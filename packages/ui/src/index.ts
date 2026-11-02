@@ -91,7 +91,7 @@ export {
   type OutputStrings,
 } from "./output.js";
 export { HeadRow, ReviewPrompt, Th } from "./review.js";
-export { patchAt, removeAt, RemoveRowButton, RowHead, RowList, RowListHeader } from "./rows.js";
+export { DeleteRowButton, patchAt, removeAt, RemoveRowButton, RowHead, RowList, RowListHeader } from "./rows.js";
 export { AdvancedDisclosure, EditorSection, PromptSection } from "./sections.js";
 export { PromptField } from "./PromptField.js";
 export { pointsOrDash, ScoreHeader, Verdict, verdictTone } from "./verdict.js";

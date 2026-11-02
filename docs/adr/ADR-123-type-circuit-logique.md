@@ -164,20 +164,29 @@ Decided by the product owner on issue #459 (follow-up); the rules are in
   from the reference (`keyFrom`); with the reference, every row is
   simulated on it from a fresh state, as on the student's circuit, through
   the one combinational check (the domain's `CombinationalKey`: expressions
-  or circuit). No expression is ever derived from the circuit. A reference
-  reading `X` or `Z` on a row is refused at publication
-  (`logic.reference_undefined`), never a free point.
+  or circuit), its truth table computed once per grade. No expression is
+  ever derived from the circuit. A reference reading `X` or `Z` on a row is
+  refused at publication (`logic.reference_undefined`), never a free
+  point; that sweep is up to 1 024 simulations, so it lives in
+  `publicationIssues`, never in the schema every read parses. A
+  combinational reference holds no latch nor flip-flop
+  (`logic.reference_memory`), which also keeps a looped latch from
+  spending the event budget on every row.
 - **Sequential: the vectors stay the key.** "Use as reference" writes the
   outputs of the teacher's stimulus from one run of the reference, through
-  the stepper the grade uses (`runSteps`); the teacher may then edit them.
-- **Invariant 4**: the reference never reaches a student — not in
-  `toStudent`, not in `studentDetails`, not in `toSolution` (a
-  reference-keyed key is empty). It is stored as a schematic, held to an
-  answer's caps, and rebuilt into a netlist at every use. No stored question
+  the stepper the grade uses (`runSteps`), and refuses a step on which it
+  reads `X` or `Z`; the teacher may then edit them.
+- **Invariant 4**: the reference never reaches a student through
+  `toStudent` nor `studentDetails`. When it is the key, `toSolution` is
+  the circuit, drawn read-only by the review and the debrief key where the
+  expressions would be — staff, or a student when the key may be shown —
+  as `circuit`'s reference (ADR-037). It is stored as a schematic, held to
+  an answer's caps, and rebuilt into a netlist at every use. No stored question
   existed, so the config changed shape without a migration.
 - **The gate cap is 50** (`LOGIC_LIMITS.gates`), a round number for people;
   `LOGIC_LIMITS.components` stays 60, the margin holding the two constant
-  cells. It replaces the 58 of §2's arithmetic.
+  cells. It replaces the former cap of 58 (the 60 cells less the two
+  constants) that §4.18 gave `maxGates`.
 
 ## Consequences
 

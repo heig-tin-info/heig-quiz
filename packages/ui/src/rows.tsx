@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 import { CheckboxField, FieldCell, NumberField } from "./fields.js";
 import { badge, sectionTitle } from "./styles.js";
 import { Button, IconButton, TextInput } from "./controls.js";
-import { CloseIcon } from "./icon.js";
+import { CloseIcon, TrashIcon } from "./icon.js";
 
 /** The list with the row at `index` merged with `patch`; the others untouched. */
 export function patchAt<T>(list: readonly T[], index: number, patch: Partial<T>): T[] {
@@ -88,6 +88,29 @@ export function RemoveRowButton({
   return (
     <IconButton danger label={label} disabled={disabled} onClick={onClick}>
       <CloseIcon />
+    </IconButton>
+  );
+}
+
+/**
+ * A row's bin, for lists whose rows sit side by side or hold a name (a
+ * choice, an argument, an input): a `×` there reads as a multiplication or a
+ * close. `label` names the row ("Remove input a"), and is its tooltip too.
+ */
+export function DeleteRowButton({
+  label,
+  disabled,
+  onClick,
+  className,
+}: {
+  label: string;
+  disabled?: boolean | undefined;
+  onClick: () => void;
+  className?: string | undefined;
+}): ReactNode {
+  return (
+    <IconButton danger label={label} title={label} disabled={disabled} className={className} onClick={onClick}>
+      <TrashIcon />
     </IconButton>
   );
 }

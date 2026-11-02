@@ -28,7 +28,6 @@ import {
   parseExpression,
   parseVectors,
   toLatex,
-  truthRows,
   type LogicErrorCode,
   type TestVectors,
   type VectorErrorCode,
@@ -39,9 +38,9 @@ import {
   GATES,
   gateCount,
   initialTerminals,
-  LOGIC_GATES_MAX,
   LOGIC_KINDS,
   LOGIC_PARTS,
+  MEMORY_FAMILIES,
   TERMINAL_NAME_MAX,
 } from "./logicLibrary.js";
 import { buildLogicNetlist, portsMismatch } from "./logicNetlist.js";
@@ -64,7 +63,7 @@ const unique = (ids: readonly string[]): boolean => new Set(ids).size === ids.le
 
 /**
  * Held to `LOGIC_LIMITS`: the gates are the netlist's cells beside the two
- * constant cells, so at most {@link LOGIC_GATES_MAX} of them, which is the
+ * constant cells, so at most `LOGIC_LIMITS.gates` of them, which is the
  * budget the canvas counts too (`gateCount`); the parts in all, terminals
  * and constants included, stay under the cells' and the ports' caps. Ids are
  * unique: a wire names its pin by its part's id.
@@ -74,7 +73,7 @@ export const LogicSchematic = z
     components: z.array(LogicComponent).max(LOGIC_LIMITS.components + LOGIC_LIMITS.inputs + LOGIC_LIMITS.outputs),
     wires: z.array(LogicWire).max(LOGIC_LIMITS.wires),
   })
-  .refine((s) => gateCount(s) <= LOGIC_GATES_MAX, { message: "logic.too_many_components", path: ["components"] })
+  .refine((s) => gateCount(s) <= LOGIC_LIMITS.gates, { message: "logic.too_many_components", path: ["components"] })
   .refine((s) => unique(s.components.map((c) => c.id)) && unique(s.wires.map((w) => w.id)), {
     message: "logic.duplicate_id",
   });
@@ -100,7 +99,7 @@ export const DEFAULT_FAMILIES: readonly GateFamilySchema[] = GATES.filter((f) =>
 export const LogicPalette = z.object({
   kinds: z.array(GateFamilySchema).min(1).max(GATE_FAMILIES.length),
   /** How many gates the student may place, `NOT` and `BUF` included; `null`: as many as the limits allow. */
-  maxGates: z.number().int().min(1).max(LOGIC_GATES_MAX).nullable().default(null),
+  maxGates: z.number().int().min(1).max(LOGIC_LIMITS.gates).nullable().default(null),
 });
 export type LogicPalette = z.infer<typeof LogicPalette>;
 
@@ -165,8 +164,8 @@ export const LogicConfig = z
     }
     if (c.keyFrom === "reference") {
       // Duplicate names already have their issue; the terminals cannot match them.
-      const error = duplicate ? null : referenceError(c);
-      if (error !== null) ctx.addIssue({ code: "custom", message: error.code, path: ["reference"], params: { row: error.row } });
+      const problem = duplicate ? null : (referencePortsProblem(c) ?? (hasMemory(c.reference!) ? "logic.reference_memory" : null));
+      if (problem !== null) ctx.addIssue({ code: "custom", message: problem, path: ["reference"] });
       return;
     }
     c.outputs.forEach((output, i) => {
@@ -202,27 +201,38 @@ function logicErrorOf(parse: () => unknown): { code: LogicErrorCode; position: n
 }
 
 /**
- * What keeps the reference circuit from being a combinational key, or
- * `null`: none drawn, terminals that differ from the declared ones, or a
- * row of the truth table on which an output reads `X` or `Z` (`row`, its
- * number, `inputs[0]` the most significant bit). The config's refine, and
- * the editor's live line.
+ * What keeps the reference from being read at all, or `null`: none drawn, or
+ * terminals that differ from the declared ones. Cheap: the schema's refine
+ * and "Use as reference" both ask it.
  */
-export function referenceError(
+export function referencePortsProblem(
   c: Pick<LogicConfig, "inputs" | "outputs" | "reference">,
-): { code: "logic.reference_missing" | "logic.reference_ports" | "logic.reference_undefined"; row: number | null } | null {
-  if (c.reference === null) return { code: "logic.reference_missing", row: null };
-  if (portsMismatch(c.reference, declaredOf(c))) return { code: "logic.reference_ports", row: null };
-  const { netlist } = buildLogicNetlist(c.reference);
-  const outputs = c.outputs.map((o) => o.name);
+): "logic.reference_missing" | "logic.reference_ports" | null {
+  if (c.reference === null) return "logic.reference_missing";
+  return portsMismatch(c.reference, declaredOf(c)) ? "logic.reference_ports" : null;
+}
+
+/**
+ * A latch or a flip-flop: never in a combinational reference, whose rows each
+ * start from a fresh state, and where a looped latch could spend the event
+ * budget on every row.
+ */
+const hasMemory = (schematic: LogicSchematic): boolean =>
+  schematic.components.some((c) => (MEMORY_FAMILIES as readonly string[]).includes(LOGIC_PARTS.part(c.kind).family ?? ""));
+
+/**
+ * The first row of the truth table on which a combinational reference reads
+ * `X` or `Z` (`inputs[0]` the most significant bit), or `null`: up to 1 024
+ * simulations, so it runs at publication and in the editor only
+ * (`publicationIssues`), never on a read. The reference has passed
+ * {@link referencePortsProblem}.
+ */
+export function referenceUndefinedRow(c: Pick<LogicConfig, "inputs" | "outputs"> & { reference: LogicSchematic }): number | null {
   try {
-    const key = circuitKey(netlist, c.inputs, outputs);
-    for (const bits of truthRows(c.inputs)) key.expected(Object.fromEntries(c.inputs.map((name, j) => [name, bits[j]!])));
+    circuitKey(buildLogicNetlist(c.reference).netlist, c.inputs, c.outputs.map((o) => o.name));
     return null;
   } catch (error) {
-    if (error instanceof LogicError && error.code === "logic.reference_undefined") {
-      return { code: error.code, row: error.position };
-    }
+    if (error instanceof LogicError && error.code === "logic.reference_undefined") return error.position;
     throw error;
   }
 }
@@ -330,12 +340,14 @@ export type LogicStudent = z.infer<typeof LogicStudent>;
 
 /**
  * The key: each output's expression (combinational), the test vectors
- * (sequential, `outputs` empty), or nothing for a reference circuit, which
- * never leaves the server (`outputs` empty, no vectors).
+ * (sequential, `outputs` empty), or the reference circuit when it is the key
+ * (`outputs` empty), drawn read-only where the expressions would be (as
+ * `circuit`'s reference, ADR-037).
  */
 export const LogicSolution = z.object({
   outputs: z.array(z.object({ name: z.string(), expression: z.string() })),
   vectors: z.string().optional(),
+  reference: LogicSchematic.optional(),
 });
 export type LogicSolution = z.infer<typeof LogicSolution>;
 

@@ -3,14 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   checkSequential,
   fillVectors,
-  runSteps,
   LOGIC_LIMITS,
   LogicError,
   parseVectors,
   type Netlist,
   type NetlistCell,
   type NetlistPort,
-  type VectorInput,
 } from "../logic.js";
 
 const declared = { inputs: ["clk", "d"], outputs: ["q"] };
@@ -134,32 +132,32 @@ describe("checkSequential", () => {
 });
 
 describe("fillVectors", () => {
-  const byDff = (inputs: string[], outputs: string[], steps: VectorInput[][]) => runSteps(dff, inputs, outputs, steps);
-
-  it("writes the reference's outputs under the teacher's stimulus, adding a missing output to the header", () => {
-    const filled = fillVectors("# a D flip-flop\nclk d\n0 1\n\nC 1  # rises\nC 0", declared, byDff);
+  it("writes the reference's outputs under the teacher's stimulus, an output column left off or overwritten", () => {
+    const filled = fillVectors("# a D flip-flop\nclk d q\n0 1\n\nC 1 0  # rises\nC 0", declared, dff);
     expect(filled).toBe("# a D flip-flop\nclk d q\n0   1 0\n\nC   1 1 # rises\nC   0 0");
     expect(checkSequential(dff, parseVectors(filled, declared)).passed).toBe(true);
   });
 
-  it("overwrites whatever the output columns held, and writes X where the reference reads X or Z", () => {
-    expect(fillVectors("clk d q\nC 1 0\n0 0 ?", declared, byDff)).toBe("clk d q\nC   1 1\n0   0 1");
+  it("refuses a step on which the reference reads X or Z, by its line", () => {
     const open: Netlist = { ...dff, cells: {} };
-    expect(fillVectors("clk d q\nC 1", declared, (i, o, steps) => runSteps(open, i, o, steps))).toBe("clk d q\nC   1 X");
+    expect(errorOfFill("clk d q\n# none yet\nC 1", open)).toEqual(["logic.reference_undefined", 3]);
   });
 
-  it("refuses a header without every input, a missing input value and no step", () => {
-    const errorOfFill = (source: string) => {
-      try {
-        fillVectors(source, declared, byDff);
-        return null;
-      } catch (error) {
-        return error instanceof LogicError ? [error.code, error.position] : error;
-      }
-    };
-    expect(errorOfFill("clk q\n0 0")).toEqual(["logic.vector_header", 1]);
+  it("holds the stimulus to the vectors' rules: the full header, every input, its values, a step", () => {
+    expect(errorOfFill("clk d\n0 0")).toEqual(["logic.vector_header", 1]);
     expect(errorOfFill("clk d q\nC")).toEqual(["logic.vector_columns", 2]);
     expect(errorOfFill("clk d q\nC 2")).toEqual(["logic.vector_value", 2]);
     expect(errorOfFill("clk d q\n")).toEqual(["logic.vector_empty", null]);
   });
 });
+
+/** The code and position `fillVectors` throws, or `null`. */
+function errorOfFill(source: string, netlist: Netlist = dff): [string, number | null] | null {
+  try {
+    fillVectors(source, declared, netlist);
+    return null;
+  } catch (error) {
+    if (error instanceof LogicError) return [error.code, error.position];
+    throw error;
+  }
+}

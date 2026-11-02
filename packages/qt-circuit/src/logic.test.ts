@@ -7,11 +7,12 @@
 import { describe, expect, it } from "vitest";
 
 import { findStudentLeaks } from "@quiz/core/testing";
+import { LOGIC_LIMITS } from "@quiz/domain/logic";
 
 import { gradeLogic } from "./logicGrade.js";
-import { gateCount, LOGIC_GATES_MAX, LOGIC_PARTS, offeredLogicKinds } from "./logicLibrary.js";
+import { gateCount, LOGIC_PARTS, offeredLogicKinds } from "./logicLibrary.js";
 import { buildLogicNetlist } from "./logicNetlist.js";
-import { LogicAnswer, LogicConfig, type LogicSchematic } from "./logicSchema.js";
+import { LogicAnswer, LogicConfig, referenceUndefinedRow, type LogicSchematic } from "./logicSchema.js";
 import { fitTerminals, vectorsFromReference } from "./logicReference.js";
 import { logicServer } from "./logicServer.js";
 import {
@@ -91,8 +92,8 @@ describe("the logic answer", () => {
 
   it("holds the gates to the budget the canvas counts, whatever the constants", () => {
     const constants = [part("c90", "LOW", 40, 480), part("c91", "LOW", 80, 480), part("c92", "HIGH", 120, 480)];
-    expect(LogicAnswer.safeParse({ schematic: { components: [...nots(LOGIC_GATES_MAX), ...constants], wires: [] } }).success).toBe(true);
-    expect(LogicAnswer.safeParse({ schematic: { components: nots(LOGIC_GATES_MAX + 1), wires: [] } }).success).toBe(false);
+    expect(LogicAnswer.safeParse({ schematic: { components: [...nots(LOGIC_LIMITS.gates), ...constants], wires: [] } }).success).toBe(true);
+    expect(LogicAnswer.safeParse({ schematic: { components: nots(LOGIC_LIMITS.gates + 1), wires: [] } }).success).toBe(false);
   });
 
   it("refuses two parts with one id: a wire names its pin by it", () => {
@@ -298,14 +299,14 @@ describe("a sequential question (test vectors)", () => {
 
   it("fills the vectors' outputs from the reference, on the teacher's stimulus (Use as reference)", () => {
     // A stimulus alone is a draft, not yet a valid config: the button fills it.
-    const config = { ...logicSequentialConfig({ reference: flipFlop() }), vectors: "clk d\n0 1\nC 1\nC 0  # falls\n" };
+    const config = { ...logicSequentialConfig({ reference: flipFlop() }), vectors: "clk d q\n0 1\nC 1\nC 0  # falls\n" };
     const filled = vectorsFromReference(config);
     expect(filled).toEqual({ vectors: "clk d q\n0   1 0\nC   1 1\nC   0 0 # falls\n" });
     if (!("vectors" in filled)) return;
     expect(grade(logicSequentialConfig({ vectors: filled.vectors }), flipFlop())).toMatchObject({ points: 4 });
-    expect(vectorsFromReference(logicSequentialConfig())).toEqual({ problem: "reference_missing" });
+    expect(vectorsFromReference(logicSequentialConfig())).toEqual({ problem: "logic.reference_missing" });
     const renamed = { ...flipFlop(), components: flipFlop().components.map((c) => (c.name === "q" ? { ...c, name: "r" } : c)) };
-    expect(vectorsFromReference(logicSequentialConfig({ reference: renamed }))).toEqual({ problem: "reference_ports" });
+    expect(vectorsFromReference(logicSequentialConfig({ reference: renamed }))).toEqual({ problem: "logic.reference_ports" });
   });
 
   it("gives a flip-flop a Q and a Q̄ beside its inputs", () => {
@@ -333,14 +334,25 @@ describe("a reference circuit as the key", () => {
     expect(issueOf({ ...logicReferenceConfig(), inputs: ["a", "x"] })?.message).toBe("logic.reference_ports");
   });
 
-  it("refuses a reference that reads X or Z on a row, with the row", () => {
+  it("refuses a latch or a flip-flop in a combinational reference", () => {
+    const reference = halfAdderSchematic();
+    reference.components.push(part("c9", "DFF", 300, 460, "U9"));
+    expect(issueOf({ ...logicReferenceConfig({ palette: { kinds: ["AND", "XOR", "DFF"], maxGates: 4 } }), reference })?.message).toBe(
+      "logic.reference_memory",
+    );
+  });
+
+  it("refuses at publication, never on a read, a reference that reads X or Z on a row", () => {
     // The AND's second input left open: c reads X when a = 1 (rows 2 and 3).
     const open = halfAdderSchematic();
     open.wires = open.wires.filter((w) => w.id !== "w3");
-    expect(issueOf({ ...logicReferenceConfig(), reference: open })).toMatchObject({
-      message: "logic.reference_undefined",
-      params: { row: 2 },
-    });
+    // Every read parses the config: it never simulates the reference.
+    const config = LogicConfig.parse({ ...logicReferenceConfig(), reference: open });
+    expect(logicServer.publicationIssues!(config)).toEqual([{ path: ["reference"], message: "logic.reference_undefined" }]);
+    expect(referenceUndefinedRow({ ...config, reference: open })).toBe(2);
+    expect(logicServer.publicationIssues!(logicReferenceConfig())).toEqual([]);
+    // A draft tried in that state is not compared with anything.
+    expect(grade(config, halfAdder())).toMatchObject({ points: 0, state: "proposed", details: { reason: "reference_undefined" } });
   });
 
   it("grades against the reference exactly as against the same expressions", () => {
@@ -355,13 +367,17 @@ describe("a reference circuit as the key", () => {
     expect(grade(logicReferenceConfig(), halfAdder())).toMatchObject({ points: 4, state: "validated" });
   });
 
-  it("never serves nor keys the reference", () => {
+  it("never serves the reference, and keys it", () => {
     for (const fixture of [logicLeakFixture, logicReferenceLeakFixture]) {
       const student = logicServer.toStudent(fixture.config, view);
       expect(findStudentLeaks(student, fixture)).toEqual([]);
       for (const gate of SECRET_REFERENCE_GATES) expect(JSON.stringify(student)).not.toContain(gate);
     }
-    expect(logicServer.toSolution(logicReferenceConfig(), view)).toEqual({ outputs: [] });
+    // The key IS the circuit: read-only where the key may be shown, never in the student view.
+    expect(logicServer.toSolution(logicReferenceConfig(), view)).toEqual({
+      outputs: [],
+      reference: halfAdderSchematic(SECRET_REFERENCE_GATES as [string, string]),
+    });
   });
 });
 

@@ -19,7 +19,7 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { fmt } from "@quiz/core/client";
-import { Button, cx, IconButton, lockedBlock, PlusIcon, TextInput, TrashIcon } from "@quiz/ui";
+import { Button, cx, DeleteRowButton, lockedBlock, PlusIcon, TextInput } from "@quiz/ui";
 
 import type { CodeLanguage } from "./schema.js";
 
@@ -163,15 +163,7 @@ export function ArgsInput({
               onChange={(e) => onChange(value.map((a, j) => (j === i ? e.target.value : a)))}
               onKeyDown={onKeyDown(i)}
             />
-            <IconButton
-              danger
-              label={fmt(s.removeArgument, { n: i + 1 })}
-              title={fmt(s.removeArgument, { n: i + 1 })}
-              disabled={disabled}
-              onClick={() => remove(i)}
-            >
-              <TrashIcon />
-            </IconButton>
+            <DeleteRowButton label={fmt(s.removeArgument, { n: i + 1 })} disabled={disabled} onClick={() => remove(i)} />
           </li>
         ))}
       </ol>

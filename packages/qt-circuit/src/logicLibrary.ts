@@ -15,7 +15,7 @@
  * Geometry is on the canvas grid ({@link GRID}): inputs on the left at
  * x = −40, the output on the right at x = 40, a terminal's pin at its origin.
  */
-import { CELL_SPECS, LOGIC_LIMITS, type CellType } from "@quiz/domain/logic";
+import { CELL_SPECS, type CellType } from "@quiz/domain/logic";
 
 import { BOX, GRID, type PinSpec } from "./library.js";
 import { countedParts, type PartSpec, type ValueRole } from "./parts.js";
@@ -206,12 +206,6 @@ export function logicSummary(schematic: { components: readonly { kind: string }[
   return maxGates === null ? String(gates) : `${gates}/${maxGates}`;
 }
 
-/**
- * The most gates an answer (or a reference) holds, `LOGIC_LIMITS.gates`: a
- * round number for the teacher and the student, under the netlist's cells
- * (`LOGIC_LIMITS.components`), which keep the margin for the two constant cells.
- */
-export const LOGIC_GATES_MAX = LOGIC_LIMITS.gates;
 
 /**
  * Where the declared terminals start: the inputs down the left edge, the

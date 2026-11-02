@@ -17,6 +17,7 @@ import {
   LogicDetails,
   LogicSolution,
   LogicStudent,
+  referenceUndefinedRow,
 } from "./logicSchema.js";
 
 export const logicServer: QuestionTypeServer<LogicConfig, LogicAnswer, LogicStudent, LogicSolution, LogicDetails> = {
@@ -54,10 +55,25 @@ export const logicServer: QuestionTypeServer<LogicConfig, LogicAnswer, LogicStud
     };
   },
 
-  /** The key: each output's expression, or the test vectors; never the reference circuit, which stays here. */
+  /**
+   * What publication needs beyond the schema: a combinational reference that
+   * reads a level on every row. Up to 1 024 simulations, so here (publication
+   * and the draft's issues) and never in the schema, which every read runs.
+   */
+  publicationIssues(config) {
+    if (config.mode === "sequential" || config.keyFrom !== "reference" || config.reference === null) return [];
+    const row = referenceUndefinedRow({ ...config, reference: config.reference });
+    return row === null ? [] : [{ path: ["reference"], message: "logic.reference_undefined" }];
+  },
+
+  /**
+   * The key: each output's expression, the test vectors, or the reference
+   * circuit when it is the key. Never `toStudent`: a student reads it only
+   * where the key may be shown.
+   */
   toSolution(config) {
     if (config.mode === "sequential") return { outputs: [], vectors: config.vectors };
-    if (config.keyFrom === "reference") return { outputs: [] };
+    if (config.keyFrom === "reference" && config.reference !== null) return { outputs: [], reference: config.reference };
     return { outputs: config.outputs.map(({ name, expression }) => ({ name, expression })) };
   },
 

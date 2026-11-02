@@ -6,7 +6,7 @@
 import { evaluate, type Expr } from "./expression.js";
 import { LOGIC_LIMITS, LogicError, type Bit, type Netlist, type Value } from "./netlist.js";
 import { compileNetlist, type Simulator } from "./simulator.js";
-import { checksOutput, type TestVectors, type VectorInput, type VectorOutput } from "./vectors.js";
+import { checksOutput, readStimulus, type TestVectors, type VectorInput, type VectorOutput } from "./vectors.js";
 
 export interface CombinationalRow {
   readonly inputs: Bit[];
@@ -42,23 +42,27 @@ export function expressionKey(exprs: Readonly<Record<string, Expr>>): Combinatio
 }
 
 /**
- * The key of a reference circuit: each row simulated by a FRESH simulator, as
- * the circuit under check is. A row on which the reference reads `X` or `Z`
- * has no expected level: it throws `logic.reference_undefined`, its
- * `position` the row's number (`inputs[0]` the most significant bit).
+ * The key of a reference circuit: its truth table, computed once here, each
+ * row by a FRESH simulator, as the circuit under check is; `expected` is a
+ * lookup. A row on which the reference reads `X` or `Z` has no expected
+ * level: it throws `logic.reference_undefined`, its `position` the first
+ * such row's number (`inputs[0]` the most significant bit).
  */
 export function circuitKey(netlist: Netlist, inputs: readonly string[], outputs: readonly string[]): CombinationalKey {
   const compiled = compileNetlist(netlist);
+  const table = truthRows(inputs).map((bits, row) => {
+    const values = settledOutputs(compiled.createSimulator(), envOf(inputs, bits), outputs);
+    if (values.every((v): v is Bit => v === 0 || v === 1)) return values;
+    throw new LogicError("logic.reference_undefined", row);
+  });
   return {
     outputs,
-    expected(env) {
-      const values = settledOutputs(compiled.createSimulator(), env, outputs);
-      if (values.every((v): v is Bit => v === 0 || v === 1)) return values;
-      const row = inputs.reduce((n, name) => 2 * n + (env[name] ?? 0), 0);
-      throw new LogicError("logic.reference_undefined", row);
-    },
+    expected: (env) => [...table[inputs.reduce((n, name) => 2 * n + (env[name] ?? 0), 0)]!],
   };
 }
+
+const envOf = (inputs: readonly string[], bits: readonly Bit[]): Record<string, Bit> =>
+  Object.fromEntries(inputs.map((name, j) => [name, bits[j]!]));
 
 /** The 2^n rows of `inputs`, counting in binary with `inputs[0]` as the most significant bit. */
 export function truthRows(inputs: readonly string[]): Bit[][] {
@@ -80,7 +84,7 @@ export function checkCombinational(netlist: Netlist, key: CombinationalKey, inpu
   const compiled = compileNetlist(netlist);
   const outputs = [...key.outputs];
   const rows = bitsOf.map((bits): CombinationalRow => {
-    const env = Object.fromEntries(inputs.map((name, j) => [name, bits[j]!]));
+    const env = envOf(inputs, bits);
     const expected = key.expected(env);
     const actual = settledOutputs(compiled.createSimulator(), env, outputs);
     return { inputs: bits, expected, actual, ok: actual.map((v, k) => v === expected[k]) };
@@ -161,4 +165,50 @@ export function checkSequential(netlist: Netlist, vectors: TestVectors): Sequent
     return [{ inputs: row.inputs, expected: row.outputs, actual, ok: actual.map((v, k) => row.outputs[k] === "X" || v === row.outputs[k]) }];
   });
   return { inputs: [...inputs], outputs: [...outputs], rows, passed: rows.every((r) => r.ok.every(Boolean)) };
+}
+
+/**
+ * The vectors with every step's outputs written by the reference circuit run
+ * on the teacher's stimulus ({@link runSteps}, the grade's own stepper): the
+ * editor's "Use as reference". The stimulus is test vectors whose output
+ * columns may hold anything or be left off the end of a line
+ * (`readStimulus`); the header names every input and output. A step on which
+ * the reference reads `X` or `Z` is refused, as a combinational row is:
+ * `logic.reference_undefined`, its `position` the step's line. Comments and
+ * blank lines stay; columns are padded to their name.
+ */
+export function fillVectors(
+  source: string,
+  declared: { readonly inputs: readonly string[]; readonly outputs: readonly string[] },
+  reference: Netlist,
+): string {
+  const { lines, header, names, isInput, steps } = readStimulus(source, declared, { outputsOptional: true });
+  if (steps.length === 0) throw new LogicError("logic.vector_empty", null);
+  const read = runSteps(
+    reference,
+    names.filter((_, k) => isInput[k]),
+    names.filter((_, k) => !isInput[k]),
+    steps.map((step) => step.inputs),
+  );
+  const row = (cells: readonly string[], comment: string) =>
+    [cells.map((cell, k) => cell.padEnd(names[k]!.length)).join(" ").trimEnd(), comment].filter(Boolean).join(" ");
+  const stepOf = new Map(steps.map((step, i) => [step.line, i]));
+  const filled = lines
+    .map(({ line, comment }) => {
+      if (line === header) return row(names, comment);
+      const i = stepOf.get(line);
+      // Blank, or a comment alone: kept as its comment.
+      if (i === undefined) return comment;
+      const values = read[i]!;
+      if (!values.every((v) => v === 0 || v === 1)) throw new LogicError("logic.reference_undefined", line);
+      let input = 0;
+      let output = 0;
+      return row(
+        names.map((_, k) => String(isInput[k] ? steps[i]!.inputs[input++] : values[output++])),
+        comment,
+      );
+    })
+    .join("\n");
+  if (filled.length > LOGIC_LIMITS.vectorLength) throw new LogicError("logic.vector_too_long", null);
+  return filled;
 }

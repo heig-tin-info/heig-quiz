@@ -92,6 +92,7 @@ const KNOWN: Record<string, keyof Dict> = {
   "logic.vector_value": "issue.logic.vector_value",
   "logic.reference_missing": "issue.logic.reference_missing",
   "logic.reference_ports": "issue.logic.reference_ports",
+  "logic.reference_memory": "issue.logic.reference_memory",
   "logic.reference_undefined": "issue.logic.reference_undefined",
   "blocks.battery_out_of_range": "issue.blocks.battery_out_of_range",
   "blocks.no_case": "issue.blocks.no_case",

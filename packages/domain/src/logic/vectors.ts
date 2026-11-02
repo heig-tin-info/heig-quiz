@@ -18,7 +18,7 @@
  * in order on one simulator (`checkSequential`). At least one step checks an
  * output, and `LOGIC_LIMITS` caps the steps and the text.
  */
-import { LOGIC_LIMITS, LogicError, type Bit, type Value, type VectorErrorCode } from "./netlist.js";
+import { LOGIC_LIMITS, LogicError, type Bit, type VectorErrorCode } from "./netlist.js";
 
 /** An input's value at a step: a level, or `C`, a clock pulse 0 → 1 → 0. */
 export type VectorInput = Bit | "C";
@@ -62,17 +62,39 @@ const fail = (code: VectorErrorCode, line: number | null): never => {
   throw new LogicError(code, line);
 };
 
+/** One step of a stimulus: its line, its inputs in header order, its output tokens as typed (`null`: left off). */
+export interface StimulusStep {
+  readonly line: number;
+  readonly inputs: VectorInput[];
+  readonly outputs: (string | null)[];
+}
+
+/** Test vectors read up to their outputs: the lines, the header's names, the steps. */
+export interface Stimulus {
+  /** Every line, 1-based, a comment stripped from its tokens and kept apart. */
+  readonly lines: { line: number; tokens: string[]; comment: string }[];
+  readonly header: number;
+  /** The header's names, in its order. */
+  readonly names: string[];
+  readonly isInput: boolean[];
+  readonly steps: StimulusStep[];
+}
+
 /**
- * Parses test vectors over the declared signals. Throws a `LogicError` whose
- * `position` is the 1-based line at fault (`null` for the text as a whole).
+ * The rules test vectors and a stimulus share: the length, a header naming
+ * every declared input and output once, the step cap, one value per column
+ * and each input `0`, `1` or `C`. With `outputsOptional`, a step may leave
+ * its output columns off the end of the line (a stimulus "Use as reference"
+ * fills); otherwise every column is there. Output tokens are not read here.
  */
-export function parseVectors(
+export function readStimulus(
   source: string,
   declared: { readonly inputs: readonly string[]; readonly outputs: readonly string[] },
-): TestVectors {
+  { outputsOptional = false }: { outputsOptional?: boolean } = {},
+): Stimulus {
   if (source.length > LOGIC_LIMITS.vectorLength) fail("logic.vector_too_long", null);
-  const lines = lex(source).filter((l) => l.tokens.length > 0);
-  const [header, ...steps] = lines;
+  const lines = lex(source);
+  const [header, ...rest] = lines.filter((l) => l.tokens.length > 0);
   if (header === undefined) return fail("logic.vector_empty", null);
 
   const names = header.tokens;
@@ -83,82 +105,42 @@ export function parseVectors(
     names.length === signals.length &&
     signals.every((name) => names.includes(name));
   if (!exact) fail("logic.vector_header", header.line);
-  if (steps.length > LOGIC_LIMITS.vectorRows) fail("logic.vector_too_long", steps[LOGIC_LIMITS.vectorRows]!.line);
+  if (rest.length > LOGIC_LIMITS.vectorRows) fail("logic.vector_too_long", rest[LOGIC_LIMITS.vectorRows]!.line);
 
-  const rows = steps.map(({ line, tokens }): VectorRow => {
-    if (tokens.length !== names.length) fail("logic.vector_columns", line);
+  const steps = rest.map(({ line, tokens }): StimulusStep => {
+    // Too many values, too few, or (a stimulus) an input column left off the end of the line.
+    const short = tokens.length < names.length && (!outputsOptional || isInput.slice(tokens.length).some(Boolean));
+    if (tokens.length > names.length || short) fail("logic.vector_columns", line);
     const inputs: VectorInput[] = [];
-    const outputs: VectorOutput[] = [];
-    tokens.forEach((token, k) => {
-      const value = token.toUpperCase();
-      if (isInput[k]) inputs.push(inputValue(token) ?? fail("logic.vector_value", line));
-      else outputs.push(value === "0" ? 0 : value === "1" ? 1 : value === "X" ? "X" : fail("logic.vector_value", line));
+    const outputs: (string | null)[] = [];
+    names.forEach((_, k) => {
+      const token = tokens[k];
+      if (isInput[k]) inputs.push(inputValue(token!) ?? fail("logic.vector_value", line));
+      else outputs.push(token ?? null);
     });
-    return { inputs, outputs };
+    return { line, inputs, outputs };
   });
-  if (!rows.some(checksOutput)) fail("logic.vector_empty", null);
-  return { inputs: names.filter((_, k) => isInput[k]), outputs: names.filter((_, k) => !isInput[k]), rows };
+  return { lines, header: header.line, names, isInput, steps };
 }
 
 /**
- * The vectors with every step's outputs written from a run of the steps —
- * the reference circuit's, through `runSteps` (the editor's "Use as
- * reference"). The teacher writes the stimulus: a header naming every input
- * once (an output it leaves out is added at its end), then each step's
- * inputs; a step's output columns may hold anything, or be left off the end
- * of the line. A level read is written as is, an `X` or `Z` as `X` (not
- * checked). Comments and blank lines stay; columns are padded to their name.
- * Throws the `logic.vector_*` errors of {@link parseVectors}, by line.
+ * Parses test vectors over the declared signals ({@link readStimulus}, then
+ * each output `0`, `1` or `X`, and one step that checks an output). Throws a
+ * `LogicError` whose `position` is the 1-based line at fault (`null` for the
+ * text as a whole).
  */
-export function fillVectors(
+export function parseVectors(
   source: string,
   declared: { readonly inputs: readonly string[]; readonly outputs: readonly string[] },
-  run: (inputs: string[], outputs: string[], steps: VectorInput[][]) => Value[][],
-): string {
-  if (source.length > LOGIC_LIMITS.vectorLength) fail("logic.vector_too_long", null);
-  const lines = lex(source);
-  const header = lines.find((l) => l.tokens.length > 0);
-  if (header === undefined) return fail("logic.vector_empty", null);
-  const named = header.tokens;
-  const known = (name: string) => declared.inputs.includes(name) || declared.outputs.includes(name);
-  const headerOk =
-    new Set(named).size === named.length && named.every(known) && declared.inputs.every((name) => named.includes(name));
-  if (!headerOk) fail("logic.vector_header", header.line);
-  const names = [...named, ...declared.outputs.filter((name) => !named.includes(name))];
-  const isInput = names.map((name) => declared.inputs.includes(name));
-
-  const steps = lines.filter((l) => l.line > header.line && l.tokens.length > 0);
-  if (steps.length === 0) fail("logic.vector_empty", null);
-  if (steps.length > LOGIC_LIMITS.vectorRows) fail("logic.vector_too_long", steps[LOGIC_LIMITS.vectorRows]!.line);
-  const levels = steps.map(({ line, tokens }) => {
-    // Too many values, or an input column left off the end of the line.
-    if (tokens.length > named.length || isInput.slice(tokens.length).some(Boolean)) fail("logic.vector_columns", line);
-    return names.flatMap((_, k) => (isInput[k] ? [inputValue(tokens[k]!) ?? fail("logic.vector_value", line)] : []));
-  });
-  const inputs = names.filter((_, k) => isInput[k]);
-  const outputs = names.filter((_, k) => !isInput[k]);
-  const read = run(inputs, outputs, levels);
-
-  const widths = names.map((name) => name.length);
-  const row = (cells: readonly string[], comment: string) =>
-    [cells.map((cell, k) => cell.padEnd(widths[k]!)).join(" ").trimEnd(), comment].filter(Boolean).join(" ");
-  const stepOf = new Map(steps.map((s, i) => [s.line, i]));
-  const text = lines.map(({ line, comment }) => {
-    if (line === header.line) return row(names, comment);
-    const step = stepOf.get(line);
-    // Blank or a comment alone: kept as its comment.
-    if (step === undefined) return comment;
-    let i = 0;
-    let o = 0;
-    return row(
-      names.map((_, k) => (isInput[k] ? String(levels[step]![i++]) : levelOf(read[step]![o++]))),
-      comment,
-    );
-  });
-  const filled = text.join("\n");
-  if (filled.length > LOGIC_LIMITS.vectorLength) fail("logic.vector_too_long", null);
-  return filled;
+): TestVectors {
+  const { names, isInput, steps } = readStimulus(source, declared);
+  const rows = steps.map(({ line, inputs, outputs }): VectorRow => ({
+    inputs,
+    outputs: outputs.map((token) => {
+      const value = token!.toUpperCase();
+      return value === "0" ? 0 : value === "1" ? 1 : value === "X" ? "X" : fail("logic.vector_value", line);
+    }),
+  }));
+  if (!rows.some(checksOutput)) fail("logic.vector_empty", null);
+  return { inputs: names.filter((_, k) => isInput[k]), outputs: names.filter((_, k) => !isInput[k]), rows };
 }
-
-/** A level read, as an expected output: `X` for anything that is not 0 or 1. */
-const levelOf = (value: Value | undefined): string => (value === 0 || value === 1 ? String(value) : "X");

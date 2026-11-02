@@ -32,7 +32,7 @@ describe("LogicEditor", () => {
     const onChange = edit(logicReferenceConfig());
     const list = screen.getByRole("textbox", { name: "Input 1" }).closest("ul")!;
     expect(list.querySelectorAll("li")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Remove b" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove input b" }));
     const next = onChange.mock.calls[0]![0];
     expect(next.inputs).toEqual(["a"]);
     expect(next.reference?.components.map((c) => c.name)).not.toContain("b");
@@ -60,7 +60,7 @@ describe("LogicEditor", () => {
       components: [clk, d, ff, q],
       wires: [logicWire("w1", [d, 0], [ff, 0]), logicWire("w2", [clk, 0], [ff, 1]), logicWire("w3", [ff, 2], [q, 0])],
     };
-    const onChange = edit({ ...logicSequentialConfig({ reference }), vectors: "clk d\nC 1\nC 0" });
+    const onChange = edit({ ...logicSequentialConfig({ reference }), vectors: "clk d q\nC 1\nC 0" });
     fireEvent.click(screen.getByRole("button", { name: "Use as reference" }));
     expect(onChange.mock.calls[0]![0].vectors).toBe("clk d q\nC   1 1\nC   0 0");
   });

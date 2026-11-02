@@ -36,6 +36,7 @@ export {
   checkSequential,
   circuitKey,
   expressionKey,
+  fillVectors,
   runSteps,
   truthRows,
   type CombinationalCheck,
@@ -46,8 +47,10 @@ export {
 } from "./logic/check.js";
 export {
   checksOutput,
-  fillVectors,
   parseVectors,
+  readStimulus,
+  type Stimulus,
+  type StimulusStep,
   type TestVectors,
   type VectorInput,
   type VectorOutput,

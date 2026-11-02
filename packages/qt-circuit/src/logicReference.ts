@@ -3,15 +3,15 @@
  * §4.18, ADR-123 amendment of 2026-11-02): its terminals follow the declared
  * inputs and outputs as the teacher edits them, and in sequential mode it
  * fills the test vectors' outputs ("Use as reference") through the very run
- * the grade makes (`runSteps`). The grade and the config's refine read the
+ * the grade makes (`fillVectors` through `runSteps`). The grade and the config's refine read the
  * reference through `logicSchema.ts` and `logicGrade.ts`, never through here.
  */
-import { fillVectors, runSteps } from "@quiz/domain/logic";
+import { fillVectors } from "@quiz/domain/logic";
 
 import { nextId } from "./canvas/geometry.js";
 import { initialTerminals } from "./logicLibrary.js";
-import { buildLogicNetlist, portsMismatch } from "./logicNetlist.js";
-import { declaredOf, type LogicConfig, type LogicSchematic } from "./logicSchema.js";
+import { buildLogicNetlist } from "./logicNetlist.js";
+import { declaredOf, referencePortsProblem, type LogicConfig, type LogicSchematic } from "./logicSchema.js";
 
 type Declared = { inputs: readonly string[]; outputs: readonly string[] };
 
@@ -53,18 +53,17 @@ export function fitTerminals(schematic: LogicSchematic, before: Declared, after:
   };
 }
 
-/** Why the reference cannot fill the vectors, or the vectors filled: the editor's "Use as reference". */
-export type Filled = { vectors: string } | { problem: "reference_missing" | "reference_ports" };
+/** The vectors filled, or why the reference cannot fill them: the editor's "Use as reference". */
+export type Filled = { vectors: string } | { problem: "logic.reference_missing" | "logic.reference_ports" };
 
 /**
  * The vectors whose output columns the reference circuit wrote, on the
  * teacher's stimulus (`fillVectors`). Throws the `logic.vector_*` errors of
- * a stimulus it cannot read.
+ * a stimulus it cannot read, and `logic.reference_undefined` (by line) for a
+ * step on which the reference reads `X` or `Z`.
  */
 export function vectorsFromReference(config: LogicConfig): Filled {
-  const declared = declaredOf(config);
-  if (config.reference === null) return { problem: "reference_missing" };
-  if (portsMismatch(config.reference, declared)) return { problem: "reference_ports" };
-  const { netlist } = buildLogicNetlist(config.reference);
-  return { vectors: fillVectors(config.vectors, declared, (inputs, outputs, steps) => runSteps(netlist, inputs, outputs, steps)) };
+  const problem = referencePortsProblem(config);
+  if (problem !== null) return { problem };
+  return { vectors: fillVectors(config.vectors, declaredOf(config), buildLogicNetlist(config.reference!).netlist) };
 }

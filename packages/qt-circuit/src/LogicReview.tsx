@@ -2,8 +2,8 @@
  * The feedback view of a `logic` answer (docs/spec/04 §4.18).
  *
  * Everyone reads the circuit, the score, the right rows and each output's
- * rate. The expected expressions (or the test vectors, as a table) and the
- * failing rows are the key: the
+ * rate. The expected expressions (or the reference circuit, read-only, or the
+ * test vectors, as a table) and the failing rows are the key: the
  * teacher reads them, and a student only under a shown key, when the server
  * sent the solution and left the rows in the details (`studentDetails`).
  * This component renders what it was given and never rebuilds a key.
@@ -59,6 +59,7 @@ export function LogicReview({
   const showKey = audience === "teacher" ? showsSection(sections, "solution") : solution !== null;
   const expressions = showKey ? (solution?.outputs ?? []) : [];
   const vectors = showKey && solution?.vectors !== undefined ? vectorsMarkdown(solution.vectors, student) : null;
+  const reference = showKey ? (solution?.reference ?? null) : null;
   const rows = showKey ? (breakdown?.rows ?? []) : [];
   const reason =
     breakdown?.reason === "ports_mismatch"
@@ -123,6 +124,17 @@ export function LogicReview({
               {markdown(renderMarkdown, latexOf(output.name, output.expression))}
             </div>
           ))}
+        </section>
+      )}
+
+      {reference === null ? null : (
+        <section className={cx(card, "flex flex-col gap-2 p-4")}>
+          <h3 className={sectionTitle}>{s.reference}</h3>
+          <SchematicView
+            schematic={reference}
+            library={logicLibrary(student.symbols)}
+            {...(canvasStrings === undefined ? {} : { strings: canvasStrings })}
+          />
         </section>
       )}
 

@@ -21,6 +21,7 @@ import {
   checksOutput,
   circuitKey,
   expressionKey,
+  LogicError,
   parseExpression,
   parseVectors,
   type CombinationalCheck,
@@ -60,8 +61,8 @@ function nothing(config: LogicConfig, reason: string): LogicDetails {
 
 /**
  * A combinational question's key: the expressions, or the reference circuit
- * rebuilt into a netlist here, never stored. The config's refine guarantees
- * the reference reads a level on every row.
+ * rebuilt into a netlist here, never stored, simulated once per row
+ * (`circuitKey`). Publication guarantees it reads a level on every row.
  */
 function combinationalKey(config: LogicConfig): CombinationalKey {
   const outputs = config.outputs.map((o) => o.name);
@@ -92,7 +93,17 @@ export function gradeLogic(
     return zeroGrade(ctx, nothing(config, "palette_violation"), "proposed", "palette_violation");
   }
 
-  const { inputs, outputs, rows } = check(config, buildLogicNetlist(answer.schematic).netlist);
+  let checked: CombinationalCheck | SequentialCheck;
+  try {
+    checked = check(config, buildLogicNetlist(answer.schematic).netlist);
+  } catch (error) {
+    // A draft tried before its reference reads a level on every row (publication refuses it): nothing to compare with.
+    if (error instanceof LogicError && error.code === "logic.reference_undefined") {
+      return zeroGrade(ctx, nothing(config, "reference_undefined"), "proposed");
+    }
+    throw error;
+  }
+  const { inputs, outputs, rows } = checked;
   const right = rows.filter((row) => row.ok.every(Boolean)).length;
   const total = rows.length;
   /** Over the rows that check output `k` (every row, but for a step's don't cares). */

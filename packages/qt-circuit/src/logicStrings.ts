@@ -70,14 +70,14 @@ export const LOGIC_EDITOR_STRINGS = {
   inputsHint: "A letter, then letters, digits or _, 6 characters at most.",
   input: "Input {n}",
   addInput: "Add an input",
-  removeInput: "Remove {name}",
+  removeInput: "Remove input {name}",
 
   outputs: "Outputs",
   outputsHint: "AND: * or &. OR: + or |. NOT: ~ before or ' after. XOR: ^. Constants 0 and 1.",
   outputName: "Output {n}",
   expression: "Expression of {name}",
   addOutput: "Add an output",
-  removeOutput: "Remove {name}",
+  removeOutput: "Remove output {name}",
   expressionInvalid: "Unreadable from character {n}.",
   expressionUnreadable: "Unreadable expression.",
   unknownIdentifier: "Unknown input at character {n}.",
@@ -89,6 +89,7 @@ export const LOGIC_EDITOR_STRINGS = {
   referenceMissing: "Draw the reference circuit first.",
   referencePorts: "The reference's inputs and outputs differ from the declared ones.",
   referenceUndefined: "The reference reads X or Z for {row}.",
+  referenceUndefinedStep: "Line {line}: the reference reads X or Z.",
   useReference: "Use as reference",
   useReferenceHint: "Write each step's inputs, then fill the outputs from the reference circuit.",
 
@@ -157,6 +158,7 @@ export const LOGIC_REVIEW_STRINGS = {
   failing: "Failing rows",
   failingFirst: "The first {n} failing rows.",
   expectedOf: "{name} expected",
+  reference: "Reference circuit",
   reasonPortsMismatch: "The inputs and outputs differ from the question's. The teacher grades this answer.",
   reasonPaletteViolation: "The circuit uses gates the question does not allow. The teacher grades this answer.",
 };
@@ -169,6 +171,8 @@ export const LOGIC_KEY_STRINGS = {
   hidden: "Expected expressions, hidden until the answers are revealed",
   vectors: "Test vectors",
   vectorsHidden: "Test vectors, hidden until the answers are revealed",
+  reference: "Reference circuit",
+  referenceHidden: "Reference circuit, hidden until the answers are revealed",
 };
 
 export type LogicKeyStrings = typeof LOGIC_KEY_STRINGS;

@@ -15,22 +15,23 @@
  * domain's parser, the one the config schema runs at publication, so the
  * line under the field says where it stops reading, and a readable
  * expression shows as the student's key will. The reference is checked the
- * same way, by the refine's own `referenceError`.
+ * same way: its terminals by the refine's `referencePortsProblem`, its rows by
+ * publication's own `referenceUndefinedRow`.
  */
 import { useId, useMemo, useState } from "react";
 
 import { fmt, issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import type { EditorProps } from "@quiz/core/client";
-import { LOGIC_LIMITS, LogicError, type VectorErrorCode } from "@quiz/domain/logic";
+import { LOGIC_LIMITS, LogicError, truthRows, type VectorErrorCode } from "@quiz/domain/logic";
 import {
   AsideSection,
   Button,
   cx,
+  DeleteRowButton,
   EditorSection,
   ErrorText,
   ExpandableCanvas,
   hint,
-  IconButton,
   IssueList,
   label,
   markdown,
@@ -41,18 +42,18 @@ import {
   Segmented,
   textareaClass,
   TextInput,
-  TrashIcon,
 } from "@quiz/ui";
 
 import { logicLibrary, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
-import { GATE_FAMILIES, LOGIC_GATES_MAX, offeredLogicKinds, type GateFamily } from "./logicLibrary.js";
+import { GATE_FAMILIES, MEMORY_FAMILIES, offeredLogicKinds, type GateFamily } from "./logicLibrary.js";
 import { fitTerminals, vectorsFromReference } from "./logicReference.js";
 import {
   declaredOf,
   expressionError,
   expressionLatex,
   initialLogicAnswer,
-  referenceError,
+  referencePortsProblem,
+  referenceUndefinedRow,
   vectorsError,
   type LogicConfig,
   type LogicKeyFrom,
@@ -72,19 +73,18 @@ export interface LogicEditorProps extends EditorProps<LogicConfig> {
 }
 
 /**
- * What the line under the reference says of its `referenceError`: its
- * terminals, or the inputs (`a = 0, b = 1`) of a row on which it reads `X`
- * or `Z`; nothing while none is drawn (the saved draft's issue says it).
+ * What the line under the reference says: its terminals, or the inputs
+ * (`a = 0, b = 1`) of the first row on which it reads `X` or `Z`; nothing
+ * while none is drawn (the saved draft's issue says it). Up to 1 024
+ * simulations: the caller memoizes it on the circuit and the ports.
  */
-function referenceProblem(
-  error: ReturnType<typeof referenceError>,
-  inputs: readonly string[],
-  s: LogicEditorStrings,
-): string | null {
-  if (error === null || error.code === "logic.reference_missing") return null;
-  if (error.code === "logic.reference_ports") return s.referencePorts;
-  const row = inputs.map((name, j) => `${name} = ${((error.row ?? 0) >> (inputs.length - 1 - j)) & 1}`).join(", ");
-  return fmt(s.referenceUndefined, { row });
+function referenceProblem(c: Pick<LogicConfig, "inputs" | "outputs" | "reference">, s: LogicEditorStrings): string | null {
+  if (c.reference === null) return null;
+  if (referencePortsProblem(c) !== null) return s.referencePorts;
+  const row = referenceUndefinedRow({ ...c, reference: c.reference });
+  if (row === null) return null;
+  const bits = truthRows(c.inputs)[row]!;
+  return fmt(s.referenceUndefined, { row: c.inputs.map((name, j) => `${name} = ${bits[j]}`).join(", ") });
 }
 
 /** The first candidate no input nor output already uses. */
@@ -154,11 +154,11 @@ export function LogicEditor({
   const vectorsLine = sequential ? vectorsProblem(config, s) : null;
   // Up to 1 024 rows simulated: only when the circuit or the ports change, not at every keystroke.
   const { reference, inputs, outputs } = config;
-  const referenceIssue = useMemo(
-    () => (byReference && reference !== null ? referenceError({ reference, inputs, outputs }) : null),
+  const referenceLine = useMemo(
+    () => (byReference ? referenceProblem({ reference, inputs, outputs }, s) : null),
+    // `s` is rebuilt every render; its words never change while the editor is open.
     [byReference, reference, inputs, outputs],
   );
-  const referenceLine = referenceProblem(referenceIssue, inputs, s);
   /** What "Use as reference" could not do, until the vectors change. */
   const [fillProblem, setFillProblem] = useState<string | null>(null);
   const toggleFamily = (family: GateFamily, on: boolean) =>
@@ -173,14 +173,18 @@ export function LogicEditor({
     try {
       const filled = vectorsFromReference(config);
       if ("problem" in filled) {
-        setFillProblem(filled.problem === "reference_missing" ? s.referenceMissing : s.referencePorts);
+        setFillProblem(filled.problem === "logic.reference_missing" ? s.referenceMissing : s.referencePorts);
         return;
       }
       setFillProblem(null);
       patch({ vectors: filled.vectors });
     } catch (error) {
       if (!(error instanceof LogicError)) throw error;
-      setFillProblem(vectorMessage(error as LogicError & { code: VectorErrorCode }, s));
+      setFillProblem(
+        error.code === "logic.reference_undefined"
+          ? fmt(s.referenceUndefinedStep, { line: error.position ?? 1 })
+          : vectorMessage(error as LogicError & { code: VectorErrorCode }, s),
+      );
     }
   }
 
@@ -255,8 +259,8 @@ export function LogicEditor({
                 disabled={disabled}
                 onChange={(e) => patchPorts({ inputs: config.inputs.map((n, k) => (k === i ? e.target.value : n)) })}
               />
-              <RemoveButton
-                label={fmt(s.removeInput, { name })}
+              <DeleteRowButton
+                label={fmt(s.removeInput, { name: name || String(i + 1) })}
                 disabled={disabled || config.inputs.length <= 1}
                 onClick={() => patchPorts({ inputs: removeAt(config.inputs, i) })}
               />
@@ -281,8 +285,8 @@ export function LogicEditor({
             const withExpression = !sequential && !byReference;
             const problem = withExpression ? expressionProblem(output.expression, config.inputs, s) : null;
             const latex = problem === null && withExpression ? expressionLatex(output.name, output.expression, config.inputs) : null;
-            const setOutput = (next: Partial<typeof output>) =>
-              patchPorts({ outputs: config.outputs.map((o, k) => (k === i ? { ...o, ...next } : o)) });
+            const outputsWith = (next: Partial<typeof output>) =>
+              config.outputs.map((o, k) => (k === i ? { ...o, ...next } : o));
             return (
               <li key={i} className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
@@ -294,7 +298,7 @@ export function LogicEditor({
                     spellCheck={false}
                     autoComplete="off"
                     disabled={disabled}
-                    onChange={(e) => setOutput({ name: e.target.value })}
+                    onChange={(e) => patchPorts({ outputs: outputsWith({ name: e.target.value }) })}
                   />
                   {withExpression ? (
                     <>
@@ -310,12 +314,12 @@ export function LogicEditor({
                         spellCheck={false}
                         autoComplete="off"
                         disabled={disabled}
-                        onChange={(e) => setOutput({ expression: e.target.value })}
+                        onChange={(e) => patch({ outputs: outputsWith({ expression: e.target.value }) })}
                       />
                     </>
                   ) : null}
-                  <RemoveButton
-                    label={fmt(s.removeOutput, { name: output.name })}
+                  <DeleteRowButton
+                    label={fmt(s.removeOutput, { name: output.name || String(i + 1) })}
                     disabled={disabled || config.outputs.length <= 1}
                     onClick={() => patchPorts({ outputs: removeAt(config.outputs, i) })}
                   />
@@ -358,7 +362,13 @@ export function LogicEditor({
                 aria-label={s.reference}
                 value={config.reference ?? initialLogicAnswer(declaredOf(config)).schematic}
                 onChange={(reference: LogicSchematic) => patch({ reference })}
-                palette={{ kinds: offeredLogicKinds(config.palette.kinds), maxComponents: LOGIC_GATES_MAX }}
+                palette={{
+                  // A combinational reference holds no memory: each row starts from a fresh state.
+                  kinds: offeredLogicKinds(
+                    sequential ? config.palette.kinds : config.palette.kinds.filter((f) => !(MEMORY_FAMILIES as readonly string[]).includes(f)),
+                  ),
+                  maxComponents: LOGIC_LIMITS.gates,
+                }}
                 readOnly={disabled === true}
                 {...(expanded ? { height: "fill" as const } : {})}
                 {...(canvasStrings === undefined ? {} : { strings: canvasStrings })}
@@ -424,13 +434,13 @@ export function LogicEditor({
             label={s.maxGates}
             value={config.palette.maxGates}
             min={1}
-            max={LOGIC_GATES_MAX}
+            max={LOGIC_LIMITS.gates}
             disabled={disabled}
             width="w-24"
             onChange={(maxGates) => patch({ palette: { ...config.palette, maxGates: maxGates || null } })}
             onClear={() => patch({ palette: { ...config.palette, maxGates: null } })}
           />
-          <p className={`${hint} pb-1.5`}>{fmt(s.maxGatesHint, { max: LOGIC_GATES_MAX })}</p>
+          <p className={`${hint} pb-1.5`}>{fmt(s.maxGatesHint, { max: LOGIC_LIMITS.gates })}</p>
         </div>
         <div className="flex flex-col items-start gap-2">
           <span className={label} id={`${ids}-symbols`}>
@@ -455,15 +465,6 @@ export function LogicEditor({
         <p className={hint}>{sequential ? s.scoringHintSequential : s.scoringHint}</p>
       </AsideSection>
     </div>
-  );
-}
-
-/** A row's removal, a bin as in the other list editors (a choice, an argument): never a `×` between two names. */
-function RemoveButton({ label, disabled, onClick }: { label: string; disabled: boolean | undefined; onClick: () => void }) {
-  return (
-    <IconButton danger label={label} title={label} disabled={disabled} onClick={onClick}>
-      <TrashIcon />
-    </IconButton>
   );
 }
 
