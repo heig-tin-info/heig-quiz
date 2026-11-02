@@ -62,6 +62,7 @@ import {
   AsideSection,
   CheckboxField,
   cx,
+  DeleteRowButton,
   gripClass,
   GripIcon,
   hint,
@@ -76,7 +77,6 @@ import {
   sectionTitle,
   Segmented,
   TextInput,
-  TrashIcon,
   useWandRunner,
   WandIcon,
 } from "@quiz/ui";
@@ -710,15 +710,12 @@ function ChoiceRow({
           <span aria-hidden className="size-7 shrink-0" />
         ) : null}
 
-        <IconButton
+        <DeleteRowButton
           label={`${s.removeChoice} ${letter}`}
-          danger
           className="mt-1.25"
           disabled={disabled || !removable}
           onClick={onRemove}
-        >
-          <TrashIcon />
-        </IconButton>
+        />
 
         {trailing ?? <span aria-hidden className="size-7 shrink-0" />}
       </span>

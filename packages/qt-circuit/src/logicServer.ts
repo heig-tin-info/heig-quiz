@@ -17,6 +17,7 @@ import {
   LogicDetails,
   LogicSolution,
   LogicStudent,
+  referenceUndefinedRow,
 } from "./logicSchema.js";
 
 export const logicServer: QuestionTypeServer<LogicConfig, LogicAnswer, LogicStudent, LogicSolution, LogicDetails> = {
@@ -40,8 +41,8 @@ export const logicServer: QuestionTypeServer<LogicConfig, LogicAnswer, LogicStud
 
   /**
    * THE single content exit (invariant 4): the statement, the symbols, the
-   * names of the inputs and the outputs, the palette. Never an expression
-   * nor a vector. The mode is not sent either, since no surface needs it,
+   * names of the inputs and the outputs, the palette. Never an expression,
+   * a vector nor the reference circuit. The mode is not sent either, since no surface needs it,
    * though the palette (flip-flops or not) and the prompt usually tell it.
    */
   toStudent(config) {
@@ -54,11 +55,26 @@ export const logicServer: QuestionTypeServer<LogicConfig, LogicAnswer, LogicStud
     };
   },
 
-  /** The key: each output's expression, or the test vectors. */
+  /**
+   * What publication needs beyond the schema: a combinational reference that
+   * reads a level on every row. Up to 1 024 simulations, so here (publication
+   * and the draft's issues) and never in the schema, which every read runs.
+   */
+  publicationIssues(config) {
+    if (config.mode === "sequential" || config.keyFrom !== "reference" || config.reference === null) return [];
+    const row = referenceUndefinedRow({ ...config, reference: config.reference });
+    return row === null ? [] : [{ path: ["reference"], message: "logic.reference_undefined" }];
+  },
+
+  /**
+   * The key: each output's expression, the test vectors, or the reference
+   * circuit when it is the key. Never `toStudent`: a student reads it only
+   * where the key may be shown.
+   */
   toSolution(config) {
-    return config.mode === "sequential"
-      ? { outputs: [], vectors: config.vectors }
-      : { outputs: config.outputs.map(({ name, expression }) => ({ name, expression })) };
+    if (config.mode === "sequential") return { outputs: [], vectors: config.vectors };
+    if (config.keyFrom === "reference" && config.reference !== null) return { outputs: [], reference: config.reference };
+    return { outputs: config.outputs.map(({ name, expression }) => ({ name, expression })) };
   },
 
   studentDetails: (details, policy) => logicStudentDetails(details, policy),

@@ -1526,7 +1526,9 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     randomizable: false,
     concepts: [],
-    config: LOGIC_CONFIG,
+    // Keyed by the teacher's majority drawn as the reference (same truth table as its expression):
+    // the editor, the review and the grading panel show the circuit. Parsed, as the API stores it.
+    config: logicServer.configSchema.parse({ ...LOGIC_CONFIG, keyFrom: "reference", reference: LOGIC_ANSWER.schematic }),
     explanation: "La sortie vaut 1 dès que deux entrées valent 1 : $m = ab + ac + bc$, trois ET et un OU.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 1 }],
   }),
@@ -1540,7 +1542,7 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     randomizable: false,
     concepts: [],
-    config: LOGIC_SEQ_CONFIG,
+    config: logicServer.configSchema.parse({ ...LOGIC_SEQ_CONFIG, reference: LOGIC_SEQ_ANSWER.schematic }),
     explanation: "Une bascule D dont $\\bar{Q}$ revient sur $D$ change d'état à chaque front.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 1 }],
   }),

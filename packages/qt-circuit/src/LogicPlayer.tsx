@@ -18,11 +18,11 @@ import { useId, useMemo, useState } from "react";
 
 import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { PlayerProps } from "@quiz/core/client";
-import { compileNetlist, type Bit, type Value } from "@quiz/domain/logic";
+import { compileNetlist, LOGIC_LIMITS, type Bit, type Value } from "@quiz/domain/logic";
 import { badge, Button, cx, ExpandableCanvas, hint, isLocked, markdown, Segmented } from "@quiz/ui";
 
 import { logicLibrary, SchematicEditor, SchematicView, type CanvasStrings } from "./canvas/index.js";
-import { gateCount, LOGIC_GATES_MAX, offeredLogicKinds } from "./logicLibrary.js";
+import { gateCount, offeredLogicKinds } from "./logicLibrary.js";
 import { buildLogicNetlist } from "./logicNetlist.js";
 import { initialLogicAnswer, type LogicAnswer, type LogicSchematic, type LogicStudent } from "./logicSchema.js";
 import { LOGIC_PLAYER_STRINGS, type LogicPlayerStrings } from "./logicStrings.js";
@@ -116,7 +116,7 @@ export function LogicPlayer({
   };
   const played = useMemo(() => bench?.apply(levels) ?? null, [bench, levels]);
   const gates = gateCount(schematic);
-  const max = student.palette.maxGates ?? LOGIC_GATES_MAX;
+  const max = student.palette.maxGates ?? LOGIC_LIMITS.gates;
   const canvas = canvasStrings === undefined ? {} : { strings: canvasStrings };
   const level = (value: Value | undefined): string => (value === undefined ? "Z" : String(value));
 

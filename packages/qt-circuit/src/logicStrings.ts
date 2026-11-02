@@ -58,6 +58,9 @@ export const LOGIC_EDITOR_STRINGS = {
   mode: "Specification",
   modeCombinational: "Combinational",
   modeSequential: "Sequential",
+  keyFrom: "Expected answer",
+  keyExpressions: "Expressions",
+  keyReference: "Reference circuit",
 
   symbols: "Symbols",
   symbolsIec: "IEC 60617",
@@ -78,6 +81,18 @@ export const LOGIC_EDITOR_STRINGS = {
   expressionInvalid: "Unreadable from character {n}.",
   expressionUnreadable: "Unreadable expression.",
   unknownIdentifier: "Unknown input at character {n}.",
+
+  reference: "Reference circuit",
+  referenceHint: "Draw the expected circuit. Shown when the evaluation reveals the expected answer.",
+  referenceHintSequential: "Draw a circuit to fill the expected outputs. Students never see it.",
+  expand: "Expand",
+  expanded: "The circuit is open over the page.",
+  referenceMissing: "Draw the reference circuit first.",
+  referencePorts: "The reference's inputs and outputs differ from the declared ones.",
+  referenceUndefined: "The reference reads X or Z for {row}.",
+  referenceUndefinedStep: "Line {line}: the reference reads X or Z.",
+  useReference: "Use as reference",
+  useReferenceHint: "Write each step's inputs, then fill the outputs from the reference circuit.",
 
   vectors: "Test vectors",
   vectorsHint: "Line 1: every input and output. Then one step per line: 0, 1, C (clock pulse) or X (don't care).",
@@ -144,6 +159,7 @@ export const LOGIC_REVIEW_STRINGS = {
   failing: "Failing rows",
   failingFirst: "The first {n} failing rows.",
   expectedOf: "{name} expected",
+  reference: "Reference circuit",
   reasonPortsMismatch: "The inputs and outputs differ from the question's. The teacher grades this answer.",
   reasonPaletteViolation: "The circuit uses gates the question does not allow. The teacher grades this answer.",
 };
@@ -156,6 +172,8 @@ export const LOGIC_KEY_STRINGS = {
   hidden: "Expected expressions, hidden until the answers are revealed",
   vectors: "Test vectors",
   vectorsHidden: "Test vectors, hidden until the answers are revealed",
+  reference: "Reference circuit",
+  referenceHidden: "Reference circuit, hidden until the answers are revealed",
 };
 
 export type LogicKeyStrings = typeof LOGIC_KEY_STRINGS;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   checkSequential,
+  fillVectors,
   LOGIC_LIMITS,
   LogicError,
   parseVectors,
@@ -129,3 +130,34 @@ describe("checkSequential", () => {
     expect(performance.now() - started).toBeLessThan(5_000);
   });
 });
+
+describe("fillVectors", () => {
+  it("writes the reference's outputs under the teacher's stimulus, an output column left off or overwritten", () => {
+    const filled = fillVectors("# a D flip-flop\nclk d q\n0 1\n\nC 1 0  # rises\nC 0", declared, dff);
+    expect(filled).toBe("# a D flip-flop\nclk d q\n0   1 0\n\nC   1 1 # rises\nC   0 0");
+    expect(checkSequential(dff, parseVectors(filled, declared)).passed).toBe(true);
+  });
+
+  it("refuses a step on which the reference reads X or Z, by its line", () => {
+    const open: Netlist = { ...dff, cells: {} };
+    expect(errorOfFill("clk d q\n# none yet\nC 1", open)).toEqual(["logic.reference_undefined", 3]);
+  });
+
+  it("holds the stimulus to the vectors' rules: the full header, every input, its values, a step", () => {
+    expect(errorOfFill("clk d\n0 0")).toEqual(["logic.vector_header", 1]);
+    expect(errorOfFill("clk d q\nC")).toEqual(["logic.vector_columns", 2]);
+    expect(errorOfFill("clk d q\nC 2")).toEqual(["logic.vector_value", 2]);
+    expect(errorOfFill("clk d q\n")).toEqual(["logic.vector_empty", null]);
+  });
+});
+
+/** The code and position `fillVectors` throws, or `null`. */
+function errorOfFill(source: string, netlist: Netlist = dff): [string, number | null] | null {
+  try {
+    fillVectors(source, declared, netlist);
+    return null;
+  } catch (error) {
+    if (error instanceof LogicError) return [error.code, error.position];
+    throw error;
+  }
+}

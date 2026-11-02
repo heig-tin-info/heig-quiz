@@ -117,6 +117,8 @@ export const LOGIC_LIMITS = {
   inputs: 10,
   outputs: 8,
   components: 60,
+  /** The gates an answer or a reference holds: a round number for the people, under `components` by the two constant cells' margin. */
+  gates: 50,
   wires: 120,
   verticesPerWire: 64,
   eventsPerRow: 2_000,
@@ -201,13 +203,15 @@ export function validateNetlist(netlist: unknown): NetlistIssue[] {
 /**
  * The codes a user may see (an i18n key): `logic.expression_invalid` and
  * `logic.unknown_identifier`, with a 0-based character `position`, and the
- * `logic.vector_*` codes, whose `position` is the 1-based LINE. The others
+ * `logic.vector_*` codes, whose `position` is the 1-based LINE, and
+ * `logic.reference_undefined`, whose `position` is a truth-table row. The others
  * are programmer errors: a caller passed something the contract excludes.
  */
 export type LogicErrorCode =
   | "logic.expression_invalid"
   | "logic.unknown_identifier"
   | VectorErrorCode
+  | "logic.reference_undefined"
   | "logic.netlist_invalid"
   | "logic.unknown_input"
   | "logic.bad_value"
