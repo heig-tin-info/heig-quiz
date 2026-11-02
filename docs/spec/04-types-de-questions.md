@@ -29,8 +29,8 @@ Rules:
 
 - A type has no tables. Its configuration and its answers live in JSONB in the core tables.
 - A type makes no direct network call. Runner execution uses `ctx.runner`; an LLM request is returned as a pending result for the API to execute. `ctx.llm` is an availability flag, not a service.
-- A type has no drill hook (ADR-041 §4). A question is drillable when its type is in the drill's scope — `mcq`, `short`, `cloze`, `categorize` and `blocks` (ADR-103) in v1, `DRILL_TYPES` in `@quiz/domain` — and `grade` settles its answer automatically and finally: graded at once, not pending a runner or an LLM, not a proposal for the teacher. The drill takes its correctness from `grade`'s points and its time from the review.
-- The phase 1 types live in the monorepo under `packages/qt-*`, with two entry points `server` and `client`, see 5.2. Loading is static, through two registries.
+- A type has no drill hook (ADR-041 §4). A question is drillable when its type is in the drill's scope — `mcq`, `short`, `cloze`, `categorize` and `blocks` (ADR-103) in v1, `DRILL_TYPES` in `@quiz/domain`; `logic` is not added in v1, to be decided (ADR-123 §8, Q63) — and `grade` settles its answer automatically and finally: graded at once, not pending a runner or an LLM, not a proposal for the teacher. The drill takes its correctness from `grade`'s points and its time from the review.
+- The phase 1 types live in the monorepo under `packages/qt-*`, with two entry points `server` and `client`, see 5.2. Loading is static, through two registries. A package may export more than one type from each entry point: `qt-code` exports `code` and `codeimage` (ADR-021), `qt-circuit` exports `circuit` and `logic` (ADR-123).
 
 ## 4.2 Canonical format
 
@@ -625,3 +625,45 @@ config:
 **Review**: the student's program, read-only, and the case table with each case's verdict and reason; the teacher, and a student under `showKey`, also see the trails, the hidden maps and the reference.
 
 **Dashboard and more**: the live cell shows the number of blocks as a bare figure (the cell is not translated), never a verdict. `aggregate` is the pass rate of the visible cases, as `code`. Not shuffleable, not pollable, no generator (wand) in v1. Drillable (§4.1): its grading is automatic and final. Optimised for desktop (docs/00 §0.4).
+
+## 4.18 Logic circuit `logic`
+
+Shown as **Logic circuit** / « Circuit logique » in the interface, as its own tile of "New question" right after **Circuit**. The student draws a circuit of gates between the inputs and outputs the teacher declared, plays it, and hands it in; it is graded by simulating every input combination. Decided by the product owner on 2026-11-02 (issue #459), [ADR-123](../adr/ADR-123-type-circuit-logique.md). A second type of `packages/qt-circuit`, on the same canvas parameterized by a component library; the simulator and the expression parser are `@quiz/domain/logic`, pure, unit-tested, the same code in the browser and on the server. Karnaugh maps are out of scope.
+
+**Configuration** (`configVersion: 1`, phase 1, combinational):
+
+```yaml
+config:
+  prompt: markdown
+  symbols: iec               # iec (default) or ansi: a segmented control in the editor
+  inputs: [a, b, c]          # declared names, at most 10
+  outputs:                   # declared names, at most 8, each with its expression: the key
+    - name: m
+      expression: "a*b + a*c + b*c"
+  palette:
+    kinds: [AND, OR, NOT, NAND, NOR, XOR, XNOR]   # the allowed gates
+    maxGates: 6              # optional
+```
+
+- **The expression of an output** is written with `*` `·` `&` (AND), `+` `|` (OR), `!` `~` prefix or `'` postfix (NOT), `^` `⊕` (XOR), parentheses and the constants `0` and `1`. Precedence is NOT > AND > XOR > OR; the binary operators associate left. There is **no juxtaposition** (`ab` is one name, never `a·b`), and **every identifier must be a declared input**. The parse and the identifier check run in the type's `configSchema`, as a refine through `@quiz/domain/logic`, so publication, import and the MCP server refuse a bad expression as the editor does, with its position: `logic.expression_invalid` (a syntax error, or an expression longer or deeper than `LOGIC_LIMITS` allows: the parser is recursive and runs in the API), `logic.unknown_identifier`; drafts follow the usual rule. No parameterized variables (ADR-056) and no don't-care rows in v1.
+- **Inputs and outputs** are declared by the teacher. In the student's canvas they are rounded rectangles bearing their name, placed freely, neither deletable nor renamable. Buses and multi-bit signals are out of scope.
+- **Symbols**: IEC 60617 by default, ANSI when the teacher chooses it; the student draws with the teacher's choice.
+- **`palette.kinds` and `maxGates` are editor limits**, not graded criteria: the palette offers only the allowed gates and stops at the maximum. `maxGates` counts every gate, `NOT` and `BUF` included, never an input, an output or a constant.
+
+**The simulation** (`@quiz/domain/logic`): event-driven, values `0`, `1`, `X` (unknown or conflicting) and `Z` (undriven, read as `X` by a gate input), a unit delay per gate, so a feedback loop such as a NOR latch is legal. Two outputs driven together resolve to `X` when they disagree. A row whose settle exceeds the event cap stops and every net still changing reads `X`: an oscillation is `X`, never a hang. The netlist it reads, an internal shape modeled on the Yosys JSON netlist, is **rebuilt server-side from the stored schematic every time and never stored** (invariant 14 by analogy, ADR-019 Decision 3).
+
+**Limits**: one constant, `LOGIC_LIMITS` of `@quiz/domain/logic`, used by the schemas and enforced by the domain itself, which refuses an over-cap netlist: inputs ≤ 10, outputs ≤ 8, components ≤ 60, wires ≤ 120, vertices per wire ≤ 64 (as `circuit`), events per row ≤ 2 000 (a domain constant, never a parameter), and a maximum length and nesting depth per expression. The rebuild is bounded by wires × vertices, the grade by 1 024 rows × the event cap; with fixed inputs a fresh circuit never oscillates (every cell is monotone from `X`), so the worst-case test releases rings mid-row: 10 inputs, 60 components, each of the 1 024 rows hitting the cap, with the event count asserted deterministically and a wall-clock ceiling that only catches an algorithmic blow-up.
+
+**Answer**: `{ schematic }` — the gates with position, orientation and kind, the declared inputs and outputs where the student placed them, and the wires with their routed polyline. The schema holds it to `LOGIC_LIMITS`. A declared terminal placed twice or missing, an undeclared terminal, an unknown kind or a wire to a pin that does not exist is never simulated: an unknown kind or a malformed wire is refused by the answer schema (`422 answer_invalid`), a terminal set that differs from the declared one is graded `ports_mismatch` (below).
+
+**Scoring**: each of the 2ⁿ rows of the truth table is simulated from a fresh state (every net unknown). A row is right when every output equals its expression's value; an `X` or `Z` on an output is wrong. The grade is the item's points × the share of right rows. Grading is synchronous and final (`state: validated`) except for the two machine reasons below: no runner. Two machine reasons give 0 stored `proposed`, as `circuit` does for the first: `palette_violation` (a gate outside the palette, or more gates than `maxGates`) and `ports_mismatch` (the placed inputs and outputs differ from the declared ones). The editor cannot produce either, so the answer is stale (the teacher changed the question) or forged, and the teacher decides. `ports_mismatch` joins `MACHINE_REASONS` (`packages/core/src/reasons.ts`), with its `en` and `fr` strings. `gradings.details` holds the score, the count of right rows, each output's success rate and at most 16 failing rows (inputs, the student's outputs, the expected outputs).
+
+**Student** (`toStudent`, invariant 4): the prompt, the symbols, the declared inputs and outputs (names only), the palette and `maxGates`. Never an expression; the leak test searches the serialized view for each expression's text, with compound expressions in the fixture (a single-name expression would collide with an input's name). **`studentDetails`**: with 0/1 values a failing row's student output reveals the expected one, so when the key may NOT be shown the details carry only the score, the count of right rows and the per-output rates, no row at all; the failing rows (inputs, the student's outputs, the expected outputs) reach the student only when the key may be shown. Its leak test is structural: under a hidden policy, no `rows` nor `expected` field, checked by key. The key (`toSolution`) is the outputs' expressions.
+
+**Player**: the prompt and the canvas (Expand as `circuit`, §4.11). A **play mode** turns the inputs into toggles and lights the outputs from the student's own circuit, through the domain simulator, in the browser, with no API route; it never shows the expected values nor a comparison. The grade is the server's.
+
+**Review**: the student's circuit, the score and the per-output rates; the teacher, and a student when the key may be shown, also read the failing rows and the expressions.
+
+**Dashboard and more**: not added to `DRILL_TYPES` nor made pollable in v1; to be decided.
+
+**Phase 2, sequential**: D and JK flip-flops, which start at 0, and a clock, specified by test vectors in the style of Digital (hneemann): a header of signal names, one row per step, `C` a clock pulse, `X` a don't care on an output. Its grading rule is settled with that phase.
