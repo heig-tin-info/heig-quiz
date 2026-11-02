@@ -302,14 +302,11 @@ export const AttemptOrLobby = z.union([
 export type AttemptOrLobby = z.infer<typeof AttemptOrLobby>;
 
 /**
- * What the two entry routes answer, `POST /evaluations/:id/attempt` and
- * `POST /evaluations/:id/attempt/start` (ADR-076): a `running` evaluation the
- * participant has not started answers `ready`, nothing written.
- */
-/**
- * The entry routes' answer: `POST /evaluations/:id/attempt` and
- * `…/attempt/start`, and the practice's `POST /evaluations/:id/practice`
- * and `…/practice/start` (ADR-122), which never answer the lobby.
+ * What the entry routes answer, `POST /evaluations/:id/attempt` and
+ * `…/attempt/start` (ADR-076): a `running` evaluation the participant has
+ * not started answers `ready`, nothing written. The practice's
+ * `POST /evaluations/:id/practice` and `…/practice/start` (ADR-122) answer
+ * the same, never the lobby.
  */
 export const AttemptEntry = z.union([
   ...AttemptOrLobby.options,
