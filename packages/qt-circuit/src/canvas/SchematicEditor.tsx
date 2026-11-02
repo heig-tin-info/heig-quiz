@@ -8,11 +8,14 @@
  * is transient stays here: the selection, the wire being drawn, the drag, the
  * view box.
  *
+ * The parts, the box and its ports come from a {@link SchematicLibrary}
+ * (`library`): the editor itself knows no kind.
+ *
  * Two differences from the mockup, both from the data model:
- * - the world IS the box (`0..BOX.width` × `0..BOX.height`). Components are
+ * - the world IS the box (`0..box.width` × `0..box.height`). Components are
  *   clamped inside it and the router never leaves it, so nothing on the canvas
  *   can be a value the schema rejects;
- * - the four ports on the border are wire ends like any pin.
+ * - the ports on the border (`circuit`'s four) are wire ends like any pin.
  *
  * Keyboard is scoped to the editor, never to the window: several of these may
  * sit on one page, and the app has shortcuts of its own.
@@ -27,7 +30,7 @@
  *   useId · useRef rootRef, svgRef, canvasRef · useHistory · useState mode,
  *   placeKind, ghost · useViewport [useState view, canvasHeight · useCallback
  *   toWorld, slack · useEffect measure, wheel] · useState cursor, hover ·
- *   useMemo kinds · useCallback apply · useSelection [useState selection ·
+ *   useCallback apply · useSelection [useState selection ·
  *   useCallback removeSelection, transformSelection, duplicate] · useCallback
  *   place · usePartDragging [useState drag · useRef dragRef, lastVia ·
  *   useState palDrag · useMemo displayed · useCallback componentUnder,
@@ -41,35 +44,49 @@
  */
 import { useCallback, useId, useMemo, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import type { ComponentKind, PortId } from "../library.js";
-import { Schematic, countedComponents, type Palette, type SchematicComponent, type Supplies } from "../schema.js";
-
 import { resolveStrings, type CanvasShortcutsListener } from "@quiz/core/client";
 import { CANVAS_STRINGS, type CanvasStrings } from "./canvasStrings.js";
 import { canvasArea, cx, frame } from "./canvasStyles.js";
 import { Drawing, Inspector, PaletteRail, StatusBar, Toolbar, Transient } from "./EditorChrome.js";
-import { ORIENT_0, indexOf, newComponent, viewBoxAttr, type PinTarget } from "./geometry.js";
+import { ORIENT_0, fitView, indexOf, newComponent, viewBoxAttr, type PinTarget } from "./geometry.js";
 import { useCanvasShortcuts, useHistory } from "@quiz/ui";
 import { blockedCells, computeRoutes, withRoutes } from "./router.js";
+import {
+  countedParts,
+  type CanvasComponent,
+  type CanvasSchematic,
+  type SchematicLibrary,
+} from "./schematicLibrary.js";
 import { connectedPins, type FlaggedPin } from "./SchematicView.js";
 import { usePartDragging, type Ghost } from "./usePartDragging.js";
 import { usePointerTools, type Cursor } from "./usePointerTools.js";
-import { editorKey, isTerminal, keyActions, SHORTCUT_LINES, useSelection, type Mode } from "./useSelection.js";
+import { editorKey, keyActions, SHORTCUT_LINES, useSelection, type Mode } from "./useSelection.js";
 import { useViewport } from "./useViewport.js";
 import { useWireDrawing } from "./useWireDrawing.js";
 
-export interface SchematicEditorProps {
-  value: Schematic;
-  /** Every committed edit, with a value that satisfies `Schematic.parse`. */
-  onChange: (next: Schematic) => void;
-  /** Only these kinds are offered; VCC and VEE also need their supply. */
-  palette: Palette;
-  supplies: Supplies;
+/** What the student may place: these kinds, and this many parts that are not terminals. */
+export interface CanvasPalette {
+  readonly kinds: readonly string[];
+  readonly maxComponents: number;
+}
+
+export interface SchematicEditorProps<S extends CanvasSchematic = CanvasSchematic> {
+  value: S;
+  /**
+   * Every committed edit, with a value of the host's own type (`Schematic.parse`
+   * accepts it): the editor only places the palette's kinds, wires the
+   * library's pins and ports, and keeps every point inside the box.
+   */
+  onChange: (next: S) => void;
+  /** The parts, the box and the ports. */
+  library: SchematicLibrary;
+  /** Only these kinds are offered: the host has already filtered them (`offeredKinds` for `circuit`). */
+  palette: CanvasPalette;
   /** View and select only: no palette, no transform, no edit. */
   readOnly?: boolean | undefined;
   /** Pins to mark as a problem — the host maps its netlist issues onto these. */
   highlightPins?: readonly FlaggedPin[] | undefined;
-  highlightPorts?: readonly PortId[] | undefined;
+  highlightPorts?: readonly string[] | undefined;
   strings?: Partial<CanvasStrings> | undefined;
   /**
    * The TALLEST the drawing area gets, in px. It is normally shorter: the
@@ -84,11 +101,11 @@ export interface SchematicEditorProps {
   onShortcuts?: CanvasShortcutsListener | undefined;
 }
 
-export function SchematicEditor({
+export function SchematicEditor<S extends CanvasSchematic>({
   value,
   onChange,
+  library,
   palette,
-  supplies,
   readOnly = false,
   highlightPins,
   highlightPorts,
@@ -97,7 +114,7 @@ export function SchematicEditor({
   id,
   "aria-label": ariaLabel,
   onShortcuts,
-}: SchematicEditorProps): JSX.Element {
+}: SchematicEditorProps<S>): JSX.Element {
   const s = resolveStrings(CANVAS_STRINGS, strings);
   const reactId = useId();
   const patternId = (id ?? reactId).replace(/[^A-Za-z0-9_-]/g, "_");
@@ -107,63 +124,69 @@ export function SchematicEditor({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
-  const history = useHistory<Schematic>();
+  const history = useHistory<S>();
   const [mode, setMode] = useState<Mode>("select");
-  const [placeKind, setPlaceKind] = useState<ComponentKind | null>(null);
+  const [placeKind, setPlaceKind] = useState<string | null>(null);
   const [ghost, setGhost] = useState<Ghost>({ x: 200, y: 200, m: ORIENT_0, show: false });
   const fill = height === "fill";
-  const { view, setView, canvasHeight, toWorld, slack, fit, zoom } = useViewport(svgRef, canvasRef, fill ? null : height);
+  const { view, setView, canvasHeight, toWorld, slack, fit, zoom } = useViewport(
+    svgRef,
+    canvasRef,
+    fill ? null : height,
+    fitView(library.box),
+  );
   const [cursor, setCursor] = useState<Cursor>({ x: 0, y: 0, inside: false });
   const [hover, setHover] = useState<PinTarget | null>(null);
 
   // --- what the palette offers ------------------------------------------
-  const kinds = useMemo(
-    () => palette.kinds.filter((k) => (k !== "VCC" || supplies.vcc !== null) && (k !== "VEE" || supplies.vee !== null)),
-    [palette.kinds, supplies.vcc, supplies.vee],
-  );
-  const used = countedComponents(value, isTerminal);
+  const kinds = palette.kinds;
+  const used = countedParts(value.components, library);
   const full = used >= palette.maxComponents;
 
   // --- committing --------------------------------------------------------
   const apply = useCallback(
-    (next: Schematic, continuing = false) => {
+    (next: CanvasSchematic, continuing = false) => {
       if (!continuing) history.push(value);
-      onChange(withRoutes(next));
+      /* The one widening back to the host's type: see `onChange`. */
+      onChange(withRoutes(next, library) as S);
     },
-    [history, onChange, value],
+    [history, library, onChange, value],
   );
 
-  const { selection, setSelection, removeSelection, transformSelection, duplicate } = useSelection({
-    value, apply, readOnly, placing: mode === "place", setGhost, used, maxComponents: palette.maxComponents,
+  const { selection, setSelection, removeSelection, transformSelection, duplicate, canRemove, canDuplicate } = useSelection({
+    library, value, apply, readOnly, placing: mode === "place", setGhost, used, maxComponents: palette.maxComponents,
   });
 
   const place = useCallback(
     (x: number, y: number) => {
       if (placeKind === null || readOnly) return;
-      if (!isTerminal(placeKind) && full) return;
-      const c = newComponent(placeKind, x, y, ghost.m, value.components);
+      if (!library.part(placeKind).terminal && full) return;
+      const c = newComponent(placeKind, x, y, ghost.m, value.components, library);
       apply({ components: [...value.components, c], wires: value.wires });
       setSelection(new Set([c.id]));
     },
-    [apply, full, ghost.m, placeKind, readOnly, value],
+    [apply, full, ghost.m, library, placeKind, readOnly, value],
   );
 
   // --- what is drawn right now ------------------------------------------
   const { drag, setDrag, dragRef, lastVia, setPalDrag, displayed, componentUnder, viaUnder } = usePartDragging({
-    value, selection, slack, toWorld, place, setGhost, setMode, setPlaceKind,
+    library, value, selection, slack, toWorld, place, setGhost, setMode, setPlaceKind,
   });
 
-  const routes = useMemo(() => computeRoutes(displayed), [displayed]);
-  const obstacles = useMemo(() => ({ blocked: blockedCells(displayed.components), used: new Map<string, number>() }), [displayed]);
+  const routes = useMemo(() => computeRoutes(displayed, library), [displayed, library]);
+  const obstacles = useMemo(
+    () => ({ blocked: blockedCells(displayed.components, library), used: new Map<string, number>() }),
+    [displayed, library],
+  );
   const connected = useMemo(() => connectedPins(displayed), [displayed]);
   const byId = useMemo(() => indexOf(displayed.components), [displayed]);
 
   const { draft, setDraft, wireClick, cancelStep, wireUnder, draftPoints } = useWireDrawing({
-    value, apply, byId, obstacles, routes, slack, mode, setMode, setPlaceKind, setHover, cursor, hover,
+    library, value, apply, byId, obstacles, routes, slack, mode, setMode, setPlaceKind, setHover, cursor, hover,
   });
 
   /* Undo and redo hand the host a value it already had; nothing is re-routed. */
-  const restore = (to: Schematic | undefined): void => {
+  const restore = (to: S | undefined): void => {
     if (to === undefined) return;
     setSelection(new Set());
     setDraft(null);
@@ -174,7 +197,7 @@ export function SchematicEditor({
 
   // --- the pointer -------------------------------------------------------
   const pointer = usePointerTools({
-    rootRef, svgRef, value, apply, readOnly, mode, setMode, placeKind, place,
+    library, rootRef, svgRef, value, apply, readOnly, mode, setMode, placeKind, place,
     view, setView, toWorld, slack, selection, setSelection,
     dragRef, setDrag, lastVia, displayed, routes, componentUnder, viaUnder,
     wireUnder, wireClick, cancelStep, setCursor, setGhost, setHover,
@@ -204,7 +227,7 @@ export function SchematicEditor({
   const editing = useRef(false);
 
   const editComponent = useCallback(
-    (patch: Partial<SchematicComponent>) => {
+    (patch: Partial<CanvasComponent>) => {
       if (selectedComponent === null) return;
       const continuing = editing.current;
       editing.current = true;
@@ -220,7 +243,7 @@ export function SchematicEditor({
   );
 
   // --- render ------------------------------------------------------------
-  const grabTile = (kind: ComponentKind, x: number, y: number, rearm: boolean): void => {
+  const grabTile = (kind: string, x: number, y: number, rearm: boolean): void => {
     setMode("place");
     setPlaceKind(kind);
     setDraft(null);
@@ -241,6 +264,7 @@ export function SchematicEditor({
     >
       <Toolbar
         strings={s} readOnly={readOnly} mode={mode} selection={selection} zoom={zoom}
+        canRemove={canRemove} canDuplicate={canDuplicate}
         canUndo={history.canUndo} canRedo={history.canRedo}
         setMode={setMode} setPlaceKind={setPlaceKind} setDraft={setDraft}
         transform={transformSelection} duplicate={duplicate} remove={removeSelection} undo={undo} redo={redo} fit={fit}
@@ -248,7 +272,7 @@ export function SchematicEditor({
       <div className={cx("flex flex-col sm:flex-row", fill && "min-h-0 flex-1")}>
         {readOnly ? null : (
           <PaletteRail
-            strings={s} kinds={kinds} used={used} max={palette.maxComponents} full={full}
+            strings={s} library={library} kinds={kinds} used={used} max={palette.maxComponents} full={full}
             mode={mode} placeKind={placeKind} maxHeight={canvasHeight} onGrab={grabTile}
           />
         )}
@@ -279,17 +303,17 @@ export function SchematicEditor({
             onContextMenu={(e) => e.preventDefault()}
           >
             <Drawing
-              strings={s} patternId={patternId} schematic={displayed} routes={routes} selection={selection}
+              strings={s} library={library} patternId={patternId} schematic={displayed} routes={routes} selection={selection}
               connected={connected} hover={hover} highlightPins={highlightPins} highlightPorts={highlightPorts}
             />
             <Transient
-              draftPoints={draftPoints} draft={draft} wires={displayed.wires} selection={selection} mode={mode}
+              library={library} draftPoints={draftPoints} draft={draft} wires={displayed.wires} selection={selection} mode={mode}
               ghost={ghost} placeKind={placeKind} cursor={cursor} hover={hover} drag={drag}
             />
           </svg>
           {selectedComponent !== null ? (
             <Inspector
-              strings={s} component={selectedComponent} readOnly={readOnly}
+              strings={s} library={library} component={selectedComponent} readOnly={readOnly}
               nameDraft={nameDraft} setNameDraft={setNameDraft} editing={editing} edit={editComponent}
             />
           ) : null}

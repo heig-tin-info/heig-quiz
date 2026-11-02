@@ -14,9 +14,6 @@
  */
 import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
-import type { ComponentKind } from "../library.js";
-import type { Schematic, SchematicComponent, Wire, WireEnd } from "../schema.js";
-
 import {
   clampPoint,
   nextId,
@@ -28,20 +25,27 @@ import {
   type PinTarget,
 } from "./geometry.js";
 import { onPolyline, route, type Obstacles } from "./router.js";
+import type {
+  CanvasComponent,
+  CanvasSchematic,
+  CanvasWire,
+  CanvasWireEnd,
+  SchematicLibrary,
+} from "./schematicLibrary.js";
 import type { Mode } from "./useSelection.js";
 
 type Point = { x: number; y: number };
 
 /** The wire being drawn: where it started, and the corners clicked since. */
 export interface Draft {
-  readonly a: WireEnd;
+  readonly a: CanvasWireEnd;
   readonly via: ReadonlyArray<Point>;
 }
 
 /** What a click with the wire tool does. */
 export type WireStep =
   | { readonly kind: "draft"; readonly draft: Draft }
-  | { readonly kind: "finish"; readonly a: WireEnd; readonly via: ReadonlyArray<Point>; readonly b: WireEnd };
+  | { readonly kind: "finish"; readonly a: CanvasWireEnd; readonly via: ReadonlyArray<Point>; readonly b: CanvasWireEnd };
 
 /** A wire holds at most this many waypoints; further clicks in open space are ignored. */
 const MAX_VIA = 16;
@@ -59,6 +63,7 @@ export interface WireDrawing {
 }
 
 export function useWireDrawing({
+  library,
   value,
   apply,
   byId,
@@ -72,15 +77,16 @@ export function useWireDrawing({
   cursor,
   hover,
 }: {
-  value: Schematic;
-  apply: (next: Schematic) => void;
-  byId: ReadonlyMap<string, SchematicComponent>;
+  library: SchematicLibrary;
+  value: CanvasSchematic;
+  apply: (next: CanvasSchematic) => void;
+  byId: ReadonlyMap<string, CanvasComponent>;
   obstacles: Obstacles;
   routes: ReadonlyMap<string, ReadonlyArray<readonly [number, number]>>;
   slack: () => number;
   mode: Mode;
   setMode: Dispatch<SetStateAction<Mode>>;
-  setPlaceKind: Dispatch<SetStateAction<ComponentKind | null>>;
+  setPlaceKind: Dispatch<SetStateAction<string | null>>;
   setHover: Dispatch<SetStateAction<PinTarget | null>>;
   cursor: Point;
   hover: PinTarget | null;
@@ -88,24 +94,24 @@ export function useWireDrawing({
   const [draft, setDraft] = useState<Draft | null>(null);
 
   const finishWire = useCallback(
-    (a: WireEnd, via: ReadonlyArray<Point>, b: WireEnd) => {
-      const wire = finishedWire(value.wires, byId, obstacles, a, via, b);
+    (a: CanvasWireEnd, via: ReadonlyArray<Point>, b: CanvasWireEnd) => {
+      const wire = finishedWire(value.wires, byId, obstacles, a, via, b, library);
       if (wire === null) return;
       apply({ components: value.components, wires: [...value.wires, wire] });
       setDraft(null);
       setHover(null);
     },
-    [apply, byId, obstacles, setHover, value],
+    [apply, byId, library, obstacles, setHover, value],
   );
 
   const wireClick = useCallback(
     (target: PinTarget | null, onWire: string | null, world: Point) => {
-      const step = wireStep(draft, target, onWire, clampPoint(world.x, world.y));
+      const step = wireStep(draft, target, onWire, clampPoint(world.x, world.y, library));
       if (step === null) return;
       if (step.kind === "draft") setDraft(step.draft);
       else finishWire(step.a, step.via, step.b);
     },
-    [draft, finishWire],
+    [draft, finishWire, library],
   );
 
   const cancelStep = useCallback(() => {
@@ -133,17 +139,17 @@ export function useWireDrawing({
   // --- the draft polyline, drawn under the cursor ------------------------
   const draftPoints = useMemo(() => {
     if (draft === null) return null;
-    const a = resolveEnd(draft.a, byId);
+    const a = resolveEnd(draft.a, byId, library);
     if (a === null) return null;
-    const end = draftEnd(cursor, hover, byId);
+    const end = draftEnd(cursor, hover, byId, library);
     if (end === null) return null;
-    return route([a, ...draft.via.map((v) => ({ x: v.x, y: v.y, d: -1 as const })), end], obstacles);
-  }, [byId, cursor.x, cursor.y, draft, hover, obstacles]);
+    return route([a, ...draft.via.map((v) => ({ x: v.x, y: v.y, d: -1 as const })), end], obstacles, library);
+  }, [byId, cursor.x, cursor.y, draft, hover, library, obstacles]);
 
   return { draft, setDraft, wireClick, cancelStep, wireUnder, draftPoints };
 }
 
-const endOf = (target: PinTarget): WireEnd =>
+const endOf = (target: PinTarget): CanvasWireEnd =>
   target.kind === "pin" ? { kind: "pin", c: target.c, p: target.p } : { kind: "port", port: target.port };
 
 /** The first click: on a pin or port, or on a wire (a junction). Open space starts nothing. */
@@ -182,17 +188,18 @@ export function wireStep(
 
 /** The finished wire, routed through its waypoints; `null` when an end no longer resolves. */
 export function finishedWire(
-  wires: readonly Wire[],
-  byId: ReadonlyMap<string, SchematicComponent>,
+  wires: readonly CanvasWire[],
+  byId: ReadonlyMap<string, CanvasComponent>,
   obstacles: Obstacles,
-  a: WireEnd,
+  a: CanvasWireEnd,
   via: ReadonlyArray<Point>,
-  b: WireEnd,
-): Wire | null {
-  const pa = resolveEnd(a, byId);
-  const pb = resolveEnd(b, byId);
+  b: CanvasWireEnd,
+  library: SchematicLibrary,
+): CanvasWire | null {
+  const pa = resolveEnd(a, byId, library);
+  const pb = resolveEnd(b, byId, library);
   if (pa === null || pb === null) return null;
-  const points = route([pa, ...via.map((v) => ({ x: v.x, y: v.y, d: -1 as const })), pb], obstacles);
+  const points = route([pa, ...via.map((v) => ({ x: v.x, y: v.y, d: -1 as const })), pb], obstacles, library);
   return {
     id: nextId(
       "w",
@@ -209,10 +216,11 @@ export function finishedWire(
 function draftEnd(
   cursor: Point,
   hover: PinTarget | null,
-  byId: ReadonlyMap<string, SchematicComponent>,
+  byId: ReadonlyMap<string, CanvasComponent>,
+  library: SchematicLibrary,
 ): PinPoint | null {
   if (hover === null) return { x: cursor.x, y: cursor.y, d: -1 };
-  if (hover.kind === "port") return portPosition(hover.port);
+  if (hover.kind === "port") return portPosition(hover.port, library);
   const c = byId.get(hover.c);
-  return c === undefined ? null : pinPosition(c, hover.p);
+  return c === undefined ? null : pinPosition(c, hover.p, library);
 }

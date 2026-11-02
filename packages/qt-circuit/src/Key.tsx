@@ -14,7 +14,7 @@ import type { KeyProps } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
 import { KeyFigure, KeyFrame } from "@quiz/ui";
 
-import { SchematicView, type CanvasStrings } from "./canvas/index.js";
+import { CIRCUIT_LIBRARY, SchematicView, type CanvasStrings } from "./canvas/index.js";
 import type { CircuitSolution, CircuitStudent } from "./schema.js";
 import { KEY_STRINGS, type CircuitKeyStrings } from "./strings.js";
 
@@ -33,7 +33,13 @@ export function CircuitKey({ solution, revealed, density, stats, prompt, rows, s
         <KeyFigure density={density} caption={revealed ? s.reference : s.hidden}>
           <KeyFrame density={density} shown={revealed ? reference : null} revealed={revealed}>
             {(schematic, height) => (
-              <SchematicView schematic={schematic} height={height} strings={canvasStrings} aria-label={s.reference} />
+              <SchematicView
+                schematic={schematic}
+                library={CIRCUIT_LIBRARY}
+                height={height}
+                strings={canvasStrings}
+                aria-label={s.reference}
+              />
             )}
           </KeyFrame>
         </KeyFigure>

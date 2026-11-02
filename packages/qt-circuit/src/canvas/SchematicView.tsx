@@ -9,8 +9,7 @@
  */
 import { useId, type JSX } from "react";
 
-import { BOX, GRID, LIBRARY, MAJOR, PORT_IDS, type PortId } from "../library.js";
-import type { Schematic, SchematicComponent, Wire } from "../schema.js";
+import { GRID, MAJOR } from "../library.js";
 
 import { resolveStrings } from "@quiz/core/client";
 import { CANVAS_STRINGS, type CanvasStrings } from "./canvasStrings.js";
@@ -36,8 +35,7 @@ import {
   wireLine,
 } from "./canvasStyles.js";
 import {
-  FIT_ASPECT,
-  FIT_VIEW,
+  fitView,
   hitRectOf,
   pinPosition,
   portPosition,
@@ -46,7 +44,12 @@ import {
   type Placement,
 } from "./geometry.js";
 import { junctionPoints, pathOf } from "./router.js";
-import { SYMBOLS } from "./symbols.js";
+import type {
+  CanvasComponent,
+  CanvasSchematic,
+  CanvasWire,
+  SchematicLibrary,
+} from "./schematicLibrary.js";
 
 /** A pin the host wants flagged — a floating net, a short, whatever it found. */
 export interface FlaggedPin {
@@ -64,7 +67,7 @@ const safeId = (id: string): string => id.replace(/[^A-Za-z0-9_-]/g, "_");
 /**
  * The grid patterns; drawn INSIDE the box only, which is what {@link Paper}
  * does. The thick line falls every {@link MAJOR} cells from the box origin,
- * which is the lattice the border and the four port anchors are laid out on.
+ * which is the lattice the border and the port anchors are laid out on.
  */
 export function GridDefs({ id }: { id: string }): JSX.Element {
   const major = GRID * MAJOR;
@@ -82,33 +85,36 @@ export function GridDefs({ id }: { id: string }): JSX.Element {
 }
 
 /** The box the student wires inside: its grid and its outline, nothing else. */
-export function Paper({ id }: { id: string }): JSX.Element {
+export function Paper({ id, box }: { id: string; box: SchematicLibrary["box"] }): JSX.Element {
   return (
     <g>
-      <rect x={0} y={0} width={BOX.width} height={BOX.height} fill={`url(#${id}-maj)`} />
-      <rect className={boxOutline} x={0} y={0} width={BOX.width} height={BOX.height} />
+      <rect x={0} y={0} width={box.width} height={box.height} fill={`url(#${id}-maj)`} />
+      <rect className={boxOutline} x={0} y={0} width={box.width} height={box.height} />
     </g>
   );
 }
 
 /**
- * The four ports on the border, with their labels INSIDE the box: a label
- * hanging outside would be the first thing a narrow viewport clipped.
+ * The library's ports on the border (`circuit`'s four), with their labels
+ * INSIDE the box: a label hanging outside would be the first thing a narrow
+ * viewport clipped.
  */
 export function Ports({
   strings,
+  library,
   flagged,
   hovered,
 }: {
   strings: CanvasStrings;
-  flagged?: readonly PortId[] | undefined;
-  hovered?: PortId | null | undefined;
+  library: SchematicLibrary;
+  flagged?: readonly string[] | undefined;
+  hovered?: string | null | undefined;
 }): JSX.Element {
   return (
     <g>
-      {PORT_IDS.map((port) => {
-        const q = portPosition(port);
-        const right = q.x > BOX.width / 2;
+      {library.ports.map(({ name: port }) => {
+        const q = portPosition(port, library);
+        const right = q.x > library.box.width / 2;
         const isFlagged = flagged?.includes(port) ?? false;
         return (
           <g
@@ -140,7 +146,8 @@ export function Ports({
 // ---------------------------------------------------------------------------
 
 interface ComponentGlyphProps {
-  component: SchematicComponent;
+  library: SchematicLibrary;
+  component: CanvasComponent;
   selected?: boolean | undefined;
   /** A half-transparent preview under the cursor: no label, no mouse target. */
   ghost?: boolean | undefined;
@@ -151,6 +158,7 @@ interface ComponentGlyphProps {
 }
 
 export function ComponentGlyph({
+  library,
   component,
   selected = false,
   ghost = false,
@@ -158,10 +166,10 @@ export function ComponentGlyph({
   flaggedPins,
   hoveredPin,
 }: ComponentGlyphProps): JSX.Element {
-  const spec = LIBRARY[component.kind];
-  const symbol = SYMBOLS[component.kind];
+  const spec = library.part(component.kind);
+  const symbol = library.symbol(component.kind);
   const m = component.m;
-  const hit = hitRectOf(component);
+  const hit = hitRectOf(component, library);
 
   const label = spec.label_at;
   let text: JSX.Element | null = null;
@@ -238,7 +246,7 @@ export function ComponentGlyph({
         );
       })}
       {spec.pins.map((_, i) => {
-        const q = pinPosition(component, i);
+        const q = pinPosition(component, i, library);
         if (q === null) return null;
         const isFlagged = flaggedPins?.some((f) => f.c === component.id && f.p === i) ?? false;
         const isHovered = hoveredPin === i;
@@ -266,7 +274,7 @@ export function WireGlyph({
   points,
   selected = false,
 }: {
-  wire: Wire;
+  wire: CanvasWire;
   points: ReadonlyArray<readonly [number, number]>;
   selected?: boolean | undefined;
 }): JSX.Element | null {
@@ -281,15 +289,17 @@ export function WireGlyph({
 }
 
 export function Junctions({
+  library,
   schematic,
   routes,
 }: {
-  schematic: Schematic;
+  library: SchematicLibrary;
+  schematic: CanvasSchematic;
   routes: ReadonlyMap<string, ReadonlyArray<readonly [number, number]>>;
 }): JSX.Element {
   return (
     <g className={inkNormal}>
-      {junctionPoints(schematic, routes).map(([x, y]) => (
+      {junctionPoints(schematic, routes, library).map(([x, y]) => (
         <circle key={`${x},${y}`} className={junctionDot} cx={x} cy={y} r={3.6} />
       ))}
     </g>
@@ -297,7 +307,7 @@ export function Junctions({
 }
 
 /** `"c1:0"` for every pin a wire ends on: those pins are drawn by the wire, not twice. */
-export function connectedPins(schematic: Schematic): Set<string> {
+export function connectedPins(schematic: CanvasSchematic): Set<string> {
   const set = new Set<string>();
   for (const w of schematic.wires) {
     for (const e of [w.a, w.b]) {
@@ -309,15 +319,17 @@ export function connectedPins(schematic: Schematic): Set<string> {
 
 /** A small preview of one symbol alone, for a palette tile. */
 export function SymbolPreview({
+  library,
   kind,
   width = 44,
   height = 24,
 }: {
-  kind: SchematicComponent["kind"];
+  library: SchematicLibrary;
+  kind: string;
   width?: number;
   height?: number;
 }): JSX.Element {
-  const symbol = SYMBOLS[kind];
+  const symbol = library.symbol(kind);
   return (
     <svg
       viewBox={symbol.viewBox}
@@ -346,18 +358,21 @@ export function SymbolPreview({
 // ---------------------------------------------------------------------------
 
 interface SchematicViewProps {
-  schematic: Schematic;
+  schematic: CanvasSchematic;
+  /** The parts, the box and the ports. */
+  library: SchematicLibrary;
   strings?: Partial<CanvasStrings> | undefined;
   className?: string | undefined;
   /** The tallest the drawing gets, in px; it shrinks to fit a narrow column. */
   height?: number | undefined;
   flaggedPins?: readonly FlaggedPin[] | undefined;
-  flaggedPorts?: readonly PortId[] | undefined;
+  flaggedPorts?: readonly string[] | undefined;
   "aria-label"?: string | undefined;
 }
 
 export function SchematicView({
   schematic,
+  library,
   strings,
   className,
   height = 320,
@@ -372,13 +387,14 @@ export function SchematicView({
     schematic.wires.map((w) => [w.id, w.points]),
   );
   const empty = schematic.components.length === 0 && schematic.wires.length === 0;
+  const fit = fitView(library.box);
 
   return (
     <div className={cx("relative w-full", className)}>
       <svg
         role="img"
         aria-label={ariaLabel ?? s.viewLabel}
-        viewBox={viewBoxAttr(FIT_VIEW)}
+        viewBox={viewBoxAttr(fit)}
         preserveAspectRatio="xMidYMid meet"
         /*
          * The same fit as the editor: the drawing IS the frame plus its
@@ -388,31 +404,32 @@ export function SchematicView({
          */
         style={{
           width: "100%",
-          maxWidth: Math.round(height * FIT_ASPECT),
+          maxWidth: Math.round(height * (fit.w / fit.h)),
           height: "auto",
           maxHeight: height,
         }}
         className="mx-auto block"
       >
         <GridDefs id={id} />
-        <Paper id={id} />
+        <Paper id={id} box={library.box} />
         <g>
           {schematic.wires.map((w) => (
             <WireGlyph key={w.id} wire={w} points={w.points} />
           ))}
         </g>
-        <Junctions schematic={schematic} routes={routes} />
+        <Junctions library={library} schematic={schematic} routes={routes} />
         <g>
           {schematic.components.map((c) => (
             <ComponentGlyph
               key={c.id}
+              library={library}
               component={c}
               connected={connected}
               {...(flaggedPins === undefined ? {} : { flaggedPins })}
             />
           ))}
         </g>
-        <Ports strings={s} {...(flaggedPorts === undefined ? {} : { flagged: flaggedPorts })} />
+        <Ports strings={s} library={library} {...(flaggedPorts === undefined ? {} : { flagged: flaggedPorts })} />
       </svg>
       {empty ? (
         <span className={cx(emptyNote, "pointer-events-none absolute inset-0 grid place-items-center")}>

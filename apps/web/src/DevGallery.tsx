@@ -1,6 +1,15 @@
 import { DiagramEditor, DiagramView } from "@quiz/diagram/client";
 import { DIAGRAM_KINDS, EXAMPLES, type DiagramKind, type Scene } from "@quiz/diagram/server";
-import { Plot, SchematicEditor, SchematicView, withRoutes, type PlotProps, type SchematicEditorProps } from "@quiz/qt-circuit/canvas";
+import {
+  CIRCUIT_LIBRARY,
+  offeredKinds,
+  Plot,
+  SchematicEditor,
+  SchematicView,
+  withRoutes,
+  type PlotProps,
+  type SchematicEditorProps,
+} from "@quiz/qt-circuit/canvas";
 import { Pencil, Trash2, UserMinus, Users } from "lucide-react";
 import { useState } from "react";
 
@@ -179,11 +188,15 @@ const ORG_PICTURE = `data:image/svg+xml,${encodeURIComponent(
    labels above — this page is development only and never ships. */
 
 type CircuitSchematic = SchematicEditorProps["value"];
-type CircuitPalette = SchematicEditorProps["palette"];
 type CircuitSeries = NonNullable<PlotProps["series"]>;
 
-const CIRCUIT_PALETTE: CircuitPalette = {
-  kinds: ["R", "C", "L", "D", "DS", "DZ", "NPN", "PNP", "NMOS", "PMOS", "NMOSD", "PMOSD", "OPAMP", "GND", "VCC", "VEE"],
+const CIRCUIT_PALETTE = {
+  kinds: offeredKinds(
+    {
+      kinds: ["R", "C", "L", "D", "DS", "DZ", "NPN", "PNP", "NMOS", "PMOS", "NMOSD", "PMOSD", "OPAMP", "GND", "VCC", "VEE"],
+    },
+    { vcc: 12, vee: -12 },
+  ),
   maxComponents: 12,
 };
 
@@ -480,7 +493,7 @@ export function DevGallery() {
         <SectionHeading title={t("dev.ui.circuitView")} />
         <div className="grid items-start gap-4 lg:grid-cols-2">
           <Card>
-            <SchematicView schematic={CIRCUIT_DEMO} height={260} />
+            <SchematicView schematic={CIRCUIT_DEMO} library={CIRCUIT_LIBRARY} height={260} />
           </Card>
           <div className="space-y-4">
             <Plot series={CIRCUIT_SERIES} expected={CIRCUIT_EXPECTED} title={t("dev.ui.sine")} height={200} />
@@ -591,8 +604,8 @@ function CircuitEditorDemo() {
     <SchematicEditor
       value={schematic}
       onChange={setSchematic}
+      library={CIRCUIT_LIBRARY}
       palette={CIRCUIT_PALETTE}
-      supplies={{ vcc: 12, vee: -12 }}
       highlightPins={[{ c: "c5", p: 1 }]}
     />
   );

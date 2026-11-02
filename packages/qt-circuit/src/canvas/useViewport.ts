@@ -13,7 +13,6 @@
 import { useCallback, useEffect, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 
 import {
-  FIT_VIEW,
   clampView,
   fitCanvasHeight,
   screenToWorld,
@@ -62,8 +61,10 @@ export function useViewport(
   canvasRef: RefObject<HTMLDivElement | null>,
   /** The cap, in px; `null` when the area FILLS its parent (the expand layer) and is only measured. */
   height: number | null,
+  /** The whole box plus its margin (`fitView`): the first view, and the floor of zoom-out. */
+  fit: ViewBox,
 ): Viewport {
-  const [view, setView] = useState<ViewBox>(FIT_VIEW);
+  const [view, setView] = useState<ViewBox>(fit);
   /* The drawing area is as tall as the fitted view is, for the width it was
      given — never taller, or the frame floats in a band of empty canvas. */
   const [canvasHeight, setCanvasHeight] = useState<number>(height ?? 0);
@@ -98,7 +99,7 @@ export function useViewport(
     if (el === null) return;
     const measure = (): void => {
       setCanvasHeight((current) => {
-        const next = height === null ? el.clientHeight : fitCanvasHeight(el.clientWidth, height);
+        const next = height === null ? el.clientHeight : fitCanvasHeight(el.clientWidth, height, fit);
         return next === current ? current : next;
       });
     };
@@ -112,7 +113,7 @@ export function useViewport(
       observer.disconnect();
       document.removeEventListener("fullscreenchange", measure);
     };
-  }, [canvasRef, height]);
+  }, [canvasRef, fit, height]);
 
   /* Wheel has to be a native listener: React registers `wheel` passively on
      the root, where `preventDefault` is a no-op and the page scrolls away. */
@@ -122,13 +123,13 @@ export function useViewport(
     const onWheel = (e: WheelEvent): void => {
       e.preventDefault();
       const w = toWorld(e.clientX, e.clientY);
-      setView((v) => zoomAt(v, Math.exp(-e.deltaY * 0.0015), w.x, w.y));
+      setView((v) => zoomAt(v, Math.exp(-e.deltaY * 0.0015), w.x, w.y, fit));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [svgRef, toWorld]);
+  }, [fit, svgRef, toWorld]);
 
-  return { view, setView, canvasHeight, toWorld, slack, fit: () => setView(FIT_VIEW), zoom: zoomPercent(view) };
+  return { view, setView, canvasHeight, toWorld, slack, fit: () => setView(fit), zoom: zoomPercent(view, fit) };
 }
 
 /** A pan starts where the button went down, from the view as it is. */
@@ -144,11 +145,11 @@ export function panStart(
  * MOVED past three canvas units, so that a right click that did not travel
  * still counts as a click (it steps the wire tool back).
  */
-export function panned(d: PanDrag, svg: SVGSVGElement | null, clientX: number, clientY: number): ViewBox {
+export function panned(d: PanDrag, svg: SVGSVGElement | null, clientX: number, clientY: number, fit: ViewBox): ViewBox {
   const rect = svg?.getBoundingClientRect();
   const k = rect === undefined ? 1 : viewScale(rect, d.view);
   const dx = (clientX - d.cx) / k;
   const dy = (clientY - d.cy) / k;
   if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
-  return clampView({ ...d.view, x: d.view.x - dx, y: d.view.y - dy });
+  return clampView({ ...d.view, x: d.view.x - dx, y: d.view.y - dy }, fit);
 }

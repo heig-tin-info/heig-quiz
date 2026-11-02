@@ -11,7 +11,7 @@
  * the same `{var}` syntax, so it translates these entries key by key like any
  * other. A count-dependent sentence has a `<key>.one` sibling, used for 1.
  */
-import { LIBRARY, type ComponentKind, type PortId } from "../library.js";
+import { LIBRARY, type ComponentSpec } from "../library.js";
 
 export const CANVAS_STRINGS = {
   /** Accessible name of the editor's canvas, when the host gives none. */
@@ -58,9 +58,12 @@ export const CANVAS_STRINGS = {
   hintPlace: "{kind}: click to place, R to rotate, H or V to mirror, Escape to stop.",
   cursor: "x {x}  y {y}",
 
-  /** The label of a kind, for a palette tooltip and the inspector title. */
-  kind: (kind: ComponentKind): string => LIBRARY[kind].label,
-  port: (port: PortId): string => port,
+  /**
+   * The label of a kind, for a palette tooltip and the inspector title. The
+   * default knows `circuit`'s kinds; a host with another library passes its own.
+   */
+  kind: (kind: string): string => (LIBRARY as Readonly<Record<string, ComponentSpec | undefined>>)[kind]?.label ?? kind,
+  port: (port: string): string => port,
   emptySchematic: "Nothing drawn yet.",
 
   plotEmpty: "Run a simulation to see the output",

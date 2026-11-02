@@ -12,7 +12,7 @@
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import type { ReviewProps } from "@quiz/core/client";
 
-import { Plot, SchematicView, type CanvasStrings } from "./canvas/index.js";
+import { CIRCUIT_LIBRARY, Plot, SchematicView, type CanvasStrings } from "./canvas/index.js";
 import type {
   CircuitAnswer,
   CircuitDetails,
@@ -218,12 +218,12 @@ export function CircuitReview({
         <div className={cx("grid gap-3", reference ? "lg:grid-cols-2" : "")}>
           <section className={cx(card, "flex flex-col gap-2 p-4")}>
             <h3 className={sectionTitle}>{s.yourCircuit}</h3>
-            <SchematicView schematic={schematic} {...canvas} />
+            <SchematicView schematic={schematic} library={CIRCUIT_LIBRARY} {...canvas} />
           </section>
           {reference ? (
             <section className={cx(card, "flex flex-col gap-2 p-4")}>
               <h3 className={sectionTitle}>{s.reference}</h3>
-              <SchematicView schematic={reference} {...canvas} />
+              <SchematicView schematic={reference} library={CIRCUIT_LIBRARY} {...canvas} />
             </section>
           ) : null}
         </div>

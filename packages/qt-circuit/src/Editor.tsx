@@ -17,8 +17,8 @@ import { useId, type ReactNode } from "react";
 import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
 import type { ConfigIssue, EditorProps } from "@quiz/core/client";
 
-import { Plot, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
-import { COMPONENT_KINDS, type ComponentKind } from "./library.js";
+import { CIRCUIT_LIBRARY, Plot, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
+import { COMPONENT_KINDS, offeredKinds, type ComponentKind } from "./library.js";
 import {
   DEFAULT_AC_ANALYSIS,
   DEFAULT_ANALYSIS,
@@ -377,11 +377,11 @@ export function CircuitEditor({
           {(expanded) => (
             <SchematicEditor
               id={`${ids}-reference`}
+              library={CIRCUIT_LIBRARY}
               aria-label={s.reference}
               value={config.reference ?? { components: [], wires: [] }}
               onChange={(reference: Schematic) => patch({ reference })}
-              palette={{ kinds: config.palette.kinds, maxComponents: 40 }}
-              supplies={config.supplies}
+              palette={{ kinds: offeredKinds(config.palette, config.supplies), maxComponents: 40 }}
               readOnly={disabled === true}
               {...(expanded ? { height: "fill" as const } : {})}
               {...canvasProps(canvasStrings)}

@@ -24,10 +24,16 @@ import {
   type SetStateAction,
 } from "react";
 
-import { BOX, type ComponentKind } from "../library.js";
-import type { Orientation, Schematic, SchematicComponent, Wire, WireEnd } from "../schema.js";
+import type { Orientation } from "../schema.js";
 
 import { clampPoint, clampToBox, extentOf, hitRectOf, snap } from "./geometry.js";
+import type {
+  CanvasComponent,
+  CanvasSchematic,
+  CanvasWire,
+  CanvasWireEnd,
+  SchematicLibrary,
+} from "./schematicLibrary.js";
 import { linkedWires, type BoxDrag, type Mode } from "./useSelection.js";
 import type { PanDrag, WorldPoint } from "./useViewport.js";
 
@@ -66,7 +72,7 @@ export interface Ghost {
 
 /** A palette tile held down: where it was pressed, and whether it has travelled. */
 export interface PaletteDrag {
-  kind: ComponentKind;
+  kind: string;
   x: number;
   y: number;
   moved: boolean;
@@ -93,12 +99,13 @@ export interface PartDragging {
   lastVia: RefObject<LastVia | null>;
   setPalDrag: Dispatch<SetStateAction<PaletteDrag | null>>;
   /** The schematic as drawn: the value, with a move in flight applied. */
-  displayed: Schematic;
+  displayed: CanvasSchematic;
   componentUnder: (x: number, y: number) => string | null;
   viaUnder: (x: number, y: number) => { wire: string; index: number } | null;
 }
 
 export function usePartDragging({
+  library,
   value,
   selection,
   slack,
@@ -108,14 +115,15 @@ export function usePartDragging({
   setMode,
   setPlaceKind,
 }: {
-  value: Schematic;
+  library: SchematicLibrary;
+  value: CanvasSchematic;
   selection: ReadonlySet<string>;
   slack: () => number;
   toWorld: (clientX: number, clientY: number) => WorldPoint;
   place: (x: number, y: number) => void;
   setGhost: Dispatch<SetStateAction<Ghost>>;
   setMode: Dispatch<SetStateAction<Mode>>;
-  setPlaceKind: Dispatch<SetStateAction<ComponentKind | null>>;
+  setPlaceKind: Dispatch<SetStateAction<string | null>>;
 }): PartDragging {
   const [drag, setDrag] = useState<Drag | null>(null);
   /* The drag mutates on every pointer move; a ref keeps the handler stable and
@@ -130,13 +138,13 @@ export function usePartDragging({
   const [palDrag, setPalDrag] = useState<PaletteDrag | null>(null);
 
   const displayed = useMemo(() => {
-    if (drag?.kind === "move" && drag.moved) return movedBy(value, selection, drag.dx, drag.dy);
+    if (drag?.kind === "move" && drag.moved) return movedBy(value, selection, drag.dx, drag.dy, library);
     return value;
-  }, [drag, selection, value]);
+  }, [drag, library, selection, value]);
 
   const componentUnder = useCallback(
-    (x: number, y: number): string | null => componentAt(displayed.components, x, y),
-    [displayed],
+    (x: number, y: number): string | null => componentAt(displayed.components, x, y, library),
+    [displayed, library],
   );
 
   const viaUnder = useCallback(
@@ -151,7 +159,7 @@ export function usePartDragging({
       if (Math.hypot(e.clientX - palDrag.x, e.clientY - palDrag.y) > TILE_TRAVEL) {
         setPalDrag((p) => (p === null ? p : { ...p, moved: true }));
         const w = toWorld(e.clientX, e.clientY);
-        setGhost(ghostAt(palDrag.kind, snap(w.x), snap(w.y), w.inside));
+        setGhost(ghostAt(palDrag.kind, snap(w.x), snap(w.y), w.inside, library));
       }
     };
     const up = (e: PointerEvent): void => {
@@ -172,7 +180,7 @@ export function usePartDragging({
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [palDrag, place, setGhost, setMode, setPlaceKind, toWorld]);
+  }, [library, palDrag, place, setGhost, setMode, setPlaceKind, toWorld]);
 
   return { drag, setDrag, dragRef, lastVia, setPalDrag, displayed, componentUnder, viaUnder };
 }
@@ -180,17 +188,23 @@ export function usePartDragging({
 // --- moving parts -------------------------------------------------------
 
 /** The move the box allows, out of the one the pointer asked for. */
-function clampDelta(components: readonly SchematicComponent[], dx: number, dy: number): { dx: number; dy: number } {
+function clampDelta(
+  components: readonly CanvasComponent[],
+  dx: number,
+  dy: number,
+  library: SchematicLibrary,
+): { dx: number; dy: number } {
+  const box = library.box;
   let lowX = -Infinity;
   let highX = Infinity;
   let lowY = -Infinity;
   let highY = Infinity;
   for (const c of components) {
-    const e = extentOf(c);
+    const e = extentOf(c, library);
     lowX = Math.max(lowX, -e.x0);
-    highX = Math.min(highX, BOX.width - e.x1);
+    highX = Math.min(highX, box.width - e.x1);
     lowY = Math.max(lowY, -e.y0);
-    highY = Math.min(highY, BOX.height - e.y1);
+    highY = Math.min(highY, box.height - e.y1);
   }
   if (components.length === 0) return { dx, dy };
   return {
@@ -200,17 +214,23 @@ function clampDelta(components: readonly SchematicComponent[], dx: number, dy: n
 }
 
 /** The whole selection shifted by (dx, dy): components, waypoints and free ends. */
-export function movedBy(schematic: Schematic, selection: ReadonlySet<string>, dx: number, dy: number): Schematic {
+export function movedBy(
+  schematic: CanvasSchematic,
+  selection: ReadonlySet<string>,
+  dx: number,
+  dy: number,
+  library: SchematicLibrary,
+): CanvasSchematic {
   const picked = schematic.components.filter((c) => selection.has(c.id));
-  const d = clampDelta(picked, dx, dy);
+  const d = clampDelta(picked, dx, dy, library);
   if (d.dx === 0 && d.dy === 0) return schematic;
   const pickedIds = new Set(picked.map((c) => c.id));
   const wires = new Set(linkedWires(schematic, selection).map((w) => w.id));
-  const shiftEnd = (e: WireEnd): WireEnd =>
-    e.kind === "free" ? { kind: "free", ...clampPoint(e.x + d.dx, e.y + d.dy) } : e;
+  const shiftEnd = (e: CanvasWireEnd): CanvasWireEnd =>
+    e.kind === "free" ? { kind: "free", ...clampPoint(e.x + d.dx, e.y + d.dy, library) } : e;
   return {
     components: schematic.components.map((c) =>
-      pickedIds.has(c.id) ? { ...c, ...clampToBox(c.kind, c.m, c.x + d.dx, c.y + d.dy) } : c,
+      pickedIds.has(c.id) ? { ...c, ...clampToBox(c.kind, c.m, c.x + d.dx, c.y + d.dy, library) } : c,
     ),
     wires: schematic.wires.map((w) =>
       wires.has(w.id)
@@ -218,7 +238,7 @@ export function movedBy(schematic: Schematic, selection: ReadonlySet<string>, dx
             ...w,
             a: shiftEnd(w.a),
             b: shiftEnd(w.b),
-            via: w.via.map((v) => clampPoint(v.x + d.dx, v.y + d.dy)),
+            via: w.via.map((v) => clampPoint(v.x + d.dx, v.y + d.dy, library)),
           }
         : w,
     ),
@@ -237,11 +257,16 @@ export function moveStep(d: MoveDrag, w: Point): MoveDrag | null {
 }
 
 /** The topmost component whose hit box holds (x, y). */
-function componentAt(components: readonly SchematicComponent[], x: number, y: number): string | null {
+function componentAt(
+  components: readonly CanvasComponent[],
+  x: number,
+  y: number,
+  library: SchematicLibrary,
+): string | null {
   for (let i = components.length - 1; i >= 0; i -= 1) {
     const c = components[i];
     if (c === undefined) continue;
-    const r = hitRectOf(c);
+    const r = hitRectOf(c, library);
     if (x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) return c.id;
   }
   return null;
@@ -251,7 +276,7 @@ function componentAt(components: readonly SchematicComponent[], x: number, y: nu
 
 /** A waypoint of a SELECTED wire within `r` of (x, y): only those show a handle. */
 function viaAt(
-  wires: readonly Wire[],
+  wires: readonly CanvasWire[],
   selection: ReadonlySet<string>,
   x: number,
   y: number,
@@ -286,7 +311,7 @@ export function viaStart(via: { wire: string; index: number }): ViaDrag {
 }
 
 /** The schematic without that one waypoint. */
-export function withoutVia(value: Schematic, via: { wire: string; index: number }): Schematic {
+export function withoutVia(value: CanvasSchematic, via: { wire: string; index: number }): CanvasSchematic {
   return {
     components: value.components,
     wires: value.wires.map((x) => (x.id === via.wire ? { ...x, via: x.via.filter((_, i) => i !== via.index) } : x)),
@@ -294,11 +319,11 @@ export function withoutVia(value: Schematic, via: { wire: string; index: number 
 }
 
 /** The schematic with the dragged waypoint on grid point `at`; `null` when it is already there. */
-export function viaMoved(value: Schematic, d: ViaDrag, at: Point): Schematic | null {
+export function viaMoved(value: CanvasSchematic, d: ViaDrag, at: Point, library: SchematicLibrary): CanvasSchematic | null {
   const wire = value.wires.find((x) => x.id === d.wire);
   const v = wire?.via[d.index];
   if (wire === undefined || v === undefined || (v.x === at.x && v.y === at.y)) return null;
-  const point = clampPoint(at.x, at.y);
+  const point = clampPoint(at.x, at.y, library);
   return {
     components: value.components,
     wires: value.wires.map((x) =>
@@ -311,5 +336,5 @@ export function viaMoved(value: Schematic, d: ViaDrag, at: Point): Schematic | n
 
 /** The ghost moved to grid point (x, y), kept inside the box. */
 export const ghostAt =
-  (kind: ComponentKind, x: number, y: number, show: boolean) =>
-  (g: Ghost): Ghost => ({ ...g, ...clampToBox(kind, g.m, x, y), show });
+  (kind: string, x: number, y: number, show: boolean, library: SchematicLibrary) =>
+  (g: Ghost): Ghost => ({ ...g, ...clampToBox(kind, g.m, x, y, library), show });

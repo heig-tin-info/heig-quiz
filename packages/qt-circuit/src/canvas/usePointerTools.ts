@@ -19,10 +19,7 @@ import {
   type SetStateAction,
 } from "react";
 
-import type { ComponentKind } from "../library.js";
-import type { Schematic } from "../schema.js";
-
-import { pinAt, snap, type PinTarget, type ViewBox } from "./geometry.js";
+import { fitView, pinAt, snap, type PinTarget, type ViewBox } from "./geometry.js";
 import {
   ghostAt,
   moveStart,
@@ -37,6 +34,7 @@ import {
   type MoveDrag,
   type ViaDrag,
 } from "./usePartDragging.js";
+import type { CanvasSchematic, SchematicLibrary } from "./schematicLibrary.js";
 import { boxSelection, boxStart, pressed, type Mode } from "./useSelection.js";
 import { panStart, panned, type WorldPoint } from "./useViewport.js";
 
@@ -52,14 +50,15 @@ export interface Cursor {
 
 /** Everything the pointer reads or sets, gathered from the editor and its hooks. */
 export interface PointerTools {
+  library: SchematicLibrary;
   rootRef: RefObject<HTMLDivElement | null>;
   svgRef: RefObject<SVGSVGElement | null>;
-  value: Schematic;
-  apply: (next: Schematic, continuing?: boolean) => void;
+  value: CanvasSchematic;
+  apply: (next: CanvasSchematic, continuing?: boolean) => void;
   readOnly: boolean;
   mode: Mode;
   setMode: Dispatch<SetStateAction<Mode>>;
-  placeKind: ComponentKind | null;
+  placeKind: string | null;
   place: (x: number, y: number) => void;
   view: ViewBox;
   setView: Dispatch<SetStateAction<ViewBox>>;
@@ -70,7 +69,7 @@ export interface PointerTools {
   dragRef: RefObject<Drag | null>;
   setDrag: Dispatch<SetStateAction<Drag | null>>;
   lastVia: RefObject<{ wire: string; index: number; at: number } | null>;
-  displayed: Schematic;
+  displayed: CanvasSchematic;
   routes: ReadonlyMap<string, ReadonlyArray<readonly [number, number]>>;
   componentUnder: (x: number, y: number) => string | null;
   viaUnder: (x: number, y: number) => { wire: string; index: number } | null;
@@ -101,6 +100,7 @@ export function usePointerTools(t: PointerTools): PointerHandlers {
       t.apply,
       t.componentUnder,
       t.displayed.components,
+      t.library,
       t.mode,
       t.place,
       t.readOnly,
@@ -117,12 +117,12 @@ export function usePointerTools(t: PointerTools): PointerHandlers {
 
   const onPointerMove = useCallback(
     (e: SvgPointer) => pointerMove(t, e),
-    [t.apply, t.displayed.components, t.mode, t.placeKind, t.readOnly, t.slack, t.toWorld, t.value],
+    [t.apply, t.displayed.components, t.library, t.mode, t.placeKind, t.readOnly, t.slack, t.toWorld, t.value],
   );
 
   const onPointerUp = useCallback(
     (e: SvgPointer) => pointerUp(t, e),
-    [t.apply, t.cancelStep, t.displayed.components, t.routes, t.selection, t.value],
+    [t.apply, t.cancelStep, t.displayed.components, t.library, t.routes, t.selection, t.value],
   );
 
   return { onPointerDown, onPointerMove, onPointerUp };
@@ -157,7 +157,7 @@ function leftPress(t: PointerTools, w: WorldPoint, shift: boolean): void {
     t.place(snap(w.x), snap(w.y));
     return;
   }
-  const target = pinAt(t.displayed.components, w.x, w.y, t.slack());
+  const target = pinAt(t.displayed.components, w.x, w.y, t.slack(), t.library);
   const onWire = t.wireUnder(w.x, w.y);
   if (!t.readOnly && (pressWaypoint(t, w) || pressWire(t, target, onWire, w, shift))) return;
   pressSelect(t, t.componentUnder(w.x, w.y) ?? onWire, w, shift);
@@ -199,7 +199,7 @@ function pointerMove(t: PointerTools, e: SvgPointer): void {
   const w = t.toWorld(e.clientX, e.clientY);
   const at = { x: snap(w.x), y: snap(w.y) };
   t.setCursor({ ...at, inside: w.inside });
-  if (t.mode === "place" && t.placeKind !== null) t.setGhost(ghostAt(t.placeKind, at.x, at.y, w.inside));
+  if (t.mode === "place" && t.placeKind !== null) t.setGhost(ghostAt(t.placeKind, at.x, at.y, w.inside, t.library));
   const d = t.dragRef.current;
   if (d === null) t.setHover(hoverAt(t, w));
   else dragTo(t, d, e, w, at);
@@ -208,13 +208,13 @@ function pointerMove(t: PointerTools, e: SvgPointer): void {
 /** The pin or port under a free pointer, for the tools that start wires. */
 function hoverAt(t: PointerTools, w: WorldPoint): PinTarget | null {
   const armed = (t.mode === "wire" || t.mode === "select") && w.inside && !t.readOnly;
-  return armed ? pinAt(t.displayed.components, w.x, w.y, t.slack()) : null;
+  return armed ? pinAt(t.displayed.components, w.x, w.y, t.slack(), t.library) : null;
 }
 
 function dragTo(t: PointerTools, d: Drag, e: SvgPointer, w: Point, at: Point): void {
   switch (d.kind) {
     case "pan":
-      t.setView(panned(d, t.svgRef.current, e.clientX, e.clientY));
+      t.setView(panned(d, t.svgRef.current, e.clientX, e.clientY, fitView(t.library.box)));
       return;
     case "move":
       dragParts(t, d, w);
@@ -235,7 +235,7 @@ function dragParts(t: PointerTools, d: MoveDrag, w: Point): void {
 
 /** A waypoint follows the pointer live; the whole drag is ONE undo step. */
 function dragWaypoint(t: PointerTools, d: ViaDrag, at: Point): void {
-  const next = viaMoved(t.value, d, at);
+  const next = viaMoved(t.value, d, at, t.library);
   if (next === null) return;
   t.apply(next, d.moved);
   t.setDrag({ ...d, moved: true });
@@ -256,7 +256,7 @@ function pointerUp(t: PointerTools, e: SvgPointer): void {
       releaseParts(t, d, e.shiftKey);
       return;
     case "box":
-      t.setSelection(boxSelection(d, t.displayed.components, t.routes));
+      t.setSelection(boxSelection(d, t.displayed.components, t.routes, t.library));
       return;
     case "via":
       return;
@@ -265,6 +265,6 @@ function pointerUp(t: PointerTools, e: SvgPointer): void {
 
 /** A move commits on release; a click that did not move narrows the selection to what it hit. */
 function releaseParts(t: PointerTools, d: MoveDrag, shift: boolean): void {
-  if (d.moved) t.apply(movedBy(t.value, t.selection, d.dx, d.dy));
+  if (d.moved) t.apply(movedBy(t.value, t.selection, d.dx, d.dy, t.library));
   else if (d.collapse !== null && !shift) t.setSelection(new Set([d.collapse]));
 }

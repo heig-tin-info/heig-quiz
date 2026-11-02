@@ -13,7 +13,8 @@ import { typeIcon } from "@quiz/ui";
 import { circuitGrading } from "./grading.js";
 import { isCircuitAnswered } from "./schema.js";
 
-import { LIBRARY } from "./library.js";
+import { CIRCUIT_PARTS } from "./library.js";
+import { countedParts } from "./parts.js";
 import type {
   CircuitAnswer,
   CircuitConfig,
@@ -71,7 +72,7 @@ export const circuitClient: QuestionTypeClient<
    */
   summarize(answer, student) {
     if (answer === null) return "—";
-    const counted = answer.schematic.components.filter((c) => !LIBRARY[c.kind].terminal).length;
+    const counted = countedParts(answer.schematic.components, CIRCUIT_PARTS);
     if (counted === 0 && answer.schematic.wires.length === 0) return "—";
     return `${counted}/${student.palette.maxComponents}`;
   },
