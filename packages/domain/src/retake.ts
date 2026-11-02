@@ -16,6 +16,7 @@
  *
  * Pure: the current instant is injected, nothing is read from a database.
  */
+import { checkAllowed } from "./correction.js";
 import { isLiveState, type EvaluationModeName } from "./evaluationConfig.js";
 import type { EvaluationStateName } from "./itemList.js";
 import type { NavigationMode } from "./questionProgress.js";
@@ -149,11 +150,18 @@ export function isFinishedAttempt(state: string): boolean {
  * is graded at its next; once it is over, every attempt (an attempt left
  * open by a reopen before #95 included). A practice attempt started after
  * the due date (ADR-122) is graded at its hand-in only, whatever the state.
+ *
+ * ADR-124 §3: a CHECKED question of an exercise (`cell`) is gradable
+ * whatever the attempt's state — its check graded it while the attempt was
+ * open, and a runner's verdict lands after it — on a practice attempt as on
+ * any other; and a reopen does not stand its grading down.
  */
 export function gradableNow(
   evaluationState: EvaluationStateName,
   attempt: { state: AttemptStateName; afterDue?: boolean | undefined },
+  cell?: { mode: EvaluationModeName; checked: boolean },
 ): boolean {
+  if (cell?.checked === true && checkAllowed(cell.mode)) return true;
   if (attempt.afterDue === true) return isFinishedAttempt(attempt.state);
   return !isLiveState(evaluationState) || isFinishedAttempt(attempt.state);
 }

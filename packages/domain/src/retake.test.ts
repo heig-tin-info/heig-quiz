@@ -155,6 +155,20 @@ describe("gradableNow (ADR-067)", () => {
     expect(gradableNow("closed", { state: "in_progress" })).toBe(true);
     expect(gradableNow("released", { state: "submitted" })).toBe(true);
   });
+
+  it("grades a checked question of an exercise while its attempt is open (ADR-124 §3)", () => {
+    const checked = { mode: "exercise" as const, checked: true };
+    expect(gradableNow("running", { state: "in_progress" }, checked)).toBe(true);
+    expect(gradableNow("paused", { state: "in_progress" }, checked)).toBe(true);
+    // A practice attempt (ADR-122), still being written.
+    expect(gradableNow("closed", { state: "in_progress", afterDue: true }, checked)).toBe(true);
+    // Not checked, or not an exercise: the attempt's own rule.
+    expect(gradableNow("running", { state: "in_progress" }, { mode: "exercise", checked: false })).toBe(false);
+    expect(gradableNow("running", { state: "in_progress" }, { mode: "exam", checked: true })).toBe(false);
+    expect(gradableNow("closed", { state: "in_progress", afterDue: true }, { mode: "exercise", checked: false })).toBe(
+      false,
+    );
+  });
 });
 
 describe("retake scope (ADR-091)", () => {

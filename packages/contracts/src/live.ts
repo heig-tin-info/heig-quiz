@@ -99,6 +99,27 @@ export const isIntegrityEventKind = (kind: AttemptEventKind): kind is IntegrityE
 // --- Student side ---------------------------------------------------------
 
 /**
+ * ADR-124 §3: the correction of ONE question of an exercise, once the
+ * student checked it or handed the attempt in — built by the one student
+ * exit of a correction (`studentItemCorrection` in the API), never by a
+ * route. `verdict` is `pending` until a validated grading stands: a runner's
+ * verdict lands after the check (the client reads the attempt again), an
+ * essay's at the hand-in or the close. `solution` is the STUDENT's key
+ * (`studentSolutionView`: an essay's model answer, never its criteria,
+ * ADR-037), in the coordinates of the question the player shows; on a
+ * parameterized question, the student's own draw (ADR-056 §5).
+ */
+export const ItemCorrection = z.object({
+  verdict: Verdict,
+  /** The validated points; null while `pending`. */
+  points: z.number().nullable(),
+  maxPoints: z.number(),
+  solution: z.unknown().nullable(),
+  explanation: z.string().nullable(),
+});
+export type ItemCorrection = z.infer<typeof ItemCorrection>;
+
+/**
  * One question as the student sees it. `student` is the output of
  * `type.toStudent` through `studentView()`; nothing else may produce it.
  */
@@ -136,6 +157,17 @@ export const AttemptItem = z.object({
    * reachable; every write to it is `409 item_acquired`.
    */
   acquired: z.boolean(),
+  /**
+   * ADR-124 §3: the student checked this question of an exercise. Locked for
+   * the rest of the attempt, a reopen included: every write to it is
+   * `409 item_checked`. A retake starts it again unchecked.
+   */
+  checked: z.boolean(),
+  /**
+   * ADR-124 §3: its correction, on an exercise once it is checked or the
+   * attempt handed in; null otherwise — and always on an exam and a poll.
+   */
+  correction: ItemCorrection.nullable(),
 });
 export type AttemptItem = z.infer<typeof AttemptItem>;
 
@@ -383,6 +415,22 @@ export const AutosaveResponse = z.object({
   serverNow: z.iso.datetime(),
 });
 export type AutosaveResponse = z.infer<typeof AutosaveResponse>;
+
+/**
+ * `POST /attempts/:id/answers/:itemId/check` (ADR-124 §3): the student
+ * checks one question of an exercise. The body is the autosave's: the answer
+ * on screen is written first, under the same revision guard (ADR-067 §4),
+ * and the check grades what is then stored — the server's newer revision
+ * when the client's was stale (`payload` beside `accepted: false`, which
+ * the client adopts, as for an autosave). Refused: `409 not_checkable` (not
+ * an exercise), `409 item_checked` (checked already — so is every later
+ * write to the question), `422 nothing_to_check` (an empty question).
+ */
+export const CheckRequest = AutosaveRequest;
+export type CheckRequest = z.infer<typeof CheckRequest>;
+
+export const CheckResponse = AutosaveResponse.extend({ correction: ItemCorrection });
+export type CheckResponse = z.infer<typeof CheckResponse>;
 
 /** The 410 body. `reason` is what the player shows the student. */
 export const AttemptClosed = z.object({

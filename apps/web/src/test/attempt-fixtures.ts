@@ -40,6 +40,8 @@ export function makeAttemptItem(
     flagged: false,
     locked: false,
     acquired: false,
+    checked: false,
+    correction: null,
     ...over,
   };
 }

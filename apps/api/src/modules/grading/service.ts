@@ -17,7 +17,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, notExists, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type {
@@ -1191,7 +1191,9 @@ export async function checkLlmRegradeBudget(db: Db, evaluationId: string, itemId
  * grades the cell again, and nothing is deleted (F-GRADE-05). What a teacher
  * settled stays: an override (`manual`), a proposal they validated (it keeps
  * its source but carries their `gradedBy`), and a model's proposal (`llm`,
- * never written while an evaluation runs).
+ * never written while an evaluation runs). So does a CHECKED question's
+ * (ADR-124 §3): the reopen does not unlock it, so its answer cannot change,
+ * and its grading still describes it.
  *
  * The caller holds the attempt's row lock (`reopenAttempt`): a grading write
  * of the jobs takes the same lock and re-reads the attempt's state under it,
@@ -1207,6 +1209,18 @@ export async function standDownAutomaticGradings(db: DbOrTx, attemptId: string):
         eq(gradings.source, "auto"),
         isNull(gradings.gradedBy),
         ne(gradings.state, "superseded"),
+        notExists(
+          db
+            .select({ id: answers.id })
+            .from(answers)
+            .where(
+              and(
+                eq(answers.attemptId, gradings.attemptId),
+                eq(answers.itemId, gradings.itemId),
+                isNotNull(answers.checkedAt),
+              ),
+            ),
+        ),
       ),
     );
 }

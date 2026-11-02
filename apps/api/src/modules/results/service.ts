@@ -27,6 +27,7 @@ import type {
   CardResults,
   FeedbackPolicy,
   GradingScale,
+  ItemCorrection,
   ReleasedGrades,
   ResultRow,
   ResultsItem,
@@ -57,6 +58,7 @@ import {
   FINISHED_ATTEMPT_STATES,
   isEvaluationOver,
   isFinishedAttempt,
+  itemCorrectionShown,
   latestAttempt,
   partialRetakesOn,
   retakeRefusal,
@@ -122,6 +124,7 @@ import {
   answeredBy,
   answerToStudent,
   attemptItemView,
+  type ItemView,
   orderItems,
   purgeIntegrityJournal,
   solutionView,
@@ -735,6 +738,66 @@ export function keyShownTo(evaluation: EvaluationRecord, attemptState: string): 
 }
 
 /**
+ * ADR-124 §3: THE student exit of one question's correction on the player —
+ * the check's reply and the attempt's own view, on a resume or a reload.
+ * No route builds a key itself: both come through here, and the one rule
+ * of `@quiz/domain` decides, per question, whether anything leaves
+ * (`itemCorrectionShown`: an exercise, the question checked or the attempt
+ * handed in); `null` otherwise. What leaves is what the feedback page shows
+ * of the question under the effective policy (`feedbackOf`): the verdict and
+ * the points of its VALIDATED grading (`pending` without one), the STUDENT's
+ * key (`studentSolutionViewOf`: an essay's model answer, never its criteria,
+ * ADR-037) and the explanation — in `itemView`, the attempt's own view of
+ * the item, so the key reads in the player's coordinates (ADR-097) and on
+ * the student's own draw (ADR-056 §5).
+ */
+export function studentItemCorrection(input: {
+  evaluation: EvaluationRecord;
+  attemptState: string;
+  /** The question was checked in this attempt (`answers.checked_at`). */
+  checked: boolean;
+  item: Pick<JoinedItem["item"], "points" | "counting">;
+  /** The attempt's one view of the item (`attemptItemView`). */
+  itemView: ItemView;
+  /** The cell's standing grading, if any: only a validated one is a verdict. */
+  grading: Pick<GradingRecord, "points" | "maxPoints" | "state"> | null;
+}): ItemCorrection | null {
+  const { evaluation, item, itemView } = input;
+  const shown = itemCorrectionShown({
+    mode: evaluation.mode,
+    checked: input.checked,
+    attemptFinished: isFinishedAttempt(input.attemptState),
+  });
+  if (!shown) return null;
+  const grading = input.grading?.state === "validated" ? input.grading : null;
+  return correctionOf(feedbackOf(evaluation), grading, item, itemView);
+}
+
+/**
+ * One question's correction under `policy`, from its VALIDATED grading (or
+ * none: `pending`): what the feedback page ({@link reviewedItems}) and the
+ * player ({@link studentItemCorrection}) both show of it — the verdict, the
+ * points as a student reads them (a bonus never "−4 / 2", ADR-108), the
+ * student's key (the grading criteria stay the teacher's, ADR-037) and the
+ * explanation, in `itemView`'s coordinates.
+ */
+function correctionOf(
+  policy: FeedbackPolicy,
+  grading: Pick<GradingRecord, "points" | "maxPoints" | "state"> | null,
+  item: Pick<JoinedItem["item"], "points" | "counting">,
+  itemView: ItemView,
+): ItemCorrection {
+  const { type, config, view, instance } = itemView;
+  return {
+    verdict: grading ? verdictOf(grading) : "pending",
+    points: grading ? shownPoints(grading.points, item.counting) : null,
+    maxPoints: item.points,
+    solution: policy.showKey ? studentSolutionViewOf(type, config, view) : null,
+    explanation: policy.showExplanation && instance.explanation !== "" ? instance.explanation : null,
+  };
+}
+
+/**
  * Whether a student may see anything at all right now: `feedbackGate`
  * (`@quiz/domain`) fed with this evaluation and its EFFECTIVE policy
  * (`feedbackOf`). The drill's `keyShownTo` reads the same answer, so it
@@ -832,7 +895,8 @@ async function reviewedItems(
     const answer = byItem.get(item.item.id) ?? null;
     // The student's OWN instance (ADR-056 §9): the values stored with the
     // attempt, in the statement, the key and the explanation alike.
-    const { type, instance, config, view: attemptView } = attemptItemView(evaluation, item, attempt);
+    const itemView = attemptItemView(evaluation, item, attempt);
+    const { type, config, view: attemptView } = itemView;
     // With the key published, the teacher's order: the review letters its
     // choices A, B, C… as the wall, the grading table and the live grid do.
     // With the key hidden, the attempt's own order: the teacher's tends to be
@@ -842,23 +906,20 @@ async function reviewedItems(
     // its coordinates (ADR-097); the breakdown names no choice of the
     // student's while the key is hidden.
     const view = { ...attemptView, shuffle: attemptView.shuffle && !policy.showKey };
+    const correction = correctionOf(policy, grading, item.item, { ...itemView, view });
     return {
       itemId: item.item.id,
       position: item.item.position,
       type: item.question.type,
-      // A bonus never reads "−4 / 2"; a neutralized cell keeps its points, struck through (ADR-108).
-      points: grading ? shownPoints(grading.points, item.item.counting) : null,
-      maxPoints: item.item.points,
+      // A neutralized cell keeps its points, struck through (ADR-108).
+      points: correction.points,
+      maxPoints: correction.maxPoints,
       counting: item.item.counting,
-      verdict: grading ? verdictOf(grading) : null,
+      verdict: grading ? correction.verdict : null,
       student: studentViewOf(type, config, view),
       answer: policy.showAnswer ? answerToStudent(type, config, view, answer?.payload) : null,
-      // The student's key: the grading criteria stay the teacher's (ADR-037).
-      solution: policy.showKey ? studentSolutionViewOf(type, config, view) : null,
-      explanation:
-        policy.showExplanation && instance.explanation !== ""
-          ? instance.explanation
-          : null,
+      solution: correction.solution,
+      explanation: correction.explanation,
       details: grading ? filterDetails(type, grading.details, policy) : null,
       comment: policy.showTeacherComment ? (grading?.comment ?? null) : null,
     };

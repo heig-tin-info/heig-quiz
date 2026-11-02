@@ -32,6 +32,7 @@ import {
   evaluationTotal,
   attemptDeadline,
   bonusSeconds,
+  checkAllowed,
   practiceCooldownS,
   practiceDeadline,
   practiceDurationS,
@@ -111,6 +112,7 @@ import {
   releasedGradesOf,
   resultsState,
   scoreVisible,
+  studentItemCorrection,
   type ReleasedGrade,
 } from "../results/service.js";
 import { attemptItemView } from "./itemView.js";
@@ -165,6 +167,12 @@ const REFUSALS = {
   // a question that is not a checkpoint in `milestones` (#89).
   not_validatable: [409, "this question has no validation step"],
   item_locked: [409, "navigation does not allow going back to this question"],
+  // ADR-124 §3, the refusals of `@quiz/domain#checkRefusal`: a check off an
+  // exercise, a question checked already (and every later write to it), an
+  // empty question.
+  not_checkable: [409, "only a question of an exercise can be checked"],
+  item_checked: [409, "this question was checked: it is locked for this attempt"],
+  nothing_to_check: [422, "an empty question cannot be checked"],
   // `RateLimited`.
   rate_limited: [429],
   // `RunnerDown`.
@@ -775,7 +783,7 @@ async function carriedFrom(
  * same payload. The copy was shown when the original was (`firstShownAt`),
  * and has spent no time on screen in this attempt (dwell 0, ADR-039); a flag
  * or a validation of attempt n is not carried, they were notes on another
- * paper.
+ * paper, and so is a check.
  */
 async function carryAcquired(
   tx: DbOrTx,
@@ -795,6 +803,9 @@ async function carryAcquired(
     attemptId: to.id,
     markedDone: false,
     flagged: false,
+    // A check of attempt n (ADR-124 §3) locked attempt n's question; the
+    // copy is read-only as acquired, and shows no correction of its own.
+    checkedAt: null,
     dwellMs: 0,
     updatedAt: now,
   }));
@@ -1039,7 +1050,12 @@ function attemptItems(
   locked: ReadonlySet<string>,
   /** ADR-091: the items a partial retake carried over. */
   acquired: ReadonlySet<string>,
-  attempt: InstanceAttempt,
+  attempt: InstanceAttempt & {
+    /** The attempt's state, which the correction's rule reads (ADR-124). */
+    state: string;
+    /** Its validated gradings, by item: the verdict of a checked question. */
+    graded: ReadonlyMap<string, GradingRecord>;
+  },
 ): AttemptItem[] {
   return ordered.map((entry) => {
     const answer = answered.get(entry.item.id) ?? null;
@@ -1047,7 +1063,9 @@ function attemptItems(
     // drawn from the same seed for a preview that stores nothing. The ONE
     // view of the item (ADR-097): the question leaves in it, and so does the
     // stored answer — a carried-over one (ADR-091) under this attempt's seed.
-    const { type, config, view } = attemptItemView(evaluation, entry, attempt);
+    const itemView = attemptItemView(evaluation, entry, attempt);
+    const { type, config, view } = itemView;
+    const checked = answer?.checkedAt != null;
     return {
       id: entry.item.id,
       position: entry.item.position,
@@ -1066,6 +1084,17 @@ function attemptItems(
       flagged: answer?.flagged ?? false,
       locked: locked.has(entry.item.id),
       acquired: acquired.has(entry.item.id),
+      checked,
+      // ADR-124 §3: a checked question's correction comes back on a resume
+      // or a reload — through the one exit, which decides per question.
+      correction: studentItemCorrection({
+        evaluation,
+        attemptState: attempt.state,
+        checked,
+        item: entry.item,
+        itemView,
+        grading: attempt.graded.get(entry.item.id) ?? null,
+      }),
     };
   });
 }
@@ -1132,13 +1161,21 @@ export async function attemptView(
   holder?: Participant,
 ): Promise<AttemptView> {
   const participant = holder ?? (await participantOfAttempt(db, evaluation, attempt));
+  const answered = await answersOf(db, attempt.id);
+  // The verdicts a correction may carry (ADR-124), read only where one may
+  // show: an exercise with a checked question, or handed in.
+  const corrected =
+    checkAllowed(evaluation.mode) &&
+    (isFinishedAttempt(attempt.state) || [...answered.values()].some((a) => a.checkedAt !== null));
   return viewOf(db, evaluation, {
     seed: attempt.seed,
     timeBonusPercent: participant.timeBonusPercent,
     practice: attempt.afterDue,
     instances: attempt.instances,
     acquired: attempt.acquiredItemIds,
-    answered: await answersOf(db, attempt.id),
+    answered,
+    state: attempt.state,
+    graded: corrected ? new Map((await validatedOfAttempt(db, attempt.id)).map((g) => [g.itemId, g])) : new Map(),
     header: {
       id: attempt.id,
       state: attempt.state,
@@ -1175,6 +1212,8 @@ export async function previewView(
     acquired: [],
     items,
     answered: new Map(),
+    state: "in_progress",
+    graded: new Map(),
     header: {
       id: PREVIEW_ATTEMPT_ID,
       state: "in_progress",
@@ -1209,6 +1248,10 @@ async function viewOf(
     acquired: readonly string[];
     items?: readonly JoinedItem[] | undefined;
     answered: ReadonlyMap<string, AnswerRecord>;
+    /** The attempt's state; a preview's is `in_progress`, and it has nothing checked. */
+    state: string;
+    /** The attempt's validated gradings, by item (ADR-124); none in a preview. */
+    graded: ReadonlyMap<string, GradingRecord>;
     header: AttemptView["attempt"];
   },
 ): Promise<AttemptView> {
@@ -1238,6 +1281,8 @@ async function viewOf(
     items: attemptItems(evaluation, ordered, answered, locked, new Set(input.acquired), {
       seed,
       instances: input.instances,
+      state: input.state,
+      graded: input.graded,
     }),
   };
 }

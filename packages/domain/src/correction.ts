@@ -125,3 +125,53 @@ export function feedbackGradeShown(input: {
 }): boolean {
   return input.released && input.pendingCount === 0;
 }
+
+/*
+ * The per-question check of an exercise (ADR-124 §3): during an attempt the
+ * student may CHECK one question — its verdict (at once, or once the runner
+ * or the hand-in settles it), its key and its explanation — and the question
+ * is then locked for the rest of that attempt; a retake gives another go.
+ * Read by the server, which refuses what the rule refuses, and by the
+ * player, which offers only what the server accepts.
+ */
+
+/** Only an exercise is checked: an exam shows nothing before its close, a poll has its reveal. */
+export function checkAllowed(mode: EvaluationModeName): boolean {
+  return mode === "exercise";
+}
+
+/**
+ * Why a check of a question of an exercise ({@link checkAllowed} decides
+ * that first) is refused, in the order checked:
+ *
+ * - `item_checked`: the question was checked already — locked for this
+ *   attempt, a reopen included;
+ * - `nothing_to_check`: the question holds no answer (its type's own
+ *   `isAnswered`): an empty question cannot be checked.
+ */
+export function checkRefusal(input: {
+  /** The question was checked already in this attempt. */
+  checked: boolean;
+  /** The question holds an answer, by its type's own rule. */
+  answered: boolean;
+}): "item_checked" | "nothing_to_check" | null {
+  if (input.checked) return "item_checked";
+  if (!input.answered) return "nothing_to_check";
+  return null;
+}
+
+/**
+ * THE rule of whether a student reads the correction of ONE question of
+ * their attempt (ADR-124): only on an exercise, once the question is checked
+ * or the attempt handed in (submitted, expired or closed). The student exit
+ * of the correction (`studentItemCorrection`, `results/service.ts`) asks it
+ * for each question; nothing else decides it.
+ */
+export function itemCorrectionShown(input: {
+  mode: EvaluationModeName;
+  checked: boolean;
+  /** The attempt is handed in, expired or closed (`isFinishedAttempt`). */
+  attemptFinished: boolean;
+}): boolean {
+  return checkAllowed(input.mode) && (input.checked || input.attemptFinished);
+}

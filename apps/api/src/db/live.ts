@@ -238,6 +238,14 @@ export const answers = pgTable(
      * the staff on the live grid, never to another student.
      */
     flagged: boolean("flagged").notNull().default(false),
+    /**
+     * ADR-124 §3: when the student CHECKED this question of an exercise, on
+     * the server's clock; null if never. Distinct from `marked_done`: a check
+     * locks this one question under any navigation, and crosses no
+     * checkpoint of `milestones`. Never cleared — not by a reopen; a retake
+     * is another attempt, and a partial retake does not carry it over.
+     */
+    checkedAt: timestamp("checked_at", { withTimezone: true }),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }),
     /**
      * The first time the question was on the student's screen (ADR-039):

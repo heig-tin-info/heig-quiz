@@ -18,6 +18,7 @@ import {
   AttemptEntry,
   AttemptStartBody,
   AutosaveRequest,
+  CheckRequest,
   DashboardQuery,
   ExtendBody,
   FlagBody,
@@ -32,6 +33,7 @@ import {
   StartBody,
   SubmitBody,
   isIntegrityEventKind,
+  type CheckResponse,
   type ExtendResponse,
   type FlagResponse,
   type ResetAttemptResponse,
@@ -308,6 +310,30 @@ export async function livePlugin(
         coordinates: body.coordinates,
         now,
       }),
+    ),
+  );
+
+  /**
+   * ADR-124 §3: check one question of an exercise — the autosave's body,
+   * written first, then the verdict (at once, or `pending` for a runner or
+   * an essay), the key and the explanation. The question is locked for the
+   * rest of the attempt. `409 not_checkable` off an exercise, `409
+   * item_checked` a second time, `422 nothing_to_check` on an empty one, and
+   * the `410` of every write.
+   */
+  app.post(
+    "/app/api/attempts/:id/answers/:itemId/check",
+    sit,
+    student({ params: AnswerParam, body: CheckRequest, load: own }, async ({ now, params, body, scope }) =>
+      (await service.checkItem(app, {
+        evaluation: scope.evaluation,
+        attempt: scope.attempt,
+        itemId: params.itemId,
+        payload: body.payload,
+        revision: body.revision,
+        coordinates: body.coordinates,
+        now,
+      })) satisfies CheckResponse,
     ),
   );
 

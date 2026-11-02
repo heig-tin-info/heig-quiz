@@ -118,6 +118,8 @@ function view(
         flagged: false,
         locked: false,
         acquired: false,
+        checked: false,
+        correction: null,
       },
     ],
   };
