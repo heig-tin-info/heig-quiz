@@ -804,6 +804,7 @@ export function QuestionEditorHost({
   if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;
   const Editor = client.Editor as unknown as ComponentType<EditorHostProps>;
   const strings = editorStrings[client.id](t);
+  const kindLabels = KIND_LABELS_OF[client.id];
   return (
     <Suspense fallback={<EditorSkeleton label={t("qt.loading")} />}>
       <Editor
@@ -813,7 +814,7 @@ export function QuestionEditorHost({
         issues={issues}
         strings={strings}
         {...canvasStringsProp(client.id, t)}
-        {...(KIND_LABELS_OF[client.id] === undefined ? {} : { kindLabels: KIND_LABELS_OF[client.id]!(t) })}
+        {...(kindLabels === undefined ? {} : { kindLabels: kindLabels(t) })}
         renderMarkdown={renderBlock}
         renderHelp={renderHelp}
         RichText={LazyRichText}

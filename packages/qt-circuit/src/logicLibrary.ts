@@ -14,10 +14,10 @@
  * Geometry is on the canvas grid ({@link GRID}): inputs on the left at
  * x = −40, the output on the right at x = 40, a terminal's pin at its origin.
  */
-import type { CellType } from "@quiz/domain/logic";
+import { LOGIC_LIMITS, type CellType } from "@quiz/domain/logic";
 
 import { BOX, GRID, type PinSpec } from "./library.js";
-import type { PartSpec, ValueRole } from "./parts.js";
+import { countedParts, type PartSpec, type ValueRole } from "./parts.js";
 
 /** The gates a teacher may allow, in the order the editor and the palette show them. */
 export const GATE_FAMILIES = ["AND", "OR", "NAND", "NOR", "XOR", "XNOR", "NOT", "BUF"] as const;
@@ -41,16 +41,14 @@ const CELL: Readonly<Record<GateFamily, CellType>> = {
 /** The families whose output is negated: the bubble on the symbol. */
 export const NEGATED: ReadonlySet<GateFamily> = new Set(["NAND", "NOR", "XNOR", "NOT"]);
 
-/** The declared terminals, then the constants. */
-export const TERMINAL_KINDS = ["IN", "OUT"] as const;
-export const CONSTANT_KINDS = ["LOW", "HIGH"] as const;
-
 export const LOGIC_KINDS = [
   ...VARIADIC.flatMap((family) => WIDTHS.map((width) => `${family}${width}` as const)),
   "NOT",
   "BUF",
-  ...CONSTANT_KINDS,
-  ...TERMINAL_KINDS,
+  "LOW",
+  "HIGH",
+  "IN",
+  "OUT",
 ] as const;
 export type LogicKind = (typeof LOGIC_KINDS)[number];
 
@@ -79,8 +77,8 @@ const INPUT_YS: Readonly<Record<number, readonly number[]>> = {
 /** The longest name a terminal's pill holds; the config refuses a longer one. */
 export const TERMINAL_NAME_MAX = 6;
 /** The pill's height, and its width for the longest name: what the router keeps clear. */
-export const PILL_HEIGHT = 24;
-export const PILL_MAX = 3 * GRID;
+export const PILL_HEIGHT = 28;
+export const PILL_MAX = 4 * GRID;
 
 function gate(family: GateFamily, width: number): LogicPartSpec {
   const half = width === 4 ? 50 : width === 1 ? 20 : 30;
@@ -140,16 +138,34 @@ export const LOGIC_PARTS: { part(kind: string): LogicPartSpec } = {
   },
 };
 
-/** The kinds the student is offered: every fan-in of the allowed families, then the constants. */
+/** The kinds the student is offered: every fan-in of the allowed families, then the constants (cells, not ports). */
 export function offeredLogicKinds(families: readonly GateFamily[]): LogicKind[] {
   return LOGIC_KINDS.filter((kind) => {
-    const family = LOGIC_PARTS.part(kind).family;
-    return family === null ? (CONSTANT_KINDS as readonly string[]).includes(kind) : families.includes(family);
+    const { family, cell } = LOGIC_PARTS.part(kind);
+    return family === null ? cell !== null : families.includes(family);
   });
 }
 
-/** The box the student wires inside: `circuit`'s, with no port on its border. */
-export const LOGIC_BOX = BOX;
+/**
+ * THE budget rule: what `maxGates`, the canvas's count, the grader and the
+ * dashboard all count — every part that is not a terminal, i.e. every gate.
+ * A constant is a terminal: all the `LOW` parts are one net driven by one
+ * cell, all the `HIGH` parts another (`logicNetlist.ts`).
+ */
+export const gateCount = (schematic: { components: readonly { kind: string }[] }): number =>
+  countedParts(schematic.components, LOGIC_PARTS);
+
+/**
+ * One dashboard cell, server and client alike: the gates against the budget
+ * (`4/6`), or the gates alone without one. Numbers only, so no language.
+ */
+export function logicSummary(schematic: { components: readonly { kind: string }[] }, maxGates: number | null): string {
+  const gates = gateCount(schematic);
+  return maxGates === null ? String(gates) : `${gates}/${maxGates}`;
+}
+
+/** The most gates an answer holds: the netlist's cells, less the two constant cells. */
+export const LOGIC_GATES_MAX = LOGIC_LIMITS.components - 2;
 
 /**
  * Where the declared terminals start: the inputs down the left edge, the
@@ -165,13 +181,13 @@ export function initialTerminals(
       id: `c${first + i}`,
       kind,
       x,
-      y: Math.round((LOGIC_BOX.height / 2 - (names.length - 1) * GRID + i * 2 * GRID) / GRID) * GRID,
+      y: Math.round((BOX.height / 2 - (names.length - 1) * GRID + i * 2 * GRID) / GRID) * GRID,
       m: [1, 0, 0, 1] as [1, 0, 0, 1],
       name,
       value: "",
     }));
   return [
     ...column(inputs, "IN", PILL_MAX + 2 * GRID, 1),
-    ...column(outputs, "OUT", LOGIC_BOX.width - PILL_MAX - 2 * GRID, inputs.length + 1),
+    ...column(outputs, "OUT", BOX.width - PILL_MAX - 2 * GRID, inputs.length + 1),
   ];
 }

@@ -3032,7 +3032,7 @@ export const en = {
   "qt.logic.e.paletteHint": "The gates students may place. Constants 0 and 1 are always offered.",
   "qt.logic.e.paletteEmpty": "Allow at least one gate.",
   "qt.logic.e.maxGates": "Gate limit",
-  "qt.logic.e.maxGatesHint": "Empty: up to 60 gates.",
+  "qt.logic.e.maxGatesHint": "Empty: up to {max} gates.",
   "qt.logic.e.scoring": "Scoring",
   "qt.logic.e.scoringHint": "Every input combination is simulated. The points follow the share of rows with every output right.",
   "qt.logic.p.schematic": "Your circuit",

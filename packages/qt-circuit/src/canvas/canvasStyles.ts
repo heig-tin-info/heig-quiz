@@ -108,6 +108,9 @@ export const portLabel = "font-mono text-[11px] fill-current select-none";
 
 export const componentLabel = "font-mono text-[11px] fill-current select-none";
 
+/** A symbol's own text (`&`, `≥1`, a terminal's name): part of the drawing, so read at the drawing's scale. */
+export const symbolText = "font-mono text-[15px] fill-current select-none";
+
 export const componentValue = "fill-current opacity-70";
 
 export const hitArea = "fill-transparent cursor-move";

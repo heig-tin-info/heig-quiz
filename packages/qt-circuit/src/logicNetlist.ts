@@ -6,7 +6,7 @@
  * Connectivity is `circuit`'s, read from the routed polylines alone
  * (`netlist.ts`): a pin on a wire's end, a wire's end on another wire, two
  * pins on one point. A declared input is an input port, a declared output an
- * output port, each named by the terminal; every gate and constant is a cell.
+ * output port, each named by the terminal; every gate is a cell, and each constant level one more.
  * A pin nothing reaches is a net of its own that nobody drives: it reads `Z`,
  * an unfinished circuit still simulates and its outputs read `X`.
  *
@@ -14,12 +14,11 @@
  * {@link portsMismatch} — the placed terminals differ from the declared ones,
  * or a wire claims a pin that does not exist — and {@link paletteViolation}.
  */
-import type { Netlist, NetlistCell } from "@quiz/domain/logic";
+import type { CellType, Netlist, NetlistCell } from "@quiz/domain/logic";
 
-import { LOGIC_PARTS } from "./logicLibrary.js";
+import { gateCount, LOGIC_PARTS } from "./logicLibrary.js";
 import type { LogicPalette, LogicSchematic } from "./logicSchema.js";
-import { isGateKind } from "./logicSchema.js";
-import { Dsu, pinLocation, unionPins, unionWires, wireKey } from "./netlist.js";
+import { connect, pinLocation } from "./netlist.js";
 
 export interface LogicNetlist {
   netlist: Netlist;
@@ -29,35 +28,44 @@ export interface LogicNetlist {
 
 const pinKey = (c: string, p: number): string => `${c}:${p}`;
 
-export function buildLogicNetlist(schematic: LogicSchematic): LogicNetlist {
-  const dsu = new Dsu();
-  const pinNodes = schematic.components.flatMap((component) =>
-    LOGIC_PARTS.part(component.kind).pins.map((pin, p) => {
-      const key = pinKey(component.id, p);
-      dsu.add(key);
-      return { key, at: pinLocation(component, pin) };
-    }),
-  );
-  for (const wire of schematic.wires) dsu.add(wireKey(wire.id));
-  unionWires(dsu, schematic.wires);
-  unionPins(dsu, pinNodes, schematic.wires);
+/**
+ * Every `LOW` part is one net, driven by one `$const0` cell, and every `HIGH`
+ * part another, as `circuit`'s ground symbols are one net: a constant is a
+ * terminal, never counted, and an answer holds at most two constant cells.
+ */
+const CONSTANT_CELLS: readonly { kind: "LOW" | "HIGH"; cell: CellType }[] = [
+  { kind: "LOW", cell: "$const0" },
+  { kind: "HIGH", cell: "$const1" },
+];
 
-  const net = (c: string, p: number): string => dsu.find(pinKey(c, p));
+export function buildLogicNetlist(schematic: LogicSchematic): LogicNetlist {
+  const pins = schematic.components.flatMap((component) =>
+    LOGIC_PARTS.part(component.kind).pins.map((pin, p) => ({ key: pinKey(component.id, p), at: pinLocation(component, pin) })),
+  );
+  const rails = CONSTANT_CELLS.map(({ kind }) =>
+    schematic.components.filter((c) => c.kind === kind).map((c) => pinKey(c.id, 0)),
+  );
+  const { netOf, netOfWire } = connect(pins, schematic.wires, rails);
+
   const ports: Record<string, Netlist["ports"][string]> = {};
   const cells: Record<string, NetlistCell> = {};
   for (const component of schematic.components) {
     const spec = LOGIC_PARTS.part(component.kind);
     if (spec.cell === null) {
-      ports[component.name] = { direction: component.kind === "IN" ? "input" : "output", net: net(component.id, 0) };
-      continue;
+      ports[component.name] = { direction: component.kind === "IN" ? "input" : "output", net: netOf(pinKey(component.id, 0)) };
+    } else if (spec.family !== null) {
+      const connections: Record<string, string> = {};
+      spec.pins.forEach((pin, p) => (connections[pin.name] = netOf(pinKey(component.id, p))));
+      cells[component.id] = spec.width > 1 ? { type: spec.cell, connections, params: { width: spec.width } } : { type: spec.cell, connections };
     }
-    const connections: Record<string, string> = {};
-    spec.pins.forEach((pin, p) => (connections[pin.name] = net(component.id, p)));
-    cells[component.id] = spec.width > 1 ? { type: spec.cell, connections, params: { width: spec.width } } : { type: spec.cell, connections };
   }
+  CONSTANT_CELLS.forEach(({ kind, cell }, i) => {
+    const first = rails[i]?.[0];
+    if (first !== undefined) cells[kind] = { type: cell, connections: { Y: netOf(first) } };
+  });
   return {
     netlist: { ports, cells },
-    netOfWire: new Map(schematic.wires.map((wire) => [wire.id, dsu.find(wireKey(wire.id))])),
+    netOfWire: new Map(schematic.wires.map((wire) => [wire.id, netOfWire(wire.id)])),
   };
 }
 
@@ -84,10 +92,9 @@ export function portsMismatch(
 
 /** A gate outside the allowed families, or more gates than `maxGates`. */
 export function paletteViolation(schematic: LogicSchematic, palette: LogicPalette): boolean {
-  const gates = schematic.components.filter((c) => isGateKind(c.kind));
-  if (palette.maxGates !== null && gates.length > palette.maxGates) return true;
-  return gates.some((c) => {
+  if (palette.maxGates !== null && gateCount(schematic) > palette.maxGates) return true;
+  return schematic.components.some((c) => {
     const family = LOGIC_PARTS.part(c.kind).family;
-    return family === null || !palette.kinds.includes(family);
+    return family !== null && !palette.kinds.includes(family);
   });
 }

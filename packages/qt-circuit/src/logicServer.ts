@@ -7,9 +7,9 @@ import type { QuestionTypeServer } from "@quiz/core/server";
 import { reparseMigrate } from "@quiz/core/server";
 
 import { gradeLogic, logicStudentDetails } from "./logicGrade.js";
+import { logicSummary } from "./logicLibrary.js";
 import {
   emptyLogicConfig,
-  isGateKind,
   isLogicAnswered,
   LOGIC_CONFIG_VERSION,
   LogicAnswer,
@@ -59,10 +59,9 @@ export const logicServer: QuestionTypeServer<LogicConfig, LogicAnswer, LogicStud
 
   studentDetails: (details, policy) => logicStudentDetails(details, policy),
 
-  /** One cell of the live dashboard: the size of the drawing, never its worth. */
-  summarizeAnswer(_config, answer) {
-    const gates = answer.schematic.components.filter((c) => isGateKind(c.kind)).length;
-    return `${gates} gates · ${answer.schematic.wires.length} wires`;
+  /** One cell of the live dashboard: the gate budget, never the circuit's worth (`logicSummary`). */
+  summarizeAnswer(config, answer) {
+    return logicSummary(answer.schematic, config.palette.maxGates);
   },
 
   grade: gradeLogic,

@@ -452,6 +452,31 @@ describe("studentView never leaks the key (invariant 4)", () => {
     });
   });
 
+  it("keeps the expressions of `logic` out, the names of its ports in (ADR-123 §7)", () => {
+    // An expression is a grammar a marker cannot prefix, so the value search
+    // above sows nothing into it: this test plants compound ones by hand.
+    const type = questionType("logic");
+    const config = type.configSchema.parse({
+      ...(filledDraft(type) as object),
+      outputs: [
+        { name: "y", expression: "a * b" },
+        { name: "z", expression: "a ^ !b" },
+      ],
+    });
+    const payload = studentView({
+      type: "logic",
+      version: { config, configVersion: type.configVersion, variables: null },
+      seed: 0,
+      itemId: "77777777-7777-4777-8777-777777777778",
+      shuffle: false,
+    });
+    const serialized = JSON.stringify(payload);
+    expect(serialized).not.toContain("a * b");
+    expect(serialized).not.toContain("a ^ !b");
+    expect(keysOf(payload)).not.toContain("expression");
+    expect(payload).toMatchObject({ inputs: ["a", "b"], outputs: ["y", "z"] });
+  });
+
   it("keeps the key of the fake test type out too", () => {
     const restore = registerForTests(fakeShort);
     try {

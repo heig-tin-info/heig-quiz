@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { findStudentLeaks } from "@quiz/core/testing";
 
 import { gradeLogic } from "./logicGrade.js";
-import { LOGIC_PARTS, offeredLogicKinds } from "./logicLibrary.js";
+import { gateCount, LOGIC_GATES_MAX, LOGIC_PARTS, offeredLogicKinds } from "./logicLibrary.js";
 import { buildLogicNetlist } from "./logicNetlist.js";
 import { LogicAnswer, LogicConfig, type LogicComponent, type LogicSchematic } from "./logicSchema.js";
 import { logicServer } from "./logicServer.js";
@@ -100,9 +100,20 @@ describe("the logic answer", () => {
     expect(LogicAnswer.safeParse({ schematic }).success).toBe(false);
   });
 
-  it("refuses more cells than the netlist allows", () => {
-    const gates = Array.from({ length: 61 }, (_, i) => part(`c${i + 10}`, "NOT", 100 + (i % 10) * 60, 40 + Math.floor(i / 10) * 60));
-    expect(LogicAnswer.safeParse({ schematic: { components: gates, wires: [] } }).success).toBe(false);
+  const nots = (n: number) => Array.from({ length: n }, (_, i) => part(`c${i + 10}`, "NOT", 100 + (i % 10) * 60, 40 + Math.floor(i / 10) * 60));
+
+  it("holds the gates to the budget the canvas counts, whatever the constants", () => {
+    const constants = [part("c90", "LOW", 40, 480), part("c91", "LOW", 80, 480), part("c92", "HIGH", 120, 480)];
+    expect(LogicAnswer.safeParse({ schematic: { components: [...nots(LOGIC_GATES_MAX), ...constants], wires: [] } }).success).toBe(true);
+    expect(LogicAnswer.safeParse({ schematic: { components: nots(LOGIC_GATES_MAX + 1), wires: [] } }).success).toBe(false);
+  });
+
+  it("refuses two parts with one id: a wire names its pin by it", () => {
+    const schematic = halfAdder();
+    schematic.components.push({ ...schematic.components[2]!, x: 400, y: 400 });
+    const parsed = LogicAnswer.safeParse({ schematic });
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues[0]?.message).toBe("logic.duplicate_id");
   });
 
   it("offers every fan-in of the allowed families, and the constants", () => {
@@ -118,6 +129,14 @@ describe("the netlist rebuilt from the schematic", () => {
     // Two wires leaving the same pin carry the same net.
     expect(netOfWire.get("w1")).toBe(netOfWire.get("w2"));
     expect(netOfWire.get("w1")).not.toBe(netOfWire.get("w3"));
+  });
+
+  it("drives every LOW part from one cell, never counted as a gate", () => {
+    const schematic = halfAdder();
+    schematic.components.push(part("c7", "LOW", 400, 420), part("c8", "LOW", 400, 460));
+    const { netlist } = buildLogicNetlist(schematic);
+    expect(Object.values(netlist.cells).filter((c) => c.type === "$const0")).toHaveLength(1);
+    expect(gateCount(schematic)).toBe(2);
   });
 });
 

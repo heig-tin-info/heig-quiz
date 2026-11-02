@@ -9,7 +9,6 @@
  */
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import type { ReviewProps } from "@quiz/core/client";
-import { parseExpression, toLatex } from "@quiz/domain/logic";
 import {
   breakdownOf,
   card,
@@ -25,7 +24,7 @@ import {
 } from "@quiz/ui";
 
 import { logicLibrary, SchematicView, type CanvasStrings } from "./canvas/index.js";
-import type { LogicAnswer, LogicDetails, LogicSolution, LogicStudent } from "./logicSchema.js";
+import { expressionLatex, type LogicAnswer, type LogicDetails, type LogicSolution, type LogicStudent } from "./logicSchema.js";
 import { LOGIC_REVIEW_STRINGS, type LogicReviewStrings } from "./logicStrings.js";
 
 interface LogicReviewProps extends ReviewProps<LogicStudent, LogicAnswer, LogicSolution, LogicDetails> {
@@ -35,11 +34,8 @@ interface LogicReviewProps extends ReviewProps<LogicStudent, LogicAnswer, LogicS
 
 /** `m = a·b + …` for KaTeX; the expression as typed when it no longer parses. */
 function latexOf(name: string, expression: string): string {
-  try {
-    return `$${name} = ${toLatex(parseExpression(expression))}$`;
-  } catch {
-    return `${name} = ${expression}`;
-  }
+  const latex = expressionLatex(name, expression);
+  return latex === null ? `${name} = ${expression}` : `$${latex}$`;
 }
 
 const percent = (rate: number): string => String(Math.round(rate * 100));

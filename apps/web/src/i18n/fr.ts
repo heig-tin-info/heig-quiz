@@ -3005,7 +3005,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.logic.e.paletteHint": "Les portes que les étudiants peuvent placer. Les constantes 0 et 1 sont toujours proposées.",
   "qt.logic.e.paletteEmpty": "Autorisez au moins une porte.",
   "qt.logic.e.maxGates": "Nombre de portes",
-  "qt.logic.e.maxGatesHint": "Vide : jusqu'à 60 portes.",
+  "qt.logic.e.maxGatesHint": "Vide : jusqu'à {max} portes.",
   "qt.logic.e.scoring": "Notation",
   "qt.logic.e.scoringHint": "Chaque combinaison des entrées est simulée. Les points suivent la part des lignes dont toutes les sorties sont justes.",
   "qt.logic.p.schematic": "Votre circuit",

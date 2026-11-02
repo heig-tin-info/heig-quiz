@@ -16,14 +16,15 @@
  */
 import { z } from "zod";
 
-import { LOGIC_LIMITS, LogicError, parseExpression } from "@quiz/domain/logic";
+import { LOGIC_LIMITS, LogicError, parseExpression, toLatex } from "@quiz/domain/logic";
 
 import {
-  CONSTANT_KINDS,
   GATE_FAMILIES,
+  gateCount,
   initialTerminals,
+  LOGIC_GATES_MAX,
   LOGIC_KINDS,
-  TERMINAL_KINDS,
+  LOGIC_PARTS,
   TERMINAL_NAME_MAX,
 } from "./logicLibrary.js";
 import { FreeEnd, PinEnd, SchematicComponent, wireOf } from "./schema.js";
@@ -34,8 +35,6 @@ export const LOGIC_CONFIG_VERSION = 1;
 // Schematic
 // ---------------------------------------------------------------------------
 
-const isTerminal = (kind: string): boolean => (TERMINAL_KINDS as readonly string[]).includes(kind);
-
 export const LogicComponent = SchematicComponent.extend({ kind: z.enum(LOGIC_KINDS) });
 export type LogicComponent = z.infer<typeof LogicComponent>;
 
@@ -43,18 +42,23 @@ export type LogicComponent = z.infer<typeof LogicComponent>;
 export const LogicWire = wireOf(z.discriminatedUnion("kind", [PinEnd, FreeEnd]));
 export type LogicWire = z.infer<typeof LogicWire>;
 
+const unique = (ids: readonly string[]): boolean => new Set(ids).size === ids.length;
+
 /**
- * Held to `LOGIC_LIMITS`: the gates and the constants are the netlist's
- * cells, the declared terminals its ports, each under its own cap.
+ * Held to `LOGIC_LIMITS`: the gates are the netlist's cells beside the two
+ * constant cells, so at most {@link LOGIC_GATES_MAX} of them, which is the
+ * budget the canvas counts too (`gateCount`); the parts in all, terminals
+ * and constants included, stay under the cells' and the ports' caps. Ids are
+ * unique: a wire names its pin by its part's id.
  */
 export const LogicSchematic = z
   .object({
     components: z.array(LogicComponent).max(LOGIC_LIMITS.components + LOGIC_LIMITS.inputs + LOGIC_LIMITS.outputs),
     wires: z.array(LogicWire).max(LOGIC_LIMITS.wires),
   })
-  .refine((s) => s.components.filter((c) => !isTerminal(c.kind)).length <= LOGIC_LIMITS.components, {
-    message: "logic.too_many_components",
-    path: ["components"],
+  .refine((s) => gateCount(s) <= LOGIC_GATES_MAX, { message: "logic.too_many_components", path: ["components"] })
+  .refine((s) => unique(s.components.map((c) => c.id)) && unique(s.wires.map((w) => w.id)), {
+    message: "logic.duplicate_id",
   });
 export type LogicSchematic = z.infer<typeof LogicSchematic>;
 
@@ -78,7 +82,7 @@ export const DEFAULT_FAMILIES: readonly GateFamilySchema[] = GATE_FAMILIES.filte
 export const LogicPalette = z.object({
   kinds: z.array(GateFamilySchema).min(1).max(GATE_FAMILIES.length),
   /** How many gates the student may place, `NOT` and `BUF` included; `null`: as many as the limits allow. */
-  maxGates: z.number().int().min(1).max(LOGIC_LIMITS.components).nullable().default(null),
+  maxGates: z.number().int().min(1).max(LOGIC_GATES_MAX).nullable().default(null),
 });
 export type LogicPalette = z.infer<typeof LogicPalette>;
 
@@ -145,6 +149,19 @@ export function expressionError(
   }
 }
 
+/**
+ * `m = a \cdot b + …`, the KaTeX source of an output's equation (no
+ * delimiters), or `null` when the expression no longer parses: the editor's
+ * preview, the review's and the debrief key's one rendering.
+ */
+export function expressionLatex(name: string, expression: string, inputs?: readonly string[]): string | null {
+  try {
+    return `${toLatex({ kind: "var", name })} = ${toLatex(parseExpression(expression, inputs))}`;
+  } catch {
+    return null;
+  }
+}
+
 /** A fresh draft: two inputs and one output whose expression the teacher writes (D16: it need not validate). */
 export function emptyLogicConfig(): LogicConfig {
   return {
@@ -175,12 +192,8 @@ export function initialLogicAnswer(student: { inputs: readonly string[]; outputs
  * predicate behind both `isAnswered` hooks.
  */
 export function isLogicAnswered(answer: LogicAnswer): boolean {
-  return answer.schematic.wires.length > 0 || answer.schematic.components.some((c) => !isTerminal(c.kind));
+  return answer.schematic.wires.length > 0 || answer.schematic.components.some((c) => LOGIC_PARTS.part(c.kind).locked !== true);
 }
-
-/** The kinds that are neither a declared terminal nor a constant: what `maxGates` counts. */
-export const isGateKind = (kind: string): boolean =>
-  !isTerminal(kind) && !(CONSTANT_KINDS as readonly string[]).includes(kind);
 
 // ---------------------------------------------------------------------------
 // Student view and key

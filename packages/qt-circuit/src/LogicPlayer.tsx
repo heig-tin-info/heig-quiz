@@ -15,13 +15,13 @@ import { useId, useMemo, useState } from "react";
 
 import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { PlayerProps } from "@quiz/core/client";
-import { compileNetlist, LOGIC_LIMITS, type Bit, type Value } from "@quiz/domain/logic";
+import { compileNetlist, type Bit, type Value } from "@quiz/domain/logic";
 import { badge, cx, ExpandableCanvas, hint, isLocked, markdown, Segmented } from "@quiz/ui";
 
 import { logicLibrary, SchematicEditor, SchematicView, type CanvasStrings } from "./canvas/index.js";
-import { offeredLogicKinds } from "./logicLibrary.js";
+import { gateCount, LOGIC_GATES_MAX, offeredLogicKinds } from "./logicLibrary.js";
 import { buildLogicNetlist } from "./logicNetlist.js";
-import { initialLogicAnswer, isGateKind, type LogicAnswer, type LogicSchematic, type LogicStudent } from "./logicSchema.js";
+import { initialLogicAnswer, type LogicAnswer, type LogicSchematic, type LogicStudent } from "./logicSchema.js";
 import { LOGIC_PLAYER_STRINGS, type LogicPlayerStrings } from "./logicStrings.js";
 import { strip } from "./styles.js";
 
@@ -92,8 +92,8 @@ export function LogicPlayer({
 
   const schematic = useMemo(() => answer?.schematic ?? initialLogicAnswer(student).schematic, [answer, student]);
   const played = useMemo(() => (mode === "play" ? playCircuit(schematic, levels) : null), [mode, schematic, levels]);
-  const gates = schematic.components.filter((c) => isGateKind(c.kind)).length;
-  const max = student.palette.maxGates ?? LOGIC_LIMITS.components;
+  const gates = gateCount(schematic);
+  const max = student.palette.maxGates ?? LOGIC_GATES_MAX;
   const canvas = canvasStrings === undefined ? {} : { strings: canvasStrings };
   const level = (value: Value | undefined): string => (value === undefined ? "Z" : String(value));
 

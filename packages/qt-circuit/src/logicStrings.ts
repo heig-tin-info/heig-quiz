@@ -74,7 +74,7 @@ export const LOGIC_EDITOR_STRINGS = {
   paletteHint: "The gates students may place. Constants 0 and 1 are always offered.",
   paletteEmpty: "Allow at least one gate.",
   maxGates: "Gate limit",
-  maxGatesHint: "Empty: up to 60 gates.",
+  maxGatesHint: "Empty: up to {max} gates.",
 
   scoring: "Scoring",
   scoringHint: "Every input combination is simulated. The points follow the share of rows with every output right.",

@@ -11,14 +11,14 @@ import type { GradingColumn, QuestionTypeGrading } from "@quiz/core/client";
 import { fmt, gradingSortKey, plural, resolveStrings } from "@quiz/core/client";
 import { AnswerChip, breakdownOf, countTone, Dash } from "@quiz/ui";
 
-import { isGateKind, type LogicAnswer, type LogicDetails, type LogicSolution, type LogicStudent } from "./logicSchema.js";
+import { gateCount } from "./logicLibrary.js";
+import { type LogicAnswer, type LogicDetails, type LogicSolution, type LogicStudent } from "./logicSchema.js";
 import { LOGIC_GRADING_STRINGS } from "./logicStrings.js";
 
 export const logicGrading: QuestionTypeGrading<LogicStudent, LogicAnswer, LogicSolution, LogicDetails> = {
   columns(_student, _solution, strings) {
     const s = resolveStrings(LOGIC_GRADING_STRINGS, strings);
-    const gatesOf = (answer: LogicAnswer | null): number =>
-      answer?.schematic.components.filter((c) => isGateKind(c.kind)).length ?? 0;
+    const gatesOf = (answer: LogicAnswer | null): number => (answer === null ? 0 : gateCount(answer.schematic));
     const column: GradingColumn<LogicAnswer, LogicDetails> = {
       key: "schematic",
       label: s.schematic,

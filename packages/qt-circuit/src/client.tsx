@@ -15,9 +15,9 @@ import { isCircuitAnswered } from "./schema.js";
 
 import { CIRCUIT_PARTS } from "./library.js";
 import { logicGrading } from "./logicGrading.js";
+import { logicSummary } from "./logicLibrary.js";
 import {
   initialLogicAnswer,
-  isGateKind,
   isLogicAnswered,
   type LogicAnswer,
   type LogicConfig,
@@ -154,11 +154,9 @@ export const logicClient: QuestionTypeClient<LogicConfig, LogicAnswer, LogicStud
   isAnswered: isLogicAnswered,
   grading: logicGrading,
 
-  /** The gate budget, as for `circuit`'s parts. */
+  /** The gate budget, as the server's `summarizeAnswer` writes it. */
   summarize(answer, student) {
-    if (answer === null || !isLogicAnswered(answer)) return "—";
-    const gates = answer.schematic.components.filter((c) => isGateKind(c.kind)).length;
-    return student.palette.maxGates === null ? String(gates) : `${gates}/${student.palette.maxGates}`;
+    return answer === null || !isLogicAnswered(answer) ? "—" : logicSummary(answer.schematic, student.palette.maxGates);
   },
 };
 

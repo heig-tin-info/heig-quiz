@@ -9,7 +9,8 @@
  * the name needs: a one-letter name is a circle. Its pin sits at the end of
  * the pill, on the side the wire leaves.
  */
-import { LOGIC_BOX, LOGIC_KINDS, LOGIC_PARTS, NEGATED, PILL_HEIGHT, type LogicPartSpec } from "../logicLibrary.js";
+import { BOX } from "../library.js";
+import { LOGIC_KINDS, LOGIC_PARTS, NEGATED, PILL_HEIGHT, type LogicPartSpec } from "../logicLibrary.js";
 
 import type { SchematicLibrary } from "./schematicLibrary.js";
 import type { SymbolShape, SymbolSpec, SymbolText } from "./symbols.js";
@@ -100,8 +101,8 @@ function ansiGate(spec: LogicPartSpec): SymbolSpec {
   };
 }
 
-/** A name's pill: as wide as the name needs at the canvas's 11 px mono, a circle for one letter. */
-export const pillWidth = (name: string): number => Math.max(PILL_HEIGHT, Math.ceil(name.length * 6.6 + 12));
+/** A name's pill: as wide as the name needs at the symbol text's 15 px mono (`symbolText`), a circle for one letter. */
+export const pillWidth = (name: string): number => Math.max(PILL_HEIGHT, Math.ceil(name.length * 9 + 14));
 
 /** A terminal (`IN` left of its pin, `OUT` right of it) or a constant (a square with its level). */
 function oneSided(kind: string, name: string): SymbolSpec {
@@ -131,7 +132,7 @@ function libraryOf(style: LogicSymbolStyle): SchematicLibrary {
     }),
   );
   return {
-    box: LOGIC_BOX,
+    box: BOX,
     ports: [],
     kinds: LOGIC_KINDS,
     part: LOGIC_PARTS.part,

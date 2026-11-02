@@ -29,8 +29,8 @@ describe("a terminal", () => {
   it("prints its name, upright, in a pill as wide as the name", () => {
     const short = LOGIC_IEC_LIBRARY.symbol("IN", "a");
     const long = LOGIC_IEC_LIBRARY.symbol("IN", "carry");
-    expect(short.texts).toEqual([{ x: -12, y: 0, text: "a" }]);
-    expect(pillWidth("a")).toBe(24);
+    expect(short.texts).toEqual([{ x: -14, y: 0, text: "a" }]);
+    expect(pillWidth("a")).toBe(28);
     expect(pillWidth("carry")).toBeGreaterThan(pillWidth("cin"));
     expect(long.texts?.[0]?.text).toBe("carry");
   });

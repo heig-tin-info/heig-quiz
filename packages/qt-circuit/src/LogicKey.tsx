@@ -6,10 +6,9 @@
  */
 import type { KeyProps } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
-import { parseExpression, toLatex } from "@quiz/domain/logic";
 import { KeyFigure, KeyHatch } from "@quiz/ui";
 
-import type { LogicSolution, LogicStudent } from "./logicSchema.js";
+import { expressionLatex, type LogicSolution, type LogicStudent } from "./logicSchema.js";
 import { LOGIC_KEY_STRINGS, type LogicKeyStrings } from "./logicStrings.js";
 
 type LogicKeyProps = KeyProps<LogicStudent, LogicSolution> & { strings?: Partial<LogicKeyStrings> };
@@ -19,11 +18,8 @@ export function LogicKey({ solution, revealed, density, stats, prompt, rows, str
   const outputs = solution?.outputs ?? [];
   const display = outputs
     .map(({ name, expression }) => {
-      try {
-        return `$$${name} = ${toLatex(parseExpression(expression))}$$`;
-      } catch {
-        return `\`${name} = ${expression}\``;
-      }
+      const latex = expressionLatex(name, expression);
+      return latex === null ? `\`${name} = ${expression}\`` : `$$${latex}$$`;
     })
     .join("\n\n");
   return (

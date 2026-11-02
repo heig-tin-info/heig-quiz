@@ -13,7 +13,7 @@ import { useId } from "react";
 
 import { fmt, issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import type { EditorProps } from "@quiz/core/client";
-import { LOGIC_LIMITS, parseExpression, toLatex } from "@quiz/domain/logic";
+import { LOGIC_LIMITS } from "@quiz/domain/logic";
 import {
   AsideSection,
   Button,
@@ -32,8 +32,8 @@ import {
   TextInput,
 } from "@quiz/ui";
 
-import { GATE_FAMILIES, type GateFamily } from "./logicLibrary.js";
-import { expressionError, type LogicConfig, type LogicSymbols } from "./logicSchema.js";
+import { GATE_FAMILIES, LOGIC_GATES_MAX, type GateFamily } from "./logicLibrary.js";
+import { expressionError, expressionLatex, type LogicConfig, type LogicSymbols } from "./logicSchema.js";
 import { LOGIC_EDITOR_STRINGS, LOGIC_KIND_STRINGS, type LogicEditorStrings, type LogicKindStrings } from "./logicStrings.js";
 import { chip } from "./styles.js";
 
@@ -137,7 +137,7 @@ export function LogicEditor({
         <ul className="flex flex-col gap-3">
           {config.outputs.map((output, i) => {
             const problem = expressionProblem(output.expression, config.inputs, s);
-            const readable = output.expression.trim() !== "" && problem === null;
+            const latex = problem === null ? expressionLatex(output.name, output.expression, config.inputs) : null;
             const setOutput = (next: Partial<typeof output>) =>
               patch({ outputs: config.outputs.map((o, k) => (k === i ? { ...o, ...next } : o)) });
             return (
@@ -174,11 +174,9 @@ export function LogicEditor({
                   />
                 </div>
                 {problem !== null ? <ErrorText>{problem}</ErrorText> : null}
-                {readable ? (
-                  <div className="text-[13px] text-fg-muted">
-                    {markdown(renderMarkdown, `$${output.name} = ${toLatex(parseExpression(output.expression, config.inputs))}$`)}
-                  </div>
-                ) : null}
+                {latex === null ? null : (
+                  <div className="text-[13px] text-fg-muted">{markdown(renderMarkdown, `$${latex}$`)}</div>
+                )}
                 <IssueList issues={issuesAt(issues, "outputs", i)} />
               </li>
             );
@@ -222,13 +220,13 @@ export function LogicEditor({
             label={s.maxGates}
             value={config.palette.maxGates}
             min={1}
-            max={LOGIC_LIMITS.components}
+            max={LOGIC_GATES_MAX}
             disabled={disabled}
             width="w-24"
             onChange={(maxGates) => patch({ palette: { ...config.palette, maxGates: maxGates || null } })}
             onClear={() => patch({ palette: { ...config.palette, maxGates: null } })}
           />
-          <p className={`${hint} pb-1.5`}>{s.maxGatesHint}</p>
+          <p className={`${hint} pb-1.5`}>{fmt(s.maxGatesHint, { max: LOGIC_GATES_MAX })}</p>
         </div>
         <div className="flex flex-col items-start gap-2">
           <span className={label} id={`${ids}-symbols`}>

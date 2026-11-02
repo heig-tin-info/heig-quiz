@@ -31,6 +31,7 @@ import {
   portLabel,
   selectedHalo,
   shapeClass,
+  symbolText,
   wireHit,
   wireLine,
 } from "./canvasStyles.js";
@@ -276,7 +277,7 @@ export function ComponentGlyph({
 /** A symbol's upright text, centred on its point (`SymbolSpec.texts`). */
 function SymbolLabel({ x, y, text }: { x: number; y: number; text: string }): JSX.Element {
   return (
-    <text className={componentLabel} x={x} y={y} textAnchor="middle" dominantBaseline="central">
+    <text className={symbolText} x={x} y={y} textAnchor="middle" dominantBaseline="central">
       {text}
     </text>
   );
