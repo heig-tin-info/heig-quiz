@@ -38,6 +38,8 @@ const item = (n: number, over: Partial<AttemptView["items"][number]> = {}) => ({
   flagged: false,
   locked: false,
   acquired: false,
+  checked: false,
+  correction: null,
   ...over,
 });
 

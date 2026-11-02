@@ -286,24 +286,35 @@ async function publishCell(
   });
 }
 
+/** What an answer write is given. */
+export interface AnswerWrite {
+  evaluation: EvaluationRecord;
+  attempt: AttemptRecord;
+  itemId: string;
+  payload: unknown;
+  revision: number;
+  now: Date;
+  /** ADR-097: the client's `AnswerCoordinates` marker; a server-side writer passes its own. */
+  coordinates?: AnswerCoordinates | undefined;
+}
+
 /**
  * ONE statement, no read-modify-write (§4.7). `WHERE answers.revision <
  * excluded.revision` is what makes two concurrent writes deterministic: the
  * higher revision wins, and the loser is told which payload to adopt.
  */
-export async function saveAnswer(
+export async function saveAnswer(db: Db, input: AnswerWrite): Promise<AutosaveResponse> {
+  return (await writeAnswer(db, input)).reply;
+}
+
+/**
+ * {@link saveAnswer}, with the item it wrote to: the check (ADR-124 §3)
+ * writes the answer on screen first, and grades that item next.
+ */
+export async function writeAnswer(
   db: Db,
-  input: {
-    evaluation: EvaluationRecord;
-    attempt: AttemptRecord;
-    itemId: string;
-    payload: unknown;
-    revision: number;
-    now: Date;
-    /** ADR-097: the client's `AnswerCoordinates` marker; a server-side writer passes its own. */
-    coordinates?: AnswerCoordinates | undefined;
-  },
-): Promise<AutosaveResponse> {
+  input: AnswerWrite,
+): Promise<{ reply: AutosaveResponse; joined: JoinedItem }> {
   const { evaluation, attempt, itemId, revision, now } = input;
   const { joined, current } = await stateTarget(db, evaluation, attempt, itemId, now);
 
@@ -362,25 +373,39 @@ export async function saveAnswer(
           firstShownAt: sql`coalesce(${answers.firstShownAt}, excluded.first_shown_at)`,
           updatedAt: now,
         },
-        setWhere: sql`${answers.revision} < excluded.revision`,
+        // ADR-124 §3: never over a checked answer. A save that passed
+        // `stateTarget` before a check committed waits here for the check's
+        // update lock of the attempt, then finds the row checked.
+        setWhere: sql`${answers.revision} < excluded.revision and ${answers.checkedAt} is null`,
       })
       .returning();
   });
 
   if (written.length === 0) {
+    // Filtered out: checked since `stateTarget` read the row — refused like
+    // any write to a checked question — or stale.
+    const [stored] = await db
+      .select()
+      .from(answers)
+      .where(and(eq(answers.attemptId, attempt.id), eq(answers.itemId, itemId)))
+      .limit(1);
+    const latest = unchecked(stored ?? current);
     // Stale: the row in the database is newer. Hand it back so the client
     // adopts it (last-writer-wins by revision), in the client's coordinates.
     return {
-      accepted: false,
-      revision: current?.revision ?? 0,
-      payload: answerToStudent(joined.question.type, config, view, current?.payload),
-      serverNow: iso(now),
+      joined,
+      reply: {
+        accepted: false,
+        revision: latest?.revision ?? 0,
+        payload: answerToStudent(joined.question.type, config, view, latest?.payload),
+        serverNow: iso(now),
+      },
     };
   }
 
   const row = written[0]!;
   await publishCell(evaluation, attempt, joined, row, now);
-  return { accepted: true, revision: row.revision, serverNow: iso(now) };
+  return { joined, reply: { accepted: true, revision: row.revision, serverNow: iso(now) } };
 }
 
 /**
@@ -463,6 +488,11 @@ function blankAnswerRow(attemptId: string, itemId: string, now: Date) {
  * yet. "Seen, nothing typed": the row has to exist for a flag to, and
  * `payload` is NOT NULL, so it holds the JSON value `null` — which is what a
  * type's `grade(config, null, …)` already means (F-GRADE-01).
+ *
+ * A skip or a flag never lands on a checked question (ADR-124 §3), even one
+ * checked since `stateTarget` read the row: the statement itself refuses it.
+ * A validation may — "Validate and continue" after a check moves on, and the
+ * question is locked already.
  */
 async function writeState(
   db: Db,
@@ -474,32 +504,33 @@ async function writeState(
 ): Promise<AnswerRecord> {
   // Written, therefore shown (ADR-039), whatever the player reported.
   const shown = { firstShownAt: sql`coalesce(${answers.firstShownAt}, ${now.toISOString()}::timestamptz)` };
-  if (current) {
-    const [row] = await db
-      .update(answers)
-      .set({ ...set, ...shown, updatedAt: now })
-      .where(eq(answers.id, current.id))
-      .returning();
-    return row!;
-  }
-  const [row] = await db
-    .insert(answers)
-    .values({ ...blankAnswerRow(attempt.id, itemId, now), ...set })
-    // Two tabs racing on a never-opened question: the second one updates.
-    .onConflictDoUpdate({
-      target: [answers.attemptId, answers.itemId],
-      set: { ...set, ...shown, updatedAt: now },
-    })
-    .returning();
-  return row!;
+  const unlessChecked = set.markedDone === undefined ? isNull(answers.checkedAt) : undefined;
+  const [row] = current
+    ? await db
+        .update(answers)
+        .set({ ...set, ...shown, updatedAt: now })
+        .where(and(eq(answers.id, current.id), unlessChecked))
+        .returning()
+    : await db
+        .insert(answers)
+        .values({ ...blankAnswerRow(attempt.id, itemId, now), ...set })
+        // Two tabs racing on a never-opened question: the second one updates.
+        .onConflictDoUpdate({
+          target: [answers.attemptId, answers.itemId],
+          set: { ...set, ...shown, updatedAt: now },
+          ...(unlessChecked ? { setWhere: unlessChecked } : {}),
+        })
+        .returning();
+  if (!row) throw new LiveError("item_checked");
+  return row;
 }
 
 /**
  * What every write of a student to one item shares — an answer, and the two
  * state writes of issue #89: the write gate (a `410` past the deadline plus
  * grace, on the server's clock), the item, the lock of the locking
- * navigations — a validated question takes no write of any kind — and the
- * row as it stands.
+ * navigations — a validated question takes no write of any kind, nor does a
+ * checked one (ADR-124 §3) — and the row as it stands.
  *
  * Free navigation needs this one item and this one row only. A locking mode
  * needs the whole ordered list and every answer anyway (the lock depends on
@@ -526,7 +557,7 @@ async function stateTarget(
       .from(answers)
       .where(and(eq(answers.attemptId, attempt.id), eq(answers.itemId, itemId)))
       .limit(1);
-    return { joined, current: current ?? null };
+    return { joined, current: unchecked(current ?? null) };
   }
   const ordered = orderItems(
     await joinedItems(db, evaluation.id),
@@ -538,7 +569,16 @@ async function stateTarget(
   if (!joined) throw new LiveError("not_found");
   const stored = await answersOf(db, attempt.id);
   if (lockedItemIds(settings, ordered, stored).has(itemId)) throw new LiveError("item_locked");
-  return { joined, current: stored.get(itemId) ?? null };
+  return { joined, current: unchecked(stored.get(itemId) ?? null) };
+}
+
+/**
+ * ADR-124 §3: a checked question takes no write of any kind for the rest of
+ * its attempt — an answer, a skip, a flag — whatever the navigation.
+ */
+function unchecked(current: AnswerRecord | null): AnswerRecord | null {
+  if (current?.checkedAt != null) throw new LiveError("item_checked");
+  return current;
 }
 
 /**

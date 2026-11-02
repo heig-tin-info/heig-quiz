@@ -46,7 +46,7 @@
  * the code answers simply arrive in the panel as proposals a teacher settles.
  */
 import type { FastifyInstance } from "fastify";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { GradeContext, GradeResult, LlmGradeRequest, RunnerRequest } from "@quiz/core/server";
 import {
@@ -59,6 +59,7 @@ import {
 } from "@quiz/contracts";
 import { RunnerBusy, RunnerUnavailable, isGraded, isPendingRunner } from "@quiz/core/server";
 import {
+  checkAllowed,
   gradableNow,
   isLiveState,
   itemPoints,
@@ -83,6 +84,7 @@ import {
   joinedItem,
   joinedItems,
   peopleOf,
+  type DbOrTx,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
@@ -141,7 +143,7 @@ interface EvaluationGradingJob {
   regradeNote?: string;
 }
 
-interface RunnerGradingJob {
+export interface RunnerGradingJob {
   evaluationId: string;
   attemptId: string;
   itemId: string;
@@ -556,6 +558,80 @@ export async function runEvaluationGrading(
   await announceGradingReady(app, evaluation);
 }
 
+/**
+ * What a check of one question of an exercise (ADR-124 §3) settles, graded
+ * by the pass's own cell grader — the same `type.grade`, config and context
+ * as the hand-in's, so the check and the hand-in can never disagree. Writes
+ * nothing:
+ *
+ *   - `write`: a VALIDATED automatic grade, the instant verdict, which the
+ *     check writes with {@link writeCheckGrading} once the question is
+ *     marked checked;
+ *   - `runner` (code, circuit): the job the check sends with
+ *     {@link enqueueCheckRun} once the question is checked;
+ *   - `null`: a proposal (an essay, a manual circuit, an unreadable answer),
+ *     `pending: llm`, or a question with no key — no model is asked while the
+ *     evaluation runs (ADR-067 §1, F-LLM-03), and the hand-in's or the
+ *     close's pass grades the cell as it grades every other.
+ */
+export async function checkGrading(
+  app: FastifyInstance,
+  cell: {
+    evaluation: EvaluationRecord;
+    item: JoinedItem;
+    attempt: AttemptRecord;
+    answer: typeof answers.$inferSelect;
+  },
+): Promise<{ write: WriteGradingInput } | { runner: RunnerGradingJob } | null> {
+  const { evaluation, item, attempt, answer } = cell;
+  const { configOf, keyed } = readConfig(app, item);
+  // A question with no key (an opinion) has nothing to be right about.
+  if (!keyed) return null;
+  const graded = await gradeCell(app, {
+    evaluation,
+    job: { evaluationId: evaluation.id },
+    item,
+    config: configOf(attempt),
+    attempt,
+    answer,
+    llm: false,
+  });
+  if ("runner" in graded) return graded;
+  return "write" in graded && graded.write.state === "validated" ? graded : null;
+}
+
+/**
+ * The instant verdict of a check, written once the question is marked
+ * checked, under the attempt's row lock (`passGuard`, which keeps a checked
+ * cell gradable while its attempt is open). The checked answer cannot move:
+ * every write statement refuses a checked row. `null` when the guard
+ * dropped the write.
+ */
+export async function writeCheckGrading(app: FastifyInstance, write: WriteGradingInput): Promise<GradingRecord | null> {
+  const [written] = await writeGradings(app.db, [write], passGuard());
+  return written ?? null;
+}
+
+/**
+ * A check's runner job, sent once the question is checked, at the queue's
+ * default priority: ahead of the hand-in passes' jobs, since a student
+ * waits on it. Its verdict lands on the cell later; the player reads the
+ * attempt again.
+ *
+ * Handed in while this job still waits, the attempt's pass finds no
+ * validated grading on the cell and sends a job of its own: a bounded
+ * duplicate, accepted rather than tracked by an in-flight marker — the
+ * runner jobs run one at a time in order of priority, so the check's runs
+ * first, and the pass's then finds the cell validated (`isValidated`) and
+ * runs nothing.
+ *
+ * Without a queue (`JOBS_DISABLED`, development on PGlite, the route tests)
+ * the job runs inline, and the check's request waits for the runner.
+ */
+export async function enqueueCheckRun(app: FastifyInstance, job: RunnerGradingJob): Promise<void> {
+  await enqueueOrRun(app, GRADING_RUNNER_QUEUE, job, runRunnerGrading);
+}
+
 type GradeOutcome =
   | {
       kind: "written";
@@ -692,7 +768,7 @@ async function gradeWithRunner(
     : undefined;
   // A cheap early exit, so a stale job never takes a runner slot. What
   // decides is the guard of the write, under the attempt's lock.
-  if (isStale(evaluation.state, attempt, answerRow, job)) return;
+  if (isStale(evaluation, attempt, answerRow, job)) return;
 
   const now = app.clock.now();
   const base = {
@@ -775,15 +851,18 @@ async function gradeWithRunner(
  * was reopened since the hand-in that sent it, while the evaluation runs, or
  * its answer was rewritten since (a reopened attempt handed in again, whose
  * own pass sent a job of its own). Writing would grade an answer the student
- * no longer holds, and the pass never re-grades a validated cell.
+ * no longer holds, and the pass never re-grades a validated cell. A checked
+ * question's job (ADR-124 §3) is current while its attempt is still open:
+ * the check locked the answer it was built from.
  */
 function isStale(
-  evaluationState: EvaluationRecord["state"],
+  evaluation: Pick<EvaluationRecord, "state" | "mode">,
   attempt: Pick<AttemptRecord, "state" | "afterDue">,
-  answer: { revision: number } | undefined,
+  answer: { revision: number; checkedAt: Date | null } | undefined,
   job: RunnerGradingJob,
 ): boolean {
-  if (!gradableNow(evaluationState, attempt)) return true;
+  const cell = { mode: evaluation.mode, checked: answer?.checkedAt != null };
+  if (!gradableNow(evaluation.state, attempt, cell)) return true;
   return answer !== undefined && rewritten(answer.revision, job);
 }
 
@@ -817,20 +896,41 @@ function passGuard(loadedEnd?: ReadonlyMap<string, number | null>): WriteGuard {
         afterDue: attempts.afterDue,
         closedAt: attempts.closedAt,
         evaluationState: evaluations.state,
+        mode: evaluations.mode,
       })
       .from(attempts)
       .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
       .where(inArray(attempts.id, ids))
       .orderBy(attempts.id)
       .for("update", { of: attempts });
-    const gradable = new Set(
+    const loaded = new Map(
       rows
-        .filter((r) => gradableNow(r.evaluationState, r))
         .filter((r) => loadedEnd === undefined || loadedEnd.get(r.id) === endOf(r.closedAt))
-        .map((r) => r.id),
+        .map((r) => [r.id, r]),
     );
-    return inputs.filter((i) => gradable.has(i.attemptId));
+    // ADR-124 §3: the checked questions among the cells, read under the same
+    // lock — a checked cell is gradable while its attempt is still open.
+    // Only an exercise is checked: no read for an exam's or a poll's pass.
+    const exercises = [...loaded.values()].filter((r) => checkAllowed(r.mode)).map((r) => r.id);
+    const checked = await checkedCells(tx, exercises);
+    return inputs.filter((i) => {
+      const r = loaded.get(i.attemptId);
+      return (
+        r !== undefined &&
+        gradableNow(r.evaluationState, r, { mode: r.mode, checked: checked.has(pairKey(i.attemptId, i.itemId)) })
+      );
+    });
   };
+}
+
+/** The checked cells (ADR-124 §3) of these attempts. */
+async function checkedCells(db: DbOrTx, attemptIds: readonly string[]): Promise<Set<PairKey>> {
+  if (attemptIds.length === 0) return new Set();
+  const rows = await db
+    .select({ attemptId: answers.attemptId, itemId: answers.itemId })
+    .from(answers)
+    .where(and(inArray(answers.attemptId, [...attemptIds]), isNotNull(answers.checkedAt)));
+  return new Set(rows.map((r) => pairKey(r.attemptId, r.itemId)));
 }
 
 const endOf = (closedAt: Date | null): number | null => closedAt?.getTime() ?? null;

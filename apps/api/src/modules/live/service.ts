@@ -12,6 +12,7 @@
  *   - `autosave.ts`: the answer summaries, the live grader, `saveAnswer`,
  *     `markDone`, `reportShown` (the position and the dwell) and the attempt
  *     journal;
+ *   - `check.ts`: the per-question check of an exercise (ADR-124 §3);
  *   - `runs.ts`: running code and simulating a schematic for a student;
  *   - `control.ts`: the teacher controls (start, pause, resume, close, extend);
  *   - `dashboard.ts`: the dashboard read model and the attempt inspector;
@@ -88,7 +89,7 @@ export {
   teacherPreviewView,
 } from "./studentView.js";
 // ADR-097: the one view of an attempt's item, for the feedback page and the preview.
-export { attemptItemView } from "./itemView.js";
+export { attemptItemView, type ItemView } from "./itemView.js";
 export {
   answeredBy,
   saveAnswer,
@@ -99,6 +100,7 @@ export {
   logAttemptEvent,
   countRecentEvents,
 } from "./autosave.js";
+export { checkItem } from "./check.js";
 export { evaluationIncidents } from "./incidents.js";
 export {
   purgeIntegrityJournal,

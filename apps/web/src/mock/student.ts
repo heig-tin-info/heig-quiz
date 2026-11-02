@@ -499,6 +499,9 @@ export const studentAttemptView = (): AttemptView => ({
       // `forward_only` closes a validated question (F-LIVE-08).
       locked: scene === "forward" && stored?.done === true,
       acquired: scene === "partial" && PARTIAL_ACQUIRED.has(n),
+      // ADR-124 §3: the mock checks nothing yet.
+      checked: false,
+      correction: null,
     };
   }),
 });

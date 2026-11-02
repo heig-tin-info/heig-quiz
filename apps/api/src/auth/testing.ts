@@ -28,6 +28,8 @@ export const SITTING_ROUTES = new Set([
   "GET /app/api/attempts/:id",
   "PUT /app/api/attempts/:id/answers/:itemId",
   "POST /app/api/attempts/:id/answers/:itemId/done",
+  // ADR-124 §3: an exercise behind a trusted client is checked from it.
+  "POST /app/api/attempts/:id/answers/:itemId/check",
   "POST /app/api/attempts/:id/answers/:itemId/skip",
   "POST /app/api/attempts/:id/answers/:itemId/flag",
   "POST /app/api/attempts/:id/position",

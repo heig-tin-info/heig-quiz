@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { FEEDBACK_WHEN } from "./evaluationConfig.js";
 import { EVALUATION_STATES } from "./itemList.js";
 import {
+  checkAllowed,
+  checkRefusal,
+  itemCorrectionShown,
   correctionPublishRefusal,
   effectiveFeedbackPolicy,
   feedbackGate,
@@ -147,5 +150,33 @@ describe("feedbackGradeShown (F-RES-04)", () => {
     expect(feedbackGradeShown({ released: true, pendingCount: 1 })).toBe(false);
     expect(feedbackGradeShown({ released: false, pendingCount: 0 })).toBe(false);
     expect(feedbackGradeShown({ released: false, pendingCount: 2 })).toBe(false);
+  });
+});
+
+describe("the per-question check (ADR-124 §3)", () => {
+  it("is an exercise's only", () => {
+    expect(checkAllowed("exercise")).toBe(true);
+    expect(checkAllowed("exam")).toBe(false);
+    expect(checkAllowed("poll")).toBe(false);
+  });
+
+  it("refuses a question checked already, then an empty one", () => {
+    expect(checkRefusal({ checked: true, answered: false })).toBe("item_checked");
+    expect(checkRefusal({ checked: true, answered: true })).toBe("item_checked");
+    expect(checkRefusal({ checked: false, answered: false })).toBe("nothing_to_check");
+    expect(checkRefusal({ checked: false, answered: true })).toBeNull();
+  });
+
+  it("shows a question's correction on an exercise once it is checked or the attempt handed in", () => {
+    const shown = (mode: "exercise" | "exam" | "poll", checked: boolean, attemptFinished: boolean) =>
+      itemCorrectionShown({ mode, checked, attemptFinished });
+    expect(shown("exercise", false, false)).toBe(false);
+    expect(shown("exercise", true, false)).toBe(true);
+    expect(shown("exercise", false, true)).toBe(true);
+    // An exam's and a poll's are their policy's, never this rule's.
+    for (const mode of ["exam", "poll"] as const) {
+      expect(shown(mode, true, false)).toBe(false);
+      expect(shown(mode, true, true)).toBe(false);
+    }
   });
 });

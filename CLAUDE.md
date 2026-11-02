@@ -78,8 +78,10 @@ Never work around these, not even "temporarily".
    One point of exit, in the `studentView` service of the `live` module: it
    strips the internal name, the concepts, the difficulty and the explanation,
    then applies the feedback policy. An exercise's solution reaches its
-   student once the attempt is handed in (ADR-124), through
-   `studentSolutionView`, from `results.studentFeedback`.
+   student once the item is checked or the attempt handed in (ADR-124),
+   through `studentSolutionView`: from `results.studentFeedback` on the
+   feedback page, from `results.studentItemCorrection` (one rule,
+   `itemCorrectionShown`) in the check's reply and the attempt's view.
    Every question type is tested with a
    full configuration passed through `toStudent`, by forbidden-key list AND
    by searching the serialized output for the answer-key values

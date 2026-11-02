@@ -108,6 +108,8 @@ function viewOf(e: MockEvaluation, seed: number): AttemptView {
           flagged: false,
           locked: false,
           acquired: false,
+          checked: false,
+          correction: null,
         },
       ];
     }),
