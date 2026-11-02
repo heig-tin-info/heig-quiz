@@ -40,6 +40,7 @@ const CHECKBOX = "inline-flex items-center gap-1.5 text-sm text-fg-muted";
 export function ClozeEditor({
   config,
   onChange,
+  uploadAsset,
   disabled,
   issues = [],
   strings,
@@ -63,6 +64,7 @@ export function ClozeEditor({
           onChange={(text) => patch({ text })}
           disabled={disabled}
           RichText={RichText}
+          uploadImage={uploadAsset}
           // The `{{…}}` holes are OBJECTS in the rich field: chips the teacher
           // clicks to edit, written back verbatim. It is what finally replaced
           // the textarea this editor was stuck with — a plain rich field
