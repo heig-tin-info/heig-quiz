@@ -31,6 +31,7 @@ import {
   portLabel,
   selectedHalo,
   shapeClass,
+  symbolText,
   wireHit,
   wireLine,
 } from "./canvasStyles.js";
@@ -167,7 +168,7 @@ export function ComponentGlyph({
   hoveredPin,
 }: ComponentGlyphProps): JSX.Element {
   const spec = library.part(component.kind);
-  const symbol = library.symbol(component.kind);
+  const symbol = library.symbol(component.kind, component.name);
   const m = component.m;
   const hit = hitRectOf(component, library);
 
@@ -245,6 +246,10 @@ export function ComponentGlyph({
           />
         );
       })}
+      {(symbol.texts ?? []).map((text, i) => {
+        const [tx, ty] = transform(m, text.x, text.y);
+        return <SymbolLabel key={`t${i}`} x={component.x + tx} y={component.y + ty} text={text.text} />;
+      })}
       {spec.pins.map((_, i) => {
         const q = pinPosition(component, i, library);
         if (q === null) return null;
@@ -269,19 +274,31 @@ export function ComponentGlyph({
 // Wires
 // ---------------------------------------------------------------------------
 
+/** A symbol's upright text, centred on its point (`SymbolSpec.texts`). */
+function SymbolLabel({ x, y, text }: { x: number; y: number; text: string }): JSX.Element {
+  return (
+    <text className={symbolText} x={x} y={y} textAnchor="middle" dominantBaseline="central">
+      {text}
+    </text>
+  );
+}
+
 export function WireGlyph({
   wire,
   points,
   selected = false,
+  ink,
 }: {
   wire: CanvasWire;
   points: ReadonlyArray<readonly [number, number]>;
   selected?: boolean | undefined;
+  /** The host's ink for this wire (a logic level in play mode); the normal ink when absent. */
+  ink?: string | undefined;
 }): JSX.Element | null {
   if (points.length < 2) return null;
   const d = pathOf(points);
   return (
-    <g className={selected ? inkSelected : inkNormal} data-wire={wire.id}>
+    <g className={selected ? inkSelected : (ink ?? inkNormal)} data-wire={wire.id}>
       <path className={wireHit} d={d} />
       <path className={cx(wireLine, selected && "stroke-[2.3]")} d={d} />
     </g>
@@ -349,6 +366,9 @@ export function SymbolPreview({
           d={`M${mark.x - 3.5} ${mark.y}h7${mark.sign === "+" ? `M${mark.x} ${mark.y - 3.5}v7` : ""}`}
         />
       ))}
+      {(symbol.texts ?? []).map((text, i) => (
+        <SymbolLabel key={`t${i}`} x={text.x} y={text.y} text={text.text} />
+      ))}
     </svg>
   );
 }
@@ -367,6 +387,8 @@ interface SchematicViewProps {
   height?: number | undefined;
   flaggedPins?: readonly FlaggedPin[] | undefined;
   flaggedPorts?: readonly string[] | undefined;
+  /** The ink of each wire, by id (a logic level in play mode); the normal ink when it answers nothing. */
+  wireInk?: ((wireId: string) => string | undefined) | undefined;
   "aria-label"?: string | undefined;
 }
 
@@ -378,6 +400,7 @@ export function SchematicView({
   height = 320,
   flaggedPins,
   flaggedPorts,
+  wireInk,
   "aria-label": ariaLabel,
 }: SchematicViewProps): JSX.Element {
   const s = resolveStrings(CANVAS_STRINGS, strings);
@@ -414,7 +437,7 @@ export function SchematicView({
         <Paper id={id} box={library.box} />
         <g>
           {schematic.wires.map((w) => (
-            <WireGlyph key={w.id} wire={w} points={w.points} />
+            <WireGlyph key={w.id} wire={w} points={w.points} ink={wireInk?.(w.id)} />
           ))}
         </g>
         <Junctions library={library} schematic={schematic} routes={routes} />

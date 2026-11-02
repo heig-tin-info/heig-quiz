@@ -1047,6 +1047,9 @@ const scenes = [
   // The blocks item (docs/04 §4.17): the starter in the workspace, then every visible warehouse tested.
   { name: "player-blocks", role: "student", path: `${TAKE}?scene=running`, settle: 3000, act: (p) => openQuestion(p, 10) },
   { name: "player-blocks-tested", role: "student", path: `${TAKE}?scene=running`, settle: 3000, act: async (p) => { await openQuestion(p, 10); await p.getByRole("button", { name: /^(Test on every warehouse|Tester sur tous les entrepôts)$/ }).click(); await p.getByRole("button", { name: /Rayonnage sur l'allée/ }).click(); await p.getByRole("button", { name: /^(Step|Pas à pas)$/ }).click(); await p.getByRole("button", { name: /^(Step|Pas à pas)$/ }).click(); await p.waitForTimeout(500); } },
+  // The logic item (docs/04 §4.18): the circuit to finish, then play mode with b and c on — the output the student's own circuit computes.
+  { name: "player-logic", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 11) },
+  { name: "player-logic-play", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 11); await p.getByRole("radio", { name: /^(Play|Simuler)$/ }).check({ force: true }); await p.getByRole("button", { name: "b = 0" }).click(); await p.getByRole("button", { name: "c = 0" }).click(); await p.waitForTimeout(300); } },
   { name: "player-blocks-code", role: "student", path: `${TAKE}?scene=running`, settle: 3000, act: async (p) => { await openQuestion(p, 10); await p.getByText(/^Code$/).click(); await p.waitForTimeout(400); } },
   // The focused canvas lends its keys to the side column, under Alt + ← → (issue #549).
   { name: "player-circuit-shortcuts", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openQuestion(p, 5); await focusCanvas(p); } },
@@ -1504,6 +1507,10 @@ const scenes = [
   { name: "editor-categorize", role: "teacher", path: "/questions/q18", settle: 3000 },
   // The blocks editor (docs/04 §4.17): toolbox, starter, reference, warehouses on their grids; then the reference checked.
   { name: "editor-blocks", role: "teacher", path: "/questions/q-blocks", settle: 4000 },
+  // The logic editor (docs/04 §4.18): the inputs, the expressions in KaTeX, the gates; then ANSI and the try tab drawn with it.
+  { name: "editor-logic", role: "teacher", path: "/questions/q-logic", settle: 2000 },
+  { name: "editor-logic-ansi", role: "teacher", path: "/questions/q-logic", settle: 2000, act: async (p) => { await p.getByRole("radio", { name: "ANSI" }).check({ force: true }); await p.waitForTimeout(300); } },
+  { name: "try-logic-ansi", role: "teacher", path: "/questions/q-logic", settle: 2000, act: async (p) => { await p.getByRole("radio", { name: "ANSI" }).check({ force: true }); await p.getByRole("tab", { name: /^(Try|Essayer)$/ }).click(); await p.waitForTimeout(800); } },
   { name: "editor-blocks-checked", role: "teacher", path: "/questions/q-blocks", settle: 4000, act: async (p) => { await p.getByRole("button", { name: /^(Check the reference|Vérifier la référence)$/ }).click(); await p.waitForTimeout(400); } },
   // The diagram (ADR-046): published, so its kind is shown locked; the new draft's grid is `editor-diagram-new`.
   { name: "editor-diagram", role: "teacher", path: "/questions/q19", settle: 3000 },
@@ -1594,6 +1601,10 @@ const scenes = [
   // The blocks question, appended last after the parameterized one (docs/04 §4.17): the program column, then a review in the panel.
   { name: "grading-blocks", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 10) },
   { name: "grading-blocks-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => { await nextQuestion(p, 10); await openRow(p, 1); } },
+  // The logic question, appended after the blocks one (docs/04 §4.18): the rows column, then a review in the panel.
+  { name: "grading-logic", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 11) },
+  { name: "grading-logic-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => { await nextQuestion(p, 11); await openRow(p, 1); } },
+  { name: "grading-logic-failing", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => { await nextQuestion(p, 11); await openRow(p, 7); await p.getByText(/^(Failing rows|Lignes fausses)$/).scrollIntoViewIfNeeded(); await p.waitForTimeout(300); } },
   // ADR-056 §9: the parameterized question, the closed evaluation's tenth —
   // the question as written on the key's row, the rows by verdict, an
   // answer's own values and key, and the variables on the key's panel.

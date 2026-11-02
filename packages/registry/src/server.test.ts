@@ -3,7 +3,7 @@ import { findStudentLeaks, type StudentLeakFixture } from "@quiz/core/testing";
 import { blocksLeakFixture } from "@quiz/qt-blocks/testing";
 import { brainstormLeakFixture } from "@quiz/qt-brainstorm/testing";
 import { categorizeLeakFixture } from "@quiz/qt-categorize/testing";
-import { circuitLeakFixture } from "@quiz/qt-circuit/testing";
+import { circuitLeakFixture, logicLeakFixture } from "@quiz/qt-circuit/testing";
 import { clozeLeakFixture } from "@quiz/qt-cloze/testing";
 import { codeimageLeakFixture, codeLeakFixture } from "@quiz/qt-code/testing";
 import { diagramLeakFixture } from "@quiz/qt-diagram/testing";
@@ -16,7 +16,7 @@ import { clientRegistry, questionTypeClient } from "./client.js";
 import { QUESTION_TYPE_IDS, questionType, registeredServerIds, serverRegistry } from "./server.js";
 
 /**
- * The four MVP types, `circuit` (docs/spec/04 §4.11), `codeimage` (§4.9),
+ * The four MVP types, `circuit` (docs/spec/04 §4.11), `logic` (§4.18), `codeimage` (§4.9),
  * `rich` (§4.8), `categorize` (§4.13), `diagram` (§4.14) and `math` (§4.16),
  * brought forward, `brainstorm` (ADR-071) and `blocks` (§4.17).
  */
@@ -26,6 +26,7 @@ const REGISTERED = [
   "cloze",
   "code",
   "circuit",
+  "logic",
   "codeimage",
   "rich",
   "categorize",
@@ -48,6 +49,7 @@ const CONFIG_VERSIONS: Record<RegisteredId, number> = {
   cloze: 2,
   code: 1,
   circuit: 1,
+  logic: 1,
   codeimage: 1,
   rich: 2,
   categorize: 1,
@@ -71,6 +73,7 @@ const LEAK_FIXTURES: Record<RegisteredId, StudentLeakFixture> = {
   cloze: clozeLeakFixture,
   code: codeLeakFixture,
   circuit: circuitLeakFixture,
+  logic: logicLeakFixture,
   codeimage: codeimageLeakFixture,
   rich: richLeakFixture,
   categorize: categorizeLeakFixture,
@@ -110,7 +113,7 @@ describe("the static registries", () => {
     expect(() => questionType("drawing")).toThrow(UnknownQuestionType);
   });
 
-  it("expose the twelve ids", () => {
+  it("expose the thirteen ids", () => {
     expect(QUESTION_TYPE_IDS).toEqual([...REGISTERED]);
     expect(Object.keys(serverRegistry)).toEqual([...REGISTERED]);
   });

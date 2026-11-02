@@ -5,7 +5,7 @@
  * one, its staff-only debrief `Key` (ADR-109) — through `React.lazy`, so that
  * Monaco never enters the initial bundle (N-PERF-05).
  */
-import { circuitClient } from "@quiz/qt-circuit/client";
+import { circuitClient, logicClient } from "@quiz/qt-circuit/client";
 import { codeClient, codeimageClient } from "@quiz/qt-code/client";
 
 import {
@@ -34,6 +34,7 @@ export const clientRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeClien
     cloze: clozeClient,
     code: codeClient,
     circuit: circuitClient,
+    logic: logicClient,
     codeimage: codeimageClient,
     rich: richClient,
     categorize: categorizeClient,

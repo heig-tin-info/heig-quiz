@@ -6,7 +6,7 @@ import type { QuestionDetail } from "@quiz/contracts";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { QuestionTypePicker, TypeFace } from "./QuestionTypePicker";
-import { QUESTION_TYPE_IDS } from "../questionTypes";
+import { CREATABLE_TYPE_IDS } from "../questionTypes";
 import { Button, Field, FormError, Modal, cx } from "../ui";
 
 type Step = "type" | "name";
@@ -115,7 +115,7 @@ export function NewQuestionModal({
           <fieldset ref={typePane} inert={step !== "type"} className="w-full shrink-0 pb-1">
             <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
             <QuestionTypePicker
-              types={QUESTION_TYPE_IDS}
+              types={CREATABLE_TYPE_IDS}
               value={type}
               onChange={(next) => {
                 setType(next);

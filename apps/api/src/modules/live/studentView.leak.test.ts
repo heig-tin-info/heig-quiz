@@ -174,6 +174,16 @@ const DRAFT_COMPLETIONS: Record<string, (draft: unknown) => unknown> = {
    */
   rich: (draft) => ({ ...(draft as object), reference: "" }),
   /*
+   * `logic`'s draft has an output whose expression the teacher writes, and no
+   * filler is an expression over its inputs. The expressions are the key but
+   * not a string a marker can prefix (`S3CR3T…a*b` names no input): its own
+   * `toStudent.test.ts` searches the view for them.
+   */
+  logic: (draft) => {
+    const config = draft as { outputs: { name: string; expression: string }[] };
+    return { ...config, outputs: config.outputs.map((o) => ({ ...o, expression: "a * b" })) };
+  },
+  /*
    * `categorize`'s draft has two columns and no card, and a question needs
    * one card in a column (`categorize.no_target`). Its key is not a string
    * but the id lists inside the columns, which the value search cannot sow:
@@ -440,6 +450,31 @@ describe("studentView never leaks the key (invariant 4)", () => {
       kind: "class",
       starter: (config as { starter: unknown }).starter,
     });
+  });
+
+  it("keeps the expressions of `logic` out, the names of its ports in (ADR-123 §7)", () => {
+    // An expression is a grammar a marker cannot prefix, so the value search
+    // above sows nothing into it: this test plants compound ones by hand.
+    const type = questionType("logic");
+    const config = type.configSchema.parse({
+      ...(filledDraft(type) as object),
+      outputs: [
+        { name: "y", expression: "a * b" },
+        { name: "z", expression: "a ^ !b" },
+      ],
+    });
+    const payload = studentView({
+      type: "logic",
+      version: { config, configVersion: type.configVersion, variables: null },
+      seed: 0,
+      itemId: "77777777-7777-4777-8777-777777777778",
+      shuffle: false,
+    });
+    const serialized = JSON.stringify(payload);
+    expect(serialized).not.toContain("a * b");
+    expect(serialized).not.toContain("a ^ !b");
+    expect(keysOf(payload)).not.toContain("expression");
+    expect(payload).toMatchObject({ inputs: ["a", "b"], outputs: ["y", "z"] });
   });
 
   it("keeps the key of the fake test type out too", () => {

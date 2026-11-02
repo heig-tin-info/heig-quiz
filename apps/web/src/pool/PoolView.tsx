@@ -20,7 +20,7 @@ import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useToast } from "../notify";
 import { useT } from "../i18n";
-import { QUESTION_TYPE_IDS, typeIcon, typeLabel } from "../questionTypes";
+import { CREATABLE_TYPE_IDS, QUESTION_TYPE_IDS, typeIcon, typeLabel } from "../questionTypes";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
 import { Trail, useRootCrumb } from "../Trail";
@@ -300,7 +300,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   // not offer what the screen has taken away.
   useScreenCommands(
     mayWrite
-      ? QUESTION_TYPE_IDS.map((typeId) => ({
+      ? CREATABLE_TYPE_IDS.map((typeId) => ({
           id: `question:new:${typeId}`,
           // Opens the creation sheet; nothing exists until the teacher saves it.
           effect: "none" as const,

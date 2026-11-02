@@ -59,7 +59,7 @@ export interface Point2 {
  * pin INDEX and also returns the direction the wire leaves in; this one is
  * the position alone, and it is the one a grade depends on.
  */
-export function pinLocation(component: SchematicComponent, pin: PinSpec): Point2 {
+export function pinLocation(component: Pick<SchematicComponent, "x" | "y" | "m">, pin: PinSpec): Point2 {
   const [a, b, c, d] = component.m;
   return {
     x: component.x + a * pin.x + c * pin.y,
@@ -134,6 +134,9 @@ export interface ExtractOptions {
 
 type SchematicWire = Schematic["wires"][number];
 
+/** What connectivity reads of a wire: its id and its routed polyline, whatever its ends' type. */
+export type WireGeometry = Pick<SchematicWire, "id" | "points">;
+
 const samePoint = (a: Point2, b: Point2): boolean => a.x === b.x && a.y === b.y;
 
 /** Inclusive: an endpoint of the segment counts as being on it. */
@@ -168,7 +171,7 @@ function liesOnPolyline(p: Point2, points: ReadonlyArray<readonly [number, numbe
 }
 
 /** The first and the last point of a wire's polyline (the same point twice for a one-point wire). */
-function endsOf(wire: SchematicWire): Point2[] {
+function endsOf(wire: WireGeometry): Point2[] {
   const first = wire.points[0];
   const last = wire.points[wire.points.length - 1];
   const out: Point2[] = [];
@@ -286,34 +289,29 @@ interface PinNode {
 const wireKey = (id: string): string => `wire:${id}`;
 
 /** The nodes: one per component pin, one per port, one per wire. */
-function collectNodes(schematic: Schematic, dsu: Dsu): PinNode[] {
+function collectNodes(schematic: Schematic): PinNode[] {
   const pinNodes: PinNode[] = [];
   for (const [index, component] of schematic.components.entries()) {
     const spec = LIBRARY[component.kind];
     for (const [p, pin] of spec.pins.entries()) {
       const ref: PinRef = { c: component.id, p };
-      const key = pinKey(ref);
-      dsu.add(key);
-      pinNodes.push({ key, ref, at: pinLocation(component, pin), order: index, terminal: spec.terminal });
+      pinNodes.push({ key: pinKey(ref), ref, at: pinLocation(component, pin), order: index, terminal: spec.terminal });
     }
   }
   for (const port of PORT_IDS) {
     const ref: PinRef = { port };
-    const key = pinKey(ref);
-    dsu.add(key);
-    pinNodes.push({ key, ref, at: portLocation(port), order: -1, terminal: false });
+    pinNodes.push({ key: pinKey(ref), ref, at: portLocation(port), order: -1, terminal: false });
   }
-  for (const wire of schematic.wires) dsu.add(wireKey(wire.id));
   return pinNodes;
 }
 
 /** Wire ↔ wire: a free end of one lies anywhere on the other. */
-function unionWires(dsu: Dsu, wires: readonly SchematicWire[]): void {
+function unionWires(dsu: Dsu, wires: readonly WireGeometry[]): void {
   const ends = wires.map(endsOf);
   for (let i = 0; i < wires.length; i += 1) {
     for (let j = i + 1; j < wires.length; j += 1) {
-      const a = wires[i] as SchematicWire;
-      const b = wires[j] as SchematicWire;
+      const a = wires[i] as WireGeometry;
+      const b = wires[j] as WireGeometry;
       const touches =
         (ends[i] ?? []).some((p) => liesOnPolyline(p, b.points)) ||
         (ends[j] ?? []).some((p) => liesOnPolyline(p, a.points));
@@ -326,8 +324,12 @@ function unionWires(dsu: Dsu, wires: readonly SchematicWire[]): void {
  * Pin ↔ wire (a pin or a port on one of the wire's two ends) and pin ↔ pin
  * (touching symbols), both through one index of the pins by exact position.
  */
-function unionPins(dsu: Dsu, pinNodes: readonly PinNode[], wires: readonly SchematicWire[]): void {
-  const index = new PointIndex<PinNode>();
+function unionPins(
+  dsu: Dsu,
+  pinNodes: readonly Pick<PinNode, "key" | "at">[],
+  wires: readonly WireGeometry[],
+): void {
+  const index = new PointIndex<Pick<PinNode, "key" | "at">>();
   for (const node of pinNodes) index.add(node.at, node);
   for (const wire of wires) {
     for (const end of endsOf(wire)) {
@@ -362,24 +364,43 @@ function railKeysOf(schematic: Schematic, commonGround: boolean): Map<string, st
   return railKeys;
 }
 
-/** All the instances of one rail are one net. */
-function tieRails(dsu: Dsu, railKeys: ReadonlyMap<string, readonly string[]>): void {
-  for (const keys of railKeys.values()) {
+/** The net of a pin, by its key, and of a wire, by its id: a net is named by any member of it. */
+export interface Connectivity {
+  netOf(key: string): string;
+  netOfWire(id: string): string;
+}
+
+/**
+ * THE connectivity rule, shared by `circuit` and `logic`: a wire's end on
+ * another wire, a pin on a wire's end, two pins on one point — read from the
+ * routed polylines alone — and every group of `rails` tied into one net (all
+ * the instances of one rail are one net).
+ */
+export function connect(
+  pins: readonly Pick<PinNode, "key" | "at">[],
+  wires: readonly WireGeometry[],
+  rails: Iterable<readonly string[]> = [],
+): Connectivity {
+  const dsu = new Dsu();
+  unionWires(dsu, wires);
+  unionPins(dsu, pins, wires);
+  for (const keys of rails) {
     const first = keys[0];
     if (first === undefined) continue;
     for (const key of keys) dsu.union(first, key);
   }
+  return { netOf: (key) => dsu.find(key), netOfWire: (id) => dsu.find(wireKey(id)) };
 }
 
 /** The fixed names: root → the strongest name any of its members carries. */
 function assignNames(
-  dsu: Dsu,
+  nets: Connectivity,
   railKeys: ReadonlyMap<string, readonly string[]>,
   commonGround: boolean,
 ): Map<string, string> {
   const fixedName = new Map<string, string>();
   const nameNode = (key: string, name: string): void => {
-    const root = dsu.find(key);
+    const root = nets.netOf(key);
     const current = fixedName.get(root);
     fixedName.set(root, current === undefined ? name : strongerName(current, name));
   };
@@ -402,7 +423,7 @@ interface Group {
 }
 
 /** Root → group, in the order the pins and then the wires first reach each root. */
-function groupNodes(dsu: Dsu, schematic: Schematic, pinNodes: readonly PinNode[]): Map<string, Group> {
+function groupNodes(nets: Connectivity, schematic: Schematic, pinNodes: readonly PinNode[]): Map<string, Group> {
   const groups = new Map<string, Group>();
   const touch = (root: string, order: number): Group => {
     const existing = groups.get(root);
@@ -414,10 +435,10 @@ function groupNodes(dsu: Dsu, schematic: Schematic, pinNodes: readonly PinNode[]
     groups.set(root, created);
     return created;
   };
-  for (const node of pinNodes) touch(dsu.find(node.key), node.order).pins.push(node.ref);
+  for (const node of pinNodes) touch(nets.netOf(node.key), node.order).pins.push(node.ref);
   const wireOrder = (index: number): number => schematic.components.length + index;
   for (const [index, wire] of schematic.wires.entries()) {
-    touch(dsu.find(wireKey(wire.id)), wireOrder(index)).wires += 1;
+    touch(nets.netOfWire(wire.id), wireOrder(index)).wires += 1;
   }
   return groups;
 }
@@ -585,19 +606,15 @@ function diagnoseSchematic(nets: readonly Net[], counted: number, palette: Palet
  */
 export function extractNets(schematic: Schematic, options: ExtractOptions): Netlist {
   const { commonGround } = options;
-  const dsu = new Dsu();
-
-  const pinNodes = collectNodes(schematic, dsu);
-  unionWires(dsu, schematic.wires);
-  unionPins(dsu, pinNodes, schematic.wires);
+  const pinNodes = collectNodes(schematic);
   const railKeys = railKeysOf(schematic, commonGround);
-  tieRails(dsu, railKeys);
-  const fixedName = assignNames(dsu, railKeys, commonGround);
+  const connected = connect(pinNodes, schematic.wires, railKeys.values());
+  const fixedName = assignNames(connected, railKeys, commonGround);
 
-  const groups = groupNodes(dsu, schematic, pinNodes);
+  const groups = groupNodes(connected, schematic, pinNodes);
   const { nets, netOfPin } = buildNets(groups, fixedName);
 
-  const groupOf: GroupOf = (key) => groups.get(dsu.find(key));
+  const groupOf: GroupOf = (key) => groups.get(connected.netOf(key));
   const counted = countedParts(schematic.components, CIRCUIT_PARTS);
   const issues = [
     ...diagnoseComponents(schematic, options, groupOf),

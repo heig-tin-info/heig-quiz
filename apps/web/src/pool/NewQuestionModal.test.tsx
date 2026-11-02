@@ -44,6 +44,14 @@ describe("NewQuestionModal", () => {
     });
   });
 
+  it("offers the logic circuit right after the circuit, and no brainstorm (it starts as a poll)", () => {
+    open(null);
+    const tiles = screen.getAllByRole("button", { pressed: false }).map((b) => b.textContent ?? "");
+    const circuit = tiles.findIndex((text) => text.startsWith("Circuit"));
+    expect(tiles[circuit + 1]).toMatch(/^Logic circuit/);
+    expect(tiles.some((text) => text.startsWith("Brainstorm"))).toBe(false);
+  });
+
   it("goes back to the grid with the type marked and the name kept", async () => {
     open(null);
     await userEvent.click(screen.getByRole("button", { name: /^Essay/ }));

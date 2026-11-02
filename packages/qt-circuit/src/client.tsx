@@ -14,6 +14,17 @@ import { circuitGrading } from "./grading.js";
 import { isCircuitAnswered } from "./schema.js";
 
 import { CIRCUIT_PARTS } from "./library.js";
+import { logicGrading } from "./logicGrading.js";
+import { logicSummary } from "./logicLibrary.js";
+import {
+  initialLogicAnswer,
+  isLogicAnswered,
+  type LogicAnswer,
+  type LogicConfig,
+  type LogicDetails,
+  type LogicSolution,
+  type LogicStudent,
+} from "./logicSchema.js";
 import { countedParts } from "./parts.js";
 import type {
   CircuitAnswer,
@@ -114,3 +125,50 @@ export {
   type CanvasStrings,
   type KindLabels,
 } from "./strings.js";
+
+// ---------------------------------------------------------------------------
+// `logic` (ADR-123): the package's second type, on the same canvas
+// ---------------------------------------------------------------------------
+
+/** An AND gate's D with its two inputs and its output: the answer is a circuit of gates. */
+const LogicIcon = typeIcon(
+  <>
+    <path d="M7 5h5a7 7 0 0 1 0 14H7z" />
+    <path d="M2 9h5M2 15h5M19 12h3" />
+  </>,
+);
+
+export const logicClient: QuestionTypeClient<LogicConfig, LogicAnswer, LogicStudent, LogicSolution, LogicDetails> = {
+  id: "logic",
+  labelKey: "qt.logic.label",
+  hintKey: "qt.logic.hint",
+  Icon: LogicIcon,
+
+  Editor: lazy(() => import("./LogicEditor.js")),
+  Player: lazy(() => import("./LogicPlayer.js")),
+  Review: lazy(() => import("./LogicReview.js")),
+  Key: lazy(async () => ({ default: (await import("./LogicKey.js")).LogicKey })),
+
+  /** The declared terminals where they start: the student wires between them. */
+  emptyAnswer: initialLogicAnswer,
+  isAnswered: isLogicAnswered,
+  grading: logicGrading,
+
+  /** The gate budget, as the server's `summarizeAnswer` writes it. */
+  summarize(answer, student) {
+    return answer === null || !isLogicAnswered(answer) ? "—" : logicSummary(answer.schematic, student.palette.maxGates);
+  },
+};
+
+export type { LogicConfig, LogicDetails, LogicStudent } from "./logicSchema.js";
+export type { LogicEditorProps } from "./LogicEditor.js";
+export {
+  LOGIC_EDITOR_STRINGS,
+  LOGIC_GRADING_STRINGS,
+  LOGIC_KEY_STRINGS,
+  LOGIC_KIND_STRINGS,
+  LOGIC_PLAYER_STRINGS,
+  LOGIC_REVIEW_STRINGS,
+  logicKindLabel,
+  type LogicKindStrings,
+} from "./logicStrings.js";

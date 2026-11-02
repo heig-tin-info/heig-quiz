@@ -48,10 +48,13 @@ import type {
  */
 import {
   extractNets,
+  logicServer,
   parseSimulation,
 } from "@quiz/qt-circuit/server";
+import { LOGIC_IEC_LIBRARY, withRoutes } from "@quiz/qt-circuit/canvas";
 import type {
   CircuitStudent,
+  LogicConfig,
   Schematic,
   StimulusDetail,
 } from "@quiz/qt-circuit/client";
@@ -146,7 +149,7 @@ interface MockVersion {
 export interface MockQuestion {
   id: string;
   poolId: string;
-  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich" | "categorize" | "diagram" | "brainstorm" | "math" | "blocks";
+  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich" | "categorize" | "diagram" | "brainstorm" | "math" | "blocks" | "logic";
   internalName: string;
   categoryId: string | null;
   difficulty: number;
@@ -941,6 +944,79 @@ const WALL_FOLLOWER = [
     ],
   },
 ];
+/**
+ * The `logic` question (docs/04 §4.18): the majority of three inputs, its
+ * expression the key, the IEC symbols. Its answers are drawn on the type's
+ * own grid and routed by the canvas's own router, as the editor stores them.
+ */
+export const LOGIC_CONFIG: Record<string, unknown> = {
+  configVersion: 1,
+  prompt:
+    "Un système de vote à trois juges allume le voyant $m$ quand **au moins deux** juges sur trois " +
+    "appuient sur leur bouton $a$, $b$ ou $c$. Réalisez la fonction avec au plus six portes.",
+  symbols: "iec",
+  inputs: ["a", "b", "c"],
+  outputs: [{ name: "m", expression: "a*b + a*c + b*c" }],
+  palette: { kinds: ["AND", "OR", "NOT", "NAND", "NOR"], maxGates: 6 },
+};
+
+const logicPart = (id: string, kind: string, x: number, y: number, name: string) => ({
+  id,
+  kind,
+  x,
+  y,
+  m: [1, 0, 0, 1] as [1, 0, 0, 1],
+  name,
+  value: "",
+});
+const pinEnd = (c: string, p: number) => ({ kind: "pin" as const, c, p });
+const logicWires = (pairs: [string, number, string, number][]) =>
+  pairs.map(([c1, p1, c2, p2], i) => ({ id: `w${i + 1}`, a: pinEnd(c1, p1), b: pinEnd(c2, p2), via: [], points: [] }));
+
+/** Three ANDs into an OR: the majority, right on every row. */
+export const LOGIC_ANSWER = {
+  schematic: withRoutes(
+    {
+      components: [
+        logicPart("c1", "IN", 100, 160, "a"),
+        logicPart("c2", "IN", 100, 260, "b"),
+        logicPart("c3", "IN", 100, 360, "c"),
+        logicPart("c4", "OUT", 700, 260, "m"),
+        logicPart("c5", "AND2", 300, 140, "U1"),
+        logicPart("c6", "AND2", 300, 260, "U2"),
+        logicPart("c7", "AND2", 300, 380, "U3"),
+        logicPart("c8", "OR3", 520, 260, "U4"),
+      ],
+      wires: logicWires([
+        ["c1", 0, "c5", 0],
+        ["c1", 0, "c6", 0],
+        ["c2", 0, "c5", 1],
+        ["c2", 0, "c7", 0],
+        ["c3", 0, "c6", 1],
+        ["c3", 0, "c7", 1],
+        ["c5", 2, "c8", 0],
+        ["c6", 2, "c8", 1],
+        ["c7", 2, "c8", 2],
+        ["c8", 3, "c4", 0],
+      ]),
+    },
+    LOGIC_IEC_LIBRARY,
+  ),
+};
+
+/** The same circuit without its third AND: wrong on the one row where only b and c vote. */
+export const LOGIC_PARTIAL_ANSWER = {
+  schematic: withRoutes(
+    {
+      components: LOGIC_ANSWER.schematic.components.filter((c) => c.id !== "c7"),
+      wires: LOGIC_ANSWER.schematic.wires
+        .filter((w) => w.a.c !== "c7" && w.b.c !== "c7")
+        .map((w) => ({ ...w, points: [] })),
+    },
+    LOGIC_IEC_LIBRARY,
+  ),
+};
+
 export const BLOCKS_CONFIG: Record<string, unknown> = {
   configVersion: 1,
   prompt:
@@ -1400,6 +1476,23 @@ export const questions: MockQuestion[] = [
     config: BLOCKS_CONFIG,
     explanation: "Longer le mur à droite mène au quai quelle que soit la disposition des rayonnages.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 2 }],
+  }),
+  /*
+   * The `logic` question (docs/04 §4.18), under an id of its own, appended
+   * to the closed evaluation like the blocks one (`mock/grading.ts`).
+   */
+  makeQuestion({
+    id: "q-logic",
+    poolId: "p1",
+    type: "logic",
+    internalName: "vote-majorite-trois-juges",
+    categoryId: "k1",
+    difficulty: 2,
+    randomizable: false,
+    concepts: [],
+    config: LOGIC_CONFIG,
+    explanation: "La sortie vaut 1 dès que deux entrées valent 1 : $m = ab + ac + bc$, trois ET et un OU.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 1 }],
   }),
   /*
    * An essay from before criteria (ADR-118), its barème in the rubric: the
@@ -1889,6 +1982,7 @@ export const questionDetail = (q: MockQuestion) => ({
 const SCHEMA_CHECKED: Partial<Record<MockQuestion["type"], AnyQuestionTypeServer>> = {
   diagram: diagramServer,
   blocks: blocksServer,
+  logic: logicServer,
 };
 
 /**
@@ -2091,6 +2185,8 @@ export function studentView(q: MockQuestion, config: Record<string, unknown>): u
       return diagramServer.toStudent(config as DiagramConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "blocks":
       return blocksServer.toStudent(config as BlocksConfig, { seed: 0, itemId: q.id, shuffle: false });
+    case "logic":
+      return logicServer.toStudent(config as unknown as LogicConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "code": {
       const cases = ((config.tests as { cases?: CodeCaseLike[] })?.cases ?? []) as CodeCaseLike[];
       const visible = cases.filter((c) => c.visible);
@@ -2228,6 +2324,8 @@ export function solutionOf(q: MockQuestion): unknown {
       return diagramServer.toSolution(config as DiagramConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "blocks":
       return blocksServer.toSolution(config as BlocksConfig, { seed: 0, itemId: q.id, shuffle: false });
+    case "logic":
+      return logicServer.toSolution(config as unknown as LogicConfig, { seed: 0, itemId: q.id, shuffle: false });
   }
 }
 
@@ -2288,6 +2386,25 @@ export function tryAnswer(
       const details = { ...(graded.details as object), [JUSTIFICATION_KEY]: justification, [AI_KEY]: ai };
       return { status: "graded", points, maxPoints, details, solution: solutionOf(q), manual: true, confidence: "medium" };
     }
+    return {
+      status: "graded",
+      points: graded.points,
+      maxPoints: graded.maxPoints,
+      details: graded.details,
+      solution: solutionOf(q),
+      ...(graded.state === "proposed" ? { manual: true } : {}),
+    };
+  }
+  // `logic` likewise: the domain's simulator over the whole truth table.
+  if (q.type === "logic") {
+    const graded = logicServer.grade(config as unknown as LogicConfig, (answer as { schematic: never } | null) ?? null, {
+      seed: 0,
+      itemId: q.id,
+      attemptId: "",
+      itemPoints: 1,
+      now: new Date(),
+      runner: NO_RUNNER,
+    }) as { points: number; maxPoints: number; details: unknown; state?: string };
     return {
       status: "graded",
       points: graded.points,
@@ -3003,6 +3120,8 @@ export function emptyConfig(type: MockQuestion["type"]): Record<string, unknown>
       return { ...diagramServer.emptyDraft() };
     case "blocks":
       return { ...blocksServer.emptyDraft() };
+    case "logic":
+      return { ...logicServer.emptyDraft() };
     case "brainstorm":
       return { ...brainstormServer.emptyDraft() };
     case "math":

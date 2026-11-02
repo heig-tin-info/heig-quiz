@@ -14,6 +14,7 @@
  */
 export { SchematicEditor, type CanvasPalette, type SchematicEditorProps } from "./SchematicEditor.js";
 export { CIRCUIT_LIBRARY } from "./circuitLibrary.js";
+export { LOGIC_ANSI_LIBRARY, LOGIC_IEC_LIBRARY, logicLibrary, type LogicSymbolStyle } from "./logicLibrary.js";
 export type { CanvasSchematic, PartSpec, SchematicLibrary } from "./schematicLibrary.js";
 export { SchematicView } from "./SchematicView.js";
 export { Plot, type PlotProps } from "./Plot.js";

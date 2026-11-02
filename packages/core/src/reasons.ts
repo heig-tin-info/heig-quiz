@@ -16,7 +16,7 @@ import type { LlmCriterion } from "./llm.js";
  * `comment`) of a grading no grader could settle. Wire values, closed here
  * once: the grading pass writes the first ten (`jobs.ts`; `runner_busy` on
  * the last try of a saturated runner, ADR-101), question types the next
- * four (a circuit's or a program's own fault, issue #267). The web
+ * five (a circuit's or a program's own fault, issue #267). The web
  * translates every one of them.
  */
 export const PASS_REASONS = [
@@ -37,6 +37,7 @@ export const MACHINE_REASONS = [
   ...PASS_REASONS,
   "reference_failed",
   "palette_violation",
+  "ports_mismatch",
   "runner_request_invalid",
   "template_region_mismatch",
 ] as const;

@@ -10,6 +10,9 @@
 import type { StudentLeakFixture } from "@quiz/core/testing";
 
 import { BOX, LIBRARY, PORTS, type ComponentKind } from "./library.js";
+import { LOGIC_PARTS } from "./logicLibrary.js";
+import { pinLocation } from "./netlist.js";
+import { LogicConfig, type LogicComponent, type LogicWire } from "./logicSchema.js";
 import {
   CircuitConfig,
   type Orientation,
@@ -234,3 +237,56 @@ export const circuitLeakFixture: StudentLeakFixture<CircuitConfig> = {
     '"step"',
   ],
 };
+
+// ---------------------------------------------------------------------------
+// `logic` (ADR-123)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compound expressions only: a single-name key (`y = a`) would be the name
+ * of an input, which the student view publishes on purpose, and the value
+ * search would cry wolf (§4.18).
+ */
+export const SECRET_MAJORITY = "a*b + a*c + b*c";
+export const SECRET_PARITY = "a ^ b ^ c";
+
+/** A majority and a parity over three inputs, two outputs, a restricted palette. */
+export function logicConfig(overrides: Record<string, unknown> = {}): LogicConfig {
+  return LogicConfig.parse({
+    configVersion: 1,
+    prompt: "Build the majority and the parity of three inputs.",
+    symbols: "iec",
+    inputs: ["a", "b", "c"],
+    outputs: [
+      { name: "m", expression: SECRET_MAJORITY },
+      { name: "p", expression: SECRET_PARITY },
+    ],
+    palette: { kinds: ["AND", "OR", "XOR"], maxGates: 8 },
+    ...overrides,
+  });
+}
+
+export const logicLeakFixture: StudentLeakFixture<LogicConfig> = {
+  config: logicConfig(),
+  forbiddenKeys: ["expression", "expressions", "expected", "rows"],
+  secrets: [SECRET_MAJORITY, SECRET_PARITY],
+};
+
+/**
+ * A wire between two placed pins, routed as one horizontal then one vertical
+ * then one horizontal run (the grader reads the polyline, never routes).
+ */
+export function logicWire(id: string, from: [LogicComponent, number], to: [LogicComponent, number]): LogicWire {
+  const at = ([c, p]: [LogicComponent, number]) => pinLocation(c, LOGIC_PARTS.part(c.kind).pins[p]!);
+  const { x: x0, y: y0 } = at(from);
+  const { x: x1, y: y1 } = at(to);
+  const mid = Math.round((x0 + x1) / 40) * 20;
+  const points: [number, number][] = y0 === y1 ? [[x0, y0], [x1, y1]] : [[x0, y0], [mid, y0], [mid, y1], [x1, y1]];
+  return {
+    id,
+    a: { kind: "pin", c: from[0].id, p: from[1] },
+    b: { kind: "pin", c: to[0].id, p: to[1] },
+    via: [],
+    points,
+  };
+}
