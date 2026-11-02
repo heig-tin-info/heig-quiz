@@ -7,8 +7,8 @@
  * expected row says the same of the reference circuit.
  *
  * This module is reached from every page through `@quiz/registry/client`,
- * so it imports the library and types only — never the netlist, the grader
- * or zod (see `client.tsx`).
+ * so it imports the component library (`CIRCUIT_PARTS`) and types only —
+ * never the netlist, the grader or zod (see `client.tsx`).
  */
 import type { ReactNode } from "react";
 
@@ -16,14 +16,15 @@ import type { GradingColumn, QuestionTypeGrading } from "@quiz/core/client";
 import { fmt, gradingSortKey, plural, resolveStrings } from "@quiz/core/client";
 import { AnswerChip, breakdownOf, countTone, Dash, runStatus, WordChip } from "@quiz/ui";
 
-import { LIBRARY } from "./library.js";
+import { CIRCUIT_PARTS } from "./library.js";
+import { countedParts } from "./parts.js";
 import type { CircuitAnswer, CircuitDetails, CircuitSolution, CircuitStudent, Schematic } from "./schema.js";
 import { GRADING_STRINGS, type CircuitGradingStrings } from "./strings.js";
 
 /** The parts the student placed (the ports are the box's) and the wires; `null` for an empty box. */
 function countsOf(schematic: Schematic | undefined): { parts: number; wires: number } | null {
   if (schematic === undefined) return null;
-  const parts = schematic.components.filter((c) => !LIBRARY[c.kind].terminal).length;
+  const parts = countedParts(schematic.components, CIRCUIT_PARTS);
   const wires = schematic.wires.length;
   return parts === 0 && wires === 0 ? null : { parts, wires };
 }

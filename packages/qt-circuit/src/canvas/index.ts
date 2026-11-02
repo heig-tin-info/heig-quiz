@@ -12,9 +12,13 @@
  * is the exception — a host that draws a stored schematic needs the wire
  * routes computed the same way the editor computes them.
  */
-export { SchematicEditor, type SchematicEditorProps } from "./SchematicEditor.js";
+export { SchematicEditor, type CanvasPalette, type SchematicEditorProps } from "./SchematicEditor.js";
+export { CIRCUIT_LIBRARY } from "./circuitLibrary.js";
+export type { CanvasSchematic, PartSpec, SchematicLibrary } from "./schematicLibrary.js";
 export { SchematicView } from "./SchematicView.js";
 export { Plot, type PlotProps } from "./Plot.js";
 export { withRoutes } from "./router.js";
+/* `circuit`'s palette filter, for a host that mounts the editor on `CIRCUIT_LIBRARY`. */
+export { offeredKinds } from "../library.js";
 
 export { CANVAS_STRINGS, type CanvasStrings } from "./canvasStrings.js";

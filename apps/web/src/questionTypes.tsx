@@ -304,8 +304,9 @@ export const circuitCanvasStrings = (t: TFunction): CanvasStrings => {
     ...translated(t, CANVAS_STRINGS, "qt.circuit.c"),
     // The canvas asks for a kind's label through a function; the dictionary
     // above is what answers it, so the palette, the inspector and the chips
-    // of the editor all say the same word.
-    kind: (kind) => kinds[kind],
+    // of the editor all say the same word. The canvas names a kind by a plain
+    // string (it is parameterized by its library); `circuit`'s are these.
+    kind: (kind) => kinds[kind as keyof KindLabels],
     port: (port) => port,
   };
 };

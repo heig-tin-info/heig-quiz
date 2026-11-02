@@ -19,6 +19,7 @@
  * what to do with the diagnostics.
  */
 import {
+  CIRCUIT_PARTS,
   LIBRARY,
   PORTS,
   PORT_IDS,
@@ -27,6 +28,7 @@ import {
   type PinSpec,
   type PortId,
 } from "./library.js";
+import { countedParts } from "./parts.js";
 import type { Palette, Schematic, SchematicComponent, Supplies } from "./schema.js";
 
 // ---------------------------------------------------------------------------
@@ -596,7 +598,7 @@ export function extractNets(schematic: Schematic, options: ExtractOptions): Netl
   const { nets, netOfPin } = buildNets(groups, fixedName);
 
   const groupOf: GroupOf = (key) => groups.get(dsu.find(key));
-  const counted = schematic.components.filter((c) => !LIBRARY[c.kind].terminal).length;
+  const counted = countedParts(schematic.components, CIRCUIT_PARTS);
   const issues = [
     ...diagnoseComponents(schematic, options, groupOf),
     ...diagnoseWires(schematic),

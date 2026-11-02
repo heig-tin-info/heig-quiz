@@ -6,7 +6,11 @@ import type { Schematic } from "../schema.js";
 
 import { SchematicView } from "./SchematicView.js";
 import { withRoutes } from "./router.js";
-import { FIT_ASPECT, FIT_VIEW, ORIENT_0, ORIENT_90, viewBoxAttr } from "./geometry.js";
+import { CIRCUIT_LIBRARY } from "./circuitLibrary.js";
+import { fitView, ORIENT_0, ORIENT_90, viewBoxAttr } from "./geometry.js";
+
+const FIT_VIEW = fitView(CIRCUIT_LIBRARY.box);
+const FIT_ASPECT = FIT_VIEW.w / FIT_VIEW.h;
 
 const demo: Schematic = withRoutes({
   components: [
@@ -23,26 +27,26 @@ const demo: Schematic = withRoutes({
 
 describe("SchematicView", () => {
   it("draws every component and every wire", () => {
-    const { container } = render(<SchematicView schematic={demo} />);
+    const { container } = render(<SchematicView library={CIRCUIT_LIBRARY} schematic={demo} />);
     expect(container.querySelectorAll("[data-component]")).toHaveLength(3);
     expect(container.querySelectorAll("[data-wire]")).toHaveLength(3);
   });
 
   it("draws the four ports with their labels", () => {
-    const { container } = render(<SchematicView schematic={demo} />);
+    const { container } = render(<SchematicView library={CIRCUIT_LIBRARY} schematic={demo} />);
     expect(container.querySelectorAll("[data-port]")).toHaveLength(4);
     for (const port of PORT_IDS) expect(screen.getByText(port)).toBeInTheDocument();
   });
 
   it("writes the designator and the value beside a component", () => {
-    render(<SchematicView schematic={demo} />);
+    render(<SchematicView library={CIRCUIT_LIBRARY} schematic={demo} />);
     expect(screen.getByText("R1")).toBeInTheDocument();
     expect(screen.getByText("10k")).toBeInTheDocument();
     expect(screen.getByText("C1")).toBeInTheDocument();
   });
 
   it("fills its box through the view box, with one grid cell of margin", () => {
-    const { container } = render(<SchematicView schematic={demo} height={180} />);
+    const { container } = render(<SchematicView library={CIRCUIT_LIBRARY} schematic={demo} height={180} />);
     const svg = container.querySelector("svg");
     expect(svg?.getAttribute("viewBox")).toBe(viewBoxAttr(FIT_VIEW));
     expect(svg?.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
@@ -53,13 +57,13 @@ describe("SchematicView", () => {
   });
 
   it("says so when there is nothing drawn", () => {
-    render(<SchematicView schematic={{ components: [], wires: [] }} />);
+    render(<SchematicView library={CIRCUIT_LIBRARY} schematic={{ components: [], wires: [] }} />);
     expect(screen.getByText("Nothing drawn yet.")).toBeInTheDocument();
   });
 
   it("takes the host's words", () => {
     render(
-      <SchematicView
+      <SchematicView library={CIRCUIT_LIBRARY}
         schematic={{ components: [], wires: [] }}
         strings={{ emptySchematic: "Rien de dessiné." }}
       />,
@@ -80,7 +84,7 @@ describe("SchematicView", () => {
       })),
       wires: [],
     });
-    const { container } = render(<SchematicView schematic={all} />);
+    const { container } = render(<SchematicView library={CIRCUIT_LIBRARY} schematic={all} />);
     expect(container.querySelectorAll("[data-component]")).toHaveLength(COMPONENT_KINDS.length);
   });
 });

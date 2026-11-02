@@ -7,16 +7,27 @@
  * edit is computed by a plain function below and committed through the
  * editor's `apply`, so the selection never writes the schematic itself.
  *
+ * A part the library LOCKS (`PartSpec.locked`) is selected, moved and turned
+ * like any other, but delete and duplicate pass it over.
+ *
  * Hooks, in order: useState selection, useCallback removeSelection,
  * useCallback transformSelection, useCallback duplicate.
  */
 import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
 
-import { BOX, GRID, LIBRARY, type ComponentKind } from "../library.js";
-import type { Orientation, Schematic, SchematicComponent, Wire, WireEnd } from "../schema.js";
+import { GRID } from "../library.js";
+import type { Orientation } from "../schema.js";
 import { isTextField, type CanvasShortcutLine } from "@quiz/ui";
 
 import type { CanvasStrings } from "./canvasStrings.js";
+import {
+  isLockedKind,
+  type CanvasComponent,
+  type CanvasSchematic,
+  type CanvasWire,
+  type CanvasWireEnd,
+  type SchematicLibrary,
+} from "./schematicLibrary.js";
 
 import {
   MIRROR_X,
@@ -33,7 +44,7 @@ import {
   snap,
 } from "./geometry.js";
 
-type Apply = (next: Schematic, continuing?: boolean) => void;
+type Apply = (next: CanvasSchematic, continuing?: boolean) => void;
 /** The armed tool: select and drag, draw wires, or place the kind in hand. */
 export type Mode = "select" | "wire" | "place";
 type Point = { x: number; y: number };
@@ -55,11 +66,27 @@ export interface Selection {
   /** Rotates or mirrors the selection — or, while placing, the piece in hand. */
   transformSelection: (t: Orientation) => void;
   duplicate: () => void;
+  /** Delete would remove something: a wire, or a part that is not locked. */
+  canRemove: boolean;
+  /** Duplicate has a part to copy: a selected part that is not locked. */
+  canDuplicate: boolean;
 }
 
-export const isTerminal = (kind: ComponentKind): boolean => LIBRARY[kind].terminal;
+/** Whether removing the selection would remove anything: a wire, or a part that is not locked. */
+export function removable(value: CanvasSchematic, selection: ReadonlySet<string>, library: SchematicLibrary): boolean {
+  const locked = new Set(value.components.filter((c) => isLockedKind(library, c.kind)).map((c) => c.id));
+  return [...selection].some((id) => !locked.has(id));
+}
+
+/** The selected parts a duplicate copies: every one but a locked part. */
+const duplicable = (
+  value: CanvasSchematic,
+  selection: ReadonlySet<string>,
+  library: SchematicLibrary,
+): CanvasComponent[] => value.components.filter((c) => selection.has(c.id) && !isLockedKind(library, c.kind));
 
 export function useSelection<G extends { m: Orientation }>({
+  library,
   value,
   apply,
   readOnly,
@@ -68,7 +95,8 @@ export function useSelection<G extends { m: Orientation }>({
   used,
   maxComponents,
 }: {
-  value: Schematic;
+  library: SchematicLibrary;
+  value: CanvasSchematic;
   apply: Apply;
   readOnly: boolean;
   /** The place tool is armed: a transform turns the ghost, not the selection. */
@@ -81,10 +109,10 @@ export function useSelection<G extends { m: Orientation }>({
   const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
 
   const removeSelection = useCallback(() => {
-    if (readOnly || selection.size === 0) return;
-    apply(removed(value, selection));
+    if (readOnly || !removable(value, selection, library)) return;
+    apply(removed(value, selection, library));
     setSelection(new Set());
-  }, [apply, readOnly, selection, value]);
+  }, [apply, library, readOnly, selection, value]);
 
   const transformSelection = useCallback(
     (t: Orientation) => {
@@ -93,30 +121,38 @@ export function useSelection<G extends { m: Orientation }>({
         setGhost((g) => ({ ...g, m: multiply(t, g.m) }));
         return;
       }
-      const next = transformed(value, selection, t);
+      const next = transformed(value, selection, t, library);
       if (next !== null) apply(next);
     },
-    [apply, placing, readOnly, selection, setGhost, value],
+    [apply, library, placing, readOnly, selection, setGhost, value],
   );
 
   const duplicate = useCallback(() => {
     if (readOnly) return;
-    const picked = value.components.filter((c) => selection.has(c.id));
+    const picked = duplicable(value, selection, library);
     if (picked.length === 0) return;
-    const extra = picked.filter((c) => !isTerminal(c.kind)).length;
+    const extra = picked.filter((c) => !library.part(c.kind).terminal).length;
     if (used + extra > maxComponents) return;
-    const copy = duplicated(value, selection, picked);
+    const copy = duplicated(value, selection, picked, library);
     apply(copy.schematic);
     setSelection(copy.fresh);
-  }, [apply, maxComponents, readOnly, selection, used, value]);
+  }, [apply, library, maxComponents, readOnly, selection, used, value]);
 
-  return { selection, setSelection, removeSelection, transformSelection, duplicate };
+  return {
+    selection,
+    setSelection,
+    removeSelection,
+    transformSelection,
+    duplicate,
+    canRemove: removable(value, selection, library),
+    canDuplicate: duplicable(value, selection, library).length > 0,
+  };
 }
 
 // --- the edits, as plain functions --------------------------------------
 
 /** Selected wires, plus the wires wholly inside the selected components. */
-export function linkedWires(schematic: Schematic, selection: ReadonlySet<string>): Wire[] {
+export function linkedWires(schematic: CanvasSchematic, selection: ReadonlySet<string>): CanvasWire[] {
   const picked = new Set(schematic.components.filter((c) => selection.has(c.id)).map((c) => c.id));
   return schematic.wires.filter(
     (w) =>
@@ -125,9 +161,11 @@ export function linkedWires(schematic: Schematic, selection: ReadonlySet<string>
   );
 }
 
-/** The schematic without the selection, and without the wires that hung off it. */
-export function removed(value: Schematic, selection: ReadonlySet<string>): Schematic {
-  const gone = new Set(value.components.filter((c) => selection.has(c.id)).map((c) => c.id));
+/** The schematic without the selection, and without the wires that hung off it. A locked part stays. */
+export function removed(value: CanvasSchematic, selection: ReadonlySet<string>, library: SchematicLibrary): CanvasSchematic {
+  const gone = new Set(
+    value.components.filter((c) => selection.has(c.id) && !isLockedKind(library, c.kind)).map((c) => c.id),
+  );
   return {
     components: value.components.filter((c) => !gone.has(c.id)),
     wires: value.wires.filter(
@@ -140,32 +178,33 @@ export function removed(value: Schematic, selection: ReadonlySet<string>): Schem
 }
 
 /** After a rotation, the offset that brings the whole group back inside the box. */
-function fitOffset(components: readonly SchematicComponent[]): { dx: number; dy: number } {
+function fitOffset(components: readonly CanvasComponent[], library: SchematicLibrary): { dx: number; dy: number } {
+  const box = library.box;
   let dx = 0;
   let dy = 0;
   for (const c of components) {
-    const e = extentOf(c);
+    const e = extentOf(c, library);
     if (e.x0 + dx < 0) dx = -e.x0;
     if (e.y0 + dy < 0) dy = -e.y0;
   }
   for (const c of components) {
-    const e = extentOf(c);
-    if (e.x1 + dx > BOX.width) dx = BOX.width - e.x1;
-    if (e.y1 + dy > BOX.height) dy = BOX.height - e.y1;
+    const e = extentOf(c, library);
+    if (e.x1 + dx > box.width) dx = box.width - e.x1;
+    if (e.y1 + dy > box.height) dy = box.height - e.y1;
   }
   return { dx: snap(dx), dy: snap(dy) };
 }
 
 /** The waypoints and free ends of a wire: what turns when no component does. */
-const loosePointsOf = (w: Wire): Array<[number, number]> => [
+const loosePointsOf = (w: CanvasWire): Array<[number, number]> => [
   ...w.via.map((v) => [v.x, v.y] as [number, number]),
   ...[w.a, w.b]
-    .filter((e): e is Extract<WireEnd, { kind: "free" }> => e.kind === "free")
+    .filter((e): e is Extract<CanvasWireEnd, { kind: "free" }> => e.kind === "free")
     .map((e) => [e.x, e.y] as [number, number]),
 ];
 
 /** The grid point a transform turns about: the middle of what it moves. */
-function pivotOf(picked: readonly SchematicComponent[], wires: readonly Wire[]): Point | null {
+function pivotOf(picked: readonly CanvasComponent[], wires: readonly CanvasWire[]): Point | null {
   const points: Array<[number, number]> =
     picked.length > 0 ? picked.map((c) => [c.x, c.y]) : wires.flatMap(loosePointsOf);
   if (points.length === 0) return null;
@@ -181,7 +220,12 @@ function pivotOf(picked: readonly SchematicComponent[], wires: readonly Wire[]):
  * The selection rotated or mirrored by `t` about its middle, then shifted
  * back inside the box as one group. `null` when nothing would move.
  */
-export function transformed(value: Schematic, selection: ReadonlySet<string>, t: Orientation): Schematic | null {
+export function transformed(
+  value: CanvasSchematic,
+  selection: ReadonlySet<string>,
+  t: Orientation,
+  library: SchematicLibrary,
+): CanvasSchematic | null {
   const picked = value.components.filter((c) => selection.has(c.id));
   const wires = linkedWires(value, selection);
   const pivot = pivotOf(picked, wires);
@@ -197,15 +241,18 @@ export function transformed(value: Schematic, selection: ReadonlySet<string>, t:
     const [nx, ny] = turn(c.x, c.y);
     return { ...c, x: nx, y: ny, m: multiply(t, c.m) };
   });
-  const off = fitOffset(components.filter((c) => pickedIds.has(c.id)));
+  const off = fitOffset(
+    components.filter((c) => pickedIds.has(c.id)),
+    library,
+  );
   components = components.map((c) =>
-    pickedIds.has(c.id) ? { ...c, ...clampToBox(c.kind, c.m, c.x + off.dx, c.y + off.dy) } : c,
+    pickedIds.has(c.id) ? { ...c, ...clampToBox(c.kind, c.m, c.x + off.dx, c.y + off.dy, library) } : c,
   );
   const turnPoint = (p: Point): Point => {
     const [nx, ny] = turn(p.x, p.y);
-    return clampPoint(nx + off.dx, ny + off.dy);
+    return clampPoint(nx + off.dx, ny + off.dy, library);
   };
-  const turnEnd = (e: WireEnd): WireEnd => (e.kind !== "free" ? e : { kind: "free", ...turnPoint(e) });
+  const turnEnd = (e: CanvasWireEnd): CanvasWireEnd => (e.kind !== "free" ? e : { kind: "free", ...turnPoint(e) });
   return {
     components,
     wires: value.wires.map((w) =>
@@ -220,18 +267,19 @@ export function transformed(value: Schematic, selection: ReadonlySet<string>, t:
  * selection.
  */
 export function duplicated(
-  value: Schematic,
+  value: CanvasSchematic,
   selection: ReadonlySet<string>,
-  picked: readonly SchematicComponent[],
-): { schematic: Schematic; fresh: Set<string> } {
+  picked: readonly CanvasComponent[],
+  library: SchematicLibrary,
+): { schematic: CanvasSchematic; fresh: Set<string> } {
   const off = 2 * GRID;
   const components = [...value.components];
   const wires = [...value.wires];
   const map = new Map<string, string>();
   const fresh = new Set<string>();
   for (const c of picked) {
-    const n: SchematicComponent = {
-      ...newComponent(c.kind, c.x + off, c.y + off, c.m, components),
+    const n: CanvasComponent = {
+      ...newComponent(c.kind, c.x + off, c.y + off, c.m, components, library),
       value: c.value,
     };
     components.push(n);
@@ -239,7 +287,7 @@ export function duplicated(
     fresh.add(n.id);
   }
   for (const w of linkedWires(value, selection)) {
-    const n = copiedWire(w, map, wires, off);
+    const n = copiedWire(w, map, wires, off, library);
     if (n === null) continue;
     wires.push(n);
     fresh.add(n.id);
@@ -248,7 +296,13 @@ export function duplicated(
 }
 
 /** A pin-to-pin wire re-attached to the copies of its two components. */
-function copiedWire(w: Wire, map: ReadonlyMap<string, string>, wires: readonly Wire[], off: number): Wire | null {
+function copiedWire(
+  w: CanvasWire,
+  map: ReadonlyMap<string, string>,
+  wires: readonly CanvasWire[],
+  off: number,
+  library: SchematicLibrary,
+): CanvasWire | null {
   if (w.a.kind !== "pin" || w.b.kind !== "pin") return null;
   const a = map.get(w.a.c);
   const b = map.get(w.b.c);
@@ -260,7 +314,7 @@ function copiedWire(w: Wire, map: ReadonlyMap<string, string>, wires: readonly W
     ),
     a: { kind: "pin", c: a, p: w.a.p },
     b: { kind: "pin", c: b, p: w.b.p },
-    via: w.via.map((v) => clampPoint(v.x + off, v.y + off)),
+    via: w.via.map((v) => clampPoint(v.x + off, v.y + off, library)),
     points: w.points,
   };
 }
@@ -288,8 +342,9 @@ export function boxStart(w: Point, shift: boolean, selection: ReadonlySet<string
 /** What a released rubber band selects: components it touches, wires it wholly contains. */
 export function boxSelection(
   d: BoxDrag,
-  components: readonly SchematicComponent[],
+  components: readonly CanvasComponent[],
   routes: ReadonlyMap<string, ReadonlyArray<readonly [number, number]>>,
+  library: SchematicLibrary,
 ): ReadonlySet<string> {
   const x0 = Math.min(d.x0, d.x1);
   const x1 = Math.max(d.x0, d.x1);
@@ -298,7 +353,7 @@ export function boxSelection(
   const rect = { x0, y0, x1, y1 };
   const next = new Set(d.base);
   for (const c of components) {
-    if (overlaps(hitRectOf(c), rect)) next.add(c.id);
+    if (overlaps(hitRectOf(c, library), rect)) next.add(c.id);
   }
   for (const [wid, points] of routes) {
     if (points.every((p) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1)) next.add(wid);
@@ -335,14 +390,14 @@ export function keyActions(e: {
   duplicate: () => void;
   remove: () => void;
   transform: (t: Orientation) => void;
-  value: Schematic;
+  value: CanvasSchematic;
   setSelection: Dispatch<SetStateAction<ReadonlySet<string>>>;
   /** Something is selected now. */
   hasSelection: boolean;
-  kinds: readonly ComponentKind[];
+  kinds: readonly string[];
   mode: Mode;
   setMode: Dispatch<SetStateAction<Mode>>;
-  setPlaceKind: Dispatch<SetStateAction<ComponentKind | null>>;
+  setPlaceKind: Dispatch<SetStateAction<string | null>>;
   /** A wire is being drawn. */
   drafting: boolean;
   setDraft: (draft: null) => void;

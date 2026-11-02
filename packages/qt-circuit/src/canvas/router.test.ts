@@ -4,6 +4,7 @@ import { BOX, GRID } from "../library.js";
 import { Schematic, type Orientation, type SchematicComponent, type Wire } from "../schema.js";
 
 import { ORIENT_0, ORIENT_90, pinPosition, portPosition, rectOf } from "./geometry.js";
+import { CIRCUIT_LIBRARY } from "./circuitLibrary.js";
 import { blockedCells, computeRoutes, junctionPoints, route, withRoutes } from "./router.js";
 
 const component = (
@@ -117,7 +118,7 @@ describe("route", () => {
       obstacles,
     );
     expectWellFormed(points);
-    const body = rectOf(blocker);
+    const body = rectOf(blocker, CIRCUIT_LIBRARY);
     /* No vertex, and no segment, crosses the inside of the body. */
     for (let i = 0; i < points.length - 1; i += 1) {
       const a = points[i]!;

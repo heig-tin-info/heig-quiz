@@ -3,7 +3,7 @@
  * bodies as obstacles and a small cost for running on top of another wire.
  * A faithful port of `mockups/circuit.html`, with one difference that matters:
  * the search is CLAMPED TO THE BOX, so a routed polyline is always a value the
- * schema accepts (`0..BOX.width` × `0..BOX.height`, every vertex on the grid).
+ * schema accepts (`0..box.width` × `0..box.height`, every vertex on the grid).
  *
  * The result is stored in `wire.points`, which is the geometry of record: the
  * server reads connectivity from it and never routes anything itself
@@ -12,18 +12,22 @@
  */
 import { astar, cellKey, markUsed, simplify, type Obstacles, type SearchOptions } from "@quiz/domain/gridRouter";
 
-import { BOX, GRID, LIBRARY } from "../library.js";
-import { PORTS, type PortId } from "../library.js";
-import type { Point, Schematic, SchematicComponent, Wire } from "../schema.js";
+import { GRID } from "../library.js";
 
+import { CIRCUIT_LIBRARY } from "./circuitLibrary.js";
 import { type PinPoint, pinPosition, rectOf, resolveEnd, indexOf } from "./geometry.js";
+import type { CanvasComponent, CanvasSchematic, SchematicLibrary } from "./schematicLibrary.js";
 
-/** The grid is the box, and nothing routes outside it. */
-const GW = BOX.width / GRID;
-const GH = BOX.height / GRID;
-
-/** A tight window first, which is what an ordinary wire needs, then the whole box for the ones that go around something. */
-const SEARCH: SearchOptions = { margins: [6, GW + GH], clip: { x0: 0, y0: 0, x1: GW, y1: GH } };
+/**
+ * The grid is the box, and nothing routes outside it. A tight window first,
+ * which is what an ordinary wire needs, then the whole box for the ones that
+ * go around something.
+ */
+function searchIn(box: SchematicLibrary["box"]): SearchOptions {
+  const gw = box.width / GRID;
+  const gh = box.height / GRID;
+  return { margins: [6, gw + gh], clip: { x0: 0, y0: 0, x1: gw, y1: gh } };
+}
 
 /** The schema caps a polyline at 64 vertices; a route that long is a bug, not a wire. */
 const MAX_POINTS = 64;
@@ -35,10 +39,13 @@ export type { Obstacles };
  * stays reachable) plus every pin and every port: a wire routes AROUND parts
  * and never cuts across a terminal that is not its own end.
  */
-export function blockedCells(components: readonly SchematicComponent[]): Set<string> {
+export function blockedCells(
+  components: readonly CanvasComponent[],
+  library: SchematicLibrary = CIRCUIT_LIBRARY,
+): Set<string> {
   const blocked = new Set<string>();
   for (const c of components) {
-    const r = rectOf(c);
+    const r = rectOf(c, library);
     for (let gx = Math.ceil(r.x0 / GRID); gx <= Math.floor(r.x1 / GRID); gx += 1) {
       for (let gy = Math.ceil(r.y0 / GRID); gy <= Math.floor(r.y1 / GRID); gy += 1) {
         if (gx * GRID > r.x0 && gx * GRID < r.x1 && gy * GRID > r.y0 && gy * GRID < r.y1) {
@@ -46,14 +53,13 @@ export function blockedCells(components: readonly SchematicComponent[]): Set<str
         }
       }
     }
-    const pins = LIBRARY[c.kind].pins;
+    const pins = library.part(c.kind).pins;
     for (let i = 0; i < pins.length; i += 1) {
-      const q = pinPosition(c, i);
+      const q = pinPosition(c, i, library);
       if (q !== null) blocked.add(cellKey(q.x / GRID, q.y / GRID));
     }
   }
-  for (const port of Object.keys(PORTS) as PortId[]) {
-    const spec = PORTS[port];
+  for (const spec of library.ports) {
     blocked.add(cellKey(spec.x / GRID, spec.y / GRID));
   }
   return blocked;
@@ -66,7 +72,12 @@ const NO_OBSTACLES: Obstacles = { blocked: new Set(), used: new Map() };
  * waypoints in between — in CANVAS units, orthogonal, on the grid and inside
  * the box.
  */
-export function route(ends: readonly PinPoint[], obstacles: Obstacles = NO_OBSTACLES): Array<[number, number]> {
+export function route(
+  ends: readonly PinPoint[],
+  obstacles: Obstacles = NO_OBSTACLES,
+  library: SchematicLibrary = CIRCUIT_LIBRARY,
+): Array<[number, number]> {
+  const search = searchIn(library.box);
   const first = ends[0];
   if (first === undefined) return [];
   if (ends.length === 1) {
@@ -90,7 +101,7 @@ export function route(ends: readonly PinPoint[], obstacles: Obstacles = NO_OBSTA
       Math.round(b.y / GRID),
       last ? b.d : -1,
       obstacles,
-      SEARCH,
+      search,
     );
     if (grid.length > 0) leg.pts.shift();
     grid.push(...leg.pts);
@@ -112,15 +123,18 @@ export function route(ends: readonly PinPoint[], obstacles: Obstacles = NO_OBSTA
 }
 
 /** Every wire's polyline, routed in order, each one avoiding the ones before it. */
-export function computeRoutes(schematic: Schematic): Map<string, Array<[number, number]>> {
+export function computeRoutes(
+  schematic: CanvasSchematic,
+  library: SchematicLibrary = CIRCUIT_LIBRARY,
+): Map<string, Array<[number, number]>> {
   const byId = indexOf(schematic.components);
-  const obstacles: Obstacles = { blocked: blockedCells(schematic.components), used: new Map() };
+  const obstacles: Obstacles = { blocked: blockedCells(schematic.components, library), used: new Map() };
   const routes = new Map<string, Array<[number, number]>>();
   for (const w of schematic.wires) {
-    const a = resolveEnd(w.a, byId);
-    const b = resolveEnd(w.b, byId);
+    const a = resolveEnd(w.a, byId, library);
+    const b = resolveEnd(w.b, byId, library);
     if (a === null || b === null) continue;
-    const points = route([a, ...w.via.map((v) => ({ x: v.x, y: v.y, d: -1 as const })), b], obstacles);
+    const points = route([a, ...w.via.map((v) => ({ x: v.x, y: v.y, d: -1 as const })), b], obstacles, library);
     markUsed(
       points.map(([x, y]) => [x / GRID, y / GRID] as [number, number]),
       obstacles.used,
@@ -134,23 +148,26 @@ export function computeRoutes(schematic: Schematic): Map<string, Array<[number, 
  * The schematic with every `points` recomputed. Called on EVERY committed edit
  * — place, move, rotate, wire, delete — because the stored polyline is what
  * the server reads, and a stale one is a wrong netlist.
+ *
+ * Only `points` changes, so the schematic comes back as the type it went in:
+ * a `circuit` `Schematic` stays one.
  */
-export function withRoutes(schematic: Schematic): Schematic {
-  const routes = computeRoutes(schematic);
-  const wires: Wire[] = schematic.wires.map((w) => {
+export function withRoutes<S extends CanvasSchematic>(schematic: S, library: SchematicLibrary = CIRCUIT_LIBRARY): S {
+  const routes = computeRoutes(schematic, library);
+  const wires = schematic.wires.map((w) => {
     const points = routes.get(w.id);
-    return points === undefined ? w : { ...w, points: points as Point[] };
+    return points === undefined ? w : { ...w, points };
   });
-  return { components: schematic.components, wires };
+  return { components: schematic.components, wires } as S;
 }
 
 /** Every component pin, as a `cellKey(x, y)` in canvas units. */
-function terminalKeys(components: readonly SchematicComponent[]): Set<string> {
+function terminalKeys(components: readonly CanvasComponent[], library: SchematicLibrary): Set<string> {
   const terminals = new Set<string>();
   for (const c of components) {
-    const pins = LIBRARY[c.kind].pins;
+    const pins = library.part(c.kind).pins;
     for (let i = 0; i < pins.length; i += 1) {
-      const q = pinPosition(c, i);
+      const q = pinPosition(c, i, library);
       if (q !== null) terminals.add(cellKey(q.x, q.y));
     }
   }
@@ -194,10 +211,11 @@ function landsMidWire(
  * in the MIDDLE of another wire counts twice — that is a T, and a T is a node.
  */
 export function junctionPoints(
-  schematic: Schematic,
+  schematic: CanvasSchematic,
   routes: ReadonlyMap<string, ReadonlyArray<readonly [number, number]>>,
+  library: SchematicLibrary = CIRCUIT_LIBRARY,
 ): Array<[number, number]> {
-  const terminals = terminalKeys(schematic.components);
+  const terminals = terminalKeys(schematic.components, library);
   const dots: Array<[number, number]> = [];
   for (const [k, n] of endCounts(routes.values())) {
     const parts = k.split(",");

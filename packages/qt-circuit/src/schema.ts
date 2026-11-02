@@ -32,7 +32,6 @@ import {
   DEFAULT_PALETTE,
   GRID,
   PORT_IDS,
-  type ComponentKind,
 } from "./library.js";
 
 export const CIRCUIT_CONFIG_VERSION = 1;
@@ -115,11 +114,6 @@ export const Schematic = z.object({
 export type Schematic = z.infer<typeof Schematic>;
 
 export const EMPTY_SCHEMATIC: Schematic = { components: [], wires: [] };
-
-/** The components that count toward `palette.maxComponents`: everything but a terminal. */
-export function countedComponents(schematic: Schematic, isTerminal: (k: ComponentKind) => boolean): number {
-  return schematic.components.filter((c) => !isTerminal(c.kind)).length;
-}
 
 // ---------------------------------------------------------------------------
 // Harness: what the teacher wraps around the box

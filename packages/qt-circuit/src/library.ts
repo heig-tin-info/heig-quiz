@@ -15,6 +15,7 @@
  * Nothing here draws: the SVG paths live beside the components
  * (`symbols.ts`), because an emitter running in the API must not carry them.
  */
+import type { PartSpec, ValueRole } from "./parts.js";
 
 /** Canvas grid step, in canvas units. Every pin, every wire vertex sits on it. */
 export const GRID = 20;
@@ -94,31 +95,18 @@ export const COMPONENT_KINDS = [
 ] as const;
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];
 
-/** What a component's single parameter means, when it has one. */
-export type ValueRole =
-  | { readonly kind: "none" }
-  /** A SPICE quantity: resistance, capacitance, inductance, a breakdown voltage. */
-  | { readonly kind: "quantity"; readonly unit: "Ω" | "F" | "H" | "V"; readonly min: number; readonly max: number };
-
-export interface ComponentSpec {
+/**
+ * One kind of the analogue library: the canvas's part (pins in ELECTRICAL
+ * order, see the header; a quantity's unit is Ω, F, H or V; GND, VCC and VEE
+ * are the terminals) plus its kind and its English label, which the host
+ * translates by `qt.circuit.kind.<kind>`.
+ */
+export interface ComponentSpec extends PartSpec {
   readonly kind: ComponentKind;
-  /** The name prefix of an instance: `R` → R1, R2… `GND` names every instance `GND`. */
-  readonly prefix: string;
-  /** English label; the host translates by `qt.circuit.kind.<kind>`. */
   readonly label: string;
-  /** Default `value` of a fresh instance, in engineering notation (`10k`, `100n`). */
-  readonly defaultValue: string;
-  readonly value: ValueRole;
-  /** Pins in ELECTRICAL order (see the header). */
-  readonly pins: readonly PinSpec[];
-  /** Body rectangle `[x, y, w, h]` in local coordinates: what a wire must route around. */
-  readonly body: readonly [number, number, number, number];
-  /** Label anchor in local coordinates; `null` for a symbol with no label. */
-  readonly label_at: readonly [number, number] | null;
-  /** True for GND / VCC / VEE. */
-  readonly terminal: boolean;
 }
 
+/** A SPICE quantity: resistance, capacitance, inductance, a breakdown voltage. */
 const quantity = (unit: "Ω" | "F" | "H" | "V", min: number, max: number): ValueRole => ({
   kind: "quantity",
   unit,
@@ -329,10 +317,31 @@ export const LIBRARY: Readonly<Record<ComponentKind, ComponentSpec>> = {
   },
 };
 
+/**
+ * The part lookup alone, without the drawings: what the netlist, the
+ * dashboard summary and the grading column need (`countedParts`), and what
+ * `CIRCUIT_LIBRARY` builds on. An undeclared kind is a bug, and throws.
+ */
+export const CIRCUIT_PARTS: { part(kind: string): ComponentSpec } = {
+  part(kind: string): ComponentSpec {
+    const spec = (LIBRARY as Readonly<Record<string, ComponentSpec | undefined>>)[kind];
+    if (spec === undefined) throw new Error(`circuit: unknown component kind ${kind}`);
+    return spec;
+  },
+};
+
 /** The kinds a fresh question offers: everything but the supplies, which the harness decides. */
 export const DEFAULT_PALETTE: readonly ComponentKind[] = COMPONENT_KINDS.filter(
   (k) => k !== "VCC" && k !== "VEE",
 );
+
+/** The palette's kinds the student is offered: a supply rail only when the harness powers it. */
+export function offeredKinds(
+  palette: { readonly kinds: readonly ComponentKind[] },
+  supplies: { readonly vcc: number | null; readonly vee: number | null },
+): ComponentKind[] {
+  return palette.kinds.filter((k) => (k !== "VCC" || supplies.vcc !== null) && (k !== "VEE" || supplies.vee !== null));
+}
 
 // ---------------------------------------------------------------------------
 // Engineering notation

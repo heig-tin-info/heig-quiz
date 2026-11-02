@@ -26,9 +26,9 @@ import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { PlayerProps } from "@quiz/core/client";
 import type { SimulateOutcome } from "@quiz/core/server";
 
-import { Plot, SchematicEditor, SchematicView, type CanvasStrings } from "./canvas/index.js";
+import { CIRCUIT_LIBRARY, Plot, SchematicEditor, SchematicView, type CanvasStrings } from "./canvas/index.js";
 import { parseSimulation, type SimulationResult } from "./grade.js";
-import { formatValue, LIBRARY, PORT_IDS, type PortId } from "./library.js";
+import { formatValue, LIBRARY, offeredKinds, PORT_IDS, type PortId } from "./library.js";
 import { extractNets, type NetlistIssue } from "./netlist.js";
 import { biasOf, type CircuitAnswer, type CircuitStudent, type Load, type Source, type StudentStimulus } from "./schema.js";
 import { PLAYER_STRINGS, type CircuitPlayerStrings } from "./strings.js";
@@ -253,6 +253,7 @@ export function CircuitPlayer({
         preview={
           <SchematicView
             schematic={schematic}
+            library={CIRCUIT_LIBRARY}
             height={280}
             flaggedPins={highlightPins}
             flaggedPorts={highlightPorts}
@@ -264,10 +265,13 @@ export function CircuitPlayer({
           <div className={cx("flex flex-col gap-2", expanded && "h-full")}>
             <SchematicEditor
               aria-label={s.schematic}
+              library={CIRCUIT_LIBRARY}
               value={schematic}
               onChange={(next) => onChange({ schematic: next })}
-              palette={student.palette}
-              supplies={student.supplies}
+              palette={{
+                kinds: offeredKinds(student.palette, student.supplies),
+                maxComponents: student.palette.maxComponents,
+              }}
               readOnly={locked}
               highlightPins={highlightPins}
               highlightPorts={highlightPorts}

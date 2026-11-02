@@ -9,8 +9,7 @@
  */
 import type { Dispatch, JSX, RefObject, SetStateAction } from "react";
 
-import { LIBRARY, formatValue, valueIssue, type ComponentKind, type PortId } from "../library.js";
-import type { Orientation, Schematic, SchematicComponent, Wire } from "../schema.js";
+import type { Orientation } from "../schema.js";
 
 import { fmt, plural } from "@quiz/core/client";
 import { TextInput } from "@quiz/ui";
@@ -55,10 +54,17 @@ import {
   WireGlyph,
   type FlaggedPin,
 } from "./SchematicView.js";
+import {
+  isLockedKind,
+  type CanvasComponent,
+  type CanvasSchematic,
+  type CanvasWire,
+  type SchematicLibrary,
+} from "./schematicLibrary.js";
 import { TOOL_ICONS } from "./symbols.js";
 import type { Drag, Ghost } from "./usePartDragging.js";
 import type { Cursor } from "./usePointerTools.js";
-import { isTerminal, type Mode } from "./useSelection.js";
+import type { Mode } from "./useSelection.js";
 import type { Draft } from "./useWireDrawing.js";
 
 type Routes = ReadonlyMap<string, Array<[number, number]>>;
@@ -71,6 +77,8 @@ export function Toolbar({
   readOnly,
   mode,
   selection,
+  canRemove,
+  canDuplicate,
   canUndo,
   canRedo,
   zoom,
@@ -88,11 +96,14 @@ export function Toolbar({
   readOnly: boolean;
   mode: Mode;
   selection: ReadonlySet<string>;
+  /** Delete and Duplicate have something to act on (a locked part is never removed nor copied). */
+  canRemove: boolean;
+  canDuplicate: boolean;
   canUndo: boolean;
   canRedo: boolean;
   zoom: number;
   setMode: Dispatch<SetStateAction<Mode>>;
-  setPlaceKind: Dispatch<SetStateAction<ComponentKind | null>>;
+  setPlaceKind: Dispatch<SetStateAction<string | null>>;
   setDraft: Dispatch<SetStateAction<Draft | null>>;
   transform: (t: Orientation) => void;
   duplicate: () => void;
@@ -139,8 +150,8 @@ export function Toolbar({
             <IconButton label={s.rotate} name="rotate" onClick={() => transform(ORIENT_90)} disabled={nothingToTurn} />
             <IconButton label={s.mirrorHorizontal} name="mirrorH" onClick={() => transform(MIRROR_X)} disabled={nothingToTurn} />
             <IconButton label={s.mirrorVertical} name="mirrorV" onClick={() => transform(MIRROR_Y)} disabled={nothingToTurn} />
-            <IconButton label={s.duplicate} name="duplicate" onClick={duplicate} disabled={![...selection].some((x) => x.startsWith("c"))} />
-            <IconButton label={s.remove} name="remove" onClick={remove} disabled={selection.size === 0} />
+            <IconButton label={s.duplicate} name="duplicate" onClick={duplicate} disabled={!canDuplicate} />
+            <IconButton label={s.remove} name="remove" onClick={remove} disabled={!canRemove} />
           </div>
           <span className={separator} aria-hidden="true" />
           <div className={toolbarGroup}>
@@ -159,6 +170,7 @@ export function Toolbar({
 
 export function PaletteRail({
   strings: s,
+  library,
   kinds,
   used,
   max,
@@ -169,15 +181,16 @@ export function PaletteRail({
   onGrab,
 }: {
   strings: CanvasStrings;
-  kinds: readonly ComponentKind[];
+  library: SchematicLibrary;
+  kinds: readonly string[];
   used: number;
   max: number;
   full: boolean;
   mode: Mode;
-  placeKind: ComponentKind | null;
+  placeKind: string | null;
   maxHeight: number;
   /** A tile pressed with the main button; `rearm` when it was already the armed one. */
-  onGrab: (kind: ComponentKind, clientX: number, clientY: number, rearm: boolean) => void;
+  onGrab: (kind: string, clientX: number, clientY: number, rearm: boolean) => void;
 }): JSX.Element {
   return (
     <div className={paletteColumn} style={{ maxHeight }}>
@@ -187,7 +200,7 @@ export function PaletteRail({
       </div>
       <div className={paletteGrid}>
         {kinds.map((kind, i) => {
-          const disabled = full && !isTerminal(kind);
+          const disabled = full && !library.part(kind).terminal;
           const armed = mode === "place" && placeKind === kind;
           return (
             <button
@@ -205,7 +218,7 @@ export function PaletteRail({
                 onGrab(kind, e.clientX, e.clientY, armed);
               }}
             >
-              <SymbolPreview kind={kind} width={48} height={22} />
+              <SymbolPreview library={library} kind={kind} width={48} height={22} />
               <span className={paletteTileLabel}>{kind}</span>
             </button>
           );
@@ -219,6 +232,7 @@ export function PaletteRail({
 /** What is stored, as drawn: the paper, the wires, the junctions, the parts and the ports. */
 export function Drawing({
   strings: s,
+  library,
   patternId,
   schematic,
   routes,
@@ -229,21 +243,22 @@ export function Drawing({
   highlightPorts,
 }: {
   strings: CanvasStrings;
+  library: SchematicLibrary;
   patternId: string;
-  schematic: Schematic;
+  schematic: CanvasSchematic;
   routes: Routes;
   selection: ReadonlySet<string>;
   connected: ReadonlySet<string>;
   hover: PinTarget | null;
   highlightPins: readonly FlaggedPin[] | undefined;
-  highlightPorts: readonly PortId[] | undefined;
+  highlightPorts: readonly string[] | undefined;
 }): JSX.Element {
   const hoveredPinOf = (componentId: string): number | null =>
     hover !== null && hover.kind === "pin" && hover.c === componentId ? hover.p : null;
   return (
     <>
       <GridDefs id={patternId} />
-      <Paper id={patternId} />
+      <Paper id={patternId} box={library.box} />
       <g>
         {schematic.wires.map((w) => {
           const points = routes.get(w.id);
@@ -252,11 +267,12 @@ export function Drawing({
           );
         })}
       </g>
-      <Junctions schematic={schematic} routes={routes} />
+      <Junctions library={library} schematic={schematic} routes={routes} />
       <g>
         {schematic.components.map((c) => (
           <ComponentGlyph
             key={c.id}
+            library={library}
             component={c}
             selected={selection.has(c.id)}
             connected={connected}
@@ -267,6 +283,7 @@ export function Drawing({
       </g>
       <Ports
         strings={s}
+        library={library}
         {...(highlightPorts === undefined ? {} : { flagged: highlightPorts })}
         hovered={hover?.kind === "port" ? hover.port : null}
       />
@@ -276,6 +293,7 @@ export function Drawing({
 
 /** Everything drawn over the schematic that is never stored. */
 export function Transient({
+  library,
   draftPoints,
   draft,
   wires,
@@ -287,13 +305,14 @@ export function Transient({
   hover,
   drag,
 }: {
+  library: SchematicLibrary;
   draftPoints: Array<[number, number]> | null;
   draft: Draft | null;
-  wires: readonly Wire[];
+  wires: readonly CanvasWire[];
   selection: ReadonlySet<string>;
   mode: Mode;
   ghost: Ghost;
-  placeKind: ComponentKind | null;
+  placeKind: string | null;
   cursor: Cursor;
   hover: PinTarget | null;
   drag: Drag | null;
@@ -312,6 +331,7 @@ export function Transient({
       {mode === "place" && ghost.show && placeKind !== null ? (
         <ComponentGlyph
           ghost
+          library={library}
           component={{ id: "ghost", kind: placeKind, x: ghost.x, y: ghost.y, m: ghost.m, name: "", value: "" }}
         />
       ) : null}
@@ -332,7 +352,7 @@ export function Transient({
 }
 
 /** A square handle on every waypoint of a selected wire. */
-function WaypointHandles({ wires, selection }: { wires: readonly Wire[]; selection: ReadonlySet<string> }): JSX.Element {
+function WaypointHandles({ wires, selection }: { wires: readonly CanvasWire[]; selection: ReadonlySet<string> }): JSX.Element {
   return (
     <>
       {wires
@@ -357,9 +377,11 @@ function WaypointHandles({ wires, selection }: { wires: readonly Wire[]; selecti
 /**
  * The one selected component's name and value. A run of keystrokes in one
  * field is ONE undo step: `editing` is reset when a field takes the focus.
+ * A locked part keeps the name the question gave it.
  */
 export function Inspector({
   strings: s,
+  library,
   component,
   readOnly,
   nameDraft,
@@ -368,13 +390,14 @@ export function Inspector({
   edit,
 }: {
   strings: CanvasStrings;
-  component: SchematicComponent;
+  library: SchematicLibrary;
+  component: CanvasComponent;
   readOnly: boolean;
   /** The name as typed, which may not be valid yet; `null` shows the stored one. */
   nameDraft: { id: string; text: string } | null;
   setNameDraft: Dispatch<SetStateAction<{ id: string; text: string } | null>>;
   editing: RefObject<boolean>;
-  edit: (patch: Partial<SchematicComponent>) => void;
+  edit: (patch: Partial<CanvasComponent>) => void;
 }): JSX.Element {
   const nameText = nameDraft !== null && nameDraft.id === component.id ? nameDraft.text : component.name;
   const nameOk = NAME.test(nameText);
@@ -391,27 +414,39 @@ export function Inspector({
         </>
       ) : (
         <>
-          <label className="flex flex-col gap-1">
-            <span className={fieldLabel}>{s.fieldName}</span>
-            <TextInput
-              size="sm"
-              className={fieldInput}
-              value={nameText}
-              spellCheck={false}
-              autoComplete="off"
-              aria-invalid={!nameOk}
-              onFocus={startEditing}
-              onChange={(e) => {
-                const text = e.target.value;
-                setNameDraft({ id: component.id, text });
-                if (NAME.test(text)) edit({ name: text });
-              }}
-              onBlur={() => setNameDraft(null)}
-              onKeyDown={blurOnEnterOrEscape}
-            />
-          </label>
-          {nameOk ? null : <span className={fieldError}>{s.nameInvalid}</span>}
-          <ValueField component={component} strings={s} onEdit={(v) => edit({ value: v })} onFocus={startEditing} />
+          {isLockedKind(library, component.kind) ? (
+            <span className={readOnlyValue}>{component.name}</span>
+          ) : (
+            <>
+              <label className="flex flex-col gap-1">
+                <span className={fieldLabel}>{s.fieldName}</span>
+                <TextInput
+                  size="sm"
+                  className={fieldInput}
+                  value={nameText}
+                  spellCheck={false}
+                  autoComplete="off"
+                  aria-invalid={!nameOk}
+                  onFocus={startEditing}
+                  onChange={(e) => {
+                    const text = e.target.value;
+                    setNameDraft({ id: component.id, text });
+                    if (NAME.test(text)) edit({ name: text });
+                  }}
+                  onBlur={() => setNameDraft(null)}
+                  onKeyDown={blurOnEnterOrEscape}
+                />
+              </label>
+              {nameOk ? null : <span className={fieldError}>{s.nameInvalid}</span>}
+            </>
+          )}
+          <ValueField
+            library={library}
+            component={component}
+            strings={s}
+            onEdit={(v) => edit({ value: v })}
+            onFocus={startEditing}
+          />
         </>
       )}
     </div>
@@ -427,26 +462,28 @@ const blurOnEnterOrEscape = (e: { key: string; currentTarget: HTMLInputElement; 
 
 /** The value box, with the unit the library declares and a live verdict. */
 function ValueField({
+  library,
   component,
   strings,
   onEdit,
   onFocus,
 }: {
-  component: SchematicComponent;
+  library: SchematicLibrary;
+  component: CanvasComponent;
   strings: CanvasStrings;
   onEdit: (value: string) => void;
   onFocus: () => void;
 }): JSX.Element | null {
-  const role = LIBRARY[component.kind].value;
+  const role = library.part(component.kind).value;
   if (role.kind === "none") return null;
-  const issue = valueIssue(component.kind, component.value);
+  const issue = library.valueIssue(component.kind, component.value);
   const message =
     issue === "missing"
       ? strings.valueMissing
       : issue === "invalid"
         ? strings.valueInvalid
         : issue === "range"
-          ? `${strings.valueRange} ${formatValue(role.min)}…${formatValue(role.max)}${role.unit}`
+          ? `${strings.valueRange} ${library.formatValue(role.min)}…${library.formatValue(role.max)}${role.unit}`
           : null;
   return (
     <>
@@ -482,7 +519,7 @@ export function StatusBar({
 }: {
   strings: CanvasStrings;
   mode: Mode;
-  placeKind: ComponentKind | null;
+  placeKind: string | null;
   /** A wire is being drawn. */
   drafting: boolean;
   /** How many things are selected. */

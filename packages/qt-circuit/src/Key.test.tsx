@@ -9,12 +9,16 @@ import { Suspense } from "react";
 import { describe, expect, it } from "vitest";
 import { keyHostProps } from "@quiz/ui/testing";
 
-import { FIT_ASPECT } from "./canvas/geometry.js";
+import { CIRCUIT_LIBRARY } from "./canvas/circuitLibrary.js";
+import { fitView } from "./canvas/geometry.js";
 import { circuitClient } from "./client.js";
 import { CircuitKey } from "./Key.js";
 import type { CircuitSolution } from "./schema.js";
 import { circuitServer } from "./server.js";
 import { circuitConfig, SECRET_HIDDEN_STIMULUS, SECRET_REFERENCE_NAME, SECRET_RUBRIC } from "./testing.js";
+
+const FIT = fitView(CIRCUIT_LIBRARY.box);
+const FIT_ASPECT = FIT.w / FIT.h;
 
 const view = { seed: 0, itemId: "i", shuffle: false };
 const CONFIG = circuitConfig();

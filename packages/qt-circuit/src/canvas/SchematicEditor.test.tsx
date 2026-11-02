@@ -4,10 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CanvasShortcutsListener } from "@quiz/core/client";
 
+import { offeredKinds } from "../library.js";
 import { Schematic, type Palette, type Supplies } from "../schema.js";
 
 import { SchematicEditor } from "./SchematicEditor.js";
-import { FIT_VIEW, ORIENT_0, portPosition, viewBoxAttr } from "./geometry.js";
+import { CIRCUIT_LIBRARY } from "./circuitLibrary.js";
+import { fitView, ORIENT_0, portPosition, viewBoxAttr } from "./geometry.js";
+
+const FIT_VIEW = fitView(CIRCUIT_LIBRARY.box);
 import { withRoutes } from "./router.js";
 
 /**
@@ -37,6 +41,8 @@ beforeEach(() => {
 
 const PALETTE: Palette = { kinds: ["R", "C", "GND", "VCC", "VEE"], maxComponents: 3 };
 const SUPPLIES: Supplies = { vcc: null, vee: null };
+/** The palette as the editor receives it: the supply rails filtered out by the host. */
+const OFFERED = { kinds: offeredKinds(PALETTE, SUPPLIES), maxComponents: PALETTE.maxComponents };
 
 const EMPTY: Schematic = { components: [], wires: [] };
 
@@ -79,8 +85,8 @@ function Harness({
         onChange?.(next);
         setValue(next);
       }}
-      palette={palette}
-      supplies={supplies}
+      library={CIRCUIT_LIBRARY}
+      palette={{ kinds: offeredKinds(palette, supplies), maxComponents: palette.maxComponents }}
       readOnly={readOnly}
       onShortcuts={onShortcuts}
     />
@@ -270,7 +276,7 @@ describe("Escape under a host layer", () => {
 
   it("fills its parent in the layer instead of sizing itself", () => {
     const { container } = render(
-      <SchematicEditor value={EMPTY} onChange={() => {}} palette={PALETTE} supplies={SUPPLIES} height="fill" />,
+      <SchematicEditor value={EMPTY} onChange={() => {}} library={CIRCUIT_LIBRARY} palette={OFFERED} height="fill" />,
     );
     expect(container.firstElementChild).toHaveClass("h-full");
     expect((canvas().parentElement as HTMLElement).style.height).toBe("");
@@ -466,8 +472,8 @@ describe("the strings", () => {
       <SchematicEditor
         value={EMPTY}
         onChange={() => {}}
-        palette={PALETTE}
-        supplies={SUPPLIES}
+        library={CIRCUIT_LIBRARY}
+        palette={OFFERED}
         strings={{ toolWire: "Fil", components: "Composants" }}
       />,
     );

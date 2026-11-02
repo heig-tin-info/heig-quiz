@@ -8,21 +8,21 @@
  * unit test can hand it.
  *
  * Coordinates are CANVAS UNITS on the {@link GRID} of 20, the same units the
- * schema stores: `0..BOX.width` × `0..BOX.height`. The router works in grid
- * steps internally and converts back before anything is stored.
+ * schema stores: `0..box.width` × `0..box.height`, the box of the
+ * {@link SchematicLibrary} in use. The router works in grid steps internally
+ * and converts back before anything is stored.
+ *
+ * Every function that reads a part, a port or the box takes the library last.
+ * `pinPosition` and `portPosition` default it to `circuit`'s: the router's
+ * golden cases (`router.golden.test.ts`) are written against them unchanged.
  */
 import { DIRS } from "@quiz/domain/gridRouter";
 
-import {
-  BOX,
-  GRID,
-  LIBRARY,
-  PORTS,
-  type ComponentKind,
-  type PinDirection,
-  type PortId,
-} from "../library.js";
-import type { Orientation, SchematicComponent, WireEnd } from "../schema.js";
+import { GRID, type PinDirection } from "../library.js";
+import type { Orientation } from "../schema.js";
+
+import { CIRCUIT_LIBRARY } from "./circuitLibrary.js";
+import type { CanvasComponent, CanvasWireEnd, PartSpec, SchematicLibrary } from "./schematicLibrary.js";
 
 // ---------------------------------------------------------------------------
 // Orientations
@@ -97,11 +97,15 @@ export interface PinPoint {
 }
 
 /** The placement of a component: everything the geometry needs, nothing more. */
-export type Placement = Pick<SchematicComponent, "kind" | "x" | "y" | "m">;
+export type Placement = Pick<CanvasComponent, "kind" | "x" | "y" | "m">;
 
 /** Where pin `index` of `component` sits, and which way its wire leaves. `null` for an unknown pin. */
-export function pinPosition(component: Placement, index: number): PinPoint | null {
-  const pin = LIBRARY[component.kind].pins[index];
+export function pinPosition(
+  component: Placement,
+  index: number,
+  library: SchematicLibrary = CIRCUIT_LIBRARY,
+): PinPoint | null {
+  const pin = library.part(component.kind).pins[index];
   if (pin === undefined) return null;
   const [x, y] = transform(component.m, pin.x, pin.y);
   const away = DIRS[pin.d];
@@ -110,10 +114,17 @@ export function pinPosition(component: Placement, index: number): PinPoint | nul
   return { x: component.x + x, y: component.y + y, d: directionOf(dx, dy) };
 }
 
-/** Where a port sits on the box border; its direction points INTO the box. */
-export function portPosition(port: PortId): PinPoint {
-  const spec = PORTS[port];
-  return { x: spec.x, y: spec.y, d: spec.d };
+/** Where a port sits on the box border; `null` for a port the library does not declare. */
+function portAt(port: string, library: SchematicLibrary): PinPoint | null {
+  const spec = library.ports.find((p) => p.name === port);
+  return spec === undefined ? null : { x: spec.x, y: spec.y, d: spec.d };
+}
+
+/** Where a port sits on the box border; its direction points INTO the box. An undeclared port throws. */
+export function portPosition(port: string, library: SchematicLibrary = CIRCUIT_LIBRARY): PinPoint {
+  const q = portAt(port, library);
+  if (q === null) throw new Error(`canvas: unknown port ${port}`);
+  return q;
 }
 
 export interface Rect {
@@ -136,23 +147,22 @@ function turnedRect(component: Placement, r: readonly [number, number, number, n
 }
 
 /** The component's BODY in world coordinates: what a wire must route around. */
-export function rectOf(component: Placement): Rect {
-  return turnedRect(component, LIBRARY[component.kind].body);
+export function rectOf(component: Placement, library: SchematicLibrary): Rect {
+  return turnedRect(component, library.part(component.kind).body);
 }
 
-/** Body ∪ pins, in LOCAL coordinates. Cached: it only depends on the kind. */
-const localExtents = new Map<ComponentKind, readonly [number, number, number, number]>();
-function localExtent(kind: ComponentKind): readonly [number, number, number, number] {
-  const cached = localExtents.get(kind);
+/** Body ∪ pins, in LOCAL coordinates. Cached: it only depends on the part. */
+const localExtents = new WeakMap<PartSpec, readonly [number, number, number, number]>();
+function localExtent(spec: PartSpec): readonly [number, number, number, number] {
+  const cached = localExtents.get(spec);
   if (cached !== undefined) return cached;
-  const spec = LIBRARY[kind];
   const [bx, by, bw, bh] = spec.body;
   const xs = [bx, bx + bw, ...spec.pins.map((p) => p.x)];
   const ys = [by, by + bh, ...spec.pins.map((p) => p.y)];
   const x0 = Math.min(...xs);
   const y0 = Math.min(...ys);
   const extent = [x0, y0, Math.max(...xs) - x0, Math.max(...ys) - y0] as const;
-  localExtents.set(kind, extent);
+  localExtents.set(spec, extent);
   return extent;
 }
 
@@ -161,13 +171,13 @@ function localExtent(kind: ComponentKind): readonly [number, number, number, num
  * box clamps: a pin pushed outside the border is a pin no wire can reach,
  * because the router never leaves the box.
  */
-export function extentOf(component: Placement): Rect {
-  return turnedRect(component, localExtent(component.kind));
+export function extentOf(component: Placement, library: SchematicLibrary): Rect {
+  return turnedRect(component, localExtent(library.part(component.kind)));
 }
 
 /** The extent, grown by 4, as the mouse target of a component. */
-export function hitRectOf(component: Placement): Rect {
-  const r = extentOf(component);
+export function hitRectOf(component: Placement, library: SchematicLibrary): Rect {
+  const r = extentOf(component, library);
   return { x0: r.x0 - 4, y0: r.y0 - 4, x1: r.x1 + 4, y1: r.y1 + 4 };
 }
 
@@ -182,12 +192,14 @@ export function overlaps(a: Rect, b: Rect): boolean {
  * component the schema would reject or the router could not reach.
  */
 export function clampToBox(
-  kind: ComponentKind,
+  kind: string,
   m: Orientation,
   x: number,
   y: number,
+  library: SchematicLibrary,
 ): { x: number; y: number } {
-  const e = turnedRect({ kind, m, x: 0, y: 0 }, localExtent(kind));
+  const box = library.box;
+  const e = turnedRect({ kind, m, x: 0, y: 0 }, localExtent(library.part(kind)));
   /* `Math.ceil(-0 / 20) * 20` is −0, which is not a value worth storing. */
   const zero = (v: number): number => (v === 0 ? 0 : v);
   const clampAxis = (v: number, lo: number, hi: number, span: number): number => {
@@ -197,31 +209,39 @@ export function clampToBox(
     return zero(Math.min(max, Math.max(min, snap(v))));
   };
   return {
-    x: clampAxis(x, e.x0, e.x1, BOX.width),
-    y: clampAxis(y, e.y0, e.y1, BOX.height),
+    x: clampAxis(x, e.x0, e.x1, box.width),
+    y: clampAxis(y, e.y0, e.y1, box.height),
   };
 }
 
 /** A free point or a waypoint, snapped and kept inside the box. */
-export function clampPoint(x: number, y: number): { x: number; y: number } {
+export function clampPoint(
+  x: number,
+  y: number,
+  library: SchematicLibrary,
+): { x: number; y: number } {
   return {
-    x: Math.min(BOX.width, Math.max(0, snap(x))),
-    y: Math.min(BOX.height, Math.max(0, snap(y))),
+    x: Math.min(library.box.width, Math.max(0, snap(x))),
+    y: Math.min(library.box.height, Math.max(0, snap(y))),
   };
 }
 
-/** Where a wire end actually is. `null` when it names a component that is gone. */
-export function resolveEnd(end: WireEnd, byId: ReadonlyMap<string, Placement>): PinPoint | null {
+/** Where a wire end actually is. `null` when it names a component that is gone, or a port the library lacks. */
+export function resolveEnd(
+  end: CanvasWireEnd,
+  byId: ReadonlyMap<string, Placement>,
+  library: SchematicLibrary,
+): PinPoint | null {
   if (end.kind === "pin") {
     const c = byId.get(end.c);
-    return c === undefined ? null : pinPosition(c, end.p);
+    return c === undefined ? null : pinPosition(c, end.p, library);
   }
-  if (end.kind === "port") return portPosition(end.port);
+  if (end.kind === "port") return portAt(end.port, library);
   return { x: end.x, y: end.y, d: -1 };
 }
 
 /** Index of the components of a schematic, for the resolvers above. */
-export function indexOf(components: readonly SchematicComponent[]): Map<string, SchematicComponent> {
+export function indexOf<C extends { id: string }>(components: readonly C[]): Map<string, C> {
   return new Map(components.map((c) => [c.id, c]));
 }
 
@@ -232,20 +252,21 @@ export function indexOf(components: readonly SchematicComponent[]): Map<string, 
  */
 export type PinTarget =
   | { readonly kind: "pin"; readonly c: string; readonly p: number }
-  | { readonly kind: "port"; readonly port: PortId };
+  | { readonly kind: "port"; readonly port: string };
 
 export function pinAt(
-  components: readonly SchematicComponent[],
+  components: readonly CanvasComponent[],
   x: number,
   y: number,
   radius: number,
+  library: SchematicLibrary,
 ): PinTarget | null {
   let best: PinTarget | null = null;
   let bestD = radius * radius;
   for (const c of components) {
-    const pins = LIBRARY[c.kind].pins;
+    const pins = library.part(c.kind).pins;
     for (let i = 0; i < pins.length; i += 1) {
-      const q = pinPosition(c, i);
+      const q = pinPosition(c, i, library);
       if (q === null) continue;
       const d = (q.x - x) ** 2 + (q.y - y) ** 2;
       if (d < bestD) {
@@ -254,19 +275,18 @@ export function pinAt(
       }
     }
   }
-  for (const port of Object.keys(PORTS) as PortId[]) {
-    const q = portPosition(port);
+  for (const q of library.ports) {
     const d = (q.x - x) ** 2 + (q.y - y) ** 2;
     if (d < bestD) {
       bestD = d;
-      best = { kind: "port", port };
+      best = { kind: "port", port: q.name };
     }
   }
   return best;
 }
 
 /** Whether two ends name the same attachment point. */
-export function sameEnd(a: WireEnd, b: WireEnd): boolean {
+export function sameEnd(a: CanvasWireEnd, b: CanvasWireEnd): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === "pin" && b.kind === "pin") return a.c === b.c && a.p === b.p;
   if (a.kind === "port" && b.kind === "port") return a.port === b.port;
@@ -294,11 +314,19 @@ export function nextId(prefix: "c" | "w", ids: readonly string[]): string {
 }
 
 /**
- * `R3` after `R1`, `R2`. A terminal has no number: there is one ground, one
- * VCC rail and one VEE rail, however many symbols name them.
+ * `R3` after `R1`, `R2`. A terminal has no number: in `circuit` there is one
+ * ground, one VCC rail and one VEE rail, however many symbols name them.
  */
-export function nextName(prefix: string, components: readonly SchematicComponent[]): string {
-  if (prefix === "GND" || prefix === "VCC" || prefix === "VEE") return prefix;
+export function nextName(
+  prefix: string,
+  components: readonly CanvasComponent[],
+  library: SchematicLibrary,
+): string {
+  const terminal = library.kinds.some((k) => {
+    const part = library.part(k);
+    return part.terminal && part.prefix === prefix;
+  });
+  if (terminal) return prefix;
   const re = new RegExp(`^${prefix}(\\d+)$`);
   let n = 0;
   for (const c of components) {
@@ -310,14 +338,15 @@ export function nextName(prefix: string, components: readonly SchematicComponent
 
 /** A fresh instance: the next free id, the next free name, the kind's default value. */
 export function newComponent(
-  kind: ComponentKind,
+  kind: string,
   x: number,
   y: number,
   m: Orientation,
-  existing: readonly SchematicComponent[],
-): SchematicComponent {
-  const spec = LIBRARY[kind];
-  const at = clampToBox(kind, m, x, y);
+  existing: readonly CanvasComponent[],
+  library: SchematicLibrary,
+): CanvasComponent {
+  const spec = library.part(kind);
+  const at = clampToBox(kind, m, x, y, library);
   return {
     id: nextId(
       "c",
@@ -327,7 +356,7 @@ export function newComponent(
     x: at.x,
     y: at.y,
     m: [...m] as Orientation,
-    name: nextName(spec.prefix, existing),
+    name: nextName(spec.prefix, existing, library),
     value: spec.defaultValue,
   };
 }
@@ -354,21 +383,21 @@ export const BLEED = GRID;
 /**
  * The whole box plus its one-cell margin. Three things at once: the view on
  * mount, the view the "fit" button returns to, and the FLOOR of zooming out —
- * which is why the indicator calls it 100 %.
+ * which is why the indicator calls it 100 %. One object per box, so a hook
+ * may depend on it.
  */
-export const FIT_VIEW: ViewBox = {
-  x: -BLEED,
-  y: -BLEED,
-  w: BOX.width + 2 * BLEED,
-  h: BOX.height + 2 * BLEED,
-};
-
-/** Width over height of {@link FIT_VIEW}: the shape a canvas area wants to be. */
-export const FIT_ASPECT = FIT_VIEW.w / FIT_VIEW.h;
+const fitViews = new WeakMap<SchematicLibrary["box"], ViewBox>();
+export function fitView(box: SchematicLibrary["box"]): ViewBox {
+  const cached = fitViews.get(box);
+  if (cached !== undefined) return cached;
+  const view = { x: -BLEED, y: -BLEED, w: box.width + 2 * BLEED, h: box.height + 2 * BLEED };
+  fitViews.set(box, view);
+  return view;
+}
 
 /**
  * The height, in CSS pixels, at which a canvas `width` pixels wide shows
- * {@link FIT_VIEW} with no letterbox at all — the frame then sits one grid
+ * the fitted view `fit` with no letterbox at all — the frame then sits one grid
  * cell from every edge of the drawing area, which is rule 1.
  *
  * `maxHeight` caps it: past that the area is wider than the fitted view and
@@ -376,9 +405,9 @@ export const FIT_ASPECT = FIT_VIEW.w / FIT_VIEW.h;
  * is wider than a cell. A width of zero (jsdom, a hidden tab) means "not
  * measured yet" and keeps the cap.
  */
-export function fitCanvasHeight(width: number, maxHeight: number): number {
+export function fitCanvasHeight(width: number, maxHeight: number, fit: ViewBox): number {
   if (!Number.isFinite(width) || width <= 0) return maxHeight;
-  return Math.min(maxHeight, Math.round(width / FIT_ASPECT));
+  return Math.min(maxHeight, Math.round(width / (fit.w / fit.h)));
 }
 
 export const viewBoxAttr = (v: ViewBox): string => `${v.x} ${v.y} ${v.w} ${v.h}`;
@@ -420,35 +449,32 @@ export function screenToWorld(
 /** The tightest the view may get: 400 % of "fit". */
 export const MAX_ZOOM = 4;
 
-/**
- * The smallest and largest the view may get. Zooming OUT stops at the fitted
- * view: below it the frame would only get smaller inside an already-empty
- * canvas, so 100 % is both the floor and what the whole frame looks like.
- */
-const MIN_W = FIT_VIEW.w / MAX_ZOOM;
-const MAX_W = FIT_VIEW.w;
-
 /** What the indicator shows: 100 % is the fitted view, more is zoomed in. */
-export const zoomPercent = (view: ViewBox): number => Math.round((FIT_VIEW.w / view.w) * 100);
+export const zoomPercent = (view: ViewBox, fit: ViewBox): number => Math.round((fit.w / view.w) * 100);
 
 /**
- * The view moved back inside {@link FIT_VIEW}. Panning may not push the frame
- * off the canvas: whatever the pointer asked for, what is on screen stays a
- * part of the box and of its one-cell margin.
+ * The view moved back inside the fitted view `fit`. Panning may not push the
+ * frame off the canvas: whatever the pointer asked for, what is on screen
+ * stays a part of the box and of its one-cell margin.
  */
-export function clampView(view: ViewBox): ViewBox {
-  const slackX = FIT_VIEW.w - view.w;
-  const slackY = FIT_VIEW.h - view.h;
+export function clampView(view: ViewBox, fit: ViewBox): ViewBox {
+  const slackX = fit.w - view.w;
+  const slackY = fit.h - view.h;
   return {
     ...view,
-    x: slackX <= 0 ? FIT_VIEW.x : Math.min(FIT_VIEW.x + slackX, Math.max(FIT_VIEW.x, view.x)),
-    y: slackY <= 0 ? FIT_VIEW.y : Math.min(FIT_VIEW.y + slackY, Math.max(FIT_VIEW.y, view.y)),
+    x: slackX <= 0 ? fit.x : Math.min(fit.x + slackX, Math.max(fit.x, view.x)),
+    y: slackY <= 0 ? fit.y : Math.min(fit.y + slackY, Math.max(fit.y, view.y)),
   };
 }
 
-/** Zoom by `factor` about the world point `(ax, ay)`, which stays put. */
-export function zoomAt(view: ViewBox, factor: number, ax: number, ay: number): ViewBox {
-  const w = Math.min(MAX_W, Math.max(MIN_W, view.w / factor));
+/**
+ * Zoom by `factor` about the world point `(ax, ay)`, which stays put. Zooming
+ * OUT stops at the fitted view: below it the frame would only get smaller
+ * inside an already-empty canvas, so 100 % is both the floor and what the
+ * whole frame looks like; zooming in stops at {@link MAX_ZOOM}.
+ */
+export function zoomAt(view: ViewBox, factor: number, ax: number, ay: number, fit: ViewBox): ViewBox {
+  const w = Math.min(fit.w, Math.max(fit.w / MAX_ZOOM, view.w / factor));
   const k = w / view.w;
-  return clampView({ x: ax - (ax - view.x) * k, y: ay - (ay - view.y) * k, w, h: view.h * k });
+  return clampView({ x: ax - (ax - view.x) * k, y: ay - (ay - view.y) * k, w, h: view.h * k }, fit);
 }
