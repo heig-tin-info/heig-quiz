@@ -48,6 +48,19 @@ describe("ClozeEditor", () => {
     expect(screen.getByText("free")).toBeInTheDocument();
   });
 
+  it("hands the host's image upload to the rich field (#984)", () => {
+    const seen: RichTextProps[] = [];
+    const RichText = (props: RichTextProps) => {
+      seen.push(props);
+      return null;
+    };
+    const upload = async () => "asset:x";
+    render(
+      <ClozeEditor config={SECRET_CONFIG} onChange={() => {}} RichText={RichText} uploadAsset={upload} />,
+    );
+    expect(seen.at(-1)).toMatchObject({ holes: true, uploadImage: upload });
+  });
+
   it("takes the host's French strings", () => {
     render(
       <ClozeEditor config={SECRET_CONFIG} onChange={() => {}} strings={{ text: "Texte à trous" }} />,
