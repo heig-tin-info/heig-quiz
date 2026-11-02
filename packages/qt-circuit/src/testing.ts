@@ -268,8 +268,31 @@ export function logicConfig(overrides: Record<string, unknown> = {}): LogicConfi
 
 export const logicLeakFixture: StudentLeakFixture<LogicConfig> = {
   config: logicConfig(),
-  forbiddenKeys: ["expression", "expressions", "expected", "rows"],
+  forbiddenKeys: ["expression", "expressions", "expected", "rows", "vectors", "mode"],
   secrets: [SECRET_MAJORITY, SECRET_PARITY],
+};
+
+/** A D flip-flop's test vectors: each step a line no student view could hold by chance. */
+export const SECRET_VECTOR_STEPS = ["C 1 1", "C 0 0", "0 1 0"];
+export const SECRET_VECTORS = `clk d q\n0 0 0\n${SECRET_VECTOR_STEPS.join("\n")}\n`;
+
+/** A sequential question: a D flip-flop, specified by test vectors. */
+export function logicSequentialConfig(overrides: Record<string, unknown> = {}): LogicConfig {
+  return logicConfig({
+    prompt: "Build a D flip-flop's behaviour.",
+    mode: "sequential",
+    inputs: ["clk", "d"],
+    outputs: [{ name: "q" }],
+    vectors: SECRET_VECTORS,
+    palette: { kinds: ["DFF"], maxGates: 2 },
+    ...overrides,
+  });
+}
+
+export const logicSequentialLeakFixture: StudentLeakFixture<LogicConfig> = {
+  config: logicSequentialConfig(),
+  forbiddenKeys: logicLeakFixture.forbiddenKeys,
+  secrets: SECRET_VECTOR_STEPS,
 };
 
 /**

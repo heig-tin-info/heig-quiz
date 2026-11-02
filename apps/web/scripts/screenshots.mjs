@@ -1050,6 +1050,9 @@ const scenes = [
   // The logic item (docs/04 §4.18): the circuit to finish, then play mode with b and c on — the output the student's own circuit computes.
   { name: "player-logic", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 11) },
   { name: "player-logic-play", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 11); await p.getByRole("radio", { name: /^(Play|Simuler)$/ }).check({ force: true }); await p.getByRole("button", { name: "b = 0" }).click(); await p.getByRole("button", { name: "c = 0" }).click(); await p.waitForTimeout(300); } },
+  // The sequential logic item (§4.18, phase 2): a D flip-flop dividing by two, then clocked three times in play mode.
+  { name: "player-logic-seq", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 12) },
+  { name: "player-logic-seq-play", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 12); await p.getByRole("radio", { name: /^(Play|Simuler)$/ }).check({ force: true }); for (let i = 0; i < 3; i++) await p.getByRole("button", { name: /^clk = / }).click(); await p.waitForTimeout(300); } },
   { name: "player-blocks-code", role: "student", path: `${TAKE}?scene=running`, settle: 3000, act: async (p) => { await openQuestion(p, 10); await p.getByText(/^Code$/).click(); await p.waitForTimeout(400); } },
   // The focused canvas lends its keys to the side column, under Alt + ← → (issue #549).
   { name: "player-circuit-shortcuts", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openQuestion(p, 5); await focusCanvas(p); } },
@@ -1511,6 +1514,10 @@ const scenes = [
   { name: "editor-logic", role: "teacher", path: "/questions/q-logic", settle: 2000 },
   { name: "editor-logic-ansi", role: "teacher", path: "/questions/q-logic", settle: 2000, act: async (p) => { await p.getByRole("radio", { name: "ANSI" }).check({ force: true }); await p.waitForTimeout(300); } },
   { name: "try-logic-ansi", role: "teacher", path: "/questions/q-logic", settle: 2000, act: async (p) => { await p.getByRole("radio", { name: "ANSI" }).check({ force: true }); await p.getByRole("tab", { name: /^(Try|Essayer)$/ }).click(); await p.waitForTimeout(800); } },
+  // The sequential editor (§4.18, phase 2): the vectors in their monospace field; then ANSI and a D flip-flop placed in the try tab.
+  { name: "editor-logic-seq", role: "teacher", path: "/questions/q-logic-seq", settle: 2000 },
+  { name: "editor-logic-seq-error", role: "teacher", path: "/questions/q-logic-seq", settle: 2000, act: async (p) => { await p.getByRole("textbox", { name: /^(Test vectors|Vecteurs de test)$/ }).fill("clk q\n0 0\nC 2\n"); await p.waitForTimeout(300); } },
+  { name: "try-logic-seq-ansi", role: "teacher", path: "/questions/q-logic-seq", settle: 2000, act: async (p) => { await p.getByRole("radio", { name: "ANSI" }).check({ force: true }); await p.getByRole("tab", { name: /^(Try|Essayer)$/ }).click(); await p.waitForTimeout(800); for (const [name, dx] of [[/^(D flip-flop|Bascule D)$/, 0], [/^(JK flip-flop|Bascule JK)$/, 140]]) { const tile = p.getByRole("button", { name }); if (await tile.count() === 0) continue; await tile.click(); const box = await p.getByRole("application").first().boundingBox().catch(() => null); if (box) await p.mouse.click(box.x + box.width / 2 - 140 + dx, box.y + box.height / 2); await p.waitForTimeout(200); } await p.waitForTimeout(400); } },
   { name: "editor-blocks-checked", role: "teacher", path: "/questions/q-blocks", settle: 4000, act: async (p) => { await p.getByRole("button", { name: /^(Check the reference|Vérifier la référence)$/ }).click(); await p.waitForTimeout(400); } },
   // The diagram (ADR-046): published, so its kind is shown locked; the new draft's grid is `editor-diagram-new`.
   { name: "editor-diagram", role: "teacher", path: "/questions/q19", settle: 3000 },

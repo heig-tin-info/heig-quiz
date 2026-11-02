@@ -5,11 +5,18 @@
  * shapes). The teacher picks one; the student draws with it. Both are module
  * constants, as `SchematicLibrary` asks.
  *
+ * A latch or a flip-flop is a box in both styles, its inputs labelled
+ * inside, an edge-triggered clock marked by the dynamic-input triangle. IEC
+ * 60617 qualifies the inputs (`1D`, `C1`, `S`, `R`) and puts a negation
+ * circle on `Q̄`; ANSI names every pin (`D`, `EN`, `Q`, `Q̄`).
+ *
  * A declared terminal is a rounded rectangle bearing its name, as wide as
  * the name needs: a one-letter name is a circle. Its pin sits at the end of
  * the pill, on the side the wire leaves.
  */
-import { BOX } from "../library.js";
+import { CELL_SPECS } from "@quiz/domain/logic";
+
+import { BOX, GRID } from "../library.js";
 import { LOGIC_KINDS, LOGIC_PARTS, NEGATED, PILL_HEIGHT, type LogicPartSpec } from "../logicLibrary.js";
 
 import type { SchematicLibrary } from "./schematicLibrary.js";
@@ -20,9 +27,9 @@ export type LogicSymbolStyle = "iec" | "ansi";
 const r2 = (v: number): number => Math.round(v * 100) / 100;
 
 /** A circle as a path: the negation bubble. */
-const bubble = (cx: number): SymbolShape => ({
+const bubble = (cx: number, cy = 0): SymbolShape => ({
   paint: "hollow",
-  d: `M${cx - 4} 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0`,
+  d: `M${cx - 4} ${cy}a4 4 0 1 0 8 0a4 4 0 1 0 -8 0`,
 });
 
 /** The output lead from `x` to the pin, through the bubble when the gate negates. */
@@ -124,11 +131,58 @@ function oneSided(kind: string, name: string): SymbolSpec {
   };
 }
 
+/**
+ * A memory input's IEC qualifier where it is not the pin's name. ANSI prints
+ * the pin's name, but for a clock, which the triangle alone marks.
+ */
+const IEC_LABELS: Readonly<Record<string, string>> = { D: "1D", J: "1J", K: "1K", T: "1T", EN: "C1", CLK: "C1" };
+const memoryLabel = (style: LogicSymbolStyle, pin: string): string =>
+  style === "iec" ? (IEC_LABELS[pin] ?? pin) : pin === "CLK" ? "" : pin;
+
+/** The monospace advance of the symbol text, 15 px (`symbolText`). */
+const CHAR = 9;
+const TRIANGLE = 7;
+
+function memorySymbol(spec: LogicPartSpec, style: LogicSymbolStyle): SymbolSpec {
+  const h = spec.half;
+  const pins = spec.pins.filter((pin) => pin.x < 0);
+  const clock = pins.find((pin) => pin.name === "CLK");
+  const left = (pin: { name: string; y: number }): SymbolText => {
+    const text = memoryLabel(style, pin.name);
+    const start = -20 + 4 + (pin.name === "CLK" ? TRIANGLE + 1 : 0);
+    return { x: start + (text.length * CHAR) / 2, y: pin.y, text };
+  };
+  const negated: SymbolShape[] =
+    style === "iec" ? [bubble(24, GRID), { paint: "stroke", d: `M28 ${GRID}H40` }] : [{ paint: "stroke", d: `M20 ${GRID}H40` }];
+  return {
+    shapes: [
+      { paint: "stroke", d: pins.map((pin) => `M${pin.x} ${pin.y}H-20`).join("") },
+      { paint: "hollow", d: `M-20 ${-h}H20V${h}H-20Z` },
+      ...(clock === undefined ? [] : [{ paint: "stroke" as const, d: `M-20 ${clock.y - 5}L${-20 + TRIANGLE} ${clock.y}L-20 ${clock.y + 5}` }]),
+      { paint: "stroke", d: `M20 ${-GRID}H40` },
+      ...negated,
+    ],
+    marks: [],
+    texts: [
+      ...pins.map(left).filter((t) => t.text !== ""),
+      ...(style === "ansi"
+        ? [
+            { x: 20 - 4 - CHAR / 2, y: -GRID, text: "Q" },
+            { x: 20 - 4 - CHAR / 2, y: GRID, text: "Q̄" },
+          ]
+        : []),
+    ],
+    viewBox: viewBox(h),
+  };
+}
+
 function libraryOf(style: LogicSymbolStyle): SchematicLibrary {
   const gates = new Map<string, SymbolSpec>(
     LOGIC_KINDS.filter((kind) => LOGIC_PARTS.part(kind).family !== null).map((kind) => {
       const spec = LOGIC_PARTS.part(kind);
-      return [kind, style === "iec" ? iecGate(spec) : ansiGate(spec)] as const;
+      const memory = spec.cell !== null && CELL_SPECS[spec.cell].kind !== "comb";
+      const symbol = memory ? memorySymbol(spec, style) : style === "iec" ? iecGate(spec) : ansiGate(spec);
+      return [kind, symbol] as const;
     }),
   );
   return {

@@ -7,20 +7,27 @@
  *
  * A gate's family is what the teacher allows (`palette.kinds`); its kinds
  * are that family at a fan-in of 2, 3 or 4 (`AND2`…`AND4`), the range of the
- * domain's variadic cells. `IN` and `OUT` are the declared terminals, LOCKED:
+ * domain's variadic cells. The memory families (an SR latch, a D latch, D,
+ * JK and T flip-flops) are one kind each, with two outputs, `Q` and `QN`. `IN` and `OUT` are the declared terminals, LOCKED:
  * the question places them, the student moves them. `LOW` and `HIGH` are the
  * constants, always offered and never counted, as `maxGates` reads (§4.18).
  *
  * Geometry is on the canvas grid ({@link GRID}): inputs on the left at
  * x = −40, the output on the right at x = 40, a terminal's pin at its origin.
  */
-import { LOGIC_LIMITS, type CellType } from "@quiz/domain/logic";
+import { CELL_SPECS, LOGIC_LIMITS, type CellType } from "@quiz/domain/logic";
 
 import { BOX, GRID, type PinSpec } from "./library.js";
 import { countedParts, type PartSpec, type ValueRole } from "./parts.js";
 
-/** The gates a teacher may allow, in the order the editor and the palette show them. */
-export const GATE_FAMILIES = ["AND", "OR", "NAND", "NOR", "XOR", "XNOR", "NOT", "BUF"] as const;
+/** The gates, in the order the editor and the palette show them. */
+export const GATES = ["AND", "OR", "NAND", "NOR", "XOR", "XNOR", "NOT", "BUF"] as const;
+/** The latches and the flip-flops; their pins are their domain cell's (`CELL_SPECS`). */
+export const MEMORY_FAMILIES = ["SR", "DLATCH", "DFF", "JKFF", "TFF"] as const;
+type MemoryFamily = (typeof MEMORY_FAMILIES)[number];
+
+/** The parts a teacher may allow: the gates, then the memories. */
+export const GATE_FAMILIES = [...GATES, ...MEMORY_FAMILIES] as const;
 export type GateFamily = (typeof GATE_FAMILIES)[number];
 
 /** The families with a fan-in, and the fan-ins the domain's variadic cells take. */
@@ -36,6 +43,11 @@ const CELL: Readonly<Record<GateFamily, CellType>> = {
   XNOR: "$xnor",
   NOT: "$not",
   BUF: "$buf",
+  SR: "$sr",
+  DLATCH: "$dlatch",
+  DFF: "$dff",
+  JKFF: "$jkff",
+  TFF: "$tff",
 };
 
 /** The families whose output is negated: the bubble on the symbol. */
@@ -45,6 +57,7 @@ export const LOGIC_KINDS = [
   ...VARIADIC.flatMap((family) => WIDTHS.map((width) => `${family}${width}` as const)),
   "NOT",
   "BUF",
+  ...MEMORY_FAMILIES,
   "LOW",
   "HIGH",
   "IN",
@@ -58,7 +71,7 @@ export interface LogicPartSpec extends PartSpec {
   readonly family: GateFamily | null;
   /** The domain cell, `null` for a declared terminal (it is a port, not a cell). */
   readonly cell: CellType | null;
-  /** The fan-in: the first `width` pins are the cell's inputs, the last its output. */
+  /** A variadic gate's fan-in (`params.width` of its cell), 1 for any other part with inputs. */
   readonly width: number;
   /** Half the body's height: where a drawing's outline runs. */
   readonly half: number;
@@ -122,10 +135,39 @@ function oneSided(kind: "IN" | "OUT" | "LOW" | "HIGH"): LogicPartSpec {
   };
 }
 
+/**
+ * A latch or a flip-flop: its inputs down the left, the clock in the middle
+ * of three; `Q` at the right of the first, `QN` at the right of the last.
+ */
+function memory(family: MemoryFamily): LogicPartSpec {
+  const names = CELL_SPECS[CELL[family]].inputs;
+  const order = names.length === 3 ? [names[0]!, names[2]!, names[1]!] : names;
+  const ys = INPUT_YS[order.length]!;
+  return {
+    family,
+    cell: CELL[family],
+    width: 1,
+    // Off the grid lines, as a gate's: a wire routed beside the box never runs on its outline.
+    half: 30,
+    prefix: "U",
+    defaultValue: "",
+    value: NONE,
+    pins: [
+      ...order.map((name, i): PinSpec => ({ name, x: -2 * GRID, y: ys[i]!, d: 2 })),
+      { name: "Q", x: 2 * GRID, y: -GRID, d: 0 },
+      { name: "QN", x: 2 * GRID, y: GRID, d: 0 },
+    ],
+    body: [-24, -30, 52, 60],
+    label_at: [0, -35],
+    terminal: false,
+  };
+}
+
 const PARTS: ReadonlyMap<string, LogicPartSpec> = new Map<string, LogicPartSpec>([
   ...VARIADIC.flatMap((family) => WIDTHS.map((width) => [`${family}${width}`, gate(family, width)] as const)),
   ["NOT", gate("NOT", 1)],
   ["BUF", gate("BUF", 1)],
+  ...MEMORY_FAMILIES.map((family) => [family, memory(family)] as const),
   ...(["LOW", "HIGH", "IN", "OUT"] as const).map((kind) => [kind, oneSided(kind)] as const),
 ]);
 

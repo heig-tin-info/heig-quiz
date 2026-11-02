@@ -6,8 +6,11 @@
  * in the browser and with no route (ADR-123 §7): the inputs become toggles,
  * the outputs light up and every wire takes the colour of its level, all
  * from the student's own circuit through the domain's simulator — the one
- * the server grades with. It never shows an expected value nor a comparison:
- * the grade is the server's.
+ * the server grades with. The simulator runs on, as on the bench: a latch or
+ * a flip-flop keeps its state between two toggles, a clock rises when its
+ * input is switched on, and Reset starts again from every input and every
+ * flip-flop at 0. It never shows an expected value nor a comparison: the
+ * grade is the server's.
  *
  * EXPAND as in `circuit` (`ExpandableCanvas` of `@quiz/ui`).
  */
@@ -16,7 +19,7 @@ import { useId, useMemo, useState } from "react";
 import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { PlayerProps } from "@quiz/core/client";
 import { compileNetlist, type Bit, type Value } from "@quiz/domain/logic";
-import { badge, cx, ExpandableCanvas, hint, isLocked, markdown, Segmented } from "@quiz/ui";
+import { badge, Button, cx, ExpandableCanvas, hint, isLocked, markdown, Segmented } from "@quiz/ui";
 
 import { logicLibrary, SchematicEditor, SchematicView, type CanvasStrings } from "./canvas/index.js";
 import { gateCount, LOGIC_GATES_MAX, offeredLogicKinds } from "./logicLibrary.js";
@@ -50,26 +53,40 @@ export interface PlayState {
   wireLevel: (wireId: string) => Value | undefined;
 }
 
-/** The student's circuit under `levels`, simulated from a fresh state; `null` when it cannot be compiled. */
-export function playCircuit(schematic: LogicSchematic, levels: Readonly<Record<string, Bit>>): PlayState | null {
+/** A running simulation of the student's circuit: `apply` drives the inputs (absent ones at 0) and settles. */
+export interface Bench {
+  apply(levels: Readonly<Record<string, Bit>>): PlayState;
+}
+
+/**
+ * A fresh simulator of the student's circuit, every flip-flop at 0; `null`
+ * when it cannot be compiled. Applying the same levels twice changes
+ * nothing, so a render may repeat it.
+ */
+export function openBench(schematic: LogicSchematic): Bench | null {
   try {
     const { netlist, netOfWire } = buildLogicNetlist(schematic);
     const sim = compileNetlist(netlist).createSimulator();
-    const inputs = Object.entries(netlist.ports).filter(([, port]) => port.direction === "input");
-    sim.set(Object.fromEntries(inputs.map(([name]) => [name, levels[name] ?? 0])));
-    sim.settle();
-    const nets = sim.nets();
+    const inputs = Object.keys(netlist.ports).filter((name) => netlist.ports[name]!.direction === "input");
     return {
-      outputs: sim.read(),
-      wireLevel: (id) => {
-        const net = netOfWire.get(id);
-        return net === undefined ? undefined : nets[net];
+      apply(levels) {
+        sim.set(Object.fromEntries(inputs.map((name) => [name, levels[name] ?? 0])));
+        sim.settle();
+        const nets = sim.nets();
+        return {
+          outputs: sim.read(),
+          wireLevel: (id) => {
+            const net = netOfWire.get(id);
+            return net === undefined ? undefined : nets[net];
+          },
+        };
       },
     };
   } catch {
     return null;
   }
 }
+
 
 export function LogicPlayer({
   student,
@@ -89,9 +106,15 @@ export function LogicPlayer({
   const modeName = useId();
   const [mode, setMode] = useState<Mode>("draw");
   const [levels, setLevels] = useState<Record<string, Bit>>({});
+  /** The running simulation, opened on entering play mode and again by Reset: every flip-flop back at 0. */
+  const [bench, setBench] = useState<Bench | null>(null);
 
   const schematic = useMemo(() => answer?.schematic ?? initialLogicAnswer(student).schematic, [answer, student]);
-  const played = useMemo(() => (mode === "play" ? playCircuit(schematic, levels) : null), [mode, schematic, levels]);
+  const play = (next: Mode) => {
+    setMode(next);
+    setBench(next === "play" ? openBench(schematic) : null);
+  };
+  const played = useMemo(() => bench?.apply(levels) ?? null, [bench, levels]);
   const gates = gateCount(schematic);
   const max = student.palette.maxGates ?? LOGIC_GATES_MAX;
   const canvas = canvasStrings === undefined ? {} : { strings: canvasStrings };
@@ -141,7 +164,7 @@ export function LogicPlayer({
                   { value: "draw", label: s.draw },
                   { value: "play", label: s.play },
                 ]}
-                onChange={setMode}
+                onChange={play}
               />
               <span className={badge(gates > max ? "danger" : "neutral")}>{plural(s, "gates", gates, { n: gates, max })}</span>
             </div>
@@ -167,6 +190,15 @@ export function LogicPlayer({
                       </button>
                     );
                   })}
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setLevels({});
+                      setBench(openBench(schematic));
+                    }}
+                  >
+                    {s.reset}
+                  </Button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2" role="status">
                   <span className="text-[13px] text-fg-muted">{s.outputs}</span>

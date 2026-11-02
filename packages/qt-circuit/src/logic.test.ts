@@ -13,7 +13,16 @@ import { gateCount, LOGIC_GATES_MAX, LOGIC_PARTS, offeredLogicKinds } from "./lo
 import { buildLogicNetlist } from "./logicNetlist.js";
 import { LogicAnswer, LogicConfig, type LogicComponent, type LogicSchematic } from "./logicSchema.js";
 import { logicServer } from "./logicServer.js";
-import { logicConfig, logicLeakFixture, logicWire, SECRET_MAJORITY, SECRET_PARITY } from "./testing.js";
+import {
+  logicConfig,
+  logicLeakFixture,
+  logicSequentialConfig,
+  logicSequentialLeakFixture,
+  logicWire,
+  SECRET_MAJORITY,
+  SECRET_PARITY,
+  SECRET_VECTORS,
+} from "./testing.js";
 
 const ctx = { itemPoints: 4, seed: 0, itemId: "item-1" } as Parameters<typeof gradeLogic>[2];
 const view = { seed: 3, itemId: "item-1", shuffle: true };
@@ -249,5 +258,69 @@ describe("what reaches a student (invariant 4)", () => {
   it("has a pin for every name of its cells", () => {
     expect(LOGIC_PARTS.part("NOT").pins.map((p) => p.name)).toEqual(["A", "Y"]);
     expect(LOGIC_PARTS.part("OR4").pins.map((p) => p.name)).toEqual(["A0", "A1", "A2", "A3", "Y"]);
+  });
+});
+
+describe("a sequential question (test vectors)", () => {
+  /** A D flip-flop from the palette, its Q on the output: right on every step of `SECRET_VECTORS`. */
+  function flipFlop(output: 2 | 3 = 2): LogicSchematic {
+    const clk = part("c1", "IN", 100, 300, "clk");
+    const d = part("c2", "IN", 100, 100, "d");
+    const ff = part("c3", "DFF", 300, 200, "U1");
+    const q = part("c4", "OUT", 500, 180, "q");
+    return {
+      components: [clk, d, ff, q],
+      wires: [logicWire("w1", [d, 0], [ff, 0]), logicWire("w2", [clk, 0], [ff, 1]), logicWire("w3", [ff, output], [q, 0])],
+    };
+  }
+
+  it("keeps a combinational question written before it valid, unchanged", () => {
+    const stored = { configVersion: 1, prompt: "p", inputs: ["a", "b"], outputs: [{ name: "y", expression: "a*b" }] };
+    const parsed = LogicConfig.parse(stored);
+    expect(parsed).toMatchObject({ ...stored, mode: "combinational", vectors: "" });
+  });
+
+  it("reads the vectors instead of the expressions, refusing them with their line", () => {
+    expect(logicSequentialConfig().outputs).toEqual([{ name: "q", expression: "" }]);
+    const parsed = LogicConfig.safeParse({ ...logicSequentialConfig(), vectors: "clk d q\n0 0 0\nC 2 1" });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.error.issues[0]).toMatchObject({ message: "logic.vector_value", path: ["vectors"], params: { line: 3 } });
+  });
+
+  it("gives every point to a flip-flop right on every checked step", () => {
+    const result = grade(logicSequentialConfig(), flipFlop());
+    expect(result).toMatchObject({ kind: "graded", points: 4, state: "validated" });
+    if (result.kind !== "graded") return;
+    expect(result.details).toMatchObject({ inputs: ["clk", "d"], right: 4, total: 4, rows: [] });
+  });
+
+  it("counts the steps whose checked outputs are all right, and no step that checks nothing", () => {
+    // Q̄ wired to q: wrong where Q and Q̄ differ, i.e. on every step.
+    const vectors = `${SECRET_VECTORS}C 1 X\n`;
+    const result = grade(logicSequentialConfig({ vectors }), flipFlop(3));
+    expect(result).toMatchObject({ points: 0 });
+    if (result.kind !== "graded") return;
+    expect(result.details).toMatchObject({ right: 0, total: 4, outputs: [{ name: "q", rate: 0 }] });
+    expect(result.details.rows?.[1]).toEqual({ inputs: ["C", 1], actual: [0], expected: [1] });
+  });
+
+  it("serves no vector to a student, and keys the vectors only", () => {
+    const student = logicServer.toStudent(logicSequentialLeakFixture.config, view);
+    expect(findStudentLeaks(student, logicSequentialLeakFixture)).toEqual([]);
+    expect(student).toEqual({
+      prompt: "Build a D flip-flop's behaviour.",
+      symbols: "iec",
+      inputs: ["clk", "d"],
+      outputs: ["q"],
+      palette: { kinds: ["DFF"], maxGates: 2 },
+    });
+    expect(logicServer.toSolution(logicSequentialConfig(), view)).toEqual({ outputs: [], vectors: SECRET_VECTORS });
+  });
+
+  it("gives a flip-flop a Q and a Q̄ beside its inputs", () => {
+    expect(LOGIC_PARTS.part("DFF").pins.map((p) => p.name)).toEqual(["D", "CLK", "Q", "QN"]);
+    expect(LOGIC_PARTS.part("JKFF").pins.map((p) => p.name)).toEqual(["J", "CLK", "K", "Q", "QN"]);
+    expect(buildLogicNetlist(flipFlop()).netlist.cells["c3"]).toMatchObject({ type: "$dff" });
   });
 });

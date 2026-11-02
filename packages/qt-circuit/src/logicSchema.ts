@@ -1,25 +1,38 @@
 /**
  * The `logic` question type: schemas (docs/spec/04 §4.18, ADR-123).
  *
- * The teacher declares the inputs and the outputs, one boolean expression per
- * output (the key), the gates the student may use and how many. The student
+ * The teacher declares the inputs and the outputs, the key, the gates the
+ * student may use and how many. The key is, for a COMBINATIONAL question,
+ * one boolean expression per output; for a SEQUENTIAL one, test vectors
+ * (`@quiz/domain/logic`'s `parseVectors`), steps run in order from the
+ * initial state. The student
  * wires gates between the declared terminals on `circuit`'s canvas; the
  * answer is the schematic, and its netlist is rebuilt server-side at every
  * grade, never stored (`logicNetlist.ts`).
  *
  * Five shapes, one schema each, as `circuit` (`schema.ts`):
- * - {@link LogicConfig}   what the teacher authors (the expressions are the key);
+ * - {@link LogicConfig}   what the teacher authors (the expressions or the vectors are the key);
  * - {@link LogicAnswer}   the student's schematic;
- * - {@link LogicStudent}  what `toStudent` hands a student: never an expression;
- * - {@link LogicSolution} the key: the expressions;
+ * - {@link LogicStudent}  what `toStudent` hands a student: never an expression nor a vector;
+ * - {@link LogicSolution} the key: the expressions, or the vectors;
  * - {@link LogicDetails}  the breakdown stored in `gradings.details`.
  */
 import { z } from "zod";
 
-import { LOGIC_LIMITS, LogicError, parseExpression, toLatex } from "@quiz/domain/logic";
+import {
+  LOGIC_LIMITS,
+  LogicError,
+  parseExpression,
+  parseVectors,
+  toLatex,
+  type LogicErrorCode,
+  type TestVectors,
+  type VectorErrorCode,
+} from "@quiz/domain/logic";
 
 import {
   GATE_FAMILIES,
+  GATES,
   gateCount,
   initialTerminals,
   LOGIC_GATES_MAX,
@@ -76,8 +89,8 @@ export const PortName = z
 export const GateFamilySchema = z.enum(GATE_FAMILIES);
 export type GateFamilySchema = z.infer<typeof GateFamilySchema>;
 
-/** The default palette: every gate of §4.18's list, the buffer left out. */
-export const DEFAULT_FAMILIES: readonly GateFamilySchema[] = GATE_FAMILIES.filter((f) => f !== "BUF");
+/** The default palette: every gate of §4.18's list, the buffer left out, no memory. */
+export const DEFAULT_FAMILIES: readonly GateFamilySchema[] = GATES.filter((f) => f !== "BUF");
 
 export const LogicPalette = z.object({
   kinds: z.array(GateFamilySchema).min(1).max(GATE_FAMILIES.length),
@@ -88,21 +101,29 @@ export type LogicPalette = z.infer<typeof LogicPalette>;
 
 export const LogicOutput = z.object({
   name: PortName,
-  /** The output's boolean expression over the declared inputs: the key. */
-  expression: z.string().min(1).max(LOGIC_LIMITS.expressionLength),
+  /** The output's boolean expression over the declared inputs: the key of a combinational question, unread otherwise. */
+  expression: z.string().max(LOGIC_LIMITS.expressionLength).default(""),
 });
 export type LogicOutput = z.infer<typeof LogicOutput>;
 
 export const LogicSymbols = z.enum(["iec", "ansi"]);
 export type LogicSymbols = z.infer<typeof LogicSymbols>;
 
+/** What the key is: an expression per output, or test vectors. */
+export const LogicMode = z.enum(["combinational", "sequential"]);
+export type LogicMode = z.infer<typeof LogicMode>;
+
 export const LogicConfig = z
   .object({
     configVersion: z.literal(LOGIC_CONFIG_VERSION),
     prompt: z.string().min(1).max(20_000),
     symbols: LogicSymbols.default("iec"),
+    /** Absent from a question written before the sequential phase: combinational. */
+    mode: LogicMode.default("combinational"),
     inputs: z.array(PortName).min(1).max(LOGIC_LIMITS.inputs),
     outputs: z.array(LogicOutput).min(1).max(LOGIC_LIMITS.outputs),
+    /** The test vectors, the key of a sequential question; unread otherwise. */
+    vectors: z.string().max(LOGIC_LIMITS.vectorLength).default(""),
     palette: LogicPalette.default({ kinds: [...DEFAULT_FAMILIES], maxGates: null }),
   })
   .superRefine((c, ctx) => {
@@ -115,6 +136,11 @@ export const LogicConfig = z
     for (const [name, path] of names) {
       if (seen.has(name)) ctx.addIssue({ code: "custom", message: "logic.duplicate_name", path });
       seen.add(name);
+    }
+    if (c.mode === "sequential") {
+      const error = vectorsError(c.vectors, declaredOf(c));
+      if (error !== null) ctx.addIssue({ code: "custom", message: error.code, path: ["vectors"], params: { line: error.position } });
+      return;
     }
     c.outputs.forEach((output, i) => {
       const error = expressionError(output.expression, c.inputs);
@@ -134,19 +160,55 @@ export type LogicConfig = z.infer<typeof LogicConfig>;
  * What is wrong with an expression over the declared inputs, with its
  * position, or `null`: the config's refine, and the editor's live line.
  */
-export function expressionError(
-  source: string,
-  inputs: readonly string[],
-): { code: "logic.expression_invalid" | "logic.unknown_identifier"; position: number | null } | null {
+export const expressionError = (source: string, inputs: readonly string[]) =>
+  logicErrorOf(() => parseExpression(source, inputs));
+
+/** The code and position of the `LogicError` a parse throws, or `null` when it parses. */
+function logicErrorOf(parse: () => unknown): { code: LogicErrorCode; position: number | null } | null {
   try {
-    parseExpression(source, inputs);
+    parse();
     return null;
   } catch (error) {
-    if (error instanceof LogicError && error.code === "logic.unknown_identifier") {
-      return { code: error.code, position: error.position };
-    }
-    return { code: "logic.expression_invalid", position: error instanceof LogicError ? error.position : null };
+    if (error instanceof LogicError) return { code: error.code, position: error.position };
+    throw error;
   }
+}
+
+/** The declared signals by name, as the vectors' header and the student view name them. */
+export const declaredOf = (c: Pick<LogicConfig, "inputs" | "outputs">) => ({
+  inputs: c.inputs,
+  outputs: c.outputs.map((o) => o.name),
+});
+
+/**
+ * What is wrong with test vectors over the declared signals, its `position`
+ * the 1-based line (`null`: the text as a whole), or `null`: the config's
+ * refine, and the editor's live line.
+ */
+export const vectorsError = (source: string, declared: { inputs: readonly string[]; outputs: readonly string[] }) =>
+  logicErrorOf(() => parseVectors(source, declared)) as { code: VectorErrorCode; position: number | null } | null;
+
+/**
+ * The vectors as a Markdown table, the header first, or as typed in a code
+ * block when they no longer parse: the review's and the debrief key's one
+ * rendering.
+ */
+export function vectorsMarkdown(
+  source: string,
+  declared: { inputs: readonly string[]; outputs: readonly string[] },
+): string {
+  let vectors: TestVectors;
+  try {
+    vectors = parseVectors(source, declared);
+  } catch {
+    return `\`\`\`\n${source}\n\`\`\``;
+  }
+  const line = (cells: readonly (string | number)[]) => `| ${cells.join(" | ")} |`;
+  return [
+    line([...vectors.inputs, ...vectors.outputs]),
+    line([...vectors.inputs, ...vectors.outputs].map(() => ":-:")),
+    ...vectors.rows.map((row) => line([...row.inputs, ...row.outputs])),
+  ].join("\n");
 }
 
 /**
@@ -168,8 +230,10 @@ export function emptyLogicConfig(): LogicConfig {
     configVersion: LOGIC_CONFIG_VERSION,
     prompt: "",
     symbols: "iec",
+    mode: "combinational",
     inputs: ["a", "b"],
     outputs: [{ name: "y", expression: "" }],
+    vectors: "",
     palette: { kinds: [...DEFAULT_FAMILIES], maxGates: null },
   };
 }
@@ -209,9 +273,10 @@ export const LogicStudent = z.object({
 });
 export type LogicStudent = z.infer<typeof LogicStudent>;
 
-/** The key: each output's expression. */
+/** The key: each output's expression (combinational), or the test vectors (sequential, `outputs` empty). */
 export const LogicSolution = z.object({
   outputs: z.array(z.object({ name: z.string(), expression: z.string() })),
+  vectors: z.string().optional(),
 });
 export type LogicSolution = z.infer<typeof LogicSolution>;
 
@@ -225,11 +290,14 @@ export const FAILING_ROWS_MAX = 16;
 const Level = z.union([z.literal(0), z.literal(1), z.literal("X"), z.literal("Z")]);
 const Bit = z.union([z.literal(0), z.literal(1)]);
 
-/** One failing row of the truth table: the inputs, the student's outputs, the expected ones. */
+/**
+ * One failing row of the truth table or of the vectors: the inputs (`C` a
+ * clock pulse), the student's outputs, the expected ones (`X` not checked).
+ */
 export const LogicRow = z.object({
-  inputs: z.array(Bit),
+  inputs: z.array(z.union([Bit, z.literal("C")])),
   actual: z.array(Level),
-  expected: z.array(Bit),
+  expected: z.array(z.union([Bit, z.literal("X")])),
 });
 export type LogicRow = z.infer<typeof LogicRow>;
 
@@ -237,7 +305,7 @@ export const LogicDetails = z.object({
   /** The inputs' and the outputs' names, in the order of a row's columns. */
   inputs: z.array(z.string()),
   outputs: z.array(z.object({ name: z.string(), rate: z.number() })),
-  /** Rows whose every output is right, out of `total`. */
+  /** Rows whose every output is right, out of `total` (a step that checks no output is not counted). */
   right: z.number().int(),
   total: z.number().int(),
   /** At most {@link FAILING_ROWS_MAX}; only under a shown key for a student (`studentDetails`). */

@@ -1017,6 +1017,42 @@ export const LOGIC_PARTIAL_ANSWER = {
   ),
 };
 
+/**
+ * The sequential `logic` question (§4.18, phase 2): a divide-by-two, its
+ * test vectors the key — the clock pulsed four times, `q` toggling from 0.
+ */
+export const LOGIC_SEQ_CONFIG: Record<string, unknown> = {
+  configVersion: 1,
+  prompt:
+    "Réalisez un **diviseur de fréquence par deux** : la sortie $q$ change d'état à chaque front montant " +
+    "de l'horloge $clk$. Les bascules partent de 0.",
+  symbols: "iec",
+  mode: "sequential",
+  inputs: ["clk"],
+  outputs: [{ name: "q" }],
+  vectors: "clk q\n0   0\nC   1\nC   0\nC   1\nC   0\n",
+  palette: { kinds: ["NOT", "DFF", "JKFF", "TFF"], maxGates: 2 },
+};
+
+/** A D flip-flop whose Q̄ feeds its D: right on every step. */
+export const LOGIC_SEQ_ANSWER = {
+  schematic: withRoutes(
+    {
+      components: [
+        logicPart("c1", "IN", 100, 300, "clk"),
+        logicPart("c2", "OUT", 600, 240, "q"),
+        logicPart("c3", "DFF", 360, 260, "U1"),
+      ],
+      wires: logicWires([
+        ["c1", 0, "c3", 1],
+        ["c3", 3, "c3", 0],
+        ["c3", 2, "c2", 0],
+      ]),
+    },
+    LOGIC_IEC_LIBRARY,
+  ),
+};
+
 export const BLOCKS_CONFIG: Record<string, unknown> = {
   configVersion: 1,
   prompt:
@@ -1492,6 +1528,20 @@ export const questions: MockQuestion[] = [
     concepts: [],
     config: LOGIC_CONFIG,
     explanation: "La sortie vaut 1 dès que deux entrées valent 1 : $m = ab + ac + bc$, trois ET et un OU.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 1 }],
+  }),
+  /* The sequential `logic` question (§4.18, phase 2): in no evaluation, the editor's and the attempt's last item. */
+  makeQuestion({
+    id: "q-logic-seq",
+    poolId: "p1",
+    type: "logic",
+    internalName: "diviseur-par-deux",
+    categoryId: "k1",
+    difficulty: 2,
+    randomizable: false,
+    concepts: [],
+    config: LOGIC_SEQ_CONFIG,
+    explanation: "Une bascule D dont $\\bar{Q}$ revient sur $D$ change d'état à chaque front.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 1 }],
   }),
   /*

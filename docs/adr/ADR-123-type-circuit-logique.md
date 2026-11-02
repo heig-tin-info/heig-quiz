@@ -4,6 +4,8 @@
 
 Accepted (2026-11-02, product owner Yves Chevallier, on issue #459; the
 decisions of its two last comments).
+Amended 2026-11-02: the sequential phase (memory cells, test vectors),
+[below](#amendment-of-2026-11-02-the-sequential-phase).
 
 Scope: the `logic` question type (a second type of `packages/qt-circuit`),
 its simulator and expression parser `@quiz/domain/logic`, and the
@@ -83,7 +85,7 @@ publication, import and the MCP server refuse a bad expression as the editor
 does (`logic.expression_invalid`, `logic.unknown_identifier`, with the
 position); drafts follow the usual rule. No ADR-056 variables and no
 don't-care rows in v1. The sequential phase uses Digital-style test vectors
-(hneemann).
+(hneemann): see the amendment of 2026-11-02 below.
 
 ### 5. Inputs, outputs, symbols
 
@@ -116,6 +118,38 @@ The leak tests are in §4.18.
 ### 8. Drill and polls
 
 `logic` is not added to `DRILL_TYPES` nor made pollable in v1; to be decided.
+
+## Amendment of 2026-11-02: the sequential phase
+
+Decided by the product owner on issue #459 (PR4); the rules are in
+[§4.18](../spec/04-types-de-questions.md#418-logic-circuit-logic).
+
+- **One type, two modes.** `mode` (`combinational`, the default, or
+  `sequential`) and `vectors` join the config with defaults, so every stored
+  question stays valid unchanged and no data migrates; an output's
+  `expression` is read only in combinational mode. The student view does not
+  carry the mode: the player and the review behave the same in both.
+- **Memory cells in the engine**, ported from the earlier draft of
+  `@quiz/domain/logic`: SR and D latches, D, JK and T flip-flops (rising
+  edge, the clock their last input), outputs `Q` and `QN`, **state 0 at the
+  start** (not `X`, so a counter is testable from its first step). A
+  latch's state follows its inputs at every evaluation; a flip-flop's
+  changes only on a clean 0 → 1 of its clock. An oscillation that reaches a
+  memory cell sets its state to `X`, as it does the nets. The event budget's
+  semantics are unchanged.
+- **Test vectors à la Digital**, the minimal grammar: a header naming every
+  declared input and output once, one step per line, `C` a clock pulse on an
+  input, `X` a don't care on an output; no loops nor bit groups. A step with
+  `C` settles three times (levels with clocks low, every clock high, every
+  clock low), so `LOGIC_LIMITS.vectorRows = 256` keeps a grade under the
+  combinational bound. All steps run on one simulator, in order.
+- **Score**: the share of steps that check an output whose checked outputs
+  are all right; `X` or `Z` read is wrong, as in combinational mode. A
+  step that checks nothing is stimulus, not a row: it would otherwise be a
+  free point. Failing rows follow §7: shown only under a shown key.
+- **Play mode** keeps one simulator running between toggles (a clock input
+  switched on is a rising edge) and gains a Reset; a combinational circuit
+  reads the same either way.
 
 ## Consequences
 

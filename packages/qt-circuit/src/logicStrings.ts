@@ -25,6 +25,11 @@ export const LOGIC_KIND_STRINGS = {
   XNOR: "XNOR",
   NOT: "NOT",
   BUF: "Buffer",
+  SR: "SR latch",
+  DLATCH: "D latch",
+  DFF: "D flip-flop",
+  JKFF: "JK flip-flop",
+  TFF: "T flip-flop",
   /** A variadic gate on the canvas: its family and its fan-in. */
   gate: "{gate}, {n} inputs",
   LOW: "Constant 0",
@@ -50,6 +55,10 @@ export const LOGIC_EDITOR_STRINGS = {
   questionSection: "Question",
   prompt: "Statement",
 
+  mode: "Specification",
+  modeCombinational: "Combinational",
+  modeSequential: "Sequential",
+
   symbols: "Symbols",
   symbolsIec: "IEC 60617",
   symbolsAnsi: "ANSI",
@@ -70,14 +79,24 @@ export const LOGIC_EDITOR_STRINGS = {
   expressionUnreadable: "Unreadable expression.",
   unknownIdentifier: "Unknown input at character {n}.",
 
+  vectors: "Test vectors",
+  vectorsHint: "Line 1: every input and output. Then one step per line: 0, 1, C (clock pulse) or X (don't care).",
+  vectorEmpty: "Write the header, then at least one step that checks an output.",
+  vectorTooLong: "Line {line}: at most {rows} steps.",
+  vectorTooManyChars: "Too long: at most {chars} characters.",
+  vectorHeader: "Line {line}: name every input and output once.",
+  vectorColumns: "Line {line}: one value per column.",
+  vectorValue: "Line {line}: inputs take 0, 1 or C, outputs 0, 1 or X.",
+
   palette: "Gates",
-  paletteHint: "The gates students may place. Constants 0 and 1 are always offered.",
+  paletteHint: "The gates and flip-flops students may place. Constants 0 and 1 are always offered.",
   paletteEmpty: "Allow at least one gate.",
   maxGates: "Gate limit",
   maxGatesHint: "Empty: up to {max} gates.",
 
   scoring: "Scoring",
   scoringHint: "Every input combination is simulated. The points follow the share of rows with every output right.",
+  scoringHintSequential: "The steps run in order. Points follow the share of steps with every checked output right.",
 };
 
 export type LogicEditorStrings = typeof LOGIC_EDITOR_STRINGS;
@@ -102,6 +121,8 @@ export const LOGIC_PLAYER_STRINGS = {
   outputs: "Outputs",
   /** One input's toggle: its name and its level. */
   toggle: "{name} = {value}",
+  /** Back to the initial state: inputs and flip-flops at 0. */
+  reset: "Reset",
 };
 
 export type LogicPlayerStrings = typeof LOGIC_PLAYER_STRINGS;
@@ -119,6 +140,7 @@ export const LOGIC_REVIEW_STRINGS = {
   rate: "Right",
   percent: "{percent} %",
   expressions: "Expected expressions",
+  vectors: "Test vectors",
   failing: "Failing rows",
   failingFirst: "The first {n} failing rows.",
   expectedOf: "{name} expected",
@@ -132,6 +154,8 @@ export type LogicReviewStrings = typeof LOGIC_REVIEW_STRINGS;
 export const LOGIC_KEY_STRINGS = {
   expressions: "Expected expressions",
   hidden: "Expected expressions, hidden until the answers are revealed",
+  vectors: "Test vectors",
+  vectorsHidden: "Test vectors, hidden until the answers are revealed",
 };
 
 export type LogicKeyStrings = typeof LOGIC_KEY_STRINGS;

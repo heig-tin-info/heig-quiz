@@ -2,7 +2,8 @@
  * The feedback view of a `logic` answer (docs/spec/04 §4.18).
  *
  * Everyone reads the circuit, the score, the right rows and each output's
- * rate. The expected expressions and the failing rows are the key: the
+ * rate. The expected expressions (or the test vectors, as a table) and the
+ * failing rows are the key: the
  * teacher reads them, and a student only under a shown key, when the server
  * sent the solution and left the rows in the details (`studentDetails`).
  * This component renders what it was given and never rebuilds a key.
@@ -24,7 +25,7 @@ import {
 } from "@quiz/ui";
 
 import { logicLibrary, SchematicView, type CanvasStrings } from "./canvas/index.js";
-import { expressionLatex, type LogicAnswer, type LogicDetails, type LogicSolution, type LogicStudent } from "./logicSchema.js";
+import { expressionLatex, vectorsMarkdown, type LogicAnswer, type LogicDetails, type LogicSolution, type LogicStudent } from "./logicSchema.js";
 import { LOGIC_REVIEW_STRINGS, type LogicReviewStrings } from "./logicStrings.js";
 
 interface LogicReviewProps extends ReviewProps<LogicStudent, LogicAnswer, LogicSolution, LogicDetails> {
@@ -57,6 +58,7 @@ export function LogicReview({
   const breakdown = breakdownOf(details, "outputs");
   const showKey = audience === "teacher" ? showsSection(sections, "solution") : solution !== null;
   const expressions = showKey ? (solution?.outputs ?? []) : [];
+  const vectors = showKey && solution?.vectors !== undefined ? vectorsMarkdown(solution.vectors, student) : null;
   const rows = showKey ? (breakdown?.rows ?? []) : [];
   const reason =
     breakdown?.reason === "ports_mismatch"
@@ -124,6 +126,13 @@ export function LogicReview({
         </section>
       )}
 
+      {vectors === null ? null : (
+        <section className="flex flex-col gap-1">
+          <h3 className={sectionTitle}>{s.vectors}</h3>
+          <div className="overflow-x-auto font-mono text-sm text-fg">{markdown(renderMarkdown, vectors)}</div>
+        </section>
+      )}
+
       {rows.length === 0 || breakdown === null ? null : (
         <section className="flex flex-col gap-2">
           <h3 className={sectionTitle}>{s.failing}</h3>
@@ -152,7 +161,10 @@ export function LogicReview({
                       </td>
                     ))}
                     {row.actual.map((value, k) => (
-                      <td key={`a${k}`} className={cx(table.td, value !== row.expected[k] && "font-semibold text-danger")}>
+                      <td
+                        key={`a${k}`}
+                        className={cx(table.td, row.expected[k] !== "X" && value !== row.expected[k] && "font-semibold text-danger")}
+                      >
                         {value}
                       </td>
                     ))}

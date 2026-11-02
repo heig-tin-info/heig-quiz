@@ -7,7 +7,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { LogicPlayer, playCircuit } from "./LogicPlayer.js";
+import { LogicPlayer, openBench } from "./LogicPlayer.js";
 import type { LogicAnswer, LogicComponent, LogicStudent } from "./logicSchema.js";
 import { logicWire } from "./testing.js";
 
@@ -71,8 +71,35 @@ describe("LogicPlayer", () => {
 
   it("colours a wire by its level, and reads an undriven output as Z", () => {
     const answer = andAnswer();
-    expect(playCircuit(answer.schematic, { a: 1, b: 1 })?.wireLevel("w3")).toBe(1);
+    expect(openBench(answer.schematic)?.apply({ a: 1, b: 1 })?.wireLevel("w3")).toBe(1);
     const open = { ...answer.schematic, wires: answer.schematic.wires.filter((w) => w.id !== "w3") };
-    expect(playCircuit(open, { a: 1, b: 1 })?.outputs["y"]).toBe("Z");
+    expect(openBench(open)?.apply({ a: 1, b: 1 })?.outputs["y"]).toBe("Z");
+  });
+
+  it("keeps a flip-flop's state between toggles: the clock rises when switched on, Reset starts again", () => {
+    const clk = part("c1", "IN", 100, 300, "clk");
+    const d = part("c2", "IN", 100, 100, "d");
+    const ff = part("c3", "DFF", 300, 200, "U1");
+    const q = part("c4", "OUT", 500, 180, "q");
+    const answer: LogicAnswer = {
+      schematic: {
+        components: [clk, d, ff, q],
+        wires: [logicWire("w1", [d, 0], [ff, 0]), logicWire("w2", [clk, 0], [ff, 1]), logicWire("w3", [ff, 2], [q, 0])],
+      },
+    };
+    const sequential = { ...student, inputs: ["clk", "d"], outputs: ["q"], palette: { kinds: ["DFF" as const], maxGates: 2 } };
+    render(<LogicPlayer student={sequential} answer={answer} onChange={() => {}} readOnly={false} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Play" }));
+    const status = () => screen.getByRole("status").textContent;
+    fireEvent.click(screen.getByRole("button", { name: "d = 0" }));
+    expect(status()).toContain("q = 0");
+    fireEvent.click(screen.getByRole("button", { name: "clk = 0" }));
+    expect(status()).toContain("q = 1");
+    fireEvent.click(screen.getByRole("button", { name: "d = 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "clk = 1" }));
+    expect(status()).toContain("q = 1");
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(screen.getByRole("button", { name: "d = 0" })).toBeTruthy();
+    expect(status()).toContain("q = 0");
   });
 });
