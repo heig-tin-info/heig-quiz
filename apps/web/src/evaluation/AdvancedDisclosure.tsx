@@ -5,8 +5,6 @@ import {
   calculatorAllowedFor,
   calculatorOn,
   clockChoiceOf,
-  feedbackWhenFor,
-  isInClass,
   liveLobbies,
   negativeMarkingAllowedFor,
   negativeMarkingOn,
@@ -15,8 +13,6 @@ import {
   notepadOn,
   partialRetakesOn,
   trustedClientsAllowedFor,
-  type FeedbackWhen,
-  type LobbyName,
 } from "@quiz/domain";
 
 import type { ReactNode } from "react";
@@ -30,21 +26,6 @@ import type { ConfigPatch, ConfigView } from "./editTarget";
 
 /** The choice of the multiple-answer select that stands for negative marking. */
 const NEGATIVE = "negative";
-
-/**
- * `body`, a patch that sets the waiting room, with the feedback brought back
- * in the SAME patch when that room forbids the policy in force: a waiting
- * room makes the evaluation sat in class, where `immediate` is not allowed
- * (#78), and the server refuses the pair rather than fixing it. The one
- * writer of a lobby change, here and in the clock mode (`ConfigSettings`).
- */
-export function withFeedbackFallback<B extends { settings: { lobby: LobbyName } }>(
-  config: Pick<ConfigView, "mode" | "feedbackPolicy">,
-  body: B,
-): B & { feedbackPolicy?: { when: FeedbackWhen } } {
-  const when = feedbackWhenFor({ mode: config.mode, lobby: body.settings.lobby }, config.feedbackPolicy.when);
-  return when === config.feedbackPolicy.when ? body : { ...body, feedbackPolicy: { when } };
-}
 
 /**
  * Everything docs/spec/08 §8.2 puts under "Options avancées": the
@@ -96,7 +77,6 @@ export function AdvancedDisclosure({
 
   const set = (next: Partial<EvaluationSettings>) => patch.mutate({ settings: next });
   const feedback = (next: Partial<FeedbackPolicy>) => patch.mutate({ feedbackPolicy: next });
-  const inClass = isInClass({ mode, lobby: settings.lobby });
   const clock = clockChoiceOf(settings);
   const calculator = calculatorOn(mode, settings.calculator);
   const notepad = notepadOn(mode, settings.notepad);
@@ -151,7 +131,7 @@ export function AdvancedDisclosure({
               value={settings.lobby}
               disabled={disabled}
               onChange={(lobby) => {
-                patch.mutate(withFeedbackFallback(config, { settings: { lobby } }));
+                patch.mutate({ settings: { lobby } });
               }}
               options={liveLobbies(clock.limited).map((value) => ({
                 value,
@@ -243,48 +223,54 @@ export function AdvancedDisclosure({
       ) : null}
 
       <Section title={t("eval.adv.feedback")} className="py-3" divided>
-        {/* F-EVAL-11 and #78: `immediate` is hidden, not disabled, for an
-            evaluation sat in class (an exam, or an exercise with a waiting
-            room). The row then says why, so the missing choice is not a
-            mystery. */}
-        <SettingRow
-          title={t("eval.feedback")}
-          desc={
-            <>
-              {t(`eval.feedback.desc.${feedbackPolicy.when}` as keyof Dict)}
-              {inClass ? (
-                <span className="mt-0.5 block text-fg-faint">{t("eval.feedback.inClassHint")}</span>
-              ) : null}
-            </>
-          }
-        >
-          <Segmented
-            name="feedback"
-            value={feedbackPolicy.when}
-            disabled={feedbackDisabled}
-            onChange={(when) => feedback({ when })}
-            options={allowedFeedbackWhen({ mode, lobby: settings.lobby }).map((when) => ({
-              value: when,
-              label: t(`eval.feedback.${when}` as keyof Dict),
-            }))}
-          />
-        </SettingRow>
-        <SettingRow title={t("eval.feedback.showKey")} desc={t("eval.feedback.showKey.desc")}>
-          <Switch
-            checked={feedbackPolicy.showKey}
-            disabled={feedbackDisabled}
-            label={t("eval.feedback.showKey")}
-            onChange={(showKey) => feedback({ showKey })}
-          />
-        </SettingRow>
-        <SettingRow title={t("eval.feedback.showExplanation")} desc={t("eval.feedback.showExplanation.desc")}>
-          <Switch
-            checked={feedbackPolicy.showExplanation}
-            disabled={feedbackDisabled}
-            label={t("eval.feedback.showExplanation")}
-            onChange={(showExplanation) => feedback({ showExplanation })}
-          />
-        </SettingRow>
+        {/* ADR-124: an exercise has no feedback choice — each student sees
+            the whole correction once handed in; the row says so, without a
+            control. F-EVAL-11: `immediate` is hidden, not disabled, for an
+            exam, and the row says why. */}
+        {mode === "exercise" ? (
+          <SettingRow title={t("eval.feedback")} desc={t("eval.feedback.exercise")} />
+        ) : (
+          <>
+            <SettingRow
+              title={t("eval.feedback")}
+              desc={
+                <>
+                  {t(`eval.feedback.desc.${feedbackPolicy.when}` as keyof Dict)}
+                  {mode === "exam" ? (
+                    <span className="mt-0.5 block text-fg-faint">{t("eval.feedback.inClassHint")}</span>
+                  ) : null}
+                </>
+              }
+            >
+              <Segmented
+                name="feedback"
+                value={feedbackPolicy.when}
+                disabled={feedbackDisabled}
+                onChange={(when) => feedback({ when })}
+                options={allowedFeedbackWhen({ mode, lobby: settings.lobby }).map((when) => ({
+                  value: when,
+                  label: t(`eval.feedback.${when}` as keyof Dict),
+                }))}
+              />
+            </SettingRow>
+            <SettingRow title={t("eval.feedback.showKey")} desc={t("eval.feedback.showKey.desc")}>
+              <Switch
+                checked={feedbackPolicy.showKey}
+                disabled={feedbackDisabled}
+                label={t("eval.feedback.showKey")}
+                onChange={(showKey) => feedback({ showKey })}
+              />
+            </SettingRow>
+            <SettingRow title={t("eval.feedback.showExplanation")} desc={t("eval.feedback.showExplanation.desc")}>
+              <Switch
+                checked={feedbackPolicy.showExplanation}
+                disabled={feedbackDisabled}
+                label={t("eval.feedback.showExplanation")}
+                onChange={(showExplanation) => feedback({ showExplanation })}
+              />
+            </SettingRow>
+          </>
+        )}
 
         {/* docs/04 §4.4: what every mcq item of this evaluation that says
             "inherited" is scored with. A question that names its own policy

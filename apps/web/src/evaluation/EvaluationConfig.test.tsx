@@ -184,15 +184,12 @@ describe("EvaluationConfig", () => {
       );
     });
 
-    it("brings the feedback back to 'on release' in the same patch that adds a waiting room (#78)", async () => {
+    it("leaves an exercise's stored feedback alone when a waiting room comes (ADR-124)", async () => {
       const user = userEvent.setup();
       const body = await firstPatch(withClock({ timing: "deadline", lobby: "skip" }, { when: "immediate" }), async () => {
         await user.click(await screen.findByRole("button", { name: /^live/i }));
       });
-      expect(body).toEqual({
-        settings: { timing: "manual", lobby: "manual" },
-        feedbackPolicy: { when: "on_release" },
-      });
+      expect(body).toEqual({ settings: { timing: "manual", lobby: "manual" } });
     });
 
     it("writes the Scheduled window as one patch, from one calendar", async () => {
@@ -383,15 +380,15 @@ describe("EvaluationConfig", () => {
     await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
     expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: /^right away$/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/not available in class/i)).toBeInTheDocument();
+    expect(screen.getByText(/not available for an exam/i)).toBeInTheDocument();
   });
 
   /*
-   * #78: "in class" is not only the exam mode. An exercise given a waiting
-   * room starts everybody together, and immediate feedback would reach the
-   * first students while the others are still working.
+   * ADR-124: an exercise has no feedback choice — each student sees the
+   * whole correction at the hand-in. The row says so, with no control, and a
+   * waiting room no longer touches the stored policy.
    */
-  describe("immediate feedback in class (#78)", () => {
+  describe("an exercise's feedback (ADR-124)", () => {
     const exercise = (lobby: "skip" | "manual", when: "on_release" | "immediate") =>
       makeEvaluationDetail({
         evaluation: {
@@ -403,51 +400,23 @@ describe("EvaluationConfig", () => {
         },
       });
 
-    it("offers it to a take-home exercise", async () => {
-      const user = userEvent.setup();
-      mockFetch(routes(exercise("skip", "immediate")));
-      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
-        route: "/evaluations/x?step=timing",
-      });
-      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
-      expect(await screen.findByRole("radio", { name: /^right away$/i })).toBeChecked();
-      expect(screen.queryByText(/not available in class/i)).toBeNull();
-    });
-
-    it("hides it, and says why, for an exercise with a waiting room", async () => {
+    it("offers no feedback choice, and says the correction comes at each hand-in", async () => {
       const user = userEvent.setup();
       mockFetch(routes(exercise("manual", "on_release")));
       renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
         route: "/evaluations/x?step=timing",
       });
       await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
-      expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeChecked();
+      expect(await screen.findByText("At each hand-in, with the answer key and the explanation.")).toBeInTheDocument();
+      expect(screen.queryByRole("radio", { name: /^on release$/i })).toBeNull();
       expect(screen.queryByRole("radio", { name: /^right away$/i })).toBeNull();
-      expect(screen.getByText(/not available in class/i)).toBeInTheDocument();
+      expect(screen.queryByRole("switch", { name: /^show the expected answer$/i })).toBeNull();
+      expect(screen.queryByRole("switch", { name: /^show the explanation$/i })).toBeNull();
     });
 
-    it("brings the policy back to 'on release' in the same patch that adds a waiting room", async () => {
+    it("leaves the stored policy alone when a waiting room comes, immediate included", async () => {
       const user = userEvent.setup();
       const detail = exercise("skip", "immediate");
-      const { calls } = mockFetch(
-        routes(detail, { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) }),
-      );
-      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
-        route: "/evaluations/x?step=timing",
-      });
-      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
-      await user.click(await screen.findByRole("radio", { name: /^manual$/i }));
-      await waitFor(() =>
-        expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
-          settings: { lobby: "manual" },
-          feedbackPolicy: { when: "on_release" },
-        }),
-      );
-    });
-
-    it("leaves the policy alone when the waiting room changes nothing about it", async () => {
-      const user = userEvent.setup();
-      const detail = exercise("skip", "on_release");
       const { calls } = mockFetch(
         routes(detail, { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) }),
       );

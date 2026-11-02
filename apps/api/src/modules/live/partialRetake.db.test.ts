@@ -319,7 +319,7 @@ describe("the settings (ADR-091)", () => {
 });
 
 describe("the results page under the scope to_review (ADR-091)", () => {
-  it("states each question's standing in the student's order, and nothing else, under the policy none", async () => {
+  it("states each question's standing in the student's order beside the correction, `none` stored or not", async () => {
     const { app, student, evaluation, items } = await exercise();
     const [q0, q1, q2] = items.map((i) => i.item.id) as [string, string, string];
     await db
@@ -333,9 +333,9 @@ describe("the results page under the scope to_review (ADR-091)", () => {
       .set({ state: "proposed" })
       .where(and(eq(gradings.attemptId, first.id), eq(gradings.itemId, q2)));
 
+    // ADR-124: the correction at the hand-in, the standings and the retake beside it.
     const feedback = await results.studentFeedback(db, running, first, app.clock.now());
-    expect(feedback.available).toBe(false);
-    if (feedback.available) return;
+    if (!feedback.available) throw new Error(`unavailable: ${feedback.reason}`);
     expect(feedback.retake).toMatchObject({ scope: "to_review", refusal: null });
     const order = orderItems(items, settingsOf(running), first.seed, evaluation.id).map((o) => o.item.id);
     expect(feedback.review!.map((r) => r.itemId)).toEqual(order);
@@ -344,29 +344,26 @@ describe("the results page under the scope to_review (ADR-091)", () => {
     expect(standing.get(q0)).toBe("acquired");
     expect(standing.get(q1)).toBe("to_review");
     expect(standing.get(q2)).toBe("pending");
-    // An id, a rank and a word per question: no points, no answer, no key.
+    // An id, a rank and a word per question.
     for (const row of feedback.review!) expect(Object.keys(row).sort()).toEqual(["itemId", "rank", "standing"]);
-    const text = JSON.stringify(feedback);
-    expect(text).not.toContain("answer-q");
-    expect(text).not.toContain("nope");
-    expect(text).not.toContain("Statement of");
 
     // Once a later attempt exists, an earlier one's page lists nothing:
     // the next partial retake would follow the latest.
     const second = await retake(app, running, student, "to_review");
     await sit(app, running, items, student, [null, true, null], second);
     const older = await results.studentFeedback(db, running, first, app.clock.now());
-    expect(older.available === false && older.review).toBeUndefined();
+    expect(older.available && older.review).toBeUndefined();
     const latest = await results.studentFeedback(db, running, (await live.attemptOf(db, evaluation.id, student))!, app.clock.now());
-    expect(latest.available === false && latest.review?.filter((r) => r.standing !== "acquired")).toHaveLength(1);
+    expect(latest.available && latest.review?.filter((r) => r.standing !== "acquired")).toHaveLength(1);
   });
+
 
   it("keeps the standings beside a published correction (ADR-050)", async () => {
     const { app, student, evaluation, items } = await exercise();
     const first = await sit(app, evaluation, items, student, [true, false, true]);
     await results.publishCorrection(db, await reload(db, evaluation.id), app.clock.now());
     const feedback = await results.studentFeedback(db, await reload(db, evaluation.id), first, app.clock.now());
-    expect(feedback.available).toBe(true);
+    if (!feedback.available) throw new Error(`unavailable: ${feedback.reason}`);
     expect(feedback.retake).toMatchObject({ scope: "to_review", refusal: null });
     expect(feedback.review?.map((r) => r.standing).sort()).toEqual(["acquired", "acquired", "to_review"]);
   });

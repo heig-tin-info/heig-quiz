@@ -132,6 +132,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-091 — Partial retake of an exercise](ADR-091-reprise-partielle-d-un-exercice.md)
 - [ADR-092 — Changing the mode of an evaluation: only the mode moves, until students are let in](ADR-092-changer-le-mode-d-une-evaluation.md)
 - [ADR-122 — Practice after the due date: an exercise stays open, its practice attempts count nowhere](ADR-122-entrainement-apres-l-echeance.md)
+- [ADR-124 — An exercise always shows its correction; a per-question check](ADR-124-un-exercice-montre-toujours-sa-correction.md)
 
 ### Question analytics
 

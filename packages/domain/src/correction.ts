@@ -1,8 +1,8 @@
 /**
  * The correction of an evaluation: when the class debrief may be read, when
- * an exercise's correction may be published before its close (ADR-050), and
- * what a student may read of their own finished attempt (the feedback gate
- * of F-RES-04, ADR-025 §4).
+ * an exercise's correction may be published before its close (ADR-050), the
+ * policy a student reads under (ADR-124) and what a student may read of
+ * their own finished attempt (the feedback gate of F-RES-04).
  *
  * Read by the server — the `not_over` refusal, `POST
  * /evaluations/:id/publish-correction`, the student's feedback page and the
@@ -36,6 +36,8 @@ export function isDebriefOpen(evaluation: {
  *   the ordinary debrief and release take over.
  *
  * An exercise already published is not refused: the route is idempotent.
+ * Since ADR-124 the publication opens the class debrief only: a student of
+ * an exercise reads their own correction at the hand-in anyway.
  */
 export type CorrectionPublishRefusal = "exam" | "poll" | "not_open";
 
@@ -50,38 +52,47 @@ export function correctionPublishRefusal(evaluation: {
 }
 
 /**
+ * THE feedback policy a student reads under (ADR-124 §1). An exercise always
+ * shows its correction once handed in — the verdict, the points, the
+ * student's answer, the key and the explanation — whatever its stored policy
+ * says: an exercise is never graded, and practice without its correction
+ * teaches nothing. The stored policy is kept, never rewritten, so a draft
+ * switched back to an exam finds the teacher's choice again; the teacher's
+ * comment and the names of hidden test cases keep their stored value. An
+ * exam and a poll read their stored policy unchanged. Every reader of the
+ * policy on a student's behalf goes through this function.
+ */
+export function effectiveFeedbackPolicy<
+  P extends { when: FeedbackWhen; showAnswer: boolean; showKey: boolean; showExplanation: boolean },
+>(mode: EvaluationModeName, stored: P): P {
+  if (mode !== "exercise") return stored;
+  return { ...stored, when: "immediate", showAnswer: true, showKey: true, showExplanation: true };
+}
+
+/**
  * Why a student may not read their attempt's feedback now:
  *
- * - `retakes_open`: an exercise with retakes is open and its correction is
- *   not published — the SCORE only (ADR-025 §4); it also stands under
- *   `none`, where enabling retakes is the teacher's consent to the score;
  * - `no_feedback`: the policy is `none`;
  * - `attempt_open`: the attempt is not handed in yet;
- * - `results_pending`: `on_release`, and neither released nor published;
+ * - `results_pending`: `on_release`, and not released yet;
  * - `exam_open`: an exam not closed yet — whatever its policy, a student
  *   reads nothing of an exam before its close, since the others are still
  *   sitting it (an `immediate` exam is refused by the contracts, docs/06 #5,
  *   but a legacy row may still carry one).
+ *
+ * An exercise meets `attempt_open` only: its effective policy is `immediate`
+ * ({@link effectiveFeedbackPolicy}).
  */
-export const FEEDBACK_REFUSALS = [
-  "results_pending",
-  "no_feedback",
-  "attempt_open",
-  "retakes_open",
-  "exam_open",
-] as const;
+export const FEEDBACK_REFUSALS = ["results_pending", "no_feedback", "attempt_open", "exam_open"] as const;
 export type FeedbackRefusal = (typeof FEEDBACK_REFUSALS)[number];
 
 export type FeedbackGate = { ok: true } | { ok: false; reason: FeedbackRefusal };
 
 /**
- * THE rule of what a student reads of one attempt (F-RES-04). A published
- * correction (ADR-050) counts as the release for the policy — `on_release`
- * and `immediate` show it — and lifts the score-only masking of an open
- * exercise with retakes; `none` stays nothing (the score included, once the
- * retakes are no longer the reason to show it). The policy's other options
- * (key, explanation, …) are applied by the caller, unchanged. An exam shows
- * nothing before its close, whatever the policy.
+ * THE rule of what a student reads of one attempt (F-RES-04), fed with the
+ * EFFECTIVE policy's `when` ({@link effectiveFeedbackPolicy}). The policy's
+ * other options (key, explanation, …) are applied by the caller. An exam
+ * shows nothing before its close, whatever the policy.
  */
 export function feedbackGate(input: {
   when: FeedbackWhen;
@@ -91,19 +102,13 @@ export function feedbackGate(input: {
   evaluationOver: boolean;
   /** The attempt is `not_started` or `in_progress`. */
   attemptOpen: boolean;
-  /** The evaluation is an exercise with retakes, still open. */
-  retakesOpen: boolean;
   released: boolean;
-  correctionPublished: boolean;
 }): FeedbackGate {
-  const { when, attemptOpen, retakesOpen, released, correctionPublished } = input;
-  const scoreOnly = retakesOpen && !(correctionPublished && when !== "none");
-  if (!attemptOpen && scoreOnly) return { ok: false, reason: "retakes_open" };
+  const { when, attemptOpen, released } = input;
   if (when === "none") return { ok: false, reason: "no_feedback" };
   if (attemptOpen) return { ok: false, reason: "attempt_open" };
   if (input.exam && !input.evaluationOver) return { ok: false, reason: "exam_open" };
-  if (when === "immediate") return { ok: true };
-  return released || correctionPublished ? { ok: true } : { ok: false, reason: "results_pending" };
+  return when === "immediate" || released ? { ok: true } : { ok: false, reason: "results_pending" };
 }
 
 /**

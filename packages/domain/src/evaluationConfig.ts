@@ -106,15 +106,12 @@ export const IN_CLASS_FEEDBACK: FeedbackWhen = "on_release";
 
 /**
  * Whether the class answers TOGETHER, in the room: an `exam`, or an
- * `exercise` given a waiting room. `immediate` feedback there hands the
- * answers to the students who validated first while the others are still
- * working (F-EVAL-11: "reserved to the exercise and poll modes"; #78).
- *
- * The waiting room is the mark of an in-class sitting because it is what
- * makes everybody start together; the glossary's `exercise` skips it
- * (docs/spec/01 §5), and the take-home preset sets it to `skip`. A `poll` is
- * live too, but its feedback is the teacher's reveal (F-LIVE-13), which the
- * spec allows explicitly.
+ * `exercise` given a waiting room. The waiting room is the mark of an
+ * in-class sitting because it is what makes everybody start together; the
+ * glossary's `exercise` skips it (docs/spec/01 §5), and the take-home preset
+ * sets it to `skip`. A `poll` is live too, but runs on the teacher's reveal
+ * (F-LIVE-13). Read by the student home's take-home rule (`activity.ts`);
+ * it no longer decides the feedback policy (ADR-124).
  */
 export function isInClass(ctx: FeedbackContext): boolean {
   if (ctx.mode === "exam") return true;
@@ -122,9 +119,15 @@ export function isInClass(ctx: FeedbackContext): boolean {
   return ctx.lobby !== "skip";
 }
 
-/** The feedback policies an evaluation may use, in screen order. */
+/**
+ * The feedback policies an evaluation may store, in screen order: all three,
+ * save `immediate` on an exam, whose results wait for the close (open
+ * question 5). An exercise's stored policy is never read (ADR-124: it shows
+ * its correction at each hand-in), so its waiting room no longer refuses
+ * `immediate` (#78 is moot there); a poll's follows its reveal.
+ */
 export function allowedFeedbackWhen(ctx: FeedbackContext): readonly FeedbackWhen[] {
-  return isInClass(ctx) ? FEEDBACK_WHEN.filter((w) => w !== "immediate") : FEEDBACK_WHEN;
+  return ctx.mode === "exam" ? FEEDBACK_WHEN.filter((w) => w !== "immediate") : FEEDBACK_WHEN;
 }
 
 export function isFeedbackAllowed(ctx: FeedbackContext, when: FeedbackWhen): boolean {
@@ -153,9 +156,8 @@ export function feedbackWhenFor(ctx: FeedbackContext, wanted: FeedbackWhen): Fee
  *   the live dashboard (`live.extendTime`), never here. The network
  *   allowlist stays open — a student locked out by a mistyped prefix must be
  *   let in mid-exam — and so do the title and the feedback policy: a
- *   forgotten answer key must be hideable during the run (#86). The in-class
- *   rule still holds there: an evaluation with a waiting room never switches
- *   to `immediate` (`isFeedbackAllowed`, #78).
+ *   forgotten answer key must be hideable during the run (#86). An exam still
+ *   never switches to `immediate` (`isFeedbackAllowed`).
  * - `attempts`: at least one attempt exists and the evaluation is not running
  *   (a closed one waiting for its release, typically). The feedback policy is
  *   still the teacher's to choose until the results are released.

@@ -478,12 +478,12 @@ describe("what a hand-in does NOT do", () => {
   });
 
   /**
-   * Graded at hand-in is not shown at hand-in: under `none` nothing of the
-   * score reaches the student, under `on_release` no grade and no item before
-   * the release — on the feedback page, the home card and the Grades page.
+   * An exercise shows its correction at the hand-in whatever its stored
+   * policy (ADR-124), and never a grade before the release — on the feedback
+   * page, the home card and the Grades page.
    */
   it.each(["none", "on_release"] as const)(
-    "shows no grade nor item before the release under %s",
+    "shows the correction but no grade before the release, %s stored",
     async (when) => {
       const { app, drain } = await queuedApp();
       const { seed, evaluation, attempt, mcq } = await running(app, "exercise", when);
@@ -496,12 +496,8 @@ describe("what a hand-in does NOT do", () => {
       const now = app.clock.now();
       const finished = (await live.attemptById(db, attempt.id))!;
       const feedback = await results.studentFeedback(db, await reload(db, evaluation.id), finished, now);
-      expect(feedback).not.toHaveProperty("items");
-      expect(feedback).not.toHaveProperty("grade");
-      if (when === "none") {
-        expect(feedback).not.toHaveProperty("points");
-        expect(feedback).not.toHaveProperty("score");
-      }
+      expect(feedback).toMatchObject({ available: true, grade: null });
+      expect(feedback).toHaveProperty("items");
 
       const card = (await live.studentHome(db, student, now)).past.find((c) => c.id === evaluation.id);
       expect(card).toBeDefined();
@@ -511,7 +507,7 @@ describe("what a hand-in does NOT do", () => {
       const row = rows.find((r) => r.kind === "evaluation" && r.evaluationId === evaluation.id);
       expect(row).toBeDefined();
       expect(row!.score?.grade ?? null).toBeNull();
-      if (when === "none") expect(row!.score).toBeNull();
+      expect(row!.score).not.toBeNull();
     },
   );
 });

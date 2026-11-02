@@ -17,6 +17,8 @@ Relations: amends [ADR-025](ADR-025-plusieurs-tentatives-exercice.md) §1
 (no partial retake after the due date). F-EVAL-04, F-EVAL-11, F-EVAL-15,
 F-EVAL-36, F-LIVE-01, F-RES-04, F-LLM-03.
 
+Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md): §1 — the default of `afterDue` is open on every exercise; the oracle that kept it hidden under a hidden key is gone, since an exercise always shows its key, and the evaluation no longer carries `afterDueSource`. §7 — a practice attempt shows the whole correction at its hand-in, points only, never a grade; no score-only page remains.
+
 ## Context
 
 An exercise is practice by nature, yet its due date closed it for good: once
@@ -32,7 +34,7 @@ the kept attempt. None of that may move.
 
 ## Decision
 
-1. **A switch, with a default.** `settings.afterDue: "open" | "hidden"`, on
+1. **A switch, with a default.** *(Default amended by ADR-124: open on every exercise.)* `settings.afterDue: "open" | "hidden"`, on
    an exercise only. Absent, the default is `open` only where the feedback
    policy shows the answer key (`showKey`, under a policy other than
    `none`); everywhere else it is `hidden`. The reason is an oracle:
@@ -102,7 +104,7 @@ the kept attempt. None of that may move.
    knowing it costs model calls (billed like any grading of the exercise)
    and shows unvalidated points. Without a model the cell stays not graded:
    "not graded in practice".
-7. **What the student reads.** The feedback gate unchanged (`feedbackGate`,
+7. **What the student reads.** *(Amended by ADR-124: the whole correction at the hand-in, whatever the policy.)* The feedback gate unchanged (`feedbackGate`,
    no retake open on an exercise that is over): under `immediate` the key
    and the explanation at hand-in, under `on_release` once released or the
    correction published (ADR-050) — the score alone before that; under

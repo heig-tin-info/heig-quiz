@@ -74,7 +74,7 @@ describe("changing the mode of a draft (ADR-092)", () => {
       ...service.settingsOf(before),
       allowDrill: false,
     });
-    expect(service.feedbackOf(after)).toEqual(service.feedbackOf(before));
+    expect(service.storedFeedbackOf(after)).toEqual(service.storedFeedbackOf(before));
     expect(after.durationS).toBe(before.durationS);
   });
 
@@ -92,7 +92,7 @@ describe("changing the mode of a draft (ADR-092)", () => {
       .set({ feedbackPolicy: { when: "immediate", showAnswer: true, showKey: false, showExplanation: false } })
       .where(eq(evaluations.id, seed.evaluationId));
     await changeMode(teacher, url, "exam");
-    expect(service.feedbackOf(await reload(server.app.db, seed.evaluationId))).toMatchObject({
+    expect(service.storedFeedbackOf(await reload(server.app.db, seed.evaluationId))).toMatchObject({
       when: "on_release",
       showKey: false,
       showExplanation: false,
@@ -107,7 +107,7 @@ describe("changing the mode of a draft (ADR-092)", () => {
       .where(eq(evaluations.id, seed.evaluationId));
     const res = await patch(teacher, url, { mode: "exam", feedbackPolicy: { showKey: false } });
     expect(res.statusCode).toBe(200);
-    expect(service.feedbackOf(await reload(server.app.db, seed.evaluationId))).toMatchObject({
+    expect(service.storedFeedbackOf(await reload(server.app.db, seed.evaluationId))).toMatchObject({
       when: "on_release",
       showKey: false,
     });

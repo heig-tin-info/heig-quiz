@@ -77,7 +77,10 @@ Never work around these, not even "temporarily".
    **Question content never reaches a student except through `toStudent`.**
    One point of exit, in the `studentView` service of the `live` module: it
    strips the internal name, the concepts, the difficulty and the explanation,
-   then applies the feedback policy. Every question type is tested with a
+   then applies the feedback policy. An exercise's solution reaches its
+   student once the attempt is handed in (ADR-124), through
+   `studentSolutionView`, from `results.studentFeedback`.
+   Every question type is tested with a
    full configuration passed through `toStudent`, by forbidden-key list AND
    by searching the serialized output for the answer-key values
    (`docs/spec/05-architecture.md`, 5.7).

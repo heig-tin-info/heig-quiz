@@ -6,10 +6,8 @@
  * The switch is its own writer (`PUT /evaluations/:id/after-due`), editable at
  * any state, the close and the release included: it opens or hides the
  * practice, nothing a student already did moves. Its value is the effective
- * one (`afterDueOpen`), the default included — open where the feedback
- * policy shows the answer key, off where it stays hidden, since unlimited
- * attempts would give it away — and the server says which
- * (`afterDueSource`); the sub-text explains a default that keeps it off.
+ * one (`afterDueOpen`), the default included — open, since every exercise
+ * shows its answer key at the hand-in (ADR-124).
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -35,13 +33,8 @@ export function AfterDueSetting({ detail }: { detail: EvaluationDetail }) {
     onSuccess: (next) => qc.setQueryData(evaluationKey(evaluation.id), next),
     onError: toastError("eval.afterDue.failed"),
   });
-  // The server's own answer: off by default where the key stays hidden; say why while that default holds.
-  const hiddenByDefault = evaluation.afterDueSource === "default" && !evaluation.afterDueOpen;
   return (
-    <SettingRow
-      title={t("eval.afterDue")}
-      desc={hiddenByDefault ? t("eval.afterDue.desc.hiddenKey") : t("eval.afterDue.desc")}
-    >
+    <SettingRow title={t("eval.afterDue")} desc={t("eval.afterDue.desc")}>
       <Switch
         checked={evaluation.afterDueOpen}
         disabled={set.isPending}

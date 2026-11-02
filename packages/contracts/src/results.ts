@@ -15,7 +15,7 @@ import { FEEDBACK_REFUSALS, ITEM_STANDINGS } from "@quiz/domain";
 
 import { StaffItemRef } from "./common.js";
 import { EvaluationMode, GradingScale, ItemCounting, RetakeKeep, RetakeScope } from "./evaluation.js";
-import { AttemptScore, AttemptState, RetakeRefusalReason } from "./live.js";
+import { AttemptState, RetakeRefusalReason } from "./live.js";
 import { Verdict } from "./grading.js";
 
 /** A student with no attempt at all still gets a row, and a 1.0 (F-RES-02). */
@@ -316,12 +316,16 @@ const StudentResults = z.object({
   pendingCount: z.number().int().nonnegative(),
   items: z.array(StudentResultItem),
   /**
-   * While an exercise with retakes is open and its correction published
-   * (ADR-050): whether another attempt may start now, as on the score-only
-   * page — the correction does not end the retakes.
+   * While an exercise with retakes is open: whether another attempt may
+   * start now, and why not — the correction does not end the retakes.
    */
   retake: RetakeStatus.optional(),
-  /** As on the score-only page (ADR-091): each question's standing, latest attempt only. */
+  /**
+   * Under the retake scope `to_review`, and for the student's latest
+   * finished attempt: each question's standing, in the student's order
+   * (ADR-091 §4). Its presence is what offers the retake of the questions to
+   * review; their number is counted from it.
+   */
   review: z.array(ReviewItem).optional(),
   /** ADR-122: a practice attempt after the due date — its points, never a grade (`grade` is null). */
   practice: z.literal(true).optional(),
@@ -336,35 +340,12 @@ type StudentResults = z.infer<typeof StudentResults>;
 export const FeedbackPending = z.object({
   available: z.literal(false),
   /**
-   * `retakes_open`: an exercise that allows several attempts is still open
-   * (F-EVAL-15, ADR-025). The student reads the score of this attempt and
-   * nothing else, whatever the policy says about the correction. Once the
-   * evaluation is closed, or its correction published (ADR-050), the
-   * feedback policy decides what is shown.
-   *
    * `exam_open`: an exam not closed yet shows nothing, whatever its policy:
-   * the results come after the deadline.
+   * the results come after the deadline. An exercise is never pending once
+   * handed in: it always shows its correction (ADR-124).
    */
   reason: z.enum(FEEDBACK_REFUSALS),
   evaluation: z.object({ id: z.uuid(), title: z.string() }),
-  /**
-   * Only with `retakes_open`, or on a practice attempt (ADR-122) the policy
-   * does not open yet (`results_pending`): the points of this attempt, and
-   * nothing else.
-   */
-  score: AttemptScore.optional(),
-  /** ADR-122: a practice attempt after the due date. */
-  practice: z.literal(true).optional(),
-  /** Only with `retakes_open`: whether another attempt may start now, and why not. */
-  retake: RetakeStatus.optional(),
-  /**
-   * Only with `retakes_open`, under the scope `to_review`, and for the
-   * student's latest finished attempt: each question's standing, in the
-   * student's order (ADR-091 §4) — whatever the feedback policy, `none`
-   * included. Its presence is what offers the retake of the questions to
-   * review; their number is counted from it.
-   */
-  review: z.array(ReviewItem).optional(),
 });
 export type FeedbackPending = z.infer<typeof FeedbackPending>;
 

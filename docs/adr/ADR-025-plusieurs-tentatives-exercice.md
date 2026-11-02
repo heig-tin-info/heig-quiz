@@ -31,6 +31,8 @@ Amended 2026-10-09: the Rollback section is removed (the runbook owns procedures
 
 Amended 2026-11-02 by [ADR-122](ADR-122-entrainement-apres-l-echeance.md): once the exercise is over, a student may start PRACTICE attempts on it, which §1's rule of retakes while running does not govern; a practice attempt is never the kept attempt, never counts against the maximum, and is read by none of the results §3 lists.
 
+Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md): §4 only — the score-only view between two attempts is lifted. A student reads the whole correction of each attempt at its hand-in (verdict, points, answer, key, explanation), retakes open or not, whatever the stored feedback policy; the refusal `retakes_open` is removed. Grading at hand-in is unchanged.
+
 ## Context
 
 F-EVAL-15 asks that an `exercise` may allow several attempts, keeping the
@@ -158,6 +160,10 @@ review, awaiting correction — and nothing else of it, whatever the policy.*
 *Amended by ADR-067 (2026-10-02): every attempt of an exercise is graded
 alone at hand-in while it runs, with or without retakes and whatever the
 feedback policy; an exam is graded at its close.*
+
+*Amended by ADR-124 (2026-11-02): the score-only masking above no longer
+applies — each attempt shows its whole correction at the hand-in, whatever
+the stored policy, and `retakes_open` is removed.*
 
 ### 5. Teacher screens
 

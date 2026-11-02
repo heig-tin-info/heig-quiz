@@ -529,38 +529,32 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         { feedbackPolicy: { when: "none", showKey: false } },
         { attemptCount: 3, now: server.clock.now() },
       );
-      expect(service.feedbackOf(next), state).toMatchObject({ when: "none", showKey: false });
+      expect(service.storedFeedbackOf(next), state).toMatchObject({ when: "none", showKey: false });
     }
   });
 
-  it("still refuses immediate feedback mid-run to an exercise with a waiting room (#78)", async () => {
+  it("accepts and stores any feedback policy on an exercise mid-run, and reads it as the whole correction (ADR-124)", async () => {
     for (const state of ["running", "paused"] as const) {
       const seed = await seedLive(db, { mode: "exercise" });
       await db
         .update(evaluations)
-        .set({
-          state,
-          settings: { ...service.settingsOf(await reload(db, seed.evaluationId)), lobby: "manual" },
-          feedbackPolicy: {
-            ...service.feedbackOf(await reload(db, seed.evaluationId)),
-            when: "on_release",
-            showKey: true,
-          },
-        })
+        .set({ state, settings: { ...service.settingsOf(await reload(db, seed.evaluationId)), lobby: "manual" } })
         .where(eq(evaluations.id, seed.evaluationId));
       const row = await reload(db, seed.evaluationId);
-      await expect(
-        service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 2, now: server.clock.now() }),
-      ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
-      expect(service.feedbackOf(await reload(db, seed.evaluationId)).when).toBe("on_release");
-
-      const hidden = await service.patchEvaluation(
+      const next = await service.patchEvaluation(
         db,
         row,
-        { feedbackPolicy: { showKey: false } },
+        { feedbackPolicy: { when: "none", showKey: false } },
         { attemptCount: 2, now: server.clock.now() },
       );
-      expect(service.feedbackOf(hidden), state).toMatchObject({ when: "on_release", showKey: false });
+      // Stored as sent, for a switch back to an exam; never read for a student.
+      expect(service.storedFeedbackOf(next), state).toMatchObject({ when: "none", showKey: false });
+      expect(service.feedbackOf(next), state).toMatchObject({
+        when: "immediate",
+        showAnswer: true,
+        showKey: true,
+        showExplanation: true,
+      });
     }
   });
 
@@ -585,7 +579,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         { revealed: true },
         new Date(),
       );
-      expect(service.feedbackOf(revealed), state).toMatchObject({ showKey: true, showExplanation: true });
+      expect(service.storedFeedbackOf(revealed), state).toMatchObject({ showKey: true, showExplanation: true });
       const scope = (await pollService.scopeOf(db, revealed))!;
       expect(pollService.pollSettingsOf(scope).revealed, state).toBe(true);
     }
@@ -603,7 +597,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
       { feedbackPolicy: { when: "none" } },
       { attemptCount: 2, now: server.clock.now() },
     );
-    expect(service.feedbackOf(released).when).toBe("none");
+    expect(service.storedFeedbackOf(released).when).toBe("none");
     await expect(
       service.patchEvaluation(db, released, { durationS: 60 }, { attemptCount: 2, now: server.clock.now() }),
     ).rejects.toMatchObject({ code: "locked", status: 409 });
@@ -724,48 +718,43 @@ describe("patch and duplicate", () => {
       service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0, now: server.clock.now() }),
     ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
     // Nothing was written: the refusal is not a clamp.
-    expect(service.feedbackOf(await reload(db, seed.evaluationId)).when).toBe("on_release");
+    expect(service.storedFeedbackOf(await reload(db, seed.evaluationId)).when).toBe("on_release");
   });
 
   /*
-   * #78: an exercise sat in class — a waiting room makes everybody start
-   * together — must not hand out the answers while the others still work.
-   * The pair is checked whichever half the patch moves.
+   * #78 no longer judges an exercise: its stored policy is never read
+   * (ADR-124), so a waiting room and `immediate` may be stored together,
+   * from either side. An exam still refuses `immediate`.
    */
-  it("refuses immediate feedback to an exercise with a waiting room, from either side (#78)", async () => {
+  it("accepts a waiting room and immediate together on an exercise, from either side (ADR-124)", async () => {
     const seed = await seedLive(db, { mode: "exercise", settings: { lobby: "skip" } });
     let row = await reload(db, seed.evaluationId);
-    // Take-home: allowed.
     row = await service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, {
       attemptCount: 0,
       now: server.clock.now(),
     });
-    expect(service.feedbackOf(row).when).toBe("immediate");
-
-    // Adding a waiting room under `immediate` is refused…
-    await expect(
-      service.patchEvaluation(db, row, { settings: { lobby: "manual" } }, { attemptCount: 0, now: server.clock.now() }),
-    ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
-    // …and accepted when the same patch brings the policy back, as the screen does.
-    row = await service.patchEvaluation(
-      db,
-      row,
-      { settings: { lobby: "manual" }, feedbackPolicy: { when: "on_release" } },
-      { attemptCount: 0, now: server.clock.now() },
-    );
+    row = await service.patchEvaluation(db, row, { settings: { lobby: "manual" } }, {
+      attemptCount: 0,
+      now: server.clock.now(),
+    });
     expect(service.settingsOf(row).lobby).toBe("manual");
+    expect(service.storedFeedbackOf(row).when).toBe("immediate");
 
-    // Asking for `immediate` under a waiting room is refused too.
+    const exam = await seedLive(db, { mode: "exam" });
     await expect(
-      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0, now: server.clock.now() }),
-    ).rejects.toMatchObject({ code: "feedback_not_allowed" });
+      service.patchEvaluation(db, await reload(db, exam.evaluationId), { feedbackPolicy: { when: "immediate" } }, {
+        attemptCount: 0,
+        now: server.clock.now(),
+      }),
+    ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
   });
+
 
   it("still renames an evaluation stored with a pair the rule now refuses (#78)", async () => {
     const seed = await seedLive(db, { mode: "exercise", settings: { lobby: "manual" } });
     await db
       .update(evaluations)
-      .set({ feedbackPolicy: { ...service.feedbackOf(await reload(db, seed.evaluationId)), when: "immediate" } })
+      .set({ feedbackPolicy: { ...service.storedFeedbackOf(await reload(db, seed.evaluationId)), when: "immediate" } })
       .where(eq(evaluations.id, seed.evaluationId));
     const renamed = await service.patchEvaluation(
       db,

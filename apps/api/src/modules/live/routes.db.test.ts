@@ -929,8 +929,8 @@ describe("pausing an exercise (#77)", () => {
   });
 });
 
-describe("reopening once the key was shown (audit L9, ADR-068 §3)", () => {
-  it("is the course owner's alone, audited as a derogation; an assistant gets 403 owner_required", async () => {
+describe("reopening once the key was shown (ADR-068 §3, ADR-124)", () => {
+  it("stays any member's on an exercise, the owner's on a revealed poll, audited either way", async () => {
     const db = server.app.db;
     const pupils = [await server.signIn("student"), await server.signIn("student")];
     const own = await seedLive(db, {
@@ -978,21 +978,25 @@ describe("reopening once the key was shown (audit L9, ADR-068 §3)", () => {
     // The key is on the student's feedback page already.
     expect((await get(`/app/api/attempts/${first.id}/feedback`, pupils[0]!.headers)).json()).toMatchObject({ available: true });
 
-    const refused = await reopen(first.id, assistant.headers);
+    // An exercise is never graded: reopening one stays any member's (ADR-124);
+    // the audit still says the student had read the key.
+    expect(await reopenable(assistant.headers)).toBe(true);
+    expect((await reopen(first.id, assistant.headers)).statusCode).toBe(200);
+    expect((await audited(first.id))!.payload).toEqual({ evaluationId: running.id, derogation: "key_shown" });
+    expect((await db.select().from(attempts).where(eq(attempts.id, first.id)))[0]!.state).toBe("in_progress");
+
+    // A running poll whose reveal turned the key on (`immediate`, `showKey`):
+    // its reopening stays the course owner's, audited as a derogation.
+    await db.update(evaluations).set({ mode: "poll" }).where(eq(evaluations.id, running.id));
+    await policy(true);
+    const refused = await reopen(second.id, assistant.headers);
     expect([refused.statusCode, refused.json().error]).toEqual([403, "owner_required"]);
     expect(await reopenable(assistant.headers)).toBe(false);
-    expect((await db.select().from(attempts).where(eq(attempts.id, first.id)))[0]!.state).toBe("submitted");
-
     expect(await reopenable(teacher.headers)).toBe(true);
-    expect((await reopen(first.id, teacher.headers)).statusCode).toBe(200);
-    expect(await audited(first.id)).toMatchObject({
+    expect((await reopen(second.id, teacher.headers)).statusCode).toBe(200);
+    expect(await audited(second.id)).toMatchObject({
       actorUserId: teacher.id,
       payload: { evaluationId: running.id, derogation: "key_shown" },
     });
-
-    // Without the key in the policy there is nothing to derogate from.
-    await policy(false);
-    expect((await reopen(second.id, assistant.headers)).statusCode).toBe(200);
-    expect((await audited(second.id))!.payload).toEqual({ evaluationId: running.id });
   });
 });

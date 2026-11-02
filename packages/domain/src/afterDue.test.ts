@@ -11,27 +11,16 @@ import {
 } from "./afterDue.js";
 import { gradableNow } from "./retake.js";
 
-const exercise = { mode: "exercise" as const, afterDue: undefined, feedbackWhen: "on_release" as const, showKey: true };
+const exercise = { mode: "exercise" as const, afterDue: undefined };
 
-describe("afterDueOpen (ADR-122 §1)", () => {
-  it("is open by default on an exercise", () => {
+describe("afterDueOpen (ADR-122 §1, ADR-124)", () => {
+  it("is open by default on every exercise: its key is shown at the hand-in anyway", () => {
     expect(afterDueOpen(exercise)).toBe(true);
-    expect(afterDueOpen({ ...exercise, feedbackWhen: "immediate" })).toBe(true);
   });
 
-  it("is hidden by default where the key stays hidden: the policy none, or no key shown", () => {
-    expect(afterDueOpen({ ...exercise, feedbackWhen: "none" })).toBe(false);
-    expect(afterDueOpen({ ...exercise, showKey: false })).toBe(false);
-    expect(afterDueOpen({ ...exercise, feedbackWhen: "immediate", showKey: false })).toBe(false);
-  });
-
-  it("is open when the teacher says so, the hidden key accepted", () => {
-    expect(afterDueOpen({ ...exercise, showKey: false, afterDue: "open" })).toBe(true);
-  });
-
-  it("follows the teacher's switch when set, the policy none included", () => {
+  it("follows the teacher's switch when set", () => {
     expect(afterDueOpen({ ...exercise, afterDue: "hidden" })).toBe(false);
-    expect(afterDueOpen({ ...exercise, feedbackWhen: "none", afterDue: "open" })).toBe(true);
+    expect(afterDueOpen({ ...exercise, afterDue: "open" })).toBe(true);
   });
 
   it("is never open on an exam or a poll", () => {

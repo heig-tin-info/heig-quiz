@@ -376,19 +376,19 @@ describe("the teacher's view of the drill: mastery per concept", () => {
     expect((await mastery()).outside).toBeNull();
   });
 
-  it("leaves out a suspended card (the evaluation no longer shows its key)", async () => {
+  it("leaves out a card whose key is not out (an unreleased exam)", async () => {
     const db = server.app.db;
     const [before] = await db.select().from(evaluations).where(eq(evaluations.id, seed.evaluationId));
     try {
       await db
         .update(evaluations)
-        .set({ feedbackPolicy: { ...(before!.feedbackPolicy as object), showKey: false } })
+        .set({ mode: "exam", releasedAt: null }) // an exam not released: its key is not out (ADR-124: an exercise's always is)
         .where(eq(evaluations.id, seed.evaluationId));
       const body = await mastery();
       expect(body.concepts.every((c) => c.cards === 0 && c.retrievability === null)).toBe(true);
       expect(body.outside).toBeNull();
     } finally {
-      await db.update(evaluations).set({ feedbackPolicy: before!.feedbackPolicy }).where(eq(evaluations.id, seed.evaluationId));
+      await db.update(evaluations).set({ mode: before!.mode, releasedAt: before!.releasedAt }).where(eq(evaluations.id, seed.evaluationId));
     }
     expect((await mastery()).concepts.some((c) => c.cards > 0)).toBe(true);
   });

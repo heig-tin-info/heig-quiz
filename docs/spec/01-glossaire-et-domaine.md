@@ -54,7 +54,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Neutralized item | An item of an evaluation the teacher withdrew at grading time, once the list is frozen, typically an incoherent question: its points are left out of the total AND out of every student's points; the stored gradings are kept, so the change is reversible. Labelled "Not counted" for the student, points struck through; a copy of the evaluation counts it normally (ADR-108). |
 | Explanation | Markdown text attached to a question version, shown to the student according to the feedback policy, and to the teacher during grading. |
 | Feedback | The disclosure policy: `none`, `on_release`, `immediate`. |
-| Published correction | The correction of an `exercise` published by its teacher while it is still running (F-EVAL-27, ADR-050): the class debrief opens over the papers handed in, and each student's feedback follows the policy as if the results were released. Irreversible; retakes go on. |
+| Published correction | The correction of an `exercise` published by its teacher while it is still running (F-EVAL-27, ADR-050): the class debrief opens over the papers handed in. Irreversible; retakes go on. It changes nothing for a student, who reads their own correction at each hand-in (ADR-124). |
 | Drill | An individual practice session generated for a student from the questions seen in class, scheduled by spaced repetition. |
 | Runner | An isolated service that compiles and runs the students' code in a sandbox. |
 | Canonical format | The YAML representation of a question or a pool, independent of the database, used for import, export and external versioning. |

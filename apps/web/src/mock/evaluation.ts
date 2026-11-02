@@ -933,16 +933,13 @@ export const toEvaluation = (e: MockEvaluation) => ({
   allowDrill:
     e.mode !== "poll" &&
     (typeof e.settings["allowDrill"] === "boolean" ? e.settings["allowDrill"] : e.mode === "exercise"),
-  // The server's `practiceOpen` (ADR-122): the switch, else open but under the policy `none`.
+  // The server's `practiceOpen` (ADR-122, ADR-124): the switch, else open.
   afterDueOpen: afterDueOpen({
     mode: e.mode,
     afterDue: e.settings["afterDue"] === "open" || e.settings["afterDue"] === "hidden" ? e.settings["afterDue"] : undefined,
-    feedbackWhen: (e.feedbackPolicy["when"] as FeedbackWhen | undefined) ?? "on_release",
-    showKey: e.feedbackPolicy["showKey"] === true,
     safeExamBrowser: e.settings["safeExamBrowser"] === true,
     kiosk: e.settings["kiosk"] === true,
   }),
-  afterDueSource: e.settings["afterDue"] === undefined ? ("default" as const) : ("set" as const),
   gradingScale: e.gradingScale,
   feedbackPolicy: e.feedbackPolicy,
   mcqPolicy: e.mcqPolicy,
@@ -1351,16 +1348,16 @@ function assertConfigPatch(e: MockEvaluation, body: Record<string, unknown>): vo
     });
   }
   const feedback = body.feedbackPolicy as { when?: FeedbackWhen } | undefined;
-  // F-EVAL-11, #78: the server refuses `immediate` in class, whichever half
-  // of the pair the patch moves, and writes nothing. A change of mode brings
-  // its own fallback (`applyConfigPatch`), unless the patch chose a policy.
+  // F-EVAL-11: the server refuses `immediate` on an exam (`isFeedbackAllowed`),
+  // and writes nothing. A change of mode brings its own fallback
+  // (`applyConfigPatch`), unless the patch chose a policy.
   if (feedback?.when !== undefined || settings?.lobby !== undefined) {
     const lobby = settings?.lobby ?? (e.settings as { lobby: LobbyName }).lobby;
     const when = feedback?.when ?? (e.feedbackPolicy as { when: FeedbackWhen }).when;
     if (!isFeedbackAllowed({ mode, lobby }, when)) {
       throw new MockPayload(422, {
         error: "feedback_not_allowed",
-        message: `feedback "${when}" is not allowed for an evaluation sat in class (F-EVAL-11)`,
+        message: `feedback "${when}" is not allowed for an exam (F-EVAL-11)`,
       });
     }
   }

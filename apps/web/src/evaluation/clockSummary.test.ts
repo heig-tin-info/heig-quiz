@@ -60,6 +60,18 @@ describe("clockSummary (#87, ADR-086)", () => {
     );
   });
 
+  it("says an exercise's feedback comes at each hand-in, whatever its stored policy (ADR-124)", () => {
+    const e = {
+      ...evaluation({ settings: { timing: "deadline", lobby: "skip", navigation: "free" }, when: "none" }),
+      mode: "exercise" as const,
+    };
+    expect(clockSummary(e, makeT("en"), date)).toMatch(/, feedback at each hand-in\.$/);
+    // A poll's answer comes with the reveal, whatever it stores.
+    expect(clockSummary({ ...e, mode: "poll" as const, feedbackPolicy: { ...e.feedbackPolicy, when: "immediate" } }, makeT("en"), date)).toMatch(
+      /, answer shown when you reveal it\.$/,
+    );
+  });
+
   it("names a scheduled end, or says it is missing, and no waiting room it never has", () => {
     const e = evaluation({
       settings: { timing: "deadline", lobby: "skip", navigation: "milestones" },
@@ -67,7 +79,7 @@ describe("clockSummary (#87, ADR-086)", () => {
       when: "immediate",
     });
     expect(clockSummary(e, makeT("en"), date)).toBe(
-      "Open until <2026-10-02>, no going back past a checkpoint, feedback as each question is validated.",
+      "Open until <2026-10-02>, no going back past a checkpoint, feedback at each hand-in.",
     );
     expect(clockSummary({ ...e, closesAt: null }, makeT("fr"), date)).toMatch(
       /^Date de fin à fixer, pas de retour au-delà d'un verrou, /,

@@ -498,9 +498,9 @@ describe("retakes keep the best or the last FLOORED total (ADR-025)", () => {
   it("serves a floored score between attempts", async () => {
     const { first } = await exercise("last");
     const feedback = (await get(`/app/api/attempts/${first.id}/feedback`, students[0]!.headers)).json() as StudentFeedback;
-    expect(feedback.available).toBe(false);
-    if (feedback.available) return;
-    expect(feedback.score?.points).toBe(0);
+    expect(feedback.available).toBe(true);
+    if (!feedback.available) return;
+    expect(feedback.points).toBe(0);
     const rows = await db().select().from(attempts).where(eq(attempts.id, first.id));
     expect(rows).toHaveLength(1);
   });

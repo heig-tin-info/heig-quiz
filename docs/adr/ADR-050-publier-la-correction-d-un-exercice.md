@@ -17,6 +17,8 @@ automatic gradings are stood down.
 
 Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
 
+Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md): the student side only — a student reads their own correction at each hand-in whatever the publication, so publishing keeps one role, the class debrief and its projection (F-RES-03, F-EVAL-27). It no longer counts as the release for the student's feedback, nor lifts a masking that no longer exists. The route, its refusals, its audit and the grading it sends are unchanged.
+
 ## Context
 
 An `exercise` is practice: its grade carries little meaning. The product

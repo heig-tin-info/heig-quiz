@@ -689,7 +689,7 @@ const CHECKED: Case[] = [
     StudentRevisionRound,
   ),
   one("/app/api/classrooms/:id/drill/revision", `/app/api/classrooms/${classroomId}/drill/revision`, DrillClassroomRevision),
-  // F-EVAL-15: the score-only feedback between two attempts of an exercise.
+  // F-EVAL-15: the feedback between two attempts of an exercise, beside the retake (ADR-124).
   one(
     `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`,
     `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`,

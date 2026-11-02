@@ -59,7 +59,7 @@ import {
   questionRefused,
 } from "./shared.js";
 import { assertStaysScheduled } from "./stateMachine.js";
-import { attemptCount as countAttempts, byId, deletionRole, settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
+import { attemptCount as countAttempts, byId, deletionRole, settingsOf, storedFeedbackOf, preferredMcqPolicy } from "./reads.js";
 import { latestPublished, type CopyHome } from "./items.js";
 
 /**
@@ -313,7 +313,7 @@ export async function patchEvaluation(
   if (patch.gradingScale !== undefined) next.gradingScale = patch.gradingScale;
   if (patch.mcqPolicy !== undefined) next.mcqPolicy = patch.mcqPolicy;
   if (patch.feedbackPolicy !== undefined || modeChanged) {
-    const merged = FeedbackPolicy.parse({ ...feedbackOf(row), ...patch.feedbackPolicy });
+    const merged = FeedbackPolicy.parse({ ...storedFeedbackOf(row), ...patch.feedbackPolicy });
     // ADR-092: the one forced consequence of a change of mode on feedback.
     // `immediate` falls back where the new mode refuses it, unless the patch
     // chose a `when` itself (then the check below judges it). Nothing is
@@ -334,22 +334,19 @@ export async function patchEvaluation(
   if (patch.durationS !== undefined) next.durationS = patch.durationS;
   if (patch.ipAllowlist !== undefined) next.ipAllowlist = patch.ipAllowlist;
 
-  // `immediate` feedback in class would hand the answers to the first
-  // students while the others are still working (F-EVAL-11, #78). The pair
-  // the patch LEAVES behind is checked, whichever half it moved: adding a
-  // waiting room under `immediate` is refused like asking for `immediate`
-  // under a waiting room. For a lobby change the SCREEN sends the fallback
-  // (`feedbackWhenFor`), so only an inconsistent client meets this 422; for a
-  // change of mode the server applies it itself (above, ADR-092). A
-  // patch that touches neither half passes, so a row stored before the rule
-  // can still be renamed.
+  // The pair the patch LEAVES behind is checked against `isFeedbackAllowed`
+  // (F-EVAL-11): `immediate` is refused on an exam (open question 5); an
+  // exercise's stored policy is accepted, never read (ADR-124). For a change
+  // of mode the server applies the fallback itself (above, ADR-092). A patch
+  // that touches neither half passes, so a row stored before the rule can
+  // still be renamed.
   if (patch.feedbackPolicy?.when !== undefined || patch.settings?.lobby !== undefined || modeChanged) {
-    const when = ((next.feedbackPolicy ?? feedbackOf(row)) as FeedbackPolicy).when;
+    const when = ((next.feedbackPolicy ?? storedFeedbackOf(row)) as FeedbackPolicy).when;
     const lobby = ((next.settings ?? settingsOf(row)) as EvaluationSettings).lobby;
     if (!isFeedbackAllowed({ mode, lobby }, when)) {
       throw new EvaluationError(
         "feedback_not_allowed",
-        `feedback "${when}" is not allowed for an evaluation sat in class (F-EVAL-11)`,
+        `feedback "${when}" is not allowed for an exam (F-EVAL-11)`,
       );
     }
   }

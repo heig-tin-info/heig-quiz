@@ -46,7 +46,7 @@ import {
   toLocalInput,
   type IconType,
 } from "../ui";
-import { AdvancedDisclosure, withFeedbackFallback } from "./AdvancedDisclosure";
+import { AdvancedDisclosure } from "./AdvancedDisclosure";
 import { clockSummary } from "./clockSummary";
 import { ConditionsSetting } from "./ConditionsSetting";
 import { ModeControl } from "./ModeChoice";
@@ -261,10 +261,10 @@ export function ConfigSettings({
 
   /*
    * One patch per choice: the two settings and the limit it starts from,
-   * with the feedback fallback a waiting room gained needs (#78).
+   * nothing else (a waiting room no longer moves the feedback, ADR-124).
    */
   const choose = (next: ClockChoice) =>
-    patch.mutate(withFeedbackFallback(config, clockPatch(next, { ...settings, durationS })));
+    patch.mutate(clockPatch(next, { ...settings, durationS }));
 
   return (
     <>
