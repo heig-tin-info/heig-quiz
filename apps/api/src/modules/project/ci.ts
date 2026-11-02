@@ -23,7 +23,12 @@
  * repository gone, or one that cannot run Actions (archived as its lock,
  * GitHub's refusal) settles the pass at once with its reason (`no_commit`,
  * `repo_missing`, `ci_unavailable`); a call whose answer never came is
- * left unconfirmed, its 24 h then settle it.
+ * left unconfirmed, its 24 h then settle it. A pass whose scope holds no
+ * automatic criterion (no leaf with a `command`) is never dispatched:
+ * nothing from a run would be read, so it is settled at once — no row
+ * written, its `sha` left empty — and its LLM review queued, which takes
+ * its target from `passTarget` itself (`reviewPass.ts`), as for any pass
+ * settled before its dispatch.
  *
  * **The intake** ({@link ingestRun}: the ONE entry of a completed run, from
  * the `workflow_run` webhook and the reconciliation's listing of a quiet
@@ -262,9 +267,11 @@ export async function runCiDispatch(app: FastifyInstance, config: AppConfig, job
   const db = app.db;
   const loaded = await loadPass(db, job.passId);
   if (!loaded || loaded.pass.sha !== "" || loaded.pass.closedAt !== null) return "none";
+  const settled = async (reason: CriterionReason) => ((await settle(app, loaded, { reason })) ? "settled" : "none");
+  // No automatic criterion in scope: a run would be read for nothing; settled now (its reason writes no row), the review follows.
+  if (automaticLeaves(loaded).length === 0) return settled("no_result");
   const { pass, repo, project, scope } = loaded;
   const target = await passTarget(db, repo, project, scope);
-  const settled = async (reason: CriterionReason) => ((await settle(app, loaded, { reason })) ? "settled" : "none");
   if (target === null) return settled("no_commit");
   if (repo.deletedAt !== null || repo.fullName === null) return settled("repo_missing");
   // Archived (as its lock, H8): Actions cannot run there, nothing is dispatched; the teacher grades.

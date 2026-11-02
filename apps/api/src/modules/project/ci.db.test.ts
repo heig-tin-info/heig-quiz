@@ -6,7 +6,9 @@
  *
  * - the dispatch: the target commit, the nonce, the pass, at most once; a
  *   milestone's tag; an archived repository not dispatched
- *   (`ci_unavailable`); no commit (`no_commit`); the pace per installation;
+ *   (`ci_unavailable`); no commit (`no_commit`); a pass without an
+ *   automatic criterion never dispatched, its review queued at once; the
+ *   pace per installation;
  * - the intake: a run by another actor, a re-run, a wrong nonce, another
  *   workflow or event is not accepted; a changed `criteria.yml` or
  *   protected file at the target, or a changed `grading.yml` at the run's
@@ -164,7 +166,7 @@ interface Lab {
 }
 
 /** A project graded by criteria on a schema-3 snapshot (the switch's), `tests` protected. */
-async function lab(version: 2 | 3 = 3): Promise<Lab> {
+async function lab(version: 2 | 3 = 3, criteria = CRITERIA): Promise<Lab> {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: [], questions: 0 });
   await db.insert(courseStaff).values({ courseId: seeded.courseId, userId: teacher.id }).onConflictDoNothing();
@@ -183,7 +185,7 @@ async function lab(version: 2 | 3 = 3): Promise<Lab> {
   });
   expect(res.statusCode, res.body).toBe(201);
   const project = ProjectSummary.parse(res.json());
-  const text = version === 3 ? CRITERIA : "schema_version: 2\ncriteria:\n  rendu:\n    all-tests-passed: {description: Tests, awarded_points: 0, max_points: 10}\n";
+  const text = version === 3 ? criteria : "schema_version: 2\ncriteria:\n  rendu:\n    all-tests-passed: {description: Tests, awarded_points: 0, max_points: 10}\n";
   const parsed = parseCriteria(text, { version });
   if (!parsed.ok) throw new Error("the fixture does not parse");
   await db.update(projects).set({ gradingMode: "criteria", protectedFiles: ["tests"] }).where(eq(projects.id, project.id));
@@ -349,6 +351,33 @@ describe("the dispatch", () => {
     const o = await claimFinal(off.id);
     expect(await runCiDispatch(server.app, config, { passId: o.passId })).toBe("settled");
     expect((await rowsOf(off.id))["code.format"]).toEqual([0, "ci_unavailable", null]);
+  });
+
+  it("dispatches nothing when the pass has no automatic criterion: settled at once, no row, the review queued", async () => {
+    const manual = await lab(3, "schema_version: 3\ncriteria:\n  rapport:\n    style: {description: Style, max_points: 2, prompt: Is the code readable?}\n    oral: {description: Oral, max_points: 3}\n");
+    const repo = await studentRepo(manual, "lab-manual");
+    await work(repo);
+    const pass = await claimFinal(repo.id);
+    const sent: { name: string; data: object }[] = [];
+    const app = server.app as { boss?: JobQueue };
+    app.boss = {
+      createQueue: async () => {},
+      send: async (name, data) => void sent.push({ name, data }),
+      work: async () => {},
+      stop: async () => {},
+    };
+    const calls = gh.calls.length;
+    try {
+      expect(await runCiDispatch(server.app, config, { passId: pass.passId })).toBe("settled");
+    } finally {
+      delete app.boss;
+    }
+    expect(gh.calls.length).toBe(calls);
+    expect(await passRow(pass.passId)).toMatchObject({ sha: "", dispatchedAt: null, closedAt: new Date(NOW) });
+    expect(await rowsOf(repo.id)).toEqual({});
+    expect(sent).toEqual([{ name: "project.review", data: { repoId: repo.id, passId: pass.passId, checkpointId: undefined } }]);
+    // Settled once: the job run again does nothing.
+    expect(await runCiDispatch(server.app, config, { passId: pass.passId })).toBe("none");
   });
 
   it("queues a batch on project.ci, each installation's passes 15 s apart, calling GitHub for none", async () => {
