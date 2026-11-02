@@ -92,6 +92,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-114 — Proposed relations between concepts: a deterministic pre-pass, then the model, accepted by selection](ADR-114-relations-proposees-entre-notions.md)
 - [ADR-116 — The concept map of a pool: a concept counts what its click opens, one level of the hierarchy per view](ADR-116-carte-des-notions-d-une-banque.md)
 - [ADR-083 — Frequency-domain stimuli for circuit](ADR-083-stimulus-frequentiel-de-circuit.md)
+- [ADR-123 — Logic circuit question type, graded by an in-process simulator](ADR-123-type-circuit-logique.md)
 - [ADR-099 — Regex matchers on RE2: linear matching, bounded programs, refused at publication only](ADR-099-moteur-re2-pour-les-expressions-regulieres.md)
 - [ADR-102 — Mathematical expression answers: a math field, numerical equivalence, no CAS](ADR-102-type-expression-mathematique.md)
 - [ADR-103 — Blocks: a block-programming question type, a warehouse robot graded by a pure interpreter](ADR-103-type-blocs.md)
