@@ -1063,6 +1063,13 @@ const scenes = [
   // (issue #89: answered with no click). "Clear my selection" takes it back.
   { name: "player-single", role: "student", path: `${TAKE}?scene=single` },
   { name: "player-single-answered", role: "student", path: `${TAKE}?scene=single`, act: async (p) => { await p.getByRole("radio").first().check({ force: true }); await p.getByRole("button", { name: /clear my selection/i }).waitFor(); } },
+  // ADR-124 §3: an exercise's question, answered, with Check as its primary;
+  // then checked right and wrong (the correction in place of the question),
+  // and the code question, whose verdict waits for the runner.
+  { name: "player-check-ready", role: "student", path: `${TAKE}?scene=exercise`, act: async (p) => { await p.getByRole("radio").first().check({ force: true }); await p.getByRole("button", { name: /^(check|vérifier)$/i }).waitFor(); } },
+  { name: "player-check-correct", role: "student", path: `${TAKE}?scene=exercise`, act: (p) => checkQuestion(p, 0) },
+  { name: "player-check-wrong", role: "student", path: `${TAKE}?scene=exercise`, act: (p) => checkQuestion(p, 1) },
+  { name: "player-check-pending", role: "student", path: `${TAKE}?scene=exercise`, act: async (p) => { await openQuestion(p, 4); await p.getByRole("button", { name: /^(check|vérifier)$/i }).click(); await p.getByText(/^(Submitted code|Code rendu)$/).waitFor(); await p.waitForTimeout(400); } },
   // Issue #89: the question list with its four states at once — answered,
   // left unanswered, flagged, nothing yet — on the flagged empty question.
   { name: "player-marks", role: "student", path: `${TAKE}?scene=marks` },
@@ -2157,6 +2164,14 @@ async function pasteFromOutside(page) {
 
 async function openQuestion(page, n) {
   await page.getByRole("button", { name: new RegExp(`^Question ${n},`) }).click();
+  await page.waitForTimeout(400);
+}
+
+/** Ticks choice `n` of the exercise's first question and checks it (ADR-124 §3). */
+async function checkQuestion(page, n) {
+  await page.getByRole("radio").nth(n).check({ force: true });
+  await page.getByRole("button", { name: /^(check|vérifier)$/i }).click();
+  await page.getByText(/^(Explanation|Explication)$/).waitFor();
   await page.waitForTimeout(400);
 }
 

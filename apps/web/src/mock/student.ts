@@ -1,14 +1,11 @@
 /** Section 4 of the mock — see `index.ts` for the layout. */
-import {
-  clozeStudentTemplate,
-  parseCloze,
-  studentProjectGroup,
-  type StudentActivityGroup,
-} from "@quiz/domain";
+import { studentProjectGroup, type StudentActivityGroup } from "@quiz/domain";
 import { evaluationConditionsOf } from "@quiz/contracts";
 import type {
   AttemptView,
   AutosaveResponse,
+  CheckResponse,
+  ItemCorrection,
   EvaluationCard,
   EvaluationGradeRow,
   GradeGroup,
@@ -37,6 +34,7 @@ import {
   MOCK_CONDITIONS,
   now,
   on,
+  refuse,
   scene,
 } from "./runtime";
 import {
@@ -48,14 +46,13 @@ import {
   ngspiceOutcome,
 } from "./pool";
 import { codeimageConfig, codeimageRunOutcome, codeimageStudentView } from "./codeimage";
+import type { AnyQuestionTypeServer, StudentView } from "@quiz/core/server";
 import { richServer } from "@quiz/qt-rich/server";
-import type { RichConfig } from "@quiz/qt-rich/client";
 import { categorizeServer } from "@quiz/qt-categorize/server";
-import type { CategorizeConfig } from "@quiz/qt-categorize/client";
+import { clozeServer } from "@quiz/qt-cloze/server";
 import { diagramServer } from "@quiz/qt-diagram/server";
-import type { DiagramConfig } from "@quiz/qt-diagram/client";
 import { blocksServer } from "@quiz/qt-blocks/server";
-import type { BlocksConfig } from "@quiz/qt-blocks/client";
+import { mcqServer } from "@quiz/qt-mcq/server";
 import { pollOfTeacher, teacherPolls } from "./poll";
 import { hasMockJournal } from "./journal";
 import { hasStudentGroups, studentGroupSetCards } from "./groups";
@@ -146,48 +143,89 @@ const STUDENT_TYPES = [
   "blocks",
 ] as const;
 
-/** One question of each MVP type, in French, as `toStudent` would publish it. */
-const studentPayloads: Record<number, unknown> = {
-  // The mcq whose choices hold a FENCED BLOCK, which is what the rich editor
-  // can now write into one (markdown/tiptap.ts): a lead line and a snippet,
-  // rendered by `MarkdownView` inside the label of the choice.
+/**
+ * The questions of the attempt whose CONFIG the mock holds, with the server
+ * half that reads it and the view this student was served: their student
+ * view is the type's own `toStudent`, and a check (ADR-124 §3) reads their
+ * key from the same half (`toSolution`, `studentSolution`), as the API does. `code`, `circuit` and `codeimage` are not among them — their
+ * server halves need Node — so a check of one keys nothing.
+ */
+interface StudentKeyed {
+  server: AnyQuestionTypeServer;
+  config: unknown;
+  view: StudentView;
+}
+const STUDENT_KEYED: Partial<Record<number, StudentKeyed>> = {
+  /*
+   * The mcq whose choices hold a FENCED BLOCK, which is what the rich editor
+   * can now write into one (markdown/tiptap.ts): a lead line and a snippet,
+   * rendered by `MarkdownView` inside the label of the choice. A bulleted
+   * list and a numbered one, nested, in the prompt: the lists a teacher
+   * writes in the editor have to reach the player as lists (issue #100).
+   */
   1: {
-    // A bulleted list and a numbered one, nested: the lists a teacher writes
-    // in the editor have to reach the player as lists (issue #100).
-    prompt:
-      "Quel extrait affiche **l'adresse** de la variable `x` ?\n\n" +
-      "- `x` est un `int` local ;\n" +
-      "- l'adresse s'affiche avec `%p` :\n" +
-      "  1. convertie en `void *`,\n" +
-      "  2. sans autre calcul.",
-    mode: "single",
-    choices: [
-      { id: 0, text: 'Avec l\'opérateur d\'adresse :\n\n```c\nprintf("%p\\n", (void *)&x);\n```' },
-      { id: 1, text: 'Avec l\'opérateur d\'indirection :\n\n```c\nprintf("%p\\n", (void *)*x);\n```' },
-      { id: 2, text: 'En convertissant la valeur :\n\n```c\nprintf("%p\\n", (void *)x);\n```' },
-      { id: 3, text: 'Avec une fonction de la bibliothèque :\n\n```c\nprintf("%p\\n", addr(x));\n```' },
-    ],
+    server: mcqServer,
+    config: mcqServer.configSchema.parse({
+      configVersion: 2,
+      prompt:
+        "Quel extrait affiche **l'adresse** de la variable `x` ?\n\n" +
+        "- `x` est un `int` local ;\n" +
+        "- l'adresse s'affiche avec `%p` :\n" +
+        "  1. convertie en `void *`,\n" +
+        "  2. sans autre calcul.",
+      mode: "single",
+      shuffleChoices: false,
+      choices: [
+        { text: 'Avec l\'opérateur d\'adresse :\n\n```c\nprintf("%p\\n", (void *)&x);\n```', correct: true },
+        { text: 'Avec l\'opérateur d\'indirection :\n\n```c\nprintf("%p\\n", (void *)*x);\n```' },
+        { text: 'En convertissant la valeur :\n\n```c\nprintf("%p\\n", (void *)x);\n```' },
+        { text: 'Avec une fonction de la bibliothèque :\n\n```c\nprintf("%p\\n", addr(x));\n```' },
+      ],
+    }),
+    view: { seed: 0, itemId: "1", shuffle: false },
   },
   /*
-   * Built by the REAL domain functions from a real config rather than written
-   * out by hand: a dropdown inside a TABLE CELL has to reach the player
-   * exactly as an inline one does, and a literal payload could not show that
-   * it does.
+   * A dropdown inside a TABLE CELL has to reach the player exactly as an
+   * inline one does, which only the real `toStudent` can show.
    */
-  2: clozeStudentTemplate(
-    parseCloze(
-      "Complétez la phrase.\n\n- L'orthographe des noms propres n'est pas notée ;\n- les unités s'écrivent au pluriel.\n\n" +
+  2: {
+    server: clozeServer,
+    config: clozeServer.configSchema.parse({
+      configVersion: 2,
+      text:
+        "Complétez la phrase.\n\n- L'orthographe des noms propres n'est pas notée ;\n- les unités s'écrivent au pluriel.\n\n" +
         "La loi d'{{Ohm|ohm}} relie la tension et le courant : pour un conducteur ohmique, " +
         "U = {{R|la résistance}} × I, où la tension U s'exprime en {{=volts|ampères|ohms|watts}}.\n\n" +
         "| Grandeur | Unité |\n" +
         "| --- | --- |\n" +
         "| Résistance | {{=ohms|volts|ampères}} |\n" +
         "| Courant | {{ohms|volts|=ampères}} |",
-    ),
-    0,
-    "student-item-2",
-    false,
-  ),
+      shuffleOptions: false,
+    }),
+    view: { seed: 0, itemId: "student-item-2", shuffle: false },
+  },
+  7: { server: richServer, config: RICH_CONFIG, view: { seed: 0, itemId: "7", shuffle: false } },
+  8: { server: categorizeServer, config: CATEGORIZE_CONFIG, view: { seed: 11, itemId: "8", shuffle: true } },
+  9: { server: diagramServer, config: DIAGRAM_CONFIG, view: { seed: 0, itemId: "9", shuffle: false } },
+  10: { server: blocksServer, config: BLOCKS_CONFIG, view: { seed: 0, itemId: "10", shuffle: false } },
+};
+
+/** Question n's student view, by its type's own `toStudent`. */
+const keyedStudent = (n: number): unknown => {
+  const keyed = STUDENT_KEYED[n]!;
+  return keyed.server.toStudent(keyed.config, keyed.view);
+};
+
+/** ADR-124 §3: the explanations a check shows, for the questions that have one. */
+const STUDENT_EXPLANATIONS: Partial<Record<number, string>> = {
+  1: "`&x` donne l'adresse de `x`, et `%p` attend un `void *` : d'où la conversion.",
+  4: "En parallèle, $R = \\frac{R_1 R_2}{R_1 + R_2}$ : le dénominateur est une **somme**, pas une différence.",
+};
+
+/** One question of each MVP type, in French, as `toStudent` would publish it. */
+const studentPayloads: Record<number, unknown> = {
+  1: keyedStudent(1),
+  2: keyedStudent(2),
   3: {
     prompt:
       "Sur une machine 64 bits compilant en LP64 :\n\n- un `long` occupe 8 octets ;\n- un pointeur aussi.\n\nCombien d'octets occupe un `int` en C ?",
@@ -307,23 +345,23 @@ const studentPayloads: Record<number, unknown> = {
    * The `rich` item (issue #192): an essay, whose rubric and model answer the
    * student view never carries — the pool question's own `toStudent`.
    */
-  7: richServer.toStudent(RICH_CONFIG as RichConfig, { seed: 0, itemId: "7", shuffle: false }),
+  7: keyedStudent(7),
   /*
    * The `categorize` item (docs/04 §4.13): the columns without their key,
    * the cards in this student's shuffled order — the type's own `toStudent`.
    */
-  8: categorizeServer.toStudent(CATEGORIZE_CONFIG as CategorizeConfig, { seed: 11, itemId: "8", shuffle: true }),
+  8: keyedStudent(8),
   /*
    * The `diagram` item (docs/04 §4.14): the kind and the starter, never the
    * reference — the type's own `toStudent`.
    */
-  9: diagramServer.toStudent(DIAGRAM_CONFIG as DiagramConfig, { seed: 0, itemId: "9", shuffle: false }),
+  9: keyedStudent(9),
   /*
    * The `blocks` item (docs/04 §4.17): the visible warehouses and the
    * starter; the hidden warehouses as a count, never their maps — the type's
    * own `toStudent`.
    */
-  10: blocksServer.toStudent(BLOCKS_CONFIG as BlocksConfig, { seed: 0, itemId: "10", shuffle: false }),
+  10: keyedStudent(10),
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */
@@ -333,6 +371,8 @@ interface StoredAnswer {
   done: boolean;
   skipped?: boolean;
   flagged?: boolean;
+  /** ADR-124 §3: checked, locked since, and the correction the check answered. */
+  correction?: ItemCorrection;
 }
 const studentAnswers = new Map<string, StoredAnswer>();
 /*
@@ -382,6 +422,19 @@ if (scene === "marks" || scene === "forward") {
     flagged: true,
   });
   studentPosition = studentItem(scene === "forward" ? 2 : 3);
+}
+// `exercise`: the code question holds the student's (wrong) fix, so it can
+// be checked as it stands (ADR-124 §3).
+if (scene === "exercise") {
+  studentAnswers.set(studentItem(4), {
+    payload: {
+      regions: [
+        "double r_parallele(double r1, double r2)\n{\n    if (r1 == 0 || r2 == 0)\n        return 0;\n    return r1 * r2 / (r1 - r2);\n}\n",
+      ],
+    },
+    revision: 1,
+    done: false,
+  });
 }
 /** ADR-091: the questions `?scene=partial` carried over from the previous attempt. */
 const PARTIAL_ACQUIRED = new Set([1, 4]);
@@ -444,6 +497,9 @@ export const studentConditions = (kiosk = false) =>
     timeBonusPercent: 33,
   });
 
+/** What question n is worth. */
+const studentItemPoints = (n: number): number => (n === 4 ? 5 : n === 5 || n === 7 ? 3 : n === 3 ? 1 : 2);
+
 export const studentAttemptView = (): AttemptView => ({
   conditions: studentConditions(),
   attempt: {
@@ -480,7 +536,7 @@ export const studentAttemptView = (): AttemptView => ({
     return {
       id: studentItem(n),
       position: n - 1,
-      points: n === 4 ? 5 : n === 5 || n === 7 ? 3 : n === 3 ? 1 : 2,
+      points: studentItemPoints(n),
       type: STUDENT_TYPES[n - 1]!,
       milestone: n === 3,
       // The circuit, a bonus question (ADR-052): the player's label.
@@ -499,9 +555,9 @@ export const studentAttemptView = (): AttemptView => ({
       // `forward_only` closes a validated question (F-LIVE-08).
       locked: scene === "forward" && stored?.done === true,
       acquired: scene === "partial" && PARTIAL_ACQUIRED.has(n),
-      // ADR-124 §3: the mock checks nothing yet.
-      checked: false,
-      correction: null,
+      // ADR-124 §3: a checked question comes back locked, with its correction.
+      checked: stored?.correction !== undefined,
+      correction: stored?.correction ?? null,
     };
   }),
 });
@@ -1224,8 +1280,16 @@ on("GET", "/app/api/attempts/:id", () =>
     : { kind: "attempt", view: studentAttemptView() },
 );
 
-on("PUT", "/app/api/attempts/:id/answers/:itemId", (m, body): AutosaveResponse => {
-  const itemId = m.groups!.itemId!;
+/** ADR-124 §3: every write to a checked question is refused, as the API refuses it. */
+function assertUnchecked(itemId: string): void {
+  if (studentAnswers.get(itemId)?.correction !== undefined) {
+    throw refuse(409, "item_checked", "this question was checked: it is locked for this attempt");
+  }
+}
+
+/** The autosave's write, which the check makes first with the same body. */
+function writeStudentAnswer(itemId: string, body: Record<string, unknown>): AutosaveResponse {
+  assertUnchecked(itemId);
   const revision = Number(body.revision ?? 1);
   const stored = studentAnswers.get(itemId);
   // The same last-writer-wins rule as the server: a lower revision is stale
@@ -1238,22 +1302,76 @@ on("PUT", "/app/api/attempts/:id/answers/:itemId", (m, body): AutosaveResponse =
       serverNow: new Date().toISOString(),
     };
   }
-  // The server's rule (issue #89): an answer that holds something takes back
-  // an "I won't answer". The mock cannot ask the type, so anything non-null
-  // counts, which is right for every payload the player sends but an empty
-  // mcq selection.
-  const empty =
-    body.payload === null ||
-    (typeof body.payload === "object" &&
-      Array.isArray((body.payload as { selected?: unknown }).selected) &&
-      (body.payload as { selected: unknown[] }).selected.length === 0);
   studentAnswers.set(itemId, {
     ...(stored ?? { done: false }),
     payload: body.payload,
     revision,
-    skipped: empty ? (stored?.skipped ?? false) : false,
+    skipped: emptyPayload(body.payload) ? (stored?.skipped ?? false) : false,
   });
   return { revision, accepted: true, serverNow: new Date().toISOString() };
+}
+
+/**
+ * The server's rule of an answer that holds nothing (issue #89), roughly:
+ * the mock cannot ask the type, so anything non-null counts, which is right
+ * for every payload the player sends but an empty mcq selection.
+ */
+const emptyPayload = (payload: unknown): boolean =>
+  payload === null ||
+  payload === undefined ||
+  (typeof payload === "object" &&
+    Array.isArray((payload as { selected?: unknown }).selected) &&
+    (payload as { selected: unknown[] }).selected.length === 0);
+
+on("PUT", "/app/api/attempts/:id/answers/:itemId", (m, body): AutosaveResponse =>
+  writeStudentAnswer(m.groups!.itemId!, body),
+);
+
+/** Question n of the attempt, from its item id: the inverse of `studentItem`. */
+const studentItemNumber = (itemId: string): number => STUDENT_TYPES.findIndex((_, i) => studentItem(i + 1) === itemId) + 1;
+
+/**
+ * The correction of a checked question: the key and the explanation as the
+ * API sends them (the key through the type's `studentSolution`), and a
+ * verdict from a fixed table rather than a grading run in the browser —
+ * question 1 (the mcq) right on its first choice and wrong otherwise, every
+ * other question pending, as a runner's or a teacher's verdict would be.
+ */
+function studentCorrection(n: number, payload: unknown): ItemCorrection {
+  const maxPoints = studentItemPoints(n);
+  const keyed = STUDENT_KEYED[n];
+  const whole = keyed ? keyed.server.toSolution(keyed.config, keyed.view) : null;
+  const server = keyed?.server;
+  const shown = {
+    maxPoints,
+    solution: keyed && whole !== null && server?.studentSolution ? server.studentSolution(whole, keyed.config) : whole,
+    explanation: STUDENT_EXPLANATIONS[n] ?? null,
+    details: null,
+  };
+  if (n !== 1) return { ...shown, verdict: "pending", points: null };
+  const right = (payload as { selected?: number[] }).selected?.[0] === 0;
+  return { ...shown, verdict: right ? "correct" : "wrong", points: right ? maxPoints : 0 };
+}
+
+/**
+ * `POST /attempts/:id/answers/:itemId/check` (ADR-124 §3), in the server's
+ * order: off an exercise `409 not_checkable`; the answer written by the
+ * autosave's path (a checked question refuses it, `409 item_checked`); an
+ * empty one `422 nothing_to_check`; then marked checked, with its
+ * correction. `?scene=closed` answers the `410` of an attempt past its time.
+ */
+on("POST", "/app/api/attempts/:id/answers/:itemId/check", (m, body): CheckResponse => {
+  if (!exerciseScene) throw refuse(409, "not_checkable", "only a question of an exercise is checked");
+  if (scene === "closed") throw refuse(410, "attempt_closed", "attempt closed: deadline", { reason: "deadline" });
+  const itemId = m.groups!.itemId!;
+  const reply = writeStudentAnswer(itemId, body);
+  const stored = studentAnswers.get(itemId);
+  if (!stored || emptyPayload(stored.payload)) {
+    throw refuse(422, "nothing_to_check", "an empty question cannot be checked");
+  }
+  const correction = studentCorrection(studentItemNumber(itemId), stored.payload);
+  studentAnswers.set(itemId, { ...stored, correction });
+  return { ...reply, correction };
 });
 
 on("POST", "/app/api/attempts/:id/answers/:itemId/done", (m, body) => {
@@ -1266,6 +1384,7 @@ on("POST", "/app/api/attempts/:id/answers/:itemId/done", (m, body) => {
 
 on("POST", "/app/api/attempts/:id/answers/:itemId/skip", (m, body) => {
   const itemId = m.groups!.itemId!;
+  assertUnchecked(itemId);
   const stored = studentAnswers.get(itemId) ?? { payload: null, revision: 0, done: false };
   const skipped = body.skipped === true;
   studentAnswers.set(itemId, { ...stored, skipped });
@@ -1274,6 +1393,7 @@ on("POST", "/app/api/attempts/:id/answers/:itemId/skip", (m, body) => {
 
 on("POST", "/app/api/attempts/:id/answers/:itemId/flag", (m, body) => {
   const itemId = m.groups!.itemId!;
+  assertUnchecked(itemId);
   const stored = studentAnswers.get(itemId) ?? { payload: null, revision: 0, done: false };
   const flagged = body.flagged === true;
   studentAnswers.set(itemId, { ...stored, flagged });

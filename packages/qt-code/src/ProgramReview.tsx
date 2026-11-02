@@ -1,12 +1,14 @@
 /**
  * The PROGRAM half of a review, shared by `code` and `codeimage` (ADR-021):
- * the score line with the runner's state, the compiler's refusal, and the
- * reference solution when the feedback policy sends it. What the program was
+ * the score line with the runner's state, the compiler's refusal, the
+ * student's own program, and the reference solution when the feedback
+ * policy sends it. What the program was
  * judged against — cases, a picture — is each review's own.
  */
 import type { ReactNode } from "react";
 
-import { fmt } from "@quiz/core/client";
+import { fmt, showsSection, type ReviewSections } from "@quiz/core/client";
+import { joinSegments, type TemplateSegment } from "@quiz/domain/lockedTemplate";
 
 import type { CodeReviewStrings } from "./strings.js";
 import { badge, card, cx, hint, lockedBlock, pointsOrDash, sectionTitle } from "@quiz/ui";
@@ -22,19 +24,108 @@ export type ProgramReviewStrings = Pick<
   | "runnerError"
   | "referenceSolution"
   | "notAnswered"
+  | "yourCode"
 >;
 
 /**
  * A review with no breakdown to show — an absent answer, a grading-level
- * marker — which reads the same to a student either way: the statement, then
- * why there is nothing more.
+ * marker, a run still to come — which reads the same to a student either
+ * way: the statement, why there is nothing more, then the program as
+ * written and the key when the policy sends it. An answer not graded yet
+ * (`graded: false`, no points: its run is still to come, as after a check,
+ * ADR-124 §3) has no reason to give, and is not said to have failed.
  */
-export function NoBreakdown({ statement, answered, s }: { statement: ReactNode; answered: boolean; s: ProgramReviewStrings }): ReactNode {
+export function NoBreakdown({
+  statement,
+  student,
+  answer,
+  solution,
+  sections,
+  graded,
+  s,
+}: {
+  statement: ReactNode;
+  student: ProgramStudent;
+  answer: ProgramAnswer | null;
+  solution: { referenceSolution: string } | null;
+  sections: ReviewSections | undefined;
+  graded: boolean;
+  s: ProgramReviewStrings;
+}): ReactNode {
+  const why = answer === null ? s.notAnswered : graded ? s.runnerError : null;
   return (
     <div className="flex flex-col gap-3">
       {statement}
-      <p className={hint}>{answered ? s.runnerError : s.notAnswered}</p>
+      {why === null ? null : <p className={hint}>{why}</p>}
+      <ProgramCards student={student} answer={answer} solution={solution} sections={sections} s={s} />
     </div>
+  );
+}
+
+/** What of a student view the program half reads: the template, split. */
+interface ProgramStudent {
+  segments: readonly TemplateSegment[];
+}
+
+/** What of an answer it reads: the editable regions. */
+interface ProgramAnswer {
+  regions: readonly string[];
+}
+
+/**
+ * The two programs under a review: the student's own, then the reference
+ * solution when the policy sends it and the reader keeps it (#109).
+ */
+export function ProgramCards({
+  student,
+  answer,
+  solution,
+  sections,
+  s,
+}: {
+  student: ProgramStudent;
+  answer: ProgramAnswer | null;
+  solution: { referenceSolution: string } | null;
+  sections: ReviewSections | undefined;
+  s: ProgramReviewStrings;
+}): ReactNode {
+  return (
+    <>
+      <StudentProgramCard student={student} answer={answer} s={s} />
+      {showsSection(sections, "solution") ? <ReferenceSolutionCard solution={solution} s={s} /> : null}
+    </>
+  );
+}
+
+/**
+ * The program the student wrote, whole: the template's locked lines with
+ * their regions in place, joined as the run joins them (`joinSegments`). An
+ * answer that no longer fits the template shows nothing rather than a
+ * program that never ran.
+ */
+export function StudentProgramCard({
+  student,
+  answer,
+  s,
+}: {
+  student: ProgramStudent;
+  answer: ProgramAnswer | null;
+  s: ProgramReviewStrings;
+}): ReactNode {
+  if (answer === null) return null;
+  let source: string;
+  try {
+    source = joinSegments(student.segments, answer.regions);
+  } catch {
+    return null;
+  }
+  return (
+    <section className={cx(card, "flex flex-col gap-2 p-4")}>
+      <h3 className={sectionTitle}>{s.yourCode}</h3>
+      <pre className={lockedBlock}>
+        <code>{source}</code>
+      </pre>
+    </section>
   );
 }
 

@@ -1,12 +1,15 @@
 /**
- * The attempt's state writes beside the answers: validate, skip, flag, hand
- * in. Each one is a single POST whose answer carries `serverNow` (fed to the
+ * The attempt's state writes beside the answers: validate, skip, flag, check
+ * (ADR-124 §3), hand in. Each one is a single POST whose answer carries `serverNow` (fed to the
  * server clock), and none of them decides anything the server has not — a
  * `410` is how the client learns that the attempt is over or paused.
  */
 import { useCallback } from "react";
 
 import {
+  ANSWER_COORDINATES,
+  CheckRequest,
+  CheckResponse,
   FlagBody,
   FlagResponse,
   MarkDoneBody,
@@ -17,7 +20,7 @@ import {
   type SubmitResponse,
 } from "@quiz/contracts";
 
-import { ApiError, api } from "../api";
+import { ApiError, api, refusedWith } from "../api";
 import type { Autosave } from "./autosave";
 import type { PlayerAction } from "./playerReducer";
 
@@ -39,6 +42,12 @@ export interface StateWrites {
   skip: (itemId: string, skipped: boolean) => Promise<void>;
   /** Issue #89: the review flag. */
   flag: (itemId: string, flagged: boolean) => Promise<void>;
+  /**
+   * ADR-124 §3: check a question of an exercise — its correction, and the
+   * question locked for the rest of the attempt. `answer` is the one on
+   * screen, which the check writes first.
+   */
+  check: (itemId: string, answer: unknown) => Promise<void>;
   submit: () => Promise<void>;
 }
 
@@ -51,6 +60,7 @@ export function useStateWrites({
   dispatch,
   end,
   pause,
+  refresh,
 }: {
   attemptId: string;
   /** The teacher's walk of their own quiz: nothing is written. */
@@ -64,6 +74,8 @@ export function useStateWrites({
   end: (reason: AttemptClosed["reason"]) => void;
   /** The teacher paused (D17): writes are buffered until the resume. */
   pause: () => void;
+  /** Reads the attempt again: the server knows something this client does not. */
+  refresh: () => void;
 }): StateWrites {
   const base = `/app/api/attempts/${attemptId}`;
 
@@ -148,6 +160,42 @@ export function useStateWrites({
     [closed, preview, post, sample, dispatch],
   );
 
+  const check = useCallback(
+    async (itemId: string, answer: unknown) => {
+      if (closed || preview) return;
+      // What is checked is what the student last wrote: it must be on the
+      // server first, or a pending autosave would land on a locked question.
+      if (!(await saver.settle(itemId))) throw new UnsavedAnswer();
+      const revision = saver.revisionOf(itemId) + 1;
+      let response: CheckResponse;
+      try {
+        response = CheckResponse.parse(
+          await post(
+            `answers/${itemId}/check`,
+            CheckRequest.parse({
+              payload: answer,
+              revision,
+              clientTs: new Date().toISOString(),
+              coordinates: ANSWER_COORDINATES,
+            }),
+          ),
+        );
+      } catch (error) {
+        // Checked already (another tab): the attempt holds its correction.
+        if (refusedWith(error, "item_checked")) refresh();
+        throw error;
+      }
+      sample(response.serverNow);
+      saver.seed(itemId, response.revision);
+      // A stale revision is not an error: the server checked what it holds.
+      if (!response.accepted && response.payload !== undefined) {
+        dispatch({ type: "adopt", itemId, payload: response.payload });
+      }
+      dispatch({ type: "check", itemId, correction: response.correction });
+    },
+    [closed, preview, saver, post, sample, dispatch, refresh],
+  );
+
   const submit = useCallback(async () => {
     if (!preview) {
       const response = await api<SubmitResponse>(`${base}/submit`, {
@@ -159,5 +207,5 @@ export function useStateWrites({
     end("submitted");
   }, [base, preview, sample, end]);
 
-  return { markDone, skip, flag, submit };
+  return { markDone, skip, flag, check, submit };
 }

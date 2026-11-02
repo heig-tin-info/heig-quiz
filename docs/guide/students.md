@@ -146,6 +146,8 @@ A question counts as **answered** as soon as it holds an answer: there is nothin
 
 Under **One way through**, each question ends with **Validate and continue**, or **Leave blank and continue** when it holds no answer: it asks for a confirmation, closes the question for good and moves to the next one (`Ctrl+Enter` does the same). Under **Checkpoints**, the checkpoint question carries the same button, and validating it closes everything up to it.
 
+In an exercise, **Check** under an answered question shows its correction at once, in place of the question: the verdict, your answer against the expected one, and the explanation. The answer is then locked until the end of the attempt; a retake gives another go. A code or circuit question shows the expected answer at once and its verdict a moment later, once the tests have run; an essay gets its verdict at the hand-in.
+
 ### How answers are saved
 
 Your answers are saved as you type, a fraction of a second after each change. The indicator in the header reads **Saving…** then **Saved**. There is no save button anywhere, and nothing to do before moving on.
@@ -209,7 +211,7 @@ You do not have to hand in. When your time is up, the attempt closes by itself a
   <figcaption>Before publication, the page only says the results are not published yet.</figcaption>
 </figure>
 
-For a graded quiz, nothing shows until your teacher publishes the results: the page reads **Results not published yet**. For an exercise, the feedback may be immediate, and your teacher may also publish the correction while the exercise is still open: your results page then shows it, and **Try again** stays there if you may retake. An evaluation can also be set to show no feedback at all, in which case the page says so and your teacher tells you your grade otherwise.
+For a graded quiz, nothing shows until your teacher publishes the results: the page reads **Results not published yet**. An exercise shows its whole correction as soon as you hand it in, and **Try again** stays there if you may retake. An exam can also be set to show no feedback at all, in which case the page says so and your teacher tells you your grade otherwise.
 
 <figure markdown="span">
   ![The results on a phone: grade 6.0, points 11 of 11, then one card per question with the chosen answer, the verdict per blank or per test case and the score](../assets/screenshots/feedback-phone-light.png#only-light){ width="390" }

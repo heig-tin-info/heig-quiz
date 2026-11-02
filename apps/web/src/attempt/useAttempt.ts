@@ -15,6 +15,11 @@
  * (`writes.ts`), the run (`run.ts`), the journal and the position
  * (`signals.ts`).
  *
+ * A checked question of an exercise whose verdict is still `pending`
+ * (ADR-124 §3: a runner's verdict lands after the check) has the attempt
+ * read again every few seconds, for a minute at most after the check (a
+ * reload does not), the way the feedback page waits for the hand-in's grading.
+ *
  * The clock is handed out, never ticked here: `clock` is the server's time
  * as a stable function, and the countdown that shows it re-reads it once a
  * second by itself. A hook that ticked would re-render the whole player —
@@ -93,6 +98,10 @@ export interface UseAttempt extends StateWrites {
 }
 
 export type FlushResult = "saved" | "unsaved" | "paused" | "closed";
+
+/** The re-reading of the attempt while a checked question awaits its verdict. */
+const CHECK_POLL_MS = 3_000;
+const CHECK_POLLS = 20;
 
 const reasonOfState = (state: AttemptView["attempt"]["state"]): AttemptClosed["reason"] | null =>
   state === "submitted" ? "submitted" : state === "expired" ? "deadline" : null;
@@ -269,7 +278,17 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     [closed, saver, preview],
   );
 
-  const { markDone, skip, flag, submit } = useStateWrites({
+  const { refetch } = query;
+  // Never cancels a read under way: on a slow network the polls below would
+  // otherwise restart one another and none would land.
+  const refresh = useCallback(() => void refetch({ cancelRefetch: false }), [refetch]);
+  const {
+    markDone,
+    skip,
+    flag,
+    check: checkWrite,
+    submit,
+  } = useStateWrites({
     attemptId,
     preview,
     closed: closed !== null,
@@ -278,7 +297,28 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     dispatch,
     end,
     pause,
+    refresh,
   });
+
+  // ADR-124 §3: a verdict to come is read again, a bounded number of times
+  // after the last check; a reload does not poll (the 60 s safety net reads it).
+  const [polls, setPolls] = useState(0);
+  const check = useCallback(
+    async (itemId: string, answer: unknown) => {
+      await checkWrite(itemId, answer);
+      setPolls(CHECK_POLLS);
+    },
+    [checkWrite],
+  );
+  const awaiting = state.items.some((item) => item.checked && item.correction?.verdict === "pending");
+  useEffect(() => {
+    if (!awaiting || closed !== null || preview || polls <= 0) return;
+    const timer = setTimeout(() => {
+      setPolls((n) => n - 1);
+      refresh();
+    }, CHECK_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [awaiting, closed, preview, polls, refresh]);
   const run = useAttemptRun(attemptId);
 
   const flush = useCallback(async (): Promise<FlushResult> => {
@@ -302,6 +342,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       markDone,
       skip,
       flag,
+      check,
       submit,
       run,
       report,
@@ -320,6 +361,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       markDone,
       skip,
       flag,
+      check,
       submit,
       run,
       report,

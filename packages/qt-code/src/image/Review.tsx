@@ -9,11 +9,11 @@
  */
 import { useMemo, useState } from "react";
 
-import { resolveStrings, showsSection } from "@quiz/core/client";
+import { resolveStrings } from "@quiz/core/client";
 import type { ReviewProps } from "@quiz/core/client";
 import { breakdownOf, hint, ReviewPrompt } from "@quiz/ui";
 
-import { CompileFailure, NoBreakdown, ReferenceSolutionCard, ScoreLine } from "../ProgramReview.js";
+import { CompileFailure, NoBreakdown, ProgramCards, ScoreLine } from "../ProgramReview.js";
 import { ImagePanel, type ImageLayout, type ImageView } from "./ImagePanel.js";
 import { decodeImage } from "./pixels.js";
 import {
@@ -75,7 +75,19 @@ export function CodeImageReview({
     <ReviewPrompt preWrap prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
   );
 
-  if (breakdown === null) return <NoBreakdown statement={statement} answered={answer !== null} s={s} />;
+  if (breakdown === null) {
+    return (
+      <NoBreakdown
+        statement={statement}
+        student={student}
+        answer={answer}
+        solution={solution}
+        sections={sections}
+        graded={points !== null}
+        s={s}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -97,7 +109,7 @@ export function CodeImageReview({
         s={s}
         emptyLabel={s.noImage}
       />
-      {showsSection(sections, "solution") ? <ReferenceSolutionCard solution={solution} s={s} /> : null}
+      <ProgramCards student={student} answer={answer} solution={solution} sections={sections} s={s} />
     </div>
   );
 }

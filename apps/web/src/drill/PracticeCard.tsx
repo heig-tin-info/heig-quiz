@@ -14,7 +14,7 @@
  * The confidence is the caller's to send or to keep in the browser.
  */
 import { useMutation, useQuery, type QueryKey } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, CircleDot, Eye, PartyPopper, XCircle } from "lucide-react";
+import { AlertTriangle, Eye, PartyPopper } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import type { DrillCorrectness, DrillServed } from "@quiz/contracts";
@@ -40,6 +40,7 @@ import {
   type Segment,
   type Tone,
 } from "../ui";
+import { VERDICT_BADGE } from "../verdictBadge";
 import { CONFIDENCE } from "./format";
 
 /** How a correctness reads: the verdict's words (the grading's), its badge, its share of the summary bar. */
@@ -47,9 +48,9 @@ export const CORRECTNESS: Record<
   DrillCorrectness,
   { label: keyof Dict; tone: Tone; bar: BarTone; icon: IconType }
 > = {
-  right: { label: "grading.verdict.correct", tone: "green", bar: "success", icon: CheckCircle2 },
-  partial: { label: "grading.verdict.partial", tone: "amber", bar: "partial", icon: CircleDot },
-  wrong: { label: "grading.verdict.wrong", tone: "red", bar: "danger", icon: XCircle },
+  right: { ...VERDICT_BADGE.correct, bar: "success" },
+  partial: { ...VERDICT_BADGE.partial, bar: "partial" },
+  wrong: { ...VERDICT_BADGE.wrong, bar: "danger" },
 };
 
 /** What both modes' answers carry: the verdict, the points and the key. */

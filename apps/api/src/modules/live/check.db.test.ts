@@ -292,6 +292,8 @@ describe("checking a question of an exercise (ADR-124 §3, invariant 4)", () => 
     const correction = await assertCheckClean(res, attemptId, ["short"]);
     expect(res.json()).toMatchObject({ accepted: true, revision: 2 });
     expect(correction).toMatchObject({ verdict: "wrong", points: 0, explanation: "SECRET-SHORT-EXPLANATION" });
+    // The breakdown the review draws from, as the feedback page reads it.
+    expect(correction.details).not.toBeNull();
     expect(JSON.stringify(correction.solution)).toContain("SECRET-SHORT-KEY");
     // Persisted as the item's automatic grading, validated.
     const rows = await server.app.db
@@ -386,7 +388,7 @@ describe("checking a question of an exercise (ADR-124 §3, invariant 4)", () => 
     expect(res.statusCode).toBe(200);
     const correction = await assertCheckClean(res, attemptId, ["short", "param", "rich", "code"]);
     // The test server's runner is the stub: the cell ends as a proposal, still pending.
-    expect(correction).toMatchObject({ verdict: "pending", points: null, explanation: "SECRET-CODE-EXPLANATION" });
+    expect(correction).toMatchObject({ verdict: "pending", points: null, explanation: "SECRET-CODE-EXPLANATION", details: null });
     expect(JSON.stringify(correction.solution)).toContain("REFERENCE-MARKER");
     const saved = await save(alice, attemptId, "code", { regions: ["    return 2;\n"] }, 2);
     expect(saved.json().error).toBe("item_checked");
@@ -565,6 +567,8 @@ describe("a checked code question and the queues (ADR-124 §3)", () => {
     const open = await live.attemptView(db, evaluation, (await live.attemptById(db, attempt.id))!, app.clock.now());
     expect(open.attempt.state).toBe("in_progress");
     expect(open.items[0]).toMatchObject({ checked: true, correction: { verdict: "correct", points: item.item.points } });
+    // The runner's breakdown travels with it: what the code review draws.
+    expect(open.items[0]!.correction?.details).not.toBeNull();
   });
 
   it("runs once when the attempt is handed in while the check's job still waits", async () => {

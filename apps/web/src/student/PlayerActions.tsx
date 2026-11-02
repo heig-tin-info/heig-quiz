@@ -15,6 +15,10 @@ import { Button } from "../ui";
  * as it holds an answer (issue #89). When it is there, it is THE primary
  * action of the screen, and on an empty question it says so: "Leave blank
  * and continue".
+ *
+ * In an exercise the centre also holds "Check" (ADR-124 §3) while the
+ * question is open: the primary once it holds an answer, disabled on an
+ * empty one, whose reason the hint under the question gives.
  */
 export function PlayerActions({
   manyItems,
@@ -25,6 +29,7 @@ export function PlayerActions({
   nextIsPrimary,
   onValidate,
   onMove,
+  check,
 }: {
   /** One question has no neighbours: both arrows are absent, not disabled. */
   manyItems: boolean;
@@ -36,6 +41,8 @@ export function PlayerActions({
   nextIsPrimary: boolean;
   onValidate: () => void;
   onMove: (delta: 1 | -1) => void;
+  /** ADR-124 §3: an exercise's open question; absent elsewhere. */
+  check?: { primary: boolean; disabled: boolean; busy: boolean; onCheck: () => void } | undefined;
 }) {
   const t = useT();
   return (
@@ -47,6 +54,16 @@ export function PlayerActions({
         </Button>
       ) : null}
       <div className="flex-1" />
+      {check ? (
+        <Button
+          variant={check.primary ? "primary" : "secondary"}
+          disabled={check.disabled}
+          loading={check.busy}
+          onClick={check.onCheck}
+        >
+          {t("player.check")}
+        </Button>
+      ) : null}
       {canValidate ? (
         <Button variant="primary" onClick={onValidate}>
           {validateLabel}

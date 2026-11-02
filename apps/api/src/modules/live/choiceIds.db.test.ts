@@ -349,6 +349,53 @@ describe("a partial retake's carried-over answer (ADR-091, ADR-097)", () => {
   });
 });
 
+describe("a check of an exercise (ADR-124 §3, ADR-097)", () => {
+  /*
+   * An exercise shows its key at the check, in the attempt's own (shuffled)
+   * view: the key names positions, and the breakdown — written in canonical
+   * indices — must not travel in a form that would undo the shuffle.
+   */
+  it("names no choice by its canonical index, in the reply or on a reload", async () => {
+    const db = server.app.db;
+    const built = await evaluationOf({ timing: "manual", lobby: "skip" }, "exercise");
+    const evaluation = await live.startEvaluation(db, await reload(db, built.seed.evaluationId), server.clock.now());
+    const participant = (await live.participantOf(db, evaluation, student.id))!;
+    const { attempt } = await enterStarted(db, { evaluation, participant, now: server.clock.now() });
+    const seed = seedHidingTheKey(built.mcq, built.cloze);
+    await db.update(attempts).set({ seed }).where(eq(attempts.id, attempt.id));
+    const order = shownOrder(seed, built.mcq, built.cloze);
+
+    const noCanonicalIndex = (body: string) => {
+      expect(body).not.toContain('"selected":[0]');
+      expect(body).not.toContain('"blanks":["0"]');
+      expect(body).not.toContain('"given":"0"');
+    };
+    for (const [itemId, payload, key] of [
+      [built.mcq, { selected: [order.mcq.indexOf(KEY)] }, { correct: [order.mcq.indexOf(KEY)] }],
+      [built.cloze, { blanks: [String(order.cloze.indexOf(KEY))] }, null],
+    ] as const) {
+      const res = await post(`/app/api/attempts/${attempt.id}/answers/${itemId}/check`, student.headers, {
+        payload,
+        revision: 1,
+        clientTs: server.clock.now().toISOString(),
+        coordinates: "position",
+      });
+      expect(res.statusCode).toBe(200);
+      const { correction } = res.json() as { correction: { verdict: string; solution: unknown; details: unknown } };
+      expect(correction.verdict).toBe("correct");
+      // The key, in the view's coordinates; the breakdown, without the canonical answer.
+      if (key) expect(correction.solution).toEqual(key);
+      expect(correction.details).not.toBeNull();
+      expect(JSON.stringify(correction.details)).not.toMatch(/"(selected|given|correct)"/);
+      noCanonicalIndex(res.body);
+    }
+    const reloaded = await get(`/app/api/attempts/${attempt.id}`, student.headers);
+    expect(reloaded.statusCode).toBe(200);
+    expect(reloaded.json().view.items.every((i: { checked: boolean }) => i.checked)).toBe(true);
+    noCanonicalIndex(reloaded.body);
+  });
+});
+
 describe("an mcq capped by maxSelections (ADR-097)", () => {
   /*
    * The grader keeps the LOWEST canonical indices of an answer too long — the

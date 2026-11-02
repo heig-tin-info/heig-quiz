@@ -157,7 +157,15 @@ export function assembleSource(
   language: TemplateLanguage,
   regions: readonly string[],
 ): string {
-  const segments = splitTemplate(template, language);
+  return joinSegments(splitTemplate(template, language), regions);
+}
+
+/**
+ * {@link assembleSource} from a template already split — what a student view
+ * carries — so the program a review shows a student is the one that runs.
+ * Throws {@link TemplateRegionMismatch} like it.
+ */
+export function joinSegments(segments: readonly TemplateSegment[], regions: readonly string[]): string {
   const expected = segments.filter((s) => s.kind === "editable").length;
   if (regions.length !== expected) throw new TemplateRegionMismatch(expected, regions.length);
 
