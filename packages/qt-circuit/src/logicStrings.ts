@@ -80,10 +80,10 @@ export const LOGIC_EDITOR_STRINGS = {
   unknownIdentifier: "Unknown input at character {n}.",
 
   vectors: "Test vectors",
-  vectorsHint:
-    "First line: every input and output. Then one step per line. Input: 0, 1 or C for a clock pulse. Output: 0, 1 or X for don't care. Flip-flops start at 0.",
+  vectorsHint: "Line 1: every input and output. Then one step per line: 0, 1, C (clock pulse) or X (don't care).",
   vectorEmpty: "Write the header, then at least one step that checks an output.",
-  vectorTooLong: "Too long: at most {rows} steps.",
+  vectorTooLong: "Line {line}: at most {rows} steps.",
+  vectorTooManyChars: "Too long: at most {chars} characters.",
   vectorHeader: "Line {line}: name every input and output once.",
   vectorColumns: "Line {line}: one value per column.",
   vectorValue: "Line {line}: inputs take 0, 1 or C, outputs 0, 1 or X.",
@@ -96,8 +96,7 @@ export const LOGIC_EDITOR_STRINGS = {
 
   scoring: "Scoring",
   scoringHint: "Every input combination is simulated. The points follow the share of rows with every output right.",
-  scoringHintSequential:
-    "The steps run in order on the student's circuit. The points follow the share of steps with every checked output right.",
+  scoringHintSequential: "The steps run in order. Points follow the share of steps with every checked output right.",
 };
 
 export type LogicEditorStrings = typeof LOGIC_EDITOR_STRINGS;

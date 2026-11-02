@@ -15,24 +15,19 @@
  * Geometry is on the canvas grid ({@link GRID}): inputs on the left at
  * x = −40, the output on the right at x = 40, a terminal's pin at its origin.
  */
-import { LOGIC_LIMITS, type CellType } from "@quiz/domain/logic";
+import { CELL_SPECS, LOGIC_LIMITS, type CellType } from "@quiz/domain/logic";
 
 import { BOX, GRID, type PinSpec } from "./library.js";
 import { countedParts, type PartSpec, type ValueRole } from "./parts.js";
 
-/** The latches and the flip-flops, each its domain cell's inputs, the clock last. */
-const MEMORY = {
-  SR: ["S", "R"],
-  DLATCH: ["D", "EN"],
-  DFF: ["D", "CLK"],
-  JKFF: ["J", "K", "CLK"],
-  TFF: ["T", "CLK"],
-} as const;
-type MemoryFamily = keyof typeof MEMORY;
-export const MEMORY_FAMILIES = Object.keys(MEMORY) as MemoryFamily[];
+/** The gates, in the order the editor and the palette show them. */
+export const GATES = ["AND", "OR", "NAND", "NOR", "XOR", "XNOR", "NOT", "BUF"] as const;
+/** The latches and the flip-flops; their pins are their domain cell's (`CELL_SPECS`). */
+export const MEMORY_FAMILIES = ["SR", "DLATCH", "DFF", "JKFF", "TFF"] as const;
+type MemoryFamily = (typeof MEMORY_FAMILIES)[number];
 
-/** The parts a teacher may allow, in the order the editor and the palette show them: the gates, then the memories. */
-export const GATE_FAMILIES = ["AND", "OR", "NAND", "NOR", "XOR", "XNOR", "NOT", "BUF", "SR", "DLATCH", "DFF", "JKFF", "TFF"] as const;
+/** The parts a teacher may allow: the gates, then the memories. */
+export const GATE_FAMILIES = [...GATES, ...MEMORY_FAMILIES] as const;
 export type GateFamily = (typeof GATE_FAMILIES)[number];
 
 /** The families with a fan-in, and the fan-ins the domain's variadic cells take. */
@@ -145,8 +140,8 @@ function oneSided(kind: "IN" | "OUT" | "LOW" | "HIGH"): LogicPartSpec {
  * of three; `Q` at the right of the first, `QN` at the right of the last.
  */
 function memory(family: MemoryFamily): LogicPartSpec {
-  const names = MEMORY[family];
-  const order = names.length === 3 ? [names[0], names[2], names[1]] : names;
+  const names = CELL_SPECS[CELL[family]].inputs;
+  const order = names.length === 3 ? [names[0]!, names[2]!, names[1]!] : names;
   const ys = INPUT_YS[order.length]!;
   return {
     family,

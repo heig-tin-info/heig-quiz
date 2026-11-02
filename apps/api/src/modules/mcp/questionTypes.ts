@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import type { ParametersDraft } from "@quiz/contracts";
 import { PARAMETERIZED_TYPES } from "@quiz/domain";
+import { LOGIC_LIMITS } from "@quiz/domain/logic";
 import { questionType, registeredServerIds } from "@quiz/registry/server";
 
 import { isParameterized, parameterIssues } from "../pool/service.js";
@@ -302,8 +303,8 @@ const GUIDES: Record<string, TypeGuide> = {
     rules: [
       "Use it for digital logic: combinational (a majority, a comparator, a multiplexer in NAND only) or sequential (a register, a counter). No buses nor multi-bit signals.",
       '`mode` is `combinational` (the default: every input combination is simulated from a fresh state against each output\'s `expression`) or `sequential` (the outputs need no `expression`; `vectors` is the key).',
-      "`vectors` (sequential only), Digital-style test vectors: a first line naming every input and every output once, in any order, then one step per line with one value per column, `#` starts a comment. An input is `0`, `1` or `C` (a clock pulse: 0, then 1, then 0, the circuit settling after each change; every `C` of a step pulses together); an output is `0`, `1` or `X` (don't care). The steps run in order on one circuit whose latches and flip-flops start at 0. At most 256 steps; at least one step checks an output. A bad line is refused with `logic.vector_header`, `logic.vector_columns`, `logic.vector_value`, `logic.vector_empty` or `logic.vector_too_long`.",
-      "`inputs` are 1 to 10 names and `outputs` 1 to 8 `{ name, expression }`. A name is a letter then letters, digits or `_`, at most 6 characters, and no name is used twice across inputs and outputs.",
+      `\`vectors\` (sequential only), Digital-style test vectors: a first line naming every input and every output once, in any order, then one step per line with one value per column, \`#\` starts a comment. An input is \`0\`, \`1\` or \`C\` (a clock pulse: 0, then 1, then 0, the circuit settling after each change; every \`C\` of a step pulses together); an output is \`0\`, \`1\` or \`X\` (don't care). The steps run in order on one circuit whose latches and flip-flops start at 0. At most ${LOGIC_LIMITS.vectorRows} steps and ${LOGIC_LIMITS.vectorLength} characters; at least one step checks an output. A bad line is refused with \`logic.vector_header\`, \`logic.vector_columns\`, \`logic.vector_value\`, \`logic.vector_empty\` or \`logic.vector_too_long\`.`,
+      `\`inputs\` are 1 to ${LOGIC_LIMITS.inputs} names and \`outputs\` 1 to ${LOGIC_LIMITS.outputs} \`{ name, expression }\`. A name is a letter then letters, digits or \`_\`, at most 6 characters, and no name is used twice across inputs and outputs.`,
       "An expression uses only declared inputs, `0` and `1`, parentheses, and the operators: AND `*` `·` `&`, OR `+` `|`, NOT `!` `~` before or `'` after, XOR `^` `⊕`. Precedence NOT > AND > XOR > OR, left-associative. There is NO juxtaposition: `ab` is one name, write `a*b`. A bad expression is refused with `logic.expression_invalid` or `logic.unknown_identifier` at its path.",
       "`palette.kinds` lists the parts the student may place, among the gates `AND`, `OR`, `NAND`, `NOR`, `XOR`, `XNOR`, `NOT`, `BUF` (each 2 to 4 inputs where it applies) and the memories `SR` (SR latch), `DLATCH` (D latch, transparent while EN is 1), `DFF` (D flip-flop, rising edge), `JKFF`, `TFF`, each with outputs Q and Q̄; the constants 0 and 1 are always offered. `palette.maxGates` (optional, null for none) caps every part, `NOT`, `BUF` and the memories included.",
       "`symbols` is `iec` (IEC 60617, the default) or `ansi`: how the gates are drawn.",

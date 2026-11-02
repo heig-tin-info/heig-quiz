@@ -7,7 +7,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { LogicPlayer, playCircuit } from "./LogicPlayer.js";
+import { LogicPlayer, openBench } from "./LogicPlayer.js";
 import type { LogicAnswer, LogicComponent, LogicStudent } from "./logicSchema.js";
 import { logicWire } from "./testing.js";
 
@@ -71,9 +71,9 @@ describe("LogicPlayer", () => {
 
   it("colours a wire by its level, and reads an undriven output as Z", () => {
     const answer = andAnswer();
-    expect(playCircuit(answer.schematic, { a: 1, b: 1 })?.wireLevel("w3")).toBe(1);
+    expect(openBench(answer.schematic)?.apply({ a: 1, b: 1 })?.wireLevel("w3")).toBe(1);
     const open = { ...answer.schematic, wires: answer.schematic.wires.filter((w) => w.id !== "w3") };
-    expect(playCircuit(open, { a: 1, b: 1 })?.outputs["y"]).toBe("Z");
+    expect(openBench(open)?.apply({ a: 1, b: 1 })?.outputs["y"]).toBe("Z");
   });
 
   it("keeps a flip-flop's state between toggles: the clock rises when switched on, Reset starts again", () => {

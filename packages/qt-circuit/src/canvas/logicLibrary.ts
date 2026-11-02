@@ -14,8 +14,9 @@
  * the name needs: a one-letter name is a circle. Its pin sits at the end of
  * the pill, on the side the wire leaves.
  */
-import { BOX } from "../library.js";
-import { GRID } from "../library.js";
+import { CELL_SPECS } from "@quiz/domain/logic";
+
+import { BOX, GRID } from "../library.js";
 import { LOGIC_KINDS, LOGIC_PARTS, NEGATED, PILL_HEIGHT, type LogicPartSpec } from "../logicLibrary.js";
 
 import type { SchematicLibrary } from "./schematicLibrary.js";
@@ -130,25 +131,24 @@ function oneSided(kind: string, name: string): SymbolSpec {
   };
 }
 
-/** A memory's input labels by pin, IEC then ANSI; the clock pin of a flip-flop also gets the triangle. */
-const MEMORY_LABELS: ReadonlyMap<string, Readonly<Record<LogicSymbolStyle, Readonly<Record<string, string>>>>> = new Map(Object.entries({
-  SR: { iec: { S: "S", R: "R" }, ansi: { S: "S", R: "R" } },
-  DLATCH: { iec: { D: "1D", EN: "C1" }, ansi: { D: "D", EN: "EN" } },
-  DFF: { iec: { D: "1D", CLK: "C1" }, ansi: { D: "D", CLK: "" } },
-  JKFF: { iec: { J: "1J", CLK: "C1", K: "1K" }, ansi: { J: "J", CLK: "", K: "K" } },
-  TFF: { iec: { T: "1T", CLK: "C1" }, ansi: { T: "T", CLK: "" } },
-}));
+/**
+ * A memory input's IEC qualifier where it is not the pin's name. ANSI prints
+ * the pin's name, but for a clock, which the triangle alone marks.
+ */
+const IEC_LABELS: Readonly<Record<string, string>> = { D: "1D", J: "1J", K: "1K", T: "1T", EN: "C1", CLK: "C1" };
+const memoryLabel = (style: LogicSymbolStyle, pin: string): string =>
+  style === "iec" ? (IEC_LABELS[pin] ?? pin) : pin === "CLK" ? "" : pin;
 
 /** The monospace advance of the symbol text, 15 px (`symbolText`). */
 const CHAR = 9;
 const TRIANGLE = 7;
 
-function memorySymbol(spec: LogicPartSpec, style: LogicSymbolStyle, labels: Readonly<Record<string, string>>): SymbolSpec {
+function memorySymbol(spec: LogicPartSpec, style: LogicSymbolStyle): SymbolSpec {
   const h = spec.half;
   const pins = spec.pins.filter((pin) => pin.x < 0);
   const clock = pins.find((pin) => pin.name === "CLK");
   const left = (pin: { name: string; y: number }): SymbolText => {
-    const text = labels[pin.name] ?? "";
+    const text = memoryLabel(style, pin.name);
     const start = -20 + 4 + (pin.name === "CLK" ? TRIANGLE + 1 : 0);
     return { x: start + (text.length * CHAR) / 2, y: pin.y, text };
   };
@@ -180,9 +180,8 @@ function libraryOf(style: LogicSymbolStyle): SchematicLibrary {
   const gates = new Map<string, SymbolSpec>(
     LOGIC_KINDS.filter((kind) => LOGIC_PARTS.part(kind).family !== null).map((kind) => {
       const spec = LOGIC_PARTS.part(kind);
-      const labels = MEMORY_LABELS.get(kind);
-      const symbol =
-        labels !== undefined ? memorySymbol(spec, style, labels[style]) : style === "iec" ? iecGate(spec) : ansiGate(spec);
+      const memory = spec.cell !== null && CELL_SPECS[spec.cell].kind !== "comb";
+      const symbol = memory ? memorySymbol(spec, style) : style === "iec" ? iecGate(spec) : ansiGate(spec);
       return [kind, symbol] as const;
     }),
   );

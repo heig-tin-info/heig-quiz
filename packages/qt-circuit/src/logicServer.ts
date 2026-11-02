@@ -41,7 +41,8 @@ export const logicServer: QuestionTypeServer<LogicConfig, LogicAnswer, LogicStud
   /**
    * THE single content exit (invariant 4): the statement, the symbols, the
    * names of the inputs and the outputs, the palette. Never an expression
-   * nor a vector, nor whether the question is sequential.
+   * nor a vector. The mode is not sent either, since no surface needs it,
+   * though the palette (flip-flops or not) and the prompt usually tell it.
    */
   toStudent(config) {
     return {

@@ -87,9 +87,6 @@ export function openBench(schematic: LogicSchematic): Bench | null {
   }
 }
 
-/** The student's circuit under `levels`, from a fresh state; `null` when it cannot be compiled. */
-export const playCircuit = (schematic: LogicSchematic, levels: Readonly<Record<string, Bit>>): PlayState | null =>
-  openBench(schematic)?.apply(levels) ?? null;
 
 export function LogicPlayer({
   student,
@@ -109,12 +106,14 @@ export function LogicPlayer({
   const modeName = useId();
   const [mode, setMode] = useState<Mode>("draw");
   const [levels, setLevels] = useState<Record<string, Bit>>({});
-  /** Bumped by Reset: a new bench, every flip-flop back at 0. */
-  const [run, setRun] = useState(0);
+  /** The running simulation, opened on entering play mode and again by Reset: every flip-flop back at 0. */
+  const [bench, setBench] = useState<Bench | null>(null);
 
   const schematic = useMemo(() => answer?.schematic ?? initialLogicAnswer(student).schematic, [answer, student]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `run` is the Reset that asks for a new bench
-  const bench = useMemo(() => (mode === "play" ? openBench(schematic) : null), [mode, schematic, run]);
+  const play = (next: Mode) => {
+    setMode(next);
+    setBench(next === "play" ? openBench(schematic) : null);
+  };
   const played = useMemo(() => bench?.apply(levels) ?? null, [bench, levels]);
   const gates = gateCount(schematic);
   const max = student.palette.maxGates ?? LOGIC_GATES_MAX;
@@ -165,7 +164,7 @@ export function LogicPlayer({
                   { value: "draw", label: s.draw },
                   { value: "play", label: s.play },
                 ]}
-                onChange={setMode}
+                onChange={play}
               />
               <span className={badge(gates > max ? "danger" : "neutral")}>{plural(s, "gates", gates, { n: gates, max })}</span>
             </div>
@@ -195,7 +194,7 @@ export function LogicPlayer({
                     size="sm"
                     onClick={() => {
                       setLevels({});
-                      setRun(run + 1);
+                      setBench(openBench(schematic));
                     }}
                   >
                     {s.reset}

@@ -19,16 +19,25 @@
  */
 import { z } from "zod";
 
-import { LOGIC_LIMITS, LogicError, parseExpression, parseVectors, toLatex, type TestVectors } from "@quiz/domain/logic";
+import {
+  LOGIC_LIMITS,
+  LogicError,
+  parseExpression,
+  parseVectors,
+  toLatex,
+  type LogicErrorCode,
+  type TestVectors,
+  type VectorErrorCode,
+} from "@quiz/domain/logic";
 
 import {
   GATE_FAMILIES,
+  GATES,
   gateCount,
   initialTerminals,
   LOGIC_GATES_MAX,
   LOGIC_KINDS,
   LOGIC_PARTS,
-  MEMORY_FAMILIES,
   TERMINAL_NAME_MAX,
 } from "./logicLibrary.js";
 import { FreeEnd, PinEnd, SchematicComponent, wireOf } from "./schema.js";
@@ -80,10 +89,8 @@ export const PortName = z
 export const GateFamilySchema = z.enum(GATE_FAMILIES);
 export type GateFamilySchema = z.infer<typeof GateFamilySchema>;
 
-/** The default palette: every gate of §4.18's list, the buffer and the memories left out. */
-export const DEFAULT_FAMILIES: readonly GateFamilySchema[] = GATE_FAMILIES.filter(
-  (f) => f !== "BUF" && !(MEMORY_FAMILIES as readonly string[]).includes(f),
-);
+/** The default palette: every gate of §4.18's list, the buffer left out, no memory. */
+export const DEFAULT_FAMILIES: readonly GateFamilySchema[] = GATES.filter((f) => f !== "BUF");
 
 export const LogicPalette = z.object({
   kinds: z.array(GateFamilySchema).min(1).max(GATE_FAMILIES.length),
@@ -132,7 +139,7 @@ export const LogicConfig = z
     }
     if (c.mode === "sequential") {
       const error = vectorsError(c.vectors, declaredOf(c));
-      if (error !== null) ctx.addIssue({ code: "custom", message: error.code, path: ["vectors"], params: { line: error.line } });
+      if (error !== null) ctx.addIssue({ code: "custom", message: error.code, path: ["vectors"], params: { line: error.position } });
       return;
     }
     c.outputs.forEach((output, i) => {
@@ -153,18 +160,17 @@ export type LogicConfig = z.infer<typeof LogicConfig>;
  * What is wrong with an expression over the declared inputs, with its
  * position, or `null`: the config's refine, and the editor's live line.
  */
-export function expressionError(
-  source: string,
-  inputs: readonly string[],
-): { code: "logic.expression_invalid" | "logic.unknown_identifier"; position: number | null } | null {
+export const expressionError = (source: string, inputs: readonly string[]) =>
+  logicErrorOf(() => parseExpression(source, inputs));
+
+/** The code and position of the `LogicError` a parse throws, or `null` when it parses. */
+function logicErrorOf(parse: () => unknown): { code: LogicErrorCode; position: number | null } | null {
   try {
-    parseExpression(source, inputs);
+    parse();
     return null;
   } catch (error) {
-    if (error instanceof LogicError && error.code === "logic.unknown_identifier") {
-      return { code: error.code, position: error.position };
-    }
-    return { code: "logic.expression_invalid", position: error instanceof LogicError ? error.position : null };
+    if (error instanceof LogicError) return { code: error.code, position: error.position };
+    throw error;
   }
 }
 
@@ -175,22 +181,12 @@ export const declaredOf = (c: Pick<LogicConfig, "inputs" | "outputs">) => ({
 });
 
 /**
- * What is wrong with test vectors over the declared signals, with its
- * 1-based line (`null`: the text as a whole), or `null`: the config's refine,
- * and the editor's live line.
+ * What is wrong with test vectors over the declared signals, its `position`
+ * the 1-based line (`null`: the text as a whole), or `null`: the config's
+ * refine, and the editor's live line.
  */
-export function vectorsError(
-  source: string,
-  declared: { inputs: readonly string[]; outputs: readonly string[] },
-): { code: string; line: number | null } | null {
-  try {
-    parseVectors(source, declared);
-    return null;
-  } catch (error) {
-    if (error instanceof LogicError) return { code: error.code, line: error.position };
-    throw error;
-  }
-}
+export const vectorsError = (source: string, declared: { inputs: readonly string[]; outputs: readonly string[] }) =>
+  logicErrorOf(() => parseVectors(source, declared)) as { code: VectorErrorCode; position: number | null } | null;
 
 /**
  * The vectors as a Markdown table, the header first, or as typed in a code

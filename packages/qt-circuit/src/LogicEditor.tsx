@@ -16,7 +16,7 @@ import { useId } from "react";
 
 import { fmt, issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import type { EditorProps } from "@quiz/core/client";
-import { LOGIC_LIMITS } from "@quiz/domain/logic";
+import { LOGIC_LIMITS, type VectorErrorCode } from "@quiz/domain/logic";
 import {
   AsideSection,
   Button,
@@ -77,14 +77,15 @@ function vectorsProblem(config: LogicConfig, s: LogicEditorStrings): string | nu
   if (config.vectors.trim() === "") return null;
   const error = vectorsError(config.vectors, declaredOf(config));
   if (error === null) return null;
-  const message: Record<string, string> = {
+  const message: Record<VectorErrorCode, string> = {
     "logic.vector_empty": s.vectorEmpty,
-    "logic.vector_too_long": s.vectorTooLong,
+    // The text as a whole (no line) is over its length; a line past the step cap is over the steps.
+    "logic.vector_too_long": error.position === null ? s.vectorTooManyChars : s.vectorTooLong,
     "logic.vector_header": s.vectorHeader,
     "logic.vector_columns": s.vectorColumns,
     "logic.vector_value": s.vectorValue,
   };
-  return fmt(message[error.code] ?? s.vectorEmpty, { line: error.line ?? 1, rows: LOGIC_LIMITS.vectorRows });
+  return fmt(message[error.code], { line: error.position ?? 1, rows: LOGIC_LIMITS.vectorRows, chars: LOGIC_LIMITS.vectorLength });
 }
 
 export function LogicEditor({
@@ -142,10 +143,11 @@ export function LogicEditor({
             { value: "combinational", label: s.modeCombinational },
             { value: "sequential", label: s.modeSequential },
           ]}
-          onChange={(mode) =>
+          onChange={(mode) => {
             // A first switch to vectors starts them with their header: every input, then every output.
-            patch({ mode, vectors: config.vectors || `${[...config.inputs, ...config.outputs.map((o) => o.name)].join(" ")}\n` })
-          }
+            const { inputs, outputs } = declaredOf(config);
+            patch({ mode, vectors: config.vectors || `${[...inputs, ...outputs].join(" ")}\n` });
+          }}
         />
       </div>
 
