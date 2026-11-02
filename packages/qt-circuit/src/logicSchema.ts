@@ -3,28 +3,32 @@
  *
  * The teacher declares the inputs and the outputs, the key, the gates the
  * student may use and how many. The key is, for a COMBINATIONAL question,
- * one boolean expression per output; for a SEQUENTIAL one, test vectors
+ * one boolean expression per output or a reference circuit drawn on the
+ * student's canvas (`keyFrom`); for a SEQUENTIAL one, test vectors
  * (`@quiz/domain/logic`'s `parseVectors`), steps run in order from the
- * initial state. The student
+ * initial state, whose outputs the reference circuit may fill (an authoring
+ * aid: the vectors stay the key). The student
  * wires gates between the declared terminals on `circuit`'s canvas; the
  * answer is the schematic, and its netlist is rebuilt server-side at every
  * grade, never stored (`logicNetlist.ts`).
  *
  * Five shapes, one schema each, as `circuit` (`schema.ts`):
- * - {@link LogicConfig}   what the teacher authors (the expressions or the vectors are the key);
+ * - {@link LogicConfig}   what the teacher authors (the expressions, the reference or the vectors are the key);
  * - {@link LogicAnswer}   the student's schematic;
- * - {@link LogicStudent}  what `toStudent` hands a student: never an expression nor a vector;
+ * - {@link LogicStudent}  what `toStudent` hands a student: never an expression, a vector nor the reference;
  * - {@link LogicSolution} the key: the expressions, or the vectors;
  * - {@link LogicDetails}  the breakdown stored in `gradings.details`.
  */
 import { z } from "zod";
 
 import {
+  circuitKey,
   LOGIC_LIMITS,
   LogicError,
   parseExpression,
   parseVectors,
   toLatex,
+  truthRows,
   type LogicErrorCode,
   type TestVectors,
   type VectorErrorCode,
@@ -40,6 +44,7 @@ import {
   LOGIC_PARTS,
   TERMINAL_NAME_MAX,
 } from "./logicLibrary.js";
+import { buildLogicNetlist, portsMismatch } from "./logicNetlist.js";
 import { FreeEnd, PinEnd, SchematicComponent, wireOf } from "./schema.js";
 
 export const LOGIC_CONFIG_VERSION = 1;
@@ -113,18 +118,30 @@ export type LogicSymbols = z.infer<typeof LogicSymbols>;
 export const LogicMode = z.enum(["combinational", "sequential"]);
 export type LogicMode = z.infer<typeof LogicMode>;
 
+/** Where a combinational question's expected outputs come from: the expressions, or the reference circuit. */
+export const LogicKeyFrom = z.enum(["expressions", "reference"]);
+export type LogicKeyFrom = z.infer<typeof LogicKeyFrom>;
+
 export const LogicConfig = z
   .object({
     configVersion: z.literal(LOGIC_CONFIG_VERSION),
     prompt: z.string().min(1).max(20_000),
     symbols: LogicSymbols.default("iec"),
-    /** Absent from a question written before the sequential phase: combinational. */
     mode: LogicMode.default("combinational"),
+    /** Combinational only: the expressions are the key, or the reference circuit is. */
+    keyFrom: LogicKeyFrom.default("expressions"),
     inputs: z.array(PortName).min(1).max(LOGIC_LIMITS.inputs),
     outputs: z.array(LogicOutput).min(1).max(LOGIC_LIMITS.outputs),
     /** The test vectors, the key of a sequential question; unread otherwise. */
     vectors: z.string().max(LOGIC_LIMITS.vectorLength).default(""),
     palette: LogicPalette.default({ kinds: [...DEFAULT_FAMILIES], maxGates: null }),
+    /**
+     * The teacher's circuit on the student's canvas, held to an answer's caps:
+     * the key of a combinational question whose `keyFrom` is `reference`,
+     * what fills the vectors' outputs of a sequential one. Never sent to a
+     * student; its netlist is rebuilt at every use, never stored.
+     */
+    reference: LogicSchematic.nullable().default(null),
   })
   .superRefine((c, ctx) => {
     // Inputs and outputs are the ports of one netlist: one namespace.
@@ -133,13 +150,23 @@ export const LogicConfig = z
       ...c.inputs.map((name, i): [string, (string | number)[]] => [name, ["inputs", i]]),
       ...c.outputs.map((o, i): [string, (string | number)[]] => [o.name, ["outputs", i, "name"]]),
     ];
+    let duplicate = false;
     for (const [name, path] of names) {
-      if (seen.has(name)) ctx.addIssue({ code: "custom", message: "logic.duplicate_name", path });
+      if (seen.has(name)) {
+        duplicate = true;
+        ctx.addIssue({ code: "custom", message: "logic.duplicate_name", path });
+      }
       seen.add(name);
     }
     if (c.mode === "sequential") {
       const error = vectorsError(c.vectors, declaredOf(c));
       if (error !== null) ctx.addIssue({ code: "custom", message: error.code, path: ["vectors"], params: { line: error.position } });
+      return;
+    }
+    if (c.keyFrom === "reference") {
+      // Duplicate names already have their issue; the terminals cannot match them.
+      const error = duplicate ? null : referenceError(c);
+      if (error !== null) ctx.addIssue({ code: "custom", message: error.code, path: ["reference"], params: { row: error.row } });
       return;
     }
     c.outputs.forEach((output, i) => {
@@ -170,6 +197,32 @@ function logicErrorOf(parse: () => unknown): { code: LogicErrorCode; position: n
     return null;
   } catch (error) {
     if (error instanceof LogicError) return { code: error.code, position: error.position };
+    throw error;
+  }
+}
+
+/**
+ * What keeps the reference circuit from being a combinational key, or
+ * `null`: none drawn, terminals that differ from the declared ones, or a
+ * row of the truth table on which an output reads `X` or `Z` (`row`, its
+ * number, `inputs[0]` the most significant bit). The config's refine, and
+ * the editor's live line.
+ */
+export function referenceError(
+  c: Pick<LogicConfig, "inputs" | "outputs" | "reference">,
+): { code: "logic.reference_missing" | "logic.reference_ports" | "logic.reference_undefined"; row: number | null } | null {
+  if (c.reference === null) return { code: "logic.reference_missing", row: null };
+  if (portsMismatch(c.reference, declaredOf(c))) return { code: "logic.reference_ports", row: null };
+  const { netlist } = buildLogicNetlist(c.reference);
+  const outputs = c.outputs.map((o) => o.name);
+  try {
+    const key = circuitKey(netlist, c.inputs, outputs);
+    for (const bits of truthRows(c.inputs)) key.expected(Object.fromEntries(c.inputs.map((name, j) => [name, bits[j]!])));
+    return null;
+  } catch (error) {
+    if (error instanceof LogicError && error.code === "logic.reference_undefined") {
+      return { code: error.code, row: error.position };
+    }
     throw error;
   }
 }
@@ -233,8 +286,10 @@ export function emptyLogicConfig(): LogicConfig {
     mode: "combinational",
     inputs: ["a", "b"],
     outputs: [{ name: "y", expression: "" }],
+    keyFrom: "expressions",
     vectors: "",
     palette: { kinds: [...DEFAULT_FAMILIES], maxGates: null },
+    reference: null,
   };
 }
 
@@ -263,7 +318,7 @@ export function isLogicAnswered(answer: LogicAnswer): boolean {
 // Student view and key
 // ---------------------------------------------------------------------------
 
-/** What a student receives: the names only, never an expression. */
+/** What a student receives: the names only, never an expression, a vector nor the reference. */
 export const LogicStudent = z.object({
   prompt: z.string(),
   symbols: LogicSymbols,
@@ -273,7 +328,11 @@ export const LogicStudent = z.object({
 });
 export type LogicStudent = z.infer<typeof LogicStudent>;
 
-/** The key: each output's expression (combinational), or the test vectors (sequential, `outputs` empty). */
+/**
+ * The key: each output's expression (combinational), the test vectors
+ * (sequential, `outputs` empty), or nothing for a reference circuit, which
+ * never leaves the server (`outputs` empty, no vectors).
+ */
 export const LogicSolution = z.object({
   outputs: z.array(z.object({ name: z.string(), expression: z.string() })),
   vectors: z.string().optional(),

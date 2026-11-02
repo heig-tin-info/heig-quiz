@@ -955,6 +955,8 @@ export const LOGIC_CONFIG: Record<string, unknown> = {
     "Un système de vote à trois juges allume le voyant $m$ quand **au moins deux** juges sur trois " +
     "appuient sur leur bouton $a$, $b$ ou $c$. Réalisez la fonction avec au plus six portes.",
   symbols: "iec",
+  mode: "combinational",
+  keyFrom: "expressions",
   inputs: ["a", "b", "c"],
   outputs: [{ name: "m", expression: "a*b + a*c + b*c" }],
   palette: { kinds: ["AND", "OR", "NOT", "NAND", "NOR"], maxGates: 6 },
@@ -1526,7 +1528,8 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     randomizable: false,
     concepts: [],
-    config: LOGIC_CONFIG,
+    // The teacher's majority drawn as the reference too: the editor's "Reference circuit" shows it.
+    config: { ...LOGIC_CONFIG, reference: LOGIC_ANSWER.schematic },
     explanation: "La sortie vaut 1 dès que deux entrées valent 1 : $m = ab + ac + bc$, trois ET et un OU.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 1 }],
   }),
@@ -1540,7 +1543,7 @@ export const questions: MockQuestion[] = [
     difficulty: 2,
     randomizable: false,
     concepts: [],
-    config: LOGIC_SEQ_CONFIG,
+    config: { ...LOGIC_SEQ_CONFIG, reference: LOGIC_SEQ_ANSWER.schematic },
     explanation: "Une bascule D dont $\\bar{Q}$ revient sur $D$ change d'état à chaque front.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 1 }],
   }),

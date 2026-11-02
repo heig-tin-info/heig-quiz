@@ -40,8 +40,8 @@ export const logicServer: QuestionTypeServer<LogicConfig, LogicAnswer, LogicStud
 
   /**
    * THE single content exit (invariant 4): the statement, the symbols, the
-   * names of the inputs and the outputs, the palette. Never an expression
-   * nor a vector. The mode is not sent either, since no surface needs it,
+   * names of the inputs and the outputs, the palette. Never an expression,
+   * a vector nor the reference circuit. The mode is not sent either, since no surface needs it,
    * though the palette (flip-flops or not) and the prompt usually tell it.
    */
   toStudent(config) {
@@ -54,11 +54,11 @@ export const logicServer: QuestionTypeServer<LogicConfig, LogicAnswer, LogicStud
     };
   },
 
-  /** The key: each output's expression, or the test vectors. */
+  /** The key: each output's expression, or the test vectors; never the reference circuit, which stays here. */
   toSolution(config) {
-    return config.mode === "sequential"
-      ? { outputs: [], vectors: config.vectors }
-      : { outputs: config.outputs.map(({ name, expression }) => ({ name, expression })) };
+    if (config.mode === "sequential") return { outputs: [], vectors: config.vectors };
+    if (config.keyFrom === "reference") return { outputs: [] };
+    return { outputs: config.outputs.map(({ name, expression }) => ({ name, expression })) };
   },
 
   studentDetails: (details, policy) => logicStudentDetails(details, policy),

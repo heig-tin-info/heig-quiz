@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   checkSequential,
+  fillVectors,
+  runSteps,
   LOGIC_LIMITS,
   LogicError,
   parseVectors,
   type Netlist,
   type NetlistCell,
   type NetlistPort,
+  type VectorInput,
 } from "../logic.js";
 
 const declared = { inputs: ["clk", "d"], outputs: ["q"] };
@@ -127,5 +130,36 @@ describe("checkSequential", () => {
     expect(check.passed).toBe(true);
     // Only catches an algorithmic blow-up, never machine speed.
     expect(performance.now() - started).toBeLessThan(5_000);
+  });
+});
+
+describe("fillVectors", () => {
+  const byDff = (inputs: string[], outputs: string[], steps: VectorInput[][]) => runSteps(dff, inputs, outputs, steps);
+
+  it("writes the reference's outputs under the teacher's stimulus, adding a missing output to the header", () => {
+    const filled = fillVectors("# a D flip-flop\nclk d\n0 1\n\nC 1  # rises\nC 0", declared, byDff);
+    expect(filled).toBe("# a D flip-flop\nclk d q\n0   1 0\n\nC   1 1 # rises\nC   0 0");
+    expect(checkSequential(dff, parseVectors(filled, declared)).passed).toBe(true);
+  });
+
+  it("overwrites whatever the output columns held, and writes X where the reference reads X or Z", () => {
+    expect(fillVectors("clk d q\nC 1 0\n0 0 ?", declared, byDff)).toBe("clk d q\nC   1 1\n0   0 1");
+    const open: Netlist = { ...dff, cells: {} };
+    expect(fillVectors("clk d q\nC 1", declared, (i, o, steps) => runSteps(open, i, o, steps))).toBe("clk d q\nC   1 X");
+  });
+
+  it("refuses a header without every input, a missing input value and no step", () => {
+    const errorOfFill = (source: string) => {
+      try {
+        fillVectors(source, declared, byDff);
+        return null;
+      } catch (error) {
+        return error instanceof LogicError ? [error.code, error.position] : error;
+      }
+    };
+    expect(errorOfFill("clk q\n0 0")).toEqual(["logic.vector_header", 1]);
+    expect(errorOfFill("clk d q\nC")).toEqual(["logic.vector_columns", 2]);
+    expect(errorOfFill("clk d q\nC 2")).toEqual(["logic.vector_value", 2]);
+    expect(errorOfFill("clk d q\n")).toEqual(["logic.vector_empty", null]);
   });
 });

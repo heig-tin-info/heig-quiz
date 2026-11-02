@@ -502,6 +502,43 @@ describe("studentView never leaks the key (invariant 4)", () => {
     expect(payload).toMatchObject({ inputs: ["clk", "d"], outputs: ["q", "qn"] });
   });
 
+  it("keeps the reference circuit of `logic` out, rebuilt for grading only (ADR-123)", () => {
+    // An inverter whose gate bears a name no view holds by chance; the key is the circuit.
+    const part = (id: string, kind: string, x: number, name: string) => ({ id, kind, x, y: 100, m: [1, 0, 0, 1], name, value: "" });
+    const wire = (id: string, a: [string, number], b: [string, number], points: [number, number][]) => ({
+      id,
+      a: { kind: "pin", c: a[0], p: a[1] },
+      b: { kind: "pin", c: b[0], p: b[1] },
+      via: [],
+      points,
+    });
+    const type = questionType("logic");
+    const config = type.configSchema.parse({
+      ...(filledDraft(type) as object),
+      inputs: ["a"],
+      outputs: [{ name: "y" }],
+      keyFrom: "reference",
+      reference: {
+        components: [part("c1", "IN", 100, "a"), part("c2", "NOT", 200, "Uref77"), part("c3", "OUT", 300, "y")],
+        wires: [
+          wire("w1", ["c1", 0], ["c2", 0], [[100, 100], [160, 100]]),
+          wire("w2", ["c2", 1], ["c3", 0], [[240, 100], [300, 100]]),
+        ],
+      },
+    });
+    const payload = studentView({
+      type: "logic",
+      version: { config, configVersion: type.configVersion, variables: null },
+      seed: 0,
+      itemId: "77777777-7777-4777-8777-77777777777a",
+      shuffle: false,
+    });
+    const serialized = JSON.stringify(payload);
+    expect(serialized).not.toContain("Uref77");
+    for (const key of ["reference", "keyFrom", "wires", "components"]) expect(keysOf(payload)).not.toContain(key);
+    expect(payload).toMatchObject({ inputs: ["a"], outputs: ["y"] });
+  });
+
   it("keeps the key of the fake test type out too", () => {
     const restore = registerForTests(fakeShort);
     try {

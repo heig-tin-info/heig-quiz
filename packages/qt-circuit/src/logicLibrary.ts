@@ -206,8 +206,12 @@ export function logicSummary(schematic: { components: readonly { kind: string }[
   return maxGates === null ? String(gates) : `${gates}/${maxGates}`;
 }
 
-/** The most gates an answer holds: the netlist's cells, less the two constant cells. */
-export const LOGIC_GATES_MAX = LOGIC_LIMITS.components - 2;
+/**
+ * The most gates an answer (or a reference) holds, `LOGIC_LIMITS.gates`: a
+ * round number for the teacher and the student, under the netlist's cells
+ * (`LOGIC_LIMITS.components`), which keep the margin for the two constant cells.
+ */
+export const LOGIC_GATES_MAX = LOGIC_LIMITS.gates;
 
 /**
  * Where the declared terminals start: the inputs down the left edge, the

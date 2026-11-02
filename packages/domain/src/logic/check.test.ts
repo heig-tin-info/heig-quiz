@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   checkCombinational,
+  circuitKey,
+  expressionKey,
   compileNetlist,
   evaluate,
   LOGIC_LIMITS,
@@ -62,7 +64,7 @@ describe("checkCombinational", () => {
     const next = rng(459);
     for (let n = 0; n < 200; n++) {
       const exprs = { Y: randomExpr(next, 3), Z: randomExpr(next, 3) };
-      const check = checkCombinational(netlistFromExpressions(exprs, VARS), exprs, VARS);
+      const check = checkCombinational(netlistFromExpressions(exprs, VARS), expressionKey(exprs), VARS);
       expect(check.passed, JSON.stringify(exprs)).toBe(true);
       for (const row of check.rows) {
         const env = Object.fromEntries(VARS.map((name, j) => [name, row.inputs[j]!]));
@@ -74,7 +76,7 @@ describe("checkCombinational", () => {
   it("counts rows in binary, and marks every wrong output, X or Z included", () => {
     const and = { Y: parseExpression("A * B") };
     const or = netlistFromExpressions({ Y: parseExpression("A + B") }, ["A", "B"]);
-    const check = checkCombinational(or, and, ["A", "B"]);
+    const check = checkCombinational(or, expressionKey(and), ["A", "B"]);
     expect(check.passed).toBe(false);
     expect(check.rows.map((r) => r.inputs)).toEqual([[0, 0], [0, 1], [1, 0], [1, 1]]);
     expect(check.rows.map((r) => r.ok)).toEqual([[true], [false], [false], [true]]);
@@ -84,15 +86,32 @@ describe("checkCombinational", () => {
       ports: { A: { direction: "input", net: "a" }, Y: { direction: "output", net: "y" } },
       cells: { g: { type: "$and", connections: { A0: "a", Y: "y" } } },
     };
-    expect(checkCombinational(floating, { Y: parseExpression("A") }, ["A"]).rows.map((r) => r.actual)).toEqual([[0], ["X"]]);
-    expect(checkCombinational(floating, { W: parseExpression("A") }, ["A"]).rows.map((r) => r.actual)).toEqual([["Z"], ["Z"]]);
+    expect(checkCombinational(floating, expressionKey({ Y: parseExpression("A") }), ["A"]).rows.map((r) => r.actual)).toEqual([[0], ["X"]]);
+    expect(checkCombinational(floating, expressionKey({ W: parseExpression("A") }), ["A"]).rows.map((r) => r.actual)).toEqual([["Z"], ["Z"]]);
     // An output named like a prototype property is missing, not inherited.
-    expect(checkCombinational(floating, { toString: parseExpression("A") }, ["A"]).rows.map((r) => r.actual)).toEqual([["Z"], ["Z"]]);
+    expect(checkCombinational(floating, expressionKey({ toString: parseExpression("A") }), ["A"]).rows.map((r) => r.actual)).toEqual([["Z"], ["Z"]]);
+  });
+
+  it("checks against a reference circuit as against its expressions, and refuses a reference that reads X", () => {
+    const exprs = { Y: parseExpression("A * B + C"), Z: parseExpression("A ^ C") };
+    const inputs = ["A", "B", "C"];
+    const reference = netlistFromExpressions(exprs, inputs);
+    const wrong = netlistFromExpressions({ Y: parseExpression("A + C"), Z: parseExpression("A ^ C") }, inputs);
+    const byExpressions = checkCombinational(wrong, expressionKey(exprs), inputs);
+    expect(checkCombinational(wrong, circuitKey(reference, inputs, ["Y", "Z"]), inputs)).toEqual(byExpressions);
+    expect(byExpressions.passed).toBe(false);
+
+    // Y = A AND (an unconnected input): X when A = 1, so row 1 (A = 1) has no expected level.
+    const floating: Netlist = {
+      ports: { A: { direction: "input", net: "a" }, Y: { direction: "output", net: "y" } },
+      cells: { g: { type: "$and", connections: { A0: "a", Y: "y" } } },
+    };
+    expect(() => checkCombinational(reference, circuitKey(floating, ["A"], ["Y"]), ["A"])).toThrow(/logic.reference_undefined at 1/);
   });
 
   it("refuses more inputs than the limit", () => {
     const inputs = Array.from({ length: LOGIC_LIMITS.inputs + 1 }, (_, i) => `I${i}`);
-    expect(() => checkCombinational({ ports: {}, cells: {} }, {}, inputs)).toThrow(/logic.too_many_inputs/);
+    expect(() => checkCombinational({ ports: {}, cells: {} }, expressionKey({}), inputs)).toThrow(/logic.too_many_inputs/);
   });
 
   it("grades a maximal netlist: 60 components, 10 inputs, 1024 rows", () => {
@@ -111,7 +130,7 @@ describe("checkCombinational", () => {
     const netlist = netlistFromExpressions(exprs, inputs);
     expect(Object.keys(netlist.cells)).toHaveLength(LOGIC_LIMITS.components);
     expect(validateNetlist(netlist)).toEqual([]);
-    const check = checkCombinational(netlist, exprs, inputs);
+    const check = checkCombinational(netlist, expressionKey(exprs), inputs);
     expect(check.rows).toHaveLength(1024);
     expect(check.passed).toBe(true);
   });

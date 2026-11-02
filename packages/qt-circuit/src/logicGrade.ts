@@ -1,7 +1,8 @@
 /**
  * The grade of a `logic` answer (docs/spec/04 §4.18, ADR-123 §6), in process
  * and final: the netlist rebuilt from the stored schematic, then either every
- * row of the truth table simulated from a fresh state (`checkCombinational`)
+ * row of the truth table simulated from a fresh state (`checkCombinational`),
+ * against the expressions or the reference circuit, simulated the same way,
  * or the test vectors' steps run in order on one simulator
  * (`checkSequential`); the points the share of rows whose checked outputs
  * are ALL right.
@@ -18,9 +19,12 @@ import {
   checkCombinational,
   checkSequential,
   checksOutput,
+  circuitKey,
+  expressionKey,
   parseExpression,
   parseVectors,
   type CombinationalCheck,
+  type CombinationalKey,
   type Netlist,
   type SequentialCheck,
 } from "@quiz/domain/logic";
@@ -54,11 +58,24 @@ function nothing(config: LogicConfig, reason: string): LogicDetails {
   };
 }
 
+/**
+ * A combinational question's key: the expressions, or the reference circuit
+ * rebuilt into a netlist here, never stored. The config's refine guarantees
+ * the reference reads a level on every row.
+ */
+function combinationalKey(config: LogicConfig): CombinationalKey {
+  const outputs = config.outputs.map((o) => o.name);
+  if (config.keyFrom === "reference") {
+    if (config.reference === null) throw new Error("logic: a reference key without a reference circuit");
+    return circuitKey(buildLogicNetlist(config.reference).netlist, config.inputs, outputs);
+  }
+  return expressionKey(Object.fromEntries(config.outputs.map((o) => [o.name, parseExpression(o.expression, config.inputs)])));
+}
+
 /** The circuit against the question's key. */
 function check(config: LogicConfig, netlist: Netlist): CombinationalCheck | SequentialCheck {
   if (config.mode === "sequential") return checkSequential(netlist, parseVectors(config.vectors, declaredOf(config)));
-  const exprs = Object.fromEntries(config.outputs.map((o) => [o.name, parseExpression(o.expression, config.inputs)]));
-  return checkCombinational(netlist, exprs, config.inputs);
+  return checkCombinational(netlist, combinationalKey(config), config.inputs);
 }
 
 export function gradeLogic(

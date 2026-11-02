@@ -12,7 +12,7 @@ import type { StudentLeakFixture } from "@quiz/core/testing";
 import { BOX, LIBRARY, PORTS, type ComponentKind } from "./library.js";
 import { LOGIC_PARTS } from "./logicLibrary.js";
 import { pinLocation } from "./netlist.js";
-import { LogicConfig, type LogicComponent, type LogicWire } from "./logicSchema.js";
+import { LogicConfig, type LogicComponent, type LogicSchematic, type LogicWire } from "./logicSchema.js";
 import {
   CircuitConfig,
   type Orientation,
@@ -250,7 +250,45 @@ export const circuitLeakFixture: StudentLeakFixture<CircuitConfig> = {
 export const SECRET_MAJORITY = "a*b + a*c + b*c";
 export const SECRET_PARITY = "a ^ b ^ c";
 
-/** A majority and a parity over three inputs, two outputs, a restricted palette. */
+/** A logic part, upright. */
+export function logicPart(id: string, kind: LogicComponent["kind"], x: number, y: number, name: string = kind): LogicComponent {
+  return { id, kind, x, y, m: [1, 0, 0, 1], name, value: "" };
+}
+
+/** The names of a reference circuit's gates: no student view could hold them by chance. */
+export const SECRET_REFERENCE_GATES = ["Uref41", "Uref42"];
+
+/** A half adder, `c = a*b` from an AND, `s = a^b` from an XOR, its gates named `gates`. */
+export function halfAdderSchematic(gates: readonly [string, string] = ["U1", "U2"]): LogicSchematic {
+  const a = logicPart("c1", "IN", 100, 100, "a");
+  const b = logicPart("c2", "IN", 100, 300, "b");
+  const and = logicPart("c3", "AND2", 300, 140, gates[0]);
+  const xor = logicPart("c4", "XOR2", 300, 300, gates[1]);
+  const c = logicPart("c5", "OUT", 500, 140, "c");
+  const s = logicPart("c6", "OUT", 500, 300, "s");
+  return {
+    components: [a, b, and, xor, c, s],
+    wires: [
+      logicWire("w1", [a, 0], [and, 0]),
+      logicWire("w2", [a, 0], [xor, 0]),
+      logicWire("w3", [b, 0], [and, 1]),
+      logicWire("w4", [b, 0], [xor, 1]),
+      logicWire("w5", [and, 2], [c, 0]),
+      logicWire("w6", [xor, 2], [s, 0]),
+    ],
+  };
+}
+
+/** The majority's reference, begun: its terminals and two gates, stored but unread while the expressions are the key. */
+function majorityReference(): LogicSchematic {
+  const terminals = ["a", "b", "c"].map((name, i) => logicPart(`c${i + 1}`, "IN", 100, 100 + 100 * i, name));
+  const outputs = ["m", "p"].map((name, i) => logicPart(`c${i + 4}`, "OUT", 600, 100 + 200 * i, name));
+  const and = logicPart("c6", "AND2", 300, 140, SECRET_REFERENCE_GATES[0]);
+  const xor = logicPart("c7", "XOR3", 300, 300, SECRET_REFERENCE_GATES[1]);
+  return { components: [...terminals, ...outputs, and, xor], wires: [logicWire("w1", [terminals[0]!, 0], [and, 0])] };
+}
+
+/** A majority and a parity over three inputs, two outputs, a restricted palette, a reference begun. */
 export function logicConfig(overrides: Record<string, unknown> = {}): LogicConfig {
   return LogicConfig.parse({
     configVersion: 1,
@@ -262,14 +300,35 @@ export function logicConfig(overrides: Record<string, unknown> = {}): LogicConfi
       { name: "p", expression: SECRET_PARITY },
     ],
     palette: { kinds: ["AND", "OR", "XOR"], maxGates: 8 },
+    reference: majorityReference(),
     ...overrides,
   });
 }
 
 export const logicLeakFixture: StudentLeakFixture<LogicConfig> = {
   config: logicConfig(),
-  forbiddenKeys: ["expression", "expressions", "expected", "rows", "vectors", "mode"],
-  secrets: [SECRET_MAJORITY, SECRET_PARITY],
+  forbiddenKeys: ["expression", "expressions", "expected", "rows", "vectors", "mode", "keyFrom", "reference", "wires"],
+  secrets: [SECRET_MAJORITY, SECRET_PARITY, ...SECRET_REFERENCE_GATES],
+};
+
+/** A half adder whose key is its reference circuit, the gates named {@link SECRET_REFERENCE_GATES}. */
+export function logicReferenceConfig(overrides: Record<string, unknown> = {}): LogicConfig {
+  return LogicConfig.parse({
+    configVersion: 1,
+    prompt: "Build a half adder.",
+    inputs: ["a", "b"],
+    outputs: [{ name: "c" }, { name: "s" }],
+    keyFrom: "reference",
+    reference: halfAdderSchematic(SECRET_REFERENCE_GATES as [string, string]),
+    palette: { kinds: ["AND", "XOR"], maxGates: 4 },
+    ...overrides,
+  });
+}
+
+export const logicReferenceLeakFixture: StudentLeakFixture<LogicConfig> = {
+  config: logicReferenceConfig(),
+  forbiddenKeys: logicLeakFixture.forbiddenKeys,
+  secrets: SECRET_REFERENCE_GATES,
 };
 
 /** A D flip-flop's test vectors: each step a line no student view could hold by chance. */
@@ -285,6 +344,7 @@ export function logicSequentialConfig(overrides: Record<string, unknown> = {}): 
     outputs: [{ name: "q" }],
     vectors: SECRET_VECTORS,
     palette: { kinds: ["DFF"], maxGates: 2 },
+    reference: null,
     ...overrides,
   });
 }

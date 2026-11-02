@@ -5,7 +5,9 @@
 Accepted (2026-11-02, product owner Yves Chevallier, on issue #459; the
 decisions of its two last comments).
 Amended 2026-11-02: the sequential phase (memory cells, test vectors),
-[below](#amendment-of-2026-11-02-the-sequential-phase).
+[below](#amendment-of-2026-11-02-the-sequential-phase); and the reference
+circuit and the gate cap of 50,
+[below](#amendment-of-2026-11-02-the-reference-circuit-and-a-round-gate-cap).
 
 Scope: the `logic` question type (a second type of `packages/qt-circuit`),
 its simulator and expression parser `@quiz/domain/logic`, and the
@@ -150,6 +152,32 @@ Decided by the product owner on issue #459 (PR4); the rules are in
 - **Play mode** keeps one simulator running between toggles (a clock input
   switched on is a rising edge) and gains a Reset; a combinational circuit
   reads the same either way.
+
+## Amendment of 2026-11-02: the reference circuit and a round gate cap
+
+Decided by the product owner on issue #459 (follow-up); the rules are in
+[§4.18](../spec/04-types-de-questions.md#418-logic-circuit-logic).
+
+- **A reference circuit in the editor**, on the student's canvas with the
+  student's palette and symbols, its terminals the declared ones, locked. A
+  combinational question takes its expected answer from the expressions OR
+  from the reference (`keyFrom`); with the reference, every row is
+  simulated on it from a fresh state, as on the student's circuit, through
+  the one combinational check (the domain's `CombinationalKey`: expressions
+  or circuit). No expression is ever derived from the circuit. A reference
+  reading `X` or `Z` on a row is refused at publication
+  (`logic.reference_undefined`), never a free point.
+- **Sequential: the vectors stay the key.** "Use as reference" writes the
+  outputs of the teacher's stimulus from one run of the reference, through
+  the stepper the grade uses (`runSteps`); the teacher may then edit them.
+- **Invariant 4**: the reference never reaches a student — not in
+  `toStudent`, not in `studentDetails`, not in `toSolution` (a
+  reference-keyed key is empty). It is stored as a schematic, held to an
+  answer's caps, and rebuilt into a netlist at every use. No stored question
+  existed, so the config changed shape without a migration.
+- **The gate cap is 50** (`LOGIC_LIMITS.gates`), a round number for people;
+  `LOGIC_LIMITS.components` stays 60, the margin holding the two constant
+  cells. It replaces the 58 of §2's arithmetic.
 
 ## Consequences
 

@@ -1,7 +1,8 @@
 /**
  * Digital logic (issue #459, ADR-123): the netlist, the event-driven engine,
  * the boolean expressions and the exhaustive check of a combinational
- * circuit, the test vectors and the step-by-step check of a sequential one.
+ * circuit (against expressions or a reference circuit), the test vectors
+ * and the step-by-step check of a sequential one.
  * Pure (invariant 8): the browser animates with it, the server grades with it.
  *
  * This file is the module's ONLY entry point (`@quiz/domain/logic`);
@@ -33,13 +34,19 @@ export { evaluate, parseExpression, toLatex, type Expr } from "./logic/expressio
 export {
   checkCombinational,
   checkSequential,
+  circuitKey,
+  expressionKey,
+  runSteps,
+  truthRows,
   type CombinationalCheck,
+  type CombinationalKey,
   type CombinationalRow,
   type SequentialCheck,
   type SequentialRow,
 } from "./logic/check.js";
 export {
   checksOutput,
+  fillVectors,
   parseVectors,
   type TestVectors,
   type VectorInput,
