@@ -274,6 +274,10 @@ branch's head**, not from the target: the workflow checks out
 Dispatches are **staggered**, one every 15 s per App installation (choice
 f): the CI runners of ADR-007 are shared, and a freeze of 100 repositories
 must not queue 100 runs at once.
+*Amended 2026-11-02:* a pass whose scope holds no automatic criterion (no
+`command` leaf) is never dispatched: it is settled at once, without a row,
+and its LLM review (§7) queued, instead of waiting 24 h for a run nothing
+would be read from.
 
 **Acceptance.** The platform accepts a run, found by its `workflow_run`
 event or by the reconciliation (ADR-011), only if all of these hold:
