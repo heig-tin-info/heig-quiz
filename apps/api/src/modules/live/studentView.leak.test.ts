@@ -477,6 +477,31 @@ describe("studentView never leaks the key (invariant 4)", () => {
     expect(payload).toMatchObject({ inputs: ["a", "b"], outputs: ["y", "z"] });
   });
 
+  it("keeps the test vectors of a sequential `logic` out (ADR-123 §7)", () => {
+    // Each step is a line of values no view holds by chance; the header names the ports, which are public.
+    const steps = ["C 1 1 0", "C 0 0 1", "0 1 0 1"];
+    const type = questionType("logic");
+    const config = type.configSchema.parse({
+      ...(filledDraft(type) as object),
+      mode: "sequential",
+      inputs: ["clk", "d"],
+      outputs: [{ name: "q" }, { name: "qn" }],
+      vectors: `clk d q qn\n${steps.join("\n")}`,
+    });
+    const payload = studentView({
+      type: "logic",
+      version: { config, configVersion: type.configVersion, variables: null },
+      seed: 0,
+      itemId: "77777777-7777-4777-8777-777777777779",
+      shuffle: false,
+    });
+    const serialized = JSON.stringify(payload);
+    for (const step of steps) expect(serialized).not.toContain(step);
+    expect(keysOf(payload)).not.toContain("vectors");
+    expect(keysOf(payload)).not.toContain("mode");
+    expect(payload).toMatchObject({ inputs: ["clk", "d"], outputs: ["q", "qn"] });
+  });
+
   it("keeps the key of the fake test type out too", () => {
     const restore = registerForTests(fakeShort);
     try {

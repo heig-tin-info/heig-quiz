@@ -2,12 +2,15 @@
  * The teacher's editor for a `logic` question (docs/spec/04 §4.18).
  *
  * The ONE thing it is for is the specification: the statement, the inputs,
- * each output's expression. The palette and the symbols follow; the scoring
- * has nothing to set, so its aside only says how the points are counted.
+ * the outputs and the key — each output's expression (combinational) or the
+ * test vectors (sequential), chosen by a segmented control. The palette and
+ * the symbols follow; the scoring has nothing to set, so its aside only says
+ * how the points are counted.
  *
- * Every expression is parsed at the keystroke by the domain's parser, the one
- * the config schema runs at publication, so the line under the field says
- * where it stops reading, and a readable one shows as the student's key will.
+ * Every expression and the vectors are parsed at the keystroke by the
+ * domain's parser, the one the config schema runs at publication, so the
+ * line under the field says where it stops reading, and a readable
+ * expression shows as the student's key will.
  */
 import { useId } from "react";
 
@@ -17,6 +20,7 @@ import { LOGIC_LIMITS } from "@quiz/domain/logic";
 import {
   AsideSection,
   Button,
+  cx,
   EditorSection,
   ErrorText,
   hint,
@@ -29,11 +33,20 @@ import {
   removeAt,
   sectionTitle,
   Segmented,
+  textareaClass,
   TextInput,
 } from "@quiz/ui";
 
 import { GATE_FAMILIES, LOGIC_GATES_MAX, type GateFamily } from "./logicLibrary.js";
-import { expressionError, expressionLatex, type LogicConfig, type LogicSymbols } from "./logicSchema.js";
+import {
+  declaredOf,
+  expressionError,
+  expressionLatex,
+  vectorsError,
+  type LogicConfig,
+  type LogicMode,
+  type LogicSymbols,
+} from "./logicSchema.js";
 import { LOGIC_EDITOR_STRINGS, LOGIC_KIND_STRINGS, type LogicEditorStrings, type LogicKindStrings } from "./logicStrings.js";
 import { chip } from "./styles.js";
 
@@ -59,6 +72,21 @@ function expressionProblem(source: string, inputs: readonly string[], s: LogicEd
   return fmt(error.code === "logic.unknown_identifier" ? s.unknownIdentifier : s.expressionInvalid, { n });
 }
 
+/** What the line under the vectors says: what is wrong and on which line, or nothing. */
+function vectorsProblem(config: LogicConfig, s: LogicEditorStrings): string | null {
+  if (config.vectors.trim() === "") return null;
+  const error = vectorsError(config.vectors, declaredOf(config));
+  if (error === null) return null;
+  const message: Record<string, string> = {
+    "logic.vector_empty": s.vectorEmpty,
+    "logic.vector_too_long": s.vectorTooLong,
+    "logic.vector_header": s.vectorHeader,
+    "logic.vector_columns": s.vectorColumns,
+    "logic.vector_value": s.vectorValue,
+  };
+  return fmt(message[error.code] ?? s.vectorEmpty, { line: error.line ?? 1, rows: LOGIC_LIMITS.vectorRows });
+}
+
 export function LogicEditor({
   config,
   onChange,
@@ -75,6 +103,8 @@ export function LogicEditor({
   const kinds = resolveStrings(LOGIC_KIND_STRINGS, kindLabels);
   const ids = useId();
   const patch = (next: Partial<LogicConfig>) => onChange({ ...config, ...next });
+  const sequential = config.mode === "sequential";
+  const vectorsLine = sequential ? vectorsProblem(config, s) : null;
   const toggleFamily = (family: GateFamily, on: boolean) =>
     patch({
       palette: {
@@ -98,6 +128,26 @@ export function LogicEditor({
         uploadImage={uploadAsset}
         issues={issuesAt(issues, "prompt")}
       />
+
+      <div className="flex flex-col items-start gap-2">
+        <span className={label} id={`${ids}-mode`}>
+          {s.mode}
+        </span>
+        <Segmented<LogicMode>
+          name={`${ids}-mode`}
+          labelledBy={`${ids}-mode`}
+          value={config.mode}
+          disabled={disabled}
+          options={[
+            { value: "combinational", label: s.modeCombinational },
+            { value: "sequential", label: s.modeSequential },
+          ]}
+          onChange={(mode) =>
+            // A first switch to vectors starts them with their header: every input, then every output.
+            patch({ mode, vectors: config.vectors || `${[...config.inputs, ...config.outputs.map((o) => o.name)].join(" ")}\n` })
+          }
+        />
+      </div>
 
       <EditorSection title={s.inputs} hint={s.inputsHint}>
         <ul className="flex flex-wrap items-center gap-2">
@@ -133,11 +183,11 @@ export function LogicEditor({
         <IssueList issues={issuesAt(issues, "inputs")} />
       </EditorSection>
 
-      <EditorSection title={s.outputs} hint={s.outputsHint}>
+      <EditorSection title={s.outputs} hint={sequential ? s.inputsHint : s.outputsHint}>
         <ul className="flex flex-col gap-3">
           {config.outputs.map((output, i) => {
-            const problem = expressionProblem(output.expression, config.inputs, s);
-            const latex = problem === null ? expressionLatex(output.name, output.expression, config.inputs) : null;
+            const problem = sequential ? null : expressionProblem(output.expression, config.inputs, s);
+            const latex = problem === null && !sequential ? expressionLatex(output.name, output.expression, config.inputs) : null;
             const setOutput = (next: Partial<typeof output>) =>
               patch({ outputs: config.outputs.map((o, k) => (k === i ? { ...o, ...next } : o)) });
             return (
@@ -153,20 +203,24 @@ export function LogicEditor({
                     disabled={disabled}
                     onChange={(e) => setOutput({ name: e.target.value })}
                   />
-                  <span aria-hidden className="font-mono text-fg-muted">
-                    =
-                  </span>
-                  <TextInput
-                    size="sm"
-                    className="min-w-0 flex-1 font-mono"
-                    aria-label={fmt(s.expression, { name: output.name })}
-                    aria-invalid={problem !== null}
-                    value={output.expression}
-                    spellCheck={false}
-                    autoComplete="off"
-                    disabled={disabled}
-                    onChange={(e) => setOutput({ expression: e.target.value })}
-                  />
+                  {sequential ? null : (
+                    <>
+                      <span aria-hidden className="font-mono text-fg-muted">
+                        =
+                      </span>
+                      <TextInput
+                        size="sm"
+                        className="min-w-0 flex-1 font-mono"
+                        aria-label={fmt(s.expression, { name: output.name })}
+                        aria-invalid={problem !== null}
+                        value={output.expression}
+                        spellCheck={false}
+                        autoComplete="off"
+                        disabled={disabled}
+                        onChange={(e) => setOutput({ expression: e.target.value })}
+                      />
+                    </>
+                  )}
                   <RemoveRowButton
                     label={fmt(s.removeOutput, { name: output.name })}
                     disabled={disabled || config.outputs.length <= 1}
@@ -193,6 +247,24 @@ export function LogicEditor({
         </div>
         <IssueList issues={issuesAt(issues, "outputs").filter((x) => x.path.length === 1)} />
       </EditorSection>
+
+      {sequential ? (
+        <EditorSection title={s.vectors} hint={s.vectorsHint}>
+          <textarea
+            aria-label={s.vectors}
+            rows={Math.min(16, Math.max(6, config.vectors.split("\n").length + 1))}
+            className={cx(textareaClass, "w-full font-mono")}
+            spellCheck={false}
+            autoComplete="off"
+            aria-invalid={vectorsLine !== null}
+            disabled={disabled}
+            value={config.vectors}
+            onChange={(e) => patch({ vectors: e.target.value })}
+          />
+          {/* The live line says where; the saved draft's issue only when there is none (an empty field). */}
+          {vectorsLine === null ? <IssueList issues={issuesAt(issues, "vectors")} /> : <ErrorText>{vectorsLine}</ErrorText>}
+        </EditorSection>
+      ) : null}
 
       <EditorSection title={s.palette} hint={s.paletteHint}>
         <div className="flex flex-wrap items-center gap-2">
@@ -248,7 +320,7 @@ export function LogicEditor({
 
       <AsideSection aside={aside}>
         <h3 className={sectionTitle}>{s.scoring}</h3>
-        <p className={hint}>{s.scoringHint}</p>
+        <p className={hint}>{sequential ? s.scoringHintSequential : s.scoringHint}</p>
       </AsideSection>
     </div>
   );

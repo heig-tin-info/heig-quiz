@@ -41,6 +41,8 @@ import {
   BLOCKS_CONFIG,
   LOGIC_CONFIG,
   LOGIC_PARTIAL_ANSWER,
+  LOGIC_SEQ_ANSWER,
+  LOGIC_SEQ_CONFIG,
   CATEGORIZE_CONFIG,
   DIAGRAM_CONFIG,
   RC_STUDENT,
@@ -145,6 +147,7 @@ const STUDENT_TYPES = [
   "diagram",
   "blocks",
   "logic",
+  "logic",
 ] as const;
 
 /**
@@ -213,6 +216,7 @@ const STUDENT_KEYED: Partial<Record<number, StudentKeyed>> = {
   9: { server: diagramServer, config: DIAGRAM_CONFIG, view: { seed: 0, itemId: "9", shuffle: false } },
   10: { server: blocksServer, config: BLOCKS_CONFIG, view: { seed: 0, itemId: "10", shuffle: false } },
   11: { server: logicServer, config: logicServer.configSchema.parse(LOGIC_CONFIG), view: { seed: 0, itemId: "11", shuffle: false } },
+  12: { server: logicServer, config: logicServer.configSchema.parse(LOGIC_SEQ_CONFIG), view: { seed: 0, itemId: "12", shuffle: false } },
 };
 
 /** Question n's student view, by its type's own `toStudent`. */
@@ -372,6 +376,8 @@ const studentPayloads: Record<number, unknown> = {
    * output, never its expression — the type's own `toStudent`.
    */
   11: keyedStudent(11),
+  // The sequential `logic` item (§4.18, phase 2): never a vector.
+  12: keyedStudent(12),
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */
@@ -393,6 +399,8 @@ const studentAnswers = new Map<string, StoredAnswer>();
 studentAnswers.set(studentItem(5), { payload: { schematic: RC_STUDENT }, revision: 1, done: false });
 // The logic item opens on a circuit with its third AND missing: play mode has something to light.
 studentAnswers.set(studentItem(11), { payload: LOGIC_PARTIAL_ANSWER, revision: 1, done: false });
+// The sequential one opens on its divide-by-two: play mode has a flip-flop to clock.
+studentAnswers.set(studentItem(12), { payload: LOGIC_SEQ_ANSWER, revision: 1, done: false });
 // The essay opens half written, so the counter under the field has something to count.
 studentAnswers.set(studentItem(7), {
   payload: {

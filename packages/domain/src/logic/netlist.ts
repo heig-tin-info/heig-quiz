@@ -1,5 +1,5 @@
 /**
- * The netlist of a combinational logic circuit (issue #459, ADR-123): the
+ * The netlist of a logic circuit (issue #459, ADR-123): the
  * graph the engine simulates, modeled on the Yosys JSON netlist. It is
  * rebuilt server-side from a schematic and never stored.
  *
@@ -29,7 +29,7 @@ export interface NetlistPort {
 
 export interface NetlistCell {
   readonly type: CellType;
-  /** Port name of the cell (`A0`, `EN`, `Y`…) → the net it is wired to. An unconnected input reads `X`. */
+  /** Port name of the cell (`A0`, `EN`, `Y`, `Q`…) → the net it is wired to. An unconnected input reads `X`. */
   readonly connections: Readonly<Record<string, NetId>>;
   /** `width` is the fan-in of a variadic gate (`$and`…`$xnor`), `MIN_WIDTH` by default. */
   readonly params?: { readonly width?: number };
@@ -41,12 +41,26 @@ export interface Netlist {
   readonly cells: Readonly<Record<string, NetlistCell>>;
 }
 
+/**
+ * How a cell computes. `comb`: its output `Y` from its inputs. `latch`: a
+ * state that follows its inputs while they say so (level-sensitive). `flop`:
+ * a state that changes on a rising edge (exactly 0 → 1) of its LAST input,
+ * `CLK`; a transition through `X` is not an edge. A latch or a flip-flop
+ * drives its state on `Q` and its complement on `QN`, and starts at 0.
+ */
+export type CellKind = "comb" | "latch" | "flop";
+
 export interface CellSpec {
+  readonly kind: CellKind;
   readonly inputs: readonly string[];
   readonly outputs: readonly string[];
   /** The inputs are `A0`…`A3`, of which `params.width` are used. */
   readonly variadic: boolean;
-  /** The output over known bits (may be `Z`, a tri-state off); unknown inputs are lifted by the engine. */
+  /**
+   * The function over known bits. `comb`: the inputs → `Y` (may be `Z`, a
+   * tri-state off). `latch`/`flop`: the data inputs (without `CLK`), then the
+   * current state → the next state. Unknown inputs are lifted by the engine.
+   */
   readonly fn: (bits: readonly Bit[]) => Value;
 }
 
@@ -55,8 +69,16 @@ const VARIADIC = ["A0", "A1", "A2", "A3"] as const;
 const MIN_WIDTH = 2;
 const parity = (bits: readonly Bit[]): Bit => bits.reduce<number>((a, b) => a ^ b, 0) as Bit;
 const bit = (b: boolean): Bit => (b ? 1 : 0);
-const gate = (fn: (bits: readonly Bit[]) => Bit): CellSpec => ({ inputs: VARIADIC, outputs: ["Y"], variadic: true, fn });
-const fixed = (inputs: readonly string[], fn: CellSpec["fn"]): CellSpec => ({ inputs, outputs: ["Y"], variadic: false, fn });
+const gate = (fn: (bits: readonly Bit[]) => Bit): CellSpec => ({ kind: "comb", inputs: VARIADIC, outputs: ["Y"], variadic: true, fn });
+const fixed = (inputs: readonly string[], fn: CellSpec["fn"]): CellSpec => ({ kind: "comb", inputs, outputs: ["Y"], variadic: false, fn });
+const memory = (kind: "latch" | "flop", inputs: readonly string[], fn: CellSpec["fn"]): CellSpec => ({
+  kind,
+  inputs,
+  outputs: ["Q", "QN"],
+  variadic: false,
+  fn,
+});
+const toggle = (q: Bit): Bit => (1 - q) as Bit;
 
 /** Every cell type, its ports and its behaviour: the single source of truth. */
 export const CELL_SPECS = {
@@ -72,16 +94,24 @@ export const CELL_SPECS = {
   $tribuf: fixed(["A", "EN"], ([a, en]) => (en ? a! : "Z")),
   $const0: fixed([], () => 0),
   $const1: fixed([], () => 1),
+  /** Set-reset latch; S = R = 1 is forbidden and makes the state `X`. */
+  $sr: memory("latch", ["S", "R"], ([s, r, q]) => (s && r ? "X" : s ? 1 : r ? 0 : q!)),
+  /** Transparent while `EN` is 1. */
+  $dlatch: memory("latch", ["D", "EN"], ([d, en, q]) => (en ? d! : q!)),
+  $dff: memory("flop", ["D", "CLK"], ([d]) => d!),
+  $jkff: memory("flop", ["J", "K", "CLK"], ([j, k, q]) => (j && k ? toggle(q!) : j ? 1 : k ? 0 : q!)),
+  $tff: memory("flop", ["T", "CLK"], ([t, q]) => (t ? toggle(q!) : q!)),
 } satisfies Record<string, CellSpec>;
 
 export type CellType = keyof typeof CELL_SPECS;
 
 /**
  * The caps of a logic question, enforced here: a netlist over them is
- * invalid, an expression over them does not parse, a check over `inputs` is
- * refused. `eventsPerRow` is the hard event budget of one settle.
- * `wires` and `verticesPerWire` bound the schematic, whose schema lives
- * elsewhere.
+ * invalid, an expression or test vectors over them do not parse, a check
+ * over `inputs` is refused. `eventsPerRow` is the hard event budget of one
+ * settle. `wires` and `verticesPerWire` bound the schematic, whose schema
+ * lives elsewhere. `vectorRows` keeps a sequential check (three settles a
+ * row at most) under the combinational one (1 024 rows of one settle).
  */
 export const LOGIC_LIMITS = {
   inputs: 10,
@@ -92,6 +122,8 @@ export const LOGIC_LIMITS = {
   eventsPerRow: 2_000,
   expressionLength: 500,
   expressionDepth: 32,
+  vectorRows: 256,
+  vectorLength: 16_000,
 } as const;
 
 /** The input ports a cell actually has: a variadic gate uses `width` of `A0`…`A3`. */
@@ -167,17 +199,27 @@ export function validateNetlist(netlist: unknown): NetlistIssue[] {
 }
 
 /**
- * The codes a user may see (an i18n key, with a 0-based `position`):
- * `logic.expression_invalid` and `logic.unknown_identifier`. The others are
- * programmer errors: a caller passed something the contract excludes.
+ * The codes a user may see (an i18n key): `logic.expression_invalid` and
+ * `logic.unknown_identifier`, with a 0-based character `position`, and the
+ * `logic.vector_*` codes, whose `position` is the 1-based LINE. The others
+ * are programmer errors: a caller passed something the contract excludes.
  */
 export type LogicErrorCode =
   | "logic.expression_invalid"
   | "logic.unknown_identifier"
+  | VectorErrorCode
   | "logic.netlist_invalid"
   | "logic.unknown_input"
   | "logic.bad_value"
   | "logic.too_many_inputs";
+
+/** What is wrong with test vectors (`vectors.ts`). */
+export type VectorErrorCode =
+  | "logic.vector_empty"
+  | "logic.vector_too_long"
+  | "logic.vector_header"
+  | "logic.vector_columns"
+  | "logic.vector_value";
 
 export class LogicError extends Error {
   constructor(

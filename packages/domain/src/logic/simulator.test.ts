@@ -253,6 +253,105 @@ describe("feedback and the event budget", () => {
   });
 });
 
+describe("latches and flip-flops", () => {
+  /** Drives the inputs, settles, and reads the outputs. */
+  const driver = (sim: Simulator) => (inputs: Record<string, Value>): Record<string, Value> => {
+    sim.set(inputs);
+    expect(sim.settle().oscillating).toEqual([]);
+    return sim.read();
+  };
+  /** A clock pulse 0 → 1 → 0 on `CLK`, each edge settled. */
+  const pulse = (sim: Simulator): Record<string, Value> => {
+    driver(sim)({ CLK: 1 });
+    return driver(sim)({ CLK: 0 });
+  };
+
+  it("starts an SR latch at 0, sets, holds, resets, and makes S = R = 1 unknown", () => {
+    const apply = driver(simulate(single("$sr")));
+    expect(apply({ S: 0, R: 0 })).toEqual({ Q: 0, QN: 1 });
+    expect(apply({ S: 1 })).toEqual({ Q: 1, QN: 0 });
+    expect(apply({ S: 0 })).toEqual({ Q: 1, QN: 0 });
+    expect(apply({ R: 1 })).toEqual({ Q: 0, QN: 1 });
+    expect(apply({ S: 1 })).toEqual({ Q: "X", QN: "X" });
+    expect(apply({ S: 0 })).toEqual({ Q: 0, QN: 1 });
+  });
+
+  it("makes a D latch transparent while EN is 1, holding otherwise", () => {
+    const apply = driver(simulate(single("$dlatch")));
+    expect(apply({ D: 1, EN: 0 }).Q).toBe(0);
+    expect(apply({ EN: 1 }).Q).toBe(1);
+    expect(apply({ D: 0 }).Q).toBe(0);
+    expect(apply({ EN: 0 }).Q).toBe(0);
+    expect(apply({ D: 1 })).toEqual({ Q: 0, QN: 1 });
+  });
+
+  it("samples a D flip-flop on the rising edge only", () => {
+    const sim = simulate(single("$dff"));
+    const apply = driver(sim);
+    expect(apply({ D: 1, CLK: 0 })).toEqual({ Q: 0, QN: 1 });
+    expect(apply({ CLK: 1 }).Q).toBe(1);
+    expect(apply({ D: 0 }).Q).toBe(1);
+    expect(apply({ CLK: 0 }).Q).toBe(1);
+    expect(pulse(sim)).toEqual({ Q: 0, QN: 1 });
+  });
+
+  it("takes no transition through X for an edge: a fresh clock at 1 has not risen", () => {
+    expect(driver(simulate(single("$dff")))({ D: 1, CLK: 1 }).Q).toBe(0);
+  });
+
+  it("toggles JK and T flip-flops", () => {
+    const jk = simulate(single("$jkff"));
+    driver(jk)({ CLK: 0, J: 1, K: 0 });
+    expect(pulse(jk).Q).toBe(1);
+    driver(jk)({ K: 1 });
+    expect(pulse(jk).Q).toBe(0);
+    expect(pulse(jk).Q).toBe(1);
+    driver(jk)({ J: 0 });
+    expect(pulse(jk).Q).toBe(0);
+    driver(jk)({ K: 0 });
+    expect(pulse(jk).Q).toBe(0);
+
+    const t = simulate(single("$tff"));
+    driver(t)({ CLK: 0, T: 1 });
+    expect(pulse(t).Q).toBe(1);
+    expect(pulse(t).Q).toBe(0);
+    driver(t)({ T: 0 });
+    expect(pulse(t)).toEqual({ Q: 0, QN: 1 });
+  });
+
+  it("shifts through a chain of flip-flops on one clock", () => {
+    const chain: Netlist = {
+      ports: { D: input("d"), CLK: input("clk"), Q0: output("q0"), Q1: output("q1") },
+      cells: {
+        f0: cell("$dff", { D: "d", CLK: "clk", Q: "q0" }),
+        f1: cell("$dff", { D: "q0", CLK: "clk", Q: "q1" }),
+      },
+    };
+    const sim = simulate(chain);
+    driver(sim)({ D: 1, CLK: 0 });
+    expect(pulse(sim)).toEqual({ Q0: 1, Q1: 0 });
+    driver(sim)({ D: 0 });
+    expect(pulse(sim)).toEqual({ Q0: 0, Q1: 1 });
+  });
+
+  it("catches a transparent latch fed its own complement, and sets its state to X", () => {
+    const ring: Netlist = {
+      ports: { EN: input("en"), Q: output("q") },
+      cells: { l: cell("$dlatch", { D: "qn", EN: "en", Q: "q", QN: "qn" }) },
+    };
+    const sim = simulate(ring);
+    expect(driver(sim)({ EN: 0 })).toEqual({ Q: 0 });
+    sim.set({ EN: 1 });
+    const run = sim.settle();
+    expect(run.oscillating).toEqual(["q", "qn"]);
+    expect(run.events).toBeLessThanOrEqual(LOGIC_LIMITS.eventsPerRow);
+    expect(sim.read()).toEqual({ Q: "X" });
+    sim.set({ EN: 0 });
+    sim.settle();
+    expect(sim.read()).toEqual({ Q: "X" });
+  });
+});
+
 describe("the simulator API", () => {
   it("counts one event per net change, the delay included", () => {
     const chain: Netlist = {
