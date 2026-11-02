@@ -161,6 +161,8 @@ export * from "./workMode.js";
 // `./parameters.js` is NOT re-exported either, for the same reason: it pulls
 // mathjs (ADR-056 §2). The server imports `@quiz/domain/parameters`; only its
 // mathjs-free vocabulary, `./parameterNames.js`, is above.
+// `./logic.js` (issue #459) is reached by its subpath, `@quiz/domain/logic`:
+// its generic names (`evaluate`, `Value`) would crowd the barrel.
 
 /**
  * The seeded shuffle lives in `@quiz/core/rng` (the question types need it
