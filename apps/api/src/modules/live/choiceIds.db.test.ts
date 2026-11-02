@@ -325,7 +325,7 @@ describe("a partial retake's carried-over answer (ADR-091, ADR-097)", () => {
       });
     }
     const submitted = await live.submitAttempt(db, evaluation, firstAttempt, server.clock.now());
-    await live.gradeAtHandIn(server.app, evaluation, [submitted.id]);
+    await live.gradeAtHandIn(server.app, evaluation, [submitted]);
     server.clock.advance(1000);
 
     evaluation = await reload(db, built.seed.evaluationId);

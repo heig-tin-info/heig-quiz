@@ -392,6 +392,9 @@ export const attemptFeedbackKey = (attemptId: string) =>
 /** The `POST …/attempt` behind the attempt route. */
 export const attemptEntryKey = (evaluationId: string) =>
   ["attempt", "enter", evaluationId] as const;
+/** ADR-122: the `POST …/practice` behind the practice route, the ready screen or the practice attempt. */
+export const practiceEntryKey = (evaluationId: string) =>
+  ["attempt", "practice", evaluationId] as const;
 
 // --- Polls ---------------------------------------------------------------------
 

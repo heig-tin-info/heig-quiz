@@ -62,6 +62,7 @@ export {
   negativeMarkingEnabled,
   trustedClients,
   drillAllowed,
+  practiceOpen,
   attemptCount,
   deletionRole,
   joinedItems,
@@ -105,6 +106,8 @@ export {
   retargetItemVersion,
   setAllowDrill,
   AllowDrillLocked,
+  setAfterDue,
+  AfterDueLocked,
 } from "./writes.js";
 export {
   coursePoolIds,

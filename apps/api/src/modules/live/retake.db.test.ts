@@ -116,7 +116,7 @@ async function sit(
     });
   }
   const submitted = await live.submitAttempt(db, evaluation, current, now);
-  await live.gradeAtHandIn(app, evaluation, [submitted.id]);
+  await live.gradeAtHandIn(app, evaluation, [submitted]);
   app.clock.advance(1000);
   return submitted;
 }

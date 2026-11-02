@@ -5,7 +5,8 @@
  * The rule is `@quiz/domain#keptAttempt`; this file only feeds it the
  * validated points of each attempt. The results, the CSV, the release and
  * the student's own cards all read it from here, so they can never disagree
- * on which attempt counts. An evaluation where every student holds one
+ * on which attempt counts. A practice attempt after the due date (ADR-122)
+ * is never among the attempts read here: it counts for nothing. An evaluation where every student holds one
  * attempt — every exam, every exercise without retakes — costs one query and
  * no points at all.
  *
@@ -19,7 +20,7 @@ import type { AttemptScore } from "@quiz/contracts";
 import { attemptTotal, countsForStudent, keptAttempt, type ItemCounting } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { attempts, evaluationItems, gradings } from "../../db/schema.js";
+import { attempts, evaluationItems, gradings, officialAttempt } from "../../db/schema.js";
 import { retakePolicyOf, type EvaluationRecord } from "../evaluation/service.js";
 
 type AttemptRecord = typeof attempts.$inferSelect;
@@ -138,7 +139,8 @@ export async function keptAttempts(
   const rows = await db
     .select()
     .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id))
+    // A practice attempt after the due date (ADR-122) is never kept.
+    .where(and(eq(attempts.evaluationId, evaluation.id), officialAttempt))
     .orderBy(asc(attempts.attemptNumber));
   const groups = byUser(rows);
   const tallies = await talliesFor(db, groups.values());
@@ -169,7 +171,9 @@ export async function studentAttempts(
   const found = await db
     .select()
     .from(attempts)
-    .where(and(eq(attempts.userId, userId), inArray(attempts.evaluationId, rows.map((r) => r.id))))
+    .where(
+      and(eq(attempts.userId, userId), inArray(attempts.evaluationId, rows.map((r) => r.id)), officialAttempt),
+    )
     .orderBy(asc(attempts.attemptNumber));
   const groups = new Map<string, AttemptRecord[]>();
   for (const row of found) {

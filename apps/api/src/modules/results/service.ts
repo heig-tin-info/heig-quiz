@@ -20,7 +20,7 @@
  * written through the `evaluation` module's narrow writers (`setRelease`,
  * `clearRelease`, `setModifiedAfterRelease`), never by an UPDATE of its own.
  */
-import { and, asc, eq, inArray, notExists } from "drizzle-orm";
+import { and, asc, countDistinct, eq, inArray, notExists, sql } from "drizzle-orm";
 
 import type {
   ByQuestion,
@@ -73,9 +73,12 @@ import {
   answers,
   attempts,
   enrollments,
+  evaluations,
   gradebookColumns,
   gradebookMarks,
   gradings,
+  isStaffAttempt,
+  practiceAttempt,
 } from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
 import {
@@ -335,7 +338,7 @@ function itemViews(
 }
 
 export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise<ResultsView> {
-  const computed = await computeResults(db, evaluation);
+  const [computed, practisedCount] = await Promise.all([computeResults(db, evaluation), practisedCountOf(db, evaluation)]);
   // Absent students count in the mean: a 1.0 that is not in the statistics
   // would flatter every class average (F-RES-01). A teacher's own test does
   // NOT: it is not a member of the class (ADR-018); nor does an excused
@@ -356,7 +359,22 @@ export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise
     items: computed.items,
     rows: computed.rows,
     stats: { ...stats, histogram: histogram(grades) },
+    practisedCount,
   };
+}
+
+/**
+ * ADR-122: how many students — not staff seats — started a practice attempt
+ * after the due date. Shown beside the grade table, never in it.
+ */
+async function practisedCountOf(db: Db, evaluation: EvaluationRecord): Promise<number> {
+  if (evaluation.mode !== "exercise") return 0;
+  const [row] = await db
+    .select({ n: countDistinct(attempts.userId) })
+    .from(attempts)
+    .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
+    .where(and(eq(attempts.evaluationId, evaluation.id), practiceAttempt, sql`not ${isStaffAttempt}`));
+  return row?.n ?? 0;
 }
 
 // --- Release (F-RES-04, F-GRADE-09) --------------------------------------
@@ -898,12 +916,18 @@ export async function studentFeedback(
 ): Promise<StudentFeedback> {
   const policy = feedbackOf(evaluation);
   const gate = feedbackAvailable(policy, evaluation, attempt.state);
+  // ADR-122 §7: a practice attempt after the due date reads the same gate,
+  // points only, labelled practice, never a grade — and its score alone
+  // while the policy does not open the correction yet (`results_pending`).
+  const practice = attempt.afterDue ? { practice: true as const } : {};
   const pending = (reason: FeedbackRefusal) => ({
     available: false as const,
     reason,
     evaluation: { id: evaluation.id, title: evaluation.title },
+    ...practice,
   });
-  if (!gate.ok && gate.reason !== "retakes_open") return pending(gate.reason);
+  const scoreOnly = !gate.ok && (gate.reason === "retakes_open" || (attempt.afterDue && gate.reason === "results_pending"));
+  if (!gate.ok && !scoreOnly) return pending(gate.reason);
   // While the exercise takes retakes, the page offers the next attempt — on
   // the score alone (ADR-025) or beside a published correction (ADR-050).
   const offer =
@@ -932,11 +956,13 @@ export async function studentFeedback(
   }
 
   const copy = await reviewedItems(db, evaluation, attempt, policy);
-  // No grade before the release, nor while a cell is pending.
-  const gradeShown = feedbackGradeShown({
-    released: evaluation.releasedAt !== null,
-    pendingCount: copy.pendingCount,
-  });
+  // No grade before the release, nor while a cell is pending, nor ever on a practice attempt.
+  const gradeShown =
+    !attempt.afterDue &&
+    feedbackGradeShown({
+      released: evaluation.releasedAt !== null,
+      pendingCount: copy.pendingCount,
+    });
   return {
     available: true,
     evaluation: {
@@ -948,6 +974,7 @@ export async function studentFeedback(
     ...copy,
     grade: gradeShown ? copy.grade : null,
     ...retake,
+    ...practice,
   };
 }
 

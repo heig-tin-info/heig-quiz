@@ -127,8 +127,12 @@ export type Route =
    */
   | { view: "questionPreview"; id: string }
   // WP9: student player
-  /** The student's attempt: the server decides between the lobby and the player. */
-  | { view: "attempt"; evaluationId: string }
+  /**
+   * The student's attempt: the server decides between the lobby and the
+   * player. `practice`: a practice attempt on an exercise that is over
+   * (ADR-122, `/take/:id/practice`), the ready screen or the player.
+   */
+  | { view: "attempt"; evaluationId: string; practice?: true }
   // WP8: evaluation + dashboard
   /** The three-step configuration; the step lives in `?step=`. */
   | { view: "evaluation"; id: string }
@@ -555,9 +559,13 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   },
   // WP9: student player
   attempt: {
-    path: (r) => `/take/${r.evaluationId}`,
-    match: ([head, evaluationId]) =>
-      head === "take" && evaluationId ? { view: "attempt", evaluationId } : null,
+    path: (r) => `/take/${r.evaluationId}${r.practice ? "/practice" : ""}`,
+    match: ([head, evaluationId, tail]) =>
+      head === "take" && evaluationId
+        ? tail === "practice"
+          ? { view: "attempt", evaluationId, practice: true }
+          : { view: "attempt", evaluationId }
+        : null,
     studentSafe: true,
     answering: true,
   },

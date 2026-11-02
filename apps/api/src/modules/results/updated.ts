@@ -22,7 +22,7 @@
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { Db } from "../../db/client.js";
-import { attempts, evaluations } from "../../db/schema.js";
+import { attempts, evaluations, officialAttempt } from "../../db/schema.js";
 import { byId, staffAttemptIds, type EvaluationRecord } from "../evaluation/service.js";
 import { pointsAcrossRegrade } from "../grading/service.js";
 import { notifyMany, type Delivery } from "../notifications/service.js";
@@ -69,6 +69,8 @@ export async function watchReleasedGrades(
           inArray(attempts.id, [...new Set(cells.map((c) => c.attemptId))]),
           isNotNull(evaluations.releasedAt),
           isNotNull(attempts.userId),
+          // A practice attempt's grading (ADR-122) moves no released grade.
+          officialAttempt,
         ),
       );
     if (pairs.length === 0) return NOTHING;

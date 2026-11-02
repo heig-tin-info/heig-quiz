@@ -147,13 +147,15 @@ export function isFinishedAttempt(state: string): boolean {
  * Whether the grading may write on an attempt now (ADR-067): while the
  * evaluation runs, only a finished attempt — one reopened since its hand-in
  * is graded at its next; once it is over, every attempt (an attempt left
- * open by a reopen before #95 included).
+ * open by a reopen before #95 included). A practice attempt started after
+ * the due date (ADR-122) is graded at its hand-in only, whatever the state.
  */
 export function gradableNow(
   evaluationState: EvaluationStateName,
-  attemptState: AttemptStateName,
+  attempt: { state: AttemptStateName; afterDue?: boolean | undefined },
 ): boolean {
-  return !isLiveState(evaluationState) || isFinishedAttempt(attemptState);
+  if (attempt.afterDue === true) return isFinishedAttempt(attempt.state);
+  return !isLiveState(evaluationState) || isFinishedAttempt(attempt.state);
 }
 
 /**

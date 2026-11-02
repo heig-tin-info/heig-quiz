@@ -29,13 +29,18 @@ import { countRecentEvents, logAttemptEvent } from "./autosave.js";
  * the evaluation keeps the journal (`logVisibility`, never a poll), and never
  * from a delegated session (ADR-034: somebody else is looking). A confined
  * session (`seb`, `kiosk`) journals like a portal one: the conditions line
- * announces the journal there too. Otherwise the route still answers 204:
- * the client learns nothing from the refusal.
+ * announces the journal there too. Never on a practice attempt after the
+ * due date (ADR-122): the journal is off there, its conditions say so; the
+ * attempt's other journal entries (a reconnection, its sign of life) are
+ * kept. Otherwise the route still answers 204: the client learns nothing
+ * from the refusal.
  */
 export function storesIntegrityEvent(
   evaluation: EvaluationRecord,
   auth: Pick<SessionAuth, "actorUserId"> | null,
+  attempt?: { afterDue: boolean },
 ): boolean {
+  if (attempt?.afterDue === true) return false;
   return integrityJournalOn(evaluation.mode, settingsOf(evaluation).logVisibility) && !delegated(auth);
 }
 

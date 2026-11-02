@@ -11,6 +11,10 @@
  *
  * It holds the evaluation's conditions (ADR-079) and no question
  * content (invariant 4).
+ *
+ * ADR-122: the same screen opens a practice attempt on an exercise that is
+ * over (`practice`): Start calls `POST …/practice/start` instead, and the
+ * conditions are the practice's (its own clock, unlimited attempts).
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -20,7 +24,7 @@ import type { ImposedConditionKey } from "@quiz/domain";
 import { ApiError, api } from "../api";
 import { useT, type TFunction } from "../i18n";
 import { useErrorToast } from "../notify";
-import { attemptEntryKey } from "../queryKeys";
+import { attemptEntryKey, practiceEntryKey } from "../queryKeys";
 import { Button } from "../ui";
 import { isoDateTime } from "../ui/dates";
 import { ConditionsList, minutesWithBonus } from "./ConditionsList";
@@ -49,28 +53,33 @@ function clockSentence(view: ReadyView, t: TFunction): string {
 export function Ready({
   view,
   onLater,
+  practice = false,
 }: {
   view: ReadyView;
   /** Back home (the station's own screen on a kiosk). */
   onLater: () => void;
+  /** ADR-122: a practice attempt after the due date. */
+  practice?: boolean;
 }) {
   const t = useT();
   const qc = useQueryClient();
   const toastError = useErrorToast();
   const { id, title } = view.evaluation;
+  const entryKey = practice ? practiceEntryKey(id) : attemptEntryKey(id);
 
   const start = useMutation({
     mutationFn: () =>
-      api<AttemptEntry>(`/app/api/evaluations/${id}/attempt/start`, { method: "POST" }),
+      api<AttemptEntry>(`/app/api/evaluations/${id}/${practice ? "practice" : "attempt"}/start`, { method: "POST" }),
     // The entry query now holds the attempt (or the lobby, if the evaluation
     // went back to waiting): the route renders what it says.
-    onSuccess: (entry) => qc.setQueryData(attemptEntryKey(id), entry),
+    onSuccess: (entry) => qc.setQueryData(entryKey, entry),
     onError: (error) => {
       toastError("ready.startFailed")(error);
       // A refusal the server spells out (not open any more) has its screen on
-      // the entry route: ask it again rather than leave a dead button.
-      if (error instanceof ApiError && error.status < 500) {
-        void qc.invalidateQueries({ queryKey: attemptEntryKey(id) });
+      // the entry route: ask it again rather than leave a dead button. Not
+      // the minute between two practice attempts (429): Start works again.
+      if (error instanceof ApiError && error.status < 500 && error.status !== 429) {
+        void qc.invalidateQueries({ queryKey: entryKey });
       }
     },
   });
@@ -80,7 +89,7 @@ export function Ready({
   return (
     <main className="mx-auto flex w-full max-w-160 flex-col items-center px-4 py-10 text-center sm:px-6">
       <p className="text-[13px] font-medium uppercase tracking-wide text-fg-faint">
-        {t("ready.title")}
+        {practice ? t("practice.ready.title") : t("ready.title")}
       </p>
       <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em]">{title}</h1>
 

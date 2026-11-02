@@ -19,6 +19,7 @@ import {
   LOCKED_NAVIGATIONS,
   PROGRESS_STATUSES,
   PROVIDED_CALCULATORS,
+  PRACTICE_REFUSALS,
   RETAKE_REFUSALS,
   type ConditionsInput,
   type ImposedCondition as DomainImposedCondition,
@@ -226,6 +227,11 @@ export const AttemptView = z.object({
      * write would answer `410 attempt_closed` anyway (§4.7).
      */
     readOnly: z.boolean(),
+    /**
+     * ADR-122: a practice attempt, started after the exercise was over. It
+     * counts nowhere; the player says so. Absent on every other attempt.
+     */
+    practice: z.literal(true).optional(),
   }),
   evaluation: z.object({
     id: z.uuid(),
@@ -296,15 +302,26 @@ export const AttemptOrLobby = z.union([
 export type AttemptOrLobby = z.infer<typeof AttemptOrLobby>;
 
 /**
- * What the two entry routes answer, `POST /evaluations/:id/attempt` and
- * `POST /evaluations/:id/attempt/start` (ADR-076): a `running` evaluation the
- * participant has not started answers `ready`, nothing written.
+ * What the entry routes answer, `POST /evaluations/:id/attempt` and
+ * `…/attempt/start` (ADR-076): a `running` evaluation the participant has
+ * not started answers `ready`, nothing written. The practice's
+ * `POST /evaluations/:id/practice` and `…/practice/start` (ADR-122) answer
+ * the same, never the lobby.
  */
 export const AttemptEntry = z.union([
   ...AttemptOrLobby.options,
   z.object({ kind: z.literal("ready"), view: ReadyView }),
 ]);
 export type AttemptEntry = z.infer<typeof AttemptEntry>;
+
+/**
+ * ADR-122: why a practice attempt may not start (`practiceRefusal`,
+ * `@quiz/domain`), the reason of a `409 practice_refused`. Starting a new
+ * one less than a minute after the previous one is a `429 rate_limited`.
+ */
+export const PracticeRefusalReason = z.enum(PRACTICE_REFUSALS);
+export type PracticeRefusalReason = z.infer<typeof PracticeRefusalReason>;
+
 
 /**
  * Empty since the access code was removed (ADR-053); the body of both entry
@@ -562,6 +579,36 @@ type CardRetakes = z.infer<typeof CardRetakes>;
  */
 export const CardResults = z.enum(["available", "pending", "none"]);
 export type CardResults = z.infer<typeof CardResults>;
+
+/**
+ * ADR-122, "Past series": an exercise of the student's classrooms that is
+ * over and takes practice attempts, with the student's latest practice.
+ */
+export const PracticeCard = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  classroomId: z.uuid(),
+  classroomName: z.string(),
+  courseCode: z.string(),
+  /** When the exercise closed; null for a row closed before the instant was kept. */
+  closedAt: z.iso.datetime().nullable(),
+  /** The student's unfinished practice attempt, which the card resumes; null when none. */
+  openAttemptId: z.uuid().nullable(),
+  /** How many practice attempts the student finished. */
+  count: z.number().int().nonnegative(),
+  /**
+   * The latest finished practice attempt. `score` is its points, never a
+   * grade, and null under the feedback policy `none`.
+   */
+  last: z
+    .object({
+      attemptId: z.uuid(),
+      finishedAt: z.iso.datetime().nullable(),
+      score: AttemptScore.nullable(),
+    })
+    .nullable(),
+});
+export type PracticeCard = z.infer<typeof PracticeCard>;
 
 export const EvaluationCard = z.object({
   id: z.uuid(),

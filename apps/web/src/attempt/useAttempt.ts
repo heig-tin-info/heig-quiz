@@ -109,6 +109,9 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
   const { sample, now: clock } = useServerClock();
   const autosave = useRef<Autosave | null>(null);
   const preview = initial?.attempt.preview === true;
+  // ADR-122: a practice attempt lives on an exercise that is over; only its
+  // own deadline, its hand-in or the server's 410 ends it.
+  const practice = initial?.attempt.practice === true;
   const visible = useDocumentVisible();
   // Bumped on every reconnection of the stream: the position goes out again.
   const [reopened, setReopened] = useState(0);
@@ -190,8 +193,8 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     setPaused(view.evaluation.state === "paused");
     const reason = reasonOfState(view.attempt.state);
     if (reason !== null) end(reason);
-    else if (evaluationOver(view.evaluation.state)) end("evaluation_closed");
-  }, [view, saver, sample, end]);
+    else if (!practice && evaluationOver(view.evaluation.state)) end("evaluation_closed");
+  }, [view, saver, sample, end, practice]);
 
   const report = useJournal(attemptId, preview);
 
@@ -230,7 +233,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
             setPaused(false);
             // D17: what was buffered during the pause goes out now.
             saver.resume();
-          } else if (evaluationOver(event.state)) {
+          } else if (!practice && evaluationOver(event.state)) {
             end("evaluation_closed");
           }
           break;

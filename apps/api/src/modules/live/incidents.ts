@@ -18,7 +18,7 @@ import { integrityIncidents, integrityJournalOn, uniquePseudonyms, type Incident
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { attemptEvents, attempts, users } from "../../db/schema.js";
+import { attemptEvents, attempts, officialAttempt, users } from "../../db/schema.js";
 import { settingsOf, type EvaluationRecord } from "../evaluation/service.js";
 import type { AttemptRecord } from "./attempt.js";
 import { fullName } from "./names.js";
@@ -96,7 +96,8 @@ export async function evaluationIncidents(
     })
     .from(attempts)
     .leftJoin(users, eq(users.id, attempts.userId))
-    .where(eq(attempts.evaluationId, evaluation.id));
+    // A practice attempt (ADR-122) keeps no journal: nothing to report.
+    .where(and(eq(attempts.evaluationId, evaluation.id), officialAttempt));
   const byAttempt = await incidentsOf(db, list, now);
   // The inspector's pseudonym, per person: what an entry the grid has no row
   // for is called while the names are hidden.

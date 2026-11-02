@@ -41,6 +41,9 @@ const STUDENT_ROUTES = new Set([
   "POST /app/api/evaluations/:id/attempt",
   "POST /app/api/evaluations/:id/attempt/start",
   "POST /app/api/evaluations/:id/retake",
+  // ADR-122: practice after the due date (refused 409 before it, never 404).
+  "POST /app/api/evaluations/:id/practice",
+  "POST /app/api/evaluations/:id/practice/start",
   // The journal's reads: a student of the classroom reads its journal (F-JRN-12).
   "GET /app/api/classrooms/:id/journal",
   "GET /app/api/classrooms/:id/journal/pages*",

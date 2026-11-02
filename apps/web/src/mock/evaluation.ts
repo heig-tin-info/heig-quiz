@@ -13,6 +13,7 @@ import { countsAsCompleted,
   retakesAllowedFor,
   feedbackWhenFor,
   drillAllowedOn,
+  afterDueOpen,
   pastTiming,
   parseCloze,
   poolRoleAllows,
@@ -932,6 +933,16 @@ export const toEvaluation = (e: MockEvaluation) => ({
   allowDrill:
     e.mode !== "poll" &&
     (typeof e.settings["allowDrill"] === "boolean" ? e.settings["allowDrill"] : e.mode === "exercise"),
+  // The server's `practiceOpen` (ADR-122): the switch, else open but under the policy `none`.
+  afterDueOpen: afterDueOpen({
+    mode: e.mode,
+    afterDue: e.settings["afterDue"] === "open" || e.settings["afterDue"] === "hidden" ? e.settings["afterDue"] : undefined,
+    feedbackWhen: (e.feedbackPolicy["when"] as FeedbackWhen | undefined) ?? "on_release",
+    showKey: e.feedbackPolicy["showKey"] === true,
+    safeExamBrowser: e.settings["safeExamBrowser"] === true,
+    kiosk: e.settings["kiosk"] === true,
+  }),
+  afterDueSource: e.settings["afterDue"] === undefined ? ("default" as const) : ("set" as const),
   gradingScale: e.gradingScale,
   feedbackPolicy: e.feedbackPolicy,
   mcqPolicy: e.mcqPolicy,
@@ -1258,6 +1269,16 @@ on("POST", "/app/api/classrooms/:id/evaluations", (m, body) => {
   return toEvaluation(e);
 });
 on("GET", "/app/api/evaluations/:id", (m) => evaluationDetail(evaluationOr404(m.groups!.id!)));
+
+// ADR-122: practice after the due date, an exercise's own writer, editable at any state.
+on("PUT", "/app/api/evaluations/:id/after-due", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  if (e.mode !== "exercise") {
+    throw new MockPayload(409, { error: "after_due_locked", message: "practice after the due date is an exercise's setting" });
+  }
+  e.settings["afterDue"] = body.afterDue === "open" ? "open" : "hidden";
+  return evaluationDetail(e);
+});
 /** The picker's pools: the course's own, like the server (F-EVAL-01), by name. */
 const coursePoolList = (courseId: string) =>
   (coursePools[courseId] ?? [])

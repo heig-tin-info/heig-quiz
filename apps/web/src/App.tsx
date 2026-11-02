@@ -308,7 +308,9 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
       <RevisePage classroomId={r.classroomId} navigate={c.navigate} />
     ),
   // WP9: student player — the attempt takes the whole screen (`FULL_SCREEN`).
-  attempt: (r, c) => <AttemptPage evaluationId={r.evaluationId} navigate={c.navigate} />,
+  attempt: (r, c) => (
+    <AttemptPage evaluationId={r.evaluationId} navigate={c.navigate} practice={r.practice === true} />
+  ),
   join: (r, c) => <PollJoin code={r.code} me={c.me} navigate={c.navigate} />,
   oauthConsent: (r, c) => <OAuthConsent id={r.id} me={c.me} />,
   teamsLink: (_, c) => <TeamsLinkPage me={c.me} onSettings={() => c.navigate({ view: "settings" })} />,

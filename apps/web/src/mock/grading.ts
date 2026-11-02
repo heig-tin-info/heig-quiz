@@ -35,6 +35,7 @@ import {
   H,
   MockError,
   MockPayload,
+  flags,
   iso,
   on,
   pick,
@@ -1226,6 +1227,9 @@ function resultsView(e: MockGradingWorld) {
     }),
     rows,
     stats: { ...stats, histogram: histogram(grades) },
+    // ADR-122: an exercise over and open to practice shows who practised since.
+    // `?practised=1` shows the line on the mock's graded evaluations, exams in the fiction.
+    practisedCount: flags.practised || e.evaluation.mode === "exercise" ? 3 : 0,
   };
 }
 

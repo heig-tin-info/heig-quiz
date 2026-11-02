@@ -14,6 +14,8 @@ import type {
   GradeGroup,
   LobbyView,
   ReadyView,
+  PracticeCard,
+  AttemptEntry,
   ProjectAcceptance,
   ProjectInvitationResent,
   StudentClassroomPage,
@@ -930,11 +932,90 @@ const studentHome = (): StudentHomeData => {
     open: [...tag(home.open), ...groups.open],
     upcoming: [...tag(home.upcoming), ...groups.upcoming],
     past: [...tag(home.past), ...groups.past],
+    practice: flags.empty ? [] : practiceCards(),
     serverNow: new Date().toISOString(),
   };
 };
 
 on("GET", "/app/api/student/home", studentHome);
+
+// --- ADR-122: practice after the due date ----------------------------------
+//
+// Two exercises of the student's classroom that are over and open to
+// practice ("Past series"): one practised twice, its last score shown; one
+// with a practice attempt still open, which the card resumes. The practice
+// route answers the ready screen until Start, then the player's attempt,
+// marked practice.
+const STUDENT_PRACTICE_A = "11111111-1111-4111-8111-111111111131";
+const STUDENT_PRACTICE_B = "11111111-1111-4111-8111-111111111132";
+export const STUDENT_PRACTICE_ATTEMPT = "22222222-2222-4222-8222-222222222231";
+
+const practiceCards = (): PracticeCard[] => [
+  {
+    id: STUDENT_PRACTICE_A,
+    title: "Série 2 — Boucles et conditions",
+    classroomId: "r1",
+    classroomName: "PRG1-2026",
+    courseCode: "PRG1",
+    closedAt: iso(-12 * D),
+    openAttemptId: null,
+    count: 2,
+    last: {
+      attemptId: STUDENT_PRACTICE_ATTEMPT,
+      finishedAt: iso(-2 * D),
+      score: { points: 7.5, totalPoints: 10, pendingCount: 0 },
+    },
+  },
+  {
+    id: STUDENT_PRACTICE_B,
+    title: "Série 1 — Types et expressions",
+    classroomId: "r1",
+    classroomName: "PRG1-2026",
+    courseCode: "PRG1",
+    closedAt: iso(-19 * D),
+    openAttemptId: STUDENT_ATTEMPT,
+    count: 0,
+    last: null,
+  },
+];
+
+let practiceStarted = false;
+const practiceReadyView = (id: string): ReadyView => ({
+  evaluation: { id, title: practiceCards().find((c) => c.id === id)?.title ?? "Série 2 — Boucles et conditions" },
+  conditions: evaluationConditionsOf({
+    mode: "exercise",
+    settings: { ...studentSettings(), timing: "duration", logVisibility: false, retakes: { enabled: true, keep: "best", maxAttempts: null } },
+    durationS: 8 * 3600,
+    closesAt: null,
+    timeBonusPercent: 0,
+  }),
+});
+const practiceAttemptView = (): AttemptView => {
+  const view = studentAttemptView();
+  return {
+    ...view,
+    attempt: { ...view.attempt, deadlineAt: iso(8 * 3600_000), practice: true },
+    evaluation: { ...view.evaluation, mode: "exercise", state: "closed" },
+  };
+};
+
+on("POST", "/app/api/evaluations/:id/practice", (m): AttemptEntry =>
+  practiceStarted || m.groups!.id === STUDENT_PRACTICE_B
+    ? { kind: "attempt", view: practiceAttemptView() }
+    : { kind: "ready", view: practiceReadyView(m.groups!.id!) },
+);
+on("POST", "/app/api/evaluations/:id/practice/start", (): AttemptEntry => {
+  practiceStarted = true;
+  return { kind: "attempt", view: practiceAttemptView() };
+});
+// The last practice's results: points only, labelled practice, never a grade.
+on("GET", `/app/api/attempts/${STUDENT_PRACTICE_ATTEMPT}/feedback`, () => ({
+  available: false,
+  reason: "results_pending",
+  evaluation: { id: STUDENT_PRACTICE_A, title: "Série 2 — Boucles et conditions" },
+  score: { points: 7.5, totalPoints: 10, pendingCount: 1 },
+  practice: true,
+}));
 
 const studentProjectOr404 = (id: string | undefined): StudentProjectCard => {
   const found = studentProjectCards().find((p) => p.id === id);

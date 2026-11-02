@@ -37,6 +37,8 @@ export interface EndedAttempt {
   id: string;
   evaluationId: string;
   userId: string | null;
+  /** ADR-122: a practice attempt, graded at its hand-in whatever the evaluation's state. */
+  afterDue: boolean;
 }
 
 /** The accounts of ended attempts (a guest's has none): whose `kiosk` sessions end with them (ADR-051 §7). */
@@ -131,6 +133,7 @@ export async function endAttempts(
         id: attempts.id,
         evaluationId: attempts.evaluationId,
         userId: attempts.userId,
+        afterDue: attempts.afterDue,
       });
   });
   if (ended.length > 0) {

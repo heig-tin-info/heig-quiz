@@ -10,6 +10,7 @@
 import { z } from "zod";
 
 import {
+  AFTER_DUE_SETTINGS,
   CALCULATOR_MODES,
   CATEGORIZE_SCORE_POLICIES,
   CLOCK_MODES,
@@ -332,6 +333,17 @@ export const EvaluationSettings = z.object({
    */
   allowDrill: z.boolean().optional(),
   /**
+   * ADR-122 (#985): whether an exercise takes PRACTICE attempts once it is
+   * over — `open` or `hidden`. Absent means the default: open where the
+   * feedback policy shows the answer key, hidden otherwise; read it through `afterDueOpen`
+   * (`@quiz/domain`), never raw — `Evaluation.afterDueOpen` carries the
+   * effective value. Like `allowDrill` it is NOT in
+   * {@link EvaluationSettingsPatch}: a visibility switch, not a frozen exam
+   * setting, its one writer is `PUT /evaluations/:id/after-due`, editable
+   * at any time, after the close included.
+   */
+  afterDue: z.enum(AFTER_DUE_SETTINGS).optional(),
+  /**
    * Only on a `poll` evaluation (`./poll.ts`); absent everywhere else. Whether
    * the poll is anonymous is NOT stored here: it is the absence of a
    * classroom (`PollAudience`, ADR-014 addendum 2026-09-27). A row written
@@ -399,6 +411,10 @@ export const Evaluation = z.object({
   settings: EvaluationSettings,
   /** ADR-041 §2: the effective "Allow drill" (`settings.allowDrill` or the mode's default). */
   allowDrill: z.boolean(),
+  /** ADR-122: whether the exercise takes practice attempts once over (`afterDueOpen`), always false elsewhere. */
+  afterDueOpen: z.boolean(),
+  /** ADR-122: whether {@link Evaluation.afterDueOpen} is the teacher's switch (`set`) or the default (`default`). */
+  afterDueSource: z.enum(["set", "default"]),
   gradingScale: GradingScale,
   feedbackPolicy: FeedbackPolicy,
   /** Seeded at creation from the creator's preference; an `inherit` question takes it. */
@@ -636,14 +652,19 @@ type FeedbackPolicyPatch = z.infer<typeof FeedbackPolicyPatch>;
 
 // A field added to the full body and forgotten here would be silently
 // stripped from every patch: the two key sets must stay equal, both ways —
-// save `allowDrill`, which has a writer of its own (ADR-041 §10, item 3).
+// save `allowDrill` and `afterDue`, which have a writer of their own
+// (ADR-041 §10, item 3; ADR-122 §1).
 type SameKeys<A, B> = [keyof A] extends [keyof B] ? ([keyof B] extends [keyof A] ? true : false) : false;
 const _settingsPatchKeys: SameKeys<
-  Omit<EvaluationSettings, "allowDrill">,
+  Omit<EvaluationSettings, "allowDrill" | "afterDue">,
   Required<EvaluationSettingsPatch>
 > = true;
 const _feedbackPatchKeys: SameKeys<FeedbackPolicy, Required<FeedbackPolicyPatch>> = true;
 void [_settingsPatchKeys, _feedbackPatchKeys];
+
+/** `PUT /evaluations/:id/after-due` (ADR-122): the teacher's switch, on an exercise only. */
+export const EvaluationAfterDueBody = z.object({ afterDue: z.enum(AFTER_DUE_SETTINGS) });
+export type EvaluationAfterDueBody = z.infer<typeof EvaluationAfterDueBody>;
 
 /**
  * The longest time limit per student, in minutes: 8 hours (product owner,

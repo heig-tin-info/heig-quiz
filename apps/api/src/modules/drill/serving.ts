@@ -33,6 +33,7 @@ import {
   drillRevisionRounds,
   enrollments,
   evaluations,
+  officialAttempt,
   questions,
 } from "../../db/schema.js";
 import { gradeDefaults, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
@@ -140,7 +141,9 @@ async function loadKeys(db: DbOrTx, cards: readonly KeyedCard[]) {
         state: attempts.state,
       })
       .from(attempts)
-      .where(and(inArray(attempts.evaluationId, evaluationIds), inArray(attempts.userId, userIds)))
+      // The official latest attempt: a practice one after the due date
+      // (ADR-122) in progress must not hide a key the exercise already shows.
+      .where(and(inArray(attempts.evaluationId, evaluationIds), inArray(attempts.userId, userIds), officialAttempt))
       .orderBy(attempts.evaluationId, attempts.userId, desc(attempts.attemptNumber)),
   ]);
   const byEvaluation = new Map(found.map((e) => [e.id, e]));

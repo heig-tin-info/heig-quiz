@@ -23,6 +23,7 @@ import {
   type EvaluationConditions,
   type EvaluationRules,
   type LobbyView,
+  type PracticeCard,
   type ReadyView,
   type StudentPollCard,
 } from "@quiz/contracts";
@@ -31,6 +32,12 @@ import {
   evaluationTotal,
   attemptDeadline,
   bonusSeconds,
+  practiceCooldownS,
+  practiceDeadline,
+  practiceDurationS,
+  practiceOwnLimit,
+  practiceRefusal,
+  type PracticeRefusal,
   isEvaluationOpen,
   isEvaluationOver,
   isFinishedAttempt,
@@ -48,7 +55,16 @@ import {
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, enrollments, evaluations, guestParticipants } from "../../db/schema.js";
+import {
+  answers,
+  attempts,
+  classrooms,
+  enrollments,
+  evaluations,
+  guestParticipants,
+  officialAttempt,
+  practiceAttempt,
+} from "../../db/schema.js";
 import { rateLimited, refusalClass, type FailureArms, type Refusal } from "../http.js";
 import {
   feedbackOf,
@@ -65,6 +81,7 @@ import {
   countedItemsByEvaluation,
   joinedItems,
   parameterizedItems,
+  practiceOpen,
   retakePolicyOf,
   retakesEnabled,
   studentEvaluationRows,
@@ -82,6 +99,7 @@ import {
   studentAttempts,
   tallyByAttempt,
   validatedOfAttempt,
+  type AttemptTally,
   type GradingRecord,
 } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
@@ -125,6 +143,8 @@ const REFUSALS = {
   evaluation_finished: [409, "the evaluation is already closed"],
   // `RetakeRefused`.
   retake_refused: [409],
+  // `PracticeRefused` (ADR-122).
+  practice_refused: [409],
   // ADR-091: a question a partial retake carried over is the previous
   // attempt's, as it stood: no write of any kind reaches it.
   item_acquired: [409, "this question was acquired in the previous attempt and is kept as it is"],
@@ -189,6 +209,16 @@ export class AttemptClosedError extends LiveError {
 export class RetakeRefused extends LiveError {
   constructor(readonly reason: RetakeRefusal) {
     super("retake_refused", `retake refused: ${reason}`, { reason });
+  }
+}
+
+/**
+ * ADR-122: a practice attempt the rule refuses (`@quiz/domain#practiceRefusal`).
+ * The reason travels in the body, so the screens can say which.
+ */
+export class PracticeRefused extends LiveError {
+  constructor(readonly reason: PracticeRefusal) {
+    super("practice_refused", `practice refused: ${reason}`, { reason });
   }
 }
 
@@ -544,7 +574,7 @@ export async function attemptById(db: Db, id: string): Promise<AttemptRecord | n
 /**
  * The participant's CURRENT attempt: the latest one (F-EVAL-15). Everything
  * a student enters, resumes or reads back is this one; the earlier attempts
- * of an exercise are only reached by id.
+ * of an exercise, and the practice attempts (ADR-122), are only reached by id.
  */
 export async function attemptOf(
   db: Db,
@@ -560,6 +590,9 @@ export async function attemptOf(
       and(
         eq(attempts.evaluationId, evaluationId),
         guestId === null ? eq(attempts.userId, userId!) : eq(attempts.guestId, guestId),
+        // A practice attempt after the due date (ADR-122) is never the
+        // student's current attempt: it is reached by id.
+        officialAttempt,
       ),
     )
     .orderBy(desc(attempts.attemptNumber))
@@ -654,6 +687,53 @@ export async function ensureAttempt(
     if (seat?.staff) events.rosterChanged(evaluation.id);
   }
   return row;
+}
+
+/**
+ * Inserts an attempt already STARTED, number `number`, on its own seed,
+ * values and deadline: a retake (ADR-025) and a practice attempt (ADR-122)
+ * alike, inside the caller's transaction. `null` when the unique index
+ * `(evaluation, user, number)` or the one unfinished attempt per student
+ * refused it: a concurrent click won, and the caller resumes its attempt.
+ */
+async function insertAttempt(
+  tx: DbOrTx,
+  input: {
+    evaluation: EvaluationRecord;
+    participant: Participant;
+    number: number;
+    seed: number;
+    instances: Record<string, StoredInstance>;
+    deadlineAt: Date | null;
+    bonusS: number;
+    afterDue: boolean;
+    acquiredItemIds?: string[];
+    now: Date;
+  },
+): Promise<AttemptRecord | null> {
+  const { now } = input;
+  const created = await tx
+    .insert(attempts)
+    .values({
+      id: randomUUID(),
+      evaluationId: input.evaluation.id,
+      ...ownerOf(input.participant),
+      attemptNumber: input.number,
+      state: "in_progress",
+      seed: input.seed,
+      instances: input.instances,
+      acquiredItemIds: input.acquiredItemIds ?? [],
+      startedAt: now,
+      deadlineAt: input.deadlineAt,
+      bonusS: input.bonusS,
+      afterDue: input.afterDue,
+      presentAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing()
+    .returning();
+  return created[0] ?? null;
 }
 
 /** What a partial retake carries over: the items, and their validated gradings as read. */
@@ -810,27 +890,18 @@ export async function retakeAttempt(
       const kept = latest.instances[itemId];
       if (kept !== undefined) drawn[itemId] = kept;
     }
-    const created = await tx
-      .insert(attempts)
-      .values({
-        id: randomUUID(),
-        evaluationId: evaluation.id,
-        ...ownerOf(participant),
-        attemptNumber: latest.attemptNumber + 1,
-        state: "in_progress",
-        seed,
-        instances: drawn,
-        acquiredItemIds: carried.itemIds,
-        startedAt: now,
-        deadlineAt,
-        bonusS,
-        presentAt: now,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoNothing()
-      .returning();
-    const row = created[0] ?? null;
+    const row = await insertAttempt(tx, {
+      evaluation,
+      participant,
+      number: latest.attemptNumber + 1,
+      seed,
+      instances: drawn,
+      deadlineAt,
+      bonusS,
+      afterDue: false,
+      acquiredItemIds: carried.itemIds,
+      now,
+    });
     if (row !== null) await carryAcquired(tx, latest, row, carried, now);
     return { evaluation, row };
   });
@@ -858,19 +929,21 @@ export async function retakeAttempt(
  * essay, a diagram) stays pending until the close: no model is asked while
  * an evaluation runs (F-LLM-03). An exam is graded at its close, as before,
  * and so is everything a poll holds (nothing: a poll has no key).
+ *
+ * A practice attempt after the due date (ADR-122) is graded at its hand-in
+ * whatever the evaluation's state — it is never in a close's pass — and its
+ * pass may ask the model, the evaluation being over (`grading/jobs.ts`).
  */
 export async function gradeAtHandIn(
   app: FastifyInstance,
   evaluation: EvaluationRecord,
-  attemptIds: readonly string[],
+  ended: readonly { id: string; afterDue: boolean }[],
 ): Promise<void> {
-  if (attemptIds.length === 0) return;
   if (evaluation.mode !== "exercise") return;
-  if (evaluation.state !== "running" && evaluation.state !== "paused") return;
-  await enqueueEvaluationGrading(app, {
-    evaluationId: evaluation.id,
-    attemptIds: [...attemptIds],
-  });
+  const live = evaluation.state === "running" || evaluation.state === "paused";
+  const attemptIds = ended.filter((a) => live || a.afterDue).map((a) => a.id);
+  if (attemptIds.length === 0) return;
+  await enqueueEvaluationGrading(app, { evaluationId: evaluation.id, attemptIds });
 }
 
 /** `not_started → in_progress`, with the deadline computed once (§5.2). */
@@ -1012,8 +1085,12 @@ function contentVisible(evaluation: EvaluationRecord, attempt: AttemptRecord): b
   return isEvaluationOver(state);
 }
 
-/** A write is only ever accepted on a running evaluation and a live attempt. */
+/**
+ * A write is only ever accepted on a running evaluation and a live attempt —
+ * or on a live practice attempt, which follows its own deadline (ADR-122).
+ */
 function readOnlyFor(evaluation: EvaluationRecord, attempt: AttemptRecord): boolean {
+  if (attempt.afterDue) return attempt.state !== "in_progress";
   return !(attempt.state === "in_progress" && evaluation.state === "running");
 }
 
@@ -1055,6 +1132,7 @@ export async function attemptView(
   return viewOf(db, evaluation, {
     seed: attempt.seed,
     timeBonusPercent: participant.timeBonusPercent,
+    practice: attempt.afterDue,
     instances: attempt.instances,
     acquired: attempt.acquiredItemIds,
     answered: await answersOf(db, attempt.id),
@@ -1067,6 +1145,7 @@ export async function attemptView(
       serverNow: iso(now),
       preview: false,
       readOnly: readOnlyFor(evaluation, attempt),
+      ...(attempt.afterDue ? { practice: true as const } : {}),
     },
   });
 }
@@ -1088,6 +1167,7 @@ export async function previewView(
   return viewOf(db, evaluation, {
     seed,
     timeBonusPercent: 0,
+    practice: false,
     instances: {},
     acquired: [],
     items,
@@ -1118,6 +1198,8 @@ async function viewOf(
     seed: number;
     /** The participant's extra time, for the conditions' duration line (ADR-079); 0 in a preview. */
     timeBonusPercent: number;
+    /** ADR-122: a practice attempt, whose conditions are the practice's. */
+    practice: boolean;
     /** The attempt's stored values (ADR-056); `{}` for a preview, which draws them from `seed`. */
     instances: Readonly<Record<string, StoredInstance>>;
     /** ADR-091: the items a partial retake carried over; none in a preview. */
@@ -1137,7 +1219,9 @@ async function viewOf(
   const { conditions: _announced, ...studentSettings } = settings;
   return {
     attempt: input.header,
-    conditions: conditionsFor(evaluation, input.timeBonusPercent),
+    conditions: input.practice
+      ? practiceConditions(evaluation, input.timeBonusPercent)
+      : conditionsFor(evaluation, input.timeBonusPercent),
     evaluation: {
       id: evaluation.id,
       title: evaluation.title,
@@ -1166,6 +1250,29 @@ function conditionsFor(evaluation: EvaluationRecord, timeBonusPercent: number): 
     durationS: evaluation.durationS,
     closesAt: isoOrNull(evaluation.closesAt),
     timeBonusPercent,
+  });
+}
+
+/**
+ * The conditions of a practice attempt (ADR-122): the exercise's own, with
+ * the practice's clock — its time limit, or eight hours, never its passed
+ * closing — unlimited attempts, and no integrity journal.
+ */
+function practiceConditions(evaluation: EvaluationRecord, timeBonusPercent: number): EvaluationConditions {
+  const settings = settingsOf(evaluation);
+  const limit = { timing: settings.timing, durationS: evaluation.durationS };
+  return evaluationConditionsOf({
+    mode: evaluation.mode,
+    settings: {
+      ...settings,
+      timing: "duration",
+      logVisibility: false,
+      retakes: { enabled: true, keep: "best", maxAttempts: null },
+    },
+    durationS: practiceDurationS(limit),
+    closesAt: null,
+    // The accommodation stretches the exercise's own limit, not the eight hours.
+    timeBonusPercent: practiceOwnLimit(limit) ? timeBonusPercent : 0,
   });
 }
 
@@ -1271,6 +1378,220 @@ export async function enterEvaluation(
     : { kind: "attempt", view: view.view, attempt };
 }
 
+// --- Practice after the due date (ADR-122) --------------------------------
+
+/**
+ * Where a student stands for practice on one evaluation, from ONE read of
+ * their attempts: the unfinished practice attempt to resume, whether an
+ * official attempt is left unfinished, the latest practice one (for the
+ * minute between two), and the next attempt number.
+ */
+async function practiceState(tx: DbOrTx, evaluationId: string, userId: string) {
+  const mine = await tx
+    .select()
+    .from(attempts)
+    .where(and(eq(attempts.evaluationId, evaluationId), eq(attempts.userId, userId)))
+    .orderBy(asc(attempts.attemptNumber));
+  const unfinished = mine.filter((a) => !isFinishedAttempt(a.state));
+  return {
+    open: unfinished.find((a) => a.afterDue) ?? null,
+    unfinishedOfficial: unfinished.some((a) => !a.afterDue),
+    lastPractice: mine.filter((a) => a.afterDue).at(-1) ?? null,
+    nextNumber: (mine.at(-1)?.attemptNumber ?? 0) + 1,
+  };
+}
+
+/**
+ * Whether the evaluation's classroom is archived: it takes no writes
+ * (ADR-122 §1). The student's loader read it with their seat; the staff's
+ * did not (`archived: null`), and it is read here then.
+ */
+async function classroomArchived(db: DbOrTx, evaluation: EvaluationRecord, archived: boolean | null): Promise<boolean> {
+  if (archived !== null) return archived;
+  if (evaluation.classroomId === null) return false;
+  const [row] = await db
+    .select({ archivedAt: classrooms.archivedAt })
+    .from(classrooms)
+    .where(eq(classrooms.id, evaluation.classroomId))
+    .limit(1);
+  return row?.archivedAt != null;
+}
+
+/** The practice rule for this student now, refused as `409 practice_refused`. */
+async function assertPractice(
+  db: DbOrTx,
+  evaluation: EvaluationRecord,
+  archived: boolean | null,
+  unfinishedOfficial: boolean,
+): Promise<void> {
+  const refusal = practiceRefusal({
+    open: practiceOpen(evaluation),
+    evaluationState: evaluation.state,
+    archived: await classroomArchived(db, evaluation, archived),
+    unfinishedOfficial,
+  });
+  if (refusal !== null) throw new PracticeRefused(refusal);
+}
+
+/** What the practice routes are given: the evaluation, who practises, and the loader's `archived`. */
+interface PracticeInput {
+  evaluation: EvaluationRecord;
+  participant: Participant;
+  archived: boolean | null;
+  now: Date;
+}
+
+/**
+ * `POST /evaluations/:id/practice` (ADR-122): what the practice route shows
+ * — the student's unfinished practice attempt, resumed, or the ready screen
+ * of a new one (its conditions shown again before Start, F-EVAL-33). Writes
+ * nothing. Refused (`409 practice_refused`) where a new one could not start;
+ * an unfinished one is resumed even if the teacher hid the practice since.
+ */
+export async function practiceEntry(
+  db: Db,
+  input: PracticeInput,
+): Promise<{ kind: "attempt"; view: AttemptView } | { kind: "ready"; view: ReadyView }> {
+  const { evaluation, participant, now } = input;
+  if (participant.userId === null) throw new PracticeRefused("hidden");
+  const state = await practiceState(db, evaluation.id, participant.userId);
+  if (state.open !== null) {
+    return { kind: "attempt", view: await attemptView(db, evaluation, state.open, now, participant) };
+  }
+  await assertPractice(db, evaluation, input.archived, state.unfinishedOfficial);
+  return {
+    kind: "ready",
+    view: {
+      conditions: practiceConditions(evaluation, participant.timeBonusPercent),
+      evaluation: { id: evaluation.id, title: evaluation.title },
+    },
+  };
+}
+
+/**
+ * `POST /evaluations/:id/practice/start` (ADR-122): a NEW practice attempt
+ * on an exercise that is over — blank, a new seed (a new order, new values),
+ * never a partial retake (ADR-091), started at once with its own deadline
+ * (`practiceDeadline`). Unlimited, one unfinished at a time: an unfinished
+ * practice attempt is answered instead of a new one. At most one new
+ * attempt a minute (`429 rate_limited`).
+ *
+ * The rule is read inside a transaction that holds the evaluation row
+ * `FOR SHARE`; its number follows every attempt of the student's, practice
+ * included, so the unique index `(evaluation, user, number)` lets one of two
+ * racing clicks in, and the loser resumes the winner's attempt.
+ */
+export async function startPractice(
+  db: Db,
+  input: PracticeInput,
+): Promise<{ row: AttemptRecord; created: boolean }> {
+  const { participant, now } = input;
+  if (participant.userId === null) throw new PracticeRefused("hidden");
+  const userId = participant.userId;
+
+  const outcome = await db.transaction(async (tx) => {
+    const [evaluation] = await tx
+      .select()
+      .from(evaluations)
+      .where(eq(evaluations.id, input.evaluation.id))
+      .for("share");
+    if (!evaluation) throw new PracticeRefused("not_over");
+    const state = await practiceState(tx, evaluation.id, userId);
+    if (state.open !== null) return { evaluation, row: state.open, created: false };
+    await assertPractice(tx, evaluation, input.archived, state.unfinishedOfficial);
+    const wait = practiceCooldownS(state.lastPractice?.createdAt ?? null, now);
+    if (wait > 0) throw new RateLimited(wait);
+
+    const settings = settingsOf(evaluation);
+    const seed = drawSeed();
+    const row = await insertAttempt(tx, {
+      evaluation,
+      participant,
+      number: state.nextNumber,
+      seed,
+      instances: await drawInstances(tx, evaluation, seed),
+      deadlineAt: practiceDeadline({
+        startedAt: now,
+        timing: settings.timing,
+        durationS: evaluation.durationS,
+        timeBonusPercent: participant.timeBonusPercent,
+      }),
+      bonusS: 0,
+      afterDue: true,
+      now,
+    });
+    return { evaluation, row, created: row !== null };
+  });
+
+  if (outcome.row === null) {
+    // Lost the race: resume the attempt the winner opened.
+    const row = (await practiceState(db, outcome.evaluation.id, userId)).open;
+    if (!row) throw new PracticeRefused("unfinished");
+    return { row, created: false };
+  }
+  return { row: outcome.row, created: outcome.created };
+}
+
+/**
+ * ADR-122, the student home's "Past series", from the rows `studentBoard`
+ * already read: the exercises over and open to practice in a classroom that
+ * is not archived, newest closed first, each with the student's unfinished
+ * practice attempt and the score of their latest finished one — points,
+ * never a grade, and none under the policy `none`.
+ */
+function practiceCardsOf(
+  rows: readonly StudentRow[],
+  mine: readonly AttemptRecord[],
+  scores: { totals: ReadonlyMap<string, number>; itemCounts: ReadonlyMap<string, number>; tallies: ReadonlyMap<string, AttemptTally> },
+): PracticeCard[] {
+  return rows
+    .map((row): PracticeCard => {
+      const evaluation = row.evaluation;
+      const own = mine.filter((a) => a.evaluationId === evaluation.id);
+      const finished = own.filter((a) => isFinishedAttempt(a.state));
+      const last = finished.at(-1) ?? null;
+      return {
+        id: evaluation.id,
+        title: evaluation.title,
+        classroomId: classroomIdOf(evaluation),
+        classroomName: row.classroomName,
+        courseCode: row.courseCode,
+        closedAt: isoOrNull(evaluation.closedAt),
+        openAttemptId: own.find((a) => !isFinishedAttempt(a.state))?.id ?? null,
+        count: finished.length,
+        last:
+          last === null
+            ? null
+            : {
+                attemptId: last.id,
+                finishedAt: isoOrNull(last.submittedAt ?? last.closedAt),
+                // ADR-122 §7: under `none`, not even the score.
+                score:
+                  feedbackOf(evaluation).when === "none"
+                    ? null
+                    : scoreOf(
+                        scores.tallies.get(last.id),
+                        scores.itemCounts.get(evaluation.id) ?? 0,
+                        scores.totals.get(evaluation.id) ?? 0,
+                      ),
+              },
+      };
+    })
+    .sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? ""));
+}
+
+/** The student's practice attempts on `rows`, oldest first; none to read without a row. */
+async function practiceAttemptsOf(db: Db, userId: string, rows: readonly StudentRow[]): Promise<AttemptRecord[]> {
+  if (rows.length === 0) return [];
+  return db
+    .select()
+    .from(attempts)
+    .where(
+      and(eq(attempts.userId, userId), practiceAttempt, inArray(attempts.evaluationId, rows.map((r) => r.evaluation.id))),
+    )
+    .orderBy(asc(attempts.attemptNumber));
+}
+
 // --- Autosave (§4.7) ------------------------------------------------------
 
 /**
@@ -1299,6 +1620,9 @@ function closedReason(
     return attempt.state === "submitted" ? "submitted" : "deadline";
   }
   if (scope === "submit") return null;
+  // ADR-122: a practice attempt lives on an evaluation that is over; only
+  // its own deadline closes it, by the same acceptance rule.
+  if (attempt.afterDue) return isWritable(attempt.deadlineAt, now) ? null : "deadline";
   if (evaluation.state === "paused") {
     if (scope === "answer") return "paused";
   } else if (evaluation.state !== "running") {
@@ -1380,7 +1704,7 @@ export async function submitAttempt(
   const row = (await attemptById(db, attempt.id))!;
   events.attemptClosed(evaluation.id, row, "student", now);
   await endKioskSessions(db, evaluation.id, seated(finished));
-  if (app && finished.length > 0) await gradeAtHandIn(app, evaluation, [row.id]);
+  if (app && finished.length > 0) await gradeAtHandIn(app, evaluation, [row]);
   return row;
 }
 
@@ -1411,10 +1735,10 @@ export async function closeAttempt(
   // attempt was open: grade it now, alone (the pass never touches a cell a
   // teacher validated). Not on a `released` evaluation, whose grades are
   // published: those stay the teacher's to change, from the grading panel.
-  if (app && closed.length > 0 && evaluation.state === "closed") {
+  if (app && closed.length > 0 && evaluation.state === "closed" && !row.afterDue) {
     await enqueueEvaluationGrading(app, { evaluationId: evaluation.id, attemptIds: [row.id] });
   } else if (app && closed.length > 0) {
-    await gradeAtHandIn(app, evaluation, [row.id]);
+    await gradeAtHandIn(app, evaluation, [row]);
   }
   return row;
 }
@@ -1490,6 +1814,8 @@ export interface EvaluationHome {
   open: EvaluationCard[];
   upcoming: EvaluationCard[];
   past: EvaluationCard[];
+  /** ADR-122, "Past series": on the whole home only (no `classroomId`), else empty. */
+  practice: PracticeCard[];
 }
 
 /**
@@ -1503,8 +1829,10 @@ export async function studentHome(
   now: Date,
   classroomId?: string,
 ): Promise<EvaluationHome> {
-  const { polls, open, upcoming, past } = await studentBoard(db, userId, now, classroomId);
-  return { polls, open, upcoming, past: past.map((entry) => entry.card) };
+  const { polls, open, upcoming, past, practice } = await studentBoard(db, userId, now, classroomId, {
+    practice: classroomId === undefined,
+  });
+  return { polls, open, upcoming, past: past.map((entry) => entry.card), practice };
 }
 
 type StudentRow = Awaited<ReturnType<typeof studentEvaluationRows>>[number];
@@ -1529,7 +1857,13 @@ export interface PastEntry {
  * rule for what is open, coming and past, which the home and the Grades page
  * (`grades.ts`) both read. Within the module only.
  */
-export async function studentBoard(db: Db, userId: string, now: Date, classroomId?: string) {
+export async function studentBoard(
+  db: Db,
+  userId: string,
+  now: Date,
+  classroomId?: string,
+  options: { practice?: boolean } = {},
+) {
   const all = await studentEvaluationRows(db, userId, classroomId).orderBy(
     desc(evaluations.createdAt),
   );
@@ -1560,11 +1894,22 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
   // or last) and how many were taken; its grade is the kept attempt's. Every
   // other card is its one attempt, as before.
   const withRetakes = rows.filter((r) => retakesEnabled(r.evaluation));
-  const perEvaluation = await studentAttempts(
-    db,
-    userId,
-    withRetakes.map((r) => r.evaluation),
-  );
+  // ADR-122: the exercises over and open to practice, outside an archived
+  // classroom, and the student's practice attempts on them.
+  const practiced = options.practice
+    ? rows.filter((r) => r.archivedAt === null && isEvaluationOver(r.evaluation.state) && practiceOpen(r.evaluation))
+    : [];
+  const [perEvaluation, practiceRows] = await Promise.all([
+    studentAttempts(
+      db,
+      userId,
+      withRetakes.map((r) => r.evaluation),
+    ),
+    practiceAttemptsOf(db, userId, practiced),
+  ]);
+  const lastPractice = [
+    ...new Map(practiceRows.filter((a) => isFinishedAttempt(a.state)).map((a) => [a.evaluationId, a.id])).values(),
+  ];
 
   // The grade of a released evaluation is the results page's (WP6), and the
   // score of a kept attempt what its feedback page would show — so are the
@@ -1579,17 +1924,15 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
     );
   });
   const scored = [...new Set([...withRetakes, ...readableEarly])];
-  const scoredIds = [...new Set(scored.map((r) => r.evaluation.id))];
+  const scoredIds = [...new Set([...scored, ...practiced].map((r) => r.evaluation.id))];
   const [grades, totals, itemCounts, keptTallies] = await Promise.all([
     releasedGradesOf(db, userId, rows, perEvaluation),
     totalPointsByEvaluation(db, scoredIds),
     countedItemsByEvaluation(db, scoredIds),
-    tallyByAttempt(
-      db,
-      scored
-        .map((row) => countedAttemptId(perEvaluation, row))
-        .filter((id): id is string => id !== null),
-    ),
+    tallyByAttempt(db, [
+      ...scored.map((row) => countedAttemptId(perEvaluation, row)).filter((id): id is string => id !== null),
+      ...lastPractice,
+    ]),
   ]);
 
   const retakesOf = (row: (typeof rows)[number]): EvaluationCard["retakes"] => {
@@ -1696,5 +2039,6 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
       past.push(ended);
     } else open.push(withConditions(row, c));
   }
-  return { polls, open, upcoming, past };
+  const practice = practiceCardsOf(practiced, practiceRows, { totals, itemCounts, tallies: keptTallies });
+  return { polls, open, upcoming, past, practice };
 }

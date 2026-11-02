@@ -68,7 +68,7 @@ import {
 
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, evaluations, gradings } from "../../db/schema.js";
+import { answers, attempts, evaluations, gradings, officialAttempt } from "../../db/schema.js";
 import {
   GRADING_EVALUATION_QUEUE,
   GRADING_LLM_QUEUE,
@@ -172,6 +172,11 @@ interface LlmGradingJob {
   /** The type's own details, kept beside the model's reply. */
   details?: unknown;
   regradeNote?: string;
+  /**
+   * ADR-122 §6: the attempt is a practice one after the due date — the
+   * model's successful reply is then its result, validated. Absent: false.
+   */
+  practice?: boolean;
 }
 
 /** Two calls at a time: a class of essays in minutes, without a burst the provider would rate-limit. */
@@ -282,12 +287,15 @@ async function loadPass(
     .where(
       job.attemptIds
         ? and(eq(attempts.evaluationId, evaluation.id), inArray(attempts.id, job.attemptIds))
-        : eq(attempts.evaluationId, evaluation.id),
+        : // The close's pass, a re-run, a regrade: the official attempts. A
+          // practice attempt (ADR-122) is graded by its own hand-in's pass.
+          and(eq(attempts.evaluationId, evaluation.id), officialAttempt),
     );
   // While the evaluation runs, only a finished attempt is graded (ADR-067):
   // one reopened since the hand-in that sent this pass is graded at its next.
-  // The write checks it again, under the attempt's lock (`passGuard`).
-  const gradable = attemptRows.filter((a) => gradableNow(evaluation.state, a.state));
+  // A practice attempt, only once finished. The write checks it again,
+  // under the attempt's lock (`passGuard`).
+  const gradable = attemptRows.filter((a) => gradableNow(evaluation.state, a));
   if (items.length === 0 || gradable.length === 0) return null;
 
   const answerRows = await db
@@ -303,7 +311,7 @@ async function loadPass(
     items,
     attempts: gradable,
     answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
-    standing: await standingGradings(db, evaluation.id),
+    standing: await standingGradings(db, evaluation.id, { attemptIds: gradable.map((a) => a.id) }),
     teacherIds: await events.staffOf(db, evaluation),
   };
 }
@@ -458,7 +466,7 @@ async function gradeCell(
   };
   if (outcome.kind === "llm") {
     const details = withWarning(outcome.details, warning);
-    return { llm: { ...cellOf, request: outcome.request, details } };
+    return { llm: { ...cellOf, request: outcome.request, details, ...(attempt.afterDue ? { practice: true } : {}) } };
   }
   return {
     runner: {
@@ -684,7 +692,7 @@ async function gradeWithRunner(
     : undefined;
   // A cheap early exit, so a stale job never takes a runner slot. What
   // decides is the guard of the write, under the attempt's lock.
-  if (isStale(evaluation.state, attempt.state, answerRow, job)) return;
+  if (isStale(evaluation.state, attempt, answerRow, job)) return;
 
   const now = app.clock.now();
   const base = {
@@ -771,11 +779,11 @@ async function gradeWithRunner(
  */
 function isStale(
   evaluationState: EvaluationRecord["state"],
-  attemptState: AttemptRecord["state"],
+  attempt: Pick<AttemptRecord, "state" | "afterDue">,
   answer: { revision: number } | undefined,
   job: RunnerGradingJob,
 ): boolean {
-  if (!gradableNow(evaluationState, attemptState)) return true;
+  if (!gradableNow(evaluationState, attempt)) return true;
   return answer !== undefined && rewritten(answer.revision, job);
 }
 
@@ -806,6 +814,7 @@ function passGuard(loadedEnd?: ReadonlyMap<string, number | null>): WriteGuard {
       .select({
         id: attempts.id,
         state: attempts.state,
+        afterDue: attempts.afterDue,
         closedAt: attempts.closedAt,
         evaluationState: evaluations.state,
       })
@@ -816,7 +825,7 @@ function passGuard(loadedEnd?: ReadonlyMap<string, number | null>): WriteGuard {
       .for("update", { of: attempts });
     const gradable = new Set(
       rows
-        .filter((r) => gradableNow(r.evaluationState, r.state))
+        .filter((r) => gradableNow(r.evaluationState, r))
         .filter((r) => loadedEnd === undefined || loadedEnd.get(r.id) === endOf(r.closedAt))
         .map((r) => r.id),
     );
@@ -899,6 +908,11 @@ function keepsLlmProposal(
  * which every student payload strips, never in the comment a validation
  * would hand to the student. A failed call: a proposal worth zero that says
  * why (§5.4).
+ *
+ * A practice attempt after the due date (ADR-122 §6, the product owner's
+ * choice): the model's successful reply is the practice result, VALIDATED
+ * as it stands — no teacher reads a practice attempt, and it counts nowhere.
+ * A failure stays a proposal: the cell reads "not graded in practice".
  */
 async function runLlmGrading(app: FastifyInstance, job: LlmGradingJob): Promise<void> {
   const db = app.db;
@@ -915,7 +929,9 @@ async function runLlmGrading(app: FastifyInstance, job: LlmGradingJob): Promise<
       now: app.clock.now(),
       ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
     };
-    await writeGrading(db, { ...base, ...(await askModel(app, evaluation, job)) });
+    const proposal = await askModel(app, evaluation, job);
+    const settled = job.practice === true && justificationOf(proposal.details) !== null;
+    await writeGrading(db, { ...base, ...proposal, ...(settled ? { state: "validated" as const } : {}) });
   }
   await announceGradingReady(app, evaluation);
 }

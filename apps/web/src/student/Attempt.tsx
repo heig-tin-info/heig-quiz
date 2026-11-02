@@ -17,30 +17,50 @@
  *
  * The refusals of §4.4 each have a screen: a network that is not allowed and
  * an evaluation that is not open. There is no access code to type (ADR-053).
+ *
+ * `/take/:evaluationId/practice` (ADR-122) is the same route for a practice
+ * attempt on an exercise that is over: `POST …/practice` answers the ready
+ * screen of a new one or the unfinished one, and `practice_refused` has its
+ * screen with its reason.
  */
 import { useQuery } from "@tanstack/react-query";
 import { Lock, UserX } from "lucide-react";
 
-import type { AttemptEntry } from "@quiz/contracts";
+import type { AttemptEntry, PracticeRefusalReason } from "@quiz/contracts";
 
 import { ApiError, api, refusalCodeOf, useMe } from "../api";
 import { feedbackLink } from "../grading";
-import { useT } from "../i18n";
+import { useT, type Dict } from "../i18n";
 import type { Navigate } from "../router";
 import { leaveStudentView, studentViewOn } from "../studentView";
 import { Button, Card, EmptyState, QueryError, Spinner } from "../ui";
 import { Lobby } from "./Lobby";
 import { Player } from "./Player";
 import { Ready } from "./Ready";
-import { attemptEntryKey } from "../queryKeys";
+import { attemptEntryKey, practiceEntryKey } from "../queryKeys";
 import { toKiosk } from "../kiosk/navigation";
+
+/** Why a practice attempt may not start, in the student's words (ADR-122). */
+const PRACTICE_REFUSED: Record<PracticeRefusalReason, keyof Dict> = {
+  hidden: "practice.refused.hidden",
+  not_over: "practice.refused.not_over",
+  archived: "practice.refused.archived",
+  unfinished: "practice.refused.unfinished",
+};
 
 export function AttemptPage({
   evaluationId,
   navigate,
+  practice = false,
 }: {
   evaluationId: string;
   navigate: Navigate;
+  /**
+   * ADR-122, `/take/:id/practice`: a practice attempt on an exercise that is
+   * over — `POST …/practice` instead of `…/attempt`, never a lobby, and its
+   * own refusal (`practice_refused`, with its reason).
+   */
+  practice?: boolean;
 }) {
   const t = useT();
   // Only to decide whether the refusal below may say the word "seat": a
@@ -50,7 +70,7 @@ export function AttemptPage({
   const staff = me.data?.role === "teacher" || me.data?.role === "admin";
 
   const entry = useQuery<AttemptEntry>({
-    queryKey: attemptEntryKey(evaluationId),
+    queryKey: practice ? practiceEntryKey(evaluationId) : attemptEntryKey(evaluationId),
     // A refusal the server SPELLS OUT (a blocked network, an evaluation that
     // is not open) has its own screen below and must never be retried. A
     // failure with no answer at all — the socket died, a proxy
@@ -62,7 +82,7 @@ export function AttemptPage({
     // A POST behind a query: the route is idempotent by design, and this is
     // the only way the same refetch path serves the lobby and the player.
     queryFn: () =>
-      api<AttemptEntry>(`/app/api/evaluations/${evaluationId}/attempt`, { method: "POST" }),
+      api<AttemptEntry>(`/app/api/evaluations/${evaluationId}/${practice ? "practice" : "attempt"}`, { method: "POST" }),
   });
 
   // ADR-051 §7: a kiosk station has no home but its own screen.
@@ -100,9 +120,12 @@ export function AttemptPage({
       code === "ip_not_allowed" ||
       code === "not_open" ||
       code === "not_implemented" ||
-      code === "not_found"
+      code === "not_found" ||
+      code === "practice_refused"
     ) {
       const missing = code === "not_found";
+      // ADR-122: why no practice attempt may start, in the server's words.
+      const reason = ((entry.error as ApiError).body as { reason?: PracticeRefusalReason } | null)?.reason;
       return (
         <main className="mx-auto w-full max-w-160 px-4 py-16">
           <Card className="px-6 py-4">
@@ -113,7 +136,9 @@ export function AttemptPage({
                   ? t("player.notAvailable")
                   : code === "ip_not_allowed"
                     ? t("player.ipBlocked")
-                    : t("player.notOpen")
+                    : code === "practice_refused" && reason
+                      ? t(PRACTICE_REFUSED[reason])
+                      : t("player.notOpen")
               }
               action={
                 <Button variant="primary" onClick={home}>
@@ -135,7 +160,7 @@ export function AttemptPage({
   }
 
   const data = entry.data!;
-  if (data.kind === "ready") return <Ready view={data.view} onLater={home} />;
+  if (data.kind === "ready") return <Ready view={data.view} onLater={home} practice={practice} />;
   if (data.kind === "lobby") {
     return (
       <Lobby
@@ -160,3 +185,4 @@ export function AttemptPage({
     />
   );
 }
+

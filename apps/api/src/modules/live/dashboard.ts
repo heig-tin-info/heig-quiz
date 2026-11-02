@@ -27,7 +27,7 @@ import {
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attemptEvents, attempts, classrooms, enrollments, kioskDevices, sessions, users } from "../../db/schema.js";
+import { answers, attemptEvents, attempts, classrooms, enrollments, kioskDevices, officialAttempt, sessions, users } from "../../db/schema.js";
 import { isCourseOwner, type Caller } from "../guards.js";
 import {
   gradeDefaults,
@@ -99,7 +99,8 @@ export async function dashboardView(
   const attemptRows = await db
     .select()
     .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id))
+    // A practice attempt after the due date (ADR-122) is no row of the grid.
+    .where(and(eq(attempts.evaluationId, evaluation.id), officialAttempt))
     .orderBy(asc(attempts.attemptNumber));
   const byUser = new Map(attemptRows.map((a) => [a.userId, a]));
   const attemptCounts = new Map<string | null, number>();
@@ -439,7 +440,8 @@ export async function itemAnswers(
   const attemptRows = await db
     .select()
     .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id))
+    // A practice attempt after the due date (ADR-122) is no row of the grid.
+    .where(and(eq(attempts.evaluationId, evaluation.id), officialAttempt))
     .orderBy(asc(attempts.attemptNumber));
   const latest = [...new Map(attemptRows.map((a) => [a.userId ?? a.id, a])).values()];
   const answerRows =

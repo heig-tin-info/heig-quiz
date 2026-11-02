@@ -736,6 +736,8 @@ const scenes = [
   // (the paused exercise, which students are sitting).
   { name: "eval-config-retakes", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=timing" },
   { name: "eval-config-retakes-locked", role: "teacher", path: "/evaluations/paused?step=timing" },
+  // ADR-122: practice after the due date, an exercise's switch under the advanced options.
+  { name: "eval-config-after-due", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
   { name: "eval-config-advanced-running", role: "teacher", path: "/evaluations/running?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
   // #152: the pre-flight checklist — ready with warnings (the draft exam),
   // scheduled, no waiting room (the retake exercise opens straight into
@@ -889,6 +891,10 @@ const scenes = [
 
   // Student
   { name: "student-home", role: "student", path: "/" },
+  // ADR-122: the Past series, the practice's ready screen, player and results.
+  { name: "practice-ready", role: "student", path: "/take/11111111-1111-4111-8111-111111111131/practice" },
+  { name: "practice-player", role: "student", path: "/take/11111111-1111-4111-8111-111111111132/practice" },
+  { name: "practice-feedback", role: "student", path: "/attempts/22222222-2222-4222-8222-222222222231/feedback" },
   { name: "student-empty", role: "student", path: "/?empty=1" },
   { name: "student-error", role: "student", path: "/?fail=1", settle: 2500 },
   { name: "student-loading", role: "student", path: "/?slow=1", settle: 300 },
@@ -1644,6 +1650,7 @@ const scenes = [
   { name: "eval-list-delete-assistant", role: "teacher", path: "/classrooms/r1?assistant=1", fold: true, act: (p) => openRowMenu(p, /^(Actions for|Actions pour) Test d/) },
 
   { name: "results", role: "teacher", path: "/evaluations/closed/results" },
+  { name: "results-practised", role: "teacher", path: "/evaluations/closed/results?practised=1" },
   // The table filtered to one bar of the histogram (#971).
   { name: "results-bucket", role: "teacher", path: "/evaluations/closed/results?bucket=4" },
   { name: "results-released", role: "teacher", path: "/evaluations/released/results" },

@@ -97,7 +97,7 @@ describe("the release deletes the integrity journal (ADR-088 §8)", () => {
     await everyKind(other.attempt.id);
 
     const submitted = await live.submitAttempt(db, evaluation, attempt, app.clock.now());
-    await live.gradeAtHandIn(app, evaluation, [submitted.id]);
+    await live.gradeAtHandIn(app, evaluation, [submitted]);
     const closed = await live.closeEvaluation(db, await reload(db, evaluation.id), app.clock.now(), "teacher", app);
     const released = await results.releaseResults(db, closed, app.clock.now());
 

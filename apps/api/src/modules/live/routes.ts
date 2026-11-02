@@ -203,6 +203,51 @@ export async function livePlugin(
   );
 
   /**
+   * ADR-122: practice after the due date. `…/practice` writes nothing: it
+   * resumes the student's unfinished practice attempt or answers the ready
+   * screen of a new one (its conditions, no content); `…/practice/start`
+   * starts a new one — `409 practice_refused` with its reason where the rule
+   * refuses, `429 rate_limited` within a minute of the previous one. The same
+   * loader as the entry: a claimed seat, the network allowlist.
+   */
+  const practiceScope = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {
+    const scope = sitting(req, reply, await reachableEvaluation(app, req, reply, p.id));
+    if (!scope) return null;
+    // A CLAIMED roster seat, as for the entry; anyone else gets its 404.
+    const participant = await service.participantOf(app.db, scope.evaluation, req.user!.id);
+    if (!participant) {
+      await notFound(reply);
+      return null;
+    }
+    return { evaluation: scope.evaluation, archived: scope.archived, participant };
+  };
+  const practiceRoute = { params: IdParam, body: AttemptStartBody, optionalBody: true as const, load: practiceScope };
+  // Not `SITTING`: a confined session (`seb`, `kiosk`) never practises —
+  // an exercise asking for a trusted client is hidden after its due date.
+  app.post(
+    "/app/api/evaluations/:id/practice",
+    { preHandler: requireSession },
+    student(practiceRoute, async ({ now, scope }) =>
+      (await service.practiceEntry(app.db, { ...scope, now })) satisfies AttemptEntry,
+    ),
+  );
+  app.post(
+    "/app/api/evaluations/:id/practice/start",
+    { preHandler: requireSession },
+    student(practiceRoute, async ({ req, now, scope }) => {
+      const { row, created } = await service.startPractice(app.db, { ...scope, now });
+      if (created) {
+        await trace(req, "attempt.practice", "attempt", row.id, {
+          evaluationId: scope.evaluation.id,
+          attemptNumber: row.attemptNumber,
+        });
+      }
+      const view = await service.attemptView(app.db, scope.evaluation, row, now, scope.participant);
+      return { kind: "attempt", view } satisfies AttemptEntry;
+    }),
+  );
+
+  /**
    * ADR-018: a teacher throws away their OWN staff test attempt.
    *
    * `POST /evaluations/:id/attempt` is idempotent per participant, so
@@ -376,9 +421,10 @@ export async function livePlugin(
       async ({ req, reply, now, body, scope }) => {
         // The journal follows the attempt: once it is over, it stops growing.
         service.assertOpen(scope.evaluation, scope.attempt, now);
-        // ADR-088: an integrity event the evaluation or the session does not
-        // keep is answered like a stored one, and dropped.
-        if (isIntegrityEventKind(body.kind) && !service.storesIntegrityEvent(scope.evaluation, req.auth)) {
+        // ADR-088: an integrity event the evaluation, the session or the
+        // attempt (a practice one, ADR-122) does not keep is answered like a
+        // stored one, and dropped.
+        if (isIntegrityEventKind(body.kind) && !service.storesIntegrityEvent(scope.evaluation, req.auth, scope.attempt)) {
           return reply.code(204).send();
         }
         const since = new Date(now.getTime() - 60_000);
