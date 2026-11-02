@@ -734,7 +734,8 @@ export const TOOLS: Tool[] = [
     name: "create_evaluation",
     title: "Create an evaluation",
     description:
-      "Creates an evaluation in DRAFT directly in a classroom — `exercise` (practice, feedback allowed) or " +
+      "Creates an evaluation in DRAFT directly in a classroom — `exercise` (practice, never graded: each " +
+      "student sees the whole correction after handing in) or " +
       "`exam` — and adds the given questions. Call it ONLY when the teacher explicitly asks for an " +
       "evaluation in a classroom; to make a new quiz, use `create_template` instead (and `instantiate_template` " +
       "when they also want it in a class), so the quiz is kept in the course for next year. Every " +
@@ -769,8 +770,9 @@ export const TOOLS: Tool[] = [
       "teacher schedules it in the Launch step of the web app (#921). Tell the teacher so, with the returned " +
       "`url`, whenever the result carries a `notice`. While it is running or " +
       "paused, only the title, the IP allowlist and the feedback policy may change " +
-        "(an evaluation with a waiting room never takes `immediate` feedback). A poll's feedback policy " +
-        "is never patched: it follows the poll's reveal.",
+        "(an exam never takes `immediate` feedback). An exercise's feedback policy is accepted and ignored: " +
+        "an exercise always shows the answer, the key and the explanation once handed in. A poll's feedback " +
+        "policy is never patched: it follows the poll's reveal.",
     input: z.object({ evaluationId: Id, ...EvaluationPatch.shape }),
     annotations: { ...WRITE, idempotentHint: true },
     run: async (api, { evaluationId, ...body }) => {

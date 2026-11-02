@@ -119,7 +119,7 @@ describe("LiveDashboard — publishing the correction (ADR-050)", () => {
     await waitFor(() => expect(detailReads()).toBeGreaterThan(before));
   });
 
-  it("asks first, says what the policy shows, and publishes on confirmation", async () => {
+  it("asks first, says it changes nothing for the students (ADR-124), and publishes on confirmation", async () => {
     const user = userEvent.setup();
     const { calls } = setup(
       exercise((d) => {
@@ -132,7 +132,7 @@ describe("LiveDashboard — publishing the correction (ADR-050)", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText(/can still retake it/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/correction can be projected/i)).toBeInTheDocument();
-    expect(within(dialog).getByText(/without the answer key/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/nothing changes for them/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/cannot be undone/i)).toBeInTheDocument();
     // Nothing is sent before the confirmation.
     expect(calls.some((c) => c.url.endsWith("/publish-correction"))).toBe(false);
@@ -145,12 +145,12 @@ describe("LiveDashboard — publishing the correction (ADR-050)", () => {
     });
   });
 
-  it("says students see nothing more under the policy none", async () => {
+  it("says the same whatever the stored policy, none included (ADR-124)", async () => {
     const user = userEvent.setup();
     setup(exercise((d) => (d.evaluation.feedbackPolicy = { ...d.evaluation.feedbackPolicy, when: "none" })));
     await pick(user, /publish the correction/i);
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText(/students see nothing more/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/already see their feedback when they hand in/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/can still hand in/i)).toBeInTheDocument();
   });
 

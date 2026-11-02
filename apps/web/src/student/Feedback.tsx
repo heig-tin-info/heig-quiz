@@ -41,8 +41,8 @@ import { useRetake } from "./retake";
  * (F-EVAL-15, issues #120, #121), the page an attempt ends on is where the
  * student decides to try again, so it carries **Try again** — or says, in a
  * line, why there is no other attempt. Whether one is allowed is the server's
- * answer (`retake.refusal`), never recomputed here. Once the teacher publishes
- * the correction of such an exercise (ADR-050), the page shows the correction
+ * answer (`retake.refusal`), never recomputed here. An exercise shows its
+ * correction at every hand-in (ADR-124), so the page shows the correction
  * AND keeps that one action.
  *
  * What is shown is entirely the server's call. `available: false` carries a
@@ -56,7 +56,6 @@ const PENDING_TITLE: Record<FeedbackPending["reason"], keyof Dict> = {
   results_pending: "feedback.pending.results_pending.title",
   no_feedback: "feedback.pending.no_feedback.title",
   attempt_open: "feedback.pending.attempt_open.title",
-  retakes_open: "feedback.pending.retakes_open.title",
   exam_open: "feedback.pending.exam_open.title",
 };
 
@@ -64,7 +63,6 @@ const PENDING_BODY: Record<FeedbackPending["reason"], keyof Dict> = {
   results_pending: "feedback.pending.results_pending.body",
   no_feedback: "feedback.pending.no_feedback.body",
   attempt_open: "feedback.pending.attempt_open.body",
-  retakes_open: "feedback.pending.retakes_open.body",
   exam_open: "feedback.pending.exam_open.body",
 };
 
@@ -261,14 +259,9 @@ export function Feedback({
     queryFn: () => api(`/app/api/attempts/${attemptId}/feedback`),
     refetchInterval: (query) => {
       const data = query.state.data;
-      // Right after a hand-in the attempt is still being graded — between two
-      // attempts (ADR-025), or with a correction published while the exercise
-      // runs (ADR-050), where nothing is released yet and points come in.
-      const grading = data
-        ? data.available
-          ? data.evaluation.releasedAt === null && data.pendingCount > 0
-          : (data.score?.pendingCount ?? 0) > 0
-        : false;
+      // Right after the hand-in of an exercise the attempt is still being
+      // graded (ADR-067): nothing is released yet and points come in.
+      const grading = data?.available === true && data.evaluation.releasedAt === null && data.pendingCount > 0;
       return grading && query.state.dataUpdateCount < SCORE_POLLS ? SCORE_POLL_MS : false;
     },
   });
@@ -289,7 +282,7 @@ export function Feedback({
   // The same page header on both branches: a student who opens this from a
   // notification must know what they are looking at before they know whether
   // there is anything in it.
-  const practice = data.practice === true;
+  const practice = data.available && data.practice === true;
   const header = (released: string | null) => (
     <header>
       <p className="text-[13px] text-fg-muted">{data.evaluation.title}</p>
@@ -310,38 +303,11 @@ export function Feedback({
     return (
       <div className="mx-auto max-w-180 space-y-8">
         {header(null)}
-        {/* F-EVAL-15: between two attempts, the score and nothing else
-            (ADR-025); the correction follows once the exercise closes, or
-            once the teacher publishes it (ADR-050). */}
-        {data.score ? (
-          <div className="space-y-1.5">
-            <Stat
-              label={t("feedback.score")}
-              value={`${formatPoints(data.score.points)} / ${formatPoints(data.score.totalPoints)}`}
-            />
-            {practice ? <PracticePendingLine count={data.score.pendingCount} /> : <PendingLine count={data.score.pendingCount} />}
-            {data.retake ? <AttemptCount retake={data.retake} /> : null}
-          </div>
-        ) : null}
         <Card>
-          <EmptyState
-            icon={data.reason === "retakes_open" ? CheckCircle2 : Hourglass}
-            title={t(practice && data.reason === "results_pending" ? "feedback.practice.pending.title" : PENDING_TITLE[data.reason])}
-            {...(data.retake
-              ? { action: <RetakeOffer retake={data.retake} review={data.review} navigate={navigate} /> }
-              : practice
-                ? { action: <PractiseAgain evaluationId={data.evaluation.id} navigate={navigate} /> }
-                : {})}
-          >
-            {/* ADR-091: with the standings below, the score is not all the student reads. */}
-            {practice && data.reason === "results_pending"
-              ? t("feedback.practice.pending.body")
-              : t(data.review ? "feedback.pending.retakes_open.reviewBody" : PENDING_BODY[data.reason], {
-                  title: data.evaluation.title,
-                })}
+          <EmptyState icon={Hourglass} title={t(PENDING_TITLE[data.reason])}>
+            {t(PENDING_BODY[data.reason], { title: data.evaluation.title })}
           </EmptyState>
         </Card>
-        {data.review ? <ReviewList review={data.review} /> : null}
       </div>
     );
   }

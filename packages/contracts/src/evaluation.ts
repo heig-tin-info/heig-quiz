@@ -334,8 +334,8 @@ export const EvaluationSettings = z.object({
   allowDrill: z.boolean().optional(),
   /**
    * ADR-122 (#985): whether an exercise takes PRACTICE attempts once it is
-   * over — `open` or `hidden`. Absent means the default: open where the
-   * feedback policy shows the answer key, hidden otherwise; read it through `afterDueOpen`
+   * over — `open` or `hidden`. Absent means the default, open (ADR-124: every
+   * exercise shows its key at the hand-in); read it through `afterDueOpen`
    * (`@quiz/domain`), never raw — `Evaluation.afterDueOpen` carries the
    * effective value. Like `allowDrill` it is NOT in
    * {@link EvaluationSettingsPatch}: a visibility switch, not a frozen exam
@@ -384,7 +384,12 @@ export type GradingScale = z.infer<typeof GradingScale>;
 export const defaultGradingScale = (): GradingScale =>
   GradingScale.parse({ kind: "linear", rounding: "nearest" });
 
-/** F-EVAL-11. `immediate` is refused for `exam`. */
+/**
+ * F-EVAL-11. `immediate` is refused for `exam`. Stored on an exercise and
+ * accepted there, but never read on a student's behalf: an exercise always
+ * shows its whole correction at the hand-in (`effectiveFeedbackPolicy` of
+ * `@quiz/domain`, ADR-124).
+ */
 export const FeedbackPolicy = z.object({
   when: z.enum(FEEDBACK_WHEN).default("on_release"),
   /** The student's own answer. */
@@ -413,8 +418,6 @@ export const Evaluation = z.object({
   allowDrill: z.boolean(),
   /** ADR-122: whether the exercise takes practice attempts once over (`afterDueOpen`), always false elsewhere. */
   afterDueOpen: z.boolean(),
-  /** ADR-122: whether {@link Evaluation.afterDueOpen} is the teacher's switch (`set`) or the default (`default`). */
-  afterDueSource: z.enum(["set", "default"]),
   gradingScale: GradingScale,
   feedbackPolicy: FeedbackPolicy,
   /** Seeded at creation from the creator's preference; an `inherit` question takes it. */

@@ -239,11 +239,14 @@ export function reopenRefusal(
 /**
  * The course role reopening an attempt in `attemptState` takes (ADR-068 §3,
  * audit L9): an owner's once the policy has shown its student the answer
- * key (`keyShownTo`, the rule of their feedback page: an exercise in
- * `immediate` with `showKey`), any member's otherwise. The route's loader
- * applies it; the owner's reopening is then a derogation, audited as such.
+ * key of an evaluation that is graded (`keyShownTo`, the rule of their
+ * feedback page), any member's otherwise. An exercise is never graded and
+ * shows its key at every hand-in (ADR-124): reopening one stays any
+ * member's. The route's loader applies it; the owner's reopening is then a
+ * derogation, audited as such.
  */
 export function reopenRole(evaluation: EvaluationRecord, attemptState: string): CourseRole {
+  if (evaluation.mode === "exercise") return "assistant";
   return keyShownTo(evaluation, attemptState) ? "owner" : "assistant";
 }
 
@@ -1537,7 +1540,7 @@ export async function startPractice(
  * already read: the exercises over and open to practice in a classroom that
  * is not archived, newest closed first, each with the student's unfinished
  * practice attempt and the score of their latest finished one — points,
- * never a grade, and none under the policy `none`.
+ * never a grade.
  */
 function practiceCardsOf(
   rows: readonly StudentRow[],
@@ -1565,15 +1568,12 @@ function practiceCardsOf(
             : {
                 attemptId: last.id,
                 finishedAt: isoOrNull(last.submittedAt ?? last.closedAt),
-                // ADR-122 §7: under `none`, not even the score.
-                score:
-                  feedbackOf(evaluation).when === "none"
-                    ? null
-                    : scoreOf(
-                        scores.tallies.get(last.id),
-                        scores.itemCounts.get(evaluation.id) ?? 0,
-                        scores.totals.get(evaluation.id) ?? 0,
-                      ),
+                // An exercise shows its correction, the score included (ADR-124).
+                score: scoreOf(
+                  scores.tallies.get(last.id),
+                  scores.itemCounts.get(evaluation.id) ?? 0,
+                  scores.totals.get(evaluation.id) ?? 0,
+                ),
               },
       };
     })
@@ -1762,9 +1762,9 @@ export async function reopenAttempt(
   if (attempt.state === "in_progress") return { row: attempt, derogation: null };
   const refused = reopenRefusal(evaluation);
   if (refused !== null) throw new LiveError(refused);
-  // The caller's role was the loader's step (`reopenRole`): past it, a
-  // reopening the key was shown before is an owner's derogation (audit L9).
-  const derogation = reopenRole(evaluation, attempt.state) === "owner" ? "key_shown" : null;
+  // The caller's role was the loader's step (`reopenRole`). The audit records
+  // whether the student had read the key (audit L9), an exercise's included.
+  const derogation = keyShownTo(evaluation, attempt.state) ? "key_shown" : null;
   const participant = await participantOfAttempt(db, evaluation, attempt);
   const { deadlineAt, bonusS } = deadlineFor(evaluation, {
     startedAt: attempt.startedAt ?? now,

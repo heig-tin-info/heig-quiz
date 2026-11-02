@@ -7,6 +7,7 @@ import {
   evaluationTotal,
   histogram,
   correctionPublishRefusal,
+  effectiveFeedbackPolicy,
   feedbackGradeShown,
   isBatchable,
   isDebriefOpen,
@@ -20,7 +21,7 @@ import {
   type AttemptTally,
   type DeclaredCriterion,
 } from "@quiz/domain";
-import { AI_KEY, aiOf, BREAKDOWN_KEY, JUSTIFICATION_KEY, TEACHER_ONLY_DETAIL_KEYS } from "@quiz/contracts";
+import { AI_KEY, aiOf, BREAKDOWN_KEY, FeedbackPolicy, JUSTIFICATION_KEY, TEACHER_ONLY_DETAIL_KEYS } from "@quiz/contracts";
 import type { GradingConfidence, GradingSource, GradingState, ItemCounting } from "@quiz/contracts";
 import type { AnyQuestionTypeServer, ItemAggregate, StudentDetailsPolicy } from "@quiz/core/server";
 import { blocksServer } from "@quiz/qt-blocks/server";
@@ -83,7 +84,11 @@ import {
 import {
   STUDENT_ATTEMPT,
   STUDENT_EARLY_ATTEMPT,
+  STUDENT_EVAL_RETAKE,
   STUDENT_PAST_ATTEMPT,
+  STUDENT_PRACTICE_A,
+  STUDENT_PRACTICE_ATTEMPT,
+  STUDENT_RETAKE_ATTEMPT,
 } from "./student";
 
 // --- 5. Grading, results and the student's feedback (WP10) ----------------
@@ -1352,25 +1357,75 @@ on("GET", "/app/api/evaluations/:id/results/attempts/:attemptId", (m) => {
   return copyOf(e, attempt);
 });
 
+/**
+ * The student's exercises, read before any release: the released world's
+ * page, seen as an exercise, whose correction shows at each hand-in
+ * (ADR-124) — points only, no grade (F-RES-04), the last `pending` questions
+ * waiting for a grading. The Grades page's early row, the retake between two
+ * attempts (the next one offered beside the correction, ADR-091's standings
+ * with it) and the latest practice after the due date (ADR-122).
+ */
+const EXERCISE_PAGES: Record<string, { evaluationId?: string; title: string; pending: number; review?: true; extra?: object }> = {
+  [STUDENT_EARLY_ATTEMPT]: { title: "Série 2 — Tableaux", pending: 2 },
+  [STUDENT_RETAKE_ATTEMPT]: {
+    evaluationId: STUDENT_EVAL_RETAKE,
+    title: "Série 3 — Pointeurs, entraînement",
+    pending: 0,
+    review: true,
+    extra: {
+      // Two of three attempts taken: the page offers the third (issues #120, #121).
+      retake: {
+        evaluationId: STUDENT_EVAL_RETAKE,
+        keep: "best",
+        maxAttempts: 3,
+        attemptCount: 2,
+        refusal: null,
+        // ADR-091: redo the questions to review, or everything.
+        scope: "to_review",
+      },
+    },
+  },
+  [STUDENT_PRACTICE_ATTEMPT]: {
+    evaluationId: STUDENT_PRACTICE_A,
+    title: "Série 2 — Boucles et conditions",
+    pending: 1,
+    extra: { practice: true },
+  },
+};
+
 on("GET", "/app/api/attempts/:id/feedback", (m) => {
   const attemptId = String(m.groups!.id);
-  // The Grades page's early row: the released world's page, seen as an
-  // exercise before its release whose last two questions wait for a grading
-  // — points only, the count, no grade (F-RES-04).
-  if (attemptId === STUDENT_EARLY_ATTEMPT) {
+  const page = EXERCISE_PAGES[attemptId];
+  if (page) {
     const released = feedbackPage(STUDENT_PAST_ATTEMPT);
     if (!released.available) return released;
     const items = released.items.map((item, index, all) =>
-      index < all.length - 2 ? item : { ...item, points: null, verdict: null, details: null, comment: null },
+      index < all.length - page.pending ? item : { ...item, points: null, verdict: null, details: null, comment: null },
     );
+    // ADR-091: where each question stands, in the student's order, beside the retake.
+    const review = page.review
+      ? {
+          review: items.map((item, rank) => ({
+            itemId: item.itemId,
+            rank,
+            standing: item.points === null ? "pending" : item.points >= item.maxPoints ? "acquired" : "to_review",
+          })),
+        }
+      : {};
     return {
       ...released,
-      evaluation: { ...released.evaluation, title: "Série 2 — Tableaux", releasedAt: null },
+      evaluation: {
+        id: page.evaluationId ?? released.evaluation.id,
+        title: page.title,
+        releasedAt: null,
+      },
       attemptId,
       points: items.reduce((sum, item) => sum + (item.points ?? 0), 0),
       grade: null,
-      pendingCount: 2,
+      pendingCount: page.pending,
       items,
+      ...page.extra,
+      ...review,
     };
   }
   return feedbackPage(attemptId);
@@ -1378,7 +1433,10 @@ on("GET", "/app/api/attempts/:id/feedback", (m) => {
 
 function feedbackPage(attemptId: string) {
   const { e, attempt } = attemptWorldOr404(attemptId);
-  if (e.evaluation.releasedAt === null) {
+  // The server's rule: an exercise shows its correction at the hand-in (ADR-124).
+  const policy = effectiveFeedbackPolicy(e.evaluation.mode, FeedbackPolicy.parse(e.evaluation.feedbackPolicy));
+  const released = e.evaluation.releasedAt !== null;
+  if (!released && policy.when !== "immediate") {
     return {
       available: false as const,
       reason: "results_pending",
@@ -1386,15 +1444,14 @@ function feedbackPage(attemptId: string) {
     };
   }
   const copy = copyOf(e, attempt);
-  const policy = e.evaluation.feedbackPolicy as { showKey?: boolean; showHiddenCaseNames?: boolean };
-  const shown = { showKey: policy.showKey === true, showHiddenCaseNames: policy.showHiddenCaseNames === true };
+  const shown = { showKey: policy.showKey, showHiddenCaseNames: policy.showHiddenCaseNames };
   return {
     available: true as const,
     evaluation: { id: e.evaluation.id, title: e.evaluation.title, releasedAt: e.evaluation.releasedAt },
     ...copy,
     items: copy.items.map((item) => ({ ...item, details: studentDetailsOf(item.type, item.details, shown) })),
     // The server's rule (F-RES-04): released, and no question pending.
-    grade: feedbackGradeShown({ released: true, pendingCount: copy.pendingCount }) ? copy.grade : null,
+    grade: feedbackGradeShown({ released, pendingCount: copy.pendingCount }) ? copy.grade : null,
   };
 }
 

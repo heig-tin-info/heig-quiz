@@ -16,6 +16,8 @@ students needs its own ADR) and uses its course concepts and broader relations (
 §15 (mastery is FSRS retrievability); completes F-DRILL-05 (docs/spec/02); adds an exit to
 `docs/spec/05` §5.7. Closes the student half of the idea of issue #578.
 
+Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md): §7 — an exercise's card counts once the student's latest attempt is handed in, whatever the stored feedback policy (the serving rule of ADR-041 §1, unchanged as a rule).
+
 ## Context
 
 A student sees concept labels nowhere: `toStudent` strips concepts and `COMMON_FORBIDDEN_STUDENT_KEYS`

@@ -56,6 +56,7 @@ export {
   retakesEnabled,
   isLatestAttempt,
   feedbackOf,
+  storedFeedbackOf,
   scaleOf,
   toEvaluation,
   gradeDefaults,

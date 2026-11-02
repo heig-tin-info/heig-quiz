@@ -109,12 +109,11 @@ type KeyedCard = { evaluationId: string; userId: string };
  * §13) — a review always ends on the key:
  *   - an exam's, once its results are released: a withdrawn release
  *     suspends its cards until the next one;
- *   - an exercise's, once its own feedback policy shows the key to the
- *     student's latest attempt (`results.keyShownTo`, the rule of the
- *     feedback page): at the hand-in under immediate feedback with the key,
- *     at the release under `on_release`, never when the key is not shown —
- *     and, since ADR-050, as soon as the teacher publishes the correction of
- *     the running exercise, which that rule counts as the release.
+ *   - an exercise's, once the student's latest attempt is handed in
+ *     (`results.keyShownTo` on that attempt): an exercise shows its key at
+ *     each hand-in (ADR-124). While a retake is being written the card is
+ *     held back, although the page of the earlier attempt still shows its
+ *     key: the drill is stricter than the feedback page, never looser.
  */
 function keyReleased(evaluation: EvaluationRecord, latestAttemptState: string | undefined): boolean {
   if (evaluation.mode === "exam") return evaluation.releasedAt !== null;

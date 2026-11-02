@@ -233,10 +233,10 @@ describe("the student home after a hand-in (issue #203)", () => {
       retakes: { maxAttempts: 2 },
     });
     await handIn(app, evaluation, student);
-    // Between two attempts the page is score only (ADR-025): not "available".
+    // Between two attempts the page shows the correction (ADR-124).
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "open",
-      card: { attemptState: "submitted", results: "pending", retakes: { canRetake: true } },
+      card: { attemptState: "submitted", results: "available", retakes: { canRetake: true } },
     });
 
     const second = await live.retakeAttempt(db, {
@@ -249,10 +249,10 @@ describe("the student home after a hand-in (issue #203)", () => {
     await handIn(app, evaluation, student, second);
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
-      card: { state: "running", results: "pending", retakes: { canRetake: false, attemptCount: 2 } },
+      card: { state: "running", results: "available", retakes: { canRetake: false, attemptCount: 2 } },
     });
 
-    // Closed, the teacher's policy decides again: immediate shows the kept one.
+    // Closed: the kept one, still available.
     await live.closeEvaluation(db, await reload(db, evaluation.id), app.clock.now(), "teacher", app);
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
@@ -260,7 +260,7 @@ describe("the student home after a hand-in (issue #203)", () => {
     });
   });
 
-  it("promises nothing under the none policy, closed or between two attempts", async () => {
+  it("promises nothing under the none policy of an exam; an exercise ignores a stored none (ADR-124)", async () => {
     const quiz = await runningEvaluation("none");
     await handIn(quiz.app, quiz.evaluation, quiz.student);
     await live.closeEvaluation(db, await reload(db, quiz.evaluation.id), quiz.app.clock.now(), "teacher", quiz.app);
@@ -275,10 +275,9 @@ describe("the student home after a hand-in (issue #203)", () => {
       retakes: {},
     });
     await handIn(drill.app, drill.evaluation, drill.student);
-    // Score only between attempts, and no correction after the close either.
     expect(await cardOf(drill.app, drill.student, drill.evaluation.id)).toMatchObject({
       section: "open",
-      card: { state: "running", results: "none", retakes: { canRetake: true } },
+      card: { state: "running", results: "available", retakes: { canRetake: true } },
     });
   });
 });

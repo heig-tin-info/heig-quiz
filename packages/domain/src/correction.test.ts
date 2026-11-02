@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { FEEDBACK_WHEN } from "./evaluationConfig.js";
 import { EVALUATION_STATES } from "./itemList.js";
 import {
   correctionPublishRefusal,
+  effectiveFeedbackPolicy,
   feedbackGate,
   feedbackGradeShown,
   isDebriefOpen,
@@ -34,80 +36,82 @@ describe("correctionPublishRefusal (ADR-050)", () => {
   });
 });
 
-describe("feedbackGate (F-RES-04, ADR-025 §4, ADR-050)", () => {
-  const base = {
-    exam: false,
-    evaluationOver: false,
-    attemptOpen: false,
-    retakesOpen: false,
-    released: false,
-    correctionPublished: false,
+describe("effectiveFeedbackPolicy (ADR-124 §1)", () => {
+  const stored = {
+    when: "none",
+    showAnswer: false,
+    showKey: false,
+    showExplanation: false,
+    showHiddenCaseNames: false,
+    showTeacherComment: false,
   } as const;
 
-  describe("without retakes", () => {
-    it("on_release: pending until the release, or until the correction is published", () => {
-      expect(feedbackGate({ ...base, when: "on_release" })).toEqual({
-        ok: false,
-        reason: "results_pending",
+  it("shows an exercise's whole correction at the hand-in, whatever is stored", () => {
+    for (const when of FEEDBACK_WHEN) {
+      expect(effectiveFeedbackPolicy("exercise", { ...stored, when })).toEqual({
+        when: "immediate",
+        showAnswer: true,
+        showKey: true,
+        showExplanation: true,
+        showHiddenCaseNames: false,
+        showTeacherComment: false,
       });
-      expect(feedbackGate({ ...base, when: "on_release", released: true })).toEqual({ ok: true });
-      expect(feedbackGate({ ...base, when: "on_release", correctionPublished: true })).toEqual({
-        ok: true,
-      });
-    });
-
-    it("immediate: at the hand-in, published or not", () => {
-      expect(feedbackGate({ ...base, when: "immediate" })).toEqual({ ok: true });
-      expect(feedbackGate({ ...base, when: "immediate", correctionPublished: true })).toEqual({
-        ok: true,
-      });
-    });
-
-    it("none: nothing, even published", () => {
-      expect(feedbackGate({ ...base, when: "none", correctionPublished: true })).toEqual({
-        ok: false,
-        reason: "no_feedback",
-      });
-    });
-
-    it("an attempt still open reads nothing, even published", () => {
-      for (const when of ["on_release", "immediate"] as const) {
-        expect(
-          feedbackGate({ ...base, when, attemptOpen: true, correctionPublished: true }),
-        ).toEqual({ ok: false, reason: "attempt_open" });
-      }
-    });
+    }
   });
 
-  describe("an exercise with retakes, open", () => {
-    const open = { ...base, retakesOpen: true } as const;
+  it("keeps the teacher's comment and the hidden case names as stored", () => {
+    const kept = effectiveFeedbackPolicy("exercise", { ...stored, showHiddenCaseNames: true, showTeacherComment: true });
+    expect(kept).toMatchObject({ showHiddenCaseNames: true, showTeacherComment: true });
+  });
 
-    it("reads the score only until the correction is published, whatever the policy", () => {
-      for (const when of ["none", "on_release", "immediate"] as const) {
-        expect(feedbackGate({ ...open, when })).toEqual({ ok: false, reason: "retakes_open" });
-      }
-    });
+  it("leaves an exam's and a poll's policy as stored", () => {
+    expect(effectiveFeedbackPolicy("exam", stored)).toBe(stored);
+    expect(effectiveFeedbackPolicy("poll", stored)).toBe(stored);
+  });
+});
 
-    it("reads the correction once it is published, under on_release and immediate", () => {
-      for (const when of ["on_release", "immediate"] as const) {
-        expect(feedbackGate({ ...open, when, correctionPublished: true })).toEqual({ ok: true });
-      }
-    });
+describe("feedbackGate (F-RES-04)", () => {
+  const stored = {
+    when: "on_release",
+    showAnswer: true,
+    showKey: false,
+    showExplanation: false,
+    showHiddenCaseNames: true,
+    showTeacherComment: true,
+  } as const;
+  const base = { exam: false, evaluationOver: false, attemptOpen: false, released: false } as const;
 
-    it("keeps the score under none once published: the retakes still need it", () => {
-      expect(feedbackGate({ ...open, when: "none", correctionPublished: true })).toEqual({
+  it("on_release: pending until the release", () => {
+    expect(feedbackGate({ ...base, when: "on_release" })).toEqual({ ok: false, reason: "results_pending" });
+    expect(feedbackGate({ ...base, when: "on_release", released: true })).toEqual({ ok: true });
+  });
+
+  it("immediate: at the hand-in", () => {
+    expect(feedbackGate({ ...base, when: "immediate" })).toEqual({ ok: true });
+  });
+
+  it("none: nothing, even released", () => {
+    expect(feedbackGate({ ...base, when: "none", released: true })).toEqual({ ok: false, reason: "no_feedback" });
+  });
+
+  it("an attempt still open reads nothing", () => {
+    for (const when of ["on_release", "immediate"] as const) {
+      expect(feedbackGate({ ...base, when, attemptOpen: true, released: true })).toEqual({
         ok: false,
-        reason: "retakes_open",
+        reason: "attempt_open",
       });
-    });
+    }
+  });
 
-    it("an attempt in progress reads nothing, published or not", () => {
-      for (const correctionPublished of [false, true]) {
-        expect(
-          feedbackGate({ ...open, when: "on_release", attemptOpen: true, correctionPublished }),
-        ).toEqual({ ok: false, reason: "attempt_open" });
-      }
-    });
+  it("an exercise, whatever its stored policy, reads its correction at the hand-in", () => {
+    for (const when of FEEDBACK_WHEN) {
+      const effective = effectiveFeedbackPolicy("exercise", { ...stored, when });
+      expect(feedbackGate({ ...base, when: effective.when })).toEqual({ ok: true });
+      expect(feedbackGate({ ...base, when: effective.when, attemptOpen: true })).toEqual({
+        ok: false,
+        reason: "attempt_open",
+      });
+    }
   });
 
   describe("an exam", () => {
@@ -117,11 +121,6 @@ describe("feedbackGate (F-RES-04, ADR-025 §4, ADR-050)", () => {
       for (const when of ["immediate", "on_release"] as const) {
         expect(feedbackGate({ ...exam, when })).toEqual({ ok: false, reason: "exam_open" });
       }
-      // A finished attempt while the exam runs: still closed.
-      expect(feedbackGate({ ...exam, when: "immediate", attemptOpen: false })).toEqual({
-        ok: false,
-        reason: "exam_open",
-      });
     });
 
     it("keeps the other reasons first: an open attempt, a policy that never shows", () => {
@@ -135,14 +134,12 @@ describe("feedbackGate (F-RES-04, ADR-025 §4, ADR-050)", () => {
     it("follows its policy once over", () => {
       const over = { ...exam, evaluationOver: true } as const;
       expect(feedbackGate({ ...over, when: "immediate" })).toEqual({ ok: true });
-      expect(feedbackGate({ ...over, when: "on_release" })).toEqual({
-        ok: false,
-        reason: "results_pending",
-      });
+      expect(feedbackGate({ ...over, when: "on_release" })).toEqual({ ok: false, reason: "results_pending" });
       expect(feedbackGate({ ...over, when: "on_release", released: true })).toEqual({ ok: true });
     });
   });
 });
+
 
 describe("feedbackGradeShown (F-RES-04)", () => {
   it("only once released, and never with a cell pending", () => {

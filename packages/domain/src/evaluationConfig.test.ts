@@ -34,11 +34,11 @@ describe("the feedback policies an evaluation may use (F-EVAL-11, #78)", () => {
     expect(isInClass({ mode: "exercise", lobby: "skip" })).toBe(false);
   });
 
-  it("treats an exercise with a waiting room as sat in class", () => {
+  it("lets an exercise with a waiting room store `immediate`: its policy is never read (ADR-124)", () => {
     for (const lobby of ["auto", "manual"] as const) {
       expect(isInClass({ mode: "exercise", lobby })).toBe(true);
-      expect(isFeedbackAllowed({ mode: "exercise", lobby }, "immediate")).toBe(false);
-      expect(isFeedbackAllowed({ mode: "exercise", lobby }, "on_release")).toBe(true);
+      expect(isFeedbackAllowed({ mode: "exercise", lobby }, "immediate")).toBe(true);
+      expect(feedbackWhenFor({ mode: "exercise", lobby }, "immediate")).toBe("immediate");
     }
   });
 
@@ -46,10 +46,9 @@ describe("the feedback policies an evaluation may use (F-EVAL-11, #78)", () => {
     expect(isFeedbackAllowed({ mode: "poll", lobby: "manual" }, "immediate")).toBe(true);
   });
 
-  it("falls back to `on_release` only when the wanted policy is not allowed", () => {
+  it("falls back to `on_release` only when the wanted policy is not allowed: an exam's `immediate`", () => {
     expect(feedbackWhenFor({ mode: "exam", lobby: "skip" }, "immediate")).toBe("on_release");
-    expect(feedbackWhenFor({ mode: "exercise", lobby: "manual" }, "immediate")).toBe("on_release");
-    expect(feedbackWhenFor({ mode: "exercise", lobby: "manual" }, "none")).toBe("none");
+    expect(feedbackWhenFor({ mode: "exam", lobby: "manual" }, "none")).toBe("none");
     expect(feedbackWhenFor({ mode: "exercise", lobby: "skip" }, "immediate")).toBe("immediate");
   });
 });

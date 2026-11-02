@@ -222,7 +222,7 @@ The **Questions** tab lists one block per item in quiz order, headed by its type
 
 Until you publish, a student who opens their results sees **Results not published yet**. **Publish results** asks **Publish the results of "Test 0"?** and reminds you that **Every student of this classroom sees their grade and the feedback the policy allows.** Confirm with **Publish**.
 
-What a student sees then follows the feedback policy of the evaluation: their points per question and their grade always; their own answer, the expected answer if **Show the expected answer** is on, the explanation if **Show the explanation** is on, and the comment you wrote on any adjusted grading. With the feedback set to **None**, they see the grade and nothing else. On an exercise with feedback **Right away**, they had it question by question while working; publishing adds the grade.
+What a student sees then follows the feedback policy of the evaluation: their points per question and their grade always; their own answer, the expected answer if **Show the expected answer** is on, the explanation if **Show the explanation** is on, and the comment you wrote on any adjusted grading. With the feedback set to **None**, they see the grade and nothing else. On an exercise they already had the whole correction at each hand-in; publishing adds the grade.
 
 <figure markdown="span">
   ![The results page after publication](../assets/screenshots/results-released-light.png#only-light)

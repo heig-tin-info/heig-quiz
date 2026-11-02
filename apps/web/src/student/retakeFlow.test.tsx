@@ -169,11 +169,17 @@ function feedback(
   refusal: "max_attempts" | "closed" | "not_open" | "unfinished" | null,
   over: { keep?: Keep; attemptCount?: number; review?: ReviewItem[] } = {},
 ): StudentFeedback {
+  // ADR-124: the correction beside the retake; no item, so that "Question 1"
+  // is the player's alone in these tests.
   return {
-    available: false,
-    reason: "retakes_open",
-    evaluation: { id: EVAL, title: "Série 3 — Entraînement" },
-    score: { points: 1, totalPoints: 1, pendingCount: 0 },
+    available: true,
+    evaluation: { id: EVAL, title: "Série 3 — Entraînement", releasedAt: null },
+    attemptId: FIRST,
+    points: 1,
+    totalPoints: 1,
+    grade: null,
+    pendingCount: 0,
+    items: [],
     retake: {
       evaluationId: EVAL,
       keep: over.keep ?? "best",
@@ -291,7 +297,7 @@ describe("retakes on an exercise (issues #120, #121)", () => {
     );
 
     // No "your answers are with your teacher" in between.
-    expect(await screen.findByText("Points de cette tentative")).toBeInTheDocument();
+    expect(await screen.findByText("tentatives : 1 sur 3")).toBeInTheDocument();
     expect(screen.queryByText("Réponses rendues")).toBeNull();
     expect(routes).toContainEqual({ view: "feedback", attemptId: FIRST });
     expect(screen.getByText("tentatives : 1 sur 3")).toBeInTheDocument();

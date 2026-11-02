@@ -32,6 +32,7 @@ import {
   type TrustedClient,
   drillAllowedOn,
   afterDueOpen,
+  effectiveFeedbackPolicy,
   evaluationTotal,
   type MaskedPerson,
   clockChoiceOf,
@@ -104,8 +105,22 @@ export function retakesEnabled(row: EvaluationRecord): boolean {
  */
 export const isLatestAttempt = sql`not ${attempts.afterDue} and not exists (select 1 from ${attempts} as later where later.evaluation_id = ${attempts.evaluationId} and later.user_id = ${attempts.userId} and later.attempt_number > ${attempts.attemptNumber} and not later.after_due)`;
 
-export function feedbackOf(row: EvaluationRecord): FeedbackPolicy {
+/**
+ * The feedback policy the teacher stored: what the editor shows and writes,
+ * and what a template or a copy carries. Never what a student reads under —
+ * that is {@link feedbackOf}.
+ */
+export function storedFeedbackOf(row: EvaluationRecord): FeedbackPolicy {
   return FeedbackPolicy.parse(row.feedbackPolicy);
+}
+
+/**
+ * The feedback policy a student reads under (`effectiveFeedbackPolicy`,
+ * ADR-124): an exercise's whole correction at the hand-in, whatever is
+ * stored; an exam's and a poll's stored policy.
+ */
+export function feedbackOf(row: EvaluationRecord): FeedbackPolicy {
+  return effectiveFeedbackPolicy(row.mode, storedFeedbackOf(row));
 }
 
 /** The grade scale of F-EVAL-10; the results module never parses the jsonb itself. */
@@ -123,9 +138,8 @@ export function toEvaluation(row: EvaluationRecord): Evaluation {
     settings: settingsOf(row),
     allowDrill: drillAllowed(row),
     afterDueOpen: practiceOpen(row),
-    afterDueSource: settingsOf(row).afterDue === undefined ? "default" : "set",
     gradingScale: GradingScale.parse(row.gradingScale),
-    feedbackPolicy: feedbackOf(row),
+    feedbackPolicy: storedFeedbackOf(row),
     mcqPolicy: row.mcqPolicy,
     opensAt: isoOrNull(row.opensAt),
     closesAt: isoOrNull(row.closesAt),
@@ -218,8 +232,6 @@ export function practiceOpen(row: EvaluationRecord): boolean {
   return afterDueOpen({
     mode: row.mode,
     afterDue: settings.afterDue,
-    feedbackWhen: feedbackOf(row).when,
-    showKey: feedbackOf(row).showKey,
     safeExamBrowser: settings.safeExamBrowser,
     kiosk: settings.kiosk,
   });

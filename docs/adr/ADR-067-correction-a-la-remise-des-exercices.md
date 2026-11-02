@@ -22,6 +22,8 @@ request that has waited 10 s goes first.
 
 Amended 2026-11-02 by [ADR-122](ADR-122-entrainement-apres-l-echeance.md) §6: a practice attempt started after the due date is graded at its hand-in (or its expiry) whatever the evaluation's state, and its items for the model are asked of the model, the exercise being over.
 
+Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md): §3 — `immediate` stays per hand-in for the whole attempt, but an exercise will also offer a per-question check ([ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md) §3, planned) that locks the question and shows its correction during the attempt; the check's verdict is the item's automatic grading, written under the attempt's row lock, and §4's guard `gradableNow` is extended to "a checked item of an exercise". A checked item stays locked after a reopen. No model call during an attempt (§1) stands.
+
 ## Context
 
 The exercise "Premiers pas en C" — mode `exercise`, feedback `immediate`,

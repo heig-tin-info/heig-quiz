@@ -635,8 +635,8 @@ const evaluationHome = (): EvaluationHome => {
             score: { points: 7.5, totalPoints: 10, pendingCount: 0 },
           },
         },
-        // Between two attempts the page is score only (ADR-025).
-        results: "pending",
+        // Between two attempts the page shows the correction (ADR-124).
+        results: "available",
         trustedClients: [],
         conditions: null,
       },
@@ -946,7 +946,7 @@ on("GET", "/app/api/student/home", studentHome);
 // with a practice attempt still open, which the card resumes. The practice
 // route answers the ready screen until Start, then the player's attempt,
 // marked practice.
-const STUDENT_PRACTICE_A = "11111111-1111-4111-8111-111111111131";
+export const STUDENT_PRACTICE_A = "11111111-1111-4111-8111-111111111131";
 const STUDENT_PRACTICE_B = "11111111-1111-4111-8111-111111111132";
 export const STUDENT_PRACTICE_ATTEMPT = "22222222-2222-4222-8222-222222222231";
 
@@ -1008,14 +1008,6 @@ on("POST", "/app/api/evaluations/:id/practice/start", (): AttemptEntry => {
   practiceStarted = true;
   return { kind: "attempt", view: practiceAttemptView() };
 });
-// The last practice's results: points only, labelled practice, never a grade.
-on("GET", `/app/api/attempts/${STUDENT_PRACTICE_ATTEMPT}/feedback`, () => ({
-  available: false,
-  reason: "results_pending",
-  evaluation: { id: STUDENT_PRACTICE_A, title: "Série 2 — Boucles et conditions" },
-  score: { points: 7.5, totalPoints: 10, pendingCount: 1 },
-  practice: true,
-}));
 
 const studentProjectOr404 = (id: string | undefined): StudentProjectCard => {
   const found = studentProjectCards().find((p) => p.id === id);
@@ -1187,28 +1179,6 @@ on("GET", "/app/api/student/classrooms/:id", (m): StudentClassroomPage => {
 on("POST", "/app/api/evaluations/:id/retake", () => ({
   kind: "attempt",
   view: studentAttemptView(),
-}));
-
-// Between two attempts the student reads the score and nothing else (ADR-025).
-on("GET", `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`, () => ({
-  available: false,
-  reason: "retakes_open",
-  evaluation: { id: STUDENT_EVAL_RETAKE, title: "Série 3 — Pointeurs, entraînement" },
-  score: { points: 7.5, totalPoints: 10, pendingCount: 0 },
-  // Two of three attempts taken: the page offers the third (issues #120, #121).
-  retake: {
-    evaluationId: STUDENT_EVAL_RETAKE,
-    keep: "best",
-    maxAttempts: 3,
-    attemptCount: 2,
-    refusal: null,
-    // ADR-091: redo the three questions to review, or everything.
-    scope: "to_review",
-  },
-  // Where each question stands, in the student's order (ADR-091).
-  review: (["acquired", "to_review", "acquired", "acquired", "pending", "acquired", "to_review", "acquired"] as const).map(
-    (standing, rank) => ({ itemId: `33333333-3333-4333-8333-33333333330${rank}`, rank, standing }),
-  ),
 }));
 
 // Issue #203: the player's own attempt is `on_release` and never released in

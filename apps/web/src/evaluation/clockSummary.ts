@@ -6,7 +6,8 @@
  *
  * Only the decisions a teacher reads off the card are named — the time, the
  * waiting room (Live only: Scheduled has none, its name says so), the
- * navigation and when the feedback comes — in that order, each a translated
+ * navigation and when the feedback comes (`effectiveFeedbackPolicy`: an
+ * exercise's at each hand-in, ADR-124) — in that order, each a translated
  * fragment; the sentence is the fragments joined by commas, which reads the
  * same in English and in French.
  *
@@ -14,12 +15,12 @@
  * rather than "open until", which read as a promise the badge contradicted.
  */
 import type { Evaluation } from "@quiz/contracts";
-import { clockChoiceOf } from "@quiz/domain";
+import { clockChoiceOf, effectiveFeedbackPolicy } from "@quiz/domain";
 
 import type { Dict, TFunction } from "../i18n";
 
 /** `closesAt` and `state` are an evaluation's only: a template has no dates, so no end yet. */
-type SummaryInput = Pick<Evaluation, "settings" | "durationS" | "feedbackPolicy"> &
+type SummaryInput = Pick<Evaluation, "mode" | "settings" | "durationS" | "feedbackPolicy"> &
   Partial<Pick<Evaluation, "closesAt" | "state">>;
 
 const WINDOW = {
@@ -63,7 +64,8 @@ export function clockSummary(
     timingFragment(e, t, formatDate),
     ...(live ? [t(`eval.summary.lobby.${e.settings.lobby}` as keyof Dict)] : []),
     t(`eval.summary.navigation.${e.settings.navigation}` as keyof Dict),
-    t(`eval.summary.feedback.${e.feedbackPolicy.when}` as keyof Dict),
+    // A poll's key comes with the teacher's reveal (F-LIVE-13), whatever it stores.
+    t(`eval.summary.feedback.${e.mode === "poll" ? "poll" : effectiveFeedbackPolicy(e.mode, e.feedbackPolicy).when}` as keyof Dict),
   ].join(", ");
   return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
 }

@@ -15,7 +15,7 @@
  *
  * Pure: the current instant is injected, nothing is read from a database.
  */
-import type { EvaluationModeName, FeedbackWhen } from "./evaluationConfig.js";
+import type { EvaluationModeName } from "./evaluationConfig.js";
 import { isEvaluationOver, type EvaluationStateName } from "./itemList.js";
 import { attemptDeadline, type EvaluationTiming } from "./deadline.js";
 
@@ -28,25 +28,20 @@ export type AfterDueSetting = (typeof AFTER_DUE_SETTINGS)[number];
  *
  * Only an exercise. Never one that asks for a trusted client (Safe Exam
  * Browser, a kiosk station): those are out of scope (ADR-122 §1), whatever
- * the switch says. Otherwise the teacher's switch when set; absent, OPEN
- * only where the feedback policy shows the answer key (`showKey`, under a
- * policy other than `none`). Where the key stays hidden, unlimited blank
- * attempts, each with its score or its per-question verdicts, would read the
- * key out question by question: the default there is HIDDEN, and a teacher
- * who opens it anyway accepts that (ADR-122 §1, §7).
+ * the switch says. Otherwise the teacher's switch when set; absent, OPEN.
+ * The default once hid the practice where the key stayed hidden, an oracle
+ * of unlimited tries; since every exercise shows its key at the hand-in
+ * (ADR-124 §1), there is no hidden key left to protect.
  */
 export function afterDueOpen(input: {
   mode: EvaluationModeName;
   afterDue: AfterDueSetting | undefined;
-  feedbackWhen: FeedbackWhen;
-  showKey: boolean;
   safeExamBrowser?: boolean | undefined;
   kiosk?: boolean | undefined;
 }): boolean {
   if (input.mode !== "exercise") return false;
   if (input.safeExamBrowser === true || input.kiosk === true) return false;
-  if (input.afterDue !== undefined) return input.afterDue === "open";
-  return input.feedbackWhen !== "none" && input.showKey;
+  return input.afterDue !== "hidden";
 }
 
 /** How long a practice attempt lasts when the exercise has no time limit of its own: 8 hours. */

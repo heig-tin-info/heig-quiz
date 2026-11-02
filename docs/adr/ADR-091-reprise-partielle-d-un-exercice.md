@@ -18,6 +18,8 @@ student reads a per-question standing beside the score). F-EVAL-15.
 
 Amended 2026-11-02 by [ADR-122](ADR-122-entrainement-apres-l-echeance.md): a practice attempt after the due date is always a whole blank attempt, never a partial retake, whatever `retakes.scope` says.
 
+Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md): the masking between two attempts is lifted — the standings travel beside the whole correction, not instead of it. The scope switch (`retakes.scope`) and the partial retake itself are kept.
+
 ## Context
 
 ADR-025 made every retake blank: a new seed, a new order, every question

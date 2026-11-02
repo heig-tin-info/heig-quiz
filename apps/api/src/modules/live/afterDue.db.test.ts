@@ -188,14 +188,9 @@ describe("starting a practice attempt (ADR-122 §2, §3, §5)", () => {
     const hidden = await closedExercise();
     await setAfterDue(db, hidden.evaluation, "hidden", hidden.app.clock.now());
     expect(await refusal(practise(hidden.app, hidden.evaluation, hidden.student))).toBe("hidden");
-    // Hidden by default under the feedback policy none — and open when the teacher says so.
-    const none = await closedExercise({ feedback: { when: "none" } });
-    expect(await refusal(practise(none.app, none.evaluation, none.student))).toBe("hidden");
-    await setAfterDue(db, none.evaluation, "open", none.app.clock.now());
+    // Open by default whatever the stored feedback policy: the key is shown at the hand-in (ADR-124).
+    const none = await closedExercise({ feedback: { when: "none", showKey: false } });
     expect(await refusal(practise(none.app, none.evaluation, none.student))).toBeNull();
-    // Hidden by default where the key stays hidden (ADR-122 §1).
-    const noKey = await closedExercise({ feedback: { showKey: false } });
-    expect(await refusal(practise(noKey.app, noKey.evaluation, noKey.student))).toBe("hidden");
     // Archived classroom.
     const archived = await closedExercise();
     await db.update(classrooms).set({ archivedAt: new Date() }).where(eq(classrooms.id, archived.seed.classroomId));
@@ -330,11 +325,8 @@ describe("a practice attempt counts nowhere (ADR-122 §4)", () => {
 });
 
 describe("what a student reads of a practice attempt (ADR-122 §7, invariant 4)", () => {
-  it("passes through the student view: no forbidden key, no answer key value", async () => {
+  it("passes through the student view: no key while it is written, the key once handed in", async () => {
     const { app, evaluation, student } = await closedExercise({ feedback: { when: "immediate", showKey: false } });
-    // The key stays hidden: practice is off by default (the oracle, ADR-122 §1); the teacher opens it.
-    expect(await refusal(practise(app, evaluation, student))).toBe("hidden");
-    await setAfterDue(db, evaluation, "open", app.clock.now());
     const { row } = await practise(app, evaluation, student);
     const view = await live.attemptView(db, evaluation, row, app.clock.now());
     const serialized = JSON.stringify(view);
@@ -343,33 +335,33 @@ describe("what a student reads of a practice attempt (ADR-122 §7, invariant 4)"
     const keys = keysOf(view);
     for (const key of FORBIDDEN_STUDENT_KEYS) expect(keys.has(key), key).toBe(false);
 
+    // ADR-124: an exercise shows its key at the hand-in, `showKey: false` stored or not.
     const submitted = await answerAndSubmit(app, await reload(db, evaluation.id), row, [false, false]);
     const feedback = await results.studentFeedback(db, await reload(db, evaluation.id), submitted, app.clock.now());
     expect(feedback).toMatchObject({ available: true, practice: true, grade: null, points: 0 });
     const text = JSON.stringify(feedback);
-    expect(text).not.toContain("answer-q0");
-    expect(text).not.toContain("answer-q1");
+    expect(text).toContain("answer-q0");
+    expect(text).toContain("answer-q1");
   });
 
-  it("shows the score alone under on_release before the release, and nothing under none", async () => {
-    const pending = await closedExercise();
-    const a = await practise(pending.app, pending.evaluation, pending.student);
-    const done = await answerAndSubmit(pending.app, await reload(db, pending.evaluation.id), a.row, [true, false]);
-    const feedback = await results.studentFeedback(db, await reload(db, pending.evaluation.id), done, pending.app.clock.now());
-    expect(feedback).toMatchObject({ available: false, reason: "results_pending", practice: true, score: { points: 1, totalPoints: 2 } });
-    expect(JSON.stringify(feedback)).not.toContain("answer-q");
-
-    const none = await closedExercise({ feedback: { when: "none" } });
-    await setAfterDue(db, none.evaluation, "open", none.app.clock.now());
-    const b = await practise(none.app, none.evaluation, none.student);
-    const ended = await answerAndSubmit(none.app, await reload(db, none.evaluation.id), b.row, [true, true]);
-    const nothing = await results.studentFeedback(db, await reload(db, none.evaluation.id), ended, none.app.clock.now());
-    expect(nothing).toMatchObject({ available: false, reason: "no_feedback", practice: true });
-    expect(nothing).not.toHaveProperty("score");
-    // The home's Past series card says no score either.
-    const cards = await pastSeries(none.student);
-    expect(cards.find((c) => c.id === none.evaluation.id)?.last).toMatchObject({ attemptId: ended.id, score: null });
+  it("shows the whole correction at the hand-in, whatever the stored policy (ADR-124)", async () => {
+    for (const stored of [{ when: "on_release" }, { when: "none", showKey: false }] as const) {
+      const { app, evaluation, student } = await closedExercise({ feedback: stored });
+      const { row } = await practise(app, evaluation, student);
+      const done = await answerAndSubmit(app, await reload(db, evaluation.id), row, [true, false]);
+      const feedback = await results.studentFeedback(db, await reload(db, evaluation.id), done, app.clock.now());
+      expect(feedback, stored.when).toMatchObject({ available: true, practice: true, grade: null, points: 1, totalPoints: 2 });
+      if (!feedback.available) continue;
+      expect(feedback.items.every((item) => item.solution !== null), stored.when).toBe(true);
+      // The home's Past series card carries the score too.
+      const cards = await pastSeries(student);
+      expect(cards.find((c) => c.id === evaluation.id)?.last, stored.when).toMatchObject({
+        attemptId: done.id,
+        score: { points: 1, totalPoints: 2 },
+      });
+    }
   });
+
 
   it("lists the exercise in the student's Past series, with the latest practice score", async () => {
     const { app, evaluation, student, seed } = await closedExercise();
@@ -544,6 +536,6 @@ describe("a practice essay graded by the model (ADR-122 §6)", () => {
     const validated = await db.select().from(gradings).where(and(eq(gradings.attemptId, done.id), eq(gradings.state, "validated")));
     expect(validated).toHaveLength(0);
     const feedback = await results.studentFeedback(db, await reload(db, evaluation.id), done, app.clock.now());
-    expect(feedback).toMatchObject({ practice: true, score: { pendingCount: 2 } });
+    expect(feedback).toMatchObject({ available: true, practice: true, pendingCount: 2 });
   });
 });

@@ -195,13 +195,13 @@ describe("the student's concept mastery: the rule", () => {
     try {
       await db
         .update(evaluations)
-        .set({ feedbackPolicy: { ...(before!.feedbackPolicy as object), showKey: false } })
+        .set({ mode: "exam", releasedAt: null }) // an exam not released: its key is not out (ADR-124: an exercise's always is)
         .where(eq(evaluations.id, seed.evaluationId));
       const { body } = await read(alice.headers);
       expect(body.declared).toBe(true);
       expect(body.concepts.every((c) => c.cards === 0 && c.level === null)).toBe(true);
     } finally {
-      await db.update(evaluations).set({ feedbackPolicy: before!.feedbackPolicy }).where(eq(evaluations.id, seed.evaluationId));
+      await db.update(evaluations).set({ mode: before!.mode, releasedAt: before!.releasedAt }).where(eq(evaluations.id, seed.evaluationId));
     }
     expect((await read(alice.headers)).body.concepts.some((c) => c.cards > 0)).toBe(true);
   });

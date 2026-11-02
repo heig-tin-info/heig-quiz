@@ -2,8 +2,9 @@
  * "Publish the correction" of an exercise that is still open (ADR-050),
  * over the REAL application: the route's refusals and its access rule
  * (invariant 6), the audit, the grading it sends, the class debrief it opens
- * — finished papers only — and what each student reads of their own attempt
- * under each feedback policy, retakes on and off.
+ * — finished papers only — and what each student reads of their own attempt:
+ * since ADR-124 the whole correction at the hand-in, whatever the stored
+ * policy, published or not, retakes on and off.
  */
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -17,7 +18,7 @@ import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState, joinedItems, type EvaluationRecord } from "../evaluation/service.js";
 import * as live from "../live/service.js";
-import { keyShownTo } from "./service.js";
+import { keyShownTo, releaseResults } from "./service.js";
 
 let server: TestServer;
 let restore: () => void;
@@ -195,10 +196,8 @@ describe("POST /evaluations/:id/publish-correction (ADR-050)", () => {
     expect((await get(`/app/api/evaluations/${built.evaluation.id}/results/by-question`, teacher.headers)).json())
       .toMatchObject({ error: "not_over" });
     expect(await gradingsOf(handedIn.id)).toHaveLength(0);
-    expect(await feedbackOf(handedIn.id, first)).toMatchObject({
-      available: false,
-      reason: "results_pending",
-    });
+    // ADR-124: the student reads their correction anyway, the cell awaiting its grading.
+    expect(await feedbackOf(handedIn.id, first)).toMatchObject({ available: true, pendingCount: 1 });
 
     const now = server.clock.now().toISOString();
     const published = await publish(built.evaluation.id);
@@ -289,110 +288,98 @@ describe("POST /evaluations/:id/publish-correction (ADR-050)", () => {
   });
 });
 
-describe("a student's own correction once published (ADR-050)", () => {
-  it("on_release without retakes: the correction as if released, the key per showKey", async () => {
-    const built = await running({ feedback: { when: "on_release", showKey: false } });
-    const [first, second] = built.students;
-    const attempt = await sit(built, first.id, "nope");
-    const writing = await sit(built, second.id, "nope", false);
-    await publish(built.evaluation.id);
+describe("a student's own correction of an exercise (ADR-124)", () => {
+  const secret = "why-this-is-the-key";
+  /** A running exercise whose one question carries `secret` as its explanation. */
+  async function explained(options: Parameters<typeof running>[0]) {
+    const built = await running(options);
+    const [item] = await joinedItems(server.app.db, built.evaluation.id);
+    await server.app.db
+      .update(questionVersions)
+      .set({ explanation: secret })
+      .where(eq(questionVersions.id, item!.version.id));
+    return built;
+  }
 
-    const body = await feedbackOf(attempt.id, first);
-    expect(body).toMatchObject({ available: true, evaluation: { releasedAt: null } });
-    expect(body.items[0]).toMatchObject({ points: 0, solution: null, answer: "nope" });
-    // No key anywhere: not as a solution, not in the grading's details.
-    expect(JSON.stringify(body)).not.toContain("answer-q0");
-    expect(body.retake).toBeUndefined();
-    // A paper still being written reads nothing.
-    expect(await feedbackOf(writing.id, second)).toMatchObject({
-      available: false,
-      reason: "attempt_open",
-    });
+  it("shows the whole correction at the hand-in, retakes open, whatever the stored policy", async () => {
+    const stored = [
+      { when: "on_release", showKey: false },
+      { when: "none", showKey: false, showExplanation: false },
+      { when: "immediate", showKey: false, showAnswer: false },
+    ] as const;
+    for (const feedback of stored) {
+      for (const retakes of [false, true]) {
+        const built = await explained({ ...(retakes ? { retakes: {} } : {}), feedback });
+        const [first, second] = built.students;
+        const attempt = await sit(built, first.id, "nope");
+        const writing = await sit(built, second.id, "nope", false);
+
+        const label = `${feedback.when}, retakes ${retakes}`;
+        const body = await feedbackOf(attempt.id, first);
+        expect(body, label).toMatchObject({ available: true, points: 0, grade: null, evaluation: { releasedAt: null } });
+        expect(body.items[0], label).toMatchObject({
+          verdict: "wrong",
+          answer: "nope",
+          solution: { answer: "answer-q0" },
+          explanation: secret,
+        });
+        if (retakes) expect(body.retake, label).toMatchObject({ refusal: null, attemptCount: 1 });
+        else expect(body.retake, label).toBeUndefined();
+        // The drill's rule is the feedback page's (ADR-041 §13): it follows.
+        expect(keyShownTo(await reload(server.app.db, built.evaluation.id), "submitted"), label).toBe(true);
+
+        // A paper still being written reads nothing, neither key nor explanation.
+        const open = await feedbackOf(writing.id, second);
+        expect(open, label).toMatchObject({ available: false, reason: "attempt_open" });
+        expect(JSON.stringify(open), label).not.toContain("answer-q0");
+        expect(JSON.stringify(open), label).not.toContain(secret);
+      }
+    }
   });
 
-  it("with retakes: the score only until published, then the correction and the retake", async () => {
+  it("holds the key back from the drill while a retake is written, and the publication changes nothing for the student", async () => {
     const built = await running({ retakes: {}, feedback: { when: "on_release", showKey: true } });
     const [first] = built.students;
     const attempt = await sit(built, first.id, "nope");
     const before = await feedbackOf(attempt.id, first);
-    expect(before).toMatchObject({ available: false, reason: "retakes_open" });
-    expect(before.items).toBeUndefined();
-    const evaluation = await reload(server.app.db, built.evaluation.id);
-    // The drill's rule is the feedback page's (ADR-041 §13): it follows.
-    expect(keyShownTo(evaluation, "submitted")).toBe(false);
+    expect(before).toMatchObject({ available: true });
 
     await publish(built.evaluation.id);
-    const after = await feedbackOf(attempt.id, first);
-    expect(after).toMatchObject({ available: true, retake: { refusal: null, attemptCount: 1 } });
-    expect(after.items[0].solution).toEqual({ answer: "answer-q0" });
-    expect(keyShownTo(await reload(server.app.db, built.evaluation.id), "submitted")).toBe(true);
+    expect(await feedbackOf(attempt.id, first)).toEqual(before);
 
-    // A retake still starts; while it is written the debrief keeps the paper
-    // handed in, and the drill holds the key back again.
+    const evaluation = await reload(server.app.db, built.evaluation.id);
     const retake = await live.retakeAttempt(server.app.db, {
-      evaluation: await reload(server.app.db, built.evaluation.id),
+      evaluation,
       participant: (await live.participantOf(server.app.db, evaluation, first.id))!,
       now: server.clock.now(),
     });
     expect(retake.attemptNumber).toBe(2);
     expect(keyShownTo(await reload(server.app.db, built.evaluation.id), retake.state)).toBe(false);
-    const debrief = await get(
-      `/app/api/evaluations/${built.evaluation.id}/results/by-question`,
-      teacher.headers,
-    );
+    // The debrief keeps the paper handed in, never the one being written.
+    const debrief = await get(`/app/api/evaluations/${built.evaluation.id}/results/by-question`, teacher.headers);
     expect(papersOf(debrief.json())).toEqual({ papers: 1, outcomes: 1 });
     const rows = await server.app.db.select().from(attempts).where(eq(attempts.userId, first.id));
     expect(rows.map((r) => r.state).sort()).toEqual(["in_progress", "submitted"]);
-
-    // The policy stays the teacher's: switched to `none`, the score only.
-    await setFeedback(built.evaluation.id, { when: "none" });
-    expect(await feedbackOf(attempt.id, first)).toMatchObject({
-      available: false,
-      reason: "retakes_open",
-      score: { points: 0 },
-    });
   });
 
-  it("immediate with retakes: the correction at each hand-in once published", async () => {
-    const built = await running({ retakes: {}, feedback: { when: "immediate", showKey: false } });
+  it("leaves an exam's policy as stored: nothing before the close, no key without showKey", async () => {
+    const built = await running({ mode: "exam", feedback: { when: "on_release", showKey: false } });
     const [first] = built.students;
     const attempt = await sit(built, first.id, "nope");
-    expect(await feedbackOf(attempt.id, first)).toMatchObject({ reason: "retakes_open" });
-    await publish(built.evaluation.id);
+    expect(await feedbackOf(attempt.id, first)).toMatchObject({ available: false, reason: "exam_open" });
+
+    const closed = await live.closeEvaluation(
+      server.app.db,
+      await reload(server.app.db, built.evaluation.id),
+      server.clock.now(),
+      "teacher",
+      server.app,
+    );
+    expect(await feedbackOf(attempt.id, first)).toMatchObject({ available: false, reason: "results_pending" });
+    await releaseResults(server.app.db, closed, server.clock.now());
     const body = await feedbackOf(attempt.id, first);
-    expect(body).toMatchObject({ available: true, points: 0 });
-    expect(body.items[0]).toMatchObject({ solution: null, answer: "nope" });
-    // `showKey` off: the key is nowhere, not in the details either.
+    expect(body).toMatchObject({ available: true });
+    expect(body.items[0]).toMatchObject({ solution: null });
     expect(JSON.stringify(body)).not.toContain("answer-q0");
-  });
-
-  it("under `none`: no key and no explanation anywhere in the student's payload, retakes or not", async () => {
-    const policy = { when: "none", showKey: true, showExplanation: true } as const;
-    const secret = "why-this-is-the-key";
-    for (const retakes of [false, true]) {
-      const built = await running({ ...(retakes ? { retakes: {} } : {}), feedback: policy });
-      const [item] = await joinedItems(server.app.db, built.evaluation.id);
-      await server.app.db
-        .update(questionVersions)
-        .set({ explanation: secret })
-        .where(eq(questionVersions.id, item!.version.id));
-      const [first] = built.students;
-      const attempt = await sit(built, first.id, "nope");
-      await publish(built.evaluation.id);
-
-      const body = await feedbackOf(attempt.id, first);
-      expect(body).toMatchObject({ available: false });
-      expect(body.items).toBeUndefined();
-      expect(body).not.toHaveProperty("solution");
-      expect(body).not.toHaveProperty("explanation");
-      const serialized = JSON.stringify(body);
-      expect(serialized).not.toContain("answer-q0");
-      expect(serialized).not.toContain(secret);
-
-      // The fixture holds: the same paper under `on_release` shows both.
-      await setFeedback(built.evaluation.id, { ...policy, when: "on_release" });
-      const control = await feedbackOf(attempt.id, first);
-      expect(control.items[0]).toMatchObject({ solution: { answer: "answer-q0" }, explanation: secret });
-    }
   });
 });

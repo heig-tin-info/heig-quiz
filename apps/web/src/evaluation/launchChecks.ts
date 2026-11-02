@@ -24,6 +24,7 @@ import {
 } from "@quiz/contracts";
 import {
   announcedConditionsOn,
+  effectiveFeedbackPolicy,
   imposedConditions,
   lacksGradedPoints,
   retakesOn,
@@ -105,6 +106,18 @@ function itemsCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
         : t("launch.items", { n, points: detail.totalPoints }),
     detail: typeMix(detail, t),
     fix: { kind: "step", step: "questions" },
+  };
+}
+
+/** When the students see their feedback: the policy as they read it (`effectiveFeedbackPolicy`, ADR-124). */
+function feedbackCheck(evaluation: EvaluationDetail["evaluation"], t: TFunction): LaunchCheck {
+  const { when } = effectiveFeedbackPolicy(evaluation.mode, evaluation.feedbackPolicy);
+  return {
+    id: "feedback",
+    level: "info",
+    title: t("launch.feedback", { when: t(`eval.feedback.${when}` as keyof Dict) }),
+    detail: t(`eval.feedback.desc.${when}` as keyof Dict),
+    fix: { kind: "step", step: "timing" },
   };
 }
 
@@ -340,15 +353,7 @@ export function launchChecks(
     ...templateChecks(detail, t),
     ...rosterChecks(detail, t),
     timingCheck(detail, t, now, formatDate),
-    {
-      id: "feedback",
-      level: "info",
-      title: t("launch.feedback", {
-        when: t(`eval.feedback.${evaluation.feedbackPolicy.when}` as keyof Dict),
-      }),
-      detail: t(`eval.feedback.desc.${evaluation.feedbackPolicy.when}` as keyof Dict),
-      fix: { kind: "step", step: "timing" },
-    },
+    feedbackCheck(evaluation, t),
     rulesCheck(detail, t),
     accessCheck(detail, t),
     ...kioskChecks(detail, t, kioskAvailable),

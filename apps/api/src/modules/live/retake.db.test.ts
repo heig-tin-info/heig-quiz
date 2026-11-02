@@ -1,7 +1,7 @@
 /**
  * Several attempts on an exercise (F-EVAL-15, ADR-025, #92) against the real
  * migrations: the retake rule, the database guarantees behind it, the
- * grading of every attempt, the kept attempt in the results, the score-only
+ * grading of every attempt, the kept attempt in the results, the correction
  * feedback between attempts, and the screens that must not break with
  * several attempts per student.
  */
@@ -360,7 +360,7 @@ describe("the settings (F-EVAL-15)", () => {
 });
 
 describe("grading and results with several attempts", () => {
-  it("grades each attempt as it ends, and shows its score only while the exercise is open", async () => {
+  it("grades each attempt as it ends, and shows its correction beside the retake while the exercise is open", async () => {
     const { app, seed, evaluation, items } = await exercise();
     const student = seed.studentIds[0]!;
     const first = await sit(app, evaluation, items, student, [true, false]);
@@ -368,13 +368,13 @@ describe("grading and results with several attempts", () => {
     const graded = await db.select().from(gradings).where(eq(gradings.attemptId, first.id));
     expect(graded).toHaveLength(2);
 
-    // `immediate` feedback with the key: still the score only, while open.
+    // ADR-124: the whole correction at the hand-in, retakes open or not.
     const feedback = await results.studentFeedback(db, await reload(db, evaluation.id), first, app.clock.now());
-    expect(feedback).toEqual({
-      available: false,
-      reason: "retakes_open",
-      evaluation: { id: evaluation.id, title: evaluation.title },
-      score: { points: 1, totalPoints: 2, pendingCount: 0 },
+    expect(feedback).toMatchObject({
+      available: true,
+      points: 1,
+      totalPoints: 2,
+      grade: null,
       // The results page offers the retake the route would accept (#120, #121).
       retake: {
         evaluationId: evaluation.id,
@@ -385,12 +385,13 @@ describe("grading and results with several attempts", () => {
         scope: "all",
       },
     });
-    expect(JSON.stringify(feedback)).not.toContain("answer-q");
+    expect(JSON.stringify(feedback)).toContain("answer-q");
 
-    // Closed: the policy applies again, `immediate` with the key.
+    // Closed: the same correction, no retake offered any more.
     const closed = await live.closeEvaluation(db, await reload(db, evaluation.id), app.clock.now(), "teacher", app);
     const after = await results.studentFeedback(db, closed, first, app.clock.now());
     expect(after.available).toBe(true);
+    expect(after).not.toHaveProperty("retake");
   });
 
   it("grades every attempt at the close, the unfinished one included", async () => {
@@ -544,7 +545,7 @@ describe("the screens with several attempts", () => {
     expect(home.open.find((c) => c.id === examSeed.evaluationId)!.retakes).toBeNull();
   });
 
-  it("hides the kept score on the card once closed under on_release, until the release", async () => {
+  it("keeps the kept score on the card once closed, on_release stored or not (ADR-124)", async () => {
     const { app, seed, evaluation, items } = await exercise();
     const student = seed.studentIds[0]!;
     await db
@@ -554,12 +555,11 @@ describe("the screens with several attempts", () => {
     const running = await reload(db, evaluation.id);
     await sit(app, running, items, student, [true, false]);
     let card = (await live.studentHome(db, student, app.clock.now())).open.find((c) => c.id === evaluation.id)!;
-    // Open: score only, whatever the policy.
     expect(card.retakes!.kept!.score).toMatchObject({ points: 1 });
 
     const closed = await live.closeEvaluation(db, running, app.clock.now(), "teacher", app);
     card = (await live.studentHome(db, student, app.clock.now())).past.find((c) => c.id === evaluation.id)!;
-    expect(card.retakes!.kept!.score).toBeNull();
+    expect(card.retakes!.kept!.score).toMatchObject({ points: 1 });
 
     await results.releaseResults(db, closed, app.clock.now());
     card = (await live.studentHome(db, student, app.clock.now())).past.find((c) => c.id === evaluation.id)!;
@@ -702,16 +702,15 @@ describe("POST /evaluations/:id/retake", () => {
     expect(secondId).not.toBe(firstId);
     expect(again.json().view.attempt.readOnly).toBe(false);
 
-    // The first attempt's feedback: the score only, while the exercise is open.
+    // The first attempt's feedback: its correction, beside the retake (ADR-124).
     const feedback = await server.app.inject({
       method: "GET",
       url: `/app/api/attempts/${firstId}/feedback`,
       headers: student.headers,
     });
     expect(feedback.json()).toMatchObject({
-      available: false,
-      reason: "retakes_open",
-      score: { totalPoints: 1 },
+      available: true,
+      totalPoints: 1,
       retake: { attemptCount: 2, maxAttempts: 2, refusal: "unfinished" },
     });
 
@@ -725,8 +724,8 @@ describe("POST /evaluations/:id/retake", () => {
       headers: student.headers,
     });
     expect(last.json()).toMatchObject({
-      reason: "retakes_open",
-      retake: { attemptCount: 2, refusal: "max_attempts" },
+      available: true,
+      retake:{ attemptCount: 2, refusal: "max_attempts" },
     });
 
     const denied = await post(`/app/api/evaluations/${seed.evaluationId}/retake`, stranger.headers);

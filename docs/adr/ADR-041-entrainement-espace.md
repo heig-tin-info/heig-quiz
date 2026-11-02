@@ -68,6 +68,8 @@ student met the cap two days in a row with 21 new cards waiting, after five
 series of exercises created 41 cards at once, and saw "Nothing to review
 today" with no action.
 
+Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md): §1, the exercise's key only — an exercise shows its key at every hand-in, so its card is served once the student's latest attempt is handed in (`keyShownTo`, unchanged as the rule; held back again while a retake is written). The stored policy no longer holds it back.
+
 ## Context
 
 The spec reserved a phase-2 drill in five lines: every question a student meets

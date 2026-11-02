@@ -64,7 +64,6 @@ import {
   round2,
   type AttemptTally,
   type FeedbackGate,
-  type FeedbackRefusal,
 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -110,10 +109,8 @@ import {
   keptAttempts,
   pairKey,
   pointsByAttempt,
-  scoreOf,
   standingsOf,
   studentAttempts,
-  tallyByAttempt,
   validatedGradings,
   validatedOfAttempt,
   verdictOf,
@@ -672,53 +669,40 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
 
 /**
  * An exercise that allows retakes, while it still takes them (ADR-025) —
- * lobby, running or paused. Until the correction is published the
- * student reads the SCORE of a finished attempt and nothing else, whatever
- * the policy says — the correction of attempt 1 would be the key of
- * attempt 2. Once the evaluation is closed the teacher's feedback policy
- * decides, unchanged: `immediate` shows the correction, `on_release` waits
- * for the release, `none` shows nothing — the score included.
- * The score is shown under `none` too: a retake without it has no point, and
- * enabling retakes is the teacher's consent to it. Once the teacher publishes
- * the correction (ADR-050) the policy applies as if released, retakes open
- * or not (`feedbackGate`); under `none` the score stays.
+ * lobby, running or paused: the feedback page of a finished attempt carries
+ * the next attempt beside the correction, which an exercise always shows at
+ * the hand-in (ADR-124).
  */
 function retakesOpen(evaluation: EvaluationRecord): boolean {
   return retakesEnabled(evaluation) && isEvaluationOpen(evaluation.state);
 }
 
 /**
- * Whether a student may read the SCORE of this attempt right now: while the
- * exercise still takes retakes (score only, ADR-025), or whenever the
- * feedback policy lets the results through. The student home asks this
- * before it prints a kept score, so the card never says more than the
- * feedback page would.
+ * Whether a student may read the SCORE of this attempt right now: whenever
+ * the feedback page shows the results. The student home asks this before it
+ * prints a kept score, so the card never says more than the feedback page
+ * would.
  */
 export function scoreVisible(evaluation: EvaluationRecord, attemptState: string): boolean {
-  return feedbackAvailable(feedbackOf(evaluation), evaluation, attemptState).ok
-    || (retakesOpen(evaluation) && attemptState !== "in_progress" && attemptState !== "not_started");
+  return feedbackAvailable(feedbackOf(evaluation), evaluation, attemptState).ok;
 }
 
 /**
  * What the feedback page of the attempt that counts would give the student
  * (issue #203): `available` when it answers `available: true`; `none` when
- * nothing will ever be published — no attempt, or the policy `none` (between
- * two attempts `retakes_open` comes first, but the close will not change
- * `none`); `pending` otherwise, the results still to come. The student home
- * offers "See my results" only on `available`, so the button never leads to
- * "not published yet". {@link feedbackAvailable} stays the one rule.
+ * nothing will ever be published — no attempt, or the policy `none`;
+ * `pending` otherwise, the results still to come. The student home offers
+ * "See my results" only on `available`, so the button never leads to "not
+ * published yet". {@link feedbackAvailable} stays the one rule.
  */
 export function resultsState(
   evaluation: EvaluationRecord,
   attemptState: string | null,
 ): CardResults {
   if (attemptState === null) return "none";
-  const policy = feedbackOf(evaluation);
-  const gate = feedbackAvailable(policy, evaluation, attemptState);
+  const gate = feedbackAvailable(feedbackOf(evaluation), evaluation, attemptState);
   if (gate.ok) return "available";
-  if (gate.reason === "no_feedback") return "none";
-  if (gate.reason === "retakes_open" && policy.when === "none") return "none";
-  return "pending";
+  return gate.reason === "no_feedback" ? "none" : "pending";
 }
 
 /**
@@ -740,9 +724,10 @@ export function gradeReadable(evaluation: EvaluationRecord, attemptState: string
 
 /**
  * Whether the feedback policy shows THE KEY to a student whose attempt is in
- * `attemptState`, now: the rule {@link studentFeedback} applies, for the
- * drill, which never shows a key earlier than the exercise would (ADR-041
- * §13) — nor later: a published correction (ADR-050) opens both at once.
+ * `attemptState`, now: the rule {@link studentFeedback} applies to that
+ * attempt, read by the drill on the latest attempt (ADR-041 §13) and by the
+ * reopen's audit. An exercise's key is shown once the attempt is handed
+ * in (ADR-124); an exam's per its policy, once released.
  */
 export function keyShownTo(evaluation: EvaluationRecord, attemptState: string): boolean {
   const policy = feedbackOf(evaluation);
@@ -751,9 +736,9 @@ export function keyShownTo(evaluation: EvaluationRecord, attemptState: string): 
 
 /**
  * Whether a student may see anything at all right now: `feedbackGate`
- * (`@quiz/domain`) fed with this evaluation. A published correction
- * (ADR-050) counts as the release and lifts the score-only masking; the
- * drill's `keyShownTo` reads the same answer, so it follows by construction.
+ * (`@quiz/domain`) fed with this evaluation and its EFFECTIVE policy
+ * (`feedbackOf`). The drill's `keyShownTo` reads the same answer, so it
+ * follows by construction.
  */
 function feedbackAvailable(
   policy: FeedbackPolicy,
@@ -765,9 +750,7 @@ function feedbackAvailable(
     exam: evaluation.mode === "exam",
     evaluationOver: isEvaluationOver(evaluation.state),
     attemptOpen: attemptState === "in_progress" || attemptState === "not_started",
-    retakesOpen: retakesOpen(evaluation),
     released: evaluation.releasedAt !== null,
-    correctionPublished: correctionPublished(evaluation),
   });
 }
 
@@ -916,47 +899,27 @@ export async function studentFeedback(
 ): Promise<StudentFeedback> {
   const policy = feedbackOf(evaluation);
   const gate = feedbackAvailable(policy, evaluation, attempt.state);
-  // ADR-122 §7: a practice attempt after the due date reads the same gate,
-  // points only, labelled practice, never a grade — and its score alone
-  // while the policy does not open the correction yet (`results_pending`).
-  const practice = attempt.afterDue ? { practice: true as const } : {};
-  const pending = (reason: FeedbackRefusal) => ({
-    available: false as const,
-    reason,
-    evaluation: { id: evaluation.id, title: evaluation.title },
-    ...practice,
-  });
-  const scoreOnly = !gate.ok && (gate.reason === "retakes_open" || (attempt.afterDue && gate.reason === "results_pending"));
-  if (!gate.ok && !scoreOnly) return pending(gate.reason);
-  // While the exercise takes retakes, the page offers the next attempt — on
-  // the score alone (ADR-025) or beside a published correction (ADR-050).
+  if (!gate.ok) {
+    return {
+      available: false,
+      reason: gate.reason,
+      evaluation: { id: evaluation.id, title: evaluation.title },
+    };
+  }
+  // While the exercise takes retakes, the page offers the next attempt
+  // beside the correction (ADR-124), with the standings of ADR-091.
   const offer =
     attempt.userId !== null && retakesOpen(evaluation)
       ? await retakeOffer(db, evaluation, attempt, attempt.userId, now)
       : null;
-  // ADR-091: the standings travel beside the retake, on both branches.
   const retake =
     offer === null
       ? {}
       : { retake: offer.retake, ...(offer.review === undefined ? {} : { review: offer.review }) };
-  if (!gate.ok) {
-    // The points of THIS attempt, and not one item: no verdict, no answer,
-    // no key (ADR-025).
-    const items = await joinedItems(db, evaluation.id);
-    const tally = (await tallyByAttempt(db, [attempt.id])).get(attempt.id);
-    return {
-      ...pending(gate.reason),
-      score: scoreOf(
-        tally,
-        items.filter((i) => countsForStudent(i.item.counting)).length,
-        evaluationTotal(items.map((i) => i.item)),
-      ),
-      ...retake,
-    };
-  }
 
   const copy = await reviewedItems(db, evaluation, attempt, policy);
-  // No grade before the release, nor while a cell is pending, nor ever on a practice attempt.
+  // No grade before the release, nor while a cell is pending, nor ever on a
+  // practice attempt after the due date, which is labelled practice (ADR-122 §7).
   const gradeShown =
     !attempt.afterDue &&
     feedbackGradeShown({
@@ -974,7 +937,7 @@ export async function studentFeedback(
     ...copy,
     grade: gradeShown ? copy.grade : null,
     ...retake,
-    ...practice,
+    ...(attempt.afterDue ? { practice: true as const } : {}),
   };
 }
 

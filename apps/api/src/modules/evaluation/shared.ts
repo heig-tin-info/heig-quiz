@@ -47,8 +47,8 @@ const REFUSALS = {
   // ADR-051 §2: no kiosk path (`KIOSK_ATTESTATION=off`), so an exam only a
   // kiosk station may sit could never be sat.
   kiosk_unavailable: [422, "kiosk stations are not available on this platform (ADR-051)"],
-  // F-EVAL-11 (#78): `immediate` feedback in an exam, or in an exercise
-  // given a waiting room — both sat in class (`isInClass`).
+  // F-EVAL-11: `immediate` feedback on an exam (`isFeedbackAllowed`; an
+  // exercise's stored policy is never read, ADR-124).
   feedback_not_allowed: [422],
   // A poll keeps its reveal in two places, moved together by its own reveal
   // route (F-LIVE-13): a generic patch of `feedbackPolicy` would publish the

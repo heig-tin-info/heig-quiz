@@ -10,7 +10,7 @@ import { correctionPublishRefusal } from "@quiz/domain";
 
 import { ApiError, api } from "../api";
 import { useConfirm } from "../confirm";
-import { useT, type Dict } from "../i18n";
+import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { useIsCourseOwner } from "../course/parts";
 import { resultsKey } from "../queryKeys";
@@ -18,21 +18,10 @@ import type { Route } from "../router";
 import type { CorrectionControls } from "./LiveHeader";
 
 /**
- * What a student will read once the correction is published (ADR-050): the
- * feedback policy decides, as at a release — `none` shows nothing, and the
- * key only travels under `showKey`.
- */
-function studentsLine(policy: Evaluation["feedbackPolicy"]): keyof Dict {
-  if (policy.when === "none") return "live.correction.confirm.students.none";
-  return policy.showKey
-    ? "live.correction.confirm.students.key"
-    : "live.correction.confirm.students.noKey";
-}
-
-/**
  * "Publish the correction" of a running exercise (ADR-050): the confirmation
- * that says what happens under THIS evaluation's feedback policy, the call,
- * and "Present" once it is done. `null` wherever the server refuses it
+ * that says what happens — the class debrief opens; the students already
+ * read their own correction at the hand-in (ADR-124) — the call, and
+ * "Present" once it is done. `null` wherever the server refuses it
  * (`correctionPublishRefusal`, the server's own rule: an exam, a poll, an
  * exercise that is not running) and until the evaluation has loaded — and,
  * for anyone but an owner of the course (ADR-068), until it is published:
@@ -96,7 +85,7 @@ export function useCorrectionControls({
             )}
           </p>
           <p>{t("live.correction.confirm.projection")}</p>
-          <p>{t(studentsLine(evaluation.feedbackPolicy))}</p>
+          <p>{t("live.correction.confirm.students")}</p>
           <p className="font-medium text-fg">{t("live.correction.confirm.final")}</p>
         </div>
       ),
