@@ -1,6 +1,7 @@
 /**
- * "Past series" on the student's home (ADR-122): the exercises of the
- * student's classrooms that are over and still open to practice.
+ * "Past series" (ADR-122): the exercises of the student's classrooms that
+ * are over and still open to practice — on the home, every classroom; on a
+ * classroom's Activities tab, that classroom's, without the where-line.
  *
  * A practice attempt counts for nothing: the official result stays on the
  * Grades page. Each row says when the exercise closed and what the latest
@@ -9,7 +10,7 @@
  * Practise, Practise again, or Resume an attempt still open. The title opens
  * the latest practice's results when there is one.
  *
- * The section is drawn only when it holds a row: the home's loading and
+ * The section is drawn only when it holds a row: the page's loading and
  * error states are its own, and an empty list is no news to a student.
  */
 import { RotateCcw, Timer, Trophy } from "lucide-react";
@@ -23,20 +24,37 @@ import type { Route } from "../router";
 import { MetaItem, SectionHeading, isoDateParts } from "../ui";
 import { ActivityRow, type RowAction } from "./ActivityRow";
 
-export function PastSeries({ cards, navigate }: { cards: readonly PracticeCard[]; navigate: (r: Route) => void }) {
+export function PastSeries({
+  cards,
+  navigate,
+  showWhere = true,
+}: {
+  cards: readonly PracticeCard[];
+  navigate: (r: Route) => void;
+  /** The "course · classroom" line: off on a classroom's own page. */
+  showWhere?: boolean;
+}) {
   const t = useT();
   if (cards.length === 0) return null;
   return (
     <section className="space-y-3">
       <SectionHeading title={t("practice.section")} />
       {cards.map((card) => (
-        <PracticeRow key={card.id} card={card} navigate={navigate} />
+        <PracticeRow key={card.id} card={card} navigate={navigate} showWhere={showWhere} />
       ))}
     </section>
   );
 }
 
-function PracticeRow({ card, navigate }: { card: PracticeCard; navigate: (r: Route) => void }) {
+function PracticeRow({
+  card,
+  navigate,
+  showWhere,
+}: {
+  card: PracticeCard;
+  navigate: (r: Route) => void;
+  showWhere: boolean;
+}) {
   const t = useT();
   const practise = () => navigate({ view: "attempt", evaluationId: card.id, practice: true });
   const action: RowAction = {
@@ -54,7 +72,7 @@ function PracticeRow({ card, navigate }: { card: PracticeCard; navigate: (r: Rou
     <ActivityRow
       kind={{ label: t("practice.kind"), icon: RotateCcw }}
       title={card.title}
-      where={`${card.courseCode} · ${card.classroomName}`}
+      {...(showWhere ? { where: `${card.courseCode} · ${card.classroomName}` } : {})}
       {...(results ? { link: { href: results.path, onNavigate: () => navigate(results.route) } } : {})}
       {...(card.openAttemptId !== null ? { status: { label: t("practice.status.open"), tone: "amber" as const } } : {})}
       meta={

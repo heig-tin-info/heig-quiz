@@ -1859,7 +1859,7 @@ export interface EvaluationHome {
   open: EvaluationCard[];
   upcoming: EvaluationCard[];
   past: EvaluationCard[];
-  /** ADR-122, "Past series": on the whole home only (no `classroomId`), else empty. */
+  /** ADR-122, "Past series": the whole home's, or one classroom's under `classroomId` (its page's Activities tab). */
   practice: PracticeCard[];
 }
 
@@ -1874,9 +1874,7 @@ export async function studentHome(
   now: Date,
   classroomId?: string,
 ): Promise<EvaluationHome> {
-  const { polls, open, upcoming, past, practice } = await studentBoard(db, userId, now, classroomId, {
-    practice: classroomId === undefined,
-  });
+  const { polls, open, upcoming, past, practice } = await studentBoard(db, userId, now, classroomId, { practice: true });
   return { polls, open, upcoming, past: past.map((entry) => entry.card), practice };
 }
 

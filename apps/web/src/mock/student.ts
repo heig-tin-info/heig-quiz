@@ -1247,6 +1247,7 @@ on("GET", "/app/api/student/classrooms/:id", (m): StudentClassroomPage => {
       upcoming: inRoom(home.upcoming),
       past: inRoom(home.past),
     },
+    practice: inRoom(home.practice ?? []),
     hasJournal: hasMockJournal(id),
     hasGroups: hasStudentGroups(id),
     serverNow: home.serverNow,

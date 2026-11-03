@@ -126,6 +126,7 @@ describe("the student's Courses and classroom page (M5-02, F-ORG-14/15)", () => 
           archived: false,
         },
         activities: { polls: [], groupSets: [], open: [], upcoming: [], past: [] },
+        practice: [],
         hasJournal: true,
         hasGroups: false,
         serverNow: new Date().toISOString(),

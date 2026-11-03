@@ -126,7 +126,9 @@ export async function studentClassroomPage(
   scope: ReadableClassroom,
   now: Date,
 ): Promise<StudentClassroomPage> {
-  const [classroom, { practice: _home, ...activities }, journal, groups] = await Promise.all([
+  // A confined session never reaches this route (`readableClassroom`), so
+  // the past series (ADR-122) need no trusted-client guard here.
+  const [classroom, { practice, ...activities }, journal, groups] = await Promise.all([
     studentClassroomHeader(db, scope),
     studentCards(db, caller, now, { classroomId: scope.room.id, confined: false }),
     hasJournal(db, scope.room.id),
@@ -135,6 +137,7 @@ export async function studentClassroomPage(
   return {
     classroom,
     activities,
+    practice,
     hasJournal: journal,
     hasGroups: groups,
     serverNow: iso(now),

@@ -121,6 +121,8 @@ beforeAll(async () => {
   const running = await evaluation(mine.classroomId, "running exam", { state: "running", startedAt: now });
   await evaluation(mine.classroomId, "scheduled exam", { state: "scheduled", opensAt: new Date(now.getTime() + 86_400_000) });
   await evaluation(mine.classroomId, "closed exam", { state: "closed", closedAt: now });
+  // ADR-122: an exercise over and open to practice (its default), never started.
+  await evaluation(mine.classroomId, "past exercise", { mode: "exercise", state: "closed", closedAt: now });
   await evaluation(mine.classroomId, "class poll", { mode: "poll", state: "running", accessCode: "POLL42" });
   classmateAttempt = randomUUID();
   await db.insert(attempts).values({
@@ -135,6 +137,7 @@ beforeAll(async () => {
   // Another course, where only the classmate sits.
   other = await seedLive(db, { teacherId: outsider.id, studentIds: [classmate.id], questions: 0 });
   await evaluation(other.classroomId, "other exam", { state: "running", startedAt: now });
+  await evaluation(other.classroomId, "other exercise", { mode: "exercise", state: "closed", closedAt: now });
 
   // An archived classroom of the same course, where the student sits too.
   archivedId = randomUUID();
@@ -205,7 +208,8 @@ describe("GET /app/api/student/classrooms/:id", () => {
       archived: false,
     });
     expect(p.hasJournal).toBe(true);
-    expect(titles(p)).toEqual({ open: ["running exam"], upcoming: ["scheduled exam"], past: ["closed exam"] });
+    // The past exercise is in Past too: the page draws it once, in its Past series.
+    expect(titles(p)).toEqual({ open: ["running exam"], upcoming: ["scheduled exam"], past: ["past exercise", "closed exam"] });
     expect(p.activities.open.every((c) => c.kind === "evaluation")).toBe(true);
     expect(p.activities.polls.map((c) => c.code)).toEqual(["POLL42"]);
   });
@@ -226,6 +230,18 @@ describe("GET /app/api/student/classrooms/:id", () => {
       expect(body, secret).not.toContain(secret);
     }
     expect(p.activities.open[0]).toMatchObject({ kind: "evaluation", attemptId: null });
+  });
+
+  it("carries the classroom's Past series (ADR-122), the home's narrowed to the classroom", async () => {
+    const { page: p } = await page(student.headers);
+    expect(p.practice).toEqual([
+      expect.objectContaining({ id: ids["past exercise"], classroomId: mine.classroomId, openAttemptId: null, count: 0, last: null }),
+    ]);
+    // The classmate sits in both classrooms: each page lists its own exercise only.
+    const [here, there] = await Promise.all([page(classmate.headers), page(classmate.headers, other.classroomId)]);
+    expect(here.page.practice.map((c) => c.title)).toEqual(["past exercise"]);
+    expect(here.body).not.toContain(ids["other exercise"]!);
+    expect(there.page.practice.map((c) => c.title)).toEqual(["other exercise"]);
   });
 
   it("gives the classmate their own attempt, and never the student's bonus", async () => {
@@ -255,6 +271,7 @@ describe("GET /app/api/student/classrooms/:id", () => {
       const { body, page: p } = await page(teacher.headers);
       expect(p.classroom).toMatchObject({ id: mine.classroomId, timeBonusPercent: 0 });
       expect(titles(p)).toEqual({ open: [], upcoming: [], past: [] });
+      expect(p.practice).toEqual([]);
       expect(body).not.toContain("draft exam");
     });
 

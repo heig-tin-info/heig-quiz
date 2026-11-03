@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { EvaluationCard, StudentClassroomPage, StudentPollCard, StudentProjectCard } from "@quiz/contracts";
+import type { EvaluationCard, PracticeCard, StudentClassroomPage, StudentPollCard, StudentProjectCard } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { mostUrgent, StudentClassroom } from "./StudentClassroom";
@@ -70,9 +70,23 @@ const classroomPage = (over: Partial<StudentClassroomPage> = {}): StudentClassro
       }),
     ],
   },
+  practice: [],
   hasJournal: false,
   hasGroups: false,
   serverNow: new Date().toISOString(),
+  ...over,
+});
+
+const practiceCard = (over: Partial<PracticeCard>): PracticeCard => ({
+  id: "e-over",
+  title: "Série 2 — Boucles",
+  classroomId: "r1",
+  classroomName: "PRG1-2026",
+  courseCode: "PRG1",
+  closedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+  openAttemptId: null,
+  count: 0,
+  last: null,
   ...over,
 });
 
@@ -135,6 +149,36 @@ describe("the student classroom page", () => {
 
     await userEvent.click(soon);
     expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e-soon" });
+  });
+
+  it("lists the Past series to practise (ADR-122), once, never in the accent (#1004)", async () => {
+    const page = classroomPage();
+    // The server's Past holds the exercise too: the page draws it in the Past series only.
+    const over = card({ id: "e-over", title: "Série 2 — Boucles", mode: "exercise", state: "closed" });
+    mockFetch({
+      [URL_R1]: ok({
+        ...page,
+        activities: { ...page.activities, past: [...page.activities.past, over] },
+        practice: [practiceCard({})],
+      }),
+    });
+    const { navigate } = render();
+    await screen.findByText("Série 2 — Boucles");
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "Open now",
+      "Coming up",
+      "Past series",
+      "Past evaluations",
+    ]);
+    expect(screen.getAllByText("Série 2 — Boucles")).toHaveLength(1);
+    // The page is the classroom's: no "course · classroom" line.
+    expect(screen.queryByText("PRG1 · PRG1-2026")).toBeNull();
+
+    const practise = (await cardOf("Série 2 — Boucles")).getByRole("button", { name: "Practise" });
+    expect(practise).not.toHaveClass("bg-accent");
+    expect(document.querySelectorAll("button.bg-accent")).toHaveLength(1);
+    await userEvent.click(practise);
+    expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e-over", practice: true });
   });
 
   it("says there is nothing to do, and leaves out the empty groups", async () => {
