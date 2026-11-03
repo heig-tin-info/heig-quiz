@@ -13,6 +13,7 @@ import {
 import { clozeStudentTemplate, describeBlank, parseCloze, selectOptionOrder } from "@quiz/domain/cloze";
 import { CONFIG_TOO_COMPLEX_KEY, configPatternProblems, PATTERN_PROBLEM_KEY } from "@quiz/domain/regex";
 import { toCanonical } from "./canonical.js";
+import { clozeAnswerDoc, clozeAnswerZone, clozeSolutionDoc, clozeStatementDoc, clozeStudentAnswerDoc } from "./document.js";
 import { gradeClozeAnswer } from "./grade.js";
 import {
   CLOZE_CONFIG_VERSION,
@@ -238,6 +239,13 @@ export const clozeServer: QuestionTypeServer<
     }
     return { distribution: tallyKeys(keys) };
   },
+
+  /** The export factory (ADR-121 §2, ADR-125): the statement, the key, an answer, the paper zones. */
+  statementDoc: clozeStatementDoc,
+  solutionDoc: clozeSolutionDoc,
+  answerDoc: clozeAnswerDoc,
+  studentAnswerDoc: clozeStudentAnswerDoc,
+  answerZone: clozeAnswerZone,
 
   /** The authoring text, blanks included: every answer a cloze holds is in it. */
   searchText: (config) => config.text,

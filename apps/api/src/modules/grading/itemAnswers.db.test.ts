@@ -28,6 +28,23 @@ const TEMPLATE = "// @@lock\nint main(void) {\n// @@endlock\n    return 0;\n// @
 const REFERENCE = "int main(void) { return REFERENCE_MARKER; }";
 const HIDDEN = "hidden-case-name";
 
+/** Unshuffled, so the positions the test sends are the canonical indices stored. */
+const MCQ = {
+  configVersion: 2,
+  prompt: "Pick MCQ_PROMPT_MARKER.",
+  choices: [
+    { text: "CHOICE_WRONG", correct: false },
+    { text: "CHOICE_KEY", correct: true },
+  ],
+  mode: "single",
+  shuffleChoices: false,
+};
+const CLOZE = {
+  configVersion: 2,
+  text: "CLOZE_PROMPT_MARKER {{CLOZE_KEY}} then {{=right|wrong}}.",
+  shuffleOptions: false,
+};
+
 const CODE = {
   configVersion: 1,
   prompt: "Return the answer.",
@@ -105,8 +122,12 @@ async function gradedExercise() {
       retakes: { enabled: true, keep: "best", maxAttempts: null },
     },
   });
-  const questionId = await publishQuestion(db, seed.poolId, teacher.id, "sum", { type: "code", config: CODE });
-  await addItems(db, await reload(db, seed.evaluationId), [questionId], (type, version) =>
+  const questionIds = [
+    await publishQuestion(db, seed.poolId, teacher.id, "sum", { type: "code", config: CODE }),
+    await publishQuestion(db, seed.poolId, teacher.id, "pick", { type: "mcq", config: MCQ }),
+    await publishQuestion(db, seed.poolId, teacher.id, "fill", { type: "cloze", config: CLOZE }),
+  ];
+  await addItems(db, await reload(db, seed.evaluationId), questionIds, (type, version) =>
     typeOf(type).defaultPoints(loadConfig(type, version)), { attemptCount: 0 });
   await db.insert(enrollments).values({
     id: randomUUID(),
@@ -121,6 +142,8 @@ async function gradedExercise() {
   const items = await joinedItems(db, evaluation.id);
   const code = items.find((i) => i.question.type === "code")!;
   const shortItem = items.find((i) => i.question.type === "short")!;
+  const mcq = items.find((i) => i.question.type === "mcq")!;
+  const cloze = items.find((i) => i.question.type === "cloze")!;
 
   const sit = async (userId: string, marker: string | null, ok: boolean, retake = false) => {
     const participant = (await live.participantOf(db, evaluation, userId))!;
@@ -128,7 +151,12 @@ async function gradedExercise() {
       ? await live.retakeAttempt(db, { evaluation: await reload(db, evaluation.id), participant, now })
       : (await enterStarted(db, { evaluation, participant, now })).attempt;
     if (marker !== null) {
-      await live.saveAnswer(db, { evaluation, attempt, itemId: code.item.id, payload: answerWith(marker), revision: 1, now });
+      const write = (itemId: string, payload: unknown) =>
+        live.saveAnswer(db, { evaluation, attempt, itemId, payload, revision: 1, now, coordinates: "position" });
+      await write(code.item.id, answerWith(marker));
+      // The better attempt is right on both, the worse one wrong: the best still counts.
+      await write(mcq.item.id, { selected: [ok ? 1 : 0] });
+      await write(cloze.item.id, { blanks: [ok ? "CLOZE_KEY" : marker, ok ? "0" : "1"] });
     }
     const submitted = await live.submitAttempt(db, evaluation, attempt, now);
     await writeGrading(db, {
@@ -149,7 +177,7 @@ async function gradedExercise() {
   const worse = await sit(s0, "WORSE_MARKER", false, true);
   const empty = await sit(s1, null, false);
   await sit(teacher.id, "TEACHER_WALK_MARKER", true);
-  return { evaluation: evaluation as EvaluationRecord, code, shortItem, best, worse, empty };
+  return { evaluation: evaluation as EvaluationRecord, code, shortItem, mcq, cloze, best, worse, empty };
 }
 
 const url = (itemId: string, ext: "md" | "json") =>
@@ -216,7 +244,8 @@ describe("every answer to one item (F-EXP-01)", () => {
       (await get(`/app/api/evaluations/${built.evaluation.id}/grading`, teacher.headers)).json(),
     );
     const exportable = Object.fromEntries(queue.items.map((i) => [i.type, i.exportable]));
-    expect(exportable).toEqual({ short: false, code: true });
+    // `short` here is the test's fake type, which draws no document.
+    expect(exportable).toEqual({ short: false, code: true, mcq: true, cloze: true });
     const md = await get(url(built.shortItem.item.id, "md"), teacher.headers);
     expect(md.statusCode).toBe(409);
     expect(md.json().error).toBe("not_exportable");
@@ -238,11 +267,41 @@ describe("every answer to one item (F-EXP-01)", () => {
   });
 
   it("refuses Markdown for a parameterized item, whatever its type's hooks", () => {
-    // `code` cannot carry variables today (ADR-056: mcq, short, cloze), so the
-    // rule is pinned on the predicate the route and the queue both read.
+    // Each attempt of a parameterized question (ADR-056: mcq, short, cloze)
+    // has its own statement and key: the rule is pinned on the predicate the
+    // route and the queue both read.
     const table = { rows: [{ name: "n", expr: "randint(1, 9)", format: "int" }] };
-    expect(exportsText("code", { variables: null })).toBe(true);
-    expect(exportsText("code", { variables: table })).toBe(false);
+    for (const type of ["code", "mcq", "cloze"]) {
+      expect(exportsText(type, { variables: null })).toBe(true);
+      expect(exportsText(type, { variables: table })).toBe(false);
+    }
     expect(exportsText("short", { variables: null })).toBe(false);
+  });
+
+  it("serves an mcq item's answers: the lettered statement and key, each student's ticks", async () => {
+    const res = await get(url(built.mcq.item.id, "md"), teacher.headers);
+    expect(res.statusCode).toBe(200);
+    const text = res.body;
+    expect(text).toContain("### Statement\n\nPick MCQ_PROMPT_MARKER.\n\n**A.** CHOICE_WRONG\n\n**B.** CHOICE_KEY");
+    expect(text).toContain("### Reference solution\n\n**B.** CHOICE_KEY");
+    // The counted attempt's ticks, by canonical letter, then how the policy scored them.
+    expect(text).toMatch(/## Nom0 Prenom0\n\n\*\*B\.\*\* CHOICE_KEY\n\n(\| Policy .*\n\|.*\n\| all_or_nothing .*\n\n)?Points: /);
+    expect(text).toMatch(/## Nom1 Prenom1\n\nNo answer\./);
+    expect(text).toMatch(/## Nom2 Prenom2\n\nNo attempt\./);
+    expect(text).not.toContain("## Prof");
+  });
+
+  it("serves a cloze item's answers: numbered blanks, the key, the dropdown by its option", async () => {
+    const res = await get(url(built.cloze.item.id, "md"), teacher.headers);
+    expect(res.statusCode).toBe(200);
+    const text = res.body;
+    expect(text).toContain("CLOZE_PROMPT_MARKER ____(1) then ____(2).\n\n(2) right / wrong");
+    expect(text).toContain("| (1) | CLOZE_KEY |");
+    const own = text.split("## Nom0 Prenom0")[1]!.split("## Nom1")[0]!;
+    // The dropdown's stored index reads as its option (D4).
+    expect(own).toMatch(/\| \(1\) \| CLOZE_KEY \|/);
+    expect(own).toMatch(/\| \(2\) \| right \|/);
+    expect(text).not.toContain("WORSE_MARKER");
+    expect(text).not.toContain("TEACHER_WALK_MARKER");
   });
 });

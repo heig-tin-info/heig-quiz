@@ -11,6 +11,7 @@ import {
   type StudentView,
 } from "@quiz/core/server";
 import { shuffle, streamSeed } from "@quiz/core/rng";
+import { mcqAnswerDoc, mcqAnswerZone, mcqSolutionDoc, mcqStatementDoc, mcqStudentAnswerDoc } from "./document.js";
 import { mcqGenerator } from "./generate.js";
 import { gradeMcq, negativeMarkingOf } from "./grade.js";
 import { toCanonical } from "./canonical.js";
@@ -253,6 +254,13 @@ export const mcqServer: QuestionTypeServer<
     }
     return { distribution: tallyKeys(keys) };
   },
+
+  /** The export factory (ADR-121 §2, ADR-125): the statement, the key, an answer, the paper zone. */
+  statementDoc: mcqStatementDoc,
+  solutionDoc: mcqSolutionDoc,
+  answerDoc: mcqAnswerDoc,
+  studentAnswerDoc: mcqStudentAnswerDoc,
+  answerZone: mcqAnswerZone,
 
   searchText: (config) => [config.prompt, ...config.choices.map((c) => c.text)].join("\n"),
 
