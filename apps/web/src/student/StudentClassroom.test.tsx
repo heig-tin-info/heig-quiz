@@ -151,10 +151,18 @@ describe("the student classroom page", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e-soon" });
   });
 
-  it("lists the Past series to practise (ADR-122), once, never in the accent (#1004)", async () => {
+  it("lists the Past series to practise (ADR-122), beside the official attempt in Past, never in the accent (#1004)", async () => {
     const page = classroomPage();
-    // The server's Past holds the exercise too: the page draws it in the Past series only.
-    const over = card({ id: "e-over", title: "Série 2 — Boucles", mode: "exercise", state: "closed" });
+    // The exercise is in both lists: its practice in the Past series, its official attempt in Past.
+    const over = card({
+      id: "e-over",
+      title: "Série 2 — Boucles",
+      mode: "exercise",
+      state: "released",
+      attemptId: "a-over",
+      attemptState: "submitted",
+      results: "available",
+    });
     mockFetch({
       [URL_R1]: ok({
         ...page,
@@ -163,21 +171,26 @@ describe("the student classroom page", () => {
       }),
     });
     const { navigate } = render();
-    await screen.findByText("Série 2 — Boucles");
+    await screen.findAllByText("Série 2 — Boucles");
     expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
       "Open now",
       "Coming up",
       "Past series",
       "Past evaluations",
     ]);
-    expect(screen.getAllByText("Série 2 — Boucles")).toHaveLength(1);
+    const rows = screen.getAllByText("Série 2 — Boucles").map((el) => within(el.closest("div.rounded-card") as HTMLElement));
+    expect(rows).toHaveLength(2);
     // The page is the classroom's: no "course · classroom" line.
     expect(screen.queryByText("PRG1 · PRG1-2026")).toBeNull();
 
-    const practise = (await cardOf("Série 2 — Boucles")).getByRole("button", { name: "Practise" });
-    expect(practise).not.toHaveClass("bg-accent");
+    // The official attempt keeps its Review button in Past.
+    const official = rows.find((r) => r.queryByRole("button", { name: "See my results" }) !== null);
+    expect(official).toBeDefined();
+    const practise = rows.flatMap((r) => r.queryAllByRole("button", { name: "Practise" }));
+    expect(practise).toHaveLength(1);
+    expect(practise[0]).not.toHaveClass("bg-accent");
     expect(document.querySelectorAll("button.bg-accent")).toHaveLength(1);
-    await userEvent.click(practise);
+    await userEvent.click(practise[0]!);
     expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e-over", practice: true });
   });
 

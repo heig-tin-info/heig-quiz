@@ -19,7 +19,7 @@ F-EVAL-36, F-LIVE-01, F-RES-04, F-LLM-03.
 
 Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md): §1 — the default of `afterDue` is open on every exercise; the oracle that kept it hidden under a hidden key is gone, since an exercise always shows its key, and the evaluation no longer carries `afterDueSource`. §7 — a practice attempt shows the whole correction at its hand-in, points only, never a grade; no score-only page remains.
 
-Amended 2026-11-03 (#1004), scope: §9 only — the classroom page's Activities tab shows the same Past series, narrowed to that classroom, after Upcoming and before Past; an exercise listed there is not listed again in Past.
+Amended 2026-11-03 (#1004), scope: §9 only — see the amendment note there.
 
 ## Context
 
@@ -130,8 +130,9 @@ the kept attempt. None of that may move.
    with the default explained. *(Amended 2026-11-03, #1004: the student's
    classroom page shows the same Past series on its Activities tab,
    narrowed to the classroom and without the classroom's name on each row,
-   after Upcoming and before Past; Past no longer repeats an exercise the
-   Past series lists, whose official result stays on the Grades tab.)*
+   after Upcoming and before Past. An exercise listed there stays in Past
+   too: the Past series row carries the practice, the Past card the
+   official attempt — its status, its results, its retakes.)*
 10. **Exports.** The results CSV, the export factory (ADR-121) and the
     personal export (ADR-112) read the kept attempt or the Grades page:
     practice attempts are excluded from all of them, not labelled.

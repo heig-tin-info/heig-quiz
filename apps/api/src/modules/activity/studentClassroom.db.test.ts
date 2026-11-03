@@ -157,6 +157,8 @@ beforeAll(async () => {
     userId: student.id,
     claimedAt: now,
   });
+  // ADR-122: an archived classroom takes no practice, whatever the exercise says.
+  await evaluation(archivedId, "archived exercise", { mode: "exercise", state: "closed", closedAt: now });
 });
 
 afterAll(async () => {
@@ -254,6 +256,8 @@ describe("GET /app/api/student/classrooms/:id", () => {
     const { page: p } = await page(student.headers, archivedId);
     expect(p.classroom).toMatchObject({ archived: true, name: "Z-archived" });
     expect(p.hasJournal).toBe(false);
+    expect(p.activities.past.map((c) => c.title)).toEqual(["archived exercise"]);
+    expect(p.practice).toEqual([]);
   });
 
   it.each([
@@ -278,6 +282,7 @@ describe("GET /app/api/student/classrooms/:id", () => {
     it("a teacher on their staff seat sees what a student sees, never a draft", async () => {
       const { body, page: p } = await page(seatedTeacher.headers);
       expect(titles(p)).toEqual(titles((await page(student.headers)).page));
+      expect(p.practice.map((c) => c.id)).toEqual([ids["past exercise"]]);
       expect(body).not.toContain("draft exam");
       expect(body).not.toContain(classmateAttempt);
     });

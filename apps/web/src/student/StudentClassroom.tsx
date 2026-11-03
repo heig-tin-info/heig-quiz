@@ -266,9 +266,9 @@ function StudentTrail({ room, navigate }: { room: Header; navigate: Navigate }) 
 /**
  * Open now, Upcoming (by day, as on the home), the Past series to practise
  * (ADR-122, as on the home), Past: the home's cards for this classroom, one
- * accent among them. An exercise of the Past series is not listed again in
- * Past: its row there carries the practice, its official result is on the
- * Grades tab.
+ * accent among them. An exercise of the Past series stays in Past too: its
+ * row there carries the practice, its Past card the official attempt (its
+ * status, its results, its retakes).
  */
 function Activities({
   activities,
@@ -286,9 +286,7 @@ function Activities({
   // project and `mostUrgent` all read it.
   const now = useServerNow(serverNow);
   const actions = useCardActions(navigate);
-  const { polls, groupSets, open, upcoming } = activities;
-  const practised = new Set(practice.map((card) => card.id));
-  const past = activities.past.filter((card) => !practised.has(card.id));
+  const { polls, groupSets, open, upcoming, past } = activities;
   const urgent = mostUrgent(activities, now);
 
   return (
