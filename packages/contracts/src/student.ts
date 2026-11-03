@@ -78,6 +78,12 @@ export const StudentClassroomPage = z.object({
   /** An archived classroom's page stays reachable by its address, as it is (F-ORG-15). */
   classroom: StudentClassroom.extend({ archived: z.boolean() }),
   activities: StudentActivities,
+  /**
+   * ADR-122, "Past series": this classroom's exercises over and open to
+   * practice, the home's list narrowed to the classroom. A confined session
+   * never reads this page (`readableClassroom`).
+   */
+  practice: z.array(PracticeCard),
   /** The Journal tab (F-JRN-07): the classroom has a journal, whatever it shows this caller. */
   hasJournal: z.boolean(),
   /** The Groups tab (F-PROJ-22): a group set of the classroom reaches its students (`StudentGroupSet`). */

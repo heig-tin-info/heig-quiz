@@ -29,7 +29,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2 } from "lucide-react";
 import { useEffect } from "react";
 
-import type { StudentActivities, StudentActivityCard, StudentClassroomPage } from "@quiz/contracts";
+import type { PracticeCard, StudentActivities, StudentActivityCard, StudentClassroomPage } from "@quiz/contracts";
 
 import { api, isNotFound } from "../api";
 import { StudentGradebook } from "../gradebook/StudentGradebook";
@@ -61,6 +61,7 @@ import {
   UpcomingByDay,
   useCardActions,
 } from "./cards";
+import { PastSeries } from "./PastSeries";
 import { needsStudentAction } from "./projectRow";
 
 export type ClassroomTab = "activities" | "journal" | "groups" | "grades";
@@ -220,7 +221,7 @@ export function StudentClassroom({
       ) : tab === "grades" ? (
         <StudentGradebook classroomId={id} />
       ) : (
-        <Activities activities={data.activities} serverNow={data.serverNow} navigate={navigate} />
+        <Activities activities={data.activities} practice={data.practice} serverNow={data.serverNow} navigate={navigate} />
       )}
     </div>
   );
@@ -263,15 +264,20 @@ function StudentTrail({ room, navigate }: { room: Header; navigate: Navigate }) 
 }
 
 /**
- * Open now, Upcoming (by day, as on the home), Past: the home's cards for
- * this classroom, one accent among them.
+ * Open now, Upcoming (by day, as on the home), the Past series to practise
+ * (ADR-122, as on the home), Past: the home's cards for this classroom, one
+ * accent among them. An exercise of the Past series stays in Past too: its
+ * row there carries the practice, its Past card the official attempt (its
+ * status, its results, its retakes).
  */
 function Activities({
   activities,
+  practice,
   serverNow,
   navigate,
 }: {
   activities: StudentActivities;
+  practice: readonly PracticeCard[];
   serverNow: string;
   navigate: Navigate;
 }) {
@@ -310,6 +316,9 @@ function Activities({
           <UpcomingByDay cards={upcoming} now={now} navigate={navigate} showWhere={false} />
         </section>
       ) : null}
+
+      {/* ADR-122: secondary buttons only, never the urgent accent. */}
+      <PastSeries cards={practice} navigate={navigate} showWhere={false} />
 
       {past.length > 0 ? (
         <section className="space-y-3">
