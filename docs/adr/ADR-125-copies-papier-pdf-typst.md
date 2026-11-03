@@ -101,12 +101,17 @@ nothing of B or C.
    the student copy use it.
 
 6. **The `answerZone` block** (amends ADR-121 §1):
-   `{ kind: "answerZone"; id: string; zone: "bubbles" | "lines" | "free" |
-   "name"; labels?: readonly string[]; multiple?: boolean; lines?: number;
-   heightMm?: number }`. `id` is the item id, `<itemId>:b<n>` for a cloze
-   blank, `name` for the name frame of page 1. `lines` counts the ruled
-   lines of a written answer; `heightMm` sizes a `free` zone, the generic
-   shape (an essay's). In Typst a zone is `#zone(id, kind)[…]`, which emits
+   `{ kind: "answerZone"; id: string; part?: string; zone: "bubbles" |
+   "lines" | "free" | "name"; labels?: readonly string[]; multiple?:
+   boolean; lines?: number; heightMm?: number }`. A type's hook sees no
+   item id: it writes only `part` (`b<n>` for a cloze blank); the document
+   builder scopes every zone with `scopeZones(itemId, blocks)`, so `id` is
+   `<itemId>` or `<itemId>:<part>`, and `name` for the name frame of page
+   1. `lines` counts the ruled lines of a written answer; `heightMm` sizes
+   a `free` zone, the generic shape (an essay's). The Markdown renderer
+   draws a zone as a plain preview (bubbles, underscores, blank lines), for
+   the `handout.md` a teacher downloads. In Typst a zone is
+   `#zone(id, kind)[…]`, which emits
    `#metadata((id, kind, page, x, y, w, h)) <answer-zone>` for palier B's
    `typst query`. No fiducial, no QR code; a margin of at least 10 mm stays
    free for them.
