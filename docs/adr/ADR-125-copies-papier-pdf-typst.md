@@ -197,7 +197,10 @@ nothing of B or C.
     the existing attempt-closed event. The replaced attempt stays readable
     by the staff, marked; it is never served to the student (404 on the
     attempt view, the feedback and the copy; the student's lists read
-    `officialAttempt`). The entry dialog says an attempt will be replaced.
+    `officialAttempt`). Neither a paper attempt nor a replaced one is ever
+    reopened (`409 not_reopenable`): a reopening would hand a student a
+    screen for a copy that was never theirs to type, or for one that no
+    longer counts. The entry dialog says an attempt will be replaced.
 
 13. **The exam date and the clock** (invariant 5). A paper sitting is
     supervised by a person; the platform enforces no deadline on it.
