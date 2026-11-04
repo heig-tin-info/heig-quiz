@@ -434,6 +434,9 @@ importers:
       '@quiz/core':
         specifier: workspace:*
         version: link:../core
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../docexport
       '@quiz/domain':
         specifier: workspace:*
         version: link:../domain
@@ -876,6 +879,9 @@ importers:
       '@quiz/diagram':
         specifier: workspace:*
         version: link:../diagram
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../docexport
       '@quiz/ui':
         specifier: workspace:*
         version: link:../ui

@@ -26,6 +26,7 @@
   "dependencies": {
     "@quiz/core": "workspace:*",
     "@quiz/diagram": "workspace:*",
+    "@quiz/docexport": "workspace:*",
     "@quiz/ui": "workspace:*"
   },
   "peerDependencies": {

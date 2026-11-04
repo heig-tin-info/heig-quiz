@@ -14,6 +14,13 @@ import { ConfigMigrationError, zeroGrade, type PublicationIssue, type QuestionTy
 import { formOf, isEmptyScene, kindIssues, sameScene, toText, type Scene } from "@quiz/diagram/server";
 
 import {
+  diagramAnswerDoc,
+  diagramAnswerZone,
+  diagramSolutionDoc,
+  diagramStatementDoc,
+  diagramStudentAnswerDoc,
+} from "./document.js";
+import {
   DIAGRAM_CONFIG_VERSION,
   DiagramAnswerSchema,
   DiagramConfigSchema,
@@ -165,4 +172,14 @@ export const diagramServer: QuestionTypeServer<
   /** Teacher-facing (`question_versions.search`): the rubric and the reference's names belong in it. */
   searchText: (config) =>
     [config.prompt, config.rubric, ...textsOf(config.reference)].filter((text) => text !== "").join("\n"),
+
+  /*
+   * On paper (ADR-126 §8): a squared frame with the starter in grey; the key
+   * draws the reference. A paper answer is graded by hand (ADR-125 §14).
+   */
+  statementDoc: diagramStatementDoc,
+  answerZone: diagramAnswerZone,
+  solutionDoc: diagramSolutionDoc,
+  answerDoc: diagramAnswerDoc,
+  studentAnswerDoc: diagramStudentAnswerDoc,
 };
