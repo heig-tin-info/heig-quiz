@@ -48,7 +48,7 @@ import { resolveStrings, type CanvasShortcutsListener } from "@quiz/core/client"
 import { CANVAS_STRINGS, type CanvasStrings } from "./canvasStrings.js";
 import { canvasArea, cx, frame } from "./canvasStyles.js";
 import { Drawing, Inspector, PaletteRail, StatusBar, Toolbar, Transient } from "./EditorChrome.js";
-import { ORIENT_0, fitView, indexOf, newComponent, viewBoxAttr, type PinTarget } from "./geometry.js";
+import { ORIENT_0, connectedPins, fitView, indexOf, newComponent, viewBoxAttr, type PinTarget } from "./geometry.js";
 import { useCanvasShortcuts, useHistory } from "@quiz/ui";
 import { blockedCells, computeRoutes, withRoutes } from "./router.js";
 import {
@@ -57,7 +57,7 @@ import {
   type CanvasSchematic,
   type SchematicLibrary,
 } from "./schematicLibrary.js";
-import { connectedPins, type FlaggedPin } from "./SchematicView.js";
+import type { FlaggedPin } from "./SchematicView.js";
 import { usePartDragging, type Ghost } from "./usePartDragging.js";
 import { usePointerTools, type Cursor } from "./usePointerTools.js";
 import { editorKey, keyActions, SHORTCUT_LINES, useSelection, type Mode } from "./useSelection.js";

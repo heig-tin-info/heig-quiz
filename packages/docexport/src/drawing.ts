@@ -68,6 +68,13 @@ export interface Drawing {
   items: readonly DrawingItem[];
 }
 
+/**
+ * Millimetres per drawing unit when a figure names no width: one CSS pixel
+ * (ADR-126 §5). A producer that wants its figure on a frame's ruling scales
+ * its units by it.
+ */
+export const PX_MM = 25.4 / 96;
+
 /** The font of every text of a drawing, embedded in the Typst binary; the PDF's code font too. */
 export const DRAWING_FONT = "DejaVu Sans Mono";
 

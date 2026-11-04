@@ -36,7 +36,9 @@ import {
   wireLine,
 } from "./canvasStyles.js";
 import {
+  connectedPins,
   fitView,
+  GLYPH_RADIUS,
   hitRectOf,
   pinPosition,
   portPosition,
@@ -45,6 +47,7 @@ import {
   type Placement,
 } from "./geometry.js";
 import { junctionPoints, pathOf } from "./router.js";
+import { markPath } from "./symbols.js";
 import type {
   CanvasComponent,
   CanvasSchematic,
@@ -123,7 +126,7 @@ export function Ports({
             className={cx(isFlagged ? inkFlagged : inkNormal)}
             data-port={port}
           >
-            <circle className={portGlyph} cx={q.x} cy={q.y} r={4.5} />
+            <circle className={portGlyph} cx={q.x} cy={q.y} r={GLYPH_RADIUS.port} />
             {hovered === port ? (
               <circle className="fill-accent-soft stroke-accent stroke-[1.6]" cx={q.x} cy={q.y} r={7} />
             ) : null}
@@ -242,7 +245,7 @@ export function ComponentGlyph({
           <path
             key={`m${i}`}
             className="fill-none stroke-current stroke-[1.4] [stroke-linecap:round]"
-            d={`M${x - 3.5} ${y}h7${mark.sign === "+" ? `M${x} ${y - 3.5}v7` : ""}`}
+            d={markPath(x, y, mark.sign)}
           />
         );
       })}
@@ -261,7 +264,7 @@ export function ComponentGlyph({
             {isHovered ? (
               <circle className="fill-accent-soft stroke-accent stroke-[1.6]" cx={q.x} cy={q.y} r={6.5} />
             ) : null}
-            <circle className={pinDot} cx={q.x} cy={q.y} r={isFlagged ? 4 : 2.6} />
+            <circle className={pinDot} cx={q.x} cy={q.y} r={isFlagged ? GLYPH_RADIUS.flaggedPin : GLYPH_RADIUS.pin} />
           </g>
         );
       })}
@@ -317,21 +320,10 @@ export function Junctions({
   return (
     <g className={inkNormal}>
       {junctionPoints(schematic, routes, library).map(([x, y]) => (
-        <circle key={`${x},${y}`} className={junctionDot} cx={x} cy={y} r={3.6} />
+        <circle key={`${x},${y}`} className={junctionDot} cx={x} cy={y} r={GLYPH_RADIUS.junction} />
       ))}
     </g>
   );
-}
-
-/** `"c1:0"` for every pin a wire ends on: those pins are drawn by the wire, not twice. */
-export function connectedPins(schematic: CanvasSchematic): Set<string> {
-  const set = new Set<string>();
-  for (const w of schematic.wires) {
-    for (const e of [w.a, w.b]) {
-      if (e.kind === "pin") set.add(`${e.c}:${e.p}`);
-    }
-  }
-  return set;
 }
 
 /** A small preview of one symbol alone, for a palette tile. */
@@ -363,7 +355,7 @@ export function SymbolPreview({
         <path
           key={`m${i}`}
           className="fill-none stroke-current stroke-[1.4] [stroke-linecap:round]"
-          d={`M${mark.x - 3.5} ${mark.y}h7${mark.sign === "+" ? `M${mark.x} ${mark.y - 3.5}v7` : ""}`}
+          d={markPath(mark.x, mark.y, mark.sign)}
         />
       ))}
       {(symbol.texts ?? []).map((text, i) => (

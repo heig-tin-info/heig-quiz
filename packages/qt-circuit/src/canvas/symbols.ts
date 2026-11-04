@@ -214,6 +214,10 @@ export const SYMBOLS: Readonly<Record<ComponentKind, SymbolSpec>> = {
   },
 };
 
+/** The upright `+` or `−` of a {@link SymbolMark}, centred on `(x, y)`. */
+export const markPath = (x: number, y: number, sign: SymbolMark["sign"]): string =>
+  `M${x - 3.5} ${y}h7${sign === "+" ? `M${x} ${y - 3.5}v7` : ""}`;
+
 /** Every kind has a drawing. Guards a kind added to the library and nowhere else. */
 export function symbolOf(kind: ComponentKind): SymbolSpec {
   return SYMBOLS[kind];
