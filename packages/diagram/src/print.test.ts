@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { toSvg, type DrawingItem } from "@quiz/docexport";
 
 import { EXAMPLES } from "./examples.js";
-import { GRID, estimateText } from "./geometry.js";
+import { GRID } from "./geometry.js";
 import { DIAGRAM_KINDS } from "./kinds.js";
 import { layout } from "./layout.js";
-import { TEXT_ROLES, paintLink, paintNode, type Prim } from "./paint.js";
+import { paintLink, paintNode } from "./paint.js";
 import { figure, monoMeasure } from "./print.js";
 import { emptyScene } from "./scene.js";
 
@@ -16,17 +16,6 @@ const flat = (items: readonly DrawingItem[]): DrawingItem[] => items.flatMap((it
 const textsOf = (items: readonly DrawingItem[]): string[] => flat(items).flatMap((it) => (it.kind === "text" ? [it.text] : []));
 
 describe("the geometry as primitives (ADR-126 §1)", () => {
-  it.each(DIAGRAM_KINDS)("paints every element and link of a %s with a role, texts in a text role", (kind) => {
-    const scene = EXAMPLES[kind];
-    const lay = layout(scene, kind, estimateText);
-    const prims: Prim[] = [
-      ...scene.nodes.flatMap((n) => paintNode(n, estimateText)),
-      ...scene.links.flatMap((l) => paintLink(l, lay.routes.get(l.id)!)),
-    ];
-    expect(prims.length).toBeGreaterThan(0);
-    for (const p of prims) expect(p.el === "text").toBe(TEXT_ROLES.has(p.role));
-  });
-
   it("leaves the labels out of a toolbox icon", () => {
     const route = { pts: [[4, 15], [40, 15]] as const, a: { x: 4, y: 15, d: 0 }, b: { x: 40, y: 15, d: 2 } } as const;
     const prims = paintLink({ type: "nav", name: "owns", ma: "1", mb: "0..*" }, { ...route, pts: [[4, 15], [40, 15]] }, false);

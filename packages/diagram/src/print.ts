@@ -9,23 +9,23 @@
  */
 import type { Drawing, DrawingItem, Paints, Paint } from "@quiz/docexport";
 
-import { GRID, drawOrder, type Face, type Measure } from "./geometry.js";
+import { FACE_PX, GRID, drawOrder, type Measure } from "./geometry.js";
 import type { DiagramKind } from "./kinds.js";
 import { bounds, layout } from "./layout.js";
-import { paintLink, paintNode, type PaintRole, type Prim } from "./paint.js";
+import { paintLink, paintNode, type Prim, type ShapeRole, type TextRole } from "./paint.js";
 import type { Scene } from "./scene.js";
 
 /** DejaVu Sans Mono's advance, in em: every face, bold and oblique included. */
 export const MONO_ADVANCE = 0.602;
 
-/** The size of each face, in canvas units: the screen's (`editor/measure.ts`). */
-const FACE_SIZE: Readonly<Record<Face, number>> = { name: 13.5, italic: 13.5, stereo: 12, mono: 12, label: 13 };
+/** The width of a text printed at `size`. */
+const monoWidth = (text: string, size: number): number => [...text].length * size * MONO_ADVANCE;
 
 /** The width of a text as printed. */
-export const monoMeasure: Measure = (face, text) => [...text].length * FACE_SIZE[face] * MONO_ADVANCE;
+export const monoMeasure: Measure = (face, text) => monoWidth(text, FACE_PX[face]);
 
 /** How each shape role is painted. */
-const SHAPE_PAINT: Readonly<Partial<Record<PaintRole, Paints>>> = {
+const SHAPE_PAINT: Readonly<Record<ShapeRole, Paints>> = {
   shape: { stroke: "ink", fill: "paper", width: 1.5 },
   outline: { stroke: "ink", fill: "none", width: 1.5 },
   thin: { stroke: "ink", fill: "none", width: 1.1 },
@@ -41,13 +41,13 @@ const SHAPE_PAINT: Readonly<Partial<Record<PaintRole, Paints>>> = {
   headHollow: { stroke: "ink", fill: "paper", width: 1.6 },
 };
 
-/** How each text role is set. */
-const TEXT_SET: Readonly<Partial<Record<PaintRole, { size: number; bold?: true; italic?: true; fill?: Paint }>>> = {
-  name: { size: FACE_SIZE.name, bold: true },
+/** How each text role is set; a size off a face is the screen's class (`editor/styles.ts`). */
+const TEXT_SET: Readonly<Record<TextRole, { size: number; bold?: true; italic?: true; fill?: Paint }>> = {
+  name: { size: FACE_PX.name, bold: true },
   frameName: { size: 13, bold: true },
-  stereo: { size: FACE_SIZE.stereo, fill: "grey" },
-  member: { size: FACE_SIZE.mono },
-  label: { size: FACE_SIZE.label },
+  stereo: { size: FACE_PX.stereo, fill: "grey" },
+  member: { size: FACE_PX.mono },
+  label: { size: FACE_PX.label },
   lineLabel: { size: 12, italic: true },
   lineLabelMono: { size: 11.5 },
 };
@@ -57,8 +57,8 @@ const DASH = [7, 5] as const;
 /** One primitive as items of a drawing: a link's label on a paper ground, a member's underline drawn. */
 function printed(p: Prim): DrawingItem[] {
   if (p.el === "text") {
-    const set = TEXT_SET[p.role] ?? { size: 12 };
-    const width = [...p.text].length * set.size * MONO_ADVANCE;
+    const set = TEXT_SET[p.role];
+    const width = monoWidth(p.text, set.size);
     const x0 = p.anchor === "middle" ? p.x - width / 2 : p.anchor === "end" ? p.x - width : p.x;
     const ground: DrawingItem[] =
       p.role === "lineLabel" || p.role === "lineLabelMono"
@@ -79,7 +79,7 @@ function printed(p: Prim): DrawingItem[] {
       p.underline === true ? [{ kind: "line", x1: x0, y1: p.y + 2, x2: x0 + width, y2: p.y + 2, width: 0.8 }] : [];
     return [...ground, text, ...underline];
   }
-  const paints: Paints = { ...(SHAPE_PAINT[p.role] ?? {}), ...(p.el === "path" && p.dashed === true ? { dash: DASH } : {}) };
+  const paints: Paints = { ...SHAPE_PAINT[p.role], ...(p.el === "path" && p.dashed === true ? { dash: DASH } : {}) };
   switch (p.el) {
     case "path":
       return [{ kind: "path", d: p.d, ...paints }];

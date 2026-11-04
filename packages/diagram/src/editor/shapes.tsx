@@ -8,7 +8,7 @@ import type { JSX } from "react";
 import { sizeOf, type Measure } from "../geometry.js";
 import { LINK_STYLE, type PlaceTool } from "../kinds.js";
 import { type Route } from "../layout.js";
-import { inkPath, linkPath, paintCrowFoot, paintLink, paintNode, type PaintRole, type PaintedLink, type Prim } from "../paint.js";
+import { linkPath, paintCrowFoot, paintLink, paintNode, type PaintRole, type PaintedLink, type Prim } from "../paint.js";
 import type { Cardinality, DiagramNode, LinkType } from "../scene.js";
 import {
   cardFill,
@@ -33,10 +33,8 @@ import {
   thin,
 } from "./styles.js";
 
-export { inkPath };
-
 /** The classes of each role: the screen's look of the notation. */
-export const ROLE_CLASS: Readonly<Record<PaintRole, string>> = {
+const ROLE_CLASS: Readonly<Record<PaintRole, string>> = {
   shape: shapeInk,
   outline,
   thin,

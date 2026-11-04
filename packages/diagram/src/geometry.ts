@@ -26,6 +26,9 @@ export const FINAL_RADIUS = 11;
 /** The faces a diagram sets its text in. */
 export type Face = "name" | "italic" | "stereo" | "mono" | "label";
 
+/** The size of each face, in canvas units: the screen's and the paper's. */
+export const FACE_PX: Readonly<Record<Face, number>> = { name: 13.5, italic: 13.5, stereo: 12, mono: 12, label: 13 };
+
 /** The width of a text in a face, in canvas units. */
 export type Measure = (face: Face, text: string) => number;
 

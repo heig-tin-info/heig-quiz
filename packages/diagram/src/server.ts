@@ -13,6 +13,6 @@ export * from "./scene.js";
 export * from "./kinds.js";
 export * from "./geometry.js";
 export { layout, bounds, type End, type Layout, type LinkLike, type Route } from "./layout.js";
-export { formOf, toText } from "./codecs/index.js";
+export { formOf, langOf, toText } from "./codecs/index.js";
 export { EXAMPLES } from "./examples.js";
-export { figure, monoMeasure, MONO_ADVANCE } from "./print.js";
+export { figure } from "./print.js";

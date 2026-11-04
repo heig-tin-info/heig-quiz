@@ -11,7 +11,7 @@
  */
 import { answerZone, code, drawing, labelled, markdown, type Block, type Labels } from "@quiz/docexport";
 import { PX_MM } from "@quiz/docexport/typst";
-import { GRID, figure, isEmptyScene, toText, type DiagramKind, type Scene } from "@quiz/diagram/server";
+import { GRID, figure, isEmptyScene, langOf, toText, type DiagramKind, type Scene } from "@quiz/diagram/server";
 
 import type { DiagramAnswer, DiagramConfig, DiagramSolution, DiagramStudent } from "./schema.js";
 
@@ -25,18 +25,6 @@ const NOTATION: Readonly<Record<DiagramKind, (l: Labels) => string>> = {
   automaton: (l) => l.diagramAutomaton,
   graph: (l) => l.diagramGraph,
   free: (l) => l.diagramFree,
-};
-
-/** The language of each text form, for a code block. */
-const TEXT_LANG: Readonly<Record<DiagramKind, string>> = {
-  class: "plantuml",
-  usecase: "plantuml",
-  state: "mermaid",
-  er: "mermaid",
-  flow: "mermaid",
-  automaton: "dot",
-  graph: "dot",
-  free: "text",
 };
 
 /** The figure of a scene that holds something; `null` otherwise. */
@@ -77,7 +65,7 @@ export function diagramAnswerZone(student: DiagramStudent): Block[] {
 function drawn(scene: Scene, kind: DiagramKind, alt: string): Block[] {
   const fig = figureOf(scene, kind);
   const text = toText(scene, kind);
-  return [...(fig === null ? [] : [drawing(fig, alt)]), ...(text ? [code(TEXT_LANG[kind], text)] : [])];
+  return [...(fig === null ? [] : [drawing(fig, alt)]), ...(text ? [code(langOf(kind) ?? "text", text)] : [])];
 }
 
 /**

@@ -24,40 +24,20 @@ type XY = readonly [number, number];
  * `frameName`, `stereo`, `member`, `label` (a name centred in its shape),
  * `lineLabel` and `lineLabelMono` (on a link).
  */
-export type PaintRole =
-  | "shape"
-  | "outline"
-  | "thin"
-  | "ink"
-  | "dot"
-  | "card"
-  | "header"
-  | "frame"
-  | "line"
-  | "headOpen"
-  | "headSolid"
-  | "headHollow"
-  | "name"
-  | "frameName"
-  | "stereo"
-  | "member"
-  | "label"
-  | "lineLabel"
-  | "lineLabelMono";
-
-/** The roles of a text. */
-export const TEXT_ROLES: ReadonlySet<PaintRole> = new Set(["name", "frameName", "stereo", "member", "label", "lineLabel", "lineLabelMono"]);
+export type ShapeRole = "shape" | "outline" | "thin" | "ink" | "dot" | "card" | "header" | "frame" | "line" | "headOpen" | "headSolid" | "headHollow";
+export type TextRole = "name" | "frameName" | "stereo" | "member" | "label" | "lineLabel" | "lineLabelMono";
+export type PaintRole = ShapeRole | TextRole;
 
 /** One primitive, in the coordinates of its element (a node) or of the canvas (a link). */
 export type Prim =
-  | { el: "path"; role: PaintRole; d: string; dashed?: boolean }
+  | { el: "path"; role: ShapeRole; d: string; dashed?: boolean }
   /** `x` and `y` absent: 0. */
-  | { el: "rect"; role: PaintRole; x?: number; y?: number; w: number; h: number; rx?: number }
-  | { el: "ellipse"; role: PaintRole; cx: number; cy: number; rx: number; ry: number }
-  | { el: "circle"; role: PaintRole; cx: number; cy: number; r: number }
+  | { el: "rect"; role: ShapeRole; x?: number; y?: number; w: number; h: number; rx?: number }
+  | { el: "ellipse"; role: ShapeRole; cx: number; cy: number; rx: number; ry: number }
+  | { el: "circle"; role: ShapeRole; cx: number; cy: number; r: number }
   | {
       el: "text";
-      role: PaintRole;
+      role: TextRole;
       x: number;
       y: number;
       text: string;
@@ -227,7 +207,7 @@ const END_LABEL: Readonly<Record<0 | 1 | 2 | 3, readonly [number, number, "start
   3: [11, -6, "start"],
 };
 
-const labelRole = (mono: boolean): PaintRole => (mono ? "lineLabelMono" : "lineLabel");
+const labelRole = (mono: boolean): TextRole => (mono ? "lineLabelMono" : "lineLabel");
 
 /** A multiplicity, or a flowchart's label, set just off an end. */
 function endLabel(text: string | undefined, end: End, mono: boolean): Prim[] {
