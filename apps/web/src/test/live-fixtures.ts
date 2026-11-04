@@ -89,6 +89,7 @@ export function makeRow(index: number, itemIds: string[], overrides: Partial<Das
     cells: itemIds.map((itemId) => makeCell({ itemId })),
     access: { kind: "portal", station: null, alert: null },
     incidents: 0,
+    origin: "digital",
     ...overrides,
   };
 }
@@ -203,7 +204,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
     roster: { enrolled: 24, unlinked: 2, conflicts: 0 },
     templateRevision: null,
     courseId: "c1",
-    exports: { document: null, handout: null },
+    exports: { document: null, handout: null, paper: "paper_not_started" },
     ...overrides,
   };
 }

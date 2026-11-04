@@ -79,6 +79,7 @@ import {
   evaluations,
   gradings,
   isStaffAttempt,
+  officialAttempt,
   questionVersions,
   questions,
 } from "../../db/schema.js";
@@ -88,19 +89,31 @@ import { tryLoadConfig, typeOf } from "../pool/config.js";
 import { parametersOf } from "../pool/service.js";
 
 /**
- * What makes an attempt count, whatever the series: a finished attempt of an
- * exam, by a student account that is not a staff seat, started at or after
- * the question's `stats_since`.
+ * What makes an attempt count, whatever the series: an OFFICIAL finished
+ * attempt of an exam (`officialAttempt`: neither a practice one, ADR-122,
+ * nor one a paper copy replaced, ADR-125 §12), by a student account that is
+ * not a staff seat, started at or after the question's `stats_since`. A
+ * paper copy counts: it has no start, so its entry time stands in for it;
+ * only the time figures, which read the dwell of a tracked attempt, leave
+ * it out.
  */
 function countedAttempt(): SQL {
   return and(
     eq(evaluations.mode, "exam"),
     isNotNull(attempts.userId),
     inArray(attempts.state, [...FINISHED_ATTEMPT_STATES]),
-    isNotNull(attempts.startedAt),
+    officialAttempt,
+    // A finished attempt never started is no answer, but for a paper copy:
+    // it was sat away from any screen, and typed in whole (ADR-125).
+    or(isNotNull(attempts.startedAt), eq(attempts.origin, "paper")),
     // The reset compares the START of the attempt: a grading moves on a
-    // regrade or a late validation, a submission is null on an expiry.
-    or(isNull(questions.statsSince), gte(attempts.startedAt, questions.statsSince)),
+    // regrade or a late validation, a submission is null on an expiry. A
+    // paper copy, never started on a screen, by its hand-in (the server's
+    // time of entry).
+    or(
+      isNull(questions.statsSince),
+      gte(sql`coalesce(${attempts.startedAt}, ${attempts.submittedAt})`, questions.statsSince),
+    ),
     sql`not ${isStaffAttempt}`,
   )!;
 }

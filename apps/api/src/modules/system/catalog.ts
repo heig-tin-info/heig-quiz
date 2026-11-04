@@ -22,7 +22,8 @@
  * deletes the integrity journal of the evaluations closed six months ago and
  * never released (ADR-088); `TRAINING_TASKS` installs the training course's
  * content into its public pool (ADR-105 §2); `PRESENCE_TASKS` deletes the
- * hours of activity past their eight days (ADR-107). A new task also adds its key to
+ * hours of activity past their eight days (ADR-107); `PAPER_TASKS` sweeps the
+ * scans of the paper copies whose attempt is gone (ADR-125 §15). A new task also adds its key to
  * `SCHEDULED_TASK_KEYS` (`@quiz/contracts`) and its names to the web's
  * dictionaries.
  */
@@ -34,6 +35,7 @@ import { DRILL_TASKS } from "../drill/jobs.js";
 import { GITHUB_TASKS } from "../github/jobs.js";
 import { LIVE_SCHEDULED_TASKS } from "../live/jobs.js";
 import { NOTIFICATION_TASKS } from "../notifications/jobs.js";
+import { PAPER_TASKS } from "../paper/jobs.js";
 import { POLL_TASKS } from "../poll/jobs.js";
 import { PRESENCE_TASKS } from "../presence/jobs.js";
 import { REVIEW_TASKS } from "../pool/jobs.js";
@@ -64,6 +66,7 @@ export const SCHEDULED_TASKS: readonly ScheduledTask[] = [
   ...LIVE_SCHEDULED_TASKS,
   ...TRAINING_TASKS,
   ...PRESENCE_TASKS,
+  ...PAPER_TASKS,
   {
     key: "health.checks",
     defaultIntervalMinutes: 5,

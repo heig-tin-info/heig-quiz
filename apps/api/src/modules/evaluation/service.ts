@@ -46,7 +46,7 @@ export {
 } from "./stateMachine.js";
 export type { JoinedItem } from "./reads.js";
 export { listActivities } from "./activities.js";
-export { declares } from "./print.js";
+export { declares, paperRefusal, paperSeedOf, printRefusal } from "./print.js";
 export { announceMove } from "./announce.js";
 export { countTemplates } from "./templates.js";
 export {

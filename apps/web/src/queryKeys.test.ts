@@ -146,6 +146,8 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["resultsViewKey", keys.resultsViewKey("e1"), ["results", "e1", "view"]],
     ["resultsByQuestionKey", keys.resultsByQuestionKey("e1"), ["results", "e1", "by-question"]],
     ["resultsCopyKey", keys.resultsCopyKey("e1", "a1"), ["results", "e1", "copy", "a1"]],
+    ["paperItemsKey", keys.paperItemsKey("e1", "u1"), ["paper", "e1", "items", "u1"]],
+    ["paperSheetKey", keys.paperSheetKey("e1", "a1"), ["paper", "e1", "sheet", "a1"]],
     ["studentRootKey", keys.studentRootKey, ["student"]],
     ["studentHomeKey", keys.studentHomeKey, ["student", "home"]],
     ["studentProjectKey", keys.studentProjectKey("p1"), ["student", "project", "p1"]],

@@ -4,6 +4,7 @@ import type { ResultRow, ResultRowState } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { Grade } from "../Grade";
+import { PaperBadge } from "../paper/PaperBadge";
 import { formatDuration, useT, type Dict, type TFunction } from "../i18n";
 import { Actions, Badge, cx, pressable, T, TableHead, Tip, useSortableTable, type Column, type MenuItem, type Tone } from "../ui";
 
@@ -121,6 +122,8 @@ export function GradeTable({
                       {t("roster.status.staff")}
                     </Badge>
                   ) : null}
+                  {/* ADR-125: the counted attempt was typed in from paper. */}
+                  <PaperBadge origin={row.origin} />
                   {row.excused ? (
                     <Tip label={row.excused.comment ?? t("results.excused.help")}>
                       <Badge tone="zinc" icon={UserCheck}>

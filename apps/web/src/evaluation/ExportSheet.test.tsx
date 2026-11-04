@@ -38,7 +38,7 @@ describe("the export sheet", () => {
 
   it("greys a refused document out with its reason, and keeps the other", async () => {
     mockFetch({
-      [DETAIL]: ok(makeEvaluationDetail({ exports: { document: null, handout: { reason: "type", types: ["code", "blocks"] } } })),
+      [DETAIL]: ok(makeEvaluationDetail({ exports: { document: null, handout: { reason: "type", types: ["code", "blocks"] }, paper: "paper_not_started" as const } })),
     });
     render();
     const handout = await screen.findByRole("region", { name: "Hand-out" });
@@ -49,7 +49,7 @@ describe("the export sheet", () => {
 
   it("says a parameterized question refuses both", async () => {
     const refusal = { reason: "parameterized" as const, types: [] };
-    mockFetch({ [DETAIL]: ok(makeEvaluationDetail({ exports: { document: refusal, handout: refusal } })) });
+    mockFetch({ [DETAIL]: ok(makeEvaluationDetail({ exports: { document: refusal, handout: refusal, paper: "paper_not_started" as const } })) });
     render();
     await screen.findByRole("region", { name: "Hand-out" });
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
@@ -58,7 +58,7 @@ describe("the export sheet", () => {
 
   it("says why a poll is refused", async () => {
     const refusal = { reason: "poll" as const, types: [] };
-    mockFetch({ [DETAIL]: ok(makeEvaluationDetail({ exports: { document: refusal, handout: refusal } })) });
+    mockFetch({ [DETAIL]: ok(makeEvaluationDetail({ exports: { document: refusal, handout: refusal, paper: "paper_not_started" as const } })) });
     render();
     await screen.findByRole("region", { name: "Hand-out" });
     expect(screen.getAllByText("A poll is not printed.")).toHaveLength(2);

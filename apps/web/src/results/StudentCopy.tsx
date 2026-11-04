@@ -10,6 +10,8 @@ import { CopyItem } from "../CopyItem";
 import { Grade } from "../Grade";
 import { useT } from "../i18n";
 import type { Route } from "../router";
+import { PaperBadge, SupersededBadge } from "../paper/PaperBadge";
+import { ScanCard } from "../paper/ScanCard";
 import { IconButton, QueryError, Sheet, Skeleton } from "../ui";
 import { resultsCopyKey } from "../queryKeys";
 import { PendingLine } from "../student/cards";
@@ -59,7 +61,10 @@ export function StudentCopy({
             {t("feedback.grade")} <Grade value={data.grade} /> ·{" "}
             <span className="tabular-nums">
               {formatPoints(data.points)} / {formatPoints(data.totalPoints)}
-            </span>
+            </span>{" "}
+            {/* ADR-125: typed in from paper, or replaced by a paper copy. */}
+            <PaperBadge origin={data.origin} />
+            <SupersededBadge supersededBy={data.supersededBy} />
           </>
         ) : (
           row.email
@@ -87,6 +92,8 @@ export function StudentCopy({
         <QueryError title={t("results.copy.loadFailed")} query={copy} />
       ) : (
         <div className="space-y-5">
+          {/* ADR-125 §15: a paper copy's scan, attached here at entry or later. */}
+          {data.origin === "paper" ? <ScanCard evaluationId={evaluationId} attemptId={data.attemptId} /> : null}
           <PendingLine count={data.pendingCount} />
           {data.items.map((item) => (
             <CopyItem

@@ -65,6 +65,8 @@ const liveAllOn = (evaluationId) => ({
   ss: { [`quiz-live-toggles-exam:${evaluationId}`]: JSON.stringify({ answers: true, results: true }) },
 });
 
+/** The mock's running exam that prints (ADR-125, `mock/paper.ts`): the paper copy's scenes. */
+const PAPER_EXAM = "eeeeeeee-0000-4000-8000-000000000125";
 /** The mock's evaluation, taken by the student persona (WP9). */
 const TAKE = "/take/11111111-1111-4111-8111-111111111111";
 /**
@@ -1686,6 +1688,14 @@ const scenes = [
   { name: "results-questions", role: "teacher", path: "/evaluations/closed/results?tab=questions", settle: 2500 },
   // One student's copy, opened from their row: the whole correction, before any release.
   { name: "results-copy", role: "teacher", path: "/evaluations/closed/results", fold: true, settle: 1500, act: (p) => p.locator("tbody tr[tabindex]").first().click() },
+  // ADR-125: a paper copy, entered from a student's row of the running exam that prints (`mock/paper.ts`).
+  { name: "paper-entry-live", role: "teacher", ...liveAllOn(PAPER_EXAM), path: `/evaluations/${PAPER_EXAM}/live`, fold: true },
+  { name: "paper-entry-dialog", role: "teacher", path: `/evaluations/${PAPER_EXAM}/live`, fold: true, act: (p) =>
+      p.getByRole("button", { name: /enter a paper copy|saisir une copie papier/i }).first().click() },
+  { name: "paper-entry-page", role: "teacher", path: `/evaluations/${PAPER_EXAM}/live`, fold: true, settle: 1500, act: async (p) => {
+      await p.getByRole("button", { name: /enter a paper copy|saisir une copie papier/i }).first().click();
+      await p.getByRole("button", { name: /start the entry|commencer la saisie/i }).click();
+    } },
   // The correction on a beamer (ADR-033): hidden, revealed (R), and walked
   // down to the cloze, the eighth question, whose blanks carry their bars.
   { name: "correction", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: (p) => projectNext(p, 1) },

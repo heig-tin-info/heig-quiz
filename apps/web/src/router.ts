@@ -144,6 +144,12 @@ export type Route =
    * evaluation page, so the configuration stays open beside it.
    */
   | { view: "evaluationPreview"; id: string }
+  /**
+   * ADR-125: a staff member types in one student's paper copy, in the
+   * player, and hands it in once. `user` and `date` travel as `?user=` and
+   * `?date=`; the page reads them back from the address.
+   */
+  | { view: "paperEntry"; evaluationId: string; user?: string; date?: string }
   /** The poll launcher: pick or write the question, then the wall (F-LIVE-13). */
   | { view: "polls" }
   /** The projection of a poll: the question, the tally, the QR (F-LIVE-14). */
@@ -684,6 +690,21 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // The results' Questions tab on a beamer: like the poll, it links to none
   // of the screens above.
   correction: evaluationTail("correction", (evaluationId) => ({ view: "correction", evaluationId })),
+  // `/evaluations/:id/paper/new?user=&date=`: before `evaluation`, which takes any tail.
+  paperEntry: {
+    path: (r) => {
+      const query = new URLSearchParams({
+        ...(r.user ? { user: r.user } : {}),
+        ...(r.date ? { date: r.date } : {}),
+      }).toString();
+      return `/evaluations/${r.evaluationId}/paper/new${query ? `?${query}` : ""}`;
+    },
+    match: ([head, evaluationId, tail, sub]) =>
+      head === "evaluations" && evaluationId && tail === "paper" && sub === "new"
+        ? { view: "paperEntry", evaluationId }
+        : null,
+    studentSafe: false,
+  },
   // After the tails above: this one takes whatever tail is left.
   evaluation: {
     path: (r) => `/evaluations/${r.id}`,

@@ -18,10 +18,13 @@ import { Button, Modal } from "../ui";
 export function SubmitDialog({
   open,
   unanswered,
+  finish,
   onCancel,
   onConfirm,
 }: {
   open: boolean;
+  /** The title and the confirmation where the hand-in is not a student's (a paper copy, ADR-125). */
+  finish?: string;
   /** Questions with no answer at all, as the player counts them. */
   unanswered: number;
   onCancel: () => void;
@@ -32,7 +35,7 @@ export function SubmitDialog({
   if (!open) return null;
   return (
     <Modal
-      title={t("player.submit.title")}
+      title={finish ?? t("player.submit.title")}
       size="sm"
       onClose={busy ? () => {} : onCancel}
       footer={
@@ -49,7 +52,7 @@ export function SubmitDialog({
               void onConfirm().finally(() => setBusy(false));
             }}
           >
-            {busy ? t("player.submitting") : t("player.submit.confirm")}
+            {busy ? t("player.submitting") : (finish ?? t("player.submit.confirm"))}
           </Button>
         </>
       }

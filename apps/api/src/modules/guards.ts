@@ -1297,7 +1297,9 @@ export async function findOwnAttempt(db: Db, userId: string, attemptId: string) 
     .select({ attempt: attempts, evaluation: evaluations })
     .from(attempts)
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
-    .where(and(eq(attempts.id, attemptId), eq(attempts.userId, userId)))
+    // ADR-125 §12: an attempt a paper copy replaced is never the student's
+    // again — not its view, its feedback nor its copy: the 404 of a miss.
+    .where(and(eq(attempts.id, attemptId), eq(attempts.userId, userId), isNull(attempts.supersededBy)))
     .limit(1);
   return row ?? null;
 }

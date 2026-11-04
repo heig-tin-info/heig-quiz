@@ -20,10 +20,6 @@
  * It lives beside the `evaluation` service rather than in it: it reads the
  * `live` module's student exit, which itself imports the service.
  */
-import { randomInt } from "node:crypto";
-
-import { eq, sql } from "drizzle-orm";
-
 import type { EvaluationDocumentRecord, HandoutRecord } from "@quiz/contracts";
 import {
   answerZone,
@@ -42,11 +38,10 @@ import { evaluationTotal, slugify } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { evaluations } from "../../db/schema.js";
 import { explanationBlocks, itemKeyBlocks, provenanceOf } from "../../documents/blocks.js";
 import * as live from "../live/service.js";
 import { explanationOrNull, loadConfig, typeOf } from "../pool/service.js";
-import { printRefusal } from "./print.js";
+import { paperSeedOf, printRefusal } from "./print.js";
 import { joinedItems, type JoinedItem } from "./reads.js";
 import { EvaluationError, type EvaluationRecord } from "./shared.js";
 
@@ -72,24 +67,6 @@ async function printableItems(
 /** `<title>-<suffix>`, as a slug. */
 const basenameOf = (evaluation: EvaluationRecord, suffix: string): string =>
   `${slugify(evaluation.title) || "evaluation"}-${suffix}`;
-
-/**
- * The seed of `evaluation`'s paper (ADR-125 §8): the stored one, or one drawn
- * now and stored by a single statement, so two first prints at the same
- * second keep the one that landed first. In the range of an attempt's seed
- * (`drawSeed`), from the CSPRNG: a printed order must not be predictable.
- * Never returned to a client nor logged.
- */
-async function paperSeedOf(db: Db, evaluation: EvaluationRecord): Promise<number> {
-  if (evaluation.paperSeed !== null) return evaluation.paperSeed;
-  const [row] = await db
-    .update(evaluations)
-    .set({ paperSeed: sql`coalesce(${evaluations.paperSeed}, ${randomInt(0, 0x7fffffff)})` })
-    .where(eq(evaluations.id, evaluation.id))
-    .returning({ seed: evaluations.paperSeed });
-  if (row?.seed == null) throw new Error(`evaluation ${evaluation.id} has no paper seed`);
-  return row.seed;
-}
 
 /** The staff "statement with key" (F-EXP-04): the record, in the base order. */
 export async function evaluationDocument(
