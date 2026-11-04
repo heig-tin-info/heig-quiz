@@ -7,9 +7,9 @@
  *
  *   - {@link staffCopyRecord} (ADR-125 §4, §5), for the results per-student
  *     view and the live dashboard's inspect view: {@link staffCopy}, the copy
- *     with everything shown, naming the student and the attempt. English: a
- *     staff document (ADR-121 §4). Its routes load the attempt through
- *     `loadEvaluationAttempt` (invariant 6).
+ *     with everything shown, naming the student and the attempt, worded in
+ *     the reader's language (ADR-121 §4, amended 2026-11-04). Its routes
+ *     load the attempt through `loadEvaluationAttempt` (invariant 6).
  *   - {@link studentCopyRecord} (ADR-112 amendment of 2026-11-03, ADR-125
  *     §18), the student's own, from their feedback page: built from
  *     {@link studentFeedback} and nothing else, so it holds the key, the
@@ -21,16 +21,14 @@
  * record's items and nothing else: what the student's document holds is
  * what `studentFeedback` returned. They write nothing.
  */
-import type { StaffCopyRecord, StudentCopyRecord, StudentResultItem } from "@quiz/contracts";
+import type { AttemptState, StaffCopyRecord, StudentCopyRecord, StudentResultItem } from "@quiz/contracts";
 import {
-  EN_LABELS,
   heading,
   LABELS,
   labelled,
   markdown,
   number,
   points,
-  separator,
   type Block,
   type Document,
   type Labels,
@@ -109,30 +107,40 @@ export async function studentCopyRecord(
   };
 }
 
+/** An attempt's state, as a reader's word. */
+const stateWord = (l: Labels, state: AttemptState): string =>
+  ({
+    not_started: l.stateNotStarted,
+    in_progress: l.stateInProgress,
+    submitted: l.stateSubmitted,
+    expired: l.stateExpired,
+  })[state];
+
 /**
- * The document of {@link staffCopyRecord}: who and which attempt, the
- * total, then each item in the order the student saw them — the statement,
- * the answer, the key, the explanation, the comment and the points.
+ * The document of {@link staffCopyRecord}, worded in `lang`: who and which
+ * attempt, the total, then each item in the order the student saw them —
+ * the statement, the answer, the key, the explanation, the comment and the
+ * points.
  */
-export function staffCopyDocument(found: StaffCopyFile): Document {
+export function staffCopyDocument(found: StaffCopyFile, lang: Lang): Document {
   const { record } = found;
-  const attempt = record.attempt.number > 1 ? `attempt ${record.attempt.number}, ` : "";
-  const pending = record.pendingCount > 0 ? `, ${record.pendingCount} still to grade` : "";
-  const blocks: Block[] = [
-    heading(1, record.evaluation.title),
-    markdown(
-      [
-        `**${record.student.displayName}**${record.student.email ? ` (${record.student.email})` : ""}`,
-        `${attempt}${record.attempt.state}: ${number(record.points)} / ${number(record.totalPoints)} points, grade ${number(record.grade)}${pending}`,
-      ].join("  \n"),
-    ),
+  const l = LABELS[lang];
+  const summary = [
+    `**${record.student.displayName}**${record.student.email ? ` (${record.student.email})` : ""}`,
+    ...(record.attempt.number > 1 ? [labelled(l, l.attempt, String(record.attempt.number))] : []),
+    labelled(l, l.state, stateWord(l, record.attempt.state)),
+    labelled(l, l.points, `${number(record.points)} / ${number(record.totalPoints)}`),
+    labelled(l, l.grade, number(record.grade)),
+    ...(record.pendingCount > 0 ? [labelled(l, l.awaitingGrading, String(record.pendingCount))] : []),
   ];
-  record.items.forEach((item, rank) => blocks.push(separator, ...itemBlocks(item, rank, STAFF_WORDS)));
+  const blocks: Block[] = [heading(1, record.evaluation.title), markdown(summary.join("  \n"))];
+  const words = staffWords(l);
+  record.items.forEach((item, rank) => blocks.push(...itemBlocks(item, rank, words)));
   return {
     provenance: provenanceOf(record, { evaluationId: record.evaluation.id, attemptId: record.attempt.id }, [
       record.attempt.id,
     ]),
-    lang: "en",
+    lang,
     blocks,
   };
 }
@@ -153,7 +161,7 @@ export function studentCopyDocument(found: StudentCopyFile, lang: Lang): Documen
   ];
   const blocks: Block[] = [heading(1, record.evaluation.title), markdown(summary.join("  \n"))];
   const words = studentWords(l);
-  record.items.forEach((item, rank) => blocks.push(separator, ...itemBlocks(item, rank, words)));
+  record.items.forEach((item, rank) => blocks.push(...itemBlocks(item, rank, words)));
   return {
     provenance: provenanceOf(record, { evaluationId: record.evaluation.id, attemptId: record.attemptId }, [
       record.attemptId,
@@ -163,7 +171,7 @@ export function studentCopyDocument(found: StudentCopyFile, lang: Lang): Documen
   };
 }
 
-/** The fixed words of a copy's items: a staff copy's English, or the student's language. */
+/** The fixed words of a copy's items, in the reader's language: a staff copy's, or the student's. */
 interface CopyWords {
   labels: Labels;
   answer: string;
@@ -176,12 +184,12 @@ interface CopyWords {
   saysNoAnswer: boolean;
 }
 
-const STAFF_WORDS: CopyWords = {
-  labels: EN_LABELS,
-  answer: "Answer",
-  comment: "Comment",
+const staffWords = (l: Labels): CopyWords => ({
+  labels: l,
+  answer: l.answer,
+  comment: l.staffComment,
   saysNoAnswer: true,
-};
+});
 
 const studentWords = (l: Labels): CopyWords => ({
   labels: l,

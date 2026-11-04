@@ -18,7 +18,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { ItemAnswersRecord } from "@quiz/contracts";
-import { EN_LABELS, heading, markdown, points, separator, type Block, type Document } from "@quiz/docexport";
+import { heading, LABELS, markdown, points, separator, type Block, type Document, type Labels, type Lang } from "@quiz/docexport";
 import { slugify } from "@quiz/domain";
 import { formattedValues } from "@quiz/domain/parameters";
 
@@ -133,27 +133,29 @@ export async function itemAnswers(
 }
 
 /**
- * The Markdown document of {@link itemAnswers} asked with `text: true`: the
- * header (title, item, statement, key), then one section per student.
+ * The Markdown document of {@link itemAnswers} asked with `text: true`,
+ * worded in `lang` (ADR-121 §4, amended 2026-11-04): the header (title,
+ * item, statement, key), then one section per student, a light rule
+ * between students.
  */
-export function itemAnswersDocument(found: ItemAnswers): Document {
+export function itemAnswersDocument(found: ItemAnswers, lang: Lang): Document {
   const { record } = found;
   const { item } = record;
   const type = typeOf(item.type);
-  // A staff document: English (ADR-121 §4).
-  const l = EN_LABELS;
+  const l = LABELS[lang];
   const blocks: Block[] = [
     heading(1, record.evaluation.title),
     ...itemKeyBlocks(type, item.position, item.internalName, item.points, record.statement, record.solution, l),
   ];
   record.answers.forEach((row, i) => {
     const name = `${row.student.lastName} ${row.student.firstName}`.trim() || row.student.email;
-    blocks.push(separator, heading(2, row.attempt && row.attempt.number > 1 ? `${name} (attempt ${row.attempt.number})` : name));
+    const attempt = row.attempt && row.attempt.number > 1 ? `${l.attempt} ${row.attempt.number}` : undefined;
+    blocks.push(separator, heading(2, name, attempt));
     if (row.attempt === null) {
-      blocks.push(markdown("No attempt."));
+      blocks.push(markdown(l.noAttempt));
       return;
     }
-    blocks.push(...answerBlocks(type, found.configs[i], row.answer, row.grading?.details ?? null));
+    blocks.push(...answerBlocks(type, found.configs[i], row.answer, row.grading?.details ?? null, l));
     blocks.push(points(row.grading?.points ?? null, item.points));
   });
   return {
@@ -167,7 +169,7 @@ export function itemAnswersDocument(found: ItemAnswers): Document {
       },
       found.attempts,
     ),
-    lang: "en",
+    lang,
     blocks,
   };
 }
@@ -178,10 +180,11 @@ function answerBlocks(
   config: unknown,
   payload: unknown,
   details: unknown,
+  l: Labels,
 ): Block[] {
-  if (payload === null) return [markdown("No answer.")];
+  if (payload === null) return [markdown(l.noAnswer)];
   const answer = type.answerSchema.safeParse(payload);
-  if (!answer.success) return [markdown("The stored answer cannot be read.")];
+  if (!answer.success) return [markdown(l.unreadableAnswer)];
   const parsed = details === null ? null : type.detailsSchema.safeParse(details);
-  return type.answerDoc!(config, answer.data, parsed?.success ? parsed.data : null);
+  return type.answerDoc!(config, answer.data, parsed?.success ? parsed.data : null, l);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { answerZone, code, heading, list, markdown, points, scopeZones, separator, table, tests, type Block, type Document } from "../document.js";
+import { answerZone, choices, code, heading, list, markdown, points, scopeZones, separator, table, tests, type Block, type Document } from "../document.js";
 import { EN_LABELS, FR_LABELS, type Lang } from "../labels.js";
 import { renderTypst } from "./render.js";
 import { BODY_FONT, MARGIN_MM, MONO_FONT } from "./template.js";
@@ -54,13 +54,48 @@ describe("renderTypst", () => {
         '#raw(block: true, lang: "c", "int main(void);")',
         "#list([one], [two \\#])",
         '#table(columns: 2,\n  table.header([#strong[Blank]], [#strong[Expected]]),\n  [(1)], [a|b],\n)',
-        "Tests passed: 1/1\n\n" +
+        "Tests passed: 1\\/1\n\n" +
           '#table(columns: 4,\n  table.header([#strong[Test]], [#strong[Visibility]], [#strong[Result]], [#strong[Points]]),\n  [hidden\\-one], [hidden], [passed], [3],\n)',
         "Points: 1\\.5 \\/ 2",
         "Points: not graded \\/ 2",
-        "#hr",
+        "#separator",
         "",
       ].join("\n\n"),
+    );
+  });
+
+  it("sets a heading's aside at the line's end, lighter, escaped like its text", () => {
+    const { source } = renderTypst(doc([heading(2, "Question 1: #x", "2 pt"), heading(2, "Question 2")]));
+    expect(bodyOf(source).split("\n\n")).toEqual([
+      '#heading(level: 2)[Question 1: \\#x #h(1fr) #text(weight: "regular", size: 0.8em)[2 pt]]',
+      "#heading(level: 2)[Question 2]",
+      "",
+    ]);
+    // No rule between questions: the heading opens one, with space above.
+    expect(source).toContain("#show heading.where(level: 2): set block(above: 1.8em, below: 0.8em)");
+  });
+
+  it("draws choices beside their boxes, square for several, round for one, ticked by shape", () => {
+    const items = [
+      { label: "A", text: "`x` #1" },
+      { label: "B", text: "```c\nint y;\n```" },
+    ];
+    const { source } = renderTypst(doc([choices(items, false), choices(items, true, [1]), choices(items, false, [0])]));
+    expect(bodyOf(source).split("\n\n")).toEqual([
+      '#choices([#circle-empty], [#strong[A\\.]], [#raw("x") \\#1],\n  [#circle-empty], [#strong[B\\.]], [#raw(block: true, lang: "c", "int y;")])',
+      '#choices([#square-empty], [#strong[A\\.]], [#raw("x") \\#1],\n  [#square-ticked], [#strong[B\\.]], [#raw(block: true, lang: "c", "int y;")])',
+      '#choices([#circle-ticked], [#strong[A\\.]], [#raw("x") \\#1],\n  [#circle-empty], [#strong[B\\.]], [#raw(block: true, lang: "c", "int y;")])',
+      "",
+    ]);
+    // No flag in the body: the shape is the state.
+    const plain = renderTypst(doc([choices([{ label: "A", text: "a" }], true, [0]), choices([{ label: "A", text: "a" }], false)]));
+    expect(bodyOf(plain.source)).not.toMatch(/\b(true|false)\b/);
+  });
+
+  it("keys a statement's choices as its item's paper zone, of kind choices", () => {
+    const blocks = scopeZones("item-7", [markdown("Pick."), choices([{ label: "A", text: "one" }], false)]);
+    expect(bodyOf(renderTypst(doc(blocks)).source)).toBe(
+      'Pick\\.\n\n#zone("item-7", "choices", choices([#circle-empty], [#strong[A\\.]], [one]))\n\n',
     );
   });
 

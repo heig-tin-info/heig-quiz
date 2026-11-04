@@ -1,9 +1,16 @@
 /**
  * The page and the answer spaces of every PDF (ADR-125 §6), as Typst source
  * the renderer puts before the body. A4, margins of 20 mm (the 10 mm that
- * palier B's fiducials need stay free), the two fonts embedded in the Typst
- * binary only (`--ignore-system-fonts`: the same PDF on every machine),
- * the title in the header and `n / N` in the footer.
+ * palier B's fiducials need stay free), fonts embedded in the Typst binary
+ * only (`--ignore-system-fonts`: the same PDF on every machine) — New
+ * Computer Modern, the Latin Modern look of a LaTeX paper, its maths
+ * companion for formulas (Typst's default) and DejaVu Sans Mono for code —
+ * the title in the header and `n / N` in the footer. No rule between
+ * questions: a question's heading opens it with space above.
+ *
+ * A choice question's choices are a grid of boxes (`choices`), square for
+ * several answers, round for one, each drawn empty or ticked by its own
+ * shape, so the body holds no flag.
  *
  * Every answer space is a `zone(id, kind, body)`: it records
  * `(id, kind, page, x, y, w, h)` — position and size in points — as a
@@ -15,8 +22,8 @@
  * literals.
  */
 
-/** The fonts, both embedded in the Typst binary. */
-export const BODY_FONT = "Libertinus Serif";
+/** The fonts, both embedded in the Typst binary (`typst fonts --ignore-system-fonts`). */
+export const BODY_FONT = "New Computer Modern";
 export const MONO_FONT = "DejaVu Sans Mono";
 
 /** The page margin, in millimetres: at least 20 (ADR-125 §6 reserves 10 for palier B). */
@@ -26,6 +33,21 @@ export const PREAMBLE = String.raw`
 #let img(id, alt, width) = if id in drawable { image("assets/" + id, width: width * 1%) } else { alt }
 
 #let hr = line(length: 100%, stroke: 0.5pt + luma(150))
+
+#let separator = block(above: 0.6em, below: 0.6em, line(length: 100%, stroke: 0.3pt + luma(200)))
+
+#let mark(body) = box(baseline: 0.4mm, width: 3.2mm, height: 3.2mm, body)
+#let tick = {
+  place(line(start: (0.6mm, 1.7mm), end: (1.35mm, 2.5mm), stroke: 0.8pt))
+  place(line(start: (1.35mm, 2.5mm), end: (2.7mm, 0.7mm), stroke: 0.8pt))
+}
+#let square-empty = mark(square(size: 3.2mm, stroke: 0.6pt))
+#let square-ticked = mark({ place(square(size: 3.2mm, stroke: 0.6pt)); tick })
+#let circle-empty = mark(circle(radius: 1.6mm, stroke: 0.6pt))
+#let circle-ticked = mark({ place(circle(radius: 1.6mm, stroke: 0.6pt)); place(dx: 0.8mm, dy: 0.8mm, circle(radius: 0.8mm, fill: black)) })
+
+#let choices(..cells) = block(above: 0.9em, below: 0.9em, width: 100%,
+  grid(columns: (auto, auto, 1fr), column-gutter: 2mm, row-gutter: 0.8em, ..cells))
 
 #let zone(id, kind, body) = block(breakable: false, width: 100%, layout(region => {
   let size = measure(block(width: region.width, body))
@@ -73,5 +95,7 @@ export function pageSetup(title: string, lang: string): string {
     `#show raw.where(block: true): block.with(width: 100%, fill: luma(245), inset: 6pt, radius: 2pt)`,
     `#set table(stroke: 0.5pt + luma(150))`,
     `#show heading: set block(sticky: true)`,
+    `#show heading.where(level: 2): set block(above: 1.8em, below: 0.8em)`,
+    `#show heading.where(level: 3): set block(above: 1.3em, below: 0.6em)`,
   ].join("\n");
 }

@@ -621,10 +621,10 @@ export interface QuestionTypeServer<
    * is served. With {@link answerDoc}, it makes the type exportable as text;
    * a type without them has no Markdown export.
    *
-   * `labels` are the fixed words of the document's language (ADR-125): a
-   * hand-out follows its reader's, a staff document is English. Always
-   * passed, so no hook guesses a language; one that writes no word may
-   * leave it unread.
+   * `labels` are the fixed words of the document's language: the
+   * requester's, for a staff document as for a hand-out (ADR-121 §4,
+   * ADR-125 §7, amended 2026-11-04). Always passed to every hook, so no
+   * hook guesses a language; one that writes no word may leave it unread.
    */
   statementDoc?(student: TStudent, labels: Labels): Block[];
 
@@ -643,7 +643,9 @@ export interface QuestionTypeServer<
    * `student` is {@link toStudent}'s, through the API's student exit, never
    * the config. A zone answering one part of the item names it in `part`
    * (`b<n>` for a blank); the document keys every zone to the item
-   * (`scopeZones`). Absent, the hand-out gives the item a free zone.
+   * (`scopeZones`), and with them a `choices` block of the statement,
+   * which is its item's zone: a type whose statement draws one may return
+   * no zone at all. Its presence is what makes the type printable.
    */
   answerZone?(student: TStudent): Block[];
 
@@ -662,9 +664,10 @@ export interface QuestionTypeServer<
    * One answer as the STAFF read it (ADR-121 §2): the source as it ran,
    * rebuilt from the stored config (invariant 14), and the grading's
    * `details` whole — hidden tests by name. `details` is null when nothing
-   * is graded yet. Never called for a student document.
+   * is graded yet. Never called for a student document. `labels` as for
+   * {@link statementDoc}.
    */
-  answerDoc?(config: TConfig, answer: TAnswer, details: TDetails | null): Block[];
+  answerDoc?(config: TConfig, answer: TAnswer, details: TDetails | null, labels: Labels): Block[];
 
   /** Text fed to the tsvector of `question_versions.search`. */
   searchText(config: TConfig): string;

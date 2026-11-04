@@ -9,7 +9,7 @@
  * them. The provenance of ADR-121 §5 goes in twice: as a `<provenance>`
  * metadata (`query(<provenance>)`) and as the PDF's own title and author.
  */
-import { number, type AnswerZone, type Block, type Document, type TestLine } from "../document.js";
+import { number, type AnswerZone, type Block, type Choices, type Document, type TestLine } from "../document.js";
 import { labelled, LABELS, type Labels } from "../labels.js";
 import { rawBlock, typstLine, typstString, typstTable, typstText, typstValue } from "./escape.js";
 import { markdownToTypst, typstContext, type AssetRef, type TypstContext } from "./markdown.js";
@@ -40,17 +40,36 @@ export const drawable = (ids: readonly string[]): string => `#let drawable = ${t
 const tableOf = (header: readonly string[], rows: readonly (readonly string[])[]) =>
   typstTable(header.map(typstLine), rows.map((row) => row.map(typstLine)));
 
-/** A program's tests: a staff document's only, English like the Markdown's. */
-function testsBlock(lines: readonly TestLine[]): string {
-  if (lines.length === 0) return "No tests.";
+/** A program's tests, worded like the Markdown's. */
+function testsBlock(lines: readonly TestLine[], l: Labels): string {
+  if (lines.length === 0) return typstText(l.noTests);
   const passed = lines.filter((t) => t.ok).length;
   return [
-    `Tests passed: ${passed}/${lines.length}`,
+    typstText(labelled(l, l.testsPassed, `${passed}/${lines.length}`)),
     tableOf(
-      ["Test", "Visibility", "Result", "Points"],
-      lines.map((t) => [t.name, t.visible ? "visible" : "hidden", t.ok ? "passed" : "failed", number(t.points)]),
+      [l.test, l.visibility, l.result, l.points],
+      lines.map((t) => [t.name, t.visible ? l.visible : l.hidden, t.ok ? l.passed : l.failed, number(t.points)]),
     ),
   ].join("\n\n");
+}
+
+/**
+ * The choices beside their boxes, a grid of box, letter and text; each box
+ * one of the preamble's four shapes, so the source holds no flag. Keyed
+ * (`id`, a hand-out's statement), the grid is its item's paper zone, of
+ * kind `choices` in the manifest (ADR-125 §6).
+ */
+function choicesBlock(b: Choices, ctx: TypstContext): string {
+  const shape = b.multiple ? "square" : "circle";
+  const cells = b.items.map(({ label, text }, at) =>
+    [
+      `[#${shape}-${b.checked.includes(at) ? "ticked" : "empty"}]`,
+      `[#strong[${typstLine(label)}\\.]]`,
+      `[${markdownToTypst(text, ctx)}]`,
+    ].join(", "),
+  );
+  const grid = `choices(${cells.join(",\n  ")})`;
+  return b.id === undefined ? `#${grid}` : `#zone(${typstString(b.id)}, "choices", ${grid})`;
 }
 
 /** The millimetres of a free frame when its type names none. */
@@ -82,7 +101,10 @@ function zoneBlock(z: AnswerZone, index: number, l: Labels): string {
 function block(b: Block, l: Labels, ctx: TypstContext, zones: { n: number }): string {
   switch (b.kind) {
     case "heading":
-      return `#heading(level: ${b.level})[${typstLine(b.text)}]`;
+      // The aside at the line's end, lighter: a question's points.
+      return b.aside === undefined
+        ? `#heading(level: ${b.level})[${typstLine(b.text)}]`
+        : `#heading(level: ${b.level})[${typstLine(b.text)} #h(1fr) #text(weight: "regular", size: 0.8em)[${typstLine(b.aside)}]]`;
     case "markdown":
       return markdownToTypst(b.text, ctx);
     case "code":
@@ -92,11 +114,13 @@ function block(b: Block, l: Labels, ctx: TypstContext, zones: { n: number }): st
     case "table":
       return tableOf(b.header, b.rows);
     case "tests":
-      return testsBlock(b.tests);
+      return testsBlock(b.tests, l);
+    case "choices":
+      return choicesBlock(b, ctx);
     case "points":
       return typstText(labelled(l, l.points, `${b.earned === null ? l.notGraded : number(b.earned)} / ${number(b.max)}`));
     case "separator":
-      return "#hr";
+      return "#separator";
     case "answerZone":
       return zoneBlock(b, zones.n++, l);
   }

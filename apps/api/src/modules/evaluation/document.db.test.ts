@@ -139,7 +139,7 @@ const storedSeed = async (id: string) => (await reload(server.app.db, id)).paper
 const showsSeed = (text: string, seed: number) => new RegExp(`(?<![\\w-])${seed}(?![\\w])`).test(text);
 
 describe("the statement with key (F-EXP-04)", () => {
-  it("serves every item in the base order with its key and explanation, in English", async () => {
+  it("serves every item in the base order with its key and explanation, in the reader's language", async () => {
     const evaluation = await exam();
     const res = await get(url(evaluation.id, "document.md"), teacher.headers);
     expect(res.statusCode).toBe(200);
@@ -156,11 +156,30 @@ describe("the statement with key (F-EXP-04)", () => {
       expect(body).toContain(marker);
     }
     // The base order: the editor's order, the key where it was written.
-    const positions = [...body.matchAll(/^## Question (\d+): INTERNAL_NAME_(\w+)/gm)].map((m) => [m[1], m[2]]);
+    const positions = [...body.matchAll(/^## Question (\d+): INTERNAL_NAME_(\w+) \(\d+ pt\)$/gm)].map((m) => [m[1], m[2]]);
     expect(positions).toEqual(Object.keys(QUESTIONS).map((type, i) => [String(i + 1), type]));
-    expect(body).toContain("### Reference solution\n\n**A.** MCQ_KEY_CHOICE");
+    // Every choice listed, the right one ticked; no rule between the questions.
+    expect(body).toContain("### Reference solution\n\n- [x] **A.** MCQ_KEY_CHOICE\n- [ ] **B.** MCQ_OTHER_ONE");
+    expect(body).not.toMatch(/^---$/m);
     // The paper seed is the hand-out's: the staff document never draws it.
     expect(await storedSeed(evaluation.id)).toBeNull();
+  });
+
+  it("words the key in French for a French teacher (ADR-121 §4, amended 2026-11-04)", async () => {
+    const evaluation = await exam();
+    const res = await get(url(evaluation.id, "document.md"), { ...teacher.headers, "accept-language": "fr-CH" });
+    expect(res.statusCode).toBe(200);
+    const { body } = splitFrontMatter(res.body);
+    expect(body).toMatch(/^## Question 1 : INTERNAL_NAME_mcq \(\d+ pt\)$/m);
+    for (const heading of ["### Énoncé", "### Solution de référence", "### Explication"]) expect(body).toContain(heading);
+    expect(body).not.toMatch(/Statement|Reference solution|Explanation/);
+  });
+
+  it("indents its record, which still parses", async () => {
+    const evaluation = await exam();
+    const res = await get(url(evaluation.id, "document.json"), teacher.headers);
+    expect(res.body.startsWith('{\n  "kind": "evaluation-document"')).toBe(true);
+    expect(EvaluationDocumentRecord.safeParse(JSON.parse(res.body)).success).toBe(true);
   });
 
   it("serves the same as a record", async () => {
@@ -189,7 +208,10 @@ describe("the hand-out (ADR-125)", () => {
     }
     // The name frame first, then the questions, numbered on the paper, worded in French.
     expect(splitFrontMatter(text).body.startsWith("Nom")).toBe(true);
-    expect(text).toContain("## Question 1 (");
+    expect(text).toMatch(/^## Question 1 \(\d+ pt\)$/m);
+    // The choice question is its own zone: a task list of empty boxes, none ticked.
+    expect(text).toMatch(/^- \[ \] \*\*A\.\*\* MCQ_/m);
+    expect(text).not.toContain("- [x]");
     expect(findStudentLeaks(text, { secrets: SECRETS })).toEqual([]);
     // The front matter names the evaluation and no seed.
     const seed = (await storedSeed(evaluation.id))!;

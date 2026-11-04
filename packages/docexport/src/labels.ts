@@ -1,11 +1,11 @@
 /**
- * The fixed words of a document (ADR-121 §4, amended by ADR-125): a staff
- * document is English, like the CSV; a document a STUDENT holds — the
- * hand-out, their own copy — follows the requesting reader's interface
- * language. The renderers and the types' student hooks read their words
- * here, never inline, so a hand-out has one language throughout. Words
- * only a staff document holds (a program's tests, a policy) stay English
- * literals where they are written.
+ * The fixed words of a document (ADR-121 §4, ADR-125 §7, both amended
+ * 2026-11-04): every document — the hand-out, a student's copy, and the
+ * staff's key, answers and copies alike — follows the requesting reader's
+ * interface language. The renderers and every hook of a type read their
+ * words here, never inline, so a document has one language throughout.
+ * What the platform stores as a code (a policy's name, an attempt state's
+ * value, a math problem's code) is printed as stored.
  *
  * Both dictionaries are typed {@link Labels}: a word missing in one of them
  * is a compile error.
@@ -47,6 +47,49 @@ export interface Labels {
   notCounted: string;
   /** What stands for a statement or an answer a type cannot print. */
   notPrintable: string;
+  /** A staff document (ADR-121): an answer, a comment, an attempt and its state. */
+  answer: string;
+  staffComment: string;
+  attempt: string;
+  state: string;
+  stateNotStarted: string;
+  stateInProgress: string;
+  stateSubmitted: string;
+  stateExpired: string;
+  noAttempt: string;
+  unreadableAnswer: string;
+  /** How a choice question's policy scored an answer. */
+  policy: string;
+  fraction: string;
+  rightTicks: string;
+  wrongTicks: string;
+  rightChoices: string;
+  wrongChoices: string;
+  negativeMarkingShort: string;
+  /** A blank's answer, on the staff's reading. */
+  given: string;
+  /** A program's tests. */
+  test: string;
+  visibility: string;
+  arguments: string;
+  visible: string;
+  hidden: string;
+  passed: string;
+  failed: string;
+  noTests: string;
+  testsPassed: string;
+  compileFailed: string;
+  answerMisfit: string;
+  /** An essay's key. */
+  rubric: string;
+  criterion: string;
+  weight: string;
+  graderNote: string;
+  /** A short answer's matching. */
+  noMatch: string;
+  matchedAnswer: string;
+  /** A formula that could not be read. */
+  notRead: string;
   /** Between a label and its value: `": "` in English, a narrow no-break space and `": "` in French. */
   colon: string;
 }
@@ -82,6 +125,42 @@ export const EN_LABELS: Labels = {
   bonus: "bonus",
   notCounted: "not counted",
   notPrintable: "Not printable: read it in Quiz.",
+  answer: "Answer",
+  staffComment: "Comment",
+  attempt: "Attempt",
+  state: "State",
+  stateNotStarted: "Not started",
+  stateInProgress: "In progress",
+  stateSubmitted: "Handed in",
+  stateExpired: "Expired",
+  noAttempt: "No attempt.",
+  unreadableAnswer: "The stored answer cannot be read.",
+  policy: "Policy",
+  fraction: "Fraction",
+  rightTicks: "Right ticks",
+  wrongTicks: "Wrong ticks",
+  rightChoices: "Right choices",
+  wrongChoices: "Wrong choices",
+  negativeMarkingShort: "negative marking",
+  given: "Given",
+  test: "Test",
+  visibility: "Visibility",
+  arguments: "Arguments",
+  visible: "visible",
+  hidden: "hidden",
+  passed: "passed",
+  failed: "failed",
+  noTests: "No tests.",
+  testsPassed: "Tests passed",
+  compileFailed: "Compilation failed.",
+  answerMisfit: "The answer no longer fits the question's template.",
+  rubric: "Rubric",
+  criterion: "Criterion",
+  weight: "Weight",
+  graderNote: "Grader's note",
+  noMatch: "No accepted answer matched.",
+  matchedAnswer: "Matched accepted answer",
+  notRead: "Not read",
   colon: ": ",
 };
 
@@ -116,6 +195,42 @@ export const FR_LABELS: Labels = {
   bonus: "bonus",
   notCounted: "non comptée",
   notPrintable: "Non imprimable : à lire dans Quiz.",
+  answer: "Réponse",
+  staffComment: "Commentaire",
+  attempt: "Tentative",
+  state: "État",
+  stateNotStarted: "Pas commencée",
+  stateInProgress: "En cours",
+  stateSubmitted: "Rendue",
+  stateExpired: "Expirée",
+  noAttempt: "Pas de tentative.",
+  unreadableAnswer: "La réponse enregistrée est illisible.",
+  policy: "Règle de notation",
+  fraction: "Fraction",
+  rightTicks: "Coches justes",
+  wrongTicks: "Coches fausses",
+  rightChoices: "Choix justes",
+  wrongChoices: "Choix faux",
+  negativeMarkingShort: "points négatifs",
+  given: "Réponse donnée",
+  test: "Test",
+  visibility: "Visibilité",
+  arguments: "Arguments",
+  visible: "visible",
+  hidden: "caché",
+  passed: "réussi",
+  failed: "échoué",
+  noTests: "Aucun test.",
+  testsPassed: "Tests réussis",
+  compileFailed: "La compilation a échoué.",
+  answerMisfit: "La réponse ne correspond plus au modèle de la question.",
+  rubric: "Grille de correction",
+  criterion: "Critère",
+  weight: "Poids",
+  graderNote: "Consigne de correction",
+  noMatch: "Aucune réponse acceptée ne correspond.",
+  matchedAnswer: "Correspond à la réponse acceptée",
+  notRead: "Illisible",
   // A narrow no-break space before the colon, as the interface writes it.
   colon: " : ",
 };

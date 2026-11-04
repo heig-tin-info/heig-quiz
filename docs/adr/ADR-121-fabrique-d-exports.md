@@ -13,6 +13,11 @@ server, no browser print view; ADR-125 §1–§3) and §8 steps 2, 3 and 6
 (step 3's hand-out follows the evaluation's stored random paper seed, not seed 0, ADR-125 §8; step 6
 comes before step 5).
 
+Amended 2026-11-04 (product owner, 2026-11-04, after the first look at the
+PDF), scope: §1 (a `choices` block; a heading's `aside`) and §4 (every
+document in the requester's language); see the amendment at the end and
+[ADR-125](ADR-125-copies-papier-pdf-typst.md)'s amendment of the same day.
+
 Scope: every file the platform builds from its data for a person to read or
 process outside it — Markdown, JSON, PDF — except the results and gradebook
 CSV, the personal data export's JSON (ADR-112) and the canonical pool
@@ -109,7 +114,8 @@ question must come from the type through its contract.
    to a model is the teacher's own act, outside the platform's LLM path that
    N-DATA-05 governs. A staff document's fixed words are English, like the
    CSV; the language of a student document is decided with step 5.
-   *(Amended by ADR-125 §7.)*
+   *(Amended by ADR-125 §7; amended 2026-11-04: in the requester's
+   language, not English.)*
 
 5. **The front matter is provenance**, YAML that docrender's
    `splitFrontMatter` reads: `export` (`kind`, `format`, `version`), `source`
@@ -172,3 +178,21 @@ question must come from the type through its contract.
   visibility and re-implement Markdown escaping.
 - **One `answerDoc` with an audience flag.** Rejected: the type would apply
   the feedback policy to a raw config, a visibility rule outside the exits.
+
+## Amendment 2026-11-04: the requester's language, choices and headings
+
+Decided by the product owner, 2026-11-04, after the first look at the PDF.
+The rest of the record stands.
+
+- **§4, language.** A staff document's fixed words are no longer English:
+  every document is worded in the requester's interface language
+  (`readerLang(req)`), like the student documents of
+  [ADR-125](ADR-125-copies-papier-pdf-typst.md) §7. `answerDoc` receives
+  the labels as the other hooks do. The rest of §4 (no anonymisation, no
+  warning line, no audit, the attempt that counts) stands.
+- **§1, blocks.** A `choices` block lists a choice question's choices
+  beside their boxes, ticked by position (ADR-125's amendment, point 1); a
+  `heading` may carry an `aside` set apart at its end (a question's
+  points). A rule (`separator`) no longer separates two questions; it
+  remains between two students of an item's answers.
+- **The JSON record** is served indented; it is the same record.

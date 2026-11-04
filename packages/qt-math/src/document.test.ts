@@ -27,8 +27,9 @@ describe("the math question as a document (ADR-121 §2, ADR-125)", () => {
   it("writes an answer as math that cannot close early, and why it was not read", () => {
     const answer = { latex: "a$\n# b" };
     const details = { status: "invalid" as const, problem: { code: "syntax" as const }, matchedIndex: null, fraction: 0, latex: null };
-    expect(md(mathServer.answerDoc!(SECRET_CONFIG, answer, details))).toBe("$a\\$ # b$\n\nNot read: syntax.\n");
-    expect(md(mathServer.answerDoc!(SECRET_CONFIG, { latex: "" }, null))).toBe("No answer.\n");
+    expect(md(mathServer.answerDoc!(SECRET_CONFIG, answer, details, EN_LABELS))).toBe("$a\\$ # b$\n\nNot read: syntax.\n");
+    expect(md(mathServer.answerDoc!(SECRET_CONFIG, answer, details, FR_LABELS), "fr")).toContain("Illisible : syntax.");
+    expect(md(mathServer.answerDoc!(SECRET_CONFIG, { latex: "" }, null, EN_LABELS))).toBe("No answer.\n");
     const student = mathServer.toStudent(SECRET_CONFIG, view);
     expect(md(mathServer.studentAnswerDoc!(student, { latex: "R_1" }, null, EN_LABELS))).toBe("$R_1$\n");
     expect(md(mathServer.studentAnswerDoc!(student, { latex: "" }, null, EN_LABELS))).toBe("No answer.\n");
