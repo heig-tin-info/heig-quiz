@@ -31,6 +31,7 @@ import type {
   EditorProps,
   ReviewProps,
   ReviewSections,
+  QuestionTypeGroup,
   RichTextComponent,
 } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
@@ -176,18 +177,26 @@ export const LazyRichText = lazy(async () => ({
 
 export { QUESTION_TYPE_IDS };
 
-/**
- * The types "New question" offers, in the registry's order. `brainstorm` is
- * left out: it only runs as a poll (ADR-071), and the poll launcher creates
- * one ("Ask a new question", then "Keep this question" for the pool), as do
- * the MCP server and a duplicate.
- */
-export const CREATABLE_TYPE_IDS = QUESTION_TYPE_IDS.filter((id) => id !== "brainstorm");
-
 /** The registry entry, or `undefined` for a type this build does not carry. */
 export function questionType(id: string) {
   return clientRegistry[id as QuestionTypeId];
 }
+
+/**
+ * The family a picker files a type under, from the type's own `group`
+ * (#991); `undefined` for an unregistered id.
+ */
+export function typeGroup(id: string): QuestionTypeGroup | undefined {
+  return questionType(id)?.group;
+}
+
+/**
+ * The types "New question" offers, in the registry's order. A `poll` type
+ * (brainstorm) is left out: it only runs as a poll (ADR-071), and the poll
+ * launcher creates one ("Ask a new question", then "Keep this question" for
+ * the pool), as do the MCP server and a duplicate.
+ */
+export const CREATABLE_TYPE_IDS = QUESTION_TYPE_IDS.filter((id) => typeGroup(id) !== "poll");
 
 /** The type's icon, or a neutral placeholder for an unregistered id. */
 export function typeIcon(id: string): IconType {

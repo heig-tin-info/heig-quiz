@@ -19,6 +19,7 @@ const RichIcon = typeIcon(<path d="M5.5 3H15l3.5 3.5V21h-13zM15 3v3.5h3.5M8.5 11
 export const richClient: RichClient = {
   id: "rich",
   labelKey: "qt.rich.label",
+  group: "basics",
   hintKey: "qt.rich.hint",
   Icon: RichIcon,
 

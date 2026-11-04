@@ -23,6 +23,7 @@ const DiagramIcon = typeIcon(<path d="M3 3.5h7.5v7H3zM3 6.5h7.5M13.5 13.5H21v7h-
 export const diagramClient: DiagramClient = {
   id: "diagram",
   labelKey: "qt.diagram.label",
+  group: "engineering",
   hintKey: "qt.diagram.hint",
   Icon: DiagramIcon,
 

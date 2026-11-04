@@ -36,6 +36,7 @@ export const codeimageClient: QuestionTypeClient<
 > = {
   id: "codeimage",
   labelKey: "qt.codeimage.label",
+  group: "engineering",
   hintKey: "qt.codeimage.hint",
   Icon: CodeImageIcon,
   // `code`'s program half, and the room to set it beside the statement.

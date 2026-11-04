@@ -38,6 +38,7 @@ const BrainstormIcon = typeIcon(
 export const brainstormClient: BrainstormClient = {
   id: "brainstorm",
   labelKey: "qt.brainstorm.label",
+  group: "poll",
   hintKey: "qt.brainstorm.hint",
   Icon: BrainstormIcon,
 

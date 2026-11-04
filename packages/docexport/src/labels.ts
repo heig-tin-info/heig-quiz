@@ -11,6 +11,11 @@
  * is a compile error.
  */
 export interface Labels {
+  /**
+   * The language these words are in (ADR-126 §7): a type's hook words the
+   * fixed words of a figure or of its pseudo-code by it.
+   */
+  lang: Lang;
   question: string;
   statement: string;
   answerKey: string;
@@ -95,6 +100,7 @@ export interface Labels {
 }
 
 export const EN_LABELS: Labels = {
+  lang: "en",
   question: "Question",
   statement: "Statement",
   answerKey: "Answer key",
@@ -165,6 +171,7 @@ export const EN_LABELS: Labels = {
 };
 
 export const FR_LABELS: Labels = {
+  lang: "fr",
   question: "Question",
   statement: "Énoncé",
   answerKey: "Corrigé",

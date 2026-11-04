@@ -4,5 +4,5 @@
  * (`apps/api/src/typst/`).
  */
 export type { AssetRef } from "./markdown.js";
-export { drawable, renderTypst, type RenderedTypst } from "./render.js";
+export { BODY_MM, COLUMN_MM, drawable, printedWidthMm, PX_MM, renderTypst, type RenderedTypst } from "./render.js";
 export { BODY_FONT } from "./template.js";

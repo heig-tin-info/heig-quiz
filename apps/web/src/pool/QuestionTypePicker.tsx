@@ -1,6 +1,11 @@
+import { useId, useState } from "react";
+
+import { QUESTION_TYPE_GROUPS, type QuestionTypeGroup } from "@quiz/core/client";
+import { useMediaQuery } from "@quiz/ui";
+
 import { useT } from "../i18n";
-import { typeHint, typeIcon, typeLabel } from "../questionTypes";
-import { cx, rovingIndex } from "../ui";
+import { typeGroup, typeHint, typeIcon, typeLabel } from "../questionTypes";
+import { cx, rovingIndex, TabPanel, Tabs, usePersistentChoice } from "../ui";
 
 /**
  * "Which kind of question?" as a grid of tiles rather than a `Select`.
@@ -10,22 +15,32 @@ import { cx, rovingIndex } from "../ui";
  * (hairline at rest, `accent-soft` on an `accent` border when it is the
  * current one) at tile size, with the one-line hint that names what each type
  * actually is. Each tile is a real `aria-pressed` button, so the state and
- * the label are never separated. The icon sits in a 48 px well, large enough
- * to recognise the type before reading its name; every tile of a row has the
- * height of the tallest (`auto-rows-fr`), so a long hint never makes one card
- * stick out. The arrows move the focus from tile to tile, row by row.
- * From `sm` up the grid has three or four columns, whichever leaves the
- * fewest empty cells on the last row (`columnsFor`).
+ * the label are never separated. The arrows move the focus from tile to
+ * tile, row by row.
+ *
+ * From `sm` up a tile is a column: the icon in a 48 px well, large enough to
+ * recognise the type before reading its name, over the name and the hint;
+ * the grid has three or four columns, whichever leaves the fewest empty
+ * cells on the last row (`columnsFor`). On a phone a tile is a list row, the
+ * icon in a 36 px well beside the text, so a dozen types fit without a wall
+ * of half-empty cards (#991).
+ *
+ * `grouped` files the types under their family (`group`, metadata of each
+ * type, #991) as tabs when the screen is too small for all of them at once,
+ * or when there are more than a dozen (`pickerLayout`). The last tab used is
+ * remembered per browser.
  *
  * It was the inside of `NewQuestionModal`; the poll launcher needs the same
- * grid over a SUBSET of the types (a poll runs `mcq` and `short` only), and
- * two copies of a tile would be two chances to disagree about what a type is
- * called. Hence `types`: the caller says which ones exist here.
+ * grid over a SUBSET of the types (a poll runs `mcq`, `short` and
+ * `brainstorm`, three tiles that need no tabs), and two copies of a tile
+ * would be two chances to disagree about what a type is called. Hence
+ * `types`: the caller says which ones exist here.
  */
 export function QuestionTypePicker({
   types,
   value,
   onChange,
+  grouped = false,
   className = "",
 }: {
   /** The types on offer, in the order they are drawn. */
@@ -33,9 +48,102 @@ export function QuestionTypePicker({
   /** The current type; `""` when none is chosen yet. */
   value: string;
   onChange: (type: string) => void;
+  /** Tabs by family where the screen asks for them; otherwise one flat grid. */
+  grouped?: boolean;
   className?: string;
 }) {
   const t = useT();
+  const idPrefix = useId();
+  const large = useMediaQuery(LARGE_SCREEN);
+  const groups = groupTypes(types);
+  const ids = groups.map((g) => g.group);
+  const [remembered, remember] = usePersistentChoice(TAB_KEY, QUESTION_TYPE_GROUPS, "basics");
+  // A tab clicked here first, then the chosen type's family ("Back" from the
+  // name, the palette's typed entry, a window shrunk under the flat grid),
+  // then the tab last used, then the first. Read on every render, never
+  // frozen at mount.
+  const [picked, setPicked] = useState<QuestionTypeGroup | null>(null);
+  const wanted = picked ?? typeGroup(value) ?? remembered;
+  const tab = ids.includes(wanted) ? wanted : (ids[0] ?? "basics");
+
+  // Crossing the large-screen threshold swaps the grid for tabs (or back) and
+  // remounts the tiles, so a focused tile loses the focus: a resize, rare
+  // enough not to warrant a second tree shape kept in step with `TabPanel`.
+  if (!grouped || pickerLayout(types.length, groups.length, large) === "grid") {
+    return <TileGrid types={types} value={value} onChange={onChange} even className={className} />;
+  }
+  const shown = groups.find((g) => g.group === tab)?.types ?? [];
+  return (
+    <div className={className}>
+      <Tabs
+        value={tab}
+        onChange={(next) => {
+          setPicked(next);
+          remember(next);
+        }}
+        items={groups.map((g) => ({ value: g.group, label: t(`qt.group.${g.group}`) }))}
+        idPrefix={idPrefix}
+        label={t("pool.questionType")}
+        className="mb-3"
+      />
+      <TabPanel idPrefix={idPrefix} value={tab}>
+        <TileGrid types={shown} value={value} onChange={onChange} />
+      </TabPanel>
+    </div>
+  );
+}
+
+/** The browser remembers the last tab here (a habit, never data). */
+const TAB_KEY = "quiz-question-type-tab";
+
+/** Room enough to show every type at once without scrolling the dialog. */
+const LARGE_SCREEN = "(min-width: 1000px) and (min-height: 950px)";
+
+/** The most types a large screen shows as one flat grid. */
+const FLAT_MAX = 12;
+
+/**
+ * Flat grid or tabs (#991): one family only is always the grid; otherwise a
+ * large screen shows up to a dozen types flat, and anything smaller, or more
+ * types, gets tabs.
+ */
+export function pickerLayout(count: number, groups: number, large: boolean): "grid" | "tabs" {
+  if (groups <= 1) return "grid";
+  return large && count <= FLAT_MAX ? "grid" : "tabs";
+}
+
+/**
+ * `types` filed by family, families in `QUESTION_TYPE_GROUPS` order, types in
+ * the caller's order; an empty family, and an id this build does not
+ * register, are left out.
+ */
+export function groupTypes(
+  types: readonly string[],
+): { group: QuestionTypeGroup; types: string[] }[] {
+  return QUESTION_TYPE_GROUPS.map((group) => ({
+    group,
+    types: types.filter((id) => typeGroup(id) === group),
+  })).filter((g) => g.types.length > 0);
+}
+
+function TileGrid({
+  types,
+  value,
+  onChange,
+  even = false,
+  className = "",
+}: {
+  types: readonly string[];
+  value: string;
+  onChange: (type: string) => void;
+  /**
+   * Every row as tall as the tallest of the grid (`auto-rows-fr`): the flat
+   * grid of a large screen, which shows every type at once. Under tabs a
+   * row takes its own content's height.
+   */
+  even?: boolean;
+  className?: string;
+}) {
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const tiles = [...e.currentTarget.querySelectorAll<HTMLButtonElement>(":scope > button")];
     const at = tiles.indexOf(document.activeElement as HTMLButtonElement);
@@ -48,7 +156,7 @@ export function QuestionTypePicker({
   return (
     <div
       onKeyDown={onKeyDown}
-      className={cx("grid auto-rows-fr grid-cols-2 gap-2", WIDE_COLUMNS[columnsFor(types.length)], className)}
+      className={cx("grid grid-cols-1 gap-2", even && "auto-rows-fr", WIDE_COLUMNS[columnsFor(types.length)], className)}
     >
       {types.map((id) => {
         const active = value === id;
@@ -59,7 +167,7 @@ export function QuestionTypePicker({
             aria-pressed={active}
             onClick={() => onChange(id)}
             className={cx(
-              "group flex flex-col items-start gap-3 rounded-field border p-3.5 text-left transition-colors",
+              "group flex min-h-11 items-center gap-3 rounded-field border px-3 py-2.5 text-left transition-colors sm:flex-col sm:items-start sm:p-3.5",
               active
                 ? "border-accent bg-accent-soft"
                 : "border-line-strong bg-surface hover:bg-surface-2",
@@ -74,7 +182,7 @@ export function QuestionTypePicker({
 }
 
 /** Spelled out whole, so Tailwind sees each class. */
-const WIDE_COLUMNS = { 2: "", 3: "sm:grid-cols-3", 4: "sm:grid-cols-4" } as const;
+const WIDE_COLUMNS = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-4" } as const;
 
 /**
  * The columns from `sm` up: two for a pair, otherwise three or four,
@@ -88,9 +196,10 @@ export function columnsFor(count: number): 2 | 3 | 4 {
 }
 
 /**
- * A type as a tile shows it: its icon in a 48 px well, its name and its
- * hint. The parent lays the two out (a column in a tile, a row in the
- * "New question" dialog's reminder of the chosen type).
+ * A type as a tile shows it: its icon in a well (36 px on a phone, 48 px
+ * from `sm`), its name and its hint. The parent lays the two out (a row on a
+ * phone and in the "New question" dialog's reminder of the chosen type, a
+ * column in a tile from `sm`).
  */
 export function TypeFace({ id, active }: { id: string; active: boolean }) {
   const t = useT();
@@ -99,11 +208,11 @@ export function TypeFace({ id, active }: { id: string; active: boolean }) {
     <>
       <span
         className={cx(
-          "grid size-12 shrink-0 place-items-center rounded-field transition-colors",
+          "grid size-9 shrink-0 place-items-center rounded-field transition-colors sm:size-12",
           active ? "bg-accent text-on-fill" : "bg-surface-2 text-fg-muted group-hover:bg-surface-3",
         )}
       >
-        <Icon className="size-8" />
+        <Icon className="size-6 sm:size-8" />
       </span>
       <span className="min-w-0">
         <span className={cx("block text-sm font-semibold", active && "text-accent")}>

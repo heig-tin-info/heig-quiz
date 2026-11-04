@@ -28,6 +28,7 @@ const McqIcon = typeIcon(
 export const mcqClient: McqClient = {
   id: "mcq",
   labelKey: "qt.mcq.label",
+  group: "basics",
   hintKey: "qt.mcq.hint",
   Icon: McqIcon,
 

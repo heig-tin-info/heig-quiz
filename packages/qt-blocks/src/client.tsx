@@ -28,6 +28,7 @@ const BlocksIcon = typeIcon(
 export const blocksClient: QuestionTypeClient<BlocksConfig, BlocksAnswer, BlocksStudent, BlocksSolution, BlocksDetails> = {
   id: "blocks",
   labelKey: "qt.blocks.label",
+  group: "engineering",
   hintKey: "qt.blocks.hint",
   Icon: BlocksIcon,
 

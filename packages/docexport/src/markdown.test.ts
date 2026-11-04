@@ -5,6 +5,7 @@ import {
   answerZone,
   choices,
   code,
+  drawing,
   heading,
   list,
   markdown,
@@ -162,6 +163,24 @@ describe("answer zones (ADR-125)", () => {
   });
 });
 
+describe("drawings (ADR-126)", () => {
+  const figure = { viewBox: [0, 0, 10, 10] as const, items: [{ kind: "text" as const, x: 0, y: 0, text: "SECRET_SVG" }] };
+
+  it("prints a figure as its alt text on an italic line, never its SVG", () => {
+    const text = body([drawing(figure, "A circuit *with* two_resistors\nin series")]);
+    expect(text).toBe("*A circuit \\*with\\* two\\_resistors in series*\n");
+    expect(text).not.toContain("SECRET_SVG");
+    expect(text).not.toContain("<svg");
+    expect(body([drawing(figure, "  ")])).toBe("\n");
+  });
+
+  it("previews a ruled frame as a plain one, its starter left out", () => {
+    const zone = answerZone("free", { heightMm: 40, pattern: { kind: "grid", pitchMm: 4 }, underlay: figure });
+    expect(body([zone])).toBe(body([answerZone("free", { heightMm: 40 })]));
+    expect(body([zone])).not.toContain("SECRET_SVG");
+  });
+});
+
 describe("labels", () => {
   it("words a document in its language", () => {
     const blocks = [points(null, 2), answerZone("name"), noAnswerOr(FR_LABELS, true, separator)];
@@ -176,6 +195,7 @@ describe("labels", () => {
   it("has every word in both languages", () => {
     expect(Object.keys(FR_LABELS).sort()).toEqual(Object.keys(EN_LABELS).sort());
     for (const value of [...Object.values(EN_LABELS), ...Object.values(FR_LABELS)]) expect(value.trim()).not.toBe("");
+    expect([EN_LABELS.lang, FR_LABELS.lang]).toEqual(["en", "fr"]);
   });
 
   it("writes points with two decimals at most, and an answer only when there is one", () => {

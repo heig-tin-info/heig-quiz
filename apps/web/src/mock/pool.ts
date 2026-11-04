@@ -2386,6 +2386,7 @@ const STUDENT_SOLUTION_HOOKS: Partial<Record<string, AnyQuestionTypeServer>> = {
   rich: richServer,
   short: shortServer,
   diagram: diagramServer,
+  blocks: blocksServer,
 };
 
 /**

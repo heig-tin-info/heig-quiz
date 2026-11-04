@@ -9,11 +9,20 @@
  * them. The provenance of ADR-121 §5 goes in twice: as a `<provenance>`
  * metadata (`query(<provenance>)`) and as the PDF's own title and author.
  */
-import { number, type AnswerZone, type Block, type Choices, type Document, type TestLine } from "../document.js";
+import {
+  number,
+  type AnswerZone,
+  type Block,
+  type Choices,
+  type Document,
+  type DrawingBlock,
+  type TestLine,
+} from "../document.js";
+import { toSvg, type Drawing } from "../drawing.js";
 import { labelled, LABELS, type Labels } from "../labels.js";
 import { rawBlock, typstLine, typstString, typstTable, typstText, typstValue } from "./escape.js";
 import { markdownToTypst, typstContext, type AssetRef, type TypstContext } from "./markdown.js";
-import { pageSetup, PREAMBLE } from "./template.js";
+import { MARGIN_MM, PAGE_MM, pageSetup, PREAMBLE } from "./template.js";
 
 export interface RenderedTypst {
   /** `main.typ`, without its {@link drawable} line. */
@@ -79,6 +88,66 @@ const FREE_MM = 40;
 const bounded = (value: number | undefined, min: number, max: number, fallback: number): number =>
   value !== undefined && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
 
+/** Millimetres per drawing unit when a block names no width: one CSS pixel (ADR-126 §5). */
+export const PX_MM = 25.4 / 96;
+
+/** The width of the text column. */
+export const COLUMN_MM = PAGE_MM.width - 2 * MARGIN_MM;
+
+/** The height of the page body: no figure is taller (ADR-126 §5). */
+export const BODY_MM = PAGE_MM.height - 2 * MARGIN_MM;
+
+/**
+ * The printed width of `drawing`, in millimetres (ADR-126 §5): `widthMm`, else
+ * one pixel per unit; never wider than the column, and narrowed so its height
+ * stays within `maxHeightMm`, the page body at most.
+ */
+export function printedWidthMm(drawing: Drawing, widthMm?: number, maxHeightMm?: number): number {
+  const [, , w, h] = drawing.viewBox;
+  const maxHeight = maxHeightMm !== undefined && Number.isFinite(maxHeightMm) && maxHeightMm > 0 ? Math.min(maxHeightMm, BODY_MM) : BODY_MM;
+  let width = widthMm !== undefined && Number.isFinite(widthMm) && widthMm > 0 ? widthMm : w * PX_MM;
+  width = Math.min(width, COLUMN_MM, (maxHeight * w) / h);
+  return Math.max(1, Math.round(width * 10) / 10);
+}
+
+/** The pitch of a frame's pattern: 4 mm when its type names none, within these bounds (ADR-126 §3). */
+const PITCH_MM = { fallback: 4, min: 2, max: 20 } as const;
+
+/**
+ * A figure (ADR-126 §1–§2): its SVG inline, as a string literal the preamble's
+ * `figsvg` hands to `image(bytes(…), format: "svg")` — no file, nothing in the
+ * compile root. A drawing `toSvg` refuses prints its alt text.
+ */
+function drawingBlock(b: DrawingBlock): string {
+  const svg = toSvg(b.drawing);
+  if (!svg.ok) return `#emph[${typstLine(b.alt)}]`;
+  return `#figsvg(${typstString(svg.svg)}, ${typstString(b.alt)}, ${printedWidthMm(b.drawing, b.widthMm, b.maxHeightMm)})`;
+}
+
+/**
+ * The starter under a free frame (ADR-126 §4): greyed, at a fixed scale of
+ * one pixel per unit — never shrunk, the frame clips it — so a producer that
+ * sets the pitch to its grid times {@link PX_MM} stays on the printed grid;
+ * absent when `toSvg` refuses it.
+ */
+function underlay(drawing: Drawing): string | null {
+  const svg = toSvg(drawing, { greyed: true });
+  return svg.ok ? `(${typstString(svg.svg)}, ${Math.round(drawing.viewBox[2] * PX_MM * 1000) / 1000})` : null;
+}
+
+/** A free frame: plain (ADR-125 §6), or ruled, with its starter (ADR-126 §3–§4). */
+function freeShape(z: AnswerZone): string {
+  const args = [`${bounded(z.heightMm, 10, 240, FREE_MM)}mm`];
+  if (z.pattern !== undefined) {
+    const pitch = Number.isFinite(z.pattern.pitchMm) ? z.pattern.pitchMm : PITCH_MM.fallback;
+    args.push(`pattern: ${z.pattern.kind === "lines" ? '"lines"' : '"grid"'}`);
+    args.push(`pitch: ${Math.round(Math.min(PITCH_MM.max, Math.max(PITCH_MM.min, pitch)) * 1000) / 1000}mm`);
+  }
+  const under = z.underlay === undefined ? null : underlay(z.underlay);
+  if (under !== null) args.push(`under: ${under}`);
+  return `free(${args.join(", ")})`;
+}
+
 /** An answer space, keyed for the manifest (ADR-125 §6). */
 function zoneBlock(z: AnswerZone, index: number, l: Labels): string {
   const id = typstString(z.id ?? `zone-${index}`);
@@ -90,7 +159,7 @@ function zoneBlock(z: AnswerZone, index: number, l: Labels): string {
         // At most a page of lines, at most a page of frame: a bad value never breaks the source.
         return `lines(${bounded(z.lines, 1, 40, 1)})`;
       case "free":
-        return `free(${bounded(z.heightMm, 10, 240, FREE_MM)}mm)`;
+        return freeShape(z);
       case "name":
         return `names(${typstString(l.name)}, ${typstString(l.firstName)})`;
     }
@@ -121,6 +190,8 @@ function block(b: Block, l: Labels, ctx: TypstContext, zones: { n: number }): st
       return typstText(labelled(l, l.points, `${b.earned === null ? l.notGraded : number(b.earned)} / ${number(b.max)}`));
     case "separator":
       return "#separator";
+    case "drawing":
+      return drawingBlock(b);
     case "answerZone":
       return zoneBlock(b, zones.n++, l);
   }

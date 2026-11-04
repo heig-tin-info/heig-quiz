@@ -6,9 +6,15 @@ Accepted (2026-11-03, the product owner's decisions on issue #551, palier A;
 points 2, 5, 8, 14 and 16 arbitrated by the orchestrator after review).
 Delivery progress lives in `changes/`.
 
+Amended 2026-11-04 by [ADR-126](ADR-126-types-a-canevas-sur-papier.md),
+scope: §5 and §20 (`diagram`, `circuit`, `logic` and `blocks` become
+printable; ADR-126 §8) and §6 (a `free` zone may be a ruled frame with a
+starter, `pattern` and `underlay`, and stays `free`; ADR-126 §3–§4).
+
 Amended 2026-11-04 (product owner, 2026-11-04, after the first look at the
-PDF), scope: §6 (a choice question's choices are its paper zone) and §7
-(every document in the requester's language); see the amendment at the end.
+PDF), scope: §6 (a choice question's choices are its paper zone; the page)
+and §7 (every document in the requester's language); see the amendment at
+the end.
 
 Scope: the printed hand-out of an exam and the PDF of every export; the
 paper attempt a staff member enters, its scan, and every reader of
@@ -105,7 +111,8 @@ nothing of B or C.
    renders through a second hook, `studentAnswerDoc?(student, answer,
    details)` (amends ADR-121 §2), fed only the student view, the answer as
    handed back and `studentDetails` under the policy; the staff copy and
-   the student copy use it.
+   the student copy use it. *(Amended by ADR-126 §8: `diagram`,
+   `circuit`, `logic` and `blocks` print.)*
 
 6. **The `answerZone` block** (amends ADR-121 §1):
    `{ kind: "answerZone"; id: string; part?: string; zone: "bubbles" |
@@ -121,7 +128,8 @@ nothing of B or C.
    `#zone(id, kind)[…]`, which emits
    `#metadata((id, kind, page, x, y, w, h)) <answer-zone>` for palier B's
    `typst query`. No fiducial, no QR code; a margin of at least 10 mm stays
-   free for them. *(Amended 2026-11-04: a `choices` block is a zone too.)*
+   free for them. *(Amended by ADR-126 §3: a ruled `free` frame; amended
+   2026-11-04, see the end: a `choices` block is a zone too.)*
 
 7. **Fixed words of a student-facing document** (a scoped exception to
    invariant 1 / N-I18N-01 and to ADR-121 §4). Three documents only — the
@@ -267,7 +275,7 @@ nothing of B or C.
 20. **Not in palier A.** Fiducials, QR codes, machine reading, a model call
     on a scan; merging a partial digital attempt; per-student copies;
     detecting pages out of order (palier B flags them); printing `diagram`
-    and `circuit`.
+    and `circuit`. *(Amended by ADR-126 §8: they print.)*
 
 ## Consequences
 
@@ -314,7 +322,7 @@ nothing of B or C.
   no server-side renderer (`packages/diagram` and `packages/qt-circuit`
   render through React only), so a hand-out would print a question
   without its statement. A later record may add them once a server-side
-  SVG exists.
+  SVG exists. *(Done by ADR-126.)*
 - **A list of printable type names**: `core` names no type; the hook is the
   declaration.
 - **Merge a partial digital attempt with the paper copy**: two sources for
@@ -352,11 +360,11 @@ The rest of the record stands.
 3. **The page** (§6). The body font is New Computer Modern, the Latin
    Modern look of a LaTeX paper, embedded in the Typst binary like the
    others (`--ignore-system-fonts` stays); formulas keep New Computer
-   Modern Math, code DejaVu Sans Mono. A question's points sit at the right
-   end of its heading line, lighter (`1 pt`, never plural), outside the
-   heading itself so a PDF bookmark holds the heading alone (a `heading`
-   block's `aside`, ADR-121 §1). No rule separates
-   two questions: a level-2 heading opens each with space above; a light
-   rule remains between two students of an item's answers.
+   Modern Math, code and a drawing's text (ADR-126) DejaVu Sans Mono. A
+   question's points sit at the right end of its heading line, lighter
+   (`1 pt`, never plural), outside the heading itself so a PDF bookmark
+   holds the heading alone (a `heading` block's `aside`, ADR-121 §1). No
+   rule separates two questions: a level-2 heading opens each with space
+   above; a light rule remains between two students of an item's answers.
 4. **The JSON record is indented** (two spaces), so a person can read it;
    it parses as before.

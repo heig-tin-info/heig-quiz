@@ -3,6 +3,7 @@
  * knows. A block holds text, never markup of the target format, except
  * `markdown`, which passes a statement through as its author wrote it.
  */
+import type { Drawing } from "./drawing.js";
 import type { Lang, Labels } from "./labels.js";
 
 /** One test of a program answer, as the staff read it (hidden ones by name). */
@@ -26,6 +27,7 @@ export type Block =
   | { kind: "points"; earned: number | null; max: number }
   | { kind: "separator" }
   | Choices
+  | DrawingBlock
   | AnswerZone;
 
 /** One choice of a {@link Choices} block: its letter, and its text as Markdown. */
@@ -54,6 +56,22 @@ export interface Choices {
   id?: string;
 }
 
+/**
+ * A figure (ADR-126 §1): a closed {@link Drawing}, never markup of the target
+ * format. The Typst renderer draws it as an inline SVG, the Markdown renderer
+ * as its alt text; a drawing `toSvg` refuses prints its alt text too.
+ */
+export interface DrawingBlock {
+  kind: "drawing";
+  drawing: Drawing;
+  /** What the figure shows, in words: the Markdown and the refusal print it. */
+  alt: string;
+  /** The printed width; absent, one pixel per drawing unit (ADR-126 §5). Never wider than the column. */
+  widthMm?: number;
+  /** The printed height at most: the width narrows to keep it. */
+  maxHeightMm?: number;
+}
+
 /** What a paper answer space holds (ADR-125); a dropdown blank's options are `bubbles`. */
 export type ZoneKind = "bubbles" | "lines" | "free" | "name";
 
@@ -78,6 +96,20 @@ export interface AnswerZone {
   lines?: number;
   /** `free`: the height of the frame, in millimetres. */
   heightMm?: number;
+  /**
+   * `free`: the frame's light-grey pattern (ADR-126 §3), `pitchMm` apart: a
+   * square grid to draw on, or ruled lines to write pseudo-code on. The zone
+   * stays `free`: graded by hand (ADR-125 §14).
+   */
+  pattern?: FramePattern;
+  /** `free`: a starter drawn in grey at the frame's top left, under the student's drawing (ADR-126 §4). */
+  underlay?: Drawing;
+}
+
+/** The pattern of a `free` frame (ADR-126 §3). */
+export interface FramePattern {
+  kind: "grid" | "lines";
+  pitchMm: number;
 }
 
 /**
@@ -126,6 +158,11 @@ export const table = (header: readonly string[], rows: readonly (readonly string
 export const tests = (lines: readonly TestLine[]): Block => ({ kind: "tests", tests: lines });
 export const points = (earned: number | null, max: number): Block => ({ kind: "points", earned, max });
 export const separator: Block = { kind: "separator" };
+export const drawing = (
+  figure: Drawing,
+  alt: string,
+  size: Pick<DrawingBlock, "widthMm" | "maxHeightMm"> = {},
+): DrawingBlock => ({ kind: "drawing", drawing: figure, alt, ...size });
 
 /** Choices beside their boxes, those at `checked` drawn ticked. */
 export const choices = (items: readonly ChoiceItem[], multiple: boolean, checked: readonly number[] = []): Choices => ({
@@ -148,7 +185,7 @@ export const noAnswerOr = (labels: Labels, isEmpty: boolean, block: Block): Bloc
 /** An answer space (ADR-125). */
 export const answerZone = (
   zone: ZoneKind,
-  options: Pick<AnswerZone, "part" | "labels" | "lines" | "heightMm"> = {},
+  options: Pick<AnswerZone, "part" | "labels" | "lines" | "heightMm" | "pattern" | "underlay"> = {},
 ): AnswerZone => ({ kind: "answerZone", zone, ...options });
 
 /**

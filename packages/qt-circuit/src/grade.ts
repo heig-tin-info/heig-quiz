@@ -624,16 +624,18 @@ export function finalizeRunnerCircuit(
  * anything ngspice printed: the source, the load and the analysis window of a
  * hidden stimulus are part of the key, and a plot spells them out.
  *
- * The reference's curve is published only when the teacher says so: either
- * the whole key is out (`showKey`) or the question overlays the expected
- * output on the visible stimuli (`config.showExpected`, carried in the
- * details because this hook only ever sees the details).
+ * That holds under every policy, a shown key included (#998): the key of a
+ * circuit is its reference schematic, never a hidden stimulus.
+ *
+ * The reference's curve on a VISIBLE stimulus is published only when the
+ * teacher says so: either the whole key is out (`showKey`) or the question
+ * overlays the expected output on the visible stimuli (`config.showExpected`,
+ * carried in the details because this hook only ever sees the details).
  */
 export function studentDetails(
   details: CircuitDetails,
   policy: { showKey: boolean; showHiddenCaseNames: boolean },
 ): CircuitDetails {
-  if (policy.showKey) return details;
   return {
     ...details,
     stimuli: details.stimuli.map((s, i) => {
@@ -652,6 +654,7 @@ export function studentDetails(
           ...(s.reason === undefined ? {} : { reason: s.reason }),
         };
       }
+      if (policy.showKey) return s;
       return {
         ...s,
         expected: details.showExpected === true ? s.expected : null,

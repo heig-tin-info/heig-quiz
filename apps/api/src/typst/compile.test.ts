@@ -8,7 +8,18 @@ import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { answerZone, choices, heading, markdown, scopeZones, type Block, type Document } from "@quiz/docexport";
+import {
+  answerZone,
+  choices,
+  drawing,
+  heading,
+  markdown,
+  scopeZones,
+  type Block,
+  type Document,
+  type Drawing,
+  type DrawingItem,
+} from "@quiz/docexport";
 import { drawable, renderTypst } from "@quiz/docexport/typst";
 
 import { compileArgs, compileTypst, DEAD_PROXY, inTempDir, run, TypstFailure, typstEnv } from "./compile.js";
@@ -223,5 +234,65 @@ describe.skipIf(skip)(`a compile, with ${BIN} (${probe.version ?? "missing"})`, 
       // Inside the 20 mm margin (56.7 pt), which keeps palier B's 10 mm free.
       expect(zone["x"]).toBeGreaterThanOrEqual(56);
     }
+  });
+
+  it("draws a figure as inline SVG, its text in the embedded DejaVu Sans Mono faces, extractable from the PDF (ADR-126 §2)", async () => {
+    const figure: Drawing = {
+      viewBox: [0, 0, 160, 100],
+      items: [
+        { kind: "rect", x: 10, y: 10, w: 140, h: 80, fill: "faint" },
+        { kind: "text", x: 20, y: 30, text: "FIGTEXT_REGULAR <&>" },
+        { kind: "text", x: 20, y: 50, text: "FIGTEXT_BOLD", weight: "bold" },
+        { kind: "text", x: 20, y: 70, text: "FIGTEXT_OBLIQUE", italic: true, baseline: "middle" },
+        { kind: "text", x: 20, y: 85, text: "FIGTEXT_BOTH é", weight: "bold", italic: true, anchor: "start" },
+      ],
+    };
+    const blocks = [drawing(figure, "ALT_OF_FIGURE", { widthMm: 160 }), drawing({ viewBox: [0, 0, 1, 1], items: [{ kind: "path", d: "url(" }] }, "ALT_OF_REFUSED")];
+    const pdf = await compileTypst({ source: sourceOf(blocks), assets: [] }, options());
+    const text = await pdfText(pdf);
+    // SVG text stays text in the PDF (not outlines): a leak test reads it there too.
+    for (const word of ["FIGTEXT_REGULAR <&>", "FIGTEXT_BOLD", "FIGTEXT_OBLIQUE", "FIGTEXT_BOTH é", "ALT_OF_REFUSED"]) {
+      expect(text).toContain(word);
+    }
+    // The four faces are embedded in the binary, so `--ignore-system-fonts` still finds them.
+    const raw = pdf.toString("latin1");
+    for (const face of ["DejaVuSansMono", "DejaVuSansMono-Bold", "DejaVuSansMono-Oblique", "DejaVuSansMono-BoldOblique"]) {
+      expect(raw).toMatch(new RegExp(`/BaseFont ?/[A-Z]{6}\\+${face}[/\\s]`));
+    }
+    expect(await readdir(parent)).toEqual([]);
+  });
+
+  it("prints the alt text of nested transforms that would overflow, and the rest of the document", async () => {
+    // Six groups each scaling by 10^6, with an opacity: within the cap one by one, a
+    // panic of Typst's PDF writer once composed (ADR-126 §2).
+    let nested: DrawingItem = { kind: "ellipse", cx: 0, cy: 0, rx: 1, ry: 1 };
+    for (let i = 0; i < 6; i++) nested = { kind: "g", transform: [1e6, 0, 0, 1e6, 0, 0], opacity: 0.5, items: [nested] };
+    const blocks = [markdown("BEFORE_FIGURE"), drawing({ viewBox: [0, 0, 10, 10], items: [nested] }, "ALT_OF_HUGE")];
+    const text = await pdfText(await compileTypst({ source: sourceOf(blocks), assets: [] }, options()));
+    expect(text).toContain("BEFORE_FIGURE");
+    expect(text).toContain("ALT_OF_HUGE");
+  });
+
+  it("draws ruled frames and a starter as free zones, still listed as `free` for palier B (ADR-126 §3)", async () => {
+    const starter: Drawing = { viewBox: [0, 0, 200, 100], items: [{ kind: "rect", x: 5, y: 5, w: 50, h: 30 }, { kind: "text", x: 10, y: 25, text: "STARTER" }] };
+    const source = sourceOf([
+      ...scopeZones("i1", [answerZone("free", { heightMm: 100, pattern: { kind: "grid", pitchMm: 4 } })]),
+      ...scopeZones("i2", [answerZone("free", { heightMm: 60, pattern: { kind: "grid", pitchMm: 4 }, underlay: starter })]),
+      ...scopeZones("i3", [answerZone("free", { heightMm: 40, pattern: { kind: "lines", pitchMm: 8 } })]),
+    ]);
+    const pdf = await compileTypst({ source, assets: [] }, options());
+    expect(await pdfText(pdf)).toContain("STARTER");
+    const zones = await inTempDir(async (dir) => {
+      await writeFile(join(dir, "main.typ"), source);
+      const args = ["eval", "--root", dir, "--ignore-system-fonts", "--in", "main.typ", "query(<answer-zone>).map(it => it.value)"];
+      return JSON.parse((await run(BIN, args, dir, 20_000)).stdout) as Record<string, unknown>[];
+    });
+    expect(zones.map((z) => [z["id"], z["kind"]])).toEqual([
+      ["i1", "free"],
+      ["i2", "free"],
+      ["i3", "free"],
+    ]);
+    // The frame keeps the height it was given (100 mm ≈ 283 pt), whatever it holds.
+    expect(zones[0]!["h"]).toBeCloseTo(283.46, 0);
   });
 });

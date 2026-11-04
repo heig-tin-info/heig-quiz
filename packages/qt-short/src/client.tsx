@@ -37,6 +37,7 @@ const ShortIcon = typeIcon(
 export const shortClient: ShortClient = {
   id: "short",
   labelKey: "qt.short.label",
+  group: "basics",
   hintKey: "qt.short.hint",
   Icon: ShortIcon,
 

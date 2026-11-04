@@ -26,6 +26,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { defaultFeedbackPolicy, type AttemptItem, type AttemptView, type CheckResponse } from "@quiz/contracts";
 import type { RunnerService } from "@quiz/core/server";
+import { CodeConfig, finalizeRunnerCode } from "@quiz/qt-code/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import { answers, attempts, evaluations, gradings, questions } from "../../db/schema.js";
@@ -39,6 +40,7 @@ import { enterStarted, reload, seedLive, type Seeded } from "../../test/live.js"
 import { EXPLANATION, fallOf, markersIn, PARAMETERIZED, showsKey, VARIABLES } from "../../test/parameterized.js";
 import { addItems, applyState, byId, joinedItems } from "../evaluation/service.js";
 import { registerGradingJobs } from "../grading/jobs.js";
+import { writeGrading } from "../grading/service.js";
 import { exampleConfig, typeOf } from "../pool/service.js";
 import * as poolService from "../pool/service.js";
 import { FORBIDDEN_STUDENT_KEYS } from "./studentView.js";
@@ -55,6 +57,8 @@ const SECRETS: Record<Exclude<Kind, "param">, string[]> = {
   code: ["REFERENCE-MARKER", "hidden-case-secret", "HIDDEN-EXPECTED-OUT", "HIDDEN-STDIN-MARKER", "SECRET-CODE-EXPLANATION"],
   rich: ["MODEL-ANSWER-MARKER", "RUBRIC-MARKER", "CRITERION-TITLE-MARKER", "CRITERION-PROMPT-MARKER", "SECRET-RICH-EXPLANATION"],
 };
+/** What a code question's correction never carries, checked or not: its hidden case (#998, D15). */
+const HIDDEN_CASE = ["hidden-case-secret", "HIDDEN-EXPECTED-OUT", "HIDDEN-STDIN-MARKER"];
 /** What an essay's correction never carries, checked or not (ADR-037). */
 const GRADERS_ONLY = ["RUBRIC-MARKER", "CRITERION-TITLE-MARKER", "CRITERION-PROMPT-MARKER"];
 
@@ -390,8 +394,49 @@ describe("checking a question of an exercise (ADR-124 §3, invariant 4)", () => 
     // The test server's runner is the stub: the cell ends as a proposal, still pending.
     expect(correction).toMatchObject({ verdict: "pending", points: null, explanation: "SECRET-CODE-EXPLANATION", details: null });
     expect(JSON.stringify(correction.solution)).toContain("REFERENCE-MARKER");
+    // The key shown is the reference and the visible case, never the hidden one (#998, D15).
+    expect(HIDDEN_CASE.filter((s) => res.body.includes(s))).toEqual([]);
+    expect((correction.solution as { cases: { name: string }[] }).cases.map((c) => c.name)).toEqual(["visible-case"]);
     const saved = await save(alice, attemptId, "code", { regions: ["    return 2;\n"] }, 2);
     expect(saved.json().error).toBe("item_checked");
+  });
+
+  it("keeps the hidden case out of a checked code question's breakdown once the runner's verdict lands (#998)", async () => {
+    const db = server.app.db;
+    // Alice's shared attempt, in which the test above CHECKED the code
+    // question: only a checked question shows its correction mid-attempt.
+    // The tests after this one find that cell validated by this grading.
+    const attemptId = attemptOf.get("alice")!;
+    // The runner's verdict, as `finalizeRunnerCode` writes it: the hidden case
+    // echoes its stdin, which the teacher's breakdown keeps.
+    const config = CodeConfig.parse(CONTENT.code.config);
+    const run = (stdout: string) => ({ exitCode: 0, stdout, stderr: stdout, ms: 1, timedOut: false, oom: false, truncated: false });
+    const { details } = finalizeRunnerCode(
+      config,
+      { regions: ["    return 1;\n"] },
+      { seed: 0, itemId: itemOf.get("code")!, attemptId, itemPoints: 4, now: server.clock.now() },
+      { compile: { ok: true, stdout: "", stderr: "", ms: 1 }, cases: [run(""), run("HIDDEN-STDIN-MARKER HIDDEN-ACTUAL-OUT")] },
+    );
+    await writeGrading(db, {
+      attemptId,
+      itemId: itemOf.get("code")!,
+      answerId: null,
+      points: 1,
+      maxPoints: 4,
+      source: "auto",
+      state: "validated",
+      details,
+      now: server.clock.now(),
+    });
+    const res = await get(`/app/api/attempts/${attemptId}`, alice.headers);
+    expect(res.statusCode).toBe(200);
+    const code = (res.json().view as AttemptView).items.find((i) => i.id === itemOf.get("code"))!;
+    expect(code.correction).toMatchObject({ verdict: "partial" });
+    expect(code.correction!.details).not.toBeNull();
+    // The whole response is searched: the hidden case's stdin, expected output and run.
+    expect(["HIDDEN-EXPECTED-OUT", "HIDDEN-STDIN-MARKER", "HIDDEN-ACTUAL-OUT"].filter((s) => res.body.includes(s))).toEqual([]);
+    // Its name keeps the stored setting (ADR-124 §1), open by default.
+    expect(code.correction!.details).toMatchObject({ cases: [{ visible: true }, { name: "hidden-case-secret", visible: false, ok: false }] });
   });
 
   it("lets the hand-in pass leave a checked question's grading alone, and a reopen keep it locked", async () => {
