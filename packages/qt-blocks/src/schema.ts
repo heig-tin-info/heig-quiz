@@ -247,9 +247,9 @@ export type BlocksStudent = z.infer<typeof BlocksStudent>;
 // ---------------------------------------------------------------------------
 
 /**
- * The key (amendment D17): the reference AND every warehouse, hidden ones
- * included. Unlike `circuit`'s (ADR-037), the cases belong to it: a hidden
- * map is what a student under a shown key needs to read their own result.
+ * The staff's key: the reference AND every warehouse, hidden ones included.
+ * A student's (`studentSolution`, ADR-103 amendment of 2026-11-04) keeps
+ * the visible warehouses only: a hidden map is the teacher's (#998).
  */
 export const BlocksSolution = z.object({
   referenceSolution: ProgramSchema.nullable(),

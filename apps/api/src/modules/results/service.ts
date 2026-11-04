@@ -128,6 +128,7 @@ import {
   orderItems,
   purgeIntegrityJournal,
   solutionView,
+  solutionViewOf,
   studentSolutionViewOf,
   studentView,
   studentViewOf,
@@ -801,6 +802,7 @@ function correctionOf(
   grading: Pick<GradingRecord, "points" | "maxPoints" | "state" | "details"> | null,
   item: Pick<JoinedItem["item"], "points" | "counting">,
   itemView: ItemView,
+  audience: CorrectionAudience = "student",
 ): ItemCorrection {
   const { type, config, view, instance } = itemView;
   const detailsPolicy = view.shuffle ? { ...policy, showKey: false } : policy;
@@ -808,11 +810,29 @@ function correctionOf(
     verdict: grading ? verdictOf(grading) : "pending",
     points: grading ? shownPoints(grading.points, item.counting) : null,
     maxPoints: item.points,
-    solution: policy.showKey ? studentSolutionViewOf(type, config, view) : null,
+    solution: policy.showKey ? KEY_OF[audience](type, config, view) : null,
     explanation: policy.showExplanation && instance.explanation !== "" ? instance.explanation : null,
-    details: grading ? filterDetails(type, grading.details, detailsPolicy) : null,
+    details: grading ? filterDetails(type, grading.details, detailsPolicy, audience) : null,
   };
 }
+
+/**
+ * Who reads a correction: a student (every student exit: the key through
+ * `studentSolutionViewOf`, the breakdown through the type's hook), or the
+ * staff's copy, which reads both whole: `toSolution`'s key for every type
+ * (an essay's criteria, a hidden test case), as the grading panel does.
+ */
+export type CorrectionAudience = "student" | "staff";
+
+/**
+ * The key each audience reads. Arrows, not the functions themselves: `live`
+ * and `results` import each other, and a binding read at load time could
+ * still be uninitialized.
+ */
+const KEY_OF: Record<CorrectionAudience, typeof solutionViewOf> = {
+  staff: (type, config, view) => solutionViewOf(type, config, view),
+  student: (type, config, view) => studentSolutionViewOf(type, config, view),
+};
 
 /**
  * Whether a student may see anything at all right now: `feedbackGate`
@@ -896,6 +916,7 @@ async function reviewedItems(
   evaluation: EvaluationRecord,
   attempt: typeof attempts.$inferSelect,
   policy: FeedbackPolicy,
+  audience: CorrectionAudience = "student",
 ): Promise<Pick<StaffCopy, "points" | "totalPoints" | "grade" | "pendingCount" | "items">> {
   const items = await joinedItems(db, evaluation.id);
   const totalPoints = evaluationTotal(items.map((i) => i.item));
@@ -923,7 +944,7 @@ async function reviewedItems(
     // its coordinates (ADR-097); the breakdown names no choice of the
     // student's while the key is hidden.
     const view = { ...attemptView, shuffle: attemptView.shuffle && !policy.showKey };
-    const correction = correctionOf(policy, grading, item.item, { ...itemView, view });
+    const correction = correctionOf(policy, grading, item.item, { ...itemView, view }, audience);
     return {
       itemId: item.item.id,
       position: item.item.position,
@@ -1047,7 +1068,7 @@ export async function staffCopy(
     attemptId: attempt.id,
     origin: attempt.origin,
     supersededBy: attempt.supersededBy,
-    ...(await reviewedItems(db, evaluation, attempt, STAFF_POLICY)),
+    ...(await reviewedItems(db, evaluation, attempt, STAFF_POLICY, "staff")),
   };
 }
 
@@ -1066,13 +1087,18 @@ export async function staffCopy(
  *   2. a blind strip of {@link FORBIDDEN_DETAIL_KEYS}, so a type that gains a
  *      key-bearing field and forgets the hook still cannot publish it.
  *
- * `showKey` means the teacher chose to publish the key: the details travel
- * whole, both layers off — but for an LLM's justification
- * (`JUSTIFICATION_KEY`) and the rest of its reply (`AI_KEY`, ADR-063),
- * which are the teacher's under every policy (ADR-045, open question 27)
- * and are stripped first, as is the warning of
- * a parameterized question served from a fallback draw
- * (`INSTANCE_WARNING_KEY`, ADR-056 §7).
+ * `showKey` means the key is published (the teacher's choice, or an
+ * exercise's forced one, ADR-124): layer 2 is off, and layer 1 still runs,
+ * because what a breakdown holds is not always the key a student may read —
+ * a `code` question's hidden case, a `circuit`'s hidden stimulus, stay the
+ * teacher's under every policy (D15, #998). An LLM's justification
+ * (`JUSTIFICATION_KEY`) and the rest of its reply (`AI_KEY`, ADR-063) are
+ * the teacher's under every policy too (ADR-045, open question 27) and are
+ * stripped first, as is the warning of a parameterized question served
+ * from a fallback draw (`INSTANCE_WARNING_KEY`, ADR-056 §7).
+ *
+ * The `staff` audience (the teacher's copy, {@link staffCopy}) skips both
+ * layers: it reads the breakdown whole, but for those teacher-only keys.
  *
  * The list is its OWN, not `FORBIDDEN_STUDENT_KEYS` (`live/studentView.ts`):
  * what carries a key in a grading breakdown is these five fields, and
@@ -1108,11 +1134,13 @@ export function filterDetails(
   type: string,
   details: unknown,
   policy: FeedbackPolicy,
+  audience: CorrectionAudience = "student",
 ): unknown {
   if (details === null || details === undefined) return null;
-  if (policy.showKey) return stripKeys(details, teacherOnlyDetailKeys);
+  if (audience === "staff") return stripKeys(details, teacherOnlyDetailKeys);
   const hook = typeOf(type).studentDetails;
   const shaped = hook ? hook(details, policy) : details;
+  if (policy.showKey) return stripKeys(shaped, teacherOnlyDetailKeys);
   return stripKeys(shaped, forbiddenDetailKeys, publishedExpected);
 }
 

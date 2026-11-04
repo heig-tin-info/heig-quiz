@@ -235,10 +235,20 @@ describe("the details filter for `code` (decision D15, deviation W3-5)", () => {
     expect(named).not.toContain("SECRET-EXPECTED");
   });
 
-  it("publishes everything when the teacher published the key", () => {
-    const whole = JSON.stringify(
-      service.filterDetails("code", details, policy({ showKey: true })),
-    );
-    expect(whole).toContain("SECRET-EXPECTED");
+  it("keeps a hidden case opaque when the key is published too, an exercise's forced key (#998)", () => {
+    for (const showHiddenCaseNames of [false, true]) {
+      const filtered = service.filterDetails("code", details, policy({ showKey: true, showHiddenCaseNames })) as CodeDetails;
+      const json = JSON.stringify(filtered);
+      for (const secret of ["SECRET-EXPECTED", "SECRET-ACTUAL", "SECRET-STDERR"]) expect(json, secret).not.toContain(secret);
+      expect(json.includes("hidden-overflow")).toBe(showHiddenCaseNames);
+      // The visible case keeps its expected output and its run.
+      expect(filtered.cases[0]).toEqual(details.cases[0]);
+    }
+  });
+
+  it("gives the staff's copy the breakdown whole", () => {
+    const staff = JSON.stringify(service.filterDetails("code", details, policy({ showKey: true }), "staff"));
+    expect(staff).toContain("SECRET-EXPECTED");
+    expect(staff).toContain("hidden-overflow");
   });
 });

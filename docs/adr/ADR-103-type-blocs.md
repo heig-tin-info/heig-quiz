@@ -6,6 +6,16 @@ Accepted (2026-10-11). The product owner settled grading (§2), the mandatory
 reference (§3), keyboard and devices (§9) and the v1 scope (§10) on
 2026-10-11 and approved the rest with the plan the same day.
 
+Amended 2026-11-04 (product owner, issue #998): amendment D17 is reversed. A
+hidden warehouse is the teacher's under every feedback policy, a shown key
+included: since [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md)
+an exercise always shows its key, so D17 published every hidden map, battery
+and trail to each student who did the exercise, and to the class before an
+exam reusing the question. A student's key (`studentSolution`) is the
+reference and the visible warehouses; the details keep a hidden warehouse's
+verdict, points and coarse reason (its name per `showHiddenCaseNames`), never
+its map or trail. The staff (grading panel, staff copy) read both whole.
+
 Scope: the `blocks` question type (`packages/qt-blocks`), its interpreter
 `@quiz/domain/blocks`, and the Blockly dependency of the web client.
 

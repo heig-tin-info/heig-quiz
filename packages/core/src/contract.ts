@@ -503,8 +503,11 @@ export interface QuestionTypeServer<
    * `details` is written by `grade` for the teacher, so it holds whatever the
    * type needs to justify a score — the correct choices, the expected blanks,
    * a hidden test's output. This hook is where the answer key comes back out
-   * of it when `policy.showKey` is false. Omitting it means "the breakdown
-   * holds no key"; the `results` module strips the forbidden keys either way.
+   * of it when `policy.showKey` is false. It runs under `showKey` too: what a
+   * shown key publishes is the type's call, and a hidden test case or
+   * stimulus stays the teacher's under every policy (D15, #998). Omitting it
+   * means "the breakdown holds no key"; the `results` module strips the
+   * forbidden keys when the key is not shown.
    *
    * A part of the student's own answer the breakdown names by canonical
    * index leaves with the key (ADR-097): the student reads their answer in

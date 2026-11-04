@@ -91,6 +91,7 @@ export {
   answerToStudent,
   FORBIDDEN_STUDENT_KEYS,
   solutionView,
+  solutionViewOf,
   studentSolutionView,
   studentSolutionViewOf,
   studentView,
