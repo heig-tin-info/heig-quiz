@@ -3,6 +3,7 @@
  * knows. A block holds text, never markup of the target format, except
  * `markdown`, which passes a statement through as its author wrote it.
  */
+import type { Drawing } from "./drawing.js";
 import type { Lang, Labels } from "./labels.js";
 
 /** One test of a program answer, as the staff read it (hidden ones by name). */
@@ -24,7 +25,24 @@ export type Block =
   /** `earned: null`: nothing graded yet. */
   | { kind: "points"; earned: number | null; max: number }
   | { kind: "separator" }
+  | DrawingBlock
   | AnswerZone;
+
+/**
+ * A figure (ADR-126 §1): a closed {@link Drawing}, never markup of the target
+ * format. The Typst renderer draws it as an inline SVG, the Markdown renderer
+ * as its alt text; a drawing `toSvg` refuses prints its alt text too.
+ */
+export interface DrawingBlock {
+  kind: "drawing";
+  drawing: Drawing;
+  /** What the figure shows, in words: the Markdown and the refusal print it. */
+  alt: string;
+  /** The printed width; absent, one pixel per drawing unit (ADR-126 §5). Never wider than the column. */
+  widthMm?: number;
+  /** The printed height at most: the width narrows to keep it. */
+  maxHeightMm?: number;
+}
 
 /** What a paper answer space holds (ADR-125). */
 export type ZoneKind = "bubbles" | "lines" | "free" | "name";
@@ -52,6 +70,13 @@ export interface AnswerZone {
   lines?: number;
   /** `free`: the height of the frame, in millimetres. */
   heightMm?: number;
+  /**
+   * `free`: a squared drawing frame (ADR-126 §3), its light-grey grid this
+   * many millimetres apart. The zone stays `free`: graded by hand (ADR-125 §14).
+   */
+  grid?: { pitchMm: number };
+  /** `free`: a starter drawn in grey at the frame's top left, under the student's drawing (ADR-126 §4). */
+  underlay?: Drawing;
 }
 
 /**
@@ -98,6 +123,11 @@ export const table = (header: readonly string[], rows: readonly (readonly string
 export const tests = (lines: readonly TestLine[]): Block => ({ kind: "tests", tests: lines });
 export const points = (earned: number | null, max: number): Block => ({ kind: "points", earned, max });
 export const separator: Block = { kind: "separator" };
+export const drawing = (
+  figure: Drawing,
+  alt: string,
+  size: Pick<DrawingBlock, "widthMm" | "maxHeightMm"> = {},
+): DrawingBlock => ({ kind: "drawing", drawing: figure, alt, ...size });
 
 /** `2`, `1.5`: two decimals at most, as the CSV writes points. */
 export const number = (value: number): string => String(Math.round(value * 100) / 100);
@@ -109,7 +139,7 @@ export const noAnswerOr = (labels: Labels, isEmpty: boolean, block: Block): Bloc
 /** An answer space (ADR-125). */
 export const answerZone = (
   zone: ZoneKind,
-  options: Pick<AnswerZone, "part" | "labels" | "multiple" | "lines" | "heightMm"> = {},
+  options: Pick<AnswerZone, "part" | "labels" | "multiple" | "lines" | "heightMm" | "grid" | "underlay"> = {},
 ): AnswerZone => ({ kind: "answerZone", zone, ...options });
 
 /**

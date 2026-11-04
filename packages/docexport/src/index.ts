@@ -10,4 +10,5 @@
  * no route serves it, the JSON export is the record.
  */
 export * from "./document.js";
+export * from "./drawing.js";
 export * from "./labels.js";

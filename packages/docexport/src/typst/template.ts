@@ -11,8 +11,11 @@
  * zones of the printed paper, the manifest palier B reads a scan with.
  * An image is `img(id, alt, width)`: drawn from `assets/<id>` when the API
  * could load it — `drawable`, the line it puts before the source — else its
- * alt text. Nothing here takes user text: the renderer passes it as string
- * literals.
+ * alt text. A figure is `figsvg(svg, alt, width)`: the SVG the renderer
+ * wrote from a closed drawing (ADR-126), inline, never a file. A squared
+ * frame is `canvas(height, pitch, under)`: a `free` zone whose grid is a
+ * native `tiling`, with an optional starter `(svg, width)` drawn under it.
+ * Nothing here takes user text: the renderer passes it as string literals.
  */
 
 /** The fonts, both embedded in the Typst binary. */
@@ -24,6 +27,9 @@ export const MARGIN_MM = 20;
 
 export const PREAMBLE = String.raw`
 #let img(id, alt, width) = if id in drawable { image("assets/" + id, width: width * 1%) } else { alt }
+
+#let figsvg(svg, alt, width) = block(above: 0.8em, below: 0.8em, breakable: false, width: 100%,
+  align(center, image(bytes(svg), format: "svg", width: width * 1mm, alt: alt)))
 
 #let hr = line(length: 100%, stroke: 0.5pt + luma(150))
 
@@ -52,6 +58,15 @@ export const PREAMBLE = String.raw`
 
 #let free(height) = block(above: 0.6em, below: 0.6em, width: 100%, height: height,
   stroke: 0.5pt + luma(130), radius: 1mm)
+
+#let squares(pitch) = tiling(size: (pitch, pitch), {
+  place(line(start: (0pt, 0pt), end: (pitch, 0pt), stroke: 0.25pt + luma(205)))
+  place(line(start: (0pt, 0pt), end: (0pt, pitch), stroke: 0.25pt + luma(205)))
+})
+
+#let canvas(height, pitch, under) = block(above: 0.6em, below: 0.6em, width: 100%, height: height,
+  stroke: 0.5pt + luma(130), radius: 1mm, clip: true, fill: squares(pitch),
+  if under != none { place(top + left, image(bytes(under.at(0)), format: "svg", width: under.at(1) * 1mm)) })
 
 #let field(label) = grid(columns: (auto, 1fr), column-gutter: 2mm, align: bottom,
   label, block(width: 100%, height: 7mm, stroke: (bottom: 0.5pt + luma(90))))

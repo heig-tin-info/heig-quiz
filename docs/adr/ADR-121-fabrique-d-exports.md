@@ -13,6 +13,10 @@ server, no browser print view; ADR-125 §1–§3) and §8 steps 2, 3 and 6
 (step 3's hand-out follows the evaluation's stored random paper seed, not seed 0, ADR-125 §8; step 6
 comes before step 5).
 
+Amended 2026-11-04 by [ADR-126](ADR-126-types-a-canevas-sur-papier.md),
+scope: §1 (the `drawing` block holds a closed drawing model, never
+target-format markup; ADR-126 §1–§2).
+
 Scope: every file the platform builds from its data for a person to read or
 process outside it — Markdown, JSON, PDF — except the results and gradebook
 CSV, the personal data export's JSON (ADR-112) and the canonical pool
@@ -65,7 +69,8 @@ question must come from the type through its contract.
      (`lang`, `text`), `list`, `table`, `tests` (`name`, `visible`, `ok`,
      `points`), `points`, `separator`, and later `answerZone` (reserved for
      #551's answer space), with a front matter (point 5). The tree is
-     internal: no route serves it. *(Amended by ADR-125 §6–§7.)*
+     internal: no route serves it. *(Amended by ADR-125 §6–§7 and by ADR-126
+     §1: a `drawing` block.)*
    - **Renderer**: `md`, pure, in `packages/docexport` — a code block's fence
      is one backtick longer than the longest run of backticks in its text,
      at least three, so no answer can close it early; `json`, the record

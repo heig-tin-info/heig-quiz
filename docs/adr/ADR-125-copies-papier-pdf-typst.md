@@ -6,6 +6,11 @@ Accepted (2026-11-03, the product owner's decisions on issue #551, palier A;
 points 2, 5, 8, 14 and 16 arbitrated by the orchestrator after review).
 Delivery progress lives in `changes/`.
 
+Amended 2026-11-04 by [ADR-126](ADR-126-types-a-canevas-sur-papier.md),
+scope: §5 and §20 (`diagram`, `circuit`, `logic` and `blocks` become
+printable; ADR-126 §8) and §6 (a `free` zone may be a squared frame with a
+starter, `grid` and `underlay`, and stays `free`; ADR-126 §3–§4).
+
 Scope: the printed hand-out of an exam and the PDF of every export; the
 paper attempt a staff member enters, its scan, and every reader of
 `attempts` that counts; the student's documents of ADR-112's amendment.
@@ -101,7 +106,8 @@ nothing of B or C.
    renders through a second hook, `studentAnswerDoc?(student, answer,
    details)` (amends ADR-121 §2), fed only the student view, the answer as
    handed back and `studentDetails` under the policy; the staff copy and
-   the student copy use it.
+   the student copy use it. *(Amended by ADR-126 §8: `diagram`,
+   `circuit`, `logic` and `blocks` print.)*
 
 6. **The `answerZone` block** (amends ADR-121 §1):
    `{ kind: "answerZone"; id: string; part?: string; zone: "bubbles" |
@@ -117,7 +123,7 @@ nothing of B or C.
    `#zone(id, kind)[…]`, which emits
    `#metadata((id, kind, page, x, y, w, h)) <answer-zone>` for palier B's
    `typst query`. No fiducial, no QR code; a margin of at least 10 mm stays
-   free for them.
+   free for them. *(Amended by ADR-126 §3: a squared `free` frame.)*
 
 7. **Fixed words of a student-facing document** (a scoped exception to
    invariant 1 / N-I18N-01 and to ADR-121 §4). Three documents only — the
@@ -262,7 +268,7 @@ nothing of B or C.
 20. **Not in palier A.** Fiducials, QR codes, machine reading, a model call
     on a scan; merging a partial digital attempt; per-student copies;
     detecting pages out of order (palier B flags them); printing `diagram`
-    and `circuit`.
+    and `circuit`. *(Amended by ADR-126 §8: they print.)*
 
 ## Consequences
 
@@ -309,7 +315,7 @@ nothing of B or C.
   no server-side renderer (`packages/diagram` and `packages/qt-circuit`
   render through React only), so a hand-out would print a question
   without its statement. A later record may add them once a server-side
-  SVG exists.
+  SVG exists. *(Done by ADR-126.)*
 - **A list of printable type names**: `core` names no type; the hook is the
   declaration.
 - **Merge a partial digital attempt with the paper copy**: two sources for

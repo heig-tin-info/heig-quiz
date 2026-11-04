@@ -9,7 +9,8 @@
  * them. The provenance of ADR-121 §5 goes in twice: as a `<provenance>`
  * metadata (`query(<provenance>)`) and as the PDF's own title and author.
  */
-import { number, type AnswerZone, type Block, type Document, type TestLine } from "../document.js";
+import { number, type AnswerZone, type Block, type Document, type DrawingBlock, type TestLine } from "../document.js";
+import { printedWidthMm, toSvg, type Drawing } from "../drawing.js";
 import { labelled, LABELS, type Labels } from "../labels.js";
 import { rawBlock, typstLine, typstString, typstTable, typstText, typstValue } from "./escape.js";
 import { markdownToTypst, typstContext, type AssetRef, type TypstContext } from "./markdown.js";
@@ -60,6 +61,39 @@ const FREE_MM = 40;
 const bounded = (value: number | undefined, min: number, max: number, fallback: number): number =>
   value !== undefined && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
 
+/** The grid of a squared frame when its type names no pitch (ADR-126 §3). */
+const GRID_MM = 4;
+
+/**
+ * A figure (ADR-126 §1–§2): its SVG inline, as a string literal the preamble's
+ * `figsvg` hands to `image(bytes(…), format: "svg")` — no file, nothing in the
+ * compile root. A drawing `toSvg` refuses prints its alt text.
+ */
+function drawingBlock(b: DrawingBlock): string {
+  const svg = toSvg(b.drawing);
+  if (!svg.ok) return `#emph[${typstLine(b.alt)}]`;
+  return `#figsvg(${typstString(svg.svg)}, ${typstString(b.alt)}, ${printedWidthMm(b.drawing, b.widthMm, b.maxHeightMm)})`;
+}
+
+/**
+ * The starter under a squared frame (ADR-126 §4): greyed, one pixel per unit,
+ * shrunk to the frame; `none` when there is none or `toSvg` refuses it.
+ */
+function underlay(drawing: Drawing | undefined, heightMm: number): string {
+  if (drawing === undefined) return "none";
+  const svg = toSvg(drawing, { greyed: true });
+  if (!svg.ok) return "none";
+  return `(${typstString(svg.svg)}, ${printedWidthMm(drawing, undefined, heightMm)})`;
+}
+
+/** A free frame: plain (ADR-125 §6), or squared, with its starter (ADR-126 §3–§4). */
+function freeShape(z: AnswerZone): string {
+  const height = bounded(z.heightMm, 10, 240, FREE_MM);
+  if (z.grid === undefined && z.underlay === undefined) return `free(${height}mm)`;
+  const pitch = Math.min(20, Math.max(2, z.grid?.pitchMm !== undefined && Number.isFinite(z.grid.pitchMm) ? z.grid.pitchMm : GRID_MM));
+  return `canvas(${height}mm, ${number(pitch)}mm, ${underlay(z.underlay, height)})`;
+}
+
 /** An answer space, keyed for the manifest (ADR-125 §6). */
 function zoneBlock(z: AnswerZone, index: number, l: Labels): string {
   const id = typstString(z.id ?? `zone-${index}`);
@@ -71,7 +105,7 @@ function zoneBlock(z: AnswerZone, index: number, l: Labels): string {
         // At most a page of lines, at most a page of frame: a bad value never breaks the source.
         return `lines(${bounded(z.lines, 1, 40, 1)})`;
       case "free":
-        return `free(${bounded(z.heightMm, 10, 240, FREE_MM)}mm)`;
+        return freeShape(z);
       case "name":
         return `names(${typstString(l.name)}, ${typstString(l.firstName)})`;
     }
@@ -97,6 +131,8 @@ function block(b: Block, l: Labels, ctx: TypstContext, zones: { n: number }): st
       return typstText(labelled(l, l.points, `${b.earned === null ? l.notGraded : number(b.earned)} / ${number(b.max)}`));
     case "separator":
       return "#hr";
+    case "drawing":
+      return drawingBlock(b);
     case "answerZone":
       return zoneBlock(b, zones.n++, l);
   }

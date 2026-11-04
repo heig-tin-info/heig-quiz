@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { answerZone, heading, markdown, scopeZones, type Block, type Document } from "@quiz/docexport";
+import { answerZone, drawing, heading, markdown, scopeZones, type Block, type Document, type Drawing } from "@quiz/docexport";
 import { drawable, renderTypst } from "@quiz/docexport/typst";
 
 import { compileArgs, compileTypst, DEAD_PROXY, inTempDir, run, TypstFailure, typstEnv } from "./compile.js";
@@ -220,5 +220,52 @@ describe.skipIf(skip)(`a compile, with ${BIN} (${probe.version ?? "missing"})`, 
       // Inside the 20 mm margin (56.7 pt), which keeps palier B's 10 mm free.
       expect(zone["x"]).toBeGreaterThanOrEqual(56);
     }
+  });
+
+  it("draws a figure as inline SVG, its text in the embedded DejaVu Sans Mono faces, extractable from the PDF (ADR-126 §2)", async () => {
+    const figure: Drawing = {
+      viewBox: [0, 0, 160, 100],
+      items: [
+        { kind: "rect", x: 10, y: 10, w: 140, h: 80, fill: "faint" },
+        { kind: "text", x: 20, y: 30, text: "FIGTEXT_REGULAR <&>" },
+        { kind: "text", x: 20, y: 50, text: "FIGTEXT_BOLD", weight: "bold" },
+        { kind: "text", x: 20, y: 70, text: "FIGTEXT_OBLIQUE", italic: true, baseline: "middle" },
+        { kind: "text", x: 20, y: 85, text: "FIGTEXT_BOTH é", weight: "bold", italic: true, anchor: "start" },
+      ],
+    };
+    const blocks = [drawing(figure, "ALT_OF_FIGURE", { widthMm: 160 }), drawing({ viewBox: [0, 0, 1, 1], items: [{ kind: "path", d: "url(" }] }, "ALT_OF_REFUSED")];
+    const pdf = await compileTypst({ source: sourceOf(blocks), assets: [] }, options());
+    const text = await pdfText(pdf);
+    // SVG text stays text in the PDF (not outlines): a leak test reads it there too.
+    for (const word of ["FIGTEXT_REGULAR <&>", "FIGTEXT_BOLD", "FIGTEXT_OBLIQUE", "FIGTEXT_BOTH é", "ALT_OF_REFUSED"]) {
+      expect(text).toContain(word);
+    }
+    // The four faces are embedded in the binary, so `--ignore-system-fonts` still finds them.
+    const raw = pdf.toString("latin1");
+    for (const face of ["DejaVuSansMono", "DejaVuSansMono-Bold", "DejaVuSansMono-Oblique", "DejaVuSansMono-BoldOblique"]) {
+      expect(raw).toMatch(new RegExp(`/BaseFont ?/[A-Z]{6}\\+${face}[/\\s]`));
+    }
+    expect(await readdir(parent)).toEqual([]);
+  });
+
+  it("draws a squared frame and its starter as a free zone, still listed as `free` for palier B (ADR-126 §3)", async () => {
+    const starter: Drawing = { viewBox: [0, 0, 200, 100], items: [{ kind: "rect", x: 5, y: 5, w: 50, h: 30 }, { kind: "text", x: 10, y: 25, text: "STARTER" }] };
+    const source = sourceOf([
+      ...scopeZones("i1", [answerZone("free", { heightMm: 100, grid: { pitchMm: 4 } })]),
+      ...scopeZones("i2", [answerZone("free", { heightMm: 60, grid: { pitchMm: 4 }, underlay: starter })]),
+    ]);
+    const pdf = await compileTypst({ source, assets: [] }, options());
+    expect(await pdfText(pdf)).toContain("STARTER");
+    const zones = await inTempDir(async (dir) => {
+      await writeFile(join(dir, "main.typ"), source);
+      const args = ["eval", "--root", dir, "--ignore-system-fonts", "--in", "main.typ", "query(<answer-zone>).map(it => it.value)"];
+      return JSON.parse((await run(BIN, args, dir, 20_000)).stdout) as Record<string, unknown>[];
+    });
+    expect(zones.map((z) => [z["id"], z["kind"]])).toEqual([
+      ["i1", "free"],
+      ["i2", "free"],
+    ]);
+    // The frame keeps the height it was given (100 mm ≈ 283 pt), whatever it holds.
+    expect(zones[0]!["h"]).toBeCloseTo(283.46, 0);
   });
 });
