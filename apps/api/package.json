@@ -21,7 +21,7 @@
     "@electric-sql/pglite": "^0.5.4",
     "@fastify/cookie": "^11.0.2",
     "@fastify/multipart": "^10.1.1",
-    "@fastify/static": "^10.1.2",
+    "@fastify/static": "^10.1.9",
     "@quiz/contracts": "workspace:*",
     "@quiz/core": "workspace:*",
     "@quiz/docexport": "workspace:*",
