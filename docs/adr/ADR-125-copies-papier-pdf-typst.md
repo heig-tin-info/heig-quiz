@@ -112,7 +112,8 @@ nothing of B or C.
    details)` (amends ADR-121 §2), fed only the student view, the answer as
    handed back and `studentDetails` under the policy; the staff copy and
    the student copy use it. *(Amended by ADR-126 §8: `diagram`,
-   `circuit`, `logic` and `blocks` print.)*
+   `circuit`, `logic` and `blocks` print; and `code`, a `lines` frame, by
+   its amendment of 2026-11-04.)*
 
 6. **The `answerZone` block** (amends ADR-121 §1):
    `{ kind: "answerZone"; id: string; part?: string; zone: "bubbles" |

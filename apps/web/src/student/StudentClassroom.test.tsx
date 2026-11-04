@@ -86,6 +86,7 @@ const practiceCard = (over: Partial<PracticeCard>): PracticeCard => ({
   closedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
   openAttemptId: null,
   count: 0,
+  printable: true,
   last: null,
   ...over,
 });

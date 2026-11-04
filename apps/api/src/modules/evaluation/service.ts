@@ -76,6 +76,7 @@ export {
   studentEvaluationRows,
   gradebookEvaluations,
   totalPointsByEvaluation,
+  handoutPrints,
   itemCountsByEvaluation,
   countedItemsByEvaluation,
   COUNTS_FOR_STUDENT,

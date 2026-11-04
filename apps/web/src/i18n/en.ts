@@ -4651,6 +4651,7 @@ export const en = {
   "export.busy": "Too many PDFs at once: try again in a moment.",
   "export.failed": "Could not make the PDF.",
   "export.limited": "Too many downloads in an hour. Try again later.",
+  "export.notPrintable": "This series has a question that does not print.",
   "feedback.download": "Download my copy",
   "grading.answers.copy": "Copy",
   "grading.answers.help": "Every student's answer to this question, in one file, with names.",

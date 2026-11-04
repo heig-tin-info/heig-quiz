@@ -66,14 +66,15 @@ const RICH = {
   maxChars: 3000,
   format: "markdown",
 };
-const CODE = {
+/** A type with no paper form: `codeimage`, whose statement is a picture to reproduce. */
+const CODEIMAGE = {
   configVersion: 1,
-  prompt: "Return CODE_PROMPT.",
+  prompt: "Draw CODEIMAGE_PROMPT.",
   language: "c",
-  runtime: "backend",
-  template: "int main(void) { return 0; }\n",
-  referenceSolution: "int main(void) { return 1; }",
-  tests: { mode: "io", cases: [{ name: "one", stdin: "", expected: "", visible: true, points: 1 }] },
+  template: "// @@lock\n#include <stdio.h>\nint main(void) {\n// @@endlock\n    puts(\"1\");\n// @@lock\n    return 0;\n}\n// @@endlock\n",
+  referenceSolution: '    puts("1 0 1 0");\n',
+  image: { width: 4, height: 3, palette: "bw" },
+  target: { width: 4, height: 3, palette: "bw", pixels: "101001011010" },
 };
 const SECRETS = ["CLOZE_KEY_SECRET", "RICH_RUBRIC_SECRET", "RICH_REFERENCE_SECRET", "EXPLANATION_SECRET", "INTERNAL_NAME"];
 
@@ -229,11 +230,11 @@ describe("the refusals (F-PAPER-05, invariant 6)", () => {
   });
 
   it("refuses an exam that does not print, with the hand-out's refusal", async () => {
-    const { evaluation } = await exam({ mcq: MCQ, code: CODE });
+    const { evaluation } = await exam({ mcq: MCQ, codeimage: CODEIMAGE });
     await started(evaluation.id);
     const res = await enter(evaluation.id, body(student.id));
     expect(res.statusCode).toBe(409);
-    expect(res.json()).toMatchObject({ error: "not_printable", reason: "type", types: ["code"] });
+    expect(res.json()).toMatchObject({ error: "not_printable", reason: "type", types: ["codeimage"] });
     // The same rule, published for the screens' row action.
     const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
     expect(detail.exports.paper).toBe("not_printable");

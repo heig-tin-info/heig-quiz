@@ -5,7 +5,7 @@ import { markdownBody } from "@quiz/docexport/markdown";
 
 import type { CodeDetails } from "./schema.js";
 import { codeServer } from "./server.js";
-import { codeConfig, SECRET_HIDDEN_EXPECTED, SECRET_HIDDEN_NAME, SECRET_REFERENCE } from "./test/fixtures.js";
+import { codeConfig, codeLeakFixture, SECRET_HIDDEN_EXPECTED, SECRET_HIDDEN_NAME, SECRET_REFERENCE } from "./test/fixtures.js";
 
 const md = (blocks: readonly Block[]) => markdownBody({ lang: "en", blocks });
 
@@ -55,6 +55,42 @@ describe("the code question as a document (ADR-121 §2)", () => {
     expect(codeServer.answerDoc!(config, { regions: ["", "x"] }, null, EN_LABELS)).toHaveLength(1);
     const misfit = md(codeServer.answerDoc!(config, { regions: ["a", "b", "c"] }, null, EN_LABELS));
     expect(misfit).toContain("no longer fits");
+  });
+
+  it("prints the template without its marker lines", () => {
+    const text = md(codeServer.statementDoc!(student, EN_LABELS));
+    expect(text).toContain("int sum(const int *t, int n)\n{\n    int total = 0;");
+    expect(text).not.toContain("@@lock");
+    expect(text).not.toContain("@@endlock");
+  });
+
+  it("answers on paper in a ruled free frame, about half a page (ADR-126 §8)", () => {
+    expect(codeServer.answerZone!(student)).toEqual([
+      { kind: "answerZone", zone: "free", heightMm: 128, ruling: { kind: "lines", pitchMm: 8 } },
+    ]);
+    const long = { ...student, segments: [{ kind: "locked" as const, index: null, text: "x\n".repeat(22) }] };
+    expect(codeServer.answerZone!(long)[0]).toMatchObject({ heightMm: 22 * 8 });
+    const huge = { ...student, segments: [{ kind: "locked" as const, index: null, text: "x\n".repeat(200) }] };
+    expect(codeServer.answerZone!(huge)[0]).toMatchObject({ heightMm: 28 * 8 });
+  });
+
+  it("keeps the hand-out free of the key and of every hidden case", () => {
+    const handout = md([...codeServer.statementDoc!(student, EN_LABELS), ...codeServer.answerZone!(student)]);
+    for (const secret of codeLeakFixture.secrets) expect(handout).not.toContain(secret);
+  });
+
+  it("prints a student's own source in their copy, from the view they were served", () => {
+    const answer = { regions: ["#include <stdio.h>\n", "    int total = 42;\n    return total;\n"] };
+    const text = md(codeServer.studentAnswerDoc!(student, answer, details(true), EN_LABELS));
+    expect(text).toContain("```c\n#include <stdio.h>\nint sum(const int *t, int n)\n{\n    int total = 42;");
+    expect(text).not.toContain("@@lock");
+    for (const secret of codeLeakFixture.secrets) expect(text).not.toContain(secret);
+    expect(md(codeServer.studentAnswerDoc!(student, { regions: ["  ", ""] }, null, EN_LABELS))).toBe("No answer.\n");
+    // The fixed word follows the reader's labels.
+    const empty = codeServer.studentAnswerDoc!(student, { regions: ["  ", ""] }, null, FR_LABELS);
+    expect(markdownBody({ lang: "fr", blocks: empty })).toBe("Pas de réponse.\n");
+    const misfit = md(codeServer.studentAnswerDoc!(student, { regions: ["a", "b", "c"] }, null, EN_LABELS));
+    expect(misfit).toContain("```c\na\nb\nc\n```");
   });
 
   it("quotes the compiler's complaint", () => {

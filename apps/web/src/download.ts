@@ -57,6 +57,8 @@ export function useDownload() {
             pdf_failed: "export.failed",
             // A student's documents: 20 an hour (ADR-112 amendment of 2026-11-03).
             rate_limited: "export.limited",
+            // A type with no paper form, or a parameterized item (ADR-125 §5).
+            not_printable: "export.notPrintable",
           },
           t,
         ),

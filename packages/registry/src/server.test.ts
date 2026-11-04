@@ -131,7 +131,7 @@ describe("the static registries", () => {
     const withStatement = REGISTERED.filter((id) => questionType(id).statementDoc !== undefined);
     expect(withStatement).toEqual(["mcq", "short", "cloze", "code", "circuit", "logic", "rich", "diagram", "math", "blocks"]);
     const withZone = REGISTERED.filter((id) => questionType(id).answerZone !== undefined);
-    expect(withZone).toEqual(["mcq", "short", "cloze", "circuit", "logic", "rich", "diagram", "math", "blocks"]);
+    expect(withZone).toEqual(["mcq", "short", "cloze", "code", "circuit", "logic", "rich", "diagram", "math", "blocks"]);
     const withOwnCopy = REGISTERED.filter((id) => questionType(id).studentAnswerDoc !== undefined);
     expect(withOwnCopy).toEqual(withZone);
   });

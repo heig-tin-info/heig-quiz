@@ -88,6 +88,7 @@ import {
   retakesEnabled,
   studentEvaluationRows,
   totalPointsByEvaluation,
+  handoutPrints,
 } from "../evaluation/service.js";
 import { endAttempts, seated } from "./dwell.js";
 import { endKioskSessions } from "../../auth/session.js";
@@ -1588,11 +1589,13 @@ export async function startPractice(
  * already read: the exercises over and open to practice in a classroom that
  * is not archived, newest closed first, each with the student's unfinished
  * practice attempt and the score of their latest finished one — points,
- * never a grade.
+ * never a grade — and whether its blank print is made (`printable`, the ids
+ * `handoutPrints` let through).
  */
 function practiceCardsOf(
   rows: readonly StudentRow[],
   mine: readonly AttemptRecord[],
+  printable: ReadonlySet<string>,
   scores: { totals: ReadonlyMap<string, number>; itemCounts: ReadonlyMap<string, number>; tallies: ReadonlyMap<string, AttemptTally> },
 ): PracticeCard[] {
   return rows
@@ -1610,6 +1613,7 @@ function practiceCardsOf(
         closedAt: isoOrNull(evaluation.closedAt),
         openAttemptId: own.find((a) => !isFinishedAttempt(a.state))?.id ?? null,
         count: finished.length,
+        printable: printable.has(evaluation.id),
         last:
           last === null
             ? null
@@ -1970,7 +1974,7 @@ export async function studentBoard(
   });
   const scored = [...new Set([...withRetakes, ...readableEarly])];
   const scoredIds = [...new Set([...scored, ...practiced].map((r) => r.evaluation.id))];
-  const [grades, totals, itemCounts, keptTallies] = await Promise.all([
+  const [grades, totals, itemCounts, keptTallies, printable] = await Promise.all([
     releasedGradesOf(db, userId, rows, perEvaluation),
     totalPointsByEvaluation(db, scoredIds),
     countedItemsByEvaluation(db, scoredIds),
@@ -1978,6 +1982,10 @@ export async function studentBoard(
       ...scored.map((row) => countedAttemptId(perEvaluation, row)).filter((id): id is string => id !== null),
       ...lastPractice,
     ]),
+    handoutPrints(
+      db,
+      practiced.map((r) => r.evaluation),
+    ),
   ]);
 
   const retakesOf = (row: (typeof rows)[number]): EvaluationCard["retakes"] => {
@@ -2084,6 +2092,6 @@ export async function studentBoard(
       past.push(ended);
     } else open.push(withConditions(row, c));
   }
-  const practice = practiceCardsOf(practiced, practiceRows, { totals, itemCounts, tallies: keptTallies });
+  const practice = practiceCardsOf(practiced, practiceRows, printable, { totals, itemCounts, tallies: keptTallies });
   return { polls, open, upcoming, past, practice };
 }
