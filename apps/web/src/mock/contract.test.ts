@@ -720,6 +720,8 @@ const UNCHECKED = [
   "/app/api/evaluations/:id/document.pdf", // a PDF file
   "/app/api/evaluations/:id/handout.pdf", // a PDF file
   "/app/api/evaluations/:id/results/attempts/:attemptId/copy.pdf", // a PDF file
+  "/app/api/attempts/:id/copy.pdf", // a PDF file
+  "/app/api/student/evaluations/:id/handout.pdf", // a PDF file
   "/app/api/me", // Me
   "/app/api/courses", // CourseSummary[]
   "/app/api/classrooms/:id", // ClassroomDetail

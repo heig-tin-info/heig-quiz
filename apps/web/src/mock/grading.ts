@@ -976,6 +976,9 @@ on("GET", "/app/api/evaluations/:id/results/attempts/:attemptId/copy.pdf", (m) =
   gradingWorldOr404(m.groups!.id!);
   return mockPdf("copy.pdf");
 });
+// The student's own documents (ADR-112 amendment of 2026-11-03): their copy, a past series' blank print.
+on("GET", "/app/api/attempts/:id/copy.pdf", () => mockPdf("my-copy.pdf"));
+on("GET", "/app/api/student/evaluations/:id/handout.pdf", () => mockPdf("handout.pdf"));
 
 on("GET", "/app/api/evaluations/:id/grading/progress", (m) => {
   const e = gradingWorldOr404(m.groups!.id!);

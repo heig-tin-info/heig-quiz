@@ -403,6 +403,29 @@ export const StaffCopyRecord = StaffCopy.extend({
 export type StaffCopyRecord = z.infer<typeof StaffCopyRecord>;
 
 /**
+ * `GET /attempts/:id/copy.json` (the student, ADR-112 amendment of
+ * 2026-11-03, ADR-125 §18): the student's own copy of one handed-in attempt
+ * as a file — the feedback page's {@link StudentResults}, built by the same
+ * `studentFeedback` and nothing else, so the key, the explanation, the
+ * answer and the comment are each there only where the policy shows them.
+ * The retake offer and the standings are actions of the page, not part of
+ * the copy; a practice attempt has none (ADR-122 §10). Here, beside the
+ * shape it narrows, for the reason {@link StaffCopyRecord} is.
+ */
+export const StudentCopyRecord = StudentResults.omit({
+  available: true,
+  retake: true,
+  review: true,
+  practice: true,
+}).extend({
+  kind: z.literal("student-copy"),
+  version: z.literal(1),
+  /** The server's clock. */
+  generatedAt: z.iso.datetime(),
+});
+export type StudentCopyRecord = z.infer<typeof StudentCopyRecord>;
+
+/**
  * Where a row of the student's Grades page stands (F-RES-04, F-ORG-14):
  * `released` — the results are released; `withheld` — released, under the
  * feedback policy `none`: the grade is not shared; `available` — not

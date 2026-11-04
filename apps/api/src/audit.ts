@@ -384,6 +384,9 @@ export type AuditAction =
    * user, actor the user. `payload`: counts only — `classrooms`,
    * `gradeRows`, `feedback`, `projects`, `drillClassrooms`, `hours` —
    * never a title, a grade or an address. A read, traced like `attempt.read` and `assist.read`.
+   * The student's two documents (ADR-112 amendment of 2026-11-03) carry a
+   * `kind` instead: `student-copy` with `attemptId`, `handout` (the blank
+   * print of a past series) with `evaluationId`.
    */
   | "privacy.export"
   /**

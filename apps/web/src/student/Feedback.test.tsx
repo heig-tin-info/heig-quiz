@@ -1,8 +1,9 @@
-import { screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
 import { makeFeedback } from "../test/grading-fixtures";
-import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, ok, publicConfig, renderWithProviders } from "../test/render";
 import { Feedback } from "./Feedback";
 
 /*
@@ -130,6 +131,53 @@ describe("student feedback", () => {
     expect(await screen.findByRole("heading", { name: "Question 1" })).toBeVisible();
     expect(screen.queryByText("Explanation")).toBeNull();
     expect(screen.queryByText("Your teacher's comment")).toBeNull();
+  });
+
+  describe("Download my copy (F-EXP-06)", () => {
+    const COPY = "/app/api/attempts/a1/copy";
+    const open = async () => {
+      await userEvent.click(await screen.findByRole("button", { name: "Download my copy" }));
+      return (await screen.findAllByRole("menuitem")).map((item) => item.textContent);
+    };
+
+    it("offers the PDF and the JSON of the page, and words the hourly limit", async () => {
+      const createObjectURL = vi.fn((_blob: Blob) => "blob:pdf");
+      // jsdom has no object URLs (and `URL` is this file's route here).
+      Object.assign(globalThis.URL, { createObjectURL, revokeObjectURL: vi.fn() });
+      mockFetch({
+        [`GET ${URL}`]: ok(makeFeedback()),
+        ...publicConfig(true),
+        [`GET ${COPY}.pdf`]: fail(429, { error: "rate_limited" }),
+      });
+      renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+      await waitFor(async () => expect(await open()).toEqual(["PDF", "JSON"]));
+      expect(screen.getByRole("menuitem", { name: "JSON" })).toHaveAttribute("href", `${COPY}.json`);
+      await userEvent.click(screen.getByRole("menuitem", { name: "PDF" }));
+      expect(await screen.findByText("Too many downloads in an hour. Try again later.")).toBeInTheDocument();
+      expect(createObjectURL).not.toHaveBeenCalled();
+    });
+
+    it("hides the PDF when the server makes none", async () => {
+      mockFetch({ [`GET ${URL}`]: ok(makeFeedback()), ...publicConfig(false) });
+      renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+      expect(await open()).toEqual(["JSON"]);
+    });
+
+    it("is not offered on a practice attempt, nor before the page shows anything", async () => {
+      mockFetch({ [`GET ${URL}`]: ok({ ...makeFeedback(), grade: null, practice: true }), ...publicConfig(true) });
+      const { unmount } = renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+      expect(await screen.findByRole("heading", { name: "Question 1" })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Download my copy" })).toBeNull();
+      unmount();
+
+      mockFetch({
+        [`GET ${URL}`]: ok({ available: false, reason: "results_pending", evaluation: { id: "e1", title: "Quiz 3" } }),
+        ...publicConfig(true),
+      });
+      renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+      expect(await screen.findByText("Results not published yet")).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Download my copy" })).toBeNull();
+    });
   });
 
   // ADR-118 §5: the essay's validated points per criterion, when the key let them through.

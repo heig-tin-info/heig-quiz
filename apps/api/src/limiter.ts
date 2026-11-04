@@ -26,6 +26,16 @@ export class FixedWindowLimiter {
     return null;
   }
 
+  /**
+   * What {@link hit} would answer, without counting: for a caller that counts
+   * only what it delivers (a refused or failed request costs no slot).
+   */
+  wait(key: string, nowMs: number): number | null {
+    const current = this.windows.get(key);
+    if (!current || nowMs - current.start >= this.windowMs || current.count < this.limit) return null;
+    return Math.max(1, Math.ceil((current.start + this.windowMs - nowMs) / 1000));
+  }
+
   /** Forgets the closed windows, so the map holds only the callers of the last window. */
   private prune(nowMs: number) {
     for (const [key, w] of this.windows) {

@@ -1709,6 +1709,8 @@ const scenes = [
   { name: "results-error", role: "teacher", path: "/evaluations/closed/results?fail=1", settle: 2500 },
 
   { name: "feedback", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback` },
+  // F-EXP-06: the student's own copy, PDF or JSON, from a quiet row under the score.
+  { name: "feedback-download", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback`, fold: true, act: async (p) => { await p.getByRole("button", { name: /^(Download my copy|Télécharger ma copie)$/ }).click(); await p.getByRole("menuitem").first().waitFor(); } },
   // ADR-118 §5: the key published, an essay's validated points per criterion under the answer.
   { name: "feedback-rich", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback?showkey=1`, fold: true, act: async (p) => {
       const list = p.getByRole("list", { name: /^(Points per criterion|Points par critère)$/ }).first();

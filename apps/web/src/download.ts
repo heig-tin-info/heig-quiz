@@ -49,7 +49,17 @@ export function useDownload() {
     mutationFn: downloadFile,
     onError: (error) =>
       toast(
-        wordedRefusal(error, { pdf_unavailable: "export.unavailable", pdf_busy: "export.busy", pdf_failed: "export.failed" }, t),
+        wordedRefusal(
+          error,
+          {
+            pdf_unavailable: "export.unavailable",
+            pdf_busy: "export.busy",
+            pdf_failed: "export.failed",
+            // A student's documents: 20 an hour (ADR-112 amendment of 2026-11-03).
+            rate_limited: "export.limited",
+          },
+          t,
+        ),
         "error",
       ),
   });

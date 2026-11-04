@@ -34,6 +34,7 @@ import {
   afterDueOpen,
   effectiveFeedbackPolicy,
   evaluationTotal,
+  practiceRefusal,
   type MaskedPerson,
   clockChoiceOf,
 } from "@quiz/domain";
@@ -236,6 +237,25 @@ export function practiceOpen(row: EvaluationRecord): boolean {
     safeExamBrowser: settings.safeExamBrowser,
     kiosk: settings.kiosk,
   });
+}
+
+/**
+ * ADR-122 §9, "Past series": whether this evaluation is one of them for a
+ * student of its classroom (`archivedAt`, the classroom's) — an exercise
+ * that is over and takes practice attempts, in a classroom not archived.
+ * The one rule the home's list and the series' blank print (ADR-112
+ * amendment of 2026-11-03) read: the practice rule (`practiceRefusal`)
+ * before any student's own attempts count.
+ */
+export function inPastSeries(row: EvaluationRecord, archivedAt: Date | null): boolean {
+  return (
+    practiceRefusal({
+      open: practiceOpen(row),
+      evaluationState: row.state,
+      archived: archivedAt !== null,
+      unfinishedOfficial: false,
+    }) === null
+  );
 }
 
 /**

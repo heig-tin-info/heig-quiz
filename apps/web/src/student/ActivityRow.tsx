@@ -98,6 +98,7 @@ export function ActivityRow({
   status,
   meta,
   workMeta,
+  tools,
   action,
 }: {
   kind: RowKind;
@@ -111,6 +112,8 @@ export function ActivityRow({
   meta?: React.ReactNode;
   /** A second line of facts, under `meta`: a project's work on its repository. */
   workMeta?: React.ReactNode;
+  /** A quiet icon button before the row's one action (a past series' print), never a second button. */
+  tools?: React.ReactNode;
   action?: RowAction | undefined;
 }) {
   return (
@@ -141,7 +144,12 @@ export function ActivityRow({
         {meta ? <MetaLine className="mt-1.5">{meta}</MetaLine> : null}
         {workMeta ? <MetaLine className="mt-1">{workMeta}</MetaLine> : null}
       </div>
-      {action ? <RowActionControl action={action} /> : null}
+      {tools || action ? (
+        <div className="flex items-center gap-2">
+          {tools}
+          {action ? <RowActionControl action={action} /> : null}
+        </div>
+      ) : null}
     </Card>
   );
 }

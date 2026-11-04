@@ -12,6 +12,7 @@ import type {
 import { formatPoints } from "@quiz/domain";
 
 import { api } from "../api";
+import { CopyDownload } from "../CopyDownload";
 import { Grade } from "../Grade";
 import { useT, type Dict, type TFunction } from "../i18n";
 import type { Route } from "../router";
@@ -329,6 +330,14 @@ export function Feedback({
           />
         </div>
         {practice ? <PracticePendingLine count={data.pendingCount} /> : <PendingLine count={data.pendingCount} />}
+        {/* "Download my copy" (F-EXP-06): this page as a file, a quiet row
+            under the score, never the page's action. ADR-122 §10: a
+            practice attempt has no copy. */}
+        {practice ? null : (
+          <div className="pt-1">
+            <CopyDownload own={data.attemptId} labelled />
+          </div>
+        )}
       </div>
       {practice ? (
         <div className="flex justify-center">

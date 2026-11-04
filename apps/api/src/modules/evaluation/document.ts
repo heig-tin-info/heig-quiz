@@ -13,11 +13,14 @@
  *     each item followed by its answer zones; the name frame first. Worded
  *     in the reader's language (ADR-125 §7).
  *
- * Staff-only, both: the routes load the evaluation through `staffEvaluation`
- * (invariant 6). Each is refused as a whole (`409 not_printable`) when the
- * evaluation does not print (`printRefusal`), before anything else is read.
+ * The staff routes load the evaluation through `staffEvaluation`
+ * (invariant 6); the hand-out has a second reader, a student printing a past
+ * series, loaded by the privacy module's `findPastSeries` (ADR-112 amendment
+ * of 2026-11-03). Each document is refused as a whole (`409 not_printable`)
+ * when the evaluation does not print (`printRefusal`), before anything else
+ * is read.
  *
- * It lives beside the `evaluation` service rather than in it: it reads the
+ * It lives beside the `evaluation` service, which re-exports it: it reads the
  * `live` module's student exit, which itself imports the service.
  */
 import type { EvaluationDocumentRecord, HandoutRecord } from "@quiz/contracts";
