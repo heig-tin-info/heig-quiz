@@ -272,6 +272,27 @@ local stub, grading leaves a placeholder for the teacher. See
 A teacher may explicitly copy an AI justification into a comment; validation
 alone does not expose it to students.
 
+## PDF export (optional)
+
+The PDF exports compile with [Typst](https://typst.app) on the server
+([ADR-125](../adr/ADR-125-copies-papier-pdf-typst.md)). It is optional in
+development: without a `typst` on PATH the probe says so once in the log,
+`GET /app/api/config` answers `pdf: false`, the PDF buttons are
+hidden and a PDF route answers `503 pdf_unavailable`. To have them, put the
+pinned binary on PATH, or name it with `TYPST_BIN`:
+
+```bash
+node scripts/fetch-typst.mjs ~/.local/bin    # typst 0.15.1, checked by its sha256
+```
+
+A Typst that cannot see the system's temporary directory (the snap package,
+confined to its own `/tmp`) fails the probe and counts as missing: use the
+script's binary. The API's PDF tests compile with it and read the PDF back
+with poppler's `pdftotext`; they skip on a workstation without Typst and
+fail in CI, which installs both (`scripts/ci-pdf-tools.sh`). The limits of
+a compile are in [deployment](deployment.md) (`PDF_TIMEOUT_MS`,
+`PDF_MAX_MEMORY_MB`).
+
 ## The smoke test
 
 ```bash

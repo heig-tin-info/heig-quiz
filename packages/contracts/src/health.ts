@@ -94,6 +94,8 @@ export const SYSTEM_CHECK_KEYS = [
   ...SERVICE_CHECK_KEYS,
   // The LLM gateway's spend today against its daily cap (ADR-058 §7).
   "llm.budget",
+  // The Typst binary of the PDF exports (ADR-125 §3).
+  "pdf",
 ] as const;
 export type SystemCheckKey = (typeof SYSTEM_CHECK_KEYS)[number];
 
@@ -138,6 +140,8 @@ export const CHECK_CAUSES = [
   "service.failing",
   "llm.budget",
   "mail.dry_run",
+  "pdf.unavailable",
+  "pdf.uncapped",
   "check.failed",
 ] as const;
 export type CheckCause = (typeof CHECK_CAUSES)[number];

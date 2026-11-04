@@ -132,7 +132,8 @@ export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: str
 
   /**
    * F-EXP-01 (ADR-121): every enrolled student's answer to one item, as the
-   * Markdown file the panel's Export and Copy fetch, or as its record. Staff
+   * Markdown file the panel's Export and Copy fetch, the same document as a
+   * PDF (ADR-125, English like every staff document), or its record. Staff
    * only, beside the results CSV and like it neither anonymised nor audited.
    */
   const answerFiles = {
@@ -146,15 +147,22 @@ export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: str
       type: "application/json; charset=utf-8",
       body: (found: ItemAnswers) => JSON.stringify(ItemAnswersRecord.parse(found.record)),
     },
+    pdf: {
+      text: true,
+      type: "application/pdf",
+      // Drawn with the images the reader may see (a staff member: all of them).
+      body: (found: ItemAnswers, req: FastifyRequest) =>
+        app.pdf.render(itemAnswersDocument(found, opts.commitSha), req.user!),
+    },
   };
   for (const [format, file] of Object.entries(answerFiles)) {
     app.get(
       `/app/api/evaluations/:id/items/:itemId/answers.${format}`,
       { preHandler: requireTeacher },
-      teacher({ params: ItemParam, load: staffEvaluation }, async ({ reply, now, params, scope }) => {
+      teacher({ params: ItemParam, load: staffEvaluation }, async ({ req, reply, now, params, scope }) => {
         const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: file.text });
         if (!found) return notFound(reply);
-        return sendAttachment(reply, file.type, `${found.basename}.${format}`, file.body(found));
+        return sendAttachment(reply, file.type, `${found.basename}.${format}`, await file.body(found, req));
       }),
     );
   }

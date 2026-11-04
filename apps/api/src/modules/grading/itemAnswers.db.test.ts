@@ -22,6 +22,7 @@ import { enterStarted, publishQuestion, reload, seedLive } from "../../test/live
 import { addItems, applyState, joinedItems, type EvaluationRecord } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
+import { probeTypst } from "../../typst/service.js";
 import { exportsText, writeGrading } from "./service.js";
 
 const TEMPLATE = "// @@lock\nint main(void) {\n// @@endlock\n    return 0;\n// @@lock\n}\n// @@endlock\n";
@@ -180,7 +181,7 @@ async function gradedExercise() {
   return { evaluation: evaluation as EvaluationRecord, code, shortItem, mcq, cloze, best, worse, empty };
 }
 
-const url = (itemId: string, ext: "md" | "json") =>
+const url = (itemId: string, ext: "md" | "json" | "pdf") =>
   `/app/api/evaluations/${built.evaluation.id}/items/${itemId}/answers.${ext}`;
 
 describe("every answer to one item (F-EXP-01)", () => {
@@ -303,5 +304,53 @@ describe("every answer to one item (F-EXP-01)", () => {
     expect(own).toMatch(/\| \(2\) \| right \|/);
     expect(text).not.toContain("WORSE_MARKER");
     expect(text).not.toContain("TEACHER_WALK_MARKER");
+  });
+});
+
+/*
+ * The same document as a PDF (ADR-125 §3): compiled by the real binary when
+ * the machine has one — `TYPST_BIN` or `typst` on PATH — and always in CI,
+ * which installs it; a server whose probe failed answers 503.
+ */
+const typst = await probeTypst(process.env["TYPST_BIN"] ?? "typst", 1024);
+
+describe("every answer to one item, as a PDF (ADR-125)", () => {
+  it.skipIf(!typst.available && !process.env["CI"])("serves the class's answers as a PDF, named like the Markdown", async () => {
+    const res = await get(url(built.code.item.id, "pdf"), teacher.headers);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/pdf");
+    expect(res.headers["content-disposition"]).toMatch(/^attachment; filename="[a-z0-9-]+-q\d+\.pdf"$/);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    expect(res.rawPayload.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
+
+  it("refuses a type that does not render as text, and anyone the evaluation is not theirs", async () => {
+    const refused = await get(url(built.shortItem.item.id, "pdf"), teacher.headers);
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().error).toBe("not_exportable");
+    expect((await get(url(built.code.item.id, "pdf"), other.headers)).statusCode).toBe(404);
+    expect((await get(url(built.code.item.id, "pdf"), student.headers)).statusCode).toBe(403);
+  });
+
+  it("answers 503 pdf_unavailable on a server without Typst, whose config says so", async () => {
+    // Its own server: the probe runs once per process, against this binary.
+    const bare = await testServer({ TYPST_BIN: "/nonexistent/typst" });
+    try {
+      const owner = await bare.signIn("teacher");
+      const seed = await seedLive(bare.app.db, { teacherId: owner.id, students: 1, questions: 0 });
+      const question = await publishQuestion(bare.app.db, seed.poolId, owner.id, "pick", { type: "mcq", config: MCQ });
+      await addItems(bare.app.db, await reload(bare.app.db, seed.evaluationId), [question], () => 1, { attemptCount: 0 });
+      const [item] = await joinedItems(bare.app.db, seed.evaluationId);
+      const res = await bare.app.inject({
+        method: "GET",
+        url: `/app/api/evaluations/${seed.evaluationId}/items/${item!.item.id}/answers.pdf`,
+        headers: owner.headers,
+      });
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toMatchObject({ error: "pdf_unavailable" });
+      expect((await bare.app.inject({ method: "GET", url: "/app/api/config" })).json()).toMatchObject({ pdf: false });
+    } finally {
+      await bare.close();
+    }
   });
 });

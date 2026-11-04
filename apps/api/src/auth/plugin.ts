@@ -387,6 +387,8 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     "/app/api/config",
     async (): Promise<PublicConfig> => ({
       devLogin: development,
+      // The probe runs once per process (`typst/service.ts`).
+      pdf: (await app.pdf.status()).available,
       kiosk:
         config.KIOSK_ATTESTATION === "off"
           ? null

@@ -1,7 +1,7 @@
 import DOMPurify from "dompurify";
 import { Marked, type Tokens } from "marked";
 
-import { decodeEntities } from "@quiz/docrender/entities";
+import { decodeEntities } from "@quiz/docexport/entities";
 import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
 import { FormulaBudget } from "@quiz/docrender/katex";
 import { spaceTextToken } from "@quiz/docrender/typography";

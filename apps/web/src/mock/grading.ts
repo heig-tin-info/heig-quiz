@@ -955,6 +955,14 @@ on("GET", "/app/api/evaluations/:id/grading/steps", (m) => {
   };
 });
 
+// ADR-125: the config says the mock makes PDFs, so Export's PDF item downloads one (an empty page).
+on("GET", "/app/api/evaluations/:id/items/:itemId/answers.pdf", (m) => {
+  gradingWorldOr404(m.groups!.id!);
+  return new Response("%PDF-1.7\n%mock\n%%EOF\n", {
+    headers: { "content-type": "application/pdf", "content-disposition": 'attachment; filename="answers.pdf"' },
+  });
+});
+
 on("GET", "/app/api/evaluations/:id/grading/progress", (m) => {
   const e = gradingWorldOr404(m.groups!.id!);
   const total = e.attempts.length * e.items.length;

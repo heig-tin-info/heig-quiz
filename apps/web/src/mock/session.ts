@@ -113,7 +113,8 @@ export const setMe = (next: Me | null) => {
   me = next;
 };
 
-on("GET", "/app/api/config", (): PublicConfig => ({ devLogin: true, kiosk: { extensionId: null, mock: true } }));
+// `pdf`: the mock makes no PDF, but shows where the buttons stand (ADR-125 §3).
+on("GET", "/app/api/config", (): PublicConfig => ({ devLogin: true, kiosk: { extensionId: null, mock: true }, pdf: true }));
 
 on("GET", "/app/api/me", () => {
   if (!me) throw new MockError(401, "Signed out");
