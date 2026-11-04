@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { EN_LABELS, FR_LABELS, PX_MM, scopeZones, toSvg, type AnswerZone, type Block, type Lang } from "@quiz/docexport";
 import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
-import { GRID, type Scene } from "@quiz/diagram/server";
+import { DIAGRAM_KINDS, GRID, type Scene } from "@quiz/diagram/server";
 
 import type { DiagramConfig } from "./schema.js";
 import { diagramServer } from "./server.js";
@@ -51,6 +51,16 @@ describe("the diagram on paper (ADR-126)", () => {
     const under = toSvg(frame.underlay!, { greyed: true });
     expect(under.ok && under.svg).toContain(">Shape</text>");
     expect(under.ok && under.svg).not.toContain("#000000");
+  });
+
+  it.each(["en", "fr"] as const)("names every notation in the reader's words, each its own (%s)", (lang) => {
+    const names = DIAGRAM_KINDS.map((kind) => {
+      const student = diagramServer.toStudent({ ...SECRET_CONFIG, kind, starter: undefined }, view);
+      const [, notation] = diagramServer.statementDoc!(student, LABELS[lang]);
+      return notation?.kind === "markdown" ? notation.text : "";
+    });
+    expect(names.every((name) => name.startsWith("Notation"))).toBe(true);
+    expect(new Set(names).size).toBe(DIAGRAM_KINDS.length);
   });
 
   it("sizes the frame from the starter or a default, never from the reference (ADR-126 §6)", () => {
