@@ -13,8 +13,10 @@ import type { ReactNode } from "react";
 import { parseMap, type GridMap, type Heading } from "@quiz/domain/blocks";
 import { cx } from "@quiz/ui";
 
-/** One cell of the player's map, in viewBox units (DESIGN.md: 44 px). */
-export const CELL = 44;
+import { MAP_CELL, RACK, ROBOT_BODY, ROBOT_RX, robotChevron, SHELVES } from "./mapFigure.js";
+
+/** One cell of the player's map, in viewBox units (DESIGN.md: 44 px); the printed map's too. */
+export const CELL = MAP_CELL;
 
 export interface Pose {
   x: number;
@@ -32,14 +34,15 @@ export function mapOf(rows: readonly string[]): GridMap | null {
 }
 
 function Rack({ x, y, cell, shelves }: { x: number; y: number; cell: number; shelves: boolean }) {
-  const pad = shelves ? 5 : 1;
+  const { pad, rx } = shelves ? RACK.shelves : RACK.flat;
   const side = cell - 2 * pad;
+  const inset = RACK.shelfInset;
   return (
     <g transform={`translate(${x * cell + pad} ${y * cell + pad})`}>
-      <rect width={side} height={side} rx={shelves ? 3 : 1} className="fill-fg-faint/60" />
+      <rect width={side} height={side} rx={rx} className="fill-fg-faint/60" />
       {shelves
-        ? [0.33, 0.66].map((at) => (
-            <line key={at} x1={3} x2={side - 3} y1={side * at} y2={side * at} strokeWidth={2} className="stroke-surface-2" />
+        ? SHELVES.map((at) => (
+            <line key={at} x1={inset} x2={side - inset} y1={side * at} y2={side * at} strokeWidth={2} className="stroke-surface-2" />
           ))
         : null}
     </g>
@@ -48,16 +51,16 @@ function Rack({ x, y, cell, shelves }: { x: number; y: number; cell: number; she
 
 /** The robot at the centre of its cell, turned to its heading; it glides from cell to cell. */
 export function Robot({ pose, cell, crashed = false }: { pose: Pose; cell: number; crashed?: boolean }) {
-  const body = cell * 0.62;
+  const body = cell * ROBOT_BODY;
   return (
     <g
       data-testid="robot"
       className="transition-transform duration-200 ease-out motion-reduce:transition-none"
       style={{ transform: `translate(${pose.x * cell + cell / 2}px, ${pose.y * cell + cell / 2}px) rotate(${pose.heading * 90}deg)` }}
     >
-      <rect x={-body / 2} y={-body / 2} width={body} height={body} rx={7} className={crashed ? "fill-danger" : "fill-fg"} />
+      <rect x={-body / 2} y={-body / 2} width={body} height={body} rx={ROBOT_RX} className={crashed ? "fill-danger" : "fill-fg"} />
       <path
-        d={`M ${-body * 0.22} ${body * 0.12} L 0 ${-body * 0.2} L ${body * 0.22} ${body * 0.12}`}
+        d={robotChevron(body)}
         fill="none"
         strokeWidth={2.4}
         strokeLinecap="round"

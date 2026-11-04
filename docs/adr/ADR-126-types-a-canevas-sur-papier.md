@@ -81,8 +81,10 @@ ADR-125 §2, unchecked by any renderer).
    new in the compile root, no change to the sandbox of ADR-125 §2.
 
 3. **The ruled frame.** The `free` answer zone gains
-   `pattern?: { kind: "grid" | "lines"; pitchMm: number }` and
-   `underlay?: Drawing`. With a pattern, the Typst renderer fills the
+   `ruling?: { kind: "grid" | "lines"; pitchMm: number }` and
+   `underlay?: Drawing` (named `ruling`, not `pattern`: `pattern` is a
+   short answer's key, forbidden in every student payload and searched
+   for in every hand-out). With a ruling, the Typst renderer fills the
    frame of the zone's height with native Typst — a `tiling` of 0.25 pt
    lines at `luma(205)`, `pitchMm` apart (4 mm when not finite, held within
    2 to 20 mm): a square grid to draw on, or horizontal ruled lines to
@@ -119,11 +121,11 @@ ADR-125 §2, unchecked by any renderer).
 
 8. **Which types print, and what** (amends ADR-125 §5 and §20):
    - `diagram`, `circuit`, `logic`: `answerZone` returns a `free` frame
-     with a `grid` pattern; `statementDoc` prints the figure the student is given (a
+     with a `grid` ruling; `statementDoc` prints the figure the student is given (a
      circuit's or a logic box's fixed parts, a diagram's starter); the
      documents that show the key (`solutionDoc`) print the reference design
      as a `drawing`.
-   - `blocks`: the answer zone is a `free` frame with a `lines` pattern, for
+   - `blocks`: the answer zone is a `free` frame with a `lines` ruling, for
      pseudo-code written by hand; the statement prints the visible warehouse
      maps as drawings, the battery, the toolbox and the starter program as
      pseudo-code; the key prints the reference program as pseudo-code. A

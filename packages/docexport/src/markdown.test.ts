@@ -175,7 +175,7 @@ describe("drawings (ADR-126)", () => {
   });
 
   it("previews a ruled frame as a plain one, its starter left out", () => {
-    const zone = answerZone("free", { heightMm: 40, pattern: { kind: "grid", pitchMm: 4 }, underlay: figure });
+    const zone = answerZone("free", { heightMm: 40, ruling: { kind: "grid", pitchMm: 4 }, underlay: figure });
     expect(body([zone])).toBe(body([answerZone("free", { heightMm: 40 })]));
     expect(body([zone])).not.toContain("SECRET_SVG");
   });

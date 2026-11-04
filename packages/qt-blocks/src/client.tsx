@@ -43,7 +43,10 @@ export const blocksClient: QuestionTypeClient<BlocksConfig, BlocksAnswer, Blocks
   grading: blocksGrading,
 };
 
+// `BLOCKS_PAPER_WORDS` is the server's (the printed words); exported here only
+// for the web test that holds the app's French `qt.blocks.c.*` equal to it.
 export {
+  BLOCKS_PAPER_WORDS,
   blocksCanvasStrings,
   blocksEditorStrings,
   blocksGradingStrings,

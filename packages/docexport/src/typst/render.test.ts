@@ -167,29 +167,29 @@ describe("renderTypst", () => {
       renderTypst(
         doc([
           ...scopeZones("i0", [answerZone("free", { heightMm: 60 })]),
-          ...scopeZones("i1", [answerZone("free", { heightMm: 100, pattern: { kind: "grid", pitchMm: 4 } })]),
-          ...scopeZones("i2", [answerZone("free", { heightMm: 20, pattern: { kind: "grid", pitchMm: 5 }, underlay: starter })]),
-          ...scopeZones("i3", [answerZone("free", { pattern: { kind: "lines", pitchMm: 8 } })]),
-          ...scopeZones("i4", [answerZone("free", { pattern: { kind: "grid", pitchMm: Number.NaN } })]),
-          ...scopeZones("i5", [answerZone("free", { pattern: { kind: "lines", pitchMm: 99 } })]),
+          ...scopeZones("i1", [answerZone("free", { heightMm: 100, ruling: { kind: "grid", pitchMm: 4 } })]),
+          ...scopeZones("i2", [answerZone("free", { heightMm: 20, ruling: { kind: "grid", pitchMm: 5 }, underlay: starter })]),
+          ...scopeZones("i3", [answerZone("free", { ruling: { kind: "lines", pitchMm: 8 } })]),
+          ...scopeZones("i4", [answerZone("free", { ruling: { kind: "grid", pitchMm: Number.NaN } })]),
+          ...scopeZones("i5", [answerZone("free", { ruling: { kind: "lines", pitchMm: 99 } })]),
           ...scopeZones("i6", [answerZone("free", { underlay: { viewBox: [0, 0, 1, 1], items: [{ kind: "path", d: "x" }] } })]),
         ]),
       ).source,
     ).split("\n\n");
     expect(zones[0]).toBe('#zone("i0", "free", free(60mm))');
-    expect(zones[1]).toBe('#zone("i1", "free", free(100mm, pattern: "grid", pitch: 4mm))');
+    expect(zones[1]).toBe('#zone("i1", "free", free(100mm, ruling: "grid", pitch: 4mm))');
     // 960 px at 25.4/96 mm each: 254 mm, wider than the frame, which clips it.
-    expect(zones[2]).toMatch(/^#zone\("i2", "free", free\(20mm, pattern: "grid", pitch: 5mm, under: \("<svg [^\n]*", 254\)\)\)$/);
+    expect(zones[2]).toMatch(/^#zone\("i2", "free", free\(20mm, ruling: "grid", pitch: 5mm, under: \("<svg [^\n]*", 254\)\)\)$/);
     expect(zones[2]).toContain("#8c8c8c");
     expect(zones[2]).not.toContain("#000000");
-    expect(zones[3]).toBe('#zone("i3", "free", free(40mm, pattern: "lines", pitch: 8mm))');
-    expect(zones[4]).toBe('#zone("i4", "free", free(40mm, pattern: "grid", pitch: 4mm))');
-    expect(zones[5]).toBe('#zone("i5", "free", free(40mm, pattern: "lines", pitch: 20mm))');
+    expect(zones[3]).toBe('#zone("i3", "free", free(40mm, ruling: "lines", pitch: 8mm))');
+    expect(zones[4]).toBe('#zone("i4", "free", free(40mm, ruling: "grid", pitch: 4mm))');
+    expect(zones[5]).toBe('#zone("i5", "free", free(40mm, ruling: "lines", pitch: 20mm))');
     expect(zones[6]).toBe('#zone("i6", "free", free(40mm))');
     const { source } = renderTypst(doc([]));
-    expect(source).toContain("#let free(height, pattern: none, pitch: 4mm, under: none)");
+    expect(source).toContain("#let free(height, ruling: none, pitch: 4mm, under: none)");
     expect(source).toContain("tiling(size: (pitch, pitch)");
-    expect(source).toContain('if pattern == "grid"');
+    expect(source).toContain('if kind == "grid"');
     expect(source).toContain("0.25pt + luma(205)");
     expect(source).toContain('image(bytes(svg), format: "svg"');
   });
