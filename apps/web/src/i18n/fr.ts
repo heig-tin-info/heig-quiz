@@ -1943,6 +1943,9 @@ export const fr: Record<keyof Dict, string> = {
   "mcq.policy.desc.ripkey": "Part des bonnes réponses cochées, zéro dès une erreur.",
 
   // --- Question types (questionTypes.ts) ---
+  "qt.group.basics": "Bases",
+  "qt.group.engineering": "Ingénierie",
+  "qt.group.poll": "Sondage",
   "qt.mcq.label": "Choix multiple",
   "qt.mcq.hint": "Une ou plusieurs réponses à cocher.",
   "qt.short.label": "Réponse courte",

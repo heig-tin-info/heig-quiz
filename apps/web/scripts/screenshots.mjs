@@ -1402,9 +1402,14 @@ const scenes = [
       await p.getByRole("button", { name: /^(move|déplacer)$/i }).first().click();
     } },
   { name: "pool-new-question", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /nouvelle question|new question/i }).first().click() },
+  // The second tab of a small screen (#991), remembered from a last visit.
+  { name: "pool-new-question-engineering", role: "teacher", path: "/pools/p1", fold: true, ls: { "quiz-question-type-tab": "engineering" }, act: (p) => p.getByRole("button", { name: /nouvelle question|new question/i }).first().click() },
   // Its second step: a type chosen, the name field holding the focus.
   { name: "pool-new-question-name", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
     await p.getByRole("button", { name: /nouvelle question|new question/i }).first().click();
+    // Under `tabs` (a small screen, #991) Code is on the second tab.
+    const engineering = p.getByRole("tab", { name: /^(engineering|ingénierie)$/i });
+    if (await engineering.count()) await engineering.click();
     await p.getByRole("button", { name: /^(code|code image)\b/i }).first().click();
     await p.getByLabel(/internal name|nom interne/i).waitFor();
     await p.waitForTimeout(250); // the slide

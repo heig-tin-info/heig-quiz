@@ -75,7 +75,7 @@ export function NewQuestionModal({
       step === "name"
         ? namePane.current?.querySelector("input")
         : (typePane.current?.querySelector<HTMLElement>('[aria-pressed="true"]') ??
-          typePane.current?.querySelector("button"));
+          typePane.current?.querySelector<HTMLElement>("[aria-pressed]"));
     target?.focus({ preventScroll: true });
   }, [step]);
 
@@ -116,6 +116,7 @@ export function NewQuestionModal({
             <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
             <QuestionTypePicker
               types={CREATABLE_TYPE_IDS}
+              grouped
               value={type}
               onChange={(next) => {
                 setType(next);

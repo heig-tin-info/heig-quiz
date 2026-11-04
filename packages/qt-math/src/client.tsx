@@ -27,6 +27,7 @@ const MathIcon = typeIcon(
 export const mathClient: MathClient = {
   id: "math",
   labelKey: "qt.math.label",
+  group: "basics",
   hintKey: "qt.math.hint",
   Icon: MathIcon,
 
