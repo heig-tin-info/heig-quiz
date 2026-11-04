@@ -6,6 +6,13 @@
 import type { QuestionTypeServer } from "@quiz/core/server";
 import { reparseMigrate } from "@quiz/core/server";
 
+import {
+  logicAnswerDoc,
+  logicAnswerZone,
+  logicSolutionDoc,
+  logicStatementDoc,
+  logicStudentAnswerDoc,
+} from "./logicDocument.js";
 import { gradeLogic, logicStudentDetails } from "./logicGrade.js";
 import { logicSummary } from "./logicLibrary.js";
 import {
@@ -90,4 +97,11 @@ export const logicServer: QuestionTypeServer<LogicConfig, LogicAnswer, LogicStud
   searchText(config) {
     return [config.prompt, "logic", ...config.inputs, ...config.outputs.map((o) => o.name)].join(" ");
   },
+
+  /* On paper (ADR-126): a squared frame under the declared terminals, the key as equations, vectors or the reference drawn. */
+  statementDoc: logicStatementDoc,
+  solutionDoc: logicSolutionDoc,
+  answerZone: logicAnswerZone,
+  studentAnswerDoc: logicStudentAnswerDoc,
+  answerDoc: logicAnswerDoc,
 };

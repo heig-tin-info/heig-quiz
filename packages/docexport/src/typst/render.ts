@@ -18,7 +18,7 @@ import {
   type DrawingBlock,
   type TestLine,
 } from "../document.js";
-import { toSvg, type Drawing } from "../drawing.js";
+import { PX_MM, toSvg, type Drawing } from "../drawing.js";
 import { labelled, LABELS, type Labels } from "../labels.js";
 import { rawBlock, typstLine, typstString, typstTable, typstText, typstValue } from "./escape.js";
 import { markdownToTypst, typstContext, type AssetRef, type TypstContext } from "./markdown.js";
@@ -88,8 +88,8 @@ const FREE_MM = 40;
 const bounded = (value: number | undefined, min: number, max: number, fallback: number): number =>
   value !== undefined && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
 
-/** Millimetres per drawing unit when a block names no width: one CSS pixel (ADR-126 §5). */
-export const PX_MM = 25.4 / 96;
+/** Millimetres per drawing unit when a block names no width (ADR-126 §5): the drawing model's own. */
+export { PX_MM };
 
 /** The width of the text column. */
 export const COLUMN_MM = PAGE_MM.width - 2 * MARGIN_MM;

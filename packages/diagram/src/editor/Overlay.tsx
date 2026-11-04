@@ -8,8 +8,9 @@ import type { JSX } from "react";
 
 import type { Bounds, Measure, Rect } from "../geometry.js";
 import type { Route } from "../layout.js";
+import { inkPath } from "../paint.js";
 import type { DiagramNode, LinkType, Point } from "../scene.js";
-import { LinkShape, NodeShape, inkPath } from "./shapes.js";
+import { LinkShape, NodeShape } from "./shapes.js";
 import { cx, draftLine, handle, hoverFrame, inkNormal, marquee } from "./styles.js";
 
 export interface OverlayProps {

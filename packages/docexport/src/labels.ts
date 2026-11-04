@@ -44,6 +44,47 @@ export interface Labels {
   symbols: string;
   lengthLimit: string;
   characters: string;
+  /**
+   * The fixed words of the `circuit` and `logic` statements (ADR-126 §7):
+   * what the student may place, how the box is tested, what a logic
+   * circuit declares.
+   */
+  circuitParts: string;
+  circuitMaxParts: string;
+  circuitSupplies: string;
+  circuitCommonGround: string;
+  circuitSeparateGround: string;
+  circuitStimuli: string;
+  circuitSource: string;
+  circuitLoad: string;
+  circuitAnalysis: string;
+  circuitDc: string;
+  circuitSine: string;
+  circuitPulse: string;
+  circuitStep: string;
+  circuitOpen: string;
+  circuitBias: string;
+  circuitHidden: string;
+  schematic: string;
+  logicInputs: string;
+  logicOutputs: string;
+  logicGates: string;
+  logicMaxGates: string;
+  logicVectors: string;
+  /**
+   * The diagram question on paper (ADR-126): the line that names its
+   * notation, the caption of its starting diagram, and each notation's name.
+   */
+  diagramNotation: string;
+  diagramStarter: string;
+  diagramClass: string;
+  diagramUsecase: string;
+  diagramState: string;
+  diagramEr: string;
+  diagramFlow: string;
+  diagramAutomaton: string;
+  diagramGraph: string;
+  diagramFree: string;
   /** A student's copy (ADR-125 §18): its summary and what an item says of itself. */
   grade: string;
   awaitingGrading: string;
@@ -136,6 +177,38 @@ export const EN_LABELS: Labels = {
   symbols: "Symbols",
   lengthLimit: "Length limit",
   characters: "characters",
+  circuitParts: "Parts",
+  circuitMaxParts: "Parts at most",
+  circuitSupplies: "Supplies",
+  circuitCommonGround: "in− and out− are the ground.",
+  circuitSeparateGround: "in− and out− are two free nets to wire. A ground symbol names node 0.",
+  circuitStimuli: "How your circuit is tested",
+  circuitSource: "Source",
+  circuitLoad: "Load",
+  circuitAnalysis: "Analysis",
+  circuitDc: "DC",
+  circuitSine: "Sine",
+  circuitPulse: "Pulse",
+  circuitStep: "Step",
+  circuitOpen: "Open output",
+  circuitBias: "Bias",
+  circuitHidden: "Hidden stimuli",
+  schematic: "Schematic",
+  logicInputs: "Inputs",
+  logicOutputs: "Outputs",
+  logicGates: "Gates",
+  logicMaxGates: "Gates at most",
+  logicVectors: "Test vectors",
+  diagramNotation: "Notation",
+  diagramStarter: "Starting diagram",
+  diagramClass: "UML class diagram",
+  diagramUsecase: "UML use case diagram",
+  diagramState: "State machine",
+  diagramEr: "Entity-relationship diagram",
+  diagramFlow: "Flowchart",
+  diagramAutomaton: "Finite automaton",
+  diagramGraph: "Graph",
+  diagramFree: "Free drawing",
   grade: "Grade",
   awaitingGrading: "Questions awaiting grading",
   comment: "Your teacher's comment",
@@ -213,6 +286,38 @@ export const FR_LABELS: Labels = {
   symbols: "Symboles",
   lengthLimit: "Longueur maximale",
   characters: "caractères",
+  circuitParts: "Composants",
+  circuitMaxParts: "Composants au maximum",
+  circuitSupplies: "Alimentations",
+  circuitCommonGround: "in− et out− sont la masse.",
+  circuitSeparateGround: "in− et out− sont deux nœuds libres. Un symbole de masse nomme le nœud 0.",
+  circuitStimuli: "Tests du circuit",
+  circuitSource: "Source",
+  circuitLoad: "Charge",
+  circuitAnalysis: "Analyse",
+  circuitDc: "Tension continue",
+  circuitSine: "Sinus",
+  circuitPulse: "Impulsions",
+  circuitStep: "Échelon",
+  circuitOpen: "Sortie ouverte",
+  circuitBias: "Polarisation",
+  circuitHidden: "Stimuli cachés",
+  schematic: "Schéma",
+  logicInputs: "Entrées",
+  logicOutputs: "Sorties",
+  logicGates: "Portes",
+  logicMaxGates: "Portes au maximum",
+  logicVectors: "Vecteurs de test",
+  diagramNotation: "Notation",
+  diagramStarter: "Diagramme de départ",
+  diagramClass: "Diagramme de classes UML",
+  diagramUsecase: "Diagramme de cas d'utilisation UML",
+  diagramState: "Machine d'états",
+  diagramEr: "Diagramme entité-association",
+  diagramFlow: "Organigramme",
+  diagramAutomaton: "Automate fini",
+  diagramGraph: "Graphe",
+  diagramFree: "Dessin libre",
   grade: "Note",
   awaitingGrading: "Questions en attente de correction",
   comment: "Commentaire de l'enseignant",

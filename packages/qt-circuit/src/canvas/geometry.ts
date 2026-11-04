@@ -22,7 +22,21 @@ import { GRID, type PinDirection } from "../library.js";
 import type { Orientation } from "../schema.js";
 
 import { CIRCUIT_LIBRARY } from "./circuitLibrary.js";
-import type { CanvasComponent, CanvasWireEnd, PartSpec, SchematicLibrary } from "./schematicLibrary.js";
+import type { CanvasComponent, CanvasSchematic, CanvasWireEnd, PartSpec, SchematicLibrary } from "./schematicLibrary.js";
+
+/** The radii of the round glyphs, in canvas units: one size on screen and on paper. */
+export const GLYPH_RADIUS = { port: 4.5, pin: 2.6, flaggedPin: 4, junction: 3.6 } as const;
+
+/** `"c1:0"` for every pin a wire ends on: those pins are drawn by the wire, not twice. */
+export function connectedPins(schematic: CanvasSchematic): Set<string> {
+  const set = new Set<string>();
+  for (const w of schematic.wires) {
+    for (const e of [w.a, w.b]) {
+      if (e.kind === "pin") set.add(`${e.c}:${e.p}`);
+    }
+  }
+  return set;
+}
 
 // ---------------------------------------------------------------------------
 // Orientations

@@ -56,4 +56,14 @@ export const diagramLeakFixture: StudentLeakFixture<DiagramConfig> = {
   /* What only `diagram` holds: the reference diagram. */
   forbiddenKeys: ["reference", "rubric"],
   secrets: SECRET_VALUES,
+  /* A student's own drawing, and the untouched starter: no value of the key in either. */
+  answers: [
+    {
+      scene: {
+        nodes: [...STARTER.nodes, { id: "own00001", t: "class", x: 40, y: 200, name: "Square", body: ["- side : double"] }],
+        links: [{ id: "own00002", type: "inh", a: "own00001", b: "st4rt001" }],
+      },
+    },
+    { scene: STARTER },
+  ],
 };

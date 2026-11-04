@@ -3,14 +3,14 @@
  * box is as wide as its text really is. Without a canvas (jsdom, a very old
  * browser) the estimate of `geometry.ts` stands in, as on the server.
  */
-import { estimateText, type Face, type Measure } from "../geometry.js";
+import { FACE_PX, estimateText, type Face, type Measure } from "../geometry.js";
 
 const FACE: Readonly<Record<Face, (sans: string, mono: string) => string>> = {
-  name: (sans) => `600 13.5px ${sans}`,
-  italic: (sans) => `italic 600 13.5px ${sans}`,
-  stereo: (sans) => `400 12px ${sans}`,
-  mono: (_, mono) => `400 12px ${mono}`,
-  label: (sans) => `500 13px ${sans}`,
+  name: (sans) => `600 ${FACE_PX.name}px ${sans}`,
+  italic: (sans) => `italic 600 ${FACE_PX.italic}px ${sans}`,
+  stereo: (sans) => `400 ${FACE_PX.stereo}px ${sans}`,
+  mono: (_, mono) => `400 ${FACE_PX.mono}px ${mono}`,
+  label: (sans) => `500 ${FACE_PX.label}px ${sans}`,
 };
 
 export function canvasMeasure(host: Element | null): Measure {

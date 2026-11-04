@@ -11,6 +11,13 @@ import { reparseMigrate, type RunnerOutcome } from "@quiz/core/server";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
 import {
+  circuitAnswerDoc,
+  circuitAnswerZone,
+  circuitSolutionDoc,
+  circuitStatementDoc,
+  circuitStudentAnswerDoc,
+} from "./document.js";
+import {
   finalizeRunnerCircuit,
   gradeCircuit,
   interactiveOutcome,
@@ -154,6 +161,13 @@ export const circuitServer: QuestionTypeServer<
 
   toCanonical,
   fromCanonical,
+
+  /* On paper (ADR-126): a squared frame under the empty box, the reference drawn in the key. */
+  statementDoc: circuitStatementDoc,
+  solutionDoc: circuitSolutionDoc,
+  answerZone: circuitAnswerZone,
+  studentAnswerDoc: circuitStudentAnswerDoc,
+  answerDoc: circuitAnswerDoc,
 };
 
 /*

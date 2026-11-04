@@ -10,7 +10,7 @@
 import type { StudentLeakFixture } from "@quiz/core/testing";
 
 import { BOX, LIBRARY, PORTS, type ComponentKind } from "./library.js";
-import { LOGIC_PARTS } from "./logicLibrary.js";
+import { initialTerminals, LOGIC_PARTS } from "./logicLibrary.js";
 import { pinLocation } from "./netlist.js";
 import { LogicConfig, type LogicComponent, type LogicSchematic, type LogicWire } from "./logicSchema.js";
 import {
@@ -236,6 +236,8 @@ export const circuitLeakFixture: StudentLeakFixture<CircuitConfig> = {
     // The hidden stimulus is a 5 V step at 1 ms: its shape is part of the key.
     '"step"',
   ],
+  // A student's own low-pass, named as a student would: none of the secrets above.
+  answers: [{ schematic: rcSchematic({ name: "R1", value: "1k" }, { name: "C1", value: "100n" }).schematic }],
 };
 
 // ---------------------------------------------------------------------------
@@ -309,6 +311,8 @@ export const logicLeakFixture: StudentLeakFixture<LogicConfig> = {
   config: logicConfig(),
   forbiddenKeys: ["expression", "expressions", "expected", "rows", "vectors", "mode", "keyFrom", "reference", "wires"],
   secrets: [SECRET_MAJORITY, SECRET_PARITY, ...SECRET_REFERENCE_GATES],
+  // The declared terminals and one gate of the student's own.
+  answers: [{ schematic: { components: [...initialTerminals(["a", "b", "c"], ["m", "p"]), logicPart("c9", "AND2", 300, 200, "U1")], wires: [] } }],
 };
 
 /** A half adder whose key is its reference circuit, the gates named {@link SECRET_REFERENCE_GATES}. */
