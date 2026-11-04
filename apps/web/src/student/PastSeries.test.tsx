@@ -127,7 +127,7 @@ describe("the student's Past series", () => {
     });
     const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
     await user.click(await within(section).findByRole("button", { name: "Print the series" }));
-    expect(await screen.findByText("One of its questions does not print.")).toBeVisible();
+    expect(await screen.findByText("This series has a question that does not print.")).toBeVisible();
     expect(screen.queryByText("this evaluation does not print")).toBeNull();
   });
 

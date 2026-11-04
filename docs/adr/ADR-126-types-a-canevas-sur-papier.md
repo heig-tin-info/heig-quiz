@@ -137,9 +137,12 @@ ADR-125 §2, unchecked by any renderer).
      teacher does not rebuild the program in Blockly.
    - The student's own answer drawn in their copy (`studentAnswerDoc`) is a
      later, optional step.
-   - `code` *(amendment of 2026-11-04)*: prints like `blocks`, by the same
-     rule the owner chose for it — a `free` frame with a `lines` ruling, to
-     write the program by hand, at least half a page (16 lines of 8 mm), as
+   - `code` *(amendment of 2026-11-04)*: prints like `blocks`. The owner
+     chose a `lines` frame for `blocks` only; extending it to `code` was
+     decided by the orchestrator on 2026-11-04, to end the production
+     refusal of every past series holding code, and reported to the owner.
+     The frame is a `free` zone with a `lines` ruling, to write the program
+     by hand, at least half a page (16 lines of 8 mm), as
      many lines as the template the student is given has, up to 28; never
      sized from the reference. The statement prints the template without
      its marker lines; a hidden case never reaches it (#998). A paper answer

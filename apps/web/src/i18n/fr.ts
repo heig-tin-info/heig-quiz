@@ -4623,7 +4623,7 @@ export const fr: Record<keyof Dict, string> = {
   "export.busy": "Trop de PDF à la fois : réessayez dans un instant.",
   "export.failed": "Impossible de produire le PDF.",
   "export.limited": "Trop de téléchargements en une heure. Réessayez plus tard.",
-  "export.notPrintable": "Une de ses questions ne s'imprime pas.",
+  "export.notPrintable": "Cette série contient une question qui ne s'imprime pas.",
   "feedback.download": "Télécharger ma copie",
   "grading.answers.copy": "Copier",
   "grading.answers.help": "Les réponses de toute la classe à cette question, nommées, dans un seul fichier.",

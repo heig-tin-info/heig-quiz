@@ -485,12 +485,14 @@ export async function handoutPrints(
     .innerJoin(questionVersions, eq(evaluationItems.questionVersionId, questionVersions.id))
     .innerJoin(questions, eq(questionVersions.questionId, questions.id))
     .where(inArray(evaluationItems.evaluationId, list.map((e) => e.id)));
-  const prints = list.filter((evaluation) => {
-    const items = rows
-      .filter((r) => r.evaluationId === evaluation.id)
-      .map((r) => ({ question: { type: r.type }, version: { variables: r.variables } }));
-    return printRefusal(evaluation, items, "handout") === null;
-  });
+  type Printed = Parameters<typeof printRefusal>[1][number];
+  const itemsOf = new Map<string, Printed[]>();
+  for (const r of rows) {
+    const items = itemsOf.get(r.evaluationId) ?? [];
+    items.push({ question: { type: r.type }, version: { variables: r.variables } });
+    itemsOf.set(r.evaluationId, items);
+  }
+  const prints = list.filter((evaluation) => printRefusal(evaluation, itemsOf.get(evaluation.id) ?? [], "handout") === null);
   return new Set(prints.map((e) => e.id));
 }
 
