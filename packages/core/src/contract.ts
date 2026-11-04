@@ -7,7 +7,7 @@
  * (decision D1).
  */
 import type { z } from "zod";
-import type { Block } from "@quiz/docexport";
+import type { Block, Labels } from "@quiz/docexport";
 import type { AnswerGenerator, AssistTextLabel } from "./generate.js";
 import type { LlmGradeRequest, LlmRequestCriterion } from "./llm.js";
 import type { InteractiveOutcome, RunnerOutcome, RunnerRequest, RunnerService } from "./runner.js";
@@ -620,16 +620,43 @@ export interface QuestionTypeServer<
    * exit — never the config — so a statement carries no more than a student
    * is served. With {@link answerDoc}, it makes the type exportable as text;
    * a type without them has no Markdown export.
+   *
+   * `labels` are the fixed words of the document's language (ADR-125): a
+   * hand-out follows its reader's, a staff document is English. Always
+   * passed, so no hook guesses a language; one that writes no word may
+   * leave it unread.
    */
-  statementDoc?(student: TStudent): Block[];
+  statementDoc?(student: TStudent, labels: Labels): Block[];
 
   /**
    * The key as blocks (ADR-121 §2): `solution` is {@link toSolution}'s for the
    * staff, and for a student only {@link studentSolution}'s, under `showKey`.
    * `student` is the same view {@link statementDoc} reads (a code block's
-   * language, say).
+   * language, say). `labels` as for {@link statementDoc}.
    */
-  solutionDoc?(solution: TSolution, student: TStudent): Block[];
+  solutionDoc?(solution: TSolution, student: TStudent, labels: Labels): Block[];
+
+  /**
+   * Where the student answers on paper (ADR-125 §5): `answerZone` blocks,
+   * and any short text that tells one zone from the next (a cloze's `(2)`),
+   * never a word of a language. Fed only what the audience may read:
+   * `student` is {@link toStudent}'s, through the API's student exit, never
+   * the config. A zone answering one part of the item names it in `part`
+   * (`b<n>` for a blank); the document keys every zone to the item
+   * (`scopeZones`). Absent, the hand-out gives the item a free zone.
+   */
+  answerZone?(student: TStudent): Block[];
+
+  /**
+   * One answer as its STUDENT reads it (ADR-125): their own copy. Fed only
+   * what the audience may read (invariant 4): `student` is the view they
+   * were served, `answer` the stored answer brought back to that view
+   * ({@link toStudentAnswer}), and `details` the breakdown through
+   * {@link studentDetails} under the evaluation's feedback policy — `null`
+   * when nothing is graded or the policy shows no breakdown. It names a
+   * part by its place in `student`, never by a canonical index.
+   */
+  studentAnswerDoc?(student: TStudent, answer: TAnswer, details: unknown, labels: Labels): Block[];
 
   /**
    * One answer as the STAFF read it (ADR-121 §2): the source as it ran,

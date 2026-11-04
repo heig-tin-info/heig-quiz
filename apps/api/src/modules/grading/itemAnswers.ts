@@ -18,7 +18,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { ItemAnswersRecord } from "@quiz/contracts";
-import { heading, markdown, points, separator, type Block, type Document } from "@quiz/docexport";
+import { EN_LABELS, heading, markdown, points, separator, type Block, type Document } from "@quiz/docexport";
 import { slugify } from "@quiz/domain";
 import { formattedValues } from "@quiz/domain/parameters";
 
@@ -140,14 +140,16 @@ export function itemAnswersDocument(found: ItemAnswers, app: string | null): Doc
   const { record } = found;
   const { item } = record;
   const type = typeOf(item.type);
+  // A staff document: English (ADR-121 §4).
+  const l = EN_LABELS;
   const blocks: Block[] = [
     heading(1, record.evaluation.title),
-    heading(2, `Question ${item.position + 1}: ${item.internalName} (${item.points} points)`),
-    heading(3, "Statement"),
-    ...type.statementDoc!(record.statement),
+    heading(2, `${l.question} ${item.position + 1}: ${item.internalName} (${item.points} points)`),
+    heading(3, l.statement),
+    ...type.statementDoc!(record.statement, l),
   ];
   if (type.solutionDoc) {
-    blocks.push(heading(3, "Reference solution"), ...type.solutionDoc(record.solution, record.statement));
+    blocks.push(heading(3, l.referenceSolution), ...type.solutionDoc(record.solution, record.statement, l));
   }
   record.answers.forEach((row, i) => {
     const name = `${row.student.lastName} ${row.student.firstName}`.trim() || row.student.email;
@@ -173,6 +175,7 @@ export function itemAnswersDocument(found: ItemAnswers, app: string | null): Doc
       generatedAt: record.generatedAt,
       app,
     },
+    lang: "en",
     blocks,
   };
 }

@@ -1,12 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
-import { code, heading, list, markdown, points, separator, tests, type Document } from "./document.js";
+import {
+  answerZone,
+  code,
+  heading,
+  list,
+  markdown,
+  noAnswerOr,
+  number,
+  points,
+  scopeZones,
+  separator,
+  tests,
+  type Block,
+  type Document,
+} from "./document.js";
+import { EN_LABELS, FR_LABELS, type Lang } from "./labels.js";
 import { createHash } from "node:crypto";
 
 import { fenceFor, markdownBody, renderMarkdown } from "./markdown.js";
 
 const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
+
+/** The body of `blocks`, worded in `lang`. */
+const body = (blocks: readonly Block[], lang: Lang = "en") => markdownBody({ lang, blocks });
 
 const provenance = {
   kind: "item-answers",
@@ -38,7 +56,7 @@ describe("fenceFor", () => {
 describe("renderMarkdown", () => {
   it("cannot be closed early by an answer holding a fence", () => {
     const evil = "printf(\"x\");\n```\n# Injected heading\n````\n";
-    const file = markdownBody([code("c", evil), heading(2, "After")]);
+    const file = body([code("c", evil), heading(2, "After")]);
     expect(file).toContain("`````c\n" + evil + "`````");
     // The heading that follows is the only one outside the block.
     const outside = file.split("`````")[2]!;
@@ -46,7 +64,7 @@ describe("renderMarkdown", () => {
   });
 
   it("writes a front matter that reads back, with the body's sha256", () => {
-    const doc: Document = { provenance, blocks: [heading(1, "Title"), markdown("Some *text*.")] };
+    const doc: Document = { provenance, lang: "en", blocks: [heading(1, "Title"), markdown("Some *text*.")] };
     const { front, body } = split(renderMarkdown(doc));
     expect(front).toEqual({
       export: { kind: "item-answers", format: "md", version: 1 },
@@ -60,7 +78,7 @@ describe("renderMarkdown", () => {
   });
 
   it("renders tests, points, lists and separators", () => {
-    const body = markdownBody([
+    const text = body([
       tests([
         { name: "adds", visible: true, ok: true, points: 2 },
         { name: "edge | case", visible: false, ok: false, points: 1.5 },
@@ -70,7 +88,7 @@ describe("renderMarkdown", () => {
       list(["one", "two\nlines"]),
       separator,
     ]);
-    expect(body).toBe(
+    expect(text).toBe(
       [
         "Tests passed: 1/2",
         "| Test | Visibility | Result | Points |\n|---|---|---|---|\n| adds | visible | passed | 2 |\n| edge \\| case | hidden | failed | 1.5 |",
@@ -83,6 +101,60 @@ describe("renderMarkdown", () => {
   });
 
   it("keeps a heading on one line and strips a language tag to its word", () => {
-    expect(markdownBody([heading(3, "a\nb"), code("c`; rm", "x")])).toBe("### a b\n\n```crm\nx\n```\n");
+    expect(body([heading(3, "a\nb"), code("c`; rm", "x")])).toBe("### a b\n\n```crm\nx\n```\n");
+  });
+});
+
+describe("answer zones (ADR-125)", () => {
+  it("draws bubbles, lines, a free frame and the name fields", () => {
+    const text = body([
+      answerZone("bubbles", { labels: ["A", "B", "C"] }),
+      answerZone("bubbles", { labels: ["A", "B"], multiple: true }),
+      answerZone("lines", { lines: 2 }),
+      answerZone("name"),
+    ]);
+    const line = `\`${"_".repeat(40)}\``;
+    expect(text).toBe(
+      [
+        "○ A  ○ B  ○ C",
+        "☐ A  ☐ B",
+        `${line}\n\n${line}`,
+        "Name: ________________  First name: ________________",
+      ].join("\n\n") + "\n",
+    );
+  });
+
+  it("sizes a free frame by its height: a blank line per 8 mm, three at least", () => {
+    const blankLines = (heightMm?: number) => body([answerZone("free", heightMm === undefined ? {} : { heightMm })]).split("\n").length - 3;
+    expect(blankLines(80)).toBe(10);
+    expect(blankLines(10)).toBe(3);
+    expect(blankLines()).toBe(3);
+  });
+
+  it("keys a zone to its item, and to the part it answers", () => {
+    const scoped = scopeZones("item-9", [answerZone("lines"), answerZone("lines", { part: "b3" }), separator]);
+    expect(scoped.map((b) => (b.kind === "answerZone" ? b.id : b.kind))).toEqual(["item-9", "item-9:b3", "separator"]);
+  });
+});
+
+describe("labels", () => {
+  it("words a document in its language", () => {
+    const blocks = [points(null, 2), answerZone("name"), noAnswerOr(FR_LABELS, true, separator)];
+    expect(body(blocks)).toBe(
+      "Points: not graded / 2\n\nName: ________________  First name: ________________\n\nPas de réponse.\n",
+    );
+    expect(body(blocks, "fr")).toBe(
+      "Points\u202F: pas encore noté / 2\n\nNom\u202F: ________________  Prénom\u202F: ________________\n\nPas de réponse.\n",
+    );
+  });
+
+  it("has every word in both languages", () => {
+    expect(Object.keys(FR_LABELS).sort()).toEqual(Object.keys(EN_LABELS).sort());
+    for (const value of [...Object.values(EN_LABELS), ...Object.values(FR_LABELS)]) expect(value.trim()).not.toBe("");
+  });
+
+  it("writes points with two decimals at most, and an answer only when there is one", () => {
+    expect([number(2), number(1.256), number(1 / 3)]).toEqual(["2", "1.26", "0.33"]);
+    expect(noAnswerOr(EN_LABELS, false, separator)).toBe(separator);
   });
 });

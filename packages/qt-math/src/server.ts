@@ -5,6 +5,7 @@
 import { ConfigMigrationError, tallyKeys, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
 import { curveOf } from "@quiz/domain/math";
 
+import { mathAnswerDoc, mathAnswerZone, mathSolutionDoc, mathStatementDoc, mathStudentAnswerDoc } from "./document.js";
 import { gradeMath, gradingPoints, readKeys } from "./grade.js";
 import {
   emptyMathDraft,
@@ -111,6 +112,13 @@ export const mathServer: QuestionTypeServer<MathConfig, MathAnswer, MathStudent,
     }
     return { distribution: tallyKeys(keys) };
   },
+
+  /** The export factory (ADR-121 §2, ADR-125): the statement, the key, an answer, the paper zone. */
+  statementDoc: mathStatementDoc,
+  solutionDoc: mathSolutionDoc,
+  answerDoc: mathAnswerDoc,
+  studentAnswerDoc: mathStudentAnswerDoc,
+  answerZone: mathAnswerZone,
 
   searchText: (config) => [config.prompt, ...config.answers.map((a) => a.value)].join("\n"),
 };

@@ -14,6 +14,7 @@
 import { BREAKDOWN_KEY } from "@quiz/core/reasons";
 import { ConfigMigrationError, zeroGrade, type QuestionTypeServer } from "@quiz/core/server";
 
+import { richAnswerDoc, richAnswerZone, richSolutionDoc, richStatementDoc, richStudentAnswerDoc } from "./document.js";
 import { richGenerator } from "./generate.js";
 import {
   countChars,
@@ -175,6 +176,13 @@ export const richServer: QuestionTypeServer<
     const chars = countChars(answer.text);
     return config.maxChars === undefined ? String(chars) : `${chars}/${config.maxChars}`;
   },
+
+  /** The export factory (ADR-121 §2, ADR-125): the statement, the key, an essay, the paper frame. */
+  statementDoc: richStatementDoc,
+  solutionDoc: richSolutionDoc,
+  answerDoc: richAnswerDoc,
+  studentAnswerDoc: richStudentAnswerDoc,
+  answerZone: richAnswerZone,
 
   /** Teacher-facing (`question_versions.search`): the rubric, the criteria and the model answer belong in it. */
   searchText: (config) =>

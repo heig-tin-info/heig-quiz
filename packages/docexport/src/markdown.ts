@@ -1,13 +1,16 @@
 /**
  * The Markdown renderer (ADR-121 §1): a YAML front matter of provenance,
- * then the blocks, one blank line apart. The fixed words are English: a
- * staff document is worded like the CSV (ADR-121 §4).
+ * then the blocks, one blank line apart. The fixed words are the document's
+ * language, `LABELS[doc.lang]`: English for a staff document, worded like
+ * the CSV (ADR-121 §4), the reader's for a student's (ADR-125). A program's
+ * tests are a staff document's only, and stay English.
  */
 import { createHash } from "node:crypto";
 
 import { stringify } from "yaml";
 
-import type { Block, Document, TestLine } from "./document.js";
+import { number, type AnswerZone, type Block, type Document, type TestLine } from "./document.js";
+import { labelled, LABELS, type Labels } from "./labels.js";
 
 /**
  * The fence of a code block: one backtick longer than the longest run of
@@ -23,9 +26,6 @@ const oneLine = (text: string): string => text.replace(/\s*[\r\n]+\s*/g, " ").tr
 
 /** A table cell: one line, its pipes escaped. */
 const cell = (text: string): string => oneLine(text).replaceAll("|", "\\|");
-
-/** `2`, `1.5`: two decimals at most, as the CSV writes points. */
-const number = (value: number): string => String(Math.round(value * 100) / 100);
 
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string {
   const line = (cells: readonly string[]) => `| ${cells.map(cell).join(" | ")} |`;
@@ -44,7 +44,37 @@ function testsBlock(lines: readonly TestLine[]): string {
   ].join("\n\n");
 }
 
-function block(b: Block): string {
+/**
+ * One line to write on. A line of bare underscores is a thematic break in
+ * Markdown, so it is a code span: it reads as a field in a viewer and in
+ * the source alike.
+ */
+const WRITING_LINE = `\`${"_".repeat(40)}\``;
+
+/** A free frame: one blank line per this many millimetres of its height. */
+const MM_PER_LINE = 8;
+const MIN_FRAME_LINES = 3;
+
+/** A paper answer space, as plain Markdown can preview one (ADR-125). */
+function zoneBlock(z: AnswerZone, l: Labels): string {
+  switch (z.zone) {
+    case "bubbles": {
+      // A round bubble picks one, a square box picks several, as on the screen.
+      const mark = z.multiple ? "☐" : "○";
+      return (z.labels ?? []).map((label) => `${mark} ${oneLine(label)}`).join("  ");
+    }
+    case "lines":
+      return Array.from({ length: Math.max(1, z.lines ?? 1) }, () => WRITING_LINE).join("\n\n");
+    case "free": {
+      const blank = Math.max(MIN_FRAME_LINES, Math.round((z.heightMm ?? 0) / MM_PER_LINE));
+      return ["---", ...Array.from({ length: blank }, () => ""), "---"].join("\n");
+    }
+    case "name":
+      return `${labelled(l, l.name, "________________")}  ${labelled(l, l.firstName, "________________")}`;
+  }
+}
+
+function block(b: Block, l: Labels): string {
   switch (b.kind) {
     case "heading":
       return `${"#".repeat(b.level)} ${oneLine(b.text)}`;
@@ -63,15 +93,18 @@ function block(b: Block): string {
     case "tests":
       return testsBlock(b.tests);
     case "points":
-      return `Points: ${b.earned === null ? "not graded" : number(b.earned)} / ${number(b.max)}`;
+      return labelled(l, l.points, `${b.earned === null ? l.notGraded : number(b.earned)} / ${number(b.max)}`);
     case "separator":
       return "---";
+    case "answerZone":
+      return zoneBlock(b, l);
   }
 }
 
 /** The body alone: the blocks, one blank line apart, and a final newline. */
-export function markdownBody(blocks: readonly Block[]): string {
-  return `${blocks.map(block).filter((text) => text !== "").join("\n\n")}\n`;
+export function markdownBody(doc: Pick<Document, "lang" | "blocks">): string {
+  const labels = LABELS[doc.lang];
+  return `${doc.blocks.map((b) => block(b, labels)).filter((text) => text !== "").join("\n\n")}\n`;
 }
 
 /** sha256 of a text, in hex. */
@@ -82,7 +115,7 @@ const sha256 = (text: string): string => createHash("sha256").update(text, "utf8
  * then the body. `splitFrontMatter` of `@quiz/docrender` reads it back.
  */
 export function renderMarkdown(doc: Document): string {
-  const body = markdownBody(doc.blocks);
+  const body = markdownBody(doc);
   const { kind, version, source, attempts, generatedAt, app } = doc.provenance;
   const front = stringify({
     export: { kind, format: "md", version },

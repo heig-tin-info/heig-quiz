@@ -36,4 +36,6 @@ export const richLeakFixture: StudentLeakFixture<RichConfig> = {
   /* What only `rich` holds: the model answer, the criteria and their weighting (ADR-118). */
   forbiddenKeys: ["compare", "expected", "reference", "criteria", "weight", "normalize", "totalPoints"],
   secrets: SECRET_VALUES,
+  // A student's own answers, none of them a secret: the copy of ADR-125 is searched for the key.
+  answers: [{ text: "The stack runs out." }, { text: "" }],
 };

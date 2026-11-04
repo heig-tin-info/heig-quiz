@@ -1,5 +1,7 @@
-import { ConfigMigrationError, UnknownQuestionType, type StudentView } from "@quiz/core/server";
-import { findStudentLeaks, type StudentLeakFixture } from "@quiz/core/testing";
+import { ConfigMigrationError, isGraded, UnknownQuestionType, type StudentView } from "@quiz/core/server";
+import { findStudentLeaks, testGradeContext, type StudentLeakFixture } from "@quiz/core/testing";
+import { LABELS, type Block, type Lang } from "@quiz/docexport";
+import { markdownBody } from "@quiz/docexport/markdown";
 import { blocksLeakFixture } from "@quiz/qt-blocks/testing";
 import { brainstormLeakFixture } from "@quiz/qt-brainstorm/testing";
 import { categorizeLeakFixture } from "@quiz/qt-categorize/testing";
@@ -91,6 +93,9 @@ const LEAK_FIXTURES: Record<RegisteredId, StudentLeakFixture> = {
  */
 const CROSS_TYPE_FORBIDDEN_KEYS = ["policy", "tolerance"];
 
+/** The languages a student document is worded in (ADR-125). */
+const LANGS: readonly Lang[] = ["en", "fr"];
+
 /** Shuffle on and off, under the teacher preview's seed (0) and two attempts'. */
 const VIEWS: StudentView[] = [0, 7, 99].flatMap((seed) =>
   [true, false].map((shuffle) => ({ seed, itemId: "item-1", shuffle })),
@@ -118,6 +123,15 @@ describe("the static registries", () => {
     expect(Object.keys(serverRegistry)).toEqual([...REGISTERED]);
   });
 
+  it("draw as text the types ADR-121 §2 and ADR-125 name, a paper zone for the printable ones", () => {
+    const withStatement = REGISTERED.filter((id) => questionType(id).statementDoc !== undefined);
+    expect(withStatement).toEqual(["mcq", "short", "cloze", "code", "rich", "math"]);
+    const withZone = REGISTERED.filter((id) => questionType(id).answerZone !== undefined);
+    expect(withZone).toEqual(["mcq", "short", "cloze", "rich", "math"]);
+    const withOwnCopy = REGISTERED.filter((id) => questionType(id).studentAnswerDoc !== undefined);
+    expect(withOwnCopy).toEqual(withZone);
+  });
+
   it("agree with themselves: one client entry per server entry", () => {
     expect(Object.keys(clientRegistry)).toEqual(Object.keys(serverRegistry));
   });
@@ -131,6 +145,13 @@ describe.each(REGISTERED)("the contract of %s", (id) => {
   const type = questionType(id);
   const fixture = LEAK_FIXTURES[id];
   const forbiddenKeys = [...CROSS_TYPE_FORBIDDEN_KEYS, ...fixture.forbiddenKeys];
+
+  /** No forbidden key nor secret in the block tree, and no secret in its text rendered in `lang` (05 §5.7). */
+  const expectNoLeak = (blocks: readonly Block[], lang: Lang) => {
+    expect(findStudentLeaks(blocks, { forbiddenKeys, secrets: fixture.secrets })).toEqual([]);
+    const text = markdownBody({ lang, blocks });
+    expect(fixture.secrets.filter((secret) => text.includes(secret))).toEqual([]);
+  };
 
   it("has a leak fixture that is a valid config, and would catch it served whole", () => {
     expect(type.configSchema.safeParse(fixture.config).success).toBe(true);
@@ -181,6 +202,48 @@ describe.each(REGISTERED)("the contract of %s", (id) => {
       expect(back).toEqual(answer);
     }
   });
+
+  /*
+   * The export factory (ADR-121 §2, ADR-125; 05 §5.7): a statement drawn as
+   * a document, and its paper zones, come from the student view only. Two
+   * checks, as above, on the block tree — and the secret values again on
+   * the RENDERED text, in both languages a hand-out is worded in.
+   */
+  if (type.statementDoc || type.answerZone) {
+    it.each(VIEWS)("draws its statement and paper zones with no key (seed $seed, shuffle $shuffle)", (view) => {
+      const student = type.toStudent(fixture.config, view);
+      for (const lang of LANGS) {
+        const blocks = [...(type.statementDoc?.(student, LABELS[lang]) ?? []), ...(type.answerZone?.(student) ?? [])];
+        expectNoLeak(blocks, lang);
+      }
+    });
+  }
+
+  /*
+   * The student's own copy (ADR-125, invariant 4): each fixture answer,
+   * graded, its breakdown through `studentDetails` under a HIDDEN key and
+   * the answer brought back to the view, drawn by `studentAnswerDoc` — no
+   * key in the blocks nor in their text. The fixture's answers are none of
+   * its secrets, so whatever is found came from the key.
+   */
+  if (type.studentAnswerDoc) {
+    const studentAnswerDoc = type.studentAnswerDoc.bind(type);
+    it.each(VIEWS)("draws a student's own answer with no key (seed $seed, shuffle $shuffle)", async (view) => {
+      expect(fixture.answers?.length ?? 0).toBeGreaterThan(0);
+      const student = type.toStudent(fixture.config, view);
+      for (const stored of fixture.answers ?? []) {
+        const answer = type.answerSchema.parse(stored);
+        const graded = await type.grade(fixture.config, answer, testGradeContext(1));
+        const details = isGraded(graded)
+          ? type.studentDetails
+            ? type.studentDetails(graded.details, { showKey: false, showHiddenCaseNames: false })
+            : graded.details
+          : null;
+        const shown = type.toStudentAnswer ? type.toStudentAnswer(fixture.config, view, answer) : answer;
+        for (const lang of LANGS) expectNoLeak(studentAnswerDoc(student, shown, details, LABELS[lang]), lang);
+      }
+    });
+  }
 
   it("converts the answer in both directions or in neither (ADR-097)", () => {
     expect(type.fromStudentAnswer === undefined).toBe(type.toStudentAnswer === undefined);

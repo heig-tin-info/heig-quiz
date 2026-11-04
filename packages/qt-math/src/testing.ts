@@ -33,4 +33,6 @@ export const mathLeakFixture: StudentLeakFixture<MathConfig> = {
   /** The key's own vocabulary: the accepted answers, their points, how they are compared. */
   forbiddenKeys: ["value", "points", "samples", "min", "max"],
   secrets: SECRET_VALUES,
+  // A student's own answers, none of them a secret: the copy of ADR-125 is searched for the key.
+  answers: [{ latex: "R_1 R_2" }, { latex: "" }],
 };

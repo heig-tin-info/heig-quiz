@@ -3,6 +3,7 @@
  * knows. A block holds text, never markup of the target format, except
  * `markdown`, which passes a statement through as its author wrote it.
  */
+import type { Lang, Labels } from "./labels.js";
 
 /** One test of a program answer, as the staff read it (hidden ones by name). */
 export interface TestLine {
@@ -22,7 +23,36 @@ export type Block =
   | { kind: "tests"; tests: readonly TestLine[] }
   /** `earned: null`: nothing graded yet. */
   | { kind: "points"; earned: number | null; max: number }
-  | { kind: "separator" };
+  | { kind: "separator" }
+  | AnswerZone;
+
+/** What a paper answer space holds (ADR-125). */
+export type ZoneKind = "bubbles" | "lines" | "free" | "name";
+
+/**
+ * Where a student answers on paper (ADR-125): written by a type's
+ * `answerZone` hook from the student view only, and by the hand-out for the
+ * name fields. `id` is the zone's key in the palier-B manifest, written by
+ * the document, never by a type: {@link scopeZones} sets it to the item's id,
+ * followed by `:<part>` when the type names the part of its item the zone
+ * answers (`b3`, the cloze blank of index 3).
+ */
+export interface AnswerZone {
+  kind: "answerZone";
+  /** Absent until the document keys the zone ({@link scopeZones}). */
+  id?: string;
+  /** The part of its item the zone answers; absent, the whole item. */
+  part?: string;
+  zone: ZoneKind;
+  /** `bubbles`: one label per bubble, in the printed order (`A`, `B`…, or a dropdown's options). */
+  labels?: readonly string[];
+  /** `bubbles`: several may be ticked. */
+  multiple?: boolean;
+  /** `lines`: how many lines to write on; one when absent. */
+  lines?: number;
+  /** `free`: the height of the frame, in millimetres. */
+  heightMm?: number;
+}
 
 /**
  * Where a document comes from (ADR-121 §5): ids only, never a name. The
@@ -45,6 +75,12 @@ export interface Provenance {
 
 export interface Document {
   provenance: Provenance;
+  /**
+   * The language of the fixed words (ADR-125): `en` for a staff document
+   * (ADR-121 §4), the reader's for a student's. The renderers word the
+   * document from `LABELS[lang]`, the same words its blocks were built with.
+   */
+  lang: Lang;
   blocks: readonly Block[];
 }
 
@@ -62,3 +98,25 @@ export const table = (header: readonly string[], rows: readonly (readonly string
 export const tests = (lines: readonly TestLine[]): Block => ({ kind: "tests", tests: lines });
 export const points = (earned: number | null, max: number): Block => ({ kind: "points", earned, max });
 export const separator: Block = { kind: "separator" };
+
+/** `2`, `1.5`: two decimals at most, as the CSV writes points. */
+export const number = (value: number): string => String(Math.round(value * 100) / 100);
+
+/** `block`, or the sentence that says there is no answer when `isEmpty`. */
+export const noAnswerOr = (labels: Labels, isEmpty: boolean, block: Block): Block =>
+  isEmpty ? markdown(labels.noAnswer) : block;
+
+/** An answer space (ADR-125). */
+export const answerZone = (
+  zone: ZoneKind,
+  options: Pick<AnswerZone, "part" | "labels" | "multiple" | "lines" | "heightMm"> = {},
+): AnswerZone => ({ kind: "answerZone", zone, ...options });
+
+/**
+ * One item's blocks with their answer zones keyed to the item: `itemId`, or
+ * `itemId:b3` for a zone of part `b3`. Other blocks pass as they are.
+ */
+export const scopeZones = (itemId: string, blocks: readonly Block[]): Block[] =>
+  blocks.map((b) =>
+    b.kind === "answerZone" ? { ...b, id: b.part === undefined ? itemId : `${itemId}:${b.part}` } : b,
+  );

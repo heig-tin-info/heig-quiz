@@ -34,6 +34,7 @@
     "@quiz/qt-short": "workspace:*"
   },
   "devDependencies": {
+    "@quiz/docexport": "workspace:*",
     "@types/react": "^19.2.17",
     "react": "^19.2.7",
     "typescript": "^6.0.3",

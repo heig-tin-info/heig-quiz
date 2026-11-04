@@ -65,8 +65,9 @@ export const clozeLeakFixture: StudentLeakFixture<ClozeConfig> = {
   ],
   secrets: SECRET_VALUES,
   // ADR-097: both dropdowns answered (canonical option indices, D4), and blank.
+  // The typed words are none of the secrets: a student's copy (ADR-125) is searched for them.
   answers: [
-    { blanks: ["Newton", "10", "+=", "0", "N", "2"] },
+    { blanks: ["newton", "10", "+", "0", "N", "2"] },
     { blanks: ["x", null, "", "3", null, "1"] },
     { blanks: [] },
   ],

@@ -9,3 +9,4 @@
  * record.
  */
 export * from "./document.js";
+export * from "./labels.js";

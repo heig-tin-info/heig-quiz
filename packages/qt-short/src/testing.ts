@@ -56,4 +56,6 @@ export const shortLeakFixture: StudentLeakFixture<ShortConfig> = {
     "value",
   ],
   secrets: SECRET_VALUES,
+  // A student's own answers, none of them a secret: the copy of ADR-125 is searched for the key.
+  answers: [{ text: "4 bytes" }, { text: "" }],
 };

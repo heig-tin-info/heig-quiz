@@ -336,6 +336,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../../packages/docexport
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.6(@types/node@26.1.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.1))
@@ -751,6 +754,9 @@ importers:
       '@quiz/core':
         specifier: workspace:*
         version: link:../core
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../docexport
       '@quiz/domain':
         specifier: workspace:*
         version: link:../domain
@@ -898,6 +904,9 @@ importers:
       '@quiz/core':
         specifier: workspace:*
         version: link:../core
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../docexport
       '@quiz/domain':
         specifier: workspace:*
         version: link:../domain
@@ -956,6 +965,9 @@ importers:
       '@quiz/core':
         specifier: workspace:*
         version: link:../core
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../docexport
       '@quiz/domain':
         specifier: workspace:*
         version: link:../domain
@@ -1002,6 +1014,9 @@ importers:
       '@quiz/core':
         specifier: workspace:*
         version: link:../core
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../docexport
       '@quiz/ui':
         specifier: workspace:*
         version: link:../ui
@@ -1045,6 +1060,9 @@ importers:
       '@quiz/core':
         specifier: workspace:*
         version: link:../core
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../docexport
       '@quiz/domain':
         specifier: workspace:*
         version: link:../domain
@@ -1125,6 +1143,9 @@ importers:
         specifier: workspace:*
         version: link:../qt-short
     devDependencies:
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../docexport
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17

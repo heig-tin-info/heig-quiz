@@ -8,6 +8,7 @@ import { formatStep } from "@quiz/domain";
 import { CONFIG_TOO_COMPLEX_KEY, configPatternProblems, PATTERN_PROBLEM_KEY } from "@quiz/domain/regex";
 import { describeMatcher } from "@quiz/domain/short";
 import { toCanonical } from "./canonical.js";
+import { shortAnswerDoc, shortAnswerZone, shortSolutionDoc, shortStatementDoc, shortStudentAnswerDoc } from "./document.js";
 import { shortGenerator } from "./generate.js";
 import { gradeShort } from "./grade.js";
 import {
@@ -305,6 +306,13 @@ export const shortServer: QuestionTypeServer<
     }
     return { distribution: tallyKeys(keys) };
   },
+
+  /** The export factory (ADR-121 §2, ADR-125): the statement, the key, an answer, the paper zone. */
+  statementDoc: shortStatementDoc,
+  solutionDoc: shortSolutionDoc,
+  answerDoc: shortAnswerDoc,
+  studentAnswerDoc: shortStudentAnswerDoc,
+  answerZone: shortAnswerZone,
 
   /**
    * The search index is teacher-facing (`question_versions.search`), so the

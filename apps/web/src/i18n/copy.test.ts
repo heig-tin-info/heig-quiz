@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { EN_LABELS, FR_LABELS } from "@quiz/docexport";
+
 import { en } from "./en";
 import { fr } from "./fr";
 
@@ -138,5 +140,30 @@ describe("copy lint (N-I18N-04)", () => {
   it("lists exceptions under existing rules only", () => {
     const names = new Set(checks.map((c) => c.name));
     expect(Object.keys(exceptions).filter((n) => !names.has(n))).toEqual([]);
+  });
+});
+
+/**
+ * The fixed words of an exported document (ADR-125): a student reads them on
+ * a hand-out or on their own copy, so the same rules hold, with no
+ * exception, and every word is short — a label, or one sentence of a toast's
+ * length at most.
+ */
+const DOCUMENT_WORDS: Record<Lang, Record<string, string>> = {
+  fr: Object.fromEntries(Object.entries(FR_LABELS)),
+  en: Object.fromEntries(Object.entries(EN_LABELS)),
+};
+const DOCUMENT_WORD_MAX = 80;
+
+describe("copy lint of a document's fixed words (N-I18N-04, ADR-125)", () => {
+  it.each(BOTH)("%s: every rule holds, every word is short", (lang) => {
+    const words = DOCUMENT_WORDS[lang];
+    const offenders = RULES.filter((rule) => rule.langs.includes(lang)).flatMap((rule) =>
+      Object.keys(words)
+        .filter((key) => rule.test(words[key]!, key))
+        .map((key) => `${rule.name} (${rule.fix}): ${key} = ${JSON.stringify(words[key])}`),
+    );
+    expect(offenders).toEqual([]);
+    expect(Object.keys(words).filter((key) => words[key]!.length > DOCUMENT_WORD_MAX)).toEqual([]);
   });
 });
