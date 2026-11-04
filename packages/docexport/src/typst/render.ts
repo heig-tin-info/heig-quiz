@@ -83,7 +83,7 @@ export function printedWidthMm(drawing: Drawing, widthMm?: number, maxHeightMm?:
   return Math.max(1, Math.round(width * 10) / 10);
 }
 
-/** The pitch of a frame's pattern: 4 mm when its type names none, within these bounds (ADR-126 §3). */
+/** The pitch of a frame's ruling: 4 mm when its type names none, within these bounds (ADR-126 §3). */
 const PITCH_MM = { fallback: 4, min: 2, max: 20 } as const;
 
 /**
@@ -111,9 +111,9 @@ function underlay(drawing: Drawing): string | null {
 /** A free frame: plain (ADR-125 §6), or ruled, with its starter (ADR-126 §3–§4). */
 function freeShape(z: AnswerZone): string {
   const args = [`${bounded(z.heightMm, 10, 240, FREE_MM)}mm`];
-  if (z.pattern !== undefined) {
-    const pitch = Number.isFinite(z.pattern.pitchMm) ? z.pattern.pitchMm : PITCH_MM.fallback;
-    args.push(`pattern: ${z.pattern.kind === "lines" ? '"lines"' : '"grid"'}`);
+  if (z.ruling !== undefined) {
+    const pitch = Number.isFinite(z.ruling.pitchMm) ? z.ruling.pitchMm : PITCH_MM.fallback;
+    args.push(`ruling: ${z.ruling.kind === "lines" ? '"lines"' : '"grid"'}`);
     args.push(`pitch: ${Math.round(Math.min(PITCH_MM.max, Math.max(PITCH_MM.min, pitch)) * 1000) / 1000}mm`);
   }
   const under = z.underlay === undefined ? null : underlay(z.underlay);
