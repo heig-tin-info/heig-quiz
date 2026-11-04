@@ -74,9 +74,12 @@ nothing of B or C.
    The child shares the API container, with no namespace isolation; the
    escape, the closed environment and `--root` are the defence.
 
-3. **Availability.** A boot probe feeds `GET /app/api/capabilities`
-   (`Capabilities = { pdf }`); the web app hides every PDF button when it
-   is false, a PDF route answers `503 pdf_unavailable`, and the system
+3. **Availability.** A probe (one real compile in the sandbox of point 2,
+   memoized) feeds `pdf: boolean` in the public configuration the web app
+   already fetches at boot (`/app/api/config`, every session kind); the
+   web app hides every PDF button when it is false, a PDF route answers
+   `503 pdf_unavailable` (`503 pdf_busy` with `Retry-After` behind a full
+   queue), and the system
    status gains a `pdf` entry (ADR-055). CI installs `typst` and
    `poppler-utils`; the PDF tests fail under `CI=1` without the binary and
    skip on a workstation without it.
