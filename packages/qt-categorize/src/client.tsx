@@ -46,6 +46,7 @@ const CategorizeIcon = typeIcon(
 export const categorizeClient: CategorizeClient = {
   id: "categorize",
   labelKey: "qt.categorize.label",
+  group: "basics",
   hintKey: "qt.categorize.hint",
   Icon: CategorizeIcon,
 

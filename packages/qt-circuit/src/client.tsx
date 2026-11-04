@@ -60,6 +60,7 @@ export const circuitClient: QuestionTypeClient<
 > = {
   id: "circuit",
   labelKey: "qt.circuit.label",
+  group: "engineering",
   hintKey: "qt.circuit.hint",
   Icon: CircuitIcon,
 
@@ -141,6 +142,7 @@ const LogicIcon = typeIcon(
 export const logicClient: QuestionTypeClient<LogicConfig, LogicAnswer, LogicStudent, LogicSolution, LogicDetails> = {
   id: "logic",
   labelKey: "qt.logic.label",
+  group: "engineering",
   hintKey: "qt.logic.hint",
   Icon: LogicIcon,
 

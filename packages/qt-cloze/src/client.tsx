@@ -38,6 +38,7 @@ const ClozeIcon = typeIcon(
 export const clozeClient: ClozeClient = {
   id: "cloze",
   labelKey: "qt.cloze.label",
+  group: "basics",
   hintKey: "qt.cloze.hint",
   Icon: ClozeIcon,
 

@@ -435,6 +435,16 @@ export function showsSection(
   return sections?.[part] !== false;
 }
 
+/**
+ * The families a type belongs to, in the order a picker draws them (#991):
+ * `basics` for text and choice, `engineering` for code, circuits and
+ * diagrams, `poll` for a type that only runs as a poll (brainstorm, ADR-071).
+ * `poll` also means "not creatable from a pool": "New question" leaves the
+ * family out (`CREATABLE_TYPE_IDS` in the web app).
+ */
+export const QUESTION_TYPE_GROUPS = ["basics", "engineering", "poll"] as const;
+export type QuestionTypeGroup = (typeof QUESTION_TYPE_GROUPS)[number];
+
 export interface QuestionTypeClient<
   TConfig = unknown,
   TAnswer = unknown,
@@ -447,6 +457,11 @@ export interface QuestionTypeClient<
   readonly labelKey: string;
   readonly hintKey: string;
   readonly Icon: ComponentType<{ className?: string }>;
+  /**
+   * The family a picker files the type under (#991). Metadata of the type,
+   * so a new type lands in its tab without the host listing it anywhere.
+   */
+  readonly group: QuestionTypeGroup;
   /**
    * The player wants more than the reading column — a need, not a layout
    * (ADR-066). On a wide screen the host gives such a question the room it

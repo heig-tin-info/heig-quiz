@@ -1972,6 +1972,9 @@ export const en = {
   "mcq.policy.desc.ripkey": "The share of correct choices ticked, zero from the first wrong tick.",
 
   // --- Question types (questionTypes.ts) ---
+  "qt.group.basics": "Basics",
+  "qt.group.engineering": "Engineering",
+  "qt.group.poll": "Poll",
   "qt.mcq.label": "Multiple choice",
   "qt.mcq.hint": "One or several answers to tick.",
   "qt.short.label": "Short answer",

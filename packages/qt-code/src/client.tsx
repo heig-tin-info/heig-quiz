@@ -34,6 +34,7 @@ export const codeClient: QuestionTypeClient<
 > = {
   id: "code",
   labelKey: "qt.code.label",
+  group: "engineering",
   hintKey: "qt.code.hint",
   Icon: CodeIcon,
   // The statement and the editor side by side when the player has the room
