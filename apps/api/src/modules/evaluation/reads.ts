@@ -59,7 +59,7 @@ import {
 } from "../../db/schema.js";
 import { conceptsOf } from "../concept/service.js";
 import { poolRolesOf } from "../pool/service.js";
-import { exportsOf } from "./print.js";
+import { exportsOf, printRefusal } from "./print.js";
 import type { EvaluationRecord, ItemRecord, DbOrTx } from "./shared.js";
 import type { Caller } from "../guards.js";
 
@@ -467,6 +467,31 @@ export async function totalPointsByEvaluation(
     )
     .groupBy(evaluationItems.evaluationId);
   return new Map(rows.map((r) => [r.evaluationId, round2(Number(r.points))]));
+}
+
+/**
+ * Which of `list` print a hand-out (ADR-125 §5), in one query: the ids
+ * `printRefusal` lets through, so a screen never offers a print the route
+ * refuses.
+ */
+export async function handoutPrints(
+  db: Db,
+  list: readonly { id: string; mode: string }[],
+): Promise<Set<string>> {
+  if (list.length === 0) return new Set();
+  const rows = await db
+    .select({ evaluationId: evaluationItems.evaluationId, type: questions.type, variables: questionVersions.variables })
+    .from(evaluationItems)
+    .innerJoin(questionVersions, eq(evaluationItems.questionVersionId, questionVersions.id))
+    .innerJoin(questions, eq(questionVersions.questionId, questions.id))
+    .where(inArray(evaluationItems.evaluationId, list.map((e) => e.id)));
+  const prints = list.filter((evaluation) => {
+    const items = rows
+      .filter((r) => r.evaluationId === evaluation.id)
+      .map((r) => ({ question: { type: r.type }, version: { variables: r.variables } }));
+    return printRefusal(evaluation, items, "handout") === null;
+  });
+  return new Set(prints.map((e) => e.id));
 }
 
 /** How many items each evaluation holds, in one grouped query. */

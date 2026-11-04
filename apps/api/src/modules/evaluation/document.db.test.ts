@@ -280,7 +280,7 @@ describe("an evaluation that does not print (ADR-125 §5)", () => {
     expect(await storedSeed(evaluation.id)).toBeNull();
   });
 
-  it("refuses the hand-out for a type with no paper form, and serves the statement with key", async () => {
+  it("prints a code question: a ruled frame to write the program by hand (ADR-126 §8, amended 2026-11-04)", async () => {
     const code = {
       configVersion: 1,
       prompt: "Return CODE_PROMPT.",
@@ -291,16 +291,33 @@ describe("an evaluation that does not print (ADR-125 §5)", () => {
       tests: { mode: "io", cases: [{ name: "one", stdin: "", expected: "", visible: true, points: 1 }] },
     };
     const evaluation = await exam(async (poolId) => [await publish(poolId, "code", code)]);
-    for (const file of ["handout.md", "handout.json", "handout.pdf"]) {
+    const handout = await get(url(evaluation.id, "handout.md"), teacher.headers);
+    expect(handout.statusCode).toBe(200);
+    expect(handout.body).toContain("CODE_PROMPT");
+    const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
+    expect(detail.exports).toEqual({ document: null, handout: null, paper: "paper_not_started" });
+  });
+
+  it("refuses both documents for a type with no paper form, naming it", async () => {
+    // `codeimage` writes no document: its statement is a picture to reproduce.
+    const codeimage = {
+      configVersion: 1,
+      prompt: "Draw CODEIMAGE_PROMPT.",
+      language: "c",
+      template: "// @@lock\n#include <stdio.h>\nint main(void) {\n// @@endlock\n    puts(\"1\");\n// @@lock\n    return 0;\n}\n// @@endlock\n",
+      referenceSolution: '    puts("1 0 1 0");\n',
+      image: { width: 4, height: 3, palette: "bw" },
+      target: { width: 4, height: 3, palette: "bw", pixels: "101001011010" },
+    };
+    const evaluation = await exam(async (poolId) => [await publish(poolId, "codeimage", codeimage)]);
+    for (const file of ["handout.md", "handout.json", "handout.pdf", "document.md"]) {
       const res = await get(url(evaluation.id, file), teacher.headers);
       expect(res.statusCode).toBe(409);
-      expect(res.json()).toMatchObject({ error: "not_printable", reason: "type", types: ["code"] });
+      expect(res.json()).toMatchObject({ error: "not_printable", reason: "type", types: ["codeimage"] });
     }
-    const document = await get(url(evaluation.id, "document.md"), teacher.headers);
-    expect(document.statusCode).toBe(200);
-    expect(document.body).toContain("CODE_PROMPT");
     const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
-    expect(detail.exports).toEqual({ document: null, handout: { reason: "type", types: ["code"] }, paper: "paper_not_started" });
+    const refusal = { reason: "type", types: ["codeimage"] };
+    expect(detail.exports).toEqual({ document: refusal, handout: refusal, paper: "paper_not_started" });
   });
 
   it("refuses a poll both, whatever its questions", async () => {

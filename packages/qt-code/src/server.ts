@@ -9,7 +9,7 @@ import { reparseMigrate, type RunnerOutcome } from "@quiz/core/server";
 import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
-import { codeAnswerDoc, codeSolutionDoc, codeStatementDoc } from "./document.js";
+import { codeAnswerDoc, codeAnswerZone, codeSolutionDoc, codeStatementDoc, codeStudentAnswerDoc } from "./document.js";
 import { codeGenerator } from "./generate.js";
 import {
   buildInteractiveRequest,
@@ -184,10 +184,16 @@ export const codeServer: QuestionTypeServer<
     return finalizeRunnerCode(config, answer, ctx, outcome);
   },
 
-  /** The export factory (ADR-121 §2): the statement, the key, an answer as it ran. */
+  /**
+   * The export factory (ADR-121 §2): the statement, the key, an answer as it
+   * ran; on paper (ADR-126 §8, amended 2026-11-04) a ruled frame to write
+   * the program by hand, and the student's own source in their copy.
+   */
   statementDoc: codeStatementDoc,
   solutionDoc: codeSolutionDoc,
   answerDoc: codeAnswerDoc,
+  answerZone: codeAnswerZone,
+  studentAnswerDoc: codeStudentAnswerDoc,
 
   /** Indexed: what a teacher would type to find the question again. */
   searchText(config) {

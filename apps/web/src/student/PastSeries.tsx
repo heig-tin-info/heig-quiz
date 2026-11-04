@@ -92,7 +92,7 @@ function PracticeRow({
           ) : null}
         </>
       }
-      tools={pdf ? <PrintSeries evaluationId={card.id} /> : null}
+      tools={pdf && card.printable ? <PrintSeries evaluationId={card.id} /> : null}
       action={action}
     />
   );
@@ -101,7 +101,8 @@ function PracticeRow({
 /**
  * "Print the series" (ADR-112 amendment of 2026-11-03): the blank paper of
  * the series as a PDF, fetched so a refusal is a toast. A quiet icon beside
- * the row's one action; absent while the server makes no PDF.
+ * the row's one action; absent while the server makes no PDF, and on a
+ * series that does not print (`card.printable`, ADR-125 §5).
  */
 function PrintSeries({ evaluationId }: { evaluationId: string }) {
   const t = useT();

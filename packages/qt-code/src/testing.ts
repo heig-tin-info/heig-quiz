@@ -100,6 +100,8 @@ export const codeLeakFixture: StudentLeakFixture<CodeConfig> = {
     SECRET_HIDDEN_ARG,
     SECRET_REFERENCE,
   ],
+  // A student's own source (their copy, ADR-125): one region per editable one, and an empty answer.
+  answers: [{ regions: ["#include <stdio.h>\n", "    int total = 0;\n    for (int i = 0; i < n; i++) total += t[i];\n    return total;\n"] }, { regions: ["", ""] }],
 };
 
 // ---------------------------------------------------------------------------

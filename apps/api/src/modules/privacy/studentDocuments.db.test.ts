@@ -76,6 +76,23 @@ const QUESTIONS = {
   },
 } as const;
 
+/** A C question with a template, a reference and a hidden case: what a programming series holds. */
+const CODE = {
+  configVersion: 1,
+  prompt: "Write CODE_PROMPT.",
+  language: "c",
+  template: "#include <stdio.h>\n// @@lock\nint main(void) {\n    // CODE_TEMPLATE_LINE\n// @@endlock\n    return 0;\n// @@lock\n}\n// @@endlock\n",
+  referenceSolution: '    puts("CODE_REFERENCE_SECRET");\n    return 0;\n',
+  tests: {
+    mode: "io",
+    cases: [
+      { name: "visible one", stdin: "", expected: "ok\n", points: 1, visible: true },
+      { name: "CODE_HIDDEN_NAME", stdin: "CODE_HIDDEN_STDIN", expected: "CODE_HIDDEN_EXPECTED", points: 2, visible: false },
+    ],
+  },
+};
+const CODE_SECRETS = ["CODE_REFERENCE_SECRET", "CODE_HIDDEN_NAME", "CODE_HIDDEN_STDIN", "CODE_HIDDEN_EXPECTED", "@@lock"];
+
 const PROMPTS = ["MCQ_PROMPT", "SHORT_PROMPT", "CLOZE_PROMPT", "RICH_PROMPT", "MATH_PROMPT"];
 
 /**
@@ -517,10 +534,42 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
     for (const seed of [draft, running, past]) expect((await reload(db, seed.evaluationId)).paperSeed).toBeNull();
   });
 
+  /*
+   * The production case: a programming series, an mcq and a code question.
+   * `code` prints a ruled frame (ADR-126 §8, amended 2026-11-04), so the
+   * series prints and its card offers it; the template prints, never the
+   * reference solution nor a hidden case.
+   */
+  it("prints a series with a code question, and its card says so", async () => {
+    const seed = await pastSeries(undefined, { mcq: QUESTIONS.mcq, code: CODE });
+    const card = (await get("/app/api/student/home", student.headers))
+      .json()
+      .practice.find((c: { id: string }) => c.id === seed.evaluationId);
+    expect(card).toMatchObject({ printable: true });
+    nextHour();
+    const res = await get(printUrl(seed.evaluationId), student.headers);
+    expect(res.statusCode).toBe(typstProbe.available ? 200 : 503);
+    const found = await handout(server.app.db, await reload(server.app.db, seed.evaluationId), { now: server.clock.now() });
+    for (const lang of ["en", "fr"] as const) {
+      const tree = handoutTree(found, lang);
+      expect(tree.blocks).toContainEqual(
+        expect.objectContaining({ kind: "answerZone", zone: "free", ruling: { kind: "lines", pitchMm: 8 } }),
+      );
+      const source = typstOf(tree);
+      expect(source).toContain("CODE_TEMPLATE_LINE");
+      expect(CODE_SECRETS.filter((secret) => source.includes(secret))).toEqual([]);
+    }
+  });
+
   it("refuses a series that does not print (ADR-125 §5), and any session but the caller's own portal", async () => {
     const parameterized = await pastSeries((poolId) =>
       publishParameterized(server.app.db, { poolId, teacherId: teacher.id, type: "mcq" }).then((id) => [id]),
     );
+    // Its card offers no print (`printRefusal`, the route's own rule).
+    const card = (await get("/app/api/student/home", student.headers))
+      .json()
+      .practice.find((c: { id: string }) => c.id === parameterized.evaluationId);
+    expect(card).toMatchObject({ printable: false });
     nextHour();
     const res = await get(printUrl(parameterized.evaluationId), student.headers);
     expect(res.statusCode).toBe(409);

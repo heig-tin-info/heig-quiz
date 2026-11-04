@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Me, PracticeCard, StudentHome as StudentHomeData } from "@quiz/contracts";
 
 import { makeMe } from "../test/fixtures";
-import { mockFetch, ok, publicConfig, renderWithProviders, type Reply } from "../test/render";
+import { fail, mockFetch, ok, publicConfig, renderWithProviders, type Reply } from "../test/render";
 import { StudentHome } from "./StudentHome";
 
 /*
@@ -29,6 +29,7 @@ const practice = (over: Partial<PracticeCard>): PracticeCard => ({
   closedAt: "2026-10-20T16:00:00.000Z",
   openAttemptId: null,
   count: 0,
+  printable: true,
   last: null,
   ...over,
 });
@@ -109,6 +110,25 @@ describe("the student's Past series", () => {
     expect(within(section).getByRole("button", { name: "Practise" })).toBeVisible();
     // The config has answered: still no print.
     await waitFor(() => expect(within(section).queryByRole("button", { name: "Print the series" })).toBeNull());
+  });
+
+  it("offers no print on a series that does not print (ADR-125 §5)", async () => {
+    render([practice({ printable: false })], vi.fn(), publicConfig(true));
+    const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
+    expect(within(section).getByRole("button", { name: "Practise" })).toBeVisible();
+    await waitFor(() => expect(within(section).queryByRole("button", { name: "Print the series" })).toBeNull());
+  });
+
+  it("words a refused print in the reader's language, never the server's message", async () => {
+    const user = userEvent.setup();
+    render([practice({})], vi.fn(), {
+      ...publicConfig(true),
+      [`GET ${PRINT}`]: fail(409, { error: "not_printable", message: "this evaluation does not print", reason: "type", types: ["code"] }),
+    });
+    const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
+    await user.click(await within(section).findByRole("button", { name: "Print the series" }));
+    expect(await screen.findByText("One of its questions does not print.")).toBeVisible();
+    expect(screen.queryByText("this evaluation does not print")).toBeNull();
   });
 
   it("draws nothing when no exercise is open to practice", async () => {

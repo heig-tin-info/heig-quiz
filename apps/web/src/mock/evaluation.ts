@@ -1088,7 +1088,7 @@ const evaluationDetail = (e: MockEvaluation) => ({
  * `statementDoc`) today. A type that gains or loses the hook must be added
  * here or removed, or the mock's sheet says something the server does not.
  */
-export const PRINTABLE_TYPES = new Set(["mcq", "short", "cloze", "rich", "math"]);
+export const PRINTABLE_TYPES = new Set(["mcq", "short", "cloze", "code", "circuit", "logic", "rich", "diagram", "math", "blocks"]);
 const exportsOf = (e: MockEvaluation): EvaluationExports => {
   if (e.mode === "poll") {
     const poll = { reason: "poll" as const, types: [] };

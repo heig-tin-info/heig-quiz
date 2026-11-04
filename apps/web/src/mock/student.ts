@@ -1039,6 +1039,7 @@ const practiceCards = (): PracticeCard[] => [
     closedAt: iso(-12 * D),
     openAttemptId: null,
     count: 2,
+    printable: true,
     last: {
       attemptId: STUDENT_PRACTICE_ATTEMPT,
       finishedAt: iso(-2 * D),
@@ -1054,6 +1055,8 @@ const practiceCards = (): PracticeCard[] => [
     closedAt: iso(-19 * D),
     openAttemptId: STUDENT_ATTEMPT,
     count: 0,
+    // A series holding a type with no paper form: no printer on its row.
+    printable: false,
     last: null,
   },
 ];
