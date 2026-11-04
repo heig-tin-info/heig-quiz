@@ -54,6 +54,17 @@ export interface Labels {
   notPrintable: string;
   /** Between a label and its value: `": "` in English, a narrow no-break space and `": "` in French. */
   colon: string;
+  /**
+   * A printed `blocks` question (ADR-126 §8): how to read its maps, what its
+   * hidden warehouses are, the blocks it offers, its starting program, how
+   * to write the program by hand. The block words are the type's own.
+   */
+  blocksMapLegend: string;
+  blocksHiddenWarehouses: string;
+  blocksAllOrNothing: string;
+  blocksToolbox: string;
+  blocksStarter: string;
+  blocksAnswerHint: string;
 }
 
 export const EN_LABELS: Labels = {
@@ -89,6 +100,12 @@ export const EN_LABELS: Labels = {
   notCounted: "not counted",
   notPrintable: "Not printable: read it in Quiz.",
   colon: ": ",
+  blocksMapLegend: "Grey: racks. Black: the robot, its arrow pointing ahead. Dashed: the dock.",
+  blocksHiddenWarehouses: "Hidden warehouses, tested at grading",
+  blocksAllOrNothing: "The points only when the robot reaches the dock in every warehouse.",
+  blocksToolbox: "Blocks you may use",
+  blocksStarter: "Starting program",
+  blocksAnswerHint: "Write the program in pseudo-code: one block a line, its body indented.",
 };
 
 export const FR_LABELS: Labels = {
@@ -123,6 +140,12 @@ export const FR_LABELS: Labels = {
   bonus: "bonus",
   notCounted: "non comptée",
   notPrintable: "Non imprimable : à lire dans Quiz.",
+  blocksMapLegend: "Gris : rayonnages. Noir : le robot, sa flèche devant. Pointillés : le quai.",
+  blocksHiddenWarehouses: "Entrepôts cachés, testés à la correction",
+  blocksAllOrNothing: "Points attribués seulement si le robot atteint le quai dans chaque entrepôt.",
+  blocksToolbox: "Blocs à disposition",
+  blocksStarter: "Programme de départ",
+  blocksAnswerHint: "Écrivez le programme en pseudo-code : un bloc par ligne, son contenu en retrait.",
   // A narrow no-break space before the colon, as the interface writes it.
   colon: " : ",
 };

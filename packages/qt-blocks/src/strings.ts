@@ -180,3 +180,87 @@ export const blocksGradingStrings = {
 } as const;
 export type BlocksGradingStringKey = keyof typeof blocksGradingStrings;
 export type BlocksGradingStrings = Readonly<Record<BlocksGradingStringKey, string>>;
+
+/**
+ * The canvas's words a PRINTED blocks question says (ADR-126 §7), in both
+ * languages: the server writes a hand-out in its reader's language, and the
+ * French of `blocksCanvasStrings` otherwise lives only in the web app's
+ * dictionary, which the API cannot read. The English is the canvas's own;
+ * the French is typed key by key, so a missing word is a compile error, and
+ * a web test holds the app's `qt.blocks.c.*` entries equal to these.
+ */
+const PAPER_KEYS = [
+  "forward",
+  "turn",
+  "turnLeft",
+  "turnRight",
+  "repeat",
+  "repeatUntilDock",
+  "ifSensor",
+  "else",
+  "sensorFree",
+  "sensorBlocked",
+  "whereFront",
+  "whereLeft",
+  "whereRight",
+  "kindForward",
+  "kindTurn",
+  "kindRepeat",
+  "kindRepeatUntilDock",
+  "kindIfSensor",
+  "battery",
+  "map",
+  "dock",
+  "reasonDock",
+  "reasonCollision",
+  "reasonBattery",
+  "reasonLoop",
+  "reasonShort",
+  "colWarehouse",
+  "colResult",
+  "hidden",
+] as const satisfies readonly BlocksCanvasStringKey[];
+
+export type BlocksPaperWords = Readonly<Pick<BlocksCanvasStrings, (typeof PAPER_KEYS)[number]>>;
+
+const blocksPaperWordsEn: BlocksPaperWords = Object.fromEntries(
+  PAPER_KEYS.map((key) => [key, blocksCanvasStrings[key]]),
+) as BlocksPaperWords;
+
+const blocksPaperWordsFr: Readonly<Record<keyof BlocksPaperWords, string>> = {
+  forward: "avancer",
+  turn: "tourner à {dir}",
+  turnLeft: "gauche",
+  turnRight: "droite",
+  repeat: "répéter {n} fois",
+  repeatUntilDock: "répéter jusqu'au quai",
+  ifSensor: "si {sensor} {where}",
+  else: "sinon",
+  sensorFree: "libre",
+  sensorBlocked: "obstacle",
+  whereFront: "devant",
+  whereLeft: "à gauche",
+  whereRight: "à droite",
+  kindForward: "Avancer",
+  kindTurn: "Tourner",
+  kindRepeat: "Répéter n fois",
+  kindRepeatUntilDock: "Répéter jusqu'au quai",
+  kindIfSensor: "Si un capteur indique",
+  battery: "Batterie",
+  map: "Plan de l'entrepôt",
+  dock: "QUAI",
+  reasonDock: "Quai atteint",
+  reasonCollision: "Collision",
+  reasonBattery: "Batterie vide",
+  reasonLoop: "Boucle sans fin",
+  reasonShort: "Arrêté avant le quai",
+  colWarehouse: "Entrepôt",
+  colResult: "Résultat",
+  hidden: "Caché",
+};
+
+/** The printed words of each language, as a document's `labels.lang` picks them. */
+export const BLOCKS_PAPER_WORDS: Readonly<Record<"en" | "fr", BlocksPaperWords>> = {
+  en: blocksPaperWordsEn,
+  fr: blocksPaperWordsFr,
+};

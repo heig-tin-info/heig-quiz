@@ -44,6 +44,7 @@ export const blocksClient: QuestionTypeClient<BlocksConfig, BlocksAnswer, Blocks
 };
 
 export {
+  BLOCKS_PAPER_WORDS,
   blocksCanvasStrings,
   blocksEditorStrings,
   blocksGradingStrings,

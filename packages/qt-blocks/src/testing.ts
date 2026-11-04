@@ -58,6 +58,8 @@ export const SECRET_CONFIG: BlocksConfig = BlocksConfig.parse({
 export const blocksLeakFixture: StudentLeakFixture<BlocksConfig> = {
   config: SECRET_CONFIG,
   forbiddenKeys: ["hiddenCases", "cases", "trail"],
+  // A student's own program, none of the key: it fails every warehouse.
+  answers: [{ program: [{ kind: "turn", dir: "left" }, { kind: "forward" }] }],
   secrets: [
     "^...D",
     ".#.#.",

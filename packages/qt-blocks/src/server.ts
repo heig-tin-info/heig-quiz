@@ -9,6 +9,7 @@
 import { reparseMigrate, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
 import { programStats } from "@quiz/domain/blocks";
 
+import { blocksAnswerZone, blocksSolutionDoc, blocksStatementDoc, blocksStudentAnswerDoc } from "./document.js";
 import { answerMisfit, gradeBlocks, referenceRuns, studentDetails } from "./grade.js";
 import {
   BLOCKS_CONFIG_VERSION,
@@ -151,6 +152,13 @@ export const blocksServer: QuestionTypeServer<
     }
     return { casePassRate: [...tally.values()] };
   },
+
+  // On paper (ADR-126 §8): the visible warehouses drawn, ruled lines for a
+  // program written by hand and graded by hand (ADR-125 §14).
+  statementDoc: blocksStatementDoc,
+  answerZone: blocksAnswerZone,
+  solutionDoc: blocksSolutionDoc,
+  studentAnswerDoc: blocksStudentAnswerDoc,
 
   /** Indexed: what a teacher would type to find the question again. */
   searchText: (config) => [config.prompt, ...config.cases.map((c) => c.name)].join("\n"),

@@ -567,6 +567,9 @@ importers:
       '@quiz/core':
         specifier: workspace:*
         version: link:../core
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../docexport
       '@quiz/domain':
         specifier: workspace:*
         version: link:../domain

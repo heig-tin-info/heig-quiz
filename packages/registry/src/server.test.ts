@@ -129,9 +129,9 @@ describe("the static registries", () => {
 
   it("draw as text the types ADR-121 §2 and ADR-125 name, a paper zone for the printable ones", () => {
     const withStatement = REGISTERED.filter((id) => questionType(id).statementDoc !== undefined);
-    expect(withStatement).toEqual(["mcq", "short", "cloze", "code", "rich", "math"]);
+    expect(withStatement).toEqual(["mcq", "short", "cloze", "code", "rich", "math", "blocks"]);
     const withZone = REGISTERED.filter((id) => questionType(id).answerZone !== undefined);
-    expect(withZone).toEqual(["mcq", "short", "cloze", "rich", "math"]);
+    expect(withZone).toEqual(["mcq", "short", "cloze", "rich", "math", "blocks"]);
     const withOwnCopy = REGISTERED.filter((id) => questionType(id).studentAnswerDoc !== undefined);
     expect(withOwnCopy).toEqual(withZone);
   });
@@ -152,7 +152,17 @@ describe.each(REGISTERED)("the contract of %s", (id) => {
 
   /** No forbidden key nor secret in the block tree, and no secret in its text rendered in `lang` (05 §5.7). */
   const expectNoLeak = (blocks: readonly Block[], lang: Lang) => {
-    expect(findStudentLeaks(blocks, { forbiddenKeys, secrets: fixture.secrets })).toEqual([]);
+    // A frame's `pattern` is its ruling (ADR-126 §3), `{ kind, pitchMm }` from
+    // `@quiz/docexport`, not a short answer's `pattern`: the key search skips
+    // that one key; the secret search reads the tree whole.
+    const unruled = blocks.map((b) => {
+      if (b.kind !== "answerZone") return b;
+      const { pattern: _ruling, ...zone } = b;
+      return zone;
+    });
+    expect(findStudentLeaks(unruled, { forbiddenKeys })).toEqual([]);
+    const tree = JSON.stringify(blocks);
+    expect(fixture.secrets.filter((secret) => tree.includes(secret))).toEqual([]);
     const text = markdownBody({ lang, blocks });
     expect(fixture.secrets.filter((secret) => text.includes(secret))).toEqual([]);
   };
