@@ -27,7 +27,7 @@ import {
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attemptEvents, attempts, classrooms, enrollments, kioskDevices, officialAttempt, sessions, users } from "../../db/schema.js";
+import { answers, attemptEvents, attempts, classrooms, enrollments, kioskDevices, officialAttempt, sessions } from "../../db/schema.js";
 import { isCourseOwner, type Caller } from "../guards.js";
 import {
   gradeDefaults,
@@ -50,7 +50,7 @@ import { solutionView, studentView } from "./studentView.js";
 import { type AttemptRecord, type AnswerRecord, answersOf, reopenRefusal, reopenRole } from "./attempt.js";
 import { answerSummarizer, answeredBy, liveGrader, cellStatus } from "./autosave.js";
 import { incidentOut, incidentsFrom, incidentsOf, journalOn } from "./incidents.js";
-import { fullName } from "./names.js";
+import { attemptOwnerName, fullName } from "./names.js";
 import { itemInstance } from "../pool/service.js";
 
 // --- Dashboard read model (F-DASH-01..04) ---------------------------------
@@ -375,14 +375,8 @@ export async function attemptInspect(
   const items = await joinedItems(db, evaluation.id);
   const answered = await answersOf(db, attempt.id);
   // A teacher only ever inspects an attempt of THEIR evaluation, and a poll
-  // has no inspector; the guest branch is here so the type is honest.
-  const [student] = attempt.userId === null
-    ? []
-    : await db
-        .select({ givenName: users.givenName, familyName: users.familyName, email: users.email })
-        .from(users)
-        .where(eq(users.id, attempt.userId))
-        .limit(1);
+  // has no inspector; the guest branch is there so the type is honest.
+  const { displayName } = await attemptOwnerName(db, attempt);
   const ownerId = attempt.userId ?? attempt.id;
   // The attempt's journal, read once, in time order: the incidents are
   // derived from it, and the raw list shows its latest 200 rows.
@@ -396,7 +390,7 @@ export async function attemptInspect(
     attempt: {
       id: attempt.id,
       userId: ownerId,
-      displayName: student ? fullName(student.givenName, student.familyName, student.email) : "Guest",
+      displayName,
       pseudonym: uniquePseudonyms(evaluation.id, [ownerId]).get(ownerId) ?? "—",
       state: attempt.state,
       startedAt: isoOrNull(attempt.startedAt),

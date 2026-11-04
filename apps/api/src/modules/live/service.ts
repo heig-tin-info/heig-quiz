@@ -74,6 +74,7 @@ export {
   orderItems,
 } from "./attempt.js";
 export { onAttemptsEnded, type EndedAttempt } from "./dwell.js";
+export { attemptOwnerName } from "./names.js";
 export { studentGrades } from "./grades.js";
 // The one student exit (invariant 4), for the modules that serve a question
 // outside an attempt: the drill (ADR-041 §9).

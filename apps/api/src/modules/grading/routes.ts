@@ -40,8 +40,7 @@ import { itemAnswers, itemAnswersDocument } from "./itemAnswers.js";
 import { enqueueEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
 
-/** `commitSha`: the build, named in an export's provenance (ADR-121 §5); null when unknown. */
-export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: string | null }) {
+export async function gradingPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
 
   /** Params, scope, then body: access is loaded before anything else is checked (invariant 6). */
@@ -140,11 +139,11 @@ export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: str
     app.get(
       `/app/api/evaluations/:id/items/:itemId/answers.${format}`,
       { preHandler: requireTeacher },
-      teacher({ params: ItemParam, load: staffEvaluation }, async ({ req, reply, now, params, scope }) => {
+      teacher({ params: ItemParam, load: staffEvaluation }, async ({ reply, now, params, scope }) => {
         // The Markdown and the PDF print each answer as text; the record keeps it as stored.
         const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: format !== "json" });
         if (!found) return notFound(reply);
-        return sendExport(req, reply, format, found, ItemAnswersRecord, () => itemAnswersDocument(found, opts.commitSha));
+        return sendExport(reply, format, found, ItemAnswersRecord, () => itemAnswersDocument(found));
       }),
     );
   }

@@ -1,8 +1,9 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { EVALUATION_ID, makeEvaluationDetail } from "../test/live-fixtures";
-import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, ok, publicConfig, renderWithProviders } from "../test/render";
 import { ExportSheet } from "./ExportSheet";
 
 /*
@@ -61,6 +62,32 @@ describe("the export sheet", () => {
     render();
     await screen.findByRole("region", { name: "Hand-out" });
     expect(screen.getAllByText("A poll is not printed.")).toHaveLength(2);
+  });
+
+  it("puts the PDF first when the server makes PDFs, fetched so a refusal is a toast (ADR-125)", async () => {
+    mockFetch({
+      [DETAIL]: ok(makeEvaluationDetail()),
+      ...publicConfig(true),
+      [`GET /app/api/evaluations/${EVALUATION_ID}/handout.pdf`]: () => ({ status: 503, body: { error: "pdf_busy" } }),
+    });
+    render();
+    const handout = await screen.findByRole("region", { name: "Hand-out" });
+    const pdf = await within(handout).findByRole("button", { name: "PDF" });
+    // First of the row, before the two links.
+    expect([...handout.querySelectorAll("a, button")].map((b) => b.textContent?.trim())).toEqual(["PDF", "Markdown", "JSON"]);
+    await userEvent.click(pdf);
+    expect(await screen.findByText("Too many PDFs at once: try again in a moment.")).toBeInTheDocument();
+    // The sheet stays open.
+    expect(screen.getByRole("dialog", { name: "Export" })).toBeInTheDocument();
+    expect(within(section("Statement with answer key")).getByRole("button", { name: "PDF" })).toBeInTheDocument();
+  });
+
+  it("offers no PDF when the server makes none", async () => {
+    mockFetch({ [DETAIL]: ok(makeEvaluationDetail()), ...publicConfig(false) });
+    render();
+    const handout = await screen.findByRole("region", { name: "Hand-out" });
+    await waitFor(() => expect(within(handout).getAllByRole("link")).toHaveLength(2));
+    expect(screen.queryByRole("button", { name: "PDF" })).not.toBeInTheDocument();
   });
 
   it("renders the failed state", async () => {

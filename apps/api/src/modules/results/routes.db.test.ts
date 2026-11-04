@@ -9,7 +9,7 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { StaffCopy, StudentGrades } from "@quiz/contracts";
+import { StaffCopy, StaffCopyRecord, StudentGrades } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { READ_TRACE_WINDOW_MS } from "../../audit.js";
@@ -18,6 +18,7 @@ import { auditLog, evaluations } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
+import { pdfText, pdfTools } from "../../test/pdf.js";
 import { applyState, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 
@@ -163,27 +164,62 @@ describe("results and the export (§4.6)", () => {
     expect(body.items[0]).toMatchObject({ answer: "answer-q0", points: 1, verdict: "correct" });
     expect(body.items[0]!.solution).not.toBeNull();
 
-    // Invariant 6: anyone off the course's staff meets a 404, the student a 403 (the role).
-    expect((await get(url, other.headers)).statusCode).toBe(404);
-    expect((await get(url, student.headers)).statusCode).toBe(403);
-    // An attempt of another evaluation is not reached through this one.
+    // Invariant 6, for the copy and its files (ADR-125 §4, §5): anyone off the
+    // course's staff meets a 404, the student a 403 (the role).
     const elsewhere = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [], questions: 1 });
-    expect(
-      (await get(`/app/api/evaluations/${elsewhere.evaluationId}/results/attempts/${built.attemptId}`, teacher.headers))
-        .statusCode,
-    ).toBe(404);
+    for (const suffix of ["", "/copy.json", "/copy.pdf"]) {
+      expect((await get(url + suffix, other.headers)).statusCode).toBe(404);
+      expect((await get(url + suffix, student.headers)).statusCode).toBe(403);
+      // An attempt of another evaluation is not reached through this one.
+      const foreign = `/app/api/evaluations/${elsewhere.evaluationId}/results/attempts/${built.attemptId}${suffix}`;
+      expect((await get(foreign, teacher.headers)).statusCode).toBe(404);
+    }
+  });
+
+  it("serves the copy as its record: the copy, its student and its attempt (ADR-125 §4, §5)", async () => {
+    const res = await get(`/app/api/evaluations/${built.evaluationId}/results/attempts/${built.attemptId}/copy.json`, teacher.headers);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-disposition"]).toMatch(/^attachment; filename="[a-z0-9-]+-test-student-copy\.json"$/);
+    expect(StaffCopyRecord.parse(res.json())).toMatchObject({
+      kind: "staff-copy",
+      version: 1,
+      evaluation: { id: built.evaluationId, mode: "exam" },
+      student: { userId: student.id, displayName: "Test student" },
+      attempt: { id: built.attemptId, number: 1 },
+      attemptId: built.attemptId,
+      points: 1,
+      items: [expect.objectContaining({ answer: "answer-q0", points: 1 })],
+    });
+  });
+
+  it.skipIf(!pdfTools)("serves the copy as a PDF, a type without the copy's hooks said so", async () => {
+    const res = await get(`/app/api/evaluations/${built.evaluationId}/results/attempts/${built.attemptId}/copy.pdf`, teacher.headers);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/pdf");
+    expect(res.headers["content-disposition"]).toMatch(/-test-student-copy\.pdf"$/);
+    const text = await pdfText(res.rawPayload);
+    // The fake type declares no `statementDoc`: the degraded line stands for it.
+    for (const word of ["Test student", "Question 1", "Answer", "Not printable: read it in Quiz."]) expect(text).toContain(word);
   });
 
   it("audits the opening of a copy once per actor, channel and window, never a refused read (#875)", async () => {
     const start = server.clock.now();
-    const url = `/app/api/evaluations/${built.evaluationId}/results/attempts/${built.attemptId}`;
+    // The copy, then its files (ADR-125 §4, §5): each download is an opening too.
+    for (const suffix of ["", "/copy.json", ...(pdfTools ? ["/copy.pdf"] : [])]) {
+      await auditedOpenings(`/app/api/evaluations/${built.evaluationId}/results/attempts/${built.attemptId}${suffix}`);
+    }
+    server.clock.set(start);
+  });
+
+  async function auditedOpenings(url: string) {
     const reads = () =>
       server.app.db
         .select()
         .from(auditLog)
         .where(and(eq(auditLog.action, "attempt.read"), eq(auditLog.subjectId, built.attemptId)));
-    // A fresh window: the test above opened this copy already.
+    // A fresh window: the test above (or the previous file) opened this copy already.
     server.clock.advance(READ_TRACE_WINDOW_MS);
+    const opened = server.clock.now();
     const before = (await reads()).length;
 
     expect((await get(url, teacher.headers)).statusCode).toBe(200);
@@ -208,7 +244,7 @@ describe("results and the export (§4.6)", () => {
     const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null, scope: "api" });
     expect((await get(url, { authorization: `Bearer ${token}` })).statusCode).toBe(200);
     expect(await reads()).toHaveLength(before + 2);
-    expect((await reads()).filter((row) => row.actorType === "api_key")).toEqual([
+    expect((await reads()).filter((row) => row.actorType === "api_key" && row.createdAt >= opened)).toEqual([
       expect.objectContaining({ actorUserId: teacher.id }),
     ]);
 
@@ -225,8 +261,7 @@ describe("results and the export (§4.6)", () => {
     expect(all.filter((row) => row.actorUserId === admin.id)).toEqual([
       expect.objectContaining({ actorType: "user", payload: { evaluationId: built.evaluationId, view: "copy" } }),
     ]);
-    server.clock.set(start);
-  });
+  }
 
   it("gates the student's feedback on the release", async () => {
     const before = await get(`/app/api/attempts/${built.attemptId}/feedback`, student.headers);

@@ -11,10 +11,11 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { AttemptParam, IdParam, PublishCorrectionBody, ReleaseBody } from "@quiz/contracts";
+import { AttemptParam, IdParam, PublishCorrectionBody, ReleaseBody, StaffCopyRecord } from "@quiz/contracts";
 
 import { readTracer, tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
+import { sendExport } from "../../documents/files.js";
 import { loadEvaluation, loadEvaluationAttempt, ownAttempt, teacherGuard, withCourseRole } from "../guards.js";
 import { sendCsv, studentRoute, teacherRoute } from "../http.js";
 import { byId } from "../evaluation/service.js";
@@ -22,6 +23,7 @@ import * as gradingEvents from "../grading/events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import { studentGrades } from "../live/service.js";
 import * as bus from "../realtime/bus.js";
+import { staffCopyDocument, staffCopyRecord } from "./copy.js";
 import { csvFilename, resultsCsv } from "./csv.js";
 import * as service from "./service.js";
 
@@ -77,6 +79,28 @@ export async function resultsPlugin(app: FastifyInstance) {
       return copy;
     }),
   );
+
+  /**
+   * The same copy as a file (ADR-125 §4, §5): its record, or its PDF, from the
+   * results per-student view and the dashboard's inspect view — never from
+   * the anonymised grading table (F-GRADE-03). Audited as an opening of the
+   * copy, like the read above.
+   */
+  for (const format of ["json", "pdf"] as const) {
+    app.get(
+      `/app/api/evaluations/:id/results/attempts/:attemptId/copy.${format}`,
+      { preHandler: requireTeacher },
+      teacher({ params: AttemptParam, load: staffEvaluationAttempt }, async ({ req, reply, now, scope }) => {
+        const found = await staffCopyRecord(app.db, scope.evaluation, scope.attempt, { now });
+        await traceRead(req, "attempt.read", "attempt", scope.attempt.id, {
+          evaluationId: scope.evaluation.id,
+          view: "copy",
+        });
+        // A refused PDF (503) is still an opening: access was granted and the record built.
+        return sendExport(reply, format, found, StaffCopyRecord, () => staffCopyDocument(found));
+      }),
+    );
+  }
 
   /** F-RES-02. UTF-8 with a BOM and `;`, because Excel is the reader. */
   app.get(

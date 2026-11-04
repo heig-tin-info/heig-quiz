@@ -5,6 +5,7 @@ import type { ResultRow, ResultsItem, StaffCopy } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { api } from "../api";
+import { CopyDownload } from "../CopyDownload";
 import { CopyItem } from "../CopyItem";
 import { Grade } from "../Grade";
 import { useT } from "../i18n";
@@ -19,7 +20,8 @@ import { PendingLine } from "../student/cards";
  * comment — whatever the feedback policy and before any release, so the
  * teacher can check a "but I had it right" on the spot. A reading sheet over
  * the table, walked student by student (↑ / ↓ in the table's order); a
- * question that deserves another look opens in the grading panel.
+ * question that deserves another look opens in the grading panel. The copy
+ * downloads as a PDF or its record (ADR-125 §4, §5).
  */
 export function StudentCopy({
   evaluationId,
@@ -66,6 +68,7 @@ export function StudentCopy({
       onClose={onClose}
       actions={
         <>
+          <CopyDownload evaluationId={evaluationId} attemptId={row.attemptId} />
           <IconButton label={t("results.copy.prev")} onClick={onMove.prev} disabled={!onMove.prev}>
             <ArrowUp />
           </IconButton>

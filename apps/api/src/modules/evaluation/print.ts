@@ -14,13 +14,19 @@ interface PrintedItem {
 
 /**
  * What each document needs of a type (ADR-125 §5): the hand-out a statement
- * and an answer zone, the staff "statement with key" a statement. A type
- * declares each by implementing the hook; no list of type names lives here.
+ * and an answer zone, the staff "statement with key" a statement, a copy a
+ * statement and the student's answer. A type declares each by implementing
+ * the hook; no list of type names lives here.
  */
 const HOOKS = {
   handout: ["statementDoc", "answerZone"],
   document: ["statementDoc"],
+  copy: ["statementDoc", "studentAnswerDoc"],
 } as const;
+
+/** Whether `type` implements every hook `document` needs of it. */
+export const declares = (type: string, document: keyof typeof HOOKS): boolean =>
+  HOOKS[document].every((hook) => typeOf(type)[hook] !== undefined);
 
 /**
  * Why `evaluation` does not make `document`, or `null` when it does: a poll
@@ -31,12 +37,11 @@ const HOOKS = {
 export function printRefusal(
   evaluation: { mode: string },
   items: readonly PrintedItem[],
-  document: keyof typeof HOOKS,
+  document: Exclude<keyof typeof HOOKS, "copy">,
 ): PrintRefusal | null {
   if (evaluation.mode === "poll") return { reason: "poll", types: [] };
   if (items.some((i) => isParameterized(i.version))) return { reason: "parameterized", types: [] };
-  const lacks = (type: string) => HOOKS[document].some((hook) => typeOf(type)[hook] === undefined);
-  const types = [...new Set(items.map((i) => i.question.type).filter(lacks))];
+  const types = [...new Set(items.map((i) => i.question.type).filter((type) => !declares(type, document)))];
   return types.length === 0 ? null : { reason: "type", types };
 }
 

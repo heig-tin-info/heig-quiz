@@ -1,17 +1,13 @@
 import { useMutation } from "@tanstack/react-query";
-import { Braces, ChevronDown, Copy, Download, FileText } from "lucide-react";
+import { ChevronDown, Copy, Download } from "lucide-react";
 
-import { usePublicConfig, wordedRefusal } from "../api";
-import { downloadFile, fetchFile } from "../download";
+import { fetchFile, useExportMenu, type ExportExt } from "../download";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { Button, Menu, type MenuItem } from "../ui";
-
-/** The formats of the answers file (F-EXP-01, ADR-125). */
-type Format = "md" | "pdf" | "json";
+import { Button, Menu } from "../ui";
 
 /** `GET …/items/:itemId/answers.<format>` (F-EXP-01): the server names the file. */
-const answersPath = (evaluationId: string, itemId: string, format: Format): string =>
+const answersPath = (evaluationId: string, itemId: string, format: ExportExt): string =>
   `/app/api/evaluations/${evaluationId}/items/${itemId}/answers.${format}`;
 
 /** The Markdown file as plain text, the one type every clipboard takes. */
@@ -43,34 +39,23 @@ async function copyFrom(path: string): Promise<void> {
 export function AnswersExport({ evaluationId, itemId }: { evaluationId: string; itemId: string }) {
   const t = useT();
   const toast = useToast();
-  // The server makes PDFs (ADR-125 §3); until it says so, no PDF is offered.
-  const pdf = usePublicConfig().data?.pdf === true;
-  const path = (format: Format) => answersPath(evaluationId, itemId, format);
+  const path = (format: ExportExt) => answersPath(evaluationId, itemId, format);
   const copy = useMutation({
     mutationFn: () => copyFrom(path("md")),
     onSuccess: () => toast(t("grading.answers.copied"), "success"),
     onError: () => toast(t("grading.answers.copyFailed"), "error"),
   });
-  // A PDF is built on request and may be refused (busy, no Typst): fetched, so the refusal is a toast.
-  const printable = useMutation({
-    mutationFn: () => downloadFile(path("pdf")),
-    onError: (error) =>
-      toast(wordedRefusal(error, { pdf_unavailable: "export.unavailable", pdf_busy: "export.busy", pdf_failed: "export.failed" }, t), "error"),
-  });
-  const items: MenuItem[] = [
-    { label: t("md.label"), icon: FileText, href: path("md") },
-    ...(pdf ? [{ label: t("export.pdf"), icon: Download, onSelect: () => printable.mutate() }] : []),
-    { label: t("export.json"), icon: Braces, href: path("json") },
-  ];
+  // A PDF only when the server makes them, fetched so a refusal (busy, no Typst) is a toast.
+  const exports = useExportMenu(path, ["md", "pdf", "json"]);
   return (
     // One group, so a narrow toolbar wraps the pair together.
     <span className="flex items-center gap-2">
       <Menu
         label={t("export.menu")}
         align="start"
-        items={items}
+        items={exports.items}
         trigger={
-          <Button variant="secondary" loading={printable.isPending} title={t("grading.answers.help")}>
+          <Button variant="secondary" loading={exports.pending} title={t("grading.answers.help")}>
             <Download /> {t("export.menu")} <ChevronDown />
           </Button>
         }

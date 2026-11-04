@@ -43,7 +43,7 @@ import { evaluationTotal, slugify } from "@quiz/domain";
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { evaluations } from "../../db/schema.js";
-import { itemKeyBlocks, provenanceOf } from "../../documents/blocks.js";
+import { explanationBlocks, itemKeyBlocks, provenanceOf } from "../../documents/blocks.js";
 import * as live from "../live/service.js";
 import { explanationOrNull, loadConfig, typeOf } from "../pool/service.js";
 import { printRefusal } from "./print.js";
@@ -133,8 +133,8 @@ export async function evaluationDocument(
   };
 }
 
-/** The Markdown tree of {@link evaluationDocument}. `app`: the build's commit (ADR-121 §5). */
-export function evaluationDocumentTree(found: Found<EvaluationDocumentRecord>, app: string | null): Document {
+/** The Markdown tree of {@link evaluationDocument}. */
+export function evaluationDocumentTree(found: Found<EvaluationDocumentRecord>): Document {
   const { record } = found;
   // A staff document: English (ADR-121 §4).
   const l = EN_LABELS;
@@ -145,10 +145,10 @@ export function evaluationDocumentTree(found: Found<EvaluationDocumentRecord>, a
       // The teacher's passage before the item (ADR-084).
       ...(item.intro ? [markdown(item.intro)] : []),
       ...itemKeyBlocks(typeOf(item.type), item.position, item.internalName, item.points, item.statement, item.solution, l),
+      ...explanationBlocks(item.explanation, l),
     );
-    if (item.explanation !== null) blocks.push(heading(3, l.explanation), markdown(item.explanation));
   }
-  return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, [], app), lang: "en", blocks };
+  return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, []), lang: "en", blocks };
 }
 
 /**
@@ -190,7 +190,7 @@ export async function handout(
  * the title, then each item numbered in the paper's order, its statement
  * and its answer zones, keyed to the item (`scopeZones`).
  */
-export function handoutTree(found: Found<HandoutRecord>, app: string | null, lang: Lang): Document {
+export function handoutTree(found: Found<HandoutRecord>, lang: Lang): Document {
   const { record } = found;
   const l = LABELS[lang];
   const blocks: Block[] = [{ ...answerZone("name"), id: "name" }, heading(1, record.evaluation.title)];
@@ -205,5 +205,5 @@ export function handoutTree(found: Found<HandoutRecord>, app: string | null, lan
       ...scopeZones(item.id, type.answerZone!(item.statement)),
     );
   });
-  return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, [], app), lang, blocks };
+  return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, []), lang, blocks };
 }

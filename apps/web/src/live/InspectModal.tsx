@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 
 import type { DashboardRow } from "@quiz/contracts";
 
+import { CopyDownload } from "../CopyDownload";
 import { useT } from "../i18n";
 import type { GridState } from "../realtime/grid";
 import {
@@ -40,7 +41,8 @@ import { useAttemptInspect } from "./useAttemptInspect";
  * Each answer is drawn by `AnswerCard`, the type's own `Review` — the same
  * card one cell (`AnswerModal`) and one question (`QuestionModal`) show, so
  * this file never learns what any type's answer looks like. This is what the
- * row's eye opens; a cell opens that one answer only (issue #353).
+ * row's eye opens; a cell opens that one answer only (issue #353). The
+ * footer downloads the student's copy (ADR-125 §4, §5).
  */
 export function InspectModal({
   evaluationId,
@@ -140,6 +142,7 @@ export function InspectModal({
         <span className="flex w-full items-center justify-between gap-2">
           <span className="text-xs tabular-nums text-fg-muted">{position}</span>
           <span className="touch-group flex items-center gap-1">
+            {row.attemptId !== null ? <CopyDownload evaluationId={evaluationId} attemptId={row.attemptId} /> : null}
             <IconButton
               label={t("live.inspect.prev")}
               disabled={rowIndex <= 0}

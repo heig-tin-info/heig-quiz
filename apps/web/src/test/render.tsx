@@ -90,6 +90,11 @@ export const noContent = (): Reply => ({ status: 204 });
 /** Any error status; `body` is what `apiErrorMessage` reads. */
 export const fail = (status: number, body?: unknown): Reply => ({ status, body });
 
+/** The public configuration's route, saying whether the server makes PDFs (ADR-125 §3). */
+export const publicConfig = (pdf: boolean): Record<string, Reply> => ({
+  "GET /app/api/config": ok({ devLogin: false, kiosk: null, pdf }),
+});
+
 /**
  * Installs a `fetch` answering the given routes, keyed `"<METHOD> <url>"`
  * exactly as the app calls them (query string included). An unknown route

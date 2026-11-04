@@ -4,7 +4,7 @@
  * Each Source's module keeps its own routes, its loader (invariant 6) and
  * its record; this is the shared tail that turns the record into a download.
  */
-import type { FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyReply } from "fastify";
 import type { z } from "zod";
 
 import type { Document } from "@quiz/docexport";
@@ -25,23 +25,28 @@ const CONTENT_TYPE: Record<ExportFormat, string> = {
 /**
  * `found` as `<basename>.<format>`: the record parsed through its `schema`
  * (so the file is what the contract says), or the document `tree` draws from
- * it, built only when asked for, as Markdown or as a PDF (ADR-125). The PDF
- * draws the images the caller (`req.user`) may see; `app.pdf` answers
+ * it, built only when asked for, as Markdown or as a PDF (ADR-125). The
+ * document's provenance names the build here, once (ADR-121 §5). The PDF
+ * draws the images the caller may see; `app.pdf` answers
  * `503 pdf_unavailable` or `pdf_busy` when it cannot make one.
  */
 export async function sendExport<R>(
-  req: FastifyRequest,
   reply: FastifyReply,
   format: ExportFormat,
   found: { basename: string; record: R },
   schema: z.ZodType<R>,
   tree: () => Document,
 ): Promise<FastifyReply> {
+  const { server, request } = reply;
+  const document = (): Document => {
+    const doc = tree();
+    return { ...doc, provenance: { ...doc.provenance, app: server.commitSha } };
+  };
   const body =
     format === "json"
       ? JSON.stringify(schema.parse(found.record))
       : format === "pdf"
-        ? await req.server.pdf.render(tree(), req.user!)
-        : renderMarkdown(tree());
+        ? await server.pdf.render(document(), request.user!)
+        : renderMarkdown(document());
   return sendAttachment(reply, CONTENT_TYPE[format], `${found.basename}.${format}`, body);
 }

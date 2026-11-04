@@ -1,14 +1,10 @@
 /**
- * The Typst sandbox (ADR-125 §2), against the real binary: `TYPST_BIN`, else
- * `typst` on PATH. Without one the compiles are skipped on a workstation and
- * FAIL in CI (`CI` set), which installs it: the PDF path is never green
- * there by being untested.
+ * The Typst sandbox (ADR-125 §2), against the real binary: the tools of
+ * `test/pdf.ts`, skipped on a workstation without them and FAILING in CI.
  */
-import { execFile } from "node:child_process";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -16,12 +12,11 @@ import { answerZone, heading, markdown, scopeZones, type Block, type Document } 
 import { drawable, renderTypst } from "@quiz/docexport/typst";
 
 import { compileArgs, compileTypst, DEAD_PROXY, inTempDir, run, TypstFailure, typstEnv } from "./compile.js";
-import { prlimitCaps, probeTypst } from "./service.js";
+import { pdfText, pdfTools, TYPST_BIN as BIN, typstProbe as probe } from "../test/pdf.js";
+import { prlimitCaps } from "./service.js";
 
-const BIN = process.env["TYPST_BIN"] ?? "typst";
-const probe = await probeTypst(BIN, 1024);
-/** On a workstation without Typst, skip; in CI, run and fail. */
-const skip = !probe.available && !process.env["CI"];
+/** On a workstation without Typst or `pdftotext`, skip; in CI, run and fail. */
+const skip = !pdfTools;
 
 const provenance = {
   kind: "test",
@@ -44,15 +39,6 @@ afterAll(async () => {
 });
 
 const options = (timeoutMs = 20_000) => ({ bin: BIN, timeoutMs, parent });
-
-/** The text of a PDF, through poppler's `pdftotext`. */
-async function pdfText(pdf: Buffer): Promise<string> {
-  return inTempDir(async (dir) => {
-    await writeFile(join(dir, "out.pdf"), pdf);
-    const { stdout } = await promisify(execFile)("pdftotext", ["-layout", "out.pdf", "-"], { cwd: dir });
-    return stdout;
-  });
-}
 
 /** Why a compile failed, or a throw when it did not. */
 async function failure(promise: Promise<unknown>): Promise<TypstFailure> {

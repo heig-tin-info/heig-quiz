@@ -93,6 +93,10 @@ describe("ResultsView", () => {
     expect(await within(sheet).findByText("Clean answer.")).toBeVisible();
     expect(within(sheet).getByText("sizeof-ptr")).toBeVisible();
     expect(screen.getByText("Zoe Blanc", { selector: "td *" }).closest("tr")).toHaveAttribute("aria-current", "true");
+    // The copy downloads from the sheet (ADR-125 §4, §5), its record at least.
+    await userEvent.click(within(sheet).getByRole("button", { name: "Download the copy" }));
+    expect(await screen.findByRole("menuitem", { name: "JSON" })).toHaveAttribute("href", `${VIEW}/attempts/a1/copy.json`);
+    await userEvent.keyboard("{Escape}");
 
     // ↓ skips the absent row: by name, Currat has no attempt.
     expect(within(sheet).getByRole("button", { name: "Previous student" })).toBeDisabled();

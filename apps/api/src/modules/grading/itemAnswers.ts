@@ -135,9 +135,8 @@ export async function itemAnswers(
 /**
  * The Markdown document of {@link itemAnswers} asked with `text: true`: the
  * header (title, item, statement, key), then one section per student.
- * `app` is the build's commit, for the provenance (ADR-121 §5).
  */
-export function itemAnswersDocument(found: ItemAnswers, app: string | null): Document {
+export function itemAnswersDocument(found: ItemAnswers): Document {
   const { record } = found;
   const { item } = record;
   const type = typeOf(item.type);
@@ -167,7 +166,6 @@ export function itemAnswersDocument(found: ItemAnswers, app: string | null): Doc
         questionVersionId: item.questionVersionId,
       },
       found.attempts,
-      app,
     ),
     lang: "en",
     blocks,

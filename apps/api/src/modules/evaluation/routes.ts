@@ -199,17 +199,16 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
    * language). Staff only, like the answers export; `409 not_printable {
    * reason, types }` for an evaluation that does not print.
    */
-  const commitSha = opts.config.COMMIT_SHA || null;
   /** What a document is served from: the evaluation loaded, the clock, the format, the reader's language. */
-  type Served = { req: FastifyRequest; reply: FastifyReply; evaluation: service.EvaluationRecord; now: Date; format: ExportFormat; lang: Locale };
+  type Served = { reply: FastifyReply; evaluation: service.EvaluationRecord; now: Date; format: ExportFormat; lang: Locale };
   const documents = {
-    document: async ({ req, reply, evaluation, now, format }: Served) => {
+    document: async ({ reply, evaluation, now, format }: Served) => {
       const found = await evaluationDocument(app.db, evaluation, { now });
-      return sendExport(req, reply, format, found, EvaluationDocumentRecord, () => evaluationDocumentTree(found, commitSha));
+      return sendExport(reply, format, found, EvaluationDocumentRecord, () => evaluationDocumentTree(found));
     },
-    handout: async ({ req, reply, evaluation, now, format, lang }: Served) => {
+    handout: async ({ reply, evaluation, now, format, lang }: Served) => {
       const found = await handout(app.db, evaluation, { now });
-      return sendExport(req, reply, format, found, HandoutRecord, () => handoutTree(found, commitSha, lang));
+      return sendExport(reply, format, found, HandoutRecord, () => handoutTree(found, lang));
     },
   };
   for (const [name, serve] of Object.entries(documents)) {
@@ -218,7 +217,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
         `/app/api/evaluations/:id/${name}.${format}`,
         { preHandler: requireTeacher },
         teacher({ params: IdParam, load: staffEvaluation }, ({ req, reply, now, scope }) =>
-          serve({ req, reply, evaluation: scope.evaluation, now, format, lang: readerLang(req) }),
+          serve({ reply, evaluation: scope.evaluation, now, format, lang: readerLang(req) }),
         ),
       );
     }
