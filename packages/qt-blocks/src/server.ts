@@ -89,7 +89,7 @@ export const blocksServer: QuestionTypeServer<
     };
   },
 
-  /** The key (amendment D17): the reference and every warehouse, hidden ones included. */
+  /** The staff's key: the reference and every warehouse, hidden ones included. */
   toSolution(config) {
     return {
       referenceSolution: config.referenceSolution,
@@ -104,11 +104,19 @@ export const blocksServer: QuestionTypeServer<
   },
 
   /**
-   * Under `showKey` the details travel whole (amendment D17): the hidden
-   * maps and the reference then come from `toSolution` as well.
+   * The key a student reads (ADR-103 amendment of 2026-11-04, reversing D17;
+   * #998): the reference and the visible warehouses, never a hidden one —
+   * its name, map and battery stay the teacher's under every policy.
+   */
+  studentSolution(solution) {
+    return { ...solution, cases: solution.cases.filter((c) => c.visible) };
+  },
+
+  /**
+   * A hidden warehouse keeps its verdict, points and coarse reason under
+   * every policy, a shown key included (#998): its trail draws its map.
    */
   studentDetails(details, policy): unknown {
-    if (policy.showKey) return details;
     return studentDetails(details, { showHiddenCaseNames: policy.showHiddenCaseNames });
   },
 

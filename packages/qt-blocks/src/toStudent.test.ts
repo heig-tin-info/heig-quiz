@@ -63,12 +63,43 @@ describe("toStudent", () => {
   });
 });
 
+describe("studentSolution: a shown key never carries a hidden warehouse (#998)", () => {
+  const solution = blocksServer.toSolution(SECRET_CONFIG, view);
+  const forStudent = blocksServer.studentSolution!(solution, SECRET_CONFIG)!;
+  const hiddenCases = SECRET_CONFIG.cases.filter((c) => !c.visible);
+
+  it("keeps the reference and the visible warehouses whole", () => {
+    expect(forStudent.referenceSolution).toEqual(solution.referenceSolution);
+    expect(forStudent.cases).toEqual(solution.cases.filter((c) => c.visible));
+  });
+
+  it("drops each hidden warehouse: its name and every row of its map", () => {
+    const serialized = JSON.stringify(forStudent);
+    for (const c of hiddenCases) {
+      expect(serialized).not.toContain(c.name);
+      expect(serialized).not.toContain(JSON.stringify(c.map));
+      // A distinctive row of the map, not shared with a visible one.
+      const visibleRows = new Set(SECRET_CONFIG.cases.filter((k) => k.visible).flatMap((k) => k.map));
+      for (const row of c.map.filter((r) => !visibleRows.has(r))) expect(serialized, row).not.toContain(JSON.stringify(row));
+    }
+  });
+});
+
 describe("studentDetails", () => {
   const details = graded();
   const hidden = details.cases.filter((c) => !c.visible);
 
-  it("hands the details over whole under a shown key", () => {
-    expect(blocksServer.studentDetails!(details, { showKey: true, showHiddenCaseNames: false })).toBe(details);
+  it("keeps a hidden warehouse opaque under a shown key too (#998, ADR-103 amendment of 2026-11-04)", () => {
+    for (const showHiddenCaseNames of [false, true]) {
+      const out = blocksServer.studentDetails!(details, { showKey: true, showHiddenCaseNames }) as BlocksDetails;
+      expect(out.cases.slice(0, 2)).toEqual(details.cases.slice(0, 2));
+      expect(out.cases[2]).toEqual({ name: showHiddenCaseNames ? "Hidden north-east" : "#3", visible: false, points: 2, ok: true, reason: "dock" });
+      const serialized = JSON.stringify(out);
+      for (const c of hidden) {
+        expect(serialized).not.toContain(JSON.stringify(c.trail));
+        expect(serialized).not.toContain(`"moves":${c.moves}`);
+      }
+    }
   });
 
   it("keeps a visible warehouse whole", () => {

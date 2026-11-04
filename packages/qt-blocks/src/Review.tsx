@@ -54,7 +54,10 @@ function rowsOf(student: BlocksStudent, details: BlocksReviewDetails | null, sol
   }
   let visible = 0;
   return details.cases.map((c, i) => {
-    const map = c.visible ? (student.visibleCases[visible++]?.map ?? null) : (solution?.cases[i]?.map ?? null);
+    // A hidden map comes with the staff's key only: a student's lists the
+    // visible warehouses alone, so the entry at `i` must itself be hidden.
+    const keyed = solution?.cases[i];
+    const map = c.visible ? (student.visibleCases[visible++]?.map ?? null) : keyed?.visible === false ? keyed.map : null;
     return {
       n: String(i + 1),
       name: c.name,

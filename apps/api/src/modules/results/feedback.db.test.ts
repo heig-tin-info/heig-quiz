@@ -464,3 +464,89 @@ describe("an essay's grading criteria stay the teacher's (ADR-037)", () => {
     expect(entry!.solution).toEqual({ rubric: ESSAY_RUBRIC, reference: ESSAY_REFERENCE });
   });
 });
+
+describe("a blocks question's hidden warehouses stay the teacher's (#998, ADR-103 amendment of 2026-11-04)", () => {
+  /** The wall follower: it reaches the dock of every warehouse below. */
+  const WALL_FOLLOWER = [
+    {
+      kind: "repeat_until_dock",
+      body: [
+        {
+          kind: "if_sensor",
+          sensor: "free",
+          where: "front",
+          then: [{ kind: "forward" }],
+          else: [{ kind: "turn", dir: "right" }],
+        },
+      ],
+    },
+  ];
+  /** The hidden warehouses' distinctive rows and batteries, found in no visible one. */
+  const HIDDEN_MAP = ["^...D", ".#.#.", ">.##...D", "...#.#.."];
+  const HIDDEN_BATTERIES = ['"battery":23', '"battery":61'];
+
+  it("shows the student the visible warehouse and the verdicts, never a hidden map or trail", async () => {
+    const db = server.app.db;
+    CONFIGS["blocks"] = {
+      configVersion: 1,
+      prompt: "Bring the robot to the dock.",
+      world: { kind: "warehouse" },
+      toolbox: ["forward", "turn", "repeat", "repeat_until_dock", "if_sensor"],
+      starter: [{ kind: "repeat", times: 7, body: [{ kind: "forward" }] }],
+      referenceSolution: WALL_FOLLOWER,
+      cases: [
+        { name: "Clear aisle", map: ["..#..#..", "........", ">......D", "...#..#."], battery: 40, visible: true, points: 1 },
+        { name: "Hidden north-east", map: ["^...D", ".#.#.", "....."], battery: 23, visible: false, points: 2 },
+        {
+          name: "Trapped corridor",
+          map: ["........", "..#..#..", "...#.#..", ">.##...D", "........"],
+          battery: 61,
+          visible: false,
+          points: 3,
+        },
+      ],
+      allOrNothing: false,
+    };
+    // An exercise: it always shows its key (ADR-124).
+    const seed = await seedLive(db, {
+      teacherId: teacher.id,
+      studentIds: [student.id],
+      questions: 0,
+      mode: "exercise",
+      durationS: null,
+    });
+    const exercise = (await byId(db, seed.evaluationId))!;
+    const [item] = await addItems(db, exercise, [await publish(seed.poolId, "blocks")], () => 6, { attemptCount: 0 });
+    await post(`/app/api/evaluations/${seed.evaluationId}/start`, teacher.headers, { confirm: true });
+    const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt/start`, student.headers, {});
+    const attemptId = entered.json().view.attempt.id as string;
+    const saved = await server.app.inject({
+      method: "PUT",
+      url: `/app/api/attempts/${attemptId}/answers/${item!.id}`,
+      headers: student.headers,
+      payload: { payload: { program: WALL_FOLLOWER }, revision: 1, clientTs: server.clock.now().toISOString() },
+    });
+    expect(saved.statusCode).toBe(200);
+    const submitted = await post(`/app/api/attempts/${attemptId}/submit`, student.headers, { confirm: true });
+    expect(submitted.statusCode).toBe(200);
+
+    const feedback = await get(`/app/api/attempts/${attemptId}/feedback`, student.headers);
+    expect(feedback.statusCode).toBe(200);
+    const blocks = (feedback.json().items as Record<string, unknown>[])[0]!;
+    expect((blocks["solution"] as { cases: { name: string }[] }).cases.map((c) => c.name)).toEqual(["Clear aisle"]);
+    const details = blocks["details"] as { cases: Record<string, unknown>[] };
+    // The stored default opens the hidden names (D15); the rest is the verdict.
+    expect(details.cases[1]).toEqual({ name: "Hidden north-east", visible: false, points: 2, ok: true, reason: "dock" });
+    expect(details.cases[0]).toHaveProperty("trail");
+    // The whole response is searched.
+    for (const secret of [...HIDDEN_MAP, ...HIDDEN_BATTERIES]) expect(feedback.body, secret).not.toContain(secret);
+
+    // The staff's copy keeps everything: the hidden maps and their trails.
+    const copy = await get(
+      `/app/api/evaluations/${seed.evaluationId}/results/attempts/${attemptId}/copy.json`,
+      teacher.headers,
+    );
+    expect(copy.statusCode).toBe(200);
+    for (const secret of [...HIDDEN_MAP, ...HIDDEN_BATTERIES]) expect(copy.body, secret).toContain(secret);
+  });
+});

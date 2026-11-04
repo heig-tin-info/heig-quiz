@@ -174,6 +174,15 @@ describe("BlocksReview", () => {
     expect(screen.queryByText("Reference solution")).toBeNull();
   });
 
+  it("draws no hidden map for a student under a shown key, and no visible map in its place (#998)", async () => {
+    const solution = blocksServer.studentSolution!(blocksServer.toSolution(SECRET_CONFIG, view), SECRET_CONFIG);
+    const details = blocksServer.studentDetails!(detailsOf(), { showKey: true, showHiddenCaseNames: true }) as BlocksDetails;
+    render(<BlocksReview {...base} answer={{ program: REFERENCE }} solution={solution} details={details} />);
+    await userEvent.click(screen.getByRole("button", { name: /Trapped corridor/ }));
+    expect(screen.queryByRole("img", { name: /Plan of the warehouse (Hidden north-east|Trapped corridor)/ })).toBeNull();
+    expect(screen.getByLabelText("Reference solution")).toHaveTextContent("if free ahead");
+  });
+
   it("shows the teacher the hidden maps and the reference, from the key", async () => {
     const solution = blocksServer.toSolution(SECRET_CONFIG, view);
     render(<BlocksReview {...base} audience="teacher" answer={{ program: REFERENCE }} solution={solution} details={detailsOf()} />);
