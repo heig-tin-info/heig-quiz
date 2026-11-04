@@ -10,14 +10,18 @@
  * teacher's unshuffled view. On a hand-out the statement's choices are the
  * paper zone itself (ADR-125 §6), so the type adds no zone of its own.
  */
-import { choices, markdown, number, table, type Block, type Labels } from "@quiz/docexport";
+import { choices, markdown, number, table, type Block, type ChoiceItem, type Labels } from "@quiz/docexport";
 
 import { choiceLetter, type McqAnswer, type McqConfig, type McqDetails, type McqSolution, type McqStudent } from "./schema.js";
+
+/** Choices lettered by their place in `list`. */
+const lettered = (list: readonly { text: string }[]): ChoiceItem[] =>
+  list.map((choice, at) => ({ label: choiceLetter(at), text: choice.text }));
 
 /** The choices of `student`, lettered as the student saw them, those whose id is in `ticked` ticked. */
 function studentChoices(student: McqStudent, ticked: readonly number[]): Block {
   return choices(
-    student.choices.map((choice, at) => ({ label: choiceLetter(at), text: choice.text })),
+    lettered(student.choices),
     student.mode === "multiple",
     student.choices.flatMap((choice, at) => (ticked.includes(choice.id) ? [at] : [])),
   );
@@ -50,11 +54,7 @@ export function mcqAnswerDoc(config: McqConfig, answer: McqAnswer, details: McqD
     ticked.length === 0
       ? [markdown(labels.noAnswer)]
       : [
-          choices(
-            config.choices.map((choice, i) => ({ label: choiceLetter(i), text: choice.text })),
-            config.mode === "multiple",
-            ticked,
-          ),
+          choices(lettered(config.choices), config.mode === "multiple", ticked),
         ];
   if (details === null) return blocks;
   const policy = details.negativeMarking ? `${details.policy}, ${labels.negativeMarkingShort}` : details.policy;

@@ -9,8 +9,10 @@
  * questions: a question's heading opens it with space above.
  *
  * A choice question's choices are a grid of boxes (`choices`), square for
- * several answers, round for one, each drawn empty or ticked by its own
- * shape, so the body holds no flag.
+ * several answers, round for one, each drawn empty or ticked by a shape of
+ * its own (`square-ticked`), which the source reads as it prints. A cloze
+ * dropdown's `bubbles` are round, one to pick. A heading with an aside is
+ * `headed`: the aside sits outside the heading, so no bookmark holds it.
  *
  * Every answer space is a `zone(id, kind, body)`: it records
  * `(id, kind, page, x, y, w, h)` — position and size in points — as a
@@ -58,14 +60,14 @@ export const PREAMBLE = String.raw`
   body
 }))
 
-#let bubble(multiple) = if multiple {
-  box(baseline: 0.6mm, square(size: 3.6mm, stroke: 0.6pt))
-} else {
-  box(baseline: 0.6mm, circle(radius: 1.8mm, stroke: 0.6pt))
-}
+#let bubbles(labels) = block(above: 0.8em, below: 0.8em,
+  labels.map(l => box[#circle-empty#h(1.5mm)#l]).join(h(7mm)))
 
-#let bubbles(labels, multiple) = block(above: 0.8em, below: 0.8em,
-  labels.map(l => box[#bubble(multiple)#h(1.5mm)#l]).join(h(7mm)))
+#let headed(level, aside, body) = block(width: 100%, sticky: true,
+  above: if level <= 2 { 1.8em } else { 1.3em }, below: if level <= 2 { 0.8em } else { 0.6em }, {
+    heading(level: level, body)
+    place(bottom + right, text(size: 0.9em, fill: luma(60), aside))
+  })
 
 #let rule = line(length: 100%, stroke: 0.4pt + luma(130))
 

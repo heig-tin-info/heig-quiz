@@ -284,7 +284,7 @@ describe("every answer to one item (F-EXP-01)", () => {
     expect(res.statusCode).toBe(200);
     const text = res.body;
     expect(text).toContain("### Statement\n\nPick MCQ_PROMPT_MARKER.\n\n- [ ] **A.** CHOICE_WRONG\n- [ ] **B.** CHOICE_KEY");
-    expect(text).toContain("### Reference solution\n\n- [ ] **A.** CHOICE_WRONG\n- [x] **B.** CHOICE_KEY");
+    expect(text).toContain("### Answer key\n\n- [ ] **A.** CHOICE_WRONG\n- [x] **B.** CHOICE_KEY");
     // The counted attempt's ticks, by canonical letter, then how the policy scored them.
     expect(text).toMatch(
       /## Nom0 Prenom0\n\n- \[ \] \*\*A\.\*\* CHOICE_WRONG\n- \[x\] \*\*B\.\*\* CHOICE_KEY\n\n(\| Policy .*\n\|.*\n\| all_or_nothing .*\n\n)?Points: /,
@@ -298,10 +298,10 @@ describe("every answer to one item (F-EXP-01)", () => {
     const res = await get(url(built.mcq.item.id, "md"), { ...teacher.headers, "accept-language": "fr-CH" });
     expect(res.statusCode).toBe(200);
     const text = res.body;
-    for (const heading of ["### Énoncé", "### Solution de référence"]) expect(text).toContain(heading);
+    for (const heading of ["### Énoncé", "### Corrigé"]) expect(text).toContain(heading);
     expect(text).toMatch(/## Nom1 Prenom1\n\nPas de réponse\./);
     expect(text).toMatch(/## Nom2 Prenom2\n\nPas de tentative\./);
-    expect(text).not.toMatch(/Statement|Reference solution|No answer|No attempt/);
+    expect(text).not.toMatch(/Statement|Answer key|No answer|No attempt/);
   });
 
   it("serves a cloze item's answers: numbered blanks, the key, the dropdown by its option", async () => {

@@ -38,8 +38,8 @@ export interface ChoiceItem {
  * The choices of a question, each beside its box: a square when several may
  * be ticked, a round one for one answer, as on the screen. `checked` holds
  * the positions in `items` drawn ticked: none on a statement, the right
- * ones on a key, the ticked ones on an answer. Positions rather than a flag
- * per item, so the tree holds no boolean a leak test reads as a key.
+ * ones on a key, the ticked ones on an answer — positions, like a stored
+ * answer's `selected` (ADR-097).
  *
  * On a hand-out the statement's block IS the paper zone of its item
  * (ADR-125 §6): {@link scopeZones} keys it like an answer zone, and the PDF
@@ -72,10 +72,8 @@ export interface AnswerZone {
   /** The part of its item the zone answers; absent, the whole item. */
   part?: string;
   zone: ZoneKind;
-  /** `bubbles`: one label per bubble, in the printed order (a dropdown's options). */
+  /** `bubbles`: one label per bubble, in the printed order (a dropdown's options, one to tick). */
   labels?: readonly string[];
-  /** `bubbles`: several may be ticked. */
-  multiple?: boolean;
   /** `lines`: how many lines to write on; one when absent. */
   lines?: number;
   /** `free`: the height of the frame, in millimetres. */
@@ -141,7 +139,7 @@ export const choices = (items: readonly ChoiceItem[], multiple: boolean, checked
 export const number = (value: number): string => String(Math.round(value * 100) / 100);
 
 /** `2 pt`, `0.5 pt`: a number of points with its unit, never plural. */
-export const pointsShort = (labels: Labels, value: number): string => `${number(value)} ${labels.pointsShort}`;
+export const pointsAside = (labels: Labels, value: number): string => `${number(value)} ${labels.pointsShort}`;
 
 /** `block`, or the sentence that says there is no answer when `isEmpty`. */
 export const noAnswerOr = (labels: Labels, isEmpty: boolean, block: Block): Block =>
@@ -150,7 +148,7 @@ export const noAnswerOr = (labels: Labels, isEmpty: boolean, block: Block): Bloc
 /** An answer space (ADR-125). */
 export const answerZone = (
   zone: ZoneKind,
-  options: Pick<AnswerZone, "part" | "labels" | "multiple" | "lines" | "heightMm"> = {},
+  options: Pick<AnswerZone, "part" | "labels" | "lines" | "heightMm"> = {},
 ): AnswerZone => ({ kind: "answerZone", zone, ...options });
 
 /**

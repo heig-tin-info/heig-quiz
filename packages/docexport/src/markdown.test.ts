@@ -134,7 +134,7 @@ describe("answer zones (ADR-125)", () => {
   it("draws bubbles, lines, a free frame and the name fields", () => {
     const text = body([
       answerZone("bubbles", { labels: ["A", "B", "C"] }),
-      answerZone("bubbles", { labels: ["A", "B"], multiple: true }),
+      answerZone("bubbles", { labels: ["A", "B"] }),
       answerZone("lines", { lines: 2 }),
       answerZone("name"),
     ]);
@@ -142,7 +142,7 @@ describe("answer zones (ADR-125)", () => {
     expect(text).toBe(
       [
         "○ A  ○ B  ○ C",
-        "☐ A  ☐ B",
+        "○ A  ○ B",
         `${line}\n\n${line}`,
         "Name: ________________  First name: ________________",
       ].join("\n\n") + "\n",

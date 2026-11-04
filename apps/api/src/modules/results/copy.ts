@@ -129,13 +129,10 @@ export function staffCopyDocument(found: StaffCopyFile, lang: Lang): Document {
     `**${record.student.displayName}**${record.student.email ? ` (${record.student.email})` : ""}`,
     ...(record.attempt.number > 1 ? [labelled(l, l.attempt, String(record.attempt.number))] : []),
     labelled(l, l.state, stateWord(l, record.attempt.state)),
-    labelled(l, l.points, `${number(record.points)} / ${number(record.totalPoints)}`),
-    labelled(l, l.grade, number(record.grade)),
-    ...(record.pendingCount > 0 ? [labelled(l, l.awaitingGrading, String(record.pendingCount))] : []),
+    ...scoreLines(l, record),
   ];
   const blocks: Block[] = [heading(1, record.evaluation.title), markdown(summary.join("  \n"))];
-  const words = staffWords(l);
-  record.items.forEach((item, rank) => blocks.push(...itemBlocks(item, rank, words)));
+  record.items.forEach((item, rank) => blocks.push(...itemBlocks(item, rank, { labels: l, staff: true })));
   return {
     provenance: provenanceOf(record, { evaluationId: record.evaluation.id, attemptId: record.attempt.id }, [
       record.attempt.id,
@@ -154,14 +151,8 @@ export function staffCopyDocument(found: StaffCopyFile, lang: Lang): Document {
 export function studentCopyDocument(found: StudentCopyFile, lang: Lang): Document {
   const { record } = found;
   const l = LABELS[lang];
-  const summary = [
-    labelled(l, l.points, `${number(record.points)} / ${number(record.totalPoints)}`),
-    ...(record.grade !== null ? [labelled(l, l.grade, number(record.grade))] : []),
-    ...(record.pendingCount > 0 ? [labelled(l, l.awaitingGrading, String(record.pendingCount))] : []),
-  ];
-  const blocks: Block[] = [heading(1, record.evaluation.title), markdown(summary.join("  \n"))];
-  const words = studentWords(l);
-  record.items.forEach((item, rank) => blocks.push(...itemBlocks(item, rank, words)));
+  const blocks: Block[] = [heading(1, record.evaluation.title), markdown(scoreLines(l, record).join("  \n"))];
+  record.items.forEach((item, rank) => blocks.push(...itemBlocks(item, rank, { labels: l, staff: false })));
   return {
     provenance: provenanceOf(record, { evaluationId: record.evaluation.id, attemptId: record.attemptId }, [
       record.attemptId,
@@ -171,40 +162,28 @@ export function studentCopyDocument(found: StudentCopyFile, lang: Lang): Documen
   };
 }
 
-/** The fixed words of a copy's items, in the reader's language: a staff copy's, or the student's. */
-interface CopyWords {
-  labels: Labels;
-  answer: string;
-  comment: string;
-  /**
-   * Whether an item without an answer says "No answer.": on the staff copy,
-   * which shows every answer, it is the truth; on the student's, `null` may
-   * as well be an answer the policy hides, so the part is left out.
-   */
-  saysNoAnswer: boolean;
+/** The points, the grade where there is one, and the questions still awaiting a grading. */
+function scoreLines(
+  l: Labels,
+  score: { points: number; totalPoints: number; grade: number | null; pendingCount: number },
+): string[] {
+  return [
+    labelled(l, l.points, `${number(score.points)} / ${number(score.totalPoints)}`),
+    ...(score.grade !== null ? [labelled(l, l.grade, number(score.grade))] : []),
+    ...(score.pendingCount > 0 ? [labelled(l, l.awaitingGrading, String(score.pendingCount))] : []),
+  ];
 }
-
-const staffWords = (l: Labels): CopyWords => ({
-  labels: l,
-  answer: l.answer,
-  comment: l.staffComment,
-  saysNoAnswer: true,
-});
-
-const studentWords = (l: Labels): CopyWords => ({
-  labels: l,
-  answer: l.yourAnswer,
-  comment: l.comment,
-  saysNoAnswer: false,
-});
 
 /**
  * One item of a copy: its statement, the answer, then the key, as the key
  * document orders them. Each part only as the item holds it: the key when
  * `solution` is there, the answer when `answer` is (the record decided).
+ * `staff`: the staff copy's words; and an item without an answer says "No
+ * answer.", the truth on a copy that shows every answer — on the student's,
+ * `null` may as well be an answer the policy hides, so the part is left out.
  */
-function itemBlocks(item: StudentResultItem, rank: number, words: CopyWords): Block[] {
-  const l = words.labels;
+function itemBlocks(item: StudentResultItem, rank: number, { labels: l, staff }: { labels: Labels; staff: boolean }): Block[] {
+  const answerHeading = heading(3, staff ? l.answer : l.yourAnswer);
   const type = typeOf(item.type);
   const printable = declares(item.type, "copy");
   const notPrintable = markdown(l.notPrintable);
@@ -214,16 +193,16 @@ function itemBlocks(item: StudentResultItem, rank: number, words: CopyWords): Bl
     heading(2, `${l.question} ${rank + 1}${counting}`),
     ...(printable ? statementBlocks(type, item.student, l) : [notPrintable]),
     ...(item.answer === null
-      ? words.saysNoAnswer
-        ? [heading(3, words.answer), markdown(l.noAnswer)]
+      ? staff
+        ? [answerHeading, markdown(l.noAnswer)]
         : []
       : [
-          heading(3, words.answer),
+          answerHeading,
           ...(printable ? type.studentAnswerDoc!(item.student, item.answer, item.details, l) : [notPrintable]),
         ]),
     ...(item.solution !== null ? solutionBlocks(type, item.solution, item.student, l) : []),
     ...explanationBlocks(item.explanation, l),
-    ...(item.comment ? [heading(3, words.comment), markdown(item.comment)] : []),
+    ...(item.comment ? [heading(3, staff ? l.staffComment : l.comment), markdown(item.comment)] : []),
     points(item.points, item.maxPoints),
   ];
 }

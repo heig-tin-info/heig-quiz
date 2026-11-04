@@ -179,20 +179,13 @@ question must come from the type through its contract.
 - **One `answerDoc` with an audience flag.** Rejected: the type would apply
   the feedback policy to a raw config, a visibility rule outside the exits.
 
-## Amendment 2026-11-04: the requester's language, choices and headings
+## Amendment 2026-11-04: the requester's language
 
 Decided by the product owner, 2026-11-04, after the first look at the PDF.
-The rest of the record stands.
-
-- **§4, language.** A staff document's fixed words are no longer English:
-  every document is worded in the requester's interface language
-  (`readerLang(req)`), like the student documents of
-  [ADR-125](ADR-125-copies-papier-pdf-typst.md) §7. `answerDoc` receives
-  the labels as the other hooks do. The rest of §4 (no anonymisation, no
-  warning line, no audit, the attempt that counts) stands.
-- **§1, blocks.** A `choices` block lists a choice question's choices
-  beside their boxes, ticked by position (ADR-125's amendment, point 1); a
-  `heading` may carry an `aside` set apart at its end (a question's
-  points). A rule (`separator`) no longer separates two questions; it
-  remains between two students of an item's answers.
-- **The JSON record** is served indented; it is the same record.
+§4: a staff document's fixed words are no longer English; every document is
+worded in the requester's interface language (`readerLang(req)`), and
+`answerDoc` receives the labels as the other hooks do. The rest of §4 (no
+anonymisation, no warning line, no audit, the attempt that counts) stands.
+The other changes of that day — the `choices` block and a heading's
+`aside` (§1), the page, the indented JSON record — are stated in
+[ADR-125](ADR-125-copies-papier-pdf-typst.md)'s amendment of the same day.

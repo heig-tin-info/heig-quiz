@@ -74,11 +74,9 @@ const MIN_FRAME_LINES = 3;
 /** A paper answer space, as plain Markdown can preview one (ADR-125). */
 function zoneBlock(z: AnswerZone, l: Labels): string {
   switch (z.zone) {
-    case "bubbles": {
-      // A round bubble picks one, a square box picks several, as on the screen.
-      const mark = z.multiple ? "☐" : "○";
-      return (z.labels ?? []).map((label) => `${mark} ${oneLine(label)}`).join("  ");
-    }
+    case "bubbles":
+      // A round bubble: one option to pick.
+      return (z.labels ?? []).map((label) => `○ ${oneLine(label)}`).join("  ");
     case "lines":
       return Array.from({ length: Math.max(1, z.lines ?? 1) }, () => WRITING_LINE).join("\n\n");
     case "free": {

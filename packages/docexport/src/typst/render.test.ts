@@ -64,10 +64,10 @@ describe("renderTypst", () => {
     );
   });
 
-  it("sets a heading's aside at the line's end, lighter, escaped like its text", () => {
+  it("sets a heading's aside at the line's end, outside the heading (no bookmark holds it), escaped like its text", () => {
     const { source } = renderTypst(doc([heading(2, "Question 1: #x", "2 pt"), heading(2, "Question 2")]));
     expect(bodyOf(source).split("\n\n")).toEqual([
-      '#heading(level: 2)[Question 1: \\#x #h(1fr) #text(weight: "regular", size: 0.8em)[2 pt]]',
+      '#headed(2, [2 pt], [Question 1: \\#x])',
       "#heading(level: 2)[Question 2]",
       "",
     ]);
@@ -87,9 +87,6 @@ describe("renderTypst", () => {
       '#choices([#circle-ticked], [#strong[A\\.]], [#raw("x") \\#1],\n  [#circle-empty], [#strong[B\\.]], [#raw(block: true, lang: "c", "int y;")])',
       "",
     ]);
-    // No flag in the body: the shape is the state.
-    const plain = renderTypst(doc([choices([{ label: "A", text: "a" }], true, [0]), choices([{ label: "A", text: "a" }], false)]));
-    expect(bodyOf(plain.source)).not.toMatch(/\b(true|false)\b/);
   });
 
   it("keys a statement's choices as its item's paper zone, of kind choices", () => {
@@ -103,7 +100,7 @@ describe("renderTypst", () => {
     const blocks = [
       answerZone("name"),
       ...scopeZones("item-1", [answerZone("bubbles", { labels: ["A", "B", 'C "x"'] })]),
-      ...scopeZones("item-2", [answerZone("bubbles", { labels: ["A"], multiple: true })]),
+      ...scopeZones("item-2", [answerZone("bubbles", { labels: ["A"] })]),
       ...scopeZones("item-3", [answerZone("lines", { part: "b0", lines: 2 }), answerZone("lines", { part: "b1" })]),
       ...scopeZones("item-4", [answerZone("free", { heightMm: 60 })]),
     ].map((b) => (b.kind === "answerZone" && b.zone === "name" ? { ...b, id: "name" } : b));
@@ -111,8 +108,8 @@ describe("renderTypst", () => {
     const zones = bodyOf(source).split("\n\n");
     expect(zones).toEqual([
       '#zone("name", "name", names("Name", "First name"))',
-      '#zone("item-1", "bubbles", bubbles(("A", "B", "C \\"x\\""), false))',
-      '#zone("item-2", "bubbles", bubbles(("A",), true))',
+      '#zone("item-1", "bubbles", bubbles(("A", "B", "C \\"x\\"")))',
+      '#zone("item-2", "bubbles", bubbles(("A",)))',
       '#zone("item-3:b0", "lines", lines(2))',
       '#zone("item-3:b1", "lines", lines(1))',
       '#zone("item-4", "free", free(60mm))',

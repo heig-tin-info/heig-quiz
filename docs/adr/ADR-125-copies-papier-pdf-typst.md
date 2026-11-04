@@ -325,21 +325,20 @@ nothing of B or C.
 Decided by the product owner, 2026-11-04, after the first look at the PDF.
 The rest of the record stands.
 
-1. **A choice question's choices are its paper zone** (amends §6). A
-   `choices` block (`{ kind: "choices"; multiple; items: { label, text }[];
-   checked: number[]; id? }`) lists every choice beside its box: a square
-   when several may be ticked, a round one for one answer, drawn empty or
-   ticked. `mcq` draws it on the statement (none ticked), on the key (the
+1. **A choice question's choices are its paper zone** (amends §6 and
+   ADR-121 §1). A `choices` block of the document tree lists every choice
+   beside its box: a square when several may be ticked, a round one for
+   one answer, drawn empty or ticked (by position, like a stored answer). `mcq` draws it on the statement (none ticked), on the key (the
    right ones) and on an answer (the ticked ones), every choice listed each
    time. Its `answerZone` hook returns no block: `scopeZones` keys the
    statement's `choices` block to the item like an answer zone, and the
    Typst renderer wraps a keyed block in `zone(id, "choices", …)`, so the
    `<answer-zone>` manifest lists it with its position. The type stays
    printable: the hook is present. `bubbles` stays a zone kind, for a cloze
-   dropdown's options. Markdown writes the block as a task list,
-   `- [ ] **A.** text` or `- [x]`. The ticked state is a list of positions,
-   not a boolean per choice, so a block holds no `true` that a leak test
-   would read as a key.
+   dropdown's options (round, one to pick). Markdown writes the block as a
+   task list, `- [ ] **A.** text` or `- [x]`. The leak tests assert that no
+   box is ticked on a statement or a hand-out, nor on a copy whose key is
+   hidden.
 2. **Every document follows the requester's language** (amends §7 and,
    through it, [ADR-121](ADR-121-fabrique-d-exports.md) §4). The hand-out,
    the student's copy, the blank print of a series and the staff documents
@@ -353,7 +352,9 @@ The rest of the record stands.
    Modern look of a LaTeX paper, embedded in the Typst binary like the
    others (`--ignore-system-fonts` stays); formulas keep New Computer
    Modern Math, code DejaVu Sans Mono. A question's points sit at the right
-   end of its heading, lighter (`1 pt`, never plural). No rule separates
+   end of its heading line, lighter (`1 pt`, never plural), outside the
+   heading itself so a PDF bookmark holds the heading alone (a `heading`
+   block's `aside`, ADR-121 §1). No rule separates
    two questions: a level-2 heading opens each with space above; a light
    rule remains between two students of an item's answers.
 4. **The JSON record is indented** (two spaces), so a person can read it;

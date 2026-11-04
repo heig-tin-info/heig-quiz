@@ -55,7 +55,7 @@ function testsBlock(lines: readonly TestLine[], l: Labels): string {
 
 /**
  * The choices beside their boxes, a grid of box, letter and text; each box
- * one of the preamble's four shapes, so the source holds no flag. Keyed
+ * one of the preamble's four named shapes (`circle-ticked`). Keyed
  * (`id`, a hand-out's statement), the grid is its item's paper zone, of
  * kind `choices` in the manifest (ADR-125 §6).
  */
@@ -85,7 +85,7 @@ function zoneBlock(z: AnswerZone, index: number, l: Labels): string {
   const shape = (() => {
     switch (z.zone) {
       case "bubbles":
-        return `bubbles(${typstValue(z.labels ?? [])}, ${z.multiple === true})`;
+        return `bubbles(${typstValue(z.labels ?? [])})`;
       case "lines":
         // At most a page of lines, at most a page of frame: a bad value never breaks the source.
         return `lines(${bounded(z.lines, 1, 40, 1)})`;
@@ -101,10 +101,10 @@ function zoneBlock(z: AnswerZone, index: number, l: Labels): string {
 function block(b: Block, l: Labels, ctx: TypstContext, zones: { n: number }): string {
   switch (b.kind) {
     case "heading":
-      // The aside at the line's end, lighter: a question's points.
+      // The aside at the line's end, lighter, outside the heading: a PDF bookmark holds the heading alone.
       return b.aside === undefined
         ? `#heading(level: ${b.level})[${typstLine(b.text)}]`
-        : `#heading(level: ${b.level})[${typstLine(b.text)} #h(1fr) #text(weight: "regular", size: 0.8em)[${typstLine(b.aside)}]]`;
+        : `#headed(${b.level}, [${typstLine(b.aside)}], [${typstLine(b.text)}])`;
     case "markdown":
       return markdownToTypst(b.text, ctx);
     case "code":

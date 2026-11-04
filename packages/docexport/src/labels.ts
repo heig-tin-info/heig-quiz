@@ -13,7 +13,7 @@
 export interface Labels {
   question: string;
   statement: string;
-  referenceSolution: string;
+  answerKey: string;
   explanation: string;
   yourAnswer: string;
   points: string;
@@ -97,7 +97,7 @@ export interface Labels {
 export const EN_LABELS: Labels = {
   question: "Question",
   statement: "Statement",
-  referenceSolution: "Reference solution",
+  answerKey: "Answer key",
   explanation: "Explanation",
   yourAnswer: "Your answer",
   points: "Points",
@@ -154,10 +154,10 @@ export const EN_LABELS: Labels = {
   testsPassed: "Tests passed",
   compileFailed: "Compilation failed.",
   answerMisfit: "The answer no longer fits the question's template.",
-  rubric: "Rubric",
+  rubric: "Grading instructions",
   criterion: "Criterion",
   weight: "Weight",
-  graderNote: "Grader's note",
+  graderNote: "Grading prompt",
   noMatch: "No accepted answer matched.",
   matchedAnswer: "Matched accepted answer",
   notRead: "Not read",
@@ -167,7 +167,7 @@ export const EN_LABELS: Labels = {
 export const FR_LABELS: Labels = {
   question: "Question",
   statement: "Énoncé",
-  referenceSolution: "Solution de référence",
+  answerKey: "Corrigé",
   explanation: "Explication",
   yourAnswer: "Votre réponse",
   points: "Points",
@@ -224,10 +224,10 @@ export const FR_LABELS: Labels = {
   testsPassed: "Tests réussis",
   compileFailed: "La compilation a échoué.",
   answerMisfit: "La réponse ne correspond plus au modèle de la question.",
-  rubric: "Grille de correction",
+  rubric: "Consignes de correction",
   criterion: "Critère",
   weight: "Poids",
-  graderNote: "Consigne de correction",
+  graderNote: "Prompt de correction",
   noMatch: "Aucune réponse acceptée ne correspond.",
   matchedAnswer: "Correspond à la réponse acceptée",
   notRead: "Illisible",

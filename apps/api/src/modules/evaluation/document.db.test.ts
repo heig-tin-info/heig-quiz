@@ -14,6 +14,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { EvaluationDetail, EvaluationDocumentRecord, HandoutRecord } from "@quiz/contracts";
 import { findStudentLeaks } from "@quiz/core/testing";
+import { markdownBody } from "@quiz/docexport/markdown";
+import { renderTypst } from "@quiz/docexport/typst";
 import { splitFrontMatter } from "@quiz/docrender/frontMatter";
 
 import { evaluations, questions } from "../../db/schema.js";
@@ -159,7 +161,7 @@ describe("the statement with key (F-EXP-04)", () => {
     const positions = [...body.matchAll(/^## Question (\d+): INTERNAL_NAME_(\w+) \(\d+ pt\)$/gm)].map((m) => [m[1], m[2]]);
     expect(positions).toEqual(Object.keys(QUESTIONS).map((type, i) => [String(i + 1), type]));
     // Every choice listed, the right one ticked; no rule between the questions.
-    expect(body).toContain("### Reference solution\n\n- [x] **A.** MCQ_KEY_CHOICE\n- [ ] **B.** MCQ_OTHER_ONE");
+    expect(body).toContain("### Answer key\n\n- [x] **A.** MCQ_KEY_CHOICE\n- [ ] **B.** MCQ_OTHER_ONE");
     expect(body).not.toMatch(/^---$/m);
     // The paper seed is the hand-out's: the staff document never draws it.
     expect(await storedSeed(evaluation.id)).toBeNull();
@@ -171,8 +173,8 @@ describe("the statement with key (F-EXP-04)", () => {
     expect(res.statusCode).toBe(200);
     const { body } = splitFrontMatter(res.body);
     expect(body).toMatch(/^## Question 1 : INTERNAL_NAME_mcq \(\d+ pt\)$/m);
-    for (const heading of ["### Énoncé", "### Solution de référence", "### Explication"]) expect(body).toContain(heading);
-    expect(body).not.toMatch(/Statement|Reference solution|Explanation/);
+    for (const heading of ["### Énoncé", "### Corrigé", "### Explication"]) expect(body).toContain(heading);
+    expect(body).not.toMatch(/Statement|Answer key|Explanation/);
   });
 
   it("indents its record, which still parses", async () => {
@@ -232,6 +234,12 @@ describe("the hand-out (ADR-125)", () => {
     for (const lang of ["en", "fr"] as const) {
       const tree = handoutTree(found, lang);
       expect(findStudentLeaks(tree, { forbiddenKeys: live.FORBIDDEN_STUDENT_KEYS, secrets: SECRETS })).toEqual([]);
+      // No box ticked on a hand-out: in the tree, its Markdown and its Typst source (invariant 4).
+      const boxes = tree.blocks.filter((b) => b.kind === "choices");
+      expect(boxes).toHaveLength(1);
+      for (const block of boxes) expect(block.checked).toEqual([]);
+      expect(markdownBody(tree)).not.toContain("[x]");
+      expect(renderTypst(tree).source).not.toContain("-ticked]");
       expect(showsSeed(JSON.stringify(tree), (await storedSeed(evaluation.id))!)).toBe(false);
     }
   });

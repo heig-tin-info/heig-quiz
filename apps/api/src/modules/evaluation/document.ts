@@ -30,7 +30,7 @@ import {
   heading,
   LABELS,
   markdown,
-  pointsShort,
+  pointsAside,
   scopeZones,
   type Block,
   type Document,
@@ -176,7 +176,7 @@ export function handoutTree(found: Found<HandoutRecord>, lang: Lang): Document {
     const type = typeOf(item.type);
     blocks.push(
       ...(item.intro ? [markdown(item.intro)] : []),
-      heading(2, `${l.question} ${rank + 1}`, pointsShort(l, item.points)),
+      heading(2, `${l.question} ${rank + 1}`, pointsAside(l, item.points)),
       // Both hooks are there: `printRefusal` refused the hand-out otherwise.
       ...scopeZones(item.id, [...type.statementDoc!(item.statement, l), ...type.answerZone!(item.statement)]),
     );

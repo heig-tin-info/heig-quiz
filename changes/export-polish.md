@@ -1,6 +1,6 @@
 ---
 audience: student
 kind: changed
-en: Printed papers and PDF copies look like an exam sheet now. Each choice has its own box to tick, the points sit on the right of each question, and the font is the one of a LaTeX document.
-fr: Les énoncés imprimés et les copies PDF ressemblent désormais à une feuille d'examen. Chaque choix a sa case à cocher, les points sont alignés à droite de chaque question et la police est celle d'un document LaTeX.
+en: The PDF of your copy and the series print look like an exam sheet now, with a box beside each choice and the points on the right.
+fr: Le PDF de votre copie et l'impression d'une série ressemblent désormais à une feuille d'examen, avec une case devant chaque choix et les points à droite.
 ---
