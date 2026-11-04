@@ -9,8 +9,7 @@
  * tell the size of the answer. The key draws the reference, then its text
  * form; the rubric only when the solution passed holds it (the staff's).
  */
-import { answerZone, code, drawing, labelled, markdown, type Block, type Labels } from "@quiz/docexport";
-import { PX_MM } from "@quiz/docexport/typst";
+import { answerZone, code, drawing, labelled, markdown, PX_MM, type Block, type Labels } from "@quiz/docexport";
 import { GRID, figure, isEmptyScene, langOf, toText, type DiagramKind, type Scene } from "@quiz/diagram/server";
 
 import type { DiagramAnswer, DiagramConfig, DiagramSolution, DiagramStudent } from "./schema.js";

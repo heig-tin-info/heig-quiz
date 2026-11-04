@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { EN_LABELS, FR_LABELS, scopeZones, toSvg, type AnswerZone, type Block, type Lang } from "@quiz/docexport";
+import { EN_LABELS, FR_LABELS, PX_MM, scopeZones, toSvg, type AnswerZone, type Block, type Lang } from "@quiz/docexport";
 import { markdownBody } from "@quiz/docexport/markdown";
-import { PX_MM, renderTypst } from "@quiz/docexport/typst";
+import { renderTypst } from "@quiz/docexport/typst";
 import { GRID, type Scene } from "@quiz/diagram/server";
 
 import type { DiagramConfig } from "./schema.js";
