@@ -40,3 +40,4 @@ export * from "./conceptProposals.js";
 export * from "./changelog.js";
 export * from "./training.js";
 export * from "./privacy.js";
+export * from "./paper.js";

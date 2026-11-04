@@ -342,6 +342,19 @@ export const resultsByQuestionKey = (evaluationId: string) =>
 export const resultsCopyKey = (evaluationId: string, attemptId: string) =>
   ["results", evaluationId, "copy", attemptId] as const;
 
+// --- Paper copies (ADR-125) ----------------------------------------------------
+
+/**
+ * The paper of one student, as the entry page types it in: read ONCE per
+ * entry, never refreshed by a hint — a re-read would hand the player a new
+ * view under the answers being typed.
+ */
+export const paperItemsKey = (evaluationId: string, userId: string) =>
+  ["paper", evaluationId, "items", userId] as const;
+/** A paper attempt's sheet: its exam date and scan. */
+export const paperSheetKey = (evaluationId: string, attemptId: string) =>
+  ["paper", evaluationId, "sheet", attemptId] as const;
+
 // --- Students ------------------------------------------------------------------
 
 /** Every read of the student's own pages: what a project's write (Accept, Resend) invalidates (M3-13). */

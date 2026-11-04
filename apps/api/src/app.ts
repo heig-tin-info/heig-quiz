@@ -70,6 +70,7 @@ import { projectPlugin } from "./modules/project/routes.js";
 import { poolPlugin } from "./modules/pool/routes.js";
 import { flushCoalescers, openStreamCount } from "./modules/realtime/bus.js";
 import { realtimePlugin } from "./modules/realtime/routes.js";
+import { paperPlugin } from "./modules/paper/routes.js";
 import { resultsPlugin } from "./modules/results/routes.js";
 import { createRunner } from "./modules/runner/index.js";
 import { statsPlugin } from "./modules/stats/routes.js";
@@ -262,6 +263,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(previewPlugin);
   await app.register(gradingPlugin, { commitSha: config.COMMIT_SHA || null });
   await app.register(resultsPlugin);
+  await app.register(paperPlugin, { config });
   await app.register(statsPlugin);
   // The vocabulary of concepts (ADR-081): the registry alone, connected to nothing yet.
   await app.register(conceptPlugin);

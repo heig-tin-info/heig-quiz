@@ -1,10 +1,24 @@
 /**
  * Whether an evaluation prints (ADR-125 §5): the one pure rule the detail's
- * `exports`, the document routes and the paper attempt to come all read.
+ * `exports`, the document routes and the paper attempt all read — and the
+ * paper's secret order (ADR-125 §8), which the hand-out, the blank print and
+ * the paper attempt share.
  */
-import type { EvaluationExports, PrintRefusal } from "@quiz/contracts";
+import { randomInt } from "node:crypto";
 
+import { eq, sql } from "drizzle-orm";
+
+import type { EvaluationExports, PAPER_ENTRY_REFUSALS, PrintRefusal } from "@quiz/contracts";
+
+/** A paper copy's refusal: its code, and the hand-out's refusal when it does not print (the 409's body). */
+interface PaperEntryRefusal {
+  code: (typeof PAPER_ENTRY_REFUSALS)[number];
+  print: PrintRefusal | null;
+}
+
+import { evaluations } from "../../db/schema.js";
 import { isParameterized, typeOf } from "../pool/config.js";
+import type { DbOrTx, EvaluationRecord } from "./shared.js";
 
 /** The fields of an item the rule reads. */
 interface PrintedItem {
@@ -40,8 +54,48 @@ export function printRefusal(
   return types.length === 0 ? null : { reason: "type", types };
 }
 
-/** Both documents' refusals, for the export sheet (`EvaluationDetail.exports`). */
-export const exportsOf = (evaluation: { mode: string }, items: readonly PrintedItem[]): EvaluationExports => ({
+/**
+ * The seed of `evaluation`'s paper (ADR-125 §8): the stored one, or one drawn
+ * now and stored by a single statement, so two first prints at the same
+ * second keep the one that landed first. In the range of an attempt's seed
+ * (`drawSeed`), from the CSPRNG: a printed order must not be predictable.
+ * Never returned to a client nor logged. Read by the hand-out and by the
+ * paper attempt (through the service), so a typed copy follows the paper.
+ */
+export async function paperSeedOf(db: DbOrTx, evaluation: EvaluationRecord): Promise<number> {
+  if (evaluation.paperSeed !== null) return evaluation.paperSeed;
+  const [row] = await db
+    .update(evaluations)
+    .set({ paperSeed: sql`coalesce(${evaluations.paperSeed}, ${randomInt(0, 0x7fffffff)})` })
+    .where(eq(evaluations.id, evaluation.id))
+    .returning({ seed: evaluations.paperSeed });
+  if (row?.seed == null) throw new Error(`evaluation ${evaluation.id} has no paper seed`);
+  return row.seed;
+}
+
+/**
+ * Why `evaluation` takes no paper copy (ADR-125 §11), or `null` when it does:
+ * an exam, not released, that has run, and prints. The one rule of the
+ * submission, of the entry page's read and of the screens' row action
+ * (`EvaluationDetail.exports.paper`).
+ */
+export function paperRefusal(
+  evaluation: { mode: string; state: string; startedAt: Date | null },
+  items: readonly PrintedItem[],
+): PaperEntryRefusal | null {
+  if (evaluation.mode !== "exam") return { code: "paper_mode", print: null };
+  if (evaluation.state === "released") return { code: "paper_released", print: null };
+  if (evaluation.startedAt === null) return { code: "paper_not_started", print: null };
+  const print = printRefusal(evaluation, items, "handout");
+  return print && { code: "not_printable", print };
+}
+
+/** The documents' refusals and the paper copy's, for the export sheet and the rows (`EvaluationDetail.exports`). */
+export const exportsOf = (
+  evaluation: Parameters<typeof paperRefusal>[0],
+  items: readonly PrintedItem[],
+): EvaluationExports => ({
   document: printRefusal(evaluation, items, "document"),
   handout: printRefusal(evaluation, items, "handout"),
+  paper: paperRefusal(evaluation, items)?.code ?? null,
 });

@@ -544,6 +544,26 @@ describe("StudentGrid — how each student sits (ADR-051 §8)", () => {
     expect(within(unavailable).getByText("not attested")).toBeInTheDocument();
   });
 
+  it("offers Enter a paper copy on every student's row, never a staff one, and badges a paper copy (ADR-125)", async () => {
+    const view = viewIn("closed", 3, 2);
+    view.rows[0] = { ...view.rows[0]!, origin: "paper", state: "submitted" };
+    view.rows[1] = { ...view.rows[1]!, attemptId: null, state: "not_started" };
+    view.rows[2] = { ...view.rows[2]!, staff: true };
+    const { unmount } = setup(view);
+    expect(screen.queryByRole("button", { name: "Enter a paper copy" })).toBeNull();
+    expect(within(rowOf(view.rows[0]!.displayName)).getByText("paper")).toBeInTheDocument();
+    expect(within(rowOf(view.rows[1]!.displayName)).queryByText("paper")).toBeNull();
+    unmount();
+
+    const onPaper = vi.fn();
+    setup(view, { onPaper });
+    // A paper row, a row with no attempt: both; the staff walk: none.
+    expect(within(rowOf(view.rows[2]!.displayName)).queryByRole("button", { name: "Enter a paper copy" })).toBeNull();
+    await userEvent.click(within(rowOf(view.rows[1]!.displayName)).getByRole("button", { name: "Enter a paper copy" }));
+    expect(onPaper).toHaveBeenCalledWith(view.rows[1], view.rows[1]!.displayName);
+    expect(screen.getAllByRole("button", { name: "Enter a paper copy" })).toHaveLength(2);
+  });
+
   it("offers Assign a station on the running rows only when the exam accepts the kiosk", async () => {
     const view = viewIn("running", 2, 2);
     view.rows[1] = { ...view.rows[1]!, state: "submitted" };

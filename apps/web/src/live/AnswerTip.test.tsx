@@ -68,6 +68,8 @@ function paper(text: string, revision = 1): AttemptInspect & { serverNow: string
       displayName: "Nadia Roux 1",
       pseudonym: "Amber Lynx",
       state: "in_progress",
+      origin: "digital",
+      supersededBy: null,
       startedAt: null,
       deadlineAt: null,
       submittedAt: null,

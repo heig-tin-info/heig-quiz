@@ -57,7 +57,7 @@ const BEFORE = new Date("2026-09-01T08:00:00.000Z");
 const AFTER = new Date("2026-09-10T08:00:00.000Z");
 
 interface AttemptOptions {
-  state?: "in_progress" | "submitted" | "expired";
+  state?: "not_started" | "in_progress" | "submitted" | "expired";
   startedAt?: Date | null;
   number?: number;
   /** False by default: an attempt of before ADR-039, the rule ADR-038 was written for. */
@@ -214,12 +214,14 @@ describe("what a question's statistics count (ADR-038)", () => {
   });
 
   it("leaves out polls, guests, staff seats, unfinished or unstarted attempts and zero-point items", async () => {
-    const seed = await seedLive(db, { students: 13 });
+    const seed = await seedLive(db, { students: 14 });
     await sitAll(seed, ten);
 
     // An unfinished attempt, and one that never started.
     await grade(await attempt(seed.evaluationId, seed.studentIds[10]!, { state: "in_progress" }), seed.itemIds[0]!, 0);
     await grade(await attempt(seed.evaluationId, seed.studentIds[11]!, { startedAt: null }), seed.itemIds[0]!, 0);
+    // And one still `not_started` (the state filter).
+    await grade(await attempt(seed.evaluationId, seed.studentIds[13]!, { state: "not_started", startedAt: null }), seed.itemIds[0]!, 0);
     // An item worth nothing.
     await grade(await attempt(seed.evaluationId, seed.studentIds[12]!), seed.itemIds[0]!, 0, { max: 0 });
     // A teacher's own test walk from a staff seat (ADR-018).

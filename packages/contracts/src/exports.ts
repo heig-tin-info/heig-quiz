@@ -25,6 +25,13 @@ export const PrintRefusal = z.object({
 export type PrintRefusal = z.infer<typeof PrintRefusal>;
 
 /**
+ * Why an evaluation takes no paper copy (ADR-125 §5, §11), in the order the
+ * server asks: not an exam, released, never run, or it does not print. The
+ * codes are the refusals of `POST /evaluations/:id/paper` (`409`).
+ */
+export const PAPER_ENTRY_REFUSALS = ["paper_mode", "paper_released", "paper_not_started", "not_printable"] as const;
+
+/**
  * What the export sheet offers of one evaluation, without a round trip:
  * `null` where the document is served, else why it is not (`409
  * not_printable` with the same body).
@@ -34,6 +41,8 @@ export const EvaluationExports = z.object({
   document: PrintRefusal.nullable(),
   /** The hand-out to print; the refusal reasons are `PrintRefusal`'s. */
   handout: PrintRefusal.nullable(),
+  /** "Enter a paper copy" (ADR-125 §17): `null` where a student's row offers it. */
+  paper: z.enum(PAPER_ENTRY_REFUSALS).nullable(),
 });
 export type EvaluationExports = z.infer<typeof EvaluationExports>;
 

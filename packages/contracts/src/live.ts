@@ -14,6 +14,7 @@ import { z } from "zod";
 import {
   announcedConditionsOn,
   ATTEMPT_CLOSERS,
+  ATTEMPT_ORIGINS,
   ATTEMPT_STATES,
   imposedConditions,
   LOCKED_NAVIGATIONS,
@@ -44,6 +45,10 @@ import { IntegrityIncident } from "./integrity.js";
 
 export const AttemptState = z.enum(ATTEMPT_STATES);
 export type AttemptState = z.infer<typeof AttemptState>;
+
+/** Where an attempt was answered (ADR-125 §9): on a screen, or on paper and typed in by the staff. */
+export const AttemptOrigin = z.enum(ATTEMPT_ORIGINS);
+export type AttemptOrigin = z.infer<typeof AttemptOrigin>;
 
 export const ClosedBy = z.enum(ATTEMPT_CLOSERS);
 export type ClosedBy = z.infer<typeof ClosedBy>;
@@ -812,6 +817,8 @@ export const DashboardRow = z.object({
    * not its frames.
    */
   incidents: z.number().int().nonnegative(),
+  /** ADR-125: the row's attempt is a paper copy (`digital` without an attempt); the row's Paper badge. */
+  origin: AttemptOrigin,
 });
 export type DashboardRow = z.infer<typeof DashboardRow>;
 
@@ -924,6 +931,10 @@ export const AttemptInspect = z.object({
     startedAt: z.iso.datetime().nullable(),
     deadlineAt: z.iso.datetime().nullable(),
     submittedAt: z.iso.datetime().nullable(),
+    /** ADR-125 §9: a paper copy typed in by the staff. */
+    origin: AttemptOrigin,
+    /** ADR-125 §12: the paper attempt that replaced this one; it then counts nowhere. */
+    supersededBy: z.uuid().nullable(),
   }),
   items: z.array(
     z.object({

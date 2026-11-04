@@ -162,6 +162,12 @@ describe("routeToPath / parsePath", () => {
     }
   });
 
+  it("carries the paper entry's student and date in the query, read back by the page", () => {
+    const path = routeToPath({ view: "paperEntry", evaluationId: "e-1", user: "u-1", date: "2026-11-02" });
+    expect(path).toBe("/evaluations/e-1/paper/new?user=u-1&date=2026-11-02");
+    expect(parsePath(path.split("?")[0]!)).toEqual({ view: "paperEntry", evaluationId: "e-1" });
+  });
+
   it("falls back to the configuration screen for an unknown sub-path", () => {
     expect(parsePath("/evaluations/e-1/nope")).toEqual({ view: "evaluation", id: "e-1" });
     expect(parsePath("/evaluations")).toEqual({ view: "home" });
@@ -214,6 +220,7 @@ describe("ROUTES", () => {
     revise: { view: "revise", classroomId: "c-1" },
     live: { view: "live", id: "e-1" },
     evaluationPreview: { view: "evaluationPreview", id: "e-1" },
+    paperEntry: { view: "paperEntry", evaluationId: "e-1" },
     poll: { view: "poll", id: "e-1" },
     pollModerate: { view: "pollModerate", id: "e-1" },
     grading: { view: "grading", evaluationId: "e-1" },
@@ -314,6 +321,7 @@ describe("ROUTES", () => {
         "evaluation",
         "evaluationPreview",
         "feedback",
+        "paperEntry",
         "grading",
         "groupSet",
         "join",

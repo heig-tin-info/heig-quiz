@@ -28,11 +28,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, courseConditions, courseStaff, enrollments, evaluations, journalPageRevisions, poolMembers, questionReports } from "../db/schema.js";
+import { attempts, courseConditions, courseStaff, enrollments, evaluations, journalPageRevisions, paperSheets, poolMembers, questionReports } from "../db/schema.js";
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
 import * as evaluationService from "./evaluation/service.js";
+import { sha256Of, writeAsset } from "./pool/assets.js";
 
 type Who = Awaited<ReturnType<TestServer["signIn"]>>;
 
@@ -125,6 +126,20 @@ async function world(): Promise<World> {
   await db.insert(questionReports).values({ id: reportId, questionId: seed.questionIds[0]!, reporterId: owner.id, message: "Swept" });
   const attemptId = randomUUID();
   await db.insert(attempts).values({ id: attemptId, evaluationId: seed.evaluationId, userId: enrolled.id, seed: 1 });
+  // A paper sheet with its scan (ADR-125): the `…/paper` and `…/paper/scan` routes of the attempt.
+  const scan = Buffer.from("%PDF-1.4\n%%EOF\n", "latin1");
+  const sha = sha256Of(scan);
+  await writeAsset(server.assetsDir, `paper/${attemptId}/${sha}.pdf`, scan);
+  await db.insert(paperSheets).values({
+    attemptId,
+    examDate: "2026-11-02",
+    enteredBy: owner.id,
+    scanMime: "application/pdf",
+    scanBytes: scan.length,
+    scanSha256: sha,
+    scanUploadedAt: new Date(),
+    scanUploadedBy: owner.id,
+  });
   return {
     ids: {
       courses: seed.courseId,

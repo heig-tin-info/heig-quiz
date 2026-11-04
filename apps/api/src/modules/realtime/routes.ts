@@ -291,7 +291,8 @@ async function resolveWatch(
     if (!scope) return null;
     // A student watches their OWN attempt; a staff member watches any of
     // the evaluation's, which is what the dashboard's cell inspector needs.
-    if (!scope.staff && attempt.userId !== req.user!.id) return null;
+    // A replaced attempt (ADR-125 §12) is never the student's again.
+    if (!scope.staff && (attempt.userId !== req.user!.id || attempt.supersededBy !== null)) return null;
     return {
       watch: { kind: "attempt", attemptId: id, evaluationId: attempt.evaluationId },
       evaluation: scope.evaluation,

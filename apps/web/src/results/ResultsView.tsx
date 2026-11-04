@@ -6,6 +6,7 @@ import {
   Eraser,
   MonitorPlay,
   Pencil,
+  PenLine,
   Presentation,
   Send,
   Undo2,
@@ -54,6 +55,7 @@ import { useIsCourseOwner } from "../course/parts";
 import { evaluationKey, resultsKey, resultsViewKey } from "../queryKeys";
 import { useEvaluation, useResultsByQuestion } from "../evaluation/api";
 import { ExcuseDialog } from "../gradebook/dialogs";
+import { PaperEntryDialog } from "../paper/PaperEntryDialog";
 import { useMarkWrites } from "../gradebook/useMarkWrites";
 
 type Tab = (typeof RESULTS_TABS)[number];
@@ -182,10 +184,17 @@ export function ResultsView({
   const markColumn = { kind: "evaluation" as const, activityId: evaluationId, title };
   const markStudent = (row: ResultRow) => ({ enrollmentId: row.enrollmentId, name: row.displayName });
   const refreshResults = () => void qc.invalidateQueries({ queryKey: resultsKey(evaluationId) });
+  // ADR-125 §17: an exam that has run, prints and is not released takes a paper copy.
+  const paperOpen = evaluation.data?.exports.paper === null;
+  const [paperFor, setPaperFor] = useState<ResultRow | null>(null);
   const rowActions = (row: ResultRow): MenuItem[] => {
     if (row.staff) return [];
-    if (row.excused === null) return [{ label: t("results.excuse"), icon: UserCheck, onSelect: () => setExcusing(row) }];
+    const paper: MenuItem[] = paperOpen ? [{ label: t("paper.enter"), icon: PenLine, onSelect: () => setPaperFor(row) }] : [];
+    if (row.excused === null) {
+      return [...paper, { label: t("results.excuse"), icon: UserCheck, onSelect: () => setExcusing(row) }];
+    }
     return [
+      ...paper,
       { label: t("results.excuse.edit"), icon: Pencil, onSelect: () => setExcusing(row) },
       {
         label: t("results.excuse.clear"),
@@ -370,6 +379,17 @@ export function ResultsView({
                   ? t("results.practised.one")
                   : t("results.practised", { n: view.practisedCount })}
               </p>
+            ) : null}
+            {paperFor ? (
+              <PaperEntryDialog
+                evaluationId={evaluationId}
+                userId={paperFor.userId}
+                name={paperFor.displayName}
+                onClose={() => setPaperFor(null)}
+                onStart={(date) =>
+                  navigate({ view: "paperEntry", evaluationId, user: paperFor.userId, date })
+                }
+              />
             ) : null}
             {excusing ? (
               <ExcuseDialog

@@ -1,10 +1,22 @@
 import { memo } from "react";
-import { Clock, DoorOpen, Eye, GraduationCap, Monitor, MonitorCheck, RotateCcw, ShieldAlert, WifiOff } from "lucide-react";
+import {
+  Clock,
+  DoorOpen,
+  Eye,
+  GraduationCap,
+  Monitor,
+  MonitorCheck,
+  PenLine,
+  RotateCcw,
+  ShieldAlert,
+  WifiOff,
+} from "lucide-react";
 
 import type { DashboardRow, DashboardView } from "@quiz/contracts";
 import { isFinishedAttempt } from "@quiz/domain";
 
 import { useT } from "../i18n";
+import { PaperBadge } from "../paper/PaperBadge";
 import { Badge, ClockCountdown, cx, Dash, IconButton, T, VerdictCell } from "../ui";
 import { AnswerTip } from "./AnswerTip";
 import { IncidentBadge } from "./Incidents";
@@ -20,8 +32,17 @@ export const COL = "w-16 min-w-16";
  * the teacher's pointer.
  */
 export const ACTIONS = "w-26 min-w-26";
-/** The same, with room for a fourth button: "Assign a station", on an exam that accepts the kiosk (ADR-051 §7). */
+/**
+ * The same, with room for one more button: "Assign a station", on an exam
+ * that accepts the kiosk (ADR-051 §7), or "Enter a paper copy", on an exam
+ * that takes one (ADR-125 §17).
+ */
 export const ACTIONS_KIOSK = "w-30 min-w-30";
+/** Room for both: the kiosk's station and the paper copy. */
+export const ACTIONS_WIDE = "w-38 min-w-38";
+
+/** The width of the actions column, from the extra buttons the grid offers. */
+export const actionsWidth = (extra: number) => (extra >= 2 ? ACTIONS_WIDE : extra === 1 ? ACTIONS_KIOSK : ACTIONS);
 
 /**
  * How the row's student sits the exam (ADR-051 §8), beside the name: nothing
@@ -147,6 +168,8 @@ export const GridRow = memo(function GridRow({
   onClose,
   onReopen,
   onAssign,
+  onPaper,
+  actionsClass,
 }: {
   row: DashboardRow;
   items: DashboardView["items"];
@@ -181,6 +204,10 @@ export const GridRow = memo(function GridRow({
   onReopen: (row: DashboardRow, name: string) => void;
   /** The exam accepts the kiosk: the supervisor may pair a station for this student (ADR-051 §7). */
   onAssign?: ((row: DashboardRow, name: string) => void) | undefined;
+  /** The exam takes a paper copy (ADR-125 §17): a student's row offers to enter one. */
+  onPaper?: ((row: DashboardRow, name: string) => void) | undefined;
+  /** The actions column's width class, the grid's (`actionsWidth`). */
+  actionsClass: string;
 }) {
   const t = useT();
   const presence = presenceOf(row, t);
@@ -231,6 +258,8 @@ export const GridRow = memo(function GridRow({
             </span>
           ) : null}
           <AccessBadges access={row.access} t={t} />
+          {/* ADR-125: a copy typed in from paper. */}
+          <PaperBadge origin={row.origin} />
           {/* F-EVAL-15: the row is the LATEST attempt; the
               earlier ones are in the grading panel. */}
           {row.attemptCount > 1 ? (
@@ -344,7 +373,7 @@ export const GridRow = memo(function GridRow({
       <td
         className={cx(
           TD,
-          onAssign ? ACTIONS_KIOSK : ACTIONS,
+          actionsClass,
           "px-1 sm:sticky sm:right-0 sm:z-10 sm:border-l sm:border-line",
           stick,
         )}
@@ -360,6 +389,17 @@ export const GridRow = memo(function GridRow({
               onClick={() => onAssign(row, name)}
             >
               <MonitorCheck />
+            </IconButton>
+          ) : null}
+          {/* A claimed student seat, never a staff one (ADR-125 §17). */}
+          {onPaper && row.userId !== null && !row.staff ? (
+            <IconButton
+              size="sm"
+              className={ROW_BUTTON}
+              label={t("paper.enter")}
+              onClick={() => onPaper(row, name)}
+            >
+              <PenLine />
             </IconButton>
           ) : null}
           {row.attemptId === null ? null : (
@@ -393,7 +433,8 @@ export const GridRow = memo(function GridRow({
               <DoorOpen />
             </IconButton>
           ) : null}
-          {finished && live && reopenable ? (
+          {/* A paper copy goes back to no screen (the server's `not_reopenable`). */}
+          {finished && live && reopenable && row.origin !== "paper" ? (
             <IconButton
               size="sm"
               className={ROW_BUTTON}

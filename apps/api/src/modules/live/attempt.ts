@@ -156,6 +156,9 @@ const REFUSALS = {
   // ADR-050: a reopened student would rewrite their answers with the
   // correction in hand.
   correction_published: [409, "the correction of this exercise is published: no attempt is reopened"],
+  // ADR-125: a paper copy was handed in whole by the staff, and a replaced
+  // attempt counts nowhere: neither goes back to a student's screen.
+  not_reopenable: [409, "a paper copy, or an attempt a paper copy replaced, is not reopened"],
   not_open: [409, "this evaluation is not open"],
   // `AnswerInvalid`.
   answer_invalid: [422],
@@ -1805,6 +1808,7 @@ export async function reopenAttempt(
     throw new LiveError("evaluation_not_live");
   }
   if (attempt.state === "in_progress") return { row: attempt, derogation: null };
+  if (attempt.origin === "paper" || attempt.supersededBy !== null) throw new LiveError("not_reopenable");
   const refused = reopenRefusal(evaluation);
   if (refused !== null) throw new LiveError(refused);
   // The caller's role was the loader's step (`reopenRole`). The audit records

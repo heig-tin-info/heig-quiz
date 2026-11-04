@@ -163,6 +163,8 @@ import {
   tallyOf,
   type MockTeacherPoll,
 } from "./poll";
+// Last: it seeds its exam from the running one, and draws no id before the others.
+import "./paper";
 
 
 /** Latency of every mocked call: enough to see a skeleton under `?slow=1`. */

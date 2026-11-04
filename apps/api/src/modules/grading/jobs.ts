@@ -13,6 +13,8 @@
  *    an attempt not finished while the eval runs  → skip: its next hand-in grades it
  *    a validated grading already stands           → skip          (idempotent)
  *    no answer row at all                         → 0, validated, auto  (F-GRADE-01)
+ *      … on a paper copy, an item of free zones only → 0, proposed, 'paper_free_zone'
+ *        (ADR-125 §14: an essay the staff did not type in; a person decides)
  *    type.grade() returns 'graded'                → validated (or proposed if it says so)
  *    type.grade() returns pending: 'runner'       → grading.runner, low priority
  *    a successful LLM proposal for the same answer → kept, unless a re-grade (ADR-063 §3)
@@ -89,6 +91,7 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import { hasKey, loadConfig, typeOf } from "../pool/config.js";
+import { studentViewOf } from "../live/studentView.js";
 import { configPerAttempt, exampleConfig, isParameterized, itemInstance } from "../pool/service.js";
 import type { StoredInstance } from "../../db/columns.js";
 import * as events from "./events.js";
@@ -426,6 +429,11 @@ async function gradeCell(
   if (cell.config === null) return { write: { ...base, ...failedProposal("config_unreadable") } };
   const { config, warning } = cell.config;
   if (answer === null) {
+    // ADR-125 §14: on a paper copy, a written answer nobody typed in is not
+    // a blank — the scan may hold it. Proposed at zero, no grader, no model.
+    if (attempt.origin === "paper" && freeZonesOnly(item, config, attempt)) {
+      return { write: { ...base, ...failedProposal("paper_free_zone") } };
+    }
     // F-GRADE-01: an absent answer is worth zero, and it is settled.
     //
     // With NO details: `gradings.details` is the question type's own
@@ -478,6 +486,21 @@ async function gradeCell(
       finalizeState: outcome.finalizeState,
     },
   };
+}
+
+/**
+ * Whether every answer zone the item prints is `free` (ADR-125 §6, §14) —
+ * an essay's: what the type declares through `answerZone` on the view the
+ * paper was printed in. A type without the hook prints nothing, and is no
+ * free zone.
+ */
+function freeZonesOnly(item: JoinedItem, config: unknown, attempt: AttemptRecord): boolean {
+  const type = item.question.type;
+  const zoneOf = typeOf(type).answerZone;
+  if (!zoneOf) return false;
+  const student = studentViewOf(type, config, { seed: attempt.seed, itemId: item.item.id, shuffle: false });
+  const zones = zoneOf(student).filter((block) => block.kind === "answerZone");
+  return zones.length > 0 && zones.every((zone) => zone.zone === "free");
 }
 
 /**
