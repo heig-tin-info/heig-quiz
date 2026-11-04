@@ -71,6 +71,20 @@ export interface Labels {
   logicGates: string;
   logicMaxGates: string;
   logicVectors: string;
+  /**
+   * The diagram question on paper (ADR-126): the line that names its
+   * notation, the caption of its starting diagram, and each notation's name.
+   */
+  diagramNotation: string;
+  diagramStarter: string;
+  diagramClass: string;
+  diagramUsecase: string;
+  diagramState: string;
+  diagramEr: string;
+  diagramFlow: string;
+  diagramAutomaton: string;
+  diagramGraph: string;
+  diagramFree: string;
   /** A student's copy (ADR-125 §18): its summary and what an item says of itself. */
   grade: string;
   awaitingGrading: string;
@@ -142,6 +156,16 @@ export const EN_LABELS: Labels = {
   logicGates: "Gates",
   logicMaxGates: "Gates at most",
   logicVectors: "Test vectors",
+  diagramNotation: "Notation",
+  diagramStarter: "Starting diagram",
+  diagramClass: "UML class diagram",
+  diagramUsecase: "UML use case diagram",
+  diagramState: "State machine",
+  diagramEr: "Entity-relationship diagram",
+  diagramFlow: "Flowchart",
+  diagramAutomaton: "Finite automaton",
+  diagramGraph: "Graph",
+  diagramFree: "Free drawing",
   grade: "Grade",
   awaitingGrading: "Questions awaiting grading",
   comment: "Your teacher's comment",
@@ -205,6 +229,16 @@ export const FR_LABELS: Labels = {
   logicGates: "Portes",
   logicMaxGates: "Portes au maximum",
   logicVectors: "Vecteurs de test",
+  diagramNotation: "Notation",
+  diagramStarter: "Diagramme de départ",
+  diagramClass: "Diagramme de classes UML",
+  diagramUsecase: "Diagramme de cas d'utilisation UML",
+  diagramState: "Machine d'états",
+  diagramEr: "Diagramme entité-association",
+  diagramFlow: "Organigramme",
+  diagramAutomaton: "Automate fini",
+  diagramGraph: "Graphe",
+  diagramFree: "Dessin libre",
   grade: "Note",
   awaitingGrading: "Questions en attente de correction",
   comment: "Commentaire de l'enseignant",

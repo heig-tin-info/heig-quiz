@@ -1,7 +1,8 @@
 /**
  * `@quiz/diagram/server`: the diagram engine without React (ADR-046 §1).
  * The scene model and its schema, the catalogue of kinds, the sizes and the
- * layout, and the text SERIALISER of each kind.
+ * layout, the text SERIALISER of each kind, and the printed figure
+ * (ADR-126).
  *
  * The parsers are not exported here, on purpose (ADR-046 §2): the server
  * never parses a text written in a browser, and an entry that does not
@@ -14,3 +15,4 @@ export * from "./geometry.js";
 export { layout, bounds, type End, type Layout, type LinkLike, type Route } from "./layout.js";
 export { formOf, toText } from "./codecs/index.js";
 export { EXAMPLES } from "./examples.js";
+export { figure, monoMeasure, MONO_ADVANCE } from "./print.js";
