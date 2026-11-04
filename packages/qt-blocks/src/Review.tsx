@@ -2,8 +2,10 @@
  * The feedback view of a `blocks` answer (docs/spec/04 §4.17): the student's
  * program, read-only, and the table of warehouses with each verdict; the
  * selected warehouse drawn with the robot's trail where this reader may see
- * its map. The teacher, and a student under a shown key, also get the hidden
- * maps and the reference (both from `toSolution`).
+ * its map. A student under a shown key also gets the reference; the teacher
+ * gets it and the hidden maps (`toSolution`). A student's key lists the
+ * visible warehouses only (`studentSolution`, #998), so a hidden row is drawn
+ * without a map.
  *
  * It renders what it was given: the filtering happened server-side in
  * `studentDetails` (no trail, no move count for a hidden warehouse), and

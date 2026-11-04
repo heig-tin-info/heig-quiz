@@ -183,6 +183,24 @@ describe("BlocksReview", () => {
     expect(screen.getByLabelText("Reference solution")).toHaveTextContent("if free ahead");
   });
 
+  it("draws no map for a hidden warehouse listed BEFORE a visible one, under a student's key (#998)", async () => {
+    // Hidden first: the student's key lists the visible warehouses only, so a
+    // lookup by position would land on "Clear aisle" and draw its map here.
+    const [clear, rack, northEast, corridor] = SECRET_CONFIG.cases;
+    const config: BlocksConfig = { ...SECRET_CONFIG, cases: [northEast!, clear!, rack!, corridor!] };
+    const reordered = blocksServer.toStudent(config, view);
+    const solution = blocksServer.studentSolution!(blocksServer.toSolution(config, view), config);
+    const graded = blocksServer.grade(config, { program: REFERENCE }, testGradeContext(7));
+    if (graded instanceof Promise || graded.kind !== "graded") throw new Error("expected a grade");
+    const details = blocksServer.studentDetails!(graded.details, { showKey: true, showHiddenCaseNames: true }) as BlocksDetails;
+    render(<BlocksReview {...base} student={reordered} answer={{ program: REFERENCE }} solution={solution} details={details} />);
+    // Each row's thumbnail is the map the review holds for it.
+    const thumbnailOf = (name: string) => screen.getByText(name).closest("tr")!.querySelector("svg");
+    expect(thumbnailOf("Hidden north-east")).toBeNull();
+    // The visible warehouse keeps its own map.
+    expect(thumbnailOf("Clear aisle")).not.toBeNull();
+  });
+
   it("shows the teacher the hidden maps and the reference, from the key", async () => {
     const solution = blocksServer.toSolution(SECRET_CONFIG, view);
     render(<BlocksReview {...base} audience="teacher" answer={{ program: REFERENCE }} solution={solution} details={detailsOf()} />);

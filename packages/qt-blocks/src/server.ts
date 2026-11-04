@@ -114,7 +114,8 @@ export const blocksServer: QuestionTypeServer<
 
   /**
    * A hidden warehouse keeps its verdict, points and coarse reason under
-   * every policy, a shown key included (#998): its trail draws its map.
+   * every policy, a shown key included (#998): its trail would draw its map,
+   * so it is dropped.
    */
   studentDetails(details, policy): unknown {
     return studentDetails(details, { showHiddenCaseNames: policy.showHiddenCaseNames });
