@@ -36,6 +36,10 @@ export const PREAMBLE = String.raw`
 
 #let hr = line(length: 100%, stroke: 0.5pt + luma(150))
 
+#let heading-gap = ("2": (above: 24pt, below: 10pt), "3": (above: 14pt, below: 7pt))
+#show heading.where(level: 2): set block(..heading-gap.at("2"))
+#show heading.where(level: 3): set block(..heading-gap.at("3"))
+
 #let separator = block(above: 0.6em, below: 0.6em, line(length: 100%, stroke: 0.3pt + luma(200)))
 
 #let mark(body) = box(baseline: 0.4mm, width: 3.2mm, height: 3.2mm, body)
@@ -63,11 +67,9 @@ export const PREAMBLE = String.raw`
 #let bubbles(labels) = block(above: 0.8em, below: 0.8em,
   labels.map(l => box[#circle-empty#h(1.5mm)#l]).join(h(7mm)))
 
-#let headed(level, aside, body) = block(width: 100%, sticky: true,
-  above: if level <= 2 { 1.8em } else { 1.3em }, below: if level <= 2 { 0.8em } else { 0.6em }, {
-    heading(level: level, body)
-    place(bottom + right, text(size: 0.9em, fill: luma(60), aside))
-  })
+#let headed(level, aside, body) = block(width: 100%, sticky: true, ..heading-gap.at(str(level), default: (:)),
+  grid(columns: (1fr, auto), column-gutter: 4mm, align: bottom,
+    heading(level: level, body), text(size: 0.9em, fill: luma(60), aside)))
 
 #let rule = line(length: 100%, stroke: 0.4pt + luma(130))
 
@@ -97,7 +99,5 @@ export function pageSetup(title: string, lang: string): string {
     `#show raw.where(block: true): block.with(width: 100%, fill: luma(245), inset: 6pt, radius: 2pt)`,
     `#set table(stroke: 0.5pt + luma(150))`,
     `#show heading: set block(sticky: true)`,
-    `#show heading.where(level: 2): set block(above: 1.8em, below: 0.8em)`,
-    `#show heading.where(level: 3): set block(above: 1.3em, below: 0.6em)`,
   ].join("\n");
 }

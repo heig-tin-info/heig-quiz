@@ -165,7 +165,7 @@ export function studentCopyDocument(found: StudentCopyFile, lang: Lang): Documen
 /** The points, the grade where there is one, and the questions still awaiting a grading. */
 function scoreLines(
   l: Labels,
-  score: { points: number; totalPoints: number; grade: number | null; pendingCount: number },
+  score: Pick<StudentCopyRecord, "points" | "totalPoints" | "grade" | "pendingCount">,
 ): string[] {
   return [
     labelled(l, l.points, `${number(score.points)} / ${number(score.totalPoints)}`),

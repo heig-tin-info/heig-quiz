@@ -72,7 +72,9 @@ describe("renderTypst", () => {
       "",
     ]);
     // No rule between questions: the heading opens one, with space above.
-    expect(source).toContain("#show heading.where(level: 2): set block(above: 1.8em, below: 0.8em)");
+    // Both the plain heading and `headed` take their gaps from one table.
+    expect(source).toContain("#show heading.where(level: 2): set block(..heading-gap.at(\"2\"))");
+    expect(source).toContain("..heading-gap.at(str(level), default: (:))");
   });
 
   it("draws choices beside their boxes, square for several, round for one, ticked by shape", () => {

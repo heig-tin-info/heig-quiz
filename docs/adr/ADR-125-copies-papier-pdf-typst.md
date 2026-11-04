@@ -328,9 +328,10 @@ The rest of the record stands.
 1. **A choice question's choices are its paper zone** (amends §6 and
    ADR-121 §1). A `choices` block of the document tree lists every choice
    beside its box: a square when several may be ticked, a round one for
-   one answer, drawn empty or ticked (by position, like a stored answer). `mcq` draws it on the statement (none ticked), on the key (the
-   right ones) and on an answer (the ticked ones), every choice listed each
-   time. Its `answerZone` hook returns no block: `scopeZones` keys the
+   one answer, drawn empty or ticked (by position, like a stored answer).
+   `mcq` draws it on the statement (none ticked), on the key (the right
+   ones) and on an answer (the ticked ones), every choice listed each time.
+   Its `answerZone` hook returns no block: `scopeZones` keys the
    statement's `choices` block to the item like an answer zone, and the
    Typst renderer wraps a keyed block in `zone(id, "choices", …)`, so the
    `<answer-zone>` manifest lists it with its position. The type stays
