@@ -21,7 +21,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { FeedbackPolicy, HandoutRecord, PERSONAL_DATA_EXPORT_PATH, StudentCopyRecord } from "@quiz/contracts";
 import { findStudentLeaks } from "@quiz/core/testing";
-import type { Document } from "@quiz/docexport";
+import { EN_LABELS, FR_LABELS, type Document } from "@quiz/docexport";
+import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
 
 import { answers, auditLog, classrooms, enrollments, evaluations, questions } from "../../db/schema.js";
@@ -97,11 +98,12 @@ const PROMPTS = ["MCQ_PROMPT", "SHORT_PROMPT", "CLOZE_PROMPT", "RICH_PROMPT", "M
 
 /**
  * What the key publishes, by value. The mcq's key choice is printed in every
- * statement (it is one of the choices): its key is the "Reference solution"
- * part, searched by its heading in both languages ({@link KEY_HEADINGS}).
+ * statement (it is one of the choices): its key is the "Answer key"
+ * part, searched by its heading in both languages ({@link KEY_HEADINGS}), and
+ * its box, never ticked on a copy whose key is hidden ({@link tickedKey}).
  */
 const KEYS = ["SHORT_KEY_SECRET", "CLOZE_KEY_SECRET", "RICH_REFERENCE_SECRET", "x^3+11x"];
-const KEY_HEADINGS = ["Reference solution", "Solution de référence"];
+const KEY_HEADINGS = [EN_LABELS.answerKey, FR_LABELS.answerKey];
 const EXPLANATIONS = ["EXPLANATION_SECRET"];
 const COMMENT = "TEACHER_COMMENT_SECRET";
 /** What a student never reads, whatever the policy. */
@@ -162,6 +164,9 @@ const nextHour = () => server.clock.advance(3_600_000);
 
 /** A document's Typst source, escapes undone (`typstText` writes `A_B` as `A\_B`), as the registry's leak test reads it. */
 const typstOf = (tree: Document) => renderTypst(tree).source.replace(/\\(.)/g, "$1");
+/** The task-list lines of `tree` that tick the mcq key choice: a ticked key box is the key, shown. */
+const tickedKey = (tree: Document): string[] =>
+  markdownBody(tree).split("\n").filter((line) => line.startsWith("- [x]") && line.includes("MCQ_KEY_CHOICE"));
 
 /** The `privacy.export` rows of `userId` since `since`. */
 const exportsOf = async (userId: string, since: Date) =>
@@ -335,6 +340,8 @@ describe("the student's own copy (F-EXP-06)", () => {
       for (const lang of ["en", "fr"] as const) {
         const tree = studentCopyDocument(found, lang);
         expect(findStudentLeaks(tree, { forbiddenKeys: live.FORBIDDEN_STUDENT_KEYS, secrets: absent })).toEqual([]);
+        // The key choice's box is ticked only by the key, and only when the policy shows it.
+        expect(tickedKey(tree)).toHaveLength(policy.showKey ? 1 : 0);
         const source = typstOf(tree);
         expect(absent.filter((secret) => source.includes(secret))).toEqual([]);
         for (const secret of present) expect(source).toContain(secret);

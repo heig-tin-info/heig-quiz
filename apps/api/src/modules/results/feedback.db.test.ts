@@ -547,6 +547,8 @@ describe("a blocks question's hidden warehouses stay the teacher's (#998, ADR-10
       teacher.headers,
     );
     expect(copy.statusCode).toBe(200);
-    for (const secret of [...HIDDEN_MAP, ...HIDDEN_BATTERIES]) expect(copy.body, secret).toContain(secret);
+    // The export is indented: searched in its compact form, as the secrets are written.
+    const compact = JSON.stringify(copy.json());
+    for (const secret of [...HIDDEN_MAP, ...HIDDEN_BATTERIES]) expect(compact, secret).toContain(secret);
   });
 });

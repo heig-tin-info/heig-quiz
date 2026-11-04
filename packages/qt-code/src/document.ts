@@ -66,12 +66,12 @@ export function codeStudentAnswerDoc(student: CodeStudent, answer: CodeAnswer, _
 }
 
 /** The reference solution, then the cases the grade runs, hidden ones by name. */
-export function codeSolutionDoc(solution: CodeSolution, student: CodeStudent): Block[] {
+export function codeSolutionDoc(solution: CodeSolution, student: CodeStudent, labels: Labels): Block[] {
   return [
     code(student.language, solution.referenceSolution),
     table(
-      ["Test", "Visibility", "Arguments", "Points"],
-      solution.cases.map((c) => [c.name, c.visible ? "visible" : "hidden", c.args.join(" "), String(c.points)]),
+      [labels.test, labels.visibility, labels.arguments, labels.points],
+      solution.cases.map((c) => [c.name, c.visible ? labels.visible : labels.hidden, c.args.join(" "), String(c.points)]),
     ),
   ];
 }
@@ -80,18 +80,18 @@ export function codeSolutionDoc(solution: CodeSolution, student: CodeStudent): B
  * The source the runner compiled, the compiler's complaint when it refused
  * it, and every test with its verdict — the staff's reading of `details`.
  */
-export function codeAnswerDoc(config: CodeConfig, answer: CodeAnswer, details: CodeDetails | null): Block[] {
+export function codeAnswerDoc(config: CodeConfig, answer: CodeAnswer, details: CodeDetails | null, labels: Labels): Block[] {
   let source: Block;
   try {
     source = code(config.language, assembleCodeSource(config, answer));
   } catch (err) {
     // A stored answer that no longer fits the template: never pasted into the wrong hole.
     if (!(err instanceof TemplateRegionMismatch)) throw err;
-    source = markdown("The answer no longer fits the question's template.");
+    source = markdown(labels.answerMisfit);
   }
   if (details === null) return [source];
   const compile =
-    details.compile && !details.compile.ok ? [markdown("Compilation failed:"), code("text", details.compile.stderr)] : [];
+    details.compile && !details.compile.ok ? [markdown(labels.compileFailed), code("text", details.compile.stderr)] : [];
   return [
     source,
     ...compile,

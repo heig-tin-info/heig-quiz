@@ -5,8 +5,8 @@
  * The statement and the paper zone read the student view only. The key
  * renders what the solution object holds and nothing more: the staff's
  * holds the rubric and the criteria, a student's (`studentSolution`) the
- * model answer alone, so the same hook serves both. The staff's words are
- * English (ADR-121 §4).
+ * model answer alone, so the same hook serves both. Every word is the
+ * requester's (ADR-121 §4).
  */
 import { answerZone, code, labelled, markdown, noAnswerOr, table, type Block, type Labels } from "@quiz/docexport";
 
@@ -32,11 +32,16 @@ export function richStatementDoc(student: RichStudent, labels: Labels): Block[] 
 }
 
 /** The model answer, then — the staff's only — the rubric and the criteria. */
-export function richSolutionDoc(solution: RichSolution): Block[] {
+export function richSolutionDoc(solution: RichSolution, _student: RichStudent, labels: Labels): Block[] {
   const reference = solution.reference?.trim() ? [markdown(solution.reference)] : [];
-  const rubric = solution.rubric?.trim() ? [markdown("**Rubric**"), markdown(solution.rubric)] : [];
+  const rubric = solution.rubric?.trim() ? [markdown(`**${labels.rubric}**`), markdown(solution.rubric)] : [];
   const criteria = solution.criteria?.length
-    ? [table(["Criterion", "Weight", "Grader's note"], solution.criteria.map((c) => [c.title, String(c.weight), c.prompt]))]
+    ? [
+        table(
+          [labels.criterion, labels.weight, labels.graderNote],
+          solution.criteria.map((c) => [c.title, String(c.weight), c.prompt]),
+        ),
+      ]
     : [];
   return [...reference, ...rubric, ...criteria];
 }
@@ -58,13 +63,13 @@ const essay = (format: RichFormat, answer: RichAnswer): Block =>
   format === "markdown" ? markdown(answer.text) : code("text", answer.text);
 
 /** The staff's reading: the essay, then the validated points per criterion when there are any. */
-export function richAnswerDoc(config: RichConfig, answer: RichAnswer, details: RichDetails | null): Block[] {
+export function richAnswerDoc(config: RichConfig, answer: RichAnswer, details: RichDetails | null, labels: Labels): Block[] {
   const breakdown = details?.breakdown ?? [];
   return [
-    isEmpty(answer) ? markdown("No answer.") : essay(config.format, answer),
+    noAnswerOr(labels, isEmpty(answer), essay(config.format, answer)),
     ...(breakdown.length === 0
       ? []
-      : [table(["Criterion", "Points"], breakdown.map((b) => [b.title, `${b.points} / ${b.maxPoints}`]))]),
+      : [table([labels.criterion, labels.points], breakdown.map((b) => [b.title, `${b.points} / ${b.maxPoints}`]))]),
   ];
 }
 

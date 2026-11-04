@@ -77,13 +77,13 @@ export function diagramSolutionDoc(solution: DiagramSolution, student: DiagramSt
   return [
     ...drawn(solution.reference, student.kind, notation),
     ...(starter === null ? [] : [markdown(`**${labels.diagramStarter}**`), drawing(starter, labels.diagramStarter)]),
-    ...(solution.rubric?.trim() ? [markdown("**Rubric**"), markdown(solution.rubric)] : []),
+    ...(solution.rubric?.trim() ? [markdown(`**${labels.rubric}**`), markdown(solution.rubric)] : []),
   ];
 }
 
 /** The staff's reading of an answer: the drawing and its text form. */
-export function diagramAnswerDoc(config: DiagramConfig, answer: DiagramAnswer): Block[] {
-  return isEmptyScene(answer.scene) ? [markdown("No answer.")] : drawn(answer.scene, config.kind, "Answer");
+export function diagramAnswerDoc(config: DiagramConfig, answer: DiagramAnswer, _details: unknown, labels: Labels): Block[] {
+  return isEmptyScene(answer.scene) ? [markdown(labels.noAnswer)] : drawn(answer.scene, config.kind, labels.answer);
 }
 
 /** The student's own reading: their drawing. */

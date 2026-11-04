@@ -8,7 +8,18 @@ import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { answerZone, drawing, heading, markdown, scopeZones, type Block, type Document, type Drawing, type DrawingItem } from "@quiz/docexport";
+import {
+  answerZone,
+  choices,
+  drawing,
+  heading,
+  markdown,
+  scopeZones,
+  type Block,
+  type Document,
+  type Drawing,
+  type DrawingItem,
+} from "@quiz/docexport";
 import { drawable, renderTypst } from "@quiz/docexport/typst";
 
 import { compileArgs, compileTypst, DEAD_PROXY, inTempDir, run, TypstFailure, typstEnv } from "./compile.js";
@@ -193,6 +204,8 @@ describe.skipIf(skip)(`a compile, with ${BIN} (${probe.version ?? "missing"})`, 
       ...scopeZones("i1", [answerZone("bubbles", { labels: ["A", "B"] })]),
       ...scopeZones("i2", [answerZone("lines", { part: "b0", lines: 2 }), answerZone("lines", { part: "b1" })]),
       ...scopeZones("i3", [answerZone("free", { heightMm: 50 })]),
+      // A choice question's statement is its zone (ADR-125 §6).
+      ...scopeZones("i4", [markdown("Pick."), choices([{ label: "A", text: "one" }, { label: "B", text: "two" }], true, [1])]),
     ]);
     const zones = await inTempDir(async (dir) => {
       await writeFile(join(dir, "main.typ"), source);
@@ -206,6 +219,7 @@ describe.skipIf(skip)(`a compile, with ${BIN} (${probe.version ?? "missing"})`, 
       ["i2:b0", "lines"],
       ["i2:b1", "lines"],
       ["i3", "free"],
+      ["i4", "choices"],
     ]);
     for (const zone of zones) {
       expect(zone).toEqual({

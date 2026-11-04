@@ -117,7 +117,7 @@ describe("the diagram on paper (ADR-126)", () => {
 
   it("draws an answer: the staff's with its text form, the student's alone, and says when there is none", () => {
     const answer = { scene: REFERENCE };
-    const staff = markdownBody({ lang: "en", blocks: diagramServer.answerDoc!(SECRET_CONFIG, answer, null) });
+    const staff = markdownBody({ lang: "en", blocks: diagramServer.answerDoc!(SECRET_CONFIG, answer, null, EN_LABELS) });
     expect(staff).toContain("```plantuml");
     expect(staff).toContain("SecretCircleRef");
     const student = diagramServer.toStudent(SECRET_CONFIG, view);
@@ -125,7 +125,7 @@ describe("the diagram on paper (ADR-126)", () => {
     expect(own).toMatchObject([{ kind: "drawing", alt: "Votre réponse" }]);
     const none = diagramServer.studentAnswerDoc!(student, { scene: { nodes: [], links: [] } }, null, FR_LABELS);
     expect(markdownBody({ lang: "fr", blocks: none })).toBe("Pas de réponse.\n");
-    expect(markdownBody({ lang: "en", blocks: diagramServer.answerDoc!(SECRET_CONFIG, { scene: { nodes: [], links: [] } }, null) })).toBe(
+    expect(markdownBody({ lang: "en", blocks: diagramServer.answerDoc!(SECRET_CONFIG, { scene: { nodes: [], links: [] } }, null, EN_LABELS) })).toBe(
       "No answer.\n",
     );
   });

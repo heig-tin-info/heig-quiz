@@ -17,6 +17,11 @@ Amended 2026-11-04 by [ADR-126](ADR-126-types-a-canevas-sur-papier.md),
 scope: §1 (the `drawing` block holds a closed drawing model, never
 target-format markup; ADR-126 §1–§2).
 
+Amended 2026-11-04 (product owner, 2026-11-04, after the first look at the
+PDF), scope: §1 (a `choices` block; a heading's `aside`) and §4 (every
+document in the requester's language); see the amendment at the end and
+[ADR-125](ADR-125-copies-papier-pdf-typst.md)'s amendment of the same day.
+
 Scope: every file the platform builds from its data for a person to read or
 process outside it — Markdown, JSON, PDF — except the results and gradebook
 CSV, the personal data export's JSON (ADR-112) and the canonical pool
@@ -114,7 +119,8 @@ question must come from the type through its contract.
    to a model is the teacher's own act, outside the platform's LLM path that
    N-DATA-05 governs. A staff document's fixed words are English, like the
    CSV; the language of a student document is decided with step 5.
-   *(Amended by ADR-125 §7.)*
+   *(Amended by ADR-125 §7; amended 2026-11-04: in the requester's
+   language, not English.)*
 
 5. **The front matter is provenance**, YAML that docrender's
    `splitFrontMatter` reads: `export` (`kind`, `format`, `version`), `source`
@@ -177,3 +183,14 @@ question must come from the type through its contract.
   visibility and re-implement Markdown escaping.
 - **One `answerDoc` with an audience flag.** Rejected: the type would apply
   the feedback policy to a raw config, a visibility rule outside the exits.
+
+## Amendment 2026-11-04: the requester's language
+
+Decided by the product owner, 2026-11-04, after the first look at the PDF.
+§4: a staff document's fixed words are no longer English; every document is
+worded in the requester's interface language (`readerLang(req)`), and
+`answerDoc` receives the labels as the other hooks do. The rest of §4 (no
+anonymisation, no warning line, no audit, the attempt that counts) stands.
+The other changes of that day — the `choices` block and a heading's
+`aside` (§1), the page, the indented JSON record — are stated in
+[ADR-125](ADR-125-copies-papier-pdf-typst.md)'s amendment of the same day.

@@ -5,7 +5,8 @@
  *   - {@link evaluationDocument}, the staff "statement with key" (F-EXP-04):
  *     every item in the base order, its statement as a student is served it
  *     (seed 0, no shuffle, like the grading panel's expected row), the
- *     type's key and the explanation. English (ADR-121 §4).
+ *     type's key and the explanation. Worded in the reader's language
+ *     (ADR-121 §4, amended 2026-11-04).
  *   - {@link handout}, the paper a student is handed (ADR-125 §5–§8): the
  *     student views only, through the one exit (invariant 4), in the order
  *     and with the shuffles of the evaluation's secret paper seed — built
@@ -26,13 +27,11 @@
 import type { EvaluationDocumentRecord, HandoutRecord } from "@quiz/contracts";
 import {
   answerZone,
-  EN_LABELS,
   heading,
   LABELS,
   markdown,
-  number,
+  pointsAside,
   scopeZones,
-  separator,
   type Block,
   type Document,
   type Lang,
@@ -113,22 +112,20 @@ export async function evaluationDocument(
   };
 }
 
-/** The Markdown tree of {@link evaluationDocument}. */
-export function evaluationDocumentTree(found: Found<EvaluationDocumentRecord>): Document {
+/** The Markdown tree of {@link evaluationDocument}, worded in `lang`. No rule between items: each heading opens one. */
+export function evaluationDocumentTree(found: Found<EvaluationDocumentRecord>, lang: Lang): Document {
   const { record } = found;
-  // A staff document: English (ADR-121 §4).
-  const l = EN_LABELS;
+  const l = LABELS[lang];
   const blocks: Block[] = [heading(1, record.evaluation.title)];
   for (const item of record.items) {
     blocks.push(
-      separator,
       // The teacher's passage before the item (ADR-084).
       ...(item.intro ? [markdown(item.intro)] : []),
       ...itemKeyBlocks(typeOf(item.type), item.position, item.internalName, item.points, item.statement, item.solution, l),
       ...explanationBlocks(item.explanation, l),
     );
   }
-  return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, []), lang: "en", blocks };
+  return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, []), lang, blocks };
 }
 
 /**
@@ -167,8 +164,9 @@ export async function handout(
 
 /**
  * The Markdown tree of {@link handout}, worded in `lang`: the name frame,
- * the title, then each item numbered in the paper's order, its statement
- * and its answer zones, keyed to the item (`scopeZones`).
+ * the title, then each item numbered in the paper's order, its points at
+ * the heading's end, its statement and its answer zones, all keyed to the
+ * item (`scopeZones`): a statement's choices are its zone.
  */
 export function handoutTree(found: Found<HandoutRecord>, lang: Lang): Document {
   const { record } = found;
@@ -177,12 +175,10 @@ export function handoutTree(found: Found<HandoutRecord>, lang: Lang): Document {
   record.items.forEach((item, rank) => {
     const type = typeOf(item.type);
     blocks.push(
-      separator,
       ...(item.intro ? [markdown(item.intro)] : []),
-      heading(2, `${l.question} ${rank + 1} (${number(item.points)} ${l.pointsShort})`),
+      heading(2, `${l.question} ${rank + 1}`, pointsAside(l, item.points)),
       // Both hooks are there: `printRefusal` refused the hand-out otherwise.
-      ...type.statementDoc!(item.statement, l),
-      ...scopeZones(item.id, type.answerZone!(item.statement)),
+      ...scopeZones(item.id, [...type.statementDoc!(item.statement, l), ...type.answerZone!(item.statement)]),
     );
   });
   return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, []), lang, blocks };

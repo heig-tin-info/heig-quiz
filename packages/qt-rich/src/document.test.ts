@@ -36,9 +36,13 @@ describe("the essay as a document (ADR-121 §2, ADR-125)", () => {
 
   it("gives an essay formatted, or verbatim when the field was plain, with the validated breakdown", () => {
     const breakdown = [{ id: "c-guard", title: "Guard page", points: 1.5, maxPoints: 2 }];
-    const body = md(richServer.answerDoc!(SECRET_CONFIG, { text: "The *stack*." }, { reason: "manual", chars: 13, breakdown }));
+    const graded = { reason: "manual" as const, chars: 13, breakdown };
+    const body = md(richServer.answerDoc!(SECRET_CONFIG, { text: "The *stack*." }, graded, EN_LABELS));
     expect(body).toBe("The *stack*.\n\n| Criterion | Points |\n|---|---|\n| Guard page | 1.5 / 2 |\n");
-    expect(md(richServer.answerDoc!(SECRET_CONFIG, { text: "" }, null))).toBe("No answer.\n");
+    expect(md(richServer.answerDoc!(SECRET_CONFIG, { text: "The *stack*." }, graded, FR_LABELS), "fr")).toContain(
+      "| Critère | Points |",
+    );
+    expect(md(richServer.answerDoc!(SECRET_CONFIG, { text: "" }, null, EN_LABELS))).toBe("No answer.\n");
     const plain = richServer.toStudent({ ...SECRET_CONFIG, format: "plain" }, view);
     expect(md(richServer.studentAnswerDoc!(plain, { text: "# not a title" }, null, EN_LABELS))).toBe("```text\n# not a title\n```\n");
     expect(md(richServer.studentAnswerDoc!(plain, { text: "" }, null, FR_LABELS), "fr")).toBe("Pas de réponse.\n");

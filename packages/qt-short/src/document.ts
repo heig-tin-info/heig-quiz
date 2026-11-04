@@ -2,8 +2,8 @@
  * The `short` question as blocks of an exported document (ADR-121 §2, ADR-125).
  *
  * The statement and the paper zone read the student view only: the prompt
- * and the kind of the field, never a matcher. The staff's words are
- * English (ADR-121 §4).
+ * and the kind of the field, never a matcher. Every word is the
+ * requester's (ADR-121 §4).
  */
 import { answerZone, code, list, markdown, noAnswerOr, type Block, type Labels } from "@quiz/docexport";
 
@@ -38,13 +38,18 @@ const isEmpty = (answer: ShortAnswer): boolean => answer.text.trim() === "";
 const typed = (answer: ShortAnswer): Block => code("text", answer.text);
 
 /** The staff's reading: the answer, then which accepted answer took it. */
-export function shortAnswerDoc(_config: ShortConfig, answer: ShortAnswer, details: ShortDetails | null): Block[] {
-  const given = isEmpty(answer) ? markdown("No answer.") : typed(answer);
+export function shortAnswerDoc(
+  _config: ShortConfig,
+  answer: ShortAnswer,
+  details: ShortDetails | null,
+  labels: Labels,
+): Block[] {
+  const given = noAnswerOr(labels, isEmpty(answer), typed(answer));
   if (details === null) return [given];
+  // The matcher's kind is a code (`regex`), printed as stored.
+  const kind = details.matchedKind === null ? "" : ` (${details.matchedKind})`;
   const verdict =
-    details.matchedIndex === null
-      ? "No accepted answer matched."
-      : `Matched accepted answer ${details.matchedIndex + 1} (${details.matchedKind ?? "unknown"}).`;
+    details.matchedIndex === null ? labels.noMatch : `${labels.matchedAnswer} ${details.matchedIndex + 1}${kind}.`;
   return [given, markdown(verdict)];
 }
 

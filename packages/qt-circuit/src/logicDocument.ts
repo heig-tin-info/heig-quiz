@@ -11,7 +11,7 @@
  * as a table, or the reference circuit drawn.
  */
 import { parseVectors } from "@quiz/domain/logic";
-import { code, EN_LABELS, labelled, list, markdown, table, type Block, type Labels } from "@quiz/docexport";
+import { code, labelled, list, markdown, table, type Block, type Labels } from "@quiz/docexport";
 
 import { logicLibrary } from "./canvas/logicLibrary.js";
 import { canvasZone, drawnAnswer, paletteBlock, schematicBlock } from "./canvas/paper.js";
@@ -92,7 +92,7 @@ export function logicStudentAnswerDoc(student: LogicStudent, answer: LogicAnswer
   return [answerBlock(answer, student.symbols, labels)];
 }
 
-/** The staff's reading, in English (ADR-121 §4): the circuit as drawn. */
-export function logicAnswerDoc(config: LogicConfig, answer: LogicAnswer): Block[] {
-  return [answerBlock(answer, config.symbols, EN_LABELS)];
+/** The staff's reading: the circuit as drawn. */
+export function logicAnswerDoc(config: LogicConfig, answer: LogicAnswer, _details: unknown, labels: Labels): Block[] {
+  return [answerBlock(answer, config.symbols, labels)];
 }

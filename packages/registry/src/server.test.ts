@@ -219,6 +219,9 @@ describe.each(REGISTERED)("the contract of %s", (id) => {
       for (const lang of LANGS) {
         const blocks = [...(type.statementDoc?.(student, LABELS[lang]) ?? []), ...(type.answerZone?.(student) ?? [])];
         expectNoLeak(blocks, lang);
+        // A ticked box on a statement is a key: none, in the tree or its Markdown.
+        for (const block of blocks) if (block.kind === "choices") expect(block.checked).toEqual([]);
+        expect(markdownBody({ lang, blocks })).not.toContain("[x]");
       }
     });
 
@@ -242,6 +245,7 @@ describe.each(REGISTERED)("the contract of %s", (id) => {
         // The body only: the page setup and the preamble are ours, fixed words of Typst.
         const body = source.slice(source.indexOf("<provenance>")).replace(/\\(.)/g, "$1");
         expect(fixture.secrets.filter((secret) => body.includes(secret)), lang).toEqual([]);
+        expect(body, lang).not.toContain("-ticked");
         expect(forbiddenKeys.filter((key) => new RegExp(`["(,\\s]${key}"?\\s*:`).test(body)), lang).toEqual([]);
       }
     });
