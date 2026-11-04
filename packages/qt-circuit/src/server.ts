@@ -179,8 +179,5 @@ export const circuitServer: QuestionTypeServer<
 export { parseSimulation } from "./grade.js";
 export { extractNets } from "./netlist.js";
 
-/* The pure figure of a schematic (ADR-126): what the documents above draw, for a host that prints one. */
-export { schematicFigure } from "./canvas/figure.js";
-
 /* The package's second type (ADR-123): combinational logic, graded in process. */
 export { logicServer } from "./logicServer.js";

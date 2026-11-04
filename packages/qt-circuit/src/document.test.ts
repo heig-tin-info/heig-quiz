@@ -12,6 +12,8 @@ import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
 import type { QuestionTypeServer } from "@quiz/core/server";
 
+import { CIRCUIT_LIBRARY } from "./canvas/circuitLibrary.js";
+import { atCellScale, schematicFigure } from "./canvas/figure.js";
 import { circuitServer, logicServer } from "./server.js";
 import {
   circuitConfig,
@@ -96,6 +98,8 @@ describe("the circuit statement", () => {
     const text = markdownBody({ lang: "en", blocks: circuitServer.statementDoc!(circuitServer.toStudent(config, view), LABELS.en) });
     // VEE is in the palette, but no rail powers it: the student is not offered it.
     expect(text).toContain("Parts: R, C, VCC\n");
+    // Once: the palette figure's alt text names the list, not its content again.
+    expect(text.split("Parts: ")).toHaveLength(2);
     expect(text).toContain("Parts at most: 6");
     expect(text).toContain("Supplies: VCC = 12 V");
     expect(text).toContain("in− and out− are the ground.");
@@ -105,7 +109,14 @@ describe("the circuit statement", () => {
 
   it("frames a squared zone of the box's size, its ruling on the editor's grid", () => {
     const [zone] = circuitServer.answerZone!(circuitServer.toStudent(circuitConfig(), view));
-    expect(zone).toMatchObject({ kind: "answerZone", zone: "free", heightMm: 108, ruling: { kind: "grid", pitchMm: 4 } });
+    // The starter is the empty box and its ports, from the library's constants alone.
+    expect(zone).toEqual({
+      kind: "answerZone",
+      zone: "free",
+      heightMm: 108,
+      ruling: { kind: "grid", pitchMm: 4 },
+      underlay: atCellScale(schematicFigure({ components: [], wires: [] }, CIRCUIT_LIBRARY)),
+    });
   });
 
   it("prints no key when the question has no reference", () => {

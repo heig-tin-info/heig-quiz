@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { toSvg, type Drawing, type DrawingItem } from "@quiz/docexport";
-import { PX_MM } from "@quiz/docexport/typst";
+import { PX_MM, toSvg, type Drawing, type DrawingItem } from "@quiz/docexport";
 
 import { BOX, GRID, PORTS } from "../library.js";
 import { initialTerminals } from "../logicLibrary.js";
 import { halfAdderSchematic, referenceSchematic } from "../testing.js";
 import { CIRCUIT_LIBRARY } from "./circuitLibrary.js";
-import { atCellScale, CELL_MM, figureHeightMm, figureWidthMm, paletteFigure, schematicFigure } from "./figure.js";
+import { atCellScale, CELL_MM, figureSizeMm, paletteFigure, schematicFigure } from "./figure.js";
 import { LOGIC_ANSI_LIBRARY, LOGIC_IEC_LIBRARY } from "./logicLibrary.js";
 
 const svgOf = (drawing: Drawing): string => {
@@ -90,8 +89,8 @@ describe("a starter at the frame's scale (ADR-126 §4–§5)", () => {
     const [x1, y1] = printed(starter, BOX.width, BOX.height);
     expect(x1 - CELL_MM).toBeCloseTo(160, 1);
     expect(y1 - CELL_MM).toBeCloseTo(100, 1);
-    expect(starter.viewBox[2] * PX_MM).toBeCloseTo(figureWidthMm(CIRCUIT_LIBRARY), 1);
-    expect(starter.viewBox[3] * PX_MM).toBeCloseTo(figureHeightMm(CIRCUIT_LIBRARY), 1);
+    expect(starter.viewBox[2] * PX_MM).toBeCloseTo(figureSizeMm(CIRCUIT_LIBRARY).width, 1);
+    expect(starter.viewBox[3] * PX_MM).toBeCloseTo(figureSizeMm(CIRCUIT_LIBRARY).height, 1);
   });
 
   it("draws the declared terminals of a logic question and nothing else", () => {

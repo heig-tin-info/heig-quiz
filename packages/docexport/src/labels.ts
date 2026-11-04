@@ -65,7 +65,7 @@ export interface Labels {
   circuitOpen: string;
   circuitBias: string;
   circuitHidden: string;
-  circuitSchematic: string;
+  schematic: string;
   logicInputs: string;
   logicOutputs: string;
   logicGates: string;
@@ -133,10 +133,10 @@ export const EN_LABELS: Labels = {
   circuitSine: "Sine",
   circuitPulse: "Pulse",
   circuitStep: "Step",
-  circuitOpen: "open output",
-  circuitBias: "bias",
+  circuitOpen: "Open output",
+  circuitBias: "Bias",
   circuitHidden: "Hidden stimuli",
-  circuitSchematic: "Schematic",
+  schematic: "Schematic",
   logicInputs: "Inputs",
   logicOutputs: "Outputs",
   logicGates: "Gates",
@@ -196,10 +196,10 @@ export const FR_LABELS: Labels = {
   circuitSine: "Sinus",
   circuitPulse: "Impulsions",
   circuitStep: "Échelon",
-  circuitOpen: "sortie ouverte",
-  circuitBias: "polarisation",
+  circuitOpen: "Sortie ouverte",
+  circuitBias: "Polarisation",
   circuitHidden: "Stimuli cachés",
-  circuitSchematic: "Schéma",
+  schematic: "Schéma",
   logicInputs: "Entrées",
   logicOutputs: "Sorties",
   logicGates: "Portes",

@@ -1,25 +1,23 @@
 /**
  * `circuit` and `logic` on paper (ADR-126 step 2), over the real application:
- * an exam of both prints — the hand-out and the staff "statement with key",
- * as Markdown, as their tree and as PDFs. The hand-out holds no secret of
- * the questions in any of its forms, the PDF's text included, which a figure
- * keeps as text (ADR-126 §9); the key's PDF shows the reference designators
- * and values, the positive control of that search.
+ * an exam of both prints its hand-out and its statement with key, as
+ * Markdown and as PDFs. The hand-out holds no secret of the questions, the
+ * PDF's text included, which a figure keeps as text (ADR-126 §9); the key's
+ * PDF shows the reference designators and values, the positive control of
+ * that search. The tree and the Typst source are searched per type
+ * (`packages/qt-circuit/src/document.test.ts`, the registry's contract).
  */
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { EvaluationDetail } from "@quiz/contracts";
 import { findStudentLeaks } from "@quiz/core/testing";
 
 import { questions } from "../../db/schema.js";
 import { type TestServer, testServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
 import { pdfText, pdfTools } from "../../test/pdf.js";
-import * as live from "../live/service.js";
 import { typeOf } from "../pool/config.js";
 import * as poolService from "../pool/service.js";
-import { handout, handoutTree } from "./document.js";
 import { addItems } from "./service.js";
 
 /** A pin-to-pin or port-to-pin wire along the stored polyline. */
@@ -150,21 +148,8 @@ async function exam() {
 }
 
 describe("circuit and logic on paper (ADR-126)", () => {
-  it("print: the detail offers both documents", async () => {
+  it("hand out the statements and no secret, as Markdown", async () => {
     const evaluation = await exam();
-    const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
-    expect(detail.exports).toEqual({ document: null, handout: null, paper: "paper_not_started" });
-  });
-
-  it("hand out a squared frame per question, and no secret in the tree nor the Markdown", async () => {
-    const evaluation = await exam();
-    const found = await handout(server.app.db, evaluation, { now: server.clock.now() });
-    for (const lang of ["en", "fr"] as const) {
-      const tree = handoutTree(found, lang);
-      expect(findStudentLeaks(tree, { forbiddenKeys: live.FORBIDDEN_STUDENT_KEYS, secrets: SECRETS })).toEqual([]);
-      const frames = tree.blocks.filter((b) => b.kind === "answerZone" && b.zone === "free" && b.ruling?.kind === "grid");
-      expect(frames).toHaveLength(3);
-    }
     const res = await get(url(evaluation.id, "handout.md"), { ...teacher.headers, "accept-language": "fr-CH" });
     expect(res.statusCode).toBe(200);
     for (const prompt of ["CIRCUIT_PROMPT", "LOGIC_PROMPT", "LOGIC_MAJORITY_PROMPT", "VISIBLE_STIM", "Stimuli cachés"]) {

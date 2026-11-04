@@ -10,30 +10,10 @@
  * constants alone (ADR-126 §4, §6). The key is the reference schematic as a
  * figure; a student's answer is their own schematic, drawn the same way.
  */
-import {
-  answerZone,
-  drawing,
-  EN_LABELS,
-  labelled,
-  list,
-  markdown,
-  number,
-  table,
-  type Block,
-  type Labels,
-} from "@quiz/docexport";
+import { EN_LABELS, labelled, list, markdown, number, table, type Block, type Labels } from "@quiz/docexport";
 
 import { CIRCUIT_LIBRARY } from "./canvas/circuitLibrary.js";
-import {
-  atCellScale,
-  CELL_MM,
-  figureHeightMm,
-  figureWidthMm,
-  paletteFigure,
-  paletteWidthMm,
-  schematicFigure,
-} from "./canvas/figure.js";
-import type { CanvasSchematic, SchematicLibrary } from "./canvas/schematicLibrary.js";
+import { canvasZone, drawnAnswer, paletteBlock, schematicBlock } from "./canvas/paper.js";
 import { formatValue, offeredKinds } from "./library.js";
 import {
   biasOf,
@@ -44,28 +24,6 @@ import {
   type CircuitStudent,
   type StudentStimulus,
 } from "./schema.js";
-
-/** `R1 4.7k, C1 100n, GND`: what a schematic holds, in words, for its alt text and the Markdown. */
-function partsInWords(schematic: CanvasSchematic): string {
-  return schematic.components.map((c) => (c.value === "" ? c.name : `${c.name} ${c.value}`)).join(", ");
-}
-
-/** A schematic as a figure of the document, at the frame's scale, its parts named in its alt text. */
-export function schematicBlock(schematic: CanvasSchematic, library: SchematicLibrary, title: string, labels: Labels): Block {
-  const parts = partsInWords(schematic);
-  return drawing(schematicFigure(schematic, library, { grid: true }), parts === "" ? title : labelled(labels, title, parts), {
-    widthMm: figureWidthMm(library),
-  });
-}
-
-/** The squared frame a student draws in, the `starter` (the box, its fixed parts) drawn grey under it. */
-export function canvasZone(starter: CanvasSchematic, library: SchematicLibrary): Block {
-  return answerZone("free", {
-    heightMm: figureHeightMm(library),
-    ruling: { kind: "grid", pitchMm: CELL_MM },
-    underlay: atCellScale(schematicFigure(starter, library)),
-  });
-}
 
 const hz = (value: number) => `${formatValue(value)}Hz`;
 
@@ -122,10 +80,10 @@ export function circuitStatementDoc(student: CircuitStudent, labels: Labels): Bl
   return [
     markdown(student.prompt),
     list(facts),
-    drawing(
-      paletteFigure(kinds.map((kind) => ({ kind, code: kind })), CIRCUIT_LIBRARY),
-      labelled(labels, labels.circuitParts, kinds.join(", ")),
-      { widthMm: paletteWidthMm(kinds.length) },
+    paletteBlock(
+      kinds.map((kind) => ({ kind, code: kind })),
+      CIRCUIT_LIBRARY,
+      labels.circuitParts,
     ),
     ...(stimuli.length === 0
       ? []
@@ -153,21 +111,19 @@ export function circuitAnswerZone(_student: CircuitStudent): Block[] {
 
 /** The reference schematic, drawn; nothing when the question has none. */
 export function circuitSolutionDoc(solution: CircuitSolution, _student: CircuitStudent, labels: Labels): Block[] {
-  return solution.reference === null ? [] : [schematicBlock(solution.reference, CIRCUIT_LIBRARY, labels.circuitSchematic, labels)];
+  return solution.reference === null ? [] : [schematicBlock(solution.reference, CIRCUIT_LIBRARY, labels)];
 }
 
-const isEmpty = (answer: CircuitAnswer) => answer.schematic.components.length === 0 && answer.schematic.wires.length === 0;
-
 /** An answer's schematic, drawn as the student left it, worded by `labels`. */
-const answerBlocks = (answer: CircuitAnswer, labels: Labels): Block[] =>
-  isEmpty(answer) ? [markdown(labels.noAnswer)] : [schematicBlock(answer.schematic, CIRCUIT_LIBRARY, labels.circuitSchematic, labels)];
+const answerBlock = ({ schematic }: CircuitAnswer, labels: Labels): Block =>
+  drawnAnswer(schematic, CIRCUIT_LIBRARY, labels, schematic.components.length === 0 && schematic.wires.length === 0);
 
 /** The student's own schematic. The simulation's breakdown is read in Quiz. */
 export function circuitStudentAnswerDoc(_student: CircuitStudent, answer: CircuitAnswer, _details: unknown, labels: Labels): Block[] {
-  return answerBlocks(answer, labels);
+  return [answerBlock(answer, labels)];
 }
 
 /** The staff's reading, in English (ADR-121 §4): the schematic as drawn. */
 export function circuitAnswerDoc(_config: CircuitConfig, answer: CircuitAnswer): Block[] {
-  return answerBlocks(answer, EN_LABELS);
+  return [answerBlock(answer, EN_LABELS)];
 }

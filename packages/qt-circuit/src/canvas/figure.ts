@@ -11,16 +11,15 @@
  * is `ink`, the box outline `grey`, a hollow body is filled with `paper`, the
  * grid `faint`. The sizes are the screen's, in canvas units.
  */
-import type { Drawing, DrawingItem, Matrix } from "@quiz/docexport";
-import { PX_MM } from "@quiz/docexport/typst";
+import { PX_MM, type Drawing, type DrawingItem, type Matrix } from "@quiz/docexport";
 
 import { GRID, MAJOR } from "../library.js";
 import type { Orientation } from "../schema.js";
 
-import { fitView, pinPosition, portPosition, transform } from "./geometry.js";
+import { connectedPins, fitView, GLYPH_RADIUS, pinPosition, portPosition, transform } from "./geometry.js";
 import { junctionPoints, pathOf, withRoutes } from "./router.js";
 import type { CanvasComponent, CanvasSchematic, SchematicLibrary } from "./schematicLibrary.js";
-import type { SymbolShape, SymbolSpec } from "./symbols.js";
+import { markPath, type SymbolShape, type SymbolSpec } from "./symbols.js";
 
 /** The printed size of one grid cell, in millimetres: a 40 × 25 box prints 160 × 100 mm (ADR-126 §5). */
 export const CELL_MM = 4;
@@ -57,9 +56,7 @@ function symbolItems(symbol: SymbolSpec, m: Orientation, x: number, y: number): 
     { kind: "g", transform: matrix, items: symbol.shapes.map(shapeItem) },
     ...symbol.marks.map((mark): DrawingItem => {
       const [mx, my] = transform(m, mark.x, mark.y);
-      const px = x + mx;
-      const py = y + my;
-      return { kind: "path", d: `M${px - 3.5} ${py}h7${mark.sign === "+" ? `M${px} ${py - 3.5}v7` : ""}`, width: 1.4 };
+      return { kind: "path", d: markPath(x + mx, y + my, mark.sign), width: 1.4 };
     }),
     ...(symbol.texts ?? []).map((text): DrawingItem => {
       const [tx, ty] = transform(m, text.x, text.y);
@@ -68,33 +65,29 @@ function symbolItems(symbol: SymbolSpec, m: Orientation, x: number, y: number): 
   ];
 }
 
+/** `R1 4.7k`, or `GND` for a part with no value: how a part is named, in a figure and in words. */
+export const designation = (c: Pick<CanvasComponent, "name" | "value">): string => (c.value === "" ? c.name : `${c.name} ${c.value}`);
+
 /** The designator and the value at the part's label anchor, placed as `ComponentGlyph` places them. */
 function labelItem(component: CanvasComponent, library: SchematicLibrary): DrawingItem | null {
   const at = library.part(component.kind).label_at;
   if (at === null) return null;
   const [lx, ly] = transform(component.m, at[0], at[1]);
-  const text = component.value === "" ? component.name : `${component.name} ${component.value}`;
-  const base = { kind: "text" as const, text, size: LABEL_SIZE };
+  const base = { kind: "text" as const, text: designation(component), size: LABEL_SIZE };
   if (Math.abs(lx) > Math.abs(ly)) {
     return { ...base, x: component.x + lx, y: component.y + ly, anchor: lx > 0 ? "start" : "end", baseline: "middle" };
   }
   return { ...base, x: component.x + lx, y: component.y + ly + (ly > 0 ? 0.8 * LABEL_SIZE : 0), anchor: "middle" };
 }
 
-/** `"c1:0"` for every pin a wire ends on: the wire draws it, not a pin dot. */
-function connectedPins(schematic: CanvasSchematic): Set<string> {
-  const set = new Set<string>();
-  for (const w of schematic.wires) {
-    for (const e of [w.a, w.b]) if (e.kind === "pin") set.add(`${e.c}:${e.p}`);
-  }
-  return set;
-}
+/** A paper-filled circle: a free pin or a port. */
+const disc = (x: number, y: number, r: number, width: number): DrawingItem => ({ kind: "ellipse", cx: x, cy: y, rx: r, ry: r, fill: "paper", width });
 
 function componentItems(component: CanvasComponent, library: SchematicLibrary, connected: ReadonlySet<string>): DrawingItem[] {
   const pins = library.part(component.kind).pins.flatMap((_, i): DrawingItem[] => {
     const q = pinPosition(component, i, library);
     if (q === null || connected.has(`${component.id}:${i}`)) return [];
-    return [{ kind: "ellipse", cx: q.x, cy: q.y, rx: 2.6, ry: 2.6, fill: "paper", width: 1.2 }];
+    return [disc(q.x, q.y, GLYPH_RADIUS.pin, 1.2)];
   });
   const label = labelItem(component, library);
   return [
@@ -110,7 +103,7 @@ function portItems(library: SchematicLibrary): DrawingItem[] {
     const q = portPosition(name, library);
     const right = q.x > library.box.width / 2;
     return [
-      { kind: "ellipse", cx: q.x, cy: q.y, rx: 4.5, ry: 4.5, fill: "paper", width: 1.4 },
+      disc(q.x, q.y, GLYPH_RADIUS.port, 1.4),
       { kind: "text", x: right ? q.x - 9 : q.x + 9, y: q.y - 8, text: name, anchor: right ? "end" : "start", size: LABEL_SIZE },
     ];
   });
@@ -152,12 +145,21 @@ export function schematicFigure(schematic: CanvasSchematic, library: SchematicLi
       { kind: "rect", x: 0, y: 0, w: library.box.width, h: library.box.height, stroke: "grey", width: 1.2 },
       ...routed.wires.flatMap((w): DrawingItem[] => (w.points.length < 2 ? [] : [{ kind: "path", d: pathOf(w.points), width: 1.7 }])),
       ...junctionPoints(routed, routes, library).map(
-        ([x, y]): DrawingItem => ({ kind: "ellipse", cx: x, cy: y, rx: 3.6, ry: 3.6, stroke: "none", fill: "ink" }),
+        ([x, y]): DrawingItem => ({ kind: "ellipse", cx: x, cy: y, rx: GLYPH_RADIUS.junction, ry: GLYPH_RADIUS.junction, stroke: "none", fill: "ink" }),
       ),
       ...routed.components.flatMap((c) => componentItems(c, library, connected)),
       ...portItems(library),
     ],
   };
+}
+
+/**
+ * The printed size of a schematic figure — and of the frame a starter is
+ * drawn in — in millimetres: its fitted view at {@link CELL_MM} per grid cell.
+ */
+export function figureSizeMm(library: SchematicLibrary): { width: number; height: number } {
+  const fit = fitView(library.box);
+  return { width: (fit.w / GRID) * CELL_MM, height: (fit.h / GRID) * CELL_MM };
 }
 
 /**
@@ -175,13 +177,11 @@ export function atCellScale(figure: Drawing): Drawing {
   };
 }
 
-/** The width of a printed schematic figure, in millimetres: {@link CELL_MM} per cell, the margin included. */
-export const figureWidthMm = (library: SchematicLibrary): number => (library.box.width / GRID + 2) * CELL_MM;
-
-/** The height of a schematic figure, or of the frame it is drawn in, in millimetres. */
-export const figureHeightMm = (library: SchematicLibrary): number => (library.box.height / GRID + 2) * CELL_MM;
-
-/** The cells of a palette figure: this many in a row at most, each this size in drawing units. */
+/**
+ * The cells of a palette figure: at most `columns` in a row, each `cell`
+ * drawing units square, its symbol fitted in `symbol` units, and printed
+ * `mm` wide — 7 × 24 mm fills the 170 mm column.
+ */
 const PALETTE = { columns: 7, cell: 110, symbol: 80, mm: 24 } as const;
 
 /**

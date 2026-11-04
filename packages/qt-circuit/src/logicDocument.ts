@@ -11,11 +11,10 @@
  * as a table, or the reference circuit drawn.
  */
 import { parseVectors } from "@quiz/domain/logic";
-import { code, drawing, EN_LABELS, labelled, list, markdown, table, type Block, type Labels } from "@quiz/docexport";
+import { code, EN_LABELS, labelled, list, markdown, table, type Block, type Labels } from "@quiz/docexport";
 
-import { paletteFigure, paletteWidthMm } from "./canvas/figure.js";
 import { logicLibrary } from "./canvas/logicLibrary.js";
-import { canvasZone, schematicBlock } from "./document.js";
+import { canvasZone, drawnAnswer, paletteBlock, schematicBlock } from "./canvas/paper.js";
 import { initialTerminals, LOGIC_KINDS, type GateFamily } from "./logicLibrary.js";
 import {
   expressionLatex,
@@ -43,10 +42,10 @@ export function logicStatementDoc(student: LogicStudent, labels: Labels): Block[
   return [
     markdown(student.prompt),
     list(facts),
-    drawing(
-      paletteFigure(families.map((family) => ({ kind: kindOf(family), code: family })), logicLibrary(student.symbols)),
-      labelled(labels, labels.logicGates, families.join(", ")),
-      { widthMm: paletteWidthMm(families.length) },
+    paletteBlock(
+      families.map((family) => ({ kind: kindOf(family), code: family })),
+      logicLibrary(student.symbols),
+      labels.logicGates,
     ),
   ];
 }
@@ -80,20 +79,20 @@ export function logicSolutionDoc(solution: LogicSolution, student: LogicStudent,
     ...(solution.vectors === undefined ? [] : [markdown(`**${labels.logicVectors}**`), vectorsBlock(solution.vectors, student)]),
     ...(solution.reference === undefined
       ? []
-      : [schematicBlock(solution.reference, logicLibrary(student.symbols), labels.circuitSchematic, labels)]),
+      : [schematicBlock(solution.reference, logicLibrary(student.symbols), labels)]),
   ];
 }
 
 /** An answer's circuit, drawn as the student left it in the question's symbols. */
-const answerBlocks = (answer: LogicAnswer, symbols: LogicStudent["symbols"], labels: Labels): Block[] =>
-  isLogicAnswered(answer) ? [schematicBlock(answer.schematic, logicLibrary(symbols), labels.circuitSchematic, labels)] : [markdown(labels.noAnswer)];
+const answerBlock = (answer: LogicAnswer, symbols: LogicStudent["symbols"], labels: Labels): Block =>
+  drawnAnswer(answer.schematic, logicLibrary(symbols), labels, !isLogicAnswered(answer));
 
 /** The student's own circuit. The truth table's breakdown is read in Quiz. */
 export function logicStudentAnswerDoc(student: LogicStudent, answer: LogicAnswer, _details: unknown, labels: Labels): Block[] {
-  return answerBlocks(answer, student.symbols, labels);
+  return [answerBlock(answer, student.symbols, labels)];
 }
 
 /** The staff's reading, in English (ADR-121 §4): the circuit as drawn. */
 export function logicAnswerDoc(config: LogicConfig, answer: LogicAnswer): Block[] {
-  return answerBlocks(answer, config.symbols, EN_LABELS);
+  return [answerBlock(answer, config.symbols, EN_LABELS)];
 }
