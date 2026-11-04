@@ -369,6 +369,17 @@ export type AuditAction =
   | "pool.unshare"
   | "pool.update"
   /**
+   * ADR-125 §9, §12: a staff member handed in a student's paper copy,
+   * subject the paper attempt; `payload.evaluationId`, `userId` (the
+   * student), `examDate`, and `supersededAttemptId` when it replaced an
+   * attempt — which then counts nowhere.
+   */
+  | "paper.enter"
+  /** ADR-125 §15: the scan of a paper copy attached or replaced, subject the attempt; `evaluationId`, `mime`, `bytes`. */
+  | "paper.scan_upload"
+  /** ADR-125 §15: a staff member opened a paper copy's scan, subject the attempt; `evaluationId`. A read, traced like `attempt.read`. */
+  | "paper.scan_read"
+  /**
    * A person downloaded their own data (N-DATA-04, ADR-112 §10), subject the
    * user, actor the user. `payload`: counts only — `classrooms`,
    * `gradeRows`, `feedback`, `projects`, `drillClassrooms`, `hours` —

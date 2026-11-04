@@ -136,6 +136,15 @@ export type AttemptStateName = (typeof ATTEMPT_STATES)[number];
 /** Who closed an attempt: the ticker, the student's hand-in, or the teacher. */
 export const ATTEMPT_CLOSERS = ["server", "student", "teacher"] as const;
 
+/**
+ * Where an attempt was answered (ADR-125 §9): on a screen, or on paper and
+ * typed in by a staff member — one staff submission, handed in at once.
+ */
+export const ATTEMPT_ORIGINS = ["digital", "paper"] as const;
+
+/** The types a paper copy's scan may have, read from its bytes (ADR-125 §15). */
+export const PAPER_SCAN_MIMES = ["application/pdf", "image/png", "image/jpeg"] as const;
+
 /** An attempt is finished once it is handed in or closed; only then may another start. */
 export const FINISHED_ATTEMPT_STATES = ["submitted", "expired"] as const satisfies readonly AttemptStateName[];
 

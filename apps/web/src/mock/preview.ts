@@ -57,7 +57,7 @@ function durationOf(e: MockEvaluation): number | null {
   return null;
 }
 
-function viewOf(e: MockEvaluation, seed: number): AttemptView {
+export function viewOf(e: MockEvaluation, seed: number): AttemptView {
   const nowIso = new Date().toISOString();
   return {
     attempt: {

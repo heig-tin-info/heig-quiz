@@ -220,7 +220,7 @@ describe("the hand-out (ADR-125)", () => {
     expect(record.items).toHaveLength(5);
     // A printable evaluation offers both on its detail.
     const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
-    expect(detail.exports).toEqual({ document: null, handout: null });
+    expect(detail.exports).toEqual({ document: null, handout: null, paper: "paper_not_started" });
     expect(findStudentLeaks(record, { forbiddenKeys: live.FORBIDDEN_STUDENT_KEYS, secrets: SECRETS })).toEqual([]);
     expect(showsSeed(res.body, (await storedSeed(evaluation.id))!)).toBe(false);
   });
@@ -273,6 +273,7 @@ describe("an evaluation that does not print (ADR-125 §5)", () => {
     expect(detail.exports).toEqual({
       document: { reason: "parameterized", types: [] },
       handout: { reason: "parameterized", types: [] },
+      paper: "paper_not_started",
     });
     expect(await storedSeed(evaluation.id)).toBeNull();
   });
@@ -297,7 +298,7 @@ describe("an evaluation that does not print (ADR-125 §5)", () => {
     expect(document.statusCode).toBe(200);
     expect(document.body).toContain("CODE_PROMPT");
     const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
-    expect(detail.exports).toEqual({ document: null, handout: { reason: "type", types: ["code"] } });
+    expect(detail.exports).toEqual({ document: null, handout: { reason: "type", types: ["code"] }, paper: "paper_not_started" });
   });
 
   it("refuses a poll both, whatever its questions", async () => {

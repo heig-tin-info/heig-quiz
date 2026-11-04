@@ -118,6 +118,8 @@ const EnvSchema = z.object({
   COMMIT_DATE: z.string().default(""),
   /** Hard cap on one uploaded image, in bytes (PLAN-MVP §4.2: 5 MB). */
   ASSETS_MAX_BYTES: z.coerce.number().int().min(1024).max(50_000_000).default(5_000_000),
+  /** Hard cap on the scan of a paper copy, in bytes (ADR-125 §15: 25 MB). */
+  PAPER_SCAN_MAX_BYTES: z.coerce.number().int().min(1024).max(100_000_000).default(25_000_000),
 
   /**
    * The Typst binary every PDF is compiled with (ADR-125 §1): a name looked

@@ -1201,6 +1201,7 @@ function resultsView(e: MockGradingWorld) {
       staff: a.staff,
       enrollmentId: seatOf(a.userId),
       excused: excusedOf(e, a.userId),
+      origin: e.evaluation.rows.find((r) => r.userId === a.userId)?.origin ?? ("digital" as const),
     };
   });
   // The students who never opened it: a 1.0 that belongs in the table and in
@@ -1223,6 +1224,7 @@ function resultsView(e: MockGradingWorld) {
       staff: row.staff,
       enrollmentId: seatOf(row.userId),
       excused: excusedOf(e, row.userId),
+      origin: "digital" as const,
     });
   });
   // The class, and only the class: a teacher's own test is a row of the
@@ -1509,6 +1511,8 @@ function copyOf(e: MockGradingWorld, attempt: MockAttempt) {
   const pendingCount = e.items.filter((item) => !standingGrading(e, attempt.id, item.id)).length;
   return {
     attemptId: attempt.id,
+    origin: e.evaluation.rows.find((r) => r.attemptId === attempt.id)?.origin ?? ("digital" as const),
+    supersededBy: null,
     points,
     totalPoints: total,
     grade: gradeOf(points, total),

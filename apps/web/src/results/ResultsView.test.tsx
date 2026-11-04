@@ -247,6 +247,36 @@ describe("ResultsView", () => {
     });
   });
 
+  it("badges a paper copy in its copy, and offers its scan there (ADR-125 §15)", async () => {
+    const { evaluation: _e, available: _a, ...copy } = makeFeedback();
+    const view = makeResultsView();
+    const zoe = view.rows[0]!;
+    mockFetch({
+      [`GET ${VIEW}`]: ok(view),
+      [`GET ${VIEW}/attempts/${zoe.attemptId}`]: ok({ ...copy, attemptId: zoe.attemptId, origin: "paper", supersededBy: null }),
+      [`GET /app/api/evaluations/e1/attempts/${zoe.attemptId}/paper`]: ok({
+        attemptId: zoe.attemptId,
+        examDate: "2026-11-02",
+        scan: null,
+      }),
+    });
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />, { route: `/?copy=${zoe.attemptId}` });
+    const sheet = await screen.findByRole("dialog", { name: zoe.displayName });
+    expect(await within(sheet).findByText("paper")).toBeInTheDocument();
+    expect(await within(sheet).findByRole("button", { name: "Attach the scan" })).toBeInTheDocument();
+  });
+
+  it("opens Enter a paper copy from a student's row menu (ADR-125)", async () => {
+    mockFetch({
+      [`GET ${VIEW}`]: ok(makeResultsView()),
+      "GET /app/api/evaluations/e1": ok(makeEvaluationDetail({ exports: { document: null, handout: null, paper: null } })),
+    });
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Actions for Adam Perret" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Enter a paper copy" }));
+    expect(await screen.findByRole("dialog", { name: "Paper copy of Adam Perret" })).toBeInTheDocument();
+  });
+
   it("exports through a real navigation to the CSV endpoint", async () => {
     mockFetch({ [`GET ${VIEW}`]: ok(makeResultsView()) });
     renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);

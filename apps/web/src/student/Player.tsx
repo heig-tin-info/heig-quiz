@@ -284,11 +284,18 @@ export function PlayerView({
   banner,
   homeLabel,
   tools,
+  finish,
   homeBusy = false,
   confinement,
 }: {
   initial: AttemptView;
   session: PlayerSession;
+  /**
+   * The hand-in's words where it is not a student's (ADR-125: a paper copy
+   * a staff member hands in): the bar's button and the dialog's title and
+   * confirmation. A student's by default.
+   */
+  finish?: string | undefined;
   onHome: () => void;
   /** Where Home leads, named; the student home by default. */
   homeLabel?: string;
@@ -492,7 +499,7 @@ export function PlayerView({
             size="sm"
             onClick={controls.openSubmit}
           >
-            {t("player.finish")}
+            {finish ?? t("player.finish")}
           </Button>
         }
         banner={
@@ -627,6 +634,7 @@ export function PlayerView({
       <SubmitDialog
         open={controls.submitting}
         unanswered={unanswered}
+        {...(finish ? { finish } : {})}
         onCancel={controls.cancelSubmit}
         onConfirm={controls.handIn}
       />

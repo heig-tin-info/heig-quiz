@@ -20,11 +20,12 @@
  *     shown: the dwell (ADR-039) has either an open interval or none, never
  *     half of one.
  */
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { AttemptEventKind } from "@quiz/contracts";
-import { ATTEMPT_CLOSERS, ATTEMPT_STATES } from "@quiz/domain";
+import { ATTEMPT_CLOSERS, ATTEMPT_ORIGINS, ATTEMPT_STATES } from "@quiz/domain";
 import {
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -151,6 +152,20 @@ export const attempts = pgTable(
      * once, at creation.
      */
     afterDue: boolean("after_due").notNull().default(false),
+    /**
+     * ADR-125 §9: `paper` for a copy a staff member typed in from a paper
+     * sitting (one submission, `submitted` by `teacher`, no start, no
+     * deadline); `digital` for every other attempt. Written once, at
+     * creation.
+     */
+    origin: text("origin", { enum: ATTEMPT_ORIGINS }).notNull().default("digital"),
+    /**
+     * ADR-125 §12: the paper attempt that REPLACED this one. A replaced
+     * attempt counts nowhere ({@link officialAttempt}) and never reaches its
+     * student; the staff still read it. NO ACTION, checked at the end of the
+     * statement: deleting an evaluation removes the pair in one cascade.
+     */
+    supersededBy: uuid("superseded_by").references((): AnyPgColumn => attempts.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -184,13 +199,15 @@ export const attempts = pgTable(
 );
 
 /**
- * The row `attempts` is an OFFICIAL attempt, not a practice one started
- * after the due date (ADR-122): THE predicate every reader that counts,
- * grades, ranks or shows the class adds — the kept attempt, the dashboard,
- * the grading queue, the regrade, the lists of the teacher. A practice
- * attempt is reached by id, or through the student's own practice reads.
+ * The row `attempts` is an OFFICIAL attempt: neither a practice one started
+ * after the due date (ADR-122) nor one a paper copy replaced (ADR-125 §12,
+ * amending ADR-122 §4). THE predicate every reader that counts, grades,
+ * ranks or shows the class adds — the kept attempt, the dashboard, the
+ * grading queue, the regrade, the lists of the teacher and of the student.
+ * A practice attempt is reached by id, or through the student's own
+ * practice reads; a replaced one by id, by the staff only.
  */
-export const officialAttempt = eq(attempts.afterDue, false);
+export const officialAttempt = and(eq(attempts.afterDue, false), isNull(attempts.supersededBy))!;
 
 /** Its complement: a practice attempt after the due date (ADR-122), read by the student's own practice reads. */
 export const practiceAttempt = eq(attempts.afterDue, true);

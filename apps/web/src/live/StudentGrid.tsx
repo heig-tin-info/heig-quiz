@@ -6,7 +6,7 @@ import { displayedRate } from "@quiz/domain";
 import { useT } from "../i18n";
 import type { GridState } from "../realtime/grid";
 import { cx, Dash, T } from "../ui";
-import { ACTIONS, ACTIONS_KIOSK, COL, GridRow, PROGRESS } from "./GridRow";
+import { actionsWidth, COL, GridRow, PROGRESS } from "./GridRow";
 
 /**
  * The grid of F-DASH-01: students down, questions across.
@@ -67,6 +67,7 @@ export function StudentGrid({
   onClose,
   onReopen,
   onAssign,
+  onPaper,
 }: {
   state: GridState;
   /**
@@ -96,7 +97,10 @@ export function StudentGrid({
   onReopen: (row: DashboardRow, name: string) => void;
   /** Given when the exam accepts the kiosk: each row may get a station (ADR-051 §7). */
   onAssign?: ((row: DashboardRow, name: string) => void) | undefined;
+  /** Given when the exam takes a paper copy: each student's row may enter one (ADR-125 §17). */
+  onPaper?: ((row: DashboardRow, name: string) => void) | undefined;
 }) {
+  const actionsClass = actionsWidth(Number(onAssign !== undefined) + Number(onPaper !== undefined));
   const t = useT();
   const { view } = state;
   const totals = new Map(view.totals.map((x) => [x.itemId, x]));
@@ -217,7 +221,7 @@ export function StudentGrid({
               scope="col"
               className={cx(
                 T.th,
-                onAssign ? ACTIONS_KIOSK : ACTIONS,
+                actionsClass,
                 "bg-surface text-right sm:sticky sm:right-0 sm:z-10 sm:border-l sm:border-line",
               )}
             >
@@ -252,6 +256,8 @@ export function StudentGrid({
               onClose={onClose}
               onReopen={onReopen}
               onAssign={onAssign}
+              onPaper={onPaper}
+              actionsClass={actionsClass}
             />
           ))}
         </tbody>
@@ -301,7 +307,7 @@ export function StudentGrid({
             <td
               className={cx(
                 T.td,
-                onAssign ? ACTIONS_KIOSK : ACTIONS,
+                actionsClass,
                 "bg-surface-2 sm:sticky sm:right-0 sm:z-10 sm:border-l sm:border-line",
               )}
             />

@@ -135,6 +135,8 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   correction_not_open: "error.correctionNotOpen",
   correction_not_allowed: "error.correctionNotAllowed",
   correction_published: "error.correctionPublished",
+  // ADR-125: a Reopen on a paper copy, or on an attempt it replaced.
+  not_reopenable: "error.notReopenable",
   // F-ADMIN-06: "Run now" on a task whose run is still going.
   task_running: "error.taskRunning",
   // F-GH-04, D28: a classroom's organization is held by its journal; and a

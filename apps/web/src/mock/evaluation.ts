@@ -33,7 +33,7 @@ import type {
   LobbyName,
   McqScorePolicy,
 } from "@quiz/domain";
-import { TemplatePatch, type DashboardAccess, type IntegrityIncident } from "@quiz/contracts";
+import { TemplatePatch, type DashboardAccess, type EvaluationExports, type IntegrityIncident } from "@quiz/contracts";
 import {
   D,
   H,
@@ -397,6 +397,8 @@ interface MockRowState {
   cells: MockCell[];
   /** ADR-051 §8: how the student sits it — the portal, unless `?seb=1` / `?kiosk=1`. */
   access: DashboardAccess;
+  /** ADR-125: the row's attempt was typed in from paper (`mock/paper.ts`); digital when absent. */
+  origin?: "digital" | "paper";
 }
 
 const PORTAL: DashboardAccess = { kind: "portal", station: null, alert: null };
@@ -1086,12 +1088,27 @@ const evaluationDetail = (e: MockEvaluation) => ({
  * `statementDoc`) today. A type that gains or loses the hook must be added
  * here or removed, or the mock's sheet says something the server does not.
  */
-const PRINTABLE_TYPES = new Set(["mcq", "short", "cloze", "rich", "math"]);
-const exportsOf = (e: MockEvaluation) => {
-  if (e.mode === "poll") return { document: { reason: "poll" as const, types: [] }, handout: { reason: "poll" as const, types: [] } };
+export const PRINTABLE_TYPES = new Set(["mcq", "short", "cloze", "rich", "math"]);
+const exportsOf = (e: MockEvaluation): EvaluationExports => {
+  if (e.mode === "poll") {
+    const poll = { reason: "poll" as const, types: [] };
+    return { document: poll, handout: poll, paper: "paper_mode" };
+  }
   const types = [...new Set(e.items.map((i) => i.type).filter((type) => !PRINTABLE_TYPES.has(type)))];
-  return { document: null, handout: types.length === 0 ? null : { reason: "type" as const, types } };
+  const handout = types.length === 0 ? null : { reason: "type" as const, types };
+  return { document: null, handout, paper: mockPaperRefusal(e, handout)?.code ?? null };
 };
+
+/** Like the server's `paperRefusal` (ADR-125 §11): its code, and the hand-out's refusal for the 409's body. */
+export function mockPaperRefusal(
+  e: MockEvaluation,
+  handout: EvaluationExports["handout"] = exportsOf(e).handout,
+): { code: NonNullable<EvaluationExports["paper"]>; print: EvaluationExports["handout"] } | null {
+  if (e.mode !== "exam") return { code: "paper_mode", print: null };
+  if (e.state === "released") return { code: "paper_released", print: null };
+  if (e.startedAt === null) return { code: "paper_not_started", print: null };
+  return handout && { code: "not_printable", print: handout };
+}
 
 /** Whether the evaluation keeps the integrity journal (`integrityJournalOn`). */
 const journalOnMock = (e: MockEvaluation) => e.mode !== "poll" && e.settings["logVisibility"] === true;
@@ -1167,6 +1184,7 @@ export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
       ...r,
       cells: r.cells.map((c) => ({ ...c, summary: includeAnswers ? c.summary : null })),
       incidents: mockIncidents(e, r).length,
+      origin: r.origin ?? ("digital" as const),
     })),
     totals: e.items.map((item) => {
       const done = classRows.filter((r) => {
@@ -1211,6 +1229,8 @@ export const attemptInspect = (e: MockEvaluation, attemptId: string) => {
       startedAt: e.startedAt,
       deadlineAt: row.deadlineAt,
       submittedAt: row.state === "submitted" ? iso(-60_000) : null,
+      origin: row.origin ?? ("digital" as const),
+      supersededBy: null,
     },
     items: e.items.flatMap((item, i) => {
       const q = itemQuestion(item);

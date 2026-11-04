@@ -144,7 +144,7 @@ export async function readAsset(assetsDir: string, relativePath: string): Promis
  * `path` comes from the database, but a stored value is still an input:
  * anything that escapes `ASSETS_DIR` is refused rather than read.
  */
-function safeJoin(assetsDir: string, relativePath: string): string {
+export function safeJoin(assetsDir: string, relativePath: string): string {
   const base = resolve(assetsDir);
   const full = resolve(base, relativePath);
   if (full !== base && !full.startsWith(base + sep)) {

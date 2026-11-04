@@ -74,6 +74,14 @@ export {
   orderItems,
 } from "./attempt.js";
 export { onAttemptsEnded, type EndedAttempt } from "./dwell.js";
+// ADR-125 §9: the paper attempt's rows, written in the `paper` module's transaction.
+export {
+  announcePaperAttempt,
+  insertPaperAttempt,
+  paperAnswers,
+  paperKey,
+  type InsertedPaperAttempt,
+} from "./paperAttempt.js";
 export { studentGrades } from "./grades.js";
 // The one student exit (invariant 4), for the modules that serve a question
 // outside an attempt: the drill (ADR-041 §9).
