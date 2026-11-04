@@ -42,9 +42,11 @@ services:
       # Staging's own history of chunks (ADR-110, compose.prod.yml says why).
       STATIC_HISTORY_DIR: /app/static-history
       # The image sets no heap size (production runs uncapped). Pinned here
-      # rather than left to V8's own sizing: 192 MB keeps the heap under the
-      # 256 MB cap below with room for the rest of the process, so V8
-      # collects instead of the container being OOM-killed.
+      # rather than left to V8's own sizing: 192 MB keeps the heap well under
+      # the 384 MB cap below, so V8 collects instead of the container being
+      # OOM-killed, and leaves the rest to the process and to the Typst child
+      # that compiles a PDF (ADR-125 §3: one compile at a time, a short-lived
+      # process of some tens of megabytes).
       NODE_OPTIONS: --max-old-space-size=192
     ports:
       - "127.0.0.1:3003:3000" # native Caddy -> reverse_proxy localhost:3003
@@ -52,8 +54,8 @@ services:
       - ./secrets:/app/secrets:ro
       - ./assets:/app/assets
       - static-history:/app/static-history
-    mem_limit: 256m
-    memswap_limit: 256m
+    mem_limit: 384m
+    memswap_limit: 384m
     cpus: 0.5
     cpu_shares: 256
     depends_on:
