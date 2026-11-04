@@ -7,6 +7,9 @@ marked *default* were set by the orchestrator's spec challenge and adopted).
 Delivery progress lives in `changes/`. Amended 2026-10-15 by
 [ADR-115](ADR-115-revision-ciblee-par-notion.md) §12: each classroom carries
 the student's rounds of targeted revision, and the file is version 2 (§3, §9).
+Amended 2026-11-03 by [ADR-125](ADR-125-copies-papier-pdf-typst.md) §18,
+scope: two student documents beside this file (the amendment after §12);
+the personal export itself is unchanged. Open question 62 is settled.
 
 Scope: what `GET /app/api/me/export` returns, to whom, and what it leaves out.
 
@@ -144,6 +147,35 @@ this record is about the self-service file.
     that is not read-only. It fetches the file and saves it, so a refusal
     (the hourly limit, a server error) is a toast, never an error body saved
     as the file.
+
+### Amendment of 2026-11-03
+
+From [ADR-125](ADR-125-copies-papier-pdf-typst.md) §18 (product owner;
+orchestrator's arbitration after review). It settles open question 62 by
+the rule of F-EXP-02: what the requester sees in the app, and nothing
+more. Two student documents of the export factory (ADR-121) sit beside
+this file; neither changes it, and point 4 still governs it.
+
+- **The student's own copy** of one attempt (PDF, JSON), from the feedback
+  page of a handed-in attempt, built from `studentFeedback` on that attempt
+  only, as point 4 builds one: the key if and only if
+  `effectiveFeedbackPolicy` shows it, the student's answers only where the
+  page shows them. None for a practice attempt
+  ([ADR-122](ADR-122-entrainement-apres-l-echeance.md) §10) or an attempt
+  a paper copy replaced (404).
+- **The blank print of a series** (PDF), from a row of the past series:
+  the statements through the `studentView` exit of the `live` module, in
+  the evaluation's paper order (ADR-125 §8), no answer, no key. Loaded
+  through the student branch of `readableClassroom` — a claimed seat, or
+  a staff member in the student view (ADR-018, point 7) — for exactly the
+  evaluations ADR-122 §9 lists as past series (404 for a draft, a future
+  evaluation or an unreleased exam); the refusals of ADR-125 §5 apply.
+- **For both**: the caller's own portal session (point 7, `ownSessionGuard`:
+  no impersonation, `seb`, `kiosk` or token); one rate-limit bucket of
+  their own, shared by both, 20 per hour per user, apart from point 8's, so
+  printing a few series never locks the personal export;
+  audited as `privacy.export` with a `kind` field (`student-copy` or
+  `handout`), so the audit union gains no action.
 
 ## Consequences
 

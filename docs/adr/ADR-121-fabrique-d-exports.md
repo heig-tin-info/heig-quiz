@@ -5,6 +5,14 @@
 Accepted (2026-10-29, the product owner's decisions on the design of issue
 #972 and of the hand-outs of #551). Delivery progress lives in `changes/`.
 
+Amended 2026-11-03 by [ADR-125](ADR-125-copies-papier-pdf-typst.md), scope:
+§1 (the `answerZone` block, typed labels; ADR-125 §6–§7), §2 (the student
+answer hook `studentAnswerDoc`, the paper hook `answerZone`; ADR-125 §5),
+§4 (a student-facing document's language; ADR-125 §7), §7 (Typst on the
+server, no browser print view; ADR-125 §1–§3) and §8 steps 2, 3 and 6
+(step 3's hand-out follows the evaluation's stored random paper seed, not seed 0, ADR-125 §8; step 6
+comes before step 5).
+
 Scope: every file the platform builds from its data for a person to read or
 process outside it — Markdown, JSON, PDF — except the results and gradebook
 CSV, the personal data export's JSON (ADR-112) and the canonical pool
@@ -57,7 +65,7 @@ question must come from the type through its contract.
      (`lang`, `text`), `list`, `table`, `tests` (`name`, `visible`, `ok`,
      `points`), `points`, `separator`, and later `answerZone` (reserved for
      #551's answer space), with a front matter (point 5). The tree is
-     internal: no route serves it.
+     internal: no route serves it. *(Amended by ADR-125 §6–§7.)*
    - **Renderer**: `md`, pure, in `packages/docexport` — a code block's fence
      is one backtick longer than the longest run of backticks in its text,
      at least three, so no answer can close it early; `json`, the record
@@ -80,7 +88,7 @@ question must come from the type through its contract.
    A student's answer, when step 5 needs it, gets a hook of its own typed on
    the student shapes only — the student view, the answer as handed back,
    and `studentDetails(details, policy)` — so no hook decides visibility
-   from a raw config. A type without both `statementDoc` and `answerDoc` offers
+   from a raw config. *(Amended by ADR-125 §5.)* A type without both `statementDoc` and `answerDoc` offers
    no Markdown or PDF button; its data stays in the JSON record.
 
 3. **Audience rule** (product owner): F-EXP-02 governs — what the requester
@@ -90,7 +98,7 @@ question must come from the type through its contract.
    only in the player (the statements of an open exercise series, their own
    answers once a policy hides them after hand-in), which ADR-112 §4 keeps out
    of the personal export, is settled when ADR-112 is amended at step 5
-   (open question 62, [06](../spec/06-questions-ouvertes.md)).
+   (open question 62, [06](../spec/06-questions-ouvertes.md)). *(Settled by ADR-125 §18.)*
 
 4. **Staff documents name the students, in English.** The owner overrode
    four points of #972: a staff document is not anonymised (only the
@@ -101,6 +109,7 @@ question must come from the type through its contract.
    to a model is the teacher's own act, outside the platform's LLM path that
    N-DATA-05 governs. A staff document's fixed words are English, like the
    CSV; the language of a student document is decided with step 5.
+   *(Amended by ADR-125 §7.)*
 
 5. **The front matter is provenance**, YAML that docrender's
    `splitFrontMatter` reads: `export` (`kind`, `format`, `version`), `source`
@@ -118,7 +127,7 @@ question must come from the type through its contract.
    the user's own browser (`@media print`, `break-inside: avoid` per
    question; no server-side Chromium) only if its result is clean; it moves to Typst as soon as a question splits across pages,
    a cross-reference is needed, or #551's answer zones need a measured
-   layout. Both render the same document tree.
+   layout. Both render the same document tree. *(Amended by ADR-125 §1–§3.)*
 
 8. **Sequence** (each step its own PR, on this decision):
    0. this record;
@@ -138,6 +147,7 @@ question must come from the type through its contract.
       series, by an amendment of ADR-112 (same rate limit, session rule and
       `privacy.export` audit);
    6. PDF (point 7), then #551's lots on the same tree.
+   *(Amended by ADR-125 §1–§8; step 6 before step 5.)*
 
 ## Consequences
 
