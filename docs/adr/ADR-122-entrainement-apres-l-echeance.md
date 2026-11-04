@@ -21,6 +21,8 @@ Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correctio
 
 Amended 2026-11-03 (#1004), scope: §9 only — see the amendment note there.
 
+Amended 2026-11-03 by [ADR-125](ADR-125-copies-papier-pdf-typst.md) §12, scope: §4 only — `officialAttempt` also leaves out an attempt a paper copy replaced (`superseded_by is null`); `isLatestAttempt` and `attemptOf` are unchanged, the paper attempt being the student's latest.
+
 ## Context
 
 An exercise is practice by nature, yet its due date closed it for good: once
