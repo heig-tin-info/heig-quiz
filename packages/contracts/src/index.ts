@@ -11,6 +11,7 @@ export * from "./integrity.js";
 export * from "./live.js";
 export * from "./student.js";
 export * from "./grading.js";
+export * from "./exports.js";
 export * from "./results.js";
 export * from "./realtime.js";
 export * from "./api.js";

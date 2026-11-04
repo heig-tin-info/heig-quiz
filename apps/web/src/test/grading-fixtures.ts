@@ -201,6 +201,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
     roster: { enrolled: 24, unlinked: 0, conflicts: 0 },
     templateRevision: null,
     courseId: "c1",
+    exports: { document: null, handout: null },
     ...over,
   };
 }

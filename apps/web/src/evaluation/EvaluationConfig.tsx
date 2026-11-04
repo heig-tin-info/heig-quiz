@@ -6,6 +6,7 @@ import {
   CalendarClock,
   ClipboardCheck,
   Copy,
+  Download,
   Eye,
   FileStack,
   MonitorPlay,
@@ -43,6 +44,7 @@ import {
 } from "../ui";
 import { evaluationBadgeLabel, scheduleFactsOf, schedulingPhase, stateStyle, type SchedulingPhase } from "./common";
 import { evaluationTarget } from "./editTarget";
+import { ExportSheet } from "./ExportSheet";
 import { useItemPane } from "./ItemPreview";
 import { ItemsStep } from "./ItemsStep";
 import { LaunchStep } from "./LaunchStep";
@@ -103,6 +105,8 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   /** The teacher tried "Go to launch" with the timing incomplete (#76). */
   const [timingChecked, setTimingChecked] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  /** The export sheet is open (ADR-125). */
+  const [exporting, setExporting] = useState(false);
   const pane = useItemPane();
   const now = useNow();
 
@@ -278,6 +282,10 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
                 onSelect: () =>
                   duplicate.mutate(t("eval.duplicateTitle", { title: evaluation.title })),
               },
+              // ADR-125: the hand-out and the statement with key; a poll is never printed.
+              ...(evaluation.mode === "poll"
+                ? []
+                : [{ label: t("eval.export"), icon: Download, onSelect: () => setExporting(true) }]),
               // ADR-031: keep this evaluation at the course level, for every
               // classroom of the course to start from.
               ...(classroom.data
@@ -430,6 +438,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
           onClose={() => setSavingTemplate(false)}
         />
       ) : null}
+      {exporting ? <ExportSheet evaluationId={id} title={evaluation.title} onClose={() => setExporting(false)} /> : null}
     </div>
   );
 }

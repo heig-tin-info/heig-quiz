@@ -85,6 +85,7 @@ export {
   studentSolutionView,
   studentSolutionViewOf,
   studentView,
+  staffViews,
   studentViewOf,
   teacherPreviewView,
 } from "./studentView.js";

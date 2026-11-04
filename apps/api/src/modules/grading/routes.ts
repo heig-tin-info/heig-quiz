@@ -26,17 +26,17 @@ import {
   RegradeBody,
   ValidateGradingBody,
 } from "@quiz/contracts";
-import { renderMarkdown } from "@quiz/docexport/markdown";
 import { evaluationGradingRole } from "@quiz/domain";
 
 import { tracer, type AuditAction } from "../../audit.js";
+import { EXPORT_FORMATS, sendExport } from "../../documents/files.js";
 import { loadEvaluation, staffAnswer, staffGrading, teacherGuard, withCourseRole } from "../guards.js";
 import { notFound, sendAttachment, teacherRoute } from "../http.js";
 import { joinedItem, joinedItems, type JoinedItem } from "../evaluation/service.js";
 import { listVersions } from "../pool/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
-import { itemAnswers, itemAnswersDocument, type ItemAnswers } from "./itemAnswers.js";
+import { itemAnswers, itemAnswersDocument } from "./itemAnswers.js";
 import { enqueueEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
 
@@ -136,36 +136,28 @@ export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: str
    * PDF (ADR-125, English like every staff document), or its record. Staff
    * only, beside the results CSV and like it neither anonymised nor audited.
    */
-  const answerFiles = {
-    md: {
-      text: true,
-      type: "text/markdown; charset=utf-8",
-      body: (found: ItemAnswers) => renderMarkdown(itemAnswersDocument(found, opts.commitSha)),
-    },
-    json: {
-      text: false,
-      type: "application/json; charset=utf-8",
-      body: (found: ItemAnswers) => JSON.stringify(ItemAnswersRecord.parse(found.record)),
-    },
-    pdf: {
-      text: true,
-      type: "application/pdf",
-      // Drawn with the images the reader may see (a staff member: all of them).
-      body: (found: ItemAnswers, req: FastifyRequest) =>
-        app.pdf.render(itemAnswersDocument(found, opts.commitSha), req.user!),
-    },
-  };
-  for (const [format, file] of Object.entries(answerFiles)) {
+  for (const format of EXPORT_FORMATS) {
     app.get(
       `/app/api/evaluations/:id/items/:itemId/answers.${format}`,
       { preHandler: requireTeacher },
-      teacher({ params: ItemParam, load: staffEvaluation }, async ({ req, reply, now, params, scope }) => {
-        const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: file.text });
+      teacher({ params: ItemParam, load: staffEvaluation }, async ({ reply, now, params, scope }) => {
+        const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: format === "md" });
         if (!found) return notFound(reply);
-        return sendAttachment(reply, file.type, `${found.basename}.${format}`, await file.body(found, req));
+        return sendExport(reply, format, found, ItemAnswersRecord, () => itemAnswersDocument(found, opts.commitSha));
       }),
     );
   }
+  app.get(
+    "/app/api/evaluations/:id/items/:itemId/answers.pdf",
+    { preHandler: requireTeacher },
+    teacher({ params: ItemParam, load: staffEvaluation }, async ({ req, reply, now, params, scope }) => {
+      const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: true });
+      if (!found) return notFound(reply);
+      // Drawn with the images the reader may see (a staff member: all of them).
+      const pdf = await app.pdf.render(itemAnswersDocument(found, opts.commitSha), req.user!);
+      return sendAttachment(reply, "application/pdf", `${found.basename}.pdf`, pdf);
+    }),
+  );
 
   /** The whole history of one answer, newest first (F-GRADE-05). */
   app.get(

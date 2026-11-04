@@ -58,6 +58,7 @@ import {
 } from "../../db/schema.js";
 import { conceptsOf } from "../concept/service.js";
 import { poolRolesOf } from "../pool/service.js";
+import { exportsOf } from "./print.js";
 import type { EvaluationRecord, ItemRecord, DbOrTx } from "./shared.js";
 import type { Caller } from "../guards.js";
 
@@ -705,7 +706,8 @@ export async function evaluationDetail(
   courseId: string,
   lang: ConceptLang,
 ): Promise<EvaluationDetail> {
-  const items = await itemRows(db, row.id);
+  const joined = await joinedItems(db, row.id);
+  const items = await itemRowsOf(db, joined);
   const counted = await attemptCounts(db, row.id);
   const attemptsSoFar = counted.all;
   return {
@@ -722,6 +724,7 @@ export async function evaluationDetail(
     roster: await rosterOf(db, row, enrolled),
     templateRevision: (await templateRevisionsOf(db, [row])).get(row.id) ?? null,
     courseId,
+    exports: exportsOf(row, joined),
   };
 }
 

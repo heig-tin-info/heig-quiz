@@ -150,6 +150,15 @@ export const evaluations = pgTable(
     releasedGrades: jsonb("released_grades"),
     modifiedAfterRelease: boolean("modified_after_release").notNull().default(false),
     /**
+     * The seed of the printed paper (ADR-125 §8): the order and the shuffles
+     * every paper copy of this evaluation follows, as a digital attempt's
+     * `seed` drives its own. Drawn on the first print by `paperSeedOf`, the
+     * one writer, and never cleared. A SECRET: never in a response, a record,
+     * a log or a copy of the evaluation — with it and the public code, the
+     * base order (and so the key of an mcq) could be read off the paper.
+     */
+    paperSeed: integer("paper_seed"),
+    /**
      * Who created the evaluation. For a poll with no classroom it is also
      * the OWNER, the one person (with the admins) who reaches it
      * (`findOwnedPoll` in `modules/guards.ts`).

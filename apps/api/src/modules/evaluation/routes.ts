@@ -15,9 +15,11 @@ import {
   EvaluationAfterDueBody,
   EvaluationCreate,
   EvaluationDelete,
+  EvaluationDocumentRecord,
   EvaluationDuplicate,
   EvaluationPatch,
   EvaluationStateBody,
+  HandoutRecord,
   IdParam,
   ItemParam,
   ItemPatch,
@@ -34,9 +36,11 @@ import {
   type TemplateInstance,
   type TemplatePullResult,
 } from "@quiz/contracts";
+import type { Locale } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import { tracer, type AuditAction } from "../../audit.js";
+import { EXPORT_FORMATS, sendExport, type ExportFormat } from "../../documents/files.js";
 import { hasKey } from "../pool/config.js";
 import { exampleConfig } from "../pool/service.js";
 import {
@@ -50,6 +54,7 @@ import {
 } from "../guards.js";
 import { notFound, readerLang, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
+import { evaluationDocument, evaluationDocumentTree, handout, handoutTree } from "./document.js";
 import { evaluationChanged } from "./events.js";
 import * as service from "./service.js";
 import * as templates from "./templates.js";
@@ -186,6 +191,38 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
       detail(req, scope.evaluation, scope.classroom.courseId),
     ),
   );
+
+  /**
+   * The evaluation's two documents (ADR-121 step 3, ADR-125), each as
+   * Markdown or as its record: the staff "statement with key" (English) and
+   * the hand-out (student views in the paper's order, worded in the reader's
+   * language). Staff only, like the answers export; `409 not_printable {
+   * reason, types }` for an evaluation that does not print.
+   */
+  const commitSha = opts.config.COMMIT_SHA || null;
+  /** What a document is served from: the evaluation loaded, the clock, the format, the reader's language. */
+  type Served = { reply: FastifyReply; evaluation: service.EvaluationRecord; now: Date; format: ExportFormat; lang: Locale };
+  const documents = {
+    document: async ({ reply, evaluation, now, format }: Served) => {
+      const found = await evaluationDocument(app.db, evaluation, { now });
+      return sendExport(reply, format, found, EvaluationDocumentRecord, () => evaluationDocumentTree(found, commitSha));
+    },
+    handout: async ({ reply, evaluation, now, format, lang }: Served) => {
+      const found = await handout(app.db, evaluation, { now });
+      return sendExport(reply, format, found, HandoutRecord, () => handoutTree(found, commitSha, lang));
+    },
+  };
+  for (const [name, serve] of Object.entries(documents)) {
+    for (const format of EXPORT_FORMATS) {
+      app.get(
+        `/app/api/evaluations/:id/${name}.${format}`,
+        { preHandler: requireTeacher },
+        teacher({ params: IdParam, load: staffEvaluation }, ({ req, reply, now, scope }) =>
+          serve({ reply, evaluation: scope.evaluation, now, format, lang: readerLang(req) }),
+        ),
+      );
+    }
+  }
 
   /** The pools the question picker offers: the course's own (F-EVAL-01). */
   app.get(
