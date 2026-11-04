@@ -86,6 +86,8 @@ const REFUSALS = {
   // ADR-092: the mode changes only while the evaluation is a draft or
   // scheduled with no attempt (`modeChangeable`), and never on a poll.
   mode_frozen: [409, "the mode can no longer change: students have been let in, or an attempt exists (ADR-092)"],
+  // ADR-125 §5: the body carries the `PrintRefusal`, `reason` and `types`.
+  not_printable: [409, "this evaluation does not print"],
 } satisfies Record<string, Refusal>;
 
 export type EvaluationErrorCode = keyof typeof REFUSALS;

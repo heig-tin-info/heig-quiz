@@ -88,7 +88,7 @@ import {
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
-import { solutionViewOf, studentViewOf } from "../live/studentView.js";
+import { solutionViewOf, staffViews, studentViewOf } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
 import { formattedValues, sameTable } from "@quiz/domain/parameters";
 import {
@@ -745,12 +745,7 @@ export async function gradingQueue(
  */
 export function expectedViews(item: JoinedItem): { student: unknown; solution: unknown; example: boolean } {
   const { config, example } = writtenConfig(item.question.type, item.version);
-  const view = { seed: 0, itemId: item.item.id, shuffle: false };
-  return {
-    student: studentViewOf(item.question.type, config, view),
-    solution: solutionViewOf(item.question.type, config, view),
-    example,
-  };
+  return { ...staffViews(item.question.type, config, item.item.id), example };
 }
 
 /** A parameterized item's expected row (ADR-056 §9): its variables, and the question as written. */

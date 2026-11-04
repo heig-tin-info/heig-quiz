@@ -38,6 +38,7 @@ import {
 
 import { CourseRole } from "./common.js";
 import { ConceptRef } from "./concept.js";
+import { EvaluationExports } from "./exports.js";
 
 /** F-EVAL-01. `poll` is accepted by the column and refused by every route (decision D7). */
 export const EvaluationMode = z.enum(EVALUATION_MODES);
@@ -593,6 +594,8 @@ export const EvaluationDetail = z.object({
    * course cannot be found there once the classroom is archived.
    */
   courseId: z.uuid(),
+  /** What the export sheet offers (ADR-121 step 3, ADR-125 §5): each document, or why it is refused. */
+  exports: EvaluationExports,
 });
 export type EvaluationDetail = z.infer<typeof EvaluationDetail>;
 

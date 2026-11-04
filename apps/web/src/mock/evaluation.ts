@@ -1077,7 +1077,21 @@ const evaluationDetail = (e: MockEvaluation) => ({
   roster: rosterOf(e),
   templateRevision: templateRevisionOf(e),
   courseId: rooms.find((r) => r.id === e.classroomId)?.courseId ?? "",
+  exports: exportsOf(e),
 });
+
+/**
+ * Like the server's `printRefusal` (ADR-125 §5). This set MIRRORS the
+ * registry: the types whose server half implements `answerZone` (and
+ * `statementDoc`) today. A type that gains or loses the hook must be added
+ * here or removed, or the mock's sheet says something the server does not.
+ */
+const PRINTABLE_TYPES = new Set(["mcq", "short", "cloze", "rich", "math"]);
+const exportsOf = (e: MockEvaluation) => {
+  if (e.mode === "poll") return { document: { reason: "poll" as const, types: [] }, handout: { reason: "poll" as const, types: [] } };
+  const types = [...new Set(e.items.map((i) => i.type).filter((type) => !PRINTABLE_TYPES.has(type)))];
+  return { document: null, handout: types.length === 0 ? null : { reason: "type" as const, types } };
+};
 
 /** Whether the evaluation keeps the integrity journal (`integrityJournalOn`). */
 const journalOnMock = (e: MockEvaluation) => e.mode !== "poll" && e.settings["logVisibility"] === true;

@@ -168,6 +168,16 @@ export function solutionViewOf(type: string, config: unknown, view: StudentView)
 }
 
 /**
+ * The question as the staff read it beside its key: the student view and the
+ * whole key of the teacher's preview (seed 0, no shuffle), for the grading
+ * panel's expected row and the staff documents (ADR-121). Staff-only.
+ */
+export function staffViews(type: string, config: unknown, itemId: string): { student: unknown; solution: unknown } {
+  const view = teacherPreviewView(itemId);
+  return { student: studentViewOf(type, config, view), solution: solutionViewOf(type, config, view) };
+}
+
+/**
  * THE single exit of a key toward a student (ADR-037): the solution passed
  * through the type's `studentSolution` hook, which drops from the solution
  * what stays the teacher's even under a shown key — an essay's grading

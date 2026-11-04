@@ -17,6 +17,8 @@ export interface Labels {
   explanation: string;
   yourAnswer: string;
   points: string;
+  /** The unit after a number of points: `2 pt`. */
+  pointsShort: string;
   /** The points of an answer nothing has graded yet. */
   notGraded: string;
   noAnswer: string;
@@ -48,6 +50,7 @@ export const EN_LABELS: Labels = {
   explanation: "Explanation",
   yourAnswer: "Your answer",
   points: "Points",
+  pointsShort: "pt",
   notGraded: "not graded",
   noAnswer: "No answer.",
   name: "Name",
@@ -75,6 +78,7 @@ export const FR_LABELS: Labels = {
   explanation: "Explication",
   yourAnswer: "Votre réponse",
   points: "Points",
+  pointsShort: "pt",
   notGraded: "pas encore noté",
   noAnswer: "Pas de réponse.",
   name: "Nom",
