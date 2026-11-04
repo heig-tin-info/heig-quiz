@@ -2,12 +2,15 @@
  * One attempt's copy as a file: the Sources of the export factory (ADR-121
  * §1) for the two readers of a copy, built by the question types' STUDENT
  * hooks (`statementDoc`, `studentAnswerDoc`, the `copy` need of `declares`),
- * because a copy holds what the student was served, never the config. An
+ * because a copy holds what the student was served, never the config (the
+ * staff record's key aside, below). An
  * item's `intro` (ADR-084) is absent: `StudentResultItem` does not carry it.
  *
  *   - {@link staffCopyRecord} (ADR-125 §4, §5), for the results per-student
  *     view and the live dashboard's inspect view: {@link staffCopy}, the copy
- *     with everything shown, naming the student and the attempt. English: a
+ *     with everything shown, naming the student and the attempt; its key is
+ *     `toSolution`'s, whole (#998: an essay's criteria, a hidden test case),
+ *     and its breakdown is unfiltered. English: a
  *     staff document (ADR-121 §4). Its routes load the attempt through
  *     `loadEvaluationAttempt` (invariant 6).
  *   - {@link studentCopyRecord} (ADR-112 amendment of 2026-11-03, ADR-125

@@ -810,11 +810,7 @@ function correctionOf(
     verdict: grading ? verdictOf(grading) : "pending",
     points: grading ? shownPoints(grading.points, item.counting) : null,
     maxPoints: item.points,
-    solution: !policy.showKey
-      ? null
-      : audience === "staff"
-        ? solutionViewOf(type, config, view)
-        : studentSolutionViewOf(type, config, view),
+    solution: policy.showKey ? KEY_OF[audience](type, config, view) : null,
     explanation: policy.showExplanation && instance.explanation !== "" ? instance.explanation : null,
     details: grading ? filterDetails(type, grading.details, detailsPolicy, audience) : null,
   };
@@ -823,9 +819,20 @@ function correctionOf(
 /**
  * Who reads a correction: a student (every student exit: the key through
  * `studentSolutionViewOf`, the breakdown through the type's hook), or the
- * staff's copy, which reads both whole (a hidden test case included).
+ * staff's copy, which reads both whole: `toSolution`'s key for every type
+ * (an essay's criteria, a hidden test case), as the grading panel does.
  */
 export type CorrectionAudience = "student" | "staff";
+
+/**
+ * The key each audience reads. Arrows, not the functions themselves: `live`
+ * and `results` import each other, and a binding read at load time could
+ * still be uninitialized.
+ */
+const KEY_OF: Record<CorrectionAudience, typeof solutionViewOf> = {
+  staff: (type, config, view) => solutionViewOf(type, config, view),
+  student: (type, config, view) => studentSolutionViewOf(type, config, view),
+};
 
 /**
  * Whether a student may see anything at all right now: `feedbackGate`

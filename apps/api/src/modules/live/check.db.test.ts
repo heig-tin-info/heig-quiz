@@ -403,6 +403,9 @@ describe("checking a question of an exercise (ADR-124 §3, invariant 4)", () => 
 
   it("keeps the hidden case out of a checked code question's breakdown once the runner's verdict lands (#998)", async () => {
     const db = server.app.db;
+    // Alice's shared attempt, in which the test above CHECKED the code
+    // question: only a checked question shows its correction mid-attempt.
+    // The tests after this one find that cell validated by this grading.
     const attemptId = attemptOf.get("alice")!;
     // The runner's verdict, as `finalizeRunnerCode` writes it: the hidden case
     // echoes its stdin, which the teacher's breakdown keeps.

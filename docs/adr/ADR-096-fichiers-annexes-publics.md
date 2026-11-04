@@ -12,7 +12,9 @@ expected output, read before an exam reusing the question. A hidden case is now 
 teacher's under every policy: the details keep its verdict, points and coarse category
 (its name per `showHiddenCaseNames`), and a student's key (`studentSolution`) is the
 reference solution and the visible cases only. The same holds for a `circuit` question's
-hidden stimulus. The staff's copy of an attempt still reads both whole.
+hidden stimulus. The staff's copy of an attempt reads the details whole and now carries
+the full `toSolution` key for every type (an essay's criteria, a short answer's `llm`
+rubric, the hidden cases), as the grading panel does and as ADR-125 §4 describes it.
 
 Scope: what `toStudent` publishes of a `code` or `codeimage` config besides its cases, the
 order in which a grading request runs a `code` question's cases, and what a student reads of a
@@ -69,10 +71,10 @@ quieter channel of the same kind (audit finding M3).
    (`studentDetails`, `packages/qt-code/src/grade.ts`), a hidden case is
    `{ name, visible: false, points, ok, failure? }`, where `failure` is `timed_out`, `oom`,
    `crashed` or `failed`; its name stays `#n` unless the policy opens the names. Its expected
-   output, output, stderr, exit code and time never reach a student. Under `showKey` the
-   details travel whole, as before: the teacher published the key. *(Superseded for hidden
-   cases by the amendment of 2026-11-04 above: they stay opaque under every policy.)* The stored
-   `gradings.details` are unchanged; the grading panel and the class debrief read them.
+   output, output, stderr, exit code and time never reach a student, under every policy, a
+   shown key included: a student's key (`studentSolution`) is the reference solution and the
+   visible cases only (amendment of 2026-11-04). The stored `gradings.details` are
+   unchanged; the grading panel, the class debrief and the staff's copy read them whole.
 
 No migration and no new config field: `CODE_CONFIG_VERSION` stays at 1.
 

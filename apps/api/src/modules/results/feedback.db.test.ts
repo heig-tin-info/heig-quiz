@@ -375,6 +375,22 @@ describe("`showKey: true` publishes the key the teacher chose to publish", () =>
       });
     }
   });
+
+  it("gives the staff's copy the hidden case whole: the full key and the breakdown (#998)", async () => {
+    // The student's policy is irrelevant to the staff's copy; the most closed one proves it.
+    await setPolicy({ showKey: false, showHiddenCaseNames: false });
+    const res = await get(
+      `/app/api/evaluations/${built.seed.evaluationId}/results/attempts/${built.attemptId}/copy.json`,
+      teacher.headers,
+    );
+    expect(res.statusCode).toBe(200);
+    const code = (res.json().items as Record<string, unknown>[]).find((i) => i["itemId"] === built.itemOf("code"))!;
+    const solution = code["solution"] as { cases: Record<string, unknown>[] };
+    expect(solution.cases.map((c) => c["name"])).toEqual(["shown", HIDDEN_CASE_NAME]);
+    expect(solution.cases[1]).toMatchObject({ args: [HIDDEN_ARG], stdin: HIDDEN_STDIN, expected: HIDDEN_EXPECTED, visible: false });
+    const details = code["details"] as { cases: Record<string, unknown>[] };
+    expect(details.cases[1]).toMatchObject({ name: HIDDEN_CASE_NAME, expected: HIDDEN_EXPECTED, actual: HIDDEN_ACTUAL });
+  });
 });
 
 describe("the review's order (ADR-033, addendum 2026-10-01)", () => {
