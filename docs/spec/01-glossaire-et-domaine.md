@@ -260,6 +260,8 @@ by the product owner on 2026-10-20.
 | Release (results, scores) | release | publier (les résultats, les notes) | rendre, relâcher |
 | Published correction (exercise) | published correction | corrigé publié | — |
 | Retake | retake | nouvelle tentative | reprise |
+| Paper copy (an exam answered by hand, typed in by the staff, ADR-125) | paper copy; badge *Paper* | copie papier; badge *Papier* | — |
+| Hand-out (the printed evaluation, blank, for a paper sitting) | hand-out | énoncé à distribuer | — |
 | Frozen (score, list) | frozen | figé | gelé, verrouillé |
 | Locked (repository, question) | locked | verrouillé | figé, gelé |
 | Dashboard (live) | dashboard | tableau de bord | — |
