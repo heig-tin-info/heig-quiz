@@ -23,6 +23,7 @@ import { slugify } from "@quiz/domain";
 import { formattedValues } from "@quiz/domain/parameters";
 
 import { iso } from "../../clock.js";
+import { itemKeyBlocks, provenanceOf } from "../../documents/blocks.js";
 import type { Db } from "../../db/client.js";
 import { answers, enrollments } from "../../db/schema.js";
 import { joinedItem, seatsOf, type EvaluationRecord } from "../evaluation/service.js";
@@ -144,13 +145,8 @@ export function itemAnswersDocument(found: ItemAnswers, app: string | null): Doc
   const l = EN_LABELS;
   const blocks: Block[] = [
     heading(1, record.evaluation.title),
-    heading(2, `${l.question} ${item.position + 1}: ${item.internalName} (${item.points} points)`),
-    heading(3, l.statement),
-    ...type.statementDoc!(record.statement, l),
+    ...itemKeyBlocks(type, item.position, item.internalName, item.points, record.statement, record.solution, l),
   ];
-  if (type.solutionDoc) {
-    blocks.push(heading(3, l.referenceSolution), ...type.solutionDoc(record.solution, record.statement, l));
-  }
   record.answers.forEach((row, i) => {
     const name = `${row.student.lastName} ${row.student.firstName}`.trim() || row.student.email;
     blocks.push(separator, heading(2, row.attempt && row.attempt.number > 1 ? `${name} (attempt ${row.attempt.number})` : name));
@@ -162,19 +158,17 @@ export function itemAnswersDocument(found: ItemAnswers, app: string | null): Doc
     blocks.push(points(row.grading?.points ?? null, item.points));
   });
   return {
-    provenance: {
-      kind: record.kind,
-      version: record.version,
-      source: {
+    provenance: provenanceOf(
+      record,
+      {
         evaluationId: record.evaluation.id,
         itemId: item.id,
         questionId: item.questionId,
         questionVersionId: item.questionVersionId,
       },
-      attempts: found.attempts,
-      generatedAt: record.generatedAt,
+      found.attempts,
       app,
-    },
+    ),
     lang: "en",
     blocks,
   };

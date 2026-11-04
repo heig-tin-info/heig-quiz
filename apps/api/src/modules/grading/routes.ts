@@ -26,17 +26,17 @@ import {
   RegradeBody,
   ValidateGradingBody,
 } from "@quiz/contracts";
-import { renderMarkdown } from "@quiz/docexport/markdown";
 import { evaluationGradingRole } from "@quiz/domain";
 
 import { tracer, type AuditAction } from "../../audit.js";
+import { EXPORT_FORMATS, sendExport } from "../../documents/files.js";
 import { loadEvaluation, staffAnswer, staffGrading, teacherGuard, withCourseRole } from "../guards.js";
-import { notFound, sendAttachment, teacherRoute } from "../http.js";
+import { notFound, teacherRoute } from "../http.js";
 import { joinedItem, joinedItems, type JoinedItem } from "../evaluation/service.js";
 import { listVersions } from "../pool/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
-import { itemAnswers, itemAnswersDocument, type ItemAnswers } from "./itemAnswers.js";
+import { itemAnswers, itemAnswersDocument } from "./itemAnswers.js";
 import { enqueueEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
 
@@ -135,26 +135,14 @@ export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: str
    * Markdown file the panel's Export and Copy fetch, or as its record. Staff
    * only, beside the results CSV and like it neither anonymised nor audited.
    */
-  const answerFiles = {
-    md: {
-      text: true,
-      type: "text/markdown; charset=utf-8",
-      body: (found: ItemAnswers) => renderMarkdown(itemAnswersDocument(found, opts.commitSha)),
-    },
-    json: {
-      text: false,
-      type: "application/json; charset=utf-8",
-      body: (found: ItemAnswers) => JSON.stringify(ItemAnswersRecord.parse(found.record)),
-    },
-  };
-  for (const [format, file] of Object.entries(answerFiles)) {
+  for (const format of EXPORT_FORMATS) {
     app.get(
       `/app/api/evaluations/:id/items/:itemId/answers.${format}`,
       { preHandler: requireTeacher },
       teacher({ params: ItemParam, load: staffEvaluation }, async ({ reply, now, params, scope }) => {
-        const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: file.text });
+        const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: format === "md" });
         if (!found) return notFound(reply);
-        return sendAttachment(reply, file.type, `${found.basename}.${format}`, file.body(found));
+        return sendExport(reply, format, found, ItemAnswersRecord, () => itemAnswersDocument(found, opts.commitSha));
       }),
     );
   }

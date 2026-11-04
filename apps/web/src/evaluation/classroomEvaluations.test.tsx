@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { EvaluationSummary } from "@quiz/contracts";
 
 import { makeCourseSummary } from "../test/fixtures";
-import { EVALUATION_ID, id, liveAt } from "../test/live-fixtures";
+import { EVALUATION_ID, id, liveAt, makeEvaluationDetail } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { isoDateTime } from "../ui";
 import { ClassroomActivities } from "../ClassroomActivities";
@@ -172,6 +172,31 @@ describe("the evaluations of the Activities tab", () => {
     await waitFor(() => expect(screen.getByRole("menu")).toBeInTheDocument());
     expect(screen.queryByRole("menuitem", { name: "Grading" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Results" })).not.toBeInTheDocument();
+  });
+
+  it("opens a row's documents from its menu, never a poll's (ADR-125)", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      ...list([
+        summary({ state: "closed", title: "Closed quiz" }),
+        summary({ id: id("evaluation", 2), mode: "poll", state: "closed", title: "A poll" }),
+      ]),
+      [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(makeEvaluationDetail()),
+    });
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
+
+    await user.click(await screen.findByRole("button", { name: /A poll/ }));
+    await waitFor(() => expect(screen.getByRole("menu")).toBeInTheDocument());
+    expect(screen.queryByRole("menuitem", { name: "Export…" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Closed quiz/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "Export…" }));
+    const sheet = await screen.findByRole("dialog", { name: "Export" });
+    const markdown = await within(sheet).findAllByRole("link", { name: "Markdown" });
+    expect(markdown.map((a) => a.getAttribute("href"))).toEqual([
+      `/app/api/evaluations/${EVALUATION_ID}/handout.md`,
+      `/app/api/evaluations/${EVALUATION_ID}/document.md`,
+    ]);
   });
 
   it("greys out Delete for an assistant where only a teacher of the course may delete, saying why (ADR-068 §3)", async () => {

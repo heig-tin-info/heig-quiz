@@ -251,6 +251,7 @@ const scenes = [
   { name: "template-pull-confirm", role: "teacher", path: "/classrooms/r1", fold: true, act: async (p) => { await p.getByRole("button", { name: /from its template|depuis son modèle/i }).first().click(); } },
   { name: "launch-template-behind", role: "teacher", path: `/evaluations/${TEMPLATE_INSTANCE}?step=launch` },
   { name: "launch-template-pull-confirm", role: "teacher", path: `/evaluations/${TEMPLATE_INSTANCE}?step=launch`, fold: true, act: async (p) => { await p.getByRole("button", { name: /^(update…|mettre à jour…)$/i }).first().click(); } },
+  { name: "eval-export", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); await p.getByRole("menuitem", { name: /^(export|exporter)…$/i }).click(); } },
   { name: "eval-save-template", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); await p.getByRole("menuitem", { name: /save as template|enregistrer comme modèle/i }).click(); } },
   // #155: a hidden course brought back by "Show hidden", the course menu with
   // "Hide for me", and a course's archived classrooms behind "Show archived".

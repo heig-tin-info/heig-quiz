@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, FileStack, Pencil, Trash2 } from "lucide-react";
+import { Copy, Download, FileStack, Pencil, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { EvaluationPatch, type EvaluationSummary } from "@quiz/contracts";
@@ -13,6 +13,7 @@ import { evaluationsKey } from "../queryKeys";
 import type { Route } from "../router";
 import { TextFieldDialog, type MenuItem } from "../ui";
 import { evaluationLinkItems } from "./common";
+import { ExportSheet } from "./ExportSheet";
 import { SaveAsTemplateDialog, useDuplicateErrorToast } from "./templates";
 import { PullTemplateDialog } from "./templatePull";
 import { useRenameEvaluation } from "./usePatch";
@@ -54,7 +55,8 @@ function RenameEvaluationDialog({
  * badge opens (F-EVAL-26), and the dialogs those lead to (`layers`, drawn
  * once beside the tables). The menu is the same whichever table holds the
  * row: where else it leads, Rename (#804), Duplicate, Save as template
- * (never a poll's, `422 template_poll`) and Delete, greyed out with its
+ * (never a poll's, `422 template_poll`), Export (its documents, ADR-125;
+ * never a poll's, which nobody prints) and Delete, greyed out with its
  * reason where the course role does not allow it (ADR-068 §3).
  */
 export interface EvaluationRowActions {
@@ -76,6 +78,8 @@ export function useEvaluationRowActions(classroomId: string, navigate: (r: Route
   const [savingTemplate, setSavingTemplate] = useState<EvaluationSummary | null>(null);
   /** The row being renamed (#804). */
   const [renaming, setRenaming] = useState<EvaluationSummary | null>(null);
+  /** The row whose documents are offered (ADR-125). */
+  const [exporting, setExporting] = useState<EvaluationSummary | null>(null);
   const classroom = useClassroom(classroomId);
   const myRole = useCourseRole(classroom.data?.course.id);
 
@@ -106,6 +110,7 @@ export function useEvaluationRowActions(classroomId: string, navigate: (r: Route
     ...(row.mode === "poll" || !classroom.data
       ? []
       : [{ label: t("templates.save"), icon: FileStack, onSelect: () => setSavingTemplate(row) }]),
+    ...(row.mode === "poll" ? [] : [{ label: t("eval.export"), icon: Download, onSelect: () => setExporting(row) }]),
     {
       label: t("eval.delete"),
       icon: Trash2,
@@ -141,6 +146,9 @@ export function useEvaluationRowActions(classroomId: string, navigate: (r: Route
       ) : null}
       {renaming ? (
         <RenameEvaluationDialog evaluation={renaming} classroomId={classroomId} onClose={() => setRenaming(null)} />
+      ) : null}
+      {exporting ? (
+        <ExportSheet evaluationId={exporting.id} title={exporting.title} onClose={() => setExporting(null)} />
       ) : null}
       {pulling ? (
         <PullTemplateDialog evaluationId={pulling} classroomId={classroomId} onClose={() => setPulling(null)} />
