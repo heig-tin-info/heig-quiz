@@ -262,9 +262,9 @@ describe.skipIf(skip)(`a compile, with ${BIN} (${probe.version ?? "missing"})`, 
   it("draws ruled frames and a starter as free zones, still listed as `free` for palier B (ADR-126 §3)", async () => {
     const starter: Drawing = { viewBox: [0, 0, 200, 100], items: [{ kind: "rect", x: 5, y: 5, w: 50, h: 30 }, { kind: "text", x: 10, y: 25, text: "STARTER" }] };
     const source = sourceOf([
-      ...scopeZones("i1", [answerZone("free", { heightMm: 100, pattern: { kind: "grid", pitchMm: 4 } })]),
-      ...scopeZones("i2", [answerZone("free", { heightMm: 60, pattern: { kind: "grid", pitchMm: 4 }, underlay: starter })]),
-      ...scopeZones("i3", [answerZone("free", { heightMm: 40, pattern: { kind: "lines", pitchMm: 8 } })]),
+      ...scopeZones("i1", [answerZone("free", { heightMm: 100, ruling: { kind: "grid", pitchMm: 4 } })]),
+      ...scopeZones("i2", [answerZone("free", { heightMm: 60, ruling: { kind: "grid", pitchMm: 4 }, underlay: starter })]),
+      ...scopeZones("i3", [answerZone("free", { heightMm: 40, ruling: { kind: "lines", pitchMm: 8 } })]),
     ]);
     const pdf = await compileTypst({ source, assets: [] }, options());
     expect(await pdfText(pdf)).toContain("STARTER");

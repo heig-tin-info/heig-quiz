@@ -18,6 +18,27 @@ export const MAP_CELL = 44;
 /** A printed cell, in millimetres: a 12-cell map stays within 120 mm. */
 export const MAP_CELL_MM = 10;
 
+/**
+ * The map's geometry, one source for the screen (`WarehouseMap.tsx`) and the
+ * paper: a rack's padding and corner (the full map's, then the thumbnail's
+ * flat one), its two shelf lines, the robot's body and chevron.
+ */
+export const RACK = {
+  shelves: { pad: 5, rx: 3 },
+  flat: { pad: 1, rx: 1 },
+  /** How far a shelf line stops short of the rack's sides. */
+  shelfInset: 3,
+} as const;
+/** Where the two shelf lines cross a rack, as fractions of its side. */
+export const SHELVES = [0.33, 0.66] as const;
+/** The robot's body, as a fraction of a cell, and its corner. */
+export const ROBOT_BODY = 0.62;
+export const ROBOT_RX = 7;
+
+/** The robot's chevron, pointing up, on a body of side `body` centred on the origin. */
+export const robotChevron = (body: number): string =>
+  `M ${-body * 0.22} ${body * 0.12} L 0 ${-body * 0.2} L ${body * 0.22} ${body * 0.12}`;
+
 export interface MapFigureOptions {
   /** The dock's word, in the reader's language (`DOCK`, `QUAI`). */
   dockLabel: string;
@@ -26,19 +47,19 @@ export interface MapFigureOptions {
 }
 
 const rack = (x: number, y: number): DrawingItem => {
-  const pad = 5;
+  const { pad, rx } = RACK.shelves;
   const side = MAP_CELL - 2 * pad;
   const left = x * MAP_CELL + pad;
   const top = y * MAP_CELL + pad;
   return {
     kind: "g",
     items: [
-      { kind: "rect", x: left, y: top, w: side, h: side, rx: 3, fill: "grey", stroke: "none" },
-      ...[0.33, 0.66].map(
+      { kind: "rect", x: left, y: top, w: side, h: side, rx, fill: "grey", stroke: "none" },
+      ...SHELVES.map(
         (at): DrawingItem => ({
           kind: "line",
-          x1: left + 3,
-          x2: left + side - 3,
+          x1: left + RACK.shelfInset,
+          x2: left + side - RACK.shelfInset,
           y1: top + side * at,
           y2: top + side * at,
           stroke: "paper",
@@ -51,7 +72,7 @@ const rack = (x: number, y: number): DrawingItem => {
 
 /** The robot at the centre of its cell, turned a quarter per heading step (0 faces up). */
 function robot(start: { x: number; y: number; heading: Heading }): DrawingItem {
-  const body = MAP_CELL * 0.62;
+  const body = MAP_CELL * ROBOT_BODY;
   const angle = (start.heading * Math.PI) / 2;
   const cos = Math.round(Math.cos(angle));
   const sin = Math.round(Math.sin(angle));
@@ -60,10 +81,10 @@ function robot(start: { x: number; y: number; heading: Heading }): DrawingItem {
     kind: "g",
     transform,
     items: [
-      { kind: "rect", x: -body / 2, y: -body / 2, w: body, h: body, rx: 7, fill: "ink", stroke: "none" },
+      { kind: "rect", x: -body / 2, y: -body / 2, w: body, h: body, rx: ROBOT_RX, fill: "ink", stroke: "none" },
       {
         kind: "path",
-        d: `M ${-body * 0.22} ${body * 0.12} L 0 ${-body * 0.2} L ${body * 0.22} ${body * 0.12}`,
+        d: robotChevron(body),
         stroke: "paper",
         width: 2.4,
       },

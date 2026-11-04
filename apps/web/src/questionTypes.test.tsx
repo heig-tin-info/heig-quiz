@@ -242,12 +242,11 @@ describe("question type strings", () => {
   /*
    * A printed blocks question (ADR-126 §7) speaks the canvas's words from
    * its own copy, which the API can read: it must say what the screen says.
+   * The English is `blocksCanvasStrings` itself; the French is the copy.
    */
-  it("prints the blocks canvas's words as the screen shows them, in both languages", () => {
-    for (const locale of ["en", "fr"] as const) {
-      for (const [key, value] of Object.entries(BLOCKS_PAPER_WORDS[locale])) {
-        expect(DICTS[locale]![`qt.blocks.c.${key}`], `qt.blocks.c.${key} (${locale})`).toBe(value);
-      }
+  it("prints the blocks canvas's French words as the screen shows them", () => {
+    for (const [key, value] of Object.entries(BLOCKS_PAPER_WORDS.fr)) {
+      expect(DICTS.fr![`qt.blocks.c.${key}`], `qt.blocks.c.${key}`).toBe(value);
     }
   });
 

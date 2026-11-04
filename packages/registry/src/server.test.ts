@@ -152,17 +152,7 @@ describe.each(REGISTERED)("the contract of %s", (id) => {
 
   /** No forbidden key nor secret in the block tree, and no secret in its text rendered in `lang` (05 §5.7). */
   const expectNoLeak = (blocks: readonly Block[], lang: Lang) => {
-    // A frame's `pattern` is its ruling (ADR-126 §3), `{ kind, pitchMm }` from
-    // `@quiz/docexport`, not a short answer's `pattern`: the key search skips
-    // that one key; the secret search reads the tree whole.
-    const unruled = blocks.map((b) => {
-      if (b.kind !== "answerZone") return b;
-      const { pattern: _ruling, ...zone } = b;
-      return zone;
-    });
-    expect(findStudentLeaks(unruled, { forbiddenKeys })).toEqual([]);
-    const tree = JSON.stringify(blocks);
-    expect(fixture.secrets.filter((secret) => tree.includes(secret))).toEqual([]);
+    expect(findStudentLeaks(blocks, { forbiddenKeys, secrets: fixture.secrets })).toEqual([]);
     const text = markdownBody({ lang, blocks });
     expect(fixture.secrets.filter((secret) => text.includes(secret))).toEqual([]);
   };

@@ -1,8 +1,10 @@
 /**
  * A `blocks` question on paper (ADR-126 §8, §9), over the real application:
  * the hand-out draws the visible warehouses and never a hidden one — its
- * map, name or battery — nor the reference program, in the four forms of
- * ADR-125 §19 (the tree, its Typst source, the Markdown, the PDF's text);
+ * map, name or battery — nor the reference program, as served: its
+ * Markdown and its PDF's text (the tree and the Typst source of the hook's
+ * output are `qt-blocks/src/document.test.ts`'s, on the type's own secret
+ * config); the student's blank print and copy in all three forms;
  * the staff "statement with key" holds them all (the positive control);
  * and the student's own documents — the blank print of a past series and
  * the copy of a released exam under a shown key — keep the hidden
@@ -95,18 +97,11 @@ const typstOf = (tree: Document) => renderTypst(tree).source.replace(/\\(.)/g, "
 /** What a text holds of the key: the secrets it contains, and a hidden battery. */
 const leaksIn = (text: string) => [...SECRETS.filter((s) => text.includes(s)), ...(HIDDEN_BATTERY.test(text) ? ["battery"] : [])];
 
-/**
- * The tree's leaks: secrets and forbidden keys. A frame's `pattern` is its
- * ruling (ADR-126 §3), not a short answer's: the key search skips it.
- */
-function treeLeaks(tree: Document): string[] {
-  const blocks = tree.blocks.map((b): unknown => {
-    if (b.kind !== "answerZone") return b;
-    const { pattern: _ruling, ...zone } = b;
-    return zone;
-  });
-  return [...findStudentLeaks(blocks, { forbiddenKeys: live.FORBIDDEN_STUDENT_KEYS }), ...leaksIn(JSON.stringify(tree))];
-}
+/** The tree's leaks: forbidden keys, secrets and a hidden battery. */
+const treeLeaks = (tree: Document): string[] => [
+  ...findStudentLeaks(tree, { forbiddenKeys: live.FORBIDDEN_STUDENT_KEYS }),
+  ...leaksIn(JSON.stringify(tree)),
+];
 
 const drawings = (tree: Document) => tree.blocks.filter((b: Block) => b.kind === "drawing");
 
@@ -125,22 +120,6 @@ async function series(mode: "exam" | "exercise") {
 }
 
 describe("the hand-out of a blocks question (ADR-126 §8)", () => {
-  it("prints, and builds a tree and a Typst source with the visible warehouses only, in both languages", async () => {
-    const seed = await series("exam");
-    const evaluation = await reload(server.app.db, seed.evaluationId);
-    const found = await handout(server.app.db, evaluation, { now: server.clock.now() });
-    for (const lang of ["en", "fr"] as const) {
-      const tree = handoutTree(found, lang);
-      expect(treeLeaks(tree)).toEqual([]);
-      expect(drawings(tree)).toHaveLength(2);
-      const source = typstOf(tree);
-      expect(leaksIn(source)).toEqual([]);
-      expect(source).toContain("BLOCKS_PROMPT");
-      expect(source).toContain('pattern: "lines"');
-      expect(source).toContain(lang === "fr" ? ">QUAI</text>" : ">DOCK</text>");
-    }
-  });
-
   it("serves its Markdown in the reader's language, no hidden warehouse in it", async () => {
     const seed = await series("exam");
     const res = await get(url(seed.evaluationId, "handout.md"), { ...teacher.headers, "accept-language": "fr-CH" });
@@ -169,7 +148,8 @@ describe("the hand-out of a blocks question (ADR-126 §8)", () => {
 
     const keyPdf = await get(url(seed.evaluationId, "document.pdf"), teacher.headers);
     expect(keyPdf.statusCode).toBe(200);
-    const key = await pdfText(keyPdf.rawPayload);    for (const secret of [...HIDDEN_NAMES, "if free ahead", "DOCK"]) expect(key).toContain(secret);
+    const key = await pdfText(keyPdf.rawPayload);
+    for (const secret of [...HIDDEN_NAMES, "if free ahead", "DOCK"]) expect(key).toContain(secret);
     expect(key).toMatch(HIDDEN_BATTERY);
   });
 });

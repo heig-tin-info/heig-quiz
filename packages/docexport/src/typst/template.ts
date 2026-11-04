@@ -13,7 +13,7 @@
  * could load it — `drawable`, the line it puts before the source — else its
  * alt text. A figure is `figsvg(svg, alt, width)`: the SVG the renderer
  * wrote from a closed drawing (ADR-126), inline, never a file. A free frame
- * is `free(height, pattern:, pitch:, under:)`: plain, or ruled by a native
+ * is `free(height, ruling:, pitch:, under:)`: plain, or ruled by a native
  * `tiling` — a square grid or horizontal lines (ADR-126 §3) — with an
  * optional starter `(svg, width)` drawn under it, clipped by the frame.
  * Nothing here takes user text: the renderer passes it as string literals.
@@ -61,14 +61,14 @@ export const PREAMBLE = String.raw`
 #let lines(n) = block(above: 0.6em, below: 0.6em, width: 100%,
   stack(spacing: 8mm, v(0mm), ..range(n).map(_ => rule)))
 
-#let ruling(pattern, pitch) = tiling(size: (pitch, pitch), {
+#let ruled(kind, pitch) = tiling(size: (pitch, pitch), {
   place(line(start: (0pt, 0pt), end: (pitch, 0pt), stroke: 0.25pt + luma(205)))
-  if pattern == "grid" { place(line(start: (0pt, 0pt), end: (0pt, pitch), stroke: 0.25pt + luma(205))) }
+  if kind == "grid" { place(line(start: (0pt, 0pt), end: (0pt, pitch), stroke: 0.25pt + luma(205))) }
 })
 
-#let free(height, pattern: none, pitch: 4mm, under: none) = block(above: 0.6em, below: 0.6em, width: 100%,
+#let free(height, ruling: none, pitch: 4mm, under: none) = block(above: 0.6em, below: 0.6em, width: 100%,
   height: height, stroke: 0.5pt + luma(130), radius: 1mm, clip: true,
-  fill: if pattern == none { none } else { ruling(pattern, pitch) },
+  fill: if ruling == none { none } else { ruled(ruling, pitch) },
   if under != none { place(top + left, image(bytes(under.at(0)), format: "svg", width: under.at(1) * 1mm)) })
 
 #let field(label) = grid(columns: (auto, 1fr), column-gutter: 2mm, align: bottom,

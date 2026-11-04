@@ -98,7 +98,7 @@ describe("the hand-out of a blocks question (ADR-126 §8, §9)", () => {
 
   it("answers in a ruled free frame, sized without the reference (ADR-126 §3, §6)", () => {
     expect(blocksServer.answerZone!(student)).toEqual([
-      { kind: "answerZone", zone: "free", heightMm: 96, pattern: { kind: "lines", pitchMm: 8 } },
+      { kind: "answerZone", zone: "free", heightMm: 96, ruling: { kind: "lines", pitchMm: 8 } },
     ]);
   });
 });
@@ -137,13 +137,13 @@ describe("the student's own answer", () => {
   const program = SECRET_CONFIG.referenceSolution!;
 
   it("prints their program and each warehouse's verdict, a hidden one by its number unless the names are open", () => {
-    const closed = blocksServer.studentDetails!(graded(), { showHiddenCaseNames: false } as never);
+    const closed = blocksServer.studentDetails!(graded(), { showKey: false, showHiddenCaseNames: false });
     const body = forms(blocksServer.studentAnswerDoc!(student, { program }, closed, FR_LABELS), "fr")[2]!;
     expect(body).toContain(pseudoCode(program, BLOCKS_PAPER_WORDS.fr));
     expect(body).toContain("| Clear aisle | Quai atteint | 1 / 1 |");
     expect(body).toContain("| #3 | Quai atteint | 2 / 2 |");
     for (const c of hidden) expect(body).not.toContain(c.name);
-    const open = blocksServer.studentDetails!(graded(), { showHiddenCaseNames: true } as never);
+    const open = blocksServer.studentDetails!(graded(), { showKey: false, showHiddenCaseNames: true });
     expect(forms(blocksServer.studentAnswerDoc!(student, { program }, open, EN_LABELS), "en")[2]).toContain("| Hidden north-east |");
   });
 

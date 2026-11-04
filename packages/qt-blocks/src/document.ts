@@ -31,7 +31,7 @@ import { BLOCK_KINDS, type BlockKind, type Stmt } from "@quiz/domain/blocks";
 import { runCase } from "./grade.js";
 import { MAP_CELL_MM, mapFigure } from "./mapFigure.js";
 import { pseudoCode } from "./pseudo.js";
-import { RunReasonSchema, type BlocksAnswer, type BlocksSolution, type BlocksStudent } from "./schema.js";
+import { CaseResult, RunReasonSchema, type BlocksAnswer, type BlocksSolution, type BlocksStudent } from "./schema.js";
 import { BLOCKS_PAPER_WORDS, type BlocksPaperWords } from "./strings.js";
 
 const wordsOf = (labels: Labels): BlocksPaperWords => BLOCKS_PAPER_WORDS[labels.lang];
@@ -102,7 +102,7 @@ const ANSWER_LINES = 12;
 const LINE_PITCH_MM = 8;
 
 export function blocksAnswerZone(_student: BlocksStudent): Block[] {
-  return [answerZone("free", { heightMm: ANSWER_LINES * LINE_PITCH_MM, pattern: { kind: "lines", pitchMm: LINE_PITCH_MM } })];
+  return [answerZone("free", { heightMm: ANSWER_LINES * LINE_PITCH_MM, ruling: { kind: "lines", pitchMm: LINE_PITCH_MM } })];
 }
 
 /** The reference's walk on a warehouse, or none when it cannot run there. */
@@ -139,7 +139,7 @@ export function blocksSolutionDoc(solution: BlocksSolution, _student: BlocksStud
 
 /** The breakdown a student may read: `studentDetails` already kept a hidden warehouse to its verdict. */
 const ReadableDetails = z.object({
-  cases: z.array(z.object({ name: z.string(), points: z.number(), ok: z.boolean(), reason: RunReasonSchema })),
+  cases: z.array(CaseResult.pick({ name: true, points: true, ok: true, reason: true })),
 });
 
 const REASON_WORD = {
