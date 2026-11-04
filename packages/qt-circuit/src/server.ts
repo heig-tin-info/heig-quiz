@@ -11,6 +11,13 @@ import { reparseMigrate, type RunnerOutcome } from "@quiz/core/server";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
 import {
+  circuitAnswerDoc,
+  circuitAnswerZone,
+  circuitSolutionDoc,
+  circuitStatementDoc,
+  circuitStudentAnswerDoc,
+} from "./document.js";
+import {
   finalizeRunnerCircuit,
   gradeCircuit,
   interactiveOutcome,
@@ -154,6 +161,13 @@ export const circuitServer: QuestionTypeServer<
 
   toCanonical,
   fromCanonical,
+
+  /* On paper (ADR-126): a squared frame under the empty box, the reference drawn in the key. */
+  statementDoc: circuitStatementDoc,
+  solutionDoc: circuitSolutionDoc,
+  answerZone: circuitAnswerZone,
+  studentAnswerDoc: circuitStudentAnswerDoc,
+  answerDoc: circuitAnswerDoc,
 };
 
 /*
@@ -164,6 +178,9 @@ export const circuitServer: QuestionTypeServer<
  */
 export { parseSimulation } from "./grade.js";
 export { extractNets } from "./netlist.js";
+
+/* The pure figure of a schematic (ADR-126): what the documents above draw, for a host that prints one. */
+export { schematicFigure } from "./canvas/figure.js";
 
 /* The package's second type (ADR-123): combinational logic, graded in process. */
 export { logicServer } from "./logicServer.js";

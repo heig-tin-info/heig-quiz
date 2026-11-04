@@ -127,11 +127,11 @@ describe("the static registries", () => {
     expect(Object.keys(serverRegistry)).toEqual([...REGISTERED]);
   });
 
-  it("draw as text the types ADR-121 §2 and ADR-125 name, a paper zone for the printable ones", () => {
+  it("draw as text the types ADR-121 §2, ADR-125 and ADR-126 name, a paper zone for the printable ones", () => {
     const withStatement = REGISTERED.filter((id) => questionType(id).statementDoc !== undefined);
-    expect(withStatement).toEqual(["mcq", "short", "cloze", "code", "rich", "math", "blocks"]);
+    expect(withStatement).toEqual(["mcq", "short", "cloze", "code", "circuit", "logic", "rich", "math", "blocks"]);
     const withZone = REGISTERED.filter((id) => questionType(id).answerZone !== undefined);
-    expect(withZone).toEqual(["mcq", "short", "cloze", "rich", "math", "blocks"]);
+    expect(withZone).toEqual(["mcq", "short", "cloze", "circuit", "logic", "rich", "math", "blocks"]);
     const withOwnCopy = REGISTERED.filter((id) => questionType(id).studentAnswerDoc !== undefined);
     expect(withOwnCopy).toEqual(withZone);
   });
