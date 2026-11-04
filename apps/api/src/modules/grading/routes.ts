@@ -132,17 +132,19 @@ export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: str
 
   /**
    * F-EXP-01 (ADR-121): every enrolled student's answer to one item, as the
-   * Markdown file the panel's Export and Copy fetch, or as its record. Staff
+   * Markdown file the panel's Export and Copy fetch, the same document as a
+   * PDF (ADR-125, English like every staff document), or its record. Staff
    * only, beside the results CSV and like it neither anonymised nor audited.
    */
   for (const format of EXPORT_FORMATS) {
     app.get(
       `/app/api/evaluations/:id/items/:itemId/answers.${format}`,
       { preHandler: requireTeacher },
-      teacher({ params: ItemParam, load: staffEvaluation }, async ({ reply, now, params, scope }) => {
-        const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: format === "md" });
+      teacher({ params: ItemParam, load: staffEvaluation }, async ({ req, reply, now, params, scope }) => {
+        // The Markdown and the PDF print each answer as text; the record keeps it as stored.
+        const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: format !== "json" });
         if (!found) return notFound(reply);
-        return sendExport(reply, format, found, ItemAnswersRecord, () => itemAnswersDocument(found, opts.commitSha));
+        return sendExport(req, reply, format, found, ItemAnswersRecord, () => itemAnswersDocument(found, opts.commitSha));
       }),
     );
   }

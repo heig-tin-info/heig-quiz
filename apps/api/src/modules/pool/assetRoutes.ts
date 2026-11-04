@@ -83,21 +83,8 @@ export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       if (!params.success) return reply.code(404).send({ error: "not_found" });
       const [asset] = await app.db.select().from(assets).where(eq(assets.id, params.data.id)).limit(1);
       if (!asset || !isAllowedMime(asset.mime)) return reply.code(404).send({ error: "not_found" });
-      // Assets are content-addressed and deduplicated across the whole
-      // instance (`unique (sha256)`), so `assets.pool_id` names the pool that
-      // uploaded the bytes FIRST, not the set of pools that show them: a
-      // per-pool check would break the second teacher's image. Any staff
-      // session may therefore read an asset — its id is a random uuid, and a
-      // colleague holding the same bytes obtains the same id anyway.
-      // A STUDENT reaches it through the attempt that shows it, and only
-      // then (`assetReachableBy`): the image of a question they are taking
-      // or reviewing, never the instance's image store.
-      const staff = req.user!.role === "teacher" || req.user!.role === "admin";
-      const allowed =
-        staff ||
-        asset.ownerId === req.user!.id ||
-        (await service.assetReachableBy(app.db, asset.id, req.user!.id));
-      if (!allowed) return reply.code(404).send({ error: "not_found" });
+      // Staff, its uploader, or a student through the attempt that shows it (`assetAccess.ts`).
+      if (!(await service.mayReadAsset(app.db, asset, req.user!))) return reply.code(404).send({ error: "not_found" });
       let bytes: Buffer;
       try {
         bytes = await readAsset(config.ASSETS_DIR, asset.path);

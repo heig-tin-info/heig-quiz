@@ -12,6 +12,14 @@ WORKDIR /src
 # script again, finds every file in place and downloads nothing.
 COPY apps/web/scripts/fetch-runtimes.mjs apps/web/scripts/
 RUN node apps/web/scripts/fetch-runtimes.mjs --strict
+# The Typst binary of the PDF exports (ADR-125 §1): the static musl build,
+# pinned by its digest (the script refuses any other), in a layer keyed on the
+# script alone like the runtimes. xz unpacks its tarball, in this stage only.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends xz-utils \
+  && rm -rf /var/lib/apt/lists/*
+COPY scripts/fetch-typst.mjs scripts/
+RUN node scripts/fetch-typst.mjs /opt/typst
 # Every dependency of the lockfile into the store, keyed on the lockfile only:
 # no package.json is listed here, so a new workspace package needs no change
 # to this file. The install below then links offline, for this image's
@@ -44,6 +52,9 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends git ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
+# Typst for the PDFs (ADR-125): a static binary, nothing else to install; the
+# address-space cap of each compile is util-linux's `prlimit`, already here.
+COPY --from=build /opt/typst/typst /usr/local/bin/typst
 WORKDIR /app
 COPY --from=build /out /app
 # STATIC_HISTORY_DIR of the compose files (ADR-110): a named volume mounted

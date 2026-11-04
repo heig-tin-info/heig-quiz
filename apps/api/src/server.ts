@@ -23,6 +23,10 @@ if (config.WORKER_MODE !== "worker") {
 
 app.log.info({ workerMode: config.WORKER_MODE }, "quiz-api started");
 
+// ADR-125 §3: whether this process makes PDFs, found once and logged; the
+// web process serves them, the worker never does.
+if (config.WORKER_MODE !== "worker") void app.pdf.status();
+
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     app.log.info({ signal }, "shutting down");

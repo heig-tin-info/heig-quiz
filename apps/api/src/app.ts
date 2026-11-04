@@ -68,6 +68,7 @@ import { registerProjectJobs } from "./modules/project/jobs.js";
 import { registerPollJobs } from "./modules/poll/ai.js";
 import { projectPlugin } from "./modules/project/routes.js";
 import { poolPlugin } from "./modules/pool/routes.js";
+import { readableAssets } from "./modules/pool/service.js";
 import { flushCoalescers, openStreamCount } from "./modules/realtime/bus.js";
 import { realtimePlugin } from "./modules/realtime/routes.js";
 import { resultsPlugin } from "./modules/results/routes.js";
@@ -78,6 +79,7 @@ import { registerSystemJobs } from "./modules/system/jobs.js";
 import { healthz, seedScheduledTasks } from "./modules/system/service.js";
 import { startJobs, type JobQueue } from "./jobs.js";
 import { startTicker } from "./ticker.js";
+import { PdfService } from "./typst/service.js";
 
 export interface AppDeps {
   config: AppConfig;
@@ -117,6 +119,11 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   app.decorate("llmGateway", llmGateway);
   // The grading service (ADR-063): the stub of LLM_PROVIDER, else the gateway's; null sends nothing.
   app.decorate("llm", createLlm(config, llmGateway));
+  // The PDF renderer (ADR-125): its probe runs once, at boot (`server.ts`) or on first use.
+  app.decorate(
+    "pdf",
+    new PdfService(config, app.log, (ids, reader) => readableAssets(handle.db, config.ASSETS_DIR, ids, reader)),
+  );
   // At most one station attestor, chosen once by KIOSK_ATTESTATION (ADR-051);
   // null is `off`, and then no kiosk route exists. A test may swap it.
   app.decorate("kioskAttestor", createKioskAttestor(config, app.log));

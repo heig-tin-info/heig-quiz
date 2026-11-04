@@ -138,6 +138,7 @@ export {
   copyQuestion,
 } from "./questionWrite.js";
 export { createReport, listReports, resolveReport } from "./reports.js";
+export { mayReadAsset, readableAssets, type AssetReader } from "./assetAccess.js";
 export type { UsingCourse } from "./move.js";
 export {
   MoveNameTaken,

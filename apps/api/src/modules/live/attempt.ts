@@ -66,7 +66,7 @@ import {
   officialAttempt,
   practiceAttempt,
 } from "../../db/schema.js";
-import { rateLimited, refusalClass, type FailureArms, type Refusal } from "../http.js";
+import { refusalClass, type FailureArms, type Refusal } from "../http.js";
 import {
   feedbackOf,
   classroomIdOf,
@@ -264,9 +264,9 @@ export class AnswerInvalid extends LiveError {
   }
 }
 
-/** A 429 with its `Retry-After`. */
+/** A 429 with its `Retry-After` (`sendFailure` sends the header). */
 export class RateLimited extends LiveError {
-  constructor(readonly retryAfterS: number) {
+  constructor(override readonly retryAfterS: number) {
     super("rate_limited");
   }
 }
@@ -283,13 +283,12 @@ export class RunnerDown extends LiveError {
 
 /**
  * The failures answered in their own shape before the shared tail: the 410
- * with the server's clock, the type's issues, a `retry-after`. The `live`
- * and `poll` routes share them.
+ * with the server's clock, the type's issues. The `live` and `poll` routes
+ * share them.
  */
 export const liveFailureArms: FailureArms = (reply, error, now) => {
   if (error instanceof AttemptClosedError) return reply.code(410).send(error.body(now));
   if (error instanceof AnswerInvalid) return reply.code(422).send({ error: error.code, details: error.issues });
-  if (error instanceof RateLimited) return rateLimited(reply, error.retryAfterS);
   return null;
 };
 

@@ -5,8 +5,9 @@
  * {@link Document} (the question types add their blocks through the hooks of
  * `QuestionTypeServer`), and the Markdown renderer,
  * `@quiz/docexport/markdown` (Node only: it hashes the body), turns it into
- * a file. The tree is internal: no route serves it, the JSON export is the
- * record.
+ * a file; the Typst renderer, `@quiz/docexport/typst` (ADR-125), turns it
+ * into the source of a PDF, which the API compiles. The tree is internal:
+ * no route serves it, the JSON export is the record.
  */
 export * from "./document.js";
 export * from "./labels.js";

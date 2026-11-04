@@ -1645,6 +1645,8 @@ configuration.
 | `LLM_PROVIDER` | unset (`none`) | AI grading proposals go through the gateway (`LLM_KEY_SECRET`, below) when it is on and holds a key, otherwise answers are graded by hand; `stub`, the development fake, makes the process refuse to start |
 | `LLM_KEY_SECRET` | `openssl rand -hex 32`, copied into the age vault | the master key that encrypts the Anthropic key entered in Administration › AI ([ADR-058](../adr/ADR-058-passerelle-llm.md)); empty turns the AI gateway off; under 32 characters, or containing `change-me`, the process does not start; a new value only means pasting the key again |
 | `LLM_DAILY_CAP_MAX_USD` | default `100` | the most the console may set as the AI daily spending cap |
+| `TYPST_BIN` | unset (`typst`, the image's `/usr/local/bin/typst`) | the binary every PDF export compiles with ([ADR-125](../adr/ADR-125-copies-papier-pdf-typst.md)); probed once at start: without a working one the PDF buttons are hidden, a PDF route answers `503 pdf_unavailable` and the System status warns |
+| `PDF_TIMEOUT_MS`, `PDF_MAX_MEMORY_MB` | defaults `20000` (5000–60000) and `1024` (256–4096) | one compile's wall-clock limit (SIGKILL) and its address-space cap through `prlimit --as`; compiles run one at a time, eight more wait, the next one answers `503 pdf_busy` |
 | `BACKUP_STATUS_FILE` | `/app/backup-status/last.json`, set by compose | the `backup` service's report of its last dump (§6); empty: the System status says "not configured" |
 | `COMMIT_SHA`, `COMMIT_DATE` | baked into the image by CI | the commit the System status shows; never set by hand |
 | `LOG_LEVEL`, `WORKER_MODE` | `info`, `all` | `web`/`worker` would split the roles without a code change ([ADR-001](../adr/ADR-001-monolithe-modulaire.md)) |

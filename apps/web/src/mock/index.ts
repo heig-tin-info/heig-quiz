@@ -206,6 +206,8 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
       // Awaited: a handler that takes GitHub's time (a project's build) is async.
       const result = await r.h(m, body, url);
       if (result === undefined) return new Response(null, { status: 204 });
+      // A file (a PDF): the handler wrote the whole response.
+      if (result instanceof Response) return result;
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { "content-type": "application/json" },

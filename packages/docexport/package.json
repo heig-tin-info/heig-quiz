@@ -12,6 +12,14 @@
       "types": "./dist/markdown.d.ts",
       "default": "./dist/markdown.js"
     },
+    "./typst": {
+      "types": "./dist/typst/index.d.ts",
+      "default": "./dist/typst/index.js"
+    },
+    "./entities": {
+      "types": "./dist/entities.d.ts",
+      "default": "./dist/entities.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -20,6 +28,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "marked": "^18.0.13",
+    "tex2typst": "0.6.2",
     "yaml": "^2.9.1"
   },
   "devDependencies": {

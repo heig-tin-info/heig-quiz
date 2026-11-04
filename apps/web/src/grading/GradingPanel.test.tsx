@@ -964,27 +964,67 @@ describe("GradingPanel — every answer as one file (F-EXP-01)", () => {
     ),
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  const PDF = `${EVAL}/items/i1/answers.pdf`;
+  const publicConfig = (pdf: boolean) => ({
+    "GET /app/api/config": ok({ devLogin: false, kiosk: null, pdf }),
+  });
+  /** Opens the Export menu and returns its items' names. */
+  const openExport = async () => {
+    await userEvent.click(await screen.findByRole("button", { name: "Export" }));
+    return (await screen.findAllByRole("menuitem")).map((item) => item.textContent);
+  };
 
   it("offers Export and Copy beside the one primary action, and copies the file", async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-    mockFetch(routes([], { ...exportable(true), [`GET ${MD}`]: ok("# Answers") }));
+    mockFetch(routes([], { ...exportable(true), ...publicConfig(true), [`GET ${MD}`]: ok("# Answers") }));
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
 
-    const link = await screen.findByRole("link", { name: "Export" });
-    expect(link).toHaveAttribute("href", MD);
-    expect(link).toHaveAttribute("download");
+    await waitFor(async () => expect(await openExport()).toEqual(["Markdown", "PDF", "JSON"]));
+    expect(screen.getByRole("menuitem", { name: "Markdown" })).toHaveAttribute("href", MD);
+    expect(screen.getByRole("menuitem", { name: "JSON" })).toHaveAttribute("href", `${EVAL}/items/i1/answers.json`);
+    await userEvent.keyboard("{Escape}");
     await userEvent.click(screen.getByRole("button", { name: "Copy" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("# Answers")));
     expect(await screen.findByText("Answers copied")).toBeInTheDocument();
   });
 
+  it("downloads the PDF without leaving the page, and words a refusal", async () => {
+    // jsdom has no object URLs: the save is observed where it hands over the blob.
+    const createObjectURL = vi.fn((_blob: Blob) => "blob:pdf");
+    Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
+    let busy = false;
+    const { calls } = mockFetch(
+      routes([], {
+        ...exportable(true),
+        ...publicConfig(true),
+        [`GET ${PDF}`]: () => (busy ? { status: 503, body: { error: "pdf_busy" } } : ok("%PDF-1.7")),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await waitFor(async () => expect(await openExport()).toContain("PDF"));
+    await userEvent.click(screen.getByRole("menuitem", { name: "PDF" }));
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1));
+    expect(calls.filter((c) => c.url === PDF)).toHaveLength(1);
+
+    busy = true;
+    await openExport();
+    await userEvent.click(screen.getByRole("menuitem", { name: "PDF" }));
+    expect(await screen.findByText("Too many PDFs at once: try again in a moment.")).toBeInTheDocument();
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the PDF when the server makes none", async () => {
+    mockFetch(routes([], { ...exportable(true), ...publicConfig(false) }));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    expect(await openExport()).toEqual(["Markdown", "JSON"]);
+  });
+
   it("offers neither for a question that does not export as text", async () => {
-    mockFetch(routes([], exportable(false)));
+    mockFetch(routes([], { ...exportable(false), ...publicConfig(true) }));
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
     await table();
-    expect(screen.queryByRole("link", { name: "Export" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Export" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Copy" })).toBeNull();
   });
 });
