@@ -1,15 +1,14 @@
 /**
  * The Markdown renderer (ADR-121 §1): a YAML front matter of provenance,
  * then the blocks, one blank line apart. The fixed words are the document's
- * language, `LABELS[doc.lang]`: English for a staff document, worded like
- * the CSV (ADR-121 §4), the reader's for a student's (ADR-125). A program's
- * tests are a staff document's only, and stay English.
+ * language, `LABELS[doc.lang]`: the requester's (ADR-121 §4, ADR-125 §7,
+ * amended 2026-11-04).
  */
 import { createHash } from "node:crypto";
 
 import { stringify } from "yaml";
 
-import { number, type AnswerZone, type Block, type Document, type TestLine } from "./document.js";
+import { number, type AnswerZone, type Block, type Choices, type Document, type TestLine } from "./document.js";
 import { labelled, LABELS, type Labels } from "./labels.js";
 
 /**
@@ -32,16 +31,33 @@ function table(header: readonly string[], rows: readonly (readonly string[])[]):
   return [line(header), `|${header.map(() => "---").join("|")}|`, ...rows.map(line)].join("\n");
 }
 
-function testsBlock(lines: readonly TestLine[]): string {
-  if (lines.length === 0) return "No tests.";
+function testsBlock(lines: readonly TestLine[], l: Labels): string {
+  if (lines.length === 0) return l.noTests;
   const passed = lines.filter((t) => t.ok).length;
   return [
-    `Tests passed: ${passed}/${lines.length}`,
+    labelled(l, l.testsPassed, `${passed}/${lines.length}`),
     table(
-      ["Test", "Visibility", "Result", "Points"],
-      lines.map((t) => [t.name, t.visible ? "visible" : "hidden", t.ok ? "passed" : "failed", number(t.points)]),
+      [l.test, l.visibility, l.result, l.points],
+      lines.map((t) => [t.name, t.visible ? l.visible : l.hidden, t.ok ? l.passed : l.failed, number(t.points)]),
     ),
   ].join("\n\n");
+}
+
+/**
+ * A task list, one choice per item: `- [ ] **A.** text`, `- [x]` when
+ * ticked. A choice of several lines (a code fence) goes on the lines below
+ * its letter, indented into the item, never on the letter's line, where it
+ * would break the fence.
+ */
+function choicesBlock(b: Choices): string {
+  return b.items
+    .map(({ label, text }, at) => {
+      const head = `- [${b.checked.includes(at) ? "x" : " "}] **${oneLine(label)}.**`;
+      const body = text.trim();
+      if (!body.includes("\n")) return body === "" ? head : `${head} ${body}`;
+      return [head, ...body.split("\n").map((line) => (line === "" ? "" : `  ${line}`))].join("\n");
+    })
+    .join("\n");
 }
 
 /**
@@ -67,11 +83,9 @@ function drawingLine(alt: string): string {
 /** A paper answer space, as plain Markdown can preview one (ADR-125; a ruled frame as a plain one, ADR-126). */
 function zoneBlock(z: AnswerZone, l: Labels): string {
   switch (z.zone) {
-    case "bubbles": {
-      // A round bubble picks one, a square box picks several, as on the screen.
-      const mark = z.multiple ? "☐" : "○";
-      return (z.labels ?? []).map((label) => `${mark} ${oneLine(label)}`).join("  ");
-    }
+    case "bubbles":
+      // A round bubble: one option to pick.
+      return (z.labels ?? []).map((label) => `○ ${oneLine(label)}`).join("  ");
     case "lines":
       return Array.from({ length: Math.max(1, z.lines ?? 1) }, () => WRITING_LINE).join("\n\n");
     case "free": {
@@ -86,7 +100,7 @@ function zoneBlock(z: AnswerZone, l: Labels): string {
 function block(b: Block, l: Labels): string {
   switch (b.kind) {
     case "heading":
-      return `${"#".repeat(b.level)} ${oneLine(b.text)}`;
+      return `${"#".repeat(b.level)} ${oneLine(b.text)}${b.aside === undefined ? "" : ` (${oneLine(b.aside)})`}`;
     case "markdown":
       return b.text.trim();
     case "code": {
@@ -100,7 +114,9 @@ function block(b: Block, l: Labels): string {
     case "table":
       return table(b.header, b.rows);
     case "tests":
-      return testsBlock(b.tests);
+      return testsBlock(b.tests, l);
+    case "choices":
+      return choicesBlock(b);
     case "points":
       return labelled(l, l.points, `${b.earned === null ? l.notGraded : number(b.earned)} / ${number(b.max)}`);
     case "separator":

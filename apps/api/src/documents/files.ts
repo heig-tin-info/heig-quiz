@@ -47,7 +47,8 @@ export async function sendExport<R>(
   };
   const body =
     format === "json"
-      ? JSON.stringify(schema.parse(found.record))
+      ? // Indented: a record is read by people too.
+        JSON.stringify(schema.parse(found.record), null, 2)
       : format === "pdf"
         ? await server.pdf.render(document(), request.user!)
         : renderMarkdown(document());

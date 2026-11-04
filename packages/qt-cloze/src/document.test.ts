@@ -45,12 +45,16 @@ describe("the cloze question as a document (ADR-121 §2, ADR-125)", () => {
     expect(solution).toContain("| Blank | Expected |");
     expect(solution).toContain("| (4) | newton |");
     const answer = { blanks: ["Newton", "10", "+=", "0", "N", "2"] };
-    const body = md(clozeServer.answerDoc!(SECRET_CONFIG, answer, await graded(answer)));
+    const body = md(clozeServer.answerDoc!(SECRET_CONFIG, answer, await graded(answer), EN_LABELS));
     expect(body).toContain("| Blank | Given | Expected | Result |");
     // A dropdown's canonical index reads as its option (D4).
     expect(body).toContain("| (4) | newton | newton | right |");
     expect(body).toContain("| (6) | joule |");
-    expect(md(clozeServer.answerDoc!(SECRET_CONFIG, { blanks: [null] }, null))).toContain("| (1) | — |");
+    expect(md(clozeServer.answerDoc!(SECRET_CONFIG, { blanks: [null] }, null, EN_LABELS))).toContain("| (1) | — |");
+    // A French teacher reads the same table in French (ADR-121 §4, amended 2026-11-04).
+    const french = md(clozeServer.answerDoc!(SECRET_CONFIG, answer, await graded(answer), FR_LABELS), "fr");
+    expect(french).toContain("| Trou | Réponse donnée | Attendu | Résultat |");
+    expect(french).toContain("| (4) | newton | newton | juste |");
   });
 
   it("gives the student their blanks in their own view, the key only when the policy shows it", async () => {

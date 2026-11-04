@@ -28,13 +28,16 @@ describe("the short question as a document (ADR-121 §2, ADR-125)", () => {
     const student = shortServer.toStudent(SECRET_CONFIG, view);
     expect(md(shortServer.solutionDoc!(shortServer.toSolution(SECRET_CONFIG, view), student, EN_LABELS))).toContain("- 0x1004");
     const details = { matchedIndex: 1, matchedKind: "regex", normalized: "n42", fraction: 1 };
-    expect(md(shortServer.answerDoc!(SECRET_CONFIG, { text: "N42" }, details))).toBe(
+    expect(md(shortServer.answerDoc!(SECRET_CONFIG, { text: "N42" }, details, EN_LABELS))).toBe(
       "```text\nN42\n```\n\nMatched accepted answer 2 (regex).\n",
     );
-    expect(md(shortServer.answerDoc!(SECRET_CONFIG, { text: "x" }, { ...details, matchedIndex: null }))).toContain(
+    expect(md(shortServer.answerDoc!(SECRET_CONFIG, { text: "N42" }, details, FR_LABELS), "fr")).toContain(
+      "Correspond à la réponse acceptée 2 (regex).",
+    );
+    expect(md(shortServer.answerDoc!(SECRET_CONFIG, { text: "x" }, { ...details, matchedIndex: null }, EN_LABELS))).toContain(
       "No accepted answer matched.",
     );
-    expect(md(shortServer.answerDoc!(SECRET_CONFIG, { text: "" }, null))).toBe("No answer.\n");
+    expect(md(shortServer.answerDoc!(SECRET_CONFIG, { text: "" }, null, EN_LABELS))).toBe("No answer.\n");
   });
 
   it("gives the student their answer in a block no answer can close", () => {

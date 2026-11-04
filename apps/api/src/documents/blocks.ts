@@ -1,10 +1,11 @@
 /**
  * The pieces every staff document of the export factory (ADR-121) opens an
  * item and itself with: the item's heading, statement, key and explanation,
- * and the provenance. Pure: the Sources in the modules hand in what they read.
+ * and the provenance. Pure: the Sources in the modules hand in what they read,
+ * and the labels of the requester's language.
  */
 import type { AnyQuestionTypeServer } from "@quiz/core/server";
-import { heading, markdown, number, type Block, type Labels, type Provenance } from "@quiz/docexport";
+import { heading, labelled, markdown, pointsAside, type Block, type Labels, type Provenance } from "@quiz/docexport";
 
 /** `### Statement` and the statement, through the type's hook (the caller checked it is there). */
 export const statementBlocks = (type: AnyQuestionTypeServer, statement: unknown, l: Labels): Block[] => [
@@ -12,17 +13,18 @@ export const statementBlocks = (type: AnyQuestionTypeServer, statement: unknown,
   ...type.statementDoc!(statement, l),
 ];
 
-/** `### Reference solution` and the key, when the type draws one. */
+/** `### Answer key` and the key, when the type draws one. */
 export const solutionBlocks = (type: AnyQuestionTypeServer, solution: unknown, statement: unknown, l: Labels): Block[] =>
-  type.solutionDoc ? [heading(3, l.referenceSolution), ...type.solutionDoc(solution, statement, l)] : [];
+  type.solutionDoc ? [heading(3, l.answerKey), ...type.solutionDoc(solution, statement, l)] : [];
 
 /** `### Explanation` and its text, when there is one. */
 export const explanationBlocks = (text: string | null, l: Labels): Block[] =>
   text ? [heading(3, l.explanation), markdown(text)] : [];
 
 /**
- * `## Question n: name (p points)`, the statement and, when the type draws
- * one, the reference solution. `position` is the item's canonical place.
+ * `## Question n: name`, its points set apart at the line's end (`2 pt`),
+ * the statement and, when the type draws one, the reference solution.
+ * `position` is the item's canonical place.
  */
 export function itemKeyBlocks(
   type: AnyQuestionTypeServer,
@@ -34,7 +36,7 @@ export function itemKeyBlocks(
   l: Labels,
 ): Block[] {
   return [
-    heading(2, `${l.question} ${position + 1}: ${name} (${number(points)} points)`),
+    heading(2, labelled(l, `${l.question} ${position + 1}`, name), pointsAside(l, points)),
     ...statementBlocks(type, statement, l),
     ...solutionBlocks(type, solution, statement, l),
   ];

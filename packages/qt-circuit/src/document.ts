@@ -10,7 +10,7 @@
  * constants alone (ADR-126 §4, §6). The key is the reference schematic as a
  * figure; a student's answer is their own schematic, drawn the same way.
  */
-import { EN_LABELS, labelled, list, markdown, number, table, type Block, type Labels } from "@quiz/docexport";
+import { labelled, list, markdown, number, table, type Block, type Labels } from "@quiz/docexport";
 
 import { CIRCUIT_LIBRARY } from "./canvas/circuitLibrary.js";
 import { canvasZone, drawnAnswer, paletteBlock, schematicBlock } from "./canvas/paper.js";
@@ -123,7 +123,7 @@ export function circuitStudentAnswerDoc(_student: CircuitStudent, answer: Circui
   return [answerBlock(answer, labels)];
 }
 
-/** The staff's reading, in English (ADR-121 §4): the schematic as drawn. */
-export function circuitAnswerDoc(_config: CircuitConfig, answer: CircuitAnswer): Block[] {
-  return [answerBlock(answer, EN_LABELS)];
+/** The staff's reading: the schematic as drawn. */
+export function circuitAnswerDoc(_config: CircuitConfig, answer: CircuitAnswer, _details: unknown, labels: Labels): Block[] {
+  return [answerBlock(answer, labels)];
 }

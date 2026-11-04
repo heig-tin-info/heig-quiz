@@ -3,6 +3,7 @@ import { parse } from "yaml";
 
 import {
   answerZone,
+  choices,
   code,
   drawing,
   heading,
@@ -104,13 +105,37 @@ describe("renderMarkdown", () => {
   it("keeps a heading on one line and strips a language tag to its word", () => {
     expect(body([heading(3, "a\nb"), code("c`; rm", "x")])).toBe("### a b\n\n```crm\nx\n```\n");
   });
+
+  it("writes a heading's aside in parentheses at its end", () => {
+    expect(body([heading(2, "Question 1: stack", "2 pt")])).toBe("## Question 1: stack (2 pt)\n");
+  });
+
+  it("writes choices as a task list, ticked where checked, a fence of several lines inside its item", () => {
+    const text = body([
+      choices(
+        [
+          { label: "A", text: "one" },
+          { label: "B", text: "```c\nint x;\n\nint y;\n```" },
+          { label: "C", text: "three" },
+        ],
+        true,
+        [0, 2],
+      ),
+    ]);
+    expect(text).toBe("- [x] **A.** one\n- [ ] **B.**\n  ```c\n  int x;\n\n  int y;\n  ```\n- [x] **C.** three\n");
+  });
+
+  it("keys a choices block to its item", () => {
+    const [keyed] = scopeZones("item-3", [choices([{ label: "A", text: "x" }], false)]);
+    expect(keyed).toMatchObject({ kind: "choices", id: "item-3" });
+  });
 });
 
 describe("answer zones (ADR-125)", () => {
   it("draws bubbles, lines, a free frame and the name fields", () => {
     const text = body([
       answerZone("bubbles", { labels: ["A", "B", "C"] }),
-      answerZone("bubbles", { labels: ["A", "B"], multiple: true }),
+      answerZone("bubbles", { labels: ["A", "B"] }),
       answerZone("lines", { lines: 2 }),
       answerZone("name"),
     ]);
@@ -118,7 +143,7 @@ describe("answer zones (ADR-125)", () => {
     expect(text).toBe(
       [
         "○ A  ○ B  ○ C",
-        "☐ A  ☐ B",
+        "○ A  ○ B",
         `${line}\n\n${line}`,
         "Name: ________________  First name: ________________",
       ].join("\n\n") + "\n",

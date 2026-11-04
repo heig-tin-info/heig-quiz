@@ -3,7 +3,7 @@
  *
  * The statement and the paper zone read the student view only: the prompt
  * and the symbols the answer may use, never a key. A formula is written as
- * the web renders one, `$…$`. The staff's words are English (ADR-121 §4).
+ * the web renders one, `$…$`. Every word is the requester's (ADR-121 §4).
  */
 import { answerZone, labelled, list, markdown, noAnswerOr, type Block, type Labels } from "@quiz/docexport";
 
@@ -39,9 +39,12 @@ const isEmpty = (answer: MathAnswer): boolean => answer.latex.trim() === "";
 const formula = (answer: MathAnswer): Block => markdown(inlineMath(answer.latex));
 
 /** The staff's reading: the formula, and why it could not be read when it could not. */
-export function mathAnswerDoc(_config: MathConfig, answer: MathAnswer, details: MathDetails | null): Block[] {
-  const problem = details?.status === "invalid" && details.problem ? [markdown(`Not read: ${details.problem.code}.`)] : [];
-  return [isEmpty(answer) ? markdown("No answer.") : formula(answer), ...problem];
+export function mathAnswerDoc(_config: MathConfig, answer: MathAnswer, details: MathDetails | null, labels: Labels): Block[] {
+  const problem =
+    details?.status === "invalid" && details.problem
+      ? [markdown(`${labelled(labels, labels.notRead, details.problem.code)}.`)]
+      : [];
+  return [noAnswerOr(labels, isEmpty(answer), formula(answer)), ...problem];
 }
 
 /** The student's own reading: the formula as they typed it. */

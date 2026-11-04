@@ -5,7 +5,7 @@
  * template, whose sentinels become numbered blanks, and its dropdowns'
  * options in the order the student was served. The staff's reading of an
  * answer resolves a dropdown's canonical index (D4) through the stored
- * text, in English (ADR-121 §4).
+ * text, worded in the requester's language (ADR-121 §4).
  */
 import { answerZone, markdown, table, type Block, type Labels } from "@quiz/docexport";
 import { CLOZE_SENTINEL_PATTERN, parseCloze } from "@quiz/domain/cloze";
@@ -54,19 +54,24 @@ const shown = (value: string | null | undefined, option: ((value: number) => str
 };
 
 /** The staff's reading: blank by blank, the answer, the key and the verdict. */
-export function clozeAnswerDoc(config: ClozeConfig, answer: ClozeAnswer, details: ClozeDetails | null): Block[] {
+export function clozeAnswerDoc(
+  config: ClozeConfig,
+  answer: ClozeAnswer,
+  details: ClozeDetails | null,
+  labels: Labels,
+): Block[] {
   const blanks = parseCloze(config.text).blanks;
   const given = (index: number): string => {
     const blank = blanks[index];
     return shown(answer.blanks[index], blank?.kind === "select" ? (i) => blank.options[i] : null);
   };
   if (details === null) {
-    return [table(["Blank", "Given"], blanks.map((b) => [numbered(b.index), given(b.index)]))];
+    return [table([labels.blank, labels.given], blanks.map((b) => [numbered(b.index), given(b.index)]))];
   }
   return [
     table(
-      ["Blank", "Given", "Expected", "Result"],
-      details.perBlank.map((p) => [numbered(p.index), given(p.index), p.expected, p.ok ? "right" : "wrong"]),
+      [labels.blank, labels.given, labels.expected, labels.result],
+      details.perBlank.map((p) => [numbered(p.index), given(p.index), p.expected, p.ok ? labels.right : labels.wrong]),
     ),
   ];
 }

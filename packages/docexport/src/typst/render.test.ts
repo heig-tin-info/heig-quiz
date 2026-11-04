@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { answerZone, code, drawing, heading, list, markdown, points, scopeZones, separator, table, tests, type Block, type Document } from "../document.js";
+import {
+  answerZone,
+  choices,
+  code,
+  drawing,
+  heading,
+  list,
+  markdown,
+  points,
+  scopeZones,
+  separator,
+  table,
+  tests,
+  type Block,
+  type Document,
+} from "../document.js";
 import { EN_LABELS, FR_LABELS, type Lang } from "../labels.js";
 import { BODY_MM, COLUMN_MM, printedWidthMm, renderTypst } from "./render.js";
 import { BODY_FONT, MARGIN_MM, MONO_FONT } from "./template.js";
@@ -54,13 +69,47 @@ describe("renderTypst", () => {
         '#raw(block: true, lang: "c", "int main(void);")',
         "#list([one], [two \\#])",
         '#table(columns: 2,\n  table.header([#strong[Blank]], [#strong[Expected]]),\n  [(1)], [a|b],\n)',
-        "Tests passed: 1/1\n\n" +
+        "Tests passed: 1\\/1\n\n" +
           '#table(columns: 4,\n  table.header([#strong[Test]], [#strong[Visibility]], [#strong[Result]], [#strong[Points]]),\n  [hidden\\-one], [hidden], [passed], [3],\n)',
         "Points: 1\\.5 \\/ 2",
         "Points: not graded \\/ 2",
-        "#hr",
+        "#separator",
         "",
       ].join("\n\n"),
+    );
+  });
+
+  it("sets a heading's aside at the line's end, outside the heading (no bookmark holds it), escaped like its text", () => {
+    const { source } = renderTypst(doc([heading(2, "Question 1: #x", "2 pt"), heading(2, "Question 2")]));
+    expect(bodyOf(source).split("\n\n")).toEqual([
+      '#headed(2, [2 pt], [Question 1: \\#x])',
+      "#heading(level: 2)[Question 2]",
+      "",
+    ]);
+    // No rule between questions: the heading opens one, with space above.
+    // Both the plain heading and `headed` take their gaps from one table.
+    expect(source).toContain("#show heading.where(level: 2): set block(..heading-gap.at(\"2\"))");
+    expect(source).toContain("..heading-gap.at(str(level), default: (:))");
+  });
+
+  it("draws choices beside their boxes, square for several, round for one, ticked by shape", () => {
+    const items = [
+      { label: "A", text: "`x` #1" },
+      { label: "B", text: "```c\nint y;\n```" },
+    ];
+    const { source } = renderTypst(doc([choices(items, false), choices(items, true, [1]), choices(items, false, [0])]));
+    expect(bodyOf(source).split("\n\n")).toEqual([
+      '#choices([#circle-empty], [#strong[A\\.]], [#raw("x") \\#1],\n  [#circle-empty], [#strong[B\\.]], [#raw(block: true, lang: "c", "int y;")])',
+      '#choices([#square-empty], [#strong[A\\.]], [#raw("x") \\#1],\n  [#square-ticked], [#strong[B\\.]], [#raw(block: true, lang: "c", "int y;")])',
+      '#choices([#circle-ticked], [#strong[A\\.]], [#raw("x") \\#1],\n  [#circle-empty], [#strong[B\\.]], [#raw(block: true, lang: "c", "int y;")])',
+      "",
+    ]);
+  });
+
+  it("keys a statement's choices as its item's paper zone, of kind choices", () => {
+    const blocks = scopeZones("item-7", [markdown("Pick."), choices([{ label: "A", text: "one" }], false)]);
+    expect(bodyOf(renderTypst(doc(blocks)).source)).toBe(
+      'Pick\\.\n\n#zone("item-7", "choices", choices([#circle-empty], [#strong[A\\.]], [one]))\n\n',
     );
   });
 
@@ -68,7 +117,7 @@ describe("renderTypst", () => {
     const blocks = [
       answerZone("name"),
       ...scopeZones("item-1", [answerZone("bubbles", { labels: ["A", "B", 'C "x"'] })]),
-      ...scopeZones("item-2", [answerZone("bubbles", { labels: ["A"], multiple: true })]),
+      ...scopeZones("item-2", [answerZone("bubbles", { labels: ["A"] })]),
       ...scopeZones("item-3", [answerZone("lines", { part: "b0", lines: 2 }), answerZone("lines", { part: "b1" })]),
       ...scopeZones("item-4", [answerZone("free", { heightMm: 60 })]),
     ].map((b) => (b.kind === "answerZone" && b.zone === "name" ? { ...b, id: "name" } : b));
@@ -76,8 +125,8 @@ describe("renderTypst", () => {
     const zones = bodyOf(source).split("\n\n");
     expect(zones).toEqual([
       '#zone("name", "name", names("Name", "First name"))',
-      '#zone("item-1", "bubbles", bubbles(("A", "B", "C \\"x\\""), false))',
-      '#zone("item-2", "bubbles", bubbles(("A",), true))',
+      '#zone("item-1", "bubbles", bubbles(("A", "B", "C \\"x\\"")))',
+      '#zone("item-2", "bubbles", bubbles(("A",)))',
       '#zone("item-3:b0", "lines", lines(2))',
       '#zone("item-3:b1", "lines", lines(1))',
       '#zone("item-4", "free", free(60mm))',
