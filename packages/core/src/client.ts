@@ -438,8 +438,9 @@ export function showsSection(
 /**
  * The families a type belongs to, in the order a picker draws them (#991):
  * `basics` for text and choice, `engineering` for code, circuits and
- * diagrams, `poll` for a type that only runs as a poll and is never created
- * from a pool (brainstorm, ADR-071).
+ * diagrams, `poll` for a type that only runs as a poll (brainstorm, ADR-071).
+ * `poll` also means "not creatable from a pool": "New question" leaves the
+ * family out (`CREATABLE_TYPE_IDS` in the web app).
  */
 export const QUESTION_TYPE_GROUPS = ["basics", "engineering", "poll"] as const;
 export type QuestionTypeGroup = (typeof QUESTION_TYPE_GROUPS)[number];

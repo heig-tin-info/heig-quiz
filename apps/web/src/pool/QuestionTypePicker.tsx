@@ -57,13 +57,18 @@ export function QuestionTypePicker({
   const large = useMediaQuery(LARGE_SCREEN);
   const groups = groupTypes(types);
   const ids = groups.map((g) => g.group);
-  const [remembered, remember] = usePersistentChoice(TAB_KEY, QUESTION_TYPE_GROUPS, ids[0] ?? "basics");
-  // The chosen type's family first ("Back" from the name, the palette's
-  // typed entry), then the tab last used, then the first.
-  const [picked, setPicked] = useState<QuestionTypeGroup | null>(() => typeGroup(value) ?? null);
-  const wanted = picked ?? remembered;
+  const [remembered, remember] = usePersistentChoice(TAB_KEY, QUESTION_TYPE_GROUPS, "basics");
+  // A tab clicked here first, then the chosen type's family ("Back" from the
+  // name, the palette's typed entry, a window shrunk under the flat grid),
+  // then the tab last used, then the first. Read on every render, never
+  // frozen at mount.
+  const [picked, setPicked] = useState<QuestionTypeGroup | null>(null);
+  const wanted = picked ?? typeGroup(value) ?? remembered;
   const tab = ids.includes(wanted) ? wanted : (ids[0] ?? "basics");
 
+  // Crossing the large-screen threshold swaps the grid for tabs (or back) and
+  // remounts the tiles, so a focused tile loses the focus: a resize, rare
+  // enough not to warrant a second tree shape kept in step with `TabPanel`.
   if (!grouped || pickerLayout(types.length, groups.length, large) === "grid") {
     return <TileGrid types={types} value={value} onChange={onChange} even className={className} />;
   }
@@ -109,14 +114,15 @@ export function pickerLayout(count: number, groups: number, large: boolean): "gr
 
 /**
  * `types` filed by family, families in `QUESTION_TYPE_GROUPS` order, types in
- * the caller's order; an empty family is left out.
+ * the caller's order; an empty family, and an id this build does not
+ * register, are left out.
  */
 export function groupTypes(
   types: readonly string[],
 ): { group: QuestionTypeGroup; types: string[] }[] {
   return QUESTION_TYPE_GROUPS.map((group) => ({
     group,
-    types: types.filter((id) => (typeGroup(id) ?? "basics") === group),
+    types: types.filter((id) => typeGroup(id) === group),
   })).filter((g) => g.types.length > 0);
 }
 

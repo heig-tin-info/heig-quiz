@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { viewport } from "../test/viewport";
+import { CREATABLE_TYPE_IDS } from "../questionTypes";
 import { NewQuestionModal } from "./NewQuestionModal";
+import { QuestionTypePicker } from "./QuestionTypePicker";
 
 /*
  * The two steps of "New question": choosing a type slides to the name with
@@ -67,6 +69,19 @@ describe("NewQuestionModal", () => {
     expect(screen.getByRole("button", { name: /^Circuit/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Short answer/ })).toBeNull();
     expect(localStorage.getItem("quiz-question-type-tab")).toBe("engineering");
+  });
+
+  it("shows the chosen type's tab when the window shrinks under the flat grid", () => {
+    localStorage.setItem("quiz-question-type-tab", "basics");
+    viewport(1440);
+    const { rerender } = renderWithProviders(
+      <QuestionTypePicker types={CREATABLE_TYPE_IDS} grouped value="code" onChange={vi.fn()} />,
+    );
+    expect(screen.queryByRole("tablist")).toBeNull();
+    vi.stubGlobal("matchMedia", narrow);
+    rerender(<QuestionTypePicker types={CREATABLE_TYPE_IDS} grouped value="code" onChange={vi.fn()} />);
+    expect(screen.getByRole("tab", { name: "Engineering" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { pressed: true })).toHaveTextContent(/^Code(?! image)/);
   });
 
   it("opens on the tab last used", () => {
