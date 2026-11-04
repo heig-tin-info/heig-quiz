@@ -71,6 +71,8 @@ export async function testServer(
     // is not started cannot print a connection failure (see config.ts).
     JOBS_DISABLED: "1",
     LOG_LEVEL: "fatal",
+    // The Typst binary of the PDF tests, when the machine names one (ADR-125).
+    ...(process.env["TYPST_BIN"] ? { TYPST_BIN: process.env["TYPST_BIN"] } : {}),
     ...env,
   });
   const config = opts.production ? { ...loaded, NODE_ENV: "production" as const } : loaded;

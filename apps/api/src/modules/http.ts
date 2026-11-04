@@ -13,8 +13,8 @@
  *
  * Then `DomainError`, the one refusal a service throws, and `sendFailure`,
  * the error tail every route shares: a module's own arms first (the 410 of
- * the clock, a `retry-after`), then any `DomainError` as
- * `{ error, message, ...details }`, then a logged 500.
+ * the clock), then any `DomainError` as `{ error, message, ...details }`
+ * with its `retry-after` when it has one, then a logged 500.
  *
  * Below them, `studentRoute`/`teacherRoute`: the guarded-route preamble
  * (clock, params, body, loader, error tail) written once.
@@ -80,7 +80,7 @@ export function sendCsv(reply: FastifyReply, filename: string, csv: string) {
  * A file to save, not a page to show: `filename` is a slug already (no quote,
  * no path). Never cached: these files carry names and answers.
  */
-export function sendAttachment(reply: FastifyReply, type: string, filename: string, body: string) {
+export function sendAttachment(reply: FastifyReply, type: string, filename: string, body: string | Buffer) {
   return reply
     .type(type)
     .header("content-disposition", `attachment; filename="${filename}"`)
@@ -107,6 +107,8 @@ export class DomainError extends Error {
     readonly status: number,
     message?: string,
     readonly details?: Readonly<Record<string, unknown>>,
+    /** When to come back, in seconds: sent as the `retry-after` header (a 429, a busy 503). */
+    readonly retryAfterS?: number,
   ) {
     super(message ?? code);
     this.name = "DomainError";
@@ -115,9 +117,9 @@ export class DomainError extends Error {
 
 /**
  * One row of a module's refusal table: the status of a code and, when it
- * reads the same at every throw site, its message.
+ * reads the same at every throw site, its message and its `retry-after`.
  */
-export type Refusal = readonly [status: number, message?: string];
+export type Refusal = readonly [status: number, message?: string, retryAfterS?: number];
 
 /**
  * A module's refusal class over its table: `new LiveError(code, message?,
@@ -132,8 +134,8 @@ export function refusalClass<C extends string>(name: string, table: Readonly<Rec
   return class extends DomainError {
     declare readonly code: C;
     constructor(code: C, message?: string, details?: Readonly<Record<string, unknown>>) {
-      const [status, fixed] = table[code];
-      super(code, status, message ?? fixed ?? code, details);
+      const [status, fixed, retryAfterS] = table[code];
+      super(code, status, message ?? fixed ?? code, details, retryAfterS);
       this.name = name;
     }
   };
@@ -163,6 +165,7 @@ export function sendFailure(
   const handled = arms?.(reply, error, now);
   if (handled) return handled;
   if (error instanceof DomainError) {
+    if (error.retryAfterS !== undefined) reply.header("retry-after", String(error.retryAfterS));
     return reply
       .code(error.status)
       .send({ error: error.code, message: error.message, ...error.details });

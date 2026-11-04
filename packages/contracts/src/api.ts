@@ -34,6 +34,12 @@ export interface PublicConfig {
    * fixture, which answers `mock:<device id>` instead of asking an extension.
    */
   kiosk: { extensionId: string | null; mock: boolean } | null;
+  /**
+   * The server makes PDFs: its Typst binary answered the probe (ADR-125 §3).
+   * False, the web app hides every PDF button; a PDF route would answer
+   * `503 pdf_unavailable`.
+   */
+  pdf: boolean;
 }
 
 /**

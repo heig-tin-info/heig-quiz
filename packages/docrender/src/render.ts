@@ -41,12 +41,12 @@ import {
   type JournalTocEntry,
   type JournalWarning,
 } from "@quiz/contracts";
+import { decodeEntities } from "@quiz/docexport/entities";
 import { slugify } from "@quiz/domain";
 import katex from "katex";
 import { Marked, type Renderer, type Tokens } from "marked";
 
 import { journalAssetUrl } from "./assets.js";
-import { decodeEntities } from "./entities.js";
 import { asBoolean, oneLine, splitFrontMatter } from "./frontMatter.js";
 import { escapeHtml, highlight } from "./highlight.js";
 import { relativeHref, resolveRelative } from "./journalTree.js";

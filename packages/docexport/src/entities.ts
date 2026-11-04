@@ -12,8 +12,9 @@ const NAMED: Record<string, string> = {
  * What the reader sees for the entities written in a text: numeric ones
  * (`&#233;`, `&#xE9;`, never a surrogate half) and the named ones of
  * {@link NAMED}. For text that is never parsed as HTML again — a journal
- * heading (title, TOC), a formula or a code span of the web's markdown —
- * where an entity left encoded would show as `&amp;` to a student.
+ * heading (title, TOC), a formula or a code span of the web's markdown, the
+ * text of a PDF (`./typst`) — where an entity left encoded would show as
+ * `&amp;` to a student. Here, in the package every renderer can import.
  */
 export function decodeEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (whole, name: string) => {

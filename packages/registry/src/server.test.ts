@@ -1,7 +1,8 @@
 import { ConfigMigrationError, isGraded, UnknownQuestionType, type StudentView } from "@quiz/core/server";
 import { findStudentLeaks, testGradeContext, type StudentLeakFixture } from "@quiz/core/testing";
-import { LABELS, type Block, type Lang } from "@quiz/docexport";
+import { LABELS, scopeZones, type Block, type Lang } from "@quiz/docexport";
 import { markdownBody } from "@quiz/docexport/markdown";
+import { renderTypst } from "@quiz/docexport/typst";
 import { blocksLeakFixture } from "@quiz/qt-blocks/testing";
 import { brainstormLeakFixture } from "@quiz/qt-brainstorm/testing";
 import { categorizeLeakFixture } from "@quiz/qt-categorize/testing";
@@ -95,6 +96,9 @@ const CROSS_TYPE_FORBIDDEN_KEYS = ["policy", "tolerance"];
 
 /** The languages a student document is worded in (ADR-125). */
 const LANGS: readonly Lang[] = ["en", "fr"];
+
+/** The provenance of a rendered test document: ids only, none of a fixture. */
+const PROVENANCE = { kind: "test", version: 1, source: {}, attempts: [], generatedAt: "2026-11-04T10:00:00.000Z", app: null };
 
 /** Shuffle on and off, under the teacher preview's seed (0) and two attempts'. */
 const VIEWS: StudentView[] = [0, 7, 99].flatMap((seed) =>
@@ -215,6 +219,30 @@ describe.each(REGISTERED)("the contract of %s", (id) => {
       for (const lang of LANGS) {
         const blocks = [...(type.statementDoc?.(student, LABELS[lang]) ?? []), ...(type.answerZone?.(student) ?? [])];
         expectNoLeak(blocks, lang);
+      }
+    });
+
+    /*
+     * The second form of ADR-125 §19: the same statement and zones as the
+     * Typst source of a PDF, searched for the secrets and for a forbidden key
+     * written as a dictionary key — escapes undone first, since `typstText`
+     * writes `3.14` as `3\.14`. The third form, the PDF's text through
+     * `pdftotext`, will run on the real documents that hold whole papers —
+     * the hand-out (`handout.pdf`) and the student's own copy — when their
+     * routes land.
+     */
+    it.each(VIEWS)("renders its statement and paper zones to Typst with no key (seed $seed, shuffle $shuffle)", (view) => {
+      const student = type.toStudent(fixture.config, view);
+      for (const lang of LANGS) {
+        const blocks = scopeZones("item-1", [
+          ...(type.statementDoc?.(student, LABELS[lang]) ?? []),
+          ...(type.answerZone?.(student) ?? []),
+        ]);
+        const { source } = renderTypst({ provenance: PROVENANCE, lang, blocks });
+        // The body only: the page setup and the preamble are ours, fixed words of Typst.
+        const body = source.slice(source.indexOf("<provenance>")).replace(/\\(.)/g, "$1");
+        expect(fixture.secrets.filter((secret) => body.includes(secret)), lang).toEqual([]);
+        expect(forbiddenKeys.filter((key) => new RegExp(`["(,\\s]${key}"?\\s*:`).test(body)), lang).toEqual([]);
       }
     });
   }

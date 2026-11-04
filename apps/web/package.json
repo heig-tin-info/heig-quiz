@@ -23,6 +23,7 @@
     "@quiz/contracts": "workspace:*",
     "@quiz/core": "workspace:*",
     "@quiz/diagram": "workspace:*",
+    "@quiz/docexport": "workspace:*",
     "@quiz/docrender": "workspace:*",
     "@quiz/domain": "workspace:*",
     "@quiz/qt-blocks": "workspace:*",

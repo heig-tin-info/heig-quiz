@@ -97,6 +97,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm --filter "@quiz/${{ matrix.pkg }}^..." build
+      # The PDF exports' tools, so the API's PDF tests run here (ADR-125 §3).
+      - if: matrix.pkg == 'api'
+        run: bash scripts/ci-pdf-tools.sh
       - run: pnpm --filter "@quiz/${{ matrix.pkg }}" test --shard=${{ matrix.shard }}/${{ matrix.shards }}
 
   # Every other package's `test`: the question types, domain, contracts, ui,

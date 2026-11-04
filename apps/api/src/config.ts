@@ -120,6 +120,22 @@ const EnvSchema = z.object({
   ASSETS_MAX_BYTES: z.coerce.number().int().min(1024).max(50_000_000).default(5_000_000),
 
   /**
+   * The Typst binary every PDF is compiled with (ADR-125 §1): a name looked
+   * up on PATH or an absolute path. The image installs a pinned static one
+   * (`scripts/fetch-typst.mjs`); without it the PDF buttons are hidden and a
+   * PDF route answers `503 pdf_unavailable` (ADR-125 §3).
+   */
+  TYPST_BIN: z.string().trim().min(1).default("typst"),
+  /** The most one compile may take before it is killed (ADR-125 §2). */
+  PDF_TIMEOUT_MS: z.coerce.number().int().min(5_000).max(60_000).default(20_000),
+  /**
+   * The address space one compile may reserve, through `prlimit --as` where
+   * the host has it (ADR-125 §2). Address space, not resident memory: Typst
+   * maps more than it touches, and 128 MB is too little for its threads.
+   */
+  PDF_MAX_MEMORY_MB: z.coerce.number().int().min(256).max(4096).default(1024),
+
+  /**
    * Skip the job queue entirely. The tests point the API at a database that
    * is not there on purpose (`app.test.ts` checks that /healthz degrades
    * instead of crashing), and pg-boss answers that by retrying the

@@ -55,6 +55,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm --filter "@quiz/${{ matrix.pkg }}^..." build
+      # Typst and pdftotext for the API's PDF tests, as in ci.yml (ADR-125 §3).
+      - if: matrix.pkg == 'api'
+        run: bash scripts/ci-pdf-tools.sh
       # `default` keeps the console output; `blob` writes the file merged
       # below. The coverage reporters of vitest.shared.ts run at merge time.
       - run: >

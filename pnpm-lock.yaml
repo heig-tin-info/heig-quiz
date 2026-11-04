@@ -218,6 +218,9 @@ importers:
       '@quiz/diagram':
         specifier: workspace:*
         version: link:../../packages/diagram
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../../packages/docexport
       '@quiz/docrender':
         specifier: workspace:*
         version: link:../../packages/docrender
@@ -477,6 +480,12 @@ importers:
 
   packages/docexport:
     dependencies:
+      marked:
+        specifier: ^18.0.13
+        version: 18.0.13
+      tex2typst:
+        specifier: 0.6.2
+        version: 0.6.2
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
@@ -496,6 +505,9 @@ importers:
       '@quiz/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@quiz/docexport':
+        specifier: workspace:*
+        version: link:../docexport
       '@quiz/domain':
         specifier: workspace:*
         version: link:../domain
@@ -3665,6 +3677,9 @@ packages:
   tdigest@0.1.2:
     resolution: {integrity: sha512-+G0LLgjjo9BZX2MfdvPfH+MKLCrxlXSYec5DaPYP1fe6Iyhf0/fSmJ0bFiZ1F8BT6cGXl2LpltQptzjXKWEkKA==}
 
+  tex2typst@0.6.2:
+    resolution: {integrity: sha512-KQwpKUZ3kWI/cBEChFhVPJJV5/61R2Eb0epL6AGlQTKdto4OZer9wX4F2mbTsThVJPeLP4Ax0CkUk23IdcgnGQ==}
+
   thread-stream@4.2.0:
     resolution: {integrity: sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==}
     engines: {node: '>=20'}
@@ -6165,6 +6180,8 @@ snapshots:
   tdigest@0.1.2:
     dependencies:
       bintrees: 1.0.2
+
+  tex2typst@0.6.2: {}
 
   thread-stream@4.2.0:
     dependencies:

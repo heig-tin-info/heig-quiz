@@ -21,7 +21,8 @@ packages/
   contracts/  zod schemas and payload types shared api <-> web
   domain/     pure business rules: grade scale, deadlines, policies, cloze, roster
   docrender/  the server-side journal renderer
-  docexport/  the export factory's document tree and Markdown renderer (ADR-121)
+  docexport/  the export factory's document tree, its Markdown renderer
+              (ADR-121) and its Typst renderer, ./typst (ADR-125)
   seb/        Safe Exam Browser, pure: typed plist, Config Key, request hashes
   ui/         the shared primitives of the question-type surfaces (@quiz/ui)
   qt-mcq/     question type: multiple choice
@@ -48,7 +49,8 @@ infra/
   engine/     deploy.sh, the engine VM's deploy dispatcher (runner + codespace, M6-04)
 scripts/      smoke.sh, the end-to-end HTTP walk; staging-export.sh and
               staging-refresh.sh; changes.mjs and check-changes.mjs, the
-              changelog's parser and guard (ADR-087)
+              changelog's parser and guard (ADR-087); fetch-typst.mjs, the
+              pinned Typst binary of the PDF exports (ADR-125)
 changes/      What's new: one entry per pull request (its README, ADR-087)
 ```
 

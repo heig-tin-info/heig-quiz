@@ -463,6 +463,22 @@ async function llmBudgetCheck({ app, now }: CheckContext): Promise<CheckResult> 
   };
 }
 
+/**
+ * The Typst binary of the PDF exports (ADR-125 §3), from the probe this
+ * process ran once: `ok` with its version when it compiles under
+ * `prlimit`'s caps. In production (the image installs both: either missing
+ * is a build defect) a missing binary or an uncapped compile is a `warn`;
+ * elsewhere, where Typst is optional, `unknown` and `ok`.
+ */
+async function pdfCheck({ app, config }: CheckContext): Promise<CheckResult> {
+  const status = await app.pdf.status();
+  const production = config.NODE_ENV === "production";
+  if (!status.available) return { status: production ? "warn" : "unknown", cause: "pdf.unavailable" };
+  const details = status.version ? [named(status.version)] : [];
+  if (!status.capped && production) return { status: "warn", cause: "pdf.uncapped", details };
+  return { status: "ok", details };
+}
+
 // --- The registry ---------------------------------------------------------
 
 /** Every check, in the order the screen lists them. */
@@ -488,6 +504,7 @@ export const HEALTH_CHECKS: readonly HealthCheck[] = [
     run: serviceCheck(name),
   })),
   { key: "llm.budget", section: "services", run: llmBudgetCheck },
+  { key: "pdf", section: "services", run: pdfCheck },
 ];
 
 /**

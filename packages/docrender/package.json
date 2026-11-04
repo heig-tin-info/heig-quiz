@@ -12,10 +12,6 @@
       "types": "./dist/highlight.d.ts",
       "default": "./dist/highlight.js"
     },
-    "./entities": {
-      "types": "./dist/entities.d.ts",
-      "default": "./dist/entities.js"
-    },
     "./assets": {
       "types": "./dist/assets.d.ts",
       "default": "./dist/assets.js"
@@ -45,6 +41,7 @@
   },
   "dependencies": {
     "@quiz/contracts": "workspace:*",
+    "@quiz/docexport": "workspace:*",
     "@quiz/domain": "workspace:*",
     "katex": "^0.18.7",
     "marked": "^18.0.13",
