@@ -15,7 +15,7 @@ import {
 } from "../test/grading-fixtures";
 import { elapse, flowingClock } from "../test/clock";
 import { makeCourseSummary } from "../test/fixtures";
-import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { mockFetch, ok, publicConfig, renderWithProviders } from "../test/render";
 
 /*
  * The grading screen (ADR-044): one question as a table, the key pinned on
@@ -965,9 +965,6 @@ describe("GradingPanel — every answer as one file (F-EXP-01)", () => {
   });
 
   const PDF = `${EVAL}/items/i1/answers.pdf`;
-  const publicConfig = (pdf: boolean) => ({
-    "GET /app/api/config": ok({ devLogin: false, kiosk: null, pdf }),
-  });
   /** Opens the Export menu and returns its items' names. */
   const openExport = async () => {
     await userEvent.click(await screen.findByRole("button", { name: "Export" }));

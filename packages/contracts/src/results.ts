@@ -379,6 +379,30 @@ export const StaffCopy = z.object({
 export type StaffCopy = z.infer<typeof StaffCopy>;
 
 /**
+ * `GET /evaluations/:id/results/attempts/:attemptId/copy.json` (staff,
+ * ADR-125 §4, §5): one student's copy as a file — the {@link StaffCopy} the
+ * results view opens, everything shown, with who wrote it and which attempt
+ * it is. The record of the export factory (ADR-121 §1); the PDF is drawn
+ * from it. Here rather than in `exports.ts`, beside the shape it extends:
+ * `exports.ts` is read by `evaluation.ts`, which this file reads.
+ */
+export const StaffCopyRecord = StaffCopy.extend({
+  kind: z.literal("staff-copy"),
+  version: z.literal(1),
+  /** The server's clock. */
+  generatedAt: z.iso.datetime(),
+  evaluation: z.object({ id: z.uuid(), title: z.string(), mode: EvaluationMode }),
+  student: z.object({
+    /** Null: a guest's attempt (a poll's), which has no account. */
+    userId: z.uuid().nullable(),
+    displayName: z.string(),
+    email: z.string().nullable(),
+  }),
+  attempt: z.object({ id: z.uuid(), number: z.number().int(), state: AttemptState }),
+});
+export type StaffCopyRecord = z.infer<typeof StaffCopyRecord>;
+
+/**
  * Where a row of the student's Grades page stands (F-RES-04, F-ORG-14):
  * `released` — the results are released; `withheld` — released, under the
  * feedback policy `none`: the grade is not shared; `available` — not

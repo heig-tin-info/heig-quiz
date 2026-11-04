@@ -1,10 +1,11 @@
 /**
  * An evaluation's two documents (ADR-121 step 3, ADR-125), over the real
  * application: the staff "statement with key" and the hand-out, as Markdown
- * and as their records; the hand-out searched for every secret of its
- * questions (invariant 4, 05 §5.7) and for the paper seed, which it follows
- * and never shows (ADR-125 §8); the refusals of an evaluation that does not
- * print (§5); and who reaches them (invariant 6).
+ * as PDFs and as their records; the hand-out searched for every secret of
+ * its questions (invariant 4, 05 §5.7) and for the paper seed, which it
+ * follows and never shows (ADR-125 §8), in its three forms (§19); the
+ * refusals of an evaluation that does not print (§5); and who reaches them
+ * (invariant 6).
  */
 import { randomUUID } from "node:crypto";
 
@@ -19,6 +20,7 @@ import { evaluations, questions } from "../../db/schema.js";
 import { sessionOf, type TestServer, testServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
 import { publishParameterized } from "../../test/parameterized.js";
+import { pdfText, pdfTools } from "../../test/pdf.js";
 import * as live from "../live/service.js";
 import { typeOf } from "../pool/config.js";
 import * as poolService from "../pool/service.js";
@@ -206,7 +208,7 @@ describe("the hand-out (ADR-125)", () => {
     const evaluation = await exam();
     const found = await handout(server.app.db, evaluation, { now: server.clock.now() });
     for (const lang of ["en", "fr"] as const) {
-      const tree = handoutTree(found, null, lang);
+      const tree = handoutTree(found, lang);
       expect(findStudentLeaks(tree, { forbiddenKeys: live.FORBIDDEN_STUDENT_KEYS, secrets: SECRETS })).toEqual([]);
       expect(showsSeed(JSON.stringify(tree), (await storedSeed(evaluation.id))!)).toBe(false);
     }
@@ -264,7 +266,7 @@ describe("an evaluation that does not print (ADR-125 §5)", () => {
     const evaluation = await exam((poolId) =>
       publishParameterized(server.app.db, { poolId, teacherId: teacher.id, type: "mcq" }).then((id) => [id]),
     );
-    for (const file of ["document.md", "document.json", "handout.md", "handout.json"]) {
+    for (const file of ["document.md", "document.json", "document.pdf", "handout.md", "handout.json", "handout.pdf"]) {
       const res = await get(url(evaluation.id, file), teacher.headers);
       expect(res.statusCode).toBe(409);
       expect(res.json()).toMatchObject({ error: "not_printable", reason: "parameterized", types: [] });
@@ -289,7 +291,7 @@ describe("an evaluation that does not print (ADR-125 §5)", () => {
       tests: { mode: "io", cases: [{ name: "one", stdin: "", expected: "", visible: true, points: 1 }] },
     };
     const evaluation = await exam(async (poolId) => [await publish(poolId, "code", code)]);
-    for (const file of ["handout.md", "handout.json"]) {
+    for (const file of ["handout.md", "handout.json", "handout.pdf"]) {
       const res = await get(url(evaluation.id, file), teacher.headers);
       expect(res.statusCode).toBe(409);
       expect(res.json()).toMatchObject({ error: "not_printable", reason: "type", types: ["code"] });
@@ -313,7 +315,7 @@ describe("an evaluation that does not print (ADR-125 §5)", () => {
 });
 
 describe("who reaches them (invariant 6)", () => {
-  const FILES = ["document.md", "document.json", "handout.md", "handout.json"];
+  const FILES = ["document.md", "document.json", "document.pdf", "handout.md", "handout.json", "handout.pdf"];
 
   it("is the 404 of a missing evaluation for a stranger, and for an unknown id", async () => {
     const evaluation = await exam();
@@ -342,5 +344,48 @@ describe("who reaches them (invariant 6)", () => {
       }
     }
     expect(await storedSeed(evaluation.id)).toBeNull();
+  });
+});
+
+/*
+ * The same documents as PDFs (ADR-125 §3, §19), through the tools of
+ * `test/pdf.ts`. A server without Typst answers 503 through the one
+ * `sendExport`, proven by the answers export (`itemAnswers.db.test.ts`).
+ */
+describe("the documents as PDFs (ADR-125)", () => {
+  it.skipIf(!pdfTools)("serves the statement with key as a PDF, named like the Markdown", async () => {
+    const evaluation = await exam();
+    const res = await get(url(evaluation.id, "document.pdf"), teacher.headers);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/pdf");
+    expect(res.headers["content-disposition"]).toMatch(/^attachment; filename="[a-z0-9-]+-key\.pdf"$/);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    expect(res.rawPayload.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    // Every secret the hand-out's PDF is searched for reads as itself in a PDF's
+    // text: else the search below would find nothing for the wrong reason.
+    const text = await pdfText(res.rawPayload);
+    for (const secret of SECRETS) expect(text).toContain(secret);
+  });
+
+  /*
+   * The third form of the leak search (05 §5.7, ADR-125 §19): beside the
+   * tree and the rendered source above, the text of the PDF itself, as a
+   * printer receives it — no secret of the questions, no paper seed.
+   */
+  it.skipIf(!pdfTools)("serves the hand-out as a PDF whose text holds no secret and no seed, in the reader's language", async () => {
+    const evaluation = await exam();
+    const res = await get(url(evaluation.id, "handout.pdf"), { ...teacher.headers, "accept-language": "fr-CH" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/pdf");
+    expect(res.headers["content-disposition"]).toMatch(/^attachment; filename="[a-z0-9-]+-handout\.pdf"$/);
+    const text = await pdfText(res.rawPayload);
+    for (const prompt of ["MCQ_PROMPT", "SHORT_PROMPT", "CLOZE_PROMPT", "RICH_PROMPT", "MATH_PROMPT"]) {
+      expect(text).toContain(prompt);
+    }
+    // Worded in the reader's language: the name frame's French words.
+    expect(text).toContain("Nom");
+    expect(text).toContain("Prénom");
+    for (const secret of SECRETS) expect(text).not.toContain(secret);
+    expect(showsSeed(text, (await storedSeed(evaluation.id))!)).toBe(false);
   });
 });

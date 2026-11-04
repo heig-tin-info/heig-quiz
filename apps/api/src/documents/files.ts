@@ -13,26 +13,40 @@ import { renderMarkdown } from "@quiz/docexport/markdown";
 import { sendAttachment } from "../modules/http.js";
 
 /** The formats an export is served in. */
-export const EXPORT_FORMATS = ["md", "json"] as const;
+export const EXPORT_FORMATS = ["md", "json", "pdf"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
 const CONTENT_TYPE: Record<ExportFormat, string> = {
   md: "text/markdown; charset=utf-8",
   json: "application/json; charset=utf-8",
+  pdf: "application/pdf",
 };
 
 /**
  * `found` as `<basename>.<format>`: the record parsed through its `schema`
- * (so the file is what the contract says), or the Markdown of the document
- * `tree` draws from it, built only when asked for.
+ * (so the file is what the contract says), or the document `tree` draws from
+ * it, built only when asked for, as Markdown or as a PDF (ADR-125). The
+ * document's provenance names the build here, once (ADR-121 §5). The PDF
+ * draws the images the caller may see; `app.pdf` answers
+ * `503 pdf_unavailable` or `pdf_busy` when it cannot make one.
  */
-export function sendExport<R>(
+export async function sendExport<R>(
   reply: FastifyReply,
   format: ExportFormat,
   found: { basename: string; record: R },
   schema: z.ZodType<R>,
   tree: () => Document,
-): FastifyReply {
-  const body = format === "json" ? JSON.stringify(schema.parse(found.record)) : renderMarkdown(tree());
+): Promise<FastifyReply> {
+  const { server, request } = reply;
+  const document = (): Document => {
+    const doc = tree();
+    return { ...doc, provenance: { ...doc.provenance, app: server.commitSha } };
+  };
+  const body =
+    format === "json"
+      ? JSON.stringify(schema.parse(found.record))
+      : format === "pdf"
+        ? await server.pdf.render(document(), request.user!)
+        : renderMarkdown(document());
   return sendAttachment(reply, CONTENT_TYPE[format], `${found.basename}.${format}`, body);
 }

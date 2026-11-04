@@ -194,22 +194,21 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
 
   /**
    * The evaluation's two documents (ADR-121 step 3, ADR-125), each as
-   * Markdown or as its record: the staff "statement with key" (English) and
+   * Markdown, as a PDF or as its record: the staff "statement with key" (English) and
    * the hand-out (student views in the paper's order, worded in the reader's
    * language). Staff only, like the answers export; `409 not_printable {
    * reason, types }` for an evaluation that does not print.
    */
-  const commitSha = opts.config.COMMIT_SHA || null;
   /** What a document is served from: the evaluation loaded, the clock, the format, the reader's language. */
   type Served = { reply: FastifyReply; evaluation: service.EvaluationRecord; now: Date; format: ExportFormat; lang: Locale };
   const documents = {
     document: async ({ reply, evaluation, now, format }: Served) => {
       const found = await evaluationDocument(app.db, evaluation, { now });
-      return sendExport(reply, format, found, EvaluationDocumentRecord, () => evaluationDocumentTree(found, commitSha));
+      return sendExport(reply, format, found, EvaluationDocumentRecord, () => evaluationDocumentTree(found));
     },
     handout: async ({ reply, evaluation, now, format, lang }: Served) => {
       const found = await handout(app.db, evaluation, { now });
-      return sendExport(reply, format, found, HandoutRecord, () => handoutTree(found, commitSha, lang));
+      return sendExport(reply, format, found, HandoutRecord, () => handoutTree(found, lang));
     },
   };
   for (const [name, serve] of Object.entries(documents)) {

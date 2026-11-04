@@ -74,6 +74,7 @@ export {
   orderItems,
 } from "./attempt.js";
 export { onAttemptsEnded, type EndedAttempt } from "./dwell.js";
+export { attemptOwnerName } from "./names.js";
 // ADR-125 §9: the paper attempt's rows, written in the `paper` module's transaction.
 export {
   announcePaperAttempt,

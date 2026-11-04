@@ -19,10 +19,10 @@ import { enrollments } from "../../db/schema.js";
 import { type TestServer, testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { enterStarted, publishQuestion, reload, seedLive } from "../../test/live.js";
+import { pdfTools } from "../../test/pdf.js";
 import { addItems, applyState, joinedItems, type EvaluationRecord } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
-import { probeTypst } from "../../typst/service.js";
 import { exportsText, writeGrading } from "./service.js";
 
 const TEMPLATE = "// @@lock\nint main(void) {\n// @@endlock\n    return 0;\n// @@lock\n}\n// @@endlock\n";
@@ -308,14 +308,13 @@ describe("every answer to one item (F-EXP-01)", () => {
 });
 
 /*
- * The same document as a PDF (ADR-125 §3): compiled by the real binary when
- * the machine has one — `TYPST_BIN` or `typst` on PATH — and always in CI,
- * which installs it; a server whose probe failed answers 503.
+ * The same document as a PDF (ADR-125 §3), through the tools of
+ * `test/pdf.ts`; a server whose probe failed answers 503 — the shared
+ * `sendExport` path every PDF export takes.
  */
-const typst = await probeTypst(process.env["TYPST_BIN"] ?? "typst", 1024);
 
 describe("every answer to one item, as a PDF (ADR-125)", () => {
-  it.skipIf(!typst.available && !process.env["CI"])("serves the class's answers as a PDF, named like the Markdown", async () => {
+  it.skipIf(!pdfTools)("serves the class's answers as a PDF, named like the Markdown", async () => {
     const res = await get(url(built.code.item.id, "pdf"), teacher.headers);
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toBe("application/pdf");

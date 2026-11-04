@@ -111,6 +111,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   const handle = createDb(config.DATABASE_URL, app.log);
   app.decorate("db", handle.db);
   app.decorate("clock", clock ?? systemClock);
+  // The build's commit, named once in every export's provenance (ADR-121 §5); null when unknown.
+  app.decorate("commitSha", config.COMMIT_SHA || null);
   // One runner for the whole process, chosen once by RUNNER_MODE. Everything
   // that grades code takes `app.runner` and never reads the configuration.
   app.decorate("runner", createRunner(config));
@@ -268,7 +270,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(legacyPlugin);
   await app.register(livePlugin, { config });
   await app.register(previewPlugin);
-  await app.register(gradingPlugin, { commitSha: config.COMMIT_SHA || null });
+  await app.register(gradingPlugin);
   await app.register(resultsPlugin);
   await app.register(paperPlugin, { config });
   await app.register(statsPlugin);
@@ -446,6 +448,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
 declare module "fastify" {
   interface FastifyInstance {
     db: ReturnType<typeof createDb>["db"];
+    /** `COMMIT_SHA`, or null: the build an export names (ADR-121 §5). */
+    commitSha: string | null;
   }
   interface FastifyContextConfig {
     /** A read served by a non-GET verb: no refresh hint on its response. */

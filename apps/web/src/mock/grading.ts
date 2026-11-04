@@ -955,12 +955,26 @@ on("GET", "/app/api/evaluations/:id/grading/steps", (m) => {
   };
 });
 
-// ADR-125: the config says the mock makes PDFs, so Export's PDF item downloads one (an empty page).
+/** A PDF of the mock: an empty page under `name`. */
+const mockPdf = (name: string) =>
+  new Response("%PDF-1.7\n%mock\n%%EOF\n", {
+    headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${name}"` },
+  });
+
+// ADR-125: the config says the mock makes PDFs, so every PDF button downloads one.
 on("GET", "/app/api/evaluations/:id/items/:itemId/answers.pdf", (m) => {
   gradingWorldOr404(m.groups!.id!);
-  return new Response("%PDF-1.7\n%mock\n%%EOF\n", {
-    headers: { "content-type": "application/pdf", "content-disposition": 'attachment; filename="answers.pdf"' },
+  return mockPdf("answers.pdf");
+});
+for (const name of ["document", "handout"]) {
+  on("GET", `/app/api/evaluations/:id/${name}.pdf`, (m) => {
+    evaluationOr404(m.groups!.id!);
+    return mockPdf(`${name}.pdf`);
   });
+}
+on("GET", "/app/api/evaluations/:id/results/attempts/:attemptId/copy.pdf", (m) => {
+  gradingWorldOr404(m.groups!.id!);
+  return mockPdf("copy.pdf");
 });
 
 on("GET", "/app/api/evaluations/:id/grading/progress", (m) => {

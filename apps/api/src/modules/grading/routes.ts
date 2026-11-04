@@ -31,7 +31,7 @@ import { evaluationGradingRole } from "@quiz/domain";
 import { tracer, type AuditAction } from "../../audit.js";
 import { EXPORT_FORMATS, sendExport } from "../../documents/files.js";
 import { loadEvaluation, staffAnswer, staffGrading, teacherGuard, withCourseRole } from "../guards.js";
-import { notFound, sendAttachment, teacherRoute } from "../http.js";
+import { notFound, teacherRoute } from "../http.js";
 import { joinedItem, joinedItems, type JoinedItem } from "../evaluation/service.js";
 import { listVersions } from "../pool/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
@@ -40,8 +40,7 @@ import { itemAnswers, itemAnswersDocument } from "./itemAnswers.js";
 import { enqueueEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
 
-/** `commitSha`: the build, named in an export's provenance (ADR-121 §5); null when unknown. */
-export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: string | null }) {
+export async function gradingPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
 
   /** Params, scope, then body: access is loaded before anything else is checked (invariant 6). */
@@ -141,23 +140,13 @@ export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: str
       `/app/api/evaluations/:id/items/:itemId/answers.${format}`,
       { preHandler: requireTeacher },
       teacher({ params: ItemParam, load: staffEvaluation }, async ({ reply, now, params, scope }) => {
-        const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: format === "md" });
+        // The Markdown and the PDF print each answer as text; the record keeps it as stored.
+        const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: format !== "json" });
         if (!found) return notFound(reply);
-        return sendExport(reply, format, found, ItemAnswersRecord, () => itemAnswersDocument(found, opts.commitSha));
+        return sendExport(reply, format, found, ItemAnswersRecord, () => itemAnswersDocument(found));
       }),
     );
   }
-  app.get(
-    "/app/api/evaluations/:id/items/:itemId/answers.pdf",
-    { preHandler: requireTeacher },
-    teacher({ params: ItemParam, load: staffEvaluation }, async ({ req, reply, now, params, scope }) => {
-      const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: true });
-      if (!found) return notFound(reply);
-      // Drawn with the images the reader may see (a staff member: all of them).
-      const pdf = await app.pdf.render(itemAnswersDocument(found, opts.commitSha), req.user!);
-      return sendAttachment(reply, "application/pdf", `${found.basename}.pdf`, pdf);
-    }),
-  );
 
   /** The whole history of one answer, newest first (F-GRADE-05). */
   app.get(

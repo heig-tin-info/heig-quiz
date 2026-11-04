@@ -2,10 +2,12 @@ import { Ban, Download } from "lucide-react";
 
 import type { PrintRefusal } from "@quiz/contracts";
 
+import { usePublicConfig } from "../api";
+import { useDownload } from "../download";
 import { useT, type Dict } from "../i18n";
 import { QueryError } from "../queryError";
 import { typeLabel } from "../questionTypes";
-import { LinkButton, Sheet, Skeleton } from "../ui";
+import { Button, LinkButton, Sheet, Skeleton } from "../ui";
 import { useEvaluation } from "./api";
 
 /** The two documents of an evaluation (ADR-121 step 3, ADR-125), and their routes' stem. */
@@ -14,10 +16,10 @@ const DOCUMENTS = [
   { key: "document", label: "eval.export.document", desc: "eval.export.document.desc" },
 ] as const satisfies readonly { key: string; label: keyof Dict; desc: keyof Dict }[];
 
-/** The formats each document downloads in. PR 4 (ADR-125 §3) adds the PDF first, behind `capabilities.pdf`. */
+/** The formats each document downloads in as a plain link; the PDF comes first, fetched (ADR-125 §3). */
 const FORMATS = [
   { ext: "md", label: "md.label" },
-  { ext: "json", label: "eval.export.json" },
+  { ext: "json", label: "export.json" },
 ] as const satisfies readonly { ext: string; label: keyof Dict }[];
 
 /** The sentence of a refusal that names no type. */
@@ -34,9 +36,11 @@ const exportPath = (evaluationId: string, document: string, ext: string): string
  * "Export…" of an evaluation (ADR-121 step 3, ADR-125 §17): the hand-out to
  * print and the statement with its key, each a row of plain download links,
  * or a muted line saying why the evaluation does not make it (`exports` of
- * the detail, the server's `printRefusal`). A reading sheet: every button
- * is a secondary download, the screen behind keeps its primary. Opened from
- * an evaluation row's menu and from the evaluation page's.
+ * the detail, the server's `printRefusal`). The PDF first, when the server
+ * makes PDFs (`config.pdf`): fetched, so a refusal (busy, no Typst) is a
+ * toast and the sheet stays. A reading sheet: every button is a secondary
+ * download, the screen behind keeps its primary. Opened from an evaluation
+ * row's menu and from the evaluation page's.
  */
 export function ExportSheet({
   evaluationId,
@@ -49,6 +53,8 @@ export function ExportSheet({
 }) {
   const t = useT();
   const detail = useEvaluation(evaluationId);
+  const pdf = usePublicConfig().data?.pdf === true;
+  const download = useDownload();
   const refusalText = (refusal: PrintRefusal) =>
     refusal.reason === "type"
       ? t("eval.export.types", { types: refusal.types.map((type) => typeLabel(t, type)).join(", ") })
@@ -80,6 +86,15 @@ export function ExportSheet({
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
+                    {pdf ? (
+                      <Button
+                        variant="secondary"
+                        loading={download.isPending && download.variables === exportPath(evaluationId, key, "pdf")}
+                        onClick={() => download.mutate(exportPath(evaluationId, key, "pdf"))}
+                      >
+                        <Download /> {t("export.pdf")}
+                      </Button>
+                    ) : null}
                     {FORMATS.map(({ ext, label: format }) => (
                       <LinkButton key={ext} href={exportPath(evaluationId, key, ext)} download>
                         <Download /> {t(format)}
