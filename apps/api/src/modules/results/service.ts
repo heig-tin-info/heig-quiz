@@ -137,6 +137,8 @@ import { typeOf } from "../pool/config.js";
 import { exampleInstance, explanationOrNull, isParameterized } from "../pool/service.js";
 
 export { watchReleasedGrades } from "./updated.js";
+// The student's own copy as a file, for the `privacy` module's route.
+export { studentCopyDocument, studentCopyRecord } from "./copy.js";
 
 /**
  * Everything this module refuses, by code: its status and, where the
@@ -149,6 +151,10 @@ const REFUSALS = {
   correction_not_allowed: [422],
   // …and on an exercise that is not running (not yet, or no more).
   correction_not_open: [409, "only a running exercise publishes its correction early"],
+  // The student's own copy (ADR-112 amendment of 2026-11-03): only of what
+  // the feedback page shows (`reason`, its refusal), never of a practice attempt.
+  feedback_pending: [409, "the feedback page shows nothing of this attempt yet"],
+  practice_attempt: [409, "a practice attempt has no copy"],
 } satisfies Record<string, Refusal>;
 
 export class ResultsError extends refusalClass("ResultsError", REFUSALS) {}

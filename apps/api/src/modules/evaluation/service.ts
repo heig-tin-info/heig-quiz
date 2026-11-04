@@ -47,6 +47,8 @@ export {
 export type { JoinedItem } from "./reads.js";
 export { listActivities } from "./activities.js";
 export { declares } from "./print.js";
+// The hand-out, for the student's blank print of a past series (the `privacy` module).
+export { handout, handoutTree } from "./document.js";
 export { announceMove } from "./announce.js";
 export { countTemplates } from "./templates.js";
 export {
@@ -65,6 +67,7 @@ export {
   trustedClients,
   drillAllowed,
   practiceOpen,
+  inPastSeries,
   attemptCount,
   deletionRole,
   joinedItems,

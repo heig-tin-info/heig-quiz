@@ -1,11 +1,11 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Me, PracticeCard, StudentHome as StudentHomeData } from "@quiz/contracts";
 
 import { makeMe } from "../test/fixtures";
-import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { mockFetch, ok, publicConfig, renderWithProviders, type Reply } from "../test/render";
 import { StudentHome } from "./StudentHome";
 
 /*
@@ -43,13 +43,16 @@ const homeWith = (cards: PracticeCard[]): StudentHomeData => ({
   serverNow: new Date().toISOString(),
 });
 
-const render = (cards: PracticeCard[], navigate = vi.fn()) => {
-  mockFetch({
+const PRINT = "/app/api/student/evaluations/e9/handout.pdf";
+
+const render = (cards: PracticeCard[], navigate = vi.fn(), extra: Record<string, Reply> = {}) => {
+  const { calls } = mockFetch({
     "GET /app/api/student/home": ok(homeWith(cards)),
     "GET /app/api/student/classrooms": ok([]),
+    ...extra,
   });
   renderWithProviders(<StudentHome me={me} navigate={navigate} />);
-  return navigate;
+  return Object.assign(navigate, { calls });
 };
 
 describe("the student's Past series", () => {
@@ -84,6 +87,28 @@ describe("the student's Past series", () => {
     const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
     expect(within(section).getByText("in progress")).toBeVisible();
     expect(within(section).getByRole("button", { name: "Resume" })).toBeVisible();
+  });
+
+  it("prints the blank series beside the row's one action, when the server makes PDFs", async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.fn((_blob: Blob) => "blob:pdf");
+    Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
+    const { calls } = render([practice({})], vi.fn(), { ...publicConfig(true), [`GET ${PRINT}`]: ok("%PDF-1.7") });
+    const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
+    const print = await within(section).findByRole("button", { name: "Print the series" });
+    // Practise stays the row's one button with a label.
+    expect(within(section).getByRole("button", { name: "Practise" })).toBeVisible();
+    await user.click(print);
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1));
+    expect(calls.filter((c) => c.url === PRINT)).toHaveLength(1);
+  });
+
+  it("offers no print when the server makes no PDF", async () => {
+    render([practice({})], vi.fn(), publicConfig(false));
+    const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
+    expect(within(section).getByRole("button", { name: "Practise" })).toBeVisible();
+    // The config has answered: still no print.
+    await waitFor(() => expect(within(section).queryByRole("button", { name: "Print the series" })).toBeNull());
   });
 
   it("draws nothing when no exercise is open to practice", async () => {

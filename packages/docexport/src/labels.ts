@@ -39,6 +39,14 @@ export interface Labels {
   symbols: string;
   lengthLimit: string;
   characters: string;
+  /** A student's copy (ADR-125 §18): its summary and what an item says of itself. */
+  grade: string;
+  awaitingGrading: string;
+  comment: string;
+  bonus: string;
+  notCounted: string;
+  /** What stands for a statement or an answer a type cannot print. */
+  notPrintable: string;
   /** Between a label and its value: `": "` in English, a narrow no-break space and `": "` in French. */
   colon: string;
 }
@@ -68,6 +76,12 @@ export const EN_LABELS: Labels = {
   symbols: "Symbols",
   lengthLimit: "Length limit",
   characters: "characters",
+  grade: "Grade",
+  awaitingGrading: "Questions awaiting grading",
+  comment: "Your teacher's comment",
+  bonus: "bonus",
+  notCounted: "not counted",
+  notPrintable: "Not printable: read it in Quiz.",
   colon: ": ",
 };
 
@@ -96,6 +110,12 @@ export const FR_LABELS: Labels = {
   symbols: "Symboles",
   lengthLimit: "Longueur maximale",
   characters: "caractères",
+  grade: "Note",
+  awaitingGrading: "Questions en attente de correction",
+  comment: "Commentaire de l'enseignant",
+  bonus: "bonus",
+  notCounted: "non comptée",
+  notPrintable: "Non imprimable : à lire dans Quiz.",
   // A narrow no-break space before the colon, as the interface writes it.
   colon: " : ",
 };

@@ -80,6 +80,7 @@ import {
 import {
   isLatestAttempt,
   countedItemsByEvaluation,
+  inPastSeries,
   joinedItems,
   parameterizedItems,
   practiceOpen,
@@ -1938,9 +1939,7 @@ export async function studentBoard(
   const withRetakes = rows.filter((r) => retakesEnabled(r.evaluation));
   // ADR-122: the exercises over and open to practice, outside an archived
   // classroom, and the student's practice attempts on them.
-  const practiced = options.practice
-    ? rows.filter((r) => r.archivedAt === null && isEvaluationOver(r.evaluation.state) && practiceOpen(r.evaluation))
-    : [];
+  const practiced = options.practice ? rows.filter((r) => inPastSeries(r.evaluation, r.archivedAt)) : [];
   const [perEvaluation, practiceRows] = await Promise.all([
     studentAttempts(
       db,

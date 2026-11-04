@@ -28,7 +28,9 @@ const CONTENT_TYPE: Record<ExportFormat, string> = {
  * it, built only when asked for, as Markdown or as a PDF (ADR-125). The
  * document's provenance names the build here, once (ADR-121 §5). The PDF
  * draws the images the caller may see; `app.pdf` answers
- * `503 pdf_unavailable` or `pdf_busy` when it cannot make one.
+ * `503 pdf_unavailable` or `pdf_busy` when it cannot make one. `delivered`
+ * runs once the body exists, before it is sent: what counts a download (an
+ * audit row, a rate) counts none that failed.
  */
 export async function sendExport<R>(
   reply: FastifyReply,
@@ -36,6 +38,7 @@ export async function sendExport<R>(
   found: { basename: string; record: R },
   schema: z.ZodType<R>,
   tree: () => Document,
+  delivered?: () => Promise<void>,
 ): Promise<FastifyReply> {
   const { server, request } = reply;
   const document = (): Document => {
@@ -48,5 +51,6 @@ export async function sendExport<R>(
       : format === "pdf"
         ? await server.pdf.render(document(), request.user!)
         : renderMarkdown(document());
+  await delivered?.();
   return sendAttachment(reply, CONTENT_TYPE[format], `${found.basename}.${format}`, body);
 }
