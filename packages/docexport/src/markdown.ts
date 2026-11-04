@@ -64,7 +64,7 @@ function drawingLine(alt: string): string {
   return text === "" ? "" : `*${text}*`;
 }
 
-/** A paper answer space, as plain Markdown can preview one (ADR-125; a squared frame as a plain one, ADR-126). */
+/** A paper answer space, as plain Markdown can preview one (ADR-125; a ruled frame as a plain one, ADR-126). */
 function zoneBlock(z: AnswerZone, l: Labels): string {
   switch (z.zone) {
     case "bubbles": {

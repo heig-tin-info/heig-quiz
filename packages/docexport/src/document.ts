@@ -71,12 +71,19 @@ export interface AnswerZone {
   /** `free`: the height of the frame, in millimetres. */
   heightMm?: number;
   /**
-   * `free`: a squared drawing frame (ADR-126 §3), its light-grey grid this
-   * many millimetres apart. The zone stays `free`: graded by hand (ADR-125 §14).
+   * `free`: the frame's light-grey pattern (ADR-126 §3), `pitchMm` apart: a
+   * square grid to draw on, or ruled lines to write pseudo-code on. The zone
+   * stays `free`: graded by hand (ADR-125 §14).
    */
-  grid?: { pitchMm: number };
+  pattern?: FramePattern;
   /** `free`: a starter drawn in grey at the frame's top left, under the student's drawing (ADR-126 §4). */
   underlay?: Drawing;
+}
+
+/** The pattern of a `free` frame (ADR-126 §3). */
+export interface FramePattern {
+  kind: "grid" | "lines";
+  pitchMm: number;
 }
 
 /**
@@ -139,7 +146,7 @@ export const noAnswerOr = (labels: Labels, isEmpty: boolean, block: Block): Bloc
 /** An answer space (ADR-125). */
 export const answerZone = (
   zone: ZoneKind,
-  options: Pick<AnswerZone, "part" | "labels" | "multiple" | "lines" | "heightMm" | "grid" | "underlay"> = {},
+  options: Pick<AnswerZone, "part" | "labels" | "multiple" | "lines" | "heightMm" | "pattern" | "underlay"> = {},
 ): AnswerZone => ({ kind: "answerZone", zone, ...options });
 
 /**

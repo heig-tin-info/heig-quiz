@@ -149,8 +149,8 @@ describe("drawings (ADR-126)", () => {
     expect(body([drawing(figure, "  ")])).toBe("\n");
   });
 
-  it("previews a squared frame as a plain one, its starter left out", () => {
-    const zone = answerZone("free", { heightMm: 40, grid: { pitchMm: 4 }, underlay: figure });
+  it("previews a ruled frame as a plain one, its starter left out", () => {
+    const zone = answerZone("free", { heightMm: 40, pattern: { kind: "grid", pitchMm: 4 }, underlay: figure });
     expect(body([zone])).toBe(body([answerZone("free", { heightMm: 40 })]));
     expect(body([zone])).not.toContain("SECRET_SVG");
   });

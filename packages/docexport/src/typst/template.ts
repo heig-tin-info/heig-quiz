@@ -12,18 +12,23 @@
  * An image is `img(id, alt, width)`: drawn from `assets/<id>` when the API
  * could load it — `drawable`, the line it puts before the source — else its
  * alt text. A figure is `figsvg(svg, alt, width)`: the SVG the renderer
- * wrote from a closed drawing (ADR-126), inline, never a file. A squared
- * frame is `canvas(height, pitch, under)`: a `free` zone whose grid is a
- * native `tiling`, with an optional starter `(svg, width)` drawn under it.
+ * wrote from a closed drawing (ADR-126), inline, never a file. A free frame
+ * is `free(height, pattern:, pitch:, under:)`: plain, or ruled by a native
+ * `tiling` — a square grid or horizontal lines (ADR-126 §3) — with an
+ * optional starter `(svg, width)` drawn under it, clipped by the frame.
  * Nothing here takes user text: the renderer passes it as string literals.
  */
+import { DRAWING_FONT } from "../drawing.js";
 
-/** The fonts, both embedded in the Typst binary. */
+/** The fonts, both embedded in the Typst binary; a drawing's text uses the mono one. */
 export const BODY_FONT = "Libertinus Serif";
-export const MONO_FONT = "DejaVu Sans Mono";
+export const MONO_FONT = DRAWING_FONT;
 
 /** The page margin, in millimetres: at least 20 (ADR-125 §6 reserves 10 for palier B). */
 export const MARGIN_MM = 20;
+
+/** An A4 page, in millimetres. */
+export const PAGE_MM = { width: 210, height: 297 } as const;
 
 export const PREAMBLE = String.raw`
 #let img(id, alt, width) = if id in drawable { image("assets/" + id, width: width * 1%) } else { alt }
@@ -56,16 +61,14 @@ export const PREAMBLE = String.raw`
 #let lines(n) = block(above: 0.6em, below: 0.6em, width: 100%,
   stack(spacing: 8mm, v(0mm), ..range(n).map(_ => rule)))
 
-#let free(height) = block(above: 0.6em, below: 0.6em, width: 100%, height: height,
-  stroke: 0.5pt + luma(130), radius: 1mm)
-
-#let squares(pitch) = tiling(size: (pitch, pitch), {
+#let ruling(pattern, pitch) = tiling(size: (pitch, pitch), {
   place(line(start: (0pt, 0pt), end: (pitch, 0pt), stroke: 0.25pt + luma(205)))
-  place(line(start: (0pt, 0pt), end: (0pt, pitch), stroke: 0.25pt + luma(205)))
+  if pattern == "grid" { place(line(start: (0pt, 0pt), end: (0pt, pitch), stroke: 0.25pt + luma(205))) }
 })
 
-#let canvas(height, pitch, under) = block(above: 0.6em, below: 0.6em, width: 100%, height: height,
-  stroke: 0.5pt + luma(130), radius: 1mm, clip: true, fill: squares(pitch),
+#let free(height, pattern: none, pitch: 4mm, under: none) = block(above: 0.6em, below: 0.6em, width: 100%,
+  height: height, stroke: 0.5pt + luma(130), radius: 1mm, clip: true,
+  fill: if pattern == none { none } else { ruling(pattern, pitch) },
   if under != none { place(top + left, image(bytes(under.at(0)), format: "svg", width: under.at(1) * 1mm)) })
 
 #let field(label) = grid(columns: (auto, 1fr), column-gutter: 2mm, align: bottom,

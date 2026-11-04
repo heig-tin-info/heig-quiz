@@ -8,8 +8,8 @@ Delivery progress lives in `changes/`.
 
 Amended 2026-11-04 by [ADR-126](ADR-126-types-a-canevas-sur-papier.md),
 scope: §5 and §20 (`diagram`, `circuit`, `logic` and `blocks` become
-printable; ADR-126 §8) and §6 (a `free` zone may be a squared frame with a
-starter, `grid` and `underlay`, and stays `free`; ADR-126 §3–§4).
+printable; ADR-126 §8) and §6 (a `free` zone may be a ruled frame with a
+starter, `pattern` and `underlay`, and stays `free`; ADR-126 §3–§4).
 
 Scope: the printed hand-out of an exam and the PDF of every export; the
 paper attempt a staff member enters, its scan, and every reader of
@@ -123,7 +123,7 @@ nothing of B or C.
    `#zone(id, kind)[…]`, which emits
    `#metadata((id, kind, page, x, y, w, h)) <answer-zone>` for palier B's
    `typst query`. No fiducial, no QR code; a margin of at least 10 mm stays
-   free for them. *(Amended by ADR-126 §3: a squared `free` frame.)*
+   free for them. *(Amended by ADR-126 §3: a ruled `free` frame.)*
 
 7. **Fixed words of a student-facing document** (a scoped exception to
    invariant 1 / N-I18N-01 and to ADR-121 §4). Three documents only — the

@@ -1,4 +1,4 @@
-# ADR-126 — Canvas question types on paper: a closed drawing model, inline SVG, a squared free frame
+# ADR-126 — Canvas question types on paper: a closed drawing model, inline SVG, a ruled free frame
 
 ## Status
 
@@ -7,10 +7,10 @@ issue #551). Delivery progress lives in `changes/`.
 
 Scope: the printed and exported documents of the `diagram`, `circuit`,
 `logic` and `blocks` question types; the `drawing` block of the document
-tree and its SVG writer; the squared form of a `free` answer zone.
+tree and its SVG writer; the ruled form of a `free` answer zone.
 
 Relations: amends [ADR-125](ADR-125-copies-papier-pdf-typst.md) §5 and §20
-(which types print), §6 (the squared `free` zone) and [ADR-121](ADR-121-fabrique-d-exports.md) §1 (a new
+(which types print), §6 (the ruled `free` zone) and [ADR-121](ADR-121-fabrique-d-exports.md) §1 (a new
 block kind). Depends on ADR-125 §2 (the compile sandbox), §6 (the answer
 zones), §7 (fixed words), §14 (untyped free zones), §19 (leak tests);
 [ADR-046](ADR-046-type-diagramme.md) (the diagram's server entry has no
@@ -39,11 +39,11 @@ ADR-125 §2, unchecked by any renderer).
    `{ kind: "drawing"; drawing: Drawing; alt: string; widthMm?: number;
    maxHeightMm?: number }`. A `Drawing` is a closed model in
    `packages/docexport` (`src/drawing.ts`): `{ viewBox: [x, y, w, h];
-   items: DrawingItem[] }`, where an item is a `path`, `rect`, `circle`,
-   `ellipse`, `line`, `text`, or a group `g` with an optional affine
-   `matrix` transform. Shapes are painted with a closed set of paints —
-   `none`, `ink`, `grey`, `faint`, `paper` — a stroke width, a dash array
-   and an opacity; a text has `x`, `y`, `text`, `anchor`
+   items: DrawingItem[] }`, where an item is a `path`, `rect`, `ellipse`
+   (a circle too), `line`, `text`, or a group `g`, the one item with an
+   affine `matrix` transform and an opacity. Shapes are painted with a
+   closed set of paints — `none`, `ink`, `grey`, `faint`, `paper` — a
+   stroke width and a dash array; a text has `x`, `y`, `text`, `anchor`
    (`start`/`middle`/`end`), `baseline` (`alphabetic`/`middle`), `size`,
    `weight` (`normal`/`bold`) and `italic`. A block never holds markup of a
    target format: each canvas type writes a `Drawing` from its model through
@@ -64,8 +64,14 @@ ADR-125 §2, unchecked by any renderer).
    - no `class`, `style`, `href`, `image`, `use`, `foreignObject`, script or
      `url(…)`: the writer has no way to emit them;
    - a path's data must match `^[MLHVCSQTAZmlhvcsqtaz0-9 .,eE+-]*$`;
-   - every number must be finite and within ±10⁶; widths, sizes and
-     opacities are clamped into range;
+   - every number must be finite and within ±10⁶, each number of a path's
+     data included; widths, sizes and opacities are clamped into range;
+   - the transforms of nested groups are composed down the tree: a
+     composed coefficient past ±10⁶, or a determinant below 10⁻⁶, refuses
+     the drawing (six nested ×10⁶ scales with an opacity, each within the
+     cap, made Typst 0.15.1's PDF writer panic and fail the whole document);
+   - a value of the wrong shape (a cast string for an array, an unknown
+     kind or paint) is refused, never thrown;
    - caps: 5,000 items, groups 8 deep, 500 characters per text, 20,000 per
      path, 500,000 for the whole SVG.
 
@@ -74,23 +80,30 @@ ADR-125 §2, unchecked by any renderer).
    `image(bytes(<string literal>), format: "svg")`: no asset file, nothing
    new in the compile root, no change to the sandbox of ADR-125 §2.
 
-3. **The squared frame.** The `free` answer zone gains
-   `grid?: { pitchMm: number }` and `underlay?: Drawing`. With either, the
-   Typst renderer draws a frame of the zone's height whose light-grey grid
-   is native Typst — a `tiling` of 0.25 pt lines at `luma(205)`, 4 mm apart
-   by default (2 to 20 mm) — still wrapped by `zone()`. The zone **stays
-   `free`**: its metadata kind, palier B's manifest and ADR-125 §14 (an
-   untyped free zone is proposed at 0, `paper_free_zone`, graded by hand)
-   apply unchanged. The Markdown hand-out previews it as a plain frame.
+3. **The ruled frame.** The `free` answer zone gains
+   `pattern?: { kind: "grid" | "lines"; pitchMm: number }` and
+   `underlay?: Drawing`. With a pattern, the Typst renderer fills the
+   frame of the zone's height with native Typst — a `tiling` of 0.25 pt
+   lines at `luma(205)`, `pitchMm` apart (4 mm when not finite, held within
+   2 to 20 mm): a square grid to draw on, or horizontal ruled lines to
+   write on — still wrapped by `zone()`, the same `free(…)` function as a
+   plain frame. The zone **stays `free`**: its metadata kind, palier B's
+   manifest and ADR-125 §14 (an untyped free zone is proposed at 0,
+   `paper_free_zone`, graded by hand) apply unchanged. The Markdown
+   hand-out previews it as a plain frame.
 
 4. **The starter.** A diagram's starter is the frame's `underlay`, drawn
    at the frame's top left in grey: `toSvg` with `greyed` maps `ink` to
-   `grey`, whatever the type wrote. An underlay `toSvg` refuses is left out;
-   the frame stays.
+   `grey`, whatever the type wrote. It is printed at a **fixed scale**, one
+   drawing unit per CSS pixel, never shrunk — the frame clips what passes
+   its edge — so a producer that sets `pitchMm` to its editor's grid times
+   `PX_MM` (25.4 / 96) keeps the starter on the printed grid. An underlay
+   `toSvg` refuses is left out; the frame stays.
 
 5. **Scale.** A drawing is printed at `widthMm`, else one drawing unit per
-   CSS pixel (1 px ≈ 0.26 mm), never wider than the 170 mm text column,
-   and narrowed to keep `maxHeightMm`. A circuit or logic box of 40 × 25
+   CSS pixel (1 px ≈ 0.26 mm), never wider than the text column (A4 less
+   both margins, 170 mm), and narrowed to keep `maxHeightMm`, itself never
+   more than the page body (257 mm): no figure overflows a page. A circuit or logic box of 40 × 25
    cells prints at 4 mm per cell, 160 × 100 mm; a diagram at 1 px ≈
    0.26 mm, shrunk to the column.
 
@@ -105,18 +118,18 @@ ADR-125 §2, unchecked by any renderer).
    `Labels`; `answerZone` gains that parameter when the first type needs it.
 
 8. **Which types print, and what** (amends ADR-125 §5 and §20):
-   - `diagram`, `circuit`, `logic`: `answerZone` returns a squared `free`
-     frame; `statementDoc` prints the figure the student is given (a
+   - `diagram`, `circuit`, `logic`: `answerZone` returns a `free` frame
+     with a `grid` pattern; `statementDoc` prints the figure the student is given (a
      circuit's or a logic box's fixed parts, a diagram's starter); the
      documents that show the key (`solutionDoc`) print the reference design
      as a `drawing`.
-   - `blocks`: the answer zone is `lines`, for pseudo-code written by hand;
-     the statement prints the visible warehouse maps as drawings, the
-     battery, the toolbox and the starter program as pseudo-code; the key
-     prints the reference program as pseudo-code. A hidden warehouse never
-     reaches a student document (#998). A blocks answer is typed by the
-     teacher through the paper entry page like any typed answer; ADR-125
-     §14 does not apply to it.
+   - `blocks`: the answer zone is a `free` frame with a `lines` pattern, for
+     pseudo-code written by hand; the statement prints the visible warehouse
+     maps as drawings, the battery, the toolbox and the starter program as
+     pseudo-code; the key prints the reference program as pseudo-code. A
+     hidden warehouse never reaches a student document (#998). A blocks
+     paper answer is a free zone **graded by hand** under ADR-125 §14: the
+     teacher does not rebuild the program in Blockly.
    - The student's own answer drawn in their copy (`studentAnswerDoc`) is a
      later, optional step.
 
@@ -161,6 +174,9 @@ ADR-125 §2, unchecked by any renderer).
   native `tiling` is one line of source.
 - **A new zone kind (`canvas`)**: palier B's manifest and ADR-125 §14 would
   need a case for what is, on paper, a free frame.
+- **A `lines` zone for blocks**: a typed zone, so an untranscribed program
+  would be graded as no answer, and the teacher would rebuild each program
+  in Blockly to enter it.
 - **Blockly's own rendering for `blocks`**: block shapes need the Blockly
   runtime and a DOM; pseudo-code reads well on paper and is written by hand.
 - **Sizing the frame from the reference design**: a leak of the answer's
