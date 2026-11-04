@@ -15,7 +15,7 @@ import { FEEDBACK_REFUSALS, ITEM_STANDINGS } from "@quiz/domain";
 
 import { StaffItemRef } from "./common.js";
 import { EvaluationMode, GradingScale, ItemCounting, RetakeKeep, RetakeScope } from "./evaluation.js";
-import { AttemptState, RetakeRefusalReason } from "./live.js";
+import { AttemptOrigin, AttemptState, RetakeRefusalReason } from "./live.js";
 import { Verdict } from "./grading.js";
 
 /** A student with no attempt at all still gets a row, and a 1.0 (F-RES-02). */
@@ -50,6 +50,8 @@ export const ResultRow = z.object({
    * in the CSV's grade; the success rates keep its attempt.
    */
   excused: z.object({ comment: z.string().nullable() }).nullable(),
+  /** ADR-125: the counted attempt is a paper copy (`digital` without one); the row's Paper badge. */
+  origin: AttemptOrigin,
 });
 export type ResultRow = z.infer<typeof ResultRow>;
 
@@ -363,6 +365,10 @@ export type StudentFeedback = z.infer<typeof StudentFeedback>;
  */
 export const StaffCopy = z.object({
   attemptId: z.uuid(),
+  /** ADR-125 §9: a paper copy typed in by the staff. */
+  origin: AttemptOrigin,
+  /** ADR-125 §12: the paper attempt that replaced this one; it then counts nowhere. */
+  supersededBy: z.uuid().nullable(),
   points: z.number(),
   totalPoints: z.number(),
   grade: z.number(),

@@ -236,6 +236,7 @@ export async function dashboardView(
         ),
         access: (userId === null ? undefined : access.get(userId)) ?? PORTAL_ACCESS,
         incidents: attempt ? (incidents.get(attempt.id)?.length ?? 0) : 0,
+        origin: attempt?.origin ?? "digital",
       };
     }),
   );
@@ -396,6 +397,8 @@ export async function attemptInspect(
       startedAt: isoOrNull(attempt.startedAt),
       deadlineAt: isoOrNull(attempt.deadlineAt),
       submittedAt: isoOrNull(attempt.submittedAt),
+      origin: attempt.origin,
+      supersededBy: attempt.supersededBy,
     },
     items: items.map((entry) => {
       const answer = answered.get(entry.item.id);

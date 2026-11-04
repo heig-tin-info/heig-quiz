@@ -66,6 +66,7 @@ const REASON_KEYS: Record<MachineReason, keyof Dict> = {
   runner_request_invalid: "grading.reason.runner_request_invalid",
   template_region_mismatch: "grading.reason.template_region_mismatch",
   runner_busy: "grading.reason.runner_busy",
+  paper_free_zone: "grading.reason.paper_free_zone",
 };
 
 export const machineReason = (t: TFunction, comment: string): string =>

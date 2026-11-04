@@ -16,6 +16,7 @@ const TEACHER_HIDDEN: readonly Route["view"][] = [
   // Drawn on the whole screen, outside the frame (App.tsx's FULL_SCREEN).
   "questionPreview",
   "evaluationPreview",
+  "paperEntry",
   "poll",
   "correction",
   "attempt",

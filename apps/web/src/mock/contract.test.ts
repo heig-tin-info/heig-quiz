@@ -729,6 +729,8 @@ const UNCHECKED = [
   "/app/api/projects/:id/grading", // ProjectGradingView: checked under its flag, by "the mock's grading by criteria"
   "/app/api/projects/:id/repos/:rid/commits", // ProjectCommitGraph: checked under the same flag
   "/app/api/projects/:id/repos/:rid/criteria/:criterionId/ci-log", // CriterionCiLog: checked under the same flag
+  "/app/api/evaluations/:id/paper/items", // PaperItems: under `?paper=1` and a student's `?user=` (ADR-125)
+  "/app/api/evaluations/:id/attempts/:attemptId/paper", // PaperSheet: only once a copy was handed in
 ];
 
 // ADR-051 §7: one pending pairing (the mock keeps it in localStorage, which

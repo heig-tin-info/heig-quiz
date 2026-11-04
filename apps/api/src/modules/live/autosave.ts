@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { and, count, eq, getTableColumns, gte, isNull, sql } from "drizzle-orm";
 
 import type { AnswerCoordinates, AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
-import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer } from "@quiz/core/server";
+import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer, type StudentView } from "@quiz/core/server";
 import { itemPoints, mayValidate, progressStatus } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
@@ -286,6 +286,37 @@ async function publishCell(
   });
 }
 
+/**
+ * An answer a student sent, read as the save reads it (§4.7 step 6): through
+ * the view this attempt was served of the item (ADR-097), on this attempt's
+ * own instance of a parameterized question (ADR-056) — a poll's, forced
+ * unshuffled, as much as an exam's — then the type's own schema, the one
+ * answer entry, and the rules that need the config (an mcq in `single`
+ * mode takes one choice, ADR-026). Refused with `422 answer_invalid`. From
+ * here on the answer is canonical — checked, stored, graded and counted as
+ * such. The save and the paper copy a staff member hands in (ADR-125 §9)
+ * both read their answers here.
+ */
+export function canonicalAnswer(
+  evaluation: EvaluationRecord,
+  joined: JoinedItem,
+  attempt: InstanceAttempt,
+  raw: unknown,
+  coordinates: AnswerCoordinates | undefined,
+): { config: unknown; view: StudentView; payload: unknown; answered: boolean } {
+  const { config, view } = attemptItemView(evaluation, joined, attempt);
+  const type = typeOf(joined.question.type);
+  const entry = answerFromStudent(joined.question.type, config, view, raw, coordinates);
+  if ("issues" in entry) throw new AnswerInvalid(entry.issues);
+  const payload = entry.answer;
+  const misfit = type.answerMisfit?.(config, payload);
+  if (misfit) throw new AnswerInvalid([{ message: misfit }]);
+  // Issue #89: an answer that holds something takes back an "I won't
+  // answer". An EMPTY write leaves it alone — a cleared field is not an
+  // answer, and the student may have said "won't answer" just before it.
+  return { config, view, payload, answered: type.isAnswered(payload) };
+}
+
 /** What an answer write is given. */
 export interface AnswerWrite {
   evaluation: EvaluationRecord;
@@ -317,27 +348,7 @@ export async function writeAnswer(
 ): Promise<{ reply: AutosaveResponse; joined: JoinedItem }> {
   const { evaluation, attempt, itemId, revision, now } = input;
   const { joined, current } = await stateTarget(db, evaluation, attempt, itemId, now);
-
-  // The view this attempt was served of the item (ADR-097), on this
-  // attempt's own instance of a parameterized question (ADR-056): a poll's,
-  // forced unshuffled, as much as an exam's. Its config is parsed on every
-  // write — the conversion and `answerMisfit` both need it.
-  const { config, view } = attemptItemView(evaluation, joined, attempt);
-  // Never persist garbage: the type's own schema is the gate (§4.7 step 6),
-  // and the one answer entry applies it. From here on the answer is
-  // canonical — checked, stored, graded and counted as such (ADR-097).
-  const type = typeOf(joined.question.type);
-  const entry = answerFromStudent(joined.question.type, config, view, input.payload, input.coordinates);
-  if ("issues" in entry) throw new AnswerInvalid(entry.issues);
-  const payload = entry.answer;
-  // The rules that need the config (an mcq in `single` mode takes one
-  // choice, ADR-026): the same 422 as a malformed payload.
-  const misfit = type.answerMisfit?.(config, payload);
-  if (misfit) throw new AnswerInvalid([{ message: misfit }]);
-  // Issue #89: writing an answer that holds something takes back an "I won't
-  // answer". An EMPTY write leaves it alone — a cleared field is not an
-  // answer, and the student may have said "won't answer" just before it.
-  const answered = type.isAnswered(payload);
+  const { config, view, payload, answered } = canonicalAnswer(evaluation, joined, attempt, input.payload, input.coordinates);
 
   // Under a share lock of the attempt row, re-checked (ADR-067): a hand-in
   // ends the attempt under the row's update lock, and its grading pass reads

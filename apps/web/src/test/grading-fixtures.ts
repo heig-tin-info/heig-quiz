@@ -201,7 +201,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
     roster: { enrolled: 24, unlinked: 0, conflicts: 0 },
     templateRevision: null,
     courseId: "c1",
-    exports: { document: null, handout: null },
+    exports: { document: null, handout: null, paper: "paper_not_started" },
     ...over,
   };
 }
@@ -225,6 +225,7 @@ function row(displayName: string, points: number, grade: number, over: Partial<R
     state: "submitted" as const,
     staff: false,
     excused: null as ResultsView["rows"][number]["excused"],
+    origin: "digital" as const,
     ...over,
   };
 }

@@ -262,6 +262,7 @@ async function computeResults(
       staff: entry.staff,
       enrollmentId: entry.seatId,
       excused: excused.get(entry.seatId) ?? null,
+      origin: attempt?.origin ?? "digital",
     });
   }
 
@@ -1042,7 +1043,12 @@ export async function staffCopy(
   evaluation: EvaluationRecord,
   attempt: typeof attempts.$inferSelect,
 ): Promise<StaffCopy> {
-  return { attemptId: attempt.id, ...(await reviewedItems(db, evaluation, attempt, STAFF_POLICY)) };
+  return {
+    attemptId: attempt.id,
+    origin: attempt.origin,
+    supersededBy: attempt.supersededBy,
+    ...(await reviewedItems(db, evaluation, attempt, STAFF_POLICY)),
+  };
 }
 
 /**

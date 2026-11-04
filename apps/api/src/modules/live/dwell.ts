@@ -27,9 +27,9 @@
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 
 import type { ClosedBy } from "@quiz/contracts";
-import { DWELL_IDLE_CAP_MS } from "@quiz/domain";
+import { DWELL_IDLE_CAP_MS, type AttemptStateName } from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { attempts } from "../../db/schema.js";
 
 /** An attempt {@link endAttempts} ended: what a listener needs, read in the same statement. */
@@ -112,39 +112,61 @@ export async function closeShown(db: Db, which: SQL, end: Date): Promise<void> {
 export async function endAttempts(
   db: Db,
   which: SQL,
-  set: { state: "submitted" | "expired"; closedBy: ClosedBy; submittedAt?: Date },
+  set: EndSet,
   now: Date,
 ): Promise<EndedAttempt[]> {
-  const ended = await db.transaction(async (tx) => {
-    const locked = await tx
-      .select({ id: attempts.id })
-      .from(attempts)
-      .where(and(which, eq(attempts.state, "in_progress")))
-      .orderBy(attempts.id)
-      .for("update");
-    if (locked.length === 0) return [];
-    const ids = inArray(attempts.id, locked.map((row) => row.id));
-    await closeShown(tx, ids, now);
-    return tx
-      .update(attempts)
-      .set({ ...set, closedAt: now, updatedAt: now })
-      .where(ids)
-      .returning({
-        id: attempts.id,
-        evaluationId: attempts.evaluationId,
-        userId: attempts.userId,
-        afterDue: attempts.afterDue,
-      });
-  });
-  if (ended.length > 0) {
-    for (const listener of endedListeners) {
-      try {
-        await listener(db, ended, now);
-      } catch (err) {
-        // The service layer has no logger (as `results/service.ts`): stderr.
-        console.error("live: an attempts-ended listener failed", err);
-      }
+  const ended = await db.transaction((tx) => endAttemptsIn(tx, which, ["in_progress"], set, now));
+  await notifyEnded(db, ended, now);
+  return ended;
+}
+
+/** How {@link endAttemptsIn} ends an attempt. */
+type EndSet = { state: "submitted" | "expired"; closedBy: ClosedBy; submittedAt?: Date };
+
+/**
+ * {@link endAttempts}' statement, inside the caller's transaction: the
+ * attempts `which` selects in one of `states` locked in id order, their open
+ * interval credited, their state written. The caller hands what it ended to
+ * {@link notifyEnded} once its transaction committed. A paper copy
+ * (ADR-125 §12) ends a replaced attempt still `not_started` too.
+ */
+export async function endAttemptsIn(
+  tx: Tx,
+  which: SQL,
+  states: readonly AttemptStateName[],
+  set: EndSet,
+  now: Date,
+): Promise<EndedAttempt[]> {
+  const locked = await tx
+    .select({ id: attempts.id })
+    .from(attempts)
+    .where(and(which, inArray(attempts.state, [...states])))
+    .orderBy(attempts.id)
+    .for("update");
+  if (locked.length === 0) return [];
+  const ids = inArray(attempts.id, locked.map((row) => row.id));
+  await closeShown(tx, ids, now);
+  return tx
+    .update(attempts)
+    .set({ ...set, closedAt: now, updatedAt: now })
+    .where(ids)
+    .returning({
+      id: attempts.id,
+      evaluationId: attempts.evaluationId,
+      userId: attempts.userId,
+      afterDue: attempts.afterDue,
+    });
+}
+
+/** Hands attempts ended by a committed transaction to the {@link onAttemptsEnded} listeners. */
+export async function notifyEnded(db: Db, ended: readonly EndedAttempt[], now: Date): Promise<void> {
+  if (ended.length === 0) return;
+  for (const listener of endedListeners) {
+    try {
+      await listener(db, ended, now);
+    } catch (err) {
+      // The service layer has no logger (as `results/service.ts`): stderr.
+      console.error("live: an attempts-ended listener failed", err);
     }
   }
-  return ended;
 }

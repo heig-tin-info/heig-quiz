@@ -26,6 +26,7 @@ import {
   textLink,
   useFullscreen,
 } from "../ui";
+import { PaperEntryDialog } from "../paper/PaperEntryDialog";
 import { AssignStationDialog } from "./AssignStation";
 import { anonymousNumbers, commonDeadline } from "./cells";
 import { AnswerModal } from "./AnswerModal";
@@ -92,6 +93,8 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
 
   // The row a station is being assigned to (ADR-051 §7), with the name it showed.
   const [assigning, setAssigning] = useState<{ userId: string; name: string } | null>(null);
+  // ADR-125: the student whose paper copy is about to be typed in.
+  const [paperFor, setPaperFor] = useState<{ userId: string; name: string } | null>(null);
 
   /**
    * What a supervisor must not miss about one student (ADR-051 §4, §6): the
@@ -227,6 +230,12 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     trustedClientsOf(detail.data.evaluation.mode, detail.data.evaluation.settings).includes("kiosk");
   const assignRow = useCallback(
     (row: DashboardRow, name: string) => row.userId && setAssigning({ userId: row.userId, name }),
+    [],
+  );
+  // ADR-125 §17: an exam that has run, prints and is not released takes a paper copy.
+  const paperOpen = detail.data?.exports.paper === null;
+  const enterPaperFor = useCallback(
+    (row: DashboardRow, name: string) => row.userId && setPaperFor({ userId: row.userId, name }),
     [],
   );
 
@@ -463,6 +472,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
                 onClose={closeRow}
                 onReopen={reopenRow}
                 onAssign={kioskAccepted ? assignRow : undefined}
+                onPaper={paperOpen ? enterPaperFor : undefined}
               />
             </Card>
           </div>
@@ -477,6 +487,15 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
                 selectPaper(row);
               }}
               onClose={() => setJournalOpen(false)}
+            />
+          ) : null}
+          {paperFor ? (
+            <PaperEntryDialog
+              evaluationId={id}
+              userId={paperFor.userId}
+              name={paperFor.name}
+              onClose={() => setPaperFor(null)}
+              onStart={(date) => navigate({ view: "paperEntry", evaluationId: id, user: paperFor.userId, date })}
             />
           ) : null}
           {assigning ? (

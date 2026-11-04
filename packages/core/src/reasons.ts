@@ -14,7 +14,7 @@ import type { LlmCriterion } from "./llm.js";
 /**
  * Why a machine PROPOSED instead of grading: the `details.reason` (and the
  * `comment`) of a grading no grader could settle. Wire values, closed here
- * once: the grading pass writes the first ten (`jobs.ts`; `runner_busy` on
+ * once: the grading pass writes the first eleven (`jobs.ts`; `runner_busy` on
  * the last try of a saturated runner, ADR-101), question types the next
  * five (a circuit's or a program's own fault, issue #267). The web
  * translates every one of them.
@@ -30,6 +30,8 @@ export const PASS_REASONS = [
   "runner_error",
   "finalize_error",
   "runner_busy",
+  // ADR-125 §14: a free zone of a paper copy the staff did not type in.
+  "paper_free_zone",
 ] as const;
 export type PassReason = (typeof PASS_REASONS)[number];
 

@@ -5,6 +5,7 @@ import type { DashboardRow } from "@quiz/contracts";
 
 import { CopyDownload } from "../CopyDownload";
 import { useT } from "../i18n";
+import { PaperBadge, SupersededBadge } from "../paper/PaperBadge";
 import type { GridState } from "../realtime/grid";
 import {
   Badge,
@@ -134,6 +135,9 @@ export function InspectModal({
           ) : row.state === "expired" ? (
             <Badge tone="zinc">{t("live.row.expired")}</Badge>
           ) : null}
+          {/* ADR-125: typed in from paper, or replaced by a paper copy. */}
+          <PaperBadge origin={inspect.data?.attempt.origin ?? row.origin} />
+          <SupersededBadge supersededBy={inspect.data?.attempt.supersededBy ?? null} />
           <span className="text-fg-faint">{t("live.inspect.keys")}</span>
         </span>
       }
