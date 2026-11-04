@@ -8,13 +8,15 @@ import { describe, expect, it } from "vitest";
 
 import { findStudentLeaks } from "@quiz/core/testing";
 
-import { CodeConfig } from "./schema.js";
-import { codeServer } from "./server.js";
+import { CodeConfig, type CodeReviewDetails } from "./schema.js";
+import { codeServer, finalizeRunnerCode } from "./server.js";
 import {
   codeConfig,
   codeLeakFixture,
   COMPILE_ARGS,
   FILE_CONTENT,
+  FINALIZE_CTX,
+  outcome,
   SECRET_HIDDEN_ARG,
   SECRET_HIDDEN_EXPECTED,
   SECRET_HIDDEN_NAME,
@@ -160,4 +162,58 @@ describe("codeServer.toSolution", () => {
       visible: false,
     });
   });
+});
+
+/** Is `secret` anywhere in `value` once serialized (its JSON escapes included)? */
+const carries = (value: unknown, secret: string) => JSON.stringify(value).includes(JSON.stringify(secret).slice(1, -1));
+const HIDDEN_SECRETS = [SECRET_HIDDEN_NAME, SECRET_HIDDEN_ARG, SECRET_HIDDEN_STDIN, SECRET_HIDDEN_EXPECTED];
+
+describe("codeServer.studentSolution: a shown key never carries a hidden case (#998, D15)", () => {
+  const solution = codeServer.toSolution(codeConfig(), view);
+  const forStudent = codeServer.studentSolution!(solution, codeConfig());
+
+  it("keeps the reference solution and the visible cases whole", () => {
+    expect(forStudent).not.toBeNull();
+    expect(forStudent!.referenceSolution).toBe(SECRET_REFERENCE);
+    expect(forStudent!.cases).toEqual(solution.cases.filter((c) => c.visible));
+    expect(forStudent!.cases.map((c) => c.name)).toEqual(["three items", "empty array"]);
+    expect(forStudent!.compare).toEqual(solution.compare);
+  });
+
+  it("drops the hidden case: no name, command line, stdin nor expected output", () => {
+    for (const secret of HIDDEN_SECRETS) expect(carries(forStudent, secret), secret).toBe(false);
+  });
+});
+
+describe("codeServer.studentDetails under a shown key (#998, D15)", () => {
+  const hiddenStdout = "HIDDEN-PROGRAM-OUTPUT";
+  const graded = finalizeRunnerCode(
+    codeConfig(),
+    { regions: [] },
+    FINALIZE_CTX,
+    outcome([
+      { stdout: "6\n" },
+      { stdout: "0\n" },
+      { stdout: hiddenStdout, stderr: SECRET_HIDDEN_STDIN, ms: 1234 },
+    ]),
+  ).details;
+
+  for (const showHiddenCaseNames of [false, true]) {
+    it(`reduces a hidden case to its verdict, names ${showHiddenCaseNames ? "open" : "closed"}`, () => {
+      const shown = codeServer.studentDetails!(graded, { showKey: true, showHiddenCaseNames }) as CodeReviewDetails;
+      expect(shown.cases[2]).toEqual({
+        name: showHiddenCaseNames ? SECRET_HIDDEN_NAME : "#3",
+        visible: false,
+        points: 2,
+        ok: false,
+        failure: "failed",
+      });
+      // The visible cases travel whole: their expected output is published.
+      expect(shown.cases.slice(0, 2)).toEqual(graded.cases.slice(0, 2));
+      const secrets = [SECRET_HIDDEN_ARG, SECRET_HIDDEN_STDIN, SECRET_HIDDEN_EXPECTED, hiddenStdout, "1234"];
+      for (const secret of showHiddenCaseNames ? secrets : [...secrets, SECRET_HIDDEN_NAME]) {
+        expect(carries(shown, secret), secret).toBe(false);
+      }
+    });
+  }
 });

@@ -40,7 +40,11 @@ const paris = (student: unknown): number =>
 const MCQ_CORRECT = 0;
 const CLOZE_EXPECTED = "Lutece";
 const HIDDEN_CASE_NAME = "hidden-limit";
-const HIDDEN_EXPECTED = "42";
+const HIDDEN_EXPECTED = "HIDDEN-EXPECTED-42";
+const HIDDEN_STDIN = "HIDDEN-STDIN-MARKER";
+const HIDDEN_ARG = "--hidden-arg-marker";
+/** What the program printed on the hidden case: its run, never a student's to read. */
+const HIDDEN_ACTUAL = "HIDDEN-ACTUAL-OUT";
 /** The essay of the exercise below (ADR-037): criteria the teacher's, a model answer published. */
 const ESSAY_RUBRIC = "RUBRIC-SECRET 2 pts: names the guard page";
 const ESSAY_REFERENCE = "The stack grows down into unmapped memory.";
@@ -83,7 +87,7 @@ const CONFIGS: Record<string, unknown> = {
       mode: "io",
       cases: [
         { name: "shown", stdin: "", expected: "shown-output", visible: true, points: 1 },
-        { name: HIDDEN_CASE_NAME, stdin: "", expected: HIDDEN_EXPECTED, visible: false, points: 1 },
+        { name: HIDDEN_CASE_NAME, args: [HIDDEN_ARG], stdin: HIDDEN_STDIN, expected: HIDDEN_EXPECTED, visible: false, points: 1 },
       ],
     },
   },
@@ -239,7 +243,7 @@ function codeDetails(): CodeDetails {
       compile: { ok: true, stdout: "", stderr: "", ms: 3 },
       cases: [
         { exitCode: 0, stdout: "shown-output", stderr: "", ms: 1, timedOut: false, oom: false, truncated: false },
-        { exitCode: 0, stdout: "wrong", stderr: "", ms: 1, timedOut: false, oom: false, truncated: false },
+        { exitCode: 0, stdout: HIDDEN_ACTUAL, stderr: "", ms: 1, timedOut: false, oom: false, truncated: false },
       ],
     },
   );
@@ -343,12 +347,33 @@ describe("`showKey: true` publishes the key the teacher chose to publish", () =>
     expect(short["matchedIndex"]).toBe(1);
     expect(short["matchedKind"]).toBe("exact");
 
-    const code = (await feedbackOf("code"))["details"] as { cases: Record<string, unknown>[] };
-    expect(code.cases[1]!["name"]).toBe(HIDDEN_CASE_NAME);
-    expect(code.cases[1]!["expected"]).toBe(HIDDEN_EXPECTED);
-
     // …and the solutions travel with it.
     expect((await feedbackOf("mcq"))["solution"]).toEqual({ correct: [MCQ_CORRECT] });
+  });
+
+  it("keeps a code question's hidden case the teacher's: a shown key is the reference and the visible cases (#998)", async () => {
+    for (const showHiddenCaseNames of [true, false]) {
+      await setPolicy({ showKey: true, showHiddenCaseNames });
+      const res = await get(`/app/api/attempts/${built.attemptId}/feedback`, student.headers);
+      expect(res.statusCode).toBe(200);
+      // The whole response is searched, not the code item alone.
+      for (const secret of [HIDDEN_STDIN, HIDDEN_ARG, HIDDEN_EXPECTED, HIDDEN_ACTUAL]) {
+        expect(res.body, secret).not.toContain(secret);
+      }
+      expect(res.body.includes(HIDDEN_CASE_NAME)).toBe(showHiddenCaseNames);
+      const code = await feedbackOf("code");
+      const solution = code["solution"] as { cases: { name: string }[] };
+      expect(solution.cases.map((c) => c.name)).toEqual(["shown"]);
+      const details = code["details"] as { cases: Record<string, unknown>[] };
+      expect(details.cases[0]).toMatchObject({ name: "shown", expected: "shown-output", actual: "shown-output" });
+      expect(details.cases[1]).toEqual({
+        name: showHiddenCaseNames ? HIDDEN_CASE_NAME : "#2",
+        visible: false,
+        points: 1,
+        ok: false,
+        failure: "failed",
+      });
+    }
   });
 });
 

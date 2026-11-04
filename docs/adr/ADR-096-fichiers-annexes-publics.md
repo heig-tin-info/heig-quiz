@@ -5,6 +5,15 @@
 Accepted (2026-10-10, product owner's standing authorization for the security audit's fixes,
 findings M2 and M3). Delivery progress is in `changes/`.
 
+Amended 2026-11-04 (issue #998, opened by the product owner): §5's "under `showKey` the
+details travel whole" no longer holds for a hidden case. An exercise always shows its key
+(ADR-124), so a published key had become every hidden case's stdin, command line and
+expected output, read before an exam reusing the question. A hidden case is now the
+teacher's under every policy: the details keep its verdict, points and coarse category
+(its name per `showHiddenCaseNames`), and a student's key (`studentSolution`) is the
+reference solution and the visible cases only. The same holds for a `circuit` question's
+hidden stimulus. The staff's copy of an attempt still reads both whole.
+
 Scope: what `toStudent` publishes of a `code` or `codeimage` config besides its cases, the
 order in which a grading request runs a `code` question's cases, and what a student reads of a
 hidden case in the grading breakdown.
@@ -61,7 +70,8 @@ quieter channel of the same kind (audit finding M3).
    `{ name, visible: false, points, ok, failure? }`, where `failure` is `timed_out`, `oom`,
    `crashed` or `failed`; its name stays `#n` unless the policy opens the names. Its expected
    output, output, stderr, exit code and time never reach a student. Under `showKey` the
-   details travel whole, as before: the teacher published the key. The stored
+   details travel whole, as before: the teacher published the key. *(Superseded for hidden
+   cases by the amendment of 2026-11-04 above: they stay opaque under every policy.)* The stored
    `gradings.details` are unchanged; the grading panel and the class debrief read them.
 
 No migration and no new config field: `CODE_CONFIG_VERSION` stays at 1.

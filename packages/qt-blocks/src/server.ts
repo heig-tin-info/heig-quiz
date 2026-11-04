@@ -104,9 +104,8 @@ export const blocksServer: QuestionTypeServer<
   },
 
   /**
-   * Runs only when the key is NOT shown: `filterDetails` (results module)
-   * hands the details over whole under `showKey`, and the hidden maps and
-   * the reference then come from `toSolution`.
+   * Under `showKey` the details travel whole (amendment D17): the hidden
+   * maps and the reference then come from `toSolution` as well.
    */
   studentDetails(details, policy): unknown {
     if (policy.showKey) return details;

@@ -613,8 +613,22 @@ describe("studentDetails", () => {
     expect(shown.stimuli[2]?.expected).toBeNull();
   });
 
-  it("passes the whole breakdown through once the key is published", () => {
-    expect(studentDetails(details, { showKey: true, showHiddenCaseNames: false })).toBe(details);
+  it("publishes the visible stimuli whole once the key is, and never a hidden one (#998, D15)", () => {
+    for (const showHiddenCaseNames of [false, true]) {
+      const view = studentDetails(details, { showKey: true, showHiddenCaseNames });
+      // The visible stimuli: the student's curves and the reference's, as the teacher's.
+      expect(view.stimuli.slice(0, 2)).toEqual(details.stimuli.slice(0, 2));
+      expect(view.stimuli[0]?.expected).not.toBeNull();
+      // The hidden one: its verdict and its weight, nothing it was fed or drew.
+      const hidden = view.stimuli[2];
+      expect(hidden).toMatchObject({ visible: false, ok: true, points: 2, series: null, expected: null });
+      expect(hidden?.name).toBe(showHiddenCaseNames ? SECRET_HIDDEN_STIMULUS : "#3");
+      expect(hidden).not.toHaveProperty("log");
+      // The hidden stimulus's own input curve (`vin`) is the stimulus spelled out.
+      const hiddenVin = JSON.stringify((details.stimuli[2]!.series as { vin: number[] }).vin);
+      expect(JSON.stringify(view.stimuli[2])).not.toContain(hiddenVin);
+      if (!showHiddenCaseNames) expect(JSON.stringify(view)).not.toContain(SECRET_HIDDEN_STIMULUS);
+    }
   });
 });
 

@@ -117,15 +117,26 @@ export const codeServer: QuestionTypeServer<
   },
 
   /**
+   * The key a student reads (#998): the reference solution and the visible
+   * cases, never a hidden case. A hidden case's name, command line, stdin and
+   * expected output are the teacher's under every policy (decision D15,
+   * ADR-096 §5 as amended): its count and points are in `toStudent`, its
+   * verdict (and its name, when the policy opens the names) in the details.
+   */
+  studentSolution(solution) {
+    return { ...solution, cases: solution.cases.filter((c) => c.visible) };
+  },
+
+  /**
    * Decision D15, ADR-096: a hidden case keeps its verdict, its points and a
    * coarse failure category, and loses its expected output and everything
    * the program did (output, exit code, time); its name too, unless the
    * policy opens the names. A VISIBLE case travels whole: its expected
    * output is published to the student by `toStudent` already (deviation
-   * W3-4). `showKey` means the teacher publishes the key, so nothing is cut.
+   * W3-4). Under every policy, `showKey` included (#998): a shown key is the
+   * reference solution and the visible cases, never a hidden case.
    */
   studentDetails(details: CodeDetails, policy): unknown {
-    if (policy.showKey) return details;
     return studentDetails(details, { showHiddenCaseNames: policy.showHiddenCaseNames });
   },
 
