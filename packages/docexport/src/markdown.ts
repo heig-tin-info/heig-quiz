@@ -55,7 +55,16 @@ const WRITING_LINE = `\`${"_".repeat(40)}\``;
 const MM_PER_LINE = 8;
 const MIN_FRAME_LINES = 3;
 
-/** A paper answer space, as plain Markdown can preview one (ADR-125). */
+/**
+ * A figure, as Markdown holds one: its alt text on an italic line (ADR-126 §1).
+ * The figure itself is the PDF's.
+ */
+function drawingLine(alt: string): string {
+  const text = oneLine(alt).replace(/[\\*_`[\]<>]/g, (c) => `\\${c}`);
+  return text === "" ? "" : `*${text}*`;
+}
+
+/** A paper answer space, as plain Markdown can preview one (ADR-125; a ruled frame as a plain one, ADR-126). */
 function zoneBlock(z: AnswerZone, l: Labels): string {
   switch (z.zone) {
     case "bubbles": {
@@ -96,6 +105,8 @@ function block(b: Block, l: Labels): string {
       return labelled(l, l.points, `${b.earned === null ? l.notGraded : number(b.earned)} / ${number(b.max)}`);
     case "separator":
       return "---";
+    case "drawing":
+      return drawingLine(b.alt);
     case "answerZone":
       return zoneBlock(b, l);
   }
