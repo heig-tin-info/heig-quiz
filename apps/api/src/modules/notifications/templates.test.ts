@@ -324,6 +324,39 @@ describe("system_alert (ADR-055 §5)", () => {
   });
 });
 
+describe("account_dormant (ADR-117 §4)", () => {
+  it("says two years, how to keep the account, and what anonymization takes; links to the data first, then the sign-in", () => {
+    const en = renderNotification({ kind: "account_dormant", state: "notice" }, "en", "https://quiz.test");
+    expect(en.subject).toBe("Your HEIG Quiz account has not been used for two years");
+    expect(en.text).toContain("Sign in within a year to keep your account.");
+    expect(en.text).toContain("your name, addresses, picture and links leave it, and your results stay without your name");
+    expect(en.text.indexOf("Download my data: https://quiz.test/settings")).toBeLessThan(en.text.indexOf("Sign in: https://quiz.test/"));
+    expect(en.html).toContain('href="https://quiz.test/settings"');
+    expect(en.html).toMatch(/href="https:\/\/quiz\.test\/"[^>]*>Sign in<\/a>/);
+    const reminder = renderNotification({ kind: "account_dormant", state: "reminder" }, "en", "https://quiz.test");
+    expect(reminder.subject).toBe("Your HEIG Quiz account will be anonymized in three months");
+    expect(reminder.text).toContain("Sign in within three months");
+    const fr = renderNotification({ kind: "account_dormant", state: "reminder" }, "fr", "https://quiz.test");
+    expect(fr.subject).toBe("Votre compte HEIG Quiz sera anonymisé dans trois mois");
+    expect(fr.text).toContain("Connectez-vous d'ici trois mois");
+    expect(fr.text).toContain("Télécharger mes données: https://quiz.test/settings");
+  });
+
+  it("never says deleted, and points at no notification settings: nobody can turn it off", () => {
+    for (const state of ["notice", "reminder"] as const) {
+      for (const locale of ["en", "fr"] as const) {
+        const out = renderNotification({ kind: "account_dormant", state }, locale, "https://quiz.test");
+        for (const part of [out.subject, out.text, out.html]) {
+          expect(part).not.toMatch(/\{\w+\}/);
+          expect(part).not.toMatch(/delet|supprim/i);
+        }
+        expect(out.text).not.toContain("--");
+        expect(out.html).not.toMatch(/notification settings|Réglages des notifications/i);
+      }
+    }
+  });
+});
+
 describe("the test e-mail (ADR-055 §6)", () => {
   it("names the platform, links back to the System status, and has no notification footer", () => {
     for (const locale of ["en", "fr"] as const) {

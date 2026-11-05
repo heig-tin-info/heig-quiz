@@ -162,6 +162,9 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
       });
     case "github_org_lost":
       return t("notif.githubOrgLost", { classroom: payload.classroomName, org: payload.orgLogin });
+    // An e-mail only (ADR-117 §4): worded here for the closed union, never in the bell.
+    case "account_dormant":
+      return t(`notif.accountDormant.${payload.state}`);
   }
 }
 
@@ -203,6 +206,8 @@ function notificationRoute(payload: NotificationPayload): Route {
       return { view: "admin", tab: "system" };
     case "impersonation_ended":
       return { view: "privacy" };
+    case "account_dormant":
+      return { view: "settings" };
     case "project_published":
     case "project_deadline_reminder":
     case "project_repo_invited":

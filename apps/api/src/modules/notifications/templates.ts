@@ -16,9 +16,13 @@
  * one line. The payload carries ids and titles only: nothing here can leak a
  * grade or question content, because nothing of the kind is ever passed in.
  * A `system_alert` (ADR-055 §5) carries check keys only; their causes and
- * measures are on the System status page it links to.
+ * measures are on the System status page it links to. An `account_dormant`
+ * (ADR-117 §4) carries its stage only: it links first to the Settings, where
+ * the data is downloaded, then to the sign-in, and has no settings footer,
+ * since nobody can turn it off.
  */
 import {
+  ACCOUNT_KINDS,
   kindChannels,
   type NotificationKind,
   type NotificationPayload,
@@ -136,6 +140,15 @@ const en = {
   "system_alert.recovered.subject": "{host}: health checks back to OK",
   "system_alert.recovered.body": "Health checks of {host} that had failed are OK again: {checks}.",
   "system_alert.action": "Open the system status",
+  // The account lifecycle (ADR-117 §4): never "deleted", the results stay.
+  "account_dormant.notice.subject": "Your HEIG Quiz account has not been used for two years",
+  "account_dormant.notice.body":
+    "You have not used HEIG Quiz for two years. Sign in within a year to keep your account. Otherwise it will be anonymized: your name, addresses, picture and links leave it, and your results stay without your name. Download your data first if you want a copy.",
+  "account_dormant.reminder.subject": "Your HEIG Quiz account will be anonymized in three months",
+  "account_dormant.reminder.body":
+    "You have not used HEIG Quiz for over two years. Sign in within three months to keep your account. Otherwise it will be anonymized: your name, addresses, picture and links leave it, and your results stay without your name. Download your data first if you want a copy.",
+  "account_dormant.action": "Download my data",
+  signin: "Sign in",
   // The administrator's "Send me a test e-mail" (ADR-055 §6): no kind, no preference.
   "test_mail.subject": "{host}: test e-mail",
   "test_mail.body": "This is a test e-mail from {host}, sent at your request from the System status page. If you are reading it, the platform's e-mail delivery works.",
@@ -164,6 +177,7 @@ const en = {
   "check.llm.budget": "AI spending today",
   "check.pdf": "PDF export",
   "check.service.github": "GitHub App",
+  "check.accounts": "Account lifecycle",
   "role.reader": "reader",
   "role.contributor": "contributor",
   "role.owner": "owner",
@@ -323,6 +337,14 @@ const fr: Record<Key, string> = {
   "system_alert.recovered.subject": "{host} : contrôles de santé de nouveau OK",
   "system_alert.recovered.body": "Des contrôles de santé de {host} qui avaient échoué sont de nouveau OK : {checks}.",
   "system_alert.action": "Ouvrir l'état du système",
+  "account_dormant.notice.subject": "Votre compte HEIG Quiz n'a pas servi depuis deux ans",
+  "account_dormant.notice.body":
+    "Vous n'avez pas utilisé HEIG Quiz depuis deux ans. Connectez-vous d'ici un an pour garder votre compte. Sinon, il sera anonymisé. Votre nom, vos adresses, votre photo et vos liens en seront retirés, et vos résultats resteront sans votre nom. Téléchargez d'abord vos données si vous voulez en garder une copie.",
+  "account_dormant.reminder.subject": "Votre compte HEIG Quiz sera anonymisé dans trois mois",
+  "account_dormant.reminder.body":
+    "Vous n'avez pas utilisé HEIG Quiz depuis plus de deux ans. Connectez-vous d'ici trois mois pour garder votre compte. Sinon, il sera anonymisé. Votre nom, vos adresses, votre photo et vos liens en seront retirés, et vos résultats resteront sans votre nom. Téléchargez d'abord vos données si vous voulez en garder une copie.",
+  "account_dormant.action": "Télécharger mes données",
+  signin: "Se connecter",
   "test_mail.subject": "{host} : e-mail de test",
   "test_mail.body": "Ceci est un e-mail de test de {host}, envoyé à votre demande depuis la page État du système. Si vous le lisez, l'envoi des e-mails de la plateforme fonctionne.",
   "test_mail.action": "Retour à l'état du système",
@@ -348,6 +370,7 @@ const fr: Record<Key, string> = {
   "check.llm.budget": "Dépenses d'IA du jour",
   "check.pdf": "Export PDF",
   "check.service.github": "Application GitHub",
+  "check.accounts": "Cycle de vie des comptes",
   "role.reader": "lecteur",
   "role.contributor": "contributeur",
   "role.owner": "propriétaire",
@@ -475,6 +498,8 @@ function varsOf(payload: OutboundPayload, t: Record<Key, string>): Record<string
     case "system_alert":
       // `{host}` is added by `renderNotification`, which knows the address.
       return { checks: payload.checks.map((key) => t[`check.${key}`]).join(", ") };
+    case "account_dormant":
+      return {};
   }
 }
 
@@ -530,6 +555,9 @@ export function notificationPath(payload: OutboundPayload): string {
       return `/take/${payload.evaluationId}`;
     case "system_alert":
       return "/admin?tab=system";
+    // The Settings, where "Download my data" is (N-DATA-04); reaching them signs in.
+    case "account_dormant":
+      return "/settings";
     // The project: the staff's page, or the student's view of it (M3-13).
     case "project_published":
     case "project_deadline_reminder":
@@ -591,6 +619,8 @@ export function renderNotification(
   const t = DICTS[locale];
   const kind: OutboundNotificationKind = payload.kind;
   const vars: Record<string, string> = { ...varsOf(payload, t), host: hostOf(webUrl) };
+  // An account kind: no toggle to point at, and the sign-in that keeps the account.
+  const account = ACCOUNT_KINDS.includes(kind);
   const mail = composeMail(t, {
     subject: sentenceKey(payload, "subject"),
     body: sentenceKey(payload, "body"),
@@ -598,6 +628,7 @@ export function renderNotification(
     action: t[`${kind}.action`],
     path: notificationPath(payload),
     webUrl,
+    ...(account ? { footer: false, secondary: { action: t.signin, path: "/" } } : {}),
   });
   const topic =
     teamsLine(vars.evaluationTitle ?? vars.projectTitle ?? vars.poolName ?? vars.classroomName ?? "") || t["app.name.short"];
@@ -626,8 +657,8 @@ export function renderTestMail(locale: Locale, webUrl: string): Pick<RenderedNot
 
 /**
  * One e-mail: its subject on one line, a plain-text part and an HTML part, a
- * button to `path`, and — unless `footer: false` — the line pointing at the
- * notification settings.
+ * button to `path`, a plain link to `secondary` when given, and — unless
+ * `footer: false` — the line pointing at the notification settings.
  */
 function composeMail(
   t: Record<Key, string>,
@@ -639,24 +670,33 @@ function composeMail(
     path: string;
     webUrl: string;
     footer?: boolean;
+    secondary?: { action: string; path: string };
   },
 ): Pick<RenderedNotification, "subject" | "text" | "html"> {
   const link = `${m.webUrl}${m.path}`;
+  const second = m.secondary ? { action: m.secondary.action, link: `${m.webUrl}${m.secondary.path}` } : null;
   const settings = `${m.webUrl}/settings`;
   const footer = m.footer ?? true;
   const subject = oneLine(fill(t[m.subject], m.vars, plain));
   const body = fill(t[m.body], m.vars, plain);
-  const text = [body, "", `${m.action}: ${link}`, ...(footer ? ["", "--", `${t.footer} ${settings}`] : [])].join(
-    "\n",
-  );
+  const text = [
+    body,
+    "",
+    `${m.action}: ${link}`,
+    ...(second ? [`${second.action}: ${second.link}`] : []),
+    ...(footer ? ["", "--", `${t.footer} ${settings}`] : []),
+  ].join("\n");
   const bodyHtml = fill(t[m.body], m.vars, escapeHtml);
   const footerHtml = footer
     ? `\n  <p style="font-size:12px;line-height:1.5;color:#71717a;border-top:1px solid #e4e4e7;padding-top:12px;margin:0">${escapeHtml(t.footer)} <a href="${escapeHtml(settings)}" style="color:#71717a">${escapeHtml(t["footer.link"])}</a></p>`
     : "";
+  const secondHtml = second
+    ? `\n  <p style="font-size:14px;margin:-12px 0 28px"><a href="${escapeHtml(second.link)}" style="color:#18181b">${escapeHtml(second.action)}</a></p>`
+    : "";
   const html = `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#18181b">
   <p style="font-size:13px;font-weight:600;letter-spacing:.02em;color:#71717a;margin:0 0 16px">HEIG Quiz</p>
   <p style="font-size:15px;line-height:1.6;margin:0 0 20px">${bodyHtml}</p>
-  <p style="margin:0 0 28px"><a href="${escapeHtml(link)}" style="background:#18181b;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:500">${escapeHtml(m.action)}</a></p>${footerHtml}
+  <p style="margin:0 0 28px"><a href="${escapeHtml(link)}" style="background:#18181b;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:500">${escapeHtml(m.action)}</a></p>${secondHtml}${footerHtml}
 </div>`;
   return { subject, text, html };
 }

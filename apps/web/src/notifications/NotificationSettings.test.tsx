@@ -72,6 +72,7 @@ function settings(
       project_provision_failed: ALL_ON,
       github_org_lost: ALL_ON,
       impersonation_ended: { bell: true, email: false, teams: false },
+      account_dormant: { bell: false, email: true, teams: false },
     },
     kinds,
     email,

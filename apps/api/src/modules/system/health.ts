@@ -37,6 +37,7 @@ import {
   type SystemStatus,
 } from "@quiz/contracts";
 import {
+  accountsStatus,
   backupStatus,
   connectionsStatus,
   dbLatencyStatus,
@@ -65,6 +66,7 @@ import { serverErrorsOf } from "../../httpMetrics.js";
 import { lastTickOf, serviceRecord } from "../../serviceHealth.js";
 import { MIGRATIONS_DIR } from "../../paths.js";
 import { InProcessQueue } from "../../jobs.js";
+import { LIFECYCLE, lifecycleHealth } from "../account/service.js";
 import { overdueAttempts, overdueEvaluations } from "../live/service.js";
 import { todayBudget } from "../llm/service.js";
 import { openStreamCount } from "../realtime/bus.js";
@@ -479,6 +481,21 @@ async function pdfCheck({ app, config }: CheckContext): Promise<CheckResult> {
   return { status: "ok", details };
 }
 
+/**
+ * The account lifecycle (ADR-117 §10): the accounts due for pseudonymization
+ * now, against what one daily run takes, and those still due three days past
+ * their term. Counts only, never whose; the job's log names them. Nothing to
+ * say while `ACCOUNT_LIFECYCLE` is off: a copy of production's dates
+ * (staging) would otherwise fail for good.
+ */
+async function accountsCheck({ app, config }: CheckContext): Promise<CheckResult> {
+  if (!config.ACCOUNT_LIFECYCLE) return { status: "ok" };
+  const { due, late } = await lifecycleHealth(app.db);
+  const status = accountsStatus(due, LIFECYCLE.perRun, late);
+  const cause = status === "ok" ? null : late > 0 ? "accounts.late" : "accounts.backlog";
+  return { status, value: count(late > 0 ? late : due), cause };
+}
+
 // --- The registry ---------------------------------------------------------
 
 /** Every check, in the order the screen lists them. */
@@ -505,6 +522,7 @@ export const HEALTH_CHECKS: readonly HealthCheck[] = [
   })),
   { key: "llm.budget", section: "services", run: llmBudgetCheck },
   { key: "pdf", section: "services", run: pdfCheck },
+  { key: "accounts", section: "storage", run: accountsCheck },
 ];
 
 /**
