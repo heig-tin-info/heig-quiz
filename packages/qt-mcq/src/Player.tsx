@@ -56,9 +56,12 @@ export function McqPlayer({
 
   // `min-w-0`: a fieldset is never narrower than its content by default, so a
   // long line of code in a choice pushed the question out of a narrow pane.
+  // `w-full`: a legend is sized to fit its content, never below its widest
+  // unbreakable line, so a long `<pre>` in the statement pushed the prompt
+  // past the card (#1023); given the fieldset's width, the block scrolls.
   return (
     <fieldset className="flex min-w-0 flex-col gap-4" disabled={locked}>
-      <legend className="mb-2 text-lg leading-relaxed text-fg">
+      <legend className="mb-2 w-full text-lg leading-relaxed text-fg">
         {markdown(renderMarkdown, student.prompt)}
       </legend>
       <p className={caption}>{instructions}</p>
