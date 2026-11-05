@@ -121,7 +121,9 @@ Two pairs stay below their target, on purpose:
   stays quiet and legible at 13 px. One family; the contrast lives in the
   size jump and the weight jump, not in a second face.
 - Mono: **JetBrains Mono** for SHAs, repository names, milestone keys and
-  anything a student will copy.
+  anything a student will copy. Its ligatures are off everywhere code is
+  shown: `->`, `=>` and `!=` stay the two characters a student has to type
+  (`font-variant-ligatures: none` in `style.css`).
 - Scale (px): 12 caption · 13 dense UI (tables, chips) · 14 body · 16 section
   title · 20 sheet title · 28 page title. Page title / body = 2×, and the
   title is 700 with `-0.02em` tracking; body is 400, labels 500. Rendered
