@@ -41,3 +41,15 @@ describe("a field a finger types in is 16 px at least (style.css, #849)", () => 
     expect(html).not.toMatch(/maximum-scale|user-scalable/);
   });
 });
+
+describe("code is shown as written (style.css)", () => {
+  it("inline code keeps its run of spaces, a fenced block keeps its lines (#1033)", () => {
+    expect(css).toMatch(/\.md-body code \{[^}]*white-space: pre-wrap;/);
+    expect(css).toMatch(/\.md-body pre code \{[^}]*white-space: inherit;/);
+  });
+
+  it("the mono face wears no ligature: -> and != stay two characters", () => {
+    const rule = /\n@layer base \{[\s\S]*?\n  code,\n  kbd,\n  samp,\n  pre,\n  \.font-mono \{\s*font-variant-ligatures: none;/;
+    expect(css).toMatch(rule);
+  });
+});

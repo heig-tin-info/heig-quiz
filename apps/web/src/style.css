@@ -308,6 +308,19 @@ html.dark {
   html.dark {
     color-scheme: dark;
   }
+  /* Code shows its characters, not glyphs made of them. JetBrains Mono's
+     contextual ligatures fuse `->`, `=>`, `!=`, `<=` into one arrow or one
+     slashed sign, and a student learning C reads them as a symbol the
+     language does not have. Off wherever the mono face is worn: the inline
+     and fenced code of rendered markdown, the editors and read-only
+     listings of the code question (`font-mono`), keys and samples. */
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono {
+    font-variant-ligatures: none;
+  }
   body {
     @apply bg-canvas text-fg text-[14px] leading-[1.5];
   }
@@ -678,7 +691,13 @@ span.md-body:not(.md-inline) { display: block; }
   color: var(--fg-muted);
 }
 /* Inline code wears the block's surface and line, so the two read as one
-   family when they sit side by side; the line keeps it visible on a card. */
+   family when they sit side by side; the line keeps it visible on a card.
+   Its spaces are kept as written (#1033): the body above is `white-space:
+   normal`, under which `[    3.14]` and `[ 3.14]` — two choices of a printf
+   question that differ only by their padding — came out as the same text.
+   `pre-wrap` keeps the run and still wraps a long span inside the card. A
+   fenced block takes `pre` back from its <pre>, so a long line scrolls
+   instead of folding. */
 .md-body code {
   font-family: var(--font-mono);
   font-size: 0.87em;
@@ -686,6 +705,7 @@ span.md-body:not(.md-inline) { display: block; }
   border: 1px solid var(--line);
   border-radius: 5px;
   padding: 0 4px;
+  white-space: pre-wrap;
 }
 /* A code block owns its size and its leading, on the <pre> itself (issue
    #831). Set on the inner <code> only, the 13 px reached the glyphs but not
@@ -702,7 +722,7 @@ span.md-body:not(.md-inline) { display: block; }
   font-size: 13px;
   line-height: 1.6;
 }
-.md-body pre code { background: none; border: 0; border-radius: 0; padding: 0; font-size: inherit; }
+.md-body pre code { background: none; border: 0; border-radius: 0; padding: 0; font-size: inherit; white-space: inherit; }
 .md-body img {
   max-width: 100%;
   height: auto;
