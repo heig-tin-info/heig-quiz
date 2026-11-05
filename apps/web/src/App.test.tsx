@@ -223,6 +223,25 @@ describe("the Data and privacy page (N-DATA-07)", () => {
   });
 });
 
+describe("the end of an account's identity (ADR-117 §5)", () => {
+  it("says on the landing page, once, that the account is anonymized", async () => {
+    mockFetch({ "GET /app/api/me": fail(401, { error: "unauthorized" }) });
+    renderWithProviders(<App />, { route: "/?anonymized=1" });
+    expect(await screen.findByText(/your account is anonymized/i)).toBeVisible();
+    expect(window.location.search).toBe("");
+  });
+
+  it("tells a sign-in that ended a dormancy, until dismissed, and drops the flag", async () => {
+    vi.stubGlobal("EventSource", FakeStream);
+    mockFetch({ "GET /app/api/me": ok(makeMe({ role: "student" })) });
+    renderWithProviders(<App />, { route: "/settings?reactivated=1" });
+    expect(await screen.findByText("Your account is active again")).toBeVisible();
+    expect(window.location.search).toBe("");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByText("Your account is active again")).not.toBeInTheDocument();
+  });
+});
+
 describe("an impersonation session (ADR-034)", () => {
   it("says whom the admin acts as, on every page, and ends by signing out", async () => {
     vi.stubGlobal("EventSource", FakeStream);

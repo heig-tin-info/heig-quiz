@@ -49,6 +49,7 @@ import {
   on,
   pick,
   rand,
+  refuse,
 } from "./runtime";
 import { courseConceptRefs, setCourseConceptIds } from "./concept";
 import { journalRemovalRefusal, mockJournalSignal } from "./journal";
@@ -422,8 +423,64 @@ const account = (
   pools: 0,
   questions: 0,
   classrooms: 0,
+  // Filled from the other dates below, once every account is drawn.
+  lastActivityAt: "",
+  inactive: false,
+  dormantSince: null,
+  due: false,
   ...rest,
 });
+
+/**
+ * The accounts of the "Inactive" list (ADR-117 §6), drawn without `rand`
+ * so the other scenes' figures stay where they were: a student a little over
+ * a year away, a dormant one whose notice runs, a dormant one past its term,
+ * and a teacher three years away, whom only the administrator anonymizes.
+ */
+function inactiveAccounts(): AdminUser[] {
+  const base = {
+    avatarUrl: null,
+    role: "student",
+    reason: null,
+    lastSeenAt: null,
+    pools: 0,
+    questions: 0,
+    classrooms: 0,
+    inactive: true,
+    dormantSince: null,
+    due: false,
+  } as const;
+  const idle = (
+    id: string,
+    givenName: string,
+    familyName: string,
+    email: string,
+    awayDays: number,
+    rest: Partial<AdminUser> = {},
+  ): AdminUser => ({
+    ...base,
+    id,
+    email,
+    givenName,
+    familyName,
+    lastLoginAt: iso(-awayDays * D),
+    createdAt: iso(-(awayDays + 400) * D),
+    lastActivityAt: iso(-awayDays * D),
+    ...rest,
+  });
+  return [
+    idle("u-idle-perrin", "Jeanne", "Perrin", "jeanne.perrin@heig-vd.ch", 420),
+    idle("u-dormant-favre", "Mathis", "Favre", "mathis.favre@heig-vd.ch", 800, { dormantSince: iso(-70 * D) }),
+    idle("u-due-rochat", "Inès", "Rochat", "ines.rochat@heig-vd.ch", 1130, { dormantSince: iso(-400 * D), due: true }),
+    idle("u-due-dijkstra", "Edsger", "Dijkstra", "edsger.dijkstra@heig-vd.ch", 1200, {
+      role: "teacher",
+      reason: "grant",
+      pools: 1,
+      questions: 23,
+      due: true,
+    }),
+  ];
+}
 
 function buildAdminUsers(): AdminUser[] {
   if (flags.empty) return [];
@@ -474,11 +531,13 @@ function buildAdminUsers(): AdminUser[] {
   // days later, never in the future; derived, not drawn, so the other scenes'
   // random figures stay where they were.
   const now = Date.now();
-  return [...staff, ...students].map((u, i) => ({
-    ...u,
-    lastSeenAt:
-      u.lastLoginAt === null ? null : new Date(Math.min(now - (i % 5) * 7 * 60_000, Date.parse(u.lastLoginAt) + (i % 9) * 9 * H)).toISOString(),
-  }));
+  const drawn = [...staff, ...students].map((u, i) => {
+    const lastSeenAt =
+      u.lastLoginAt === null ? null : new Date(Math.min(now - (i % 5) * 7 * 60_000, Date.parse(u.lastLoginAt) + (i % 9) * 9 * H)).toISOString();
+    const lastActivityAt = lastSeenAt ?? u.lastLoginAt ?? u.createdAt;
+    return { ...u, lastSeenAt, lastActivityAt, inactive: Date.parse(lastActivityAt) <= now - 365 * D };
+  });
+  return [...drawn, ...inactiveAccounts()];
 }
 
 const adminUsers = buildAdminUsers();
@@ -962,6 +1021,16 @@ on("POST", "/app/api/admin/teachers", (_m, body) => {
   });
   return undefined;
 });
+// ADR-117 §6: an administrator, Super Powers on, anonymizes an account; it leaves the list.
+on("POST", "/app/api/admin/users/:id/pseudonymize", (m) => {
+  if (!me?.session?.superPowersUntil) throw refuse(403, "super_powers_required", "This takes Super Powers");
+  const i = adminUsers.findIndex((u) => u.id === m.groups!.id);
+  if (i < 0) throw refuse(404, "not_found", "No such account");
+  if (flags.fail) throw refuse(409, "open_attempt", "This account has an exam attempt in progress");
+  adminUsers.splice(i, 1);
+  return undefined;
+});
+
 on("DELETE", "/app/api/admin/teachers/:gid", (m) => {
   const i = teachers.findIndex((x) => x.id === m.groups!.gid);
   if (i >= 0) teachers.splice(i, 1);

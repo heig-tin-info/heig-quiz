@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -174,6 +174,36 @@ describe("GET /app/api/admin/users (F-ADMIN-01)", () => {
     const rows = z.array(AdminUser).parse((await list(admin)).json());
     expect(rows.map((r) => r.id)).not.toContain(anonymized.id);
     expect(rows).toHaveLength(6);
+  });
+
+  // ADR-117 §6: the "Inactive" list's dates and flags, on the database's clock. Last: it adds accounts.
+  it("flags a year without activity, a dormant account's notice, and the accounts past the term", async () => {
+    const [idle, dormant, old, oldStudent] = await Promise.all([
+      server.signIn("student"),
+      server.signIn("student"),
+      server.signIn("teacher"),
+      server.signIn("student"),
+    ]);
+    const set = (assignments: string, id: string) =>
+      server.app.db.execute(sql`UPDATE users SET ${sql.raw(assignments)} WHERE id = ${id}`);
+    await set(`last_login_at = now() - interval '13 months', created_at = now() - interval '4 years'`, idle.id);
+    await set(
+      `last_login_at = now() - interval '3 years', created_at = now() - interval '4 years',
+       inactivity_notified_at = now() - interval '13 months', inactivity_reminded_at = now() - interval '4 months'`,
+      dormant.id,
+    );
+    await set(`last_login_at = now() - interval '4 years', created_at = now() - interval '5 years'`, old.id);
+    await set(`last_login_at = now() - interval '4 years', created_at = now() - interval '5 years'`, oldStudent.id);
+    const rows = new Map(z.array(AdminUser).parse((await list(admin)).json()).map((u) => [u.id, u]));
+    expect(rows.get(admin.id)).toMatchObject({ inactive: false, dormantSince: null, due: false });
+    expect(rows.get(idle.id)).toMatchObject({ inactive: true, dormantSince: null, due: false });
+    expect(rows.get(dormant.id)).toMatchObject({ inactive: true, due: true });
+    expect(rows.get(dormant.id)!.dormantSince).not.toBeNull();
+    // A staff account is never notified: three years without activity put it past the term.
+    expect(rows.get(old.id)).toMatchObject({ inactive: true, dormantSince: null, due: true });
+    expect(new Date(rows.get(old.id)!.lastActivityAt).getTime()).toBeLessThan(Date.now() - 3 * 365 * 86_400_000);
+    // A student is due only by its notice: as old, never told, it is inactive but not due.
+    expect(rows.get(oldStudent.id)).toMatchObject({ inactive: true, dormantSince: null, due: false });
   });
 });
 
