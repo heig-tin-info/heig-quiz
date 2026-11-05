@@ -75,12 +75,27 @@ async function admissionFacts(
 }
 
 /**
+ * A login whose subject is held by a pseudonymized account (ADR-117 §7):
+ * refused, never written onto. A pseudonymized account's subject is
+ * rewritten (`anon-<id>`), so no identity provider issues it again; this
+ * is the defence in depth, for an account marked anonymized without it.
+ */
+export class AnonymizedAccountError extends Error {
+  constructor() {
+    super("The account of this subject is pseudonymized");
+    this.name = "AnonymizedAccountError";
+  }
+}
+
+/**
  * Login adoption of an imported heig-classroom account (ADR-061, `adoption.ts`),
  * user upsert (key: oidc_sub), then the address set and the affiliations,
  * then the role through the single rule of roles.ts — the same path as any
  * later recompute, so it counts the course seats — but without the pool
  * succession, which stays tied to the admin and staff actions. A new account starts as a student; an existing one
- * keeps its role until the recompute.
+ * keeps its role until the recompute. A sign-in ends the account's dormancy
+ * (ADR-117): the inactivity notice and reminder are forgotten. Refused with
+ * {@link AnonymizedAccountError} when the subject's account is pseudonymized.
  */
 export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Promise<SessionUser> {
   // `loginRefusal` refused it already; never write under a placeholder subject.
@@ -93,11 +108,25 @@ export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Pro
     swissEduId: claims.swissEduId,
     pictureUrl: claims.picture,
     lastLoginAt: new Date(),
+    inactivityNotifiedAt: null,
+    inactivityRemindedAt: null,
   };
   // Adoption and upsert in one transaction (ADR-061): an account the
   // heig-classroom import made for this person becomes theirs before the
   // upsert, which then lands on it through `oidc_sub`.
   const row = await db.transaction(async (tx) => {
+    // Locked: a pseudonymization in flight either commits first (the
+    // subject is then gone and the upsert makes a new account) or waits.
+    // In the window between `loginRefusal` and here, a login admitted as
+    // "known" on the row being pseudonymized then finds no row and makes a
+    // fresh account without admission's other tests: an empty account,
+    // accepted (ADR-117 §7).
+    const [held] = await tx
+      .select({ anonymizedAt: users.anonymizedAt })
+      .from(users)
+      .where(eq(users.oidcSub, claims.sub))
+      .for("update");
+    if (held && held.anonymizedAt !== null) throw new AnonymizedAccountError();
     const found = await findAdoption(tx, claims);
     const adopted = found.kind === "candidate" && (await applyAdoption(tx, found.userId, claims.sub));
     const [upserted] = await tx

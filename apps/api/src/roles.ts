@@ -11,13 +11,13 @@
  * still holds a grant. It reads the whole address set: a grant issued on an
  * institutional address must apply to someone signing in under a private one.
  */
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { RoleReason } from "@quiz/contracts";
 import { affiliationKindsIn } from "@quiz/domain";
 
 import type { AppConfig } from "./config.js";
-import type { Db } from "./db/client.js";
+import type { Db, Tx } from "./db/client.js";
 import {
   STAFF_ROLES,
   courseStaff,
@@ -27,8 +27,7 @@ import {
   users,
 } from "./db/schema.js";
 import { knownEmails, normalizeEmail, ownersOf } from "./identity.js";
-import { holdsCourseSeat } from "./modules/guards.js";
-import { transferOnLoss, vacateSeats } from "./modules/pool/service.js";
+import { handOverPools } from "./modules/pool/service.js";
 import { accessRevoked } from "./modules/realtime/bus.js";
 
 type UserRole = (typeof users.$inferSelect)["role"];
@@ -91,21 +90,23 @@ function normalizedSet(emails: readonly string[]): string[] {
 }
 
 export async function roleForIdentity(
-  db: Db,
+  db: Db | Tx,
   config: AppConfig,
   identity: Identity,
 ): Promise<RoleDecision> {
   const emails = normalizedSet(identity.emails);
-  // Both lookups at once: this runs at every sign-in.
-  const [hasGrant, hasSeat] = await Promise.all([
-    hasTeacherGrant(db, emails),
-    identity.userId ? holdsCourseSeat(db, identity.userId) : false,
-  ]);
+  // Both lookups in one statement, one round trip at every sign-in (and one
+  // query at a time on a transaction's connection).
+  const grant = emails.length === 0 ? sql`false` : sql`EXISTS (SELECT 1 FROM ${teacherGrants} WHERE ${inArray(teacherGrants.email, emails)})`;
+  const seat = identity.userId
+    ? sql`EXISTS (SELECT 1 FROM ${courseStaff} WHERE ${eq(courseStaff.userId, identity.userId)})`
+    : sql`false`;
+  const [facts] = await db.select({ hasGrant: sql<boolean>`${grant}`, hasSeat: sql<boolean>`${seat}` }).from(sql`(SELECT 1) AS one`);
   return decideRole(config, {
     emails,
     affiliations: identity.affiliations ?? [],
-    hasGrant,
-    hasSeat,
+    hasGrant: facts?.hasGrant === true,
+    hasSeat: facts?.hasSeat === true,
   });
 }
 
@@ -114,7 +115,7 @@ export async function roleForIdentity(
  * role's first branch after the super administrator, and an invitation for
  * login admission (ADR-111 §2).
  */
-export async function hasTeacherGrant(db: Db, emails: readonly string[]): Promise<boolean> {
+export async function hasTeacherGrant(db: Db | Tx, emails: readonly string[]): Promise<boolean> {
   if (emails.length === 0) return false;
   const [grant] = await db
     .select({ id: teacherGrants.id })
@@ -173,9 +174,13 @@ export async function roleDecisionsOfAll(
   );
 }
 
-/** The stored identity of an existing account. */
-async function roleForUser(
-  db: Db,
+/**
+ * The rule applied to the stored identity of an existing account: its
+ * verified addresses, stored affiliations, grants and course seats. Also
+ * the `account` module's test of a staff account (ADR-117 §6).
+ */
+export async function roleForUser(
+  db: Db | Tx,
   config: AppConfig,
   userId: string,
 ): Promise<RoleDecision> {
@@ -241,10 +246,7 @@ async function storeRole(
     .limit(1);
   const lost = before !== undefined && RANK[role] < RANK[before.role];
   if (lost && succession && !(STAFF_ROLES as readonly string[]).includes(role)) {
-    // The pools they own pass on first, then every seat they held goes: a
-    // demoted member does not get it back with the role (ADR-013, rule 5).
-    await transferOnLoss(db, userId);
-    await vacateSeats(db, userId);
+    await handOverPools(db, userId, "owner_lost_teacher_role");
   }
   await db.update(users).set({ role }).where(eq(users.id, userId));
   // A privilege was lost: `admin`, or every `teacher:`/`course:`/`pool:`

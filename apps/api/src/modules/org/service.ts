@@ -582,16 +582,37 @@ export interface Revocation {
  * worded `502 revoke_failed` (`rosterRefusal`): nothing written, retry.
  */
 async function afterRevocation<T>(db: Db, enrollmentId: string, ctx: Revocation, via: RevokeVia, write: (tx: Tx) => Promise<T>): Promise<T> {
-  try {
+  return worded(async () => {
     await revokeEnrollmentAccess(db, ctx.config, enrollmentId, { ...ctx, via });
-    return await db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
       await releaseLine(tx, enrollmentId);
       return write(tx);
     });
+  });
+}
+
+/** `run`, with a {@link RevokeFailed} worded `502 revoke_failed` (`rosterRefusal`). */
+async function worded<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
   } catch (err) {
     if (err instanceof RevokeFailed) throw rosterRefusal("revoke_failed", { repo: err.repo });
     throw err;
   }
+}
+
+/**
+ * Every roster line account `userId` claimed loses its GitHub accesses
+ * (F-PROJ-17), as a removal's do, before the account is pseudonymized
+ * (ADR-117 §10); the lines themselves stay, claimed. `502 revoke_failed`
+ * (`rosterRefusal`) when GitHub does not take one: what was revoked stays
+ * revoked, the caller writes nothing and retries.
+ */
+export async function revokeAccountAccess(db: Db, userId: string, ctx: Revocation): Promise<void> {
+  const lines = await db.select({ id: enrollments.id }).from(enrollments).where(eq(enrollments.userId, userId));
+  await worded(async () => {
+    for (const line of lines) await revokeEnrollmentAccess(db, ctx.config, line.id, { ...ctx, via: "account.pseudonymize" });
+  });
 }
 
 /**
