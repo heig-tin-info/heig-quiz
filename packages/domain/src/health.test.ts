@@ -8,6 +8,7 @@ import {
   HEALTH_THRESHOLDS,
   jobsStatus,
   llmBudgetStatus,
+  accountsStatus,
   overdueStatus,
   serverErrorsStatus,
   servicePolicy,
@@ -158,6 +159,15 @@ describe("serviceStatus", () => {
     // Sign-in wants three: a person's own mistakes are not the provider's.
     expect(serviceStatus(failing, now, servicePolicy("signin"))).toBe("warn");
     expect(serviceStatus({ ...failing, failuresSinceOk: 3 }, now, servicePolicy("signin"))).toBe("fail");
+  });
+});
+
+describe("accountsStatus", () => {
+  it("fails past one run's worth of due accounts, or on an account due for days", () => {
+    expect(accountsStatus(0, 20, 0)).toBe("ok");
+    expect(accountsStatus(20, 20, 0)).toBe("ok");
+    expect(accountsStatus(21, 20, 0)).toBe("fail");
+    expect(accountsStatus(0, 20, 1)).toBe("fail");
   });
 });
 

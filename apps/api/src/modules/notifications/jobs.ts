@@ -13,11 +13,12 @@ import type { FastifyInstance } from "fastify";
 
 import { eq } from "drizzle-orm";
 
-import { NOTIFICATION_AUDIENCE, NotificationPayload } from "@quiz/contracts";
+import { ACCOUNT_KINDS, NOTIFICATION_AUDIENCE, NotificationPayload } from "@quiz/contracts";
 
 import { teamsEnabled, type AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { users } from "../../db/schema.js";
+import { normalizeEmail } from "../../identity.js";
 import type { JobQueue } from "../../jobs.js";
 import type { ScheduledTask } from "../../ticker.js";
 import { sendDeadlineReminders } from "./deadline.js";
@@ -51,7 +52,7 @@ export interface DeliveryDeps {
 /** Performs one delivery. Exported for the tests, which pass fakes for both transports. */
 export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<void> {
   const [user] = await deps.db
-    .select({ locale: users.locale, anonymizedAt: users.anonymizedAt, role: users.role })
+    .select({ locale: users.locale, anonymizedAt: users.anonymizedAt, role: users.role, email: users.email })
     .from(users)
     .where(eq(users.id, job.userId))
     .limit(1);
@@ -73,15 +74,13 @@ export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<voi
 
   if (job.channel === "email") {
     // The account's notification address (`address.ts`), resolved now: a
-    // choice changed after the send is honoured.
-    const to = (await notificationAddress(deps.db, job.userId))?.address;
-    if (!to) return;
-    await deps.mailer.send({
-      to,
-      subject: message.subject,
-      text: message.text,
-      html: message.html,
-    });
+    // choice changed after the send is honoured. A kind about the account
+    // itself (ADR-117 §4) also goes to the login address when it differs.
+    const address = (await notificationAddress(deps.db, job.userId))?.address;
+    const candidates = [address, ...(ACCOUNT_KINDS.includes(payload.kind) ? [normalizeEmail(user.email)] : [])];
+    for (const recipient of new Set(candidates.filter((a): a is string => !!a))) {
+      await deps.mailer.send({ to: recipient, subject: message.subject, text: message.text, html: message.html });
+    }
     return;
   }
 

@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
+  ACCOUNT_KINDS,
   DEFAULT_CHANNEL_ENABLED,
   kindChannels,
   NOTIFICATION_AUDIENCE,
@@ -66,7 +67,11 @@ const ADMIN_KINDS = NOTIFICATION_KINDS.filter((kind) => NOTIFICATION_AUDIENCE[ki
 
 type NotificationRow = typeof notifications.$inferSelect;
 
-/** The channels each of `userIds` wants for each of `kinds`, defaults filled in: one query. */
+/**
+ * The channels each of `userIds` wants for each of `kinds`, defaults filled
+ * in: one query. An account kind (`ACCOUNT_KINDS`, ADR-117 §4) has no toggle:
+ * its defaults, whatever a row says.
+ */
 async function channelsFor(
   db: Db,
   userIds: readonly string[],
@@ -91,7 +96,10 @@ async function channelsFor(
     const key = `${row.userId}:${row.kind}`;
     moved.set(key, { ...moved.get(key), [row.channel]: row.enabled });
   }
-  return (userId, kind) => ({ ...DEFAULT_CHANNEL_ENABLED[kind], ...moved.get(`${userId}:${kind}`) });
+  return (userId, kind) => ({
+    ...DEFAULT_CHANNEL_ENABLED[kind],
+    ...(ACCOUNT_KINDS.includes(kind) ? {} : moved.get(`${userId}:${kind}`)),
+  });
 }
 
 /**
@@ -144,7 +152,19 @@ export async function notifyMany(
   db: Db,
   deliveries: readonly Delivery[],
 ): Promise<(Notification | null)[]> {
-  if (deliveries.length === 0) return [];
+  return (await notifyManyEnqueued(db, deliveries)).bells;
+}
+
+/**
+ * {@link notifyMany}, which also says, per delivery, the channels whose job
+ * the queue accepted: for a caller whose own write must follow the send, and
+ * never happen without it (the account lifecycle, ADR-117 §4).
+ */
+export async function notifyManyEnqueued(
+  db: Db,
+  deliveries: readonly Delivery[],
+): Promise<{ bells: (Notification | null)[]; enqueued: ExternalChannel[][] }> {
+  if (deliveries.length === 0) return { bells: [], enqueued: [] };
   const parsed = deliveries.map((d) => ({
     userId: d.userId,
     payload: NotificationPayload.parse(d.payload),
@@ -193,13 +213,14 @@ export async function notifyMany(
   }
   for (const row of values) hint("notifications", [userTopic(row.userId)]);
 
+  const enqueued: ExternalChannel[][] = [];
   for (const d of planned) {
     const external: ExternalChannel[] = [];
     if (d.wanted.email) external.push("email");
     if (d.wanted.teams && linked.has(d.userId)) external.push("teams");
-    if (external.length > 0) await enqueueDeliveries(d.userId, d.payload, external);
+    enqueued.push(external.length > 0 ? await enqueueDeliveries(d.userId, d.payload, external) : []);
   }
-  return bells.map((b) => (b ? notificationJson(byId.get(b.id)!) : null));
+  return { bells: bells.map((b) => (b ? notificationJson(byId.get(b.id)!) : null)), enqueued };
 }
 
 /** Where a best-effort send reports a failure: `app.log` from a job or the ticker, stderr from a service. */
@@ -411,8 +432,10 @@ export async function preferenceMatrix(db: Db, userId: string): Promise<Notifica
     NOTIFICATION_KINDS.map((kind) => [kind, { ...DEFAULT_CHANNEL_ENABLED[kind] }]),
   ) as NotificationMatrix;
   for (const row of rows) {
-    // A row of a kind or channel that was withdrawn is ignored.
+    // A row of a kind or channel that was withdrawn is ignored, and so is
+    // one of a kind nobody may turn off.
     if (!NOTIFICATION_KINDS.includes(row.kind) || !NOTIFICATION_CHANNELS.includes(row.channel)) continue;
+    if (ACCOUNT_KINDS.includes(row.kind)) continue;
     matrix[row.kind][row.channel] = row.enabled;
   }
   return matrix;
