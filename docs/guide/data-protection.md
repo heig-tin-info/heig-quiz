@@ -8,7 +8,16 @@ The platform is used by teachers of the HEIG-VD, a public institution of the can
 
 This page does not say whether the processing meets that law; judging it is not the role of a piece of software's documentation. It describes, in good faith, what is in place, what is not, and what remains to be checked. The section [Known limits](#known-limits) lists what is missing; the gaps are tracked in issue [#274](https://github.com/heig-tin-info/heig-quiz/issues/274). The rules the platform is meant to follow are the N-DATA requirements of the specification (`docs/spec/03-exigences-non-fonctionnelles.md`).
 
-Who is formally responsible for the processing (the HEIG-VD, a department, the teacher), and whether it has been declared to an authority or to the school's data protection officer: **To be confirmed**.
+The person responsible for this processing on the school's side is confirmed: the HEIG-VD's records officer (product owner, 2026-11-05, issue [#681](https://github.com/heig-tin-info/heig-quiz/issues/681)). The platform's administrator answers that officer if a request arrives. Whether the HEIG-VD is formally the controller and the platform's operator its processor is one of the questions the records officer escalated to the school's Direction (below): **To be confirmed**, as is any declaration to an authority.
+
+**The records officer's written answers (October 2026)** to the question sent on 2026-10-13:
+
+- exam copies are kept two years from the close of the evaluation (directive 11.04.05 of the HEIG-VD's records directive of 28 May 2024);
+- eliminating them needs a disposal form (bordereau) agreed by the Archives cantonales vaudoises, and the same principle holds for what is kept online;
+- the school has no validated list of tools;
+- three questions were escalated to the school's Direction and have no answer yet: how a tool is validated, the HEIG-VD as controller and the operator as processor, and the transfers to the United States (Anthropic, GitHub).
+
+Applying the two-year period to the platform's attempts, and keeping the register of eliminations a bordereau needs, is issue [#1027](https://github.com/heig-tin-info/heig-quiz/issues/1027).
 
 ## Words used on this page
 
@@ -31,7 +40,7 @@ Kiosk station
 
 - Sign-in goes through Switch edu-ID; the platform has no password of its own.
 - A teacher reaches the students of a course only through a seat on that course's staff; a student sees only their own work.
-- Data is kept until a teacher deletes it (N-DATA-03). A few kinds of data have a shorter, automatic retention (the integrity journal, the drill, the help assistant, the hours of activity, GitHub's notifications, a project's evidence files). Nothing is deleted when a student finishes their studies, and there is no account deletion.
+- Data is kept until a teacher deletes it (N-DATA-03). A few kinds of data have a shorter, automatic retention (the integrity journal, the drill, the help assistant, the hours of activity, GitHub's notifications, a project's evidence files). Nothing is deleted when a student finishes their studies. An account is never deleted. Decided on 2026-11-05 and not yet delivered: an unused one will be pseudonymized, its identity leaving and its work staying (ADR-117, [Accounts](#accounts)).
 - Content, including some student answers and student code with the names masked, is sent to an AI model (Anthropic) through one gateway that logs every call.
 - The servers are rented from Hetzner: the application machine in Nuremberg (Germany), the code machine and the off-site encrypted copy of the backups in Helsinki (Finland). Nothing is hosted in Switzerland.
 - Reads of personal data are mostly not traced: only the opening of one student's paper by the staff and an administrator's reading of help-assistant conversations are.
@@ -44,16 +53,16 @@ The platform receives data from three sources: Switch edu-ID at sign-in, the cla
 
 | Data | Where | Source | Kept until |
 | --- | --- | --- | --- |
-| edu-ID identifiers (`sub`, `swissEduPersonUniqueID`), first name, last name, e-mail address, picture address, last sign-in, preferences | `users` (`db/auth.ts`) | edu-ID, at every sign-in (`auth/oidc.ts`, `auth/login.ts`) | Never deleted: there is no account deletion |
-| Every e-mail address seen for the account (institutional, private, linked) | `user_emails` (`db/auth.ts`) | edu-ID | Never deleted, even once an affiliation ends |
-| Everything edu-ID sent at the last sign-in, affiliations included, unfiltered | `user_idp_claims` (`db/auth.ts`) | edu-ID | Replaced at each sign-in, never deleted |
+| edu-ID identifiers (`sub`, `swissEduPersonUniqueID`), first name, last name, e-mail address, picture address, last sign-in, preferences | `users` (`db/auth.ts`) | edu-ID, at every sign-in (`auth/oidc.ts`, `auth/login.ts`) | Replaced when the account is pseudonymized ([Accounts](#accounts)); the row is never deleted |
+| Every e-mail address seen for the account (institutional, private, linked) | `user_emails` (`db/auth.ts`) | edu-ID | Until the account is pseudonymized, even once an affiliation ends |
+| Everything edu-ID sent at the last sign-in, affiliations included, unfiltered | `user_idp_claims` (`db/auth.ts`) | edu-ID | Replaced at each sign-in, removed when the account is pseudonymized |
 | Role grants (an address granted the teacher role) | `teacher_grants` (`db/auth.ts`) | administrator | Until revoked |
 | Uploaded profile picture | `avatars` (`db/auth.ts`) | the user | Until the user removes it |
 | Sessions (a hash of the cookie only, kind, expiry) | `sessions` (`db/auth.ts`) | server | Deleted every ten minutes once expired |
 | API tokens and AI-assistant authorisations (hashes only) | `api_tokens`, `oauth_*` (`db/auth.ts`) | the user | Until revoked; expired OAuth rows are deleted every hour |
-| Notifications, preferences, the link to a Microsoft Teams account (tenant, object id, Teams name) | `notifications`, `notification_preferences`, `teams_links` (`db/notifications.ts`) | server, Teams | Never deleted automatically; the user may remove the Teams link |
+| Notifications, preferences, the link to a Microsoft Teams account (tenant, object id, Teams name) | `notifications`, `notification_preferences`, `teams_links` (`db/notifications.ts`) | server, Teams | Until the account is pseudonymized; the user may remove the Teams link |
 | Hours of activity: one row per person and hour in which their own session reached the server | `presence_hours` (`db/presence.ts`, ADR-107) | server | Eight days |
-| Last activity: the time of the last request of their own session | `presence_last_seen` (`db/presence.ts`) | server | Lives with the account |
+| Last activity: the time of the last request of their own session | `presence_last_seen` (`db/presence.ts`) | server | Until the account is pseudonymized |
 | Linked GitHub account: GitHub id and login, date of the link | `github_accounts` (`db/github.ts`) | the user, through GitHub | Until the user removes the link |
 
 `user_idp_claims` is kept unfiltered on purpose: the code gives the diagnosis of sign-in problems as the reason (`apps/api/src/auth/claims.ts`). It is displayed nowhere and no route exposes it. Which claims edu-ID actually releases for HEIG-VD accounts, the picture included: **To be confirmed**.
@@ -91,8 +100,8 @@ The platform receives data from three sources: Switch edu-ID at sign-in, the cla
 | --- | --- | --- | --- |
 | Each call to the AI model: purpose, model, token counts, estimated cost, the person it was made for; never the content | `llm_calls` (`db/llm.ts`, ADR-058) | server | Never deleted automatically |
 | The help assistant's conversations: a teacher's questions and the answers | `assist_conversations`, `assist_exchanges` (`db/assist.ts`, ADR-080) | teacher, AI model | 30 days, or sooner if the teacher deletes them |
-| Audit log: actor, action, subject, a JSON payload | `audit_log` (`db/auth.ts`, `apps/api/src/audit.ts`) | server | Never deleted, and protected against change |
-| heig-classroom's audit log, imported as it was | `legacy_classroom_audit_log` (`db/importClassroom.ts`) | the heig-classroom migration | Kept indefinitely; read by no route |
+| Audit log: actor, action, subject, a JSON payload | `audit_log` (`db/auth.ts`, `apps/api/src/audit.ts`) | server | Never changed; three years from each entry (decided on 2026-11-05, ADR-003 §5, not yet delivered: until then never deleted) |
+| heig-classroom's audit log, imported as it was | `legacy_classroom_audit_log` (`db/importClassroom.ts`) | the heig-classroom migration | Three years from each entry, like the audit log (ADR-003 §5, amendment of 2026-11-05); read by no route |
 | Technical log of each request: method, address with secrets masked, host, IP address | the containers' output (`apps/api/src/redact.ts`) | request | See [Technical logs](#technical-logs) |
 
 The IP address is not stored in the database, with one exception: a refused Safe Exam Browser access writes it to the audit log (`apps/api/src/auth/seb.ts`). The platform records neither the browser in use (only the drill's device class), nor keystrokes, nor the content of a paste, nor any audience measurement beyond the hours of activity, which the administrator reads only as counts.
@@ -150,7 +159,7 @@ Whoever administers the machines reaches the database, the backups and the logs,
 
 ### What is traced
 
-The audit log (`apps/api/src/audit.ts`) records the actions that change something: sign-ins, class list imports and edits, gradings, releases, Super Powers, a view opened as a student, grants. A database trigger refuses any change or deletion of its rows (migration `0096_audit_log_immutable`, ADR-003 §5). It traces two kinds of read only:
+The audit log (`apps/api/src/audit.ts`) records the actions that change something: sign-ins, class list imports and edits, gradings, releases, Super Powers, a view opened as a student, grants. A database trigger refuses any change or deletion of its rows (migration `0096_audit_log_immutable`, ADR-003 §5). Decided on 2026-11-05 (ADR-003 §5 amendment, N-SEC-09): an entry is kept three years, after which a daily job deletes it, the only deletion the trigger will let through; no entry is ever changed. The provenance of a grade in the log goes after three years; the grade stays. It traces two kinds of read only:
 
 - a member of a course's staff, or the administrator with Super Powers, opening one student's paper, from the live dashboard (the whole paper or one of its answers, the grid's hover preview included) or from a row of the grade table (`attempt.read`). It is one entry per opening, not per request: the same person's reads of the same paper are recorded at most once every 15 minutes, a window kept in the server's memory, so a restart may record one more;
 - an administrator reading a teacher's help-assistant conversations (`assist.read`);
@@ -212,7 +221,7 @@ A **staging** environment runs on the application machine under a separate syste
 
 ## Retention and deletion
 
-**Data is kept until a teacher deletes it** (N-DATA-03), except for the kinds below, which are deleted automatically by the platform's scheduled tasks (`apps/api/src/modules/system/catalog.ts`). Nothing happens automatically when a student completes or leaves their studies, and there is no deletion or pseudonymisation of accounts: the specification does not require one (ADR-003 §5).
+**Data is kept until a teacher deletes it** (N-DATA-03), except for the kinds below, which are deleted automatically by the platform's scheduled tasks (`apps/api/src/modules/system/catalog.ts`). Nothing is deleted when a student completes or leaves their studies. An account is never deleted; its identity has its own lifecycle ([Accounts](#accounts), N-DATA-08).
 
 Automatic deletions:
 
@@ -241,7 +250,13 @@ Deletions by a teacher:
 | Removing a student from the class list | Their seat, gradebook marks, group memberships and repository-access rows go (their GitHub access is revoked first); their attempts, answers, grades and drill data stay |
 | Archiving a classroom | Nothing is deleted: the classroom is only hidden |
 
-What is never deleted automatically: the accounts, the e-mail addresses and edu-ID information kept, the notifications, the AI call log, the kiosk pairings, the audit log (which keeps, among others, the name and address of a student removed from a class list), the imported heig-classroom audit log, and the online workspace's users (name, e-mail address) and working directories (no deletion of them is in the repository).
+What is never deleted automatically: the accounts' rows (their identity is pseudonymized, [Accounts](#accounts)), the AI call log, the kiosk pairings, and the online workspace's users (name, e-mail address) and working directories (no deletion of them is in the repository). The audit log, which keeps among others the name and address of a student removed from a class list, and the imported heig-classroom audit log keep each entry three years.
+
+### Accounts
+
+Decided on 2026-11-05 (product owner, ADR-117, N-DATA-08), and delivered by the changes that follow that decision; production runs the daily job only once the operator turns it on (`ACCOUNT_LIFECYCLE`). A student account with no activity for two years — the latest of its last sign-in, its last request and the last use of its tokens; a session an administrator opened in its name does not count — receives one e-mail, at its notification address and at its edu-ID login address when they differ, pointing first to **Download my data**. The account is then *dormant*. A reminder follows nine months later, and twelve months after the first e-mail the job pseudonymizes it, at most twenty accounts a day. Signing in at any time before then makes the account active again. A student may also pseudonymize their own account sooner, from **Settings**, with a typed confirmation. The administrator, with Super Powers on, may pseudonymize any account, one at a time, with a typed confirmation, for instance on a request the records officer relays; a staff account is pseudonymized only so, and its pools pass to their next member (ADR-013 §5). Nothing is pseudonymized while the account has an attempt in progress or a place in a classroom that is still running.
+
+Pseudonymizing an account replaces its names, e-mail addresses, edu-ID identifiers, picture, GitHub and Teams links and the e-mail of the class-list lines it claimed, and removes its sessions, tokens, hours of activity, notifications and preferences; its GitHub access is revoked first. Its attempts, answers, gradings, grades, project results and drill data stay under the same id, for the teachers' view over several years. It is not deletion: the audit log (three years), the backups (about four months), GitHub commits and repository names, the scan of a paper copy (which may carry the handwritten name), the class lists as the teacher imported them, the help assistant's conversations (30 days) and the online workspace's own database (handled by hand) still hold the identity, and the operator can re-identify the account until they go. A later sign-in with the same edu-ID creates a new, empty account, through admission (ADR-111).
 
 ### Backups
 
@@ -321,11 +336,11 @@ What the platform lets a student do today:
 | Stop the drill | Yes, per classroom: nothing more is counted; what was recorded stays visible to the teacher and is kept five years |
 | Export their data | Partly: **Download my data** (**Settings**) gives, in one JSON file, everything the platform shows them, plus their verified e-mail addresses, hours of activity and last activity (ADR-112). Not what only the teacher sees (the attempt journal, a note on the class list, the edu-ID claims, the audit log) |
 | Correct their name or address | Not in the platform: they come from edu-ID and are updated at every sign-in; a mistake in the class list is corrected by the teacher |
-| Delete their data | Only their profile picture, their Teams link and their GitHub link |
+| Delete their data | Their profile picture, their Teams link and their GitHub link. Decided on 2026-11-05, not yet delivered: pseudonymize their own account (**Settings**, typed confirmation, ADR-117), their identity leaving and their results staying without their name |
 
-For any request (access, copy, correction or deletion), the student turns first to the course's teacher, who can correct a class list or delete an evaluation. The student's own file (above) holds what they can see; extracting everything the platform holds about a student, or deleting their account, is possible through no feature of the application: only direct access to the database allows it, so a full access request goes through the teacher or the institution's data-protection officer.
+For any request (access, copy, correction or deletion), the student turns first to the course's teacher, who can correct a class list or delete an evaluation. The student's own file (above) holds what they can see; extracting everything the platform holds about a student is possible through no feature of the application: only direct access to the database allows it, so a full access request goes through the teacher or the HEIG-VD's records officer. An account is never deleted; once the action decided on 2026-11-05 is delivered, a student who wants their identity gone pseudonymizes their own account ([Accounts](#accounts)).
 
-The institutional contact for these requests, and the supervisory authority to name: **To be confirmed**.
+The institutional contact for these requests is the HEIG-VD's records officer, whom the platform's administrator answers. The supervisory authority to name: **To be confirmed**.
 
 ## Known limits
 
@@ -334,9 +349,12 @@ These points are known; the open ones are tracked in issue [#274](https://github
 Retention and deletion:
 
 - no general retention period and nothing deleted when a student leaves: only the specific periods listed above apply;
-- no deletion or pseudonymisation of accounts; the edu-ID information and every e-mail address seen are kept with no time limit;
+- the account lifecycle and the student's own action in **Settings** are decided (2026-11-05, ADR-117) but not yet delivered: until they are, an account's identity, its e-mail addresses and edu-ID information are kept with no time limit;
+- accounts are pseudonymized, never anonymized: until the audit log's three years and the backups' four months run out, the operator can re-identify one, and GitHub repository names, paper scans and the teachers' class lists keep the name;
+- the lifecycle e-mail may reach nobody (an address that no longer works); the account is pseudonymized a year later all the same;
+- a staff account is pseudonymized only when the administrator does it: its identity has no time limit otherwise;
 - removing a student from a class list leaves their attempts, answers, grades, drill data and released-grade snapshot in the database;
-- the audit log is never purged and contains names and addresses; its protection against change also prevents removing them;
+- the audit log contains names and addresses for three years; its protection against change prevents removing them sooner, and a grade's provenance goes with them;
 - the AI call log, the notifications, the kiosk pairings and the online workspace's working directories have no retention period;
 - the frozen results of a poll keep what its participants without an account typed, with no time limit: an anonymous poll belongs to no classroom, and no screen deletes it;
 - the off-site copy's four to five months hold only if it is pruned by hand; otherwise its archives keep everything.
@@ -372,7 +390,7 @@ Hosting:
 
 ## Working hypotheses
 
-Pending the answers listed in [To be confirmed](#to-be-confirmed), the following hypotheses were formed on 2026-10-13 from public sources. They are hypotheses, not legal advice; a question was sent to the HEIG-VD on the controller, the applicable law and the transfers.
+Pending the answers listed in [To be confirmed](#to-be-confirmed), the following hypotheses were formed on 2026-10-13 from public sources. They are hypotheses, not legal advice; a question was sent to the HEIG-VD on the controller, the applicable law and the transfers, answered in part in October 2026 ([Framework and approach](#framework-and-approach)).
 
 **Applicable law and controller.**
 
@@ -408,8 +426,8 @@ Hypotheses: if the HEIG-VD falls under the LArch, its retention schedule sets th
 
 - Whether a revision of the LPrD is under way, and its effect on this page.
 - Where Anthropic, GitHub and Google, United States companies, process the data (no agreement specific to the platform covers these transfers).
-- Who is responsible for the processing, the contact for students' requests, and any declaration to the cantonal authority or the school's data protection officer.
-- The retention period the institution requires for exam copies and grades, after the studies included.
+- Whether the HEIG-VD is formally the controller and the operator its processor (escalated to the school's Direction), and any declaration to the cantonal authority.
+- How the two years the records officer gave for exam copies apply to the platform's attempts and grades, and the register of eliminations (issue [#1027](https://github.com/heig-tin-info/heig-quiz/issues/1027)).
 - Whether Hetzner's machine backup is enabled; the encryption of the disks and of those backups.
 - Who holds personal accounts with administrator rights on the production machines.
 - Whether e-mail and Teams notifications are enabled in production.

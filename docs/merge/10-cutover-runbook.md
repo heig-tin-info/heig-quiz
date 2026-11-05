@@ -680,6 +680,8 @@ M9-01 row of [`PROGRESS.md`](PROGRESS.md).
    08:33 UTC), is final. The owner copied it by `scp` to their workstation
    and checked its sha256 on both sides
    (`fde6b3a3217f59d2f0ddf0c880ba9120f6d245b422eb98c5429ab79b5bcd7242`).
+   That workstation copy was deleted on 2026-11-05 (product owner,
+   [ADR-117](../adr/ADR-117-pseudonymisation-d-un-compte-sur-demande.md) §12).
    The off-site borg archives (`deployment.md` §6, *The off-site copy*)
    also hold classroom's dumps until their retention (about three months)
    prunes them; `push.sh` no longer copies `/srv/heig-classroom/backups`.
