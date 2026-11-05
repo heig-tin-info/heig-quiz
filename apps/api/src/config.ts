@@ -147,6 +147,19 @@ const EnvSchema = z.object({
    */
   JOBS_DISABLED: flag(),
 
+  /**
+   * The account lifecycle (ADR-117 §3, §10): `1` lets the daily
+   * `accounts.lifecycle` task send the inactivity notices and reminders and
+   * pseudonymize the accounts whose notice is a year old. `0`, the default,
+   * makes it do nothing: off on staging and on a workstation, whose mailer
+   * may only log, so nobody's account goes without the e-mail that announced
+   * it. Production turns it on when the operator decides.
+   */
+  ACCOUNT_LIFECYCLE: z
+    .enum(["0", "1"])
+    .default("0")
+    .transform((v) => v === "1"),
+
   /** Deadline ticker period, in milliseconds (docs/spec/05, 5.4). */
   TICK_MS: z.coerce.number().int().min(100).max(600_000).default(1000),
 

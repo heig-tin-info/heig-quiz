@@ -23,13 +23,15 @@
  * never released (ADR-088); `TRAINING_TASKS` installs the training course's
  * content into its public pool (ADR-105 §2); `PRESENCE_TASKS` deletes the
  * hours of activity past their eight days (ADR-107); `PAPER_TASKS` sweeps the
- * scans of the paper copies whose attempt is gone (ADR-125 §15). A new task also adds its key to
+ * scans of the paper copies whose attempt is gone (ADR-125 §15); `ACCOUNT_TASKS`
+ * runs the student accounts' lifecycle (ADR-117 §10). A new task also adds its key to
  * `SCHEDULED_TASK_KEYS` (`@quiz/contracts`) and its names to the web's
  * dictionaries.
  */
 import { purgeOAuth } from "../../auth/oauth/service.js";
 import { purgeExpiredSessions } from "../../auth/session.js";
 import type { ScheduledTask } from "../../ticker.js";
+import { ACCOUNT_TASKS } from "../account/jobs.js";
 import { ASSIST_TASKS } from "../assist/jobs.js";
 import { DRILL_TASKS } from "../drill/jobs.js";
 import { GITHUB_TASKS } from "../github/jobs.js";
@@ -67,6 +69,7 @@ export const SCHEDULED_TASKS: readonly ScheduledTask[] = [
   ...TRAINING_TASKS,
   ...PRESENCE_TASKS,
   ...PAPER_TASKS,
+  ...ACCOUNT_TASKS,
   {
     key: "health.checks",
     defaultIntervalMinutes: 5,

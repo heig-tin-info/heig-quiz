@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ACCOUNT_KINDS,
   DEFAULT_CHANNEL_ENABLED,
   GITHUB_KINDS,
   kindChannels,
@@ -8,6 +9,7 @@ import {
   NOTIFICATION_KINDS,
   notificationKindsFor,
   NotificationPayload,
+  NotificationPreferencePut,
 } from "./notifications.js";
 
 describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", () => {
@@ -20,8 +22,10 @@ describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", ()
     }
   });
 
-  it("keeps the app on for every kind: a default never hides a notification", () => {
-    for (const kind of NOTIFICATION_KINDS) expect(DEFAULT_CHANNEL_ENABLED[kind].bell).toBe(true);
+  it("keeps the app on for every kind the bell carries: a default never hides a notification", () => {
+    for (const kind of NOTIFICATION_KINDS) {
+      if (kindChannels(kind).includes("bell")) expect(DEFAULT_CHANNEL_ENABLED[kind].bell, kind).toBe(true);
+    }
   });
 
   it("leaves the kinds that existed before #198 on everywhere, as they were", () => {
@@ -88,6 +92,31 @@ describe("impersonation_ended — a session opened in the student's name (ADR-03
   });
 });
 
+describe("account_dormant — the account's lifecycle e-mail (ADR-117 §4)", () => {
+  it("is an e-mail only, about the account, with no toggle anyone may send", () => {
+    expect(ACCOUNT_KINDS).toEqual(["account_dormant"]);
+    expect(kindChannels("account_dormant")).toEqual(["email"]);
+    expect(DEFAULT_CHANNEL_ENABLED.account_dormant).toEqual({ bell: false, email: true, teams: false });
+    for (const enabled of [true, false]) {
+      expect(NotificationPreferencePut.safeParse({ kind: "account_dormant", channel: "email", enabled }).success).toBe(false);
+    }
+    expect(NotificationPreferencePut.safeParse({ kind: "pool_shared", channel: "email", enabled: false }).success).toBe(true);
+  });
+
+  it("names its stage and nothing else", () => {
+    expect(NotificationPayload.parse({ kind: "account_dormant", state: "notice" })).toEqual({ kind: "account_dormant", state: "notice" });
+    expect(NotificationPayload.safeParse({ kind: "account_dormant", state: "gone" }).success).toBe(false);
+  });
+
+  it("is never a row of the settings grid, whatever the account", () => {
+    for (const role of ["student", "teacher", "admin"] as const) {
+      for (const seat of [false, true]) {
+        expect(notificationKindsFor({ role, studentSeat: seat, courseSeat: seat, github: true })).not.toContain("account_dormant");
+      }
+    }
+  });
+});
+
 describe("notificationKindsFor — the rows of the settings grid (#277)", () => {
   const SEAT_KINDS = [
     "results_released",
@@ -138,17 +167,18 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
     expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: true, github: true })).not.toContain("system_alert");
   });
 
-  it("gives a teacher on a roster every kind but the admin ones, and an admin every kind, in the catalogue order", () => {
+  it("gives a teacher on a roster every kind but the admin and account ones, and an admin every kind but the account ones, in the catalogue order", () => {
+    const listed = NOTIFICATION_KINDS.filter((k) => !ACCOUNT_KINDS.includes(k));
     expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false, github: true })).toEqual(
-      NOTIFICATION_KINDS.filter((k) => !ADMIN_KINDS.includes(k)),
+      listed.filter((k) => !ADMIN_KINDS.includes(k)),
     );
-    expect(notificationKindsFor({ role: "admin", studentSeat: true, courseSeat: true, github: true })).toEqual([...NOTIFICATION_KINDS]);
+    expect(notificationKindsFor({ role: "admin", studentSeat: true, courseSeat: true, github: true })).toEqual(listed);
   });
 
   it("hides the project kinds on a platform without Quiz's GitHub App: a toggle that does nothing is a lie (F-NOTIF-13)", () => {
     const shown = notificationKindsFor({ role: "admin", studentSeat: true, courseSeat: true, github: false });
     const gated: readonly string[] = GITHUB_KINDS;
-    expect(shown).toEqual(NOTIFICATION_KINDS.filter((k) => !gated.includes(k)));
+    expect(shown).toEqual(NOTIFICATION_KINDS.filter((k) => !gated.includes(k) && !ACCOUNT_KINDS.includes(k)));
     for (const kind of GITHUB_KINDS) expect(shown).not.toContain(kind);
     // Every project kind is gated, and the lost organization with them.
     for (const kind of NOTIFICATION_KINDS) {

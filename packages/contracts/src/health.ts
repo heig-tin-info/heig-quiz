@@ -96,6 +96,9 @@ export const SYSTEM_CHECK_KEYS = [
   "llm.budget",
   // The Typst binary of the PDF exports (ADR-125 §3).
   "pdf",
+  // The account lifecycle (ADR-117 §10): more accounts due than one run
+  // takes, or an account still due three days past its term.
+  "accounts",
 ] as const;
 export type SystemCheckKey = (typeof SYSTEM_CHECK_KEYS)[number];
 
@@ -142,6 +145,8 @@ export const CHECK_CAUSES = [
   "mail.dry_run",
   "pdf.unavailable",
   "pdf.uncapped",
+  "accounts.backlog",
+  "accounts.late",
   "check.failed",
 ] as const;
 export type CheckCause = (typeof CHECK_CAUSES)[number];

@@ -277,6 +277,17 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     openedAt: z.iso.datetime(),
     closedAt: z.iso.datetime(),
   }),
+  z.object({
+    /**
+     * The account has not been used for two years (ADR-117 §3, §4): the
+     * `notice` that makes it dormant, then the `reminder` nine months later.
+     * Sent by the `accounts.lifecycle` task to the account itself, by e-mail
+     * only, and never switched off. No date: the sentence says "within a
+     * year" (the reminder: "within three months").
+     */
+    kind: z.literal("account_dormant"),
+    state: z.enum(["notice", "reminder"]),
+  }),
 ]);
 export type NotificationPayload = z.infer<typeof NotificationPayload>;
 
@@ -328,6 +339,7 @@ export const NOTIFICATION_KINDS = [
   "question_report_resolved",
   "pool_unpublished",
   "system_alert",
+  "account_dormant",
 ] as const;
 export const NotificationKind = z.enum(NOTIFICATION_KINDS);
 export type NotificationKind = z.infer<typeof NotificationKind>;
@@ -393,6 +405,9 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   // The secondary alarm of the operator (ADR-055 §5): the e-mail is the point.
   // Teams stays off: `KIND_CHANNELS` forbids it (a test holds every default to it).
   system_alert: { bell: true, email: true, teams: false },
+  // The account's own lifecycle (ADR-117 §4): an e-mail, which nobody can
+  // turn off (`ACCOUNT_KINDS`), and nothing else.
+  account_dormant: { bell: false, email: true, teams: false },
 };
 
 /**
@@ -402,10 +417,13 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
  * the Teams app for every user, for a notice a handful of administrators
  * receive by e-mail anyway (ADR-030, addendum of 2026-09-30).
  * `impersonation_ended` stays in the app (ADR-034 §6, amended 2026-10-15).
+ * `account_dormant` is an e-mail: the person it is for no longer opens the
+ * app (ADR-117 §4).
  */
 export const KIND_CHANNELS = {
   system_alert: ["bell", "email"],
   impersonation_ended: ["bell"],
+  account_dormant: ["email"],
 } as const satisfies Partial<Record<NotificationKind, readonly NotificationChannel[]>>;
 
 /** The channels `kind` may use (`KIND_CHANNELS`, every channel otherwise). */
@@ -437,11 +455,14 @@ export type OutboundNotificationKind = Exclude<NotificationKind, AppOnlyKind>;
  * staff seats of a course (`course_staff`: `tellStaff`, `staffOf`), never a
  * seatless admin. `pool`: pool owners and members, which only a teacher or an
  * admin reaches. `admin`: the accounts whose role is admin (the platform's
- * health, ADR-055 §5). A kind added to {@link NOTIFICATION_KINDS} without its
- * row here is a compile error.
+ * health, ADR-055 §5). `account`: the account itself, whatever its role
+ * and its seats, about the account (its lifecycle, ADR-117 §4); such a kind
+ * is never in the settings grid and cannot be turned off
+ * ({@link ACCOUNT_KINDS}). A kind added to {@link NOTIFICATION_KINDS} without
+ * its row here is a compile error.
  */
 export const NOTIFICATION_AUDIENCE: Readonly<
-  Record<NotificationKind, "seat" | "course" | "pool" | "admin">
+  Record<NotificationKind, "seat" | "course" | "pool" | "admin" | "account">
 > = {
   results_released: "seat",
   activity_scheduled: "seat",
@@ -466,7 +487,18 @@ export const NOTIFICATION_AUDIENCE: Readonly<
   question_report_resolved: "pool",
   pool_unpublished: "pool",
   system_alert: "admin",
+  account_dormant: "account",
 };
+
+/**
+ * The kinds about the account itself (audience `account`): out of the
+ * settings grid, and their defaults are the only channels they use, whatever
+ * a stored toggle says (ADR-117 §4). Their e-mail goes to the notification
+ * address AND to the login address when it differs.
+ */
+export const ACCOUNT_KINDS: readonly NotificationKind[] = NOTIFICATION_KINDS.filter(
+  (kind) => NOTIFICATION_AUDIENCE[kind] === "account",
+);
 
 /**
  * The kinds only a platform with Quiz's GitHub App ever sends (projects,
@@ -492,7 +524,8 @@ const githubKinds: readonly NotificationKind[] = GITHUB_KINDS;
  * sees the pool kinds, and the seat kinds only while holding a student seat.
  * The course kinds go to a teacher, whose course seat may come at any time,
  * and to an admin only while holding one: without it they are a row that
- * controls nothing (#287). The admin kinds go to an admin, and only there.
+ * controls nothing (#287). The admin kinds go to an admin, and only there;
+ * the account kinds ({@link ACCOUNT_KINDS}) are never listed.
  * The GitHub kinds ({@link GITHUB_KINDS}) only on a platform with the App.
  */
 export function notificationKindsFor({
@@ -514,6 +547,8 @@ export function notificationKindsFor({
     course: role === "teacher" || (role === "admin" && courseSeat),
     pool: role !== "student",
     admin: role === "admin",
+    // Never a row of the grid: nothing to choose (ADR-117 §4).
+    account: false,
   };
   return NOTIFICATION_KINDS.filter((kind) => reaches[NOTIFICATION_AUDIENCE[kind]] && (github || !githubKinds.includes(kind)));
 }
@@ -575,7 +610,8 @@ export type NotificationSettings = z.infer<typeof NotificationSettings>;
 
 /** `PUT /app/api/notifications/preferences`: one toggle of the grid. */
 export const NotificationPreferencePut = z.object({
-  kind: NotificationKind,
+  /** An account kind (`ACCOUNT_KINDS`) has no toggle: refused. */
+  kind: NotificationKind.refine((kind) => !ACCOUNT_KINDS.includes(kind), "This notification cannot be turned off"),
   channel: NotificationChannel,
   enabled: z.boolean(),
 });

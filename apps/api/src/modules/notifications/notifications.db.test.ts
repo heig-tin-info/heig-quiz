@@ -473,8 +473,9 @@ describe("preferences", () => {
     await seat(true);
     expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false, github: true }));
     await seat(false);
-    // Every kind but the administrators' own (`system_alert`).
-    expect(await kinds(frank)).toEqual(NOTIFICATION_KINDS.filter((k) => k !== "system_alert"));
+    // Every kind but the administrators' own (`system_alert`) and the account's
+    // lifecycle, which nobody chooses (`account_dormant`).
+    expect(await kinds(frank)).toEqual(NOTIFICATION_KINDS.filter((k) => k !== "system_alert" && k !== "account_dormant"));
 
     const gina = await seedUser("gina@heig.test");
     await db.update(users).set({ role: "student" }).where(eq(users.id, gina));

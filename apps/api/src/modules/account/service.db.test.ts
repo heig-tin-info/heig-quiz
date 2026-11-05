@@ -289,7 +289,7 @@ describe("pseudonymizeUser", () => {
     await db.insert(users).values({ id: heir, oidcSub: `heir-${heir}`, email: `heir-${heir}@heig.test`, role: "teacher" });
     await db.insert(poolMembers).values({ poolId: seed.poolId, userId: heir, role: "contributor" });
     for (const by of ["self", "lifecycle"] as const) {
-      await exec(`UPDATE users SET inactivity_notified_at = now() - interval '13 months' WHERE id = $1`, [seed.teacherId]);
+      await exec(`UPDATE users SET inactivity_notified_at = now() - interval '13 months', inactivity_reminded_at = now() - interval '4 months', created_at = now() - interval '3 years', last_login_at = NULL WHERE id = $1`, [seed.teacherId]);
       await expect(pseudonymizeUser(db, seed.teacherId, ctx(by)), by).rejects.toMatchObject({ code: "staff" });
     }
     await pseudonymizeUser(db, seed.teacherId, ctx("admin"));
@@ -305,10 +305,10 @@ describe("pseudonymizeUser", () => {
   it("pseudonymizes for the lifecycle only twelve months after the notice, and never once a sign-in ended the dormancy", async () => {
     const seed = await seedLive(db, { students: 2, questions: 0 });
     const [dormant, back] = seed.studentIds as [string, string];
-    await exec(`UPDATE users SET inactivity_notified_at = now() - interval '11 months' WHERE id = $1`, [dormant]);
+    await exec(`UPDATE users SET inactivity_notified_at = now() - interval '11 months', inactivity_reminded_at = now() - interval '4 months' WHERE id = $1`, [dormant]);
     await expect(pseudonymizeUser(db, dormant, ctx("lifecycle"))).rejects.toMatchObject({ code: "not_due" });
     await expect(pseudonymizeUser(db, back, ctx("lifecycle"))).rejects.toMatchObject({ code: "not_due" });
-    await exec(`UPDATE users SET inactivity_notified_at = now() - interval '12 months 1 day' WHERE id = $1`, [dormant]);
+    await exec(`UPDATE users SET inactivity_notified_at = now() - interval '12 months 1 day', inactivity_reminded_at = now() - interval '3 months 1 day', created_at = now() - interval '3 years', last_login_at = NULL WHERE id = $1`, [dormant]);
     await pseudonymizeUser(db, dormant, ctx("lifecycle"));
     const entries = await db.select().from(auditLog).where(eq(auditLog.subjectId, dormant));
     expect(entries.filter((e) => e.action === "user.anonymized").map((e) => [e.actorType, e.payload])).toEqual([
