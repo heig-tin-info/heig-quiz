@@ -153,9 +153,13 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
    `swiss_edu_id` (open question 57) can bring a pseudonymized account back:
    its `swiss_edu_id` is gone with the rest of the identity.
 
-8. **One wipe list, shared with staging.** `scripts/staging-pseudonymize.sql`
-   is split into a per-account fragment and the whole-copy rest. The fragment
-   is parameterized: the subject prefix (`anon-` here, `staging:` on staging),
+8. **One wipe list, shared with staging.** The per-account fragment is the
+   database function `quiz_pseudonymize_account(...)`, created by migration
+   `0129`; a later migration changes the list with `CREATE OR REPLACE`. The
+   service runs it inside its transaction (§10), and
+   `scripts/staging-pseudonymize.sql` calls it once per person, the whole-copy
+   rest staying in the script. The staging export therefore requires
+   production at migration `0129` or later. The function is parameterized: the subject prefix (`anon-` here, `staging:` on staging),
    the replacement names, and whether it sets `anonymized_at` — production
    does, staging does not, else every copied account would lose its role and
    leave the admin list. `apps/api/src/stagingScrub.db.test.ts`, which searches
@@ -190,7 +194,10 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
    question 28 (a)). The proposal of 2026-10-26 deleted it; the owner keeps it.
 
 10. **Guards and the job.** Whatever the trigger, nothing is pseudonymized
-    while the account has an open attempt, or a seat in an unarchived
+    while the account has an open attempt — an attempt in progress in an
+    exam whose state is not closed (the ticker closes it, invariant 5); an
+    exercise or poll attempt never blocks, since an exercise stays open after
+    its due date (#985) — or a seat in an unarchived
     classroom whose `period_end` (a `YYYY-MM` text, `db/org.ts`) is the current
     month or later, by the database's clock; an undated classroom never
     blocks, and the job logs that it met one. The daily job
@@ -201,9 +208,11 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
     to the administrator (ADR-055) and stops. Each account is handled in its
     own transaction, under `SELECT … FOR UPDATE` on its row, with the
     inactivity and the guards checked again inside it (a sign-in may race the
-    job). GitHub access is revoked first, as a roster removal does (`org`
-    service); an account whose revocation fails (`502 revoke_failed`) is
-    skipped and tried again the next day, and after three failures a
+    job). Inside that locked transaction, after the guards are checked again
+    and before the wipe, GitHub access is revoked, as a roster removal does
+    (`org` service); a failure rolls everything back (`502 revoke_failed`,
+    nothing written). An account whose revocation fails is skipped by the job
+    and tried again the next day, and after three failures a
     `system_alert` names it. Each pseudonymization writes one audit row,
     `user.anonymized`, whose payload is the account id and
     `by: "lifecycle" | "self" | "admin"` (a new member of the union of
@@ -256,17 +265,18 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
     > confirmation; a staff account is never pseudonymized otherwise, and
     > its pools pass to their next member (ADR-013 §5) while its questions,
     > templates and classrooms stay. Nothing is pseudonymized while the
-    > account has an open attempt or a seat in an unarchived classroom whose
-    > period has not ended. Pseudonymization replaces the identity (names,
-    > addresses, edu-ID identifiers, picture, GitHub and Teams links, the
-    > e-mail of the roster lines it claimed) and revokes its sessions,
-    > tokens and GitHub access; attempts, answers, gradings, grades and
-    > drill data stay under the same id. It is not deletion: the audit log
-    > (three years, N-SEC-09), the backups (about four months, N-DATA-03),
-    > GitHub commits and repository names, and the scans of paper copies
-    > keep the identity, and the operator can re-identify the account until
-    > they go. A later sign-in creates a new, empty account, through
-    > admission (ADR-111). Audited as `user.anonymized` (ADR-117).
+    > account has an attempt in progress in an exam not yet closed (an
+    > exercise or poll attempt never blocks) or a seat in an unarchived
+    > classroom whose period has not ended. Pseudonymization replaces the
+    > identity (names, addresses, edu-ID identifiers, picture, GitHub and
+    > Teams links, the e-mail of the roster lines it claimed) and revokes
+    > its sessions, tokens and GitHub access; attempts, answers, gradings,
+    > grades and drill data stay under the same id. It is not deletion: the
+    > audit log (three years, N-SEC-09), the backups (about four months,
+    > N-DATA-03), GitHub commits and repository names, and the scans of
+    > paper copies keep the identity, and the operator can re-identify the
+    > account until they go. A later sign-in creates a new, empty account,
+    > through admission (ADR-111). Audited as `user.anonymized` (ADR-117).
 
 ## Consequences
 
@@ -276,11 +286,16 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
 - The data-protection guide and the privacy pages (N-DATA-07) describe the
   lifecycle, worded as pseudonymization, never as deletion; the *Known limits*
   entry "no deletion or pseudonymisation of accounts" changes accordingly.
-- The staging script is split into a parameterized per-account fragment and a
-  whole-copy rest; a table added to the fragment is then pseudonymized by
-  both, under the one test.
+- The staging script keeps the whole-copy rest and calls the per-account
+  function (§8); a table added to the function is then pseudonymized by both,
+  under the one test.
 - The routine writes other modules' tables directly (§8): accepted for this
   one fragment, not as a precedent.
+- The staging export requires production at migration `0129` or later, since
+  `scripts/staging-pseudonymize.sql` calls the function it creates (§8).
+- In the millisecond window where a sign-in has passed its refusal check
+  before the wipe commits, that sign-in creates a fresh, empty account without
+  admission. Accepted: the window is tiny, and the new account holds nothing.
 - A lifecycle e-mail that reaches nobody still leads, a year later, to the
   pseudonymization of a student account. Accepted: the account had two years
   of silence, and its work stays.
