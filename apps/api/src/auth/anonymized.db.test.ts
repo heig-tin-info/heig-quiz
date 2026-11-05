@@ -44,6 +44,10 @@ describe("signIn", () => {
     await db.update(users).set({ inactivityNotifiedAt: at, inactivityRemindedAt: at }).where(eq(users.id, first.id));
     const again = await signIn(db, config, oidcClaims(sub, { email: "dormant@heig-vd.ch" }, true));
     expect(again).toMatchObject({ id: first.id, inactivityNotifiedAt: null, inactivityRemindedAt: null });
+    // The fact the callback carries once to the page (ADR-117 §5): this sign-in ended a dormancy, no other did.
+    expect(first.reactivated).toBe(false);
+    expect(again.reactivated).toBe(true);
+    expect((await signIn(db, config, oidcClaims(sub, { email: "dormant@heig-vd.ch" }, true))).reactivated).toBe(false);
   });
 });
 

@@ -1,6 +1,7 @@
 /**
  * The user Settings' data card (N-DATA-04, ADR-112): one secondary action,
- * the personal data export. Fetched rather than followed as a link, so a
+ * the personal data export, and under it, last, the anonymization of the
+ * account (ADR-117 §5, `AccountAnonymize.tsx`). Fetched rather than followed as a link, so a
  * refusal (the hourly limit, a server error) is a toast, never an error
  * body saved as the file; the file is saved under the server's own name
  * (`personalDataExportFileName`).
@@ -14,6 +15,7 @@ import { Download, FileJson } from "lucide-react";
 
 import { PERSONAL_DATA_EXPORT_PATH, personalDataExportFileName, type Me, type PersonalDataExport } from "@quiz/contracts";
 
+import { AnonymizeAccountRow } from "./AccountAnonymize";
 import { api, apiErrorMessage, refusalCodeOf } from "./api";
 import { useT } from "./i18n";
 import { useToast } from "./notify";
@@ -50,12 +52,13 @@ export function DataExportCard({ me }: { me: Me }) {
   return (
     <section className="space-y-3">
       <SectionHeading icon={FileJson} title={t("settings.data")} />
-      <Card className="px-5">
+      <Card className="divide-y divide-line px-5">
         <SettingRow title={t("settings.dataExport")} desc={t("settings.dataExportHint")}>
           <Button variant="secondary" loading={download.isPending} onClick={() => download.mutate()}>
             <Download /> {t("settings.dataExportDownload")}
           </Button>
         </SettingRow>
+        <AnonymizeAccountRow me={me} />
       </Card>
     </section>
   );
