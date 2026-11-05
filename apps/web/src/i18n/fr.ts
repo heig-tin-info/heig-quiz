@@ -624,6 +624,8 @@ export const fr: Record<keyof Dict, string> = {
   "admin.activity.empty.body": "Les heures sont enregistrées depuis la mise en service de cette vue.",
   "admin.task.presence.purge": "Purge des heures d'activité",
   "admin.task.presence.purge.desc": "Supprime les heures d'activité de plus de huit jours.",
+  "admin.task.audit.purge": "Purge du journal d'audit",
+  "admin.task.audit.purge.desc": "Supprime les entrées du journal d'audit de plus de trois ans.",
   "admin.tab.people": "Personnes",
   "admin.tab.system": "État du système",
   "admin.tab.tasks": "Tâches planifiées",
