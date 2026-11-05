@@ -45,6 +45,7 @@ import { FormulaBudget } from "@quiz/docrender/katex";
 import { clozeHoleExtensions } from "./clozeHole";
 import { ParamExpr } from "./paramExpr";
 import { CodeHighlight } from "./codeHighlight";
+import { GeckoCaret } from "./geckoCaret";
 import { formulaHtml, type FormulaLabels } from "./formula";
 import { REFUSED, type ImageUrl } from "./imageUrl";
 import { assetUrl, assetWidth } from "./render";
@@ -597,6 +598,9 @@ export function richTextExtensions({
     // text, and a node cannot live in it — so it is coloured by a decoration
     // instead, like the keywords around it.
     CodeHighlight.configure({ holes: cloze }),
+    // Those decorations redraw the span under the caret, and Firefox then
+    // paints it on the previous line (#1025): put it back in its text node.
+    GeckoCaret,
     image.configure({ allowBase64: false }),
     InlineMathTyping.extend({ addNodeView: () => formulaNodeView(false, formulaLabels) }),
     BlockMathTyping.extend({ addNodeView: () => formulaNodeView(true, formulaLabels) }),
