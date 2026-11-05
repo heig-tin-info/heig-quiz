@@ -43,12 +43,15 @@ mechanism (NFR-09), revocable sessions (AU-06), a durable job queue and a simple
 
    *Amendment of 2026-11-05 (ruled on the product owner's delegation, issue #681,
    [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) §11): the audit log has a
-   retention of three years.* The trigger becomes a row-level `BEFORE DELETE` that lets a row
-   go only when its `created_at` is older than `now() - interval '3 years'`, by the
-   database's clock; `UPDATE` stays refused for every statement and every row. A daily job
+   retention of three years.* The trigger becomes one row-level trigger,
+   `BEFORE UPDATE OR DELETE FOR EACH ROW` (migration `0130_audit_log_retention`, beside
+   `0096_audit_log_immutable`), that lets a row be deleted only when its `created_at` is older
+   than `now() - interval '3 years'`, by the database's clock; `UPDATE` stays refused for
+   every row (a statement that matches no row changes nothing and passes). A daily job
    deletes the rows past that age; nothing else deletes one. `legacy_classroom_audit_log`
    (the imported heig-classroom history, D11 of `docs/merge/08-decisions.md`) is purged under
-   the same rule. The trigger keeps its name, `audit_log_immutable`, which the staging
+   the same rule, guarded by its own trigger `legacy_classroom_audit_log_immutable` under the
+   same function. The trigger keeps its name, `audit_log_immutable`, which the staging
    pseudonymization (`scripts/staging-pseudonymize.sql`) disables by name (or that script changes in the same pull request).
    Pseudonymizing an account rewrites no audit row: the operator can re-identify a
    pseudonymized account from the payloads until they age out. Accepted consequence: the
