@@ -59,7 +59,11 @@ export const importIdMap = importClassroom.table(
 /**
  * heig-classroom's `audit_log`, kept as it was (D11, settled 2026-10-01): a
  * history nothing in Quiz writes after the import, so Quiz's own closed
- * audit union stays clean. Kept indefinitely. No route reads it: like
+ * audit union stays clean. Under `audit_log`'s rule (ADR-003 §5, amended
+ * 2026-11-05): the trigger `legacy_classroom_audit_log_immutable` (migration
+ * 0130) refuses every UPDATE and the DELETE of a row younger than three
+ * years, and `audit.purge` deletes the older ones, by their original
+ * `created_at` (classroom's, not the import's). No route reads it: like
  * `audit_log`, it is forensics, read by an admin with `psql`.
  *
  * `source_id` is classroom's `audit_log.id`, the idempotency key (a second

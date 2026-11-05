@@ -158,17 +158,20 @@ BEGIN
   FROM (SELECT id, row_number() OVER (ORDER BY created_at, id) AS n FROM guest_participants WHERE pseudonym IS NOT NULL) r
   WHERE g.id = r.id;
 
-  -- Free text beside the content. The trigger that keeps `audit_log`
-  -- append-only (ADR-003 §5) is lifted for these two statements of this
-  -- transaction only, on a scratch copy that is dumped and dropped: it
-  -- guards production's record, and the copy is not that record. It is back
-  -- on when the block commits, and nothing changed if the block fails.
+  -- Free text beside the content. The triggers that keep `audit_log` and
+  -- `legacy_classroom_audit_log` append-only (ADR-003 §5) are lifted for
+  -- these four statements of this transaction only, on a scratch copy that
+  -- is dumped and dropped: they guard production's record, and the copy is
+  -- not that record. They are back on when the block commits, and nothing
+  -- changed if the block fails.
   ALTER TABLE audit_log DISABLE TRIGGER audit_log_immutable;
   UPDATE audit_log SET payload = NULL WHERE payload IS NOT NULL;
   UPDATE audit_log SET subject_id = 'redacted' WHERE subject_id LIKE '%@%';
   ALTER TABLE audit_log ENABLE TRIGGER audit_log_immutable;
+  ALTER TABLE legacy_classroom_audit_log DISABLE TRIGGER legacy_classroom_audit_log_immutable;
   UPDATE legacy_classroom_audit_log SET payload = NULL WHERE payload IS NOT NULL;
   UPDATE legacy_classroom_audit_log SET subject_id = 'redacted' WHERE subject_id LIKE '%@%';
+  ALTER TABLE legacy_classroom_audit_log ENABLE TRIGGER legacy_classroom_audit_log_immutable;
   DELETE FROM notifications;
   UPDATE webhook_deliveries SET payload = NULL, error = NULL WHERE payload IS NOT NULL OR error IS NOT NULL;
   UPDATE scheduled_tasks SET last_message = NULL WHERE last_message IS NOT NULL;
