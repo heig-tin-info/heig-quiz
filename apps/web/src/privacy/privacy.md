@@ -2,7 +2,7 @@
 
 - You sign in with Switch edu-ID. Quiz has no password of its own.
 - The teaching staff of your course see your work in that course. Other students never see your grades (except your teammates, for a group project's shared score); what a teacher shows in class is without names unless the teacher chooses to show them.
-- What you do is kept until your teacher deletes the evaluation, classroom or course it belongs to. A few kinds of data are deleted sooner, automatically; others, your account first, are never deleted automatically (see *How long it is kept*).
+- What you do is kept until your teacher deletes the evaluation, classroom or course it belongs to. A few kinds of data are deleted sooner, automatically. Your account is anonymized once you stop using Quiz; your results stay, without your name (see *How long it is kept*).
 - Some of your answers and some of your code are sent to an AI model (Anthropic), usually with names masked, to help your teacher grade; your teacher decides the grade. Your teacher's help assistant may send your name and final results (see *Artificial intelligence*).
 - No advertising, no audience measurement beyond the hours of activity, no tracking script. Nothing is sold.
 
@@ -56,7 +56,7 @@ To give you access to your classrooms, to run the evaluations (the clock, extra 
 
 By default, what you do in a course is kept until your teacher deletes the evaluation, the project, the classroom or the course it belongs to. Nothing is deleted automatically when you finish your studies. If you are removed from a class list, your answers, grades and drill activity in that classroom stay until the classroom is deleted.
 
-Some data is never deleted automatically: your account, with your e-mail addresses and what edu-ID sent; the audit log, which records actions such as sign-ins, class list changes and gradings, with names; the log of calls to the AI model, which names the person each call was made for (never its content); your notifications; which kiosk station you used for which exam; and your name, e-mail address and files in the online workspace.
+Some data is never deleted automatically: the log of calls to the AI model, which names the person each call was made for (never its content); which kiosk station you used for which exam; and your name, e-mail address and files in the online workspace. Your account, your e-mail addresses, what edu-ID sent and your notifications stay until your account is anonymized (below).
 
 Some data is deleted automatically:
 
@@ -69,9 +69,12 @@ Some data is deleted automatically:
 | The files, commits and test outputs kept to grade a project by criteria, and the result files of its checks with their logs | Six months after the project's results are published (the list of tests and their results, and the points of each criterion, stay) |
 | The content of GitHub's messages about your repositories | 30 days after they arrive |
 | A teacher's conversations with the help assistant, which may quote your name or grade | 30 days after each exchange |
+| The audit log, which records actions such as sign-ins, class list changes and gradings, with names | Three years after each entry |
 | A poll you answered without an account: the cookie's trace and your answers | 30 days after the poll ended. The poll's results stay for the teacher, linked to no one, but with what you typed in them |
 
 Deleted data stays in the platform's backups for about four more months. That period holds only while the oldest backups are removed as planned, which is done by hand. The daily copies of the database kept on the server itself are not encrypted; the copy kept in Finland is.
+
+**Your account.** After two years without signing in, you get an e-mail. A year later, if you have not signed in, your account is anonymized: your name, your addresses, your picture and your links leave Quiz. The audit log keeps them up to three years, the backups about four months. Your results stay, without your name. Signing in keeps your account. You can also anonymize it sooner, in **Settings**.
 
 ## Who sees what
 
@@ -109,6 +112,7 @@ Quiz loads no script, font or image from another company: everything comes from 
 - **Download a copy**: in **Settings** › **Your data**, *Download my data* gives you one JSON file of everything the platform shows you, with your verified e-mail addresses and your hours of activity. What only your teachers see is not in it.
 - **Correct it**: your name and address come from edu-ID and are updated at each sign-in. A mistake in a class list is corrected by your teacher.
 - **Remove it yourself**: your profile picture, your GitHub link and your Teams link, in **Settings**.
+- **Anonymize your account**, in **Settings**: your results stay, without your name.
 - **Stop the drill** of a classroom, from your drill.
 
 For any other request (a fuller copy of your data, a correction, a deletion), turn first to the teacher of your course.

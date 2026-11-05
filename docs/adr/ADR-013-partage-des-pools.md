@@ -30,6 +30,10 @@ followed by subscription; the pool list shows only the pools a teacher owns, sit
 through a course or subscribed to. A course link has a mode, and staff are contributors only
 through an `edit` link. Access (§2) is unchanged.
 
+**Amended 2026-11-05 by [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) §6
+(product owner, issue #681), scope: §5 only.** The succession also runs when the administrator
+pseudonymizes a staff account; see §5's note. "An account is never deleted" stays true.
+
 ## Context
 
 Until now a question pool was reached by its owner and by the teaching staff of the courses
@@ -86,6 +90,14 @@ every teacher. Two facts shape the design:
    falls. A pool with no member keeps its owner: it stays reachable through its courses, and
    nothing is ever orphaned to nobody. One transaction per pool, idempotent, audited as
    `pool.transfer` with `actorType: "system"`.
+
+   *Note of 2026-11-05 ([ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) §6,
+   product owner):* when the administrator pseudonymizes a staff account, its pools are
+   handed over by this same succession, first member by seniority, before its identity is
+   replaced. A pool with no member keeps its owner id, now pseudonymous, and stays reachable
+   through its courses. The account's questions keep their rows under an anonymous author;
+   its course seats, templates and classrooms stay. Staff accounts are never pseudonymized
+   automatically.
 
    **A demoted member loses their seat, for good** (product decision, 2026-09-29). When a
    deliberate action — a revoked grant, the last course seat removed — demotes an account to

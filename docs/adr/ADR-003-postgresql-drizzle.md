@@ -4,7 +4,9 @@
 
 Accepted (2026-07-03, phase 3).
 
-Amended 2026-10-09: §2 records the `uuid` v4 identifiers the code generates (`randomUUID()`), not v7; §4 drops the repository layer that was never built (the modules import `drizzle-orm`). §5 (audit immutability): enforced by the trigger of migration `0096_audit_log_immutable`, not by SQL roles (the application connects as the owner role, so no GRANT or REVOKE could take the privileges away); account pseudonymization is not a Quiz requirement (NFR-07 is heig-classroom's and was not carried over; Quiz keeps data until the teacher deletes it, N-DATA-03), and issue #681, in the backlog, keeps its analysis. [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) (proposed 2026-10-26) proposes to amend that "not a Quiz requirement" sentence on acceptance; it keeps this trigger and states the re-identification it allows.
+Amended 2026-10-09: §2 records the `uuid` v4 identifiers the code generates (`randomUUID()`), not v7; §4 drops the repository layer that was never built (the modules import `drizzle-orm`). §5 (audit immutability): enforced by the trigger of migration `0096_audit_log_immutable`, not by SQL roles (the application connects as the owner role, so no GRANT or REVOKE could take the privileges away); account pseudonymization is not a Quiz requirement (NFR-07 is heig-classroom's and was not carried over; Quiz keeps data until the teacher deletes it, N-DATA-03), and issue #681, in the backlog, keeps its analysis. [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) (proposed 2026-10-26) proposed to amend that "not a Quiz requirement" sentence on acceptance.
+
+Amended 2026-11-05 by [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) (accepted that day, product owner, issue #681), scope §5 only: account pseudonymization is a Quiz requirement (N-DATA-08), and it leaves the audit log untouched; the audit log gets a retention of three years (N-SEC-09), ruled on the product owner's delegation — §5's *Amendment of 2026-11-05*.
 
 ## Context
 
@@ -35,8 +37,23 @@ mechanism (NFR-09), revocable sessions (AU-06), a durable job queue and a simple
    trigger; `TRUNCATE` fires no such trigger and nothing truncates the table. Quiz has no
    account pseudonymization routine (issue #681, backlog); if one is ever specified, it
    decides whether it must rewrite identity fields here and how it passes the trigger.
+   *(Obsolete since 2026-11-05: ADR-117 specifies the routine, which rewrites nothing here.)*
    (Scoped amendment 2026-10-11: the staging copy is pseudonymized on a scratch database,
    the trigger lifted there only, never on production's record: ADR-028, *Update 2026-10-11*.)
+
+   *Amendment of 2026-11-05 (ruled on the product owner's delegation, issue #681,
+   [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) §11): the audit log has a
+   retention of three years.* The trigger becomes a row-level `BEFORE DELETE` that lets a row
+   go only when its `created_at` is older than `now() - interval '3 years'`, by the
+   database's clock; `UPDATE` stays refused for every statement and every row. A daily job
+   deletes the rows past that age; nothing else deletes one. `legacy_classroom_audit_log`
+   (the imported heig-classroom history, D11 of `docs/merge/08-decisions.md`) is purged under
+   the same rule. The trigger keeps its name, `audit_log_immutable`, which the staging
+   pseudonymization (`scripts/staging-pseudonymize.sql`) disables by name (or that script changes in the same pull request).
+   Pseudonymizing an account rewrites no audit row: the operator can re-identify a
+   pseudonymized account from the payloads until they age out. Accepted consequence: the
+   provenance of a grade (the `grading.*` rows) disappears after three years while the grade
+   stays.
 
 ## Consequences
 
