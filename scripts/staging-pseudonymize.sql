@@ -4,29 +4,32 @@
 -- apps/api/src/stagingScrub.db.test.ts runs against the real migrations,
 -- followed by scripts/staging-scrub.sql.
 --
--- It replaces who people are, not what they did. Replaced:
---   users          email `<role>-<n>@example.invalid`, given name the role
---                  ("Student"), family name `<n>`, OIDC subject
---                  `staging:<id>` (no identity provider issues it), no
---                  edu-ID identifier, no picture;
---   user_emails    the account's new address only;
---   teacher_grants a grant follows its teacher's new address (one per
---                  teacher), any other one becomes `grant-<n>@example.invalid`;
---   enrollments    a roster row takes its person's identity (claimed, or
---                  unclaimed under one of that person's addresses), any
---                  other one becomes `enrollment-<n>@example.invalid`; the
---                  teacher's note goes;
---   github_accounts, project_repo_access   a negative id, `github-user-<n>`;
+-- It replaces who people are, not what they did. Each person goes through
+-- THE per-account wipe list, the database function
+-- `quiz_pseudonymize_account` (ADR-117 §8), which production's account
+-- pseudonymization runs too; here with the subject prefix `staging:` (no
+-- identity provider issues it) and without `anonymized_at`, so a copied
+-- account keeps its role and its place in the administration list. Its
+-- replacement identity: email `<role>-<n>@example.invalid`, given name the
+-- role ("Student"), family name `<n>`. What the function replaces, deletes
+-- and keeps: the header of apps/api/src/modules/account/service.ts. Since
+-- it took over, a person's second grant under another address is deleted
+-- rather than numbered, and the chosen notification address is cleared.
+--
+-- The whole-copy rest, here: the numbering of every GitHub identity of the
+-- copy, `github-user-<n>` (run first, so the function finds none left to
+-- replace); a roster row nobody claimed takes the identity of the person
+-- whose address it holds (once per class, unless that person is claimed
+-- there), any other one becomes `enrollment-<n>@example.invalid`; a grant
+-- of nobody's becomes `grant-<n>@example.invalid`;
 --   project_repos  `<org>/repo-<id>` (a student repository names its student);
 --   student_groups, project_groups   `Group <n>` (slug `group-<n>`), and
 --                  group_sets `Groups <n>` (a group may be named after its
 --                  members);
 --   guest_participants   `Guest <n>` (a chosen pseudonym may be a real name).
--- Emptied, as free text beside the content that names people: IdP claims
--- (the affiliations stay: they name nobody and the role rule reads them),
--- avatars, Teams links, audit and legacy audit payloads (and a subject that
--- is an address), notifications, webhook payloads and errors, the scheduled
--- tasks' last messages.
+-- Emptied, as free text beside the content that names people: audit and
+-- legacy audit payloads (and a subject that is an address), notifications,
+-- webhook payloads and errors, the scheduled tasks' last messages.
 -- Kept: grades, answers, questions, journals, projects, and the free text
 -- people wrote in them. Kept as well, and named here so that nobody
 -- believes otherwise: GitHub organization logins and the repository names
@@ -43,7 +46,8 @@
 -- anyone not kept who signs in on staging gets a new, empty account.
 --
 -- Idempotent: a second run leaves the data as the first left it. Every
--- table named here exists in production since migration 0096.
+-- table and the function named here exist in production since migration
+-- 0129.
 DO $$
 DECLARE
   keep text[] := array_remove(
@@ -57,8 +61,7 @@ BEGIN
   SELECT u.id,
          u.role || '-' || n.n || '@example.invalid' AS new_email,
          initcap(u.role) AS given_name,
-         n.n::text AS family_name,
-         u.email_verified OR EXISTS (SELECT 1 FROM user_emails e WHERE e.user_id = u.id AND e.verified) AS verified
+         n.n::text AS family_name
   FROM users u
   JOIN (SELECT id, row_number() OVER (PARTITION BY role ORDER BY created_at, id) AS n FROM users) n ON n.id = u.id
   WHERE lower(u.email) <> ALL (keep)
@@ -80,61 +83,9 @@ BEGIN
   RAISE NOTICE 'staging-pseudonymize: % account(s) kept as they are, % pseudonymized',
     (SELECT count(*) FROM users) - people, people;
 
-  UPDATE teacher_grants g SET email = m.new_email
-  FROM (
-    SELECT DISTINCT ON (p.id) g2.id AS grant_id, p.new_email
-    FROM teacher_grants g2
-    JOIN staging_addresses a ON a.email = lower(g2.email)
-    JOIN staging_people p ON p.id = a.user_id
-    ORDER BY p.id, g2.created_at, g2.id
-  ) m
-  WHERE g.id = m.grant_id AND g.email <> m.new_email;
-  UPDATE teacher_grants g SET email = 'grant-' || r.n || '@example.invalid'
-  FROM (SELECT id, row_number() OVER (ORDER BY created_at, id) AS n FROM teacher_grants) r
-  WHERE g.id = r.id AND g.email NOT LIKE '%@example.invalid' AND lower(g.email) <> ALL (kept);
-
-  -- The rosters. An unclaimed row under a person's address takes that
-  -- person's identity, once per class, unless the person is claimed there.
-  UPDATE enrollments e
-  SET email = p.new_email, prenom = p.given_name, nom = p.family_name, note = NULL
-  FROM staging_people p
-  WHERE e.user_id = p.id;
-  UPDATE enrollments e
-  SET email = m.new_email, prenom = m.given_name, nom = m.family_name, note = NULL
-  FROM (
-    SELECT DISTINCT ON (e2.classroom_id, p.id) e2.id, p.new_email, p.given_name, p.family_name
-    FROM enrollments e2
-    JOIN staging_addresses a ON a.email = lower(e2.email)
-    JOIN staging_people p ON p.id = a.user_id
-    WHERE e2.user_id IS NULL
-      AND NOT EXISTS (SELECT 1 FROM enrollments o WHERE o.classroom_id = e2.classroom_id AND o.user_id = p.id)
-    ORDER BY e2.classroom_id, p.id, e2.id
-  ) m
-  WHERE e.id = m.id AND e.email <> m.new_email;
-  UPDATE enrollments e
-  SET email = 'enrollment-' || r.n || '@example.invalid', prenom = 'Enrollment', nom = r.n::text, note = NULL
-  FROM (SELECT id, row_number() OVER (ORDER BY id) AS n FROM enrollments WHERE user_id IS NULL) r
-  WHERE e.id = r.id AND e.email NOT LIKE '%@example.invalid' AND lower(e.email) <> ALL (kept);
-
-  -- The accounts.
-  UPDATE users u
-  SET email = p.new_email, given_name = p.given_name, family_name = p.family_name,
-      oidc_sub = 'staging:' || u.id, swiss_edu_id = NULL, picture_url = NULL
-  FROM staging_people p
-  WHERE u.id = p.id;
-  DELETE FROM user_emails e USING staging_people p WHERE e.user_id = p.id AND e.email <> p.new_email;
-  INSERT INTO user_emails (user_id, email, source, verified)
-  SELECT id, new_email, 'login', verified FROM staging_people
-  ON CONFLICT DO NOTHING;
-  UPDATE user_idp_claims c SET claims = '{}'::jsonb
-  FROM staging_people p WHERE c.user_id = p.id AND c.claims <> '{}'::jsonb;
-  DELETE FROM avatars a USING staging_people p WHERE a.user_id = p.id;
-  -- A Teams link is a person's Teams identity, and the address staging
-  -- would message them at.
-  DELETE FROM teams_links t USING staging_people p WHERE t.user_id = p.id;
-
-  -- GitHub identities: negative ids, which GitHub never issues. The seats
-  -- of a kept account keep theirs.
+  -- GitHub identities: negative ids, which GitHub never issues, numbered in
+  -- the order they were seen. Every one of the copy that no kept account
+  -- holds, so before the accounts: the function then finds none to number.
   CREATE TEMP TABLE staging_github ON COMMIT DROP AS
   SELECT ids.id AS old_id, row_number() OVER (ORDER BY min(ids.seen), ids.id) AS n
   FROM (
@@ -152,6 +103,35 @@ BEGIN
   FROM staging_github m WHERE a.github_user_id = m.old_id;
   UPDATE project_repo_access r SET github_user_id = -m.n, github_login = 'github-user-' || m.n
   FROM staging_github m WHERE r.github_user_id = m.old_id;
+
+  -- The accounts: THE per-account wipe list (migration 0129), the one
+  -- production's pseudonymization runs.
+  PERFORM quiz_pseudonymize_account(p.id, 'staging:', p.new_email, p.given_name, p.family_name, false)
+  FROM staging_people p ORDER BY p.id;
+  -- A grant still under a real address is no copied account's: numbered.
+  UPDATE teacher_grants g SET email = 'grant-' || r.n || '@example.invalid'
+  FROM (SELECT id, row_number() OVER (ORDER BY created_at, id) AS n FROM teacher_grants) r
+  WHERE g.id = r.id AND g.email NOT LIKE '%@example.invalid' AND lower(g.email) <> ALL (kept);
+
+  -- The rosters. An unclaimed row under a person's address takes that
+  -- person's identity, once per class, unless the person is claimed there.
+  UPDATE enrollments e
+  SET email = m.new_email, prenom = m.given_name, nom = m.family_name, note = NULL
+  FROM (
+    SELECT DISTINCT ON (e2.classroom_id, p.id) e2.id, p.new_email, p.given_name, p.family_name
+    FROM enrollments e2
+    JOIN staging_addresses a ON a.email = lower(e2.email)
+    JOIN staging_people p ON p.id = a.user_id
+    WHERE e2.user_id IS NULL
+      AND NOT EXISTS (SELECT 1 FROM enrollments o WHERE o.classroom_id = e2.classroom_id AND o.user_id = p.id)
+    ORDER BY e2.classroom_id, p.id, e2.id
+  ) m
+  WHERE e.id = m.id AND e.email <> m.new_email;
+  UPDATE enrollments e
+  SET email = 'enrollment-' || r.n || '@example.invalid', prenom = 'Enrollment', nom = r.n::text, note = NULL
+  FROM (SELECT id, row_number() OVER (ORDER BY id) AS n FROM enrollments WHERE user_id IS NULL) r
+  WHERE e.id = r.id AND e.email NOT LIKE '%@example.invalid' AND lower(e.email) <> ALL (kept);
+
   UPDATE project_repos r SET full_name = split_part(r.full_name, '/', 1) || '/repo-' || left(r.id::text, 8)
   FROM staging_people p
   WHERE r.user_id = p.id AND r.full_name IS NOT NULL

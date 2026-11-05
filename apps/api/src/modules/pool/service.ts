@@ -87,6 +87,8 @@ export {
   poolAudience,
   transferOnLoss,
   vacateSeats,
+  handOverPools,
+  type PoolTransferReason,
 } from "./members.js";
 export { poolsOfCourse, setCoursePools } from "./coursePools.js";
 export { createPublished, ensureCategory, questionByName, type PublishedQuestionSpec } from "./ensure.js";

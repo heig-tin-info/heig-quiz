@@ -627,7 +627,8 @@ export type AuditAction =
    * (`app_not_installed`, `repo_deleted`, `not_provisioned`,
    * `account_gone`, `not_invited`), `invitationsCancelled` of a
    * revocation, `via` (`roster.remove`, `roster.unclaim`, `roster.update`,
-   * `roster.self_enroll`, `group.sync`, `group.resync`).
+   * `roster.self_enroll`, `group.sync`, `group.resync`,
+   * `account.pseudonymize`).
    */
   | "project_group.repo_invite"
   | "project_group.repo_revoke"
@@ -698,7 +699,15 @@ export type AuditAction =
    * idempotent second call writes nothing and traces nothing.
    */
   | "training.install"
-  | "training.provision";
+  | "training.provision"
+  /**
+   * ADR-117: an account was pseudonymized, its identity replaced, its row
+   * and what it did kept under the same id. Subject the user; `payload`:
+   * `userId` and `by` (`lifecycle`: the inactivity job; `self`: the person,
+   * from their settings; `admin`: an administrator), nothing else. The
+   * audit log keeps the identity its earlier entries name (ADR-003 §5).
+   */
+  | "user.anonymized";
 
 /**
  * Append-only audit log (NFR-05, AU-42). The trigger of migration 0096
