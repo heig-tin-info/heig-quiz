@@ -1760,6 +1760,20 @@ const scenes = [
   { name: "settings-github-student", role: "student", path: "/settings?unlinked=1", fold: true, act: (p) => p.getByRole("heading", { name: "GitHub" }).scrollIntoViewIfNeeded() },
   // ADR-112: the personal data export, one secondary link.
   { name: "settings-data-export", role: "student", path: "/settings", fold: true, act: (p) => p.getByRole("heading", { name: /^(your data|vos données)$/i }).scrollIntoViewIfNeeded() },
+  // ADR-117 §5: anonymize my own account (its typed confirmation), the
+  // landing page after it, and the notice of a sign-in that ended a dormancy.
+  {
+    name: "settings-anonymize",
+    role: "student",
+    path: "/settings",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /anonymize my account|anonymiser mon compte/i }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
+  { name: "landing-anonymized", role: "student", path: "/?as=guest&anonymized=1" },
+  { name: "account-reactivated", role: "student", path: "/?reactivated=1", fold: true },
   // ADR-054: an admin's Super Powers, off and on, and the red banner above
   // everything — its minutes, its last-five-minutes countdown, and stacked
   // over the student view's banner.
@@ -1855,6 +1869,8 @@ const scenes = [
   { name: "admin-empty", role: "admin", path: "/admin?empty=1" },
   { name: "admin-error", role: "admin", path: "/admin?fail=1", settle: 2500 },
   { name: "admin-loading", role: "admin", path: "/admin?slow=1", settle: 300 },
+  // ADR-117 §6: the inactive accounts, Super Powers on, each row with its "Anonymize…".
+  { name: "admin-inactive-superpowers", role: "admin", path: "/admin?superpowers=1&lastminutes=0", act: (p) => p.locator("label").filter({ hasText: /^(Inactive|Sans activité)$/ }).click() },
   // F-ADMIN-09 (ADR-107): the platform's activity, and its states.
   { name: "admin-activity", role: "admin", path: "/admin?tab=activity" },
   { name: "admin-activity-empty", role: "admin", path: "/admin?tab=activity&empty=1" },

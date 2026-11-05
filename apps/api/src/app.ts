@@ -28,6 +28,7 @@ import { publish } from "./events.js";
 import { githubApp } from "./github/app.js";
 import { registerHttpMetrics } from "./httpMetrics.js";
 import { activityPlugin } from "./modules/activity/routes.js";
+import { accountPlugin } from "./modules/account/routes.js";
 import { adminPlugin } from "./modules/admin/routes.js";
 import { createPresenceRecorder } from "./modules/presence/service.js";
 import { adminGuard } from "./modules/guards.js";
@@ -281,6 +282,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(trainingPlugin);
   // The personal data export (ADR-112): a composition of the student views above.
   await app.register(privacyPlugin, { config });
+  // The end of an account's identity, by its person or an administrator (ADR-117 §5, §6).
+  await app.register(accountPlugin, { config });
   // The drill listens to the release and to the end of an attempt (ADR-041
   // §1): wired here, once, never by an import's side effect.
   registerDrillHooks();

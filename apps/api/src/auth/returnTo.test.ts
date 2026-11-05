@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { returnToOf, safeReturnTo } from "./returnTo.js";
+import { returnToOf, safeReturnTo, withParam } from "./returnTo.js";
 
 describe("safeReturnTo", () => {
   it("keeps a same-origin path, with its query and fragment", () => {
@@ -44,5 +44,12 @@ describe("returnToOf", () => {
   it("prefers ?next= over ?returnTo=, and validates either", () => {
     expect(returnToOf({ next: "/p/ABC123", returnTo: "/home" })).toBe("/p/ABC123");
     expect(returnToOf({ returnTo: "//evil.example" })).toBe("/");
+  });
+});
+
+describe("withParam", () => {
+  it("sets its parameter beside the query and before the fragment", () => {
+    expect(withParam("/", "reactivated", "1")).toBe("/?reactivated=1");
+    expect(withParam("/courses/42?tab=results#top", "github", "linked")).toBe("/courses/42?tab=results&github=linked#top");
   });
 });

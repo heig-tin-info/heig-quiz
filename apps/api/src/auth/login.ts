@@ -88,16 +88,24 @@ export class AnonymizedAccountError extends Error {
 }
 
 /**
+ * A signed-in account, and whether this sign-in ended its dormancy
+ * (ADR-117 §5): the notice was set before the reset. The callback carries
+ * that fact once to the page (`REACTIVATED_PARAM`); nothing stores it.
+ */
+export type SignedIn = SessionUser & { reactivated: boolean };
+
+/**
  * Login adoption of an imported heig-classroom account (ADR-061, `adoption.ts`),
  * user upsert (key: oidc_sub), then the address set and the affiliations,
  * then the role through the single rule of roles.ts — the same path as any
  * later recompute, so it counts the course seats — but without the pool
  * succession, which stays tied to the admin and staff actions. A new account starts as a student; an existing one
  * keeps its role until the recompute. A sign-in ends the account's dormancy
- * (ADR-117): the inactivity notice and reminder are forgotten. Refused with
+ * (ADR-117): the inactivity notice and reminder are forgotten, and
+ * `reactivated` says it did. Refused with
  * {@link AnonymizedAccountError} when the subject's account is pseudonymized.
  */
-export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Promise<SessionUser> {
+export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Promise<SignedIn> {
   // `loginRefusal` refused it already; never write under a placeholder subject.
   if (isPlaceholderSub(claims.sub)) throw new Error("A placeholder subject cannot sign in");
   const profile = {
@@ -122,7 +130,7 @@ export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Pro
     // fresh account without admission's other tests: an empty account,
     // accepted (ADR-117 §7).
     const [held] = await tx
-      .select({ anonymizedAt: users.anonymizedAt })
+      .select({ anonymizedAt: users.anonymizedAt, notifiedAt: users.inactivityNotifiedAt })
       .from(users)
       .where(eq(users.oidcSub, claims.sub))
       .for("update");
@@ -144,7 +152,7 @@ export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Pro
     if (outcome) {
       await audit(tx, { ...outcome, actorUserId: upserted.id, actorType: "system", subjectType: "user", subjectId: upserted.id });
     }
-    return upserted;
+    return { ...upserted, reactivated: held?.notifiedAt != null };
   });
   // Both are load-bearing: the role reads the affiliations and the verified
   // addresses, and the roster matching reads the addresses. A failed write
@@ -159,5 +167,5 @@ export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Pro
   await claimEnrollments(db, row);
   const [user] = await db.select().from(users).where(eq(users.id, row.id));
   if (!user) throw new Error("Signed-in user vanished");
-  return user;
+  return { ...user, reactivated: row.reactivated };
 }

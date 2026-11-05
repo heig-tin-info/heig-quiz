@@ -5,7 +5,7 @@
  * reads, `dueForPseudonymization` the one rule of when the lifecycle may
  * pseudonymize, `lifecycleHealth` what the System status reads of it. The
  * daily job is `jobs.ts`, its stages `lifecycle.ts`; the routes
- * (self-service, administration) come with the module's `routes.ts`.
+ * (self-service, administration) are `routes.ts`.
  *
  * A module of its own rather than `admin`: two of its three callers are not
  * an administrator (the person, the lifecycle job), and the wipe touches
@@ -46,6 +46,7 @@
 import type { FastifyBaseLogger } from "fastify";
 import { and, eq, isNotNull, isNull, lte, not, notInArray, or, sql, type SQL } from "drizzle-orm";
 
+import type { PseudonymizeRefusal } from "@quiz/contracts";
 import { HEALTH_THRESHOLDS } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
@@ -74,11 +75,12 @@ import { accessRevoked, sessionsEnded } from "../realtime/bus.js";
 export type PseudonymizedBy = "lifecycle" | "self" | "admin";
 
 /**
- * Why an account is not pseudonymized now. `not_due`: the lifecycle's term
- * has not come, or a sign-in ended the dormancy meanwhile. A GitHub access
- * that would not go is the `org` module's `502 revoke_failed`.
+ * Why an account is not pseudonymized now: the contract's closed list
+ * (`PSEUDONYMIZE_REFUSALS`), which the screens word. `not_due`: the
+ * lifecycle's term has not come, or a sign-in ended the dormancy meanwhile.
+ * A GitHub access that would not go is the `org` module's `502
+ * revoke_failed`.
  */
-type PseudonymizeRefusal = "not_found" | "already_anonymized" | "open_attempt" | "running_classroom" | "staff" | "not_due";
 
 const REFUSALS: Record<PseudonymizeRefusal, Refusal> = {
   not_found: [404, "No such account"],
@@ -285,12 +287,12 @@ export const usedSinceNotice: SQL = sql`${lastActivity()} > ${users.inactivityNo
  * activity since the notice (a token or a session used meanwhile ends the
  * dormancy as a sign-in does). The database's clock.
  */
-function duePast(lateDays: number): SQL {
+function duePast(lateDays: number, activity: SQL = lastActivity()): SQL {
   const ago = (months: number) => sql`now() - make_interval(months => ${months}, days => ${lateDays})`;
   return and(
     lte(users.inactivityNotifiedAt, ago(LIFECYCLE.pseudonymizeAfterMonths)),
     lte(users.inactivityRemindedAt, ago(LIFECYCLE.afterReminderMonths)),
-    not(usedSinceNotice),
+    not(sql`${activity} > ${users.inactivityNotifiedAt}`),
   )!;
 }
 
@@ -300,6 +302,21 @@ function duePast(lateDays: number): SQL {
  * status's count read this one condition on `users`.
  */
 export const dueForPseudonymization: SQL = duePast(0);
+
+/**
+ * What the administration flags as due (ADR-117 §6), on the account's last
+ * activity `activity` (`lastActivity()`, or a column a query computed from
+ * it once): due for the lifecycle; or a staff account (by the stored role,
+ * the one the list shows), which the lifecycle never notifies, without
+ * activity for as long as the notice and its term add up to (three years).
+ * A student is due only by its notice: the horizon counts from the notice,
+ * and imported students carry old dates (ADR-117 §3).
+ */
+export function dueForReview(activity: SQL = lastActivity()): SQL<boolean> {
+  const pastHorizon = sql`${users.role} <> 'student' AND ${users.inactivityNotifiedAt} IS NULL AND ${activity} <= now()
+    - make_interval(years => ${LIFECYCLE.noticeAfterYears}, months => ${LIFECYCLE.pseudonymizeAfterMonths})`;
+  return sql<boolean>`coalesce(${duePast(0, activity)}, false) OR coalesce(${pastHorizon}, false)`;
+}
 
 /**
  * What the System status's `accounts` check reads (ADR-117 §10): the

@@ -21,6 +21,7 @@ import {
   iso,
   nextId,
   on,
+  refuse,
   role,
 } from "./runtime";
 
@@ -78,7 +79,17 @@ export let me: Me | null = {
             superPowersAvailable: true,
           },
         }
-      : {}),
+      : {
+          // The person's own portal session, as `GET /me` always says.
+          session: {
+            kind: "portal",
+            evaluationId: null,
+            projectId: null,
+            readOnly: false,
+            superPowersUntil: null,
+            superPowersAvailable: false,
+          },
+        }),
 };
 
 /** The session's Super Powers (ADR-054), switched like the real route: an hour, never extended. */
@@ -264,6 +275,13 @@ on("GET", "/app/api/oauth/requests/:id", (m, _b, url): OAuthRequestView => {
 on("POST", "/app/api/oauth/requests/:id/decision", () => ({ redirectTo: "/settings" }));
 
 on("POST", "/app/auth/logout", () => {
+  me = null;
+  return undefined;
+});
+
+// ADR-117 §5: the account anonymizes itself and its session ends; `?fail=1` shows a refusal.
+on("POST", "/app/api/me/pseudonymize", () => {
+  if (flags.fail) throw refuse(409, "open_attempt", "This account has an exam attempt in progress");
   me = null;
   return undefined;
 });

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { SettingsPage } from "./SettingsPage";
 import { makeMe } from "./test/fixtures";
-import { fail, mockFetch, ok, renderWithProviders } from "./test/render";
+import { fail, mockFetch, noContent, ok, renderWithProviders } from "./test/render";
 
 /*
  * The preferences that are stored on the ACCOUNT, so they follow the teacher
@@ -182,5 +182,64 @@ describe("SettingsPage — the data export", () => {
     mockFetch({});
     renderWithProviders(<SettingsPage me={makeMe({ role: "student", session: { ...session, kind: "seb", readOnly: false } })} />);
     expect(button()).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * ADR-117 §5: the last row of "Your data" anonymizes a student's own
+ * account, behind a typed confirmation (their address), on their own portal
+ * session only; the page then leaves for the landing page, which says it. A
+ * staff account reads who does it instead; a refusal is worded, never the
+ * server's English.
+ */
+describe("SettingsPage — anonymize my account", () => {
+  const button = () => screen.queryByRole("button", { name: /anonymize my account/i });
+  const own = { kind: "portal" as const, evaluationId: null, projectId: null, readOnly: false, superPowersUntil: null, superPowersAvailable: false };
+
+  it("asks for the address typed, then anonymizes and lands signed out", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({ "POST /app/api/me/pseudonymize": noContent() });
+    const assign = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, "location", { configurable: true, value: { ...original, assign } });
+    try {
+      const me = makeMe({ role: "student", session: own });
+      renderWithProviders(<SettingsPage me={me} />);
+      await user.click(button()!);
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog).toHaveTextContent(/cannot be undone/i);
+      const go = screen.getByRole("button", { name: "Anonymize" });
+      expect(go).toBeDisabled();
+      await user.type(screen.getByRole("textbox", { name: /to confirm/i }), me.email);
+      await user.click(go);
+      await waitFor(() => expect(assign).toHaveBeenCalledWith("/?anonymized=1"));
+      expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/app/api/me/pseudonymize"))).toBe(true);
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: original });
+    }
+  });
+
+  it("words a refusal", async () => {
+    const user = userEvent.setup();
+    mockFetch({ "POST /app/api/me/pseudonymize": fail(409, { error: "open_attempt", message: "server words" }) });
+    const me = makeMe({ role: "student", session: own });
+    renderWithProviders(<SettingsPage me={me} />);
+    await user.click(button()!);
+    await user.type(await screen.findByRole("textbox", { name: /to confirm/i }), me.email);
+    await user.click(screen.getByRole("button", { name: "Anonymize" }));
+    expect(await screen.findByText(/an exam is in progress on this account/i)).toBeInTheDocument();
+  });
+
+  it("tells a staff account to ask the administrator, with no action", () => {
+    mockFetch({});
+    renderWithProviders(<SettingsPage me={makeMe({ role: "teacher", session: own })} />);
+    expect(button()).not.toBeInTheDocument();
+    expect(screen.getByText(/anonymized by the administrator/i)).toBeInTheDocument();
+  });
+
+  it("is absent when the session is not known to be the person's own portal one", () => {
+    mockFetch({});
+    renderWithProviders(<SettingsPage me={makeMe({ role: "student" })} />);
+    expect(screen.queryByText("Account anonymization")).not.toBeInTheDocument();
   });
 });

@@ -57,7 +57,7 @@ import { publish } from "../events.js";
 import { githubApp } from "../github/app.js";
 import { ownSessionGuard } from "../modules/guards.js";
 import { inviteOnGithubLink } from "../modules/project/service.js";
-import { safeReturnTo } from "./returnTo.js";
+import { safeReturnTo, withParam } from "./returnTo.js";
 // GitHub's return. Its query carries the one-time `code`: the request log masks it (`redact.ts`).
 import { GITHUB_CALLBACK_PATH } from "./paths.js";
 
@@ -84,11 +84,7 @@ export function linkReturn(raw: unknown): string {
 }
 
 /** `path` with `?github=<outcome>` set, its other parameters and fragment kept. */
-function withOutcome(path: string, outcome: GithubLinkOutcome): string {
-  const url = new URL(path, "https://x.invalid");
-  url.searchParams.set("github", outcome);
-  return url.pathname + url.search + url.hash;
-}
+const withOutcome = (path: string, outcome: GithubLinkOutcome): string => withParam(path, "github", outcome);
 
 /** What the signed cookie carries between the link and the callback. */
 const LinkState = z.object({

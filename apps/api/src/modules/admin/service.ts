@@ -10,10 +10,14 @@ import { avatars, classrooms, courseStaff, pools, presenceLastSeen, questions, t
 import { normalizeEmail } from "../../identity.js";
 import { shownAvatar } from "../avatar.js";
 import { roleDecisionsOfAll } from "../../roles.js";
+import { dueForReview, lastActivity } from "../account/service.js";
 
 /**
  * Every account that is not anonymized (F-ADMIN-01), with its teaching
- * footprint, why it holds its role, and when it was last seen (ADR-107).
+ * footprint, why it holds its role, when it was last seen (ADR-107), and
+ * where it stands in the inactivity lifecycle (ADR-117 §6: its last
+ * activity, inactive for a year, dormant since, due) by the database's
+ * clock: dates and flags only, beside the identity the row already shows.
  *
  * One statement for the rows and their counts (correlated subqueries, no
  * N+1), plus the few bulk reads of `roleDecisionsOfAll`. No pagination: the
@@ -31,6 +35,13 @@ export async function listUsers(db: Db, config: AppConfig): Promise<AdminUser[]>
   // Qualified by hand: drizzle drops the table name on a one-table select,
   // and a bare `id` is ambiguous inside the subqueries.
   const uid = sql`${users}.id`;
+  // The last activity once per row (ADR-117 §2): the "inactive" and "due"
+  // flags read the column rather than its four subqueries again.
+  const activity = db
+    .select({ userId: users.id, at: sql<Date>`${lastActivity()}`.as("last_activity") })
+    .from(users)
+    .as("activity");
+  const at = sql`${activity.at}`;
   const [rows, decisions] = await Promise.all([
     db
       .select({
@@ -49,8 +60,13 @@ export async function listUsers(db: Db, config: AppConfig): Promise<AdminUser[]>
           WHERE p.owner_id = ${uid} AND q.deleted_at IS NULL)::int`,
         classrooms: sql<number>`(SELECT count(*) FROM ${classrooms} c JOIN ${courseStaff} cs ON cs.course_id = c.course_id
           WHERE cs.user_id = ${uid} AND c.archived_at IS NULL)::int`,
+        lastActivityAt: sql<Date>`${at}`.mapWith(users.createdAt),
+        inactive: sql<boolean>`${at} <= now() - make_interval(years => 1)`,
+        dormantSince: users.inactivityNotifiedAt,
+        due: dueForReview(at),
       })
       .from(users)
+      .innerJoin(activity, eq(activity.userId, users.id))
       .leftJoin(avatars, eq(avatars.userId, users.id))
       // ADR-107: the last activity is the `presence` module's, read by join.
       .leftJoin(presenceLastSeen, eq(presenceLastSeen.userId, users.id))
@@ -67,6 +83,8 @@ export async function listUsers(db: Db, config: AppConfig): Promise<AdminUser[]>
       lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
       lastSeenAt: r.lastSeenAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
+      lastActivityAt: r.lastActivityAt.toISOString(),
+      dormantSince: r.dormantSince?.toISOString() ?? null,
     };
   });
 }

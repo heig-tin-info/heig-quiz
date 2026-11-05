@@ -41,3 +41,14 @@ export function returnToOf(query: unknown): string {
   const q = (query ?? {}) as { next?: unknown; returnTo?: unknown };
   return safeReturnTo(q.next ?? q.returnTo);
 }
+
+/**
+ * `path` (already through {@link safeReturnTo}) with `name=value` set in its
+ * query, its other parameters and fragment kept: a one-time word to the page
+ * a redirect lands on (a GitHub link's outcome, a reactivated account).
+ */
+export function withParam(path: string, name: string, value: string): string {
+  const url = new URL(path, PROBE_ORIGIN);
+  url.searchParams.set(name, value);
+  return url.pathname + url.search + url.hash;
+}

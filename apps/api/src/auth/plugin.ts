@@ -16,6 +16,7 @@ import {
   CSRF_HEADER,
   IDLE_HEADER,
   LOGIN_REFUSED_PATH,
+  REACTIVATED_PARAM,
   cookieName,
   type Me,
   type PublicConfig,
@@ -32,7 +33,7 @@ import { impersonationRoutes } from "./impersonation.js";
 import { AnonymizedAccountError, loginRefusal, signIn } from "./login.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
 import { OIDC_CALLBACK_PATH } from "./paths.js";
-import { returnToOf, safeReturnTo } from "./returnTo.js";
+import { returnToOf, safeReturnTo, withParam } from "./returnTo.js";
 import { MCP_PATH } from "./oauth/service.js";
 import { oauthRoutes } from "./oauth/routes.js";
 import { sebRoutes } from "./seb.js";
@@ -198,6 +199,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     reply.clearCookie(sessionCookie, { path: "/", secure });
     reply.clearCookie(csrfCookie, { path: "/", secure });
   };
+  app.decorate("clearSessionCookies", clearSessionCookies);
 
   // --- Session resolution on every request ---
   app.decorateRequest("user", null);
@@ -469,8 +471,9 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     }
 
     let user: SessionUser;
+    let reactivated: boolean;
     try {
-      user = await signIn(app.db, config, claims);
+      ({ reactivated, ...user } = await signIn(app.db, config, claims));
     } catch (err) {
       if (!(err instanceof AnonymizedAccountError)) throw err;
       req.log.warn({ sub: claims.sub }, "Login refused: the account is pseudonymized");
@@ -484,7 +487,9 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       subjectType: "user",
       subjectId: user.id,
     });
-    return reply.redirect(safeReturnTo(stash.returnTo), 303);
+    // ADR-117 §5: a dormant account active again hears it once, on the page it lands on.
+    const landing = safeReturnTo(stash.returnTo);
+    return reply.redirect(reactivated ? withParam(landing, REACTIVATED_PARAM, "1") : landing, 303);
   });
 
   await apiTokenRoutes(app);
@@ -606,6 +611,8 @@ declare module "fastify" {
     ) => Promise<FastifyReply | undefined>;
     /** Mints the session cookies for `user` (the single sign-in path); a portal session by default. */
     openSession: (reply: FastifyReply, user: SessionUser, auth?: NewSession) => Promise<void>;
+    /** Clears the session's cookie pair, for a route that ended the session on the server (sign-out, a self-pseudonymization). */
+    clearSessionCookies: (reply: FastifyReply) => void;
     /** The value of {@link INTERNAL_CALL_HEADER} for this process. */
     internalCallSecret: string;
     /** The name a first-party cookie of `base` takes on this instance (`cookieName` of `@quiz/contracts`, audit L8). */
