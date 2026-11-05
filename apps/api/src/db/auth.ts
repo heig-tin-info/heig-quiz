@@ -420,8 +420,10 @@ export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];
 
 /**
  * Append-only audit log (NFR-05, AU-42), platform-wide: it belongs to no
- * single module, and `src/audit.ts` is the only writer. The trigger of
- * migration 0096 refuses every UPDATE and DELETE on it (ADR-003 §5).
+ * single module, and `src/audit.ts` is the only writer. Its trigger,
+ * `audit_log_immutable` (migration 0130), refuses every UPDATE and the
+ * DELETE of a row younger than three years by the database's clock; the
+ * daily `audit.purge` deletes the older ones (ADR-003 §5, N-SEC-09).
  *
  * No route reads it: it is forensics, read with `psql` (ADR-003, addendum
  * 2026-09-23). The two indexes serve the two questions asked there — "what

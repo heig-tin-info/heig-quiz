@@ -1,8 +1,9 @@
+import { lt, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { Db, Tx } from "./db/client.js";
 import type { AuditActorType } from "./db/auth.js";
-import { auditLog } from "./db/schema.js";
+import { auditLog, legacyClassroomAuditLog } from "./db/schema.js";
 import { perApp } from "./perApp.js";
 
 /**
@@ -710,8 +711,9 @@ export type AuditAction =
   | "user.anonymized";
 
 /**
- * Append-only audit log (NFR-05, AU-42). The trigger of migration 0096
- * refuses every UPDATE and DELETE on this table (ADR-003 §5).
+ * Append-only audit log (NFR-05, AU-42). The trigger `audit_log_immutable`
+ * (migration 0130) refuses every UPDATE on this table, and the DELETE of a
+ * row younger than three years (ADR-003 §5, N-SEC-09).
  */
 export async function audit(
   db: Db | Tx,
@@ -735,6 +737,25 @@ export async function audit(
     payload: entry.payload ?? null,
     ...(entry.at ? { createdAt: entry.at } : {}),
   });
+}
+
+/**
+ * The scheduled task `audit.purge` (ADR-003 §5, amended 2026-11-05;
+ * N-SEC-09): the rows of `audit_log` and `legacy_classroom_audit_log` past
+ * their three years. The SQL function `audit_log_retention_cutoff()`
+ * (migration 0130) owns that value, and the tables' triggers read it too, so
+ * the purge never asks for a row they would refuse. One statement per table:
+ * after the first run a day's worth of rows is what goes. Returns how many
+ * rows went, never what they said.
+ */
+export async function purgeAuditLog(db: Db): Promise<number> {
+  const cutoff = sql`audit_log_retention_cutoff()`;
+  const audit = await db.delete(auditLog).where(lt(auditLog.createdAt, cutoff)).returning({ id: auditLog.id });
+  const legacy = await db
+    .delete(legacyClassroomAuditLog)
+    .where(lt(legacyClassroomAuditLog.createdAt, cutoff))
+    .returning({ id: legacyClassroomAuditLog.id });
+  return audit.length + legacy.length;
 }
 
 /** Who an audit entry names as acting: a person (through a session or a token), or the system. */

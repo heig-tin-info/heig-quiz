@@ -347,8 +347,9 @@ describe("staging-pseudonymize.sql, then staging-scrub.sql", () => {
         { key_ciphertext: null, key_last4: null, cap: "5.00" },
       ]);
       expect((await exec("SELECT count(*)::int AS n FROM kiosk_pairings")).rows).toEqual([{ n: 0 }]);
-      // The audit log's trigger, lifted for the copy's rewrite, is back on.
+      // The audit logs' triggers, lifted for the copy's rewrite, are back on.
       await expect(exec("UPDATE audit_log SET action = action")).rejects.toThrow(/append-only/);
+      await expect(exec("UPDATE legacy_classroom_audit_log SET action = action")).rejects.toThrow(/append-only/);
       expect((await exec("SELECT count(*)::int AS n FROM teams_link_tokens")).rows).toEqual([{ n: 0 }]);
 
       // A second run changes nothing but the guest's unmatchable hash.

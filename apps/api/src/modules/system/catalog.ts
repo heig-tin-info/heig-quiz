@@ -23,10 +23,12 @@
  * never released (ADR-088); `TRAINING_TASKS` installs the training course's
  * content into its public pool (ADR-105 §2); `PRESENCE_TASKS` deletes the
  * hours of activity past their eight days (ADR-107); `PAPER_TASKS` sweeps the
- * scans of the paper copies whose attempt is gone (ADR-125 §15). A new task also adds its key to
+ * scans of the paper copies whose attempt is gone (ADR-125 §15); `audit.purge`
+ * deletes the audit rows past their three years (ADR-003 §5, N-SEC-09). A new task also adds its key to
  * `SCHEDULED_TASK_KEYS` (`@quiz/contracts`) and its names to the web's
  * dictionaries.
  */
+import { purgeAuditLog } from "../../audit.js";
 import { purgeOAuth } from "../../auth/oauth/service.js";
 import { purgeExpiredSessions } from "../../auth/session.js";
 import type { ScheduledTask } from "../../ticker.js";
@@ -55,6 +57,12 @@ export const SCHEDULED_TASKS: readonly ScheduledTask[] = [
     key: "oauth.purge",
     defaultIntervalMinutes: 60,
     run: async (app) => `${await purgeOAuth(app.db, app.clock.now())} OAuth rows deleted`,
+  },
+  {
+    // ADR-003 §5: the audit log belongs to no module (`src/audit.ts`).
+    key: "audit.purge",
+    defaultIntervalMinutes: 24 * 60,
+    run: async (app) => `${await purgeAuditLog(app.db)} audit rows deleted`,
   },
   ...POLL_TASKS,
   ...NOTIFICATION_TASKS,
