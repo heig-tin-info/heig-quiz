@@ -99,10 +99,15 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
      **dormant** (glossary §1.5; never "archived", which is a classroom's state);
    - **nine months** after the notice, a reminder, recorded in
      `users.inactivity_reminded_at`;
-   - **twelve months after the notice**, the daily job (§10) pseudonymizes it.
-   Dormant ⇔ `inactivity_notified_at IS NOT NULL`. Every sign-in, through edu-ID
-   (`auth/login.ts`, `signIn`) or the development login (`auth/dev.ts`), resets
-   both columns to null. The horizon counts from the notice, never from
+   - at the later of **twelve months after the notice** and **three months
+     after the reminder**, the daily job (§10) pseudonymizes it, so a job that
+     was paused never pseudonymizes an account the day it reminds it.
+   Dormant ⇔ `inactivity_notified_at IS NOT NULL`. Any use of the account since
+   the notice makes it active again and clears the notice: a sign-in, through
+   edu-ID (`auth/login.ts`, `signIn`) or the development login (`auth/dev.ts`),
+   resets both columns to null, and the job, which reads activity as §2
+   defines it, also counts an API or OAuth token used, or a page opened under
+   a live session, after the notice. The horizon counts from the notice, never from
    `last_login_at + 3 years`: imported accounts carry old dates, and a mailer
    that only logs (development, staging) must not lead to a wipe nobody was
    told about.
@@ -203,9 +208,12 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
     blocks, and the job logs that it met one. The daily job
     (`accounts.lifecycle`) sends the notices and reminders and pseudonymizes
     what is due, and runs only when `ACCOUNT_LIFECYCLE=1` (off on staging;
-    production turns it on when the operator decides). Per run it
-    pseudonymizes at most **20** accounts; above, it raises a `system_alert`
-    to the administrator (ADR-055) and stops. GitHub access is revoked first,
+    production turns it on when the operator decides). Per run it sends at
+    most **50** notices, oldest activity first, and pseudonymizes at most
+    **20** accounts; the rest waits for the next run. An account is marked
+    dormant only once its e-mail job was accepted by the queue, so a lost
+    enqueue never starts the clock; a notice repeated after a crash between the
+    two steps is accepted. GitHub access is revoked first,
     as a roster removal does (`org` service); a `502 revoke_failed` stops with
     nothing written. Then, in one transaction under a row lock
     (`SELECT … FOR UPDATE`), the inactivity and the guards are checked again
@@ -215,8 +223,13 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
     (#899); accepted, the window is milliseconds. The revocation stays outside
     the transaction because, inside it, the `revoking_at` mark would be
     invisible to a concurrent invitation. An account whose revocation fails is
-    skipped by the job and tried again the next day, and after three failures
-    a `system_alert` names it. Each pseudonymization writes one audit row,
+    skipped by the job and tried again the next day. The System status
+    (ADR-055) has a check `accounts`, which fails when more accounts are due
+    than one run takes, or when an account due for pseudonymization is still
+    not pseudonymized three days later, whatever the cause (a GitHub
+    revocation that keeps failing, a guard, a backlog); the `system_alert`
+    carries the check, the System status the counts, the log the account id.
+    The check is not applicable while `ACCOUNT_LIFECYCLE` is off. Each pseudonymization writes one audit row,
     `user.anonymized`, whose payload is the account id and
     `by: "lifecycle" | "self" | "admin"` (a new member of the union of
     `apps/api/src/audit.ts`).
@@ -260,26 +273,28 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
     > an administrator opened in its name never counts) receives one e-mail,
     > at its notification address and at its edu-ID login address when they
     > differ, and becomes **dormant**; a reminder follows nine months later,
-    > and twelve months after the notice a daily job pseudonymizes it. Any
-    > sign-in before then makes it active again. A student may pseudonymize
-    > their own account earlier from Settings, with a typed confirmation,
-    > from their own portal session. The administrator, with Super Powers on
-    > (ADR-054), may pseudonymize any account, one at a time, with a typed
-    > confirmation; a staff account is never pseudonymized otherwise, and
-    > its pools pass to their next member (ADR-013 §5) while its questions,
-    > templates and classrooms stay. Nothing is pseudonymized while the
-    > account has an attempt in progress in an exam not yet closed (an
-    > exercise or poll attempt never blocks) or a seat in an unarchived
-    > classroom whose period has not ended. Pseudonymization replaces the
-    > identity (names, addresses, edu-ID identifiers, picture, GitHub and
-    > Teams links, the e-mail of the roster lines it claimed) and revokes
-    > its sessions, tokens and GitHub access; attempts, answers, gradings,
-    > grades and drill data stay under the same id. It is not deletion: the
-    > audit log (three years, N-SEC-09), the backups (about four months,
-    > N-DATA-03), GitHub commits and repository names, and the scans of
-    > paper copies keep the identity, and the operator can re-identify the
-    > account until they go. A later sign-in creates a new, empty account,
-    > through admission (ADR-111). Audited as `user.anonymized` (ADR-117).
+    > and a daily job pseudonymizes it at the later of twelve months after
+    > the notice and three months after the reminder. Any use of the account
+    > before then (a sign-in, a token, a page opened under a live session)
+    > makes it active again. A student may pseudonymize their own account
+    > earlier from Settings, with a typed confirmation, from their own
+    > portal session. The administrator, with Super Powers on (ADR-054), may
+    > pseudonymize any account, one at a time, with a typed confirmation; a
+    > staff account is never pseudonymized otherwise, and its pools pass to
+    > their next member (ADR-013 §5) while its questions, templates and
+    > classrooms stay. Nothing is pseudonymized while the account has an
+    > attempt in progress in an exam not yet closed (an exercise or poll
+    > attempt never blocks) or a seat in an unarchived classroom whose
+    > period has not ended. Pseudonymization replaces the identity (names,
+    > addresses, edu-ID identifiers, picture, GitHub and Teams links, the
+    > e-mail of the roster lines it claimed) and revokes its sessions,
+    > tokens and GitHub access; attempts, answers, gradings, grades and
+    > drill data stay under the same id. It is not deletion: the audit log
+    > (three years, N-SEC-09), the backups (about four months, N-DATA-03),
+    > GitHub commits and repository names, and the scans of paper copies
+    > keep the identity, and the operator can re-identify the account until
+    > they go. A later sign-in creates a new, empty account, through
+    > admission (ADR-111). Audited as `user.anonymized` (ADR-117).
 
 ## Consequences
 
