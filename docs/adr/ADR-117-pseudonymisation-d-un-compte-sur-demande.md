@@ -205,15 +205,18 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
     what is due, and runs only when `ACCOUNT_LIFECYCLE=1` (off on staging;
     production turns it on when the operator decides). Per run it
     pseudonymizes at most **20** accounts; above, it raises a `system_alert`
-    to the administrator (ADR-055) and stops. Each account is handled in its
-    own transaction, under `SELECT … FOR UPDATE` on its row, with the
-    inactivity and the guards checked again inside it (a sign-in may race the
-    job). Inside that locked transaction, after the guards are checked again
-    and before the wipe, GitHub access is revoked, as a roster removal does
-    (`org` service); a failure rolls everything back (`502 revoke_failed`,
-    nothing written). An account whose revocation fails is skipped by the job
-    and tried again the next day, and after three failures a
-    `system_alert` names it. Each pseudonymization writes one audit row,
+    to the administrator (ADR-055) and stops. GitHub access is revoked first,
+    as a roster removal does (`org` service); a `502 revoke_failed` stops with
+    nothing written. Then, in one transaction under a row lock
+    (`SELECT … FOR UPDATE`), the inactivity and the guards are checked again
+    and the wipe runs. If that second check refuses (a sign-in or an exam
+    attempt raced it), the account keeps its data but has lost its GitHub
+    repository access, which the student recovers through *Request access*
+    (#899); accepted, the window is milliseconds. The revocation stays outside
+    the transaction because, inside it, the `revoking_at` mark would be
+    invisible to a concurrent invitation. An account whose revocation fails is
+    skipped by the job and tried again the next day, and after three failures
+    a `system_alert` names it. Each pseudonymization writes one audit row,
     `user.anonymized`, whose payload is the account id and
     `by: "lifecycle" | "self" | "admin"` (a new member of the union of
     `apps/api/src/audit.ts`).
@@ -296,6 +299,9 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
 - In the millisecond window where a sign-in has passed its refusal check
   before the wipe commits, that sign-in creates a fresh, empty account without
   admission. Accepted: the window is tiny, and the new account holds nothing.
+- A pseudonymization refused by the second check of §10 leaves an account
+  without its GitHub repository access until the student asks for it again
+  (*Request access*, #899). Accepted: the window is milliseconds.
 - A lifecycle e-mail that reaches nobody still leads, a year later, to the
   pseudonymization of a student account. Accepted: the account had two years
   of silence, and its work stays.
