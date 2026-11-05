@@ -136,7 +136,11 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
    ([ADR-054](ADR-054-super-powers-admin.md)): a request the HEIG-VD's records
    officer relays lands on the administrator. The guards of §10 apply as to
    the job. The admin screen lists the accounts inactive for one year or more
-   and those past the horizon of §3.
+   and those past the horizon of §3. A student account is past the horizon
+   only by §3's term (twelve months after its notice, three after the
+   reminder); a staff account, which the job never notifies, is past the
+   horizon three years after its last activity (§2). The screen marks both as
+   due, and the administrator decides.
    An account that holds a course staff seat, a pool seat, a teacher grant or
    the admin role is a staff account: it is **never pseudonymized
    automatically**, nor by its own action (§5); only the administrator's act
