@@ -125,15 +125,23 @@ describe("the student's Grades: a project row (F-PROJ-14, product owner 2026-10-
     expect(StudentGrades.parse(grades)).toEqual(grades);
   });
 
-  it("exists only released, with a grade", () => {
+  it("exists only released, with a grade, or excused (product owner, 2026-11-06)", () => {
     expect(GradeRow.safeParse({ ...row, status: "available" }).success).toBe(false);
+    expect(GradeRow.safeParse({ ...row, status: "pending" }).success).toBe(false);
     expect(GradeRow.safeParse({ ...row, score: { points: 4.5, totalPoints: 6, grade: null } }).success).toBe(false);
     expect(GradeRow.safeParse({ ...row, score: null }).success).toBe(false);
+    expect(GradeRow.safeParse({ ...row, status: "excused", counts: false, score: null }).success).toBe(true);
+    // Excused: no score, and counting nowhere.
+    expect(GradeRow.safeParse({ ...row, status: "excused", counts: false }).success).toBe(false);
+    expect(GradeRow.safeParse({ ...row, status: "excused", counts: true, score: null }).success).toBe(false);
   });
 
   it("carries neither the score's source, the teacher's comment nor the repository (N-SEC-20)", () => {
-    expect(Object.keys(ProjectGradeRow.shape).sort()).toEqual(["counts", "date", "kind", "projectId", "score", "status", "title"]);
-    expect(Object.keys(ProjectGradeRow.shape.score.shape).sort()).toEqual(["grade", "points", "totalPoints"]);
+    const [released, excused] = ProjectGradeRow.options;
+    for (const shape of [released.shape, excused.shape]) {
+      expect(Object.keys(shape).sort()).toEqual(["counts", "date", "kind", "projectId", "score", "status", "title"]);
+    }
+    expect(Object.keys(released.shape.score.shape).sort()).toEqual(["grade", "points", "totalPoints"]);
     const leaky = {
       ...row,
       source: "teacher",

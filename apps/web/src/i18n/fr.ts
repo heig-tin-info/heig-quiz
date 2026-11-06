@@ -3625,7 +3625,7 @@ export const fr: Record<keyof Dict, string> = {
   // M5-02 (F-ORG-14, F-ORG-15): the student's Courses and classroom page.
   "scourses.subtitle": "Les classes dont vous faites partie.",
   // F-ORG-14, F-RES-04: the student's Grades (`/grades`).
-  "sgrades.subtitle": "Vos examens et exercices terminés, par classe.",
+  "sgrades.subtitle": "Vos examens, exercices et projets terminés, par classe.",
   "sgrades.col.activity": "Activité",
   "sgrades.col.kind": "Type",
   "sgrades.kind.project": "Projet",

@@ -44,13 +44,13 @@ import {
   evaluations,
   gradebookColumns,
   gradebookMarks,
-  githubOrganizations,
   projectRepos,
   projects,
 } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { evaluationRows } from "../../test/grades.js";
 import { kioskStation } from "../../test/kiosk.js";
+import { gradedProject, projectRepo } from "../../test/project.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
@@ -73,7 +73,6 @@ let admin: Signed;
 let seated: Signed;
 let students: Signed[];
 let seed: Seeded;
-let nextOrg = 91_000;
 
 /** Column ids by name, and each student's roster line by index. */
 const col: Record<string, string> = {};
@@ -170,54 +169,11 @@ async function play(id: string, takers: { student: number; points: number }[], r
 
 /** A locked, graded project of the classroom; each entry is a student's repository scored by the teacher. */
 async function makeProject(name: string, released: boolean, scored: { student: number; points: number; max: number }[]): Promise<string> {
-  const n = nextOrg++;
-  const orgId = randomUUID();
-  await db().insert(githubOrganizations).values({ id: orgId, login: `gb-org-${n}`, githubOrgId: n, installationId: n });
-  const id = randomUUID();
-  const deadline = new Date("2026-10-09T22:00:00Z");
-  await db().insert(projects).values({
-    id,
-    classroomId: seed.classroomId,
-    orgId,
-    name,
-    slug: `gb-${n}`,
-    state: "locked",
-    startAt: new Date("2026-10-01T08:00:00Z"),
-    deadlineAt: deadline,
-    deadlineAppliedAt: deadline,
-    sourceRepoId: n,
-    sourceFullName: `gb-org-${n}/starter`,
-    distributionRepoId: n + 1,
-    distributionFullName: `gb-org-${n}/dist`,
-    branches: ["main"],
-    protectedFiles: [],
-    gradingMode: "auto",
-    gradingScale: { kind: "linear", rounding: "nearest" },
-    createdBy: teacher.id,
-    ...(released ? { releasedAt: new Date("2026-10-10T08:00:00Z"), releasedBy: teacher.id } : {}),
-  });
+  const project = await gradedProject(db(), { classroomId: seed.classroomId, name, createdBy: teacher.id, released });
   for (const { student, points, max } of scored) {
-    await db().insert(projectRepos).values({
-      id: randomUUID(),
-      projectId: id,
-      userId: students[student]!.id,
-      githubRepoId: n * 10 + student,
-      fullName: `gb-org-${n}/repo-${student}`,
-      defaultBranch: "main",
-      provisionStatus: "ok",
-      acceptedAt: new Date("2026-10-01T09:00:00Z"),
-      invitationStatus: "accepted",
-      rulesetId: n,
-      deadlineAppliedAt: deadline,
-      frozenAt: new Date("2026-10-09T22:30:00Z"),
-      teacherPoints: points,
-      teacherMax: max,
-      teacherComment: SECRET,
-      // The release's snapshot, its grade stored as `releaseProject` writes it (ADR-119 §11).
-      ...(released ? { releasedPoints: points, releasedMax: max, releasedGrade: gradeFromPoints(points, max, { rounding: "nearest" }), releasedComment: SECRET } : {}),
-    });
+    await projectRepo(db(), project, { userId: students[student]!.id, points, max, comment: SECRET });
   }
-  return id;
+  return project.id;
 }
 
 beforeAll(async () => {
@@ -736,7 +692,7 @@ describe("the student's own cells (F-GBOOK-05, F-RES-04) and what must never rea
   });
 
   it("tells the student whether each column counts, on the tab and the Grades page alike — the flag alone, no weight before the mean is published (#803)", async () => {
-    /** The effective flag of E1, X1 and P1 on the tab, and of E1 and X1 on the Grades page; no weight anywhere. */
+    /** The effective flag of E1, X1 and P1 on the tab and on the Grades page; no weight anywhere. */
     const flags = async () => {
       const { parsed, raw } = await studentRead(students[0]!.headers);
       for (const column of raw["columns"] as Record<string, unknown>[]) expect(column).not.toHaveProperty("weight");
@@ -744,20 +700,22 @@ describe("the student's own cells (F-GBOOK-05, F-RES-04) and what must never rea
       const res = await call("GET", "/app/api/student/results", students[0]!.headers);
       expect(res.statusCode, res.body).toBe(200);
       expect(res.body).not.toContain('"weight"');
-      const rows = evaluationRows(StudentGrades.parse(res.json()));
-      const page = (name: string) => rows.find((r) => r.evaluationId === col[name])!.counts;
-      return { E1: [tab("E1"), page("E1")], X1: [tab("X1"), page("X1")], P1: tab("P1") };
+      const rows = StudentGrades.parse(res.json()).flatMap((g) => g.rows);
+      const page = (name: string) => rows.find((r) => (r.kind === "evaluation" ? r.evaluationId : r.projectId) === col[name])!.counts;
+      return { E1: [tab("E1"), page("E1")], X1: [tab("X1"), page("X1")], P1: [tab("P1"), page("P1")] };
     };
     // The kinds' defaults: an exam and a project count, an exercise does not.
-    expect(await flags()).toEqual({ E1: [true, true], X1: [false, false], P1: true });
-    // The teacher includes the exercise and leaves the exam out: their word wins, the weight stays theirs.
+    expect(await flags()).toEqual({ E1: [true, true], X1: [false, false], P1: [true, true] });
+    // The teacher includes the exercise and leaves the exam and the project out: their word wins, the weight stays theirs.
     await call("PATCH", colUrl("evaluation", "X1"), teacher.headers, { counts: true, weight: 30 });
     await call("PATCH", colUrl("evaluation", "E1"), teacher.headers, { counts: false });
+    await call("PATCH", colUrl("project", "P1"), teacher.headers, { counts: false });
     try {
-      expect(await flags()).toEqual({ E1: [false, false], X1: [true, true], P1: true });
+      expect(await flags()).toEqual({ E1: [false, false], X1: [true, true], P1: [false, false] });
     } finally {
       await call("PATCH", colUrl("evaluation", "X1"), teacher.headers, { counts: false, weight: 100 });
       await call("PATCH", colUrl("evaluation", "E1"), teacher.headers, { counts: true });
+      await call("PATCH", colUrl("project", "P1"), teacher.headers, { counts: true });
     }
   });
 

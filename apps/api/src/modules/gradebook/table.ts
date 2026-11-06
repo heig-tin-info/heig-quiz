@@ -131,7 +131,7 @@ export async function studentGradebook(db: Db, scope: ReadableClassroom, userId:
   if (seat === null || seat.staff) return { classroomId: room.id, columns: [], cells: {}, ...meanKey(null) };
 
   const [entries, stored, marks] = await Promise.all([
-    studentGradebookEntries(db, userId, { enrollmentId: seat.id, userId }, room.id, now),
+    studentGradebookEntries(db, userId, room.id, now),
     storedColumns(db, room.id),
     marksByCell(db, room.id, seat.id),
   ]);

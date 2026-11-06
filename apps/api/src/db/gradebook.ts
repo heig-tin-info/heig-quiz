@@ -23,7 +23,7 @@
  *
  * `updated_at`, `set_at` are the server's clock, written by the service.
  */
-import { sql } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -119,3 +119,16 @@ export const gradebookSettings = pgTable("gradebook_settings", {
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 });
+
+/**
+ * The seat's `excused` mark on the stored column joined beside it (#969):
+ * the ON of a left join of `gradebook_marks`, on a query that has
+ * `enrollments` and `gradebook_columns` in scope. Its id alone is read, never
+ * its staff-only comment.
+ */
+export const excusedMarkOfSeat = (): SQL =>
+  and(
+    eq(gradebookMarks.columnId, gradebookColumns.id),
+    eq(gradebookMarks.enrollmentId, enrollments.id),
+    eq(gradebookMarks.kind, "excused"),
+  )!;
