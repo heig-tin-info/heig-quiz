@@ -29,7 +29,7 @@ import { invalid } from "../modules/http.js";
 import { accountOf } from "./account.js";
 import { devLoginRoutes } from "./dev.js";
 import { impersonationRoutes } from "./impersonation.js";
-import { loginRefusal, signIn } from "./login.js";
+import { AnonymizedAccountError, loginRefusal, signIn } from "./login.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
 import { OIDC_CALLBACK_PATH } from "./paths.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
@@ -274,7 +274,10 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // A cookie the server no longer honours (unknown, expired, past its
     // absolute bound) is cleared, as a sign-out clears it: the browser stops
     // presenting a dead token, and the client sees the anonymous answer.
-    if (!found) {
+    // A pseudonymized account's sessions are deleted with its identity
+    // (ADR-117); one that survived is refused all the same. A bearer token
+    // of one is refused by `findTokenUser` already.
+    if (!found || found.user.anonymizedAt !== null) {
       clearSessionCookies(reply);
       return;
     }
@@ -465,7 +468,14 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       return reply.redirect(`${LOGIN_REFUSED_PATH}?reason=${refusal}`, 303);
     }
 
-    const user = await signIn(app.db, config, claims);
+    let user: SessionUser;
+    try {
+      user = await signIn(app.db, config, claims);
+    } catch (err) {
+      if (!(err instanceof AnonymizedAccountError)) throw err;
+      req.log.warn({ sub: claims.sub }, "Login refused: the account is pseudonymized");
+      return reply.redirect(`${LOGIN_REFUSED_PATH}?reason=restricted`, 303);
+    }
     await app.openSession(reply, user);
     await audit(app.db, {
       actorUserId: user.id,

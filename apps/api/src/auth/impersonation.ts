@@ -8,7 +8,7 @@
  * so a session opened in a tab of the admin's own browser would replace the
  * admin's in every tab. Only another browser profile keeps the two apart.
  */
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import { LaunchSecretParams, type ImpersonationLink } from "@quiz/contracts";
@@ -34,6 +34,8 @@ async function impersonable(db: Db, userId: string) {
       and(
         eq(users.id, userId),
         eq(users.role, "student"),
+        // A pseudonymized account opens no session (ADR-117): no dead link.
+        isNull(users.anonymizedAt),
         sql`EXISTS (SELECT 1 FROM ${enrollments} WHERE ${enrollments.userId} = ${users.id} AND NOT ${enrollments.staff})`,
       ),
     )

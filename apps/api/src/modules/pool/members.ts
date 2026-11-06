@@ -246,6 +246,26 @@ export async function tellPoolOfPublication(db: Db, poolId: string, authorId: st
 }
 
 /**
+ * Why the pools of an account pass on (`pool.transfer`'s `payload.reason`):
+ * it lost the teacher role, or it was pseudonymized (ADR-117).
+ */
+export type PoolTransferReason = "owner_lost_teacher_role" | "owner_pseudonymized";
+
+/**
+ * The pool succession of ADR-013, rule 5: the pools `userId` owns pass on
+ * first (to their first member still staff, by seniority; a pool with none
+ * keeps its owner), then every pool seat they held goes, so a demoted
+ * member does not get it back with the role. Run by a deliberate demotion
+ * (`storeRole`) and after the pseudonymization of a staff account
+ * (`account` module, ADR-117). Idempotent; never inside a transaction: it
+ * notifies the heirs and the pools' audiences.
+ */
+export async function handOverPools(db: Db, userId: string, reason: PoolTransferReason): Promise<void> {
+  await transferOnLoss(db, userId, reason);
+  await vacateSeats(db, userId);
+}
+
+/**
  * A member demoted to student loses every seat they held (ADR-013, rule 5),
  * for good: a later promotion gives nothing back, a colleague has to invite
  * them again. Called by `storeRole` after `transferOnLoss`, from the same
@@ -287,6 +307,7 @@ export async function vacateSeats(db: Db, userId: string): Promise<void> {
 export async function transferOnLoss(
   db: Db,
   userId: string,
+  reason: PoolTransferReason = "owner_lost_teacher_role",
 ): Promise<{ poolId: string; toUserId: string }[]> {
   const owned = await db.select().from(pools).where(eq(pools.ownerId, userId));
   if (owned.length === 0) return [];
@@ -334,7 +355,7 @@ export async function transferOnLoss(
       action: "pool.transfer",
       subjectType: "pool",
       subjectId: pool.id,
-      payload: { from: userId, to: heir, name: pool.name, reason: "owner_lost_teacher_role" },
+      payload: { from: userId, to: heir, name: pool.name, reason },
     });
     await notify(db, heir, {
       kind: "pool_ownership",

@@ -84,8 +84,8 @@ export const users = pgTable(
      * among the account's own (ADR-030, amendment of 2026-10-28); null means
      * the default, the institutional address when one is known. A choice no
      * longer among the account's addresses falls back to the default
-     * (`notificationAddress`). An address: a future anonymization clears it
-     * along with `email`.
+     * (`notificationAddress`). An address: the pseudonymization clears it
+     * along with `email` (ADR-117).
      */
     notificationEmail: text("notification_email"),
     /**
@@ -95,7 +95,21 @@ export const users = pgTable(
      * database's clock, the one that dates the entries.
      */
     changelogSeenAt: timestamp("changelog_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * When the account was pseudonymized (ADR-117): its identity replaced by
+     * `quiz_pseudonymize_account` (migration 0129), its row kept under the
+     * same id. Set once, never cleared; a session or a sign-in on such an
+     * account is refused.
+     */
     anonymizedAt: timestamp("anonymized_at", { withTimezone: true }),
+    /**
+     * The account lifecycle of a student (ADR-117, product owner 2026-11-05):
+     * when the inactivity notice was sent — the account is dormant while it
+     * is set — and when its reminder was. Both null again at every sign-in
+     * (`signIn`, the development login).
+     */
+    inactivityNotifiedAt: timestamp("inactivity_notified_at", { withTimezone: true }),
+    inactivityRemindedAt: timestamp("inactivity_reminded_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("users_email_idx").on(sql`lower(${t.email})`)],

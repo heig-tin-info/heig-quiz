@@ -347,7 +347,15 @@ export async function inviteOnGithubLink(db: Db, config: AppConfig, userId: stri
 type SkipReason = "app_not_installed" | "repo_deleted" | "not_provisioned" | "account_gone" | "not_invited";
 
 /** The roster write a revocation runs before, or the set's move (`group.sync`), or a resync's (`group.resync`): the audit's `via`. */
-export type RevokeVia = "roster.remove" | "roster.unclaim" | "roster.update" | "roster.self_enroll" | "group.sync" | "group.resync";
+export type RevokeVia =
+  | "roster.remove"
+  | "roster.unclaim"
+  | "roster.update"
+  | "roster.self_enroll"
+  | "group.sync"
+  | "group.resync"
+  /** The line's account is pseudonymized (ADR-117 §10): every line it claimed, through `revokeAccountAccess`. */
+  | "account.pseudonymize";
 
 export interface RevokeContext {
   actor: AuditActor;
