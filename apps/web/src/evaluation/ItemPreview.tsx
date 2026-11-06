@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Eye } from "lucide-react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { useState, type KeyboardEvent } from "react";
 
 import type { ItemPreview as ItemPreviewData, ItemRow, PreviewSolution } from "@quiz/contracts";
@@ -10,7 +10,6 @@ import { itemPreviewKey, solutionKey } from "../queryKeys";
 import type { EditTarget } from "./editTarget";
 import { typeLabel } from "../questionTypes";
 import {
-  Alert,
   ASIDE_MIN_WIDTH,
   IconButton,
   pageBox,
@@ -66,7 +65,9 @@ export type ItemPane = ReturnType<typeof useItemPane>;
  *     whatever pool it was drawn from.
  *
  * Nothing is saved, run or graded: the whole-exam preview (#75) is where an
- * evaluation is rehearsed end to end.
+ * evaluation is rehearsed end to end. The panel does not say so: opened from
+ * the row's eye, titled by the question, it cannot be taken for an exam. The
+ * header carries the item's points, beside the version and the difficulty.
  */
 export function ItemPreview({
   target,
@@ -107,6 +108,11 @@ export function ItemPreview({
             <span aria-hidden className="text-fg-faint">·</span>
             <DifficultyDots value={item.difficulty} />
           </span>
+          {/* The item's points, so the sheet says them while it covers the list. */}
+          <span className="inline-flex items-center gap-2">
+            <span aria-hidden className="text-fg-faint">·</span>
+            {item.points === 1 ? t("player.point") : t("player.points", { n: item.points })}
+          </span>
         </span>
       }
       onClose={onClose}
@@ -129,17 +135,15 @@ export function ItemPreview({
         </>
       }
     >
-      <div className="space-y-4">
-        <Alert icon={Eye} title={t("eval.questions.preview.banner")} />
-        <PreviewedQuestion
-          key={item.id}
-          query={preview}
-          solution={{
-            queryKey: solutionKey(key),
-            queryFn: () => api<PreviewSolution>(`${target.base}/preview/items/${item.id}/solution`),
-          }}
-        />
-      </div>
+      <PreviewedQuestion
+        key={item.id}
+        query={preview}
+        points={false}
+        solution={{
+          queryKey: solutionKey(key),
+          queryFn: () => api<PreviewSolution>(`${target.base}/preview/items/${item.id}/solution`),
+        }}
+      />
     </PaneOrSheet>
   );
 }

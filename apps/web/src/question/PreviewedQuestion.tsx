@@ -49,9 +49,12 @@ const SHOWS_ANSWERS = new Set(["mcq", "cloze"]);
 export function PreviewedQuestion({
   query,
   solution,
+  points,
 }: {
   query: UseQueryResult<StudentQuestion>;
   solution?: SolutionSource;
+  /** See `PlayedQuestion`: false where the surface already states the points. */
+  points?: boolean;
 }) {
   const t = useT();
   if (query.isLoading) {
@@ -69,7 +72,7 @@ export function PreviewedQuestion({
       </Alert>
     );
   }
-  return <PlayedQuestion view={query.data} solution={solution} />;
+  return <PlayedQuestion view={query.data} solution={solution} points={points} />;
 }
 
 /**
@@ -90,6 +93,7 @@ export function PlayedQuestion({
   view,
   solution,
   label,
+  points = true,
   showsAnswers = SHOWS_ANSWERS.has(view.type),
 }: {
   view: StudentQuestion;
@@ -97,6 +101,11 @@ export function PlayedQuestion({
   solution?: SolutionSource;
   /** The player's own line above the question, where the surface wants it. */
   label?: string;
+  /**
+   * Whether the points are written above the question. The item preview of
+   * an evaluation says them in its header instead, beside the version.
+   */
+  points?: boolean;
   /**
    * Whether "Show answers" is offered; by default for `SHOWS_ANSWERS`.
    * The draws of a parameterized
@@ -128,9 +137,11 @@ export function PlayedQuestion({
           <p className="text-[13px] font-semibold uppercase tracking-wide text-fg-muted">{label}</p>
         ) : null}
         <span className="flex-1" />
-        <p className="text-[13px] text-fg-muted">
-          {view.points === 1 ? t("player.point") : t("player.points", { n: view.points })}
-        </p>
+        {points ? (
+          <p className="text-[13px] text-fg-muted">
+            {view.points === 1 ? t("player.point") : t("player.points", { n: view.points })}
+          </p>
+        ) : null}
         {solution && showsAnswers ? (
           <Button variant="secondary" size="sm" aria-pressed={shown} onClick={() => setShown(!shown)}>
             {shown ? <EyeOff /> : <KeyRound />}

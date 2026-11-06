@@ -4136,7 +4136,6 @@ export const en = {
   "eval.questions.editItem": "Edit {name}",
   "eval.questions.editItem.denied": "You cannot edit {name}: you only have read access to its pool",
   "eval.questions.preview.subtitle": "{type} · version {n}, the one frozen in this list",
-  "eval.questions.preview.banner": "Student preview, answers not saved",
   "eval.questions.preview.prev": "Previous question",
   "eval.questions.preview.next": "Next question",
   "eval.questions.reorder": "Reorder {name}",
