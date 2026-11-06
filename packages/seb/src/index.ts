@@ -3,7 +3,7 @@
  * `.seb`, its Config Key, and the hashes SEB sends. No database, no HTTP:
  * the routes that serve a file or check a header are their app's.
  */
-export { configKey } from "./configKey.js";
+export { configKey, configKeyFromPlistXml } from "./configKey.js";
 export {
   array,
   bool,
@@ -25,4 +25,4 @@ export {
   expectedHash,
   hashesEqual,
 } from "./request.js";
-export { buildSebConfig, type SebConfigInput } from "./sebConfig.js";
+export { buildSebConfig, hashQuitPassword, type SebConfigInput } from "./sebConfig.js";

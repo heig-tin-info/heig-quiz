@@ -36,6 +36,7 @@ import { Legend } from "./Legend";
 import { LobbyPanel } from "./LobbyPanel";
 import { LiveHeader, type LiveControls } from "./LiveHeader";
 import { QuestionModal } from "./QuestionModal";
+import { SebUnlock } from "./SebUnlock";
 import { StudentGrid } from "./StudentGrid";
 import { useLiveToggles } from "./toggles";
 import { useDashboard } from "./useDashboard";
@@ -444,6 +445,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
             {incidentTotal > 0 ? <span className="tabular-nums text-fg-faint">{incidentTotal}</span> : null}
           </button>
         )}
+        <SebUnlock password={view.evaluation.sebUnlockPassword} />
       </div>
 
       {view.rows.length === 0 ? (

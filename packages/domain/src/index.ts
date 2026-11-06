@@ -145,6 +145,7 @@ export * from "./reviewDispatch.js";
 export * from "./roster.js";
 export * from "./essayCriteria.js";
 export * from "./round.js";
+export * from "./sebUnlockPassword.js";
 export * from "./short.js";
 export * from "./protectedFiles.js";
 export * from "./studentIgnore.js";

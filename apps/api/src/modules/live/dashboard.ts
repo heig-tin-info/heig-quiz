@@ -32,7 +32,9 @@ import { isCourseOwner, type Caller } from "../guards.js";
 import {
   gradeDefaults,
   seatsOf,
+  sebUnlockPasswordOf,
   staffRosterWithAttempt,
+  trustedClients,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
@@ -261,6 +263,8 @@ export async function dashboardView(
       serverNow: iso(input.now),
       reopenable: reopenRefusal(evaluation) === null && (await mayReopenFinished(db, evaluation, input.caller)),
       journalOn: journalOn(evaluation),
+      // Drawn here if no file was downloaded yet: the teacher sees it first.
+      sebUnlockPassword: trustedClients(evaluation).includes("seb") ? await sebUnlockPasswordOf(db, evaluation) : null,
     },
     items: items.map((i) => ({
       id: i.item.id,

@@ -12,9 +12,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { defaultProjectGradingScale, CSRF_COOKIE, workspaceStartPath } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
-import { CONFIG_KEY_HEADER } from "@quiz/seb";
+import { isSebUnlockPassword } from "@quiz/domain";
+import { CONFIG_KEY_HEADER, hashQuitPassword } from "@quiz/seb";
 
-import { auditLog, githubOrganizations, launchTickets, projects, sessions } from "../db/schema.js";
+import { auditLog, enrollments, evaluations, githubOrganizations, launchTickets, projects, sessions } from "../db/schema.js";
 import { appKey, fakeGithub } from "../github/testing.js";
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
@@ -23,7 +24,9 @@ import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
 import { LAUNCH_PATH } from "./paths.js";
 import { AUDITED_SEB_REFUSALS_PER_TICKET, configKeyHeaderFor } from "./seb.js";
 import {
+  issueImpersonation,
   launchSeb,
+  openImpersonation,
   openProjectSebSession,
   openSebSession,
   PROJECT_SEB_ROUTES,
@@ -164,6 +167,24 @@ describe("the launch ticket", () => {
     expect((await launch(startUrl)).headers.location).toBe(`/take/${exam.evaluationId}`);
     await from(new URL(await download(exam.evaluationId)).pathname, "203.0.113.20");
     expect(await refusals()).toBe(before + AUDITED_SEB_REFUSALS_PER_TICKET + 1);
+  });
+
+  it("carries the evaluation's one unlock password, hashed; a file without it no longer opens", async () => {
+    const file = async () => (await call("GET", `/app/api/evaluations/${exam.evaluationId}/seb`, student.headers)).body;
+    const first = await file();
+    const [row] = await server.app.db.select().from(evaluations).where(eq(evaluations.id, exam.evaluationId));
+    const password = row!.sebUnlockPassword!;
+    expect(isSebUnlockPassword(password)).toBe(true);
+    const hash = hashQuitPassword(password);
+    // Drawn once: every file of the evaluation carries the same hash, never the password.
+    for (const body of [first, await file()]) {
+      expect(body).toMatch(new RegExp(`<key>quitURLConfirm</key>\\s*<false/>\\s*<key>hashedQuitPassword</key>\\s*<string>${hash}</string>`));
+      expect(body).not.toContain(password);
+    }
+    // The file of before the password (its Config Key) is refused, and leaves the ticket for SEB.
+    const startUrl = await download(exam.evaluationId);
+    expect((await launch(startUrl, configKeyHeaderFor(startUrl))).headers.location).toBe("/?seb=invalid");
+    expect((await launch(startUrl, configKeyHeaderFor(startUrl, [], password))).headers.location).toBe(`/take/${exam.evaluationId}`);
   });
 
   it("is only issued to a seated student, on an exam that requires SEB", async () => {
@@ -465,6 +486,8 @@ describe("the seb session of a project (D21)", () => {
     expect(res.headers["content-disposition"]).toBe('attachment; filename="workspace.seb"');
     expect(res.body).toMatch(/<key>startURL<\/key>\s*<string>http:\/\/[^<]+\/app\/auth\/seb\/[^<]+<\/string>/);
     expect(res.body).toContain(`<string>${PORTAL_HOST}</string>`);
+    // No unlock password in a project's file in v1 (ADR-027, 2026-11-06).
+    expect(res.body).not.toContain("hashedQuitPassword");
     // An evaluation's file allows Quiz's host alone, as ADR-027 pinned it.
     const examFile = await call("GET", `/app/api/evaluations/${exam.evaluationId}/seb`, student.headers);
     expect(examFile.body).not.toContain(PORTAL_HOST);
@@ -544,3 +567,123 @@ describe("the seb session of a project (D21)", () => {
     seb = second;
   });
 });
+
+describe("the unlock password (ADR-027, addendum of 2026-11-06)", () => {
+  it("reaches the staff's live screen, and no response a student or a student view gets (05 §5.7)", async () => {
+    const dashboard = await call("GET", `/app/api/evaluations/${exam.evaluationId}/dashboard`, teacher.headers);
+    expect(dashboard.statusCode, dashboard.body).toBe(200);
+    const password: string = dashboard.json().evaluation.sebUnlockPassword;
+    expect(isSebUnlockPassword(password)).toBe(true);
+    const [row] = await server.app.db.select().from(evaluations).where(eq(evaluations.id, exam.evaluationId));
+    expect(row!.sebUnlockPassword).toBe(password);
+
+    // An evaluation that does not trust SEB shows none, and draws none.
+    const plain = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], mode: "exam" });
+    const plainBoard = await call("GET", `/app/api/evaluations/${plain.evaluationId}/dashboard`, teacher.headers);
+    expect(plainBoard.statusCode, plainBoard.body).toBe(200);
+    expect(plainBoard.json().evaluation.sebUnlockPassword).toBeNull();
+    const [plainRow] = await server.app.db.select().from(evaluations).where(eq(evaluations.id, plain.evaluationId));
+    expect(plainRow!.sebUnlockPassword).toBeNull();
+
+    const classroom = `/app/api/student/classrooms/${exam.classroomId}`;
+    const responses: { who: string; body: string }[] = [];
+    const read = async (who: string, method: Method, url: string, headers: Headers) =>
+      responses.push({ who: `${who} ${method} ${url}`, body: (await call(method, url, headers)).body });
+    const stream = async (who: string, watch: string, headers: Headers) =>
+      responses.push({ who: `${who} SSE ${watch}`, body: await snapshotOf(watch, headers) });
+
+    // The student, sitting in SEB: entering, the attempt, the session.
+    const seb = await sebSession(exam.evaluationId);
+    const entered = await call("POST", `/app/api/evaluations/${exam.evaluationId}/attempt`, seb);
+    expect(entered.statusCode, entered.body).toBe(200);
+    responses.push({ who: "seb POST attempt", body: entered.body });
+    const attemptId: string = entered.json().view.attempt.id;
+    await read("seb", "GET", `/app/api/attempts/${attemptId}`, seb);
+    await read("seb", "GET", "/app/api/me", seb);
+    await stream("seb", `attempt:${attemptId}`, seb);
+    await stream("seb", `lobby:${exam.evaluationId}`, seb);
+    // The student's portal.
+    for (const url of ["/app/api/student/home", classroom, `/app/api/evaluations/${exam.evaluationId}`]) {
+      await read("portal", "GET", url, student.headers);
+    }
+    // The teacher in the student view (ADR-018): the student payload, asked for.
+    await read("teacher, student view", "GET", classroom, teacher.headers);
+    // An impersonation session (ADR-034).
+    const admin = await server.signInWithSuperPowers();
+    const [entry] = await server.app.db
+      .select({ id: enrollments.id })
+      .from(enrollments)
+      .where(and(eq(enrollments.classroomId, exam.classroomId), eq(enrollments.userId, student.id)));
+    const link = await issueImpersonation(server, admin.headers, exam.classroomId, entry!.id);
+    expect(typeof link).toBe("string");
+    const acting = (await openImpersonation(server, link as string))!;
+    for (const url of ["/app/api/student/home", classroom, `/app/api/attempts/${attemptId}`]) {
+      await read("impersonation", "GET", url, acting);
+    }
+    // A `kiosk` session (ADR-051), on an exam that accepts SEB or a station.
+    const either = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [student.id],
+      mode: "exam",
+      settings: { safeExamBrowser: true, kiosk: true },
+    });
+    await call("POST", `/app/api/evaluations/${either.evaluationId}/start`, teacher.headers, { confirm: true });
+    const eitherPassword: string = (
+      await call("GET", `/app/api/evaluations/${either.evaluationId}/dashboard`, teacher.headers)
+    ).json().evaluation.sebUnlockPassword;
+    expect(isSebUnlockPassword(eitherPassword)).toBe(true);
+    const station = await kioskStation(server.app);
+    const opened = await createSession(server.app.db, student.id, 12, {
+      kind: "kiosk",
+      actorUserId: null,
+      evaluationId: either.evaluationId,
+      projectId: null,
+      deviceId: station.deviceId,
+    });
+    const kiosk = { cookie: `${SESSION_COOKIE}=${opened.token}; ${CSRF_COOKIE}=${opened.csrf}; ${station.cookie}`, "x-csrf-token": opened.csrf };
+    const kioskEntered = await call("POST", `/app/api/evaluations/${either.evaluationId}/attempt`, kiosk);
+    expect(kioskEntered.statusCode, kioskEntered.body).toBe(200);
+    responses.push({ who: "kiosk POST attempt", body: kioskEntered.body });
+    const kioskAttemptId: string = kioskEntered.json().view.attempt.id;
+    await read("kiosk", "GET", `/app/api/attempts/${kioskAttemptId}`, kiosk);
+    await stream("kiosk", `attempt:${kioskAttemptId}`, kiosk);
+
+    const leaks = responses.filter((r) => r.body.includes(password) || r.body.includes(eitherPassword));
+    expect(leaks.map((r) => r.who)).toEqual([]);
+    // Every stream answered its snapshot.
+    for (const r of responses.filter((r) => r.who.includes(" SSE "))) expect(r.body, r.who).toMatch(/^200 [\s\S]*snapshot/);
+    // The probe sees what it searches: the home names the exam, the attempt its own id.
+    for (const who of ["portal", "impersonation"]) {
+      expect(responses.find((r) => r.who === `${who} GET /app/api/student/home`)!.body).toContain(exam.evaluationId);
+    }
+    expect(responses.find((r) => r.who === `teacher, student view GET ${classroom}`)!.body).toContain(exam.classroomId);
+    expect(responses.find((r) => r.who.startsWith("seb GET /app/api/attempts/"))!.body).toContain(attemptId);
+    expect(dashboard.body).toContain(password);
+    // The staff's own stream carries it, which proves the stream reader reads snapshots.
+    expect(await snapshotOf(`evaluation:${exam.evaluationId}`, teacher.headers)).toContain(password);
+  });
+});
+
+/**
+ * The first frames of an SSE stream (`GET /app/api/events?watch=…`): its
+ * status, then what it sent until its snapshot arrived; the client then hangs up.
+ */
+async function snapshotOf(watch: string, headers: Headers): Promise<string> {
+  const url = `/app/api/events?watch=${encodeURIComponent(watch)}`;
+  const hangUp = new AbortController();
+  const res = await server.app.inject({
+    method: "GET",
+    url,
+    headers: typeof headers === "function" ? headers(url) : headers,
+    payloadAsStream: true,
+    signal: hangUp.signal,
+  });
+  let text = "";
+  if (res.statusCode === 200) res.stream().on("data", (chunk: Buffer) => (text += chunk.toString("utf8")));
+  for (let i = 0; i < 50 && res.statusCode === 200 && !text.includes("snapshot"); i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  hangUp.abort();
+  res.stream().destroy();
+  return `${res.statusCode} ${text}`;
+}

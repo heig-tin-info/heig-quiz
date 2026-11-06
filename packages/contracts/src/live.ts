@@ -851,6 +851,13 @@ export const DashboardView = z.object({
      * `logVisibility`, never a poll). Off, the grid offers no journal list.
      */
     journalOn: z.boolean(),
+    /**
+     * The unlock password of the evaluation's Safe Exam Browser (ADR-027,
+     * 2026-11-06), for the teacher in the room: what SEB's lock screen asks
+     * after a session switch. `null` unless the evaluation trusts SEB.
+     * STAFF-ONLY: this view is served to the staff alone.
+     */
+    sebUnlockPassword: z.string().nullable(),
   }),
   items: z.array(StaffItemRef.extend({ milestone: z.boolean() })),
   rows: z.array(DashboardRow),

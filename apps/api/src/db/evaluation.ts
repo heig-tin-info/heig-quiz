@@ -159,6 +159,17 @@ export const evaluations = pgTable(
      */
     paperSeed: integer("paper_seed"),
     /**
+     * The unlock password of the evaluation's Safe Exam Browser (ADR-027,
+     * addendum of 2026-11-06): every `.seb` of the evaluation carries its
+     * SHA-256 as `hashedQuitPassword`, and the staff read it on the live
+     * screen to unlock a student SEB locked after a session switch. Drawn
+     * on first need by `sebUnlockPasswordOf`, the one writer, and never
+     * changed. STAFF-ONLY: never in a student payload, a template, a copy, an
+     * audit row, a log line, nor the assistant's or MCP tools. Never inside
+     * `settings`, which the student view and the copies take whole.
+     */
+    sebUnlockPassword: text("seb_unlock_password"),
+    /**
      * Who created the evaluation. For a poll with no classroom it is also
      * the OWNER, the one person (with the admins) who reaches it
      * (`findOwnedPoll` in `modules/guards.ts`).

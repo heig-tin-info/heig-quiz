@@ -1,5 +1,6 @@
 /** Section 3 of the mock — see `index.ts` for the layout. */
 import { countsAsCompleted,
+  trustedClientsOf,
   evaluationDeletionRole,
   evaluationTotal,
   configLock,
@@ -1171,6 +1172,8 @@ export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
       // The server's `reopenRefusal`: retakes on, or the correction published.
       reopenable: !retakesOnMock(e) && e.correctionPublishedAt === null,
       journalOn: journalOnMock(e),
+      // The server draws one per evaluation; the mock shows a fixed one (`?seb=1` too).
+      sebUnlockPassword: flags.seb || trustedClientsOf(e.mode, e.settings).includes("seb") ? "cde234" : null,
     },
     items: e.items.map((i) => ({
       id: i.id,
