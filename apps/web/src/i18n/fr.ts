@@ -4105,7 +4105,6 @@ export const fr: Record<keyof Dict, string> = {
   "eval.questions.editItem": "Modifier {name}",
   "eval.questions.editItem.denied": "Modification de {name} impossible : vous n'avez qu'un accès en lecture à sa banque",
   "eval.questions.preview.subtitle": "{type} · version {n}, figée dans cette liste",
-  "eval.questions.preview.banner": "Aperçu étudiant, réponses non enregistrées",
   "eval.questions.preview.prev": "Question précédente",
   "eval.questions.preview.next": "Question suivante",
   "eval.questions.reorder": "Déplacer {name}",
