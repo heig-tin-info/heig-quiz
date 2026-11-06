@@ -1525,6 +1525,10 @@ there (ADR-028, *Update 2026-10-11*):
 ~/quiz-staging/scripts/staging-refresh.sh <file>       # that dump, images unchanged
 ```
 
+Since 2026-11-05 (ADR-117 §8) the export requires production at migration
+`0129` or later: `scripts/staging-pseudonymize.sql` calls the database function
+`quiz_pseudonymize_account(...)` that migration creates, once per person.
+
 The export copies production's database into a scratch database of
 production's own PostgreSQL (`staging_export`), runs
 `scripts/staging-pseudonymize.sql` on it, dumps that copy alone and drops

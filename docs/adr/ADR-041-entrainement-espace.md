@@ -70,6 +70,11 @@ today" with no action.
 
 Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md): §1, the exercise's key only — an exercise shows its key at every hand-in, so its card is served once the student's latest attempt is handed in (`keyShownTo`, unchanged as the rule; held back again while a retake is written). The stored policy no longer holds it back.
 
+Amended 2026-11-05 by [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) §9
+(product owner, issue #681), scope: §8's retention only. When an account is pseudonymized, its
+drill data (cards, reviews, rounds of targeted revision) stays under the pseudonymous id; the
+five-year purge and the deletion with a classroom, an evaluation or a question still apply.
+
 ## Context
 
 The spec reserved a phase-2 drill in five lines: every question a student meets
@@ -298,6 +303,10 @@ default"):
   deleted with its classroom; the staff see who revised which concept, as
   counts, under the same cuts (current student seats, nothing after an
   opt-out), and the student is told so.
+- **Pseudonymized accounts** *(note of 2026-11-05, [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) §9,
+  product owner)*: pseudonymizing an account deletes none of its drill data; the cards, the
+  reviews and the rounds of targeted revision stay under the pseudonymous id, under the
+  retention anchors above.
 
 ### 9. The invariants the drill keeps
 

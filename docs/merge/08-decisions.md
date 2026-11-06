@@ -236,10 +236,14 @@ Status values: `open`, `settled`, `superseded`.
 - Blocks: M8-01.
 - **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
 - **Addendum (2026-10-05, product owner; merge task M8-01a)**: the table is
-  `legacy_classroom_audit_log` (migration `0076`), kept indefinitely, read by
+  `legacy_classroom_audit_log` (migration `0076`), kept indefinitely *(obsolete
+  since 2026-11-05, see the amendment below)*, read by
   an admin with `psql` like `audit_log` (no route for now). Insert-only,
   keyed on classroom's audit id; the actor is remapped best-effort, and
   classroom's own actor id is kept beside it.
+- **Amendment (2026-11-05, [ADR-003 §5](../adr/ADR-003-postgresql-drizzle.md#decision),
+  ruled on the product owner's delegation, ADR-117 §11)**: the table falls under
+  the audit log's purge, each entry deleted three years after its creation.
 
 ### D12 — Language of text written into GitHub
 - (Seed READMEs, sync PR bodies, bot commit messages, revert commits.)
