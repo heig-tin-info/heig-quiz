@@ -93,7 +93,10 @@ import {
   criteriaTable,
   criteriaTotals,
   currentCriterionRows,
+  draftStartsLater,
   editableProjectFields,
+  projectBeforePublication,
+  projectIsLive,
   patchedDraftDates,
   projectFieldRefusal,
   projectListDates,
@@ -228,6 +231,8 @@ const SEEDS: {
   noRepos?: true;
 }[] = [
   { id: "pj-draft", title: "Labo 3 — listes chaînées", state: "draft", start: 7 * D, deadline: 21 * D },
+  // Scheduled (ADR-127): announced to the class, published by the ticker at its start.
+  { id: "pj-scheduled", title: "Labo 4 — fichiers", state: "scheduled", start: 2 * D, deadline: 16 * D },
   // A draft published by hand, its deadline a duration: the list shows no date at all (M3-14a).
   { id: "pj-draft-manual", title: "Labo 5 — arbres", state: "draft", start: 0, deadline: 14 * D, durationMinutes: 14 * 24 * 60 },
   { id: "pj-published", title: "Labo 2 — pointeurs", state: "published", start: -7 * D, deadline: 7 * D },
@@ -354,7 +359,7 @@ function mockRepo(over: Pick<MockRepo, "id" | "enrollmentId" | "student" | "full
  * second repository has an access to revoke, its fifth a pending invitation.
  */
 function seedGroupRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, groups: CopyGroup[], roster: RosterEntry[]): MockRepo[] {
-  if (seed.state === "draft") return [];
+  if (projectBeforePublication(seed.state)) return [];
   const locked = seed.state === "locked";
   return groups.flatMap((g, k) => {
     const creator = roster.find((s) => s.id === g.members[0]);
@@ -417,7 +422,8 @@ function driftedCopy(groups: CopyGroup[]): CopyGroup[] {
  * screenshots never move; a locked project's are all frozen and locked.
  */
 function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster: RosterEntry[]): MockRepo[] {
-  if (seed.state === "draft") return [];
+  // Nobody accepts before publication: a scheduled project has no repository either (ADR-127).
+  if (projectBeforePublication(seed.state)) return [];
   const locked = seed.state === "locked";
   const deadline = Date.parse(project.deadlineAt);
   const repos: MockRepo[] = [];
@@ -642,7 +648,7 @@ function seeded(): MockProject[] {
       name: seed.title,
       slug: name,
       state: seed.state,
-      publishMode: seed.id === "pj-draft" ? "scheduled" : "manual",
+      publishMode: seed.id === "pj-draft" || seed.state === "scheduled" ? "scheduled" : "manual",
       startAt: iso(seed.start),
       deadlineAt: iso(seed.deadline),
       durationMinutes: seed.durationMinutes ?? null,
@@ -665,7 +671,7 @@ function seeded(): MockProject[] {
       deadlineAppliedAt: seed.state === "locked" ? iso(seed.deadline) : null,
       archivedAt: null,
       createdAt: iso(seed.start - 2 * D),
-      accepted: seed.state !== "draft",
+      accepted: seed.state === "published" || seed.state === "locked",
       editable: [],
     };
     const releasedAt = seed.state === "locked" && !flags.unreleased && !seed.groupSet && !seed.unreleased ? iso(-5 * D) : null;
@@ -827,7 +833,7 @@ function consequence(p: MockProject, group: CopyGroup | { id: string; name: stri
 /** A set's move reaches the repositories of the published projects that FOLLOW it (ADR-070 §4): who loses, who joins. */
 provideMoveConsequences((setId, line, from, to) =>
   [...seeded(), ...CREATED]
-    .filter((p) => p.summary.groupSetId === setId && p.summary.state !== "draft" && p.summary.archivedAt === null && p.copy === null)
+    .filter((p) => p.summary.groupSetId === setId && projectIsLive(p.summary.state) && p.summary.archivedAt === null && p.copy === null)
     .flatMap((p) => {
       const groups = copyOf(p);
       const named = (id: string | null) => groups.find((g) => g.id === id);
@@ -1076,6 +1082,7 @@ function detailOf(p: MockProject): ProjectDetail {
     primaryAction: projectPrimaryAction({
       ...readiness,
       archived: p.summary.archivedAt !== null,
+      startsLater: draftStartsLater({ publishMode: p.summary.publishMode, startAt: new Date(p.summary.startAt) }, new Date(now)),
       sourceAhead: p.sync.aheadAt !== null,
       changedAfterRelease: views.filter((r) => r.flags.changedAfterRelease).length,
     }),
@@ -1098,7 +1105,7 @@ function detailOf(p: MockProject): ProjectDetail {
     // Stale only when there was live state to read.
     liveStale: !p.read && readiness.live > 0,
     // A stopped copy the set moved away from since (M3-16b); a confirmed resync owed for two reads (R2).
-    groupsDrifted: drifted && p.summary.state !== "draft",
+    groupsDrifted: drifted && projectIsLive(p.summary.state),
     groupSyncPending: pending,
     // `?staffrepo=1`: the teacher's own test repository (ADR-077), after the students', counted nowhere above.
     rows: flags.staffrepo && !p.summary.groupMode && p.repos[0] ? [...rows, staffTestRow(p, p.repos[0])] : rows,
@@ -1118,7 +1125,7 @@ on("POST", "/app/api/projects/:id/groups/resync", (m, raw) => {
   const p = projectOr404(m.groups!.id!);
   const parsed = ProjectGroupResync.safeParse(raw);
   if (!parsed.success) throw new MockPayload(400, { error: "validation", message: parsed.error.message });
-  if (p.summary.state === "draft") return undefined;
+  if (projectBeforePublication(p.summary.state)) return undefined;
   if (!p.summary.groupMode || p.summary.groupSetId === null) throw refuse(409, "no_group_set", "The project follows no group set");
   if (p.summary.archivedAt !== null) throw refuse(409, "project_archived", "An archived project resyncs nothing");
   if (p.releasedAt !== null) throw refuse(409, "released", "The project is released");
@@ -1172,7 +1179,7 @@ on("PATCH", "/app/api/projects/:id", (m, raw) => {
   if (body.deadlineAt !== undefined && body.deadlineAt !== s.deadlineAt) changed.deadlineAt = new Date(body.deadlineAt);
   if (body.durationMinutes !== undefined && body.durationMinutes !== s.durationMinutes) changed.durationMinutes = body.durationMinutes;
   const dates = patchedDraftDates(
-    { publishMode: s.publishMode, startAt: new Date(s.startAt), deadlineAt: new Date(s.deadlineAt), durationMinutes: s.durationMinutes },
+    { state: s.state, publishMode: s.publishMode, startAt: new Date(s.startAt), deadlineAt: new Date(s.deadlineAt), durationMinutes: s.durationMinutes },
     changed,
     new Date(now),
   );
@@ -1604,10 +1611,9 @@ on("POST", "/app/api/projects/:id/repos/:rid/regrade", (m): ProjectRegradeAccept
   return { repos: 1 };
 });
 
-on("POST", "/app/api/projects/:id/publish", (m) => {
-  const p = projectOr404(m.groups!.id!);
+/** What Publish and Schedule refuse alike (ADR-127 §6): the distribution, the groups. */
+function openingRefusal(p: MockProject): void {
   const s = p.summary;
-  if (s.state !== "draft") throw refuse(409, "not_draft", "Only a draft is published");
   if (s.distribution === null) throw refuse(409, "distribution_missing", "The distribution repository is not built");
   if (s.groupMode && s.groupSetId === null) throw refuse(409, "no_group_set", "A group project needs a group set");
   const left = s.groupMode && s.groupSetId !== null ? unplacedClaimed(s.groupSetId) : [];
@@ -1618,8 +1624,40 @@ on("POST", "/app/api/projects/:id/publish", (m) => {
       .map((x, i) => ({ enrollmentId: `0190d3c4-0000-7000-8000-${String(i + 1).padStart(12, "0")}`, nom: x.nom, prenom: x.prenom }));
     throw refuse(409, "unassigned_students", `${students.length} student(s) in no group`, { students });
   }
+}
+
+/** A draft or a scheduled project published now: its start is now (ADR-127 §9). */
+on("POST", "/app/api/projects/:id/publish", (m) => {
+  const p = projectOr404(m.groups!.id!);
+  const s = p.summary;
+  if (s.state !== "draft" && s.state !== "scheduled") throw refuse(409, "not_draft", "Only a draft is published");
+  openingRefusal(p);
   s.state = "published";
-  if (s.publishMode === "manual") s.startAt = iso(0);
+  s.startAt = iso(0);
+  if (s.durationMinutes !== null) s.deadlineAt = iso(s.durationMinutes * 60_000);
+  s.editable = editableProjectFields(lifeOf(s, p.releasedAt), new Date(now));
+  return s;
+});
+
+/** ADR-127: a draft whose date lies ahead armed; `start_past` otherwise. */
+on("POST", "/app/api/projects/:id/schedule", (m) => {
+  const p = projectOr404(m.groups!.id!);
+  const s = p.summary;
+  if (s.state !== "draft") throw refuse(409, "not_draft", "Only a draft is scheduled");
+  openingRefusal(p);
+  if (!draftStartsLater({ publishMode: s.publishMode, startAt: new Date(s.startAt) }, new Date(now))) {
+    throw refuse(422, "start_past", "The project has no start ahead");
+  }
+  s.state = "scheduled";
+  s.editable = editableProjectFields(lifeOf(s, p.releasedAt), new Date(now));
+  return s;
+});
+
+on("POST", "/app/api/projects/:id/unschedule", (m) => {
+  const p = projectOr404(m.groups!.id!);
+  const s = p.summary;
+  if (s.state !== "scheduled") throw refuse(409, "not_scheduled", "The project is not scheduled");
+  s.state = "draft";
   s.editable = editableProjectFields(lifeOf(s, p.releasedAt), new Date(now));
   return s;
 });

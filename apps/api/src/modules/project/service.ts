@@ -82,8 +82,10 @@ export {
   deleteProject,
   patchProject,
   publishProject,
+  scheduleProject,
   setProjectArchived,
   setWorkMode,
+  unscheduleProject,
 } from "./lifecycle.js";
 export { listSources, sourceDetail } from "./sources.js";
 export { studentProject, studentProjectCards, studentResendInvitation } from "./studentView.js";

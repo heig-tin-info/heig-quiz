@@ -25,7 +25,7 @@ import {
   type OutboundNotificationKind,
   type TeamsNotificationKind,
 } from "@quiz/contracts";
-import type { Locale } from "@quiz/domain";
+import { SCHOOL_TIME_ZONE, type Locale } from "@quiz/domain";
 import { escapeHtml } from "@quiz/docrender/highlight";
 
 /**
@@ -100,6 +100,10 @@ const en = {
   "pool_unpublished.action": "Open the pools",
   // The project kinds (F-NOTIF-13, M3-09b): the project's name and counts,
   // never a score nor a student's name.
+  "project_scheduled.subject": "Project announced: {projectTitle}",
+  "project_scheduled.body": "The project “{projectTitle}” opens on {startAt}. You can accept it from then on.",
+  "project_scheduled.unlinked.body": "The project “{projectTitle}” opens on {startAt}. Link your GitHub account before then, to accept it once it opens.",
+  "project_scheduled.action": "Open the project",
   "project_published.subject": "New project: {projectTitle}",
   "project_published.body": "The project “{projectTitle}” is published in your classroom. Accept it to get your repository.",
   "project_published.unlinked.body": "The project “{projectTitle}” is published in your classroom. Link your GitHub account, then accept it to get your repository.",
@@ -211,6 +215,8 @@ const en = {
   "activity.results_updated.description": "Your grade of a released evaluation changes",
   "activity.results_updated.template": "Results updated: {evaluationTitle}",
   // The project kinds (F-NOTIF-13), declared in the one bump of M3-09b (2.2.0).
+  "activity.project_scheduled.description": "A project of your classroom is announced, with its opening date",
+  "activity.project_scheduled.template": "{projectTitle} opens on {startAt}",
   "activity.project_published.description": "A project is published in your classroom",
   "activity.project_published.template": "New project: {projectTitle}",
   "activity.project_deadline_reminder.description": "The deadline of a project is within 24 hours",
@@ -288,6 +294,10 @@ const fr: Record<Key, string> = {
   "pool_unpublished.deleted.subject": "La banque {poolName} a été supprimée",
   "pool_unpublished.deleted.body": "Le propriétaire de la banque « {poolName} » l'a supprimée : votre abonnement est terminé.",
   "pool_unpublished.action": "Ouvrir les banques",
+  "project_scheduled.subject": "Projet annoncé : {projectTitle}",
+  "project_scheduled.body": "Le projet « {projectTitle} » ouvre le {startAt}. Vous pourrez l'accepter dès ce moment.",
+  "project_scheduled.unlinked.body": "Le projet « {projectTitle} » ouvre le {startAt}. Liez votre compte GitHub d'ici là, pour l'accepter dès son ouverture.",
+  "project_scheduled.action": "Ouvrir le projet",
   "project_published.subject": "Nouveau projet : {projectTitle}",
   "project_published.body": "Le projet « {projectTitle} » est publié dans votre classe. Acceptez-le pour obtenir votre dépôt.",
   "project_published.unlinked.body": "Le projet « {projectTitle} » est publié dans votre classe. Liez votre compte GitHub, puis acceptez-le pour obtenir votre dépôt.",
@@ -387,6 +397,8 @@ const fr: Record<Key, string> = {
   "activity.deadline_approaching.template": "Se termine dans les 24 heures : {evaluationTitle}",
   "activity.results_updated.description": "Votre note d'une évaluation publiée change",
   "activity.results_updated.template": "Résultats mis à jour : {evaluationTitle}",
+  "activity.project_scheduled.description": "Un projet de votre classe est annoncé, avec sa date d'ouverture",
+  "activity.project_scheduled.template": "{projectTitle} ouvre le {startAt}",
   "activity.project_published.description": "Un projet est publié dans votre classe",
   "activity.project_published.template": "Nouveau projet : {projectTitle}",
   "activity.project_deadline_reminder.description": "L'échéance d'un projet tombe dans les 24 heures",
@@ -430,8 +442,26 @@ function oneLine(s: string): string {
   return s.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
 }
 
+/**
+ * An instant as the school reads it (`SCHOOL_TIME_ZONE`), in digits only —
+ * `06.11.2026 16:30` in French, `06/11/2026, 16:30` in English: a Teams
+ * template parameter is never a translated word.
+ */
+function schoolDateTime(at: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale === "fr" ? "fr-CH" : "en-GB", {
+    timeZone: SCHOOL_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(at));
+}
+
 /** The values a kind's sentences read, and the page its link opens. */
-function varsOf(payload: OutboundPayload, t: Record<Key, string>): Record<string, string> {
+function varsOf(payload: OutboundPayload, locale: Locale): Record<string, string> {
+  const t = DICTS[locale];
   switch (payload.kind) {
     case "results_released":
       return { evaluationTitle: payload.evaluationTitle };
@@ -461,6 +491,8 @@ function varsOf(payload: OutboundPayload, t: Record<Key, string>): Record<string
       return { poolName: payload.poolName, questionName: payload.questionName };
     case "pool_unpublished":
       return { poolName: payload.poolName, courseName: payload.courseName ?? "" };
+    case "project_scheduled":
+      return { projectTitle: payload.projectTitle, startAt: schoolDateTime(payload.startAt, locale) };
     case "project_published":
     case "project_deadline_reminder":
     case "project_repo_invited":
@@ -531,6 +563,7 @@ export function notificationPath(payload: OutboundPayload): string {
     case "system_alert":
       return "/admin?tab=system";
     // The project: the staff's page, or the student's view of it (M3-13).
+    case "project_scheduled":
     case "project_published":
     case "project_deadline_reminder":
     case "project_repo_invited":
@@ -590,7 +623,7 @@ export function renderNotification(
 ): RenderedNotification {
   const t = DICTS[locale];
   const kind: OutboundNotificationKind = payload.kind;
-  const vars: Record<string, string> = { ...varsOf(payload, t), host: hostOf(webUrl) };
+  const vars: Record<string, string> = { ...varsOf(payload, locale), host: hostOf(webUrl) };
   const mail = composeMail(t, {
     subject: sentenceKey(payload, "subject"),
     body: sentenceKey(payload, "body"),
@@ -684,7 +717,7 @@ export function placeholders(template: string): string[] {
 export function activityParameters(
   payload: Extract<NotificationPayload, { kind: TeamsNotificationKind }>,
 ): Record<string, string> {
-  const vars = varsOf(payload, en);
+  const vars = varsOf(payload, "en");
   return Object.fromEntries(
     placeholders(en[`activity.${payload.kind}.template`]).map((name) => [name, oneLine(vars[name] ?? "")]),
   );

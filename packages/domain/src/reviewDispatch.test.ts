@@ -92,10 +92,10 @@ describe("the checkpoints' rules (M3-05b)", () => {
     expect(isVoidCheckpoint(deadline, deadline)).toBe(true);
   });
 
-  it("fires at its date, once, never void, never on a draft, a project graded none or archived", () => {
+  it("fires at its date, once, never void, never on a draft, a scheduled project, a project graded none or archived", () => {
     const due = at("2026-10-05T08:00:00Z");
     const later = at("2026-10-05T08:00:01Z");
-    const project = { deadlineAt: deadline, state: "published", gradingMode: "auto", archivedAt: null };
+    const project = { deadlineAt: deadline, state: "published" as const, gradingMode: "auto", archivedAt: null };
     const open = { dueAt: due, dispatchedAt: null };
     expect(checkpointPass(open, project, at("2026-10-05T07:59:59Z"))).toBeNull();
     expect(checkpointPass(open, project, later)).toBe("dispatch");
@@ -103,6 +103,8 @@ describe("the checkpoints' rules (M3-05b)", () => {
     expect(checkpointPass({ dueAt: due, dispatchedAt: later }, project, later)).toBeNull();
     expect(checkpointPass(open, { ...project, deadlineAt: due }, later)).toBeNull();
     expect(checkpointPass(open, { ...project, state: "draft" }, later)).toBeNull();
+    expect(checkpointPass(open, { ...project, state: "scheduled" }, later)).toBeNull();
+    expect(checkpointPass(open, { ...project, state: "locked" }, later)).toBe("dispatch");
     expect(checkpointPass(open, { ...project, gradingMode: "none" }, later)).toBeNull();
     expect(checkpointPass(open, { ...project, archivedAt: later }, later)).toBeNull();
   });

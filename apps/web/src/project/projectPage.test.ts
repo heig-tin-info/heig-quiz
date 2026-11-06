@@ -52,9 +52,12 @@ const statusKey = (p: Parameters<typeof projectStatus>[0]) => projectStatus(p).k
 describe("the header's sentence", () => {
   it("follows the state, and names Release and Sync as text when the server asks for them", () => {
     expect(statusKey(makeProject({ state: "draft", primaryAction: "publish" }))).toBe("project.status.draft");
-    expect(statusKey(makeProject({ state: "draft", publishMode: "scheduled", primaryAction: "publish" }))).toBe(
-      "project.status.scheduled",
-    );
+    // ADR-127: a draft holding a date to come says Schedule; a date past reads Publish, the plain draft's sentence.
+    const dated = makeProject({ state: "draft", publishMode: "scheduled", primaryAction: "schedule" });
+    expect(projectStatus(dated)).toEqual({ key: "project.status.draftDated", date: dated.startAt });
+    expect(statusKey(makeProject({ state: "draft", publishMode: "scheduled", primaryAction: "publish" }))).toBe("project.status.draft");
+    const scheduled = makeProject({ state: "scheduled", publishMode: "scheduled", primaryAction: "none" });
+    expect(projectStatus(scheduled)).toEqual({ key: "project.status.scheduled", date: scheduled.startAt });
     expect(statusKey(makeProject())).toBe("project.status.open");
     expect(statusKey(makeProject({ state: "locked", primaryAction: "release" }))).toBe("project.status.release");
     expect(statusKey(makeProject({ primaryAction: "sync" }))).toBe("project.status.sync");
@@ -83,7 +86,7 @@ describe("the header's sentence", () => {
 
   it("names the date the sentence is about: the start, the release, else the deadline", () => {
     const start = new Date(Date.now() + 86_400_000).toISOString();
-    expect(projectStatus(makeProject({ state: "draft", publishMode: "scheduled", startAt: start })).date).toBe(start);
+    expect(projectStatus(makeProject({ state: "scheduled", publishMode: "scheduled", startAt: start })).date).toBe(start);
     expect(projectStatus(makeProject({ state: "locked", releasedAt: PAST, gradingMode: "none" })).date).toBe(PAST);
     expect(projectStatus(makeProject()).date).toBe(AHEAD);
   });
@@ -634,6 +637,13 @@ describe("the lifecycle rail's steps", () => {
     expect(steps[0]).toEqual({ kind: "published", at: planned.startAt, done: false });
     expect(steps.find((s) => s.kind === "deadline")).toEqual({ kind: "deadline", at: planned.deadlineAt, done: false });
     expect(dated(steps)).toEqual([["mid", true]]);
+
+    // A scheduled project (ADR-127) shows its planned dates; Published is not done until the ticker publishes it.
+    const scheduled = makeProject({ state: "scheduled", publishMode: "scheduled", durationMinutes: null });
+    const armed = railSteps(scheduled, [relative]);
+    expect(armed[0]).toEqual({ kind: "published", at: scheduled.startAt, done: false });
+    expect(armed.find((s) => s.kind === "deadline")).toEqual({ kind: "deadline", at: scheduled.deadlineAt, done: false });
+    expect(railSteps(makeProject(), [])[0]).toMatchObject({ kind: "published", done: true });
   });
 
   it("goes back to an open freeze when the deadline is reopened, and says the later own deadlines", () => {

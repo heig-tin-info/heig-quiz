@@ -394,13 +394,17 @@ export type AuditAction =
    * M3-02), subject the project. `create`: `payload.slug`, `source`,
    * `distribution` (full names); `update`: the fields sent; `publish`:
    * `payload.startAt`, `deadlineAt` — `auto_publish` the same, by the
-   * ticker (M3-05); `delete`: `payload.name`, `slug`, `source`,
-   * `distribution`, `receipts` (the push receipts purged) — no repository
-   * is ever deleted on GitHub; `archive`, `unarchive`.
+   * ticker (M3-05); `schedule` (ADR-127): `payload.startAt`, `deadlineAt`,
+   * the draft armed; `unschedule`: back to a draft, no payload; `delete`:
+   * `payload.name`, `slug`, `source`, `distribution`, `receipts` (the push
+   * receipts purged) — no repository is ever deleted on GitHub; `archive`,
+   * `unarchive`.
    */
   | "project.create"
   | "project.update"
   | "project.delete"
+  | "project.schedule"
+  | "project.unschedule"
   | "project.publish"
   | "project.auto_publish"
   | "project.archive"

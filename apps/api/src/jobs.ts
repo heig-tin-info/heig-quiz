@@ -101,6 +101,15 @@ export const PROJECT_DISPATCH_QUEUE = "project.dispatch";
 export const PROJECT_GROUP_SYNC_QUEUE = "group.sync";
 
 /**
+ * The reload of a project's `criteria.yml` once the ticker published it
+ * (ADR-127 §12): `{ projectId }`, as a publication by hand reloads it in its
+ * request (`refreshCriteria`, best effort: a refused file keeps the last
+ * snapshot). `standard`, no dedupe, no retry: two jobs of one project store
+ * the same snapshot.
+ */
+export const PROJECT_CRITERIA_QUEUE = "project.criteria";
+
+/**
  * The pass of a source's sync over one project's repositories (F-PROJ-12,
  * merge task M3-07): `{ projectId, lease }`, sent by the staff's request once
  * it holds the project's `sync_job_at` lease and has updated the

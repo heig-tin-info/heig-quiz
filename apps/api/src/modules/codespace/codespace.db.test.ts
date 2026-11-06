@@ -574,6 +574,27 @@ describe("POST /app/api/projects/:id/workspace/start", () => {
     expect((await setMode(lab.id, "free")).statusCode).toBe(200);
   });
 
+  it("says nothing of a scheduled project, its mode included: the start and the .seb are 404s until it opens (ADR-127, N-SEC-20)", async () => {
+    const student = await newStudent();
+    const room = await connectedClassroom([student]);
+    const exam = await project(room, "Scheduled SEB", { publish: false });
+    await setMode(exam.id, "online_seb");
+    const lab = await project(room, "Scheduled online", { publish: false });
+    await setMode(lab.id, "online");
+    for (const id of [exam.id, lab.id]) await server.app.db.update(projects).set({ state: "scheduled" }).where(eq(projects.id, id));
+    for (const id of [exam.id, lab.id]) {
+      const res = await start(id, student.headers);
+      expect(res.statusCode, res.body).toBe(404);
+      expect(res.body).not.toMatch(/online|seb_required|not_accepted/);
+    }
+    expect((await call("GET", `/app/api/projects/${exam.id}/seb`, student.headers)).statusCode).toBe(404);
+    // Published, the same routes answer as for any open project.
+    for (const id of [exam.id, lab.id]) await server.app.db.update(projects).set({ state: "published" }).where(eq(projects.id, id));
+    expect((await start(exam.id, student.headers)).json()).toEqual({ error: "seb_required" });
+    expect((await start(lab.id, student.headers)).json()).toEqual({ error: "not_accepted" });
+    expect((await call("GET", `/app/api/projects/${exam.id}/seb`, student.headers)).statusCode).toBe(200);
+  });
+
   it("answers each refusal the project page words: not online, SEB only, not accepted, closed", async () => {
     const student = await newStudent();
     const room = await connectedClassroom([student]);

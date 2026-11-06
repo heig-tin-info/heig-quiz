@@ -173,6 +173,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-100 — GitHub organizations are granted to courses: who may connect, what the staff may read](ADR-100-organisations-github-accordees-aux-cours.md)
 - [ADR-106 — Grading a project by criteria on the platform: the criteria as data, the evidence run in `apps/runner`, an LLM pass, a validated report](ADR-106-notation-des-projets-par-criteres.md)
 - [ADR-119 — Criteria v3: the CI produces the evidence, the platform publishes the schemas](ADR-119-criteres-v3-preuves-de-la-ci.md) (proposed)
+- [ADR-127 — A project's `scheduled` state: armed by Schedule, announced, opened by the ticker](ADR-127-etat-planifie-des-projets.md)
 
 ## Maintaining a record
 

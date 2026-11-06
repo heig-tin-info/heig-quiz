@@ -3,6 +3,7 @@ import { GitCompareArrows, RefreshCw, UsersRound } from "lucide-react";
 import { useState } from "react";
 
 import { ProjectGroupResync, type ProjectDetail, type ProjectPatch, type ProjectSummary } from "@quiz/contracts";
+import { projectBeforePublication } from "@quiz/domain";
 
 import { api, refusedWith } from "../api";
 import { AppLink } from "../AppLink";
@@ -140,8 +141,8 @@ export function GroupSetBody({
           >
             {editable ? t("project.groupSet.open") : setLabel(set, t)}
           </AppLink>
-          {/* A draft's copy follows by construction; a published one says whether it still does. */}
-          {project.state === "draft" ? null : (
+          {/* A draft's copy, and a scheduled project's, follows by construction (ADR-127); a published one says whether it still does. */}
+          {projectBeforePublication(project.state) ? null : (
             <p className="mt-0.5 text-[13px] text-fg-muted">
               {t(use?.follows === false ? "project.groupSet.stopped" : "project.groupSet.follows")}
             </p>

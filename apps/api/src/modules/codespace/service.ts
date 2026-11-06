@@ -46,7 +46,7 @@ import {
   type ServiceTokenClaims,
   type TeacherCodespaceGrant,
 } from "@quiz/contracts";
-import { isOnlineMode, portalDeadline, quotaHolder, requestBinding, signHs256, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
+import { isOnlineMode, portalDeadline, projectIsLive, quotaHolder, requestBinding, signHs256, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -381,13 +381,19 @@ export async function projectSessions(
  * the project's student view (`findStudentProjectView`, read as the
  * caller's own portal would: published, not archived) with a claimed seat
  * of the caller's (a staff seat testing it included, ADR-077), in
- * `online_seb`, of a classroom not archived — checked when the `.seb` is
+ * `online_seb`, open (`projectIsLive`: a scheduled project serves no `.seb`
+ * and says nothing of its mode, ADR-127, N-SEC-20), of a classroom not archived — checked when the `.seb` is
  * downloaded and again when SEB trades its ticket, where the caller is the
  * ticket's user (`callerFor(user, null)`: no Super Powers). Null otherwise.
  */
 export async function sebProjectSeat(db: Db, caller: Caller, projectId: string): Promise<{ id: string } | null> {
   const scope = await findStudentProjectView(db, caller, PORTAL, projectId);
-  const ok = scope !== null && scope.seat !== null && scope.project.workMode === "online_seb" && scope.room.archivedAt === null;
+  const ok =
+    scope !== null &&
+    scope.seat !== null &&
+    projectIsLive(scope.project.state) &&
+    scope.project.workMode === "online_seb" &&
+    scope.room.archivedAt === null;
   return ok ? { id: scope.project.id } : null;
 }
 

@@ -29,6 +29,7 @@ const STATUS: Record<Code, number> = {
   deadline_past: 422,
   start_past: 422,
   not_draft: 409,
+  not_scheduled: 409,
   publish_mode_frozen: 409,
   strategy_frozen: 409,
   unassigned_students: 409,

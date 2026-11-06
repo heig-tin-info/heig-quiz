@@ -223,7 +223,7 @@ describe("ActivitiesPage", () => {
 
   it("narrows the current tab to what is scheduled, of either kind, the scheduled project included (#787)", async () => {
     const user = userEvent.setup();
-    const planned: ProjectActivitySummary = { ...LAB, id: id("project", 4), title: "Labo 4 — planned", state: "draft", phase: "scheduled" };
+    const planned: ProjectActivitySummary = { ...LAB, id: id("project", 4), title: "Labo 4 — planned", state: "scheduled", phase: "scheduled" };
     render([...ALL, LAB, LAB3, planned]);
     // A scheduled project is planned: it counts under the current tab, not under Drafts.
     expect(await screen.findByRole("tab", { name: /Drafts\s*1/ })).toBeInTheDocument();

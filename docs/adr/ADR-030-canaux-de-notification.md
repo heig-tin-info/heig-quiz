@@ -17,6 +17,9 @@ and the original section numbers; where this record is silent on a detail (an
 exact log line, a migration step) the archive still describes the
 implementation, and this record wins wherever both speak.
 
+Amended 2026-11-06 by [ADR-127](ADR-127-etat-planifie-des-projets.md)
+(rule 12 only): a new kind, `project_scheduled`, its row in the table.
+
 Amended 2026-10-28 (rule 25 only): an e-mail no longer goes to the login
 address (`users.email`), which Switch edu-ID lets the person choose and is
 often a private mailbox, but to the account's notification address: the
@@ -156,6 +159,7 @@ ported independently, and its `grade.final` mail on the final review is dropped
 | `pool_shared`, `pool_ownership` | Existing sharing/ownership events for the affected account | On |
 | `system_alert` | Admin health failure, continued failure after a day, or recovery; not folded; ADR-055 | E-mail on; Teams forbidden |
 | `impersonation_ended` (2026-10-15, ADR-034 §6) | A session opened in the student's name ended, whatever ended it; the student; the role and two times, never who; not folded | E-mail and Teams forbidden |
+| `project_scheduled` (2026-11-06, ADR-127) | Schedule committed, once per project ever (`scheduled_announced_at`, as rule 13's marker): a cancelled and renewed schedule or a moved date tells nobody again; the classroom's claimed student seats, the opening date carried; not folded | Off |
 | `project_published` (2026-10-04, M3-09b) | `publishProject` committed, by hand or by the ticker (once: a draft publishes once); the classroom's claimed student seats; not folded | Off |
 | `project_deadline_reminder` (2026-10-04, M3-09b) | 24 h before the student's EFFECTIVE deadline, claimed and sent in one tick (rule 19); claimed student seats | On |
 | `project_repo_invited` (2026-10-04, M3-09b) | Accept provisioned the repository in THIS request and GitHub left the invitation pending; the student; never on an idempotent repeat nor a resend | On |

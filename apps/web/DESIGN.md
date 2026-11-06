@@ -2042,7 +2042,8 @@ be understood.
 ## The project page (staff)
 
 `/projects/:id` for the course's staff (F-PROJ-13), in two faces: before
-publication one configures, after it one watches.
+publication one configures, after it one watches. A scheduled project
+(ADR-127) is still before publication: the draft's face.
 
 A **draft is a form** (`ProjectDraftForm`, F-PROJ-01, F-PROJ-03): under the
 header, sections in the order a teacher decides, each a `Card` under a
@@ -2052,12 +2053,17 @@ project holds them all). *Work handed out*: facts only (source, distribution
 or "being built", branches, history, whether the source moved on), fixed at
 creation — to change them, delete the draft and create it again; a missing
 distribution repository is a warning saying so. *Publication and deadline*:
-the three things a novice reads — manual or scheduled, and the dates. A
-scheduled draft's start and deadline are written TOGETHER, once both are
-filled (switching the mode writes nothing); a manual one's deadline is a date
-or a number of days from the publication (switching the kind writes nothing).
-What the server refuses (`start_past`, `deadline_past`) is said under the
-field it concerns and the pair stays on screen; the browser's zone is named
+the three things a novice reads — the start choice (now or at a date, the
+`publishMode` column behind it), and the dates. The choice names the
+header's one button and its sub-text says what that button does: Publish
+for now, Schedule for a date to come (a date already past reads Publish).
+A dated draft's start and deadline are written TOGETHER, once both are
+filled (switching the choice writes nothing); a draft opening now has a
+deadline that is a date or a number of days from the publication (switching
+the kind writes nothing).
+What the server refuses (`start_past`, `deadline_past`), to a patch or to
+the header's Schedule or Publish, is said under the field it concerns and
+the pair stays on screen; the browser's zone is named
 when it is not the school's. *Groups*: a switch (written at once; off clears
 the set, no confirmation) over the set picker, held with a sentence while the
 workspace mode is online. *Advanced options*: one folded `Disclosure` (a `zinc`
@@ -2073,6 +2079,13 @@ checkpoints' dates. No tiles,
 no table of repositories, no live workspace: nobody can accept a draft
 (ADR-077 §1). With no Source tile, **Sync** (the source is ahead) is a
 secondary button of the header, beside Publish.
+
+A **scheduled project** keeps the draft's form, autosaved, the start choice
+held on "at a date". It has NO primary button: the header's sentence says
+it is announced and when it opens, and its two moves are secondary buttons
+of the header, Cancel schedule (back to a draft, reversible, nothing
+confirmed) and Publish now (the start becomes now). The rail shows its
+planned dates, Published not done until the ticker publishes it.
 
 A **published or locked project reads as a dashboard in tabs** (F-PROJ-13 as
 amended 2026-10-13), the header above them and the active tab in the URL

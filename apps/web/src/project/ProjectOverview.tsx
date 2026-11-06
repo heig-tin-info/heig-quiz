@@ -300,7 +300,8 @@ function SourceTile({
           ],
           [t("project.branches"), <span key="b" className="font-mono text-xs">{project.branches.join(", ")}</span>],
           [t("project.sourceStrategy"), t(`project.sourceStrategy.${project.sourceStrategy}`)],
-          [t("project.publishMode"), t(`project.publishMode.${project.publishMode}`)],
+          // When it opened (ADR-127: the start choice is a draft's; a published project has its date).
+          [t("project.startChoice"), isoDateTime(project.startAt)],
           [
             t("project.gradingMode"),
             t(`project.gradingMode.${project.gradingMode}`),

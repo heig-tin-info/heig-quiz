@@ -2,7 +2,7 @@
  * HTTP surface of the `project` module, the staff's lifecycle (spec 05
  * §5.11, merge task M3-02): a classroom's projects and their creation, the
  * organization's repository browser, one project's summary, patch, delete,
- * publish, archive and unarchive. Every body and payload is a schema of
+ * schedule, unschedule (ADR-127), publish, archive and unarchive. Every body and payload is a schema of
  * `packages/contracts/src/project.ts` (invariant 7).
  *
  * From M3-08a, the staff's reads: the project page (`GET
@@ -280,6 +280,28 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     }),
   );
 
+  /**
+   * ADR-127: Schedule arms a draft (announced to the class, published by the
+   * ticker at its start); Cancel the schedule takes it back to a draft. The
+   * project's staff, like Publish.
+   */
+  app.post(
+    "/app/api/projects/:id/schedule",
+    session,
+    teacher(onProject, async ({ req, now, scope }) =>
+      service.projectSummary(app.db, await service.scheduleProject(app.db, scope.project.id, now, actorOf(req)), now),
+    ),
+  );
+
+  app.post(
+    "/app/api/projects/:id/unschedule",
+    session,
+    teacher(onProject, async ({ req, now, scope }) =>
+      service.projectSummary(app.db, await service.unscheduleProject(app.db, scope.project.id, actorOf(req)), now),
+    ),
+  );
+
+  /** F-PROJ-03 (ADR-127 §9): a draft or a scheduled project published now; its criteria reloaded (§12). */
   app.post(
     "/app/api/projects/:id/publish",
     session,

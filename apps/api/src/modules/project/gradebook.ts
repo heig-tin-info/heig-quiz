@@ -15,12 +15,13 @@
  * A student who never accepted has no repository: no score here — the
  * teacher's own mark (`gradebook_marks`) fills the cell (spec 06 no. 48).
  */
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 
 import type { FinalScoreSource } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { projects } from "../../db/schema.js";
+import { liveProject } from "../guards.js";
 import { repoScores, releasableScore } from "./detail.js";
 import { scoreFacts } from "./scores.js";
 import { seatRepo, seatRepos } from "./groupRepos.js";
@@ -37,7 +38,7 @@ export function gradebookProjects(db: Db, classroomId: string): Promise<ProjectR
     .select()
     .from(projects)
     .where(
-      and(eq(projects.classroomId, classroomId), ne(projects.state, "draft"), ne(projects.gradingMode, "none"), isNull(projects.archivedAt)),
+      and(eq(projects.classroomId, classroomId), liveProject(), ne(projects.gradingMode, "none")),
     );
 }
 

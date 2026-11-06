@@ -298,7 +298,10 @@ it had to fall back on the web form.
 - **Manual publication only.** `create_project` takes `ProjectCreate`
   without `publishMode` and `startAt`: the project is a `draft` the teacher
   publishes from the web app. A `scheduled` one would be published by the
-  ticker and its class notified with no teacher in the loop. Its deadline is
+  ticker and its class notified with no teacher in the loop (obsolete since
+  [ADR-127](ADR-127-etat-planifie-des-projets.md), 2026-11-06: no draft is
+  published by the ticker, only one a teacher scheduled; the tool stays
+  manual-only). Its deadline is
   `deadlineAt` or `durationMinutes` from the publication.
 - **A draft with an effect on GitHub.** The creation already builds the
   distribution repository in the classroom's organization (ADR-062), never

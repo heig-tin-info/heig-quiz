@@ -164,7 +164,8 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
           <>
             <div data-coach="sproj.deadline">
               <MetaLine>
-                <StatusBadge status={projectStatus(project.status, t)} />
+                {/* Not started (a scheduled project too, ADR-127): the start says it, as on the card, and the section below. */}
+                {kind === "notStarted" ? null : <StatusBadge status={projectStatus(project.status, t)} />}
                 <ProjectTimingMeta project={project} now={now} />
                 {live && !notStarted(project, now) ? (
                   <ProjectCommitMeta work={live} evaluated={Date.parse(project.deadlineAt) <= now || live.locked} named />

@@ -177,7 +177,7 @@ const joinable = (row: RepoRow | null | undefined): boolean => row?.provisionSta
  * dead, it is the answer — a student's own repository whose access was
  * revoked (an unclaim, an e-mail change) is joined again. Then the
  * refusals, all `409`: the project's (`acceptRefusal` of `@quiz/domain`:
- * `not_started`, `deadline_passed`, `distribution_missing`), `no_group` (a
+ * `not_started` — also a project not published yet, ADR-127 —, `deadline_passed`, `distribution_missing`), `no_group` (a
  * group project's copy places the student nowhere), `github_not_linked`,
  * `app_not_installed`, `github_account_stale`, `provision_in_progress`,
  * `repo_name_taken`; GitHub failing (its login lookup included) is `502
@@ -185,6 +185,9 @@ const joinable = (row: RepoRow | null | undefined): boolean => row?.provisionSta
  */
 export async function acceptProject(db: Db, config: AppConfig, input: AcceptInput): Promise<ProjectAcceptance> {
   const { project, userId, now } = input;
+  // Not open yet — its start ahead, or a scheduled project (ADR-127) —: refused before anything, a group's
+  // `no_group` included. No repository can exist then, so no idempotent answer is skipped.
+  if (acceptRefusal(project, now) === "not_started") throw new ProjectError("not_started", "The project is not open yet");
   // The repository the seat reads: its own, or (a group project) its copy group's (`seatRepo`).
   const seat = await seatRepo(db, project, input.enrollmentId);
   if (project.groupMode && seat?.groupId === null && isLiveIndividualRepo(seat)) return acceptance(seat);

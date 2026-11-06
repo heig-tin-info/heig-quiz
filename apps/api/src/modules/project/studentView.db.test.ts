@@ -836,6 +836,84 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
     }
   });
 
+  it("lists a scheduled project under Upcoming with the bare card, refuses its Accept, and lets nothing of its repositories, its mode or its set out (ADR-127)", async () => {
+    const messages: BusMessage[] = [];
+    const unsubscribe = subscribe((m) => messages.push(m));
+    try {
+      const student = await newStudent({ tag: "sched" });
+      const room = await connectedClassroom([student]);
+      // A closed set the project follows: before the opening, no student sees it (ADR-070 §8, ADR-127 §8).
+      const created = await call("POST", `/app/api/classrooms/${room.classroomId}/group-sets`, teacher.headers, { name: "Hidden-pairs-set" });
+      expect(created.statusCode, created.body).toBe(201);
+      const setId: string = created.json().set.id;
+      const start = at(NOW, 2 * DAY);
+      const lab = await project(room, "Announced lab", {
+        publish: false,
+        body: { publishMode: "scheduled", startAt: start.toISOString(), groupMode: true, groupSetId: setId },
+      });
+      // Scheduled with the set as it is (its groups are the staff's business until the opening).
+      await setProject(lab.id, { state: "scheduled", gradingMode: "criteria", workMode: "online" });
+
+      const sets = async () => {
+        const res = await call("GET", `/app/api/classrooms/${room.classroomId}/group-sets/student`, student.headers);
+        studentBodies.push(res.body);
+        expect(res.statusCode, res.body).toBe(200);
+        return (res.json().sets as { set: { id: string } }[]).map((x) => x.set.id);
+      };
+      const from = studentBodies.length;
+      const h = await home(student.headers);
+      expect(titles(h.open)).toEqual([]);
+      expect(projectCards(h.upcoming)).toEqual([
+        {
+          kind: "project",
+          id: lab.id,
+          title: "Announced lab",
+          classroomId: room.classroomId,
+          classroomName: expect.any(String),
+          courseCode: expect.any(String),
+          startAt: start.toISOString(),
+          deadlineAt: DEADLINE,
+          status: "to_accept",
+          invitation: null,
+          githubLinked: true,
+          repoFullName: null,
+          repoUrl: null,
+          work: null,
+        },
+      ]);
+      const page = await classroomPage(room.classroomId, student.headers);
+      expect(titles(page.activities.upcoming)).toEqual(["Announced lab"]);
+      expect(page.hasGroups).toBe(false);
+      expect(await view(lab.id, student.headers)).toMatchObject({ repo: null, workspace: null, criteria: null, status: "to_accept" });
+      expect(await sets()).toEqual([]);
+      const refused = await call("POST", `/app/api/student/projects/${lab.id}/accept`, student.headers);
+      studentBodies.push(refused.body);
+      expect([refused.statusCode, refused.json().error]).toEqual([409, "not_started"]);
+      // Its start come, the ticker not yet by: listed by its dates, still refused.
+      server.clock.set(at(start.toISOString(), MINUTE));
+      expect(titles((await home(student.headers)).open)).toEqual(["Announced lab"]);
+      const late = await call("POST", `/app/api/student/projects/${lab.id}/accept`, student.headers);
+      studentBodies.push(late.body);
+      expect([late.statusCode, late.json().error]).toEqual([409, "not_started"]);
+      expect(await sets()).toEqual([]);
+
+      const forbidden = ["starter", "squashed", "Hidden-pairs-set", setId, "online", "groupSetId", "groupMode", "workMode"];
+      for (const body of studentBodies.slice(from)) {
+        for (const secret of forbidden) expect(body, secret).not.toContain(secret);
+      }
+      for (const m of messages) {
+        if (m.kind === "end" || !m.topics.some((t) => t === `user:${student.id}` || t === `classroom:${room.classroomId}`)) continue;
+        for (const secret of ["starter", "squashed", "Hidden-pairs-set", setId]) expect(JSON.stringify(m), secret).not.toContain(secret);
+      }
+
+      // Published: the set the project names now reaches its students (the rule, not this test, decides).
+      await setProject(lab.id, { state: "published" });
+      expect(await sets()).toEqual([setId]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it("gives a student no total of a validated criteria repository before the release, then the criteria total, never a row's source (ADR-106 §7, §8)", async () => {
     const student = await newStudent({ tag: "crit" });
     const room = await connectedClassroom([student]);

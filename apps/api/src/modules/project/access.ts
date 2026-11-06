@@ -56,6 +56,7 @@ import { enrollments, githubAccounts, projectGroupMembers, projectRepoAccess, pr
 import { githubApp, githubStatus, installationClient, ownerRepo, unless404 } from "../../github/app.js";
 import { currentLogin, inviteCollaborator, isInvitationRefused, revokeCollaborator } from "../../github/collaborators.js";
 import { projectInstallation } from "../github/service.js";
+import { liveProject } from "../guards.js";
 import { ProjectError } from "./errors.js";
 import { seatRepos, type RepoMember } from "./groupRepos.js";
 import { provisioningNow, type RepoRow } from "./repos.js";
@@ -316,7 +317,7 @@ export async function inviteOnGithubLink(db: Db, config: AppConfig, userId: stri
     .select({ project: projects, enrollmentId: enrollments.id })
     .from(enrollments)
     .innerJoin(projects, and(eq(projects.classroomId, enrollments.classroomId), eq(projects.groupMode, true)))
-    .where(and(eq(enrollments.userId, userId), eq(enrollments.staff, false), ne(projects.state, "draft"), isNull(projects.archivedAt)));
+    .where(and(eq(enrollments.userId, userId), eq(enrollments.staff, false), liveProject()));
   const seats = await seatRepos(
     db,
     rows.map((r) => r.project),

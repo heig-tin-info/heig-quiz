@@ -492,11 +492,11 @@ describe("the project page (F-PROJ-13)", () => {
       expect(await phaseOf(w)).toBe("graded");
     });
 
-    it("is scheduled for a draft the scheduler publishes, draft for one published by hand (#795)", async () => {
+    it("is scheduled for a scheduled project, draft for a draft whatever its date (ADR-127, amending #795)", async () => {
       const w = await world({ students: 1, state: "draft" });
-      await server.app.db.update(projects).set({ publishMode: "manual" }).where(eq(projects.id, w.projectId));
-      expect(await phaseOf(w)).toBe("draft");
       await server.app.db.update(projects).set({ publishMode: "scheduled" }).where(eq(projects.id, w.projectId));
+      expect(await phaseOf(w)).toBe("draft");
+      await server.app.db.update(projects).set({ state: "scheduled" }).where(eq(projects.id, w.projectId));
       expect(await phaseOf(w)).toBe("scheduled");
       // Once published, the state comes first.
       await server.app.db.update(projects).set({ state: "published" }).where(eq(projects.id, w.projectId));
@@ -536,7 +536,7 @@ describe("the project page (F-PROJ-13)", () => {
       await repoOf({ ...w, projectId: open }, s1!.id, { deadlineAppliedAt: frozenAt });
       const empty = await sibling(w, "locked");
       const planned = await sibling(w, "draft");
-      await server.app.db.update(projects).set({ publishMode: "scheduled" }).where(eq(projects.id, planned));
+      await server.app.db.update(projects).set({ state: "scheduled", publishMode: "scheduled" }).where(eq(projects.id, planned));
       const calls = gh.calls.length;
       const rows = await list(w.classroomId);
       const phase = (id: string) => rows.find((r) => r.id === id)!.phase;

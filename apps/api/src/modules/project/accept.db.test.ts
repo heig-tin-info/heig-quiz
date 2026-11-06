@@ -423,12 +423,24 @@ describe("the student's GitHub account", () => {
 
 describe("what Accept refuses", () => {
   it("refuses before the start and after the deadline, on the server's clock", async () => {
-    const { project, student } = await publishedProject({
-      body: { publishMode: "scheduled", startAt: "2026-10-03T08:00:00.000Z", deadlineAt: IN_A_WEEK },
-    });
+    const { project, student } = await publishedProject();
+    // A published row whose start lies ahead: no publication makes one any more, the rows left are kept (ADR-127 §9).
+    await server.app.db.update(projects).set({ startAt: new Date("2026-10-03T08:00:00.000Z") }).where(eq(projects.id, project.id));
     expect(refusal(await accept(project.id, student))).toEqual([409, "not_started"]);
     server.clock.set(IN_A_WEEK);
     expect(refusal(await accept(project.id, student))).toEqual([409, "deadline_passed"]);
+    expect(await repoRows(project.id)).toEqual([]);
+  });
+
+  it("refuses a scheduled project, its start come or not, until the ticker publishes it (ADR-127)", async () => {
+    const { project, student } = await publishedProject({
+      publish: false,
+      body: { publishMode: "scheduled", startAt: "2026-10-03T08:00:00.000Z", deadlineAt: IN_A_WEEK },
+    });
+    expect((await call("POST", `/app/api/projects/${project.id}/schedule`, teacher.headers)).statusCode).toBe(200);
+    expect(refusal(await accept(project.id, student))).toEqual([409, "not_started"]);
+    server.clock.set("2026-10-03T08:00:01.000Z");
+    expect(refusal(await accept(project.id, student))).toEqual([409, "not_started"]);
     expect(await repoRows(project.id)).toEqual([]);
   });
 

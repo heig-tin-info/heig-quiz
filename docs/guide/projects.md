@@ -19,7 +19,7 @@ The form asks for a **Name**, a **Source repository** (only a repository of the 
 
 - **Branches**: the branches handed out; the first one chosen is the default branch of the students' repositories.
 - **History**: **One commit** (default) gives each branch as one commit holding the source's files, without what is reserved for the staff (a `student/` overlay and a `.studentignore` shape what students get); **Whole history** keeps the source's history as it is.
-- **Publication**: **By hand**, or **At the start**, where Quiz publishes at the start date.
+- **Opening**: **Now**, or **At a date**, the start of a project you will schedule.
 - **Deadline as**: a date, or a duration counted from publication.
 - **At the deadline**: **Lock** (default) refuses every push after the deadline; **Mark** leaves the repository open, to git and to the online workspace alike (an exam in Safe Exam Browser still closes at the deadline), and pushes one empty commit per handed-out branch as a marker.
 - **Grace**: minutes after the deadline during which a run started in time may still finish (30 by default).
@@ -37,7 +37,7 @@ When a push by anyone but Quiz (a student, or a workflow's own commit) touches a
 
 ## Configure a draft
 
-A draft's page is a form, written as you go: there is no Save. **Work handed out** recalls the source, the branches and the history, which are fixed. **Publication and deadline** holds the three things most projects need: publish by hand or at a start, and the deadline, either a date or a number of days counted from the publication. A scheduled start must lie ahead; the start and the deadline are saved together once both are filled, and a refusal is said under the field it concerns. **Groups** turns on group work and chooses the group set. Everything else (grace, what happens at the deadline, grading, protected files, where students work) is folded under **Advanced options**, and the lifecycle rail below lets you set the review checkpoints before publishing; before a manual publication it shows no date, since none is set yet. Once published, the page becomes the dashboard described below.
+A draft's page is a form, written as you go: there is no Save. **Work handed out** recalls the source, the branches and the history, which are fixed. **Publication and deadline** holds the three things most projects need: the opening, now or at a date, and the deadline, either a date or a number of days counted from the publication. The opening names the header's button: **Publish** for now, **Schedule** for a date to come. The start and the deadline are saved together once both are filled, and a refusal is said under the field it concerns. **Groups** turns on group work and chooses the group set. Everything else (grace, what happens at the deadline, grading, protected files, where students work) is folded under **Advanced options**, and the lifecycle rail below lets you set the review checkpoints before publishing; before a manual publication it shows no date, since none is set yet. Once published, the page becomes the dashboard described below.
 
 <figure markdown="span">
   ![A draft's page: work handed out, publication and deadline, groups, advanced options and the lifecycle rail](../assets/screenshots/mock-project-draft-light.png#only-light)
@@ -47,7 +47,13 @@ A draft's page is a form, written as you go: there is no Save. **Work handed out
 
 ## Publish
 
-On the project page, **Publish** is the primary action of a draft. It starts the project now, or leaves the schedule to do it. A group project cannot be published while a claimed student is in no group.
+On the project page, **Publish** is the primary action of a draft that opens now: it starts the project at once. A draft whose start lies ahead offers **Schedule** instead: the project is announced to the class, listed under "Coming up" with its start, and Quiz publishes it at that start; nobody can accept it before. A scheduled project keeps its form, so its dates and settings can still change (its start must stay ahead). It has no primary action: **Publish now** opens it at once, and **Cancel schedule** takes it back to a draft, which the students no longer see. A draft never publishes by itself. A project cannot be published or scheduled while a claimed student of a group project is in no group; a student who lands in no group after scheduling meets the refusal when accepting, until placed.
+
+<figure markdown="span">
+  ![A scheduled project: its form kept, Cancel schedule and Publish now beside the title](../assets/screenshots/mock-project-scheduled-light.png#only-light)
+  ![A scheduled project: its form kept, Cancel schedule and Publish now beside the title](../assets/screenshots/mock-project-scheduled-dark.png#only-dark)
+  <figcaption>A scheduled project. (Mock data.)</figcaption>
+</figure>
 
 Once published, only these change: the name, the deadline (never to a past date), what happens at the deadline (until it passes) and the protected files. The deadline is edited in its tile; the strategy and the protected files are in the folded **Settings** at the bottom of the page. Students then **accept** the project, and each gets a repository `<project>-<login>` with push access.
 
@@ -75,7 +81,7 @@ The table has one row per student (or group): the repository, the last commit wi
   <figcaption>The sheet of a repository: scores, own deadline, lock, runs. (Mock data.)</figcaption>
 </figure>
 
-The single primary action follows the state: **Publish** for a draft, **Sync** when the source is ahead, **Grade** for a project graded by criteria while a repository is still to validate, **Release scores** once everything is final.
+The single primary action follows the state: **Publish** or **Schedule** for a draft, none for a scheduled project, **Sync** when the source is ahead, **Grade** for a project graded by criteria while a repository is still to validate, **Release scores** once everything is final.
 
 A project graded by criteria has a **grading screen** (**Grade**, or **Grading screen** above the repositories): one repository at a time, each criterion with its proposed points, their source (CI, AI, teacher) and the rationale. Correct the points in place, give the teacher-only criteria theirs (0 included), then **Validate** and go on to the next; *Validate the rest as proposed* is in the menu. The release waits until every repository is validated.
 
@@ -141,4 +147,4 @@ Only an owner of the course whose account the administrator enabled for the work
 
 ## Notifications
 
-You are told when a deadline was applied (with the number of repositories locked), when a student's repository could not be made, and when the organization or the App is lost. Students are told when a project is published, a day before the deadline, when an invitation awaits them, and when scores are released. On the project page, short notices summarise what changed between two refreshes: acceptances, pushes, scores captured.
+You are told when a deadline was applied (with the number of repositories locked), when a student's repository could not be made, and when the organization or the App is lost. Students are told when a project is scheduled (with its start), when it is published, a day before the deadline, when an invitation awaits them, and when scores are released. On the project page, short notices summarise what changed between two refreshes: acceptances, pushes, scores captured.

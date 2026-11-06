@@ -52,13 +52,14 @@ import {
 } from "../../db/schema.js";
 import { setRemoteBaseForTests } from "../../github/git.js";
 import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import { PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
+import { PROJECT_CRITERIA_QUEUE, PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { GITHUB_TASKS } from "../github/jobs.js";
 import { accessibleProjectRepo } from "../guards.js";
 import { refreshScoreSelection, ingestCompletedRun } from "./grading.js";
 import { projectTick, runDeadlineJob } from "./jobs.js";
+import { autoPublishProject } from "./lifecycle.js";
 import { RECONCILE_TASKS } from "./reconcile.js";
 import { FAILED_RETRY_MS, LEASE_MS, type ProjectJob } from "./lease.js";
 import { repoContext } from "./repos.js";
@@ -238,24 +239,67 @@ afterAll(async () => {
 // ---------------------------------------------------------------- the ticker
 
 describe("the ticker (ADR-006, ADR-064)", () => {
-  it("publishes a scheduled draft at its start through publishProject, never an incomplete group project", async () => {
+  it("publishes a scheduled project at its start, an incomplete group project too, never a draft (ADR-127)", async () => {
     const scheduled = { publishMode: "scheduled", startAt: "2026-10-03T08:00:00Z", deadlineAt: DEADLINE };
     const plain = await project({ publish: false, body: scheduled });
+    const draft = await project({ publish: false, body: scheduled });
     const grouped = await project({ publish: false, body: { ...scheduled, groupMode: true } });
+    expect((await call("POST", `/app/api/projects/${plain.id}/schedule`, teacher.headers)).statusCode).toBe(200);
+    // A student in no group, no group at all: born after the schedule, it never blocks the opening (§6).
+    await server.app.db.update(projects).set({ state: "scheduled" }).where(eq(projects.id, grouped.id));
 
     server.clock.set("2026-10-03T07:59:00Z");
     expect(await tick()).toBe(true);
-    expect((await projectRow(plain.id)).state).toBe("draft");
+    expect((await projectRow(plain.id)).state).toBe("scheduled");
 
     server.clock.set("2026-10-03T08:00:00Z");
     expect(await tick()).toBe(true);
-    expect((await projectRow(plain.id)).state).toBe("published");
+    expect(await projectRow(plain.id)).toMatchObject({ state: "published", startAt: at("2026-10-03T08:00:00Z"), deadlineAt: at(DEADLINE) });
     expect(await auditOf(plain.id, "project.auto_publish")).toHaveLength(1);
-    // A student in no group, no group at all: it stays a draft, silently.
-    expect((await projectRow(grouped.id)).state).toBe("draft");
-    expect(await auditOf(grouped.id, "project.auto_publish")).toHaveLength(0);
+    expect((await projectRow(grouped.id)).state).toBe("published");
+    // A draft holding a date is no longer armed by itself.
+    expect((await projectRow(draft.id)).state).toBe("draft");
+    expect(await auditOf(draft.id, "project.auto_publish")).toHaveLength(0);
     await tick();
     expect(await auditOf(plain.id, "project.auto_publish")).toHaveLength(1);
+  });
+
+  it("re-judges the start under the row's lock: a start moved later after the ticker's scan is never published early (invariant 5)", async () => {
+    const p = await project({ publish: false, body: { publishMode: "scheduled", startAt: "2026-10-03T08:00:00Z", deadlineAt: DEADLINE } });
+    expect((await call("POST", `/app/api/projects/${p.id}/schedule`, teacher.headers)).statusCode).toBe(200);
+    server.clock.set("2026-10-03T08:00:00Z");
+    // The scan read it due; the teacher's patch committed before the publication took its lock.
+    await server.app.db.update(projects).set({ startAt: new Date("2026-10-04T08:00:00Z") }).where(eq(projects.id, p.id));
+    await expect(autoPublishProject(server.app.db, p.id, server.clock.now())).rejects.toMatchObject({ code: "not_draft" });
+    expect(await projectRow(p.id)).toMatchObject({ state: "scheduled", startAt: at("2026-10-04T08:00:00Z") });
+    expect(await auditOf(p.id, "project.auto_publish")).toHaveLength(0);
+    server.clock.set("2026-10-04T08:00:00Z");
+    expect((await autoPublishProject(server.app.db, p.id, server.clock.now())).state).toBe("published");
+  });
+
+  it("reloads the criteria of a project graded by criteria at its publication by the ticker, through a job (ADR-127 §12)", async () => {
+    const scheduled = { publishMode: "scheduled", startAt: "2026-10-03T08:00:00Z", deadlineAt: DEADLINE };
+    const graded = await project({ publish: false, body: scheduled });
+    const plain = await project({ publish: false, body: scheduled });
+    for (const p of [graded, plain]) expect((await call("POST", `/app/api/projects/${p.id}/schedule`, teacher.headers)).statusCode).toBe(200);
+    await server.app.db.update(projects).set({ gradingMode: "criteria" }).where(eq(projects.id, graded.id));
+    const sends: [string, unknown][] = [];
+    const app = server.app as { boss?: JobQueue };
+    app.boss = {
+      createQueue: async () => {},
+      send: async (name, data) => void sends.push([name, data]),
+      work: async () => {},
+      stop: async () => {},
+    };
+    server.clock.set("2026-10-03T08:00:00Z");
+    const before = gh.calls.length;
+    try {
+      await projectTick(server.app, config);
+    } finally {
+      delete app.boss;
+    }
+    expect(gh.calls.length).toBe(before);
+    expect(sends.filter(([name]) => name === PROJECT_CRITERIA_QUEUE)).toEqual([[PROJECT_CRITERIA_QUEUE, { projectId: graded.id }]]);
   });
 
   it("applies a deadline once: the project locked, the provisional freeze, one job, and no HTTP inside a tick", async () => {

@@ -206,7 +206,7 @@ describe("tabOf", () => {
 describe("isScheduled (#787)", () => {
   it("keeps a scheduled evaluation and a project in its scheduled phase", () => {
     expect(isScheduled(row({ state: "scheduled" }))).toBe(true);
-    expect(isScheduled(project({ state: "draft", phase: "scheduled" }))).toBe(true);
+    expect(isScheduled(project({ state: "scheduled", phase: "scheduled" }))).toBe(true);
   });
 
   it("leaves a draft in preparation and whatever already runs", () => {
@@ -221,7 +221,7 @@ describe("isScheduled (#787)", () => {
   });
 
   it("files a scheduled project under the current tab, not under Drafts", () => {
-    expect(tabOf(project({ state: "draft", phase: "scheduled" }))).toBe("current");
+    expect(tabOf(project({ state: "scheduled", phase: "scheduled" }))).toBe("current");
   });
 });
 

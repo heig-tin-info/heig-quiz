@@ -42,7 +42,7 @@ import {
   type ProjectSlotScore,
   type ProjectStudent,
 } from "@quiz/contracts";
-import { changedAfterRelease, projectPhase, projectPrimaryAction, reviewState, scoreGrade, type ProjectScale } from "@quiz/domain";
+import { changedAfterRelease, draftStartsLater, projectPhase, projectPrimaryAction, reviewState, scoreGrade, type ProjectScale } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
@@ -429,7 +429,6 @@ export async function projectDetail(
   // repositories (`STUDENT_REPO`, `repos.ts`) through `finalOf` too (`phaseCounts`, `views.ts`).
   const readiness = {
     state: project.state,
-    publishMode: project.publishMode,
     deadlineStrategy: project.deadlineStrategy,
     gradingMode: project.gradingMode,
     ...counts,
@@ -448,6 +447,8 @@ export async function projectDetail(
     primaryAction: projectPrimaryAction({
       ...readiness,
       archived: project.archivedAt !== null,
+      // A draft holding a date still ahead is scheduled, not published (ADR-127 §2).
+      startsLater: draftStartsLater(project, now),
       sourceAhead: sync.ahead !== null,
       // Over the students' repositories only: a test repository is no acceptance (ADR-077).
       changedAfterRelease: repos.filter((repo) => views.get(repo.id)!.flags.changedAfterRelease).length,

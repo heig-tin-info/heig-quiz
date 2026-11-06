@@ -26,7 +26,10 @@ import {
   effectivePoolRole,
   ipAllowed,
   poolRoleAllows,
+  PROJECT_LIVE_STATES,
+  PROJECT_VISIBLE_STATES,
   trustedClientsOf,
+  type ProjectStateName,
 } from "@quiz/domain";
 
 import { PORTAL, confined, delegated, type SessionAuth, type SessionState } from "../auth/session.js";
@@ -713,23 +716,39 @@ export function openSet(now: Date): SQL {
   return sql`(${qualified(groupSets.openUntil)} IS NOT NULL AND ${qualified(groupSets.openUntil)} > ${now.toISOString()}::timestamptz AND ${qualified(classrooms.archivedAt)} IS NULL)`;
 }
 
+/** `projects.state` among `states`, as a SQL list of literals (the states are the domain's closed list). */
+function projectStateIn(states: readonly ProjectStateName[]): SQL {
+  return sql`${qualified(projects.state)} IN (${sql.join(states.map((s) => sql`${s}`), sql`, `)})`;
+}
+
 /**
- * A project the students of its classroom see: published (not a draft) and
+ * A project the students of its classroom see listed: not a draft
+ * (`PROJECT_VISIBLE_STATES` — a `scheduled` one is announced, ADR-127) and
  * not archived. On a query that has `projects` in scope.
  */
-export function publishedProject(): SQL {
-  return sql`(${qualified(projects.state)} <> 'draft' AND ${qualified(projects.archivedAt)} IS NULL)`;
+export function visibleProject(): SQL {
+  return sql`(${projectStateIn(PROJECT_VISIBLE_STATES)} AND ${qualified(projects.archivedAt)} IS NULL)`;
+}
+
+/**
+ * A project open to the students of its classroom: published or locked
+ * (`PROJECT_LIVE_STATES`, ADR-127) and not archived. On a query that has
+ * `projects` in scope.
+ */
+export function liveProject(): SQL {
+  return sql`(${projectStateIn(PROJECT_LIVE_STATES)} AND ${qualified(projects.archivedAt)} IS NULL)`;
 }
 
 /**
  * THE rule of which sets reach a student of their classroom (ADR-070 §8 as
  * amended 2026-10-05, S2): an {@link openSet open} one, or one a
- * {@link publishedProject published project} of the classroom names. A
- * closed set no such project names never shows. On a query that has
- * `group_sets` and `classrooms` in scope.
+ * {@link liveProject published project} of the classroom names — never a
+ * scheduled one before its start (ADR-127 §8). A closed set no such project
+ * names never shows. On a query that has `group_sets` and `classrooms` in
+ * scope.
  */
 export function studentVisibleSet(now: Date): SQL {
-  return sql`(${openSet(now)} OR EXISTS (SELECT 1 FROM ${projects} WHERE ${qualified(projects.groupSetId)} = ${qualified(groupSets.id)} AND ${publishedProject()}))`;
+  return sql`(${openSet(now)} OR EXISTS (SELECT 1 FROM ${projects} WHERE ${qualified(projects.groupSetId)} = ${qualified(groupSets.id)} AND ${liveProject()}))`;
 }
 
 /**
@@ -775,7 +794,8 @@ export const studentGroupSet = routeLoader((app, req, params: { id: string }) =>
 
 /**
  * The student's side of a project (F-PROJ-05, N-SEC-20; merge task M3-03):
- * a project that is not a draft nor archived, of a classroom where the
+ * a project that is not a draft nor archived (a `scheduled` one loads, and
+ * Accept refuses it `409 not_started`, ADR-127), of a classroom where the
  * caller holds a claimed seat — a student's, or a teacher's staff seat
  * (ADR-018), which accepts an INDIVIDUAL project to test it (ADR-077; a
  * group project answers it `409 no_group`, staff seats are never placed).
@@ -791,7 +811,7 @@ export async function findStudentProject(db: Db, userId: string, projectId: stri
     )
     // An archived classroom takes no new work (product owner, 2026-10-02).
     .innerJoin(classrooms, and(eq(classrooms.id, projects.classroomId), isNull(classrooms.archivedAt)))
-    .where(and(eq(projects.id, projectId), publishedProject()))
+    .where(and(eq(projects.id, projectId), visibleProject()))
     .limit(1);
   return row ?? null;
 }
@@ -814,7 +834,7 @@ export interface StudentProjectScope extends ReadableClassroom {
 
 /**
  * The project's student view (F-PROJ-15, N-SEC-20; merge task M3-09a): a
- * project neither draft nor archived, through its classroom's student
+ * project neither draft nor archived (a `scheduled` one included, ADR-127), through its classroom's student
  * branch ({@link findReadableClassroom}, the student payload FORCED) — the
  * course's staff (a teacher in the student view, ADR-018), a claimed seat,
  * an impersonation session through the seat alone (ADR-034); a stranger,
@@ -833,7 +853,7 @@ export async function findStudentProjectView(
   const [project] = await db
     .select()
     .from(projects)
-    .where(and(eq(projects.id, projectId), publishedProject()))
+    .where(and(eq(projects.id, projectId), visibleProject()))
     .limit(1);
   if (!project) return null;
   const here = sebProjectSession(auth, projectId);

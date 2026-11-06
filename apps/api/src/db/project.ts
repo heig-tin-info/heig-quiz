@@ -251,6 +251,15 @@ export const projects = pgTable(
      */
     reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
     /**
+     * When the classroom's students were told the project is scheduled
+     * (`project_scheduled`, ADR-127): claimed by a conditional UPDATE before
+     * the send, never cleared — once per project ever, as evaluations'
+     * `scheduled_announced_at` (ADR-030 §13). A cancelled schedule and a
+     * new one, or a moved date, tell nobody again. Null on the rows the
+     * migration moved to `scheduled`: they were never told.
+     */
+    scheduledAnnouncedAt: timestamp("scheduled_announced_at", { withTimezone: true }),
+    /**
      * Grading by criteria (`grading_mode = 'criteria'`, ADR-106 §2): the
      * dotted id of the criterion the tests score (null: none), and the
      * argv of the build and of the tests and the output paths the evidence
@@ -293,11 +302,11 @@ export const projects = pgTable(
     index("projects_deadline_due_idx")
       .on(t.deadlineAt)
       .where(sql`${t.state} = 'published' AND ${t.deadlineAppliedAt} IS NULL`),
-    // and the scheduled drafts waiting for their start. (The freeze and the
-    // final review are per repository since M3-05a: `project_repos`.)
+    // and the scheduled projects waiting for their start (ADR-127). (The
+    // freeze and the final review are per repository since M3-05a: `project_repos`.)
     index("projects_scheduled_publish_idx")
       .on(t.startAt)
-      .where(sql`${t.state} = 'draft' AND ${t.publishMode} = 'scheduled' AND ${t.archivedAt} IS NULL`),
+      .where(sql`${t.state} = 'scheduled' AND ${t.archivedAt} IS NULL`),
   ],
 );
 

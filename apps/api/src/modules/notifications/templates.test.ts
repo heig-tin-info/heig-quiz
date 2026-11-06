@@ -92,6 +92,8 @@ describe("renderNotification", () => {
       { kind: "activity_scheduled", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 1 },
       { kind: "activity_available", activityKind: "evaluation", activityId: EVAL, activityTitle: "Série 3" },
       { kind: "deadline_approaching", evaluationId: EVAL, evaluationTitle: "Série 4" },
+      { kind: "project_scheduled", ...project, startAt: "2026-11-06T15:30:00.000Z" },
+      { kind: "project_scheduled", ...project, startAt: "2026-11-06T15:30:00.000Z", githubLinked: false },
       { kind: "project_published", ...project },
       { kind: "project_published", ...project, githubLinked: false },
       { kind: "project_deadline_reminder", ...project },
@@ -111,6 +113,15 @@ describe("renderNotification", () => {
         }
       }
     }
+  });
+
+  it("says when a scheduled project opens, in the school's time and digits only (ADR-127)", () => {
+    const scheduled = { kind: "project_scheduled", ...project, startAt: "2026-11-06T15:30:00.000Z" } as const;
+    const url = "https://quiz.test";
+    expect(renderNotification(scheduled, "fr", url).text).toContain("ouvre le 06.11.2026 16:30.");
+    expect(renderNotification(scheduled, "en", url).text).toContain("opens on 06/11/2026, 16:30.");
+    expect(renderNotification({ ...scheduled, githubLinked: false }, "fr", url).text).toContain("Liez votre compte GitHub");
+    expect(notificationPath(scheduled)).toBe(`/projects/${PROJECT}`);
   });
 
   it("gives a project published to an unlinked student the sentence that asks to link GitHub", () => {

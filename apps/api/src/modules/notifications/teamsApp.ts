@@ -47,9 +47,10 @@ import {
  * Bump by hand on any change of the package below (semver, as Teams wants
  * it). 2.2.0: the seven project kinds of F-NOTIF-13, declared in one go
  * (merge task M3-09b). 2.3.0: the two kinds of the reports on a question
- * (issue #680). 2.4.0: `pool_unpublished` (ADR-095).
+ * (issue #680). 2.4.0: `pool_unpublished` (ADR-095). 2.5.0:
+ * `project_scheduled` (ADR-127).
  */
-export const TEAMS_APP_VERSION = "2.4.0";
+export const TEAMS_APP_VERSION = "2.5.0";
 const MANIFEST_VERSION = "1.17";
 const SCHEMAS = `https://developer.microsoft.com/en-us/json-schemas/teams/v${MANIFEST_VERSION}`;
 /** The red of the logo, as the icons use it. */
@@ -90,6 +91,8 @@ export const TEAMS_ACTIVITY_KINDS = [
   "question_report_resolved",
   // A public pool left the catalogue (ADR-095), the bump to 2.4.0.
   "pool_unpublished",
+  // A project announced with its opening date (ADR-127), the bump to 2.5.0.
+  "project_scheduled",
 ] as const;
 type TeamsActivityKind = (typeof TEAMS_ACTIVITY_KINDS)[number];
 
@@ -113,6 +116,7 @@ export const TEAMS_ACTIVITY_TYPES: Record<TeamsActivityKind, string> = {
   activity_available: "activityAvailable",
   deadline_approaching: "deadlineApproaching",
   results_updated: "resultsUpdated",
+  project_scheduled: "projectScheduled",
   project_published: "projectPublished",
   project_deadline_reminder: "projectDeadlineReminder",
   project_repo_invited: "projectRepoInvited",

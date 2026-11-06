@@ -212,10 +212,12 @@ describe("a draft names its group set (ADR-070 §4, §7)", () => {
 });
 
 describe("publication (ADR-070 §7)", () => {
-  it("refuses a group project without a set by hand, and the ticker leaves it a draft; the copy is what the guard reads", async () => {
+  it("refuses a group project without a set by hand and to Schedule, and the ticker leaves a draft alone; the copy is what the guard reads", async () => {
     const room = await classroom(3);
-    const pid = await project(room, { publishMode: "scheduled", startAt: new Date("2026-10-04T07:00:00Z") });
+    const pid = await project(room, { publishMode: "scheduled", startAt: new Date("2026-10-04T09:00:00Z") });
     expect(refusal(await publish(pid))).toEqual([409, "no_group_set"]);
+    expect(refusal(await call("POST", `/app/api/projects/${pid}/schedule`))).toEqual([409, "no_group_set"]);
+    server.clock.set("2026-10-04T09:00:00Z");
     await tick();
     const [draft] = await server.app.db.select().from(projects).where(eq(projects.id, pid));
     expect(draft!.state).toBe("draft");
@@ -225,8 +227,12 @@ describe("publication (ADR-070 §7)", () => {
     const left = await publish(pid);
     expect(refusal(left)).toEqual([409, "unassigned_students"]);
     expect(left.json().students.map((s: { enrollmentId: string }) => s.enrollmentId)).toEqual([room.lines[2]]);
-    // Placed in the set, the student reaches the copy; the ticker publishes.
+    server.clock.set(NOW);
+    expect(refusal(await call("POST", `/app/api/projects/${pid}/schedule`))).toEqual([409, "unassigned_students"]);
+    // Placed in the set, the student reaches the copy; Schedule passes, and the ticker publishes (ADR-127).
     await ok(await call("PUT", `/app/api/group-sets/${set.set.id}/members/${room.lines[2]}`, { groupId: set.groups[0]!.id }));
+    expect((await call("POST", `/app/api/projects/${pid}/schedule`)).statusCode).toBe(200);
+    server.clock.set("2026-10-04T09:00:00Z");
     await tick();
     const [published] = await server.app.db.select().from(projects).where(eq(projects.id, pid));
     expect(published!.state).toBe("published");

@@ -2,7 +2,9 @@
  * What of a project may still change, and why not (F-PROJ-03, ADR-048,
  * merge task M3-02). The rule follows the spec, not heig-classroom:
  *
- * - a **draft** is freely editable;
+ * - a **draft** is freely editable, and so is a **scheduled** project
+ *   (ADR-127 §4), its start choice locked to "a date": back to a manual
+ *   publication is refused (`publish_mode_frozen`; Publish now is the way);
  * - once published, only the name, the protected files, the deadline and
  *   the deadline strategy (until the deadline) change;
  * - the publication mode and its duration freeze at publication
@@ -21,7 +23,7 @@
  *
  * `now` is the server's clock (invariant 5), never read here.
  */
-import type { ProjectGradingModeName, ProjectStateName } from "./projectView.js";
+import { projectBeforePublication, type ProjectGradingModeName, type ProjectStateName } from "./projectView.js";
 
 /** The fields `ProjectPatch` may carry, in the form's order. */
 export const PROJECT_PATCH_FIELDS = [
@@ -70,7 +72,8 @@ export function projectFieldRefusal(
   now: Date,
   value?: unknown,
 ): ProjectFieldRefusal | null {
-  if (project.state === "draft") return null;
+  if (project.state === "scheduled" && (field === "publishMode" || field === "durationMinutes")) return "publish_mode_frozen";
+  if (projectBeforePublication(project.state)) return null;
   // `locked` is the deadline applied: a reopen makes it `published` again (M3-05a).
   const applied = project.state === "locked";
   switch (field) {
@@ -107,7 +110,7 @@ export function gradingModeRefusal(
   project: Pick<ProjectLifeLike, "state" | "released" | "gradingMode">,
   to?: ProjectGradingModeName,
 ): "not_draft" | "released" | null {
-  if (project.state === "draft") return null;
+  if (projectBeforePublication(project.state)) return null;
   if (project.state !== "locked") return "not_draft";
   if (project.released) return "released";
   return to === undefined || to === "criteria" || project.gradingMode === "criteria" ? null : "not_draft";
@@ -125,6 +128,7 @@ export type PatchedDatesRefusal = "deadline_past" | "start_past" | "duration_nee
 
 /** The dates and the publication of a project, as stored. */
 export interface ProjectDatesLike {
+  state: ProjectStateName;
   publishMode: "manual" | "scheduled";
   startAt: Date;
   deadlineAt: Date;
@@ -132,7 +136,7 @@ export interface ProjectDatesLike {
 }
 
 /** What a patch CHANGES of them (a field whose value is the stored one is left out). */
-export type ProjectDatesChange = Partial<ProjectDatesLike>;
+export type ProjectDatesChange = Partial<Omit<ProjectDatesLike, "state">>;
 
 /**
  * The dates a patch leaves (F-PROJ-03), or why it cannot:
@@ -143,8 +147,10 @@ export type ProjectDatesChange = Partial<ProjectDatesLike>;
  *   `now`, so no phantom scheduled start blocks a later deadline;
  * - a deadline moved, or kept through the switch to manual, must lie ahead
  *   (`deadline_past`): a stale scheduled draft is not flipped to manual;
- * - a scheduled start must lie ahead when the mode or the start changed
- *   (`start_past`), else the ticker would publish it at the next tick;
+ * - a scheduled project's start must lie ahead when it changed
+ *   (`start_past`), else the ticker would publish it at the next tick; a
+ *   draft may hold a past date (ADR-127 §10: its button reads Publish,
+ *   which starts now);
  * - a duration only goes with a manual publication, and the deadline comes
  *   after the start.
  *
@@ -167,7 +173,7 @@ export function patchedDraftDates(
   const deadlineMoved = changed.deadlineAt !== undefined || toManual;
   if (deadlineMoved && deadlineAt.getTime() <= now.getTime()) return { ok: false, refusal: "deadline_past" };
   if (publishMode === "scheduled" && durationMinutes !== null) return { ok: false, refusal: "duration_needs_manual" };
-  if (publishMode === "scheduled" && (changed.publishMode !== undefined || changed.startAt !== undefined) && startAt.getTime() <= now.getTime()) {
+  if (project.state === "scheduled" && changed.startAt !== undefined && startAt.getTime() <= now.getTime()) {
     return { ok: false, refusal: "start_past" };
   }
   if (deadlineAt.getTime() <= startAt.getTime()) return { ok: false, refusal: "deadline_before_start" };

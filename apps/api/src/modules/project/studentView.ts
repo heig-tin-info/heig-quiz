@@ -43,7 +43,7 @@
  * copy group's (`seatRepo`, `groupRepos.ts`), never the repository its
  * creator moved out of (N-SEC-20, M3-15b).
  */
-import { and, eq, inArray, isNull, ne, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, type SQL } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 
 import type {
@@ -60,6 +60,8 @@ import {
   criteriaTable,
   effectiveDeadline,
   projectGraded,
+  projectIsLive,
+  PROJECT_VISIBLE_STATES,
   scoreGrade,
   studentCiReading,
   studentProjectGroup,
@@ -193,7 +195,8 @@ function card(row: CardRow, linked: boolean, now: Date, read: Readings): { card:
 export type StudentProjectCards = Record<StudentActivityGroup, StudentProjectCard[]>;
 
 /**
- * The published projects (locked ones included) of the classrooms where
+ * The projects students see (`PROJECT_VISIBLE_STATES`: scheduled — Upcoming
+ * until it opens, ADR-127 —, published, locked) of the classrooms where
  * `userId` holds a claimed seat — one classroom when `classroomId` is given
  * (the classroom page, loaded through `readableClassroom` by the route),
  * all of them otherwise (the home) — with the caller's own repository where
@@ -211,7 +214,7 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
     .from(enrollments)
     .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .innerJoin(projects, and(eq(projects.classroomId, classrooms.id), ne(projects.state, "draft"), isNull(projects.archivedAt)))
+    .innerJoin(projects, and(eq(projects.classroomId, classrooms.id), inArray(projects.state, [...PROJECT_VISIBLE_STATES]), isNull(projects.archivedAt)))
     .where(and(...scope));
   // The repository each seat reads (`seatRepos`): its own, or its copy group's; a staff seat its own test repository (ADR-077).
   const seats = await seatRepos(
@@ -343,8 +346,8 @@ export async function studentProject(
             comment: repo?.releasedComment ?? null,
           },
     criteria,
-    // ADR-047 (M6-06): the mode alone, when the project runs in the portal and the feature is on.
-    workspace: codespace && project.workMode !== "free" ? { mode: project.workMode } : null,
+    // ADR-047 (M6-06): the mode alone, when the project runs in the portal and the feature is on — once it is open (ADR-127).
+    workspace: codespace && projectIsLive(project.state) && project.workMode !== "free" ? { mode: project.workMode } : null,
     serverNow: iso(now),
   };
 }

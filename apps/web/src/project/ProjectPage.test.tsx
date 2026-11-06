@@ -251,6 +251,101 @@ describe("the one primary action", () => {
   });
 });
 
+describe("a start choice and a scheduled project (ADR-127)", () => {
+  const LATER = new Date(Date.parse(AHEAD) + 7 * 86_400_000).toISOString();
+  const dated = (over: Partial<ProjectDetail> = {}) =>
+    makeDraft({ publishMode: "scheduled", startAt: AHEAD, deadlineAt: LATER, primaryAction: "schedule", ...over });
+  const scheduled = (over: Partial<ProjectDetail> = {}) =>
+    dated({ state: "scheduled", primaryAction: "none", editable: ["name", "startAt", "deadlineAt", "graceMinutes"], ...over });
+
+  it("reads Publish for a start now, and says what it does under the choice", async () => {
+    routes(makeDraft());
+    renderPage();
+    expect(await screen.findByRole("button", { name: /^Publish$/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Schedule/ })).toBeNull();
+    expect(screen.getByRole("radio", { name: "Now" })).toBeChecked();
+    expect(screen.getByText("Publish opens the project at once.")).toBeInTheDocument();
+  });
+
+  it("reads Schedule for a date to come: one POST, a toast, the header saying when it opens", async () => {
+    const { calls } = routes(dated(), { [`POST ${BASE}/schedule`]: ok({ id: makeProject().id }) });
+    renderPage();
+    const button = await screen.findByRole("button", { name: "Schedule" });
+    expect(screen.queryByRole("button", { name: /Publish/ })).toBeNull();
+    expect(button).toHaveAttribute("data-coach", "project.primary");
+    expect(screen.getByRole("radio", { name: "At a date" })).toBeChecked();
+    expect(screen.getByText("Schedule announces it to the class. It opens at the start date.")).toBeInTheDocument();
+    expect(status()).toMatch(/^Draft, invisible to students\. Schedule it to announce its opening on /);
+    await userEvent.click(button);
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/schedule` })]));
+    expect(await screen.findByText("Project scheduled")).toBeInTheDocument();
+  });
+
+  it("says a refused start (422 start_past) under the start field", async () => {
+    routes(dated(), { [`POST ${BASE}/schedule`]: fail(422, { error: "start_past", message: "The start has passed" }) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    expect(await screen.findByText("The start must be in the future.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Start")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("lists the students in no group when Schedule is refused, as Publish does", async () => {
+    routes(dated(), {
+      [`POST ${BASE}/schedule`]: fail(409, {
+        error: "unassigned_students",
+        message: "1 student(s) in no group",
+        students: [{ enrollmentId: "0190d3c4-0000-7000-8000-00000000e001", nom: "Dupont", prenom: "Alice" }],
+      }),
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    expect(await screen.findByText("Dupont Alice")).toBeInTheDocument();
+  });
+
+  it("has no primary once scheduled: the form stays, the choice held on a date, two secondary moves", async () => {
+    routes(scheduled());
+    renderPage();
+    expect(await screen.findByTestId("project-draft-form")).toBeInTheDocument();
+    expect(status()).toMatch(/^Scheduled: announced to the class, opens on /);
+    expect(screen.queryByRole("button", { name: /^(Publish|Schedule)$/ })).toBeNull();
+    expect(document.querySelector('[data-coach="project.primary"]')).toBeNull();
+    expect(screen.getByRole("radio", { name: "At a date" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Now" })).toBeDisabled();
+    // The start and deadline stay editable while scheduled.
+    expect(screen.getByLabelText("Start")).toBeEnabled();
+    expect(screen.queryByText("Schedule announces it to the class. It opens at the start date.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Publish now" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel schedule" })).toBeInTheDocument();
+    // Not a dashboard: no tabs before publication.
+    expect(screen.queryByRole("tab")).toBeNull();
+  });
+
+  it("cancels the schedule without asking: one POST, a toast", async () => {
+    const { calls } = routes(scheduled(), { [`POST ${BASE}/unschedule`]: ok({ id: makeProject().id }) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Cancel schedule" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/unschedule` })]));
+    expect(await screen.findByText("Schedule cancelled")).toBeInTheDocument();
+  });
+
+  it("publishes a scheduled project now through Publish", async () => {
+    const { calls } = routes(scheduled(), { [`POST ${BASE}/publish`]: ok({ id: makeProject().id }) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Publish now" }));
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/publish` })]));
+    expect(await screen.findByText("Project published")).toBeInTheDocument();
+  });
+
+  it("offers neither move on an archived scheduled project", async () => {
+    routes(scheduled({ archivedAt: PAST }));
+    renderPage();
+    await screen.findByTestId("project-draft-form");
+    expect(screen.queryByRole("button", { name: "Publish now" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel schedule" })).toBeNull();
+  });
+});
+
 describe("the teacher's tour (M7-01)", () => {
   it("finds every step's anchor on a published project whose source is ahead, the row's on the Repositories tab", async () => {
     routes(
@@ -1496,7 +1591,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     // F-PROJ-13 as amended 2026-10-13: a draft stays a configuration form, without tabs.
     expect(screen.queryByRole("tablist")).toBeNull();
     // The facts fixed at creation, and the way to change them.
-    expect(screen.getByText(/delete this draft and create it again/)).toBeInTheDocument();
+    expect(screen.getByText(/delete the project and create it again/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /prg1-labo-02-pointeurs/ })).toBeInTheDocument();
   });
 
@@ -1518,7 +1613,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
   it("switches to a scheduled publication without writing, then writes the three fields once both dates are filled", async () => {
     const { calls } = routes(makeDraft({ durationMinutes: 7 * 1440 }), { [`PATCH ${BASE}`]: ok({}) });
     renderPage();
-    await userEvent.click(await screen.findByRole("radio", { name: "At the start" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "At a date" }));
     expect(writes(calls)).toHaveLength(0);
     fill("Start", "2099-06-01T08:00");
     expect(writes(calls)).toHaveLength(0);
@@ -1537,7 +1632,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
       [`PATCH ${BASE}`]: fail(422, { error: "start_past", message: "The start has passed" }),
     });
     renderPage();
-    await userEvent.click(await screen.findByRole("radio", { name: "At the start" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "At a date" }));
     fill("Start", "2020-01-01T08:00");
     fill("Deadline", "2099-06-08T23:59");
     const start = screen.getByLabelText("Start");
@@ -1560,17 +1655,17 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     const stale = makeDraft({ publishMode: "scheduled", startAt: AHEAD, deadlineAt: new Date(Date.parse(AHEAD) + 86_400_000).toISOString() });
     routes(stale, { [`PATCH ${BASE}`]: fail(422, { error: "deadline_past", message: "The deadline has passed" }) });
     renderPage();
-    await userEvent.click(await screen.findByRole("radio", { name: "Manual" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Now" }));
     expect(await screen.findByText("This deadline has already passed.")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "At the start" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "At a date" })).toBeChecked();
     expect(screen.getByLabelText("Start")).toBeInTheDocument();
   });
 
   it("writes nothing when the mode chosen is the stored one again, and shows the stored deadline", async () => {
     const { calls } = routes(makeDraft({ durationMinutes: 7 * 1440 }), { [`PATCH ${BASE}`]: ok({}) });
     renderPage();
-    await userEvent.click(await screen.findByRole("radio", { name: "At the start" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Manual" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "At a date" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Now" }));
     expect(writes(calls)).toHaveLength(0);
     expect(await screen.findByLabelText("Duration in days")).toHaveValue(7);
   });
@@ -1733,7 +1828,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
   it("draws every control disabled for an archived draft, and what `editable` does not name", async () => {
     routes(makeDraft({ archivedAt: PAST, editable: ["name"] }));
     renderPage();
-    expect(await screen.findByRole("radio", { name: "Manual" })).toBeDisabled();
+    expect(await screen.findByRole("radio", { name: "Now" })).toBeDisabled();
     expect(screen.getByRole("switch", { name: "Groups" })).toBeDisabled();
   });
 

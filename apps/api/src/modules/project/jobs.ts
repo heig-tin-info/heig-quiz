@@ -10,9 +10,11 @@
  * conditional write on the server's clock (`app.clock`), so two processes
  * never both do it and a restart catches up (ADR-006):
  *
- * 1. the scheduled drafts whose start has come are published by
- *    `publishProject`, its guards included: an incomplete group project
- *    stays a draft, silently, until its groups are complete;
+ * 1. the scheduled projects whose start has come are published by
+ *    `autoPublishProject` (ADR-127), whatever their groups (§6: a student
+ *    in no group meets `no_group` on Accept until placed); with a queue,
+ *    one graded by criteria has its `criteria.yml` reloaded by a
+ *    `project.criteria` job (§12), as a publication by hand does;
  * 2. a project whose deadline has come is `locked`;
  * 3. a repository whose effective deadline has come gets its provisional
  *    freeze (`frozen_grade_run_id` := the current score's run) and
@@ -79,6 +81,7 @@ import { isPlanRestriction } from "../../github/provision.js";
 import {
   PROJECT_DEADLINE_QUEUE,
   PROJECT_CI_QUEUE,
+  PROJECT_CRITERIA_QUEUE,
   PROJECT_DISPATCH_QUEUE,
   PROJECT_EVIDENCE_QUEUE,
   PROJECT_GROUP_SYNC_QUEUE,
@@ -90,12 +93,13 @@ import type { TickTask } from "../../ticker.js";
 import { requestCodespaceSync } from "../codespace/service.js";
 import { DomainError } from "../http.js";
 import { expireCiPasses, runCiDispatch, sendCiPasses, type CiDispatchJob } from "./ci.js";
+import { refreshCriteria } from "./criteria.js";
 import { COMMIT_DUE, EFFECTIVE_DEADLINE, LIVE, NEEDS_WORK, ts } from "./deadline.js";
 import { EVIDENCE_CONCURRENCY, EVIDENCE_EXPIRY_SECONDS, type EvidenceJob } from "./evidence.js";
 import { stopGroups, stopProjects } from "./groupCopy.js";
 import { claimGroupSyncWork, runGroupSyncJob } from "./groupSync.js";
 import { claimLeases, runLeased, type ProjectJob } from "./lease.js";
-import { publishProject } from "./lifecycle.js";
+import { autoPublishProject } from "./lifecycle.js";
 import { claimMilestonePasses, claimPasses, type ClaimedPass } from "./milestone.js";
 import { remindDeadlines, tellProjectStaff } from "./notify.js";
 import { hintProjectStaff, hintRepo, markRepoDeleted, type RepoRow } from "./repos.js";
@@ -112,31 +116,29 @@ const MAX_STEPS = 3;
 // ---------------------------------------------------------------- the ticker: claim and enqueue
 
 /**
- * Step 1: the scheduled drafts whose start has come, published by
- * `publishProject` — the ONE publication, its guards included, audited
- * `project.auto_publish` for the system. Its row lock and its refusals are
- * the claim: of two processes, one publishes, the other meets `not_draft`;
- * a group project with a student in no group meets `unassigned_students`
- * and stays a draft, silently, until its groups are complete.
+ * Step 1: the scheduled projects whose start has come, published by
+ * `autoPublishProject` (ADR-127) — audited `project.auto_publish` for the
+ * system. Its row lock and its refusals are the claim: of two processes,
+ * one publishes, the other meets `not_draft`. A draft is never published
+ * here: only Schedule arms one.
  */
-async function publishScheduled(db: Db, now: Date): Promise<string[]> {
+async function publishScheduled(db: Db, now: Date): Promise<ProjectRow[]> {
   const due = await db
     .select({ id: projects.id })
     .from(projects)
     .where(
       and(
-        eq(projects.state, "draft"),
-        eq(projects.publishMode, "scheduled"),
+        eq(projects.state, "scheduled"),
         isNull(projects.archivedAt),
         isNotNull(projects.distributionFullName),
         sql`${projects.startAt} <= ${ts(now)}`,
         sql`${projects.deadlineAt} > ${ts(now)}`,
       ),
     );
-  const published: string[] = [];
+  const published: ProjectRow[] = [];
   for (const { id } of due) {
     try {
-      published.push((await publishProject(db, id, now, SYSTEM_ACTOR)).id);
+      published.push(await autoPublishProject(db, id, now));
     } catch (err) {
       if (!(err instanceof DomainError)) throw err;
     }
@@ -353,9 +355,14 @@ export async function projectTick(app: FastifyInstance, config: AppConfig): Prom
   if (!githubApp(config)) return;
   const now = app.clock.now();
   const published = await publishScheduled(app.db, now);
+  // Their criteria reloaded at the effective publication (ADR-127 §12), sent at once so a later step's
+  // throw cannot lose it: best effort, a job (GitHub is never called here); a refused file keeps the snapshot.
+  if (app.boss) {
+    for (const { id } of published.filter((p) => p.gradingMode === "criteria")) await app.boss.send(PROJECT_CRITERIA_QUEUE, { projectId: id });
+  }
   const applied = await applyDeadlines(app.db, now);
   const frozen = await freezeDue(app.db, now);
-  await hintProjectStaff(app.db, [...published, ...applied, ...frozen.projectIds]);
+  await hintProjectStaff(app.db, [...published.map((p) => p.id), ...applied, ...frozen.projectIds]);
   await remindDeadlines(app.db, now, app.log);
   await sendPasses(app, frozen.passes);
   // The CI passes 24 h without an accepted run (ADR-119 §6): settled `no_result`, no HTTP.
@@ -364,7 +371,7 @@ export async function projectTick(app: FastifyInstance, config: AppConfig): Prom
   // The milestone passes due (ADR-106 §5): claimed in the ledger, sent as the final passes are; nothing to GitHub here.
   await sendPasses(app, await claimMilestonePasses(app.db, now));
   // An online project published by the schedule goes to the portal (ADR-047 §6, M6-06): a job, never a call here.
-  for (const id of published) await requestCodespaceSync(app, config, id);
+  for (const { id } of published) await requestCodespaceSync(app, config, id);
   await sendDeadlineJobs(app, config, await claimDeadlineWork(app.db, now));
   // The final reviews and the checkpoints due (M3-05b): their own lease, their own queue.
   for (const job of await claimReviewWork(app.db, now)) await app.boss.send(PROJECT_DISPATCH_QUEUE, job);
@@ -380,7 +387,7 @@ export async function requestDeadlineWork(app: FastifyInstance, config: AppConfi
 /** The ticker's project task (ADR-006 addendum): clock-bound, neither configurable nor disableable. */
 export const PROJECT_TASKS: readonly TickTask[] = [{ name: "project.deadlines", everyMs: PROJECT_TICK_MS, run: projectTick }];
 
-/** The workers of `project.deadline`, `project.dispatch`, `group.sync`, `project.sync` and `project.evidence`, registered only with Quiz's App (`app.ts`). */
+/** The workers of `project.deadline`, `project.dispatch`, `group.sync`, `project.criteria`, `project.sync` and `project.evidence`, registered only with Quiz's App (`app.ts`). */
 export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue, config: AppConfig): Promise<void> {
   await queue.createQueue(PROJECT_DEADLINE_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_DEADLINE_QUEUE, (job) => runDeadlineJob(app, config, job));
@@ -388,6 +395,11 @@ export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue,
   await queue.work<ProjectJob>(PROJECT_DISPATCH_QUEUE, (job) => runReviewJob(app, config, job));
   await queue.createQueue(PROJECT_GROUP_SYNC_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_GROUP_SYNC_QUEUE, (job) => runGroupSyncJob(app, config, job));
+  // The criteria of a project the ticker published (ADR-127 §12): read from GitHub here, never in the ticker.
+  await queue.createQueue(PROJECT_CRITERIA_QUEUE, { retryLimit: 0 });
+  await queue.work<{ projectId: string }>(PROJECT_CRITERIA_QUEUE, (job) =>
+    refreshCriteria(app.db, config, job.projectId, "publish", SYSTEM_ACTOR, app.clock.now(), app.log),
+  );
   // The source's sync (M3-07): sent by the staff's request, never by the ticker.
   await queue.createQueue(PROJECT_SYNC_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_SYNC_QUEUE, (job) => runSyncJob(app, config, job));

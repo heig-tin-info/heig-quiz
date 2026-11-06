@@ -260,6 +260,9 @@ describe("without a repository", () => {
     const r1 = render();
     expect(await screen.findByText(/^You can accept this project from /)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
+    // Not started (a scheduled project too, ADR-127): the start, no "to accept" badge, as on the card.
+    expect(screen.getByText(/^Starts in /)).toBeInTheDocument();
+    expect(screen.queryByText("to accept")).toBeNull();
     r1.unmount();
 
     mockFetch({ [URL]: ok(project({ status: "locked", deadlineAt: at(-1), repo: null })) });
