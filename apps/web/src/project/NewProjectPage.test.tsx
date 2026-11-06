@@ -176,7 +176,7 @@ describe("the new project form", () => {
     await fillNovice();
     await userEvent.click(screen.getByRole("button", { name: "Advanced options" }));
     await userEvent.click(screen.getByRole("radio", { name: "A duration" }));
-    await userEvent.click(screen.getByRole("radio", { name: "At the start" }));
+    await userEvent.click(screen.getByRole("radio", { name: "At a date" }));
     expect(screen.queryByRole("radiogroup", { name: "Deadline as" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Duration in days")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Create" }));

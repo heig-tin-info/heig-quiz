@@ -4,7 +4,7 @@ import type { ProjectDetail } from "@quiz/contracts";
 
 import { refusalCodeOf, refusedWith } from "../api";
 import { DateField } from "../evaluation/TimingStep";
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import { Card, FieldError, fieldErrorProps, useNumberDraft } from "../ui";
 import { applyChange, draftPatch, draftView, validDays, type DraftChange } from "./draftPatch";
 import { FIELD_ID, foreignZone } from "./newProject";
@@ -12,6 +12,27 @@ import type { WriteProject } from "./projectPage";
 import { DeadlineKindRow, DurationDaysField, PublishModeRow } from "./ProjectSettingRows";
 
 type Place = "start" | "deadline";
+
+/** A refusal said under the field it concerns: where, and the words. */
+export interface PlacedRefusal {
+  place: Place;
+  message: string;
+}
+
+/**
+ * Where a refusal of the publication block is said, or null for one the page
+ * says: `start_past` under the start, `deadline_past` and a deadline that
+ * does not come after the start under the deadline. A patch of the block
+ * earns them, and so do Schedule and Publish in the header (ADR-127).
+ */
+export function publicationRefusal(error: unknown, t: TFunction): PlacedRefusal | null {
+  const code = refusalCodeOf(error);
+  if (code === "start_past") return { place: "start", message: t("project.refusal.startPast") };
+  if (code === "deadline_past") return { place: "deadline", message: t("project.refusal.deadlinePast") };
+  // The one 400 this block can earn: a deadline that does not come after the start.
+  if (refusedWith(error, "validation")) return { place: "deadline", message: t("project.missing.deadlineOrder") };
+  return null;
+}
 
 /** The days of a duration, written when the teacher leaves the field. */
 function DaysField({
@@ -46,19 +67,30 @@ function DaysField({
  * the mode, which puts the screen back to what the server stores. The block
  * is keyed by its caller on the stored values, so a write from elsewhere
  * replaces them.
+ *
+ * The start choice (now / a date, ADR-127) says what the header's one button
+ * will do; a scheduled project keeps its form, the choice held on "a date"
+ * (Publish now is the header's way back to now). `refused` is what the
+ * header's Schedule or Publish earned, said under its field until the block
+ * says something else.
  */
 export function ProjectDraftPublication({
   project,
   pending,
   write,
+  refused = null,
 }: {
   project: ProjectDetail;
   pending: boolean;
   write: WriteProject;
+  refused?: PlacedRefusal | null;
 }) {
   const t = useT();
   const [view, setView] = useState(() => draftView(project));
-  const [said, setSaid] = useState<{ place: Place; message: string } | null>(null);
+  const [said, setSaid] = useState<PlacedRefusal | null>(null);
+  /** What the block said itself, else the header's refusal (cleared by the page on the next successful patch). */
+  const shown = said ?? refused;
+  const isScheduled = project.state === "scheduled";
   const can = (field: "publishMode" | "startAt" | "deadlineAt" | "durationMinutes") => project.editable.includes(field);
   const held = pending || project.archivedAt !== null;
   const zone = foreignZone();
@@ -66,13 +98,9 @@ export function ProjectDraftPublication({
 
   /** Under the field a refusal is about; false for the others, which the page says. */
   const sayRefusal = (error: unknown): boolean => {
-    const code = refusalCodeOf(error);
-    if (code === "start_past") setSaid({ place: "start", message: t("project.refusal.startPast") });
-    else if (code === "deadline_past") setSaid({ place: "deadline", message: t("project.refusal.deadlinePast") });
-    // The one 400 this block can earn: a deadline that does not come after the start.
-    else if (refusedWith(error, "validation")) setSaid({ place: "deadline", message: t("project.missing.deadlineOrder") });
-    else return false;
-    return true;
+    const placed = publicationRefusal(error, t);
+    if (placed) setSaid(placed);
+    return placed !== null;
   };
 
   const change = (c: DraftChange) => {
@@ -91,13 +119,13 @@ export function ProjectDraftPublication({
       return sayRefusal(error);
     });
   };
-  const at = (place: Place) => (said?.place === place ? said.message : undefined);
+  const at = (place: Place) => (shown?.place === place ? shown.message : undefined);
 
   return (
     <Card className="divide-y divide-line px-4">
       <PublishModeRow
         value={view.publishMode}
-        desc={t(`project.draft.publishMode.desc.${view.publishMode}`)}
+        desc={isScheduled ? undefined : t(view.publishMode === "scheduled" ? "project.startChoice.desc.date" : "project.startChoice.desc.now")}
         disabled={held || !can("publishMode")}
         onChange={(mode) => change({ type: "mode", mode })}
       />

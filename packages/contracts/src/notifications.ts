@@ -189,6 +189,18 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
   // entry opens the project (`/projects/:id`, the student's view for a
   // student).
   z.object({
+    /**
+     * A project of the recipient's classroom was scheduled (ADR-127): it is
+     * announced and opens at `startAt`, the start when it was scheduled —
+     * once per project ever; a later change of date tells nobody again.
+     */
+    kind: z.literal("project_scheduled"),
+    ...projectRef,
+    startAt: z.iso.datetime(),
+    /** As `project_published`'s: present, and false, only when the recipient had no linked GitHub account (M3-14d). */
+    githubLinked: z.literal(false).optional(),
+  }),
+  z.object({
     /** A project of the recipient's classroom was published (once per project). */
     kind: z.literal("project_published"),
     ...projectRef,
@@ -310,6 +322,7 @@ export const NOTIFICATION_KINDS = [
   "activity_available",
   "deadline_approaching",
   "results_updated",
+  "project_scheduled",
   "project_published",
   "project_deadline_reminder",
   "project_repo_invited",
@@ -368,6 +381,7 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   // The project kinds (F-NOTIF-13, ADR-030): on everywhere for what a
   // student or a teacher must not miss, off outside the app for the news
   // that can wait for the next visit.
+  project_scheduled: { bell: true, email: false, teams: false },
   project_published: { bell: true, email: false, teams: false },
   project_deadline_reminder: { bell: true, email: true, teams: true },
   project_repo_invited: { bell: true, email: true, teams: true },
@@ -448,6 +462,7 @@ export const NOTIFICATION_AUDIENCE: Readonly<
   activity_available: "seat",
   deadline_approaching: "seat",
   results_updated: "seat",
+  project_scheduled: "seat",
   project_published: "seat",
   project_deadline_reminder: "seat",
   project_repo_invited: "seat",
@@ -475,6 +490,7 @@ export const NOTIFICATION_AUDIENCE: Readonly<
  * with its emitter). Every other kind is sent whatever the configuration.
  */
 export const GITHUB_KINDS = [
+  "project_scheduled",
   "project_published",
   "project_deadline_reminder",
   "project_repo_invited",

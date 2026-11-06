@@ -139,6 +139,11 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
         closedAt: isoDateTime(payload.closedAt),
       });
     // The project kinds (F-NOTIF-13): the project's name, counts, never a score.
+    case "project_scheduled":
+      return t(payload.githubLinked === false ? "notif.projectScheduled.unlinked" : "notif.projectScheduled", {
+        projectTitle: payload.projectTitle,
+        when: isoDateTime(payload.startAt),
+      });
     case "project_published":
       return t(payload.githubLinked === false ? "notif.projectPublished.unlinked" : "notif.projectPublished", {
         projectTitle: payload.projectTitle,
@@ -203,6 +208,7 @@ function notificationRoute(payload: NotificationPayload): Route {
       return { view: "admin", tab: "system" };
     case "impersonation_ended":
       return { view: "privacy" };
+    case "project_scheduled":
     case "project_published":
     case "project_deadline_reminder":
     case "project_repo_invited":

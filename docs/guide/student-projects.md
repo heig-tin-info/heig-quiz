@@ -6,7 +6,7 @@ This page is for you if your teacher gives graded work in a **GitHub repository*
 
 You need a GitHub account. If you do not have one, create it on [github.com](https://github.com) first. It does not have to use your school address.
 
-A project appears under **Open now** or **Coming up** on your home and on your classroom's page, next to the quizzes. If you see none, your teacher has not published one yet, or your classroom is not connected to GitHub.
+A project appears under **Open now** or **Coming up** on your home and on your classroom's page, next to the quizzes. One under **Coming up** says when it starts; you accept it from then on. If you see none, your teacher has not published one yet, or your classroom is not connected to GitHub.
 
 ## 1. Link your GitHub account (once)
 

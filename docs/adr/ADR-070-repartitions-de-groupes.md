@@ -8,6 +8,13 @@ record (decision 12, and the [correspondence table](#correspondence-with-adr-048
 amendments are folded into the decisions they change, each marked with its date and task (the
 [table of old references](#correspondence-of-old-references) maps them).
 
+Amended 2026-11-06 by [ADR-127](ADR-127-etat-planifie-des-projets.md)
+(product owner), scope: decision 12's "the scheduled publication applies
+the same guard in the ticker" — a scheduled project opens at its start
+whatever its groups (a student in no group meets `409 no_group` on Accept);
+Schedule refuses what Publish refuses — and decision 8's "published
+project": a `scheduled` one does not show its closed set.
+
 Scope: where a classroom's groups of students live, who forms them and how,
 and how a group project uses them, including the GitHub side of a group
 repository (decision 12, folded from [ADR-048](ADR-048-projets-de-groupe.md)'s
@@ -406,7 +413,9 @@ were settled by the product owner on 2026-10-04.
       `409 unassigned_students` with the students (`{ students }`) before
       any state change; the scheduled publication applies the same
       guard in the ticker, so such a draft stays a draft past its start, and
-      goes live on the tick that follows the fix.
+      goes live on the tick that follows the fix. (Amended 2026-11-06 by
+      [ADR-127](ADR-127-etat-planifie-des-projets.md) §6: Schedule applies
+      the guard; the ticker opens a scheduled project whatever its groups.)
     - **One `project_repos` row per group repository**, `group_id` set
       (`ON DELETE SET NULL`: deleting a group never deletes a repository),
       `user_id` the member whose Accept created it and nothing more (§4,

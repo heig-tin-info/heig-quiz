@@ -389,7 +389,10 @@ const scenes = [
     // The first row with a score: a repository, not a student who has not accepted.
     act: (p) => p.locator("tbody tr").filter({ hasText: /\d+\/\d+/ }).first().click(),
   },
+  // ADR-127: the draft holds a date to come, so its one button is Schedule.
   { name: "project-draft", role: "teacher", path: "/projects/pj-draft?projects=1" },
+  // ADR-127: the scheduled project, its form kept, no primary, Publish now and Cancel schedule beside the title.
+  { name: "project-scheduled", role: "teacher", path: "/projects/pj-scheduled?projects=1" },
   // ADR-106 §8: the grading screen of a project graded by criteria
   // (`?pjcriteria=1`), on the first repository to validate, its second
   // criterion's rationale unfolded, the tests' CI output and the repository's

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   changedAfterRelease,
+  draftStartsLater,
+  projectBeforePublication,
+  projectIsLive,
   projectListDates,
   projectPhase,
   projectPrimaryAction,
@@ -47,6 +50,7 @@ describe("projectPrimaryAction (F-PROJ-13)", () => {
   const base: PrimaryActionInput = {
     state: "published",
     archived: false,
+    startsLater: false,
     gradingMode: "auto",
     sourceAhead: false,
     live: 3,
@@ -59,6 +63,13 @@ describe("projectPrimaryAction (F-PROJ-13)", () => {
   it("publishes a draft, nothing for an archived project", () => {
     expect(projectPrimaryAction({ ...base, state: "draft" })).toBe("publish");
     expect(projectPrimaryAction({ ...base, state: "draft", archived: true })).toBe("none");
+  });
+
+  it("schedules a draft whose start lies ahead, nothing for a scheduled project (ADR-127)", () => {
+    expect(projectPrimaryAction({ ...base, state: "draft", startsLater: true })).toBe("schedule");
+    expect(projectPrimaryAction({ ...base, state: "draft", startsLater: true, archived: true })).toBe("none");
+    expect(projectPrimaryAction({ ...base, state: "scheduled", startsLater: true })).toBe("none");
+    expect(projectPrimaryAction({ ...base, state: "scheduled", sourceAhead: true })).toBe("none");
   });
 
   it("releases once every live repository is frozen, again only when a score changed", () => {
@@ -76,7 +87,7 @@ describe("projectPrimaryAction (F-PROJ-13)", () => {
   });
 
   it("grades a frozen project by criteria while a repository is to validate, then releases (ADR-106 §8)", () => {
-    const criteria = { ...base, gradingMode: "criteria" as const, state: "locked" as const, publishMode: "manual" as const, deadlineStrategy: "lock" as const };
+    const criteria = { ...base, gradingMode: "criteria" as const, state: "locked" as const, deadlineStrategy: "lock" as const };
     expect(projectPrimaryAction({ ...criteria, frozen: 2, unvalidated: 3 })).toBe("none");
     expect(projectPrimaryAction({ ...criteria, frozen: 3, unvalidated: 1 })).toBe("grade");
     // A score to verify beneath an unvalidated repository: the validation settles it first.
@@ -160,7 +171,6 @@ describe("projectListDates", () => {
 describe("projectPhase (ADR-104)", () => {
   const final = {
     gradingMode: "auto" as const,
-    publishMode: "manual" as const,
     deadlineStrategy: "lock" as const,
     live: 3,
     frozen: 3,
@@ -174,10 +184,9 @@ describe("projectPhase (ADR-104)", () => {
     expect(projectPhase({ ...final, state: "published", released: true })).toBe("published");
   });
 
-  it("tells a scheduled draft from one published by hand, and only a draft (#795)", () => {
-    expect(projectPhase({ ...final, state: "draft", publishMode: "scheduled" })).toBe("scheduled");
-    expect(projectPhase({ ...final, state: "published", publishMode: "scheduled" })).toBe("published");
-    expect(projectPhase({ ...final, state: "locked", publishMode: "scheduled" })).toBe("graded");
+  it("reads a scheduled project's state, never a draft's date (ADR-127, amending #795)", () => {
+    expect(projectPhase({ ...final, state: "scheduled" })).toBe("scheduled");
+    expect(projectPhase({ ...final, state: "draft" })).toBe("draft");
   });
 
   it("is graded once every live repository is frozen with nothing left to verify", () => {
@@ -211,5 +220,23 @@ describe("projectPhase (ADR-104)", () => {
     expect(projectPhase({ ...commit, state: "published" })).toBe("published");
     expect(projectPhase({ ...commit, state: "locked" })).toBe("graded");
     expect(projectPhase({ ...commit, state: "locked", released: true })).toBe("released");
+  });
+});
+
+describe("the project states' predicates (ADR-127)", () => {
+  it("opens published and locked projects only", () => {
+    expect(["draft", "scheduled", "published", "locked"].map((s) => projectIsLive(s as never))).toEqual([false, false, true, true]);
+  });
+
+  it("edits a draft and a scheduled project like a draft", () => {
+    expect(["draft", "scheduled", "published", "locked"].map((s) => projectBeforePublication(s as never))).toEqual([true, true, false, false]);
+  });
+
+  it("says a draft starts later only with a date still ahead", () => {
+    const now = new Date("2026-11-06T10:00:00Z");
+    const ahead = new Date("2026-11-06T16:30:00Z");
+    expect(draftStartsLater({ publishMode: "scheduled", startAt: ahead }, now)).toBe(true);
+    expect(draftStartsLater({ publishMode: "scheduled", startAt: now }, now)).toBe(false);
+    expect(draftStartsLater({ publishMode: "manual", startAt: ahead }, now)).toBe(false);
   });
 });

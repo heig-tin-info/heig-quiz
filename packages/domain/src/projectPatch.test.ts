@@ -27,6 +27,14 @@ describe("projectFieldRefusal (F-PROJ-03)", () => {
     expect(editableProjectFields(project({ state: "draft", deadlineAt: EARLIER }), NOW)).toEqual([...PROJECT_PATCH_FIELDS]);
   });
 
+  it("lets a scheduled project change like a draft, its start choice locked to a date (ADR-127 §4)", () => {
+    const scheduled = project({ state: "scheduled" });
+    expect(editableProjectFields(scheduled, NOW)).toEqual(PROJECT_PATCH_FIELDS.filter((f) => f !== "publishMode" && f !== "durationMinutes"));
+    expect(projectFieldRefusal(scheduled, "publishMode", NOW, "manual")).toBe("publish_mode_frozen");
+    expect(projectFieldRefusal(scheduled, "groupSetId", NOW)).toBeNull();
+    expect(gradingModeRefusal(scheduled, "none")).toBeNull();
+  });
+
   it("keeps the name, the protected files, the deadline and its strategy open once published", () => {
     expect(editableProjectFields(project(), NOW)).toEqual(["name", "deadlineAt", "deadlineStrategy", "protectedFiles", "testsCriterion", "identityCriterion", "buildCommand", "testCommand", "evidenceOutputs"]);
   });
@@ -76,8 +84,8 @@ describe("gradingModeRefusal (ADR-106 §1)", () => {
 });
 
 describe("patchedDraftDates (F-PROJ-03)", () => {
-  const manual: ProjectDatesLike = { publishMode: "manual", startAt: EARLIER, deadlineAt: LATER, durationMinutes: null };
-  const scheduled: ProjectDatesLike = { publishMode: "scheduled", startAt: new Date("2026-10-10T08:00:00Z"), deadlineAt: LATER, durationMinutes: null };
+  const manual: ProjectDatesLike = { state: "draft", publishMode: "manual", startAt: EARLIER, deadlineAt: LATER, durationMinutes: null };
+  const scheduled: ProjectDatesLike = { state: "scheduled", publishMode: "scheduled", startAt: new Date("2026-10-10T08:00:00Z"), deadlineAt: LATER, durationMinutes: null };
   const FUTURE = new Date("2026-10-05T08:00:00Z");
 
   it("keeps a provisional deadline for a duration, from now", () => {
@@ -88,8 +96,9 @@ describe("patchedDraftDates (F-PROJ-03)", () => {
     });
   });
 
-  it("refuses a switch to scheduled that has no start ahead, and a start moved to the past", () => {
-    expect(patchedDraftDates(manual, { publishMode: "scheduled" }, NOW)).toEqual({ ok: false, refusal: "start_past" });
+  it("refuses a scheduled project's start moved to the past; a draft may hold a past date (ADR-127 §10)", () => {
+    expect(patchedDraftDates(manual, { publishMode: "scheduled" }, NOW)).toEqual({ ok: true, startAt: EARLIER, deadlineAt: LATER });
+    expect(patchedDraftDates({ ...scheduled, state: "draft" }, { startAt: EARLIER }, NOW)).toEqual({ ok: true, startAt: EARLIER, deadlineAt: LATER });
     expect(patchedDraftDates(scheduled, { startAt: EARLIER }, NOW)).toEqual({ ok: false, refusal: "start_past" });
     expect(patchedDraftDates(manual, { publishMode: "scheduled", startAt: FUTURE }, NOW)).toEqual({ ok: true, startAt: FUTURE, deadlineAt: LATER });
   });
@@ -99,7 +108,7 @@ describe("patchedDraftDates (F-PROJ-03)", () => {
   });
 
   it("refuses a kept deadline that is not ahead on the switch to manual, a past deadline, a duration with a schedule, a deadline before the start", () => {
-    const stale = { ...scheduled, startAt: EARLIER, deadlineAt: new Date("2026-10-02T09:00:00Z") };
+    const stale = { ...scheduled, state: "draft" as const, startAt: EARLIER, deadlineAt: new Date("2026-10-02T09:00:00Z") };
     expect(patchedDraftDates(stale, { publishMode: "manual" }, NOW)).toEqual({ ok: false, refusal: "deadline_past" });
     expect(patchedDraftDates(manual, { deadlineAt: EARLIER }, NOW)).toEqual({ ok: false, refusal: "deadline_past" });
     expect(patchedDraftDates({ ...manual, durationMinutes: 60 }, { publishMode: "scheduled" }, NOW)).toEqual({ ok: false, refusal: "duration_needs_manual" });

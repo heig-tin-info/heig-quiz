@@ -33,7 +33,7 @@
  */
 import { eq } from "drizzle-orm";
 
-import { consequenceDelta, consequenceKey, isEmptyPlan, syncWork } from "@quiz/domain";
+import { consequenceDelta, consequenceKey, isEmptyPlan, projectBeforePublication, syncWork } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import type { Db } from "../../db/client.js";
@@ -60,7 +60,7 @@ export const groupSyncOwed = (project: Pick<ProjectRow, "groupResync">): boolean
  * *Resync with the set* would change something. Read without locks.
  */
 export async function groupsDrifted(db: Db, project: ProjectRow, now: Date): Promise<boolean> {
-  if (!project.groupMode || project.state === "draft" || project.groupSetId === null) return false;
+  if (!project.groupMode || projectBeforePublication(project.state) || project.groupSetId === null) return false;
   const { now: applied, added } = resyncDelta(await copyWork(db, project.id, frameOf(project, now)));
   return !isEmptyPlan(applied) || added.length > 0;
 }
@@ -87,8 +87,8 @@ export async function resyncGroups(db: Db, projectId: string, input: ResyncInput
     if (!project) throw notFoundError("project");
     if (!project.groupMode || project.groupSetId === null) throw new ProjectError("no_group_set", "The project follows no group set");
     if (room && room.archivedAt !== null) throw new ProjectError("classroom_archived", "The classroom is archived: its group sets are read-only");
-    // A draft's copy follows its set: nothing to resync.
-    if (project.state === "draft") return null;
+    // A draft's copy follows its set, a scheduled project's too (ADR-127): nothing to resync.
+    if (projectBeforePublication(project.state)) return null;
     if (project.archivedAt !== null) throw new ProjectError("project_archived", "An archived project's groups are not resynced");
     if (project.releasedAt !== null) throw new ProjectError("released", "A released project's groups are not resynced");
 

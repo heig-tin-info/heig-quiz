@@ -2,8 +2,9 @@
  * A project's lifecycle (F-PROJ-01 to F-PROJ-03, F-PROJ-16; merge task
  * M3-02), ported from heig-classroom's `modules/assignments/lifecycle.ts`
  * (sync point `ab98cc0`): create with its distribution repository, patch,
- * publish, archive, unarchive, delete. Every write is audited here, so the
- * ticker's scheduled publication (M3-05) audits through the same function.
+ * schedule and unschedule (ADR-127), publish, archive, unarchive, delete.
+ * Every write is audited here, so the ticker's publication of a scheduled
+ * project (M3-05) audits through the same function.
  *
  * **Creation never deletes anything on GitHub** (ADR-062): the draft row is
  * inserted first, which reserves the slug; the distribution repository is
@@ -27,7 +28,9 @@ import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { COMMAND_SETTINGS, criterionConflict, defaultProjectGradingScale, type ProjectCreate, type ProjectPatch } from "@quiz/contracts";
 import {
   commandNeedsNetwork,
+  draftStartsLater,
   patchedDraftDates,
+  projectBeforePublication,
   PROJECT_PATCH_FIELDS,
   projectFieldRefusal,
   proratedByTests,
@@ -41,10 +44,10 @@ import {
   type WorkModeName,
 } from "@quiz/domain";
 
-import { audit, type AuditActor } from "../../audit.js";
+import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
-import { codespaceProjects, enrollments, groupSets, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
+import { classrooms, codespaceProjects, enrollments, groupSets, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
 import type { InstallationClient } from "../../github/app.js";
 import { RepoNameTaken } from "../../github/provision.js";
 import { createSquashedRepo } from "../../github/squash.js";
@@ -55,7 +58,7 @@ import { forgetFinalPasses, projectDeadlineMoved, rescheduleCheckpoints } from "
 import { acceptable, CRITERIA_FILE, readCriteria, snapshotLeaves, storeCriteria, type CriteriaSnapshot } from "./criteria.js";
 import { ProjectError } from "./errors.js";
 import { replaceGroupCopy, stopProjects } from "./groupCopy.js";
-import { announcePublished } from "./notify.js";
+import { announcePublished, announceScheduled } from "./notify.js";
 import { classroomClient, fetchSource, readHandout, type Source } from "./sources.js";
 import { lifeOf, type ProjectRow } from "./views.js";
 
@@ -191,7 +194,7 @@ async function buildDistribution(
  * `POST /app/api/classrooms/:id/projects` (F-PROJ-01, F-PROJ-02): a draft
  * with its distribution repository. Refused before anything is written:
  * `not_connected`, `app_not_installed`, `source_not_found`,
- * `deadline_past`, `start_past` (a scheduled start already passed),
+ * `deadline_past`,
  * `unknown_group_set`, `duplicate_slug`; after:
  * `distribution_failed`, the row deleted and nothing on GitHub. A group
  * set named is copied as soon as the row exists (ADR-070 §4), so the set's
@@ -200,11 +203,8 @@ async function buildDistribution(
 export async function createProject(db: Db, config: AppConfig, input: CreateInput): Promise<ProjectRow> {
   const { body, now } = input;
   const dates = draftDates(body, now);
+  // A past start is no refusal here: a draft may hold one (ADR-127 §10), Schedule refuses it.
   if (dates.deadlineAt.getTime() <= now.getTime()) throw new ProjectError("deadline_past", "The deadline has passed");
-  // A start in the past would be published at the next tick, with the class notified (a patch: `patchedDraftDates`).
-  if (body.publishMode === "scheduled" && dates.startAt.getTime() <= now.getTime()) {
-    throw new ProjectError("start_past", "The start has passed");
-  }
   const groupSetId = body.groupSetId ?? null;
   const { org, client } = await classroomClient(db, config, input.classroomId);
   const { source, branches } = await readSource(db, client, org, body.sourceRepo, body.branches, input.caller);
@@ -562,48 +562,126 @@ export async function unassignedStudents(db: Db | Tx, project: Pick<ProjectRow, 
     .orderBy(enrollments.nom, enrollments.prenom);
 }
 
+/** Opening a project needs its distribution built (ADR-062): `distribution_missing`. */
+function distributionRefusal(project: ProjectRow): void {
+  if (project.distributionFullName === null) {
+    throw new ProjectError("distribution_missing", "The project's distribution repository is not built");
+  }
+}
+
 /**
- * Publishes a draft (F-PROJ-03): by hand (`POST …/publish`, `actor` the
- * person) or at its start by the ticker (M3-05, `SYSTEM_ACTOR`, audited
- * `project.auto_publish`). A manual publication starts now and counts its
- * duration from now; a scheduled one published early keeps its dates.
- * Refused: `not_draft`, `distribution_missing`, `no_group_set` (a group
- * project that names no group set, ADR-070 §7), `unassigned_students` (a
- * group project with a claimed student in no group of its copy, or no
- * group at all, ADR-048; `students` the ones left out), `deadline_past`.
- * The ticker's publication meets the same refusals and leaves the draft as
- * it is. Once committed, the classroom's students are told
- * (`project_published`, F-NOTIF-13) — once per project, since a draft is
- * published once.
+ * What a group project's opening refuses on its row, read FOR UPDATE in the
+ * caller's transaction (F-PROJ-03): `no_group_set` (ADR-070 §7) and
+ * `unassigned_students` (a claimed student in no group of its copy, or no
+ * group at all, ADR-048; `students` the ones left out). Publish and Schedule
+ * ask it; the ticker's publication of a scheduled project does not (ADR-127
+ * §6: a case born after the schedule never blocks the opening).
  */
-export async function publishProject(db: Db, projectId: string, now: Date, actor: AuditActor): Promise<ProjectRow> {
+async function groupOpeningRefusal(tx: Tx, project: ProjectRow): Promise<void> {
+  if (!project.groupMode) return;
+  if (project.groupSetId === null) throw new ProjectError("no_group_set", "The group project names no group set");
+  const left = await unassignedStudents(tx, project);
+  const [group] = await tx.select({ id: projectGroups.id }).from(projectGroups).where(eq(projectGroups.projectId, project.id)).limit(1);
+  if (left.length > 0 || !group) {
+    throw new ProjectError(
+      "unassigned_students",
+      left.length > 0 ? `${left.length} student(s) in no group` : "The project has no group",
+      { students: left },
+    );
+  }
+}
+
+/** The project's row, read FOR UPDATE in `tx`: a concurrent move is waited for, then seen. */
+async function lockedProject(tx: Tx, projectId: string): Promise<ProjectRow> {
+  const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
+  if (!project) throw notFoundError("project");
+  return project;
+}
+
+/**
+ * `POST …/schedule` (ADR-127): a draft becomes `scheduled` — announced to
+ * its classroom, published by the ticker at its start. Refused as Publish
+ * is (`distribution_missing`, {@link groupOpeningRefusal}'s `no_group_set`
+ * and `unassigned_students`), plus `not_draft`, `project_archived` and
+ * `classroom_archived` (its students could not load it: the once-ever
+ * announcement would be spent for nothing), `start_past` (no date ahead: a
+ * manual draft, or a date already past — Publish is the way) and
+ * `deadline_past`. Audited `project.schedule`; once committed, the students
+ * are told it opens (`project_scheduled`, once per project ever).
+ */
+export async function scheduleProject(db: Db, projectId: string, now: Date, actor: AuditActor): Promise<ProjectRow> {
   const row = await db.transaction(async (tx) => {
-    const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
-    if (!project) throw notFoundError("project");
-    if (project.state !== "draft") throw new ProjectError("not_draft", "The project is already published");
-    if (project.distributionFullName === null) {
-      throw new ProjectError("distribution_missing", "The project's distribution repository is not built");
+    const project = await lockedProject(tx, projectId);
+    if (project.state !== "draft") throw new ProjectError("not_draft", "Only a draft is scheduled");
+    if (project.archivedAt !== null) throw new ProjectError("project_archived", "An archived project is not scheduled");
+    const [room] = await tx.select({ archivedAt: classrooms.archivedAt }).from(classrooms).where(eq(classrooms.id, project.classroomId));
+    if (room?.archivedAt != null) throw new ProjectError("classroom_archived", "The classroom is archived");
+    distributionRefusal(project);
+    await groupOpeningRefusal(tx, project);
+    if (!draftStartsLater(project, now)) throw new ProjectError("start_past", "The project has no start ahead");
+    if (project.deadlineAt.getTime() <= now.getTime()) throw new ProjectError("deadline_past", "The deadline has passed");
+    const [row] = await tx.update(projects).set({ state: "scheduled" }).where(eq(projects.id, project.id)).returning();
+    await audit(tx, {
+      ...actor,
+      action: "project.schedule",
+      subjectType: "project",
+      subjectId: project.id,
+      payload: { startAt: project.startAt.toISOString(), deadlineAt: project.deadlineAt.toISOString() },
+    });
+    return row!;
+  });
+  await announceScheduled(db, row, now);
+  return row;
+}
+
+/**
+ * `POST …/unschedule` (ADR-127): a scheduled project back to a draft — off
+ * the students' Upcoming, nobody told; `409 not_scheduled` otherwise.
+ * Audited `project.unschedule`.
+ */
+export async function unscheduleProject(db: Db, projectId: string, actor: AuditActor): Promise<ProjectRow> {
+  return db.transaction(async (tx) => {
+    const project = await lockedProject(tx, projectId);
+    if (project.state !== "scheduled") throw new ProjectError("not_scheduled", "The project is not scheduled");
+    const [row] = await tx.update(projects).set({ state: "draft" }).where(eq(projects.id, project.id)).returning();
+    await audit(tx, { ...actor, action: "project.unschedule", subjectType: "project", subjectId: project.id });
+    return row!;
+  });
+}
+
+/**
+ * Opens a project: `published`, then the classroom's students told
+ * (`project_published`, F-NOTIF-13) — once per project, since a project is
+ * published once. By hand ({@link publishProject}) or by the ticker
+ * ({@link autoPublishProject}).
+ */
+async function openProject(
+  db: Db,
+  projectId: string,
+  now: Date,
+  actor: AuditActor,
+  by: "hand" | "ticker",
+): Promise<ProjectRow> {
+  const row = await db.transaction(async (tx) => {
+    const project = await lockedProject(tx, projectId);
+    if (by === "hand") {
+      if (!projectBeforePublication(project.state)) throw new ProjectError("not_draft", "The project is already published");
+      distributionRefusal(project);
+      await groupOpeningRefusal(tx, project);
+    } else {
+      // The ticker's scan read no lock: re-judged here, under it, so a start moved later (or a deadline
+      // moved earlier, or an archive) meanwhile is never published — the claim lost, like `not_draft` (invariant 5).
+      const due =
+        project.state === "scheduled" &&
+        project.archivedAt === null &&
+        project.startAt.getTime() <= now.getTime() &&
+        project.deadlineAt.getTime() > now.getTime();
+      if (!due) throw new ProjectError("not_draft", "The project is no longer due for its scheduled publication");
+      distributionRefusal(project);
     }
-    if (project.groupMode) {
-      if (project.groupSetId === null) throw new ProjectError("no_group_set", "The group project names no group set");
-      const left = await unassignedStudents(tx, project);
-      const [group] = await tx
-        .select({ id: projectGroups.id })
-        .from(projectGroups)
-        .where(eq(projectGroups.projectId, project.id))
-        .limit(1);
-      if (left.length > 0 || !group) {
-        throw new ProjectError(
-          "unassigned_students",
-          left.length > 0 ? `${left.length} student(s) in no group` : "The project has no group",
-          { students: left },
-        );
-      }
-    }
-    const manual = project.publishMode === "manual";
-    const startAt = manual ? now : project.startAt;
-    const deadlineAt =
-      manual && project.durationMinutes !== null ? new Date(now.getTime() + project.durationMinutes * 60_000) : project.deadlineAt;
+    // By hand, the start is now and a duration counts from it (ADR-127 §9); the ticker keeps the scheduled start.
+    const startAt = by === "hand" ? now : project.startAt;
+    const deadlineAt = project.durationMinutes !== null ? new Date(now.getTime() + project.durationMinutes * 60_000) : project.deadlineAt;
     if (deadlineAt.getTime() <= now.getTime()) throw new ProjectError("deadline_past", "The deadline has passed");
     const [row] = await tx
       .update(projects)
@@ -613,7 +691,7 @@ export async function publishProject(db: Db, projectId: string, now: Date, actor
     if (deadlineAt.getTime() !== project.deadlineAt.getTime()) await rescheduleCheckpoints(tx, project.id, deadlineAt);
     await audit(tx, {
       ...actor,
-      action: actor.actorType === "system" ? "project.auto_publish" : "project.publish",
+      action: by === "ticker" ? "project.auto_publish" : "project.publish",
       subjectType: "project",
       subjectId: project.id,
       payload: { startAt: startAt.toISOString(), deadlineAt: deadlineAt.toISOString() },
@@ -624,11 +702,34 @@ export async function publishProject(db: Db, projectId: string, now: Date, actor
   return row;
 }
 
+/**
+ * `POST …/publish` (F-PROJ-03, ADR-127 §9): a draft or a scheduled project
+ * published now — its start is now, whatever date it held; a duration
+ * counts from now, an absolute deadline is kept. Refused: `not_draft`
+ * (published already), `distribution_missing`, {@link groupOpeningRefusal}'s, `deadline_past`.
+ * Audited `project.publish`.
+ */
+export function publishProject(db: Db, projectId: string, now: Date, actor: AuditActor): Promise<ProjectRow> {
+  return openProject(db, projectId, now, actor, "hand");
+}
+
+/**
+ * The ticker's publication of a scheduled project at its start (M3-05,
+ * ADR-127): its dates kept, audited `project.auto_publish` for the system.
+ * It opens whatever its groups (§6: a student in no group meets `409
+ * no_group` on Accept until placed); `not_draft` when it is no longer
+ * scheduled (unscheduled, or published by another process meanwhile).
+ */
+export function autoPublishProject(db: Db, projectId: string, now: Date): Promise<ProjectRow> {
+  return openProject(db, projectId, now, SYSTEM_ACTOR, "ticker");
+}
+
 // ---------------------------------------------------------------- archive, delete
 
 /**
  * Archives or brings back a project (F-PROJ-16): out of the lists, reversibly. Audited when it changes.
  * The archive stops its groups for good (ADR-070 §4): an unarchive never makes its copy follow again.
+ * An unarchived scheduled project whose deadline has passed comes back a draft (ADR-127).
  */
 export async function setProjectArchived(
   db: Db,
@@ -638,10 +739,14 @@ export async function setProjectArchived(
   now: Date,
 ): Promise<ProjectRow> {
   if ((project.archivedAt !== null) === archived) return project;
+  // Unarchived, a scheduled project is armed again (ADR-127 §5): the ticker publishes one whose start passed
+  // at its next tick — but never one whose deadline passed too, which would stay scheduled for ever: that
+  // one comes back a draft.
+  const stale = !archived && project.state === "scheduled" && project.deadlineAt.getTime() <= now.getTime();
   return db.transaction(async (tx) => {
     const [row] = await tx
       .update(projects)
-      .set({ archivedAt: archived ? now : null })
+      .set({ archivedAt: archived ? now : null, ...(stale ? { state: "draft" as const } : {}) })
       .where(eq(projects.id, project.id))
       .returning();
     if (archived) await stopProjects(tx, [project.id], now);
@@ -650,6 +755,7 @@ export async function setProjectArchived(
       action: archived ? "project.archive" : "project.unarchive",
       subjectType: "project",
       subjectId: project.id,
+      ...(stale ? { payload: { state: "draft" } } : {}),
     });
     return row!;
   });

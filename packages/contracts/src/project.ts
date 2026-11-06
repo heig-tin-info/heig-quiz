@@ -55,18 +55,20 @@ import { GroupConfirm } from "./group.js";
 
 // ---------------------------------------------------------- closed values
 
-/** F-PROJ-03: `draft` → `published` → `locked` (at the deadline). */
+/**
+ * F-PROJ-03 (ADR-127): `draft` → `scheduled` (announced, published by the
+ * ticker at its start) → `published` → `locked` (at the deadline).
+ */
 export const ProjectState = z.enum(PROJECT_STATES);
 export type ProjectState = z.infer<typeof ProjectState>;
 
 /**
  * What the staff's badge says (ADR-104, `projectPhase` of `@quiz/domain`):
- * the state, with `draft` refined into `draft` (published by hand) and
- * `scheduled` (published by the scheduler at its start), and `locked`
+ * the state — `scheduled` read from the state since ADR-127 — and `locked`
  * refined into `locked` (scores not final) — `deadline_passed` under the
  * `commit` deadline strategy, which leaves the repositories open (#958) —,
  * `graded` (final, the release awaited) and `released`. Derived by the
- * server from the publish mode, the deadline strategy, the frozen
+ * server from the state, the deadline strategy, the frozen
  * repositories and the release; never stored, never a student's.
  */
 export const ProjectPhase = z.enum(PROJECT_PHASES);
@@ -172,7 +174,7 @@ export const ProjectActivitySummary = z.object({
   title: z.string(),
   /** The stored state: what the buckets, the sorting and the gantt read. */
   state: ProjectState,
-  /** What the badge says ({@link ProjectPhase}): the state, `draft` refined by the publish mode, `locked` by the freeze and the release. */
+  /** What the badge says ({@link ProjectPhase}): the state, `locked` refined by the freeze and the release. */
   phase: ProjectPhase,
   classroom: z.object({ id: z.uuid(), name: z.string(), courseCode: z.string() }),
   /**
@@ -514,8 +516,12 @@ export type ProjectSummary = z.infer<typeof ProjectSummary>;
  *   - `deadline_past` (422) — a deadline, or a repository's own deadline,
  *     at or before now; moving a deadline already applied to a later date
  *     is not refused: it reopens the project (F-PROJ-09, M3-05a);
- *   - `start_past` (422) — a scheduled draft's start at or before now: it
- *     would be published at the next tick (F-PROJ-03);
+ *   - `start_past` (422) — Schedule, or a scheduled project's start moved,
+ *     at or before now: it would be published at the next tick (F-PROJ-03,
+ *     ADR-127 §10; a draft may hold a past date);
+ *   - `not_draft` — also Schedule asked of a project that is not a draft;
+ *     `not_scheduled` — Cancel the schedule asked of a project that is not
+ *     scheduled (ADR-127);
  *   - `repo_unavailable` — a repository's lock, unlock or own deadline
  *     asked of a repository that is not provisioned, or was deleted on
  *     GitHub (M3-05a);
@@ -573,6 +579,8 @@ export const PROJECT_REFUSALS = [
   "deadline_past",
   "start_past",
   "not_draft",
+  // ADR-127: Cancel the schedule of a project that is not scheduled.
+  "not_scheduled",
   "publish_mode_frozen",
   "strategy_frozen",
   "unassigned_students",

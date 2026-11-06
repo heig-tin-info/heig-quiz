@@ -35,6 +35,7 @@ import {
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import {
   auditLog,
+  classrooms,
   courseStaff,
   enrollments,
   githubClassroomLinks,
@@ -49,6 +50,7 @@ import { setRemoteBaseForTests } from "../../github/git.js";
 import { appKey, fakeGithub, orgsRoute, type Route } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
+import { gradebookProjects } from "./gradebook.js";
 import { repoWorld } from "./testing.js";
 
 const key = appKey();
@@ -360,8 +362,9 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
     const room = await connectedClassroom();
     const past = await call("POST", base(room.id), teacher.headers, { ...LAB, deadlineAt: "2026-10-01T00:00:00Z" });
     expect(refusal(past)).toEqual([422, "deadline_past"]);
+    // A past start is a draft's to hold (ADR-127 §10): Schedule refuses it, not the creation.
     const startPast = { ...LAB, publishMode: "scheduled", startAt: "2026-10-01T00:00:00Z" };
-    expect(refusal(await call("POST", base(room.id), teacher.headers, startPast))).toEqual([422, "start_past"]);
+    expect((await call("POST", base(room.id), teacher.headers, startPast)).statusCode).toBe(201);
     const loose = await connectedClassroom({ connected: false });
     expect(refusal(await call("POST", base(loose.id), teacher.headers, LAB))).toEqual([409, "not_connected"]);
     for (const body of [
@@ -445,19 +448,17 @@ describe("patch (F-PROJ-03)", () => {
     expect(refusal(await patch(project.id, { deadlineAt: "2026-10-01T00:00:00Z" }))).toEqual([422, "deadline_past"]);
   });
 
-  it("refuses a scheduled start already past, and resets the start when back to manual (F-PROJ-03)", async () => {
+  it("lets a draft hold a past date, and resets the start when back to manual (F-PROJ-03, ADR-127 §10)", async () => {
     const room = await connectedClassroom();
     const project = await create(room.id);
-    // A manual draft's stored start is its creation: switching alone would publish it at the next tick.
-    expect(refusal(await patch(project.id, { publishMode: "scheduled" }))).toEqual([422, "start_past"]);
-    expect(refusal(await patch(project.id, { publishMode: "scheduled", startAt: NOW, deadlineAt: IN_A_WEEK }))).toEqual([422, "start_past"]);
-    expect((await rowOf(project.id))!.publishMode).toBe("manual");
+    // A draft is armed by nothing but Schedule: a past start is its own business.
+    const past = await patch(project.id, { publishMode: "scheduled", startAt: "2026-10-01T08:00:00Z", deadlineAt: IN_A_WEEK });
+    expect(past.statusCode, past.body).toBe(200);
+    expect(ProjectSummary.parse(past.json())).toMatchObject({ state: "draft", publishMode: "scheduled", startAt: "2026-10-01T08:00:00.000Z" });
 
-    const scheduled = await patch(project.id, { publishMode: "scheduled", startAt: "2026-10-05T08:00:00Z", deadlineAt: IN_A_WEEK });
+    const scheduled = await patch(project.id, { startAt: "2026-10-05T08:00:00Z" });
     expect(scheduled.statusCode, scheduled.body).toBe(200);
     expect(ProjectSummary.parse(scheduled.json())).toMatchObject({ publishMode: "scheduled", startAt: "2026-10-05T08:00:00.000Z" });
-    // A start moved to the past is refused too.
-    expect(refusal(await patch(project.id, { startAt: "2026-10-01T08:00:00Z" }))).toEqual([422, "start_past"]);
 
     const back = await patch(project.id, { publishMode: "manual" });
     expect(back.statusCode, back.body).toBe(200);
@@ -509,6 +510,89 @@ describe("patch (F-PROJ-03)", () => {
   });
 });
 
+// ---------------------------------------------------------------- schedule (ADR-127)
+
+describe("schedule and unschedule (ADR-127)", () => {
+  const post = (id: string, verb: "schedule" | "unschedule" | "publish") => call("POST", `/app/api/projects/${id}/${verb}`, teacher.headers);
+  const patch = (id: string, body: object) => call("PATCH", `/app/api/projects/${id}`, teacher.headers, body);
+  const DATED = { ...LAB, publishMode: "scheduled", startAt: "2026-10-05T08:00:00Z" };
+
+  it("arms a draft with a date ahead, audited; the project stays editable like a draft, its start choice locked to a date", async () => {
+    const room = await connectedClassroom();
+    const project = await create(room.id, DATED);
+    const res = await post(project.id, "schedule");
+    expect(res.statusCode, res.body).toBe(200);
+    const summary = ProjectSummary.parse(res.json());
+    expect(summary).toMatchObject({ state: "scheduled", startAt: "2026-10-05T08:00:00.000Z" });
+    expect(summary.editable).not.toContain("publishMode");
+    expect(summary.editable).toContain("groupMode");
+    const [entry] = await auditOf(project.id, "project.schedule");
+    expect(entry!.payload).toEqual({ startAt: "2026-10-05T08:00:00.000Z", deadlineAt: IN_A_WEEK });
+
+    expect((await patch(project.id, { name: "Renamed", graceMinutes: 10, startAt: "2026-10-06T08:00:00Z" })).statusCode).toBe(200);
+    expect(refusal(await patch(project.id, { publishMode: "manual" }))).toEqual([409, "publish_mode_frozen"]);
+    expect(refusal(await patch(project.id, { startAt: "2026-10-01T08:00:00Z" }))).toEqual([422, "start_past"]);
+    expect(refusal(await post(project.id, "schedule"))).toEqual([409, "not_draft"]);
+    expect((await rowOf(project.id))).toMatchObject({ state: "scheduled", name: "Renamed", graceMinutes: 10 });
+    // Not open yet: no gradebook column until it is published.
+    expect(await gradebookProjects(server.app.db, room.id)).toEqual([]);
+    expect((await post(project.id, "publish")).statusCode).toBe(200);
+    expect((await gradebookProjects(server.app.db, room.id)).map((p) => p.id)).toEqual([project.id]);
+  });
+
+  it("takes a scheduled project back to a draft, audited, and refuses anything else", async () => {
+    const room = await connectedClassroom();
+    const project = await create(room.id, DATED);
+    expect(refusal(await post(project.id, "unschedule"))).toEqual([409, "not_scheduled"]);
+    expect((await post(project.id, "schedule")).statusCode).toBe(200);
+    const back = await post(project.id, "unschedule");
+    expect(back.statusCode, back.body).toBe(200);
+    expect(ProjectSummary.parse(back.json())).toMatchObject({ state: "draft", startAt: "2026-10-05T08:00:00.000Z" });
+    expect(await auditOf(project.id, "project.unschedule")).toHaveLength(1);
+    // Back as a draft, the start choice opens again.
+    expect((await patch(project.id, { publishMode: "manual" })).statusCode).toBe(200);
+  });
+
+  it("refuses an archived project and one of an archived classroom: the announcement is not spent on them", async () => {
+    const room = await connectedClassroom();
+    const archived = await create(room.id, DATED);
+    expect((await call("POST", `/app/api/projects/${archived.id}/archive`, teacher.headers)).statusCode).toBe(200);
+    expect(refusal(await post(archived.id, "schedule"))).toEqual([409, "project_archived"]);
+    const project = await create(room.id, DATED);
+    await server.app.db.update(classrooms).set({ archivedAt: new Date(NOW) }).where(eq(classrooms.id, room.id));
+    expect(refusal(await post(project.id, "schedule"))).toEqual([409, "classroom_archived"]);
+    expect((await rowOf(project.id))!.state).toBe("draft");
+  });
+
+  it("brings an unarchived scheduled project whose deadline passed back to a draft, and re-arms one still open", async () => {
+    const room = await connectedClassroom();
+    const project = await create(room.id, DATED);
+    const kept = await create(room.id, DATED);
+    for (const p of [project, kept]) {
+      expect((await post(p.id, "schedule")).statusCode).toBe(200);
+      expect((await call("POST", `/app/api/projects/${p.id}/archive`, teacher.headers)).statusCode).toBe(200);
+    }
+    server.clock.set("2026-10-06T08:00:00Z");
+    expect(ProjectSummary.parse((await call("POST", `/app/api/projects/${kept.id}/unarchive`, teacher.headers)).json()).state).toBe("scheduled");
+    server.clock.set("2026-10-12T08:00:00Z");
+    const back = await call("POST", `/app/api/projects/${project.id}/unarchive`, teacher.headers);
+    expect(ProjectSummary.parse(back.json())).toMatchObject({ state: "draft", archivedAt: null });
+  });
+
+  it("refuses what Publish refuses, and a start that is not ahead", async () => {
+    const room = await connectedClassroom();
+    // A manual draft: its start is its creation, never ahead.
+    expect(refusal(await post((await create(room.id)).id, "schedule"))).toEqual([422, "start_past"]);
+    const past = await create(room.id, { ...DATED, startAt: "2026-10-01T08:00:00Z" });
+    expect(refusal(await post(past.id, "schedule"))).toEqual([422, "start_past"]);
+    expect(refusal(await post((await create(room.id, { ...DATED, groupMode: true })).id, "schedule"))).toEqual([409, "no_group_set"]);
+    const unbuilt = await create(room.id, DATED);
+    await server.app.db.update(projects).set({ distributionFullName: null }).where(eq(projects.id, unbuilt.id));
+    expect(refusal(await post(unbuilt.id, "schedule"))).toEqual([409, "distribution_missing"]);
+    expect(await auditOf(past.id, "project.schedule")).toHaveLength(0);
+  });
+});
+
 // ---------------------------------------------------------------- publish
 
 describe("publish (F-PROJ-03, ADR-048)", () => {
@@ -529,15 +613,21 @@ describe("publish (F-PROJ-03, ADR-048)", () => {
     expect(refusal(await publish(project.id))).toEqual([409, "not_draft"]);
   });
 
-  it("keeps a scheduled project's dates, and refuses a deadline gone by", async () => {
+  it("starts now whatever date the project held, keeps its deadline, and refuses a deadline gone by (ADR-127 §9)", async () => {
     const room = await connectedClassroom();
-    const project = await create(room.id, { name: "S", sourceRepo: "lab", publishMode: "scheduled", startAt: "2026-10-05T08:00:00Z", deadlineAt: IN_A_WEEK });
+    const dated = { name: "S", sourceRepo: "lab", publishMode: "scheduled", startAt: "2026-10-05T08:00:00Z", deadlineAt: IN_A_WEEK };
+    const project = await create(room.id, dated);
+    const armed = await create(room.id, { ...dated, name: "S2" });
+    expect((await call("POST", `/app/api/projects/${armed.id}/schedule`, teacher.headers)).statusCode).toBe(200);
     const late = await connectedClassroom();
     const stale = await create(late.id);
     server.clock.set("2026-10-10T00:00:00Z");
     expect(refusal(await publish(stale.id))).toEqual([422, "deadline_past"]);
     server.clock.set(NOW);
-    expect(ProjectSummary.parse((await publish(project.id)).json())).toMatchObject({ startAt: "2026-10-05T08:00:00.000Z", deadlineAt: IN_A_WEEK });
+    expect(ProjectSummary.parse((await publish(project.id)).json())).toMatchObject({ state: "published", startAt: NOW, deadlineAt: IN_A_WEEK });
+    // Publish now on a scheduled project: the same.
+    expect(ProjectSummary.parse((await publish(armed.id)).json())).toMatchObject({ state: "published", startAt: NOW, deadlineAt: IN_A_WEEK });
+    expect(refusal(await publish(armed.id))).toEqual([409, "not_draft"]);
   });
 
   /** A group set of the classroom, named by the project (ADR-070): its id. */

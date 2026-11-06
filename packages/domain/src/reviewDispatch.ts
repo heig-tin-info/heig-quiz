@@ -18,6 +18,7 @@
  */
 
 import { addZonedDays } from "./zone.js";
+import { projectIsLive, type ProjectStateName } from "./projectView.js";
 
 // `GRADING_WORKFLOW_PATH` and `runKind` live in `projectRuns.ts` (M3-04).
 
@@ -158,19 +159,20 @@ export function checkpointRefusal(dueAt: Date, deadlineAt: Date, now: Date): "du
  * What a checkpoint fires now, by its project's grading mode: the CI's
  * `grade-milestone` dispatch (`auto`, F-PROJ-11) or the platform's milestone
  * pass (`criteria`, ADR-106 §5) — once not dispatched, its date come, not
- * void, on a project out of its draft and not archived. Null otherwise, and
+ * void, on a project open (`projectIsLive`: never a draft nor a scheduled
+ * project, ADR-127) and not archived. Null otherwise, and
  * always for a project graded `none`.
  */
 export function checkpointPass(
   checkpoint: { dueAt: Date; dispatchedAt: Date | null },
-  project: { deadlineAt: Date; state: string; gradingMode: string; archivedAt: Date | null },
+  project: { deadlineAt: Date; state: ProjectStateName; gradingMode: string; archivedAt: Date | null },
   now: Date,
 ): "dispatch" | "milestone" | null {
   const fires =
     checkpoint.dispatchedAt === null &&
     checkpoint.dueAt.getTime() <= now.getTime() &&
     !isVoidCheckpoint(checkpoint.dueAt, project.deadlineAt) &&
-    project.state !== "draft" &&
+    projectIsLive(project.state) &&
     project.archivedAt === null;
   if (!fires) return null;
   return project.gradingMode === "auto" ? "dispatch" : project.gradingMode === "criteria" ? "milestone" : null;

@@ -983,7 +983,8 @@ export const TOOLS: Tool[] = [
     title: "List the GitHub projects of a classroom",
     description:
       "The GitHub projects (labs handed out as one repository per student or group) of a classroom, drafts " +
-      "included, with their state and deadline. Check it before `create_project`, so nothing is created twice. " +
+      "included, with their state (`draft`, `scheduled` — announced, opening at its start —, `published`, `locked`) and deadline. " +
+      "Check it before `create_project`, so nothing is created twice. " +
       "Needs a seat on the course's staff: 404 otherwise.",
     input: z.object({ classroomId: Id }),
     annotations: READ,

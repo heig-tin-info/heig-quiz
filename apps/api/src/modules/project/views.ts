@@ -170,7 +170,6 @@ async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActi
       state: r.state,
       phase: projectPhase({
         state: r.state,
-        publishMode: r.publishMode,
         deadlineStrategy: r.deadlineStrategy,
         gradingMode: r.gradingMode,
         released: r.releasedAt !== null,

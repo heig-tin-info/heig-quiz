@@ -31,6 +31,12 @@ the Format summary and the MCP no longer present a draft's window as
 planned
 ([amendment](#amendment-2026-10-26-a-dated-draft-whose-opening-passed)).
 
+Amended 2026-11-06 by [ADR-127](ADR-127-etat-planifie-des-projets.md)
+(product owner), scope: the first 2026-10-13 amendment's item 2 and the
+2026-10-14 amendment's opening sentence — a project's `scheduled` phase is
+its `scheduled` STATE, armed by Schedule; a draft holding a date is
+`draft`, and no draft project is published by the ticker any more.
+
 Amended 2026-10-29 (#958): §5's phases — `deadline_passed` in place of
 `locked` for a project under the `commit` deadline strategy, which locks
 nothing
@@ -205,7 +211,10 @@ scheduled still said "draft" exactly like one in preparation (#795).
    preparation, `closed`, `locked`. The two tone tables stay the only place
    a state meets its colour (`STATE_STYLE` in `evaluation/common.ts`,
    `PHASE_STYLE` in `project/common.ts`).
-2. **A project's `scheduled` phase.** §5's phases become `draft |
+2. **A project's `scheduled` phase** (amended 2026-11-06 by
+   [ADR-127](ADR-127-etat-planifie-des-projets.md) §11: the phase reads the
+   `scheduled` state; the derivation from the publish mode below is
+   obsolete). §5's phases become `draft |
    scheduled | published | locked | graded | released`: a project in the
    `draft` state whose publish mode is `scheduled` (the create and
    patch contracts then require its start) is `scheduled`; a draft published by hand stays
@@ -291,7 +300,9 @@ for it in blue like a scheduled project. It was a `draft`: an evaluation
 opens by itself only once it is `scheduled` (the ticker's
 `live.open_scheduled` opens nothing else), which the Launch
 step's Schedule does; a draft project whose publish mode is scheduled, by
-contrast, IS published by the ticker, hence its blue phase.
+contrast, IS published by the ticker, hence its blue phase. (Obsolete since
+[ADR-127](ADR-127-etat-planifie-des-projets.md): a project too opens by
+itself only once Schedule made it `scheduled`.)
 
 1. **A draft is never blue**, dates or not: blue stays a promise that it
    opens on its own. The zinc pill of a draft on the Scheduled clock

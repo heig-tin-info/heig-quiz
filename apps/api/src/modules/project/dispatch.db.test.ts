@@ -600,6 +600,21 @@ describe("a checkpoint's dispatch (F-PROJ-11)", () => {
     expect(dispatched).toHaveLength(2);
   });
 
+  it("never fires while its project is scheduled, not open yet (ADR-127)", async () => {
+    const p = await project();
+    await receipt(p.repos[0]!, "f".repeat(40), at(DUE, -DAY));
+    const created = await call("POST", `/app/api/projects/${p.id}/checkpoints`, teacher.headers, { name: "early", dueAt: DUE });
+    expect(created.statusCode, created.body).toBe(201);
+    // Its start still ahead at the checkpoint, so the ticker does not publish it meanwhile.
+    await server.app.db.update(projects).set({ state: "scheduled", startAt: at(DUE, DAY) }).where(eq(projects.id, p.id));
+    server.clock.set(at(DUE, 1000));
+    await tick();
+    expect(jobsOf(p.id)).toEqual([]);
+    await server.app.db.update(projects).set({ state: "published" }).where(eq(projects.id, p.id));
+    await tick();
+    expect(jobsOf(p.id)).toHaveLength(1);
+  });
+
   it("is void once the deadline moved before it: never fires, and may be deleted", async () => {
     const p = await project();
     await receipt(p.repos[0]!, "e".repeat(40), new Date(NOW));

@@ -201,6 +201,15 @@ describe("the one action by state", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
+  it("draws a scheduled project under Coming up with its start, no status and no Accept (ADR-127)", async () => {
+    mockFetch({});
+    // The server files a scheduled project under Upcoming, `to_accept`, until the ticker publishes it.
+    render(card({ startAt: at(2), deadlineAt: at(9), status: "to_accept" }), { group: "upcoming" });
+    expect(await screen.findByText(/^Starts in /)).toBeInTheDocument();
+    expect(screen.queryByText("to accept")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Accept/ })).toBeNull();
+  });
+
   it("is secondary when the page says another card is the most urgent", async () => {
     mockFetch({});
     render(card(), { primary: false });

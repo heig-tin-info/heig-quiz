@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { acceptRefusal, type ProjectAcceptLike } from "./projectAccept.js";
 
 const project: ProjectAcceptLike = {
+  state: "published",
   startAt: new Date("2026-10-02T08:00:00Z"),
   deadlineAt: new Date("2026-10-09T22:00:00Z"),
   distributionFullName: "org/lab-1-squashed",
@@ -24,5 +25,12 @@ describe("acceptRefusal (F-PROJ-05)", () => {
     const now = at("2026-10-03T00:00:00Z");
     expect(acceptRefusal({ ...project, distributionFullName: null }, now)).toBe("distribution_missing");
     expect(acceptRefusal({ ...project, distributionFullName: null }, at("2026-10-01T00:00:00Z"))).toBe("not_started");
+  });
+
+  it("refuses a project that is not published yet, its start come or not (ADR-127)", () => {
+    expect(acceptRefusal({ ...project, state: "scheduled" }, at("2026-10-01T00:00:00Z"))).toBe("not_started");
+    expect(acceptRefusal({ ...project, state: "scheduled" }, at("2026-10-03T00:00:00Z"))).toBe("not_started");
+    expect(acceptRefusal({ ...project, state: "draft" }, at("2026-10-03T00:00:00Z"))).toBe("not_started");
+    expect(acceptRefusal({ ...project, state: "locked" }, at("2026-10-03T00:00:00Z"))).toBeNull();
   });
 });

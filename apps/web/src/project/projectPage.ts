@@ -25,7 +25,7 @@ import {
   type WorkModeRefusal,
   type WorkspaceStartRefusal,
 } from "@quiz/contracts";
-import { isVoidCheckpoint, projectGraded, reopens } from "@quiz/domain";
+import { isVoidCheckpoint, projectBeforePublication, projectGraded, projectIsLive, reopens } from "@quiz/domain";
 
 import { ApiError, refusalCodeOf, wordedRefusal } from "../api";
 import { studentName } from "../group/groupRules";
@@ -66,14 +66,16 @@ export const offersSync = (p: ProjectDetail): boolean => p.primaryAction !== "sy
  * the server names when there is one. It describes the primary button when
  * there is one (Publish, Release, a release again once a score moved after
  * the release, Sync when the source is ahead, M3-07).
- * `date` is the instant the sentence names: the start of a scheduled draft,
- * the release, else the deadline. A project past its deadline under the
+ * `date` is the instant the sentence names: the start of a scheduled
+ * project or of a draft whose button is Schedule (ADR-127), the release,
+ * else the deadline. A project past its deadline under the
  * `commit` strategy (phase `deadline_passed`) is said past its deadline,
  * never locked (#958).
  */
 export type StatusKey =
   | "project.status.archived"
   | "project.status.draft"
+  | "project.status.draftDated"
   | "project.status.scheduled"
   | "project.status.grade"
   | "project.status.release"
@@ -90,7 +92,7 @@ export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string 
   const key = ((): StatusKey => {
     if (p.archivedAt) return "project.status.archived";
     if (p.phase === "scheduled") return "project.status.scheduled";
-    if (p.phase === "draft") return "project.status.draft";
+    if (p.phase === "draft") return p.primaryAction === "schedule" ? "project.status.draftDated" : "project.status.draft";
     if (p.primaryAction === "grade") return "project.status.grade";
     if (p.primaryAction === "release") return p.releasedAt ? "project.status.rerelease" : "project.status.release";
     if (p.primaryAction === "sync") return "project.status.sync";
@@ -102,7 +104,7 @@ export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string 
     return freezing ? "project.status.lockedFreezing" : "project.status.locked";
   })();
   const date =
-    key === "project.status.scheduled"
+    key === "project.status.scheduled" || key === "project.status.draftDated"
       ? p.startAt
       : key === "project.status.released" || key === "project.status.rerelease"
         ? p.releasedAt!
@@ -333,6 +335,7 @@ type KnownCode =
   | Extract<WorkspaceStartRefusal, "not_online" | "seb_required">;
 const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   not_draft: "project.refusal.notDraft",
+  not_scheduled: "project.refusal.notScheduled",
   distribution_missing: "project.refusal.distributionMissing",
   deadline_past: "project.refusal.deadlinePast",
   start_past: "project.refusal.startPast",
@@ -608,7 +611,9 @@ export function commitTone(repo: Pick<ProjectRepoView, "commits" | "lastCommit" 
  * no date (`at` null: "at publication"). One by duration has no deadline
  * either, so its Deadline step says its days (`afterDays`) and a checkpoint
  * counted from it (J−n) is not `dated`; a deadline that is a date, and a
- * scheduled draft's planned dates, are shown. "Provisional" is `draftView`'s.
+ * draft's or a scheduled project's planned dates, are shown. "Provisional"
+ * is `draftView`'s. Published is done only once the project is live: a
+ * scheduled one shows its planned date, not done (ADR-127).
  */
 export type RailStep =
   | { kind: "published"; at: string | null; done: boolean }
@@ -625,7 +630,7 @@ export type RailStep =
 
 export function railSteps(p: ProjectDetail, checkpoints: ReviewCheckpoint[]): RailStep[] {
   const graded = projectGraded(p.gradingMode);
-  const draft = p.state === "draft" ? draftView(p) : null;
+  const draft = projectBeforePublication(p.state) ? draftView(p) : null;
   const manualDraft = draft?.publishMode === "manual";
   const afterDays = draft?.kind === "duration" && manualDraft ? draft.days : null;
   const tally = projectTally(p);
@@ -637,7 +642,7 @@ export function railSteps(p: ProjectDetail, checkpoints: ReviewCheckpoint[]): Ra
     }))
     .sort((a, b) => a.checkpoint.dueAt.localeCompare(b.checkpoint.dueAt));
   return [
-    { kind: "published", at: manualDraft ? null : p.startAt, done: p.state !== "draft" },
+    { kind: "published", at: manualDraft ? null : p.startAt, done: projectIsLive(p.state) },
     ...byDue.filter((c) => c.status !== "void").map((c): RailStep => ({ kind: "checkpoint", ...c })),
     afterDays !== null
       ? { kind: "deadline", afterDays, done: deadlinePassed(p) }

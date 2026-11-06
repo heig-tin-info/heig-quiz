@@ -1,5 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Archive, ArchiveRestore, ClipboardCheck, FolderGit2, LayoutDashboard, Rocket, Send, Settings, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Archive,
+  ArchiveRestore,
+  CalendarClock,
+  CalendarX2,
+  ClipboardCheck,
+  FolderGit2,
+  LayoutDashboard,
+  Rocket,
+  Send,
+  Settings,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -8,6 +21,7 @@ import type {
   ProjectSummary,
   ProjectSyncAccepted,
 } from "@quiz/contracts";
+import { projectBeforePublication } from "@quiz/domain";
 
 import { api, isNotFound, refusedWith } from "../api";
 import { AppLink } from "../AppLink";
@@ -37,6 +51,7 @@ import {
 import { projectPhaseLabel, projectPhaseStyle } from "./common";
 import { FIELD_ID } from "./newProject";
 import { ProjectDraftForm } from "./ProjectDraftForm";
+import { publicationRefusal, type PlacedRefusal } from "./ProjectDraftPublication";
 import { GradingTab } from "./grading/GradingTab";
 import { ProjectGroupSet } from "./ProjectGroupSet";
 import { projectNotices, projectNoticeToast } from "./projectNotices";
@@ -65,7 +80,7 @@ import { useProjectPatch, useProjectRefresh, useRenameProject } from "./useProje
  * The staff's project page (F-PROJ-13, M3-12), `/projects/:id`, in two
  * faces: before publication one configures, after it one watches.
  *
- * A DRAFT is a form (`ProjectDraftForm`, F-PROJ-01, F-PROJ-03): the work
+ * A DRAFT, and a SCHEDULED project (ADR-127), is a form (`ProjectDraftForm`, F-PROJ-01, F-PROJ-03): the work
  * handed out, the publication and the deadline, the groups, "Advanced
  * options" and the lifecycle rail, every field written as it is set. No
  * tiles and no table: nobody can accept a draft (ADR-077 §1). With no Source
@@ -89,7 +104,11 @@ import { useProjectPatch, useProjectRefresh, useRenameProject } from "./useProje
  * its lock. See DESIGN.md › The project page (staff).
  *
  * The primary action is `primaryAction`, decided by the server and never
- * derived here: Publish and Release are buttons — Release disabled, with a
+ * derived here: Publish (the start is now) or Schedule (a date to come,
+ * ADR-127) for a draft — a refused date said under its field —; a
+ * scheduled project has none, its header offering Publish now and Cancel
+ * the schedule as secondary buttons (back to a draft, nothing confirmed:
+ * Schedule undoes it). Publish and Release are buttons — Release disabled, with a
  * line saying why, while a confirmed resync of the groups is owed
  * (`groupSyncPending`, M3-16b), and confirmed first,
  * since it makes the final scores the students' and the gradebook's
@@ -119,6 +138,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const [unassigned, setUnassigned] = useState<UnassignedStudent[] | null>(null);
   /** Publish refused `409 no_group_set`: said above the page, pointing at the picker, until a set is chosen. */
   const [noSet, setNoSet] = useState(false);
+  /** Schedule or Publish refused over a date (`start_past`, `deadline_past`): said under that field of the form. */
+  const [dateRefused, setDateRefused] = useState<PlacedRefusal | null>(null);
   /** Why the last release was refused, said above the page until the next attempt succeeds. */
   const [releaseRefused, setReleaseRefused] = useState<string | null>(null);
 
@@ -138,6 +159,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
 
   const patch = useProjectPatch(id, classroomId, (body) => {
     if (body.groupSetId) setNoSet(false);
+    setDateRefused(null);
   });
   const renaming = useRenameProject(id, classroomId);
   /** The page's one write: a refusal is a toast, unless the caller said it in place (`WriteProject`). */
@@ -147,20 +169,41 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         if (onError?.(error) !== true) failed(error);
       },
     });
-  const publish = useMutation({
-    mutationFn: () => api<ProjectSummary>(`/app/api/projects/${id}/publish`, { method: "POST" }),
+  /**
+   * Publish (from a draft or a scheduled project, F-PROJ-03) and Schedule
+   * (ADR-127) refuse alike: the students in no group and the missing set
+   * above the page, a date under its field, the rest as a toast.
+   */
+  const opening = (move: "publish" | "schedule", done: "project.published" | "project.scheduledToast") => ({
+    mutationFn: () => api<ProjectSummary>(`/app/api/projects/${id}/${move}`, { method: "POST" }),
     onSuccess: async () => {
       setUnassigned(null);
       setNoSet(false);
+      setDateRefused(null);
       await refresh();
-      toast(t("project.published"), "success");
+      toast(t(done), "success");
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       const students = unassignedStudents(error);
+      const placed = publicationRefusal(error, t);
       if (students) setUnassigned(students);
       else if (refusedWith(error, "no_group_set")) setNoSet(true);
-      else failed(error);
+      else if (placed) {
+        setDateRefused(placed);
+        document.getElementById(placed.place === "start" ? FIELD_ID.start : FIELD_ID.deadline)?.focus();
+      } else failed(error);
     },
+  });
+  const publish = useMutation(opening("publish", "project.published"));
+  const schedule = useMutation(opening("schedule", "project.scheduledToast"));
+  /** Back to a draft (ADR-127): reversible by Schedule, so nothing is confirmed. */
+  const unschedule = useMutation({
+    mutationFn: () => api<ProjectSummary>(`/app/api/projects/${id}/unschedule`, { method: "POST" }),
+    onSuccess: async () => {
+      await refresh();
+      toast(t("project.unscheduledToast"), "success");
+    },
+    onError: failed,
   });
   const release = useMutation({
     mutationFn: () => api<ProjectReleaseResult>(`/app/api/projects/${id}/release`, { method: "POST" }),
@@ -277,7 +320,9 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   /** The set's page, coming back here (`?fromProject=<id>`): where the students in no group are placed. */
   const setPage = groupSetPageOf(project);
   const { sync } = project;
-  const isDraft = project.state === "draft";
+  /** A draft or a scheduled project: the form, not the dashboard (ADR-127 §4). */
+  const isDraft = projectBeforePublication(project.state);
+  const scheduled = project.state === "scheduled" && !archived;
   const tabs: Parameters<typeof Tabs<ProjectTab>>[0]["items"] = [
     { value: "summary", label: t("project.tab.summary"), icon: LayoutDashboard },
     { value: "repositories", label: t("project.repos"), icon: FolderGit2, coach: "project.repos" },
@@ -339,6 +384,27 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
             {isDraft && project.primaryAction !== "sync" && offersSync(project) && !archived
               ? syncButton("secondary", "project.sync")
               : null}
+            {/* ADR-127: a scheduled project has no primary; its two moves are secondary. */}
+            {scheduled ? (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => unschedule.mutate()}
+                  loading={unschedule.isPending}
+                  disabled={publish.isPending}
+                >
+                  {unschedule.isPending ? null : <CalendarX2 />} {t("project.unschedule")}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => publish.mutate()}
+                  loading={publish.isPending}
+                  disabled={unschedule.isPending}
+                >
+                  {publish.isPending ? null : <Rocket />} {t("project.publishNow")}
+                </Button>
+              </>
+            ) : null}
             {project.primaryAction === "publish" ? (
               <Button
                 data-coach="project.primary"
@@ -346,6 +412,14 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
                 loading={publish.isPending}
               >
                 <Rocket /> {t("question.publish")}
+              </Button>
+            ) : project.primaryAction === "schedule" ? (
+              <Button
+                data-coach="project.primary"
+                onClick={() => schedule.mutate()}
+                loading={schedule.isPending}
+              >
+                <CalendarClock /> {t("project.schedule")}
               </Button>
             ) : project.primaryAction === "grade" ? (
               // ADR-106 §8: graded by criteria, every repository frozen, some still to validate.
@@ -417,7 +491,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       ) : null}
 
       {isDraft ? (
-        <ProjectDraftForm project={project} patch={patch} write={write} navigate={navigate} />
+        <ProjectDraftForm project={project} patch={patch} write={write} navigate={navigate} dateRefused={dateRefused} />
       ) : (
         <>
           <Tabs<ProjectTab> value={tab} onChange={setTab} items={tabs} idPrefix="project" label={t("project.page")} />

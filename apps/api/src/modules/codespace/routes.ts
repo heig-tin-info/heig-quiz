@@ -38,7 +38,7 @@ import {
   WORKSPACE_START_ROUTE,
   type WorkspaceStart,
 } from "@quiz/contracts";
-import { isOnlineMode } from "@quiz/domain";
+import { isOnlineMode, projectIsLive } from "@quiz/domain";
 
 import { actorOf, audit } from "../../audit.js";
 import { sendLaunchFile } from "../../auth/seb.js";
@@ -172,7 +172,8 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     const fromSeb = sebProjectSession(req.auth, params.data.id);
     if (!ownPortalSession(req.auth) && !fromSeb) return notFound(reply);
     const scope = await findStudentProjectView(app.db, callerOf(req), req.auth, params.data.id);
-    if (scope === null || scope.seat === null) return notFound(reply);
+    // A project not open yet (scheduled, ADR-127) is a 404 before any test of its mode (N-SEC-20).
+    if (scope === null || scope.seat === null || !projectIsLive(scope.project.state)) return notFound(reply);
     const launch = await startWorkspace(
       app.db,
       config,

@@ -28,19 +28,24 @@ interface RowProps<V> {
   onChange: (value: V) => void;
 }
 
+/**
+ * The start choice (ADR-127 §2): now or at a date. The column behind it is
+ * `publishMode` — `manual` is now, `scheduled` a date — and the draft's one
+ * button follows it: Publish for now, Schedule for a date to come.
+ */
 export function PublishModeRow({ value, disabled, onChange, desc }: RowProps<PublishMode> & { desc?: ReactNode }) {
   const t = useT();
   return (
-    <SettingRow title={t("project.publishMode")} desc={desc}>
+    <SettingRow title={t("project.startChoice")} desc={desc}>
       <Segmented
         name="publishMode"
-        label={t("project.publishMode")}
+        label={t("project.startChoice")}
         value={value}
         disabled={disabled}
         onChange={onChange}
         options={[
-          { value: "manual", label: t("project.publishMode.manual") },
-          { value: "scheduled", label: t("project.publishMode.scheduled") },
+          { value: "manual", label: t("project.startChoice.now") },
+          { value: "scheduled", label: t("project.startChoice.date") },
         ]}
       />
     </SettingRow>

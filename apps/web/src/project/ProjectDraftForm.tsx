@@ -14,7 +14,7 @@ import { useT } from "../i18n";
 import type { Navigate } from "../router";
 import { Alert, Badge, Card, Disclosure, RepoLink, SectionHeading, SettingRow, Switch, useNumberDraft } from "../ui";
 import { Facts } from "./ProjectOverview";
-import { ProjectDraftPublication, publicationKey } from "./ProjectDraftPublication";
+import { ProjectDraftPublication, publicationKey, type PlacedRefusal } from "./ProjectDraftPublication";
 import { GroupSetBody } from "./ProjectGroupSet";
 import { CriteriaErrors, CriteriaRows, useGradingModeWrite } from "./ProjectCriteria";
 import { ProjectRail } from "./ProjectRail";
@@ -59,7 +59,7 @@ function GroupModeSwitch({ project, disabled, write }: { project: ProjectDetail;
 }
 
 /**
- * A DRAFT's page (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2): before publication
+ * A DRAFT's page, and a SCHEDULED project's (ADR-127) (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2): before publication
  * one configures, after it one watches. A form in the order a teacher
  * decides: the work handed out (facts, fixed at creation), the publication
  * and the deadline (the three things a novice reads), the groups, then
@@ -77,11 +77,14 @@ export function ProjectDraftForm({
   patch,
   write,
   navigate,
+  dateRefused = null,
 }: {
   project: ProjectDetail;
   patch: UseMutationResult<ProjectSummary, Error, ProjectPatch>;
   write: WriteProject;
   navigate: Navigate;
+  /** What the header's Schedule or Publish was refused over a date, said under that field. */
+  dateRefused?: PlacedRefusal | null;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -130,7 +133,13 @@ export function ProjectDraftForm({
 
       <section aria-labelledby="draft-publication" className="space-y-3">
         <SectionHeading icon={CalendarClock} title={<span id="draft-publication">{t("project.draft.publication")}</span>} />
-        <ProjectDraftPublication key={publicationKey(project)} project={project} pending={patch.isPending} write={write} />
+        <ProjectDraftPublication
+          key={publicationKey(project)}
+          project={project}
+          pending={patch.isPending}
+          write={write}
+          refused={dateRefused}
+        />
       </section>
 
       <section aria-labelledby="draft-groups" className="space-y-3">

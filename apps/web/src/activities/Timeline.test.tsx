@@ -150,7 +150,7 @@ describe("the schedule view", () => {
   it("rings a scheduled project in blue like a scheduled evaluation, a draft in preparation dashed (#795)", async () => {
     wide(true);
     const user = userEvent.setup();
-    const planned = { ...LAB, id: id("project", 2), title: "Labo 3 — listes", state: "draft" as const, phase: "scheduled" as const };
+    const planned = { ...LAB, id: id("project", 2), title: "Labo 3 — listes", state: "scheduled" as const, phase: "scheduled" as const };
     const preparing = { ...LAB, id: id("project", 3), title: "Labo 4 — arbres", state: "draft" as const, phase: "draft" as const };
     mockFetch({ "GET /app/api/activities": ok([planned, preparing]) });
     renderWithProviders(<ActivitiesPage navigate={vi.fn()} />);

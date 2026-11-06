@@ -5,7 +5,7 @@
  * of the `notifications` module — one payload to an audience, best-effort,
  * AFTER the write it announces has committed.
  *
- * The student kinds (`project_published`, `project_deadline_reminder`,
+ * The student kinds (`project_scheduled`, `project_published`, `project_deadline_reminder`,
  * `project_repo_invited`, `project_grade_final`) reach claimed STUDENT seats
  * (`enrollments.staff = false`, ADR-018); the staff kinds
  * (`project_deadline_applied`, `project_provision_failed`) reach the course's
@@ -36,10 +36,10 @@
  * own deadline is taken back falls under the project's claim again: when
  * that claim fired already, its members were reminded of their own deadline
  * and are not reminded of the project's — a moved end never sends it again
- * (F-NOTIF-06). Drafts, archived projects and archived classrooms are
- * skipped.
+ * (F-NOTIF-06). Drafts, scheduled projects (ADR-127), archived projects
+ * and archived classrooms are skipped.
  */
-import { and, eq, exists, inArray, isNotNull, isNull, ne, notExists, or, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { NotificationPayload } from "@quiz/contracts";
@@ -48,7 +48,7 @@ import { DEADLINE_REMINDER_MS } from "@quiz/domain";
 import type { Db } from "../../db/client.js";
 import { classrooms, enrollments, githubAccounts, projectGroupMembers, projectRepos, projects } from "../../db/schema.js";
 import { notifyUsers, type NotifyLog } from "../notifications/service.js";
-import { classroomStaffIds } from "../guards.js";
+import { classroomStaffIds, liveProject } from "../guards.js";
 import { LIVE, ts } from "./deadline.js";
 import { repoMembers } from "./groupRepos.js";
 
@@ -70,16 +70,45 @@ export async function classroomStudents(db: Db, classroomId: string): Promise<{ 
 }
 
 /**
- * `project_published`: the classroom's students, once per project
- * (`publishProject` runs once). Those without a linked GitHub account read
- * another text, frozen at sending (M3-14d).
+ * A student kind about a project to the classroom's students: those without
+ * a linked GitHub account read another text, frozen at sending (M3-14d).
  */
-export async function announcePublished(db: Db, project: ProjectRef): Promise<void> {
-  const students = await classroomStudents(db, project.classroomId);
-  const payload = { kind: "project_published", projectId: project.id, projectTitle: project.name } as const;
+async function tellStudents(
+  db: Db,
+  classroomId: string,
+  payload: Extract<NotificationPayload, { kind: "project_published" | "project_scheduled" }>,
+): Promise<void> {
+  const students = await classroomStudents(db, classroomId);
   const ids = (linked: boolean) => students.filter((s) => s.linked === linked).map((s) => s.userId);
   await notifyUsers(db, ids(true), payload);
   await notifyUsers(db, ids(false), { ...payload, githubLinked: false });
+}
+
+/** `project_published`: the classroom's students, once per project (a project is published once). */
+export async function announcePublished(db: Db, project: ProjectRef): Promise<void> {
+  await tellStudents(db, project.classroomId, { kind: "project_published", projectId: project.id, projectTitle: project.name });
+}
+
+/**
+ * `project_scheduled` (ADR-127): the classroom's students, told it opens at
+ * its start — once per project EVER. The marker `scheduled_announced_at` is
+ * claimed by a conditional UPDATE before anything is sent (evaluations'
+ * ADR-030 §13), so a schedule cancelled and made again, a moved date or two
+ * concurrent requests tell nobody a second time.
+ */
+export async function announceScheduled(db: Db, project: ProjectRef & { startAt: Date }, now: Date): Promise<void> {
+  const claimed = await db
+    .update(projects)
+    .set({ scheduledAnnouncedAt: now })
+    .where(and(eq(projects.id, project.id), isNull(projects.scheduledAnnouncedAt)))
+    .returning({ id: projects.id });
+  if (claimed.length === 0) return;
+  await tellStudents(db, project.classroomId, {
+    kind: "project_scheduled",
+    projectId: project.id,
+    projectTitle: project.name,
+    startAt: project.startAt.toISOString(),
+  });
 }
 
 /** A staff kind about `project`, to the course's staff seats. */
@@ -191,7 +220,7 @@ export async function remindDeadlines(db: Db, now: Date, log?: NotifyLog): Promi
       and(
         eq(projects.id, projectRepos.projectId),
         LIVE,
-        ne(projects.state, "draft"),
+        liveProject(),
         sql`EXISTS (SELECT 1 FROM ${classrooms} WHERE ${classrooms.id} = ${projects.classroomId} AND ${classrooms.archivedAt} IS NULL)`,
         isNotNull(projectRepos.deadlineAt),
         isNull(projectRepos.reminderSentAt),

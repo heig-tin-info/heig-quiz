@@ -95,6 +95,7 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
     "activity_available",
     "deadline_approaching",
     "results_updated",
+    "project_scheduled",
     "project_published",
     "project_deadline_reminder",
     "project_repo_invited",
@@ -155,7 +156,7 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
       if (kind.startsWith("project_")) expect(gated, kind).toContain(kind);
     }
     expect(gated).toContain("github_org_lost");
-    expect(GITHUB_KINDS).toHaveLength(7);
+    expect(GITHUB_KINDS).toHaveLength(8);
   });
 });
 
@@ -164,7 +165,7 @@ describe("the project kinds (F-NOTIF-13, D18)", () => {
     for (const kind of ["project_deadline_reminder", "project_repo_invited", "project_grade_final", "project_provision_failed", "github_org_lost"] as const) {
       expect(DEFAULT_CHANNEL_ENABLED[kind], kind).toEqual({ bell: true, email: true, teams: true });
     }
-    for (const kind of ["project_published", "project_deadline_applied"] as const) {
+    for (const kind of ["project_scheduled", "project_published", "project_deadline_applied"] as const) {
       expect(DEFAULT_CHANNEL_ENABLED[kind], kind).toEqual({ bell: true, email: false, teams: false });
     }
   });
@@ -176,6 +177,10 @@ describe("the project kinds (F-NOTIF-13, D18)", () => {
     const unlinked = { kind: "project_published", ...project, githubLinked: false };
     expect(NotificationPayload.parse(unlinked)).toEqual(unlinked);
     expect(NotificationPayload.safeParse({ ...unlinked, githubLinked: true }).success).toBe(false);
+    // ADR-127: the start it opens at, and the same unlinked variant.
+    const scheduled = { kind: "project_scheduled", ...project, startAt: "2026-11-06T15:30:00.000Z", githubLinked: false };
+    expect(NotificationPayload.parse(scheduled)).toEqual(scheduled);
+    expect(NotificationPayload.safeParse({ kind: "project_scheduled", ...project }).success).toBe(false);
     const failed = { kind: "project_provision_failed", ...project, count: 2, reason: "repo_name_taken" };
     expect(NotificationPayload.parse(failed)).toEqual(failed);
     expect(NotificationPayload.safeParse({ kind: "project_provision_failed", ...project, count: 1, reason: "invitation_refused" }).success).toBe(false);

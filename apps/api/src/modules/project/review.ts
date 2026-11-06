@@ -62,6 +62,7 @@ import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { gradeDispatches, projectCheckpoints, projectGradeRuns, projectRepos, projects, pushReceipts } from "../../db/schema.js";
 import { githubStatus, ownerRepo } from "../../github/app.js";
+import { liveProject } from "../guards.js";
 import { LIVE, ts } from "./deadline.js";
 import { claimLeases, runLeased, type LeasedRun, type ProjectJob } from "./lease.js";
 import { hintProjectStaff, markRepoDeleted, type RepoRow } from "./repos.js";
@@ -111,7 +112,7 @@ export const CHECKPOINT_TARGET = and(LIVE, isNull(projectRepos.deadlineAppliedAt
  */
 export const checkpointDue = (now: Date, mode: "auto" | "criteria"): SQL =>
   sql`(${projectCheckpoints.dispatchedAt} IS NULL AND ${projectCheckpoints.dueAt} <= ${ts(now)}
-    AND ${projectCheckpoints.dueAt} < ${projects.deadlineAt} AND ${projects.state} <> 'draft' AND ${NOT_ARCHIVED}
+    AND ${projectCheckpoints.dueAt} < ${projects.deadlineAt} AND ${liveProject()}
     AND ${projects.gradingMode} = ${mode})`;
 
 /**

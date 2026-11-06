@@ -7,9 +7,44 @@
 import { projectGrade, type ProjectGrade, type ProjectScale } from "./projectGrade.js";
 import type { DeadlineStrategyName } from "./projectRuns.js";
 
-/** F-PROJ-03: `draft` → `published` → `locked` (at the deadline). */
-export const PROJECT_STATES = ["draft", "published", "locked"] as const;
+/**
+ * F-PROJ-03 (ADR-127): `draft` → `scheduled` (armed by Schedule, announced,
+ * published by the ticker at its start) → `published` → `locked` (at the
+ * deadline). Schedule is undone back to `draft`.
+ */
+export const PROJECT_STATES = ["draft", "scheduled", "published", "locked"] as const;
 export type ProjectStateName = (typeof PROJECT_STATES)[number];
+
+/**
+ * The states of a project open to its students (ADR-127): Accept, the
+ * checkpoints, the gradebook column, the reminders, the invitations, a
+ * closed group set shown. A `scheduled` project is not one yet.
+ */
+export const PROJECT_LIVE_STATES = ["published", "locked"] as const satisfies readonly ProjectStateName[];
+/** The states whose project the students see listed (ADR-127): a `scheduled` one is announced, a draft never. */
+export const PROJECT_VISIBLE_STATES = ["scheduled", "published", "locked"] as const satisfies readonly ProjectStateName[];
+
+/** {@link PROJECT_LIVE_STATES}: published or locked. */
+export function projectIsLive(state: ProjectStateName): boolean {
+  return (PROJECT_LIVE_STATES as readonly ProjectStateName[]).includes(state);
+}
+
+/**
+ * Not published yet — a draft or a scheduled project: edited like a draft
+ * (ADR-127 §4), its group copy following its set (ADR-070 §4).
+ */
+export function projectBeforePublication(state: ProjectStateName): boolean {
+  return !projectIsLive(state);
+}
+
+/**
+ * A draft's start lies ahead (ADR-127 §2): it holds a date (`scheduled`
+ * publish mode) still to come at `now`, so its one button is Schedule. A
+ * date already past, or a manual draft, reads Publish (start = now).
+ */
+export function draftStartsLater(p: { publishMode: PublishModeName; startAt: Date }, now: Date): boolean {
+  return p.publishMode === "scheduled" && p.startAt.getTime() > now.getTime();
+}
 
 /**
  * F-PROJ-01: `auto` — the CI's score and its review dispatched; `none` —
@@ -49,12 +84,14 @@ export function changedAfterRelease(
 }
 
 /** The one primary action of the staff's project page (F-PROJ-13). */
-export const PROJECT_PRIMARY_ACTIONS = ["publish", "sync", "grade", "release", "none"] as const;
+export const PROJECT_PRIMARY_ACTIONS = ["publish", "schedule", "sync", "grade", "release", "none"] as const;
 export type ProjectPrimaryAction = (typeof PROJECT_PRIMARY_ACTIONS)[number];
 
 export interface PrimaryActionInput {
   state: ProjectStateName;
   archived: boolean;
+  /** A draft whose start lies ahead ({@link draftStartsLater}): Schedule instead of Publish (ADR-127). */
+  startsLater: boolean;
   gradingMode: ProjectGradingModeName;
   /** The source holds commits the distribution repository lacks (F-PROJ-12, M3-07). */
   sourceAhead: boolean;
@@ -97,9 +134,9 @@ function allFrozen(p: Pick<PrimaryActionInput, "gradingMode" | "live" | "frozen"
 
 /**
  * What the staff's badge says of a project (ADR-104, product owner
- * 2026-10-11): the state, with `draft` refined by its publish mode —
- * `scheduled` when the scheduler publishes it at its start (amendment of
- * 2026-10-13, #795) — and `locked` refined by what happened since the
+ * 2026-10-11): the state — `scheduled` the state of ADR-127, a draft
+ * holding a date being a draft (ADR-127 amends ADR-104's 2026-10-13 item
+ * 2) — and `locked` refined by what happened since the
  * deadline — `graded` once the scores are final ({@link scoresFinal}) and
  * the release awaited, `released` once the staff released them. The
  * database stops at `locked`; the phase is derived, never stored.
@@ -111,15 +148,12 @@ export const PROJECT_PHASES = ["draft", "scheduled", "published", "locked", "dea
 export type ProjectPhase = (typeof PROJECT_PHASES)[number];
 
 export type ProjectPhaseInput = Pick<PrimaryActionInput, "state" | "gradingMode" | "live" | "frozen" | "unverified" | "unvalidated" | "released"> & {
-  publishMode: PublishModeName;
   deadlineStrategy: DeadlineStrategyName;
 };
 
 /**
- * A draft whose publication is scheduled is `scheduled` (its start is
- * required by the create and patch contracts only, not by the row), a draft
- * published by hand `draft`.
- * Then the state: a project moved back to `published` by a later deadline
+ * A draft is `draft`, a scheduled project `scheduled` (ADR-127), whatever
+ * date a draft holds. Then the state: a project moved back to `published` by a later deadline
  * is `published`, whatever its kept `releasedAt` says (F-PROJ-09). Then
  * `released` as soon as it was, even when a score changed since (the page's
  * primary action says a re-release waits; the list does not). Then `graded`
@@ -128,7 +162,6 @@ export type ProjectPhaseInput = Pick<PrimaryActionInput, "state" | "gradingMode"
  * strategy, whose repositories the deadline leaves open (#958).
  */
 export function projectPhase(p: ProjectPhaseInput): ProjectPhase {
-  if (p.state === "draft") return p.publishMode === "scheduled" ? "scheduled" : "draft";
   if (p.state !== "locked") return p.state;
   if (p.released) return "released";
   if (scoresFinal(p)) return "graded";
@@ -136,7 +169,9 @@ export function projectPhase(p: ProjectPhaseInput): ProjectPhase {
 }
 
 /**
- * Publish for a draft; Grade for a project graded by criteria, every
+ * Publish for a draft, Schedule for one whose start lies ahead (ADR-127);
+ * nothing for a scheduled project (its form autosaves; Publish now and
+ * Cancel the schedule are secondary); Grade for a project graded by criteria, every
  * repository frozen, while one is still to validate (ADR-106 §8); Release
  * once the scores are final and not yet released, or changed since; Sync
  * when the source is ahead; nothing for an archived project. The release
@@ -145,7 +180,8 @@ export function projectPhase(p: ProjectPhaseInput): ProjectPhase {
  */
 export function projectPrimaryAction(p: PrimaryActionInput): ProjectPrimaryAction {
   if (p.archived) return "none";
-  if (p.state === "draft") return "publish";
+  if (p.state === "draft") return p.startsLater ? "schedule" : "publish";
+  if (p.state === "scheduled") return "none";
   if (allFrozen(p) && (p.unvalidated ?? 0) > 0) return "grade";
   if (scoresFinal(p) && (!p.released || p.changedAfterRelease > 0)) return "release";
   if (p.sourceAhead) return "sync";

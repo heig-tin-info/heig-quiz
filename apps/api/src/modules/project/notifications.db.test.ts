@@ -48,6 +48,7 @@ import { PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { projectTick, runDeadlineJob } from "./jobs.js";
+import { remindDeadlines } from "./notify.js";
 import type { ProjectJob } from "./lease.js";
 import { repoWorld } from "./testing.js";
 
@@ -243,8 +244,9 @@ describe("project_published", () => {
     ]);
   });
 
-  it("tells them at the ticker's scheduled publication too", async () => {
+  it("tells them at the ticker's publication of a scheduled project too", async () => {
     const w = await project({ publish: false, body: { publishMode: "scheduled", startAt: "2026-10-03T08:00:00Z", deadlineAt: DEADLINE } });
+    expect((await call("POST", `/app/api/projects/${w.id}/schedule`, teacher.headers)).statusCode).toBe(200);
     await tick();
     expect(await bells(w.students[0]!.id, "project_published")).toEqual([]);
     server.clock.set("2026-10-03T08:00:00Z");
@@ -252,6 +254,45 @@ describe("project_published", () => {
     expect((await projectRow(w.id)).state).toBe("published");
     expect(await bells(w.students[0]!.id, "project_published")).toHaveLength(1);
     await tick();
+    expect(await bells(w.students[0]!.id, "project_published")).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------- project_scheduled (ADR-127)
+
+describe("project_scheduled", () => {
+  const START = "2026-10-03T08:00:00.000Z";
+  const dated = { publishMode: "scheduled", startAt: START, deadlineAt: DEADLINE };
+  const post = (id: string, verb: string) => call("POST", `/app/api/projects/${id}/${verb}`, teacher.headers);
+
+  it("tells the classroom's students it opens, once per project ever, the unlinked ones to link GitHub", async () => {
+    const w = await project({ students: 2, publish: false, body: dated });
+    const [linked, unlinked] = w.students;
+    await server.app.db.delete(githubAccounts).where(eq(githubAccounts.userId, unlinked!.id));
+    expect((await post(w.id, "schedule")).statusCode).toBe(200);
+    const told = { kind: "project_scheduled", projectId: w.id, projectTitle: "Lab 1", startAt: START };
+    expect(await bells(linked!.id, "project_scheduled")).toEqual([told]);
+    expect(await bells(unlinked!.id, "project_scheduled")).toEqual([{ ...told, githubLinked: false }]);
+    expect(await bells(teacher.id, "project_scheduled", w.id)).toEqual([]);
+    expect(await bells(w.colleague.id, "project_scheduled", w.id)).toEqual([]);
+    expect((await projectRow(w.id)).scheduledAnnouncedAt).toEqual(at(NOW));
+    // Nothing published yet: no "accept it".
+    expect(await bells(linked!.id, "project_published")).toEqual([]);
+
+    // Cancelled (nobody told), moved, scheduled again: nobody is told a second time.
+    expect((await post(w.id, "unschedule")).statusCode).toBe(200);
+    expect((await call("PATCH", `/app/api/projects/${w.id}`, teacher.headers, { startAt: "2026-10-04T08:00:00Z" })).statusCode).toBe(200);
+    expect((await post(w.id, "schedule")).statusCode).toBe(200);
+    expect(await bells(linked!.id, "project_scheduled")).toHaveLength(1);
+
+    // Publish now: the opening is told as ever.
+    expect((await post(w.id, "publish")).statusCode).toBe(200);
+    expect(await bells(linked!.id, "project_published")).toHaveLength(1);
+  });
+
+  it("is never sent by a publication by hand of a draft", async () => {
+    const w = await project({ body: dated, accept: false });
+    expect(await bells(w.students[0]!.id, "project_scheduled")).toEqual([]);
     expect(await bells(w.students[0]!.id, "project_published")).toHaveLength(1);
   });
 });
@@ -339,6 +380,16 @@ describe("project_deadline_reminder", () => {
     server.clock.advance(20_000);
     await tick();
     for (const s of w.students) expect(await bells(s.id, "project_deadline_reminder")).toHaveLength(1);
+  });
+
+  it("never reminds of a scheduled project, its start come or not (ADR-127)", async () => {
+    const start = at(NOW, HOUR);
+    const deadline = at(NOW, 30 * HOUR);
+    const w = await project({ publish: false, body: { publishMode: "scheduled", startAt: start.toISOString(), deadlineAt: deadline.toISOString() } });
+    expect((await call("POST", `/app/api/projects/${w.id}/schedule`, teacher.headers)).statusCode).toBe(200);
+    // Past its start, the ticker not yet by: the reminder's scan alone.
+    expect(await remindDeadlines(server.app.db, at(deadline.toISOString(), -23 * HOUR))).toBe(0);
+    expect((await projectRow(w.id)).reminderSentAt).toBeNull();
   });
 
   it("catches up late, but never after the deadline", async () => {
