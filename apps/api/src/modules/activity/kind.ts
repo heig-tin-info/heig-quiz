@@ -140,14 +140,8 @@ export interface ActivityKind<K extends ActivityKindName> {
   /**
    * The caller's own columns and cells of this kind in a classroom (M5-03a,
    * F-GBOOK-05): only what the kind's student view lets a student read. The
-   * classroom is loaded through `readableClassroom` first, and `seat` is the
-   * caller's claimed student seat.
+   * classroom is loaded through `readableClassroom` first, on the caller's
+   * claimed student seat (the kind resolves it from `userId`).
    */
-  studentGradebookEntries(
-    db: Db,
-    userId: string,
-    seat: GradebookSeat,
-    classroomId: string,
-    now: Date,
-  ): Promise<StudentGradebookEntry[]>;
+  studentGradebookEntries(db: Db, userId: string, classroomId: string, now: Date): Promise<StudentGradebookEntry[]>;
 }

@@ -5,10 +5,12 @@ import { useT } from "../../i18n";
 import { cx } from "../../ui";
 
 /**
- * A criterion's rationale folded under it (ADR-106 §6), on the staff's
- * grading table and the student's criteria table alike: a "Rationale"
- * toggle, then, unfolded, what the table puts there. `label` names another
- * fold of the same kind (an automatic criterion's CI log, ADR-119 §8).
+ * A criterion's rationale folded under it on the staff's grading table
+ * (ADR-106 §8): a "Rationale" toggle, then, unfolded, what the table puts
+ * there. `label` names another fold of the same kind (an automatic
+ * criterion's CI log, ADR-119 §8). The student's criteria table shows its
+ * rationale unfolded, through `RationaleText` alone (ADR-106 §9, amended
+ * 2026-11-06).
  */
 export function RationaleFold({ label, children }: { label?: string; children: ReactNode }) {
   const t = useT();
@@ -35,7 +37,7 @@ export function RationaleFold({ label, children }: { label?: string; children: R
   );
 }
 
-/** A rationale as plain text (N-SEC-14): a text node, line breaks kept, never markup. */
+/** A rationale as plain text (N-SEC-14): a text node, line breaks kept, never markup, at a reading measure. */
 export const RationaleText = ({ children }: { children: string }) => (
-  <span className="whitespace-pre-wrap text-[13px] text-fg-muted">{children}</span>
+  <span className="block max-w-[70ch] whitespace-pre-wrap break-words text-[13px] text-fg-muted">{children}</span>
 );

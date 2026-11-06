@@ -146,7 +146,7 @@ describe("the student's Grades", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it("prints a released project's score out of its maximum, its grade, and opens nothing", async () => {
+  it("prints a released project's score out of its maximum, its grade, and opens the project's page", async () => {
     const project: GradeGroup = {
       ...groups[0]!,
       rows: [
@@ -169,7 +169,25 @@ describe("the student's Grades", () => {
     expect(lab.getByText("4.8")).toBeInTheDocument();
     expect(lab.getByText("released")).toBeInTheDocument();
     await userEvent.click(lab.getByText("Lab 2"));
-    expect(navigate).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith({ view: "project", id: "p1" });
+  });
+
+  it("says excused on a project's row, no points nor grade, in no mean (product owner, 2026-11-06)", async () => {
+    const project: GradeGroup = {
+      ...groups[0]!,
+      rows: [
+        row({ evaluationId: "e2", title: "Quiz 2", score: { points: 8.5, totalPoints: 12, grade: 4.5, pendingCount: 0 } }),
+        { kind: "project", projectId: "p2", title: "Lab 3", date: "2026-09-26T10:00:00.000Z", status: "excused", counts: false, score: null },
+      ],
+    };
+    mockFetch({ [URL]: ok([project]) });
+    const { navigate } = render();
+    const lab = await tableRow("Lab 3");
+    expect(lab.getByText("excused")).toBeInTheDocument();
+    expect(lab.getAllByText("—")).toHaveLength(2);
+    expect(within(screen.getByRole("region", { name: "Indicative" })).getAllByText("Lab 3").length).toBeGreaterThan(0);
+    await userEvent.click(lab.getByText("Lab 3"));
+    expect(navigate).toHaveBeenCalledWith({ view: "project", id: "p2" });
   });
 
   it("draws what counts first, then what does not count, its grades indicative in the ink (#803)", async () => {

@@ -6,24 +6,44 @@
  * release — and whom it lists: a staff seat only once it took an attempt
  * (ADR-018 §3), an archived classroom too. Who reads it: the student's
  * portal and an impersonation session (ADR-034), never a `seb` or `kiosk`
- * one (ADR-027, ADR-051).
+ * one (ADR-027, ADR-051). A project is listed once released, with the
+ * release's snapshot of the student's own or group's repository, or excused
+ * (F-PROJ-14; product owner, 2026-11-06) — never another student's.
  */
 import { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { StudentGrades, CSRF_COOKIE, type FeedbackPolicy, type SessionKind } from "@quiz/contracts";
+import {
+  StudentGrades,
+  StudentProject,
+  CSRF_COOKIE,
+  type FeedbackPolicy,
+  type ProjectGradeRow,
+  type SessionKind,
+} from "@quiz/contracts";
+import { gradeFromPoints } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
-import { SESSION_COOKIE, createSession } from "../../auth/session.js";
-import { classrooms, enrollments, evaluations } from "../../db/schema.js";
+import { PORTAL, SESSION_COOKIE, createSession } from "../../auth/session.js";
+import {
+  classrooms,
+  enrollments,
+  evaluations,
+  projectGroupMembers,
+  projectGroups,
+  projects,
+} from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { evaluationRows } from "../../test/grades.js";
 import { kioskStation } from "../../test/kiosk.js";
+import { gradedProject, projectRepo, RELEASED_AT, type FixtureProject } from "../../test/project.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
 import { applyState } from "../evaluation/service.js";
+import { findStudentProjectView } from "../guards.js";
+import { studentProject } from "../project/service.js";
 import * as results from "../results/service.js";
 import * as live from "./service.js";
 
@@ -250,5 +270,166 @@ describe("GET /app/api/student/results — who reads it", () => {
 
   it("an anonymous caller is asked to sign in", async () => {
     expect((await get("/app/api/student/results", {})).statusCode).toBe(401);
+  });
+});
+
+describe("GET /app/api/student/results — a project's row (F-PROJ-14, F-ORG-14)", () => {
+  /** The student whose page is read, a classmate, and a group mate whose Accept created their group's repository. */
+  let mine: Signed;
+  let other: Signed;
+  let mate: Signed;
+  let room: Seeded;
+  let archivedRoom: Seeded;
+  const ids: Record<string, string> = {};
+
+  const seatOf = async (classroomId: string, userId: string) =>
+    (await db().select().from(enrollments).where(eq(enrollments.classroomId, classroomId))).find((e) => e.userId === userId)!.id;
+
+  /** A graded project of `classroomId`, its id kept by name. */
+  async function project(name: string, classroomId: string, options: { released: boolean; groupMode?: boolean }) {
+    const made = await gradedProject(db(), { classroomId, name, createdBy: teacher.id, ...options });
+    ids[name] = made.id;
+    return made;
+  }
+
+  const repo = (p: FixtureProject, userId: string, points: number, max: number, groupId?: string) =>
+    projectRepo(db(), p, { userId, points, max, ...(groupId ? { groupId } : {}) });
+
+  const gradebookUrl = (classroomId: string, projectId: string) =>
+    `/app/api/classrooms/${classroomId}/gradebook/columns/project/${projectId}`;
+
+  /**
+   * The project's student view (`GET /student/projects/:id`, which needs
+   * the GitHub App configured), through its loader: null where it answers 404.
+   */
+  async function projectPage(userId: string, name: string) {
+    const scope = await findStudentProjectView(db(), { id: userId, role: "student", reach: "seats" }, PORTAL, ids[name]!);
+    return scope && StudentProject.parse(await studentProject(db(), scope, userId, server.clock.now(), { codespace: false }));
+  }
+
+  async function projectRows(headers: Record<string, string>) {
+    const { body, groups } = await grades(headers);
+    const rows = groups.flatMap((g) => g.rows).filter((r): r is ProjectGradeRow => r.kind === "project");
+    return { body, groups, rows, of: (name: string) => rows.find((r) => r.projectId === ids[name]) };
+  }
+
+  beforeAll(async () => {
+    mine = await server.signIn("student");
+    other = await server.signIn("student");
+    mate = await server.signIn("student");
+    room = await seedLive(db(), { teacherId: teacher.id, studentIds: [mine.id, other.id, mate.id], questions: 0 });
+    archivedRoom = await seedLive(db(), { teacherId: teacher.id, studentIds: [mine.id], questions: 0 });
+    // The teacher's staff seat in the room: never listed (ADR-018 §3).
+    await db().insert(enrollments).values({
+      id: randomUUID(),
+      classroomId: room.classroomId,
+      nom: "Teacher",
+      prenom: "Seated",
+      email: `seated-p-${room.classroomId.slice(0, 6)}@heig.test`,
+      userId: seated.id,
+      claimedAt: new Date(),
+      staff: true,
+    });
+
+    const released = await project("Released", room.classroomId, { released: true });
+    await repo(released, mine.id, 9, 10);
+    await repo(released, other.id, 11.75, 17);
+    await repo(released, seated.id, 3, 10);
+    const notYet = await project("Not released", room.classroomId, { released: false });
+    await repo(notYet, mine.id, 8, 10);
+    const archived = await project("Archived", room.classroomId, { released: true });
+    await repo(archived, mine.id, 7, 10);
+    await db().update(projects).set({ archivedAt: RELEASED_AT }).where(eq(projects.id, archived.id));
+    // Only the classmate accepted: nothing of theirs reaches the student.
+    const othersOnly = await project("Others only", room.classroomId, { released: true });
+    await repo(othersOnly, other.id, 13.25, 19);
+    // A group's repository, created by the mate's Accept: the student's through their membership.
+    const grouped = await project("Group", room.classroomId, { released: true, groupMode: true });
+    const groupId = randomUUID();
+    await db().insert(projectGroups).values({ id: groupId, projectId: grouped.id, name: "G1", slug: "g1", position: 0 });
+    for (const userId of [mine.id, mate.id]) {
+      await db().insert(projectGroupMembers).values({
+        id: randomUUID(),
+        projectId: grouped.id,
+        groupId,
+        enrollmentId: await seatOf(room.classroomId, userId),
+      });
+    }
+    await repo(grouped, mate.id, 6, 8, groupId);
+    // Excused, without a repository; and excused over a score.
+    const excused = await project("Excused", room.classroomId, { released: true });
+    const excusedScored = await project("Excused scored", room.classroomId, { released: true });
+    await repo(excusedScored, mine.id, 10, 10);
+    for (const p of [excused, excusedScored]) {
+      const res = await server.app.inject({
+        method: "PUT",
+        url: `${gradebookUrl(room.classroomId, p.id)}/marks/${await seatOf(room.classroomId, mine.id)}`,
+        headers: teacher.headers,
+        payload: { kind: "excused", comment: "Medical certificate 4242", override: true },
+      });
+      expect(res.statusCode, res.body).toBe(200);
+    }
+    // A released project of a classroom archived since.
+    const old = await project("Old classroom", archivedRoom.classroomId, { released: true });
+    await repo(old, mine.id, 4, 10);
+    await db().update(classrooms).set({ archivedAt: RELEASED_AT }).where(eq(classrooms.id, archivedRoom.classroomId));
+  });
+
+  it("lists a released project with the release's snapshot, the one its page shows, dated by the release", async () => {
+    const row = (await projectRows(mine.headers)).of("Released");
+    expect(row).toEqual({
+      kind: "project",
+      projectId: ids["Released"],
+      title: "Released",
+      date: RELEASED_AT.toISOString(),
+      status: "released",
+      counts: true,
+      score: { points: 9, totalPoints: 10, grade: gradeFromPoints(9, 10, { rounding: "nearest" }) },
+    });
+    const { release } = (await projectPage(mine.id, "Released"))!;
+    expect(release).toMatchObject({ points: row!.score!.points, max: row!.score!.totalPoints, grade: { grade: row!.score!.grade } });
+  });
+
+  it("lists no project before its release, an archived one, nor one the student holds no repository of", async () => {
+    const { of } = await projectRows(mine.headers);
+    expect(of("Not released")).toBeUndefined();
+    expect(of("Archived")).toBeUndefined();
+    expect(of("Others only")).toBeUndefined();
+  });
+
+  it("reads a group's repository through the student's membership (N-SEC-20)", async () => {
+    const score = { points: 6, totalPoints: 8, grade: gradeFromPoints(6, 8, { rounding: "nearest" }) };
+    expect((await projectRows(mine.headers)).of("Group")).toMatchObject({ status: "released", score });
+    expect((await projectRows(mate.headers)).of("Group")).toMatchObject({ status: "released", score });
+    expect((await projectRows(other.headers)).of("Group")).toBeUndefined();
+  });
+
+  it("says excused, with no score and counting nowhere, repository or not — never the mark's comment", async () => {
+    const { body, of } = await projectRows(mine.headers);
+    for (const name of ["Excused", "Excused scored"]) {
+      expect(of(name)).toMatchObject({ status: "excused", score: null, counts: false });
+    }
+    expect(body).not.toContain("4242");
+    // The classmate is not excused, and holds no repository: no row.
+    expect((await projectRows(other.headers)).of("Excused")).toBeUndefined();
+  });
+
+  it("carries nothing of another student's repository (N-SEC-20)", async () => {
+    const { body } = await projectRows(mine.headers);
+    for (const value of ["11.75", "13.25", ":17", ":19"]) expect(body).not.toContain(value);
+    expect((await projectRows(other.headers)).of("Others only")).toMatchObject({ score: { points: 13.25, totalPoints: 19 } });
+  });
+
+  it("lists a staff seat's projects never (ADR-018 §3)", async () => {
+    expect((await projectRows(seated.headers)).rows).toEqual([]);
+  });
+
+  it("gives a classroom with projects only its heading, an archived one marked, its row still opening the project", async () => {
+    const { groups, of } = await projectRows(mine.headers);
+    const old = groups.find((g) => g.classroom.id === archivedRoom.classroomId)!;
+    expect(old.classroom).toMatchObject({ name: "A", courseName: "Programmation C", period: "2026-A", archived: true });
+    expect(old.rows.map((r) => r.kind)).toEqual(["project"]);
+    expect(of("Old classroom")).toMatchObject({ status: "released", score: { points: 4, totalPoints: 10 } });
+    expect(await projectPage(mine.id, "Old classroom")).toMatchObject({ id: ids["Old classroom"] });
   });
 });

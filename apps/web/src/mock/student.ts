@@ -8,6 +8,7 @@ import type {
   ItemCorrection,
   EvaluationCard,
   EvaluationGradeRow,
+  ProjectGradeRow,
   GradeGroup,
   LobbyView,
   ReadyView,
@@ -1178,6 +1179,31 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
         }),
       )
     : [];
+  // `?projects=1`: the released project, with its release's snapshot (its
+  // page says the same 18 / 20), and one the teacher excused the student from
+  // (product owner, 2026-11-06). Each opens the project's page.
+  const projectRows: ProjectGradeRow[] = flags.projects
+    ? [
+        {
+          kind: "project",
+          projectId: STUDENT_PROJECT_PAST,
+          title: "Labo 0 — Prise en main",
+          date: iso(-5 * D),
+          status: "released",
+          counts: true,
+          score: { points: 18, totalPoints: 20, grade: 5.5 },
+        },
+        {
+          kind: "project",
+          projectId: STUDENT_PROJECT_LOCKED,
+          title: "Exercice préliminaire — Compilation",
+          date: iso(-13 * D),
+          status: "excused",
+          counts: false,
+          score: null,
+        },
+      ]
+    : [];
   return [
     {
       classroom: header({}),
@@ -1211,6 +1237,7 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
         // Excused by the teacher (#969): no grade, in no mean.
         row({ title: "Quiz 0 — Prise en main", status: "excused", counts: false, date: iso(-20 * D) }),
         ...series,
+        ...projectRows,
         // Newest first, as the server sorts them.
       ].sort((a, b) => b.date.localeCompare(a.date)),
     },

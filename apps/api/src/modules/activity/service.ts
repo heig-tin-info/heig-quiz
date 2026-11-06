@@ -27,7 +27,7 @@ import { hasStudentGroupSets, studentGroupSetCards } from "../group/service.js";
 import { hasJournal } from "../journal/service.js";
 import { studentClassroomHeader } from "../org/service.js";
 import { evaluationActivity } from "./evaluation.js";
-import type { GradebookEntry, GradebookSeat, StudentGradebookEntry, StudentScope } from "./kind.js";
+import type { GradebookEntry, StudentGradebookEntry, StudentScope } from "./kind.js";
 import { projectActivity } from "./project.js";
 
 const KINDS = [evaluationActivity, projectActivity] as const;
@@ -155,15 +155,14 @@ export async function gradebookEntries(db: Db, classroomId: string): Promise<Gra
 
 /**
  * The caller's own gradebook columns and cells, every kind (F-GBOOK-05): the
- * classroom is loaded through `readableClassroom` first, `seat` is the
- * caller's claimed student seat.
+ * classroom is loaded through `readableClassroom` first, on the caller's
+ * claimed student seat.
  */
 export async function studentGradebookEntries(
   db: Db,
   userId: string,
-  seat: GradebookSeat,
   classroomId: string,
   now: Date,
 ): Promise<StudentGradebookEntry[]> {
-  return (await Promise.all(KINDS.map((k) => k.studentGradebookEntries(db, userId, seat, classroomId, now)))).flat();
+  return (await Promise.all(KINDS.map((k) => k.studentGradebookEntries(db, userId, classroomId, now)))).flat();
 }

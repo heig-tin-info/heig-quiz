@@ -995,6 +995,8 @@ const scenes = [
   // F-ORG-14, F-RES-04: the student's Grades, by classroom — every status
   // once, PRG1-2024 archived; `?many=1` a term of weekly series.
   { name: "student-grades", role: "student", path: "/grades" },
+  // A released project's row and an excused one (`?projects=1`), each opening the project's page.
+  { name: "student-grades-projects", role: "student", path: "/grades?projects=1" },
   { name: "student-grades-empty", role: "student", path: "/grades?empty=1" },
   { name: "student-grades-error", role: "student", path: "/grades?fail=1", settle: 2500 },
   { name: "student-grades-many", role: "student", path: "/grades?many=1" },
