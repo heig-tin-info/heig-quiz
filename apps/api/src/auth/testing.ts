@@ -11,7 +11,7 @@
 import type { LightMyRequestResponse } from "fastify";
 import { expect } from "vitest";
 
-import { CONFIG_KEY_HEADER, absoluteRequestUrl, expectedHash } from "@quiz/seb";
+import { CONFIG_KEY_HEADER, absoluteRequestUrl, configKeyFromPlistXml, expectedHash } from "@quiz/seb";
 
 import { CSRF_COOKIE } from "@quiz/contracts";
 
@@ -59,6 +59,17 @@ export function sessionCookies(res: LightMyRequestResponse): Record<string, stri
 // ---------------------------------------------------------------- seb (ADR-027, ADR-051)
 
 /**
+ * The Config Key of each file `sebStartUrl` downloaded, by its start URL:
+ * what SEB computes from the file it opens. An evaluation's file carries a
+ * password hash (ADR-027, 2026-11-06) the test cannot rebuild from the URL.
+ */
+const fileConfigKeys = new Map<string, string>();
+
+/** The Config Key of the file that starts at `startUrl`: the downloaded one's, else rebuilt from the URL. */
+const fileConfigKey = (startUrl: string, allowedHosts: readonly string[] = []): string =>
+  fileConfigKeys.get(startUrl) ?? launchConfigKey(startUrl, allowedHosts);
+
+/**
  * Downloads a `.seb` as `headers` and returns the start URL written in it:
  * an evaluation's, or the file at `path` (a project's, D21).
  */
@@ -71,17 +82,19 @@ export async function sebStartUrl(
   const res = await server.app.inject({ method: "GET", url: path, headers });
   expect(res.statusCode).toBe(200);
   expect(res.headers["content-type"]).toBe("application/seb");
-  return /<key>startURL<\/key>\s*<string>([^<]+)<\/string>/.exec(res.body)![1]!;
+  const startUrl = /<key>startURL<\/key>\s*<string>([^<]+)<\/string>/.exec(res.body)![1]!;
+  fileConfigKeys.set(startUrl, configKeyFromPlistXml(res.body));
+  return startUrl;
 }
 
 /**
  * Opens the start URL as SEB would (or without its header), and returns the
- * response. The default header is an evaluation's file's.
+ * response. The default header is the downloaded file's.
  */
 export const launchSeb = (
   server: TestServer,
   startUrl: string,
-  header = configKeyHeaderFor(startUrl),
+  header = expectedHash(startUrl, fileConfigKey(startUrl)),
 ) =>
   server.app.inject({
     method: "GET",
@@ -100,7 +113,7 @@ export function sebSessionOf(
   allowedHosts: readonly string[] = [],
 ): (url: string) => Record<string, string> {
   const cookies = sessionCookies(res);
-  const key = launchConfigKey(startUrl, allowedHosts);
+  const key = fileConfigKey(startUrl, allowedHosts);
   return (url) => ({ ...cookies, [CONFIG_KEY_HEADER]: expectedHash(absoluteRequestUrl(startUrl, url), key) });
 }
 

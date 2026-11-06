@@ -92,6 +92,59 @@ are capped at `AUDITED_SEB_REFUSALS_PER_TICKET` (`auth/seb.ts`) — per ticket,
 not per address, since an exam room shares one address; the others are
 logged only.
 
+**Addendum (2026-11-06): the unlock password, scope: §2 and the file.**
+SEB Windows 3.x shows its lock screen after a user-session switch
+(Ctrl+Alt+Del, switch user, come back) and, when the file defines no quit
+password, logs "No unlock password is defined, allowing user to resume
+session!" and lets the student resume (`ClientResponsibility.cs`,
+`WaitForLockScreenResolution`); a student demonstrated it. Quiz now draws
+an unlock password PER EVALUATION: three lowercase letters then three
+digits from an alphabet without `i`, `l`, `o`, `0`, `1` (`cde234`;
+`@quiz/domain` `drawSebUnlockPassword`, from `node:crypto`'s `randomInt`).
+No global secret, no field for the teacher. It is stored in the nullable
+column `evaluations.seb_unlock_password`, never in `settings` (which the
+student view and every copy take whole), drawn on first need by one
+statement (`sebUnlockPasswordOf`, `modules/evaluation/sebUnlock.ts`: the
+first `.seb` download or the first look at the live screen) and never
+changed: no regeneration in v1, no audit event, never copied by a
+duplicate, a template or an instance. Every `.seb` of the evaluation
+carries its SHA-256 (UTF-8, lowercase hex) as `hashedQuitPassword`, right
+after `quitURLConfirm`: SEB asks for it on its lock screen and on Ctrl+Q /
+⌘Q. The quit link of 2026-10-08 still quits without it, so the student
+uses the button, whose shortcut line now says the keys ask for a password.
+The staff read the password on the evaluation's live screen
+(`DashboardView.evaluation.sebUnlockPassword`, `null` unless the
+evaluation trusts SEB), hidden until clicked and in that tab only: the
+screen is often projected. It reaches no student payload, template, copy,
+audit row, log line, nor the assistant's or MCP tools.
+`auth/seb.db.test.ts` searches for it in the responses of a `seb` session
+(entering, its attempt, `GET /me`, the `attempt:` and `lobby:` snapshots
+of the event stream), of a `kiosk` session (entering, its attempt, its
+`attempt:` snapshot), of the student's portal (home, classroom page,
+evaluation route), of a teacher in the student view, and of an
+impersonation session; `evaluation/templates.db.test.ts` checks that a
+template, a duplicate and an instance start without one.
+
+- §2 is amended: the file, hence the Config Key, is a function of its
+  start URL AND of the evaluation's password; the start route reads the
+  stored password of the pending ticket's evaluation, without consuming
+  the ticket, before it rebuilds the file and checks the header. It reads,
+  never draws: the route takes no session, so only the authenticated
+  download and the staff's live screen write the password.
+- The Config Key of every evaluation file changes
+  (`auth/seb.snapshot.test.ts` pins a second fixture, with `cde234`): a
+  file downloaded before the deploy is refused at its start route without
+  burning its ticket, and the student downloads it again.
+- Accepted limit: the file is unencrypted and the hash is unsalted, and
+  six characters from 23³·8³ (about 6.2 million) are cracked in seconds
+  by a student who reads their own file. The same class of limit as the
+  Config Key (§2, M10): it stops the accidental and the lazy, and the
+  high-stakes exams sit on attested kiosk stations (ADR-051).
+- Known gap: a project's `workspace.seb` (D21) carries no password in v1
+  and still resumes from the lock screen.
+- `TODO(verify)`: that the quit link still quits without the password,
+  and how SEB for macOS behaves at its lock screen, on a real machine.
+
 ## Context
 
 An exam sat in Safe Exam Browser (SEB) is a separate browser: the portal's
@@ -140,7 +193,9 @@ the client (`/?seb=invalid`); the audit log keeps the reason
 `AUDITED_SEB_REFUSALS_PER_TICKET` times per ticket.*
 
 The Config Key is computed, not stored: the file is a function of its start
-URL, so the start route rebuilds it from the URL it was reached on. The port
+URL, so the start route rebuilds it from the URL it was reached on. *Amended
+2026-11-06 (see Status): and of the evaluation's unlock password, which the
+start route reads from the ticket's evaluation before rebuilding the file.* The port
 of the Config Key (from `heig-classroom`, itself from Moodle's
 `quizaccess_seb`) is cut down to the plist subset the file uses and is checked
 against Moodle's own 201-key SEB-JSON vector. There is no Browser Exam Key

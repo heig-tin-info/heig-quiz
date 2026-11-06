@@ -31,6 +31,7 @@ import type { Db } from "../db/client.js";
 import { users } from "../db/schema.js";
 import { FixedWindowLimiter } from "../limiter.js";
 import { sebProjectSeat } from "../modules/codespace/service.js";
+import { byId, sebUnlockPasswordOf } from "../modules/evaluation/service.js";
 import { callerFor } from "../modules/guards.js";
 import { sebSeat } from "../modules/live/service.js";
 import { consumeLaunchTicket, issueLaunchTicket, pendingLaunchTicket } from "./launch.js";
@@ -45,8 +46,8 @@ export { toPlistXml };
 /**
  * What differs between an evaluation's launch and a project's (D21): the
  * activity's id on a ticket, the seat checked again when SEB trades it, the
- * page the session lands on, the file's name, and whether the URL filter
- * adds the workspace portal.
+ * page the session lands on, the file's name, whether the URL filter
+ * adds the workspace portal, and the unlock password the file carries.
  */
 const SEB_ACTIVITY: Record<
   Activity,
@@ -56,6 +57,12 @@ const SEB_ACTIVITY: Record<
     landing: (id: string) => string;
     fileName: string;
     portal: boolean;
+    /**
+     * The activity's unlock password (ADR-027, 2026-11-06), `undefined` when
+     * it has none (a project's file, v1). `draw` only on the authenticated
+     * download; the start route takes no session and never writes.
+     */
+    quitPassword: (db: Db, id: string, draw: boolean) => Promise<string | undefined>;
   }
 > = {
   evaluation: {
@@ -64,6 +71,12 @@ const SEB_ACTIVITY: Record<
     landing: (id) => `/take/${id}`,
     fileName: "exam.seb",
     portal: false,
+    // Drawn on the first download (or the first look at the live screen), then fixed.
+    quitPassword: async (db, id, draw) => {
+      const evaluation = await byId(db, id);
+      if (!evaluation) return undefined;
+      return draw ? sebUnlockPasswordOf(db, evaluation) : (evaluation.sebUnlockPassword ?? undefined);
+    },
   },
   project: {
     idOf: (auth) => auth.projectId,
@@ -73,6 +86,8 @@ const SEB_ACTIVITY: Record<
     landing: (id) => `/projects/${id}`,
     fileName: "workspace.seb",
     portal: true,
+    // A known gap of v1: a project's SEB resumes from its lock screen.
+    quitPassword: async () => undefined,
   },
 };
 
@@ -92,9 +107,17 @@ export function sebAllowedHosts(
   return [...portal, ...config.SEB_EXTRA_ALLOWED_HOSTS];
 }
 
-/** The configuration of one launch: Quiz's host, then `allowedHosts`; the quit link on Quiz's host. */
-export const sebConfig = (startUrl: string, allowedHosts: readonly string[] = []): SebValue =>
-  buildSebConfig({ startUrl, quitUrl: new URL(SEB_QUIT_PATH, startUrl).href, allowedHosts });
+/**
+ * The configuration of one launch: Quiz's host, then `allowedHosts`; the quit
+ * link on Quiz's host; the hash of `quitPassword` when the activity has one.
+ */
+export const sebConfig = (startUrl: string, allowedHosts: readonly string[] = [], quitPassword?: string): SebValue =>
+  buildSebConfig({
+    startUrl,
+    quitUrl: new URL(SEB_QUIT_PATH, startUrl).href,
+    allowedHosts,
+    ...(quitPassword === undefined ? {} : { quitPassword }),
+  });
 
 /**
  * Whether `header` is the Config Key hash of `absoluteUrl` under the key
@@ -104,12 +127,12 @@ export const configKeyHashMatches = (absoluteUrl: string, configKeyHex: string, 
   typeof header === "string" && hashesEqual(expectedHash(absoluteUrl, configKeyHex), header);
 
 /** The Config Key of the launch that starts at `url`: what a `seb` session stores. */
-export const launchConfigKey = (url: string, allowedHosts: readonly string[] = []): string =>
-  configKey(sebConfig(url, allowedHosts));
+export const launchConfigKey = (url: string, allowedHosts: readonly string[] = [], quitPassword?: string): string =>
+  configKey(sebConfig(url, allowedHosts, quitPassword));
 
 /** What SEB sends on the launch that starts at `url` (the tests send it too). */
-export const configKeyHeaderFor = (url: string, allowedHosts: readonly string[] = []): string =>
-  expectedHash(url, launchConfigKey(url, allowedHosts));
+export const configKeyHeaderFor = (url: string, allowedHosts: readonly string[] = [], quitPassword?: string): string =>
+  expectedHash(url, launchConfigKey(url, allowedHosts, quitPassword));
 
 /** The one activity a `seb` launch is for: exactly one of the two is set. */
 export type SebActivity = { evaluationId: string; projectId: null } | { evaluationId: null; projectId: string };
@@ -133,13 +156,15 @@ export async function sendLaunchFile(
     app.clock.now(),
   );
   const activity = activityOf(target);
-  await tracer(app)(req, "auth.seb_launch", activity, SEB_ACTIVITY[activity].idOf(target)!);
+  const id = SEB_ACTIVITY[activity].idOf(target)!;
+  await tracer(app)(req, "auth.seb_launch", activity, id);
   const startUrl = new URL(`${LAUNCH_PATH}${secret}`, config.PUBLIC_URL).href;
+  const quitPassword = await SEB_ACTIVITY[activity].quitPassword(app.db, id, true);
   return reply
     .header("content-type", "application/seb")
     .header("content-disposition", `attachment; filename="${SEB_ACTIVITY[activity].fileName}"`)
     .header("cache-control", "no-store")
-    .send(toPlistXml(sebConfig(startUrl, sebAllowedHosts(config, activity))));
+    .send(toPlistXml(sebConfig(startUrl, sebAllowedHosts(config, activity), quitPassword)));
 }
 
 // --- The routes ----------------------------------------------------------------
@@ -178,7 +203,8 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
   /**
    * The start URL of the `.seb`. The ticket's activity is READ first,
    * without consuming it, because the file — hence the Config Key — is a
-   * function of its start URL and of that activity's hosts; then the header
+   * function of its start URL, of that activity's hosts and of its unlock
+   * password (read as stored, never drawn here); then the header
    * is checked against that file, BEFORE the ticket is consumed: a copied
    * file opened in an ordinary browser is refused and leaves the ticket for
    * SEB. Every refusal looks the same to the client; the audit log keeps the
@@ -211,7 +237,8 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
     // The start URL of the `.seb` IS this request's URL; its Config Key is
     // kept on the session, to check every later request (ADR-051 §3).
     const url = absoluteRequestUrl(config.PUBLIC_URL, req.raw.url ?? req.url);
-    const sebConfigKey = launchConfigKey(url, sebAllowedHosts(config, activity));
+    const quitPassword = await SEB_ACTIVITY[activity].quitPassword(app.db, SEB_ACTIVITY[activity].idOf(pending.auth)!, false);
+    const sebConfigKey = launchConfigKey(url, sebAllowedHosts(config, activity), quitPassword);
     if (!configKeyHashMatches(url, sebConfigKey, req.headers[CONFIG_KEY_HEADER])) return refuse("config_key", pending.id);
     const ticket = await consumeLaunchTicket(app.db, "seb", req.params.secret, now);
     if (!ticket) return refuse("ticket", pending.id);

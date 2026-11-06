@@ -107,6 +107,7 @@ export function makeDashboard(rows = 3, items = 4): DashboardView {
       serverNow: liveAt(0),
       reopenable: true,
       journalOn: true,
+      sebUnlockPassword: null,
     },
     items: itemIds.map((itemId, i) => ({
       id: itemId,

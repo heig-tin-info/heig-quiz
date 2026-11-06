@@ -19,6 +19,7 @@ import {
   TemplateInstance,
   TemplatePoolUnlinked,
 } from "@quiz/contracts";
+import { isSebUnlockPassword } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import {
@@ -162,6 +163,9 @@ describe("the owned-poll predicate", () => {
 describe("save, list, instantiate, delete", () => {
   it("saves an evaluation as a template without anything of a run", async () => {
     const { teacher, seed } = await world();
+    // The source's SEB unlock password is its own (ADR-027, 2026-11-06): never copied.
+    const source = (await service.byId(server.app.db, seed.evaluationId))!;
+    expect(isSebUnlockPassword(await service.sebUnlockPasswordOf(server.app.db, source))).toBe(true);
     const template = await saveTemplate(teacher, seed.evaluationId);
     expect(template).toMatchObject({
       courseId: seed.courseId,
@@ -180,6 +184,7 @@ describe("save, list, instantiate, delete", () => {
       ipAllowlist: [],
       state: "draft",
       durationS: 1800,
+      sebUnlockPassword: null,
     });
     const items = await server.app.db
       .select()
@@ -196,6 +201,17 @@ describe("save, list, instantiate, delete", () => {
       .from(auditLog)
       .where(eq(auditLog.subjectId, template.id));
     expect(entry?.action).toBe("template.create");
+
+    // Nor does a duplicate, nor an instance of the template.
+    const duplicate = await call(teacher, "POST", `/app/api/evaluations/${seed.evaluationId}/duplicate`, { title: "Copy" });
+    expect(duplicate.statusCode, duplicate.body).toBe(201);
+    const instance = await call(teacher, "POST", `/app/api/templates/${template.id}/instances`, {
+      classroomId: seed.classroomId,
+    });
+    expect(instance.statusCode, instance.body).toBe(201);
+    for (const id of [duplicate.json().id as string, TemplateInstance.parse(instance.json()).evaluation.id]) {
+      expect((await service.byId(server.app.db, id))!.sebUnlockPassword).toBeNull();
+    }
   });
 
   it("links the source to the template it gave, relinking an instance and auditing the origin it loses", async () => {

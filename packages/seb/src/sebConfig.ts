@@ -13,9 +13,12 @@
  * published files); `sendBrowserExamKey` is what makes SEB send the Config
  * Key header. The keys and their order are the ones Quiz's evaluations have
  * served since ADR-027, plus the quit link beside `allowQuit` (2026-10-08):
- * their bytes, and so their Config Key, are pinned by
+ * and the unlock password after it (2026-11-06): their bytes, and so their
+ * Config Key, are pinned by
  * `apps/api/src/auth/seb.snapshot.test.ts`.
  */
+import { createHash } from "node:crypto";
+
 import { array, bool, data, dict, int, str, type SebDict, type SebValue } from "./plist.js";
 
 export interface SebConfigInput {
@@ -35,7 +38,22 @@ export interface SebConfigInput {
    * (the Config Key alone, D21).
    */
   readonly examKeySalt?: string;
+  /**
+   * The activity's unlock password, in clear (ADR-027, 2026-11-06): the file
+   * carries its SHA-256 as `hashedQuitPassword`, which SEB asks for on its
+   * lock screen after a user-session switch and on Ctrl+Q / Cmd+Q. The quit
+   * link still quits without it. Omitted: no password, the file is the one
+   * ADR-027 pinned, and SEB lets anyone resume from its lock screen.
+   */
+  readonly quitPassword?: string;
 }
+
+/**
+ * How SEB stores a quit password: the SHA-256 of its UTF-8 bytes, in
+ * lowercase hex (`HashAlgorithm.GenerateHashFor`; SEB compares ignoring case).
+ */
+export const hashQuitPassword = (password: string): string =>
+  createHash("sha256").update(password, "utf8").digest("hex");
 
 /** One URL filter rule: action 1 = allow, `regex` false = a host with wildcards. */
 const allow = (expression: string): SebValue =>
@@ -54,6 +72,7 @@ export function buildSebConfig(input: SebConfigInput): SebValue {
     ["allowQuit", bool(true)],
     ["quitURL", str(input.quitUrl)],
     ["quitURLConfirm", bool(false)],
+    ...(input.quitPassword === undefined ? [] : [["hashedQuitPassword", str(hashQuitPassword(input.quitPassword))] as const]),
     ["URLFilterEnable", bool(true)],
     ["URLFilterEnableContentFilter", bool(true)],
     ["URLFilterRulesAsRegex", bool(false)],
