@@ -83,7 +83,7 @@ export {
   paperKey,
   type InsertedPaperAttempt,
 } from "./paperAttempt.js";
-export { studentGrades } from "./grades.js";
+export { studentEvaluationGrades, studentGrades } from "./grades.js";
 // The one student exit (invariant 4), for the modules that serve a question
 // outside an attempt: the drill (ADR-041 §9).
 export {

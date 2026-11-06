@@ -3651,7 +3651,7 @@ export const en = {
   // M5-02 (F-ORG-14, F-ORG-15): the student's Courses and classroom page.
   "scourses.subtitle": "The classrooms you belong to.",
   // F-ORG-14, F-RES-04: the student's Grades (`/grades`).
-  "sgrades.subtitle": "Your finished exams and exercises, by classroom.",
+  "sgrades.subtitle": "Your finished exams, exercises and projects, by classroom.",
   "sgrades.col.activity": "Activity",
   "sgrades.col.kind": "Kind",
   "sgrades.kind.project": "Project",

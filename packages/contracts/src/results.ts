@@ -494,21 +494,24 @@ export type EvaluationGradeRow = z.infer<typeof EvaluationGradeRow>;
  * One RELEASED project of the student's (F-PROJ-14, F-ORG-14; product owner,
  * 2026-10-01): no row before the release — a project's score is indicative
  * until then and lives on the project's own page (F-PROJ-15). `date` is the
- * release; `score` the final score (`totalPoints` its maximum) and its grade
- * by the project's scale.
+ * release; `score` the release's snapshot of the final score (`totalPoints`
+ * its maximum) and its grade by the project's scale. A released project the
+ * teacher excused the student from is `excused`, with no score and counting
+ * nowhere (#969; product owner, 2026-11-06). The row opens the project's page.
  * Never the score's source (teacher, review, frozen), the teacher's comment
  * nor the repository (N-SEC-20): those belong to the project's student view.
  */
-export const ProjectGradeRow = z.object({
-  kind: z.literal("project"),
-  projectId: z.uuid(),
-  title: z.string(),
-  date: z.iso.datetime(),
-  status: z.literal("released"),
-  /** Whether it counts toward the mean, as an evaluation's row says (a project does by default). */
-  counts: z.boolean(),
-  score: z.object({ points: z.number(), totalPoints: z.number(), grade: z.number() }),
-});
+const projectGradeFacts = { kind: z.literal("project"), projectId: z.uuid(), title: z.string(), date: z.iso.datetime() };
+export const ProjectGradeRow = z.discriminatedUnion("status", [
+  z.object({
+    ...projectGradeFacts,
+    status: z.literal("released"),
+    /** Whether it counts toward the mean, as an evaluation's row says (a project does by default). */
+    counts: z.boolean(),
+    score: z.object({ points: z.number(), totalPoints: z.number(), grade: z.number() }),
+  }),
+  z.object({ ...projectGradeFacts, status: z.literal("excused"), counts: z.literal(false), score: z.null() }),
+]);
 export type ProjectGradeRow = z.infer<typeof ProjectGradeRow>;
 
 /** One row of the student's Grades page, whatever its kind. */

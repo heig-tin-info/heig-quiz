@@ -379,6 +379,9 @@ evidence file, another repository's rows, nor a row of a project not in
 `criteria` mode. Tested as N-SEC-20's exit: a second student's rows and
 rationales, a superseded rationale, and a milestone rationale read before
 the freeze, searched for in every response and event of the first.
+*Amended 2026-11-06 (product owner): the student's table shows each
+rationale unfolded under its criterion, plain text, no toggle; the staff's
+grading table keeps its fold (§8).*
 
 ### 10. What does not change
 

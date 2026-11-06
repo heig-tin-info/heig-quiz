@@ -22,8 +22,8 @@ import { projectGrade } from "@quiz/domain";
 import {
   gradebookProjects,
   projectLiveScores,
-  projectReleasedScore,
   studentProjectCards,
+  studentProjectGrades,
   teacherProjects,
   type ProjectRow,
 } from "../project/service.js";
@@ -83,18 +83,15 @@ export const projectActivity: ActivityKind<"project"> = {
       },
     }));
   },
-  async studentGradebookEntries(db, _userId, seat, classroomId) {
-    const released = (await gradebookProjects(db, classroomId)).filter((p) => p.releasedAt !== null);
-    return Promise.all(
-      released.map(async (project): Promise<StudentGradebookEntry> => {
-        const score = await projectReleasedScore(db, project, seat.enrollmentId);
-        return {
-          ...facts(project),
-          cell: score
-            ? { kind: "grade", grade: score.grade, points: score.points, max: score.max }
-            : { kind: "empty", grade: null, points: null, max: null },
-          markShown: true,
-        };
+  /** The Grades page's rule (`studentProjectGrades`); a released project without a repository is an empty cell a mark fills. */
+  async studentGradebookEntries(db, userId, classroomId) {
+    return (await studentProjectGrades(db, userId, classroomId)).map(
+      ({ project, score }): StudentGradebookEntry => ({
+        ...facts(project),
+        cell: score
+          ? { kind: "grade", grade: score.grade, points: score.points, max: score.max }
+          : { kind: "empty", grade: null, points: null, max: null },
+        markShown: true,
       }),
     );
   },

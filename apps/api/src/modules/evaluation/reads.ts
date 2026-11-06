@@ -48,6 +48,7 @@ import {
   enrollments,
   evaluationItems,
   evaluations,
+  excusedMarkOfSeat,
   gradebookColumns,
   gradebookMarks,
   isStaffAttempt,
@@ -409,14 +410,7 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
       and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId), isLatestAttempt),
     )
     .leftJoin(gradebookColumns, eq(gradebookColumns.evaluationId, evaluations.id))
-    .leftJoin(
-      gradebookMarks,
-      and(
-        eq(gradebookMarks.columnId, gradebookColumns.id),
-        eq(gradebookMarks.enrollmentId, enrollments.id),
-        eq(gradebookMarks.kind, "excused"),
-      ),
-    )
+    .leftJoin(gradebookMarks, excusedMarkOfSeat())
     .where(
       and(
         eq(enrollments.userId, userId),
