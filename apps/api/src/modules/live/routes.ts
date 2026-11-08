@@ -57,6 +57,7 @@ import {
   staffAttempt,
   teacherGuard,
   withCourseRole,
+  userOf,
 } from "../guards.js";
 import { notFound, rateLimited, studentRoute, teacherRoute } from "../http.js";
 import * as evaluationService from "../evaluation/service.js";
@@ -133,7 +134,7 @@ export async function livePlugin(
           sitting(req, reply, await reachableEvaluation(app, req, reply, p.id)),
       },
       async ({ req, reply, now, scope }) => {
-        const participant = await service.participantOf(app.db, scope.evaluation, req.user!.id);
+        const participant = await service.participantOf(app.db, scope.evaluation, userOf(req).id);
         // A CLAIMED roster seat is the whole admission, staff or not: a teacher
         // who joined their own classroom walks the real flow (ADR-018), and a
         // teacher who did not holds no seat and gets the 404 a stranger gets.
@@ -185,7 +186,7 @@ export async function livePlugin(
           sitting(req, reply, await reachableEvaluation(app, req, reply, p.id)),
       },
       async ({ req, reply, now, scope, body }) => {
-        const participant = await service.participantOf(app.db, scope.evaluation, req.user!.id);
+        const participant = await service.participantOf(app.db, scope.evaluation, userOf(req).id);
         if (!participant) return notFound(reply);
         const attempt = await service.retakeAttempt(app.db, {
           evaluation: scope.evaluation,
@@ -216,7 +217,7 @@ export async function livePlugin(
     const scope = sitting(req, reply, await reachableEvaluation(app, req, reply, p.id));
     if (!scope) return null;
     // A CLAIMED roster seat, as for the entry; anyone else gets its 404.
-    const participant = await service.participantOf(app.db, scope.evaluation, req.user!.id);
+    const participant = await service.participantOf(app.db, scope.evaluation, userOf(req).id);
     if (!participant) {
       await notFound(reply);
       return null;
@@ -266,7 +267,7 @@ export async function livePlugin(
     "/app/api/evaluations/:id/attempt",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffEvaluation }, async ({ req, scope }) => {
-      const result = await service.resetOwnStaffAttempt(app.db, scope.evaluation, req.user!.id);
+      const result = await service.resetOwnStaffAttempt(app.db, scope.evaluation, userOf(req).id);
       if (result.deleted) {
         await trace(req, "attempt.staff_reset", "evaluation", scope.evaluation.id, {
           attemptId: result.attemptId,

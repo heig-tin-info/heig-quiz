@@ -10,7 +10,7 @@ import type { FastifyInstance } from "fastify";
 
 import { actorOf } from "../../audit.js";
 import { publish } from "../../events.js";
-import { ownSessionGuard, teacherGuard } from "../guards.js";
+import { ownSessionGuard, teacherGuard, userOf } from "../guards.js";
 import { readerLang, sendFailure } from "../http.js";
 import { provision, status } from "./service.js";
 
@@ -18,14 +18,14 @@ export async function trainingPlugin(app: FastifyInstance) {
   const requireTraining = [teacherGuard(app), ownSessionGuard(app)];
 
   app.get("/app/api/training", { preHandler: requireTraining }, async (req) =>
-    status(app.db, { userId: req.user!.id, llmEnabled: app.llmGateway.enabled }),
+    status(app.db, { userId: userOf(req).id, llmEnabled: app.llmGateway.enabled }),
   );
 
   // Provisions the caller's course in the UI language of the request, or
   // answers the existing one: 201 when created, 200 when found.
   app.post("/app/api/training", { preHandler: requireTraining }, async (req, reply) => {
     const now = app.clock.now();
-    const userId = req.user!.id;
+    const userId = userOf(req).id;
     try {
       const result = await provision(app.db, { userId, lang: readerLang(req), now, actor: actorOf(req), log: req.log });
       if (result.created) publish("courses", [`teacher:${userId}`]);

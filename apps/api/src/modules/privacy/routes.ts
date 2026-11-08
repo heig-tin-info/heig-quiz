@@ -15,7 +15,7 @@ import { sendExport } from "../../documents/files.js";
 import { FixedWindowLimiter } from "../../limiter.js";
 import { codespaceOn } from "../codespace/service.js";
 import { handout, handoutTree } from "../evaluation/service.js";
-import { callerOf, ownAttempt, ownSessionGuard } from "../guards.js";
+import { callerOf, ownAttempt, ownSessionGuard, userOf } from "../guards.js";
 import { DomainError, notFound, rateLimited, readerLang, studentRoute } from "../http.js";
 import { studentCopyDocument, studentCopyRecord } from "../results/service.js";
 import { findPastSeries, STUDENT_DOCUMENTS_PER_HOUR } from "./documents.js";
@@ -68,7 +68,7 @@ export async function privacyPlugin(app: FastifyInstance, opts: { config: AppCon
     if (wait !== null) return rateLimited(reply, wait);
     const file = await personalDataExport(
       app.db,
-      { caller, user: req.user! },
+      { caller, user: userOf(req) },
       now,
       { lang: readerLang(req), codespace: codespaceOn(opts.config) },
     );

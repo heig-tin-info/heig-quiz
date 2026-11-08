@@ -30,7 +30,7 @@ import { evaluationGradingRole } from "@quiz/domain";
 
 import { tracer, type AuditAction } from "../../audit.js";
 import { EXPORT_FORMATS, sendExport } from "../../documents/files.js";
-import { loadEvaluation, staffAnswer, staffGrading, teacherGuard, withCourseRole } from "../guards.js";
+import { loadEvaluation, staffAnswer, staffGrading, teacherGuard, withCourseRole, userOf } from "../guards.js";
 import { notFound, readerLang, teacherRoute } from "../http.js";
 import { joinedItem, joinedItems, type JoinedItem } from "../evaluation/service.js";
 import { listVersions } from "../pool/service.js";
@@ -178,7 +178,7 @@ export async function gradingPlugin(app: FastifyInstance) {
       app.db,
       { ...cell, criteria: service.criteriaOf(item) },
       { points: body.points, criteria: body.criteria, comment: body.comment },
-      req.user!.id,
+      userOf(req).id,
       now,
     );
     await afterCorrection(req, evaluation, row, "grading.override");
@@ -249,7 +249,7 @@ export async function gradingPlugin(app: FastifyInstance) {
           scope.grading,
           service.criteriaOf(item),
           body,
-          req.user!.id,
+          userOf(req).id,
           now,
         );
         await afterCorrection(req, scope.evaluation, row, "grading.validate");
@@ -269,7 +269,7 @@ export async function gradingPlugin(app: FastifyInstance) {
           app.db,
           scope.evaluation.id,
           body,
-          req.user!.id,
+          userOf(req).id,
           now,
         );
         if (validated > 0) {

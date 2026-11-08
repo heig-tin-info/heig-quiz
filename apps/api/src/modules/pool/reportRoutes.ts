@@ -11,6 +11,7 @@ import { IdParam, ReportCreate, ReportParam, ReportResolve } from "@quiz/contrac
 
 import { type PoolRouteContext } from "./routeContext.js";
 import * as service from "./service.js";
+import { userOf } from "../guards.js";
 
 export function reportRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, poolWrite, teacher, onQuestion, seesAllReports } = ctx;
@@ -20,7 +21,7 @@ export function reportRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: onQuestion() }, async ({ req, scope }) => {
       const seesAll = await seesAllReports(req, scope.pool);
-      return service.listReports(app.db, scope.question.id, { id: req.user!.id, seesAll });
+      return service.listReports(app.db, scope.question.id, { id: userOf(req).id, seesAll });
     }),
   );
 
@@ -30,7 +31,7 @@ export function reportRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     teacher({ params: IdParam, body: ReportCreate, load: onQuestion() }, async ({ req, reply, body, scope }) => {
       // A deleted question is the 404 of a missing one (`createReport`).
       const { question, pool } = scope;
-      const write = () => service.createReport(app.db, { question, pool, reporterId: req.user!.id, message: body.message });
+      const write = () => service.createReport(app.db, { question, pool, reporterId: userOf(req).id, message: body.message });
       const report = await poolWrite(req, pool.id, write, (row) => [
         "question.report", "question", question.id, { reportId: row.id, poolId: pool.id },
       ]);
@@ -45,7 +46,7 @@ export function reportRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
       { params: ReportParam, body: ReportResolve, load: onQuestion("contributor") },
       async ({ req, body, scope, params }) => {
         const { question, pool } = scope;
-        const resolution = { reportId: params.reportId, resolverId: req.user!.id, reply: body.reply, now: app.clock.now() };
+        const resolution = { reportId: params.reportId, resolverId: userOf(req).id, reply: body.reply, now: app.clock.now() };
         await poolWrite(req, pool.id, () => service.resolveReport(app.db, { question, pool, ...resolution }), (report) => [
           "question.report_resolve", "question", question.id,
           { reportId: report.id, poolId: pool.id, replied: report.resolution !== "" },

@@ -349,7 +349,7 @@ export function teacherGuard(app: FastifyInstance) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const denied = await app.requireSession(req, reply);
     if (denied) return denied;
-    if (req.user!.role !== "teacher" && req.user!.role !== "admin") {
+    if (userOf(req).role !== "teacher" && userOf(req).role !== "admin") {
       return reply.code(403).send({ error: "forbidden" });
     }
     return undefined;
@@ -373,7 +373,7 @@ export function adminGuard(app: FastifyInstance, { hidden = false } = {}) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const denied = await app.requireSession(req, reply);
     if (denied) return denied;
-    if (req.user!.role !== "admin") {
+    if (userOf(req).role !== "admin") {
       return reply.code(hidden ? 404 : 403).send({ error: hidden ? "not_found" : "forbidden" });
     }
     if (req.endlessToken) {
@@ -495,6 +495,16 @@ export function reachOf(
 export function callerOf(req: FastifyRequest): Caller {
   if (!req.caller) throw new Error("callerOf: the request has no authenticated user");
   return req.caller;
+}
+
+/**
+ * The user of an authenticated request, as the session hook resolved it —
+ * for a handler behind `requireSession` or a guard built on it. A handler
+ * reached without one answers the guard's own 401, never a `TypeError`.
+ */
+export function userOf(req: FastifyRequest): NonNullable<FastifyRequest["user"]> {
+  if (!req.user) throw Object.assign(new Error("unauthenticated"), { statusCode: 401 });
+  return req.user;
 }
 
 /** What the session hook stores as `req.caller`. */
@@ -1265,7 +1275,7 @@ export const reachableEvaluation = routeLoader((app, req, evaluationId: string) 
  * which is read-only and audited once per opening (`attempt.read`, #875).
  */
 export const ownAttempt = routeLoader((app, req, attemptId: string) =>
-  findOwnAttempt(app.db, req.user!.id, attemptId),
+  findOwnAttempt(app.db, userOf(req).id, attemptId),
 );
 
 /**

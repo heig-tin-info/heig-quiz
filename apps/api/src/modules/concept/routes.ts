@@ -88,7 +88,7 @@ import {
 
 import { actorOf } from "../../audit.js";
 import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
-import { adminGuard, callerOf, teacherGuard } from "../guards.js";
+import { adminGuard, callerOf, teacherGuard, userOf } from "../guards.js";
 import { invalid, notFound, rateLimited, readerLang, sendFailure } from "../http.js";
 import { llmArms, LLM_CALLS_PER_MINUTE } from "../llm/service.js";
 import * as service from "./service.js";
@@ -150,10 +150,10 @@ export async function conceptPlugin(app: FastifyInstance) {
     const now = app.clock.now();
     const body = ConceptRelationsAiRequest.safeParse(req.body ?? {});
     if (!body.success) return invalid(reply, body.error);
-    if (!asks.spend(`concepts:${req.user!.id}`, LLM_CALLS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
+    if (!asks.spend(`concepts:${userOf(req).id}`, LLM_CALLS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
     try {
       return (await service.aiRelations(app.db, app.llmGateway, {
-        userId: req.user!.id,
+        userId: userOf(req).id,
         lang: readerLang(req),
         request: body.data,
       })) satisfies ConceptRelationProposals;
@@ -164,9 +164,9 @@ export async function conceptPlugin(app: FastifyInstance) {
 
   app.post("/app/api/admin/concepts/duplicates/ai", { preHandler: requireAdmin }, async (req, reply) => {
     const now = app.clock.now();
-    if (!asks.spend(`concepts:${req.user!.id}`, LLM_CALLS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
+    if (!asks.spend(`concepts:${userOf(req).id}`, LLM_CALLS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
     try {
-      return await service.aiDuplicates(app.db, app.llmGateway, req.user!.id, readerLang(req));
+      return await service.aiDuplicates(app.db, app.llmGateway, userOf(req).id, readerLang(req));
     } catch (error) {
       return sendFailure(reply, error, now, llmArms);
     }
@@ -178,9 +178,9 @@ export async function conceptPlugin(app: FastifyInstance) {
     if (!params.success) return notFound(reply);
     const body = ConceptFillRequest.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
-    if (!asks.spend(`concepts:${req.user!.id}`, LLM_CALLS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
+    if (!asks.spend(`concepts:${userOf(req).id}`, LLM_CALLS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
     try {
-      return await service.fillConcept(app.db, app.llmGateway, { id: params.data.id, form: body.data, userId: req.user!.id });
+      return await service.fillConcept(app.db, app.llmGateway, { id: params.data.id, form: body.data, userId: userOf(req).id });
     } catch (error) {
       return sendFailure(reply, error, now, llmArms);
     }

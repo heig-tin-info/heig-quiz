@@ -9,7 +9,7 @@ import type { Db } from "../db/client.js";
 import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
 import { PICTURE_TYPES, remoteImageCache, type RemoteImage } from "../remoteImage.js";
-import { callerOf, seesUser, type Caller } from "./guards.js";
+import { callerOf, seesUser, type Caller, userOf } from "./guards.js";
 import { INERT_IMAGE_HEADERS, sniffImage } from "./pool/assets.js";
 
 /** An upload's cap; `PICTURE_TYPES` (`remoteImage.ts`) is the one list of types, as `app.ts` parses it (B-19). */
@@ -119,24 +119,24 @@ export async function avatarPlugin(app: FastifyInstance) {
       }
       await app.db
         .insert(avatars)
-        .values({ userId: req.user!.id, data: body, contentType, updatedAt: new Date() })
+        .values({ userId: userOf(req).id, data: body, contentType, updatedAt: new Date() })
         .onConflictDoUpdate({
           target: avatars.userId,
           set: { data: body, contentType, updatedAt: new Date() },
         });
       await audit(app.db, {
-        actorUserId: req.user!.id,
+        actorUserId: userOf(req).id,
         actorType: "user",
         action: "avatar.update",
         subjectType: "user",
-        subjectId: req.user!.id,
+        subjectId: userOf(req).id,
         payload: { bytes: body.length, contentType },
       });
       // The actor's OTHER tabs show the same avatar in the shell. The generic
       // `onResponse` fallback used to cover this; it does not any more (see
       // `app.ts`), so the route says it itself. It only ever refreshes GETs,
       // so it cannot feed itself.
-      publish("mutation", [`user:${req.user!.id}`]);
+      publish("mutation", [`user:${userOf(req).id}`]);
       return reply.code(204).send();
     },
   );
@@ -145,15 +145,15 @@ export async function avatarPlugin(app: FastifyInstance) {
     "/app/api/me/avatar",
     { preHandler: (req, reply) => app.requireSession(req, reply) },
     async (req, reply) => {
-      await app.db.delete(avatars).where(eq(avatars.userId, req.user!.id));
+      await app.db.delete(avatars).where(eq(avatars.userId, userOf(req).id));
       await audit(app.db, {
-        actorUserId: req.user!.id,
+        actorUserId: userOf(req).id,
         actorType: "user",
         action: "avatar.delete",
         subjectType: "user",
-        subjectId: req.user!.id,
+        subjectId: userOf(req).id,
       });
-      publish("mutation", [`user:${req.user!.id}`]);
+      publish("mutation", [`user:${userOf(req).id}`]);
       return reply.code(204).send();
     },
   );

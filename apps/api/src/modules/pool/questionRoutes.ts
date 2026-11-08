@@ -25,7 +25,7 @@ import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import { iso, isoOrNull } from "../../clock.js";
 import { questions } from "../../db/schema.js";
 import { actorOf } from "../../audit.js";
-import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
+import { callerOf, findAccessiblePool, requirePoolRole, userOf } from "../guards.js";
 import { notFound, rateLimited, readerLang } from "../http.js";
 import { poolChanged } from "./events.js";
 import { GenerateRefusal, generateAnswers, generatorTypes } from "./generate.js";
@@ -45,7 +45,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       { params: IdParam, query: QuestionSearch, load: inPool() },
       async ({ req, reply, query, scope: pool }) => {
         try {
-          const viewer = { id: req.user!.id, seesAll: await seesAllReports(req, pool) };
+          const viewer = { id: userOf(req).id, seesAll: await seesAllReports(req, pool) };
           // A course the caller does not staff, or the pool is not linked to, is a missing one (#599 step 7b).
           const courseConcepts =
             query.course === undefined
@@ -84,12 +84,12 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
             type,
             internalName,
             categoryId: body.categoryId ?? null,
-            createdBy: req.user!.id,
+            createdBy: userOf(req).id,
             // A concept that cannot be resolved is the 422 `ConceptWriteRefusal`, and nothing is created.
             concepts: concepts && {
               inputs: concepts,
               createMissing: body.createMissing ?? false,
-              writer: { userId: req.user!.id, lang: readerLang(req), actor: actorOf(req) },
+              writer: { userId: userOf(req).id, lang: readerLang(req), actor: actorOf(req) },
             },
           });
         const created = await poolWrite(req, pool.id, write, (row) => [
@@ -116,7 +116,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       async ({ req, reply, body, scope }) => {
         // `questionWriteError`'s 409 `duplicate_name` and `poolFailure`'s 404, like the create route.
         // A concept that cannot be resolved is the 422 `ConceptWriteRefusal`.
-        const writer = { userId: req.user!.id, lang: readerLang(req), actor: actorOf(req) };
+        const writer = { userId: userOf(req).id, lang: readerLang(req), actor: actorOf(req) };
         await poolWrite(req, scope.pool.id, () => service.patchQuestion(app.db, scope.question, body, writer), () => [
           "question.update", "question", scope.question.id, body,
         ]);
@@ -166,7 +166,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     teacher(
       { params: IdParam, body: GenerateRequest, load: onQuestion("contributor") },
       async ({ req, reply, body, scope }) => {
-        if (!generations.spend(`generate:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
+        if (!generations.spend(`generate:${userOf(req).id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
           return rateLimited(reply, BUDGET_RETRY_AFTER_S);
         }
         return generateAnswers(app.llmGateway, app.runner, {
@@ -175,7 +175,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
           explanation: body.explanation,
           item: body.item,
           target: body.target,
-          userId: req.user!.id,
+          userId: userOf(req).id,
         });
       },
     ),
@@ -201,13 +201,13 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
         );
         // No excerpt: no statement, or a draft that does not parse yet — the wand's own refusal.
         if (draft === null) throw new GenerateRefusal("statement_empty");
-        if (!generations.spend(`suggest:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
+        if (!generations.spend(`suggest:${userOf(req).id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
           return rateLimited(reply, BUDGET_RETRY_AFTER_S);
         }
         return suggestConcepts(app.db, app.llmGateway, {
           questionId: scope.question.id,
           draft,
-          userId: req.user!.id,
+          userId: userOf(req).id,
           lang: readerLang(req),
         });
       },
@@ -232,7 +232,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       async ({ req, reply, body, scope }) => {
         try {
           const note = body.changeNote !== undefined ? { changeNote: body.changeNote } : {};
-          const write = () => service.publishQuestion(app.db, scope.question, { userId: req.user!.id, ...note });
+          const write = () => service.publishQuestion(app.db, scope.question, { userId: userOf(req).id, ...note });
           const version = await poolWrite(req, scope.pool.id, write, ({ number, changeNote }) => [
             "question.publish", "question", scope.question.id, { number, changeNote },
           ]);
@@ -364,7 +364,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
         // contributor's seat on the TARGET.
         if (!(await requirePoolRole(app, req, reply, target, "contributor"))) return reply;
         // A category of another pool is `CategoryNotInPool`, `poolFailure`'s 404.
-        const into = { targetPoolId: target.id, categoryId: body.categoryId ?? null, userId: req.user!.id };
+        const into = { targetPoolId: target.id, categoryId: body.categoryId ?? null, userId: userOf(req).id };
         const write = () => service.copyQuestion(app.db, scope.question, into);
         const created = await poolWrite(req, target.id, write, (row) => [
           "question.copy", "question", row.id, { from: scope.question.id, targetPoolId: target.id },

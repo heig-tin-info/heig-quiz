@@ -57,7 +57,7 @@ import {
 } from "./session.js";
 import { superPowersRoutes } from "./superPowers.js";
 import { isoOrNull } from "../clock.js";
-import { callerFor, callerOf, mayHoldSuperPowers, ownSessionGuard, type Caller } from "../modules/guards.js";
+import { callerFor, callerOf, mayHoldSuperPowers, ownSessionGuard, type Caller, userOf } from "../modules/guards.js";
 
 const LOGIN_STASH_COOKIE = "quiz_login";
 const LOGOUT_PATH = "/app/auth/logout";
@@ -508,7 +508,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // Every confined session reads who it is, whatever its activity (D21).
     { preHandler: (req, reply) => app.requireSession(req, reply), config: { ...SITTING, activities: ["evaluation", "project"] } },
     async (req): Promise<Me> => {
-      const u = req.user!;
+      const u = userOf(req);
       return {
         ...(await accountOf(app.db, u)),
         session: {
@@ -536,8 +536,8 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       const parsed = MePatch.safeParse(req.body ?? {});
       if (!parsed.success) return invalid(reply, parsed.error);
       const patch = parsed.data;
-      await app.db.update(users).set(patch).where(eq(users.id, req.user!.id));
-      const before = req.user!;
+      await app.db.update(users).set(patch).where(eq(users.id, userOf(req).id));
+      const before = userOf(req);
       // The language, the date format and the MCQ policy are read by every
       // tab of the same account. This is the one place a hint to the actor's
       // own topic is wanted, and it is safe: it only refreshes `GET /me`,
@@ -571,9 +571,9 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
                 sql`(select coalesce(jsonb_agg(distinct x.v order by x.v), '[]'::jsonb)
                        from jsonb_array_elements_text(${users.coachSeen} || ${JSON.stringify(body.seen)}::jsonb) as x(v))`,
         })
-        .where(eq(users.id, req.user!.id))
+        .where(eq(users.id, userOf(req).id))
         .returning({ seen: users.coachSeen });
-      publish("mutation", [`user:${req.user!.id}`]);
+      publish("mutation", [`user:${userOf(req).id}`]);
       return { seen: row?.seen ?? [] };
     },
   );
@@ -583,7 +583,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   // own portal session only: an impersonation is refused here in development
   // too, not only by the read-only rule above.
   app.post("/app/api/me/changelog", { preHandler: ownSessionGuard(app) }, async (req, reply) => {
-    await app.db.update(users).set({ changelogSeenAt: sql`now()` }).where(eq(users.id, req.user!.id));
+    await app.db.update(users).set({ changelogSeenAt: sql`now()` }).where(eq(users.id, userOf(req).id));
     return reply.code(204).send();
   });
 }

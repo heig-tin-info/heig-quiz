@@ -39,7 +39,7 @@ import {
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { githubApp } from "../../github/app.js";
-import { accessibleClassroom, callerOf, readableClassroom } from "../guards.js";
+import { accessibleClassroom, callerOf, readableClassroom, userOf } from "../guards.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
 import { INERT_IMAGE_HEADERS } from "../pool/assets.js";
 import { JournalError } from "./errors.js";
@@ -147,7 +147,7 @@ async function registerWrites(app: FastifyInstance, config: AppConfig, base: str
   const as = (req: FastifyRequest, room: { id: string }): writes.WriteContext => ({
     app,
     config,
-    userId: req.user!.id,
+    userId: userOf(req).id,
     note: (action, payload) => trace(req, action, "classroom", room.id, payload),
   });
 

@@ -38,7 +38,7 @@ import {
 
 import { tracer } from "../../audit.js";
 import { isoOrNull } from "../../clock.js";
-import { accessibleClassroom, callerOf, loadEvaluation, readableClassroom, teacherGuard } from "../guards.js";
+import { accessibleClassroom, callerOf, loadEvaluation, readableClassroom, teacherGuard, userOf } from "../guards.js";
 import { invalid, notFound, readerLang, studentRoute, teacherRoute } from "../http.js";
 import { drillAllowed, setAllowDrill, type EvaluationRecord } from "../evaluation/service.js";
 import { setClassroomDrill, setDrillOptOut } from "../org/service.js";
@@ -53,7 +53,7 @@ export async function drillPlugin(app: FastifyInstance) {
 
   // The loaders of invariant 6. A student's scope is themselves: every card
   // query is filtered by its owner, and a card that is not theirs is a miss.
-  const me = async (req: FastifyRequest) => ({ userId: req.user!.id });
+  const me = async (req: FastifyRequest) => ({ userId: userOf(req).id });
   /** A classroom the caller reads as a student: `readableClassroom` with the student payload forced. */
   const studentClassroom = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     readableClassroom(app, req, reply, p, { studentView: true });
@@ -74,7 +74,7 @@ export async function drillPlugin(app: FastifyInstance) {
     const now = app.clock.now();
     const query = DrillSessionQuery.safeParse(req.query ?? {});
     if (!query.success) return invalid(reply, query.error);
-    return service.drillSession(app.db, req.user!.id, query.data.device, now);
+    return service.drillSession(app.db, userOf(req).id, query.data.device, now);
   });
 
   /**
@@ -88,21 +88,21 @@ export async function drillPlugin(app: FastifyInstance) {
     const now = app.clock.now();
     const query = DrillSessionQuery.safeParse(req.query ?? {});
     if (!query.success) return invalid(reply, query.error);
-    return service.unlockNewCards(app.db, req.user!.id, query.data.device, now);
+    return service.unlockNewCards(app.db, userOf(req).id, query.data.device, now);
   });
 
   /** The classrooms whose drill the student is in (or opted out of): the tab's notice and switches. */
   app.get(
     "/app/api/drill/classrooms",
     { preHandler: requireSession },
-    async (req): Promise<DrillClassroom[]> => service.studentDrillClassrooms(app.db, req.user!.id),
+    async (req): Promise<DrillClassroom[]> => service.studentDrillClassrooms(app.db, userOf(req).id),
   );
 
   /** ADR-085 §8: the student's own calibration, every classroom pooled; nobody else's rows. */
   app.get(
     "/app/api/drill/calibration",
     { preHandler: requireSession },
-    async (req): Promise<DrillCalibrationLevel[]> => service.studentCalibration(app.db, req.user!.id),
+    async (req): Promise<DrillCalibrationLevel[]> => service.studentCalibration(app.db, userOf(req).id),
   );
 
   /** ADR-041 §6: out of one classroom's drill, or back in. */

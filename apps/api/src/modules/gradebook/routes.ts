@@ -31,7 +31,7 @@ import {
 
 import { csvFilename } from "../../csv.js";
 import { actorOf } from "../../audit.js";
-import { accessibleClassroom, callerOf, isCourseOwner, readableClassroom, teacherGuard } from "../guards.js";
+import { accessibleClassroom, callerOf, isCourseOwner, readableClassroom, teacherGuard, userOf } from "../guards.js";
 import { sendCsv, studentRoute, teacherRoute } from "../http.js";
 import { ownHints } from "../realtime/bus.js";
 import { gradebookCsv } from "./csv.js";
@@ -46,7 +46,7 @@ export async function gradebookPlugin(app: FastifyInstance) {
   const onClassroom = { params: IdParam, load: accessibleClassroom.bind(null, app) };
   const ctx = async (req: Parameters<typeof actorOf>[0], now: Date, courseId: string): Promise<service.WriteContext> => ({
     actor: actorOf(req),
-    userId: req.user!.id,
+    userId: userOf(req).id,
     owner: await isCourseOwner(app.db, courseId, callerOf(req)),
     now,
   });

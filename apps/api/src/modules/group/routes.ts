@@ -44,7 +44,7 @@ import {
 
 import { actorOf } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { accessibleGroupSet, projectsClassroom, readableClassroom, selfFormingSeat, studentGroupSet } from "../guards.js";
+import { accessibleGroupSet, projectsClassroom, readableClassroom, selfFormingSeat, studentGroupSet, userOf } from "../guards.js";
 import { studentRoute, teacherRoute } from "../http.js";
 import { requestGroupSync } from "../project/service.js";
 import { ownHints } from "../realtime/bus.js";
@@ -61,8 +61,8 @@ export async function groupPlugin(app: FastifyInstance, opts: { config: AppConfi
   const onMember = { params: GroupMemberParams, load: accessibleGroupSet.bind(null, app) };
   const ctx = (req: FastifyRequest, now: Date): service.WriteContext => ({
     actor: actorOf(req),
-    userId: req.user!.id,
-    locale: req.user!.locale ?? "en",
+    userId: userOf(req).id,
+    locale: userOf(req).locale ?? "en",
     now,
   });
 

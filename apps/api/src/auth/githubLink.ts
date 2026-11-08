@@ -54,7 +54,7 @@ import {
 } from "../db/schema.js";
 import { publish } from "../events.js";
 import { githubApp } from "../github/app.js";
-import { ownSessionGuard } from "../modules/guards.js";
+import { ownSessionGuard, userOf } from "../modules/guards.js";
 import { inviteOnGithubLink } from "../modules/project/service.js";
 import { safeReturnTo } from "./returnTo.js";
 // GitHub's return. Its query carries the one-time `code`: the request log masks it (`redact.ts`).
@@ -248,7 +248,7 @@ export async function githubLinkPlugin(app: FastifyInstance, opts: { config: App
     if (!parsed.success) return null;
     const state = parsed.data;
     if (state.nonce !== echoed) return null;
-    if (state.userId !== req.user!.id) return null;
+    if (state.userId !== userOf(req).id) return null;
     if (state.expiresAt <= app.clock.now().getTime()) return null;
     return state;
   };
@@ -257,7 +257,7 @@ export async function githubLinkPlugin(app: FastifyInstance, opts: { config: App
     const nonce = randomBytes(24).toString("base64url");
     const state: LinkState = {
       nonce,
-      userId: req.user!.id,
+      userId: userOf(req).id,
       returnTo: linkReturn((req.query as { return?: unknown }).return),
       expiresAt: app.clock.now().getTime() + STATE_TTL_MS,
     };
@@ -316,7 +316,7 @@ export async function githubLinkPlugin(app: FastifyInstance, opts: { config: App
     ACCOUNT_PATH,
     { preHandler: (req, reply) => app.requireSession(req, reply) },
     async (req): Promise<GithubAccountState> => {
-      const userId = req.user!.id;
+      const userId = userOf(req).id;
       return {
         account: await githubAccountOf(app.db, userId),
         relevant: await linkRelevant(app.db, userId),
@@ -326,7 +326,7 @@ export async function githubLinkPlugin(app: FastifyInstance, opts: { config: App
 
   /** Unlinks. Idempotent: with no link, nothing is written and nothing audited. */
   app.delete(ACCOUNT_PATH, { preHandler: ownSession }, async (req, reply) => {
-    const userId = req.user!.id;
+    const userId = userOf(req).id;
     const [gone] = await app.db
       .delete(githubAccounts)
       .where(eq(githubAccounts.userId, userId))

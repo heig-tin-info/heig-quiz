@@ -35,7 +35,7 @@ import {
 } from "@quiz/contracts";
 import type { InteractiveOutcome } from "@quiz/core/server";
 
-import { loadEvaluation, loadTemplate, teacherGuard } from "../guards.js";
+import { loadEvaluation, loadTemplate, teacherGuard, userOf } from "../guards.js";
 import { teacherRoute } from "../http.js";
 import * as service from "./service.js";
 
@@ -136,7 +136,7 @@ export async function previewPlugin(app: FastifyInstance) {
         const result = await service.runPreview(app.db, {
           runner: app.runner,
           evaluation: scope.evaluation,
-          userId: req.user!.id,
+          userId: userOf(req).id,
           seed: body.seed,
           itemId: body.itemId,
           regions: body.regions,
@@ -163,7 +163,7 @@ export async function previewPlugin(app: FastifyInstance) {
         service.simulatePreview(app.db, {
           runner: app.runner,
           evaluation: scope.evaluation,
-          userId: req.user!.id,
+          userId: userOf(req).id,
           seed: body.seed,
           itemId: body.itemId,
           answer: body.answer,
@@ -182,7 +182,7 @@ export async function previewPlugin(app: FastifyInstance) {
         service.gradePreview(app.db, {
           runner: app.runner,
           evaluation: scope.evaluation,
-          userId: req.user!.id,
+          userId: userOf(req).id,
           seed: body.seed,
           answers: body.answers,
           coordinates: body.coordinates,

@@ -42,6 +42,7 @@ import {
   teamsLinkOf,
   type AllowedTenants,
 } from "./teamsLink.js";
+import { userOf } from "../guards.js";
 
 const TEAMS_PATH = "/app/api/notifications/teams";
 
@@ -61,20 +62,20 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
   app.get("/app/api/notifications", { preHandler: requireSession }, async (req, reply) => {
     const query = NotificationQuery.safeParse(req.query);
     if (!query.success) return reply.code(400).send({ error: "validation" });
-    return service.listNotifications(app.db, req.user!.id, query.data.limit);
+    return service.listNotifications(app.db, userOf(req).id, query.data.limit);
   });
 
   app.post("/app/api/notifications/:id/read", { preHandler: requireSession }, async (req, reply) => {
     const params = IdParam.safeParse(req.params);
     if (!params.success) return reply.code(404).send({ error: "not_found" });
-    const found = await service.markRead(app.db, req.user!.id, params.data.id);
+    const found = await service.markRead(app.db, userOf(req).id, params.data.id);
     if (!found) return reply.code(404).send({ error: "not_found" });
-    return service.listNotifications(app.db, req.user!.id);
+    return service.listNotifications(app.db, userOf(req).id);
   });
 
   app.post("/app/api/notifications/read-all", { preHandler: requireSession }, async (req) => {
-    await service.markAllRead(app.db, req.user!.id);
-    return service.listNotifications(app.db, req.user!.id);
+    await service.markAllRead(app.db, userOf(req).id);
+    return service.listNotifications(app.db, userOf(req).id);
   });
 
   // --- Channels and preferences ------------------------------------------
@@ -82,15 +83,15 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
   // The project kinds are listed only where Quiz's App can send them (F-NOTIF-13).
   const githubOn = githubApp(config) !== null;
   app.get("/app/api/notifications/settings", { preHandler: requireSession }, async (req) =>
-    service.notificationSettings(app.db, req.user!.id, teamsOn, githubOn),
+    service.notificationSettings(app.db, userOf(req).id, teamsOn, githubOn),
   );
 
   /** One toggle of the kinds × channels grid; answers with the whole settings. */
   app.put("/app/api/notifications/preferences", { preHandler: requireSession }, async (req, reply) => {
     const body = NotificationPreferencePut.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "validation" });
-    await service.setPreference(app.db, req.user!.id, body.data);
-    return service.notificationSettings(app.db, req.user!.id, teamsOn, githubOn);
+    await service.setPreference(app.db, userOf(req).id, body.data);
+    return service.notificationSettings(app.db, userOf(req).id, teamsOn, githubOn);
   });
 
   /**
@@ -102,10 +103,10 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
   app.put("/app/api/notifications/email", { preHandler: requireSession }, async (req, reply) => {
     const body = NotificationEmailPut.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "validation" });
-    if (!(await service.setNotificationEmail(app.db, req.user!.id, body.data.email))) {
+    if (!(await service.setNotificationEmail(app.db, userOf(req).id, body.data.email))) {
       return reply.code(400).send({ error: "email_not_known", message: "Not one of this account's addresses" });
     }
-    return service.notificationSettings(app.db, req.user!.id, teamsOn, githubOn);
+    return service.notificationSettings(app.db, userOf(req).id, teamsOn, githubOn);
   });
 
   // --- Microsoft Teams: the tab ------------------------------------------
@@ -198,7 +199,7 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
     if (req.authVia !== "session") return reply.code(403).send({ error: "forbidden" });
     const body = TeamsLinkBody.safeParse(req.body);
     if (!body.success) return reply.code(404).send({ error: "link_invalid" });
-    const userId = req.user!.id;
+    const userId = userOf(req).id;
     const outcome = await consumeLinkToken(app.db, userId, body.data.token, app.clock.now(), tenants);
     if (!outcome) return reply.code(404).send({ error: "link_invalid" });
     if (outcome.displaced) {
@@ -211,8 +212,8 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
   /** Forgets the link. Nothing is uninstalled at Microsoft: the user owns their Teams. */
   app.delete(TEAMS_PATH, { preHandler: requireSession }, async (req, reply) => {
     if (!teamsOn) return reply.code(503).send({ error: "teams_unavailable" });
-    const removed = await service.unlinkTeams(app.db, { userId: req.user!.id });
-    if (removed) await trace(req, "teams.unlink", "user", req.user!.id);
-    return service.notificationSettings(app.db, req.user!.id, teamsOn, githubOn);
+    const removed = await service.unlinkTeams(app.db, { userId: userOf(req).id });
+    if (removed) await trace(req, "teams.unlink", "user", userOf(req).id);
+    return service.notificationSettings(app.db, userOf(req).id, teamsOn, githubOn);
   });
 }

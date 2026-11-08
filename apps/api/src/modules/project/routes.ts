@@ -73,6 +73,7 @@ import {
   studentProjectView,
   withCourseRole,
   withRoleStep,
+  userOf,
 } from "../guards.js";
 import { codespaceOn, requestCodespaceSync } from "../codespace/service.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
@@ -107,7 +108,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   const onSeatedProject = {
     params: IdParam,
     load: withRoleStep(accessibleProject.bind(null, app), async (req, reply, scope) => {
-      if (await seatOf(app.db, scope.course.id, req.user!.id)) return true;
+      if (await seatOf(app.db, scope.course.id, userOf(req).id)) return true;
       await reply.code(403).send({ error: "staff_seat_required", message: "Only a seat on the course staff may ask for access" });
       return false;
     }),
@@ -262,7 +263,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
           app.db,
           config,
           scope.project,
-          req.user!.id,
+          userOf(req).id,
           actorOf(req),
           req.log,
         ),
@@ -341,7 +342,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/projects/:id/release",
     session,
     teacher(onOwnedProject, async ({ req, now, scope }) =>
-      service.releaseProject(app.db, scope.project.id, actorOf(req), req.user!.id, now),
+      service.releaseProject(app.db, scope.project.id, actorOf(req), userOf(req).id, now),
     ),
   );
 
@@ -369,7 +370,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/projects/:id/groups/resync",
     session,
     teacher({ ...onProject, body: ProjectGroupResync }, async ({ req, reply, now, body, scope }) => {
-      const done = await service.resyncGroups(app.db, scope.project.id, { confirm: body.confirm, actor: actorOf(req), userId: req.user!.id, now });
+      const done = await service.resyncGroups(app.db, scope.project.id, { confirm: body.confirm, actor: actorOf(req), userId: userOf(req).id, now });
       if (done) {
         service.projectsChanged([scope.course.id]);
         if (done.due) await service.requestGroupSync(app, config, [scope.project.id]);
@@ -434,7 +435,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       { params: ProjectCriterionParams, body: CriterionGradeWrite, load: onStaffedRepo.load },
       async ({ req, now, params, body, scope }) =>
         ProjectGradingRepo.parse(
-          await service.gradeCriterion(app.db, scope.project, scope.repo, params.criterionId, body, actorOf(req), req.user!.id, now),
+          await service.gradeCriterion(app.db, scope.project, scope.repo, params.criterionId, body, actorOf(req), userOf(req).id, now),
         ),
     ),
   );
@@ -495,7 +496,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/projects/:id/repos/:rid/score",
     session,
     teacher({ ...onRepo, body: ScoreOverride }, async ({ req, now, body, scope }) =>
-      service.overrideScore(app.db, scope.project.id, scope.repo.id, body, actorOf(req), req.user!.id, now),
+      service.overrideScore(app.db, scope.project.id, scope.repo.id, body, actorOf(req), userOf(req).id, now),
     ),
   );
 
@@ -574,7 +575,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       ProjectAcceptance.parse(
         await service.acceptProject(app.db, config, {
           project: scope.project,
-          userId: req.user!.id,
+          userId: userOf(req).id,
           enrollmentId: scope.seat.id,
           actor: actorOf(req),
           now,
