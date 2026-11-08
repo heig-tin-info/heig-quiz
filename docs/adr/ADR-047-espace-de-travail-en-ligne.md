@@ -2,194 +2,25 @@
 
 ## Status
 
-Quiz implementation status (verified 2026-10-07): `apps/codespace` is
-present (imported by M6-03) and Quiz's `codespace` module talks to it
-(M6-06: the work mode, the grants, the sync, the start route, the sessions
-summary); M6-04 makes it deployable (two instances on the engine VM,
-`prod` and `staging`, by the CI: ADR-016's M6-04 amendment, the switch from
-heig-classroom's portal in `apps/codespace/deploy/RUNBOOK.md`), M6-05
-sizes the VM, and from M6-07 it launches `online_seb` from a `seb`
-session; no SEB project opens to students before proof B is recorded. See
-[merge progress](../merge/PROGRESS.md).
+Accepted in heig-classroom (2026-09-17, portal milestone 2, its ADR-013);
+imported 2026-09-30 (merge task M0-03, ADR-035) and amended for Quiz on
+2026-10-07, 2026-10-08, 2026-10-11 and 2026-10-29. The body is
+classroom's, read with [the merge's renames](#reading-the-imported-body);
+Quiz's rules in force are under [Quiz's amendments](#quizs-amendments).
+Delivery: [merge progress](../merge/PROGRESS.md). The dated text of every
+amendment is in the [historical record](history/ADR-047-espace-de-travail-en-ligne.md#status).
 
-**Amended (2026-10-11, security audit M11 and L25):** the platform's service token is
-single use and bound to its request, and every token's lifetime is capped:
-[ADR-078's amendment of that date](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use).
-
-**Amended (2026-10-29, #958, product owner):** under the `commit` deadline
-strategy an `online` project's start route opens while the repository is
-writable, not only until the effective deadline, and the portal receives no
-deadline for it: [ADR-078's amendment of that date](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-29-958-under-commit-the-workspace-follows-the-repositorys-writability).
-
-**Amended (2026-10-11, security audit L24):** what a session may serve on
-the portal's one origin ([amendment](#amendment-2026-10-11-one-origin-for-every-session-audit-l24)).
-
-**Amended (2026-10-11, security audit L7): the start route is a POST.**
-Scope: the start route of amendment "M6-06" (its path and method) and
-M6-07's launch from a `seb` session. A navigable GET that froze the work
-mode and minted a launch token could be triggered by a cross-site link.
-The launch is now `POST /app/api/projects/:projectId/workspace/start`,
-under the double-submit CSRF check of every session write; same access
-rule (the caller's own portal session or the project's `seb` session, the
-student branch with a claimed seat, the 404 otherwise; an impersonation
-writes nothing, `403`), same refusals as `409 { error }` (the project page
-shows them as `?workspace=<code>`), and it answers `{ url }`, the portal's
-`/launch?token=…`, `Cache-Control: no-store`, which the page navigates to.
-The portal is unchanged: it never linked to the old path. ADR-089's
-station launch was already a POST.
-
-**Amended (2026-10-08, product owner): an administrator always holds the
-workspace grant.** Scope: amendment "M6-06" (B)'s last sentence, and (C)
-for an administrator. An account whose role is `admin` (`users.role`, the
-role rule's `SUPER_ADMIN_EMAIL`, whether or not a Super Powers session is
-active) is granted with at least the default quota
-(`DEFAULT_MAX_ACTIVE_SESSIONS`, 2), the most permissive of that and any
-row its addresses hold. `grantOf` (`modules/codespace/service.ts`) is the
-one place that says so, so the mode switch, the staff's view and the quota
-sent to the portal (an administrator holding the quota as creator or
-oldest owner) give one answer. The owner check is unchanged: an
-administrator sets a mode on a course where they hold an owner seat, or
-under Super Powers (ADR-054). The administration lists no grant row for
-them and needs no switch.
-
-**Amended (2026-10-07, M6-07, D21 points 2–5): Safe Exam Browser for a
-project.** Scope: amendment "M6-06" (A)'s `online_seb` clauses and point 7.
-Quiz builds the project's `.seb` (`GET /app/api/projects/:id/seb`, a
-claimed seat of a published `online_seb` project); its start URL is Quiz's
-one-time ticket (no second sign-in), its URL filter adds the portal's host
-and `SEB_EXTRA_ALLOWED_HOSTS`. The ticket opens a `seb` session confined to
-the project (ADR-027 addendum "M6-07"); from it, and from it only, the
-start route mints the launch token with the `seb` claim, the session's
-Config Key (`seb_required` otherwise). The portal's `/launch` in exam mode
-refuses a token without the claim and checks SEB's header against it,
-then the Browser Exam Keys when the project has some, then sets its
-IP-bound `exam_session`. Point 7 as amended: the Browser Exam Keys are
-**optional** on the portal (an empty list is the Config Key alone), and
-Quiz sends none: **BEK list: after proof B step 7 (per-student `.seb`
-likely gives per-student BEKs)** — SEB's BEK covers the configuration,
-which is per student here (06 §6.3). `online_seb` is synced like
-`online`. The portal builds no `.seb` any more (its `/exam/:id.seb`,
-Config Key and salt are gone).
-
-**Amended (2026-10-07, M6-03, product owner): the portal's GitHub relay and
-its own login.** Scope: the portal side of points 2 and 6 below, nothing
-on the platform side.
-(a) *Relay off.* The relay and the development (Forgejo) forge are
-imported, heig-classroom's App-backed GitHub forge is not, and the portal
-runs with `FORGE_KIND=none` by default: a push lands in the session's
-`staging.git` and its `PushEvent` is written (the proof of submission),
-nothing is relayed to GitHub. The portal refuses to start, in every
-environment, when `GITHUB_APP_ID` or `GITHUB_APP_PRIVATE_KEY_PATH` is set:
-the only App it was ever configured with is heig-classroom's, which Quiz
-never uses (root invariant 15, D23). Whether Quiz's own App key goes on the
-engine VM, and so whether the relay is turned back on, is **open**: an ADR
-at M6-04/M6-05 decides it. Until then the "only the portal relay writes"
-of point 2 is read as "nothing writes from a workspace".
-(b) *No login of its own.* The portal's OIDC login (`/auth/*`), its home
-page with a Start button, its `/teacher/sessions` dashboard and its
-standalone `/exam/:id/start` route are removed: a user exists only through
-the platform's launch token, every portal account is a student, and an
-exam opens through `/launch` only. A teacher sees an assignment's
-workspaces in Quiz, which calls the portal's
-`GET /api/assignments/:id/sessions` with a service token
-(`CodespaceSessionSummary`, `@quiz/contracts`). The portal's `seb/`
-directory is kept as is until M6-07 moves it onto `packages/seb`.
-
-**Amended (2026-10-07, M6-06, product owner): the work mode in Quiz.**
-Scope: points 1 to 6 on the platform side, as Quiz implements them; the
-portal is unchanged.
-(A) *The mode.* `projects.work_mode` (`free | online | online_seb`,
-default `free`, migration `0079_codespace_module`). It is set by its own
-route, `PUT /app/api/projects/:id/workspace/mode`, in any state of the
-project, never by the create or the patch. Point 3's one-way door becomes:
-the mode is **frozen once a workspace was launched** for the project — the
-first launch token issued to a student seat, `codespace_projects.first_launch_at`
-— and any change after that is `409 work_mode_frozen`; a staff seat's
-launch (ADR-077, a teacher testing the project on their test repository)
-never freezes it; before it, every mode may
-change, `free` included. A group project stays `free` (F-PROJ-06): an
-online mode on a group project, or group mode on an online project, is
-`409 work_mode_group`. Point 2 applies from the next invitation: `push` in
-`free`, `pull` in `online`, none in `online_seb` (the repository is
-provisioned, nobody is invited; a second Accept answers it as it stands);
-an invitation already sent keeps the permission it had. `online_seb` can
-be set, but its start is refused outside Safe Exam Browser with a named
-refusal (`seb_required`) until M6-07, and it is not synced: the portal
-refuses an exam without Browser Exam Keys, which come with M6-07.
-(B) *Who.* Only an **owner** of the course (ADR-068, `requireCourseRole`:
-an assistant gets `403 owner_required`, in the loader, before the body)
-whose `teacher_grants` row has `codespace_enabled = true` may set a
-non-free mode (`403 codespace_not_granted` otherwise; going back to `free`
-needs no grant). The grant is two columns on `teacher_grants`,
-`codespace_enabled` (false) and `codespace_max_active_sessions` (2),
-edited by an administrator (`PATCH /app/api/admin/teachers/:gid/codespace`).
-An account's grant is read on its VERIFIED addresses only (its verified
-ones, and its sign-in address when the identity provider verified it), the
-most permissive row winning, as the role rule does; the administrator, whose address cannot hold a grant, is not
-granted (an administrator acts as an owner under Super Powers, ADR-054,
-never past the grant) — superseded 2026-10-08: an administrator is always
-granted (amendment above).
-(C) *Whose quota.* The quota an online project consumes is carried by its
-**creator while they still hold an owner seat** on the course, otherwise by
-the **oldest owner seat** (`quotaHolder`, `@quiz/domain`); it is sent to
-the portal with each sync (`teacher` and `quota` of
-`CodespaceAssignmentSync`), and the portal enforces it at launch (its
-429). Quiz does not count the live workspaces itself.
-(D) *Off.* With `CODESPACE_URL` empty the `codespace` module registers no
-route (every one a 404, indistinguishable from a missing entity), the
-administration lists no grant, and a project's student view says no
-workspace.
-The two messages of point 6 are Quiz's: the sync is the `codespace.sync`
-job (no singleton key: Quiz's queues dedupe nothing, #273; the PUT is
-idempotent), its last outcome on `codespace_projects` with the staff's
-*Resync* (`POST …/workspace/sync`); the start route is
-`GET /app/codespace/start/:projectId` (the portal's `classroomStartUrl`
-already builds that path), loaded through the classroom's student branch
-with a claimed seat and the caller's own portal session — an
-impersonation, a request carrying a Bearer token: the 404; a `seb` or `kiosk` session is
-anonymous there (ADR-027's default deny) until M6-07 —; the token's `jti`
-is audited (`codespace.launch_issued`), the token never; the decision is the pure
-`workspaceStartRefusal` (`@quiz/domain`). The staff read the project's
-workspaces through `GET …/workspace/sessions`, named by Quiz for the
-classroom's students and by nobody otherwise (the portal's address of an
-unmatched account is not sent).
-**Seeding, while the portal's forge is off** (M6-03 amendment (a)): the
-workspace is seeded from the project's distribution repository, which the
-portal clones anonymously. A PUBLIC distribution repository seeds it; a
-private one (Quiz's default) syncs, but cannot seed a workspace, until the
-decision on Quiz's App on the engine VM (M6-04/M6-05).
-
-**Imported from heig-classroom** (2026-09-30, merge task M0-03, ADR-035),
-where it is ADR-013 — Quiz's own ADR-013 is pool sharing, so it takes the
-next free number, 047. The body below is classroom's, verbatim. Read it
-with the renames of the merge: *assignment* ⇒ **project**
-(`assignments.work_mode` ⇒ `projects.work_mode`; the portal's own
-`/api/assignments/:id` route is the portal's business); *classroom*
-(org-bound, owned) ⇒ a Quiz **course** plus **classroom**, and "the owner
-of the class" ⇒ the course's staff (D04), except for the quota below:
-whose `teacher_grants` quota an online project consumes once several
-staff share a course is for M6 to decide; a codespace *session* ⇒
-**workspace** in Quiz's vocabulary; `@hgc/codespace` ⇒ `@quiz/codespace`;
-`CLASSROOM_URL` ⇒ `PLATFORM_URL`; `apps/server` ⇒ `apps/api`;
-`classroom.chevallier.io` ⇒ Quiz. The portal (`apps/codespace`) and this
-mode come with phase M6, after the cutover (D09, settled 2026-10-01: the
-workspace is rebuilt and tried in Quiz before any migration of it). How SEB reaches a project — the
-platform building every `.seb`, Browser Exam Keys optional per activity —
-is D21, settled 2026-10-01 on the suggestion, for M6; point 7 below holds
-until M6 implements it. Its two HS256
-messages are the cross-VM exception recorded in ADR-027's status.
-Classroom's requirement ids (GR-, GH-, NFR-, AU-) are those of
-heig-classroom's specification; `docs/spec/02-exigences-fonctionnelles.md`
-receives their Quiz form (M0-04), and until then they are read in
-heig-classroom's `docs/`.
-
-**Amended (2026-10-07, [ADR-078](ADR-078-codespace-git-relay-tokens.md), product owner)**: the open question of the M6-03 amendment (a) and of the seeding note above is settled — no App key on the engine VM; the portal seeds and relays with installation tokens Quiz issues for one repository (forge `quiz`, merge task M6-10).
-
-**Amended (2026-10-09, [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md), proposed)**: the M6-07 amendment's "`seb` claim only" — an `online_seb` project may also accept a kiosk station, whose launch token carries a `kiosk` claim instead.
-
-**Extended (2026-10-05, ADR-075, proposed)**: supervised evaluations may open the workspace through the `workspace` question type, without a git channel; the project rules below are unchanged.
-
-Status in heig-classroom: Accepted (2026-09-17, portal milestone 2).
+- 2026-10-07, M6-03: the portal's GitHub relay and its own login ([amendment](#m6-03-2026-10-07-the-portals-relay-and-its-own-login)).
+- 2026-10-07, M6-06: the work mode in Quiz, its grant, quota and messages ([amendment](#m6-06-2026-10-07-the-work-mode-in-quiz)).
+- 2026-10-07, M6-07: Safe Exam Browser for a project ([amendment](#m6-07-2026-10-07-safe-exam-browser-for-a-project)).
+- 2026-10-07, [ADR-078](ADR-078-codespace-git-relay-tokens.md): no App key on the engine VM; the portal seeds and relays with installation tokens Quiz issues for one repository.
+- 2026-10-08: an administrator always holds the workspace grant ([amendment](#2026-10-08-an-administrator-always-holds-the-grant)).
+- 2026-10-09, [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md) (proposed): an `online_seb` project may also accept a kiosk station (a `kiosk` claim instead of `seb`).
+- 2026-10-11, audit M11 and L25: the service token is single use and bound to its request, every token's lifetime capped ([ADR-078's amendment](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use)).
+- 2026-10-11, audit L7: the start route is a POST ([amendment](#2026-10-11-the-start-route-is-a-post)).
+- 2026-10-11, audit L24: one origin for every session ([amendment](#amendment-2026-10-11-one-origin-for-every-session-audit-l24)).
+- 2026-10-29, #958: under `commit`, an `online` project's start route opens while the repository is writable ([ADR-078's amendment](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-29-958-under-commit-the-workspace-follows-the-repositorys-writability)).
+- Extended 2026-10-05 by ADR-075 (proposed): the `workspace` question type opens the workspace in a supervised evaluation, without a git channel; the project rules are unchanged.
 
 ## Context
 
@@ -289,6 +120,172 @@ classes.
    quota.
 5. **A single global quota** rather than one per teacher: a teacher starting an exam would
    consume everyone else's capacity without any screen showing it.
+
+## Quiz's amendments
+
+### Reading the imported body
+
+Imported from heig-classroom (2026-09-30, merge task M0-03, ADR-035),
+where it is ADR-013 — Quiz's own ADR-013 is pool sharing, so it takes the
+next free number, 047. The Decision above is classroom's, verbatim. Read it
+with the renames of the merge: *assignment* ⇒ **project**
+(`assignments.work_mode` ⇒ `projects.work_mode`; the portal's own
+`/api/assignments/:id` route is the portal's business); *classroom*
+(org-bound, owned) ⇒ a Quiz **course** plus **classroom**, and "the owner
+of the class" ⇒ the course's staff (D04), except for the quota below:
+whose `teacher_grants` quota an online project consumes once several
+staff share a course was for M6 to decide (M6-06 (C) below); a codespace *session* ⇒
+**workspace** in Quiz's vocabulary; `@hgc/codespace` ⇒ `@quiz/codespace`;
+`CLASSROOM_URL` ⇒ `PLATFORM_URL`; `apps/server` ⇒ `apps/api`;
+`classroom.chevallier.io` ⇒ Quiz. The portal (`apps/codespace`) and this
+mode come with phase M6, after the cutover (D09, settled 2026-10-01: the
+workspace is rebuilt and tried in Quiz before any migration of it). How SEB reaches a project — the
+platform building every `.seb`, Browser Exam Keys optional per activity —
+is D21, settled 2026-10-01 on the suggestion, for M6; point 7 above held
+until M6-07 implemented it (below). Its two HS256
+messages are the cross-VM exception recorded in
+[ADR-027](ADR-027-tickets-de-lancement-et-sessions-typees.md#2026-09-30-the-workspaces-signed-messages).
+Classroom's requirement ids (GR-, GH-, NFR-, AU-) are those of
+heig-classroom's specification; `docs/spec/02-exigences-fonctionnelles.md`
+receives their Quiz form (M0-04), and until then they are read in
+heig-classroom's `docs/`.
+
+### M6-03 (2026-10-07): the portal's relay and its own login
+
+*Product owner.* Scope: the portal side of points 2 and 6 above, nothing
+on the platform side.
+(a) *Relay off.* The relay and the development (Forgejo) forge are
+imported, heig-classroom's App-backed GitHub forge is not, and the portal
+runs with `FORGE_KIND=none` by default: a push lands in the session's
+`staging.git` and its `PushEvent` is written (the proof of submission),
+nothing is relayed to GitHub. The portal refuses to start, in every
+environment, when `GITHUB_APP_ID` or `GITHUB_APP_PRIVATE_KEY_PATH` is set:
+the only App it was ever configured with is heig-classroom's, which Quiz
+never uses (root invariant 15, D23). *Settled 2026-10-07 by [ADR-078](ADR-078-codespace-git-relay-tokens.md): no App key on the engine VM; the portal seeds and relays with installation tokens Quiz issues for one repository (forge `quiz`, M6-10).*
+(b) *No login of its own.* The portal's OIDC login (`/auth/*`), its home
+page with a Start button, its `/teacher/sessions` dashboard and its
+standalone `/exam/:id/start` route are removed: a user exists only through
+the platform's launch token, every portal account is a student, and an
+exam opens through `/launch` only. A teacher sees an assignment's
+workspaces in Quiz, which calls the portal's
+`GET /api/assignments/:id/sessions` with a service token
+(`CodespaceSessionSummary`, `@quiz/contracts`). The portal's `seb/`
+directory is kept as is until M6-07 moves it onto `packages/seb`.
+
+### M6-06 (2026-10-07): the work mode in Quiz
+
+*Product owner.* Scope: points 1 to 6 on the platform side, as Quiz implements them; the
+portal is unchanged.
+(A) *The mode.* `projects.work_mode` (`free | online | online_seb`,
+default `free`, migration `0079_codespace_module`). It is set by its own
+route, `PUT /app/api/projects/:id/workspace/mode`, in any state of the
+project, never by the create or the patch. Point 3's one-way door becomes:
+the mode is **frozen once a workspace was launched** for the project — the
+first launch token issued to a student seat, `codespace_projects.first_launch_at`
+— and any change after that is `409 work_mode_frozen`; a staff seat's
+launch (ADR-077, a teacher testing the project on their test repository)
+never freezes it; before it, every mode may
+change, `free` included. A group project stays `free` (F-PROJ-06): an
+online mode on a group project, or group mode on an online project, is
+`409 work_mode_group`. Point 2 applies from the next invitation: `push` in
+`free`, `pull` in `online`, none in `online_seb` (the repository is
+provisioned, nobody is invited; a second Accept answers it as it stands);
+an invitation already sent keeps the permission it had. `online_seb` can
+be set, but its start is refused outside Safe Exam Browser with a named
+refusal (`seb_required`) until M6-07, and it is not synced: the portal
+refuses an exam without Browser Exam Keys, which come with M6-07.
+(B) *Who.* Only an **owner** of the course (ADR-068, `requireCourseRole`:
+an assistant gets `403 owner_required`, in the loader, before the body)
+whose `teacher_grants` row has `codespace_enabled = true` may set a
+non-free mode (`403 codespace_not_granted` otherwise; going back to `free`
+needs no grant). The grant is two columns on `teacher_grants`,
+`codespace_enabled` (false) and `codespace_max_active_sessions` (2),
+edited by an administrator (`PATCH /app/api/admin/teachers/:gid/codespace`).
+An account's grant is read on its VERIFIED addresses only (its verified
+ones, and its sign-in address when the identity provider verified it), the
+most permissive row winning, as the role rule does; the administrator, whose address cannot hold a grant, is not
+granted (an administrator acts as an owner under Super Powers, ADR-054,
+never past the grant) — superseded 2026-10-08: an administrator is always
+granted (amendment below).
+(C) *Whose quota.* The quota an online project consumes is carried by its
+**creator while they still hold an owner seat** on the course, otherwise by
+the **oldest owner seat** (`quotaHolder`, `@quiz/domain`); it is sent to
+the portal with each sync (`teacher` and `quota` of
+`CodespaceAssignmentSync`), and the portal enforces it at launch (its
+429). Quiz does not count the live workspaces itself.
+(D) *Off.* With `CODESPACE_URL` empty the `codespace` module registers no
+route (every one a 404, indistinguishable from a missing entity), the
+administration lists no grant, and a project's student view says no
+workspace.
+The two messages of point 6 are Quiz's: the sync is the `codespace.sync`
+job (no singleton key: Quiz's queues dedupe nothing, #273; the PUT is
+idempotent), its last outcome on `codespace_projects` with the staff's
+*Resync* (`POST …/workspace/sync`); the start route was
+`GET /app/codespace/start/:projectId` (*a POST since 2026-10-11, [audit L7](#2026-10-11-the-start-route-is-a-post)*) (the portal's `classroomStartUrl`
+already builds that path), loaded through the classroom's student branch
+with a claimed seat and the caller's own portal session — an
+impersonation, a request carrying a Bearer token: the 404; a `seb` or `kiosk` session is
+anonymous there (ADR-027's default deny) until M6-07 —; the token's `jti`
+is audited (`codespace.launch_issued`), the token never; the decision is the pure
+`workspaceStartRefusal` (`@quiz/domain`). The staff read the project's
+workspaces through `GET …/workspace/sessions`, named by Quiz for the
+classroom's students and by nobody otherwise (the portal's address of an
+unmatched account is not sent).
+**Seeding, while the portal's forge was off** (*settled by [ADR-078](ADR-078-codespace-git-relay-tokens.md): Quiz issues the portal an installation token for one repository*) (M6-03 amendment (a)): the
+workspace is seeded from the project's distribution repository, which the
+portal clones anonymously. A PUBLIC distribution repository seeds it; a
+private one (Quiz's default) syncs, but cannot seed a workspace, until the
+decision on Quiz's App on the engine VM (M6-04/M6-05).
+
+### M6-07 (2026-10-07): Safe Exam Browser for a project
+
+*D21 points 2–5.* Scope: amendment "M6-06" (A)'s `online_seb` clauses and point 7.
+Quiz builds the project's `.seb` (`GET /app/api/projects/:id/seb`, a
+claimed seat of a published `online_seb` project); its start URL is Quiz's
+one-time ticket (no second sign-in), its URL filter adds the portal's host
+and `SEB_EXTRA_ALLOWED_HOSTS`. The ticket opens a `seb` session confined to
+the project (ADR-027 addendum "M6-07"); from it, and from it only, the
+start route mints the launch token with the `seb` claim, the session's
+Config Key (`seb_required` otherwise). The portal's `/launch` in exam mode
+refuses a token without the claim and checks SEB's header against it,
+then the Browser Exam Keys when the project has some, then sets its
+IP-bound `exam_session`. Point 7 as amended: the Browser Exam Keys are
+**optional** on the portal (an empty list is the Config Key alone), and
+Quiz sends none: **BEK list: after proof B step 7 (per-student `.seb`
+likely gives per-student BEKs)** — SEB's BEK covers the configuration,
+which is per student here (06 §6.3). `online_seb` is synced like
+`online`. The portal builds no `.seb` any more (its `/exam/:id.seb`,
+Config Key and salt are gone).
+
+### 2026-10-08: an administrator always holds the grant
+
+*Product owner.* Scope: amendment "M6-06" (B)'s last sentence, and (C)
+for an administrator. An account whose role is `admin` (`users.role`, the
+role rule's `SUPER_ADMIN_EMAIL`, whether or not a Super Powers session is
+active) is granted with at least the default quota
+(`DEFAULT_MAX_ACTIVE_SESSIONS`, 2), the most permissive of that and any
+row its addresses hold. `grantOf` (`modules/codespace/service.ts`) is the
+one place that says so, so the mode switch, the staff's view and the quota
+sent to the portal (an administrator holding the quota as creator or
+oldest owner) give one answer. The owner check is unchanged: an
+administrator sets a mode on a course where they hold an owner seat, or
+under Super Powers (ADR-054). The administration lists no grant row for
+them and needs no switch.
+
+### 2026-10-11: the start route is a POST
+
+*Security audit L7.* Scope: the start route of amendment "M6-06" (its path and method) and
+M6-07's launch from a `seb` session. A navigable GET that froze the work
+mode and minted a launch token could be triggered by a cross-site link.
+The launch is now `POST /app/api/projects/:projectId/workspace/start`,
+under the double-submit CSRF check of every session write; same access
+rule (the caller's own portal session or the project's `seb` session, the
+student branch with a claimed seat, the 404 otherwise; an impersonation
+writes nothing, `403`), same refusals as `409 { error }` (the project page
+shows them as `?workspace=<code>`), and it answers `{ url }`, the portal's
+`/launch?token=…`, `Cache-Control: no-store`, which the page navigates to.
+The portal is unchanged: it never linked to the old path. ADR-089's
+station launch was already a POST.
 
 ## Amendment 2026-10-11: one origin for every session (audit L24)
 
