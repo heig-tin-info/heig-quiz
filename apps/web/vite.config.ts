@@ -110,10 +110,19 @@ export default defineConfig({
     // workstation's RAM (apps/api/vitest.config.ts says why).
     maxWorkers,
     // The dev mock backend, the dictionaries and the component gallery are
-    // data or development screens, not code a test should be asked to reach.
+    // data or development screens, not code a test should be asked to reach;
+    // the paper fixtures are a test helper.
     coverage: {
       ...coverage,
-      exclude: [...coverage.exclude, "src/mock/**", "src/i18n/en.ts", "src/i18n/fr.ts", "src/DevGallery.tsx", "src/devgallery/**"],
+      exclude: [
+        ...coverage.exclude,
+        "src/mock/**",
+        "src/i18n/en.ts",
+        "src/i18n/fr.ts",
+        "src/DevGallery.tsx",
+        "src/devgallery/**",
+        "src/paper/paper.fixtures.ts",
+      ],
     },
     // Vitest 4 removed `environmentMatchGlobs`; test projects are its
     // replacement. Two of them, so the pure-logic suite keeps running in

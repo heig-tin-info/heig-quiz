@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-import { nodeTests } from "../../vitest.shared.js";
+import { coverage, nodeTests } from "../../vitest.shared.js";
 
 /**
  * The default run is the unit one: no Podman, no Forgejo, no network. The
@@ -18,6 +18,8 @@ export default defineConfig({
   test: {
     ...nodeTests.test,
     exclude: process.env["CODESPACE_INTEGRATION"] ? [] : integration,
+    // The git fixtures build the tests' repositories: a helper, not a source.
+    coverage: { ...coverage, exclude: [...coverage.exclude, "src/git/fixtures.ts"] },
     testTimeout: 60_000,
     hookTimeout: 120_000,
   },
