@@ -1,9 +1,13 @@
 /**
  * Invariant 6 over EVERY staff route of an object, in one sweep: the routes
  * under `/courses/:id`, `/classrooms/:id`, `/evaluations/:id`, `/pools/:id`
- * and `/questions/:id`, and, on a server with Quiz's GitHub App, under
- * `/projects/:id` — as Fastify's route tree lists them, so a route added
- * tomorrow is swept without anybody remembering to.
+ * and `/questions/:id`, and, on a server with Quiz's GitHub App, those under
+ * `/courses/:id`, `/classrooms/:id` and `/projects/:id` again (the App adds
+ * its own) — as Fastify's route tree lists them, so a route added tomorrow
+ * is swept without anybody remembering to. One route of those families is
+ * not a staff route (`NOT_STAFF`): revoking a course's grant of an
+ * organization is an admin's with Super Powers, refused to every teacher
+ * with the role's 403 (`github.db.test.ts` holds it).
  *
  * - A teacher off the staff gets the 404 of a missing object: the same
  *   status and the same body as for an id that does not exist.
@@ -24,12 +28,13 @@
  *
  * The routes under `/admin/` belong to a role, not to an object: the last
  * sweep holds that they answer no session 401 and anyone but an admin the
- * refusal of the role, whatever the id.
+ * refusal of the role, whatever the id. Its server runs the kiosk stations
+ * (`KIOSK_ATTESTATION=mock`), whose administration routes answer the 404.
  */
 import { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 import { registerForTests } from "@quiz/registry/server";
@@ -40,8 +45,6 @@ import {
   courseStaff,
   enrollments,
   evaluations,
-  githubClassroomLinks,
-  githubOrganizations,
   journalPageRevisions,
   paperSheets,
   poolMembers,
@@ -51,10 +54,11 @@ import {
   projects,
   questionReports,
 } from "../db/schema.js";
-import { appKey, fakeGithub, orgsRoute, type FakeOrg } from "../github/testing.js";
+import { json, orgsRoute, type FakeOrg, type Route } from "../github/testing.js";
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
+import { linkClassroom, newOrg, server as projectServer, useProjectWorld } from "../test/projectWorld.js";
 import * as evaluationService from "./evaluation/service.js";
 import { sha256Of, writeAsset } from "./pool/assets.js";
 
@@ -87,19 +91,21 @@ const STUDENT_ROUTES = new Set([
  */
 const IMPERSONATION = "POST /app/api/classrooms/:id/roster/:eid/impersonation";
 const SEB_DOWNLOAD = "GET /app/api/evaluations/:id/seb";
+/** The one route of a swept family that is no staff route (see the header). */
+const NOT_STAFF = new Set(["DELETE /app/api/courses/:id/github/grants/:orgId"]);
 
 /** A world: the owner's objects, and a REAL value for every inner parameter of a swept path. */
 interface World {
   /** The object each family names; the poll routes act on a poll (`polls`). */
   ids: Record<string, string>;
+  /** By name, or `<family>:<name>` where two families name different things alike (`:cid`). */
   params: Record<string, string>;
 }
 
 /** One server swept: its route families, its callers and its worlds. */
 interface Sweep {
   server: TestServer;
-  /** `/app/api/<family>/:id…`, the family captured. */
-  family: RegExp;
+  /** The swept families: `/app/api/<family>/:id…`. */
   families: readonly string[];
   owner: Who;
   stranger: Who;
@@ -113,19 +119,20 @@ interface Sweep {
 
 /** The swept routes of a server, with their URL in a world: on its object, or on a missing one. */
 function sweptRoutes(s: Sweep) {
+  const families = new RegExp(`^/app/api/(${s.families.join("|")})/:id(/|$)`);
   return routesOf(s.server.app.printRoutes({ commonPrefix: false })).flatMap(({ method, path }) => {
-    const found = s.family.exec(path)?.[1];
+    const found = families.exec(path)?.[1];
     // Two wildcard routes under one node (the journal's `assets/*` and
     // `revisions/*`) print as `/journal*`, their segments lost: no URL can be
     // rebuilt from it, and the journal's own tests sweep both
     // (`writes.db.test.ts`, "who may write"; `journal.db.test.ts`).
-    if (!found || path.endsWith("/journal*")) return [];
+    if (!found || path.endsWith("/journal*") || NOT_STAFF.has(`${method} ${path}`)) return [];
     // A poll route on an exam is a 404 for its mode, whoever asks.
     const family = path.startsWith("/app/api/evaluations/:id/poll") ? "polls" : found;
     const url = (w: World, id: string) =>
       path.replace(/:(\w+)/g, (_, name: string) => {
         if (name === "id") return id;
-        const value = w.params[name];
+        const value = w.params[`${found}:${name}`] ?? w.params[name];
         // A new inner parameter needs a real value in `world()`.
         if (value === undefined) throw new Error(`${method} ${path}: no value for :${name}`);
         return value;
@@ -302,11 +309,10 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
-  const server = await testServer();
+  const server = await testServer({ KIOSK_ATTESTATION: "mock" });
   const who = await callers(server);
   main = {
     server,
-    family: /^\/app\/api\/(courses|classrooms|evaluations|pools|questions)\/:id(\/|$)/,
     families: ["courses", "classrooms", "evaluations", "pools", "questions"],
     ...who,
     shared: await world(server, who.owner, who.enrolled),
@@ -333,31 +339,39 @@ const CRITERIA = [
 ].join("\n");
 
 /**
- * The routes of a project exist only with Quiz's GitHub App configured
- * (M1-02): a server of their own, against the fake GitHub.
+ * The routes of a project, and the App's own under a classroom and a course,
+ * exist only with Quiz's GitHub App configured (M1-02): a server of their
+ * own, the project world's (`test/projectWorld.ts`), against the fake GitHub.
  */
-describe("every staff route of a project (invariant 6, N-SEC-20)", () => {
-  const key = appKey();
-  const gh = fakeGithub();
+describe("every staff route of a project, and of the App (invariant 6, N-SEC-20)", () => {
   const orgs: FakeOrg[] = [];
   let hub: Sweep;
-  let nextOrg = 70_000;
+  /** `GET /repos/{org}/template` and its branches: the `:repo` of a source, a real repository of the organization. */
+  const templateRoute: Route = (url, init) => {
+    const m = /^\/repos\/([^/]+)\/template(\/branches)?$/.exec(url.pathname);
+    const org = m && orgs.find((o) => o.login === m[1]);
+    if (url.host !== "api.github.com" || init.method !== "GET" || !org) return undefined;
+    if (m![2]) return json([{ name: "main" }]);
+    return json({ id: 9_000_000 + org.githubOrgId, name: "template", owner: { id: org.githubOrgId, login: org.login }, default_branch: "main" });
+  };
+  useProjectWorld({ routes: [orgsRoute(() => orgs), templateRoute], repos: false, teacher: false });
 
-  /** A project of the owner's classroom, published, graded by criteria, with a repository, a checkpoint and its criteria. */
+  /**
+   * The world of the other families, its classroom connected to an
+   * organization with Quiz's App, and a project of it: published, graded by
+   * criteria, with a repository, a checkpoint and its criteria.
+   */
   async function projectWorld(server: TestServer, owner: Who, enrolled: Who): Promise<World> {
     const db = server.app.db;
-    const seed = await seedLive(db, { teacherId: owner.id, studentIds: [enrolled.id], questions: 0 });
-    const n = nextOrg;
-    nextOrg += 10;
-    const login = `sweep-${n}`;
+    const base = await world(server, owner, enrolled);
+    const classroomId = base.ids.classrooms!;
+    const { n, login, orgId } = await newOrg("sweep");
     orgs.push({ githubOrgId: n, login, installationId: n, selection: "all", plan: "team", exists: true });
-    const orgId = randomUUID();
-    await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-    await db.insert(githubClassroomLinks).values({ classroomId: seed.classroomId, orgId, linkedBy: owner.id, linkedAt: new Date() });
+    await linkClassroom(classroomId, orgId, owner.id);
     const projectId = randomUUID();
     await db.insert(projects).values({
       id: projectId,
-      classroomId: seed.classroomId,
+      classroomId,
       orgId,
       name: "Swept lab",
       slug: `lab-${n}`,
@@ -392,41 +406,27 @@ describe("every staff route of a project (invariant 6, N-SEC-20)", () => {
     const checkpointId = randomUUID();
     await db.insert(projectCheckpoints).values({ id: checkpointId, projectId, name: "m1", dueAt: new Date("2026-11-20T22:00:00Z") });
     return {
-      ids: { projects: projectId },
-      params: { rid: repoId, cid: checkpointId, criterionId: "code.tests" },
+      ids: { ...base.ids, projects: projectId },
+      params: { ...base.params, rid: repoId, "projects:cid": checkpointId, criterionId: "code.tests", repo: "template" },
     };
   }
 
   beforeAll(async () => {
-    vi.stubGlobal("fetch", gh.fetch);
-    gh.routes = [orgsRoute(() => orgs)];
-    const server = await testServer({
-      GITHUB_APP_ID: "1",
-      GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-      GITHUB_APP_SLUG: "quiz-test",
-      GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-    });
+    const server = projectServer;
     const who = await callers(server);
     hub = {
       server,
-      family: /^\/app\/api\/(projects)\/:id(\/|$)/,
-      families: ["projects"],
+      families: ["courses", "classrooms", "projects"],
       ...who,
       shared: await projectWorld(server, who.owner, who.enrolled),
       world: () => projectWorld(server, who.owner, who.enrolled),
     };
   });
 
-  afterAll(async () => {
-    await hub.server.close();
-    vi.unstubAllGlobals();
-    key.remove();
-  });
-
   sweepStaffRoutes(() => hub);
 });
 
-/** The administration routes whose refusal is the 404 of a missing entity (`adminGuard(app, { hidden: true })`): the kiosk stations, when on. */
+/** The administration routes whose refusal is the 404 of a missing entity (`adminGuard(app, { hidden: true })`): the kiosk stations. */
 const HIDDEN_ADMIN = /^\/app\/api\/admin\/kiosk-devices(\/|$)/;
 
 /** An administration route's inner parameters: any value, the role being refused before anything is read. */
@@ -437,6 +437,8 @@ describe("every administration route (the admin's alone)", () => {
     const { server } = main;
     const routes = routesOf(server.app.printRoutes({ commonPrefix: false })).filter(({ path }) => path.startsWith("/app/api/admin/"));
     expect(routes.length).toBeGreaterThan(10);
+    // The kiosk stations are on: the hidden branch below is walked, not assumed.
+    expect(routes.filter(({ path }) => HIDDEN_ADMIN.test(path)).length).toBeGreaterThan(0);
     const teacher = await server.signIn("teacher");
     const student = await server.signIn("student");
     const admin = await server.signIn("admin");
