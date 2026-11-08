@@ -1,9 +1,12 @@
-# ADR-007 — Where CI runs: GitHub-hosted runners for every workflow, Quiz's VMs for no CI job
+# ADR-007 — Where CI runs: GitHub-hosted runners for Quiz's own CI, Quiz's VMs for no CI job
 
 ## Status
 
-Rewritten 2026-11-08 for Quiz as it runs; no decision of the product owner
-changes. Inherited from heig-classroom, where it was accepted on 2026-07-03
+Rewritten 2026-11-08 for Quiz as it runs. **Finding of 2026-11-08, awaiting
+the owner:** project CI appears to run on GitHub-hosted runners, not on the
+self-hosted runners this record described; the self-hosted VM, its PAT and
+any `runs-on: [self-hosted, grading]` lab are to be checked
+([Open points](#open-points) 1–4). Inherited from heig-classroom, where it was accepted on 2026-07-03
 (a dedicated VM of ephemeral self-hosted GitHub Actions runners, sized by the
 deadline freeze); that decision and its sizing are kept in the
 [historical record](history/ADR-007-runner-self-hosted.md), with Quiz's
@@ -13,7 +16,9 @@ heig-classroom no longer exists (its importer was removed by #1042).
 - Amended 2026-10-12 by [ADR-106](ADR-106-notation-des-projets-par-criteres.md):
   a project in the `criteria` mode is graded by the platform; the CI's
   objective tier keeps running as the student's indicative feedback, and the
-  `llm-review` tier is decommissioned (M3-14f, done 2026-10-14). Superseded
+  `llm-review` tier is decommissioned progressively (ADR-106); M3-14f
+  (done 2026-10-14) dropped only the `ANTHROPIC_API_KEY` organization-secret
+  check. Superseded
   for a v3 snapshot, and whole once the v2 path is removed (card L-06g), by:
 - Amended 2026-10-26 by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)
   §1, §6: a project in the `criteria` mode gets its automatic evidence from
@@ -51,7 +56,9 @@ on commits received before the deadline must finish within the grace.
    (the `checks` jobs, the image, the deploys to staging, the staging portal,
    production and the codespace portal), `coverage.yml`, `docs.yml`,
    `image-artifact.yml` and `runner-integration.yml`. The repository being
-   public, GitHub does not bill these minutes on standard hosted runners.
+   public, GitHub does not bill these minutes on standard hosted runners
+   (an external statement, from GitHub's Actions billing documentation, not
+   from this repository).
 2. **The runner's isolation is proven on a hosted runner too.**
    `runner-integration.yml` builds the language images cold and runs the
    Podman integration suite of `apps/runner` on a rootful socket, in two
@@ -65,13 +72,15 @@ on commits received before the deadline must finish within the grace.
    deploy job runs on a hosted runner and reaches each VM only through an
    SSH forced command (`docs/development/deployment.md`; ADR-016 for the
    engine VM). No workflow, of Quiz or of a project, executes on them.
-4. **A project's CI runs on GitHub-hosted runners of its course's
-   organization.** StudentScore's reusable workflows at the versions the
-   shim pins declare `runs-on: ubuntu-latest` (`run.yml` of 1.0.0, the v3
-   `quiz-grade` run of ADR-119; `grading.yml` of 0.7.5, the `objective` and
-   `llm-review` jobs of the v2 and `auto` modes). A calling workflow cannot
-   change a reusable workflow's runner, so a lab that uses them consumes the
-   course organization's hosted minutes, under that organization's plan.
+4. **A project's CI runs where StudentScore's reusable workflows say.** A
+   calling workflow cannot change a reusable workflow's runner, so the
+   course organization's lab runs on the runners those workflows declare:
+   `grading.yml` of 0.7.5 (the `objective` and `llm-review` jobs of the v2
+   and `auto` modes, the version the v2 shim pins) and `run.yml` of 1.0.0
+   (the v3 `quiz-grade` run of ADR-119, not yet pinned anywhere: card
+   L-06f). Which runners they declare is not established by this
+   repository ([Open points](#open-points) 6); if hosted, a lab consumes the
+   course organization's minutes, under that organization's plan.
 5. **The platform spreads its own load.** Quiz's `quiz-grade` dispatches are
    staggered, one every 15 s per App installation (ADR-119 §1, choice f):
    the organization's concurrent jobs are shared by every repository of the
@@ -84,7 +93,7 @@ on commits received before the deadline must finish within the grace.
    back after 24 h is `no_result` and the teacher grades (ADR-119). The
    project's `grace_minutes` (default 30, per project) bounds what counts as
    on time, not the CI's capacity.
-7. **No secret is needed by a graded run.** The shim carries no lab
+7. **No secret is needed by a v3 graded run.** The shim carries no lab
    information and no token; the run checks out the commit Quiz sent and
    uploads one `results` artifact (ADR-119 §1). The App never holds the
    "Self-hosted runners" organization permission: Quiz registers no CI
@@ -92,8 +101,8 @@ on commits received before the deadline must finish within the grace.
 
 ## Consequences
 
-- Quiz's CI costs no minutes; a project's CI costs the course
-  organization's minutes, which this repository cannot see.
+- Quiz's CI costs no minutes; a project's CI, on hosted runners, costs the
+  course organization's minutes, which this repository cannot see.
 - Nothing of Quiz's to patch, size or keep a registration token for on the
   CI side; the engine VM's capacity serves question code and workspaces
   only (ADR-016, ADR-101).
@@ -101,8 +110,11 @@ on commits received before the deadline must finish within the grace.
   labs' CI: the student loses the indicative feedback, and a `criteria`
   project's evidence falls to `no_result` after 24 h, which the teacher
   grades by hand. The grade is never wrong for it, only later.
-- A hosted runner is a fresh VM per job: the student's code runs without
-  any secret and nothing persists between jobs.
+- A hosted runner is a fresh VM per job: nothing persists between jobs.
+- Decision 7 holds for v3 runs only: a v2 shim still passes
+  `ANTHROPIC_API_KEY` to `grading.yml@0.7.5`
+  (`packages/domain/fixtures/criteria/labo-00-grading.yml`, lines 29–30), so
+  the student's code of a v2 lab may run beside that secret.
 
 ## Rejected alternatives
 
@@ -140,5 +152,9 @@ Not verified on 2026-11-08 (this record names no number it could not read):
    readable with the author's access.
 5. **ADR-119's wording.** ADR-119 §1 and its Context speak of "the CI
    runners of ADR-007" as shared; they are the course organization's hosted
-   runners (decision 4). The stagger's reason holds; the wording is left to
-   ADR-119's owner.
+   runners if decision 4's workflows declare hosted runners (point 6). The
+   stagger's reason holds; the wording is left to ADR-119's owner.
+6. **StudentScore's `runs-on`.** To verify in the StudentScore repository
+   (`heig-tin-info/score`): the `runs-on` of `grading.yml` at 0.7.5 and of
+   `run.yml` at 1.0.0 (once released, L-06f). This repository neither
+   vendors nor pins `run.yml`; ADR-119's shim shows a placeholder sha.
