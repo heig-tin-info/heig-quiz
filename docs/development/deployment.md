@@ -32,6 +32,9 @@ environment's GitHub App is [Quiz's GitHub App](github-app.md).
 | Vhost | `/etc/caddy/conf.d/quiz.caddy` → `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy` → `code.chevallier.io:8443` |
 | Deploys through | `/srv/quiz/deploy.sh production` (user `srv`) and `/home/srvstg/quiz-staging/deploy.sh staging` (user `srvstg`), forced commands | `/opt/quiz-runner/infra/engine/deploy.sh production` (root), the forced command of the dispatcher shared by the runner and the codespace portal's `prod` (M6-04); `/usr/local/libexec/quiz-engine/staging-dispatch.sh` (root), the frozen staging dispatcher (§4, audit H4) |
 
+The application VM replaced a DigitalOcean droplet on 2026-09-25; the directory
+basenames, hence the compose project and volume names, did not change.
+
 Why two: the application VM has no Podman and no room for student
 compilations next to two PostgreSQL servers and three Node processes, while
 the codespace VM already runs the rootful Podman the runner was written
@@ -149,7 +152,8 @@ the build before it are not covered.
 is not in the file. Keycloak is a development identity provider and is not
 deployed; production authenticates against Switch edu-ID with the private
 key whose public JWK is registered on the edu-ID client (`kid`
-`hgc-eduid-2026`). Quiz holds its copy,
+`hgc-eduid-2026`; the registry entry and the `hgc` kid come from
+heig-classroom). Quiz holds its copy,
 `/srv/quiz/secrets/eduid-private-key.pem` (and the vault's, ADR-010). **Never
 revoke that JWK**: Quiz's login depends on it.
 
@@ -214,7 +218,7 @@ container from starting, on purpose. The super administrator is
 
 Notifications ([ADR-030](../adr/ADR-030-canaux-de-notification.md)):
 e-mails go out through Scaleway TEM once `SCW_SECRET_KEY` and
-`SCW_DEFAULT_PROJECT_ID` are set in `.env.prod` (without them every e-mail is only logged). The Microsoft Teams
+`SCW_DEFAULT_PROJECT_ID` are set in `.env.prod` (the sender domain inherited from heig-classroom; without them every e-mail is only logged). The Microsoft Teams
 channel stays off until its multi-tenant Entra application exists and
 `TEAMS_CLIENT_ID` and `TEAMS_CLIENT_SECRET` (plus `TEAMS_ALLOWED_TENANTS`,
 HEIG-VD's tenant) are set:

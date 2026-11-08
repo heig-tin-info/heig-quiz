@@ -25,7 +25,7 @@ by it, §10), [ADR-022](ADR-022-jetons-api-et-serveur-mcp.md) and
 [ADR-023](ADR-023-serveur-oauth-pour-mcp.md) (the MCP mission),
 [ADR-087](ADR-087-nouveautes-de-la-plateforme.md) §9 (What's new and the coach
 marks come first on a first visit), spec 08 §8.2 (the novice path). Adds F-ORG-17
-(docs/spec/02) and settles question 58 (now in `docs/spec/history/settled-questions.md`). Amends `apps/web/DESIGN.md`
+(docs/spec/02) and settles open question 58 (docs/spec/06). Amends `apps/web/DESIGN.md`
 ("Empty state: one action") for the Courses home only: a text link may follow the
 one action. Changes no rule of ADR-018, ADR-025, ADR-034, ADR-041, ADR-068 or ADR-095.
 

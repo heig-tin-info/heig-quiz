@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-10-12; delivered by tasks L-02a to L-02f, #793 to #815,
+Accepted (2026-10-12; delivered by tasks L-02a to L-02f, #793 to #820,
 `docs/merge/PROGRESS.md`; the labo 00 pilot, L-02g, is still to do). The five product decisions and the masking, opt-in
 and runner rules are **decisions of the product owner** (2026-10-12); the
 target commit, overlay, commands, score model, report, milestone edge cases,

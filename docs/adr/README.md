@@ -217,5 +217,5 @@ there is no separate per-ADR navigation list to update. Build the documentation
 and check links before opening the PR. The [2026-10-02 audit](history/AUDIT-2026-10-02.md),
 archived, records the reasons for this organization. The
 [2026-10-06 simplification audit](../audits/2026-10-06-simplification.md)
-was followed by the simplification lots #674 to #696; its documentation size
-targets were not applied.
+was followed by the simplification lots #674 to #696; its ADR condensation
+targets (§7) were not applied.
