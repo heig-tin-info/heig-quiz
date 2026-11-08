@@ -36,11 +36,9 @@
  *     `configLock`).
  */
 export type { EvaluationRecord, DbOrTx } from "./shared.js";
-export { EvaluationError, IllegalTransition, assertItemListEditable, type EvaluationErrorCode } from "./shared.js";
 export {
   isLegalTransition,
   guardTransition,
-  assertReady,
   pastTimingOf,
   tryApplyState,
   applyState,
@@ -80,16 +78,11 @@ export {
   gradebookEvaluations,
   totalPointsByEvaluation,
   handoutPrints,
-  itemCountsByEvaluation,
   countedItemsByEvaluation,
-  COUNTS_FOR_STUDENT,
-  itemConcepts,
   itemRows,
-  itemRowsOf,
   staleOf,
   staffAttemptIds,
   staffRosterWithAttempt,
-  editableQuestionIdsOf,
   evaluationDetail,
   listEvaluations,
   byId,
@@ -116,11 +109,8 @@ export {
   setAllowDrill,
   AllowDrillLocked,
   setAfterDue,
-  AfterDueLocked,
 } from "./writes.js";
 export {
-  coursePoolIds,
-  inLinkedPool,
   listCoursePools,
   latestPublished,
   defaultPoints,
@@ -130,10 +120,5 @@ export {
   deleteItem,
   reorderItems,
   updateVersions,
-  itemRef,
-  deprecatedRefs,
-  unlinkedRefs,
-  assertPoolsLinked,
-  replaceItems,
   copyEvaluation,
 } from "./items.js";

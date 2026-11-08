@@ -13,9 +13,9 @@
 
 How classroom (`apps/server`) and the portal (`apps/codespace`) talk to each
 other, and how to run them together on one workstation. The message contract is
-[`packages/contracts/src/codespace.ts`](../../../packages/contracts/src/codespace.ts);
+[`packages/contracts/src/codespace.ts`](../../../../packages/contracts/src/codespace.ts);
 the signature is the one of
-[`packages/domain/src/hs256.ts`](../../../packages/domain/src/hs256.ts).
+[`packages/domain/src/hs256.ts`](../../../../packages/domain/src/hs256.ts).
 
 Import rule of the root `CLAUDE.md`, unchanged: the two applications import
 only `packages/*`, never each other's code. Everything goes through HTTP and
@@ -54,7 +54,7 @@ Three audiences, never interchangeable:
 
 A launch token presented to the service API gets 401; a service token
 presented to `/launch` gets 403. Two tests assert it. Since 2026-10-11 the
-service token's rules are [ADR-078's amendment of that date](../../../docs/adr/ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use).
+service token's rules are [ADR-078's amendment of that date](../../../../docs/adr/ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use).
 
 ### The student does not log in twice
 
@@ -316,7 +316,7 @@ applications.
   its two headers to *that* request, and that it hashes them over the portal's
   URL with its query string, has not been observed on any SEB binary — the
   `simulated` mode does not prove it. To be confronted during proof B
-  ([proof-b-manual.md](proof-b-manual.md)). Fallback if needed: the
+  ([proof-b-manual.md](../proof-b-manual.md)). Fallback if needed: the
   `startURL` comes back to the portal and it is classroom that posts the token
   through a form.
 

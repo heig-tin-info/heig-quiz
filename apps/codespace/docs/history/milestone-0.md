@@ -4,7 +4,7 @@
 
 Follow-up to [analyse.md](analyse.md). Every task has an input, an output and an executable acceptance criterion. Tasks P1 to P4 are independent and can be started in parallel; V1 assembles them. No graphical interface before V1, and V1 only has HTML pages served by Fastify.
 
-Manual prerequisites, done on 2026-09-17 on the development workstation: Podman 5.7 rootful, netavark, `containers` range in `/etc/subuid`, socket accessible to the `podman` group, remote connection by default. Procedure in [setup-workstation.md](setup-workstation.md).
+Manual prerequisites, done on 2026-09-17 on the development workstation: Podman 5.7 rootful, netavark, `containers` range in `/etc/subuid`, socket accessible to the `podman` group, remote connection by default. Procedure in [setup-workstation.md](../setup-workstation.md).
 
 Results already obtained on this workstation, which the agents do not have to demonstrate again but must preserve in their tests: `internal` network + `--gateway` → host reachable on the gateway and no outbound route; `--dns=none` → no resolution; `--userns=auto` → a distinct host UID range per container; inter-container traffic **open** as long as the nftables rule is not in place.
 

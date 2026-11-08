@@ -21,6 +21,7 @@ import { prefersReducedMotion } from "@quiz/ui";
 import type { AnswerMark } from "@quiz/domain";
 
 import { useT, type TFunction } from "../i18n";
+import { pad2 } from "./dates";
 import { cx, useNow, type IconType } from "./layers";
 import { rovingIndex } from "./menu";
 import { useScrollFade } from "./page";
@@ -51,14 +52,13 @@ import { useScrollFade } from "./page";
  */
 export function formatRemaining(ms: number, t: TFunction): string {
   const total = Math.max(0, Math.ceil(ms / 1000));
-  const pad = (n: number) => String(n).padStart(2, "0");
   const seconds = total % 60;
   const minutes = Math.floor(total / 60) % 60;
   const hours = Math.floor(total / 3600);
-  if (hours < 1) return `${minutes}:${pad(seconds)}`;
+  if (hours < 1) return `${minutes}:${pad2(seconds)}`;
   const text =
     hours < 48
-      ? t("dur.hourMinSec", { h: hours, m: pad(minutes), s: pad(seconds) })
+      ? t("dur.hourMinSec", { h: hours, m: pad2(minutes), s: pad2(seconds) })
       : t("dur.dayHour", { d: Math.floor(hours / 24), h: hours % 24 });
   return text.replace(/ /g, "\u00a0");
 }

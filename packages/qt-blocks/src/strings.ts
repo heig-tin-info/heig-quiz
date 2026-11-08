@@ -154,7 +154,6 @@ export const blocksReviewStrings = {
   hiddenNote: "A hidden warehouse shows its verdict only.",
 } as const;
 export type BlocksReviewStringKey = keyof typeof blocksReviewStrings;
-export type BlocksReviewStrings = Readonly<Record<BlocksReviewStringKey, string>>;
 
 /**
  * The words of the debrief's answer key (`Key`, ADR-109): the caption of the
@@ -179,7 +178,6 @@ export const blocksGradingStrings = {
   collapse: "Fold the program",
 } as const;
 export type BlocksGradingStringKey = keyof typeof blocksGradingStrings;
-export type BlocksGradingStrings = Readonly<Record<BlocksGradingStringKey, string>>;
 
 /**
  * The canvas's words a PRINTED blocks question says (ADR-126 §7), in both

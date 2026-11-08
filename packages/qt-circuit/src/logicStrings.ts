@@ -187,5 +187,3 @@ export const LOGIC_GRADING_STRINGS = {
   "wires.one": "1 wire",
   rows: "{right}/{total} rows",
 };
-
-export type LogicGradingStrings = typeof LOGIC_GRADING_STRINGS;

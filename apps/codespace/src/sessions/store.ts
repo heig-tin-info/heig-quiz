@@ -24,7 +24,6 @@ import { lastRejectedPush, type RejectedPush, type RepoRef } from "../git/index.
  * back to it rather than open a second one.
  */
 export const LIVE_STATES = ["starting", "running", "stopped"] as const;
-export type LiveState = (typeof LIVE_STATES)[number];
 
 export function findAssignment(db: Db, id: string): AssignmentRow | undefined {
   return db.select().from(assignments).where(eq(assignments.id, id)).get();
@@ -135,7 +134,7 @@ export function targetRepoOfSession(
 
 /**
  * A teacher's live sessions, **across all assignments**: that is the unit of
- * the quota set by the administrator (docs/leads.md, "quota of active
+ * the quota set by the administrator (docs/history/leads.md, "quota of active
  * sessions per teacher"). `sessions.teacherId` is copied from the assignment
  * at creation time, so the count fits in a single query.
  */

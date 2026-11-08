@@ -18,8 +18,8 @@ and its M6-03 amendment, then [docs/merge/06-codespace-seb-infra.md](../../docs/
 
 | Kind | Documents |
 | --- | --- |
-| Reference | [docs/analyse.md](docs/analyse.md) (decisions D1–D8), [docs/integration-classroom.md](docs/integration-classroom.md) (the platform boundary, written for heig-classroom), [docs/setup-workstation.md](docs/setup-workstation.md), [images/c-dev/README.md](images/c-dev/README.md) (the student image), [src/git/README.md](src/git/README.md) (the Git channel), [src/seb/README.md](src/seb/README.md) (the SEB verification; its `.seb` and Config Key sections are history since M6-07), [infra/net/README.md](infra/net/README.md) (the closed network) |
-| History, superseded in places | [project.md](project.md), [docs/milestone-0.md](docs/milestone-0.md), [docs/v1.md](docs/v1.md), [docs/leads.md](docs/leads.md), [docs/proof-b-manual.md](docs/proof-b-manual.md) |
+| Reference | [docs/history/analyse.md](docs/history/analyse.md) (decisions D1–D8), [docs/history/integration-classroom.md](docs/history/integration-classroom.md) (the platform boundary, written for heig-classroom), [docs/setup-workstation.md](docs/setup-workstation.md), [images/c-dev/README.md](images/c-dev/README.md) (the student image), [src/git/README.md](src/git/README.md) (the Git channel), [src/seb/README.md](src/seb/README.md) (the SEB verification; its `.seb` and Config Key sections are history since M6-07), [infra/net/README.md](infra/net/README.md) (the closed network) |
+| History, superseded in places | [project.md](project.md), [docs/history/milestone-0.md](docs/history/milestone-0.md), [docs/history/v1.md](docs/history/v1.md), [docs/history/leads.md](docs/history/leads.md), [docs/proof-b-manual.md](docs/proof-b-manual.md) |
 
 These documents describe heig-classroom's portal: read *classroom* as the
 platform, and ignore what they say about the portal's own OIDC login, its

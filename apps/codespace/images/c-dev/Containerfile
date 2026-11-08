@@ -98,7 +98,7 @@ RUN useradd --uid 1000 --create-home --shell /bin/bash student && \
 # 4. Extensions preinstalled at build time from Open VSX (code-server's default
 #    gallery). The directory is on the root, hence read-only at run time: it is
 #    the only barrier that holds against a .vsix brought in by the student
-#    (docs/analyse.md 3.2).
+#    (docs/history/analyse.md 3.2).
 COPY --from=vsix /heig.codespace-statusbar-0.1.0.vsix /tmp/codespace-statusbar.vsix
 RUN mkdir -p /opt/code-server/extensions /tmp/cs-build /etc/code-server && \
     code-server \

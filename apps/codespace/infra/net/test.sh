@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# P2 — acceptance test of the closed network (docs/milestone-0.md, section P2).
+# P2 — acceptance test of the closed network (docs/history/milestone-0.md, section P2).
 #
 # Three verdicts per assertion:
 #   PASS     verified on this machine, right now
@@ -129,7 +129,7 @@ sleep 1
 from_a() { pd exec "$A" wget -T 3 -q -O- "$1" >/dev/null 2>&1; }
 # Equivalent of `curl -m 3`: busybox wget -T only bounds network I/O, not name
 # resolution; `timeout 3` bounds the whole operation, the way -m does for curl.
-# This is the command from docs/milestone-0.md P2.
+# This is the command from docs/history/milestone-0.md P2.
 from_a_capped() { pd exec "$A" timeout 3 wget -T 3 -q -O- "$1" >/dev/null 2>&1; }
 from_a_timed() {
 	local t0 t1

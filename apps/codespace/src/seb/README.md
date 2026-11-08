@@ -1,6 +1,6 @@
 # `seb/` — exam side: Config Key, Browser Exam Key, `.seb` file
 
-Task P4 of [docs/milestone-0.md](../../../../docs/milestone-0.md). This module depends
+Task P4 of [docs/history/milestone-0.md](../../docs/history/milestone-0.md). This module depends
 on nothing else in `src/`: the assignments, the verifier and the session
 creation are injected into it.
 

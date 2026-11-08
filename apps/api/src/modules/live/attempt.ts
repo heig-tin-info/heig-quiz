@@ -192,8 +192,6 @@ const REFUSALS = {
   internal_error: [500],
 } satisfies Record<string, Refusal>;
 
-export type LiveErrorCode = keyof typeof REFUSALS;
-
 export class LiveError extends refusalClass("LiveError", REFUSALS) {}
 
 /** The 410 of §4.7. The body carries the reason AND the server's clock. */
@@ -512,7 +510,6 @@ export async function enrolledCounts(
     rows.map((r) => [r.id, (byClassroom.get(r.classroomId ?? "") ?? 0) + (byEvaluation.get(r.id) ?? 0)]),
   );
 }
-
 
 // --- Guest participants (F-AUTH-05) ----------------------------------------
 

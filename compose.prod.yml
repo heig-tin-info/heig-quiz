@@ -1,7 +1,8 @@
-# Production -- quiz.chevallier.io, on the VM it shares with heig-classroom
-# and evaluation-tb (ADR-016). Caddy runs NATIVELY on the host and imports
-# one fragment per service from /etc/caddy/conf.d/: only loopback ports are
-# published here, and 3002 because 3000 and 3001 belong to the neighbours.
+# Production -- quiz.chevallier.io, on the Hetzner application VM it shares
+# with staging and evaluation-tb (ADR-016). Caddy runs NATIVELY on the host
+# and imports one fragment per service from /etc/caddy/conf.d/: only
+# loopback ports are published here, and 3002 because 3001 is evaluation-tb's
+# (3000 was heig-classroom's until its decommission, 2026-10-14).
 # Start with:
 #   docker compose -f compose.prod.yml --env-file .env.prod up -d
 #

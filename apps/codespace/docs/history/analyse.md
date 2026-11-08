@@ -2,7 +2,7 @@
 
 > **In Quiz (M6-03).** History from heig-classroom: the portal's own OIDC login, its Start button, its teacher dashboard, its YAML seed and the GitHub relay described here are gone or off (ADR-047, M6-03 amendment); read *classroom* as the platform. The current rules are in `apps/codespace/CLAUDE.md`.
 
-Answer to [project.md](../project.md) · 2026-09-17
+Answer to [project.md](../../project.md) · 2026-09-17
 
 This document does what section 1 of the framing document asks for: challenge the choices of sections 7, 9 and 10, name the blind spots, and propose a realistic breakdown. Sections 3 and 4 (requirements, non-goals) are taken as a contract and are not reopened. Every trade-off ends in a decision, not in a list of options.
 
@@ -46,7 +46,7 @@ Two pitfalls on the development workstation:
 
 - **Docker Desktop is disqualified.** Its daemon runs in another WSL distro; the nftables rules laid down here would not apply to its bridges, and `--userns=auto` does not exist. The project must live on a native Podman installed inside this Ubuntu.
 - The portal must talk to the rootful socket (`/run/podman/podman.sock`). Whoever controls that socket is root; the portal is therefore **the** privileged component of the host, and that must be owned rather than hidden behind a cosmetic sudo.
-- **The `podman` binary stays in local rootless mode as long as `--remote` is not passed.** `CONTAINER_HOST` alone is ignored. Half a day of tests was lost on 2026-09-17 measuring a pasta network while believing it was the rootful bridge. The engine module always invokes `podman --remote --url unix:///run/podman/podman.sock`, and the workstation declares a default connection (`podman system connection add --default`). Details in [setup-workstation.md](setup-workstation.md).
+- **The `podman` binary stays in local rootless mode as long as `--remote` is not passed.** `CONTAINER_HOST` alone is ignored. Half a day of tests was lost on 2026-09-17 measuring a pasta network while believing it was the rootful bridge. The engine module always invokes `podman --remote --url unix:///run/podman/podman.sock`, and the workstation declares a default connection (`podman system connection add --default`). Details in [setup-workstation.md](../setup-workstation.md).
 
 ### D2. gVisor: not in v1, decision deferred to the first real exam session
 
@@ -220,4 +220,4 @@ sudo systemctl enable --now podman.socket
 sudo podman info --format '{{.Host.NetworkBackend}} {{.Host.OCIRuntime.Name}}'
 ```
 
-These commands were run on 2026-09-17; the complete procedure, with the two pitfalls encountered (socket directory recreated as 0700 by tmpfiles, remote mode to be forced), is in [setup-workstation.md](setup-workstation.md). All the rest of milestone 0 and milestone 1 is done by agents, see [milestone-0.md](milestone-0.md).
+These commands were run on 2026-09-17; the complete procedure, with the two pitfalls encountered (socket directory recreated as 0700 by tmpfiles, remote mode to be forced), is in [setup-workstation.md](../setup-workstation.md). All the rest of milestone 0 and milestone 1 is done by agents, see [milestone-0.md](milestone-0.md).
