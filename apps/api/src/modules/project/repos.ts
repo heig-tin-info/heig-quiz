@@ -109,9 +109,12 @@ export interface RepoContext {
  * caller's `extra` columns, from `project_repos` joined to `projects`: each
  * caller adds its own joins, WHERE and ORDER BY.
  */
-export function repoWithProject<E extends SelectedFields = Record<never, never>>(db: Db | Tx, extra?: E) {
+export function repoWithProject<E extends SelectedFields & { repo?: never; project?: never } = Record<never, never>>(
+  db: Db | Tx,
+  extra?: E,
+) {
   return db
-    .select({ repo: projectRepos, project: projects, ...(extra as E) })
+    .select({ repo: projectRepos, project: projects, ...(extra as Omit<E, "repo" | "project">) })
     .from(projectRepos)
     .innerJoin(projects, eq(projects.id, projectRepos.projectId))
     .$dynamic();

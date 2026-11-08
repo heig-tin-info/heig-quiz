@@ -666,11 +666,7 @@ export async function reportShown(
     // The states read AFTER the lock, not from the request's scope: a pause
     // or a close that committed since then flushed this attempt, and must
     // not find an interval opened behind it.
-    const [locked] = await tx
-      .select({ shownItemId: attempts.shownItemId, state: attempts.state })
-      .from(attempts)
-      .where(eq(attempts.id, attempt.id))
-      .for("update");
+    const locked = await lockAttempt(tx, attempt.id, "update");
     if (!locked) throw new LiveError("not_found");
     // A statement of its own, so its snapshot is taken once the lock is held
     // (READ COMMITTED): a pause committed before `closeShown` queued on this

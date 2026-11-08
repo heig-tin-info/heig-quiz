@@ -1069,7 +1069,7 @@ export const accessibleCategory = routeLoader(async (app, req, params: { id: str
     .select({ category: categories, pool: pools })
     .from(categories)
     .innerJoin(pools, eq(categories.poolId, pools.id))
-    .where(and(eq(categories.id, params.id), accessWhere(callerOf(req), poolAccess(req.user!.id)))));
+    .where(and(eq(categories.id, params.id), accessWhere(callerOf(req), poolAccess(callerOf(req).id)))));
 });
 
 // ---------------------------------------------------------------------------
