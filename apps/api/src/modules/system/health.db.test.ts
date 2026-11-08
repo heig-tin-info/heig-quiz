@@ -20,6 +20,7 @@ import { registerForTests } from "@quiz/registry/server";
 import type { AppConfig } from "../../config.js";
 import { InProcessQueue } from "../../jobs.js";
 import { loadConfig } from "../../config.js";
+import { evaluations } from "../../db/schema.js";
 import { testApp } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
@@ -39,14 +40,16 @@ beforeAll(async () => {
   restore = registerForTests(fakeShort);
   dir = await mkdtemp(join(tmpdir(), "quiz-health-"));
   config = loadConfig({ NODE_ENV: "test", ASSETS_DIR: join(dir, "assets") });
+  app = await testApp();
 });
 afterAll(async () => {
   restore();
   await rm(dir, { recursive: true, force: true });
 });
 beforeEach(async () => {
-  // A fresh database per test: the overdue counts are global.
-  app = await testApp();
+  // One database for the file, emptied of evaluations (their attempts go
+  // with them) before each test: the overdue counts are global.
+  await app.db.delete(evaluations);
   app.clock.set(new Date("2026-09-20T08:00:00.000Z"));
 });
 

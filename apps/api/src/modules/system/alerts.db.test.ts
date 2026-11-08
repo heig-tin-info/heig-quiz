@@ -11,7 +11,7 @@
 import { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { NotificationPayload, type SystemCheckKey } from "@quiz/contracts";
 import type { CheckStatus } from "@quiz/domain";
@@ -83,8 +83,16 @@ const queue: JobQueue = {
 let admins: string[];
 let teacher: string;
 
-beforeEach(async () => {
+beforeAll(async () => {
   app = await testApp();
+});
+beforeEach(async () => {
+  // One database for the file, emptied before each test of what the task
+  // reads and writes: the checks' states, the bell and the accounts (the
+  // recipients are every administrator).
+  await app.db.delete(healthCheckStates);
+  await app.db.delete(notifications);
+  await app.db.delete(users);
   app.clock.set(new Date("2026-10-01T08:00:00.000Z"));
   verdicts = {};
   sent.length = 0;
