@@ -10,7 +10,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { assets, auditLog, coursePools, courseStaff, courses, pools, questionVersions, questions, users } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
-import { type Payload, testServer, type TestServer } from "../../test/http.js";
+import { type Method, type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeRunnerType, fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
 import { newPool } from "../../test/pools.js";
@@ -47,10 +47,10 @@ let poolId: string;
 let restoreShort: () => void;
 let restoreRunner: () => void;
 
-async function createQuestion(name: string, type = "short") {
+async function createQuestion(name: string, type = "short", pool = poolId) {
   const res = await server.app.inject({
     method: "POST",
-    url: `/app/api/pools/${poolId}/questions`,
+    url: `/app/api/pools/${pool}/questions`,
     headers: owner.headers,
     payload: { type, internalName: name },
   });
@@ -1626,22 +1626,13 @@ describe("the order of the refusals, over HTTP", () => {
  * of a missing one, never a 403.
  */
 describe("the question routes past their happy path", () => {
-  let poolId: string;
-
-  type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   function call(who: Actor, method: Method, url: string, payload?: Payload) {
     return server.app.inject({ method, url, headers: who.headers, ...(payload === undefined ? {} : { payload }) });
   }
 
-  async function newQuestion(name: string, pool = poolId): Promise<string> {
-    const res = await call(owner, "POST", `/app/api/pools/${pool}/questions`, { type: "short", internalName: name });
-    expect(res.statusCode).toBe(201);
-    return res.json<{ meta: { id: string } }>().meta.id;
-  }
-
   /** A question with `n` published versions, whose answers are `v1`, `v2`… */
   async function published(name: string, n: number): Promise<string> {
-    const id = await newQuestion(name);
+    const id = await createQuestion(name);
     for (let v = 1; v <= n; v++) {
       const config = { statement: "S", answer: `v${v}` };
       expect((await call(owner, "PUT", `/app/api/questions/${id}/draft`, { config })).statusCode).toBe(200);
@@ -1658,10 +1649,6 @@ describe("the question routes past their happy path", () => {
     return row!.config;
   }
 
-  beforeAll(async () => {
-    poolId = await newPool(server, owner, "Question routes pool");
-  });
-
   describe("GET /pools/:id/questions — the cursor", () => {
     it("refuses a malformed cursor with 400 invalid_cursor", async () => {
       const res = await call(owner, "GET", `/app/api/pools/${poolId}/questions?cursor=not-a-cursor`);
@@ -1670,8 +1657,8 @@ describe("the question routes past their happy path", () => {
     });
 
     it("refuses a cursor produced by another order: the client starts the list again", async () => {
-      await newQuestion("cursor a");
-      await newQuestion("cursor b");
+      await createQuestion("cursor a");
+      await createQuestion("cursor b");
       const first = await call(owner, "GET", `/app/api/pools/${poolId}/questions?limit=1&sort=updated`);
       expect(first.statusCode).toBe(200);
       const cursor = first.json<{ nextCursor: string | null }>().nextCursor;
@@ -1688,7 +1675,7 @@ describe("the question routes past their happy path", () => {
 
   describe("POST /questions/:id/publish — the refusals", () => {
     it("answers 409 no_draft for a question that lost its draft row", async () => {
-      const id = await newQuestion("no draft");
+      const id = await createQuestion("no draft");
       await server.app.db
         .delete(questionVersions)
         .where(and(eq(questionVersions.questionId, id), isNull(questionVersions.number)));
@@ -1698,7 +1685,7 @@ describe("the question routes past their happy path", () => {
     });
 
     it("publishes with a change note, which the version keeps", async () => {
-      const id = await newQuestion("noted");
+      const id = await createQuestion("noted");
       await call(owner, "PUT", `/app/api/questions/${id}/draft`, { config: { statement: "S", answer: "a" } });
       const res = await call(owner, "POST", `/app/api/questions/${id}/publish`, { changeNote: "first cut" });
       expect(res.statusCode).toBe(201);
@@ -1767,7 +1754,7 @@ describe("the question routes past their happy path", () => {
       const reader = await server.signIn("teacher");
       const created = await call(owner, "POST", "/app/api/pools", { name: "Versions order pool", isPublic: true });
       expect(created.statusCode).toBe(201);
-      const id = await newQuestion("versions order", created.json<{ id: string }>().id);
+      const id = await createQuestion("versions order", "short", created.json<{ id: string }>().id);
       // A reader reads versions: a malformed number is the 404 of a miss.
       const read = await call(reader, "GET", `/app/api/questions/${id}/versions/abc`);
       expect(read.statusCode).toBe(404);
@@ -1821,7 +1808,7 @@ describe("the question routes past their happy path", () => {
 
   describe("POST /questions/:id/stats/reset (F-STAT-05)", () => {
     it("starts the statistics again at the server's clock, and says the previous start", async () => {
-      const id = await newQuestion("stats");
+      const id = await createQuestion("stats");
       const first = server.clock.now().toISOString();
       const res = await call(owner, "POST", `/app/api/questions/${id}/stats/reset`);
       expect(res.statusCode).toBe(200);
@@ -1842,7 +1829,7 @@ describe("the question routes past their happy path", () => {
 
   describe("DELETE /questions/:id", () => {
     it("hides a question by default: gone from the list, back with includeDeleted", async () => {
-      const id = await newQuestion("soft delete");
+      const id = await createQuestion("soft delete");
       const res = await call(owner, "DELETE", `/app/api/questions/${id}`);
       expect(res.statusCode).toBe(204);
       const [row] = await server.app.db.select().from(questions).where(eq(questions.id, id));
@@ -1876,7 +1863,7 @@ describe("the question routes past their happy path", () => {
     });
 
     it("answers a stranger 404 and deletes nothing", async () => {
-      const id = await newQuestion("guarded delete");
+      const id = await createQuestion("guarded delete");
       const res = await call(stranger, "DELETE", `/app/api/questions/${id}?hard=1`);
       expect(res.statusCode).toBe(404);
       expect(res.json()).toEqual({ error: "not_found" });
@@ -1897,7 +1884,7 @@ describe("the question routes past their happy path", () => {
     });
 
     it("answers 404 for a target pool out of the caller's reach, and writes nothing there", async () => {
-      const id = await newQuestion("copy out");
+      const id = await createQuestion("copy out");
       const foreign = await newPool(server, stranger, "Stranger's pool");
       for (const targetPoolId of [foreign, crypto.randomUUID()]) {
         const res = await call(owner, "POST", `/app/api/questions/${id}/copy`, { targetPoolId });
@@ -1909,7 +1896,7 @@ describe("the question routes past their happy path", () => {
     });
 
     it("answers 404 to a stranger copying a question they cannot read, even into their own pool", async () => {
-      const id = await newQuestion("copy source guarded");
+      const id = await createQuestion("copy source guarded");
       const theirs = await newPool(server, stranger, "Stranger's other pool");
       const res = await call(stranger, "POST", `/app/api/questions/${id}/copy`, { targetPoolId: theirs });
       expect(res.statusCode).toBe(404);
@@ -1917,7 +1904,7 @@ describe("the question routes past their happy path", () => {
     });
 
     it("refuses a body without a valid target (400)", async () => {
-      const id = await newQuestion("copy bad body");
+      const id = await createQuestion("copy bad body");
       expect((await call(owner, "POST", `/app/api/questions/${id}/copy`, { targetPoolId: "nope" })).statusCode).toBe(400);
     });
   });

@@ -584,6 +584,31 @@ describe("the student's home (F-LIVE-01)", () => {
   });
 });
 
+describe("running code from an attempt (decision D14)", () => {
+  it("loads the student's own attempt and answers 422 not_runnable for a type with no runner half", async () => {
+    const other = await server.signIn("student");
+    const own = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [other.id],
+      questions: 1,
+    });
+    await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
+    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt/start`, other.headers, {});
+    const attemptId = entered.json().view.attempt.id;
+    const itemId = entered.json().view.items[0].id;
+
+    const run = await post(`/app/api/attempts/${attemptId}/run`, other.headers, {
+      itemId,
+      regions: ["return 0;"],
+    });
+    // The fake `short` type has no runner half at all. A runner-backed type
+    // on the stub runner answers 503, which `live.db.test.ts` asserts
+    // against the real `UnavailableRunner`.
+    expect(run.statusCode).toBe(422);
+    expect(run.json().error).toBe("not_runnable");
+  });
+});
+
 /**
  * Finding H2: Caddy APPENDS to `X-Forwarded-For`, so the left-most entry is
  * whatever the client typed. `trustProxy: 1` makes `req.ip` the address the
