@@ -166,12 +166,13 @@ concepts as one set (`resolveConceptLabel`): one exact match resolves.
 **Several exact matches** — homonyms, or an alias shared by two concepts —
 are refused with the candidates (`422 concept_ambiguous`). A **close match
 only** (string distance within `keyDistance`) is refused with the "did you
-mean" candidates (`422 concept_unknown`).
+mean" candidates (`422 concept_unknown`), unless the caller explicitly asks
+to create a new concept.
 
-**Creation is explicit.** A label that matches no concept is refused
-(`422 concept_unknown`) unless the caller asks to create; the MCP tools take
-an explicit flag, false by default. No match, with creation asked: a
-`proposed` concept. **Dropped labels stay dropped:** a label whose key is on
+**Creation is explicit.** A label that matches no concept, or only closely,
+is refused (`422 concept_unknown`) unless the caller asks to create; the MCP
+tools take an explicit flag, false by default. A close match only, or no
+match, with creation asked: a new `proposed` concept. **Dropped labels stay dropped:** a label whose key is on
 the stop list is refused even when creation is asked (`422 concept_dropped`),
 so neither a teacher nor an LLM client recreates `c01`, `lecture-de-code` or
 `prog-c`; renaming a concept's label onto such a key is refused too. Because
