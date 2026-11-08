@@ -106,6 +106,11 @@ dépôt GitHub"); never "local".
 
 ### 3. Changing mode is an action, never a toggle
 
+**Abandoned, not built:** the product owner dropped the two mode switches
+(M4-11, M4-12) on 2026-10-08, to be implemented on demand
+([merge progress](../merge/PROGRESS.md), rows M4-10 to M4-13); the design
+below is kept for that case.
+
 - **Move to GitHub**: into a NEW repository, or an EMPTY one, of the
   classroom's organisation (ADR-049 point 6: never adopt). One initial
   commit holds every page and asset; file names get numeric prefixes from
@@ -118,10 +123,6 @@ dépôt GitHub"); never "local".
   for the journals that exist today, which migrate to GitHub mode.
 - Writes are frozen while a switch runs.
 
-Not built: the product owner dropped explicit ordering and nesting, the two
-mode switches and the copy of a journal (M4-10–M4-13) on 2026-10-08, to be
-implemented on demand ([merge progress](../merge/PROGRESS.md)).
-
 ### 4. Schema
 
 - `classroom_journals.mode` (`'quiz' | 'github'`). The repository columns
@@ -130,8 +131,9 @@ implemented on demand ([merge progress](../merge/PROGRESS.md)).
   `github`.
 - `journal_pages` gains a `version` (the lock, M4-07). The Quiz-mode
   explicit order among siblings and parent page are columns of their own,
-  added by M4-10 (rename, reorder, nest); `parent_path` keeps its meaning,
-  the directory of the file.
+  added by M4-10 (rename, reorder, nest), abandoned on 2026-10-08 and not
+  built ([merge progress](../merge/PROGRESS.md)); `parent_path` keeps its
+  meaning, the directory of the file.
 - A revisions table, one row per Quiz-mode save, ordered by its
   `created_at` (no revision number).
 
@@ -142,13 +144,15 @@ Every new route goes through `accessibleClassroom` / `staffAccess`
 sessions never reach the journal. The audit union gains, task by task:
 the mode on `journal.create`, the Quiz-mode page writes, `journal.restore`,
 `journal.reorder`, `journal.export` (Move to GitHub) and `journal.import`
-(Bring back into Quiz). The last three come with M4-10 to M4-13, not built
-(see the note at the end of §3).
+(Bring back into Quiz). **Abandoned:** the last three went with M4-10 to
+M4-13, dropped on 2026-10-08 and not in the union
+([merge progress](../merge/PROGRESS.md)).
 
 ### 6. Not in the first version
 
 Copying a journal from another classroom of the course (next semester):
-later, M4-13.
+later, M4-13 — abandoned on 2026-10-08, not built
+([merge progress](../merge/PROGRESS.md)).
 
 ### 7. The rules kept from ADR-049 (folded 2026-10-09)
 
