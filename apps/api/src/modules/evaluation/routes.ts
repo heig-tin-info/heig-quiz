@@ -51,7 +51,6 @@ import {
   loadTemplate,
   requireCourseRole,
   teacherGuard,
-  userOf,
 } from "../guards.js";
 import { notFound, readerLang, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
@@ -171,7 +170,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
           mode: body.mode,
           preset: body.preset,
           allowDrill: body.allowDrill,
-          createdBy: userOf(req).id,
+          createdBy: callerOf(req).id,
         });
         await trace(req, "evaluation.create", "evaluation", row.id, {
           title: row.title,
@@ -317,7 +316,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
         const row = await service.copyEvaluation(app.db, scope.evaluation, {
           home: { classroomId: target },
           title: body.title,
-          createdBy: userOf(req).id,
+          createdBy: callerOf(req).id,
         });
         await trace(req, "evaluation.duplicate", "evaluation", row.id, { from: scope.evaluation.id });
         evaluationChanged(target, row.id);
@@ -452,7 +451,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
         const { template, previousOrigin } = await templates.saveAsTemplate(app.db, scope.evaluation, {
           courseId: scope.classroom.courseId,
           title: body.title,
-          createdBy: userOf(req).id,
+          createdBy: callerOf(req).id,
         });
         await trace(req, "template.create", "evaluation", template.id, {
           from: scope.evaluation.id,
@@ -477,7 +476,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
           title: body.title,
           mode: body.mode,
           preset: body.preset,
-          createdBy: userOf(req).id,
+          createdBy: callerOf(req).id,
         });
         // No `from`: an empty template copies nothing (ADR-031, addendum b).
         await trace(req, "template.create", "evaluation", row.id, {
@@ -636,7 +635,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
         const made = await templates.instantiateTemplate(app.db, scope.template, {
           classroomId: room.room.id,
           title: body.title ?? scope.template.title,
-          createdBy: userOf(req).id,
+          createdBy: callerOf(req).id,
         });
         await trace(req, "template.instantiate", "evaluation", made.evaluation.id, {
           templateId: scope.template.id,

@@ -277,7 +277,7 @@ async function resolveWatch(
     // it, and it counts as present when its user holds a seat.
     const scope = await findReachableEvaluation(app.db, callerOf(req), id);
     if (!scope || studentOnPoll(scope)) return null;
-    const seat = await live.participantOf(app.db, scope.evaluation, userOf(req).id);
+    const seat = await live.participantOf(app.db, scope.evaluation, callerOf(req).id);
     return {
       watch: { kind: "lobby", evaluationId: id },
       evaluation: scope.evaluation,
@@ -293,14 +293,14 @@ async function resolveWatch(
     // A student watches their OWN attempt; a staff member watches any of
     // the evaluation's, which is what the dashboard's cell inspector needs.
     // A replaced attempt (ADR-125 §12) is never the student's again.
-    if (!scope.staff && (attempt.userId !== userOf(req).id || attempt.supersededBy !== null)) return null;
+    if (!scope.staff && (attempt.userId !== callerOf(req).id || attempt.supersededBy !== null)) return null;
     return {
       watch: { kind: "attempt", attemptId: id, evaluationId: attempt.evaluationId },
       evaluation: scope.evaluation,
       staff: scope.staff,
       // Watching one's OWN attempt is sitting the quiz, teacher or not; a
       // staff inspector watching somebody else's row is not in the room.
-      participant: attempt.userId === userOf(req).id,
+      participant: attempt.userId === callerOf(req).id,
     };
   }
   return null;

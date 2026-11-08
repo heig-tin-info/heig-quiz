@@ -20,7 +20,7 @@ import {
 
 import { readTracer, tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { loadEvaluation, loadEvaluationAttempt, teacherGuard, userOf } from "../guards.js";
+import { callerOf, loadEvaluation, loadEvaluationAttempt, teacherGuard } from "../guards.js";
 import { teacherRoute } from "../http.js";
 import { liveFailureArms } from "../live/service.js";
 import * as service from "./service.js";
@@ -60,7 +60,7 @@ export async function paperPlugin(
     teacher(
       { params: IdParam, body: PaperAttemptBody, load: staffEvaluation },
       async ({ req, reply, now, body, scope }) => {
-        const inserted = await service.enterPaperCopy(app, scope.evaluation, body, userOf(req).id, now);
+        const inserted = await service.enterPaperCopy(app, scope.evaluation, body, callerOf(req).id, now);
         const supersededAttemptId = inserted.superseded[0] ?? null;
         await trace(req, "paper.enter", "attempt", inserted.attempt.id, {
           evaluationId: scope.evaluation.id,
@@ -94,7 +94,7 @@ export async function paperPlugin(
       const part = await req.file();
       if (!part) return reply.code(400).send({ error: "validation", message: "No file in the request" });
       const bytes = await part.toBuffer();
-      const sheet = await service.attachScan(app.db, config.ASSETS_DIR, scope.attempt.id, bytes, userOf(req).id, now);
+      const sheet = await service.attachScan(app.db, config.ASSETS_DIR, scope.attempt.id, bytes, callerOf(req).id, now);
       await trace(req, "paper.scan_upload", "attempt", scope.attempt.id, {
         evaluationId: scope.evaluation.id,
         mime: sheet.scan?.mime,

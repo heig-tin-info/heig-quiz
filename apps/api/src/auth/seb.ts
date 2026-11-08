@@ -32,7 +32,7 @@ import { users } from "../db/schema.js";
 import { FixedWindowLimiter } from "../limiter.js";
 import { sebProjectSeat } from "../modules/codespace/service.js";
 import { byId, sebUnlockPasswordOf } from "../modules/evaluation/service.js";
-import { callerFor, userOf } from "../modules/guards.js";
+import { callerFor, callerOf } from "../modules/guards.js";
 import { sebSeat } from "../modules/live/service.js";
 import { consumeLaunchTicket, issueLaunchTicket, pendingLaunchTicket } from "./launch.js";
 import { activityOf, delegated, type Activity, type SessionAuth } from "./session.js";
@@ -152,7 +152,7 @@ export async function sendLaunchFile(
 ): Promise<FastifyReply> {
   const secret = await issueLaunchTicket(
     app.db,
-    { kind: "seb", userId: userOf(req).id, actorUserId: null, ...target },
+    { kind: "seb", userId: callerOf(req).id, actorUserId: null, ...target },
     app.clock.now(),
   );
   const activity = activityOf(target);
@@ -194,7 +194,7 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
       // Nobody acting as a student mints the student's `.seb` (ADR-034):
       // a SEB exam stays out of an impersonation's reach.
       const evaluation =
-        params.success && !delegated(req.auth) && (await sebSeat(app.db, userOf(req).id, params.data.id));
+        params.success && !delegated(req.auth) && (await sebSeat(app.db, callerOf(req).id, params.data.id));
       if (!evaluation) return reply.code(404).send({ error: "not_found" });
       return sendLaunchFile(app, config, req, reply, { evaluationId: evaluation.id, projectId: null });
     },

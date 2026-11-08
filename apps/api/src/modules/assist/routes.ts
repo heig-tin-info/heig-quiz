@@ -137,7 +137,7 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
     const params = IdParam.safeParse(req.params);
     const body = AssistWriteDecision.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
-    if (params.success) pending.take(params.data.id, { userId: userOf(req).id, conversationId: body.data.conversationId }, app.clock.now());
+    if (params.success) pending.take(params.data.id, { userId: callerOf(req).id, conversationId: body.data.conversationId }, app.clock.now());
     return reply.code(204).send();
   });
 
@@ -169,7 +169,7 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
   app.delete("/app/api/assist/conversations/:id", { preHandler: requireAssist }, async (req, reply) => {
     const params = IdParam.safeParse(req.params);
     if (!params.success) return missing(reply);
-    const own = await findConversation(app.db, params.data.id, userOf(req).id);
+    const own = await findConversation(app.db, params.data.id, callerOf(req).id);
     if (!own) return missing(reply);
     await deleteConversation(app.db, own.id);
     return reply.code(204).send();

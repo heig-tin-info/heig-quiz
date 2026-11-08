@@ -51,7 +51,7 @@ import {
   revokeConnection,
   sameResource,
 } from "./service.js";
-import { userOf } from "../../modules/guards.js";
+import { callerOf } from "../../modules/guards.js";
 
 /** Self-registrations per address and hour: DCR is open to anyone, so it is metered. */
 const REGISTRATIONS_PER_HOUR = 30;
@@ -257,7 +257,7 @@ export async function oauthRoutes(app: FastifyInstance, config: AppConfig) {
     if (!body.success) return invalid(reply, body.error);
     const answer = await decide(app.db, {
       id: params.data.id,
-      userId: userOf(req).id,
+      userId: callerOf(req).id,
       approve: body.data.approve,
       issuer,
       now: app.clock.now(),
@@ -265,7 +265,7 @@ export async function oauthRoutes(app: FastifyInstance, config: AppConfig) {
     if (!answer) return notFound(reply);
     if (body.data.approve) {
       await audit(app.db, {
-        actorUserId: userOf(req).id,
+        actorUserId: callerOf(req).id,
         actorType: "user",
         action: "oauth.grant",
         subjectType: "oauth_client",
@@ -279,16 +279,16 @@ export async function oauthRoutes(app: FastifyInstance, config: AppConfig) {
   // --- Connected assistants ---------------------------------------------------
 
   app.get("/app/api/me/connections", { preHandler: sessionTeacher }, async (req) =>
-    listConnections(app.db, userOf(req).id, app.clock.now()),
+    listConnections(app.db, callerOf(req).id, app.clock.now()),
   );
 
   app.delete("/app/api/me/connections/:id", { preHandler: sessionTeacher }, async (req, reply) => {
     const params = IdParam.safeParse(req.params);
     if (!params.success) return notFound(reply);
-    const grant = await revokeConnection(app.db, userOf(req).id, params.data.id, app.clock.now());
+    const grant = await revokeConnection(app.db, callerOf(req).id, params.data.id, app.clock.now());
     if (!grant) return notFound(reply);
     await audit(app.db, {
-      actorUserId: userOf(req).id,
+      actorUserId: callerOf(req).id,
       actorType: "user",
       action: "oauth.revoke",
       subjectType: "oauth_grant",

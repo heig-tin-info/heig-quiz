@@ -23,7 +23,6 @@ import {
   requirePoolRole,
   teacherGuard,
   withRoleStep,
-  userOf,
 } from "../guards.js";
 import { notFound, teacherRoute, type FailureArms } from "../http.js";
 import { llmArms } from "../llm/service.js";
@@ -66,7 +65,10 @@ type PoolAuditEntry = readonly [action: AuditAction, subjectType: string, subjec
 export function poolRouteContext(app: FastifyInstance, config: AppConfig) {
   const requireTeacher = teacherGuard(app);
   const trace = tracer(app);
-  const mine = (req: FastifyRequest) => accessWhere(callerOf(req), poolAccess(userOf(req).id));
+  const mine = (req: FastifyRequest) => {
+    const caller = callerOf(req);
+    return accessWhere(caller, poolAccess(caller.id));
+  };
 
   const teacher = teacherRoute(app, poolFailure);
 

@@ -16,7 +16,7 @@ import { AttemptParam, IdParam, PublishCorrectionBody, ReleaseBody, StaffCopyRec
 import { readTracer, tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
 import { sendExport } from "../../documents/files.js";
-import { loadEvaluation, loadEvaluationAttempt, ownAttempt, teacherGuard, withCourseRole, userOf } from "../guards.js";
+import { callerOf, loadEvaluation, loadEvaluationAttempt, ownAttempt, teacherGuard, withCourseRole } from "../guards.js";
 import { readerLang, sendCsv, studentRoute, teacherRoute } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as gradingEvents from "../grading/events.js";
@@ -200,7 +200,7 @@ export async function resultsPlugin(app: FastifyInstance) {
    * The home's Past rule, so it lives beside the home (`live`).
    */
   app.get("/app/api/student/results", { preHandler: requireSession }, async (req) =>
-    studentGrades(app.db, userOf(req).id, app.clock.now()),
+    studentGrades(app.db, callerOf(req).id, app.clock.now()),
   );
 
   /**

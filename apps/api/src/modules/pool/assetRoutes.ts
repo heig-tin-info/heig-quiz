@@ -9,7 +9,7 @@ import { assets } from "../../db/schema.js";
 import { INERT_IMAGE_HEADERS, isAllowedMime, readAsset, sniffImage, storeAsset } from "./assets.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
-import { userOf } from "../guards.js";
+import { callerOf, userOf } from "../guards.js";
 
 export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { config, requireTeacher, trace, teacher, inPool } = ctx;
@@ -24,7 +24,7 @@ export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
         if (!upload) return reply;
         const { row, fresh } = await storeAsset(app.db, config.ASSETS_DIR, {
           ...upload,
-          ownerId: userOf(req).id,
+          ownerId: callerOf(req).id,
           poolId: pool.id,
         });
         if (!fresh) return reply.code(200).send(assetJson(row));

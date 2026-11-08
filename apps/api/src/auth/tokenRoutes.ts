@@ -11,7 +11,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ApiTokenCreate, IdParam, tokenMustExpire } from "@quiz/contracts";
 
 import { audit } from "../audit.js";
-import { teacherGuard, userOf } from "../modules/guards.js";
+import { callerOf, teacherGuard, userOf } from "../modules/guards.js";
 import { invalid, notFound } from "../modules/http.js";
 import { createApiToken, listApiTokens, revokeApiToken } from "./tokens.js";
 
@@ -34,7 +34,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
   const sessionOnly = sessionTeacherGuard(app);
 
   app.get("/app/api/me/tokens", { preHandler: sessionOnly }, async (req) =>
-    listApiTokens(app.db, userOf(req).id),
+    listApiTokens(app.db, callerOf(req).id),
   );
 
   app.post("/app/api/me/tokens", { preHandler: sessionOnly }, async (req, reply) => {
@@ -46,9 +46,9 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         message: "This token must expire: an administrator's, or one with the whole API",
       });
     }
-    const created = await createApiToken(app.db, userOf(req).id, body.data, app.clock.now());
+    const created = await createApiToken(app.db, callerOf(req).id, body.data, app.clock.now());
     await audit(app.db, {
-      actorUserId: userOf(req).id,
+      actorUserId: callerOf(req).id,
       actorType: "user",
       action: "api_token.create",
       subjectType: "api_token",
@@ -61,10 +61,10 @@ export async function apiTokenRoutes(app: FastifyInstance) {
   app.delete("/app/api/me/tokens/:id", { preHandler: sessionOnly }, async (req, reply) => {
     const params = IdParam.safeParse(req.params);
     if (!params.success) return notFound(reply);
-    const revoked = await revokeApiToken(app.db, userOf(req).id, params.data.id, app.clock.now());
+    const revoked = await revokeApiToken(app.db, callerOf(req).id, params.data.id, app.clock.now());
     if (!revoked) return notFound(reply);
     await audit(app.db, {
-      actorUserId: userOf(req).id,
+      actorUserId: callerOf(req).id,
       actorType: "user",
       action: "api_token.revoke",
       subjectType: "api_token",

@@ -71,7 +71,7 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     "/app/api/pools/:id/subscription",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool() }, async ({ req, reply, scope: pool }) => {
-      const me = userOf(req).id;
+      const me = callerOf(req).id;
       await poolWrite(req, pool.id, () => service.subscribe(app.db, pool.id, me), (done) =>
         done ? ["pool.subscribe", "pool", pool.id, {}] : null);
       poolPeopleChanged([userTopic(me)]);
@@ -83,7 +83,7 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     "/app/api/pools/:id/subscription",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool() }, async ({ req, reply, scope: pool }) => {
-      const me = userOf(req).id;
+      const me = callerOf(req).id;
       await poolWrite(req, pool.id, () => service.unsubscribe(app.db, pool.id, me), (done) =>
         done ? ["pool.unsubscribe", "pool", pool.id, {}] : null);
       // Their streams were subscribed to the pool's topic when they opened: close them.
@@ -140,12 +140,13 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
         await poolWrite(req, pool.id, () => service.addMember(app.db, pool, invitee.id, body.role), () => [
           "pool.share", "pool", pool.id, { userId: invitee.id, email: invitee.email, role: body.role },
         ]);
+        const me = userOf(req);
         await notify(app.db, invitee.id, {
           kind: "pool_shared",
           poolId: pool.id,
           poolName: pool.name,
           role: body.role,
-          byName: `${userOf(req).givenName ?? ""} ${userOf(req).familyName ?? ""}`.trim() || userOf(req).email,
+          byName: `${me.givenName ?? ""} ${me.familyName ?? ""}`.trim() || me.email,
         });
         poolPeopleChanged(await topicsOf(pool));
         return reply.code(201).send(await service.listMembers(app.db, pool, true));
@@ -187,7 +188,7 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     "/app/api/pools/:id/members/:userId",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, path: PoolMemberParam, load: inPool() }, async ({ req, reply, path, scope: pool }) => {
-      const leaving = path.userId === userOf(req).id;
+      const leaving = path.userId === callerOf(req).id;
       if (!leaving && !(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
       if (path.userId === pool.ownerId) {
         return reply.code(409).send({

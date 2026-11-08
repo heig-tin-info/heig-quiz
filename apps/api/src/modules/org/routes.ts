@@ -110,7 +110,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   const onOwnSeatOrOwned = {
     params: StaffParam,
     load: (req: FastifyRequest, reply: FastifyReply, p: { id: string; uid: string }) =>
-      p.uid === userOf(req).id ? loadCourse(req, reply, p) : ownedCourse(req, reply, p),
+      p.uid === callerOf(req).id ? loadCourse(req, reply, p) : ownedCourse(req, reply, p),
   };
   const onEntry = {
     params: RosterEntryParams,
@@ -127,8 +127,8 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   // --- Courses ---
 
   app.get("/app/api/courses", { preHandler: requireTeacher }, async (req) =>
-    service.listCourses(app.db, accessWhere(callerOf(req), staffAccess(userOf(req).id)), {
-      id: userOf(req).id,
+    service.listCourses(app.db, accessWhere(callerOf(req), staffAccess(callerOf(req).id)), {
+      id: callerOf(req).id,
       reachesAll: callerOf(req).reach === "all",
     }),
   );
@@ -136,9 +136,9 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.post("/app/api/courses", { preHandler: requireTeacher }, async (req, reply) => {
     const body = CourseCreate.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
-    const created = await service.createCourse(app.db, body.data, userOf(req).id);
+    const created = await service.createCourse(app.db, body.data, callerOf(req).id);
     await trace(req, "course.create", "course", created.id, { name: created.name, code: created.code });
-    publish("courses", [`teacher:${userOf(req).id}`]);
+    publish("courses", [`teacher:${callerOf(req).id}`]);
     return reply.code(201).send({ ...created, createdAt: created.createdAt.toISOString() });
   });
 
@@ -215,7 +215,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       `/app/api/courses/:id/${path}`,
       { preHandler: requireTeacher },
       teacher(onCourse(), async ({ req, reply, scope: course }) => {
-        await service.setCourseHidden(app.db, userOf(req).id, course.id, hidden);
+        await service.setCourseHidden(app.db, callerOf(req).id, course.id, hidden);
         return reply.code(204).send();
       }),
     );
@@ -237,14 +237,14 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
         app.db,
         course.id,
         body.pools,
-        accessWhere(callerOf(req), poolAccess(userOf(req).id)),
+        accessWhere(callerOf(req), poolAccess(callerOf(req).id)),
         callerOf(req),
       );
       await trace(req, "course.pools_update", "course", course.id, {
         poolIds: linked.map((p) => p.id),
         links: linked.map((p) => ({ poolId: p.id, mode: p.mode })),
       });
-      publish("courses", [`course:${course.id}`, `teacher:${userOf(req).id}`]);
+      publish("courses", [`course:${course.id}`, `teacher:${callerOf(req).id}`]);
       for (const pool of linked) publish("pool", [`pool:${pool.id}`]);
       return linked;
     }),
@@ -265,7 +265,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     "/app/api/courses/:id/concepts",
     { preHandler: requireTeacher },
     teacher({ ...onCourse("owner"), body: CourseConceptsPut }, async ({ req, now, body, scope: course }): Promise<CourseConcepts> => {
-      await setCourseConcepts(app.db, { actor: actorOf(req), userId: userOf(req).id, now }, course.id, body.conceptIds);
+      await setCourseConcepts(app.db, { actor: actorOf(req), userId: callerOf(req).id, now }, course.id, body.conceptIds);
       publish("courses", [`course:${course.id}`]);
       return { concepts: await courseConceptsOf(app.db, course.id, readerLang(req)) };
     }),
@@ -445,7 +445,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
         name: room.name,
         courseId: course.id,
       });
-      publish("classrooms", [`course:${course.id}`, `teacher:${userOf(req).id}`]);
+      publish("classrooms", [`course:${course.id}`, `teacher:${callerOf(req).id}`]);
       return reply.code(201).send(room);
     }),
   );
@@ -621,7 +621,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     "/app/api/classrooms/:id/roster/:eid/impersonation",
     { preHandler: [requireAdmin, superPowersGuard()] },
     teacher(onEntry, async ({ req, reply, now, scope: entry }) =>
-      (await issueImpersonationLink(app.db, config, entry, userOf(req).id, now)) ?? notFound(reply),
+      (await issueImpersonationLink(app.db, config, entry, callerOf(req).id, now)) ?? notFound(reply),
     ),
   );
 
@@ -634,6 +634,6 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.get(
     "/app/api/student/classrooms",
     { preHandler: (req, reply) => app.requireSession(req, reply) },
-    async (req): Promise<StudentClassroom[]> => service.studentClassrooms(app.db, userOf(req).id),
+    async (req): Promise<StudentClassroom[]> => service.studentClassrooms(app.db, callerOf(req).id),
   );
 }

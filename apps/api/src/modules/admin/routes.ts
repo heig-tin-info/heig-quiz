@@ -21,7 +21,7 @@ import { publish } from "../../events.js";
 import { syncUserRole } from "../../roles.js";
 import { shownAvatar } from "../avatar.js";
 import { codespaceOn } from "../codespace/service.js";
-import { adminGuard, userOf } from "../guards.js";
+import { adminGuard, callerOf, userOf } from "../guards.js";
 import { invalid, rateLimited } from "../http.js";
 import { notificationAddress, sendTestMail } from "../notifications/service.js";
 import {
@@ -102,7 +102,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
         .code(409)
         .send({ error: "is_admin", message: "This e-mail is the administrator" });
     }
-    const created = await createTeacherGrant(app.db, { email, createdBy: userOf(req).id });
+    const created = await createTeacherGrant(app.db, { email, createdBy: callerOf(req).id });
     if (!created) {
       return reply
         .code(409)
@@ -111,7 +111,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     // Immediate effect if the account already exists (otherwise: at login).
     await syncUserRole(app.db, config, email);
     await audit(app.db, {
-      actorUserId: userOf(req).id,
+      actorUserId: callerOf(req).id,
       actorType: "user",
       action: "teacher.grant",
       subjectType: "teacher_grant",
@@ -138,7 +138,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     // Recomputed, not forced: a member of a course staff keeps the role.
     await syncUserRole(app.db, config, grant.email);
     await audit(app.db, {
-      actorUserId: userOf(req).id,
+      actorUserId: callerOf(req).id,
       actorType: "user",
       action: "teacher.revoke",
       subjectType: "teacher_grant",

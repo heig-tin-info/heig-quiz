@@ -32,7 +32,7 @@ import { exampleInstance, explanationOrNull, parameterIssues, previewInstances }
 import type { VersionRecord } from "./shared.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
-import { userOf } from "../guards.js";
+import { callerOf } from "../guards.js";
 
 /**
  * Tries per minute and teacher, every try counted (ADR-101): a try may run a
@@ -194,7 +194,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     teacher(
       { params: IdParam, body: TryBody, optionalBody: true, load: onQuestion() },
       async ({ req, reply, body, scope }) => {
-        if (!tries.spend(userOf(req).id, TRIES_PER_MINUTE, app.clock.now())) {
+        if (!tries.spend(callerOf(req).id, TRIES_PER_MINUTE, app.clock.now())) {
           return rateLimited(reply, BUDGET_RETRY_AFTER_S);
         }
         try {
@@ -238,7 +238,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
             // its reason, never a 500.
             const { request } = result;
             const proposal = await askGrader(llm, request, {
-              billedTo: userOf(req).id,
+              billedTo: callerOf(req).id,
               purpose: "try",
               own: result.details,
               log: app.log,
