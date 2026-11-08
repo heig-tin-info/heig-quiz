@@ -17,7 +17,7 @@ import { LLM_CALLS_PER_MINUTE } from "../llm/service.js";
 import type { PoolRouteContext } from "./routeContext.js";
 
 export function reviewRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
-  const { requireTeacher, trace, teacher, inPool, onQuestion } = ctx;
+  const { requireTeacher, poolWrite, teacher, inPool, onQuestion } = ctx;
 
   app.get(
     "/app/api/pools/:id/reviews",
@@ -29,9 +29,9 @@ export function reviewRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     "/app/api/pools/:id/review",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, body: ReviewToggle, load: inPool("owner") }, async ({ req, body, scope: pool }) => {
-      await setReviewEnabled(app.db, pool.id, body.enabled, req.user!.id);
-      await trace(req, "pool.review", "pool", pool.id, { enabled: body.enabled });
-      poolChanged(pool.id);
+      await poolWrite(req, pool.id, () => setReviewEnabled(app.db, pool.id, body.enabled, req.user!.id), () => [
+        "pool.review", "pool", pool.id, { enabled: body.enabled },
+      ]);
       return poolReviews(app.db, pool.id);
     }),
   );

@@ -5,12 +5,11 @@ import type { FastifyInstance } from "fastify";
 import { CategoryCreate, CategoryOrder, CategoryPatch, IdParam } from "@quiz/contracts";
 
 import { categories } from "../../db/schema.js";
-import { poolChanged } from "./events.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
 
 export function categoryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
-  const { requireTeacher, trace, teacher, inPool, onCategory } = ctx;
+  const { requireTeacher, poolWrite, teacher, inPool, onCategory } = ctx;
 
   /**
    * The categories page: the tree with each folder's question count. Any
@@ -38,12 +37,9 @@ export function categoryRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
             .limit(1);
           if (!parent) return reply.code(404).send({ error: "not_found" });
         }
-        const category = await service.createCategory(app.db, pool.id, body);
-        await trace(req, "category.create", "category", category.id, {
-          poolId: pool.id,
-          name: category.name,
-        });
-        poolChanged(pool.id);
+        const category = await poolWrite(req, pool.id, () => service.createCategory(app.db, pool.id, body), (row) => [
+          "category.create", "category", row.id, { poolId: pool.id, name: row.name },
+        ]);
         return reply.code(201).send(category);
       },
     ),
@@ -70,10 +66,9 @@ export function categoryRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
               .send({ error: "cycle", message: "A folder cannot be moved inside itself" });
           }
         }
-        const updated = await service.updateCategory(app.db, scope.category.id, body);
-        await trace(req, "category.update", "category", scope.category.id, body);
-        poolChanged(scope.pool.id);
-        return updated;
+        return poolWrite(req, scope.pool.id, () => service.updateCategory(app.db, scope.category.id, body), () => [
+          "category.update", "category", scope.category.id, body,
+        ]);
       },
     ),
   );
@@ -91,10 +86,9 @@ export function categoryRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
             .code(409)
             .send({ error: "cycle", message: "A folder cannot be moved inside itself" });
         }
-        const tree = await service.reorderCategories(app.db, pool.id, body.items);
-        await trace(req, "category.reorder", "pool", pool.id, { count: body.items.length });
-        poolChanged(pool.id);
-        return tree;
+        return poolWrite(req, pool.id, () => service.reorderCategories(app.db, pool.id, body.items), () => [
+          "category.reorder", "pool", pool.id, { count: body.items.length },
+        ]);
       },
     ),
   );
@@ -103,12 +97,9 @@ export function categoryRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     "/app/api/categories/:id",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: onCategory("contributor") }, async ({ req, reply, scope }) => {
-      await service.deleteCategory(app.db, scope.category.id);
-      await trace(req, "category.delete", "category", scope.category.id, {
-        poolId: scope.pool.id,
-        name: scope.category.name,
-      });
-      poolChanged(scope.pool.id);
+      await poolWrite(req, scope.pool.id, () => service.deleteCategory(app.db, scope.category.id), () => [
+        "category.delete", "category", scope.category.id, { poolId: scope.pool.id, name: scope.category.name },
+      ]);
       return reply.code(204).send();
     }),
   );

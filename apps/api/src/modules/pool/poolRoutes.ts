@@ -21,7 +21,7 @@ import { LLM_CALLS_PER_MINUTE } from "../llm/service.js";
 import type { PoolRouteContext } from "./routeContext.js";
 
 export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
-  const { requireTeacher, trace, teacher, inPool, topicsOf } = ctx;
+  const { requireTeacher, trace, poolWrite, teacher, inPool, topicsOf } = ctx;
 
   /**
    * "My pools" (ADR-095): the pools the caller owns, sits on, reaches through
@@ -183,15 +183,15 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       const inUse = () => service.poolUses(app.db, pool.id, managedEvaluationAccess(callerOf(req)));
       const uses = await inUse();
       if (uses) return reply.code(409).send(uses);
-      if (!(await service.deletePool(app.db, pool.id))) {
+      const deleted = await poolWrite(req, pool.id, () => service.deletePool(app.db, pool.id), (ok) =>
+        ok ? ["pool.delete", "pool", pool.id, { name: pool.name }] : null);
+      if (!deleted) {
         // Pinned between the check and the delete: the same refusal.
         const late: PoolInUse = (await inUse()) ?? { error: "pool_in_use", uses: [], hidden: 0 };
         return reply.code(409).send(late);
       }
-      await trace(req, "pool.delete", "pool", pool.id, { name: pool.name });
       // The subscribers lose their pool (the read-only links cascade with it): told once it is gone.
       await service.tellPoolDeleted(app.db, pool.name, subscribers);
-      poolChanged(pool.id);
       poolPeopleChanged(audience);
       return reply.code(204).send();
     }),

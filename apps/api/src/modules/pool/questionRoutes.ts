@@ -36,7 +36,7 @@ import { LLM_CALLS_PER_MINUTE } from "../llm/service.js";
 import { coreFailure, type PoolRouteContext } from "./routeContext.js";
 
 export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
-  const { requireTeacher, trace, teacher, inPool, onQuestion, seesAllReports } = ctx;
+  const { requireTeacher, poolWrite, teacher, inPool, onQuestion, seesAllReports } = ctx;
 
   app.get(
     "/app/api/pools/:id/questions",
@@ -77,26 +77,24 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
         // A name the pool already holds is `questionWriteError`'s 409 `duplicate_name`, a category of
         // another pool the 404 of `poolFailure`, a type the registry refuses
         // the 422 of `coreFailure`.
-        const created = await service.createQuestion(app.db, {
-          poolId: pool.id,
-          type: body.type,
-          internalName: body.internalName,
-          categoryId: body.categoryId ?? null,
-          createdBy: req.user!.id,
-          // A concept that cannot be resolved is the 422 `ConceptWriteRefusal`, and nothing is created.
-          concepts: body.concepts && {
-            inputs: body.concepts,
-            createMissing: body.createMissing ?? false,
-            writer: { userId: req.user!.id, lang: readerLang(req), actor: actorOf(req) },
-          },
-        });
-        await trace(req, "question.create", "question", created.id, {
-          poolId: pool.id,
-          type: body.type,
-          internalName: body.internalName,
-          ...(body.concepts ? { concepts: body.concepts } : {}),
-        });
-        poolChanged(pool.id);
+        const { type, internalName, concepts } = body;
+        const write = () =>
+          service.createQuestion(app.db, {
+            poolId: pool.id,
+            type,
+            internalName,
+            categoryId: body.categoryId ?? null,
+            createdBy: req.user!.id,
+            // A concept that cannot be resolved is the 422 `ConceptWriteRefusal`, and nothing is created.
+            concepts: concepts && {
+              inputs: concepts,
+              createMissing: body.createMissing ?? false,
+              writer: { userId: req.user!.id, lang: readerLang(req), actor: actorOf(req) },
+            },
+          });
+        const created = await poolWrite(req, pool.id, write, (row) => [
+          "question.create", "question", row.id, { poolId: pool.id, type, internalName, ...(concepts ? { concepts } : {}) },
+        ]);
         return reply.code(201).send(await service.questionDetail(app.db, created, readerLang(req)));
       },
     ),
@@ -118,13 +116,10 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       async ({ req, reply, body, scope }) => {
         // `questionWriteError`'s 409 `duplicate_name` and `poolFailure`'s 404, like the create route.
         // A concept that cannot be resolved is the 422 `ConceptWriteRefusal`.
-        await service.patchQuestion(app.db, scope.question, body, {
-          userId: req.user!.id,
-          lang: readerLang(req),
-          actor: actorOf(req),
-        });
-        await trace(req, "question.update", "question", scope.question.id, body);
-        poolChanged(scope.pool.id);
+        const writer = { userId: req.user!.id, lang: readerLang(req), actor: actorOf(req) };
+        await poolWrite(req, scope.pool.id, () => service.patchQuestion(app.db, scope.question, body, writer), () => [
+          "question.update", "question", scope.question.id, body,
+        ]);
         const [fresh] = await app.db
           .select()
           .from(questions)
@@ -236,15 +231,11 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       { params: IdParam, body: PublishBody, optionalBody: true, load: onQuestion("contributor") },
       async ({ req, reply, body, scope }) => {
         try {
-          const version = await service.publishQuestion(app.db, scope.question, {
-            userId: req.user!.id,
-            ...(body.changeNote !== undefined ? { changeNote: body.changeNote } : {}),
-          });
-          await trace(req, "question.publish", "question", scope.question.id, {
-            number: version.number,
-            changeNote: version.changeNote,
-          });
-          poolChanged(scope.pool.id);
+          const note = body.changeNote !== undefined ? { changeNote: body.changeNote } : {};
+          const write = () => service.publishQuestion(app.db, scope.question, { userId: req.user!.id, ...note });
+          const version = await poolWrite(req, scope.pool.id, write, ({ number, changeNote }) => [
+            "question.publish", "question", scope.question.id, { number, changeNote },
+          ]);
           return reply.code(201).send(version);
         } catch (error) {
           if (error instanceof service.DraftInvalid) {
@@ -283,10 +274,10 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     "/app/api/questions/:id/versions/:number/restore",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, path: VersionParam, load: onQuestion("contributor") }, async ({ req, reply, path, scope }) => {
-      const done = await service.restoreVersion(app.db, scope.question, path.number);
+      const write = () => service.restoreVersion(app.db, scope.question, path.number);
+      const done = await poolWrite(req, scope.pool.id, write, (ok) =>
+        ok ? ["question.restore_version", "question", scope.question.id, { number: path.number }] : null);
       if (!done) return reply.code(404).send({ error: "not_found" });
-      await trace(req, "question.restore_version", "question", scope.question.id, { number: path.number });
-      poolChanged(scope.pool.id);
       const [fresh] = await app.db
         .select()
         .from(questions)
@@ -301,11 +292,10 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     teacher(
       { params: IdParam, path: VersionParam, body: DeprecateBody, load: onQuestion("contributor") },
       async ({ req, reply, path, body, scope }) => {
-        const version = await service.deprecateVersion(app.db, scope.question.id, path.number, body.note);
-        if (!version) return reply.code(404).send({ error: "not_found" });
-        await trace(req, "question.deprecate", "question", scope.question.id, { number: path.number, note: body.note });
-        poolChanged(scope.pool.id);
-        return version;
+        const write = () => service.deprecateVersion(app.db, scope.question.id, path.number, body.note);
+        const version = await poolWrite(req, scope.pool.id, write, (v) =>
+          v ? ["question.deprecate", "question", scope.question.id, { number: path.number, note: body.note }] : null);
+        return version ?? reply.code(404).send({ error: "not_found" });
       },
     ),
   );
@@ -319,12 +309,10 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: onQuestion("contributor") }, async ({ req, scope }) => {
       const now = app.clock.now();
-      await service.resetQuestionStats(app.db, scope.question.id, now);
-      await trace(req, "question.stats_reset", "question", scope.question.id, {
-        poolId: scope.pool.id,
-        previousSince: isoOrNull(scope.question.statsSince),
-      });
-      poolChanged(scope.pool.id);
+      await poolWrite(req, scope.pool.id, () => service.resetQuestionStats(app.db, scope.question.id, now), () => [
+        "question.stats_reset", "question", scope.question.id,
+        { poolId: scope.pool.id, previousSince: isoOrNull(scope.question.statsSince) },
+      ]);
       return { since: iso(now) } satisfies StatsReset;
     }),
   );
@@ -342,9 +330,12 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     teacher(
       { params: IdParam, query: DeleteQuery, load: onQuestion("contributor") },
       async ({ req, reply, query, scope }) => {
+        const remove = query.hard ? service.hardDeleteQuestion : service.softDeleteQuestion;
         try {
-          if (query.hard) await service.hardDeleteQuestion(app.db, scope.question);
-          else await service.softDeleteQuestion(app.db, scope.question);
+          await poolWrite(req, scope.pool.id, () => remove(app.db, scope.question), () => [
+            "question.delete", "question", scope.question.id,
+            { hard: query.hard === true, internalName: scope.question.internalName },
+          ]);
         } catch (error) {
           if (error instanceof service.VersionInUse) {
             return reply.code(409).send({
@@ -354,11 +345,6 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
           }
           throw error;
         }
-        await trace(req, "question.delete", "question", scope.question.id, {
-          hard: query.hard === true,
-          internalName: scope.question.internalName,
-        });
-        poolChanged(scope.pool.id);
         return reply.code(204).send();
       },
     ),
@@ -378,16 +364,11 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
         // contributor's seat on the TARGET.
         if (!(await requirePoolRole(app, req, reply, target, "contributor"))) return reply;
         // A category of another pool is `CategoryNotInPool`, `poolFailure`'s 404.
-        const created = await service.copyQuestion(app.db, scope.question, {
-          targetPoolId: target.id,
-          categoryId: body.categoryId ?? null,
-          userId: req.user!.id,
-        });
-        await trace(req, "question.copy", "question", created.id, {
-          from: scope.question.id,
-          targetPoolId: target.id,
-        });
-        poolChanged(target.id);
+        const into = { targetPoolId: target.id, categoryId: body.categoryId ?? null, userId: req.user!.id };
+        const write = () => service.copyQuestion(app.db, scope.question, into);
+        const created = await poolWrite(req, target.id, write, (row) => [
+          "question.copy", "question", row.id, { from: scope.question.id, targetPoolId: target.id },
+        ]);
         return reply.code(201).send(await service.questionDetail(app.db, created, readerLang(req)));
       },
     ),
