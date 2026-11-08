@@ -14,10 +14,10 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { auditLog, notifications, questionReports } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { type Payload, testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer, type Actor } from "../../test/http.js";
+import { newPool } from "../../test/pools.js";
 
 let server: TestServer;
-type Actor = Awaited<ReturnType<TestServer["signIn"]>>;
 let owner: Actor;
 let contributor: Actor;
 let reader: Actor;
@@ -28,12 +28,6 @@ let restoreShort: () => void;
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 function call(who: Actor, method: Method, url: string, payload?: Payload) {
   return server.app.inject({ method, url, headers: who.headers, ...(payload === undefined ? {} : { payload }) });
-}
-
-async function newPool(name: string): Promise<string> {
-  const res = await call(owner, "POST", "/app/api/pools", { name });
-  expect(res.statusCode).toBe(201);
-  return res.json<{ id: string }>().id;
 }
 
 async function invite(pool: string, who: Actor, role: "reader" | "contributor"): Promise<void> {
@@ -70,7 +64,7 @@ beforeAll(async () => {
   contributor = await server.signIn("teacher");
   reader = await server.signIn("teacher");
   stranger = await server.signIn("teacher");
-  poolId = await newPool("Reports pool");
+  poolId = await newPool(server, owner, "Reports pool");
   await invite(poolId, contributor, "contributor");
   await invite(poolId, reader, "reader");
 });
@@ -94,7 +88,7 @@ describe("who may report", () => {
   });
 
   it("reaches a public reader through poolAccess", async () => {
-    const pool = await newPool("Public reports pool");
+    const pool = await newPool(server, owner, "Public reports pool");
     const q = await newQuestion("public-q", pool);
     expect((await call(owner, "PATCH", `/app/api/pools/${pool}`, { isPublic: true })).statusCode).toBe(200);
     expect((await report(stranger, q)).statusCode).toBe(201);
@@ -212,7 +206,7 @@ describe("moves and deletion", () => {
   it("carries the reports with a moved question", async () => {
     const q = await newQuestion("moving");
     await report(reader, q);
-    const target = await newPool("Move target");
+    const target = await newPool(server, owner, "Move target");
     const moved = await call(owner, "POST", "/app/api/questions/move", { questionIds: [q], targetPoolId: target });
     expect(moved.statusCode).toBe(200);
     const rows = await server.app.db.select().from(questionReports).where(eq(questionReports.questionId, q));

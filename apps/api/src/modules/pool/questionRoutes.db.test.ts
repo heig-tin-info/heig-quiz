@@ -16,10 +16,10 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { auditLog, questionVersions, questions } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { type Payload, testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer, type Actor } from "../../test/http.js";
+import { newPool } from "../../test/pools.js";
 
 let server: TestServer;
-type Actor = Awaited<ReturnType<TestServer["signIn"]>>;
 let owner: Actor;
 let stranger: Actor;
 let poolId: string;
@@ -28,12 +28,6 @@ let restoreShort: () => void;
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 function call(who: Actor, method: Method, url: string, payload?: Payload) {
   return server.app.inject({ method, url, headers: who.headers, ...(payload === undefined ? {} : { payload }) });
-}
-
-async function newPool(who: Actor, name: string): Promise<string> {
-  const res = await call(who, "POST", "/app/api/pools", { name });
-  expect(res.statusCode).toBe(201);
-  return res.json<{ id: string }>().id;
 }
 
 async function newQuestion(name: string, pool = poolId): Promise<string> {
@@ -66,7 +60,7 @@ beforeAll(async () => {
   server = await testServer();
   owner = await server.signIn("teacher");
   stranger = await server.signIn("teacher");
-  poolId = await newPool(owner, "Question routes pool");
+  poolId = await newPool(server, owner, "Question routes pool");
 });
 
 afterAll(async () => {
@@ -310,7 +304,7 @@ describe("DELETE /questions/:id", () => {
 describe("POST /questions/:id/copy", () => {
   it("copies into another pool of the caller, with the current draft", async () => {
     const id = await published("copy me", 1);
-    const target = await newPool(owner, "Copy target");
+    const target = await newPool(server, owner, "Copy target");
     const res = await call(owner, "POST", `/app/api/questions/${id}/copy`, { targetPoolId: target });
     expect(res.statusCode).toBe(201);
     const copy = res.json<{ meta: { id: string; poolId: string } }>().meta;
@@ -321,7 +315,7 @@ describe("POST /questions/:id/copy", () => {
 
   it("answers 404 for a target pool out of the caller's reach, and writes nothing there", async () => {
     const id = await newQuestion("copy out");
-    const foreign = await newPool(stranger, "Stranger's pool");
+    const foreign = await newPool(server, stranger, "Stranger's pool");
     for (const targetPoolId of [foreign, crypto.randomUUID()]) {
       const res = await call(owner, "POST", `/app/api/questions/${id}/copy`, { targetPoolId });
       expect(res.statusCode).toBe(404);
@@ -333,7 +327,7 @@ describe("POST /questions/:id/copy", () => {
 
   it("answers 404 to a stranger copying a question they cannot read, even into their own pool", async () => {
     const id = await newQuestion("copy source guarded");
-    const theirs = await newPool(stranger, "Stranger's other pool");
+    const theirs = await newPool(server, stranger, "Stranger's other pool");
     const res = await call(stranger, "POST", `/app/api/questions/${id}/copy`, { targetPoolId: theirs });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ error: "not_found" });

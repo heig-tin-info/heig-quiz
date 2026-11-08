@@ -1,5 +1,12 @@
 import { defineConfig } from "vitest/config";
-import { coverage, maxWorkers } from "../../vitest.shared.js";
+import { coverage as shared, maxWorkers } from "../../vitest.shared.js";
+
+/**
+ * The fakes that live beside a module (`testing.ts`, `groupTesting.ts`: the
+ * fake GitHub, the bare repositories, the SEB sessions) are test helpers,
+ * as `src/test/` is: never measured as sources.
+ */
+const coverage = { ...shared, exclude: [...shared.exclude, "src/**/testing.ts", "src/**/groupTesting.ts"] };
 
 /**
  * Every `*.db.test.ts` file boots its own PGlite, loaded with the migrated

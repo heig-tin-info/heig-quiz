@@ -19,37 +19,47 @@
 import { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { GradeRunList, ProjectActivitySummary, ProjectDetail, CSRF_COOKIE, type ProjectGradingScale } from "@quiz/contracts";
+import {
+  GradeRunList,
+  ProjectActivitySummary,
+  ProjectDetail,
+  CSRF_COOKIE,
+  type ProjectGradingScale,
+} from "@quiz/contracts";
 
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import { loadConfig } from "../../config.js";
-import { enrollments, githubAccounts, githubOrganizations, gradeDispatches, projectGradeRuns, projectRepos, projects, pushReceipts } from "../../db/schema.js";
+import {
+  enrollments,
+  githubAccounts,
+  gradeDispatches,
+  projectGradeRuns,
+  projectRepos,
+  projects,
+  pushReceipts,
+} from "../../db/schema.js";
 import { resetLiveStateCache } from "../../github/metrics.js";
-import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { json, orgsRoute, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { projectDetail } from "./detail.js";
+import {
+  APP_ENV,
+  freshOrgId,
+  gh,
+  newOrg,
+  server,
+  teacher,
+  useProjectWorld,
+  type Headers,
+} from "../../test/projectWorld.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
-const config = loadConfig({ NODE_ENV: "test", ...ENV });
+const config = loadConfig({ NODE_ENV: "test", ...APP_ENV });
 const NOW = "2026-10-02T08:00:00.000Z";
 const DEADLINE = "2026-10-09T22:00:00.000Z";
 const at = (iso: string) => new Date(iso);
-
-type Headers = Record<string, string>;
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 32_000;
 
 /** Organizations whose installation GitHub answers with an exhausted quota. */
 const limitedOrgs = new Set<string>();
@@ -94,7 +104,7 @@ type ProjectState = "draft" | "published" | "locked";
 
 /** A project of `classroomId` on the organization `org`, in `state`, its repositories numbered from `n`. */
 async function insertProject(classroomId: string, orgId: string, org: string, state: ProjectState, scale?: ProjectGradingScale): Promise<string> {
-  const n = nextOrg++;
+  const n = freshOrgId();
   const id = randomUUID();
   await server.app.db.insert(projects).values({
     id,
@@ -121,10 +131,7 @@ async function world(opts: { students?: number; scale?: ProjectGradingScale; sta
   const db = server.app.db;
   const students = await Promise.all(Array.from({ length: opts.students ?? 2 }, () => server.signIn("student")));
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
-  const n = nextOrg++;
-  const org = `vorg-${n}`;
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login: org, githubOrgId: n, installationId: n });
+  const { login: org, orgId } = await newOrg("vorg");
   const projectId = await insertProject(seeded.classroomId, orgId, org, opts.state ?? "published", opts.scale);
   return { projectId, classroomId: seeded.classroomId, org, students };
 }
@@ -188,24 +195,13 @@ const rowOf = (d: ProjectDetail, userId: string) => d.rows.find((r) => r.student
 /** GitHub calls about the repositories whose `owner/name` starts with `prefix`. */
 const liveCalls = (prefix: string) => gh.calls.filter((c) => c.includes(`/repos/${prefix}`)).length;
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), liveRoute];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [orgsRoute(() => []), liveRoute], repos: false });
 
 beforeEach(() => {
   server.clock.set(NOW);
   resetLiveStateCache();
   limitedOrgs.clear();
   hanging.clear();
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  key.remove();
 });
 
 describe("the project page (F-PROJ-13)", () => {

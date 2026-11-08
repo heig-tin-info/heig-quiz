@@ -26,7 +26,7 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   GIT_TOKEN_AUDIENCE,
@@ -48,10 +48,8 @@ import {
   codespaceLaunches,
   codespaceRelayJtis,
   codespaceRelays,
-  githubAccounts,
   presenceHours,
   presenceLastSeen,
-  githubClassroomLinks,
   githubOrganizations,
   projectGradeRuns,
   projectRepos,
@@ -61,23 +59,27 @@ import {
   webhookDeliveries,
 } from "../../db/schema.js";
 import { createPresenceRecorder } from "../presence/service.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
+import { type TestServer } from "../../test/http.js";
 import { seedLive, type Seeded } from "../../test/live.js";
-import { repoWorld } from "../project/testing.js";
 import { purgeRelayJtis, RELAY_JTI_RETENTION_AFTER_EXP_MS } from "./relay.js";
+import {
+  call,
+  gh,
+  linkClassroom,
+  newOrg,
+  newStudent,
+  server,
+  useProjectWorld,
+  usersRoute,
+  world,
+  type Headers,
+} from "../../test/projectWorld.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
 const SECRET = "s".repeat(40);
 const HOOK_SECRET = "w".repeat(40);
 const PORTAL = "http://portal.test";
 const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
   GITHUB_WEBHOOK_SECRET: HOOK_SECRET,
   CODESPACE_URL: PORTAL,
   CODESPACE_LAUNCH_SECRET: SECRET,
@@ -89,19 +91,12 @@ const DEADLINE = "2026-10-14T22:00:00.000Z";
 const GRACE_END = "2026-10-14T22:30:00.000Z";
 const MINUTE = 60_000;
 
-type Headers = Record<string, string>;
 interface Person {
   id: string;
   headers: Headers;
 }
-interface Student extends Person {
-  login: string;
-}
 
-let server: TestServer;
 let owner: Person;
-let nextOrg = 92_000;
-let nextAccount = 95_000;
 
 // ---------------------------------------------------------------- the fakes
 
@@ -121,13 +116,6 @@ const mintRoute: Route = (url, init) => {
   return json({ token, expires_at: new Date(Date.parse(server.clock.now().toISOString()) + 60 * MINUTE).toISOString() }, 201);
 };
 
-const accounts = new Map<number, string>();
-const usersRoute: Route = (url, req) => {
-  const m = /^\/user\/(\d+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const login = accounts.get(Number(m[1]));
-  return login === undefined ? undefined : json({ id: Number(m[1]), login });
-};
 /** The CI of a commit: a GRADE annotation for every sha in `scored`. */
 const scored = new Set<string>();
 const ciRoute: Route = (url, req) => {
@@ -169,18 +157,6 @@ function captureLog(app: TestServer["app"]) {
 
 // ---------------------------------------------------------------- the world
 
-const call = (method: "GET" | "POST" | "PUT", url: string, headers: Headers, payload?: object) =>
-  server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
-
-async function newStudent(): Promise<Student> {
-  const signed = await server.signIn("student");
-  const githubUserId = nextAccount++;
-  const login = `kid${githubUserId}`;
-  await server.app.db.insert(githubAccounts).values({ userId: signed.id, githubUserId, login });
-  accounts.set(githubUserId, login);
-  return { ...signed, login };
-}
-
 interface Room extends Seeded {
   org: string;
   installationId: number;
@@ -189,13 +165,9 @@ interface Room extends Seeded {
 async function connectedClassroom(students: { id: string }[]): Promise<Room> {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: owner.id, studentIds: students.map((s) => s.id), questions: 0 });
-  const n = nextOrg++;
-  const org = `rorg-${n}`;
-  world.orgIds[org] = n;
+  const { n, login: org, orgId } = await newOrg("rorg");
   world.source(org, "starter", { main: { "README.md": "# Lab", [GRADING_WORKFLOW_PATH]: "grade: v1" } });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login: org, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: owner.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId, owner.id);
   return { ...seeded, org, installationId: n };
 }
 
@@ -258,12 +230,10 @@ const declare = async (f: Fixture, heads: { ref: string; sha: string }[], over: 
 
 const refused = (res: { statusCode: number; json: () => { error: string } }) => [res.statusCode, res.json().error];
 
+useProjectWorld({ routes: [mintRoute, orgsRoute(() => []), usersRoute, ciRoute, world.route], env: ENV, fetch: fetchStub, teacher: false });
+
 beforeAll(async () => {
-  vi.stubGlobal("fetch", fetchStub);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
   captureLog(server.app);
-  gh.routes = [mintRoute, orgsRoute(() => []), usersRoute, ciRoute, world.route];
   const email = `t-${randomUUID().slice(0, 8)}@heig.test`;
   owner = await server.signIn("teacher", email);
   await server.app.db.insert(teacherGrants).values({ id: randomUUID(), email, createdBy: owner.id, codespaceEnabled: true, codespaceMaxActiveSessions: 5 });
@@ -273,14 +243,6 @@ beforeEach(() => {
   server.clock.set(NOW);
   world.allowPushes();
   mintStatus = null;
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 // ---------------------------------------------------------------- the token

@@ -18,7 +18,7 @@
 import { randomUUID } from "node:crypto";
 
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProjectSummary } from "@quiz/contracts";
 
@@ -27,8 +27,6 @@ import {
   auditLog,
   botCommits,
   githubAccounts,
-  githubClassroomLinks,
-  githubOrganizations,
   gradeDispatches,
   projectGradeRuns,
   projectRepoAccess,
@@ -38,25 +36,26 @@ import {
   reverts,
   webhookDeliveries,
 } from "../../db/schema.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { SCHEDULED_TASKS } from "../system/catalog.js";
 import { reconcileGrades, reconcileRepos } from "./reconcile.js";
-import { repoWorld } from "./testing.js";
+import {
+  APP_ENV,
+  call,
+  gh,
+  linkClassroom,
+  newOrg,
+  newStudent,
+  server,
+  teacher,
+  useProjectWorld,
+  usersRoute,
+  WEBHOOK_SECRET,
+  world,
+} from "../../test/projectWorld.js";
 
-const SECRET = "w".repeat(40);
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: SECRET,
-};
-const config = loadConfig({ NODE_ENV: "test", ...ENV });
+const config = loadConfig({ NODE_ENV: "test", ...APP_ENV });
 const NOW = "2026-10-05T08:00:00.000Z";
 const DEADLINE = "2026-10-12T22:00:00.000Z";
 const MINUTE = 60_000;
@@ -65,20 +64,7 @@ const DAY = 24 * HOUR;
 const CI = ".github/workflows/ci.yml";
 const at = (iso: string, plusMs = 0) => new Date(new Date(iso).getTime() + plusMs);
 
-type Headers = Record<string, string>;
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 42_000;
-let nextAccount = 45_000;
 let nextRun = 9_000;
-
-const accounts = new Map<number, string>();
-const usersRoute: Route = (url, req) => {
-  const m = /^\/user\/(\d+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const login = accounts.get(Number(m[1]));
-  return login === undefined ? undefined : json({ id: Number(m[1]), login });
-};
 
 /** A completed run as GitHub lists it. */
 interface ListedRun {
@@ -177,18 +163,6 @@ const byIdRoute: Route = (url, req) => {
   return json({ id: Number(m[1]), full_name: over.full_name, default_branch: "main" });
 };
 
-async function newStudent() {
-  const signed = await server.signIn("student");
-  const githubUserId = nextAccount++;
-  const login = `rc${githubUserId}`;
-  await server.app.db.insert(githubAccounts).values({ userId: signed.id, githubUserId, login });
-  accounts.set(githubUserId, login);
-  return { ...signed, login, githubUserId };
-}
-
-const call = (method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, headers: Headers, payload?: object) =>
-  server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
-
 type Repo = typeof projectRepos.$inferSelect;
 
 /** A published project of a connected classroom, and the accepted repositories of `students` students (invitations pending). */
@@ -196,13 +170,9 @@ async function project(opts: { students?: number; freePlan?: boolean } = {}) {
   const db = server.app.db;
   const students = await Promise.all(Array.from({ length: opts.students ?? 1 }, () => newStudent()));
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
-  const n = nextOrg++;
-  const login = `rcorg-${n}`;
-  world.orgIds[login] = n;
+  const { login, orgId } = await newOrg("rcorg");
   world.source(login, "starter", { main: { "README.md": "# Lab", "src/main.c": "int main(){}" } });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId);
   const created = await call("POST", `/app/api/classrooms/${seeded.classroomId}/projects`, teacher.headers, {
     name: "Lab",
     sourceRepo: "starter",
@@ -249,13 +219,7 @@ async function freeze(repo: Repo, frozenAt: Date) {
     .where(eq(projectRepos.id, repo.id));
 }
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), usersRoute, byIdRoute, runsRoute, commitsRoute, collaboratorRoute, world.route];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, byIdRoute, runsRoute, commitsRoute, collaboratorRoute, world.route] });
 
 beforeEach(async () => {
   // The projects of the earlier tests leave the scope: a pass reads this test's repositories only.
@@ -269,14 +233,6 @@ beforeEach(async () => {
   headMissing.clear();
   halfAttributed.clear();
   byId.clear();
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 describe("the catalog", () => {
@@ -341,7 +297,7 @@ describe("reconcile.grades", () => {
     const id = randomUUID();
     const res = await signedDelivery(
       server.app,
-      SECRET,
+      WEBHOOK_SECRET,
       {
         action: "completed",
         repository: { id: repo!.githubRepoId },

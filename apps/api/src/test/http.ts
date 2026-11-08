@@ -48,6 +48,9 @@ export interface TestServer {
   close: () => Promise<void>;
 }
 
+/** A signed-in account, as {@link TestServer.signIn} returns it. */
+export type Actor = Awaited<ReturnType<TestServer["signIn"]>>;
+
 /**
  * `env` adds to (or overrides) the test configuration, e.g. the `TEAMS_*`
  * variables. `production` runs the app under `NODE_ENV=production` all the

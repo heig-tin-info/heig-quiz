@@ -17,7 +17,7 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq, isNotNull } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
   CSRF_COOKIE,
@@ -39,40 +39,34 @@ import {
   courseStaff,
   enrollments,
   githubClassroomLinks,
-  githubOrganizations,
   projectCriteria,
   projectGroupMembers,
   projectRepos,
   projects,
   pushReceipts,
 } from "../../db/schema.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, orgsRoute, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { orgsRoute, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { gradebookProjects } from "./gradebook.js";
-import { repoWorld } from "./testing.js";
+import {
+  freshOrgId,
+  gh,
+  linkClassroom,
+  newOrg,
+  server,
+  teacher,
+  useProjectWorld,
+  world,
+  type Headers,
+} from "../../test/projectWorld.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
 const NOW = "2026-10-02T08:00:00.000Z";
 const IN_A_WEEK = "2026-10-09T22:00:00.000Z";
 const DAY = 86_400_000;
 
-type Headers = Record<string, string>;
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
 let colleague: { id: string; headers: Headers };
 let outsider: { id: string; headers: Headers };
 let student: { id: string; headers: Headers };
-let nextOrg = 8000;
 
 const call = (method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE", url: string, headers: Headers, payload?: object) =>
   server.app.inject({ method, url, headers, ...(payload === undefined ? {} : { payload }) });
@@ -82,18 +76,20 @@ async function connectedClassroom(opts: { connected?: boolean } = {}) {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
   await db.insert(courseStaff).values({ courseId: seeded.courseId, userId: colleague.id });
-  const n = nextOrg++;
-  const login = `org-${n}`;
-  world.orgIds[login] = n;
+  let login: string;
+  if (opts.connected !== false) {
+    const org = await newOrg("org");
+    login = org.login;
+    await linkClassroom(seeded.classroomId, org.orgId);
+  } else {
+    const n = freshOrgId();
+    login = `org-${n}`;
+    world.orgIds[login] = n;
+  }
   world.source(login, "lab", {
     main: { "README.md": "# Lab", "src/main.c": "int main(){}", "criteria.yml": "x: 1", "student/src/main.c": "// todo" },
     solution: { "README.md": "# Solution" },
   });
-  if (opts.connected !== false) {
-    const orgId = randomUUID();
-    await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-    await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
-  }
   return { id: seeded.classroomId, login, courseId: seeded.courseId };
 }
 
@@ -116,13 +112,10 @@ const auditOf = (id: string, action: string) =>
 /** What a build deleted on GitHub, but its own temporary refs (`refs/quiz/tmp-*`). */
 const githubDeletes = () => gh.calls.filter((c) => c.startsWith("DELETE") && !/\/git\/refs\/quiz(\/|%2F)tmp-/.test(c));
 
+useProjectWorld({ routes: [orgsRoute(() => []), world.route] });
+
 beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), world.route];
-  [teacher, colleague, outsider, student] = await Promise.all([
-    server.signIn("teacher"),
+  [colleague, outsider, student] = await Promise.all([
     server.signIn("teacher"),
     server.signIn("teacher"),
     server.signIn("student"),
@@ -131,14 +124,6 @@ beforeAll(async () => {
 
 beforeEach(() => {
   server.clock.set(NOW);
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 // ---------------------------------------------------------------- create

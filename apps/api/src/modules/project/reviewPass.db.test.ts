@@ -14,7 +14,7 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq, ne } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { ProjectRegradeAccepted, ProjectRepoCriteria, ProjectSummary, ReviewCheckpoint } from "@quiz/contracts";
 import { RunnerUnavailable, type ProjectRunRequest, type ProjectRunResult } from "@quiz/core/server";
@@ -27,8 +27,6 @@ import {
   courseStaff,
   enrollments,
   githubAccounts,
-  githubClassroomLinks,
-  githubOrganizations,
   gradeDispatches,
   projectCheckpoints,
   projectCriteria,
@@ -39,10 +37,8 @@ import {
   pushReceipts,
   users,
 } from "../../db/schema.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
+import { orgsRoute } from "../../github/testing.js";
 import { PROJECT_DISPATCH_QUEUE, PROJECT_EVIDENCE_QUEUE, PROJECT_REVIEW_QUEUE, type JobQueue } from "../../jobs.js";
-import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { gatewayGrader } from "../llm/grader.js";
 import { LlmError, type LlmProvider, type ProviderRequest } from "../llm/provider.js";
@@ -52,7 +48,16 @@ import { writeCriterionGrades } from "./criterionGrades.js";
 import type { EvidenceJob } from "./evidence.js";
 import { projectTick } from "./jobs.js";
 import { runEvidencePass, runReview } from "./reviewPass.js";
-import { repoWorld } from "./testing.js";
+import {
+  APP_ENV,
+  gh,
+  linkClassroom,
+  newOrg,
+  server,
+  teacher,
+  useProjectWorld,
+  world,
+} from "../../test/projectWorld.js";
 
 const CRITERIA = `schema_version: 2
 grading:
@@ -80,25 +85,15 @@ const RESULT: ProjectRunResult = {
 };
 
 const SECRET = "test-llm-master-key-0123456789abcdef";
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
 const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
   JOBS_DISABLED: "1",
   LLM_KEY_SECRET: SECRET,
 };
-const config = loadConfig({ NODE_ENV: "test", ...ENV });
+const config = loadConfig({ NODE_ENV: "test", ...APP_ENV, ...ENV });
 const NOW = "2026-10-02T08:00:00.000Z";
 const DEADLINE = new Date("2026-10-09T22:00:00.000Z");
 const before = (minutes: number) => new Date(DEADLINE.getTime() - minutes * 60_000);
 
-let server: TestServer;
-let teacher: { id: string; headers: Record<string, string> };
-let nextOrg = 9600;
 /** What the runner double received, and what it answers next. */
 const sent: ProjectRunRequest[] = [];
 let runnerAnswer: () => Promise<ProjectRunResult> = () => Promise.resolve(RESULT);
@@ -128,13 +123,9 @@ async function lab(criteria = CRITERIA): Promise<Lab> {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: [], questions: 0 });
   await db.insert(courseStaff).values({ courseId: seeded.courseId, userId: teacher.id }).onConflictDoNothing();
-  const n = nextOrg++;
-  const login = `org-${n}`;
-  world.orgIds[login] = n;
+  const { login, orgId } = await newOrg("org");
   world.source(login, "lab", { main: { "README.md": "# Lab", Makefile: "prepare:\n", "criteria.yml": criteria } });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId);
   const res = await server.app.inject({
     method: "POST",
     url: `/app/api/classrooms/${seeded.classroomId}/projects`,
@@ -220,13 +211,10 @@ const useGateway = () => {
   );
 };
 
+useProjectWorld({ routes: [orgsRoute(() => []), world.route], env: ENV });
+
 beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
   server.clock.set(NOW);
-  gh.routes = [orgsRoute(() => []), world.route];
-  teacher = await server.signIn("teacher");
   await writeSettings(server.app.db, config, { apiKey: "sk-ant-api03-test-key-0123456789-WXYZ" }, teacher.id, new Date(NOW));
   const real = server.app.runner;
   server.app.runner = {
@@ -237,14 +225,6 @@ beforeAll(async () => {
       return runnerAnswer();
     },
   };
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 describe("the review job", () => {
@@ -640,7 +620,6 @@ describe("the evidence of a pass", () => {
   });
 });
 
-
 describe("the staff's criteria table", () => {
   it("lists every criterion with its current row and the evidence's summary, never its files; 404 to an outsider", async () => {
     const l = await lab();
@@ -671,7 +650,6 @@ describe("the staff's criteria table", () => {
     expect((await server.app.inject({ method: "GET", url, headers: outsider.headers })).statusCode).toBe(404);
   });
 });
-
 
 describe("the milestones (ADR-106 §5)", () => {
   const DUE = new Date("2026-10-05T08:00:00.000Z");

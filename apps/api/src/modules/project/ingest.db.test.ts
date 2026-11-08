@@ -41,8 +41,6 @@ import { loadConfig } from "../../config.js";
 import {
   auditLog,
   botCommits,
-  githubAccounts,
-  githubClassroomLinks,
   githubOrganizations,
   gradeDispatches,
   projectGradeRuns,
@@ -53,47 +51,32 @@ import {
   webhookDeliveries,
 } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
+import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import type { JobQueue } from "../../jobs.js";
-import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { processDelivery } from "../github/deliveries.js";
 import { onEvent } from "../github/service.js";
 import { MAX_RESTORES_PER_HOUR } from "./protection.js";
-import { repoWorld } from "./testing.js";
+import {
+  APP_ENV,
+  gh,
+  linkClassroom,
+  newOrg,
+  newStudent,
+  server,
+  teacher,
+  useProjectWorld,
+  usersRoute,
+  WEBHOOK_SECRET,
+  world,
+} from "../../test/projectWorld.js";
 
-const SECRET = "w".repeat(40);
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: SECRET,
-};
 const APP_BOT = "quiz-test[bot]";
 const ACTIONS_BOT = "github-actions[bot]";
 const NOW = "2026-10-02T08:00:00.000Z";
 const DEADLINE = "2026-10-09T22:00:00.000Z";
 const MINUTE = 60_000;
 const GRADING = ".github/workflows/grading.yml";
-
-type Headers = Record<string, string>;
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 12_000;
-let nextAccount = 15_000;
-
-/** GitHub's accounts by id, for Accept's login lookup. */
-const accounts = new Map<number, string>();
-const usersRoute: Route = (url, req) => {
-  const m = /^\/user\/(\d+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const login = accounts.get(Number(m[1]));
-  return login === undefined ? undefined : json({ id: Number(m[1]), login });
-};
 
 /** The CI of a commit, by sha: its check suite's annotations and its runs' conclusions. */
 const ci = new Map<string, { suite: number; annotations: { title: string; message: string }[]; conclusions: string[] }>();
@@ -146,7 +129,7 @@ const moveDown: Route = (url, req) => {
 /** Every hint published, as the bus carried it. */
 const hints: Extract<BusMessage, { kind: "hint" }>[] = [];
 
-const deliver = (event: string, payload: object, id = randomUUID()) => signedDelivery(server.app, SECRET, payload, { event, id });
+const deliver = (event: string, payload: object, id = randomUUID()) => signedDelivery(server.app, WEBHOOK_SECRET, payload, { event, id });
 async function handled(event: string, payload: object, id = randomUUID()): Promise<string> {
   const res = await deliver(event, payload, id);
   expect(res.statusCode, res.body).toBe(200);
@@ -169,31 +152,18 @@ async function failedDelivery(payload: object): Promise<string> {
   return id;
 }
 
-async function newStudent() {
-  const signed = await server.signIn("student");
-  const githubUserId = nextAccount++;
-  const login = `kid${githubUserId}`;
-  await server.app.db.insert(githubAccounts).values({ userId: signed.id, githubUserId, login });
-  accounts.set(githubUserId, login);
-  return { ...signed, login };
-}
-
 /** A student's accepted repository of a published project whose source protects `grading.yml`. */
 async function acceptedRepo(opts: { protectedFiles?: string[]; branches?: string[] } = {}) {
   const db = server.app.db;
   const student = await newStudent();
   const other = await newStudent();
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: [student.id, other.id], questions: 0 });
-  const n = nextOrg++;
-  const login = `org-${n}`;
-  world.orgIds[login] = n;
+  const { n, login, orgId } = await newOrg("org");
   world.source(login, "starter", {
     main: { "README.md": "# Lab", "src/main.c": "int main(){}", [GRADING]: "grade: v1" },
     dev: { "README.md": "# Dev" },
   });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId);
   const created = await server.app.inject({
     method: "POST",
     url: `/app/api/classrooms/${seeded.classroomId}/projects`,
@@ -296,12 +266,9 @@ const auditOf = (subjectId: string, action: string) =>
 const restores = (f: Fixture) => server.app.db.select().from(reverts).where(eq(reverts.repoId, f.repo.id));
 
 let unsubscribe: () => void;
+useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, refsDown, moveDown, ciRoute, world.route] });
+
 beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), usersRoute, refsDown, moveDown, ciRoute, world.route];
-  teacher = await server.signIn("teacher");
   unsubscribe = subscribe((m) => {
     if (m.kind === "hint") hints.push(m);
   });
@@ -314,11 +281,6 @@ beforeEach(() => {
 
 afterAll(async () => {
   unsubscribe();
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 // ---------------------------------------------------------------- pushes
@@ -464,7 +426,7 @@ describe("protected files (F-PROJ-08)", () => {
       later.push((await push(f, { "src/main.c": content })).after);
     }
     server.clock.advance(MINUTE);
-    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...ENV }), sId);
+    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...APP_ENV }), sId);
     expect(world.git(f.fullName, "rev-parse", `${head(f)}^`).trim()).toBe(later[1]);
 
     const tampered = [];
@@ -632,7 +594,7 @@ describe("protected files (F-PROJ-08)", () => {
 
     // The retry restores on S2 (`covered`), at `created_at`...
     server.clock.advance(MINUTE);
-    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...ENV }), sId);
+    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...APP_ENV }), sId);
     expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, coveredSha: s2 })]);
     // ...and X's and S2's receipts land after it: X ran the altered files too.
     for (const [before, after] of [[s1, x], [x, s2]] as const) {
@@ -689,7 +651,7 @@ describe("protected files (F-PROJ-08)", () => {
 
     // S's delivery retried: the row stays without a restore; S's run to verify and out of the score.
     server.clock.advance(MINUTE);
-    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...ENV }), sId);
+    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...APP_ENV }), sId);
     expect(head(f)).toBe(fix.after);
     expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, revertSha: null })]);
     expect(await auditOf(f.repo.id, "project_repo.restore")).toHaveLength(0);
@@ -727,7 +689,7 @@ describe("protected files (F-PROJ-08)", () => {
     server.clock.advance(MINUTE);
     const s1 = (await push(f, { "src/main.c": "more" })).after;
     server.clock.advance(MINUTE);
-    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...ENV }), sId);
+    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...APP_ENV }), sId);
     const restored = head(f);
     expect(world.git(f.fullName, "rev-parse", `${restored}^`).trim()).toBe(s1);
     expect(world.read(f.fullName, restored, GRADING)).toBe("grade: v1");
@@ -775,7 +737,7 @@ describe("protected files (F-PROJ-08)", () => {
     server.clock.advance(MINUTE);
     const fix = await push(f, { [GRADING]: "grade: v1" });
     server.clock.advance(MINUTE);
-    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...ENV }), sId);
+    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...APP_ENV }), sId);
     expect(head(f)).toBe(fix.after);
     expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, coveredSha: s1, revertSha: null })]);
 
@@ -1257,7 +1219,7 @@ describe("GitHub's rate limit (N-PERF-07)", () => {
     try {
       expect((await deliver("test_rate_limited", { hello: 1 }, id)).statusCode).toBe(200);
       sent.length = 0; // the intake's own send
-      await expect(processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...ENV }), id)).resolves.toBeUndefined();
+      await expect(processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...APP_ENV }), id)).resolves.toBeUndefined();
     } finally {
       delete app.boss;
     }

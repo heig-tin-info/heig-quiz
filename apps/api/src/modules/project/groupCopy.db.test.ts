@@ -18,34 +18,22 @@
 import { randomUUID } from "node:crypto";
 
 import { and, asc, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { defaultProjectGradingScale, GroupSetDetail, ProjectErrorCode, ProjectSummary } from "@quiz/contracts";
 
 import { loadConfig } from "../../config.js";
-import { auditLog, enrollments, githubOrganizations, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
-import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { auditLog, enrollments, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
+import { orgsRoute } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { projectTick } from "./jobs.js";
+import { APP_ENV, newOrg, server, teacher, useProjectWorld } from "../../test/projectWorld.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
-const config = loadConfig({ NODE_ENV: "test", ...ENV });
+const config = loadConfig({ NODE_ENV: "test", ...APP_ENV });
 const NOW = "2026-10-04T08:00:00.000Z";
 const DEADLINE = "2026-10-09T22:00:00.000Z";
 
-type Headers = Record<string, string>;
 type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 52_000;
 
 const call = (method: Method, url: string, payload?: object) =>
   server.app.inject({ method, url, headers: teacher.headers, ...(payload === undefined ? {} : { payload }) });
@@ -66,9 +54,7 @@ async function classroom(students = 4): Promise<Room> {
 /** A built draft of the classroom (as M3-02's creation leaves it), in group mode unless told otherwise. */
 async function project(room: Room, over: Partial<typeof projects.$inferInsert> = {}): Promise<string> {
   const db = server.app.db;
-  const n = nextOrg++;
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login: `gorg-${n}`, githubOrgId: n, installationId: n });
+  const { n, orgId } = await newOrg("gorg");
   const id = randomUUID();
   await db.insert(projects).values({
     id,
@@ -146,21 +132,10 @@ const lastCopies = async (setId: string) => {
 
 const tick = () => projectTick(server.app, config);
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => [])];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [orgsRoute(() => [])], repos: false });
 
 beforeEach(() => {
   server.clock.set(NOW);
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  key.remove();
 });
 
 describe("a draft names its group set (ADR-070 §4, §7)", () => {

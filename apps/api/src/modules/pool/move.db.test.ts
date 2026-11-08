@@ -11,11 +11,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerForTests } from "@quiz/registry/server";
 
 import { auditLog, coursePools, courseStaff, courses, poolMembers, questions } from "../../db/schema.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { testServer, type TestServer, type Actor } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
+import { newPool } from "../../test/pools.js";
 
-type Actor = Awaited<ReturnType<TestServer["signIn"]>>;
 
 let server: TestServer;
 let restoreShort: () => void;
@@ -23,17 +23,6 @@ let mover: Actor;
 let stranger: Actor;
 let source: string;
 let destination: string;
-
-async function newPool(who: Actor, name: string): Promise<string> {
-  const created = await server.app.inject({
-    method: "POST",
-    url: "/app/api/pools",
-    headers: who.headers,
-    payload: { name },
-  });
-  expect(created.statusCode).toBe(201);
-  return created.json().id as string;
-}
 
 /** A question of `source`, with the concepts it carries into the move (labels, created if missing). */
 async function question(name: string, concepts: string[] = []): Promise<string> {
@@ -70,8 +59,8 @@ beforeAll(async () => {
   server = await testServer();
   mover = await server.signIn("teacher");
   stranger = await server.signIn("teacher");
-  source = await newPool(mover, "Move source");
-  destination = await newPool(mover, "Move destination");
+  source = await newPool(server, mover, "Move source");
+  destination = await newPool(server, mover, "Move destination");
 });
 
 afterAll(async () => {
@@ -200,7 +189,7 @@ describe("POST /questions/move", () => {
 
   it("answers 404 for a target pool the caller cannot reach, and for an unknown question", async () => {
     const id = await question("mv-unreachable");
-    const foreign = await newPool(stranger, "Not yours");
+    const foreign = await newPool(server, stranger, "Not yours");
     const res = await move(mover, { questionIds: [id], targetPoolId: foreign });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ error: "not_found" });
@@ -214,8 +203,8 @@ describe("POST /questions/move", () => {
 
   it("needs a contributor's seat on the source AND on the target", async () => {
     const reader = await server.signIn("teacher");
-    const shared = await newPool(mover, "Readable source");
-    const readerTarget = await newPool(mover, "Readable target");
+    const shared = await newPool(server, mover, "Readable source");
+    const readerTarget = await newPool(server, mover, "Readable target");
     await server.app.db.insert(poolMembers).values([
       { poolId: shared, userId: reader.id, role: "contributor" },
       { poolId: readerTarget, userId: reader.id, role: "reader" },
@@ -251,7 +240,7 @@ describe("POST /questions/move", () => {
       questions: 1,
       students: 0,
     });
-    const target = await newPool(mover, "Pool the course does not draw from");
+    const target = await newPool(server, mover, "Pool the course does not draw from");
 
     const refused = await move(mover, {
       questionIds: [seeded.questionIds[0]!],
@@ -299,7 +288,7 @@ describe("POST /questions/move", () => {
     await server.app.db
       .insert(poolMembers)
       .values({ poolId: seeded.poolId, userId: mover.id, role: "contributor" });
-    const target = await newPool(mover, "Mine, not the course's");
+    const target = await newPool(server, mover, "Mine, not the course's");
 
     const asked = await move(mover, {
       questionIds: [seeded.questionIds[0]!],
@@ -347,7 +336,7 @@ describe("POST /questions/move", () => {
     await server.app.db
       .insert(courseStaff)
       .values({ courseId: seeded.courseId, userId: mover.id, role: "assistant" });
-    const target = await newPool(mover, "Mine, an assistant's");
+    const target = await newPool(server, mover, "Mine, an assistant's");
 
     const asked = await move(mover, { questionIds: [seeded.questionIds[0]!], targetPoolId: target });
     expect(asked.statusCode).toBe(409);
@@ -374,7 +363,7 @@ describe("POST /questions/move", () => {
       questions: 1,
       students: 0,
     });
-    const target = await newPool(mover, "Already one of the course's pools");
+    const target = await newPool(server, mover, "Already one of the course's pools");
     await server.app.db.insert(coursePools).values({ courseId: seeded.courseId, poolId: target });
 
     const res = await move(mover, {

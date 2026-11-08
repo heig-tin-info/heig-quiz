@@ -21,7 +21,7 @@ import { randomUUID } from "node:crypto";
 
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { ProjectAcceptance, ProjectAcceptErrorCode, ProjectSummary, CSRF_COOKIE } from "@quiz/contracts";
 
@@ -32,7 +32,6 @@ import {
   classrooms,
   enrollments,
   githubAccounts,
-  githubClassroomLinks,
   githubOrganizations,
   projectGroupMembers,
   projectGroups,
@@ -40,49 +39,30 @@ import {
   projectRepos,
   projects,
 } from "../../db/schema.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { orgsRoute } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { studentProject } from "../guards.js";
 import { markProvisionFailed } from "./accept.js";
-import { repoWorld } from "./testing.js";
+import {
+  accounts,
+  freshAccountId,
+  gh,
+  linkClassroom,
+  newOrg,
+  newStudent,
+  server,
+  teacher,
+  useProjectWorld,
+  usersRoute,
+  world,
+  type Headers,
+  type Org as WorldOrg,
+  type Student,
+} from "../../test/projectWorld.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
 const NOW = "2026-10-02T08:00:00.000Z";
 const IN_A_WEEK = "2026-10-09T22:00:00.000Z";
 const MINUTE = 60_000;
-
-type Headers = Record<string, string>;
-interface Student {
-  id: string;
-  headers: Headers;
-  githubUserId: number;
-  login: string;
-}
-
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 9000;
-let nextAccount = 5000;
-
-/** GitHub's accounts, by immutable id: today's login, or `down` for GitHub failing. Missing: deleted. */
-const accounts = new Map<number, string>();
-const usersRoute: Route = (url, req) => {
-  const m = /^\/user\/(\d+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const login = accounts.get(Number(m[1]));
-  if (login === "down") return json({ message: "Server Error" }, 500);
-  return login === undefined ? undefined : json({ id: Number(m[1]), login });
-};
 
 /** Every body a student received: none may name the source or the distribution (N-SEC-20). */
 const studentBodies: string[] = [];
@@ -96,22 +76,7 @@ const accept = async (projectId: string, who: { headers: Headers }) => {
 };
 const refusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, ProjectAcceptErrorCode.parse(res.json().error)];
 
-/** A student with a linked GitHub account (unless `linked: false`). */
-async function newStudent(opts: { linked?: boolean; login?: string } = {}): Promise<Student> {
-  const signed = await server.signIn("student");
-  const githubUserId = nextAccount++;
-  const login = opts.login ?? `kid${githubUserId}`;
-  if (opts.linked !== false) {
-    await server.app.db.insert(githubAccounts).values({ userId: signed.id, githubUserId, login });
-    accounts.set(githubUserId, login);
-  }
-  return { ...signed, githubUserId, login };
-}
-
-interface Org {
-  login: string;
-  orgId: string;
-}
+type Org = Pick<WorldOrg, "login" | "orgId">;
 
 /**
  * A classroom of `teacher`'s course connected to an organization holding the
@@ -121,16 +86,12 @@ async function connectedClassroom(students: Student[], org?: Org) {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
   if (org) {
-    await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId: org.orgId, linkedBy: teacher.id, linkedAt: new Date() });
+    await linkClassroom(seeded.classroomId, org.orgId);
     return { id: seeded.classroomId, ...org };
   }
-  const n = nextOrg++;
-  const login = `org-${n}`;
-  world.orgIds[login] = n;
+  const { login, orgId } = await newOrg("org");
   world.source(login, "starter", { main: { "README.md": "# Lab", "src/main.c": "int main(){}" }, solution: { "README.md": "# Solution" } });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId);
   return { id: seeded.classroomId, login, orgId };
 }
 
@@ -161,13 +122,7 @@ const auditOf = (subjectId: string, action: string) =>
     .where(and(eq(auditLog.subjectId, subjectId), eq(auditLog.action, action)));
 const repoCreations = (org: string) => gh.calls.filter((c) => c === `POST api.github.com/orgs/${org}/repos`);
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), usersRoute, world.route];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, world.route] });
 
 beforeEach(() => {
   server.clock.set(NOW);
@@ -181,11 +136,6 @@ afterAll(async () => {
   for (const body of studentBodies) {
     expect(body).not.toMatch(/starter|squashed/);
   }
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 // ---------------------------------------------------------------- the repository
@@ -505,7 +455,7 @@ describe("a teacher's staff seat accepts an individual project (ADR-077)", () =>
   /** A teacher with a claimed STAFF seat of `roomId` and a linked GitHub account of their own. */
   async function staffSeat(roomId: string): Promise<Student & { enrollmentId: string }> {
     const signed = await server.signIn("teacher");
-    const githubUserId = nextAccount++;
+    const githubUserId = freshAccountId();
     const login = `teacher${githubUserId}`;
     const enrollmentId = randomUUID();
     await server.app.db.insert(enrollments).values({

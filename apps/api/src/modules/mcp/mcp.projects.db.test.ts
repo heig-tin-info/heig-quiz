@@ -13,35 +13,22 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { ApiTokenCreated, TokenScope } from "@quiz/contracts";
 
 import { mintAssistToken } from "../../auth/tokens.js";
-import { auditLog, githubClassroomLinks, githubOrganizations, projects } from "../../db/schema.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { auditLog, projects } from "../../db/schema.js";
+import { orgsRoute } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
-import { repoWorld } from "../project/testing.js";
 import { ApiError, injectedApi } from "./service.js";
+import { linkClassroom, newOrg, server, useProjectWorld, world } from "../../test/projectWorld.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
 const NOW = "2026-10-13T08:00:00.000Z";
 const IN_A_WEEK = "2026-10-20T22:00:00.000Z";
 
-let server: TestServer;
 let teacher: { id: string; headers: Record<string, string>; token: string };
 let outsider: { id: string; headers: Record<string, string>; token: string };
-let nextOrg = 9100;
 let rpcId = 0;
 
 async function tokenFor(headers: Record<string, string>, scope: TokenScope = "quiz") {
@@ -64,24 +51,18 @@ async function call(name: string, args: Record<string, unknown>, token = teacher
 async function connectedClassroom(teacherId: string) {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId, studentIds: [], questions: 0 });
-  const n = nextOrg++;
-  const login = `org-${n}`;
-  world.orgIds[login] = n;
+  const { login, orgId } = await newOrg("org");
   world.source(login, "lab", { main: { "README.md": "# Lab", "src/main.c": "int main(){}" } });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacherId, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId, teacherId);
   return seeded.classroomId;
 }
 
 const projectsOf = (classroomId: string) =>
   server.app.db.select().from(projects).where(eq(projects.classroomId, classroomId));
 
+useProjectWorld({ routes: [orgsRoute(() => []), world.route], teacher: false });
+
 beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), world.route];
   const [t, o] = await Promise.all([server.signIn("teacher"), server.signIn("teacher")]);
   teacher = { ...t, token: await tokenFor(t.headers) };
   outsider = { ...o, token: await tokenFor(o.headers) };
@@ -89,14 +70,6 @@ beforeAll(async () => {
 
 beforeEach(() => {
   server.clock.set(NOW);
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 describe("create_project", () => {

@@ -17,76 +17,50 @@ import { randomUUID } from "node:crypto";
 
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { ProjectDetail, ProjectInvitationResent, ProjectRepoProtection, ProjectSummary, CSRF_COOKIE } from "@quiz/contracts";
+import {
+  ProjectDetail,
+  ProjectInvitationResent,
+  ProjectRepoProtection,
+  ProjectSummary,
+  CSRF_COOKIE,
+} from "@quiz/contracts";
 
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import { loadConfig } from "../../config.js";
-import {
-  auditLog,
-  githubAccounts,
-  githubClassroomLinks,
-  githubOrganizations,
-  projectGradeRuns,
-  projectRepos,
-  reverts,
-} from "../../db/schema.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { auditLog, projectGradeRuns, projectRepos, reverts } from "../../db/schema.js";
+import { json, orgsRoute } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { accessibleProjectRepo } from "../guards.js";
 import { refreshScoreSelection } from "./grading.js";
 import { MAX_RESTORES_PER_HOUR, protectFiles } from "./protection.js";
 import { repoContext } from "./repos.js";
 import { claimReviewWork } from "./review.js";
-import { repoWorld } from "./testing.js";
+import {
+  accounts,
+  APP_ENV,
+  call,
+  gh,
+  linkClassroom,
+  newOrg,
+  newStudent,
+  server,
+  teacher,
+  useProjectWorld,
+  usersRoute,
+  world,
+  type Headers,
+} from "../../test/projectWorld.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
-const config = loadConfig({ NODE_ENV: "test", ...ENV });
+const config = loadConfig({ NODE_ENV: "test", ...APP_ENV });
 const NOW = "2026-10-02T08:00:00.000Z";
 const DEADLINE = "2026-10-09T22:00:00.000Z";
 const MINUTE = 60_000;
 const GRACE = 30 * MINUTE;
 const GRADING = ".github/workflows/grading.yml";
 const at = (iso: string, plusMs = 0) => new Date(new Date(iso).getTime() + plusMs);
-
-type Headers = Record<string, string>;
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 62_000;
-let nextAccount = 65_000;
-
-/** GitHub's accounts by id, for the login lookups. */
-const accounts = new Map<number, string>();
-const usersRoute: Route = (url, req) => {
-  const m = /^\/user\/(\d+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const login = accounts.get(Number(m[1]));
-  return login === undefined ? undefined : json({ id: Number(m[1]), login });
-};
-
-async function newStudent() {
-  const signed = await server.signIn("student");
-  const githubUserId = nextAccount++;
-  const login = `rw${githubUserId}`;
-  await server.app.db.insert(githubAccounts).values({ userId: signed.id, githubUserId, login });
-  accounts.set(githubUserId, login);
-  return { ...signed, login, githubUserId };
-}
-
-const call = (method: "GET" | "POST", url: string, headers: Headers, payload?: object) =>
-  server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
 
 type Repo = typeof projectRepos.$inferSelect;
 
@@ -95,13 +69,9 @@ async function project(opts: { students?: number; protectedFiles?: string[] } = 
   const db = server.app.db;
   const students = await Promise.all(Array.from({ length: opts.students ?? 1 }, () => newStudent()));
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
-  const n = nextOrg++;
-  const login = `worg-${n}`;
-  world.orgIds[login] = n;
+  const { login, orgId } = await newOrg("worg");
   world.source(login, "starter", { main: { "README.md": "# Lab", "src/main.c": "int main(){}", [GRADING]: "grade: v1" } });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId);
   const created = await call("POST", `/app/api/classrooms/${seeded.classroomId}/projects`, teacher.headers, {
     name: "Lab",
     sourceRepo: "starter",
@@ -152,24 +122,10 @@ const resend = (projectId: string, repoId: string, headers = teacher.headers) =>
   call("POST", `/app/api/projects/${projectId}/repos/${repoId}/invite`, headers);
 const inviteCalls = (login: string) => gh.calls.filter((c) => c.includes(`/collaborators/${login}`)).length;
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), usersRoute, world.route];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, world.route] });
 
 beforeEach(() => {
   server.clock.set(NOW);
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 describe("a protected directory protects its content (ADR-119 §9)", () => {
