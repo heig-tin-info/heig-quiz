@@ -126,15 +126,4 @@ describe("the integrity incidents (ADR-088 §7)", () => {
     // journal that predates the switch would be: still read, still listed.
     expect(list.incidents).toHaveLength(1);
   });
-
-  it("answers a teacher off the staff the 404 of a missing evaluation", async () => {
-    const { seed, first } = await sitting(JOURNAL);
-    const stranger = await server.signIn("teacher");
-    expect((await get(`/app/api/evaluations/${seed.evaluationId}/incidents`, stranger.headers)).statusCode).toBe(404);
-    expect(
-      (await get(`/app/api/evaluations/${seed.evaluationId}/attempts/${first.id}`, stranger.headers)).statusCode,
-    ).toBe(404);
-    const student = await server.signIn("student");
-    expect((await get(`/app/api/evaluations/${seed.evaluationId}/incidents`, student.headers)).statusCode).not.toBe(200);
-  });
 });

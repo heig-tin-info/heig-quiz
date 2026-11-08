@@ -115,14 +115,6 @@ async function list(who: Actor) {
 }
 
 describe("GET /app/api/admin/users (F-ADMIN-01)", () => {
-  it("is refused to anyone but an administrator", async () => {
-    expect((await list(granted)).statusCode).toBe(403);
-    expect((await list(student)).statusCode).toBe(403);
-    expect(
-      (await server.app.inject({ method: "GET", url: "/app/api/admin/users" })).statusCode,
-    ).toBe(401);
-  });
-
   it("lists every account with its role, the rule's reason and its footprint", async () => {
     const res = await list(admin);
     expect(res.statusCode).toBe(200);

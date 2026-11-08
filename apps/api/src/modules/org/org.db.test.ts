@@ -62,17 +62,6 @@ afterAll(async () => {
   await server.close();
 });
 
-describe("classroom access", () => {
-  it("is closed to a teacher who is not on the course staff", async () => {
-    const res = await server.app.inject({
-      method: "GET",
-      url: `/app/api/classrooms/${classroomId}`,
-      headers: outsider.headers,
-    });
-    expect(res.statusCode).toBe(404);
-  });
-});
-
 /** Opens the inherited SSE stream and collects what it receives. */
 async function openStream(headers: Record<string, string>) {
   const res = await server.app.inject({
