@@ -1,7 +1,7 @@
 /**
  * The student's Grades page (`GET /student/results`, F-RES-04, F-ORG-14):
  * the home's Past (`studentBoard`), every classroom's, archived ones
- * included, by classroom. Depends on `attempt.ts` only; its rows carry the
+ * included, by classroom. Depends on `studentHome.ts` only; its rows carry the
  * gradebook column's `counts` (ADR-074 §6, amendment of 2026-10-13).
  */
 import { countsByDefault, evaluationColumnKind, isFinishedAttempt } from "@quiz/domain";
@@ -10,7 +10,7 @@ import type { CardResults, EvaluationGradeRow, GradeGroup, GradeStatus, StudentG
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { gradeReadable } from "../results/service.js";
-import { studentBoard, type PastEntry } from "./attempt.js";
+import { studentBoard, type PastEntry } from "./studentHome.js";
 
 /**
  * The classroom of the newest row first, each newest first. A row says where

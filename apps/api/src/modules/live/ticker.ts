@@ -15,7 +15,8 @@ import { endAttempts, seated } from "./dwell.js";
 import { endKioskSessions } from "../../auth/session.js";
 import * as events from "./events.js";
 import { presence } from "../realtime/presence.js";
-import { type AttemptRecord, enrolledCounts, gradeAtHandIn } from "./attempt.js";
+import { enrolledCounts, type AttemptRecord } from "./access.js";
+import { gradeAtHandIn } from "./closing.js";
 import { startEvaluation, closeEvaluation } from "./control.js";
 
 // --- Ticker tasks (§5.3) --------------------------------------------------

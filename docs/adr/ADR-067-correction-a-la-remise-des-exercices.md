@@ -4,7 +4,7 @@
 
 Accepted (2026-10-02, settled by the product owner after an incident in
 production). Implemented by `gradeAtHandIn` and `reopenAttempt`
-(`apps/api/src/modules/live/attempt.ts`), `standDownAutomaticGradings`
+(`apps/api/src/modules/live/closing.ts`), `standDownAutomaticGradings`
 (`apps/api/src/modules/grading/service.ts`), the pass and the runner job of
 `apps/api/src/modules/grading/jobs.ts`, and `GRADING_RUNNER_CONCURRENCY`
 (`apps/api/src/config.ts`), the rule `gradableNow` (`@quiz/domain`,

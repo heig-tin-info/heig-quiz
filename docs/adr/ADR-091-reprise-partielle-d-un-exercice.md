@@ -7,7 +7,7 @@ Accepted (2026-10-09, product owner Yves Chevallier, on a student's report:
 Implemented with `@quiz/domain` (`retake.ts`: `itemStanding`,
 `acquiredItems`, `partialRetakeRefusal`, `retakeScopeFits`), migration
 `0095_partial_retake.sql`, the ADR-091 section of
-`apps/api/src/modules/grading/service.ts` and `retakeAttempt` (`apps/api/src/modules/live/attempt.ts`).
+`apps/api/src/modules/grading/service.ts` and `retakeAttempt` (`apps/api/src/modules/live/lifecycle.ts`).
 
 Scope: what a retake of an `exercise` asks again, and what the student is
 told of each question between two attempts.

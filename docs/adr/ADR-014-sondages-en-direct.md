@@ -233,7 +233,7 @@ rejected. Nothing about a poll justifies releasing grades to absent roster membe
   `end`, `again`, `keep`); public routes
   `GET /app/api/p/:code`, `POST …/join`, `POST …/answer`.
 - `apps/api/src/modules/poll/service.ts` (`purgePollGuests`) and
-  `apps/api/src/modules/live/attempt.ts` (`deleteGuests`): the guests' retention
+  `apps/api/src/modules/live/guests.ts` (`deleteGuests`): the guests' retention
   and the frozen results.
 - `packages/contracts/src/poll.ts`, `packages/domain/src/pollTally.ts` and
   `packages/domain/src/pollOutcome.ts`: contracts and pure rules.

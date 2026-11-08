@@ -25,11 +25,9 @@ import { closeShown, endAttempts, openAttemptsOf } from "./dwell.js";
 import { endKioskSessions } from "../../auth/session.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
-import {
-  type AttemptRecord,
-  LiveError,
-  beginAttempt,
-} from "./attempt.js";
+import type { AttemptRecord } from "./access.js";
+import { LiveError } from "./failures.js";
+import { beginAttempt } from "./lifecycle.js";
 import { logAttemptEvent, logAttemptEvents } from "./autosave.js";
 
 // --- Teacher controls (§5.1, F-LIVE-11) -----------------------------------

@@ -49,7 +49,7 @@ teacher who actually read.
    and the pull replaces it with the template's.
 4. **It reaches the student with the item, through the one builder of the
    attempt.** `AttemptItem.intro` is filled in `attemptItems`
-   (`live/attempt.ts`), beside `milestone` and `bonus`: the attempt, its
+   (`live/views.ts`), beside `milestone` and `bonus`: the attempt, its
    restore and the teacher's preview (ADR-018) all come through it. It is
    not question content and does not pass `toStudent`; it is an item
    property the teacher wrote for students to read, and nothing of a

@@ -17,7 +17,9 @@ import { answers, attempts } from "../../db/schema.js";
 import { checkGrading, enqueueCheckRun, writeCheckGrading } from "../grading/jobs.js";
 import type { GradingRecord } from "../grading/service.js";
 import { studentItemCorrection } from "../results/service.js";
-import { LiveError, assertWritable, type AnswerRecord, type AttemptRecord } from "./attempt.js";
+import type { AnswerRecord, AttemptRecord } from "./access.js";
+import { LiveError } from "./failures.js";
+import { assertWritable } from "./gates.js";
 import { answeredBy, writeAnswer, type AnswerWrite } from "./autosave.js";
 import { attemptItemView } from "./itemView.js";
 

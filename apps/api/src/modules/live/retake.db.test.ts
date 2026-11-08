@@ -30,7 +30,7 @@ import {
 import { gradingQueue } from "../grading/service.js";
 import { resultsCsv } from "../results/csv.js";
 import * as results from "../results/service.js";
-import { answersOf } from "./attempt.js";
+import { answersOf } from "./access.js";
 import * as live from "./service.js";
 
 // One server for the file, whose database the service tests share

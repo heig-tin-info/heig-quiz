@@ -35,14 +35,9 @@ import {
   visibleRunResult,
   type RunnableStudentView,
 } from "./visibleRun.js";
-import {
-  type AttemptRecord,
-  LiveError,
-  AnswerInvalid,
-  RateLimited,
-  RunnerDown,
-  assertWritable,
-} from "./attempt.js";
+import type { AttemptRecord } from "./access.js";
+import { AnswerInvalid, LiveError, RateLimited, RunnerDown } from "./failures.js";
+import { assertWritable } from "./gates.js";
 import { logAttemptEvent, countRecentEvents } from "./autosave.js";
 
 // --- Running code (F-QST-09 for the student side) -------------------------
