@@ -139,23 +139,9 @@ import {
 } from "@quiz/contracts";
 import { beforeEach, describe, expect, it } from "vitest";
 
-// jsdom has no `fetch`; the mock wraps whatever is there and only defers to
-// it for a URL outside `/app/`, which this test never asks for.
-if (typeof window.fetch !== "function") {
-  window.fetch = (() => Promise.reject(new Error("no network in this test"))) as typeof fetch;
-}
+import { bootMock, get, issuesOf, type Schema } from "./testHarness";
 
-// `?journal=1`, as the runtime remembers it: PRG1-2026 has a journal, so its
-// pages are served and checked; every other classroom answers "no journal".
-localStorage.setItem("quiz-mock-journal", "1");
-// `?projects=1` (M3-10): PRG1-2026 has a project in each state, so the
-// classroom's list and the Activities' project rows are served and checked.
-localStorage.setItem("quiz-mock-projects", "1");
-localStorage.setItem("quiz-mock-codespace", "1");
-// `?groups=1` (M3-16a): PRG1-2026 and PRG1-2024 have group sets, and two of
-// PRG1-2026's drafts are group projects.
-localStorage.setItem("quiz-mock-groups", "1");
-await import("./index");
+await bootMock();
 const { routes } = await import("./runtime");
 const {
   STUDENT_ATTEMPT,
@@ -164,29 +150,6 @@ const {
   STUDENT_PROJECT_IDS,
 } = await import("./student");
 
-interface Issue {
-  code: string;
-  format?: string;
-  path: PropertyKey[];
-  message: string;
-}
-interface Schema {
-  safeParse: (v: unknown) => { success: boolean; error?: { issues: Issue[] } };
-}
-
-const get = async (path: string): Promise<unknown> => {
-  const res = await fetch(path);
-  expect(res.status, `GET ${path}`).toBe(200);
-  return res.json() as Promise<unknown>;
-};
-
-const issuesOf = (schema: Schema, value: unknown): string[] => {
-  const parsed = schema.safeParse(value);
-  if (parsed.success) return [];
-  return (parsed.error?.issues ?? [])
-    .filter((i) => !(i.code === "invalid_format" && i.format === "uuid"))
-    .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`);
-};
 const issuesOfEach = (schema: Schema, value: unknown): string[] => {
   if (!Array.isArray(value)) return ["<root>: expected an array"];
   return value.flatMap((v, i) => issuesOf(schema, v).map((m) => `[${i}].${m}`));

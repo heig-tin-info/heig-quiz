@@ -51,18 +51,9 @@ import {
 } from "@quiz/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-// jsdom has no `fetch`; the mock wraps whatever is there and only defers to
-// it for a URL outside `/app/`, which this test never asks for.
-if (typeof window.fetch !== "function") {
-  window.fetch = (() => Promise.reject(new Error("no network in this test"))) as typeof fetch;
-}
+import { bootMock, get, issuesOf } from "./testHarness";
 
-// The scene flags the GET sweep runs under, so both files read the same seed.
-localStorage.setItem("quiz-mock-journal", "1");
-localStorage.setItem("quiz-mock-projects", "1");
-localStorage.setItem("quiz-mock-codespace", "1");
-localStorage.setItem("quiz-mock-groups", "1");
-await import("./index");
+await bootMock();
 const { flags } = await import("./runtime");
 const {
   STUDENT_PROJECT_ACCEPT,
@@ -71,31 +62,6 @@ const {
   STUDENT_PROJECT_FROZEN,
   STUDENT_PROJECT_PAST,
 } = await import("./student");
-
-interface Issue {
-  code: string;
-  format?: string;
-  path: PropertyKey[];
-  message: string;
-}
-interface Schema {
-  safeParse: (v: unknown) => { success: boolean; error?: { issues: Issue[] } };
-}
-
-const get = async (path: string): Promise<unknown> => {
-  const res = await fetch(path);
-  expect(res.status, `GET ${path}`).toBe(200);
-  return res.json() as Promise<unknown>;
-};
-
-/** A schema's issues, a hand-written `uuid` excepted (the header of `contract.test.ts` says why). */
-const issuesOf = (schema: Schema, value: unknown): string[] => {
-  const parsed = schema.safeParse(value);
-  if (parsed.success) return [];
-  return (parsed.error?.issues ?? [])
-    .filter((i) => !(i.code === "invalid_format" && i.format === "uuid"))
-    .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`);
-};
 
 interface Ref {
   id: string;
