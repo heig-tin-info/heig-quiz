@@ -10,7 +10,12 @@ into §2, [§10](#10-the-service-tokens-quiz-signs-for-the-portal) and
 [§11](#11-under-the-commit-strategy-the-workspace-follows-the-repositorys-writability);
 the [historical record](history/ADR-078-codespace-git-relay-tokens.md) keeps
 the original text and the [correspondence table](#correspondence-of-old-references)
-maps it. Delivered by merge task M6-10
+maps it. The 2026-10-14 amendment (M3-14f: the App no longer reads
+organization secrets) is folded into the Context's list of the App's
+permissions. Two factual updates, no decision: §5 says Quiz's Caddy
+fragment filters both paths of §2 (it said "this one path"), and §10's
+door says the allow-list is in place and answers 403 to every other
+address (it said it waited for the owner, #744). Delivered by merge task M6-10
 ([task card](../merge/history/09-tasks-delivered.md#m6-10-git-relay-through-quiz-issued-scoped-tokens-adr-078));
 its staging checks are tracked in [progress](../merge/PROGRESS.md).
 `CLAUDE.md` invariant 15 summarizes this record and points here; the full
@@ -635,4 +640,5 @@ that hold them now. Their full text is the
 | Amendment 2026-10-11, service tokens bound to their request, single use (audit M11, L25) | [§10](#10-the-service-tokens-quiz-signs-for-the-portal); its bullet "§2's route" in [§2](#2-the-service-route), Single use |
 | Amendment 2026-10-11 (#743), the relay's requests are single use | [§2](#2-the-service-route), Single use; check 1 |
 | Amendment 2026-10-29 (#958), under `commit` the workspace follows the repository's writability | [§11](#11-under-the-commit-strategy-the-workspace-follows-the-repositorys-writability); its effect in §2 check 5 and `useUntil`, §7, §8, §9 |
+| Amendment 2026-10-14 (M3-14f), the App's permissions no longer include organization secrets | [Context](#context), the list of the App's permissions |
 | Consequences, "Root `CLAUDE.md`, invariant 15, gains" | [Consequences](#consequences), The rule in brief |
