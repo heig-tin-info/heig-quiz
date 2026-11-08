@@ -38,7 +38,8 @@ quiz.chevallier.io {
 		respond 404
 	}
 
-	# 3001 is evaluation-tb (3000 was heig-classroom, decommissioned 2026-10-14): quiz listens on 3002 (loopback).
+	# 3001 is evaluation-tb (3000 was heig-classroom, decommissioned
+	# 2026-10-14): quiz listens on 3002 (loopback).
 	handle {
 		reverse_proxy localhost:3002
 	}
