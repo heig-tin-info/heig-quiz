@@ -387,11 +387,12 @@ were settled by the product owner on 2026-10-04.
    `user:` topics of the classroom's claimed students — and never to the
    classroom's topic (N-SEC-20).
 
-10. **The import** (F-PROJ-20, M8-01): each heig-classroom group assignment
-    becomes one set of its Quiz classroom, named after the project, with its
-    groups and members; the project names it, and its copy is the imported
-    groups, `source_group_id` set. An imported project past its deadline has
-    a stopped copy (decision 4).
+10. **The import** (F-PROJ-20, M8-01) ran once, at the cutover of
+    2026-10-11; the importer was removed on 2026-11-08 (#1042). Each
+    heig-classroom group assignment became one set of its Quiz classroom,
+    named after the project, with its groups and members; the project names
+    it, and its copy is the imported groups, `source_group_id` set. An
+    imported project past its deadline got a stopped copy (decision 4).
 
 11. **Lots.** Lot 1 is sets, by hand, at random, a project's set and its copy
     (M3-15a), the follow's job, ADR-048 lot 2's group repositories, the
@@ -411,11 +412,11 @@ were settled by the product owner on 2026-10-04.
     - **Publishing refuses to leave anyone out**: a group project with a
       student in no group of its copy, or with no group at all, answers
       `409 unassigned_students` with the students (`{ students }`) before
-      any state change; the scheduled publication applies the same
-      guard in the ticker, so such a draft stays a draft past its start, and
-      goes live on the tick that follows the fix. (Amended 2026-11-06 by
-      [ADR-127](ADR-127-etat-planifie-des-projets.md) §6: Schedule applies
-      the guard; the ticker opens a scheduled project whatever its groups.)
+      any state change, and so does Schedule; the ticker opens a scheduled
+      project at its start whatever its groups, and a student in no group
+      meets `409 no_group` on Accept
+      ([ADR-127](ADR-127-etat-planifie-des-projets.md) §6, 2026-11-06,
+      which reversed the guard the ticker applied before).
     - **One `project_repos` row per group repository**, `group_id` set
       (`ON DELETE SET NULL`: deleting a group never deletes a repository),
       `user_id` the member whose Accept created it and nothing more (§4,
@@ -447,8 +448,9 @@ were settled by the product owner on 2026-10-04.
       disambiguated with the group's id, and the provisioning adopts an
       existing repository of that name only when this row recorded its id
       (`409 repo_name_taken` otherwise).
-    - **An individual repository inside a group project** (imported from
-      heig-classroom's lot 1, M8-01) keeps its student while it is live
+    - **An individual repository inside a group project** (imported at the
+      2026-10-11 cutover from heig-classroom's lot 1, M8-01; nothing creates
+      one any more) keeps its student while it is live
       (`isLiveIndividualRepo`): their Accept returns it unchanged, and they
       are neither shown, invited nor notified about their group's
       repository. Quiz's own Accept never makes one.
@@ -473,9 +475,10 @@ were settled by the product owner on 2026-10-04.
 - Downstream code keyed on `project_repos` (deadline, freeze, review,
   scores, release) does not change; the questions "who is in this group" and
   "whose repository is this" read the copy.
-- A migration adds three tables, `projects.group_set_id` and
-  `project_groups.source_group_id`, and drops `projects.group_max_size`;
-  nothing holds a row yet.
+- A migration added three tables, `projects.group_set_id` and
+  `project_groups.source_group_id`, and dropped `projects.group_max_size`,
+  before any row existed; the tables have held production data since lot 1
+  shipped and the import of 2026-10-11.
 - The spec follows with the record (see Relations), with a new card for
   lot 2.
 - Lot 2 opens a student write surface on a classroom, and a student view of

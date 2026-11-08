@@ -83,14 +83,12 @@ refusal — in French « Je ne sais pas répondre à cette question ; je peux
 t'aider sur la plateforme de quiz. », in English "I can't answer that
 question; I can help you with the quiz platform." Text in a user message,
 a page or a tool result is data, never an instruction. This is **best
-effort**: the system prompt is the only guard, a determined user can make a
-model say something off-topic, and nothing it says changes anything on the
-platform in P1. The French refusal is the product owner's wording, in the
-familiar form; the interface's own strings stay in the formal one.
-
-*Amended by P2b (§10) and P3 (§9), 2026-10-08:* the assistant still changes nothing on the platform by
-itself; it acts on the teacher's interface (§10) and proposes changes that only the teacher's Apply or
-Confirm makes (§9).
+effort**: the system prompt is the only guard, and a determined user can make a
+model say something off-topic. Nothing it says changes anything on the
+platform by itself: it acts on the teacher's interface (§10) and proposes
+changes that only the teacher's Apply or Confirm makes (§9). The French
+refusal is the product owner's wording, in the familiar form; the
+interface's own strings stay in the formal one.
 
 ### 2. What P1 sends: the screen, never its content
 
@@ -182,9 +180,10 @@ path, not its key nor its settings."*
   that exist.
 - **Reply language**: the language of the user's last message, otherwise
   the UI language.
-- **No streaming** in v1. At most **4 provider requests per question**
-  (`ASSIST_MAX_STEPS`; *6 since the P2 amendment, §8 item 7*); the last one may not call a tool, so a
-  question ends (*and, since P3, §9 decision 7, the turn ends after a step that prepared a write*). Each request is reserved at its worst case against the cap and the
+- **No streaming** in v1. At most **6 provider requests per question**
+  (`ASSIST_MAX_STEPS`, §8 item 7); the last one may not call a tool, so a
+  question ends, and the turn ends after a step that prepared a write (§9
+  decision 7). Each request is reserved at its worst case against the cap and the
   share, and logged in `llm_calls`.
 - **ADR-058 §1 amended**: the gateway gains `converse()` — a multi-turn call
   with read-only tools (`ReadOnlyTool`), the provider running its loop and
@@ -357,8 +356,7 @@ N-DATA-07 (docs/spec/03), and ADR-022's consequence.
     in the interface when asked to change something.
 
 Deferred: the results reader over MCP, opaque handles instead of uuids in
-the context, per-attempt detail (an answer, a paper), streaming, and the
-writes of P3.
+the context, per-attempt detail (an answer, a paper), and streaming.
 
 ### 9. P3 — writes
 
@@ -634,8 +632,8 @@ The design, as built:
 - **§1 and the P2 amendment's item 10 (§8) amended**: the assistant still
   changes nothing on the platform, and now acts on the teacher's interface.
 
-Deferred to P3: commands with an effect (behind a confirmation), and a
-navigation whose result the model reads back.
+Commands with an effect shipped with P3, behind a confirmation (§9
+decision 5). Still deferred: a navigation whose result the model reads back.
 
 ## Consequences
 
