@@ -33,8 +33,9 @@ Student mastery per concept (F-DRILL-05) is decided in
 Amended 2026-10-09: the Rollback section is removed (the
 [deployment runbook](../development/deployment.md) owns recovery; its rule on
 student history is a Consequence); §15 places the classroom's drill switch in the
-classroom's Settings (`ClassroomSettings.tsx`), not in the Drill tab (§14 says
-where it sat first and where it is now); §11's "two inputs come from the browser"
+classroom's Settings (`ClassroomSettings.tsx`), not in the Drill tab (the
+[historical record](history/ADR-041-entrainement-espace.md)'s §14 says where it
+sat first); §11's "two inputs come from the browser"
 reads "these inputs", since the section lists three (the third, the stated
 confidence, came with ADR-085).
 
@@ -70,6 +71,11 @@ today" with no action.
 
 Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md): §1, the exercise's key only — an exercise shows its key at every hand-in, so its card is served once the student's latest attempt is handed in (`keyShownTo`, unchanged as the rule; held back again while a retake is written). The stored policy no longer holds it back.
 
+Consolidated 2026-11-08, no decision changed: §12, §14 and §15, the
+implementation choices of slices 2, 3 and 4, are reduced to the rules still in
+force; their full text is in the
+[historical record](history/ADR-041-entrainement-espace.md).
+
 ## Context
 
 The spec reserved a phase-2 drill in five lines: every question a student meets
@@ -85,8 +91,10 @@ scheduler later needs a history, which is personal data.
 
 ## Decision
 
-The rounds of former §10 and §13 are folded below, each item marked with its
-round; their numbers are not reused, and the
+The product owner's second and third rounds, formerly §10 and §13, are folded
+below, each item marked with its round. **The numbering skips §10 and §13 on
+purpose**: code and other records cite §11, §12, §14 and §15 by number, so the
+sections keep their numbers and the two folded ones are not reused; the
 [correspondence table](#correspondence-of-old-references) maps every old item.
 
 ### 1. When a question becomes a card
@@ -347,134 +355,51 @@ in a round today is not servable here today (`servableToday` refuses it), so
 a key seen in a round cannot forge a daily rating. Its next daily review, from
 the next day, may follow that key: an accepted bias.
 
-### 12. Implementation choices of slice 2
+§12, §14 and §15 keep, one line each, the rules still in force from the
+implementation choices of slices 2, 3 and 4; their reasoning and the screens'
+description are in the [historical record](history/ADR-041-entrainement-espace.md#12-implementation-choices-of-slice-2).
 
-- **The drill day is the Europe/Zurich calendar day** (`drillDayBounds`). A card
-  is due today when it is due before the day ends: FSRS counts whole days from
-  the last review, and a card due at 14:00 belongs to the morning's session. The
-  cap of new cards resets at local midnight. *Amended by ADR-115 §5, §7: the
-  same day bounds a round of targeted revision, and "practised today".*
-- **A new card held back by the cap is announced for tomorrow**: an empty day
-  gives the start of the next day as its next due date. *Amended 2026-10-27
-  (§6):* and its count, `heldNew`, which the empty day offers to let in.
-  The batches unlocked are a counter per student, `drill_new_unlocks`, for
-  the drill day it names (its first instant, Zurich); a row of an earlier day
-  counts no batch and the next unlock restarts it. The session and the
-  serving rule read it through `drillNewAllowed` of `@quiz/domain`. A counter,
-  not a mark on the cards: the serving rule has always been "a new card while the allowance
-  is not spent", whichever new card it is, and a count keeps it so.
-- **Interleaving** groups the session by course and the question's first tag in
-  alphabetical order. *Amended by ADR-081 (third addendum §8):* by the
-  question's first concept id, which carries no alphabetical meaning.
-- **A review is scored on the type's `defaultPoints`**, not the points the item
-  had in its evaluation: correctness is a ratio, and a review has no item.
-- **The review in progress lives on the card**: `serve_seed` (the seed of this
-  review, null when none is served), `shown_since` (the open interval on screen)
-  and `active_ms` (what was already credited), cleared by the answer.
-- **Eligibility is a property of the question**, decided once, when the cards
-  are created, from the type's grading of an empty answer under the
-  evaluation's settings. A review whose grading is not final (an edit made the
-  question wait for an LLM or a teacher) is refused and writes nothing; the card
-  and its history stay.
-- **The hooks go one way.** `results` (`onResultsReleased`) and `live`
-  (`onAttemptsEnded`) call their listeners after the commit; the `drill` module
-  registers them and neither module imports it.
+<a id="12-implementation-choices-of-slice-2"></a>
 
-### 14. Implementation choices of slice 3 (the screens)
+### 12. The drill day, the review in progress and the hooks
 
-- **The session starts on a button.** The drill page shows today's count and
-  budget with one primary, Start; a card is served — its clock opened — only
-  then, never on opening the page. *Amended by ADR-115 §13: targeted revision
-  is a secondary "Revise a concept" in a classroom's Concepts section, opening
-  its own screen whose one primary is its own Start; the drill page's primary
-  and the empty day are unchanged.* The list is taken as it was at Start and
-  walked on the client: the session re-read after each answer would drop the
-  card just answered, so it is read again only at the end.
-- **One card at a time, through the type's own player** (`QuestionHost`, the
-  attempt's), then its own `Review` for the key (`QuestionReviewHost`, the
-  feedback page's). The one button reads Check, or "Show the answer" while
-  nothing is written: an empty answer is a review, rated Again.
-- **The visibility reports** are a hidden report when the tab hides, a shown one
-  when it returns, and a hidden one when the page is left with the card
-  unanswered. A report that fails is dropped, since it can only lower the time
-  counted (§11).
-- **A card that cannot be served** (its classroom archived since the session was
-  read, say) offers a retry and "Skip it"; the summary counts the reviews only.
-- **The next review** is said in calendar days ("tomorrow", "in 4 days"), the
-  empty day's next due date as a date.
-- **Opting back in takes no confirmation**; opting out is confirmed, with the
-  two sentences of §6 (former §10 (k) and §13 item 5), and is not styled as
-  destructive — nothing is deleted.
-- **UI copy obligations** of slice 3 (the student's tab) and of the evaluation
-  settings screen: the "Allow drill" note (the key is shown after each review,
-  §2; the latest version is served, §7) and the opt-out confirmation (past
-  activity stays visible; the teacher sees the opt-out, §6).
-- **The badge is a dot, never a count** (DESIGN.md, "The student's bottom bar"):
-  on the Drill slot, on the sidebar's Drill row, and an "available" badge on the
-  home's card for today's drill. Slot and row are drawn only for a student with
-  a classroom whose drill is on.
-- **The teacher's switches.** The classroom's switch says how many cards the
-  backfill made; it sat first on the classroom's Evaluations tab, under the
-  list, and is now a row of the classroom's Settings (§15). "Allow drill" sits
-  in the evaluation's second step, its note always shown, on or off; the removal
-  is a secondary button in the same card, offered while there are cards,
-  confirmed as destructive with their count. The count is read from
-  `GET /evaluations/:id/drill` (`EvaluationDrill`), the one read added to the
-  module for it: the evaluation's detail does not carry it.
+- The drill day is the Europe/Zurich calendar day (`drillDayBounds`): due today means due before it ends; the cap resets at local midnight (and bounds targeted revision, ADR-115 §5, §7).
+- A new card held back by the cap makes the empty day announce the next day's start, with the count held back, `heldNew` (§6).
+- Batches unlocked beyond the cap are a per-student counter for one drill day, `drill_new_unlocks`, read through `drillNewAllowed`; never a mark on the cards.
+- Interleaving groups the session by course and the question's first concept id (ADR-081 third addendum §8).
+- A review is scored on the type's `defaultPoints`, never the item's points.
+- The review in progress lives on the card (`serve_seed`, `shown_since`, `active_ms`), cleared by the answer.
+- Eligibility is decided once, at card creation, from the grading of an empty answer under the evaluation's settings; a review whose grading is not final is refused and writes nothing; the card and its history stay.
+- The hooks go one way: `results` and `live` call their listeners after the commit; the `drill` module registers them and neither imports it.
 
-### 15. Implementation choices of slice 4 (the teacher's view)
+<a id="14-implementation-choices-of-slice-3-the-screens"></a>
 
-- **Three reads, loaded through `staffAccess` on the classroom**:
-  `GET /classrooms/:id/drill/activity` (one row per student seat),
-  `GET /classrooms/:id/drill/progress?student=` (the weeks of one seat, by its
-  enrollment id: reviews and recall counts per week) and
-  `GET /classrooms/:id/drill/mastery` (per tag; per concept since the ADR-081
-  cut-over). Each is a bounded number of queries whatever the class size.
-- **The recall rate** of §8 (former §10 item 8) is defined once, in
-  `@quiz/domain` (`drillRecallCounts`): a card's first review is decided over
-  its whole history, before a window or an opt-out cuts it. The SQL aggregates
-  the same thing with a window function, and the database test holds the two to
-  the same numbers. The API answers counts (`repeated`, `recalled`), never a
-  ratio, so "no repeated review" is not 0 %.
-- **Windows are rolling** from the server's now: 30 days, and all. The
-  **trend** compares the last 30 days with the 30 before, only when each holds
-  at least 5 repeated reviews, and reads flat within 5 points.
-- **Sessions are Europe/Zurich days** with a review, the drill's day (§12).
-  **Weeks** run Monday to Sunday on the same clock, over the classroom's dated
-  period cut at today, or, without one, from the week the drill was enabled (or
-  the first review, if earlier); empty weeks are included and at most 104 are
-  drawn.
-- **The hours of the week** *(amendment of 2026-10-14)*:
-  `GET /classrooms/:id/drill/hours[?student=]`, one query over the same
-  visible reviews, the rolling 30 days of the activity's `last30`, grouped by
-  Europe/Zurich ISO weekday and hour in SQL (a literal zone, as the sessions'
-  days, so a summer-time review lands on its local hour). Seven rows, Monday
-  first, of 24 counts: distinct students per slot for the class, reviews for
-  one seat (a seat that is not a student seat of the classroom is the 404 of
-  the progression). The off-hours share — outside Monday to Friday 08:00–18:00,
-  ADR-107's window, `isWeekdayClassHour` — is in the grid's own unit, computed by
-  the same `offHoursShare` as the administrator's. The
-  screen draws it on the administrator's heatmap (`ui/heatmap.tsx`): under the
-  table of students in the Drill tab, and in a student's sheet below the
-  weekly charts, there in its compact form that fits the sheet; a grid with
-  no review in 30 days (a null share) is one line, not an empty grid.
-- **After an opt-out**, a review is not counted in any read (28 (k)); the
-  opt-out's date is on the row (former §13 item 5). **Mastery** reads each
-  card's current state, the retrievability now of FSRS: an opted-out student's
-  cards hold their state from before, and count.
-- **Only the classroom's current student seats** are listed; a card of a student
-  no longer on the roster is not counted.
-- **No read filters deleted questions**: a card exists only for a question an
-  evaluation holds, which the pool refuses to delete (soft or hard), and
-  deleting the evaluation cascades to the cards and their reviews (28 (a)).
-- **The screen** is a third tab of the classroom, **Drill**. The classroom's
-  drill switch, first on the Evaluations tab (§14), is a row of the classroom's
-  Settings tab (`ClassroomSettings.tsx`, D24): off, the Drill tab is an empty
-  state whose one action opens the Settings. The per-student progression opens
-  in a sheet (its recall figure is all time, and says so, beside the table's 30
-  days), as two small charts over the same weeks (no second axis): reviews as
-  bars, the recall rate as a line with the 90 % target. The page header has no
-  primary action on this tab.
+### 14. The student's screens and the teacher's switches
+
+- The session starts on Start, the page's one primary; a card is served, its clock opened, only then.
+- Targeted revision (ADR-115 §13) is a secondary "Revise a concept" in a classroom's Concepts section, opening its own screen with its own Start; the drill page's primary and the empty day are unchanged.
+- One card at a time through the type's player (`QuestionHost`), then its review (`QuestionReviewHost`); an empty answer ("Show the answer") is a review, rated Again.
+- Visibility reports: hidden when the tab hides or the page is left unanswered, shown when it returns; a failed report is dropped (§11).
+- A card that cannot be served offers a retry and "Skip it"; the summary counts reviews only.
+- The next review is said in calendar days ("tomorrow", "in 4 days"), the empty day's next due date as a date (`dueIn`).
+- Opting out is confirmed with the two sentences of §6, not styled as destructive; opting back in takes no confirmation.
+- UI copy obligations: the "Allow drill" note (key after each review, §2; latest version served, §7) and the opt-out confirmation (§6).
+- The badge is a dot, never a count, drawn only for a student with a classroom whose drill is on.
+- The classroom's switch is a row of its Settings and states the cards the backfill made; "Allow drill" sits in the evaluation's second step, its note always shown; the removal is a secondary button offered while there are cards, confirmed as destructive with their count.
+
+<a id="15-implementation-choices-of-slice-4-the-teachers-view"></a>
+
+### 15. The teacher's view
+
+- Every read (activity, one seat's progress, mastery, hours) is loaded through `staffAccess` on the classroom, in a bounded number of queries.
+- The recall rate of §8 is defined once (`drillRecallCounts`), a card's first review decided over its whole history; the API answers counts, never a ratio.
+- Windows roll from the server's now (30 days, and all); the trend needs 5 repeated reviews in each 30-day window and reads flat within 5 points.
+- Sessions are drill days with a review; weeks run Monday to Sunday over the classroom's dated period cut at today, or, without one, from the week the drill was enabled (or the first review, if earlier), empty weeks included, at most 104.
+- The hours of the week (2026-10-14): the last 30 days by Europe/Zurich weekday and hour, distinct students per slot for the class, reviews for one student seat (any other seat is a 404); off-hours share as ADR-107 (`offHoursShare`).
+- After an opt-out a review counts in no read; mastery reads each card's current FSRS retrievability, an opted-out student's cards included.
+- Only the classroom's current student seats are listed or counted.
+- No read filters deleted questions: the pool refuses to delete a question an evaluation holds, and deleting the evaluation cascades (28 (a)).
+- The screen is the classroom's Drill tab, no primary action in its header; drill off, an empty state whose one action opens the Settings.
 
 ## Consequences
 
@@ -506,7 +431,7 @@ the next day, may follow that key: an accepted bias.
 
 ## Correspondence of old references
 
-§1–§9, §11, §12, §14 and §15 keep their numbers. Code and documents also cite:
+§1–§9, §11, §12, §14 and §15 keep their numbers (§12, §14 and §15 were retitled and condensed on 2026-11-08; their old anchors still land on them). Code and documents also cite:
 
 <a id="10-second-round-product-owner-2026-09-29"></a><a id="13-third-round-product-owner-2026-09-29-review-of-slice-2"></a><a id="left-open"></a>
 
@@ -527,7 +452,10 @@ the next day, may follow that key: an accepted bias.
 | question 28 (d), (e), (i) | [§4](#4-the-rating-strategy-a-correctness-and-time) |
 | question 28 (h) | [§2](#2-allow-drill-per-evaluation) |
 | question 28 (j) | [§1](#1-when-a-question-becomes-a-card) |
-| §10 and §13, UI copy obligations of slice 3 | [§14](#14-implementation-choices-of-slice-3-the-screens) |
+| §10 and §13, UI copy obligations of slice 3 | [§14](#14-the-students-screens-and-the-teachers-switches) |
+| §12 "Implementation choices of slice 2" | [§12](#12-the-drill-day-the-review-in-progress-and-the-hooks); full text in the [historical record](history/ADR-041-entrainement-espace.md#12-implementation-choices-of-slice-2) |
+| §14 "Implementation choices of slice 3 (the screens)": the list walked on the client, the calendar-day wording, where the switch sat first | [§14](#14-the-students-screens-and-the-teachers-switches); full text in the [historical record](history/ADR-041-entrainement-espace.md#14-implementation-choices-of-slice-3-the-screens) |
+| §15 "Implementation choices of slice 4 (the teacher's view)": the routes, the SQL window function, the sheet's two charts | [§15](#15-the-teachers-view); full text in the [historical record](history/ADR-041-entrainement-espace.md#15-implementation-choices-of-slice-4-the-teachers-view) |
 | §13 item 1 (backfill), item 2 (an exercise's key; ADR-050's amendment, "§13.2"), item 3 (withdrawn release) | [§1](#1-when-a-question-becomes-a-card) |
 | §13 item 4 (the version served) | [§7](#7-question-edits) |
 | §13 item 5 (the opt-out is visible) | [§6](#6-opt-in-and-the-session) |
