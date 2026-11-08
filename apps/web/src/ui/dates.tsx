@@ -20,12 +20,14 @@ export function setDateFormat(f: DateFormat | null | undefined) {
 /** The first day of a calendar week for this reader: Sunday for the `us` format, Monday elsewhere. */
 export const weekStartsOn = (): 0 | 1 => (dateFormat === "us" ? 0 : 1);
 
+/** A number on two digits, zero-padded: a month, a day, an hour, a minute. */
+export const pad2 = (n: number) => String(n).padStart(2, "0");
+
 /** The date and the time of a moment, apart, in an explicit format. */
 function datePartsAs(iso: string, f: DateFormat): { date: string; time: string } {
   const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, "0");
-  const [Y, M, D] = [d.getFullYear(), p(d.getMonth() + 1), p(d.getDate())];
-  const hm = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  const [Y, M, D] = [d.getFullYear(), pad2(d.getMonth() + 1), pad2(d.getDate())];
+  const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
   switch (f) {
     case "eu":
       return { date: `${D}.${M}.${Y}`, time: hm };
@@ -34,7 +36,7 @@ function datePartsAs(iso: string, f: DateFormat): { date: string; time: string }
     case "us":
       return {
         date: `${M}/${D}/${Y}`,
-        time: `${d.getHours() % 12 || 12}:${p(d.getMinutes())} ${d.getHours() < 12 ? "AM" : "PM"}`,
+        time: `${d.getHours() % 12 || 12}:${pad2(d.getMinutes())} ${d.getHours() < 12 ? "AM" : "PM"}`,
       };
     default:
       return { date: `${Y}-${M}-${D}`, time: hm };

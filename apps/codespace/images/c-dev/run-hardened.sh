@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the student image with the mandatory hardening (CLAUDE.md invariant 3,
-# docs/milestone-0.md P1). No option is negotiable: a test that needs one relaxed
+# docs/history/milestone-0.md P1). No option is negotiable: a test that needs one relaxed
 # must say so in docs/, not here.
 #
 # P1 only: --network none by default. The closed `codespace` network is the P2

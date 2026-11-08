@@ -155,7 +155,7 @@ Run with root on the development workstation, milestone-0 P2 closed:
 - anchor `codespace-anchor` started, `cs0` carries `10.77.0.254` permanently;
 - nftables rules loaded;
 - `sudo infra/net/test.sh`: **11 PASS, 0 FAIL, 0 BLOCKED** (9 assertions plus the
-  2 regressions), as recorded in [docs/milestone-0.md](../../docs/milestone-0.md).
+  2 regressions), as recorded in [docs/history/milestone-0.md](../../docs/history/milestone-0.md).
 
 `test.sh` run without root cannot read the nftables ruleset; it therefore does
 not claim to know the state of the table and marks the assertions that depend on

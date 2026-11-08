@@ -49,7 +49,7 @@ const EnvSchema = z.object({
   HOST: z.string().default("127.0.0.1"),
   /**
    * 3100 by default: the platform's API occupies 3000 and both run together
-   * in development (docs/integration-classroom.md).
+   * in development (docs/history/integration-classroom.md).
    */
   PORT: z.coerce.number().int().min(1).max(65535).default(3100),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
@@ -190,8 +190,9 @@ const EnvSchema = z.object({
 
   /**
    * Fastify's `trustProxy`. **Development only**: it makes `request.ip`
-   * controllable through `X-Forwarded-For`, which an end-to-end run (heig-classroom's `scripts/e2e.ts`, not imported: M6-04) needs in
-   * order to simulate a second workstation. In production, the portal sits
+   * controllable through `X-Forwarded-For`, so that a local run can
+   * simulate a second workstation (heig-classroom's end-to-end script did;
+   * it was not imported, M6-04). In production, the portal sits
    * behind a controlled front end or behind nothing at all.
    */
   TRUST_PROXY: z

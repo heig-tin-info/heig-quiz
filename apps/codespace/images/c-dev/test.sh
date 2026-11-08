@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Acceptance test for task P1 (docs/milestone-0.md).
+# Acceptance test for task P1 (docs/history/milestone-0.md).
 # Runs the image through run-hardened.sh and executes every P1 assertion.
 # Exits non-zero on the first one that fails, with a clear message.
 #

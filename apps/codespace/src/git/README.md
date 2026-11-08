@@ -1,8 +1,8 @@
 # Git channel (P3)
 
 The staging repository and the relay to the forge, as described in
-[docs/analyse.md](../../../../docs/analyse.md) section 3.1 and in
-[docs/milestone-0.md](../../../../docs/milestone-0.md) section P3.
+[docs/history/analyse.md](../../docs/history/analyse.md) section 3.1 and in
+[docs/history/milestone-0.md](../../docs/history/milestone-0.md) section P3.
 
 ```
 container ──push──▶ portal 10.77.0.254:9418/git/<session>  (auth = source IP)

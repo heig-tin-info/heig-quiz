@@ -173,8 +173,6 @@ export const POOL_ICON_GROUPS = [
   { id: "society", icons: ["scale", "gavel", "landmark", "palette", "music"] },
 ] as const satisfies readonly { id: string; icons: readonly PoolIconName[] }[];
 
-export type PoolIconGroup = (typeof POOL_ICON_GROUPS)[number]["id"];
-
 export const POOL_ICONS: readonly PoolIconName[] = POOL_ICON_GROUPS.flatMap((g) => g.icons);
 
 /** How many results the "More icons…" step draws at once (~1500 names exist). */

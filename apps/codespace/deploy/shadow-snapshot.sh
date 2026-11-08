@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Shadow repository snapshot of every volume of one portal instance, as the
-# host's root (analyse.md § 3.3, docs/v1.md D-V1-1). Run by
+# host's root (analyse.md § 3.3, docs/history/v1.md D-V1-1). Run by
 # quiz-codespace-shadow@<instance>.timer every three minutes, with
 # CODESPACE_VOLUMES=/srv/quiz-codespace/<instance>/volumes. Adapted from
 # heig-classroom's deploy/shadow-snapshot.sh (M6-04).

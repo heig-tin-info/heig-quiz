@@ -2,6 +2,7 @@ import { CalendarRange, ChevronDown, ChevronRight, Crosshair, ZoomIn, ZoomOut } 
 import { useEffect, useRef, useState } from "react";
 
 import type { ActivitySummary } from "@quiz/contracts";
+import { clamp } from "@quiz/domain";
 
 import { useI18n, useT } from "../i18n";
 import type { Route } from "../router";
@@ -43,7 +44,6 @@ const LANE_H = "h-9"; // 36px
 type View = { from: number; to: number };
 type Tick = { t: number; label: boolean; text: string; major: boolean };
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const startOfDay = (t: number) => {
   const d = new Date(t);
   d.setHours(0, 0, 0, 0);

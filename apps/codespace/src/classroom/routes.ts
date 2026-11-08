@@ -135,7 +135,7 @@ export function upsertLaunchUser(db: Db, claims: LaunchTokenClaims): UserRow {
     lastLoginAt: now,
   };
   if (existing) {
-    // The role is **not** touched: a launch token never grants one (docs/v1.md
+    // The role is **not** touched: a launch token never grants one (docs/history/v1.md
     // D-V1-3). Every account is created through this path, as a student; the
     // OIDC login that once wrote `users.role` is gone (M6-03).
     const [row] = db.update(users).set(fields).where(eq(users.id, existing.id)).returning().all();

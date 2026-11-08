@@ -4,8 +4,8 @@ The working environment of a student: a complete C toolchain, a `gdb` that is re
 usable (ASLR can be disabled), code-server without network, without an extension
 gallery and unable to write anywhere outside the work volume.
 
-Framework: [docs/milestone-0.md](../../docs/milestone-0.md) § P1,
-[docs/analyse.md](../../docs/analyse.md) § 3.2, 3.4, 3.5 and 4.3,
+Framework: [docs/history/milestone-0.md](../../docs/history/milestone-0.md) § P1,
+[docs/history/analyse.md](../../docs/history/analyse.md) § 3.2, 3.4, 3.5 and 4.3,
 invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 
 ## Files
@@ -77,7 +77,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 
 - **Add an apt package**: add it to the `apt-get install` list of the `Containerfile` (step 1), add its binary to the presence assertion of `test.sh` § 7 (`test -x /usr/bin/…`), and add a row to the pinned-versions table above.
 - **Add an extension**: one `ARG` for its identifier, one `--install-extension` in the same `RUN`, one `grep -qi "^<id>@"` against `/etc/code-server/extensions.lock` so that the build fails if it is missing, its id in `extensions.allowed` of `settings.json`, the exact expected list asserted in `test.sh` § 3 (three ids, sorted), and a row in the pinned-versions table.
-- **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`).
+- **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/history/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`).
 - **Deploy**: classroom's `deploy/push.sh --rebuild-image` rebuilds the image on the VM; without the flag it is only built there when the tag is missing.
 - **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its eleven sections prove, in order:
   - § 0 the container starts under `run-hardened.sh` and answers `/healthz` (prints `MESURE_DEMARRAGE_SECONDES`);
@@ -104,7 +104,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 | `podman run` → `GET /` (workbench HTML served) | 0.95 – 1.01 s |
 
 Reading for the "pre-warmed pool" decision of
-[docs/analyse.md § 3.4](../../docs/analyse.md): starting the container
+[docs/history/analyse.md § 3.4](../../docs/history/analyse.md): starting the container
 is not the expensive part. One second between `podman run` and a workbench
 served, on an image that is already local, leaves more than nine seconds for
 authentication, volume creation, seeding of the staging repository and
@@ -168,11 +168,11 @@ Added on top, not required but consistent: `extensions.autoCheckUpdates`,
 `update.showReleaseNotes`, `workbench.startupEditor`,
 `security.workspace.trust.enabled`, and `clangd.path: /usr/bin/clangd` +
 `clangd.checkUpdates: false` — without which the clangd extension tries to
-download its binary and fails, the network being cut off (docs/analyse.md § 3.5).
+download its binary and fails, the network being cut off (docs/history/analyse.md § 3.5).
 
 ### The two settings added after the first real trial (2026-09-18)
 
-Feedback 1 and 2 of [docs/leads.md](../../docs/leads.md), "Feedback from the first
+Feedback 1 and 2 of [docs/history/leads.md](../../docs/history/leads.md), "Feedback from the first
 real trial". Both names were **looked up in the embedded package**, not
 recalled from memory: literal `grep` in
 `/usr/lib/code-server/lib/vscode/out/vs/workbench/workbench.web.main.internal.js`
@@ -330,7 +330,7 @@ picks dies with the container: the `user-data-dir` is a tmpfs.
 
 ## Status bar extension `heig.codespace-statusbar`
 
-Feedback 3 of [docs/leads.md](../../docs/leads.md). Publisher `heig`, name
+Feedback 3 of [docs/history/leads.md](../../docs/history/leads.md). Publisher `heig`, name
 `codespace-statusbar`, version `0.1.0`. Source in `extension/`:
 plain JavaScript, two useful files (`package.json`, `extension.js`), **no
 dependency, no bundler, no network access, no telemetry**.
@@ -467,7 +467,7 @@ The hardening is intact: `test.sh` § 3 keeps checking that no
   tab and leaves the editor behind. That is the behaviour of
   `vscode.env.openExternal` in VS Code Web, which has no way of closing
   the current tab. A real exit would require a portal page
-  ("finish the session"); that is lead 2 of docs/leads.md, out of
+  ("finish the session"); that is lead 2 of docs/history/leads.md, out of
   scope here.
 - **The countdown is indicative.** It does not close the session, does not block
   anything, and the time is that of the container. The portal does not use it: the
@@ -660,7 +660,7 @@ None of them weakens the hardening; all of them are checked by `test.sh`.
    uncaught exception at start-up while trying to write its logs onto the
    read-only root. The rest of `~/.local/share/code-server` stays on
    the read-only root, so the **default** extensions directory
-   is not writable — that is the point of docs/analyse.md § 3.2, and
+   is not writable — that is the point of docs/history/analyse.md § 3.2, and
    `test.sh` makes an assertion out of it.
 5. **`XDG_CONFIG_HOME` is redirected to the tmpfs, but only in
    `entrypoint.sh`**, never in an `ENV` of the image. The student's shell
@@ -702,7 +702,7 @@ listed here.
   (drag and drop and "Download" in the context menu) requires a browser;
   that is a manual verification for milestone 1, to be recorded together with proof B.
   Second layer already planned: `allowDownUploads: false` on the SEB side
-  (docs/analyse.md § 4.3).
+  (docs/history/analyse.md § 4.3).
 - `TODO(verify)` **clangd 19.1.7 + extension 0.6.0** — does the language server
   start without `compile_commands.json` and without network? The default
   configuration is placed at both paths that clangd actually reads
@@ -716,8 +716,8 @@ listed here.
   It is there in both seed templates
   (`seed/templates/tp-pointeurs/.vscode/launch.json`,
   `seed/templates/exam-c/.vscode/launch.json`), as asked for by
-  [docs/milestone-0.md](../../docs/milestone-0.md) § V1 and as observed by the
-  end-to-end test ([docs/v1.md](../../docs/v1.md) § 2, step 3).
+  [docs/history/milestone-0.md](../../docs/history/milestone-0.md) § V1 and as observed by the
+  end-to-end test ([docs/history/v1.md](../../docs/history/v1.md) § 2, step 3).
 - `TODO(verify)` **VS Code 1.137.0** — `workbench.secondarySideBar.defaultVisibility:
   hidden`: the key, the enumeration and the upstream default are collected from the
   embedded package, but the effect (bar absent on opening) requires a
@@ -771,7 +771,7 @@ listed here.
 - The network: `run-hardened.sh` starts with `--network none`. The closed
   `codespace` network, the nftables rules and `--add-host portal.internal` are
   task P2. `test.sh` therefore measures no network property.
-- `CAP_SYS_PTRACE` stays dropped (docs/analyse.md § 3.5): `gdb ./prog`
+- `CAP_SYS_PTRACE` stays dropped (docs/history/analyse.md § 3.5): `gdb ./prog`
   works, `gdb -p <pid>` on a process from another terminal will not
   work. That is the decision, not a defect.
 - The image size (1.5 GB) is dominated by code-server (723 MB installed).

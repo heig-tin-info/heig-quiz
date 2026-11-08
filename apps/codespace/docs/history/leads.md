@@ -53,7 +53,7 @@ A session opened from classroom by a real account, VS Code served, push relayed 
 ### Dealt with on 2026-09-18 (branch `feat/codespace-image-ux`)
 
 The three points above are done. Details, proofs and limits in
-[images/c-dev/README.md](../images/c-dev/README.md).
+[images/c-dev/README.md](../../images/c-dev/README.md).
 
 1. **Done.** `workbench.secondarySideBar.defaultVisibility: "hidden"` in the machine settings. The name, the enumeration and the upstream default (`visibleInWorkspace`) were collected by `grep` in the embedded VS Code 1.137.0 package; `test.sh` § 7 replays the search. Visual effect to be observed in a browser: `TODO(verify)`.
 2. **Done.** `keyboard.dispatch: "keyCode"`, same verification method (`enum:["code","keyCode"]`, default `code`). Typing is not affected, which is noted in the image README. Reservation collected and noted as `TODO(verify)`: the declaration carries `included: jo===2||jo===3`, so the key is only registered for macOS and Linux — to be checked on a Windows machine, which is the platform of the exam room.
@@ -67,7 +67,7 @@ a tab towards the return URL, it does not end the session. A real
 
 Two student sessions on the `code.chevallier.io` VM, plus one smoke
 session. Four findings, all dealt with; proofs and limits in
-[images/c-dev/README.md](../images/c-dev/README.md).
+[images/c-dev/README.md](../../images/c-dev/README.md).
 
 1. **No git identity inside the container.** A student could not commit
    from VS Code: `git config user.name` empty, whereas the portal knows

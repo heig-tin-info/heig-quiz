@@ -62,9 +62,9 @@ if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
 fi
 
 # The registry login lives in a throwaway directory, never in the shared
-# ~/.docker/config.json: heig-classroom deploys on the same account, and a
-# concurrent deploy's login (a token scoped to ITS package) overwrote ours
-# between login and pull -- "denied" on 2026-09-25. The re-exec below keeps
+# ~/.docker/config.json: another deploy on the same account (heig-classroom's,
+# until its decommission on 2026-10-14) once overwrote ours with a login
+# scoped to ITS package between login and pull -- "denied" on 2026-09-25. The re-exec below keeps
 # the directory (inherited through DOCKER_CONFIG) and removes it on exit.
 if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
   DOCKER_CONFIG="$(mktemp -d)"

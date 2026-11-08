@@ -128,7 +128,6 @@ export type BlocksCase = z.infer<typeof CaseSchema>;
 
 /** The world fixes the block set; one member in v1 (ADR-103 §1). */
 export const WorldSchema = z.discriminatedUnion("kind", [z.object({ kind: z.literal("warehouse") })]);
-export type BlocksWorld = z.infer<typeof WorldSchema>;
 
 /** The kinds of `program` that `toolbox` does not offer, in toolbox order. */
 export function kindsOutside(program: Stmt[], toolbox: readonly BlockKind[]): BlockKind[] {

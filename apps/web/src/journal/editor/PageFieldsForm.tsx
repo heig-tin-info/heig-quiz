@@ -1,5 +1,5 @@
 import { useT } from "../../i18n";
-import { Field, Switch } from "../../ui";
+import { Field, pad2, Switch } from "../../ui";
 import type { PageFields } from "./frontMatter";
 
 /*
@@ -12,14 +12,13 @@ import type { PageFields } from "./frontMatter";
  */
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-const pad = (n: number) => String(n).padStart(2, "0");
 
 /** A `datetime-local` value from a front-matter date, "" when unset, null when it is not a date. */
 export function toLocalInput(value: string): string | null {
   if (!value) return "";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
 /** A front-matter date from a `datetime-local` value: the local time with its offset (`…T08:00:00+02:00`). */
@@ -29,7 +28,7 @@ export function fromLocalInput(local: string): string {
   if (Number.isNaN(d.getTime())) return local;
   const offset = -d.getTimezoneOffset();
   const sign = offset >= 0 ? "+" : "-";
-  return `${local}:00${sign}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`;
+  return `${local}:00${sign}${pad2(Math.floor(Math.abs(offset) / 60))}:${pad2(Math.abs(offset) % 60)}`;
 }
 
 export function PageFieldsForm({

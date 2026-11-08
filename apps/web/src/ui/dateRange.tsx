@@ -3,7 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from "
 
 import { useI18n, useT } from "../i18n";
 import { Button, TextInput } from "./controls";
-import { fromLocalInput, isoDateTime, toLocalInput, weekStartsOn } from "./dates";
+import { fromLocalInput, isoDateTime, pad2, toLocalInput, weekStartsOn } from "./dates";
 import { cx } from "./layers";
 import { Popover } from "./popover";
 
@@ -33,8 +33,7 @@ const DEFAULT_END_TIME = "23:59";
 /** A day as `YYYY-MM-DD` in the reader's zone: a plain string, ordered by `<`. */
 type Day = string;
 
-const pad = (n: number) => String(n).padStart(2, "0");
-const dayOf = (d: Date): Day => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const dayOf = (d: Date): Day => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 /** Local noon: a day's anchor, safe from the DST edges of midnight. */
 const dateOf = (day: Day): Date => new Date(`${day}T12:00:00`);
 
@@ -65,7 +64,7 @@ export function monthWeeks(day: Day, weekStart: 0 | 1): (Day | null)[][] {
   const lead = (first.getDay() - weekStart + 7) % 7;
   const cells: (Day | null)[] = [
     ...Array<null>(lead).fill(null),
-    ...Array.from({ length }, (_, i) => `${day.slice(0, 7)}-${pad(i + 1)}`),
+    ...Array.from({ length }, (_, i) => `${day.slice(0, 7)}-${pad2(i + 1)}`),
   ];
   while (cells.length % 7) cells.push(null);
   return Array.from({ length: cells.length / 7 }, (_, w) => cells.slice(w * 7, w * 7 + 7));

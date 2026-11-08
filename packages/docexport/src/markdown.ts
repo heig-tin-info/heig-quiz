@@ -10,6 +10,7 @@ import { stringify } from "yaml";
 
 import { number, type AnswerZone, type Block, type Choices, type Document, type TestLine } from "./document.js";
 import { labelled, LABELS, type Labels } from "./labels.js";
+import { oneLine } from "./typst/escape.js";
 
 /**
  * The fence of a code block: one backtick longer than the longest run of
@@ -19,9 +20,6 @@ export function fenceFor(text: string): string {
   const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map((m) => m[0].length));
   return "`".repeat(Math.max(3, longest + 1));
 }
-
-/** A heading, a list item or a table cell holds one line. */
-const oneLine = (text: string): string => text.replace(/\s*[\r\n]+\s*/g, " ").trim();
 
 /** A table cell: one line, its pipes escaped. */
 const cell = (text: string): string => oneLine(text).replaceAll("|", "\\|");
