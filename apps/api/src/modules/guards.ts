@@ -17,6 +17,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, isNull, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import type { PgSelect } from "drizzle-orm/pg-core";
 
 import { EvaluationSettings, type CourseRole, type PoolRole } from "@quiz/contracts";
 import {
@@ -343,14 +344,6 @@ export function withCourseRole<P, S>(
   );
 }
 
-/**
- * Same predicate expressed against a query that only has `classrooms` in
- * scope, so a classroom route does not have to join `courses` for the check.
- */
-function staffAccessOfClassroom(userId: string): SQL {
-  return sql`EXISTS (SELECT 1 FROM ${courseStaff} WHERE ${courseStaff.courseId} = ${classrooms.courseId} AND ${courseStaff.userId} = ${userId})`;
-}
-
 /** Teacher only; admins pass too. */
 export function teacherGuard(app: FastifyInstance) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
@@ -567,6 +560,23 @@ export function seesUser(user: Caller, subjectId: string): SQL | undefined {
     OR EXISTS (SELECT 1 FROM ${pools} WHERE ${qualified(pools.ownerId)} = ${subjectId} AND ${poolAccess(user.id)}))`;
 }
 
+/**
+ * THE staff-scoped finder (invariant 6): the first row of `query` that
+ * `match` selects, if `staffAccess` holds on its course (`courseId`, in the
+ * query's scope) or the caller has Super Powers (`accessWhere`); null
+ * otherwise. A query that joins `classrooms` passes `classrooms.courseId`
+ * (NOT NULL, a foreign key) and joins `courses` only when its row names it.
+ */
+async function staffScoped<Q extends { $dynamic(): PgSelect }>(
+  user: Caller,
+  query: Q,
+  match: SQL | undefined,
+  courseId: AnyColumn = courses.id,
+): Promise<Awaited<ReturnType<Q["$dynamic"]>>[number] | null> {
+  const [row] = await query.$dynamic().where(and(match, accessWhere(user, staffAccess(user.id, courseId)))).limit(1);
+  return row ?? null;
+}
+
 /*
  * The route loaders below take the `params` the route wrapper has already
  * parsed with its schema from `@quiz/contracts` (a malformed id is the
@@ -574,24 +584,15 @@ export function seesUser(user: Caller, subjectId: string): SQL | undefined {
  */
 
 /** Loads the course if and only if the current user is on its staff. */
-export const accessibleCourse = routeLoader(async (app, req, params: { id: string }) => {
-  const [course] = await app.db
-    .select()
-    .from(courses)
-    .where(and(eq(courses.id, params.id), accessWhere(callerOf(req), staffAccess(req.user!.id))))
-    .limit(1);
-  return course ?? null;
-});
+export const accessibleCourse = routeLoader((app, req, params: { id: string }) =>
+  staffScoped(callerOf(req), app.db.select().from(courses), eq(courses.id, params.id)),
+);
 
 /** The classroom + its course if the caller is on its staff; null otherwise. */
-export async function findAccessibleClassroom(db: Db, user: Caller, classroomId: string) {
-  const [row] = await db
-    .select({ room: classrooms, course: courses })
-    .from(classrooms)
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(classrooms.id, classroomId), accessWhere(user, staffAccess(user.id))))
-    .limit(1);
-  return row ?? null;
+export function findAccessibleClassroom(db: Db, user: Caller, classroomId: string) {
+  const query = db.select({ room: classrooms, course: courses }).from(classrooms)
+    .innerJoin(courses, eq(classrooms.courseId, courses.id));
+  return staffScoped(user, query, eq(classrooms.id, classroomId));
 }
 
 /** Loads the classroom + its course, gated by the same predicate. */
@@ -611,15 +612,11 @@ export const accessibleClassroom = routeLoader(classroomOfRequest);
 // ---------------------------------------------------------------------------
 
 /** The project, its classroom and course, if the caller is on the course's staff; null otherwise. */
-export async function findAccessibleProject(db: Db, user: Caller, projectId: string) {
-  const [row] = await db
-    .select({ project: projects, room: classrooms, course: courses })
-    .from(projects)
+export function findAccessibleProject(db: Db, user: Caller, projectId: string) {
+  const query = db.select({ project: projects, room: classrooms, course: courses }).from(projects)
     .innerJoin(classrooms, eq(projects.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(projects.id, projectId), accessWhere(user, staffAccess(user.id))))
-    .limit(1);
-  return row ?? null;
+    .innerJoin(courses, eq(classrooms.courseId, courses.id));
+  return staffScoped(user, query, eq(projects.id, projectId));
 }
 
 /** {@link findAccessibleProject} for the caller's own portal session, answering the 404 (invariant 6). */
@@ -634,16 +631,11 @@ export const accessibleProject = routeLoader(
  * the repository by its id AND its project's — a repository of another
  * project is as missing as one that does not exist.
  */
-export async function findAccessibleProjectRepo(db: Db, user: Caller, projectId: string, repoId: string) {
-  const [row] = await db
-    .select({ project: projects, repo: projectRepos, courseId: courses.id })
-    .from(projectRepos)
+export function findAccessibleProjectRepo(db: Db, user: Caller, projectId: string, repoId: string) {
+  const query = db.select({ project: projects, repo: projectRepos, courseId: classrooms.courseId }).from(projectRepos)
     .innerJoin(projects, eq(projectRepos.projectId, projects.id))
-    .innerJoin(classrooms, eq(projects.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(projectRepos.id, repoId), eq(projects.id, projectId), accessWhere(user, staffAccess(user.id))))
-    .limit(1);
-  return row ?? null;
+    .innerJoin(classrooms, eq(projects.classroomId, classrooms.id));
+  return staffScoped(user, query, and(eq(projectRepos.id, repoId), eq(projects.id, projectId)), classrooms.courseId);
 }
 
 /** {@link findAccessibleProjectRepo} for the caller's own portal session, answering the 404 (invariant 6). */
@@ -677,15 +669,11 @@ export const projectsAuthoringClassroom = routeLoader(classroomOfRequest, { admi
 // ---------------------------------------------------------------------------
 
 /** The set, its classroom and course, if the caller is on the course's staff; null otherwise. */
-export async function findAccessibleGroupSet(db: Db, user: Caller, setId: string) {
-  const [row] = await db
-    .select({ set: groupSets, room: classrooms, course: courses })
-    .from(groupSets)
+export function findAccessibleGroupSet(db: Db, user: Caller, setId: string) {
+  const query = db.select({ set: groupSets, room: classrooms, course: courses }).from(groupSets)
     .innerJoin(classrooms, eq(groupSets.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(groupSets.id, setId), accessWhere(user, staffAccess(user.id))))
-    .limit(1);
-  return row ?? null;
+    .innerJoin(courses, eq(classrooms.courseId, courses.id));
+  return staffScoped(user, query, eq(groupSets.id, setId));
 }
 
 /** {@link findAccessibleGroupSet} for the caller's own portal session, answering the 404 (invariant 6). */
@@ -951,7 +939,7 @@ export async function findReadableClassroom(
       room: classrooms,
       course: courses,
       seat: { id: enrollments.id, timeBonusPercent: enrollments.timeBonusPercent, staff: enrollments.staff },
-      staff: sql<boolean>`${accessWhere(user, staffAccessOfClassroom(user.id)) ?? sql`true`}`,
+      staff: sql<boolean>`${accessWhere(user, staffAccess(user.id, classrooms.courseId)) ?? sql`true`}`,
     })
     .from(classrooms)
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
@@ -995,20 +983,10 @@ export async function readableClassroom(
 
 /** Loads the roster entry if the current user is on the course's staff. */
 export const accessibleEnrollment = routeLoader(async (app, req, params: { id: string; eid: string }) => {
-  const [row] = await app.db
-    .select({ enrollment: enrollments })
-    .from(enrollments)
-    .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(
-      and(
-        eq(enrollments.id, params.eid),
-        eq(enrollments.classroomId, params.id),
-        accessWhere(callerOf(req), staffAccess(req.user!.id)),
-      ),
-    )
-    .limit(1);
-  return row?.enrollment ?? null;
+  const query = app.db.select({ enrollment: enrollments }).from(enrollments)
+    .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id));
+  const match = and(eq(enrollments.id, params.eid), eq(enrollments.classroomId, params.id));
+  return (await staffScoped(callerOf(req), query, match, classrooms.courseId))?.enrollment ?? null;
 });
 
 // ---------------------------------------------------------------------------
@@ -1106,15 +1084,10 @@ interface EvaluationScope {
 }
 
 /** Loads an evaluation by id for a member of its course's teaching staff. */
-export const loadEvaluation = routeLoader(async (app, req, evaluationId: string): Promise<EvaluationScope | null> => {
-  const [row] = await app.db
-    .select({ evaluation: evaluations, classroom: classrooms })
-    .from(evaluations)
-    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(evaluations.id, evaluationId), accessWhere(callerOf(req), staffAccess(req.user!.id))))
-    .limit(1);
-  return row ?? null;
+export const loadEvaluation = routeLoader((app, req, evaluationId: string): Promise<EvaluationScope | null> => {
+  const query = app.db.select({ evaluation: evaluations, classroom: classrooms }).from(evaluations)
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id));
+  return staffScoped(callerOf(req), query, eq(evaluations.id, evaluationId), classrooms.courseId);
 });
 
 /**
@@ -1123,18 +1096,10 @@ export const loadEvaluation = routeLoader(async (app, req, evaluationId: string)
  * `course_id` is set, so the inner join on `courses` through that column is
  * what tells it apart: a classroom's evaluation or a poll never matches.
  */
-async function findTemplate(
-  db: Db,
-  user: Caller,
-  templateId: string,
-): Promise<{ template: typeof evaluations.$inferSelect; course: typeof courses.$inferSelect } | null> {
-  const [row] = await db
-    .select({ template: evaluations, course: courses })
-    .from(evaluations)
-    .innerJoin(courses, eq(evaluations.courseId, courses.id))
-    .where(and(eq(evaluations.id, templateId), accessWhere(user, staffAccess(user.id))))
-    .limit(1);
-  return row ?? null;
+function findTemplate(db: Db, user: Caller, templateId: string) {
+  const query = db.select({ template: evaluations, course: courses }).from(evaluations)
+    .innerJoin(courses, eq(evaluations.courseId, courses.id));
+  return staffScoped(user, query, eq(evaluations.id, templateId));
 }
 
 /** {@link findTemplate}, answering the 404 of a missing template (invariant 6). */
@@ -1205,13 +1170,9 @@ export async function findManagedEvaluation(
   user: Caller,
   evaluationId: string,
 ): Promise<typeof evaluations.$inferSelect | null> {
-  const [row] = await db
-    .select({ evaluation: evaluations })
-    .from(evaluations)
-    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(evaluations.id, evaluationId), accessWhere(user, staffAccess(user.id))))
-    .limit(1);
+  const query = db.select({ evaluation: evaluations }).from(evaluations)
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id));
+  const row = await staffScoped(user, query, eq(evaluations.id, evaluationId), classrooms.courseId);
   if (row) return row.evaluation;
   const [owned] = await db
     .select()
@@ -1326,21 +1287,11 @@ export async function findOwnAttempt(db: Db, userId: string, attemptId: string) 
 
 /** Any attempt of an evaluation the caller is staff of (dashboard, controls). */
 export const staffAttempt = routeLoader(async (app, req, p: { evaluationId: string; attemptId: string }) => {
-  const [row] = await app.db
-    .select({ attempt: attempts })
-    .from(attempts)
+  const query = app.db.select({ attempt: attempts }).from(attempts)
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
-    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(
-      and(
-        eq(attempts.id, p.attemptId),
-        eq(attempts.evaluationId, p.evaluationId),
-        accessWhere(callerOf(req), staffAccess(req.user!.id)),
-      ),
-    )
-    .limit(1);
-  return row?.attempt ?? null;
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id));
+  const match = and(eq(attempts.id, p.attemptId), eq(attempts.evaluationId, p.evaluationId));
+  return (await staffScoped(callerOf(req), query, match, classrooms.courseId))?.attempt ?? null;
 });
 
 /**
@@ -1381,17 +1332,13 @@ interface AnswerScope {
 }
 
 /** `/answers/:answerId/…` — teacher side (the grading panel). */
-export const staffAnswer = routeLoader(async (app, req, answerId: string): Promise<AnswerScope | null> => {
-  const [row] = await app.db
-    .select({ answer: answers, attempt: attempts, evaluation: evaluations, courseId: courses.id })
-    .from(answers)
+export const staffAnswer = routeLoader((app, req, answerId: string): Promise<AnswerScope | null> => {
+  const query = app.db
+    .select({ answer: answers, attempt: attempts, evaluation: evaluations, courseId: classrooms.courseId }).from(answers)
     .innerJoin(attempts, eq(answers.attemptId, attempts.id))
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
-    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(answers.id, answerId), accessWhere(callerOf(req), staffAccess(req.user!.id))))
-    .limit(1);
-  return row ?? null;
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id));
+  return staffScoped(callerOf(req), query, eq(answers.id, answerId), classrooms.courseId);
 });
 
 interface GradingScope {
@@ -1402,15 +1349,10 @@ interface GradingScope {
 }
 
 /** `/gradings/:id/…` — the same motif, from the grading itself. */
-export const staffGrading = routeLoader(async (app, req, gradingId: string): Promise<GradingScope | null> => {
-  const [row] = await app.db
-    .select({ grading: gradings, evaluation: evaluations, courseId: courses.id })
-    .from(gradings)
+export const staffGrading = routeLoader((app, req, gradingId: string): Promise<GradingScope | null> => {
+  const query = app.db.select({ grading: gradings, evaluation: evaluations, courseId: classrooms.courseId }).from(gradings)
     .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
-    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(gradings.id, gradingId), accessWhere(callerOf(req), staffAccess(req.user!.id))))
-    .limit(1);
-  return row ?? null;
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id));
+  return staffScoped(callerOf(req), query, eq(gradings.id, gradingId), classrooms.courseId);
 });
