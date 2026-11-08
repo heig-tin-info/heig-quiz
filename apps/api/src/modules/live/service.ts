@@ -45,7 +45,6 @@ export {
   AttemptClosedError,
   AnswerInvalid,
   RateLimited,
-  RunnerDown,
   RetakeRefused,
   PracticeRefused,
   liveFailureArms,

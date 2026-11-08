@@ -6,7 +6,7 @@ import { attemptDeadline, bonusSeconds } from "@quiz/domain";
 
 import { settingsOf, type EvaluationRecord } from "../evaluation/service.js";
 
-export interface DeadlineParts {
+interface DeadlineParts {
   deadlineAt: Date | null;
   bonusS: number;
 }

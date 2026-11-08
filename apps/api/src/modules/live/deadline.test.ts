@@ -1,6 +1,8 @@
 /**
- * `deadlineFor`, the one computation of an attempt's deadline and bonus
- * (§10, decision D8), on plain rows — no database.
+ * `deadlineFor` on plain rows — no database. The arithmetic is
+ * `@quiz/domain`'s (`packages/domain/src/deadline.test.ts`); this pins what
+ * the wrapper adds: the timing read from the settings, and the rounding of
+ * the stored bonus alone.
  */
 import { describe, expect, it } from "vitest";
 
@@ -23,52 +25,18 @@ function row(overrides: Partial<EvaluationRecord> = {}): EvaluationRecord {
   } as EvaluationRecord;
 }
 
-const seat = (timeBonusPercent: number) => ({ timeBonusPercent });
-
-describe("deadlineFor in duration timing", () => {
-  it("is the student's start plus the duration", () => {
-    expect(deadlineFor(row(), seat(0), START, 0)).toEqual({ deadlineAt: at(1800), bonusS: 0 });
-  });
-
-  it("adds the accommodation on the duration and the attempt's own extra time", () => {
-    expect(deadlineFor(row(), seat(25), START, 60)).toEqual({ deadlineAt: at(1800 + 450 + 60), bonusS: 450 });
-  });
-
-  it("cuts the nominal end at the window's close, then adds the bonus and the extra time", () => {
-    const evaluation = row({ closesAt: at(900) });
-    expect(deadlineFor(evaluation, seat(10), START, 30)).toEqual({ deadlineAt: at(900 + 180 + 30), bonusS: 180 });
-  });
-
+describe("deadlineFor", () => {
   it("rounds the stored bonus, never the deadline", () => {
-    const { deadlineAt, bonusS } = deadlineFor(row({ durationS: 1001 }), seat(7), START, 0);
+    const { deadlineAt, bonusS } = deadlineFor(row({ durationS: 1001 }), { timeBonusPercent: 7 }, START, 0);
     expect(bonusS).toBe(70);
     expect(deadlineAt).toEqual(new Date(START.getTime() + 1001_000 + 70_070));
   });
 
-  it("has no deadline without a duration", () => {
-    expect(deadlineFor(row({ durationS: null }), seat(25), START, 0)).toEqual({ deadlineAt: null, bonusS: 0 });
-  });
-});
-
-describe("deadlineFor in deadline timing", () => {
-  const window = { settings: { timing: "deadline" }, opensAt: START, closesAt: at(3600) };
-
-  it("anchors on closesAt whatever the start, the bonus on the announced window", () => {
-    const evaluation = row(window);
-    expect(deadlineFor(evaluation, seat(10), at(1200), 60)).toEqual({ deadlineAt: at(3600 + 360 + 60), bonusS: 360 });
-  });
-
-  it("takes the live shifts out of the bonus's base (D8, #253)", () => {
-    const evaluation = row({ ...window, closesAt: at(4200), closesAtShiftS: 600 });
-    expect(deadlineFor(evaluation, seat(10), START, 0)).toEqual({ deadlineAt: at(4200 + 360), bonusS: 360 });
-  });
-});
-
-describe("deadlineFor in manual timing", () => {
-  it("has no deadline without a safety deadline", () => {
-    expect(deadlineFor(row({ settings: { timing: "manual" } }), seat(25), START, 0)).toEqual({
-      deadlineAt: null,
-      bonusS: 0,
+  it("reads the timing from the settings: deadline timing anchors on closesAt, whatever the start", () => {
+    const evaluation = row({ settings: { timing: "deadline" }, opensAt: START, closesAt: at(3600) });
+    expect(deadlineFor(evaluation, { timeBonusPercent: 10 }, at(1200), 60)).toEqual({
+      deadlineAt: at(3600 + 360 + 60),
+      bonusS: 360,
     });
   });
 });
