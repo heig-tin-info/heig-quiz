@@ -51,7 +51,6 @@ import {
   isOrgOwner,
   listInstalledOrgs,
   orgExistsOnGithub,
-  resolveOrgInstallation,
   type AppInstallation,
 } from "../../github/app.js";
 import { DomainError } from "../http.js";
@@ -560,10 +559,7 @@ async function healedOrg(
 async function heal(db: Db, config: AppConfig, stored: OrgRow): Promise<Healed> {
   let org = stored;
   // One call: the stored installation, else one looked for by the login.
-  const inst =
-    org.installationId !== null
-      ? await fetchInstallation(config, org.installationId, HTTP_READ)
-      : await resolveOrgInstallation(config, org.login, HTTP_READ);
+  const inst = await fetchInstallation(config, org.installationId ?? org.login, HTTP_READ);
   if (inst && org.githubOrgId !== null && inst.githubOrgId !== org.githubOrgId) {
     // The login now names ANOTHER organization: ours was deleted or renamed
     // away. The newcomer is recorded under its own row, which retires ours;
