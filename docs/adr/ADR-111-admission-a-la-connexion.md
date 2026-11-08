@@ -13,7 +13,7 @@ amends [ADR-028 §3](ADR-028-recette-sur-la-meme-vm.md#3-productions-data-not-an
 (an empty allowlist no longer means "everyone"); reads
 [ADR-061](ADR-061-adoption-des-comptes-importes.md) and the
 [ADR-053 addendum of 2026-10-11](ADR-053-retrait-des-codes-d-entree.md#addendum-2026-10-11-a-line-is-attached-only-when-the-person-acts);
-open question 59 of [06](../spec/06-questions-ouvertes.md).
+question 59, now in the [settled questions](../spec/history/settled-questions.md).
 
 ## Context
 

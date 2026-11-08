@@ -3,7 +3,7 @@
 ## Status
 
 Accepted (2026-10-10, product owner, issue #599, comment of the same day on steps 7 to 9).
-Delivery progress is in `docs/merge/PROGRESS.md` and `changes/`. Amended 2026-10-15 by
+Delivery progress is in `changes/`. Amended 2026-10-15 by
 [ADR-115](ADR-115-revision-ciblee-par-notion.md) (§4, §6, §10 and the rejected #578
 alternative): a concept can be revised on purpose, outside FSRS and the level, and this
 exit also names the concepts offered for that revision.

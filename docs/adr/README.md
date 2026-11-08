@@ -17,8 +17,10 @@ status and amendment history.
    snapshots only for rationale or old section references. Do not load `history/`
    by default. In other records, follow the Reading map when present. Cite the
    full file and section when handing work to another agent.
-4. **Accepted is a decision state, not a deployment state.** Check the code,
-   tests and [merge progress](../merge/PROGRESS.md) for implementation. Imported
+4. **Accepted is a decision state, not a deployment state.** Check the code
+   and tests for implementation. Delivery since the merge is tracked in
+   `changes/` (one entry per pull request), and, for the remaining M6 and L
+   tasks, in [merge progress](../merge/PROGRESS.md). Imported
    records describe heig-classroom until their Quiz status/addendum adapts them;
    its `GR-`, `GH-`, `AU-` and `NFR-` IDs are not Quiz requirement IDs.
 
@@ -65,7 +67,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-027 — Launch tickets and typed sessions (Safe Exam Browser first)](ADR-027-tickets-de-lancement-et-sessions-typees.md)
 - [ADR-034 — Acting as a student: a one-time link, an `impersonation` session, read-only in production](ADR-034-agir-en-tant-qu-etudiant.md)
 - [ADR-051 — Attested kiosk stations, paired from the student's phone, beside Safe Exam Browser](ADR-051-postes-kiosque-attestes.md)
-- [ADR-089 — Kiosk stations for the online workspace: the station stays on Quiz and frames the portal](ADR-089-kiosque-pour-l-espace-de-travail.md)
+- [ADR-089 — Kiosk stations for the online workspace: the station stays on Quiz and frames the portal](ADR-089-kiosque-pour-l-espace-de-travail.md) (proposed)
 - [ADR-053 — Removing the entry codes: the classroom join code and the evaluation access code](ADR-053-retrait-des-codes-d-entree.md)
 - [ADR-054 — Super Powers: an admin reaches everyone's content for one hour, on request](ADR-054-super-powers-admin.md)
 - [ADR-068 — Course staff roles: owner and assistant](ADR-068-roles-de-l-equipe-du-cours.md)
@@ -79,7 +81,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-015 — The browser executes, the server grades: a `runtime` per code question, a command line per case](ADR-015-execution-navigateur-correction-serveur.md)
 - [ADR-017 — Moving a question to another pool](ADR-017-deplacement-de-question.md)
 - [ADR-019 — Grading a schematic by simulation, not by topology](ADR-019-simulation-de-circuit.md)
-- [ADR-075 — The workspace question: an advanced exam question worked in the online workspace, collected by the server](ADR-075-question-espace-de-travail.md)
+- [ADR-075 — The workspace question: an advanced exam question worked in the online workspace, collected by the server](ADR-075-question-espace-de-travail.md) (proposed)
 - [ADR-021 — Code image: a variant of `code`, a target in the config, stdout graded whatever the exit](ADR-021-codeimage-variante-de-code.md)
 - [ADR-024 — One locked editor, three student tools, a visible cooldown](ADR-024-editeur-verrouille-et-outils-etudiant.md)
 - [ADR-096 — Extra files and compiler flags of a program question are public program inputs](ADR-096-fichiers-annexes-publics.md)
@@ -172,14 +174,14 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-074 — Gradebook: stored marks beside derived absence](ADR-074-carnet-de-notes-marques-stockees.md)
 - [ADR-100 — GitHub organizations are granted to courses: who may connect, what the staff may read](ADR-100-organisations-github-accordees-aux-cours.md)
 - [ADR-106 — Grading a project by criteria on the platform: the criteria as data, the evidence run in `apps/runner`, an LLM pass, a validated report](ADR-106-notation-des-projets-par-criteres.md)
-- [ADR-119 — Criteria v3: the CI produces the evidence, the platform publishes the schemas](ADR-119-criteres-v3-preuves-de-la-ci.md) (proposed)
+- [ADR-119 — Criteria v3: the CI produces the evidence, the platform publishes the schemas](ADR-119-criteres-v3-preuves-de-la-ci.md)
 - [ADR-127 — A project's `scheduled` state: armed by Schedule, announced, opened by the ticker](ADR-127-etat-planifie-des-projets.md)
 
 ## Maintaining a record
 
 Use the [template](TEMPLATE.md) for new decisions. Keep one decision per record;
 put requirements in the spec, operational commands in the runbook and delivery
-progress in the merge task cards. Link to those sources instead of copying them.
+progress in `changes/` (the remaining M6 and L tasks: their merge task cards). Link to those sources instead of copying them.
 
 Keep existing IDs, paths and heading anchors stable, except to resolve a
 duplicate number, noted in the record's Status (2026-10-09: an anchor list into `history/` may be reduced to a correspondence
@@ -213,4 +215,7 @@ Amended 2026-10-09 (rules carried from the archived 2026-10-02 audit):
 Add a link under one topic here. The site's Decisions entry points to this index;
 there is no separate per-ADR navigation list to update. Build the documentation
 and check links before opening the PR. The [2026-10-02 audit](history/AUDIT-2026-10-02.md),
-archived, records the reasons for this organization.
+archived, records the reasons for this organization. The
+[2026-10-06 simplification audit](../audits/2026-10-06-simplification.md)
+was followed by the simplification lots #674 to #696; its documentation size
+targets were not applied.

@@ -65,7 +65,6 @@ nav = [
         { "4. Question types" = "spec/04-types-de-questions.md" },
         { "5. Architecture" = "spec/05-architecture.md" },
         { "6. Open questions" = "spec/06-questions-ouvertes.md" },
-        { "7. Reuse of heig-classroom" = "spec/07-reutilisation-heig-classroom.md" },
         { "8. Two-level experience" = "spec/08-experience-deux-niveaux.md" },
         { "Data model reference" = "spec/reference/data-model.md" },
       ] },

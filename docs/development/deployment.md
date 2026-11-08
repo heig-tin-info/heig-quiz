@@ -10,8 +10,7 @@ Production is `https://quiz.chevallier.io` and staging is
 come from one repository
 ([ADR-016](../adr/ADR-016-runner-sur-vm-separee.md),
 [ADR-028](../adr/ADR-028-recette-sur-la-meme-vm.md)). The application stack
-runs on the VM that hosted heig-classroom until its decommission (merge task
-M9-01, 2026-10-14), behind that VM's native Caddy. The code runner runs on the codespace VM, `code.chevallier.io`, behind
+runs on the application VM, behind its native Caddy. The code runner runs on the codespace VM, `code.chevallier.io`, behind
 that VM's native Caddy, and the API reaches it over HTTPS with a shared
 token. Both images are built on GitHub Actions and pulled from GHCR. Nothing
 of ours is ever built on either VM.
@@ -27,16 +26,11 @@ environment's GitHub App is [Quiz's GitHub App](github-app.md).
 | | `portal.heig.chevallier.io` (application VM) | `code.chevallier.io` (runner VM) |
 | --- | --- | --- |
 | Size | Hetzner CPX12, 1 vCPU, 2 GB + 2 GB swap, `128.140.71.35` | Hetzner, 2 CPU, 4 GB |
-| Already runs | evaluation-tb on `:3001`, a native Caddy (heig-classroom ran on `:3000` until its decommission, 2026-10-14) | heig-codespace, rootful Podman 5.7, a native Caddy |
+| Already runs | evaluation-tb on `:3001`, a native Caddy | heig-codespace, rootful Podman 5.7, a native Caddy |
 | Gets | `/srv/quiz`: the compose stack `app`, `postgres`, `backup`, on the `srv` account's rootless Docker; and staging, `/home/srvstg/quiz-staging` on the `srvstg` account's own rootless Docker (§8) | `/opt/quiz-runner`: the runner as a Podman quadlet |
 | Listens on | `app` on `127.0.0.1:3002` (staging `127.0.0.1:3003`) | the runner on `127.0.0.1:3200` |
 | Vhost | `/etc/caddy/conf.d/quiz.caddy` → `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy` → `code.chevallier.io:8443` |
 | Deploys through | `/srv/quiz/deploy.sh production` (user `srv`) and `/home/srvstg/quiz-staging/deploy.sh staging` (user `srvstg`), forced commands | `/opt/quiz-runner/infra/engine/deploy.sh production` (root), the forced command of the dispatcher shared by the runner and the codespace portal's `prod` (M6-04); `/usr/local/libexec/quiz-engine/staging-dispatch.sh` (root), the frozen staging dispatcher (§4, audit H4) |
-
-Until 2026-09-25 the application VM was a DigitalOcean droplet
-(`165.245.246.213`, root, rootful Docker, everything under `/opt`); the three
-services moved to the Hetzner VM together, and the directory basenames (hence
-the compose project and volume names) did not change.
 
 Why two: the application VM has no Podman and no room for student
 compilations next to two PostgreSQL servers and three Node processes, while
@@ -154,13 +148,12 @@ the build before it are not covered.
 `compose.prod.yml` starts these three containers and only those. The runner
 is not in the file. Keycloak is a development identity provider and is not
 deployed; production authenticates against Switch edu-ID with the private
-key and `kid` inherited from heig-classroom (`hgc-eduid-2026`): the edu-ID
-client shares the public JWK classroom registered. Quiz holds its own copy,
-`/srv/quiz/secrets/eduid-private-key.pem` (and the vault's, ADR-010), so
-classroom's removal (M9-01) changed nothing for the login. **Never revoke
-that JWK**: Quiz's login depends on it.
+key whose public JWK is registered on the edu-ID client (`kid`
+`hgc-eduid-2026`). Quiz holds its copy,
+`/srv/quiz/secrets/eduid-private-key.pem` (and the vault's, ADR-010). **Never
+revoke that JWK**: Quiz's login depends on it.
 
-The `postgres` service carries the low-memory tuning the classroom's had
+The `postgres` service carries a low-memory tuning
 (`shared_buffers=32MB`, `max_connections=40`, no parallel query): the VM has
 one vCPU and 2 GB, shared with staging and evaluation-tb.
 
@@ -189,8 +182,7 @@ the same way.
 
 Staging does NOT run as `srv`: it has an account of its own, `srvstg`, with
 its own rootless Docker (§8). `srv`'s directories that hold production data
-(`/srv/quiz`, `/srv/evaluation-tb`; `/srv/heig-classroom` too, until its
-removal at M9-01) are `chmod o-rwx`, so `srvstg` reads none of them, the dumps in
+(`/srv/quiz`, `/srv/evaluation-tb`) are `chmod o-rwx`, so `srvstg` reads none of them, the dumps in
 `/srv/quiz/backups` included. Keep them that way when adding a service.
 
 ### Setting up the application VM
@@ -199,8 +191,7 @@ removal at M9-01) are `chmod o-rwx`, so `srvstg` reads none of them, the dumps i
 cd /srv && git clone https://github.com/heig-tin-info/heig-quiz.git quiz && cd quiz
 mkdir -p secrets backups assets backup-status
 # edu-ID: the key of the client's registered JWK (kid hgc-eduid-2026), from the
-# vault's copy of secrets/ (ADR-010). It was first read from heig-classroom's
-# /srv/heig-classroom/secrets, which is gone since M9-01 (2026-10-14).
+# vault's copy of secrets/ (ADR-010).
 cp <the vault's secrets>/eduid-private-key.pem secrets/eduid-private-key.pem
 docker run --rm -v "$PWD":/w alpine sh -c 'chown -R 1000:1000 /w/secrets /w/backups /w/assets && chmod 600 /w/secrets/*.pem'
 # backup-status stays srv's (container root, which is who writes it), mode 755:
@@ -223,8 +214,7 @@ container from starting, on purpose. The super administrator is
 
 Notifications ([ADR-030](../adr/ADR-030-canaux-de-notification.md)):
 e-mails go out through Scaleway TEM once `SCW_SECRET_KEY` and
-`SCW_DEFAULT_PROJECT_ID` are set in `.env.prod` (the Scaleway project and
-sender domain inherited from classroom; without them every e-mail is only logged). The Microsoft Teams
+`SCW_DEFAULT_PROJECT_ID` are set in `.env.prod` (without them every e-mail is only logged). The Microsoft Teams
 channel stays off until its multi-tenant Entra application exists and
 `TEAMS_CLIENT_ID` and `TEAMS_CLIENT_SECRET` (plus `TEAMS_ALLOWED_TENANTS`,
 HEIG-VD's tenant) are set:
@@ -298,13 +288,13 @@ environment, nothing mounted) is documented once, in
 ### The codespace portal on the same VM
 
 Since M6-04 the VM also runs Quiz's online workspace portal
-(`apps/codespace`, ADR-047), replacing heig-classroom's: two instances,
+(`apps/codespace`, ADR-047): two instances,
 `prod` on `code.chevallier.io` (for `quiz.chevallier.io`) and `staging` on
 `code-dev.chevallier.io` (for `quiz.dev.chevallier.io`), each a Podman
 quadlet of the CI's `ghcr.io/heig-tin-info/quiz-codespace:<sha>` image with
 its own environment, data directory, SQLite, Podman network and Caddy site.
 The two never touch each other's session containers (an instance label).
-The layout, the switch from classroom's portal, the live-session guard of
+The layout, the live-session guard of
 a prod deploy and the smoke checks are
 [`apps/codespace/deploy/RUNBOOK.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md);
 the application side is two variables per environment, `CODESPACE_URL` and
@@ -725,9 +715,8 @@ The token is piped straight to `docker login` or `podman login` with
 `--password-stdin` and expires with the workflow run; no registry credential
 is stored on either VM. On the application VM the login goes to a throwaway
 `DOCKER_CONFIG`, removed on exit, so that no other deploy on the `srv`
-account can overwrite it: heig-classroom deployed on the same account until
-its decommission (2026-10-14), and two concurrent logins in the shared
-`~/.docker/config.json` overwrote each other ("denied", 2026-09-25). On the
+account can overwrite it: two concurrent logins in a shared
+`~/.docker/config.json` once overwrote each other ("denied", 2026-09-25). On the
 runner VM, root's Podman auth file lives under `/run`, so nothing survives a
 reboot.
 
@@ -853,9 +842,8 @@ The staging key and `STAGING_DEPLOY_USER` are set up in §8. The application VM 
 VM's SSH host keys, copied over, so `DEPLOY_HOST_KEY` did not change with the
 2026-09-25 move.
 
-`DEPLOY_HOST` stays `classroom.chevallier.io` after heig-classroom's
-decommission (M9-01): the name and its redirect fragment are kept for at
-least a year (the cutover runbook's §5 step 8), and it is still a CNAME to
+`DEPLOY_HOST` is `classroom.chevallier.io`: the name and its redirect
+fragment are kept for at least a year (the cutover runbook's §5 step 8), and it is still a CNAME to
 the application VM. Moving it to `portal.heig.chevallier.io` before the name
 goes means setting `DEPLOY_HOST` and re-scanning `DEPLOY_HOST_KEY` (the same
 host key).
@@ -1000,8 +988,7 @@ first (§6); when in doubt, restore it anyway. A rollback holds until the next a
 !!! warning "Never build on the application VM"
 
     The application VM is small (1 vCPU, 2 GB). A local build makes the host
-    swap and strangles PostgreSQL (the classroom learned it on 2026-07-10, on
-    the previous VM) and fills the disk with builder cache. `deploy.sh` only
+    swap and strangles PostgreSQL and fills the disk with builder cache. `deploy.sh` only
     pulls. The runner VM does build the Alpine language images (rust, ~820 MB, included), on
     purpose; the runner image itself still comes from CI, so that both VMs
     run the commit the checks passed on.
@@ -1618,7 +1605,7 @@ configuration.
 | `AUTH_DEV_LOGIN` | unset | `1` is refused: the process does not start |
 | `PUBLIC_URL` | `https://quiz.chevallier.io`, set by compose | base of the OIDC redirect URI; `WEB_URL` is left empty because the monolith serves the SPA itself |
 | `OIDC_ISSUER`, `OIDC_CLIENT_ID` | `https://login.eduid.ch/` and the client id from the SWITCH Resource Registry | the dev defaults point at the local Keycloak |
-| `OIDC_PRIVATE_KEY_PATH`, `OIDC_PRIVATE_KEY_KID` | `secrets/eduid-private-key.pem`, `hgc-eduid-2026` | `private_key_jwt` client authentication: the key and `kid` inherited from heig-classroom, since the client shares the public JWK it registered (never revoke it); `./secrets` is mounted read-only into the container |
+| `OIDC_PRIVATE_KEY_PATH`, `OIDC_PRIVATE_KEY_KID` | `secrets/eduid-private-key.pem`, `hgc-eduid-2026` | `private_key_jwt` client authentication: the key whose public JWK is registered on the edu-ID client (never revoke it); `./secrets` is mounted read-only into the container |
 | `OIDC_CLIENT_SECRET` | unset | with a private key configured the secret is never sent and is not checked; without one, `client_secret` authentication applies and the `not-for-production` placeholder is refused |
 | `SUPER_ADMIN_EMAIL` | one address | the only account managed through the environment; teachers are managed from the admin screen |
 | `LOGIN_ALLOWLIST` | unset (staging: the testers' addresses) | when set, only these addresses and the super administrator may sign in |
@@ -1634,7 +1621,7 @@ configuration.
 | `TRUSTED_PROXIES` | default `loopback,172.16.0.0/12` | the addresses the API accepts `X-Forwarded-For` from: native Caddy on loopback and the Docker bridge; `req.ip` feeds the room restriction and the attempt journal, so never list a range a student machine can sit on |
 | `OAUTH_CIMD_HOSTS` | default `claude.ai,claude.com,chatgpt.com` | the only hosts whose OAuth Client ID Metadata Documents the server fetches ([ADR-023](../adr/ADR-023-serveur-oauth-pour-mcp.md)); `PUBLIC_URL` is the OAuth issuer, so it must be the exact public origin |
 | `METRICS_TOKEN` | `openssl rand -hex 32`, a bearer token for Prometheus | empty leaves `/metrics` and the coarse words of `/healthz` to an admin session; the metrics are never public; under 32 characters, production refuses to start |
-| `SCW_SECRET_KEY`, `SCW_DEFAULT_PROJECT_ID` | the Scaleway project inherited from heig-classroom | empty: e-mails are logged, never sent |
+| `SCW_SECRET_KEY`, `SCW_DEFAULT_PROJECT_ID` | the Scaleway project's | empty: e-mails are logged, never sent |
 | `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_ALLOWED_TENANTS` | see [Microsoft Teams setup](teams.md) | empty: the Teams channel is off |
 | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH`, `GITHUB_APP_SLUG`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` | the production App's | empty: the GitHub features are off; with an App id, the refusals of [Quiz's GitHub App](github-app.md#the-environments-variables) apply |
 | `RUNNER_MODE`, `RUNNER_URL` | `http`, `https://code.chevallier.io:8443` | `http` without a URL is refused; `stub` disables the runner, see below |

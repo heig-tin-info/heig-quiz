@@ -2,8 +2,9 @@
 
 ## Status
 
-Proposed (2026-10-11), decided with the product owner after the challenge of
-issue #460; prototype on branch `qt-math`, not merged. Requirement F-QST-12.
+Accepted (2026-10-11), decided with the product owner after the challenge of
+issue #460. Delivered by #771 (merged 2026-10-11): `packages/qt-math`,
+registered in `packages/registry`. Requirement F-QST-12.
 
 Scope: the `math` question type (`packages/qt-math`), the reading and
 comparison rules of `@quiz/domain/math`, and the student view of the type.

@@ -25,7 +25,7 @@ Analysis report only: no file in the repository was modified.
 
 - Ten independent passes, one per axis: axis 1 split into API, web and packages, axis 6 into two batches of ADRs and one batch of documentation outside the ADRs. Each pass read the lines it cites. The high-gain findings were re-verified directly (`git grep` counts, reading the lines, scripts).
 - Tools: knip 6 (unused files, exports and dependencies, tests counted as entry points), jscpd 4 (clones), madge and an import graph built with the TypeScript parser (cycles, fan-in, co-imports), a clone detector with normalized identifiers.
-- The audit of 3 October (`docs/audits/2026-10-03-code-quality/`) is taken into account: its items are carried over only if they remain open, with their identifier ("audit 10-03 W2"). Closed since: PKG-08 and the reservation on `github/sync.ts` (M3-07 delivered, #517).
+- The audit of 3 October (then `docs/audits/2026-10-03-code-quality/`, removed by #674 as X03 below proposes; it remains in the git history) is taken into account: its items are carried over only if they remain open, with their identifier ("audit 10-03 W2"). Closed since: PKG-08 and the reservation on `github/sync.ts` (M3-07 delivered, #517).
 - Limits: shallow clone of 50 commits, no test run, gains estimated by static reading (lines removed minus lines added). Since the estimates of the passes tend to be optimistic, the totals are given as ranges.
 
 Legend. Risk: low, medium, high. Effort: S (one narrow PR), M (one topic across several files), L (several PRs). Gain: net physical lines removed.
@@ -483,7 +483,7 @@ X01. `docs/merge/09-tasks.md` (4,572 lines): 75 tasks delivered out of 98, about
 
 X02. `docs/PLAN-MVP.md` (2,129 lines): its banner (`:3-16`) declares phase 1 finished and "Everything else is history". Only the D1-D20 table of §9 remains normative. Keep a pointer of about 60 lines (banner, §9, permalink to the full version) so that the 128 "PLAN-MVP §x.y" citations in the code remain resolvable. Add `search: exclude`. Gain -2,070. Risk low. Effort S.
 
-X03. `docs/audits/2026-10-03-code-quality/` (10 files, 1,032 lines): no incoming link outside navigation, partially stale (M2-06 and M3-07 declared pending, delivered). Its open items are carried over into this report. Gain -1,030. Risk low. Effort S.
+X03. `docs/audits/2026-10-03-code-quality/` (10 files, 1,032 lines; removed since by #674): no incoming link outside navigation, partially stale (M2-06 and M3-07 declared pending, delivered). Its open items are carried over into this report. Gain -1,030. Risk low. Effort S.
 
 X04. Merge strategies whose work is delivered: `03-github-projects.md` (372 lines, §3.3 stale: `groups.ts`, `ingest.ts`, `dispatch.ts` do not exist) reduced to anchors toward spec 05 §5.11. `04-journal.md`, `05-web.md`, `01-strategy.md`, `07-incompatibilities.md` lightened. `08-decisions.md` (501 lines, D01 to D29 all settled) reduced to decision, date and place of transfer. Keep `02-data-and-migration.md`, `06-codespace-seb-infra.md` and the measurements until the M8 switchover. Archive `docs/merge/` after M9-01 (-1,300 more). Gain -840. Risk medium (the M8 agents read these files). Effort M.
 

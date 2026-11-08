@@ -515,6 +515,8 @@ is the first pull request; merge, aliases and probable duplicates follow.
    no "reject" action in v1: an unwanted proposal is deleted when unused, or
    merged.
 
+<a id="sixth-addendum-2026-10-10-the-concepts-of-a-course-steps-7-9"></a>
+
 ## Sixth addendum 2026-10-10: the concepts of a course (steps 7–9)
 
 Settled with the product owner (comment of 2026-10-10 on #599, steps 7–9)

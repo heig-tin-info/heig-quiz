@@ -4,9 +4,9 @@ Goal: a single VM, a single database, one repository, operable by one person. Ev
 
 The current implementation map is [the repository page](../development/repository.md).
 The [ADR index](../adr/README.md) holds decision rationale. The classroom
-merge is still in progress: [task cards and progress](../merge/README.md)
-distinguish implemented components from accepted future work. The original
-reuse plan is [historical](07-reutilisation-heig-classroom.md).
+merge is complete: [its record](../merge/README.md) keeps the remaining M6
+and L tasks apart from the delivered ones. The original
+reuse plan is [historical](history/reuse-heig-classroom.md).
 
 ## 5.1 Technical stack
 
