@@ -571,9 +571,9 @@ live in `ui/state.ts`, each written once.
   zinc = at rest (`draft`, `closed`, `locked`; a dated draft too, see
   ADR-104's amendment of 2026-10-14); outline green =
   `released`, an evaluation's or a project's. A project's badge reads the
-  server's PHASE (`state`, with `draft` refined into `draft` / `scheduled`
-  by its publish mode and `locked` into `locked` / `graded` /
-  `released`), never the stored state alone. A further pill tone follows
+  server's PHASE (`state`, `scheduled` being the state Schedule arms
+  (ADR-127) and `locked` refined into `locked` / `deadline_passed` /
+  `graded` / `released`), never the stored state alone. A further pill tone follows
   ADR-104's rule (its 2026-10-13 amendment). Nothing blinks. No solid fill: the soft
   green plus the `TimeLeft` timer (icon and "1 h 40 min" — two units,
   floored, the seconds and a second tick only in the last ten minutes,
