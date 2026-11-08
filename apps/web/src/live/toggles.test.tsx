@@ -11,13 +11,9 @@ import {
 } from "./toggles";
 
 describe("parseLiveToggles (#80)", () => {
-  it("gives the defaults when nothing is stored", () => {
-    expect(parseLiveToggles(null)).toEqual(LIVE_TOGGLE_DEFAULTS);
-  });
-
   // #227: the first frame a projector shows names nobody and answers nothing.
-  it("starts with everything hidden", () => {
-    expect(LIVE_TOGGLE_DEFAULTS).toEqual({ names: false, answers: false, results: false });
+  it("gives the defaults when nothing is stored", () => {
+    expect(parseLiveToggles(null)).toEqual({ names: false, answers: false, results: false });
   });
 
   it("reads back what was stored", () => {

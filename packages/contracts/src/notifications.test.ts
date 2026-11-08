@@ -11,46 +11,43 @@ import {
 } from "./notifications.js";
 
 describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", () => {
-  it("has one row per kind, and every channel in each row", () => {
-    expect(Object.keys(DEFAULT_CHANNEL_ENABLED).sort()).toEqual([...NOTIFICATION_KINDS].sort());
-    for (const kind of NOTIFICATION_KINDS) {
-      expect(Object.keys(DEFAULT_CHANNEL_ENABLED[kind]).sort()).toEqual(
-        [...NOTIFICATION_CHANNELS].sort(),
-      );
-    }
+  // The decision itself, in one place (ADR-030, #198 §c §h, ADR-055 §5): a row per kind, every channel in each row.
+  it("is this table, kind by kind", () => {
+    const on = { bell: true, email: true, teams: true };
+    const appOnly = { bell: true, email: false, teams: false };
+    expect(DEFAULT_CHANNEL_ENABLED).toEqual({
+      results_released: on,
+      activity_scheduled: appOnly,
+      activity_available: on,
+      deadline_approaching: on,
+      results_updated: appOnly,
+      project_scheduled: appOnly,
+      project_published: appOnly,
+      project_deadline_reminder: on,
+      project_repo_invited: on,
+      project_grade_final: on,
+      impersonation_ended: appOnly,
+      student_joined: appOnly,
+      roster_conflict: on,
+      grading_ready: on,
+      project_deadline_applied: appOnly,
+      project_provision_failed: on,
+      github_org_lost: on,
+      pool_shared: on,
+      pool_ownership: on,
+      pool_question_added: appOnly,
+      question_reported: appOnly,
+      question_report_resolved: on,
+      pool_unpublished: on,
+      system_alert: { bell: true, email: true, teams: false },
+    });
   });
 
   it("keeps the app on for every kind: a default never hides a notification", () => {
     for (const kind of NOTIFICATION_KINDS) expect(DEFAULT_CHANNEL_ENABLED[kind].bell).toBe(true);
   });
 
-  it("leaves the kinds that existed before #198 on everywhere, as they were", () => {
-    const allOn = { bell: true, email: true, teams: true };
-    expect(DEFAULT_CHANNEL_ENABLED.results_released).toEqual(allOn);
-    expect(DEFAULT_CHANNEL_ENABLED.pool_shared).toEqual(allOn);
-    expect(DEFAULT_CHANNEL_ENABLED.pool_ownership).toEqual(allOn);
-  });
-
-  it("keeps grading_ready on everywhere and pool_question_added in the app only (§c)", () => {
-    expect(DEFAULT_CHANNEL_ENABLED.grading_ready).toEqual({ bell: true, email: true, teams: true });
-    expect(DEFAULT_CHANNEL_ENABLED.pool_question_added).toEqual({
-      bell: true,
-      email: false,
-      teams: false,
-    });
-  });
-
-  it("keeps activity_scheduled in the app only, and activity_available on everywhere (§h)", () => {
-    expect(DEFAULT_CHANNEL_ENABLED.activity_scheduled).toEqual({ bell: true, email: false, teams: false });
-    expect(DEFAULT_CHANNEL_ENABLED.activity_available).toEqual({ bell: true, email: true, teams: true });
-  });
-
-  it("keeps deadline_approaching on everywhere: a reminder a student must not miss (§c)", () => {
-    expect(DEFAULT_CHANNEL_ENABLED.deadline_approaching).toEqual({ bell: true, email: true, teams: true });
-  });
-
-  it("mails system_alert by default, and keeps it out of Teams whatever the toggle (ADR-055 §5)", () => {
-    expect(DEFAULT_CHANNEL_ENABLED.system_alert).toEqual({ bell: true, email: true, teams: false });
+  it("keeps system_alert out of Teams whatever the toggle (ADR-055 §5)", () => {
     expect(kindChannels("system_alert")).toEqual(["bell", "email"]);
     expect(kindChannels("results_released")).toEqual(NOTIFICATION_CHANNELS);
   });

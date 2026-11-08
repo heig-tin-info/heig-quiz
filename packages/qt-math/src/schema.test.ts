@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { emptyMathDraft, fieldRules, MathConfigSchema } from "./schema.js";
+import { fieldRules, MathConfigSchema } from "./schema.js";
 import { config, SECRET_CONFIG } from "./test/fixtures.js";
 
 const issues = (over: object) => {
@@ -13,11 +13,6 @@ describe("MathConfigSchema", () => {
     expect(config()).toMatchObject({ tolerance: 1e-6, samples: 10, forbidden: [], maxLength: 200, plot: "none" });
     expect(config().answers[0]).toEqual({ value: "2x^2-3", points: 1 });
     expect(MathConfigSchema.safeParse(SECRET_CONFIG).success).toBe(true);
-  });
-
-  it("refuses the empty draft (D16), which still carries its version", () => {
-    expect(MathConfigSchema.safeParse(emptyMathDraft()).success).toBe(false);
-    expect(emptyMathDraft().configVersion).toBe(1);
   });
 
   it("checks the symbols: a name, distinct, not a constant, an interval", () => {

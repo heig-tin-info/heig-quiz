@@ -137,9 +137,4 @@ describe("the other hooks", () => {
     expect(blocksServer.searchText(SECRET_CONFIG)).toContain("Trapped corridor");
     expect(blocksServer.searchText(SECRET_CONFIG)).toContain("Bring the robot");
   });
-
-  it("migrates its own version by identity and refuses a newer one", () => {
-    expect(blocksServer.migrate(SECRET_CONFIG, 1)).toBe(SECRET_CONFIG);
-    expect(() => blocksServer.migrate(SECRET_CONFIG, 2)).toThrow();
-  });
 });

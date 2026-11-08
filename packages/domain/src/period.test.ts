@@ -5,7 +5,6 @@ import {
   currentOrNextSemester,
   isCurrent,
   nextSemester,
-  PERIOD_MARGIN_MONTHS,
   semesterMonths,
   semesterOfRange,
   shiftSemester,
@@ -24,10 +23,6 @@ describe("isCurrent", () => {
   // Autumn 2026: September 2026 … January 2027, margin one month each side.
   const start = "2026-09";
   const end = "2027-01";
-
-  it("uses a one-month margin", () => {
-    expect(PERIOD_MARGIN_MONTHS).toBe(1);
-  });
 
   it("is current inside the period and within the margin, at both ends", () => {
     expect(isCurrent(start, end, "2026-07")).toBe(false);

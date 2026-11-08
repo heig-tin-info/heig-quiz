@@ -1,7 +1,7 @@
-import type { GradeResult } from "@quiz/core/server";
+import { QUESTION_TYPE_IDS, type GradeResult } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
 
-import { DRILL_TYPES, isDrillEligible } from "./drillEligibility.js";
+import { isDrillEligible } from "./drillEligibility.js";
 
 const graded = (state?: "validated" | "proposed"): GradeResult => ({
   kind: "graded",
@@ -17,24 +17,14 @@ const pendingLlm: GradeResult = {
 };
 
 describe("isDrillEligible", () => {
-  it("scopes v1 to five types", () => {
-    expect(DRILL_TYPES).toEqual(["mcq", "short", "cloze", "categorize", "blocks"]);
-  });
-
-  it("takes a v1 type whose grading is automatic and final", () => {
-    expect(isDrillEligible("mcq", graded())).toBe(true);
-    expect(isDrillEligible("categorize", graded("validated"))).toBe(true);
-    expect(isDrillEligible("blocks", graded("validated"))).toBe(true);
+  it("takes exactly the five types of the v1 scope, graded automatically and finally (ADR-041 §3)", () => {
+    const taken = QUESTION_TYPE_IDS.filter((id) => isDrillEligible(id, graded()));
+    expect(taken).toEqual(["mcq", "short", "cloze", "categorize", "blocks"]);
+    expect(QUESTION_TYPE_IDS.filter((id) => isDrillEligible(id, graded("validated")))).toEqual(taken);
   });
 
   it("refuses a grading that waits: an LLM, or a proposal for the teacher", () => {
     expect(isDrillEligible("short", pendingLlm)).toBe(false);
     expect(isDrillEligible("short", graded("proposed"))).toBe(false);
-  });
-
-  it("refuses a type outside the scope, however it is graded", () => {
-    expect(isDrillEligible("rich", graded())).toBe(false);
-    expect(isDrillEligible("code", graded())).toBe(false);
-    expect(isDrillEligible("diagram", graded())).toBe(false);
   });
 });

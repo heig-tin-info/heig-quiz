@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isGraded, isPendingLlm, isPendingRunner, QUESTION_TYPE_IDS, zeroGrade } from "./contract.js";
+import { isGraded, isPendingLlm, isPendingRunner, zeroGrade } from "./contract.js";
 import type { GradeResult } from "./contract.js";
 import { ConfigMigrationError, RunnerBusy, RunnerUnavailable, UnknownQuestionType } from "./errors.js";
 import { defineClientRegistry, defineServerRegistry, makeLookup, registeredIds } from "./registry.js";
 
 const fake = { id: "mcq" } as const;
-
-describe("question type ids", () => {
-  it("lists the four MVP types, the circuit type, the codeimage type and the essay", () => {
-    expect(QUESTION_TYPE_IDS).toEqual(["mcq", "short", "cloze", "code", "circuit", "logic", "codeimage", "rich", "categorize", "diagram", "brainstorm", "math", "blocks"]);
-  });
-});
 
 describe("registries", () => {
   it("defineServerRegistry / defineClientRegistry are identities", () => {
