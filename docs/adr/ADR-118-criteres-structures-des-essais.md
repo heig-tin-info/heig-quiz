@@ -89,7 +89,9 @@ cost them points.
    `[0, points]`. The free-rubric path of every LLM-graded type (an essay
    without criteria, a diagram) goes through the same rule, the model's
    maxima taken as the weights: its breakdown is rescaled to the item's
-   points instead of clamping the total alone.
+   points instead of clamping the total alone. A corollary: in points mode
+   (§2, Normalize off) a criterion's number is its points by default, and
+   its share of the item's points otherwise.
 4. **The rubric stays**, labelled "Grading instructions", and "Global
    instructions", folded while empty, once criteria exist *(2026-10-27)*:
    optional global context for the grader, sent beside the criteria.
@@ -115,7 +117,8 @@ cost them points.
      item's criteria; the proposal's points are copied and its total kept (a
      0.01 gap between the rounded parts and the total is accepted). A free
      rubric, a diagram, or ids that match nothing get no breakdown, never a
-     partial one. The criteria come from the type's `gradingCriteria` hook;
+     partial one. The criteria come from the type's `gradingCriteria` hook on
+     the version's config;
      a type without it is graded by one total.
    - **The total is never typed for an essay with criteria.** The teacher
      sends `criteria: [{ id, points }]`, each within `[0, maxPoints]`; the
@@ -135,7 +138,8 @@ cost them points.
    - **After the release.** `results_updated` compares grades only: a new
      split with an unchanged total notifies nobody.
    - **Who reads it.** `rich`'s `studentDetails` drops `breakdown` unless the
-     key is shown; under `showKey` the essay's `Review` lists it under the
+     key is shown: under `showKey` the feedback payload carries it, and the
+     essay's `Review` lists it under the
      answer, "Points per criterion", for student and teacher alike (the
      teacher's list adds the model's sentence per criterion). The score line
      stays the item's points.

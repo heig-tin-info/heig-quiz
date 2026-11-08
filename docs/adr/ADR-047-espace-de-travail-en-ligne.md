@@ -12,7 +12,7 @@ amendment is in the [historical record](history/ADR-047-espace-de-travail-en-lig
 
 - 2026-10-07, M6-03: the portal's GitHub relay and its own login ([amendment](#m6-03-2026-10-07-the-portals-relay-and-its-own-login)).
 - 2026-10-07, M6-06: the work mode in Quiz, its grant, quota and messages ([amendment](#m6-06-2026-10-07-the-work-mode-in-quiz)).
-- 2026-10-07, M6-07: Safe Exam Browser for a project ([amendment](#m6-07-2026-10-07-safe-exam-browser-for-a-project)).
+- 2026-10-07, M6-07: Safe Exam Browser for a project ([amendment](#m6-07-2026-10-07-safe-exam-browser-for-a-project)); no SEB project opens to students before proof B is recorded.
 - 2026-10-07, [ADR-078](ADR-078-codespace-git-relay-tokens.md): no App key on the engine VM; the portal seeds and relays with installation tokens Quiz issues for one repository.
 - 2026-10-08: an administrator always holds the workspace grant ([amendment](#2026-10-08-an-administrator-always-holds-the-grant)).
 - 2026-10-09, [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md) (proposed): an `online_seb` project may also accept a kiosk station (a `kiosk` claim instead of `seb`).

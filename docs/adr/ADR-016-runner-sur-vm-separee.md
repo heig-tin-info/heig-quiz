@@ -113,8 +113,9 @@ persistent work volume, a git channel on an internal bridge); invariants
 steps are unchanged.*
 
 - **One dispatcher.** `infra/engine/deploy.sh` is the engine VM's forced
-  command; the production key runs it on `/opt/quiz-runner` (the runner and
-  the portal's `prod`). It parses `[force] <component> <instance> <sha>
+  command, with a scope fixed by the `authorized_keys` line: the production
+  key runs it on `/opt/quiz-runner` (the runner and the portal's `prod`), so
+  the production checkout only ever moves to approved commits. It parses `[force] <component> <instance> <sha>
   <token>` strictly, serialises the VM's deploys with one lock, **refuses a
   sha that predates it**, moves its checkout and runs the component's steps
   (`apps/runner/deploy/install.sh`, `apps/codespace/deploy/install.sh
@@ -122,7 +123,9 @@ steps are unchanged.*
   untag older sha tags; **no global prune** on an engine other services
   share). It **refuses the staging scope** (2026-10-11, below). *Transition:*
   it still accepts the runner's pre-M6-04 `<sha> <token>`, which
-  `apps/runner/deploy/deploy.sh` forwards to it (a TODO in the dispatcher).
+  `apps/runner/deploy/deploy.sh` forwards to it; once `authorized_keys`
+  names the dispatcher, the CI sends `runner prod <sha> <token>` and both
+  go (a TODO in the dispatcher).
 - **Two portal instances**, `prod` (`code.chevallier.io`) and `staging`
   (`code-dev.chevallier.io`, for `quiz.dev.chevallier.io`), with separate
   environment files, secrets, ports, data directories, SQLite and volumes.
@@ -132,7 +135,7 @@ steps are unchanged.*
   nftables table pinning each bridge to its own gateway, so a staging
   container cannot reach production's git channel; the channel has **no
   `0.0.0.0` fallback** in production or for a named instance: no gateway,
-  no start.
+  no start (the deploy replays the network setup first).
 - **An image per sha.** The portal is built by the CI
   (`ghcr.io/heig-tin-info/quiz-codespace:<sha>`, `apps/codespace/Dockerfile`,
   **no secret inside**) and runs as a quadlet like the runner: host
@@ -156,22 +159,23 @@ steps are unchanged.*
 *M6-05 part 2; scope: the addendum's resize and slices; the backups this VM
 lacked.*
 
-- **No resize** while the workspace is test-only (owner); a real class
+- **(a) No resize** while the workspace is test-only (owner); a real class
   needs it.
-- **Two slices**, `quiz-runner.slice` above `codespace.slice` in CPU and IO
+- **(b) Two slices**, `quiz-runner.slice` above `codespace.slice` in CPU and IO
   weight, the runner's memory protected, the workspace's capped
   (`infra/engine/*.slice`); containers join theirs through
   **`--cgroup-parent`, an addition to invariant 12's list**, set by the
   quadlets.
-- **Backup, destination A** (stopgap): a root forced command (`restrict`,
+- **(c) Backup, destination A** (stopgap): a root forced command (`restrict`,
   `from=`) streams each instance's SQLite `.backup` and volumes; `srv` on the
   app VM pulls it daily. **No credential travels**: env files stay in the
   vault (ADR-010), session cookie tokens are blanked in the copy. Accepted
   limits: volumes are read live (a repository may need its `shadow.git`), one provider, the app VM's small disk, a
   key that reads all workspace data, monitoring by hand (not in ADR-055's
-  status). **Destination B**, restic to S3 from the engine VM, before a real
-  class. Procedures: `deployment.md` §3.
-- **The host's input policy drops by default**, in its own table
+  status). Procedures: `deployment.md` §3.
+- **(d) Destination B**, restic to S3 from the engine VM, before a real
+  class.
+- **(e) The host's input policy drops by default**, in its own table
   `inet host`, **never with `flush ruleset`** (the codespace and netavark
   tables belong to their owners); applied by hand behind a timed rollback,
   **never by a deploy**.

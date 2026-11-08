@@ -101,6 +101,8 @@ session slides on `SESSION_TTL_HOURS`; a `seb` one never slides, and lives
 6 h from the launch. It is not deleted on submit: after it, every write is a `410` and the
 session reads its own closed attempt, which is what the screen shows.
 
+<a id="4-one-rule-for-who-sits-what-sits"></a>
+
 ### 4. One rule for who sits what: `sitRefusal`
 
 `sitRefusal` in `modules/guards.ts` (first named `sits`) answers why a request
@@ -221,7 +223,8 @@ student resume from its lock screen after a user-session switch.
 - **In the file**: every `.seb` of the evaluation carries its SHA-256 (UTF-8,
   lowercase hex) as `hashedQuitPassword`, right after `quitURLConfirm`; SEB
   asks for it on its lock screen and on Ctrl+Q / ⌘Q. The quit link still
-  quits without it.
+  quits without it, so the student uses the button, whose shortcut line
+  now says the keys ask for a password.
 - **Who reads it**: the staff, on the evaluation's live screen
   (`DashboardView.evaluation.sebUnlockPassword`, `null` unless the
   evaluation trusts SEB), hidden until clicked and in that tab only. It
