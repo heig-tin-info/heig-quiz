@@ -2,7 +2,7 @@
  * `@quiz/qt-brainstorm/server` — the server half of the `brainstorm` type
  * (issue #458, ADR-071). No React in this import graph.
  */
-import { ConfigMigrationError, tallyKeys, type QuestionTypeServer } from "@quiz/core/server";
+import { versionedMigrate, tallyKeys, type QuestionTypeServer } from "@quiz/core/server";
 import { ideaKey, ideasOf } from "@quiz/domain";
 
 import {
@@ -40,10 +40,7 @@ export const brainstormServer: QuestionTypeServer<
 
   emptyDraft: emptyBrainstormDraft,
 
-  migrate(config: unknown, fromVersion: number): BrainstormConfig {
-    if (fromVersion === BRAINSTORM_CONFIG_VERSION) return config as BrainstormConfig;
-    throw new ConfigMigrationError("brainstorm", fromVersion, BRAINSTORM_CONFIG_VERSION, "unknown source version");
-  },
+  migrate: versionedMigrate<BrainstormConfig>("brainstorm", BRAINSTORM_CONFIG_VERSION),
 
   /** A poll item is never graded; the item still needs a scale. */
   defaultPoints: () => 1,

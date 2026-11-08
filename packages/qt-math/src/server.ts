@@ -2,7 +2,7 @@
  * `@quiz/qt-math/server` — the server half of the `math` type (docs/spec/04
  * §4.16, ADR-102). No React in this import graph.
  */
-import { ConfigMigrationError, tallyKeys, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
+import { versionedMigrate, tallyKeys, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
 import { curveOf } from "@quiz/domain/math";
 
 import { mathAnswerDoc, mathAnswerZone, mathSolutionDoc, mathStatementDoc, mathStudentAnswerDoc } from "./document.js";
@@ -56,10 +56,7 @@ export const mathServer: QuestionTypeServer<MathConfig, MathAnswer, MathStudent,
 
   emptyDraft: emptyMathDraft,
 
-  migrate(config: unknown, fromVersion: number): MathConfig {
-    if (fromVersion === MATH_CONFIG_VERSION) return config as MathConfig;
-    throw new ConfigMigrationError("math", fromVersion, MATH_CONFIG_VERSION, "unknown source version");
-  },
+  migrate: versionedMigrate<MathConfig>("math", MATH_CONFIG_VERSION),
 
   defaultPoints: () => 1,
 

@@ -15,7 +15,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import type { FinalizeContext, GradeContext, GradeResult, GradedResult } from "@quiz/core/server";
-import { RunnerRequest, zeroGrade, type RunnerCase, type RunnerOutcome } from "@quiz/core/server";
+import { maskHiddenCases, RunnerRequest, zeroGrade, type RunnerCase, type RunnerOutcome } from "@quiz/core/server";
 import { assembleSource, mainFileName, TemplateRegionMismatch } from "@quiz/domain/lockedTemplate";
 import { round2 } from "@quiz/domain/round";
 
@@ -29,7 +29,6 @@ import {
   type CodeDetails,
   type CodeReviewDetails,
   type ProgramConfig,
-  type ReviewCaseDetail,
 } from "./schema.js";
 import { accidentOf, caseVerdict } from "./verdict.js";
 
@@ -361,20 +360,12 @@ export function studentDetails(
   details: CodeDetails,
   options: { showHiddenCaseNames?: boolean } = {},
 ): CodeReviewDetails {
-  const show = options.showHiddenCaseNames === true;
   return {
     ...details,
-    cases: details.cases.map((c, i): ReviewCaseDetail => {
-      if (c.visible) return c;
-      // The coarse reason, the most a student reads of a hidden case.
+    // The coarse reason, the most a student reads of a hidden case.
+    cases: maskHiddenCases(details.cases, options.showHiddenCaseNames === true, (c) => {
       const failure = c.ok ? undefined : (accidentOf(c) ?? "failed");
-      return {
-        name: show ? c.name : `#${i + 1}`,
-        visible: false,
-        points: c.points,
-        ok: c.ok,
-        ...(failure === undefined ? {} : { failure }),
-      };
+      return failure === undefined ? {} : { failure };
     }),
   };
 }

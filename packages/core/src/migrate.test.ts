@@ -2,7 +2,7 @@ import { z } from "zod";
 import { describe, expect, it } from "vitest";
 
 import { ConfigMigrationError } from "./errors.js";
-import { canonicalParse, fromCanonicalOf, reparseMigrate } from "./migrate.js";
+import { canonicalParse, fromCanonicalOf, reparseMigrate, versionedMigrate } from "./migrate.js";
 
 const Config = z.object({
   configVersion: z.literal(2),
@@ -70,4 +70,13 @@ describe("fromCanonicalOf", () => {
     const read = fromCanonicalOf({ configSchema: Plain, fromCanonical: () => ({ text: "own" }) });
     expect(read({})).toEqual({ text: "own" });
   });
+});
+
+it("versionedMigrate keeps the current version, runs a named step, refuses any other", () => {
+  const migrate = versionedMigrate("mcq", 3, { 1: () => "from v1" });
+  const draft = { configVersion: 3 };
+  expect(migrate(draft, 3)).toBe(draft);
+  expect(migrate({}, 1)).toBe("from v1");
+  expect(() => migrate({}, 2)).toThrow("cannot migrate mcq config from v2 to v3: unknown source version");
+  expect(() => migrate({}, 4)).toThrow(ConfigMigrationError);
 });

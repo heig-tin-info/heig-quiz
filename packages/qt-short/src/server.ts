@@ -3,7 +3,7 @@
  *
  * No React in this import graph: the API and the grading worker load it.
  */
-import { ConfigMigrationError, tallyKeys, type ParameterSample, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
+import { versionedMigrate, tallyKeys, type ParameterSample, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
 import { formatStep } from "@quiz/domain";
 import { CONFIG_TOO_COMPLEX_KEY, configPatternProblems, PATTERN_PROBLEM_KEY } from "@quiz/domain/regex";
 import { describeMatcher } from "@quiz/domain/short";
@@ -179,17 +179,7 @@ export const shortServer: QuestionTypeServer<
    * v2 -> v3 changes nothing but the stamp: v3 only widens what a `number`
    * matcher accepts (ADR-056 §4).
    */
-  migrate(config: unknown, fromVersion: number): ShortConfig {
-    if (fromVersion === SHORT_CONFIG_VERSION) return config as ShortConfig;
-    if (fromVersion === 1) return migrateShortV1(config);
-    if (fromVersion === 2) return stamped(config);
-    throw new ConfigMigrationError(
-      "short",
-      fromVersion,
-      SHORT_CONFIG_VERSION,
-      "unknown source version",
-    );
-  },
+  migrate: versionedMigrate("short", SHORT_CONFIG_VERSION, { 1: migrateShortV1, 2: stamped }),
 
   defaultPoints: () => 1,
 

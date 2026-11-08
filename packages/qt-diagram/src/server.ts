@@ -10,7 +10,7 @@
  * answer and the teacher settles it in the grading panel, the answer above
  * the reference and both text forms.
  */
-import { ConfigMigrationError, zeroGrade, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
+import { versionedMigrate, zeroGrade, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
 import { formOf, isEmptyScene, kindIssues, sameScene, toText, type Scene } from "@quiz/diagram/server";
 
 import {
@@ -62,10 +62,7 @@ export const diagramServer: QuestionTypeServer<
 
   emptyDraft: emptyDiagramDraft,
 
-  migrate(config: unknown, fromVersion: number): DiagramConfig {
-    if (fromVersion === DIAGRAM_CONFIG_VERSION) return config as DiagramConfig;
-    throw new ConfigMigrationError("diagram", fromVersion, DIAGRAM_CONFIG_VERSION, "unknown source version");
-  },
+  migrate: versionedMigrate<DiagramConfig>("diagram", DIAGRAM_CONFIG_VERSION),
 
   /**
    * A draft may lack its reference — the teacher previews the question

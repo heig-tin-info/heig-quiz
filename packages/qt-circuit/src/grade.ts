@@ -19,7 +19,7 @@ import type {
   GradedResult,
   InteractiveOutcome,
 } from "@quiz/core/server";
-import { RunnerRequest, zeroGrade, type RunnerOutcome } from "@quiz/core/server";
+import { maskHiddenCases, RunnerRequest, zeroGrade, type RunnerOutcome } from "@quiz/core/server";
 import { round2 } from "@quiz/domain/round";
 
 import { extractNets, formatIssue, hasPaletteViolation } from "./netlist.js";
@@ -636,29 +636,19 @@ export function studentDetails(
   details: CircuitDetails,
   policy: { showKey: boolean; showHiddenCaseNames: boolean },
 ): CircuitDetails {
+  const masked = maskHiddenCases(details.stimuli, policy.showHiddenCaseNames, (s) => ({
+    error: s.error,
+    // The distance to the envelope is a verdict, like `error`; the
+    // curves it was measured on are the key.
+    ...(s.envelope === undefined ? {} : { envelope: s.envelope }),
+    series: null,
+    expected: null,
+    ...(s.reason === undefined ? {} : { reason: s.reason }),
+  }));
   return {
     ...details,
-    stimuli: details.stimuli.map((s, i) => {
-      if (!s.visible) {
-        return {
-          name: policy.showHiddenCaseNames ? s.name : `#${i + 1}`,
-          visible: false,
-          points: s.points,
-          ok: s.ok,
-          error: s.error,
-          // The distance to the envelope is a verdict, like `error`; the
-          // curves it was measured on are the key.
-          ...(s.envelope === undefined ? {} : { envelope: s.envelope }),
-          series: null,
-          expected: null,
-          ...(s.reason === undefined ? {} : { reason: s.reason }),
-        };
-      }
-      if (policy.showKey) return s;
-      return {
-        ...s,
-        expected: details.showExpected === true ? s.expected : null,
-      };
-    }),
+    stimuli: masked.map((s) =>
+      !s.visible || policy.showKey ? s : { ...s, expected: details.showExpected === true ? s.expected : null },
+    ),
   };
 }

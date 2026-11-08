@@ -12,7 +12,7 @@
  * to it instead (`pending: 'llm'`, docs/spec/04 §4.8, F-GRADE-02).
  */
 import { BREAKDOWN_KEY } from "@quiz/core/reasons";
-import { ConfigMigrationError, zeroGrade, type QuestionTypeServer } from "@quiz/core/server";
+import { versionedMigrate, zeroGrade, type QuestionTypeServer } from "@quiz/core/server";
 
 import { richAnswerDoc, richAnswerZone, richSolutionDoc, richStatementDoc, richStudentAnswerDoc } from "./document.js";
 import { richGenerator } from "./generate.js";
@@ -58,14 +58,12 @@ export const richServer: QuestionTypeServer<
    * adds a field and parses nothing, so an invalid v1 draft (D16) comes up
    * as invalid as it went in.
    */
-  migrate(config: unknown, fromVersion: number): RichConfig {
-    if (fromVersion === RICH_CONFIG_VERSION) return config as RichConfig;
-    if (fromVersion === 1) {
+  migrate: versionedMigrate("rich", RICH_CONFIG_VERSION, {
+    1: (config) => {
       const v1 = config !== null && typeof config === "object" && !Array.isArray(config) ? config : {};
       return { criteria: [], ...v1, configVersion: RICH_CONFIG_VERSION } as unknown as RichConfig;
-    }
-    throw new ConfigMigrationError("rich", fromVersion, RICH_CONFIG_VERSION, "unknown source version");
-  },
+    },
+  }),
 
   /**
    * The criteria's points, or the normalized total, else 1 (ADR-118 and its
