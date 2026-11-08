@@ -166,11 +166,7 @@ export async function reopenAttempt(
   // whether the student had read the key (audit L9), an exercise's included.
   const derogation = keyShownTo(evaluation, attempt.state) ? "key_shown" : null;
   const participant = await participantOfAttempt(db, evaluation, attempt);
-  const { deadlineAt, bonusS } = deadlineFor(evaluation, {
-    startedAt: attempt.startedAt ?? now,
-    timeBonusPercent: participant.timeBonusPercent,
-    extraS: attempt.extraS,
-  });
+  const { deadlineAt, bonusS } = deadlineFor(evaluation, participant, attempt.startedAt ?? now, attempt.extraS);
   await db.transaction(async (tx) => {
     // The attempt's row lock, which every grading write of the jobs takes
     // too before re-reading the attempt's state (ADR-067): a pass that

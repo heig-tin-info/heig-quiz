@@ -328,11 +328,7 @@ export async function retakeAttempt(
 
     // Started at once: `running` is the only state the rule allows, so there
     // is no lobby to wait in, and no `not_started` row a close would miss.
-    const { deadlineAt, bonusS } = deadlineFor(evaluation, {
-      startedAt: now,
-      timeBonusPercent: participant.timeBonusPercent,
-      extraS: 0,
-    });
+    const { deadlineAt, bonusS } = deadlineFor(evaluation, participant, now, 0);
     const seed = drawSeed();
     const drawn = await drawInstances(tx, evaluation, seed);
     // ADR-091: an acquired question keeps the numbers it was acquired with;
@@ -379,11 +375,7 @@ export async function beginAttempt(
   now: Date,
 ): Promise<AttemptRecord> {
   if (attempt.state !== "not_started") return attempt;
-  const { deadlineAt, bonusS } = deadlineFor(evaluation, {
-    startedAt: now,
-    timeBonusPercent: participant.timeBonusPercent,
-    extraS: attempt.extraS,
-  });
+  const { deadlineAt, bonusS } = deadlineFor(evaluation, participant, now, attempt.extraS);
   // Conditional: two requests racing to start the same attempt produce one
   // start, and therefore one deadline.
   await db
