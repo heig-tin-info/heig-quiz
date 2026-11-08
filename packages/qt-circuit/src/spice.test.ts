@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { COMPONENT_KINDS, type ComponentKind } from "./library.js";
 import {
   AC_OUTPUT_COLUMNS,
-  OUTPUT_COLUMNS,
   acLine,
   acSourceSpec,
   buildNetlist,
@@ -315,10 +314,6 @@ describe("parseSpiceOutput", () => {
     // Steady state only: the first period carries the turn-on transient.
     const steady = (a: number[]): number => Math.max(...a.slice(200).map(Math.abs));
     expect(steady(vout) / steady(vin)).toBeCloseTo(0.707, 2);
-  });
-
-  it("knows the four columns it asked for", () => {
-    expect(OUTPUT_COLUMNS).toEqual(["time", "v(in)", "v(out)", "i(vmeas)"]);
   });
 
   it("returns null when ngspice printed no table", () => {

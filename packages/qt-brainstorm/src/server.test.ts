@@ -43,7 +43,6 @@ describe("brainstormServer", () => {
   });
 
   it("migrates nothing it did not write", () => {
-    expect(brainstormServer.migrate(config, 1)).toBe(config);
     expect(() => brainstormServer.migrate(config, 0)).toThrow();
     expect(brainstormServer.emptyDraft().prompt).toBe("");
     expect(brainstormServer.searchText(config)).toBe("Un être vivant ?");

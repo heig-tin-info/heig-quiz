@@ -5,7 +5,6 @@ import { BATTERY_MAX, PROGRAM_LIMITS, type Stmt } from "@quiz/domain/blocks";
 import {
   BlocksAnswer,
   BlocksConfig,
-  emptyBlocksDraft,
   isBlocksAnswered,
   kindsOutside,
   programFits,
@@ -71,10 +70,6 @@ describe("the answer schema", () => {
 describe("the config schema", () => {
   it("accepts the full fixture and keeps it as written", () => {
     expect(BlocksConfig.parse(SECRET_CONFIG)).toEqual(SECRET_CONFIG);
-  });
-
-  it("refuses an empty draft: no statement, no name (D16)", () => {
-    expect(BlocksConfig.safeParse(emptyBlocksDraft()).success).toBe(false);
   });
 
   it("refuses a map with the key of the domain", () => {

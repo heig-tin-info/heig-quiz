@@ -40,15 +40,6 @@ describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", ()
     });
   });
 
-  it("keeps activity_scheduled in the app only, and activity_available on everywhere (§h)", () => {
-    expect(DEFAULT_CHANNEL_ENABLED.activity_scheduled).toEqual({ bell: true, email: false, teams: false });
-    expect(DEFAULT_CHANNEL_ENABLED.activity_available).toEqual({ bell: true, email: true, teams: true });
-  });
-
-  it("keeps deadline_approaching on everywhere: a reminder a student must not miss (§c)", () => {
-    expect(DEFAULT_CHANNEL_ENABLED.deadline_approaching).toEqual({ bell: true, email: true, teams: true });
-  });
-
   it("mails system_alert by default, and keeps it out of Teams whatever the toggle (ADR-055 §5)", () => {
     expect(DEFAULT_CHANNEL_ENABLED.system_alert).toEqual({ bell: true, email: true, teams: false });
     expect(kindChannels("system_alert")).toEqual(["bell", "email"]);

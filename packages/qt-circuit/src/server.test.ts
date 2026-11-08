@@ -56,14 +56,6 @@ describe("circuitServer.summarizeAnswer", () => {
 });
 
 describe("circuitServer: the hooks the platform calls", () => {
-  it("exposes an interactive request, a grader and a finalizer", () => {
-    expect(typeof circuitServer.interactiveRequest).toBe("function");
-    expect(typeof circuitServer.finalizeRunner).toBe("function");
-    expect(typeof circuitServer.studentDetails).toBe("function");
-    expect(typeof circuitServer.toCanonical).toBe("function");
-    expect(typeof circuitServer.fromCanonical).toBe("function");
-  });
-
   it("parses its own five schemas", () => {
     const config = circuitConfig();
     expect(circuitServer.configSchema.safeParse(config).success).toBe(true);

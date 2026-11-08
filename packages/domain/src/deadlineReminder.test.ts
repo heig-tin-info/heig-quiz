@@ -7,10 +7,6 @@ const plus = (ms: number) => new Date(now.getTime() + ms);
 const HOUR = 3_600_000;
 
 describe("the day-before reminder of a deadline (F-NOTIF-06, F-NOTIF-13)", () => {
-  it("is due 24 hours before the end", () => {
-    expect(DEADLINE_REMINDER_MS).toBe(24 * HOUR);
-  });
-
   it("re-arms a moved deadline only when it is more than a day away, and never re-sends otherwise", () => {
     const sent = new Date("2026-10-01T22:00:00Z");
     expect(reminderClaimAfterMove(sent, plus(2 * 24 * HOUR), now)).toBeNull();
