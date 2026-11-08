@@ -176,7 +176,8 @@ planifiée » (§7).
    - **A draft's window is never stated as a fact**: the Format summary and
      Launch's timing check word it conditionally, by the clock. The Format
      step's mode card is "Automatic" / « Automatique » and says it opens by
-     itself once scheduled in Launch.
+     itself once scheduled in Launch; the state and the action keep their
+     words.
    - **The MCP says it**: `update_evaluation` returns the evaluation's `url`,
      plus a `notice` for a dated draft on the Scheduled clock; no MCP tool
      schedules or opens anything.
