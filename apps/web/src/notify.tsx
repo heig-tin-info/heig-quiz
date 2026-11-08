@@ -1,5 +1,5 @@
 import { AlertTriangle, Bell, CheckCircle2, Info, Loader2, X } from "lucide-react";
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { apiErrorMessage } from "./api";
 import { useT, type Dict } from "./i18n";
@@ -106,6 +106,16 @@ const AUTO_DISMISS_MS = 6000;
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seq = useRef(0);
+  // The pending auto-dismissals, cleared with the provider: a timer firing on an
+  // unmounted provider sets state nobody reads (in a test, after the page is gone).
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const timer of pending) clearTimeout(timer);
+      pending.clear();
+    };
+  }, []);
 
   // Two-step removal: flag `leaving` so the slide-out animation plays, the
   // element itself is dropped by its onAnimationEnd.
@@ -127,7 +137,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         const evicted = new Set(same.slice(0, Math.max(0, same.length - 4)));
         return [...kept.filter((t) => !evicted.has(t)), { id, icon, iconColor, message, action, key, corner }];
       });
-      setTimeout(() => dismiss(id), AUTO_DISMISS_MS);
+      const timer = setTimeout(() => {
+        timers.current.delete(timer);
+        dismiss(id);
+      }, AUTO_DISMISS_MS);
+      timers.current.add(timer);
     },
     [dismiss],
   );

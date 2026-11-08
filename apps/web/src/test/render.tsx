@@ -21,13 +21,15 @@ const LOCALE_KEY = "quiz-locale";
  * Queries never retry here: a failing test must fail at once, not in a second.
  * `staleTime: Infinity` keeps a cache seeded by the test from being refetched
  * behind its back; `invalidateQueries` and an explicit `refetch()` still run,
- * which is what the mutation and retry paths rely on.
+ * which is what the mutation and retry paths rely on. `gcTime: Infinity`
+ * schedules no garbage collection: a client lives as long as its test, and a
+ * five-minute timer per query outlived the test file's environment.
  */
 export function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
-      queries: { retry: false, staleTime: Infinity },
-      mutations: { retry: false },
+      queries: { retry: false, staleTime: Infinity, gcTime: Infinity },
+      mutations: { retry: false, gcTime: Infinity },
     },
   });
 }

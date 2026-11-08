@@ -1509,8 +1509,9 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     routes(makeProject());
     renderPage();
     const rail = await screen.findByRole("region", { name: "Lifecycle" });
-    // Published a week ago, the deadline in two weeks: a third elapsed.
-    const bar = within(rail).getByRole("progressbar", { name: "Time elapsed from publication to the deadline" });
+    // Published a week ago, the deadline in two weeks: a third elapsed. The section is
+    // up with a skeleton while the checkpoints load; the bar comes with the steps.
+    const bar = await within(rail).findByRole("progressbar", { name: "Time elapsed from publication to the deadline" });
     expect(Number(bar.getAttribute("aria-valuenow"))).toBeGreaterThanOrEqual(33);
     expect(Number(bar.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(34);
     expect(within(rail).getAllByTestId("rail-fill")).toHaveLength(1);
@@ -1525,6 +1526,7 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     routes(frozenProject());
     renderPage();
     const rail = await screen.findByRole("region", { name: "Lifecycle" });
+    await within(rail).findAllByRole("listitem");
     expect(within(rail).queryByRole("progressbar")).toBeNull();
     expect(within(rail).queryByTestId("rail-fill")).toBeNull();
     expect(within(rail).queryByText(/^closes in/)).toBeNull();

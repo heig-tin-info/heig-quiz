@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -60,5 +60,16 @@ describe("a toast on a low screen (#450)", () => {
     renderWithProviders(<Probe onUndo={() => {}} />);
     await userEvent.click(screen.getByRole("button", { name: "move 1" }));
     expect(screen.getByText("Move 1").closest("[aria-live]")?.className).toMatch(/\bbottom-\[/);
+  });
+});
+
+describe("a toast's dismissal timer", () => {
+  it("goes with its provider: nothing is left to fire on an unmounted page", () => {
+    vi.useFakeTimers();
+    const { unmount } = renderWithProviders(<Probe onUndo={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "move 1" }));
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
