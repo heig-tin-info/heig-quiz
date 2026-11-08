@@ -1,7 +1,7 @@
 /**
  * Invariant 6 over EVERY staff route of an object, in one sweep: the routes
- * under `/courses/:id`, `/classrooms/:id`, `/evaluations/:id`, `/pools/:id`
- * and `/questions/:id`, and, on a server with Quiz's GitHub App, those under
+ * under `/courses/:id`, `/classrooms/:id`, `/evaluations/:id`, `/pools/:id`,
+ * `/questions/:id` and `/group-sets/:id`, and, on a server with Quiz's GitHub App, those under
  * `/courses/:id`, `/classrooms/:id` and `/projects/:id` again (the App adds
  * its own) — as Fastify's route tree lists them, so a route added tomorrow
  * is swept without anybody remembering to. One route of those families is
@@ -36,6 +36,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { GroupSetDetail } from "@quiz/contracts";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 import { registerForTests } from "@quiz/registry/server";
 
@@ -126,7 +127,10 @@ function sweptRoutes(s: Sweep) {
     // `revisions/*`) print as `/journal*`, their segments lost: no URL can be
     // rebuilt from it, and the journal's own tests sweep both
     // (`writes.db.test.ts`, "who may write"; `journal.db.test.ts`).
-    if (!found || path.endsWith("/journal*") || NOT_STAFF.has(`${method} ${path}`)) return [];
+    // The students' routes of a set (`/group-sets/:id/student/…`, F-PROJ-22)
+    // are no staff routes: body first, then the student's own seat
+    // (`studentGroupSet`); `studentGroups.db.test.ts` holds their refusals.
+    if (!found || path.endsWith("/journal*") || path.includes("/group-sets/:id/student/") || NOT_STAFF.has(`${method} ${path}`)) return [];
     // A poll route on an exam is a 404 for its mode, whoever asks.
     const family = path.startsWith("/app/api/evaluations/:id/poll") ? "polls" : found;
     const url = (w: World, id: string) =>
@@ -282,6 +286,13 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
     scanUploadedAt: new Date(),
     scanUploadedBy: owner.id,
   });
+  // A group set of the classroom with one group: the `:gid`.
+  const set = await server.app.inject({ method: "POST", url: `/app/api/classrooms/${seed.classroomId}/group-sets`, headers: owner.headers, payload: {} });
+  expect(set.statusCode, set.body).toBe(201);
+  const setId = GroupSetDetail.parse(set.json()).set.id;
+  const group = await server.app.inject({ method: "POST", url: `/app/api/group-sets/${setId}/groups`, headers: owner.headers, payload: {} });
+  expect(group.statusCode, group.body).toBeLessThan(300);
+  const gid = GroupSetDetail.parse(group.json()).groups[0]!.id;
   return {
     ids: {
       courses: seed.courseId,
@@ -290,6 +301,7 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
       pools: seed.poolId,
       questions: seed.questionIds[0]!,
       polls: poll.evaluationId,
+      "group-sets": setId,
     },
     params: {
       itemId: seed.itemIds[0]!,
@@ -303,6 +315,7 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
       activityId: graded.id,
       cid: conditionId,
       reportId,
+      gid,
     },
   };
 }
@@ -313,7 +326,7 @@ beforeAll(async () => {
   const who = await callers(server);
   main = {
     server,
-    families: ["courses", "classrooms", "evaluations", "pools", "questions"],
+    families: ["courses", "classrooms", "evaluations", "pools", "questions", "group-sets"],
     ...who,
     shared: await world(server, who.owner, who.enrolled),
     world: () => world(server, who.owner, who.enrolled),
