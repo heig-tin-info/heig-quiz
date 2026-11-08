@@ -29,7 +29,8 @@ import {
 import { keptAttempts, regradeItem } from "../grading/service.js";
 import { runEvaluationGrading } from "../grading/jobs.js";
 import * as results from "../results/service.js";
-import { answersOf, orderItems } from "./attempt.js";
+import { answersOf } from "./access.js";
+import { orderItems } from "./order.js";
 import * as live from "./service.js";
 
 let server: TestServer;

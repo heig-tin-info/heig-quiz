@@ -6,7 +6,7 @@
  * `AttemptView` the server sent and of what happened since. Keeping it pure
  * is what makes the navigation rules testable without a browser, and it is
  * the only way the client rule and the server rule can agree: `lockedIds`
- * below and `lockedItemIds` of `apps/api/src/modules/live/attempt.ts` are the
+ * below and `lockedItemIds` of `apps/api/src/modules/live/order.ts` are the
  * SAME function, `@quiz/domain#lockedItems`.
  *
  * The server enforces the same rules on every write (deviation W5-15 also

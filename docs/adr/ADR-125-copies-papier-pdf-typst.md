@@ -177,7 +177,7 @@ nothing of B or C.
      the close like any handed-in attempt; `closed` or `grading` →
      `enqueueEvaluationGrading({ evaluationId, attemptIds: [id] })`.
    - **Boundary**: the transaction runs in `paper/service.ts`. It calls
-     the attempt insert of `live/attempt.ts`, exported through
+     the attempt insert of `live/paperAttempt.ts`, exported through
      `live/service.ts`, which writes only `attempts` (`origin` included)
      and its answers; then it inserts its own `paper_sheets` row.
    - No `in_progress` state, ticker or autosave. The entry page keeps its

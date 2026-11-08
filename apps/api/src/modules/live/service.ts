@@ -5,9 +5,17 @@
  * This file is the entry other modules import (`import * as live from
  * "../live/service.js"`); the code lives in cohesive files beside it (audit
  * B-13), each depending only on the ones above it in this list:
- *   - `attempt.ts`: failures, deadlines, participants, attempt creation, item
- *     order, the three views, entering, the write gate, submit, the per-attempt
- *     close/reopen and the student home;
+ *   - `failures.ts`: the refusals and their error classes;
+ *   - `deadline.ts`: the one computation of an attempt deadline;
+ *   - `access.ts`: the participant, the staff seat, the attempt reads;
+ *   - `guests.ts`: the guests of an anonymous poll (F-AUTH-05);
+ *   - `order.ts`: the item order and the navigation lock;
+ *   - `views.ts`: the attempt, preview, lobby and ready views;
+ *   - `lifecycle.ts`: attempt creation, retake, start and entering;
+ *   - `gates.ts`: the write gate every student write passes (§4.7);
+ *   - `closing.ts`: grading at hand-in, submit, the per-attempt close/reopen;
+ *   - `practice.ts`: practice after the due date (ADR-122);
+ *   - `studentHome.ts`: the student home and the board `grades.ts` reads;
  *   - `dwell.ts`: the end of an interval on screen, `closeShown` (ADR-039);
  *   - `autosave.ts`: the answer summaries, the live grader, `saveAnswer`,
  *     `markDone`, `reportShown` (the position and the dwell) and the attempt
@@ -31,9 +39,8 @@
  *   - autosave is ONE statement, never a read-modify-write: the conditional
  *     upsert of §4.7 settles the revision race in the database.
  */
-export type { AttemptRecord, Participant } from "./attempt.js";
+export type { AttemptRecord, Participant } from "./access.js";
 export {
-  PREVIEW_ATTEMPT_ID,
   LiveError,
   AttemptClosedError,
   AnswerInvalid,
@@ -42,37 +49,42 @@ export {
   RetakeRefused,
   PracticeRefused,
   liveFailureArms,
+} from "./failures.js";
+export {
   participantOf,
   sebSeat,
   resetOwnStaffAttempt,
   enrolledCount,
-  guestByToken,
-  ensureGuest,
-  deleteGuests,
   attemptById,
   attemptOf,
+} from "./access.js";
+export { guestByToken, ensureGuest, deleteGuests } from "./guests.js";
+export {
   ensureAttempt,
   retakeAttempt,
-  gradeAtHandIn,
   beginAttempt,
   markPresent,
+  enterEvaluation,
+  drawSeed,
+} from "./lifecycle.js";
+export {
+  PREVIEW_ATTEMPT_ID,
   attemptOrLobbyView,
   attemptView,
   previewView,
   lobbyView,
-  enterEvaluation,
-  isOpen,
-  assertOpen,
+} from "./views.js";
+export { orderItems } from "./order.js";
+export { isOpen, assertOpen } from "./gates.js";
+export {
+  gradeAtHandIn,
   submitAttempt,
   closeAttempt,
   reopenAttempt,
   reopenRole,
-  studentHome,
-  practiceEntry,
-  startPractice,
-  drawSeed,
-  orderItems,
-} from "./attempt.js";
+} from "./closing.js";
+export { practiceEntry, startPractice } from "./practice.js";
+export { studentHome } from "./studentHome.js";
 export { onAttemptsEnded, type EndedAttempt } from "./dwell.js";
 export { attemptOwnerName } from "./names.js";
 // ADR-125 §9: the paper attempt's rows, written in the `paper` module's transaction.

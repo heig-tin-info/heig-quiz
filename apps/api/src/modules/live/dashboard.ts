@@ -49,7 +49,8 @@ import {
 } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
 import { solutionView, studentView } from "./studentView.js";
-import { type AttemptRecord, type AnswerRecord, answersOf, reopenRefusal, reopenRole } from "./attempt.js";
+import { answersOf, type AnswerRecord, type AttemptRecord } from "./access.js";
+import { reopenRefusal, reopenRole } from "./closing.js";
 import { answerSummarizer, answeredBy, liveGrader, cellStatus } from "./autosave.js";
 import { incidentOut, incidentsFrom, incidentsOf, journalOn } from "./incidents.js";
 import { attemptOwnerName, fullName } from "./names.js";

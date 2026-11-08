@@ -26,16 +26,10 @@ import { answerFromStudent, answerToStudent } from "./studentView.js";
 import * as events from "./events.js";
 import { verdictOf } from "../grading/service.js";
 import { UnavailableRunner } from "../runner/unavailable.js";
-import {
-  type AttemptRecord,
-  type AnswerRecord,
-  LiveError,
-  AnswerInvalid,
-  orderItems,
-  lockedItemIds,
-  answersOf,
-  assertWritable,
-} from "./attempt.js";
+import { answersOf, type AnswerRecord, type AttemptRecord } from "./access.js";
+import { AnswerInvalid, LiveError } from "./failures.js";
+import { assertWritable } from "./gates.js";
+import { lockedItemIds, orderItems } from "./order.js";
 
 /** One line, and never wider than a cell (`ANSWER_SUMMARY_MAX`). */
 function truncate(text: string): string {

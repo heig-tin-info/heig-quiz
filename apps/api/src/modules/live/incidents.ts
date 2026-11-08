@@ -20,7 +20,7 @@ import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { attemptEvents, attempts, officialAttempt, users } from "../../db/schema.js";
 import { settingsOf, type EvaluationRecord } from "../evaluation/service.js";
-import type { AttemptRecord } from "./attempt.js";
+import type { AttemptRecord } from "./access.js";
 import { fullName } from "./names.js";
 
 /** What an attempt's end is read from: `closedAt` is set on every end, a hand-in included. */

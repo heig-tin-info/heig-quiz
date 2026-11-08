@@ -119,7 +119,7 @@ export function StudentGrid({
   );
 
   // Mirrors of the server's own rules, so no button is offered that the API
-  // would refuse (`live/attempt.ts`, `live/control.ts`):
+  // would refuse (`live/closing.ts`, `live/control.ts`):
   //   - `closeAttempt` moves any attempt that is `in_progress`, whatever the
   //     state of the evaluation — a row left open in a finished evaluation
   //     must stay closable (#95);
