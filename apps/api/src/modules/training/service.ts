@@ -50,6 +50,7 @@ import {
   questions,
   users,
 } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { ownersOf } from "../../identity.js";
 import * as evaluationService from "../evaluation/service.js";
 import { DomainError } from "../http.js";
@@ -72,8 +73,7 @@ type VersionRow = typeof questionVersions.$inferSelect;
 
 /** The one pool marked `is_training`, public or not; null before the install. */
 export async function trainingPool(db: Db): Promise<PoolRow | null> {
-  const [row] = await db.select().from(pools).where(eq(pools.isTraining, true)).limit(1);
-  return row ?? null;
+  return first(db.select().from(pools).where(eq(pools.isTraining, true)));
 }
 
 /** "Installed" (§2): the training pool exists AND is public — an unpublication (ADR-095 §5) uninstalls. */

@@ -17,6 +17,7 @@ import type { TeacherCandidates } from "@quiz/contracts";
 
 import { likeContains, type Db } from "./db/client.js";
 import { STAFF_ROLES, users } from "./db/schema.js";
+import { first } from "./db/query.js";
 
 /**
  * The accounts that may hold a seat, and so hear of a pool: the stored role,
@@ -30,7 +31,7 @@ export const isStaff = inArray(users.role, [...STAFF_ROLES]);
 
 /** The account behind a pick of a picker — a teacher or an admin, or nobody. */
 export async function findTeacherById(db: Db, userId: string) {
-  const [row] = await db
+  return first(db
     .select({
       id: users.id,
       email: users.email,
@@ -39,9 +40,7 @@ export async function findTeacherById(db: Db, userId: string) {
       role: users.role,
     })
     .from(users)
-    .where(and(eq(users.id, userId), isStaff))
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(users.id, userId), isStaff)));
 }
 
 /**

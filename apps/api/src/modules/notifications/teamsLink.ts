@@ -20,6 +20,7 @@ import { displayName } from "@quiz/domain";
 import { hashToken } from "../../auth/session.js";
 import type { Db } from "../../db/client.js";
 import { teamsLinks, teamsLinkTokens, users } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 
 export const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
 
@@ -106,8 +107,7 @@ export async function previewLinkToken(
   now: Date,
   tenants: AllowedTenants = [],
 ): Promise<LinkTokenRow | null> {
-  const [row] = await db.select().from(teamsLinkTokens).where(usable(token, now, tenants)).limit(1);
-  return row ?? null;
+  return first(db.select().from(teamsLinkTokens).where(usable(token, now, tenants)));
 }
 
 interface LinkOutcome {
@@ -164,8 +164,7 @@ export async function teamsLinkOf(
   key: { userId: string } | Pick<TeamsIdentity, "tenantId" | "aadObjectId">,
 ): Promise<TeamsLink | null> {
   const where = "userId" in key ? eq(teamsLinks.userId, key.userId) : identityWhere(teamsLinks, key);
-  const [row] = await db.select().from(teamsLinks).where(where).limit(1);
-  return row ?? null;
+  return first(db.select().from(teamsLinks).where(where));
 }
 
 /** Which of `userIds` have linked Teams: {@link teamsLinkOf} by account, for many accounts in one query. */

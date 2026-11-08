@@ -24,6 +24,7 @@ import {
   questionVersions,
   users,
 } from "../db/schema.js";
+import { first } from "../db/query.js";
 import type { AuditActor } from "../audit.js";
 import * as conceptService from "../modules/concept/service.js";
 import * as evaluationService from "../modules/evaluation/service.js";
@@ -190,12 +191,10 @@ async function ensurePool(
 // ---------------------------------------------------------------------------
 
 async function evaluationByTitle(db: Db, classroomId: string, title: string) {
-  const [row] = await db
+  return first(db
     .select()
     .from(evaluations)
-    .where(and(eq(evaluations.classroomId, classroomId), eq(evaluations.title, title)))
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(evaluations.classroomId, classroomId), eq(evaluations.title, title))));
 }
 
 /** The timing each preset needs before it may leave `draft` (F-EVAL-04). */

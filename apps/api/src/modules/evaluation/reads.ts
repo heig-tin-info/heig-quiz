@@ -57,6 +57,7 @@ import {
   questions,
   users,
 } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { conceptsOf } from "../concept/service.js";
 import { poolRolesOf } from "../pool/service.js";
 import { exportsOf, printRefusal } from "./print.js";
@@ -357,10 +358,8 @@ export async function joinedItem(
   evaluationId: string,
   itemId: string,
 ): Promise<JoinedItem | null> {
-  const [row] = await selectJoinedItems(db)
-    .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, evaluationId)))
-    .limit(1);
-  return row ?? null;
+  return first(selectJoinedItems(db)
+    .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, evaluationId))));
 }
 
 /**
@@ -831,8 +830,7 @@ export async function listEvaluations(
 }
 
 export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | null> {
-  const [row] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
-  return row ?? null;
+  return first(db.select().from(evaluations).where(eq(evaluations.id, id)));
 }
 
 /**

@@ -25,6 +25,7 @@ import {
   questionVersions,
   questions,
 } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { conceptsOf, copyQuestionConcepts, resolveForWrite, setQuestionConcepts } from "../concept/service.js";
 import { userTopic } from "../realtime/bus.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
@@ -647,12 +648,10 @@ export async function versionRow(
   questionId: string,
   number: number,
 ): Promise<VersionRecord | null> {
-  const [row] = await db
+  return first(db
     .select()
     .from(questionVersions)
-    .where(and(eq(questionVersions.questionId, questionId), eq(questionVersions.number, number)))
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(questionVersions.questionId, questionId), eq(questionVersions.number, number))));
 }
 
 export async function listVersions(db: Db, questionId: string): Promise<VersionRow[]> {

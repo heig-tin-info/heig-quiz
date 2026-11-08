@@ -19,6 +19,7 @@ import type { CourseCondition, CourseConditionCreate, CourseConditionPatch } fro
 
 import type { Db } from "../../db/client.js";
 import { courseConditions } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { DomainError } from "../http.js";
 
 export type CourseConditionRecord = typeof courseConditions.$inferSelect;
@@ -54,12 +55,10 @@ export async function conditionOfCourse(
   courseId: string,
   conditionId: string,
 ): Promise<CourseConditionRecord | null> {
-  const [row] = await db
+  return first(db
     .select()
     .from(courseConditions)
-    .where(and(eq(courseConditions.id, conditionId), eq(courseConditions.courseId, courseId)))
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(courseConditions.id, conditionId), eq(courseConditions.courseId, courseId))));
 }
 
 /** The position after every entry of the course, archived ones included. */

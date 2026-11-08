@@ -9,13 +9,14 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { Db } from "../../db/client.js";
 import { categories, questions } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { createCategory } from "./categories.js";
 import { createQuestion, patchQuestion, publishQuestion, putDraft, type QuestionWriter } from "./questionWrite.js";
 import type { QuestionRecord } from "./shared.js";
 
 /** A pool's live question of that `internalName` — case-insensitively, the unique index's rule; a deleted one is none. */
 export async function questionByName(db: Db, poolId: string, internalName: string): Promise<QuestionRecord | null> {
-  const [row] = await db
+  return first(db
     .select()
     .from(questions)
     .where(
@@ -24,9 +25,7 @@ export async function questionByName(db: Db, poolId: string, internalName: strin
         isNull(questions.deletedAt),
         sql`lower(${questions.internalName}) = lower(${internalName})`,
       ),
-    )
-    .limit(1);
-  return row ?? null;
+    ));
 }
 
 /** The root category of that name, created at the end when the pool lacks it. */

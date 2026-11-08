@@ -11,6 +11,7 @@ import { UNREVIEWED_TYPES, type ReviewState } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { questionReviews, questionVersions, questions, reviewPools } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { startOfDay } from "../llm/service.js";
 
 type ReviewRow = typeof questionReviews.$inferSelect;
@@ -24,19 +25,16 @@ export const reviewJson = (row: ReviewRow, versionNumber: number): QuestionRevie
 
 /** The review of a version, or null when it was never reviewed. */
 export async function reviewOf(db: Db, versionId: string): Promise<ReviewRow | null> {
-  const [row] = await db.select().from(questionReviews).where(eq(questionReviews.versionId, versionId)).limit(1);
-  return row ?? null;
+  return first(db.select().from(questionReviews).where(eq(questionReviews.versionId, versionId)));
 }
 
 /** The question's latest published version, or null while it is a draft only. */
 export async function latestVersionOf(db: Db, questionId: string) {
-  const [row] = await db
+  return first(db
     .select()
     .from(questionVersions)
     .where(and(eq(questionVersions.questionId, questionId), sql`${questionVersions.number} IS NOT NULL`))
-    .orderBy(desc(questionVersions.number))
-    .limit(1);
-  return row ?? null;
+    .orderBy(desc(questionVersions.number)));
 }
 
 /** Writes a version's review, replacing the one before. */

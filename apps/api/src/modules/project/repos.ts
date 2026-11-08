@@ -12,6 +12,7 @@ import { z } from "zod";
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { classrooms, enrollments, projectRepos, projects } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { projectsChanged, repoChanged } from "./events.js";
 import { repoMembers } from "./groupRepos.js";
 
@@ -105,14 +106,12 @@ export interface RepoContext {
 
 /** The project repository GitHub knows by `githubRepoId`, or null: not a student's repository. */
 export async function repoContext(db: Db, githubRepoId: number): Promise<RepoContext | null> {
-  const [row] = await db
+  return first(db
     .select({ repo: projectRepos, project: projects, courseId: classrooms.courseId })
     .from(projectRepos)
     .innerJoin(projects, eq(projects.id, projectRepos.projectId))
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
-    .where(eq(projectRepos.githubRepoId, githubRepoId))
-    .limit(1);
-  return row ?? null;
+    .where(eq(projectRepos.githubRepoId, githubRepoId)));
 }
 
 /**

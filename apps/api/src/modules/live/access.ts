@@ -7,6 +7,7 @@ import { and, count, desc, eq, inArray } from "drizzle-orm";
 
 import type { Db } from "../../db/client.js";
 import { answers, attempts, enrollments, evaluations, officialAttempt } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { isLatestAttempt, seatsOf, trustedClients, type EvaluationRecord } from "../evaluation/service.js";
 import * as events from "./events.js";
 
@@ -198,8 +199,7 @@ export async function enrolledCounts(
 // --- Attempts -------------------------------------------------------------
 
 export async function attemptById(db: Db, id: string): Promise<AttemptRecord | null> {
-  const [row] = await db.select().from(attempts).where(eq(attempts.id, id)).limit(1);
-  return row ?? null;
+  return first(db.select().from(attempts).where(eq(attempts.id, id)));
 }
 
 /**
@@ -214,7 +214,7 @@ export async function attemptOf(
 ): Promise<AttemptRecord | null> {
   const { userId, guestId } =
     typeof owner === "string" ? { userId: owner, guestId: null } : ownerOf(owner);
-  const [row] = await db
+  return first(db
     .select()
     .from(attempts)
     .where(
@@ -226,9 +226,7 @@ export async function attemptOf(
         officialAttempt,
       ),
     )
-    .orderBy(desc(attempts.attemptNumber))
-    .limit(1);
-  return row ?? null;
+    .orderBy(desc(attempts.attemptNumber)));
 }
 
 export async function answersOf(db: Db, attemptId: string): Promise<Map<string, AnswerRecord>> {
