@@ -7,7 +7,7 @@
  * Synchronous and final (`state: "validated"`): no runner, no proposal.
  * Pure: no React, no Blockly.
  */
-import type { GradedResult } from "@quiz/core/server";
+import { maskHiddenCases, type GradedResult } from "@quiz/core/server";
 import { parseMap, runProgram, type RunResult, type RunVerdict, type Stmt } from "@quiz/domain/blocks";
 import { round2 } from "@quiz/domain/round";
 
@@ -21,6 +21,7 @@ import {
   type BlocksDetails,
   type BlocksReviewDetails,
   type CaseResult,
+  type HiddenCaseResult,
 } from "./schema.js";
 
 /**
@@ -105,13 +106,12 @@ export function studentDetails(
   details: BlocksDetails,
   options: { showHiddenCaseNames?: boolean } = {},
 ): BlocksReviewDetails {
-  const show = options.showHiddenCaseNames === true;
   return {
     ...details,
-    cases: details.cases.map((c, i) =>
-      c.visible
-        ? c
-        : { name: show ? c.name : `#${i + 1}`, visible: false, points: c.points, ok: c.ok, reason: c.reason },
+    cases: maskHiddenCases(
+      details.cases,
+      options.showHiddenCaseNames === true,
+      (c): Pick<HiddenCaseResult, "reason"> => ({ reason: c.reason }),
     ),
   };
 }

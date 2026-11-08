@@ -1,7 +1,8 @@
 /**
  * The config helpers of the contract: the migrate and the canonical parse
  * that the types whose schema stamps its own `configVersion` share — `code`,
- * `codeimage` and `circuit` — and the one reader of a canonical mapping.
+ * `codeimage` and `circuit` —, the migrate by steps of the others, and the
+ * one reader of a canonical mapping.
  */
 import type { z } from "zod";
 import type { QuestionTypeId, QuestionTypeServer } from "./contract.js";
@@ -41,6 +42,25 @@ export function reparseMigrate<T>(
       );
     }
     return parsed.data;
+  };
+}
+
+/**
+ * A {@link QuestionTypeServer.migrate} by named steps: the current version is
+ * returned as it stands (D16: a draft may be invalid), a version `older` names
+ * goes through its step, and any other version — a newer one included —
+ * throws. With no step, it accepts the current version only.
+ */
+export function versionedMigrate<T>(
+  id: QuestionTypeId,
+  version: number,
+  older: Readonly<Record<number, (config: unknown) => T>> = {},
+): (config: unknown, fromVersion: number) => T {
+  return (config, fromVersion) => {
+    if (fromVersion === version) return config as T;
+    const step = older[fromVersion];
+    if (step !== undefined) return step(config);
+    throw new ConfigMigrationError(id, fromVersion, version, "unknown source version");
   };
 }
 

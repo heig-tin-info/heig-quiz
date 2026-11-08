@@ -5,7 +5,7 @@
  * NOTHING in this module's import graph may reach React: it is loaded by the
  * API and by the grading worker. The browser half is `./client`.
  */
-import { ConfigMigrationError, type QuestionTypeServer, type StudentView } from "@quiz/core/server";
+import { versionedMigrate, type QuestionTypeServer, type StudentView } from "@quiz/core/server";
 import { shuffle, streamSeed } from "@quiz/core/rng";
 import { categorizeGenerator } from "./generate.js";
 import { gradeCategorize, negativeMarkingFrom } from "./grade.js";
@@ -58,10 +58,7 @@ export const categorizeServer: QuestionTypeServer<
 
   emptyDraft: emptyCategorizeDraft,
 
-  migrate(config: unknown, fromVersion: number): CategorizeConfig {
-    if (fromVersion === CATEGORIZE_CONFIG_VERSION) return config as CategorizeConfig;
-    throw new ConfigMigrationError("categorize", fromVersion, CATEGORIZE_CONFIG_VERSION, "unknown source version");
-  },
+  migrate: versionedMigrate<CategorizeConfig>("categorize", CATEGORIZE_CONFIG_VERSION),
 
   defaultPoints: () => 1,
 

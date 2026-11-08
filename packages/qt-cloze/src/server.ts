@@ -4,7 +4,7 @@
  * No React in this import graph: the API and the grading worker load it.
  */
 import {
-  ConfigMigrationError,
+  versionedMigrate,
   tallyKeys,
   type QuestionTypeServer,
   type StudentView,
@@ -91,19 +91,12 @@ export const clozeServer: QuestionTypeServer<
    * identity plus the version stamp — the two shapes are the same (schema.ts
    * says why the number moved anyway).
    */
-  migrate(config: unknown, fromVersion: number): ClozeConfig {
-    if (fromVersion === CLOZE_CONFIG_VERSION) return config as ClozeConfig;
-    if (fromVersion === 1) {
+  migrate: versionedMigrate("cloze", CLOZE_CONFIG_VERSION, {
+    1: (config) => {
       const v1 = (typeof config === "object" && config !== null ? config : {}) as Record<string, unknown>;
       return { ...v1, configVersion: CLOZE_CONFIG_VERSION } as unknown as ClozeConfig;
-    }
-    throw new ConfigMigrationError(
-      "cloze",
-      fromVersion,
-      CLOZE_CONFIG_VERSION,
-      "unknown source version",
-    );
-  },
+    },
+  }),
 
   /** One point per blank is the least surprising default for a teacher. */
   defaultPoints: (config) => Math.max(1, parseCloze(config.text).blanks.length),

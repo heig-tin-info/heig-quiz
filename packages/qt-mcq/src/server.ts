@@ -5,7 +5,7 @@
  * API and by the grading worker. The browser half is `./client`.
  */
 import {
-  ConfigMigrationError,
+  versionedMigrate,
   tallyKeys,
   type QuestionTypeServer,
   type StudentView,
@@ -135,11 +135,7 @@ export const mcqServer: QuestionTypeServer<
    * error behind a migration failure. A config already at the current version
    * is returned as it stands, which may well be an invalid draft (D16).
    */
-  migrate(config: unknown, fromVersion: number): McqConfig {
-    if (fromVersion === MCQ_CONFIG_VERSION) return config as McqConfig;
-    if (fromVersion === 1) return migrateV1(config);
-    throw new ConfigMigrationError("mcq", fromVersion, MCQ_CONFIG_VERSION, "unknown source version");
-  },
+  migrate: versionedMigrate("mcq", MCQ_CONFIG_VERSION, { 1: migrateV1 }),
 
   defaultPoints: () => 1,
 
