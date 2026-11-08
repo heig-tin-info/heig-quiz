@@ -17,6 +17,7 @@ import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import type { Db } from "../db/client.js";
 import { enrollments, users } from "../db/schema.js";
+import { first } from "../db/query.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
 // Where the link lands; the secret is the last segment, which the request log masks (`redact.ts`).
 import { IMPERSONATION_PATH } from "./paths.js";
@@ -27,7 +28,7 @@ import { IMPERSONATION_PATH } from "./paths.js";
  * is never impersonated (ADR-034).
  */
 async function impersonable(db: Db, userId: string) {
-  const [user] = await db
+  return first(db
     .select()
     .from(users)
     .where(
@@ -36,9 +37,7 @@ async function impersonable(db: Db, userId: string) {
         eq(users.role, "student"),
         sql`EXISTS (SELECT 1 FROM ${enrollments} WHERE ${enrollments.userId} = ${users.id} AND NOT ${enrollments.staff})`,
       ),
-    )
-    .limit(1);
-  return user ?? null;
+    ));
 }
 
 /**

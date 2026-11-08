@@ -57,7 +57,7 @@ import { referenceBlob } from "../../github/revert.js";
 import { redactTokens } from "../../redact.js";
 import { projectInstallation } from "../github/service.js";
 import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
-import { releasedBefore, type RepoRow } from "./repos.js";
+import { releasedBefore, repoWithProject, type RepoRow } from "./repos.js";
 import { CI_SNAPSHOT, passScope } from "./milestone.js";
 import { lastStudentPush } from "./review.js";
 import type { ProjectRow } from "./views.js";
@@ -548,10 +548,7 @@ const failureReason = (err: unknown): string =>
  * snapshot is schema 3 (ADR-119 §11: the CI's evidence, never the runner's).
  */
 export async function runEvidence(app: FastifyInstance, config: AppConfig, repoId: string, checkpointId?: string): Promise<EvidenceOutcome | null> {
-  const [row] = await app.db
-    .select({ repo: projectRepos, project: projects, snapshot: projectCriteria.criteria })
-    .from(projectRepos)
-    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+  const [row] = await repoWithProject(app.db, { snapshot: projectCriteria.criteria })
     .innerJoin(projectCriteria, eq(projectCriteria.projectId, projects.id))
     // A schema-3 snapshot's evidence is the CI's graded run (`ci.ts`, ADR-119 §6, §11): never the runner's.
     .where(and(eq(projectRepos.id, repoId), not(CI_SNAPSHOT)));

@@ -55,6 +55,7 @@ import {
 import { dropAssistToken, mintAssistToken } from "../../auth/tokens.js";
 import type { Db } from "../../db/client.js";
 import { assistConversations, assistExchanges } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import type { ConverseTurn, LlmGateway, ReadOnlyTool } from "../llm/service.js";
 import { STUB_MODEL } from "../llm/service.js";
 import type { Api } from "../mcp/service.js";
@@ -118,12 +119,10 @@ const toExchange = (row: typeof assistExchanges.$inferSelect): AssistExchange =>
  * (ADR-080 §6), audited by the route.
  */
 export async function findConversation(db: Db, id: string, ownerId: string | null) {
-  const [row] = await db
+  return first(db
     .select()
     .from(assistConversations)
-    .where(and(eq(assistConversations.id, id), ownerId === null ? undefined : eq(assistConversations.userId, ownerId)))
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(assistConversations.id, id), ownerId === null ? undefined : eq(assistConversations.userId, ownerId))));
 }
 
 export async function conversationDetail(

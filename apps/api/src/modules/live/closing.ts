@@ -16,7 +16,7 @@ import { retakesEnabled, type EvaluationRecord } from "../evaluation/service.js"
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import { standDownAutomaticGradings } from "../grading/service.js";
 import { keyShownTo } from "../results/service.js";
-import { attemptById, participantOfAttempt, type AttemptRecord } from "./access.js";
+import { attemptById, lockAttempt, participantOfAttempt, type AttemptRecord } from "./access.js";
 import { deadlineFor } from "./deadline.js";
 import { endAttempts, seated } from "./dwell.js";
 import * as events from "./events.js";
@@ -172,7 +172,7 @@ export async function reopenAttempt(
     // too before re-reading the attempt's state (ADR-067): a pass that
     // loaded this attempt finished either commits before the stand-down
     // below (which then supersedes what it wrote) or sees it reopened.
-    await tx.select({ id: attempts.id }).from(attempts).where(eq(attempts.id, attempt.id)).for("update");
+    await lockAttempt(tx, attempt.id, "update");
     await tx
       .update(attempts)
       .set({

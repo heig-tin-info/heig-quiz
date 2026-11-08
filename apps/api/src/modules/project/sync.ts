@@ -74,6 +74,7 @@ import {
   markRepoDeleted,
   PushEvent,
   repoContext,
+  repoWithProject,
   studentRepos,
   type RepoRow,
 } from "./repos.js";
@@ -366,10 +367,7 @@ async function gone(octokit: Octokit, owner: string, repo: string): Promise<bool
  */
 async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspace, repoId: string): Promise<SyncOutcome> {
   const db = app.db;
-  const [row] = await db
-    .select({ repo: projectRepos, project: projects, courseId: classrooms.courseId })
-    .from(projectRepos)
-    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+  const [row] = await repoWithProject(db, { courseId: classrooms.courseId })
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
     .where(eq(projectRepos.id, repoId));
   if (!row) return "skipped";

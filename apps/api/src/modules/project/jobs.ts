@@ -102,7 +102,7 @@ import { claimLeases, runLeased, type ProjectJob } from "./lease.js";
 import { autoPublishProject } from "./lifecycle.js";
 import { claimMilestonePasses, claimPasses, type ClaimedPass } from "./milestone.js";
 import { remindDeadlines, tellProjectStaff } from "./notify.js";
-import { hintProjectStaff, hintRepo, markRepoDeleted, type RepoRow } from "./repos.js";
+import { hintProjectStaff, hintRepo, markRepoDeleted, repoWithProject, type RepoRow } from "./repos.js";
 import { claimReviewWork, runReviewJob } from "./review.js";
 import { REVIEW_CONCURRENCY, runEvidencePass, runReview, type ReviewJob } from "./reviewPass.js";
 import { runSyncJob } from "./sync.js";
@@ -436,15 +436,10 @@ interface RepoState {
 }
 
 async function repoState(db: Db, repoId: string): Promise<RepoState | null> {
-  const [row] = await db
-    .select({
-      repo: projectRepos,
-      project: projects,
-      courseId: classrooms.courseId,
-      commitDue: sql<boolean>`${COMMIT_DUE}`.mapWith(Boolean),
-    })
-    .from(projectRepos)
-    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+  const [row] = await repoWithProject(db, {
+    courseId: classrooms.courseId,
+    commitDue: sql<boolean>`${COMMIT_DUE}`.mapWith(Boolean),
+  })
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
     .where(and(eq(projectRepos.id, repoId), LIVE))
     .limit(1);

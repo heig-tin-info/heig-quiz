@@ -5,8 +5,9 @@
  */
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { answers, attempts, enrollments, evaluations, officialAttempt } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { isLatestAttempt, seatsOf, trustedClients, type EvaluationRecord } from "../evaluation/service.js";
 import * as events from "./events.js";
 
@@ -198,7 +199,16 @@ export async function enrolledCounts(
 // --- Attempts -------------------------------------------------------------
 
 export async function attemptById(db: Db, id: string): Promise<AttemptRecord | null> {
-  const [row] = await db.select().from(attempts).where(eq(attempts.id, id)).limit(1);
+  return first(db.select().from(attempts).where(eq(attempts.id, id)));
+}
+
+/**
+ * The attempt's row read under a row lock held until `tx` ends (ADR-067):
+ * `update` to change the attempt, `share` to keep it from changing under a
+ * write that depends on its state.
+ */
+export async function lockAttempt(tx: Tx, id: string, mode: "update" | "share"): Promise<AttemptRecord | null> {
+  const [row] = await tx.select().from(attempts).where(eq(attempts.id, id)).for(mode);
   return row ?? null;
 }
 
@@ -214,7 +224,7 @@ export async function attemptOf(
 ): Promise<AttemptRecord | null> {
   const { userId, guestId } =
     typeof owner === "string" ? { userId: owner, guestId: null } : ownerOf(owner);
-  const [row] = await db
+  return first(db
     .select()
     .from(attempts)
     .where(
@@ -226,9 +236,7 @@ export async function attemptOf(
         officialAttempt,
       ),
     )
-    .orderBy(desc(attempts.attemptNumber))
-    .limit(1);
-  return row ?? null;
+    .orderBy(desc(attempts.attemptNumber)));
 }
 
 export async function answersOf(db: Db, attemptId: string): Promise<Map<string, AnswerRecord>> {

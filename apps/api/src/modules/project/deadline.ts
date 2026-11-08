@@ -39,7 +39,7 @@ import { notFoundError } from "../http.js";
 import { ProjectError } from "./errors.js";
 import { supersedeProposals } from "./criterionGrades.js";
 import { refreshScoreSelection } from "./grading.js";
-import type { RepoRow } from "./repos.js";
+import { repoWithProject, type RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
 
 /** The instant `at` as a timestamp parameter. */
@@ -268,11 +268,7 @@ export async function projectDeadlineMoved(
 
 /** The repository's deadline and lock as they stand, for its staff (`ProjectRepoDeadlineState`). */
 export async function repoDeadline(db: Db, repoId: string): Promise<ProjectRepoDeadlineState> {
-  const [row] = await db
-    .select({ repo: projectRepos, project: projects })
-    .from(projectRepos)
-    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
-    .where(eq(projectRepos.id, repoId));
+  const [row] = await repoWithProject(db).where(eq(projectRepos.id, repoId));
   return repoDeadlineState(row!.repo, row!.project);
 }
 

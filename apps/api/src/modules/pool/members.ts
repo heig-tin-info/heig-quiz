@@ -6,6 +6,7 @@ import { displayName } from "@quiz/domain";
 
 import { qualified, type Db } from "../../db/client.js";
 import { coursePools, courses, poolMembers, pools, userEmails, users } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { audit } from "../../audit.js";
 import { isStaff, searchTeachers } from "../../directory.js";
 import { notify, notifyMany } from "../notifications/service.js";
@@ -94,7 +95,7 @@ export async function listMembers(db: Db, pool: PoolRow, seesCourses: boolean): 
  */
 export async function findTeacherByEmail(db: Db, email: string) {
   const normalized = email.trim().toLowerCase();
-  const [row] = await db
+  return first(db
     .select({
       id: users.id,
       email: users.email,
@@ -111,9 +112,7 @@ export async function findTeacherByEmail(db: Db, email: string) {
         ),
         isStaff,
       ),
-    )
-    .limit(1);
-  return row ?? null;
+    ));
 }
 
 /**

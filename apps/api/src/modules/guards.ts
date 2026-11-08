@@ -60,6 +60,7 @@ import {
   STAFF_ROLES,
   users,
 } from "../db/schema.js";
+import { first } from "../db/query.js";
 
 /**
  * THE access predicate, on a query that has `courses` in scope: a seat on
@@ -241,12 +242,10 @@ async function courseRoleOf(
 
 /** The user's own seat on the course staff, whatever their reach, or null: Super Powers hold none. */
 export async function seatOf(db: Db, courseId: string, userId: string) {
-  const [seat] = await db
+  return first(db
     .select({ role: courseStaff.role })
     .from(courseStaff)
-    .where(and(eq(courseStaff.courseId, courseId), eq(courseStaff.userId, userId)))
-    .limit(1);
-  return seat ?? null;
+    .where(and(eq(courseStaff.courseId, courseId), eq(courseStaff.userId, userId))));
 }
 
 /**
@@ -585,8 +584,7 @@ async function staffScoped<Q extends { $dynamic(): PgSelect }>(
   match: SQL | undefined,
   courseId: AnyColumn = courses.id,
 ): Promise<Awaited<ReturnType<Q["$dynamic"]>>[number] | null> {
-  const [row] = await query.$dynamic().where(and(match, accessWhere(user, staffAccess(user.id, courseId)))).limit(1);
-  return row ?? null;
+  return first(query.$dynamic().where(and(match, accessWhere(user, staffAccess(user.id, courseId)))));
 }
 
 /*
@@ -802,7 +800,7 @@ export const studentGroupSet = routeLoader((app, req, params: { id: string }) =>
  * Null otherwise: a draft never shows.
  */
 export async function findStudentProject(db: Db, userId: string, projectId: string) {
-  const [row] = await db
+  return first(db
     .select({ project: projects, seat: enrollments })
     .from(projects)
     .innerJoin(
@@ -811,9 +809,7 @@ export async function findStudentProject(db: Db, userId: string, projectId: stri
     )
     // An archived classroom takes no new work (product owner, 2026-10-02).
     .innerJoin(classrooms, and(eq(classrooms.id, projects.classroomId), isNull(classrooms.archivedAt)))
-    .where(and(eq(projects.id, projectId), visibleProject()))
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(projects.id, projectId), visibleProject())));
 }
 
 /**
@@ -1013,12 +1009,10 @@ export async function findAccessiblePool(
   user: Caller,
   poolId: string,
 ): Promise<AccessiblePool | null> {
-  const [pool] = await db
+  return first(db
     .select()
     .from(pools)
-    .where(and(eq(pools.id, poolId), accessWhere(user, poolAccess(user.id))))
-    .limit(1);
-  return pool ?? null;
+    .where(and(eq(pools.id, poolId), accessWhere(user, poolAccess(user.id)))));
 }
 
 /** `/pools/:id` */
@@ -1037,13 +1031,11 @@ export async function findAccessibleQuestion(
   user: Caller,
   questionId: string,
 ): Promise<QuestionScope | null> {
-  const [row] = await db
+  return first(db
     .select({ question: questions, pool: pools })
     .from(questions)
     .innerJoin(pools, eq(questions.poolId, pools.id))
-    .where(and(eq(questions.id, questionId), accessWhere(user, poolAccess(user.id))))
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(questions.id, questionId), accessWhere(user, poolAccess(user.id)))));
 }
 
 /**
@@ -1060,12 +1052,10 @@ export async function findOwnUnsavedPollQuestion(
   questionId: string,
 ): Promise<typeof questions.$inferSelect | null> {
   const launched = sql`EXISTS (SELECT 1 FROM ${evaluationItems} JOIN ${evaluations} ON ${qualified(evaluations.id)} = ${qualified(evaluationItems.evaluationId)} JOIN ${questionVersions} ON ${qualified(questionVersions.id)} = ${qualified(evaluationItems.questionVersionId)} WHERE ${qualified(questionVersions.questionId)} = ${qualified(questions.id)} AND ${qualified(evaluations.mode)} = 'poll' AND ${qualified(evaluations.createdBy)} = ${user.id})`;
-  const [row] = await db
+  return first(db
     .select()
     .from(questions)
-    .where(and(eq(questions.id, questionId), isNull(questions.poolId), accessWhere(user, launched)))
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(questions.id, questionId), isNull(questions.poolId), accessWhere(user, launched))));
 }
 
 /** `/questions/:id` — so a handler never has to re-check anything. */
@@ -1075,13 +1065,11 @@ export const accessibleQuestion = routeLoader((app, req, params: { id: string })
 
 /** `/categories/:id` — the category AND its pool. */
 export const accessibleCategory = routeLoader(async (app, req, params: { id: string }) => {
-  const [row] = await app.db
+  return first(app.db
     .select({ category: categories, pool: pools })
     .from(categories)
     .innerJoin(pools, eq(categories.poolId, pools.id))
-    .where(and(eq(categories.id, params.id), accessWhere(callerOf(req), poolAccess(req.user!.id))))
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(categories.id, params.id), accessWhere(callerOf(req), poolAccess(callerOf(req).id)))));
 });
 
 // ---------------------------------------------------------------------------
@@ -1186,7 +1174,7 @@ export async function findManagedEvaluation(
     .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id));
   const row = await staffScoped(user, query, eq(evaluations.id, evaluationId), classrooms.courseId);
   if (row) return row.evaluation;
-  const [owned] = await db
+  return first(db
     .select()
     .from(evaluations)
     .where(
@@ -1195,9 +1183,7 @@ export async function findManagedEvaluation(
         ownedPollSql(),
         accessWhere(user, ownedPollAccess(user.id)),
       ),
-    )
-    .limit(1);
-  return owned ?? null;
+    ));
 }
 
 /**
@@ -1286,15 +1272,13 @@ export const ownAttempt = routeLoader((app, req, attemptId: string) =>
  * (ADR-112) asks too.
  */
 export async function findOwnAttempt(db: Db, userId: string, attemptId: string) {
-  const [row] = await db
+  return first(db
     .select({ attempt: attempts, evaluation: evaluations })
     .from(attempts)
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
     // ADR-125 §12: an attempt a paper copy replaced is never the student's
     // again — not its view, its feedback nor its copy: the 404 of a miss.
-    .where(and(eq(attempts.id, attemptId), eq(attempts.userId, userId), isNull(attempts.supersededBy)))
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(attempts.id, attemptId), eq(attempts.userId, userId), isNull(attempts.supersededBy))));
 }
 
 /** Any attempt of an evaluation the caller is staff of (dashboard, controls). */

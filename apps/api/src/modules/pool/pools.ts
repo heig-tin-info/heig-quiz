@@ -33,6 +33,7 @@ import {
   questions,
   users,
 } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { type PoolRow } from "./shared.js";
 import { conceptsCoveredByCourse, poolConcepts } from "../concept/service.js";
 import { categoryTree } from "./categories.js";
@@ -287,12 +288,10 @@ export async function ensurePersonalPool(db: Db, userId: string): Promise<PoolRo
 }
 
 async function personalPool(db: Db, userId: string): Promise<PoolRow | null> {
-  const [row] = await db
+  return first(db
     .select()
     .from(pools)
-    .where(and(eq(pools.ownerId, userId), eq(pools.isPersonal, true)))
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(pools.ownerId, userId), eq(pools.isPersonal, true))));
 }
 
 export async function updatePool(

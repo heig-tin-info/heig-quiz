@@ -26,7 +26,7 @@ import { answerFromStudent, answerToStudent } from "./studentView.js";
 import * as events from "./events.js";
 import { verdictOf } from "../grading/service.js";
 import { UnavailableRunner } from "../runner/unavailable.js";
-import { answersOf, type AnswerRecord, type AttemptRecord } from "./access.js";
+import { answersOf, lockAttempt, type AnswerRecord, type AttemptRecord } from "./access.js";
 import { AnswerInvalid, LiveError } from "./failures.js";
 import { assertWritable } from "./gates.js";
 import { lockedItemIds, orderItems } from "./order.js";
@@ -350,11 +350,7 @@ export async function writeAnswer(
   // before the hand-in must either commit first or be refused like any
   // write to a finished attempt — never land after the pass has read.
   const written = await db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select()
-      .from(attempts)
-      .where(eq(attempts.id, attempt.id))
-      .for("share");
+    const locked = await lockAttempt(tx, attempt.id, "share");
     assertWritable(evaluation, locked ?? attempt, now);
     return tx
       .insert(answers)
@@ -670,11 +666,7 @@ export async function reportShown(
     // The states read AFTER the lock, not from the request's scope: a pause
     // or a close that committed since then flushed this attempt, and must
     // not find an interval opened behind it.
-    const [locked] = await tx
-      .select({ shownItemId: attempts.shownItemId, state: attempts.state })
-      .from(attempts)
-      .where(eq(attempts.id, attempt.id))
-      .for("update");
+    const locked = await lockAttempt(tx, attempt.id, "update");
     if (!locked) throw new LiveError("not_found");
     // A statement of its own, so its snapshot is taken once the lock is held
     // (READ COMMITTED): a pause committed before `closeShown` queued on this

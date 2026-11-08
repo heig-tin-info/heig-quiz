@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 
 import type { Db } from "../../db/client.js";
 import { guestParticipants } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import type { DbOrTx } from "../evaluation/service.js";
 import { LiveError } from "./failures.js";
 
@@ -31,12 +32,10 @@ export async function guestByToken(
   evaluationId: string,
   token: string,
 ): Promise<GuestRecord | null> {
-  const [row] = await db
+  return first(db
     .select()
     .from(guestParticipants)
-    .where(eq(guestParticipants.tokenHash, guestHash(token, evaluationId)))
-    .limit(1);
-  return row ?? null;
+    .where(eq(guestParticipants.tokenHash, guestHash(token, evaluationId))));
 }
 
 /** Idempotent: the same cookie always lands on the same guest row. */

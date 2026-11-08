@@ -18,6 +18,7 @@ import { OAUTH_SCOPE, OAUTH_SCOPES_SUPPORTED, type OAuthConnection, type OAuthRe
 import { audit } from "../../audit.js";
 import type { Db } from "../../db/client.js";
 import { apiTokens, oauthClients, oauthGrants, oauthRequests } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { hashToken, newToken } from "../session.js";
 import { OAUTH_ACCESS_PREFIX } from "../tokens.js";
 import { isLoopback, type OAuthClient } from "./clients.js";
@@ -106,7 +107,7 @@ export async function createRequest(
 
 /** A request still waiting for its answer, with its client. */
 async function pendingRequest(db: Db, id: string, now: Date) {
-  const [row] = await db
+  return first(db
     .select({ request: oauthRequests, client: oauthClients })
     .from(oauthRequests)
     .innerJoin(oauthClients, eq(oauthRequests.clientId, oauthClients.id))
@@ -117,9 +118,7 @@ async function pendingRequest(db: Db, id: string, now: Date) {
         isNull(oauthRequests.usedAt),
         gt(oauthRequests.expiresAt, now),
       ),
-    )
-    .limit(1);
-  return row ?? null;
+    ));
 }
 
 export async function requestView(db: Db, id: string, now: Date): Promise<OAuthRequestView | null> {

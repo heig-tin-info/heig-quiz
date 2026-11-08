@@ -6,12 +6,13 @@
  * repository's (`webhooks.ts`) and a source's (`sync.ts`).
  */
 import { and, eq, inArray, isNotNull, isNull, lt, notExists, or, sql } from "drizzle-orm";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import type { AnyPgColumn, SelectedFields } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { classrooms, enrollments, projectRepos, projects } from "../../db/schema.js";
+import { first } from "../../db/query.js";
 import { projectsChanged, repoChanged } from "./events.js";
 import { repoMembers } from "./groupRepos.js";
 
@@ -103,16 +104,27 @@ export interface RepoContext {
   courseId: string;
 }
 
-/** The project repository GitHub knows by `githubRepoId`, or null: not a student's repository. */
-export async function repoContext(db: Db, githubRepoId: number): Promise<RepoContext | null> {
-  const [row] = await db
-    .select({ repo: projectRepos, project: projects, courseId: classrooms.courseId })
+/**
+ * The select of a repository with its project, `{ repo, project }` and the
+ * caller's `extra` columns, from `project_repos` joined to `projects`: each
+ * caller adds its own joins, WHERE and ORDER BY.
+ */
+export function repoWithProject<E extends SelectedFields & { repo?: never; project?: never } = Record<never, never>>(
+  db: Db | Tx,
+  extra?: E,
+) {
+  return db
+    .select({ repo: projectRepos, project: projects, ...(extra as Omit<E, "repo" | "project">) })
     .from(projectRepos)
     .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+    .$dynamic();
+}
+
+/** The project repository GitHub knows by `githubRepoId`, or null: not a student's repository. */
+export async function repoContext(db: Db, githubRepoId: number): Promise<RepoContext | null> {
+  return first(repoWithProject(db, { courseId: classrooms.courseId })
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
-    .where(eq(projectRepos.githubRepoId, githubRepoId))
-    .limit(1);
-  return row ?? null;
+    .where(eq(projectRepos.githubRepoId, githubRepoId)));
 }
 
 /**

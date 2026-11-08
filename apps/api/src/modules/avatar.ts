@@ -7,6 +7,7 @@ import { z } from "zod";
 import { audit } from "../audit.js";
 import type { Db } from "../db/client.js";
 import { avatars, users } from "../db/schema.js";
+import { first } from "../db/query.js";
 import { publish } from "../events.js";
 import { PICTURE_TYPES, remoteImageCache, type RemoteImage } from "../remoteImage.js";
 import { callerOf, seesUser, type Caller } from "./guards.js";
@@ -65,13 +66,11 @@ const visiblePicture = (caller: Caller, userId: string) =>
  * else the IdP's address; null alike for no picture and no right (#318).
  */
 export async function findVisibleAvatar(db: Db, caller: Caller, userId: string) {
-  const [row] = await db
+  return first(db
     .select({ data: avatars.data, contentType: avatars.contentType, pictureUrl: users.pictureUrl })
     .from(users)
     .leftJoin(avatars, eq(avatars.userId, users.id))
-    .where(visiblePicture(caller, userId))
-    .limit(1);
-  return row ?? null;
+    .where(visiblePicture(caller, userId)));
 }
 
 /**
