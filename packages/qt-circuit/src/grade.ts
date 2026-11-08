@@ -616,6 +616,9 @@ export function finalizeRunnerCircuit(
 // What a student may read of the breakdown
 // ---------------------------------------------------------------------------
 
+/** What a hidden stimulus keeps beside its verdict: a typed pick, so an extra key does not compile. */
+type HiddenStimulusCoarse = Pick<StimulusDetail, "error" | "envelope" | "series" | "expected" | "reason">;
+
 /**
  * The breakdown as a STUDENT may read it (docs/spec/05 §5.7, decision D15).
  *
@@ -636,7 +639,7 @@ export function studentDetails(
   details: CircuitDetails,
   policy: { showKey: boolean; showHiddenCaseNames: boolean },
 ): CircuitDetails {
-  const masked = maskHiddenCases(details.stimuli, policy.showHiddenCaseNames, (s) => ({
+  const masked = maskHiddenCases(details.stimuli, policy.showHiddenCaseNames, (s): HiddenStimulusCoarse => ({
     error: s.error,
     // The distance to the envelope is a verdict, like `error`; the
     // curves it was measured on are the key.

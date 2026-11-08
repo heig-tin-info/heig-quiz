@@ -21,6 +21,7 @@ import {
   type BlocksDetails,
   type BlocksReviewDetails,
   type CaseResult,
+  type HiddenCaseResult,
 } from "./schema.js";
 
 /**
@@ -107,6 +108,10 @@ export function studentDetails(
 ): BlocksReviewDetails {
   return {
     ...details,
-    cases: maskHiddenCases(details.cases, options.showHiddenCaseNames === true, (c) => ({ reason: c.reason })),
+    cases: maskHiddenCases(
+      details.cases,
+      options.showHiddenCaseNames === true,
+      (c): Pick<HiddenCaseResult, "reason"> => ({ reason: c.reason }),
+    ),
   };
 }

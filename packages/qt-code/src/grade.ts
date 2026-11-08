@@ -28,6 +28,7 @@ import {
   type CodeConfig,
   type CodeDetails,
   type CodeReviewDetails,
+  type HiddenCaseVerdict,
   type ProgramConfig,
 } from "./schema.js";
 import { accidentOf, caseVerdict } from "./verdict.js";
@@ -363,9 +364,13 @@ export function studentDetails(
   return {
     ...details,
     // The coarse reason, the most a student reads of a hidden case.
-    cases: maskHiddenCases(details.cases, options.showHiddenCaseNames === true, (c) => {
-      const failure = c.ok ? undefined : (accidentOf(c) ?? "failed");
-      return failure === undefined ? {} : { failure };
-    }),
+    cases: maskHiddenCases(
+      details.cases,
+      options.showHiddenCaseNames === true,
+      (c): Pick<HiddenCaseVerdict, "failure"> => {
+        const failure = c.ok ? undefined : (accidentOf(c) ?? "failed");
+        return failure === undefined ? {} : { failure };
+      },
+    ),
   };
 }
