@@ -15,14 +15,12 @@ import type { DbOrTx } from "../evaluation/service.js";
 import { pairKey, type PairKey } from "./records.js";
 import type { WriteGuard } from "./writer.js";
 
-export type AttemptRecord = typeof attempts.$inferSelect;
-
 /**
  * Every machine reason a pass leaves on a grading it could not settle. They
  * are wire values, closed once in `@quiz/contracts` (`PASS_REASONS`): the
  * web translates each of them, and `progressOf` counts them.
  */
-export type ProposalReason = PassReason;
+type ProposalReason = PassReason;
 
 /**
  * A proposal worth zero that says why no grader settled the cell — never a

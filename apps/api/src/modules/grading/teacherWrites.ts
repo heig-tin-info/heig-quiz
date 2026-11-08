@@ -14,50 +14,16 @@ import {
   type BreakdownEntry,
   type CriterionPointsBody,
 } from "@quiz/contracts";
-import {
-  isBatchable,
-  overridePointsRange,
-  round2,
-  scoresNegatively,
-  type DeclaredCriterion,
-  validatedBreakdown,
-} from "@quiz/domain";
+import { isBatchable, round2, type DeclaredCriterion, validatedBreakdown } from "@quiz/domain";
 
 import type { Db, Tx } from "../../db/client.js";
 import { answers, attempts, gradings, officialAttempt } from "../../db/schema.js";
-import {
-  joinedItems,
-  negativeMarkingEnabled,
-  type DbOrTx,
-  type EvaluationRecord,
-  type JoinedItem,
-} from "../evaluation/service.js";
-import { typeOf } from "../pool/config.js";
-import { writtenConfig } from "../pool/service.js";
+import { joinedItems, type DbOrTx, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
+import { criteriaOf, pointsRangeOf } from "./reads.js";
 import { GradingError, NEWEST_FIRST, type GradingRecord } from "./records.js";
 import { writeGrading, writeGradings, type WriteGradingInput } from "./writer.js";
 
 // --- Teacher writes -------------------------------------------------------
-
-/**
- * The points a teacher may give an item of type `type` in `evaluation` by
- * hand (F-GRADE-05): `[0, max]`, or `[-max, max]` for a choice question when
- * the evaluation uses negative marking (ADR-026) — never for a bonus item,
- * which is floored at 0 (ADR-052). The grading panel receives the lower
- * bound (`GradingQueueItem.minPoints`), the routes enforce both.
- */
-export function pointsRangeOf(
-  evaluation: EvaluationRecord,
-  item: JoinedItem | null,
-  maxPoints: number,
-): { min: number; max: number } {
-  const negative = scoresNegatively(
-    item?.question.type ?? "",
-    negativeMarkingEnabled(evaluation),
-    item?.item.counting ?? "normal",
-  );
-  return overridePointsRange(maxPoints, negative);
-}
 
 /** Refuses a manual score outside {@link pointsRangeOf} with `422 points_out_of_range`. */
 export function assertPointsInRange(
@@ -146,17 +112,6 @@ async function gradingInForce(tx: Tx, attemptId: string, itemId: string): Promis
     .limit(1)
     .for("update");
   return row ?? null;
-}
-
-/**
- * The criteria an item is graded by (ADR-118 §6): its type's
- * `gradingCriteria` of the version it holds, as written. None for a missing
- * item, a type without the hook or an essay without criteria; a config that
- * does not read throws, as every reader of it does.
- */
-export function criteriaOf(item: JoinedItem | null): readonly DeclaredCriterion[] {
-  const hook = item ? typeOf(item.question.type).gradingCriteria : undefined;
-  return hook ? hook(writtenConfig(item!.question.type, item!.version).config) : [];
 }
 
 /**

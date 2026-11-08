@@ -24,7 +24,6 @@
  * directly, never through this one.
  */
 export {
-  GradingError,
   pairKey,
   type GradingRecord,
   type PairKey,
@@ -32,11 +31,10 @@ export {
 export {
   writeGrading,
   writeGradings,
-  type WriteGradingInput,
-  type WriteGuard,
 } from "./writer.js";
 export {
   cellOfAnswer,
+  criteriaOf,
   pointsByAttempt,
   progressOf,
   standingGradings,
@@ -44,17 +42,16 @@ export {
   validatedGradings,
   verdictOf,
 } from "./reads.js";
-export { expectedViews, exportsText, gradingQueue, gradingSteps, historyOfCell } from "./panel.js";
+export { exportsText, gradingQueue, gradingSteps, historyOfCell } from "./panel.js";
 export {
   assertPointsInRange,
   batchValidate,
-  criteriaOf,
   manualOverride,
   standDownAutomaticGradings,
   validateGrading,
 } from "./teacherWrites.js";
 export { checkLlmRegradeBudget, pointsAcrossRegrade, regradeItem, RegradeAudit } from "./regrade.js";
-export { changeItemCounting, type CountingChange } from "./counting.js";
+export { changeItemCounting } from "./counting.js";
 // The kept attempt of each student (F-EVAL-15, ADR-025), in `./kept.ts`.
 export {
   keptAttempts,

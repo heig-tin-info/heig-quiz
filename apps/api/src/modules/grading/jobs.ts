@@ -66,7 +66,6 @@ import type { EvaluationGradingJob, LlmGradingJob, RunnerGradingJob } from "./pa
 import { runRunnerGrading } from "./runnerPass.js";
 
 export { checkGrading, enqueueCheckRun, runEvaluationGrading, writeCheckGrading } from "./evaluationPass.js";
-export type { RunnerGradingJob } from "./passCommon.js";
 export { runRunnerGrading } from "./runnerPass.js";
 
 /** Two calls at a time: a class of essays in minutes, without a burst the provider would rate-limit. */

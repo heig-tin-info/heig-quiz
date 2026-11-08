@@ -5,10 +5,11 @@
  */
 import { desc, sql } from "drizzle-orm";
 
-import { gradings } from "../../db/schema.js";
+import { attempts, gradings } from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
 
 export type GradingRecord = typeof gradings.$inferSelect;
+export type AttemptRecord = typeof attempts.$inferSelect;
 
 /**
  * "Newest first", made total. Two gradings written in the same millisecond —

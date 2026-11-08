@@ -6,12 +6,26 @@ import { and, asc, eq, inArray, ne } from "drizzle-orm";
 
 import type { Grading, GradingProgress, Verdict } from "@quiz/contracts";
 import { reasonOf, RUNNER_WAITING_REASONS } from "@quiz/contracts";
-import { countsForStudent, outcomeOf } from "@quiz/domain";
+import {
+  countsForStudent,
+  outcomeOf,
+  overridePointsRange,
+  scoresNegatively,
+  type DeclaredCriterion,
+} from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attempts, gradings, officialAttempt } from "../../db/schema.js";
-import { joinedItem, joinedItems, type JoinedItem } from "../evaluation/service.js";
+import {
+  joinedItem,
+  joinedItems,
+  negativeMarkingEnabled,
+  type EvaluationRecord,
+  type JoinedItem,
+} from "../evaluation/service.js";
+import { typeOf } from "../pool/config.js";
+import { writtenConfig } from "../pool/service.js";
 import { tallyByAttempt } from "./kept.js";
 import { pairKey, type GradingRecord, type PairKey } from "./records.js";
 
@@ -180,4 +194,35 @@ export async function pointsByAttempt(
 ): Promise<Map<string, number>> {
   const tallies = await tallyByAttempt(db, attemptIds);
   return new Map([...tallies].map(([id, tally]) => [id, tally.points]));
+}
+
+/**
+ * The points a teacher may give an item of type `type` in `evaluation` by
+ * hand (F-GRADE-05): `[0, max]`, or `[-max, max]` for a choice question when
+ * the evaluation uses negative marking (ADR-026) — never for a bonus item,
+ * which is floored at 0 (ADR-052). The grading panel receives the lower
+ * bound (`GradingQueueItem.minPoints`), the routes enforce both.
+ */
+export function pointsRangeOf(
+  evaluation: EvaluationRecord,
+  item: JoinedItem | null,
+  maxPoints: number,
+): { min: number; max: number } {
+  const negative = scoresNegatively(
+    item?.question.type ?? "",
+    negativeMarkingEnabled(evaluation),
+    item?.item.counting ?? "normal",
+  );
+  return overridePointsRange(maxPoints, negative);
+}
+
+/**
+ * The criteria an item is graded by (ADR-118 §6): its type's
+ * `gradingCriteria` of the version it holds, as written. None for a missing
+ * item, a type without the hook or an essay without criteria; a config that
+ * does not read throws, as every reader of it does.
+ */
+export function criteriaOf(item: JoinedItem | null): readonly DeclaredCriterion[] {
+  const hook = item ? typeOf(item.question.type).gradingCriteria : undefined;
+  return hook ? hook(writtenConfig(item!.question.type, item!.version).config) : [];
 }

@@ -36,14 +36,13 @@ import {
   endOf,
   failedProposal,
   passGuard,
-  type AttemptRecord,
   type EvaluationGradingJob,
   type LlmGradingJob,
   type RunnerGradingJob,
 } from "./passCommon.js";
 import { announceGradingReady } from "./ready.js";
 import { standingGradings } from "./reads.js";
-import { pairKey, type GradingRecord, type PairKey } from "./records.js";
+import { pairKey, type AttemptRecord, type GradingRecord, type PairKey } from "./records.js";
 import { runRunnerGrading } from "./runnerPass.js";
 import { writeGradings, type WriteGradingInput } from "./writer.js";
 

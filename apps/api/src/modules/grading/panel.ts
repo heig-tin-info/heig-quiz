@@ -35,9 +35,15 @@ import {
   type Reading,
 } from "../pool/service.js";
 import { keptAttempts } from "./kept.js";
-import { gradingsIn, standingGradings, toGrading, type CellScope } from "./reads.js";
-import { NEWEST_FIRST, pairKey, type GradingRecord, type PairKey } from "./records.js";
-import { criteriaOf, pointsRangeOf } from "./teacherWrites.js";
+import {
+  criteriaOf,
+  gradingsIn,
+  pointsRangeOf,
+  standingGradings,
+  toGrading,
+  type CellScope,
+} from "./reads.js";
+import { NEWEST_FIRST, pairKey, type AttemptRecord, type GradingRecord, type PairKey } from "./records.js";
 
 /**
  * Whether an item's answers export as Markdown (F-EXP-01, ADR-121 §2): its
@@ -48,8 +54,6 @@ export function exportsText(type: string, version: { variables: { rows: readonly
   const t = typeOf(type);
   return t.statementDoc !== undefined && t.answerDoc !== undefined && !isParameterized(version);
 }
-
-type AttemptRecord = typeof attempts.$inferSelect;
 
 interface Roster {
   /** The name the panel shows when the teacher asks for names; null for a guest. */

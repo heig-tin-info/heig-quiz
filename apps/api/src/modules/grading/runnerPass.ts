@@ -17,10 +17,10 @@ import {
   failedProposal,
   isValidated,
   passGuard,
-  type AttemptRecord,
   type RunnerGradingJob,
 } from "./passCommon.js";
 import { announceGradingReady } from "./ready.js";
+import type { AttemptRecord } from "./records.js";
 import { writeGradings, type WriteGradingInput, type WriteGuard } from "./writer.js";
 
 /**
