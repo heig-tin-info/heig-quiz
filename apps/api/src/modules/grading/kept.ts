@@ -22,8 +22,7 @@ import { attemptTotal, countsForStudent, keptAttempt, type ItemCounting } from "
 import type { Db } from "../../db/client.js";
 import { attempts, evaluationItems, gradings, officialAttempt } from "../../db/schema.js";
 import { retakePolicyOf, type EvaluationRecord } from "../evaluation/service.js";
-
-type AttemptRecord = typeof attempts.$inferSelect;
+import type { AttemptRecord } from "./records.js";
 
 /**
  * The validated points of an attempt and how many of its cells they cover.
