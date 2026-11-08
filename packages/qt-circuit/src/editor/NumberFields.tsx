@@ -10,7 +10,7 @@ import { NumberField } from "@quiz/ui";
 
 import type { CircuitEditorStrings } from "../strings.js";
 
-type NumericKey<T> = { [K in keyof T]-?: T[K] extends number ? K : never }[keyof T];
+type NumericKey<T> = { [K in keyof T]-?: T[K] extends number | null ? K : never }[keyof T];
 
 export interface NumberFieldSpec<T> {
   /** The property the field reads and writes. */
@@ -23,6 +23,8 @@ export interface NumberFieldSpec<T> {
   readonly step: number | "any";
   /** Absent, the field keeps `NumberField`'s own width. */
   readonly width?: string;
+  /** An empty field writes `null`, and shows `supplyNone` as its placeholder. */
+  readonly nullable?: boolean;
 }
 
 export function NumberFields<T extends object>({
@@ -45,13 +47,15 @@ export function NumberFields<T extends object>({
       key={field.id}
       id={`${idPrefix}-${field.id}`}
       label={s[field.label]}
-      value={value[field.key] as number}
+      value={value[field.key] as number | null}
       min={field.min}
       max={field.max}
       step={field.step}
       {...(field.width === undefined ? {} : { width: field.width })}
+      placeholder={field.nullable ? s.supplyNone : undefined}
       disabled={disabled}
       onChange={(n) => onChange({ ...value, [field.key]: n })}
+      onClear={field.nullable ? () => onChange({ ...value, [field.key]: null }) : undefined}
     />
   ));
 }

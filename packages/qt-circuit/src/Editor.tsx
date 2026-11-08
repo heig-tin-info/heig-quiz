@@ -29,6 +29,7 @@ import {
   type GradingMode,
   type Schematic,
   type Stimulus,
+  type Supplies,
 } from "./schema.js";
 import {
   EDITOR_STRINGS,
@@ -64,6 +65,7 @@ import {
 } from "@quiz/ui";
 
 import { BodeFields } from "./editor/BodeFields.js";
+import { NumberFields, type NumberFieldSpec } from "./editor/NumberFields.js";
 import { StimulusFields } from "./editor/StimulusFields.js";
 import { chip } from "./styles.js";
 
@@ -123,6 +125,11 @@ const KIND_GROUPS: ReadonlyArray<{
   { title: "groupTransistors", kinds: ["NPN", "PNP", "NMOS", "PMOS", "NMOSD", "PMOSD"] },
   { title: "groupOpamp", kinds: ["OPAMP"] },
   { title: "groupTerminals", kinds: ["GND", "VCC", "VEE"] },
+];
+
+const SUPPLIES: readonly NumberFieldSpec<Supplies>[] = [
+  { key: "vcc", id: "vcc", label: "vcc", min: 0, max: 100, step: "any", nullable: true },
+  { key: "vee", id: "vee", label: "vee", min: -100, max: 0, step: "any", nullable: true },
 ];
 
 /** What one simulation of the reference came back with, as a try state. */
@@ -269,29 +276,13 @@ export function CircuitEditor({
            * control to switch it off, and a checkbox beside every rail would
            * be two things for one fact.
            */}
-          <NumberField
-            id={`${ids}-vcc`}
-            label={s.vcc}
-            value={config.supplies.vcc}
-            min={0}
-            max={100}
-            step="any"
-            placeholder={s.supplyNone}
+          <NumberFields
+            fields={SUPPLIES}
+            idPrefix={ids}
+            value={config.supplies}
+            s={s}
             disabled={disabled}
-            onChange={(vcc) => patch({ supplies: { ...config.supplies, vcc } })}
-            onClear={() => patch({ supplies: { ...config.supplies, vcc: null } })}
-          />
-          <NumberField
-            id={`${ids}-vee`}
-            label={s.vee}
-            value={config.supplies.vee}
-            min={-100}
-            max={0}
-            step="any"
-            placeholder={s.supplyNone}
-            disabled={disabled}
-            onChange={(vee) => patch({ supplies: { ...config.supplies, vee } })}
-            onClear={() => patch({ supplies: { ...config.supplies, vee: null } })}
+            onChange={(supplies) => patch({ supplies })}
           />
         </div>
         <IssueList issues={issuesAt(issues, "supplies")} />
