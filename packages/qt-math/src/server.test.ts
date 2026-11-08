@@ -3,14 +3,13 @@
  * every type owes — the version stamp, the migration of its own version, the
  * empty draft, the leak test of the full fixture through `toStudent` and the
  * paper documents — is the registry's contract test; `./toStudent.test.ts`
- * holds the student view itself. This file holds the hooks that are the
- * type's own: publication, the live grid, the debrief and the feedback path.
+ * holds the student view and the feedback path. This file holds the hooks that are the
+ * type's own: publication, the live grid and the debrief.
  */
-import { findStudentLeaks, testGradeContext } from "@quiz/core/testing";
 import { describe, expect, it } from "vitest";
 
 import { mathPublicationIssues, mathServer } from "./server.js";
-import { config, mathLeakFixture, SECRET_CONFIG } from "./test/fixtures.js";
+import { config, SECRET_CONFIG } from "./test/fixtures.js";
 
 describe("publication", () => {
   it("names a key that does not read, by its problem", () => {
@@ -52,32 +51,5 @@ describe("the rest of the server contract", () => {
     expect(mathServer.hasKey!(SECRET_CONFIG)).toBe(true);
     expect(mathServer.isAnswered({ latex: " " })).toBe(false);
     expect(mathServer.isAnswered({ latex: "x" })).toBe(true);
-  });
-});
-
-/*
- * Invariant 4 on the feedback path (docs/05 §5.7): the details a student
- * reads come through `studentDetails`. Under a hidden key, which accepted
- * answer matched belongs to the key: checked by key, and by searching the
- * serialized output for every value of the key.
- */
-describe("the feedback path", () => {
-  const forbiddenKeys = [...mathLeakFixture.forbiddenKeys, "matchedIndex"];
-
-  // A partial answer's fraction is the student's own score, which they read anyway: a right and a wrong answer here.
-  it("gives a student no key under a hidden key, for a right and a wrong answer", async () => {
-    for (const latex of ["\\frac{1}{\\frac{1}{R_1}+\\frac{1}{R_2}}", "R_1 R_2"]) {
-      const graded = await mathServer.grade(SECRET_CONFIG, { latex }, testGradeContext(4));
-      if (graded.kind !== "graded") throw new Error("expected a graded result");
-      const shown = mathServer.studentDetails!(graded.details, { showKey: false, showHiddenCaseNames: false });
-      expect(findStudentLeaks(shown, { forbiddenKeys, secrets: mathLeakFixture.secrets }), latex).toEqual([]);
-    }
-  });
-
-  it("names the matched answer once the key is shown (the positive control)", async () => {
-    const graded = await mathServer.grade(SECRET_CONFIG, { latex: "R_2+R_1" }, testGradeContext(4));
-    if (graded.kind !== "graded") throw new Error("expected a graded result");
-    const shown = mathServer.studentDetails!(graded.details, { showKey: true, showHiddenCaseNames: false });
-    expect(findStudentLeaks(shown, { forbiddenKeys })).toEqual(['forbidden key "matchedIndex"']);
   });
 });
