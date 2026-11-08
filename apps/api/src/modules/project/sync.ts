@@ -59,7 +59,7 @@ import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { botCommits, classrooms, projectRepos, projects, projectSyncPrs } from "../../db/schema.js";
-import { githubStatus, installationClient, isZeroSha, ownerRepo, unless404 } from "../../github/app.js";
+import { branchHead, githubStatus, installationClient, isZeroSha, ownerRepo, unless404 } from "../../github/app.js";
 import { openSyncWorkspace, SourceRewritten, updateSquashedRepo, type SyncWorkspace } from "../../github/sync.js";
 import { PROJECT_SYNC_QUEUE } from "../../jobs.js";
 import { projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
@@ -339,19 +339,6 @@ async function upsertSyncPr(
   return "opened";
 }
 
-/** The head of the repository's `sync/<branch>` on GitHub, or null when the App never pushed it. */
-async function syncRefHead(octokit: Octokit, owner: string, repo: string, branch: string): Promise<string | null> {
-  return unless404(async () => {
-    const { data } = await octokit.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
-      owner,
-      repo,
-      ref: `heads/sync/${branch}`,
-      request: { retries: 0 },
-    });
-    return data.object.sha;
-  });
-}
-
 /** The repository's outcome, and when (the server's clock). */
 async function recordOutcome(db: Db, repoId: string, outcome: SyncOutcome, now: Date): Promise<void> {
   await db.update(projectRepos).set({ syncOutcome: outcome, syncOutcomeAt: now }).where(eq(projectRepos.id, repoId));
@@ -399,7 +386,7 @@ async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspac
       const head = await ws.headOf(branch);
       await db.insert(botCommits).values({ repoId: repo.id, sha: head, kind: "sync", createdAt: now }).onConflictDoNothing();
       // The ref moves only when the distribution did (a retry pushes nothing again, and comments on nothing).
-      const moved = (await syncRefHead(octokit, owner, name, branch)) !== head;
+      const moved = (await branchHead(octokit, owner, name, `sync/${branch}`)) !== head;
       if (moved) await ws.pushSyncRef(name, branch);
       const { data: cmp } = await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
         owner,
