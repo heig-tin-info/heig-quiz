@@ -25,11 +25,11 @@ import { publishQuestion, seedLive, type Seeded } from "../../test/live.js";
 import { writeGrading } from "../grading/service.js";
 import { poolQuestionStats } from "../stats/service.js";
 import * as poolService from "./service.js";
+import { newPool, type Actor } from "../../test/pools.js";
 
 let server: TestServer;
 let db: Db;
 let restore: () => void;
-type Actor = Awaited<ReturnType<TestServer["signIn"]>>;
 let teacher: Actor;
 let colleague: Actor;
 let seed: Seeded;
@@ -42,17 +42,6 @@ async function republish(id: string, statement: string) {
   const [question] = await db.select().from(questions).where(eq(questions.id, id));
   await poolService.putDraft(db, question!, { config: { statement, answer: "x" } });
   await poolService.publishQuestion(db, question!, { userId: seed.teacherId });
-}
-
-async function newPool(who: Actor, name: string, isPublic = false) {
-  const res = await server.app.inject({
-    method: "POST",
-    url: "/app/api/pools",
-    headers: who.headers,
-    payload: { name, isPublic },
-  });
-  expect(res.statusCode).toBe(201);
-  return res.json<{ id: string }>().id;
 }
 
 const short = (statement: string) => ({ type: "short", config: { statement, answer: "x" } });
@@ -123,11 +112,11 @@ beforeAll(async () => {
   // Ten counted exam answers on the first, three on the second.
   await sit([10, 3]);
 
-  const own = await newPool(teacher, "Mes algorithmes");
+  const own = await newPool(server, teacher, "Mes algorithmes");
   ids.own = await publishQuestion(db, own, teacher.id, "own", short("Le tri rapide est-il stable ?"));
-  const open = await newPool(colleague, "Algorithmes publics", true);
+  const open = await newPool(server, colleague, "Algorithmes publics", { isPublic: true });
   ids.public = await publishQuestion(db, open, colleague.id, "pub", short("Complexité moyenne du tri rapide"));
-  const closed = await newPool(colleague, "Privé");
+  const closed = await newPool(server, colleague, "Privé");
   ids.private = await publishQuestion(db, closed, colleague.id, "priv", short(TEXT));
   // A draft, in the linked pool, word for word the search: never a hit.
   const draft = await poolService.createQuestion(db, {

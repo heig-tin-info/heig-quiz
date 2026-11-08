@@ -44,7 +44,6 @@ import {
   courseStaff,
   enrollments,
   githubAccounts,
-  githubClassroomLinks,
   githubOrganizations,
   gradeDispatches,
   projectCheckpoints,
@@ -61,15 +60,21 @@ import {
 } from "../../db/schema.js";
 import { installationClient } from "../../github/app.js";
 import { ArtifactUnavailable } from "../../github/artifact.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, BLOB_HOST, fakeGithub, json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { BLOB_HOST, json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import type { JobQueue } from "../../jobs.js";
 import { gatewayGrader } from "../llm/grader.js";
 import type { LlmProvider, ProviderRequest } from "../llm/provider.js";
 import { LlmGateway, writeSettings } from "../llm/service.js";
-import { DISPATCH_PACE_MS, expireCiPasses, ingestRun, intakeGradedRun, RESULT_WAIT_MS, runCiDispatch, sendCiPasses } from "./ci.js";
+import {
+  DISPATCH_PACE_MS,
+  expireCiPasses,
+  ingestRun,
+  intakeGradedRun,
+  RESULT_WAIT_MS,
+  runCiDispatch,
+  sendCiPasses,
+} from "./ci.js";
 import { writeCriterionGrades } from "./criterionGrades.js";
 import { runEvidence } from "./evidence.js";
 import { runReview } from "./reviewPass.js";
@@ -77,7 +82,18 @@ import { completedRun, type CompletedRun } from "./grading.js";
 import { claimPasses } from "./milestone.js";
 import { regrade } from "./regrade.js";
 import { repoContext } from "./repos.js";
-import { repoWorld } from "./testing.js";
+import {
+  APP_ENV,
+  freshOrgId,
+  gh,
+  linkClassroom,
+  newOrg,
+  server,
+  teacher,
+  useProjectWorld,
+  WEBHOOK_SECRET,
+  world,
+} from "../../test/projectWorld.js";
 
 const CRITERIA = [
   "schema_version: 3",
@@ -97,25 +113,15 @@ const CHECK = "#!/bin/sh\nexit 0\n";
 const FILES = { "README.md": "# Lab", "criteria.yml": CRITERIA, ".github/workflows/grading.yml": WORKFLOW, "tests/check.sh": CHECK };
 const SIG = "SIGSECRET0123456789abcdef";
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
 const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
   JOBS_DISABLED: "1",
   LLM_KEY_SECRET: "test-llm-master-key-0123456789abcdef",
 };
-const config = loadConfig({ NODE_ENV: "test", ...ENV });
+const config = loadConfig({ NODE_ENV: "test", ...APP_ENV, ...ENV });
 const NOW = "2026-10-02T08:00:00.000Z";
 const DEADLINE = new Date("2026-10-09T22:00:00.000Z");
 const before = (minutes: number) => new Date(DEADLINE.getTime() - minutes * 60_000);
 
-let server: TestServer;
-let teacher: { id: string; headers: Record<string, string> };
-let nextOrg = 9600;
 
 /** The dispatches GitHub received, and the repositories that refuse one (a status). */
 const dispatched: { fullName: string; body: { event_type: string; client_payload: Record<string, unknown> } }[] = [];
@@ -170,13 +176,9 @@ async function lab(version: 2 | 3 = 3, criteria = CRITERIA): Promise<Lab> {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: [], questions: 0 });
   await db.insert(courseStaff).values({ courseId: seeded.courseId, userId: teacher.id }).onConflictDoNothing();
-  const n = nextOrg++;
-  const login = `org-${n}`;
-  world.orgIds[login] = n;
+  const { n, login, orgId } = await newOrg("org");
   world.source(login, "lab", { main: FILES });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId);
   const res = await server.app.inject({
     method: "POST",
     url: `/app/api/classrooms/${seeded.classroomId}/projects`,
@@ -266,21 +268,10 @@ async function dispatchedPass(l: Lab, name: string) {
   return { repo, target, pass: row, ctx };
 }
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  server.clock.set(NOW);
-  gh.routes = [orgsRoute(() => []), ciRoute, world.route];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [orgsRoute(() => []), ciRoute, world.route], env: ENV });
 
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
+beforeAll(async () => {
+  server.clock.set(NOW);
 });
 
 describe("the dispatch", () => {
@@ -577,7 +568,7 @@ describe("the intake", () => {
           updated_at: NOW,
         },
       };
-      const res = await signedDelivery(server.app, ENV.GITHUB_WEBHOOK_SECRET, payload, { event: "workflow_run", id });
+      const res = await signedDelivery(server.app, WEBHOOK_SECRET, payload, { event: "workflow_run", id });
       expect(res.statusCode, res.body).toBe(200);
       await vi.waitFor(
         async () => {
@@ -727,7 +718,7 @@ describe("the LLM pass of a schema-3 pass (ADR-119 §7)", () => {
     const [project] = await server.app.db.select({ classroomId: projects.classroomId }).from(projects).where(eq(projects.id, l.projectId));
     const email = `zoe.${suffix}@heig-vd.ch`;
     await server.app.db.update(users).set({ givenName: "Zoé", familyName: "Bernasconi", email }).where(eq(users.id, row!.userId));
-    await server.app.db.insert(githubAccounts).values({ userId: row!.userId, githubUserId: 700_000 + nextOrg++, login });
+    await server.app.db.insert(githubAccounts).values({ userId: row!.userId, githubUserId: 700_000 + freshOrgId(), login });
     await server.app.db
       .insert(enrollments)
       .values({ id: randomUUID(), classroomId: project!.classroomId, nom: "Bernasconi", prenom: "Zoé", email, userId: row!.userId });
@@ -879,7 +870,7 @@ describe("the LLM pass of a schema-3 pass (ADR-119 §7)", () => {
       return { repo, passId: claimed.passId };
     })();
     // The project's organization moved to an installation whose token GitHub refuses (no token cached for it).
-    const installationId = 880_000 + nextOrg++;
+    const installationId = 880_000 + freshOrgId();
     const orgId = randomUUID();
     await server.app.db.insert(githubOrganizations).values({ id: orgId, login: `org-k${installationId}`, githubOrgId: installationId, installationId });
     const [{ orgId: before_ } = { orgId: "" }] = await server.app.db.select({ orgId: projects.orgId }).from(projects).where(eq(projects.id, l.projectId));

@@ -32,7 +32,7 @@ import { chmodSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProjectDetail, ProjectErrorCode, ProjectSummary, ProjectSyncAccepted } from "@quiz/contracts";
 
@@ -40,8 +40,6 @@ import { loadConfig } from "../../config.js";
 import {
   auditLog,
   botCommits,
-  githubAccounts,
-  githubClassroomLinks,
   githubOrganizations,
   projectRepos,
   projects,
@@ -49,61 +47,36 @@ import {
   webhookDeliveries,
 } from "../../db/schema.js";
 import { installationClient } from "../../github/app.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
 import { revertProtectedFiles } from "../../github/revert.js";
 import { SYNC_COMMIT_MESSAGE } from "../../github/sync.js";
-import { appKey, fakeGithub, json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
+import { orgsRoute, signedDelivery } from "../../github/testing.js";
 import { PROJECT_SYNC_QUEUE, type JobQueue } from "../../jobs.js";
-import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import type { ProjectJob } from "./lease.js";
 import { runSyncJob } from "./sync.js";
-import { repoWorld } from "./testing.js";
+import {
+  APP_ENV,
+  call,
+  gh,
+  linkClassroom,
+  newOrg,
+  newStudent,
+  server,
+  teacher,
+  useProjectWorld,
+  usersRoute,
+  WEBHOOK_SECRET,
+  world,
+} from "../../test/projectWorld.js";
 
-const SECRET = "w".repeat(40);
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: SECRET,
-};
 const APP_BOT = "quiz-test[bot]";
-const config = loadConfig({ NODE_ENV: "test", ...ENV });
+const config = loadConfig({ NODE_ENV: "test", ...APP_ENV });
 const NOW = "2026-10-02T08:00:00.000Z";
 const DEADLINE = "2026-10-09T22:00:00.000Z";
 const GRADING = ".github/workflows/grading.yml";
 const HOUR = 3_600_000;
 const at = (iso: string, plusMs = 0) => new Date(new Date(iso).getTime() + plusMs);
 const short = (sha: string) => sha.slice(0, 7);
-
-type Headers = Record<string, string>;
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 31_000;
-let nextAccount = 34_000;
-
-const accounts = new Map<number, string>();
-const usersRoute: Route = (url, req) => {
-  const m = /^\/user\/(\d+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const login = accounts.get(Number(m[1]));
-  return login === undefined ? undefined : json({ id: Number(m[1]), login });
-};
-
-const call = (method: "GET" | "POST" | "PATCH", url: string, headers: Headers, payload?: object) =>
-  server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
-
-async function newStudent() {
-  const signed = await server.signIn("student");
-  const githubUserId = nextAccount++;
-  const login = `sy${githubUserId}`;
-  await server.app.db.insert(githubAccounts).values({ userId: signed.id, githubUserId, login });
-  accounts.set(githubUserId, login);
-  return { ...signed, login };
-}
 
 type Repo = typeof projectRepos.$inferSelect;
 
@@ -116,18 +89,14 @@ async function project(opts: { students?: number; body?: Record<string, unknown>
   const db = server.app.db;
   const students = await Promise.all(Array.from({ length: opts.students ?? 1 }, () => newStudent()));
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
-  const n = nextOrg++;
-  const login = `sorg-${n}`;
-  world.orgIds[login] = n;
+  const { login, orgId } = await newOrg("sorg");
   world.source(
     login,
     "starter",
     { main: { "README.md": "# Lab", "src/main.c": "int main(){}", [GRADING]: "grade: v1" }, dev: { "README.md": "# Dev" } },
     opts.commits ?? 1,
   );
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId);
   const created = await call("POST", `/app/api/classrooms/${seeded.classroomId}/projects`, teacher.headers, {
     name: "Lab",
     sourceRepo: "starter",
@@ -176,7 +145,7 @@ async function detail(id: string) {
 const refusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, ProjectErrorCode.parse(res.json().error)];
 
 // The deliveries, through the real intake; the test server has no queue, so a handler runs before the 200 settles.
-const deliver = (event: string, payload: object, id = randomUUID()) => signedDelivery(server.app, SECRET, payload, { event, id });
+const deliver = (event: string, payload: object, id = randomUUID()) => signedDelivery(server.app, WEBHOOK_SECRET, payload, { event, id });
 async function handled(event: string, payload: object, id = randomUUID()): Promise<void> {
   const res = await deliver(event, payload, id);
   expect(res.statusCode, res.body).toBe(200);
@@ -241,25 +210,11 @@ const prEvent = (repo: Repo, over: { action: string; number: number; merged?: bo
   },
 });
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), usersRoute, world.route];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, world.route] });
 
 beforeEach(() => {
   server.clock.set(NOW);
   sent.length = 0;
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 // ---------------------------------------------------------------- the source ahead

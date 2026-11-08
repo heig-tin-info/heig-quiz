@@ -18,36 +18,24 @@ import { randomUUID } from "node:crypto";
 
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { ProjectDetail, ProjectReleaseResult, ProjectRepoScores, CSRF_COOKIE } from "@quiz/contracts";
 
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
-import { auditLog, courseStaff, enrollments, githubOrganizations, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
+import { auditLog, courseStaff, enrollments, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
 import { resetLiveStateCache } from "../../github/metrics.js";
-import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { json, orgsRoute, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { accessibleProject, accessibleProjectRepo } from "../guards.js";
+import { call, newOrg, server, teacher, useProjectWorld, type Headers } from "../../test/projectWorld.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
 const NOW = "2026-10-10T08:00:00.000Z";
 const DEADLINE = "2026-10-09T22:00:00.000Z";
 const FROZEN_AT = "2026-10-09T22:30:00.000Z";
 const at = (iso: string) => new Date(iso);
 
-type Headers = Record<string, string>;
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 52_000;
 let nextRepo = 50_000;
 
 /** The live state of any repository: one commit, one check passed. */
@@ -58,9 +46,6 @@ const liveRoute: Route = (url, req) => {
   if (m[1]) return json({ check_runs: [{ status: "completed", conclusion: "success" }] });
   return json([{ sha: "b".repeat(40), commit: { committer: { date: NOW } } }]);
 };
-
-const call = (method: "GET" | "POST" | "PATCH", url: string, headers: Headers, payload?: object) =>
-  server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
 
 interface World {
   projectId: string;
@@ -74,10 +59,7 @@ async function world(opts: { students?: number; gradingMode?: "auto" | "none" } 
   const db = server.app.db;
   const students = await Promise.all(Array.from({ length: opts.students ?? 1 }, () => server.signIn("student")));
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
-  const n = nextOrg++;
-  const org = `gorg-${n}`;
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login: org, githubOrgId: n, installationId: n });
+  const { n, login: org, orgId } = await newOrg("gorg");
   const projectId = randomUUID();
   await db.insert(projects).values({
     id: projectId,
@@ -161,22 +143,11 @@ async function detail(w: World): Promise<ProjectDetail> {
 }
 const rowOf = (d: ProjectDetail, userId: string) => d.rows.find((r) => r.student.userId === userId)!.repo!;
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), liveRoute];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [orgsRoute(() => []), liveRoute], repos: false });
 
 beforeEach(() => {
   server.clock.set(NOW);
   resetLiveStateCache();
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  key.remove();
 });
 
 describe("the teacher's score (F-PROJ-14)", () => {

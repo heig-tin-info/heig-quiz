@@ -8,8 +8,8 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
+import { newPool, type Actor } from "../../test/pools.js";
 
-type Actor = Awaited<ReturnType<TestServer["signIn"]>>;
 
 let server: TestServer;
 let restoreShort: () => void;
@@ -18,17 +18,6 @@ let reader: Actor;
 let stranger: Actor;
 let poolId: string;
 let otherPoolId: string;
-
-async function newPool(who: Actor, name: string): Promise<string> {
-  const res = await server.app.inject({
-    method: "POST",
-    url: "/app/api/pools",
-    headers: who.headers,
-    payload: { name },
-  });
-  expect(res.statusCode).toBe(201);
-  return res.json().id as string;
-}
 
 async function question(pool: string, name: string): Promise<string> {
   const res = await server.app.inject({
@@ -81,8 +70,8 @@ beforeAll(async () => {
   owner = await server.signIn("teacher");
   reader = await server.signIn("teacher");
   stranger = await server.signIn("teacher");
-  poolId = await newPool(owner, "Stars");
-  otherPoolId = await newPool(owner, "Stars, elsewhere");
+  poolId = await newPool(server, owner, "Stars");
+  otherPoolId = await newPool(server, owner, "Stars, elsewhere");
   const invited = await server.app.inject({
     method: "POST",
     url: `/app/api/pools/${poolId}/members`,
@@ -197,7 +186,7 @@ describe("question stars", () => {
     expect((await star(stranger, [q])).statusCode).toBe(404);
     expect((await star(stranger, [q], "DELETE")).statusCode).toBe(404);
     // One reachable id beside an unreachable one: nothing is starred at all.
-    const theirPool = await newPool(stranger, "Stranger's");
+    const theirPool = await newPool(server, stranger, "Stranger's");
     const own = await server.app.inject({
       method: "POST",
       url: `/app/api/pools/${theirPool}/questions`,

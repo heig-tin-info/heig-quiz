@@ -20,17 +20,34 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq, ne } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { PointsOutOfRange, ProjectDetail, ProjectGradingRepo, ProjectGradingView, ProjectValidated } from "@quiz/contracts";
+import {
+  PointsOutOfRange,
+  ProjectDetail,
+  ProjectGradingRepo,
+  ProjectGradingView,
+  ProjectValidated,
+} from "@quiz/contracts";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 
-import { auditLog, courseStaff, enrollments, githubOrganizations, gradeDispatches, projectCiResults, projectCriteria, projectCriterionGrades, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
+import {
+  auditLog,
+  courseStaff,
+  enrollments,
+  gradeDispatches,
+  projectCiResults,
+  projectCriteria,
+  projectCriterionGrades,
+  projectGradeRuns,
+  projectRepos,
+  projects,
+} from "../../db/schema.js";
 import { resetLiveStateCache } from "../../github/metrics.js";
-import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { orgsRoute } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { writeCriterionGrades } from "./criterionGrades.js";
+import { newOrg, server, teacher, useProjectWorld, type Headers } from "../../test/projectWorld.js";
 
 const CRITERIA = `schema_version: 2
 grading:
@@ -49,23 +66,11 @@ criteria:
 const MACHINE = ["rendu.all-tests-passed", "rapport.style", "rapport.crash", "rapport.extra"];
 const XSS = "<script>alert(1)</script>";
 
-const key = appKey();
-const gh = fakeGithub();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
 const NOW = "2026-10-10T08:00:00.000Z";
 const DEADLINE = "2026-10-09T22:00:00.000Z";
 const FROZEN_AT = "2026-10-09T22:30:00.000Z";
 const at = (iso: string) => new Date(iso);
 
-type Headers = Record<string, string>;
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 61_000;
 let nextRepo = 61_000;
 
 const call = (method: "GET" | "POST" | "PUT", url: string, headers: Headers = teacher.headers, payload?: object) =>
@@ -83,9 +88,7 @@ async function world(students = 2): Promise<World> {
   const db = server.app.db;
   const people = await Promise.all(Array.from({ length: students }, () => server.signIn("student")));
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: people.map((s) => s.id), questions: 0 });
-  const n = nextOrg++;
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login: `corg-${n}`, githubOrgId: n, installationId: n });
+  const { n, orgId } = await newOrg("corg");
   const projectId = randomUUID();
   await db.insert(projects).values({
     id: projectId,
@@ -196,22 +199,11 @@ const auditOf = (subjectId: string, action: string) =>
 /** The teacher-only criterion written by a teacher, 0 included. */
 const commits = (w: World, repo: string, points = 0) => call("PUT", criterionUrl(w, repo, "git.commits"), teacher.headers, { points });
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => [])];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [orgsRoute(() => [])], repos: false });
 
 beforeEach(() => {
   server.clock.set(NOW);
   resetLiveStateCache();
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  key.remove();
 });
 
 describe("the grading screen's payload (ADR-106 §8)", () => {

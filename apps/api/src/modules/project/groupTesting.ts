@@ -11,80 +11,64 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, expect, vi } from "vitest";
+import { beforeEach, expect } from "vitest";
 
-import { GroupErrorCode, GroupSetDetail, ProjectAcceptErrorCode, ProjectSummary, RosterErrorCode } from "@quiz/contracts";
+import {
+  GroupErrorCode,
+  GroupSetDetail,
+  ProjectAcceptErrorCode,
+  ProjectSummary,
+  RosterErrorCode,
+} from "@quiz/contracts";
 
 import { loadConfig } from "../../config.js";
-import { auditLog, enrollments, githubAccounts, githubClassroomLinks, githubOrganizations, projectRepoAccess, projectRepos } from "../../db/schema.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import {
+  auditLog,
+  enrollments,
+  githubClassroomLinks,
+  githubOrganizations,
+  projectRepoAccess,
+  projectRepos,
+} from "../../db/schema.js";
+import { json, orgsRoute, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
-import { repoWorld } from "./testing.js";
+import {
+  APP_ENV,
+  call,
+  freshOrgId,
+  server,
+  staffCall,
+  teacher,
+  useProjectWorld,
+  usersRoute,
+  world,
+  type Headers,
+} from "../../test/projectWorld.js";
 
+export {
+  accounts,
+  call,
+  freshAccountId,
+  freshOrgId,
+  gh,
+  link,
+  newStudent,
+  server,
+  teacher,
+  world,
+  type Headers,
+  type Student,
+} from "../../test/projectWorld.js";
 
-const key = appKey();
-export const gh = fakeGithub();
-export const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
-export const config = loadConfig({ NODE_ENV: "test", ...ENV });
+export const config = loadConfig({ NODE_ENV: "test", ...APP_ENV });
 export const NOW = "2026-10-05T08:00:00.000Z";
 export const IN_A_WEEK = "2026-10-12T22:00:00.000Z";
 
-export type Headers = Record<string, string>;
-type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
-export interface Student {
-  id: string;
-  headers: Headers;
-  githubUserId: number;
-  login: string;
-}
-
-export let server: TestServer;
-export let teacher: { id: string; headers: Headers };
-let nextOrg = 61_000;
-let nextAccount = 81_000;
-/** A fresh GitHub id: an organization's, a repository's. */
-export const freshOrgId = () => nextOrg++;
-/** A fresh GitHub account id. */
-export const freshAccountId = () => nextAccount++;
-
-/** GitHub's accounts, by immutable id: today's login. Missing: deleted. */
-export const accounts = new Map<number, string>();
-const usersRoute: Route = (url, req) => {
-  const m = /^\/user\/(\d+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const login = accounts.get(Number(m[1]));
-  return login === undefined ? undefined : json({ id: Number(m[1]), login });
-};
-
-export const call = (method: Method, url: string, headers: Headers, payload?: object) =>
-  server.app.inject({ method, url, headers, ...(payload === undefined ? {} : { payload }) });
-export const staff = (method: Method, url: string, payload?: object) => call(method, url, teacher.headers, payload);
+export const staff = staffCall;
 export const accept = (projectId: string, who: { headers: Headers }) => call("POST", `/app/api/student/projects/${projectId}/accept`, who.headers);
 export const acceptRefusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, ProjectAcceptErrorCode.parse(res.json().error)];
 export const groupRefusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, GroupErrorCode.parse(res.json().error)];
 export const rosterRefusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, RosterErrorCode.parse(res.json().error)];
-
-/** A student with a linked GitHub account (unless `linked: false`). */
-export async function newStudent(opts: { linked?: boolean } = {}): Promise<Student> {
-  const signed = await server.signIn("student");
-  const githubUserId = freshAccountId();
-  const login = `kid${githubUserId}`;
-  if (opts.linked !== false) await link(signed.id, githubUserId, login);
-  return { ...signed, githubUserId, login };
-}
-
-export async function link(userId: string, githubUserId: number, login: string) {
-  await server.app.db.insert(githubAccounts).values({ userId, githubUserId, login });
-  accounts.set(githubUserId, login);
-}
 
 export interface Org {
   login: string;
@@ -98,7 +82,7 @@ export interface Room extends Org {
 }
 
 /** A classroom of `teacher`'s course connected to an organization holding `starter` (a new one, unless `org` is given). */
-export async function connectedClassroom(students: Student[], org?: Org): Promise<Room> {
+export async function connectedClassroom(students: { id: string }[], org?: Org): Promise<Room> {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
   let at = org;
@@ -126,7 +110,7 @@ export async function setOk(res: { statusCode: number; body: string; json: () =>
  * following a set whose groups are `groups` (indexes into `students`),
  * named "Group 1", "Group 2"…
  */
-export async function groupProject(students: Student[], groups: number[][], org?: Org) {
+export async function groupProject(students: { id: string }[], groups: number[][], org?: Org) {
   const room = await connectedClassroom(students, org);
   let set = await setOk(await staff("POST", `/app/api/classrooms/${room.id}/group-sets`, {}));
   for (const [k, members] of groups.entries()) {
@@ -201,24 +185,10 @@ const tokensRoute: Route = (url, req) => {
 
 /** Registers the world's lifecycle in the calling test file: the server with Quiz's App, the fake GitHub and its hooks, the clock at {@link NOW}. */
 export function useGroupWorld(): void {
-  beforeAll(async () => {
-    vi.stubGlobal("fetch", gh.fetch);
-    setRemoteBaseForTests(`file://${world.dir}`);
-    server = await testServer(ENV);
-    gh.routes = [hookRoute, tokensRoute, orgsRoute(() => []), usersRoute, world.route];
-    teacher = await server.signIn("teacher");
-  });
+  useProjectWorld({ routes: [hookRoute, tokensRoute, orgsRoute(() => []), usersRoute, world.route] });
 
   beforeEach(() => {
     server.clock.set(NOW);
     hooks = [];
-  });
-
-  afterAll(async () => {
-    await server.close();
-    vi.unstubAllGlobals();
-    setRemoteBaseForTests(null);
-    world.remove();
-    key.remove();
   });
 }

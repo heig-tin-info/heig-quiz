@@ -31,7 +31,7 @@ import { join } from "node:path";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq } from "drizzle-orm";
 import type { Octokit } from "octokit";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProjectRepoDeadlineState, ProjectSummary, CSRF_COOKIE } from "@quiz/contracts";
 
@@ -41,19 +41,14 @@ import { loadConfig } from "../../config.js";
 import {
   auditLog,
   botCommits,
-  githubAccounts,
-  githubClassroomLinks,
-  githubOrganizations,
   projectCheckpoints,
   projectGradeRuns,
   projectRepos,
   projects,
   pushReceipts,
 } from "../../db/schema.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
+import { json, orgsRoute, type Route } from "../../github/testing.js";
 import { PROJECT_CRITERIA_QUEUE, PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
-import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { GITHUB_TASKS } from "../github/jobs.js";
 import { accessibleProjectRepo } from "../guards.js";
@@ -63,36 +58,26 @@ import { autoPublishProject } from "./lifecycle.js";
 import { RECONCILE_TASKS } from "./reconcile.js";
 import { FAILED_RETRY_MS, LEASE_MS, type ProjectJob } from "./lease.js";
 import { repoContext } from "./repos.js";
-import { repoWorld } from "./testing.js";
+import {
+  APP_ENV,
+  call,
+  gh,
+  linkClassroom,
+  newOrg,
+  newStudent,
+  server,
+  teacher,
+  useProjectWorld,
+  usersRoute,
+  world,
+} from "../../test/projectWorld.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
-const config = loadConfig({ NODE_ENV: "test", ...ENV });
+const config = loadConfig({ NODE_ENV: "test", ...APP_ENV });
 const NOW = "2026-10-02T08:00:00.000Z";
 const DEADLINE = "2026-10-09T22:00:00.000Z";
 const MINUTE = 60_000;
 const at = (iso: string, plusMs = 0) => new Date(new Date(iso).getTime() + plusMs);
 
-type Headers = Record<string, string>;
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 22_000;
-let nextAccount = 25_000;
-
-const accounts = new Map<number, string>();
-const usersRoute: Route = (url, req) => {
-  const m = /^\/user\/(\d+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const login = accounts.get(Number(m[1]));
-  return login === undefined ? undefined : json({ id: Number(m[1]), login });
-};
 /** While set, GitHub fails a ruleset's creation with a 500: a failure to retry, never a reason to archive. */
 let rulesetsDown = false;
 const rulesetsFailing: Route = (url, req) =>
@@ -107,30 +92,14 @@ const lockHook: Route = (url, req) => {
   return run().then(() => world.route(url, req)) as unknown as Response;
 };
 
-async function newStudent() {
-  const signed = await server.signIn("student");
-  const githubUserId = nextAccount++;
-  const login = `dl${githubUserId}`;
-  await server.app.db.insert(githubAccounts).values({ userId: signed.id, githubUserId, login });
-  accounts.set(githubUserId, login);
-  return { ...signed, login };
-}
-
-const call = (method: "GET" | "POST" | "PUT" | "PATCH", url: string, headers: Headers, payload?: object) =>
-  server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
-
 /** A published project of a connected classroom, and the accepted repositories of `students` students. */
 async function project(opts: { students?: number; body?: Record<string, unknown>; freePlan?: boolean; publish?: boolean } = {}) {
   const db = server.app.db;
   const students = await Promise.all(Array.from({ length: opts.students ?? 1 }, () => newStudent()));
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
-  const n = nextOrg++;
-  const login = `dorg-${n}`;
-  world.orgIds[login] = n;
+  const { login, orgId } = await newOrg("dorg");
   world.source(login, "starter", { main: { "README.md": "# Lab", "src/main.c": "int main(){}" }, dev: { "README.md": "# Dev" } });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId);
   const created = await call("POST", `/app/api/classrooms/${seeded.classroomId}/projects`, teacher.headers, {
     name: "Lab",
     sourceRepo: "starter",
@@ -213,27 +182,13 @@ async function scoredRun(repo: Repo, points: number, completedAt: Date, afterDea
   return id;
 }
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), usersRoute, rulesetsFailing, lockHook, world.route];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, rulesetsFailing, lockHook, world.route] });
 
 beforeEach(() => {
   server.clock.set(NOW);
   sent.length = 0;
   rulesetsDown = false;
   duringLock = null;
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 // ---------------------------------------------------------------- the ticker

@@ -10,10 +10,16 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq, ne } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { ProjectSummary } from "@quiz/contracts";
-import { RunnerBusy, RunnerUnavailable, type ProjectRunRefusal, type ProjectRunRequest, type ProjectRunResult } from "@quiz/core/server";
+import {
+  RunnerBusy,
+  RunnerUnavailable,
+  type ProjectRunRefusal,
+  type ProjectRunRequest,
+  type ProjectRunResult,
+} from "@quiz/core/server";
 import { readTar } from "@quiz/core/tar";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 
@@ -21,8 +27,6 @@ import { loadConfig } from "../../config.js";
 import {
   botCommits,
   courseStaff,
-  githubClassroomLinks,
-  githubOrganizations,
   projectCriteria,
   projectCriterionGrades,
   projectEvidence,
@@ -30,12 +34,21 @@ import {
   projects,
   pushReceipts,
 } from "../../db/schema.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, CODELOAD_HOST, fakeGithub, orgsRoute } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { CODELOAD_HOST, orgsRoute } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { BUSY_ATTEMPTS_MAX, purgeEvidenceFiles, runEvidence, TarballUnavailable } from "./evidence.js";
-import { CODELOAD_TOKEN, repoWorld } from "./testing.js";
+import { CODELOAD_TOKEN } from "./testing.js";
+import {
+  APP_ENV,
+  freshOrgId,
+  gh,
+  linkClassroom,
+  newOrg,
+  server,
+  teacher,
+  useProjectWorld,
+  world,
+} from "../../test/projectWorld.js";
 
 const CRITERIA = `schema_version: 2
 criteria:
@@ -64,24 +77,14 @@ const RESULT: ProjectRunResult = {
   ],
 };
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
 const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
   JOBS_DISABLED: "1",
 };
-const config = loadConfig({ NODE_ENV: "test", ...ENV });
+const config = loadConfig({ NODE_ENV: "test", ...APP_ENV, ...ENV });
 const NOW = "2026-10-02T08:00:00.000Z";
 const DEADLINE = new Date("2026-10-09T22:00:00.000Z");
 const before = (minutes: number) => new Date(DEADLINE.getTime() - minutes * 60_000);
 
-let server: TestServer;
-let teacher: { id: string; headers: Record<string, string> };
-let nextOrg = 9400;
 /** What the runner double received, and what it answers. */
 const sent: ProjectRunRequest[] = [];
 let answer: () => Promise<ProjectRunResult | ProjectRunRefusal> = () => Promise.resolve(RESULT);
@@ -97,13 +100,9 @@ async function lab(criteria = CRITERIA): Promise<Lab> {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: [], questions: 0 });
   await db.insert(courseStaff).values({ courseId: seeded.courseId, userId: teacher.id }).onConflictDoNothing();
-  const n = nextOrg++;
-  const login = `org-${n}`;
-  world.orgIds[login] = n;
+  const { login, orgId } = await newOrg("org");
   world.source(login, "lab", { main: { "README.md": "# Lab", Makefile: "prepare:\n", [PROTECTED]: DIST_TEST, "criteria.yml": criteria } });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId);
   const res = await server.app.inject({
     method: "POST",
     url: `/app/api/classrooms/${seeded.classroomId}/projects`,
@@ -123,7 +122,7 @@ async function lab(criteria = CRITERIA): Promise<Lab> {
 async function studentRepo(l: Lab, name: string, onGithub = true) {
   const fullName = `${l.login}/${name}`;
   if (onGithub) world.source(l.login, name, { main: { "README.md": "# Lab", Makefile: "prepare:\n", [PROTECTED]: DIST_TEST } });
-  else world.ids.set(fullName, nextOrg * 100 + name.length);
+  else world.ids.set(fullName, freshOrgId() * 100 + name.length);
   const id = randomUUID();
   await server.app.db.insert(projectRepos).values({
     id,
@@ -157,13 +156,10 @@ const lastArchive = () => {
   return new Map(readTar(tar).map((e) => [e.path, Buffer.from(e.data).toString("utf8")]));
 };
 
+useProjectWorld({ routes: [orgsRoute(() => []), world.route], env: ENV });
+
 beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
   server.clock.set(NOW);
-  gh.routes = [orgsRoute(() => []), world.route];
-  teacher = await server.signIn("teacher");
   const real = server.app.runner;
   server.app.runner = {
     run: (req) => real.run(req),
@@ -173,14 +169,6 @@ beforeAll(async () => {
       return answer();
     },
   };
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 describe("the evidence of a repository", () => {

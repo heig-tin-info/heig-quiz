@@ -33,7 +33,7 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   CSRF_COOKIE,
@@ -51,7 +51,6 @@ import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import {
   auditLog,
-  githubAccounts,
   githubClassroomLinks,
   githubOrganizations,
   projectCheckpoints,
@@ -64,67 +63,30 @@ import {
   pushReceipts,
 } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { orgsRoute } from "../../github/testing.js";
 import { seedLive, type Seeded } from "../../test/live.js";
 import { studentHome as activityHome } from "../activity/service.js";
 import { findStudentProjectView } from "../guards.js";
 import { writeCriterionGrades } from "./criterionGrades.js";
 import { hintRepo, repoContext } from "./repos.js";
-import { repoWorld } from "./testing.js";
+import {
+  call,
+  freshOrgId,
+  newStudent,
+  server,
+  teacher,
+  useProjectWorld,
+  usersRoute,
+  world,
+  type Headers,
+} from "../../test/projectWorld.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
 const NOW = "2026-10-02T08:00:00.000Z";
 const DEADLINE = "2026-10-09T22:00:00.000Z";
 const MINUTE = 60_000;
 const DAY = 24 * 3_600_000;
 const at = (iso: string, plusMs = 0) => new Date(new Date(iso).getTime() + plusMs);
 
-type Headers = Record<string, string>;
-interface Student {
-  id: string;
-  headers: Headers;
-  githubUserId: number;
-  login: string;
-}
-
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 72_000;
-let nextAccount = 75_000;
-
-/** GitHub's accounts by id, for the login lookups. */
-const accounts = new Map<number, string>();
-const usersRoute: Route = (url, req) => {
-  const m = /^\/user\/(\d+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const login = accounts.get(Number(m[1]));
-  return login === undefined ? undefined : json({ id: Number(m[1]), login });
-};
-
-/** A student, their GitHub account linked unless `linked: false`; `tag` makes the login distinctive. */
-async function newStudent(opts: { linked?: boolean; tag?: string } = {}): Promise<Student> {
-  const signed = await server.signIn("student");
-  const githubUserId = nextAccount++;
-  const login = `${opts.tag ?? "kid"}${githubUserId}`;
-  if (opts.linked !== false) {
-    await server.app.db.insert(githubAccounts).values({ userId: signed.id, githubUserId, login });
-    accounts.set(githubUserId, login);
-  }
-  return { ...signed, githubUserId, login };
-}
-
-const call = (method: "GET" | "POST" | "PATCH" | "PUT", url: string, headers: Headers, payload?: object) =>
-  server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
 
 interface Room extends Seeded {
   org: string;
@@ -134,7 +96,7 @@ interface Room extends Seeded {
 async function connectedClassroom(students: { id: string }[]): Promise<Room> {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
-  const n = nextOrg++;
+  const n = freshOrgId();
   const org = `sorg-${n}`;
   world.orgIds[org] = n;
   world.source(org, "starter", { main: { "README.md": "# Lab", "src/main.c": "int main(){}" } });
@@ -276,25 +238,11 @@ async function sessionOf(userId: string, auth: { kind: SessionKind; actorUserId?
   return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
 }
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), usersRoute, world.route];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, world.route] });
 
 beforeEach(() => {
   server.clock.set(NOW);
   world.allowPushes();
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 // ---------------------------------------------------------------- the cards
@@ -688,8 +636,8 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
     const messages: BusMessage[] = [];
     const unsubscribe = subscribe((m) => messages.push(m));
     try {
-      const first = await newStudent({ tag: "alpha" });
-      const second = await newStudent({ tag: "zulu" });
+      const first = await newStudent({ prefix: "alpha" });
+      const second = await newStudent({ prefix: "zulu" });
       const room = await connectedClassroom([first, second]);
       const lab = await project(room, "Lab 9");
       await project(room, "Secret draft", { publish: false });
@@ -840,7 +788,7 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
     const messages: BusMessage[] = [];
     const unsubscribe = subscribe((m) => messages.push(m));
     try {
-      const student = await newStudent({ tag: "sched" });
+      const student = await newStudent({ prefix: "sched" });
       const room = await connectedClassroom([student]);
       // A closed set the project follows: before the opening, no student sees it (ADR-070 §8, ADR-127 §8).
       const created = await call("POST", `/app/api/classrooms/${room.classroomId}/group-sets`, teacher.headers, { name: "Hidden-pairs-set" });
@@ -915,7 +863,7 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
   });
 
   it("gives a student no total of a validated criteria repository before the release, then the criteria total, never a row's source (ADR-106 §7, §8)", async () => {
-    const student = await newStudent({ tag: "crit" });
+    const student = await newStudent({ prefix: "crit" });
     const room = await connectedClassroom([student]);
     const lab = await project(room, "Lab nine-b");
     await accept(lab.id, student);
@@ -962,8 +910,8 @@ describe("the criteria table (ADR-106 §9, N-SEC-20, L-02f)", () => {
     const messages: BusMessage[] = [];
     const unsubscribe = subscribe((m) => messages.push(m));
     try {
-      const first = await newStudent({ tag: "ada" });
-      const second = await newStudent({ tag: "yuri" });
+      const first = await newStudent({ prefix: "ada" });
+      const second = await newStudent({ prefix: "yuri" });
       const room = await connectedClassroom([first, second]);
       const lab = await project(room, "Lab ten");
       const other = await project(room, "Lab ten-auto");

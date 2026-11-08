@@ -11,53 +11,39 @@
  *   as every write of one is; Super Powers without a seat: `403
  *   staff_seat_required`.
  */
-import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { CSRF_COOKIE, ProjectDistributionAccess, ProjectSummary } from "@quiz/contracts";
 
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { loadConfig } from "../../config.js";
-import { auditLog, githubAccounts, githubClassroomLinks, githubOrganizations, projects } from "../../db/schema.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { auditLog, githubAccounts, projects } from "../../db/schema.js";
+import { json, orgsRoute } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
-import { repoWorld } from "./testing.js";
+import {
+  accounts,
+  APP_ENV,
+  freshAccountId,
+  gh,
+  linkClassroom,
+  newOrg,
+  server,
+  useProjectWorld,
+  usersRoute,
+  world,
+  type Headers,
+} from "../../test/projectWorld.js";
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
 // The fake GitHub is the config's too.
-loadConfig({ NODE_ENV: "test", ...ENV });
-
-type Headers = Record<string, string>;
-let server: TestServer;
-let nextOrg = 66_000;
-let nextAccount = 67_000;
-
-/** GitHub's accounts by id, for the login lookups. */
-const accounts = new Map<number, string>();
-const usersRoute: Route = (url, req) => {
-  const m = /^\/user\/(\d+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const login = accounts.get(Number(m[1]));
-  return login === undefined ? undefined : json({ id: Number(m[1]), login });
-};
+loadConfig({ NODE_ENV: "test", ...APP_ENV });
 
 /** A teacher, with a linked GitHub account unless `linked` is false. */
 async function newTeacher(linked = true) {
   const signed = await server.signIn("teacher");
   if (!linked) return { ...signed, login: null };
-  const githubUserId = nextAccount++;
+  const githubUserId = freshAccountId();
   const login = `da${githubUserId}`;
   await server.app.db.insert(githubAccounts).values({ userId: signed.id, githubUserId, login });
   accounts.set(githubUserId, login);
@@ -68,13 +54,9 @@ async function newTeacher(linked = true) {
 async function project(teacher: { id: string; headers: Headers }) {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: [], questions: 0 });
-  const n = nextOrg++;
-  const org = `dorg-${n}`;
-  world.orgIds[org] = n;
+  const { login: org, orgId } = await newOrg("dorg");
   world.source(org, "starter", { main: { "README.md": "# Lab" } });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login: org, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId, teacher.id);
   const created = await server.app.inject({
     method: "POST",
     url: `/app/api/classrooms/${seeded.classroomId}/projects`,
@@ -96,20 +78,7 @@ const audits = (projectId: string) =>
 const invites = (fullName: string, login: string) =>
   gh.calls.filter((c) => c === `PUT api.github.com/repos/${fullName}/collaborators/${login}`).length;
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), usersRoute, world.route];
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
-});
+useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, world.route], teacher: false });
 
 describe("a staff member's access to the distribution repository (#899)", () => {
   it("invites the caller with pull, audited, and answers accepted once they are in", async () => {

@@ -17,7 +17,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CSRF_COOKIE, ProjectCommitGraph } from "@quiz/contracts";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
@@ -26,7 +26,6 @@ import {
   botCommits,
   enrollments,
   githubAccounts,
-  githubOrganizations,
   gradeDispatches,
   kioskDevices,
   projectCiResults,
@@ -39,10 +38,10 @@ import {
 } from "../../db/schema.js";
 import { createSession, SESSION_COOKIE, type NewSession } from "../../auth/session.js";
 import { forgetRepoLiveState, LIVE_STATE_TTL_MS, resetLiveStateCache } from "../../github/metrics.js";
-import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { json, orgsRoute, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { writeCriterionGrades } from "./criterionGrades.js";
+import { freshOrgId, gh, newOrg, server, teacher, useProjectWorld, type Headers } from "../../test/projectWorld.js";
 
 const CRITERIA = [
   "schema_version: 3",
@@ -61,23 +60,10 @@ const MESSAGE_SECRET = "Graph-message-secret";
 const AUTHOR_SECRET = "Graph-Author-Secret";
 const EMAIL_SECRET = "graph.author-secret@heig-vd.ch";
 
-const key = appKey();
-const gh = fakeGithub();
-const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
-};
 const NOW = "2026-10-10T08:00:00.000Z";
 const DEADLINE = "2026-10-09T22:00:00.000Z";
 const at = (iso: string) => new Date(iso);
 const sha = (c: string) => c.repeat(40);
-
-type Headers = Record<string, string>;
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
-let nextOrg = 71_000;
 
 const call = (url: string, headers: Headers = teacher.headers) => server.app.inject({ method: "GET", url, headers });
 
@@ -134,10 +120,7 @@ async function world(): Promise<World> {
   const db = server.app.db;
   const people = await Promise.all([server.signIn("student"), server.signIn("student")]);
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: people.map((s) => s.id), questions: 0 });
-  const n = nextOrg++;
-  const org = `gorg-${n}`;
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login: org, githubOrgId: n, installationId: n });
+  const { n, login: org, orgId } = await newOrg("gorg");
   const projectId = randomUUID();
   await db.insert(projects).values({
     id: projectId,
@@ -170,7 +153,7 @@ async function world(): Promise<World> {
 /** The repository of `userId` (of `groupId` when given), frozen for good. */
 async function repoOf(w: World, userId: string, patch: Partial<typeof projectRepos.$inferInsert> = {}) {
   const id = randomUUID();
-  const n = nextOrg++;
+  const n = freshOrgId();
   const fullName = `${w.org}/lab-${n}`;
   await server.app.db.insert(projectRepos).values({
     id,
@@ -205,23 +188,12 @@ async function graph(w: World, repoId: string) {
   return ProjectCommitGraph.parse(res.json());
 }
 
-beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  server = await testServer(ENV);
-  gh.routes = [commitsRoute, orgsRoute(() => [])];
-  teacher = await server.signIn("teacher");
-});
+useProjectWorld({ routes: [commitsRoute, orgsRoute(() => [])], repos: false });
 
 beforeEach(() => {
   server.clock.set(NOW);
   resetLiveStateCache();
   failing.clear();
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  key.remove();
 });
 
 describe("the commit graph (ADR-119 §8)", () => {
@@ -294,7 +266,8 @@ describe("staff only (invariant 6, N-SEC-20)", () => {
   it("gives an outsider and a student the 404 of a missing project, and no student response holds a log or the graph", async () => {
     const w = await world();
     const repo = await repoOf(w, w.students[0]!.id);
-    await db().insert(githubAccounts).values({ userId: w.students[0]!.id, githubUserId: 600_000 + nextOrg, login: `ada-${nextOrg}` });
+    const n = freshOrgId();
+    await db().insert(githubAccounts).values({ userId: w.students[0]!.id, githubUserId: 600_000 + n, login: `ada-${n}` });
     const pass = await ciPass(repo.id, { "code.tests": { score: "7/10", log: LOG_SECRET } }, "2026-10-10T07:00:00Z");
     await writeCriterionGrades(db(), repo.id, [{ criterionId: "code.tests", points: 7, max: 10, source: "auto", state: "proposed", rationale: "7/10", passId: pass }], at(NOW));
     // The staff read both, warming the graph's cache; the grading payload marks the log, never carries it.

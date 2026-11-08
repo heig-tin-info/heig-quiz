@@ -7,6 +7,7 @@ import { registerForTests } from "@quiz/registry/server";
 import { auditLog } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
+import { newPool } from "../../test/pools.js";
 
 /**
  * The categories page of a pool: the tree with its question counts
@@ -19,17 +20,6 @@ let owner: Awaited<ReturnType<TestServer["signIn"]>>;
 let poolId: string;
 let otherPoolId: string;
 let restoreShort: () => void;
-
-async function newPool(name: string): Promise<string> {
-  const res = await server.app.inject({
-    method: "POST",
-    url: "/app/api/pools",
-    headers: owner.headers,
-    payload: { name },
-  });
-  expect(res.statusCode).toBe(201);
-  return res.json().id as string;
-}
 
 async function newCategory(pool: string, name: string, parentId: string | null = null) {
   const res = await server.app.inject({
@@ -79,8 +69,8 @@ beforeAll(async () => {
   restoreShort = registerForTests(fakeShort);
   server = await testServer();
   owner = await server.signIn("teacher");
-  poolId = await newPool("Categories pool");
-  otherPoolId = await newPool("Another pool");
+  poolId = await newPool(server, owner, "Categories pool");
+  otherPoolId = await newPool(server, owner, "Another pool");
   chapter = await newCategory(poolId, "Chapter 1");
   section = await newCategory(poolId, "Section 1.1", chapter);
   other = await newCategory(poolId, "Chapter 2");

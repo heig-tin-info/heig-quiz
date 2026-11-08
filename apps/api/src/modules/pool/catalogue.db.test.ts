@@ -21,10 +21,10 @@ import { testServer, type Payload, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { listNotifications } from "../notifications/service.js";
 import * as service from "./service.js";
+import { newPool, type Actor } from "../../test/pools.js";
 
 let server: TestServer;
 let restore: () => void;
-type Actor = Awaited<ReturnType<TestServer["signIn"]>>;
 let owner: Actor;
 let other: Actor;
 let third: Actor;
@@ -44,12 +44,6 @@ afterAll(async () => {
   await server.close();
   restore();
 });
-
-async function newPool(name: string, extra: Record<string, unknown> = {}, who = owner): Promise<string> {
-  const res = await call(who, "POST", "/app/api/pools", { name, ...extra });
-  expect(res.statusCode).toBe(201);
-  return res.json<{ id: string }>().id;
-}
 
 async function courseOf(staff: { id: string; role?: "owner" | "assistant" }[]): Promise<string> {
   const db = server.app.db;
@@ -76,13 +70,13 @@ const audits = async (pool: string) =>
 
 describe("My pools", () => {
   it("is owned + member + linked-course staff + subscribed, and leaves out a public pool with none of those", async () => {
-    const own = await newPool("Mine");
-    const open = await newPool("Open to all", { isPublic: true });
-    const shared = await newPool("Shared with me");
+    const own = await newPool(server, owner, "Mine");
+    const open = await newPool(server, owner, "Open to all", { isPublic: true });
+    const shared = await newPool(server, owner, "Shared with me");
     expect((await call(owner, "POST", `/app/api/pools/${shared}/members`, { userId: other.id, role: "contributor" })).statusCode).toBe(201);
-    const linkedEdit = await newPool("Linked edit");
-    const linkedRead = await newPool("Linked read", { isPublic: true });
-    const subscribed = await newPool("Followed", { isPublic: true });
+    const linkedEdit = await newPool(server, owner, "Linked edit");
+    const linkedRead = await newPool(server, owner, "Linked read", { isPublic: true });
+    const subscribed = await newPool(server, owner, "Followed", { isPublic: true });
     const course = await courseOf([{ id: other.id }]);
     await server.app.db.insert(coursePools).values([
       { courseId: course, poolId: linkedEdit, mode: "edit" },
@@ -102,8 +96,8 @@ describe("My pools", () => {
 
 describe("realtime topics", () => {
   it("reaches the pools of My pools only, not every public pool", async () => {
-    const mine = await newPool("Followed live", { isPublic: true });
-    const stray = await newPool("Not followed live", { isPublic: true });
+    const mine = await newPool(server, owner, "Followed live", { isPublic: true });
+    const stray = await newPool(server, owner, "Not followed live", { isPublic: true });
     await call(third, "PUT", `/app/api/pools/${mine}/subscription`);
     const res = await server.app.inject({ method: "GET", url: "/app/api/events", headers: third.headers, payloadAsStream: true });
     expect(res.statusCode).toBe(200);
@@ -128,7 +122,7 @@ describe("realtime topics", () => {
 
 describe("subscriptions", () => {
   it("lets a teacher read a public pool without a seat, and does not make them a member", async () => {
-    const id = await newPool("Public", { isPublic: true });
+    const id = await newPool(server, owner, "Public", { isPublic: true });
     expect((await call(other, "PUT", `/app/api/pools/${id}/subscription`)).statusCode).toBe(204);
     // Idempotent.
     expect((await call(other, "PUT", `/app/api/pools/${id}/subscription`)).statusCode).toBe(204);
@@ -153,7 +147,7 @@ describe("subscriptions", () => {
   });
 
   it("lists the subscribers by name to the owner and the members, to nobody else", async () => {
-    const id = await newPool("Followed by name", { isPublic: true });
+    const id = await newPool(server, owner, "Followed by name", { isPublic: true });
     await call(other, "PUT", `/app/api/pools/${id}/subscription`);
     expect((await call(owner, "POST", `/app/api/pools/${id}/members`, { userId: third.id, role: "contributor" })).statusCode).toBe(201);
 
@@ -175,7 +169,7 @@ describe("subscriptions", () => {
   });
 
   it("refuses a pool that is not public, and answers a pool out of reach with a 404", async () => {
-    const hidden = await newPool("Hidden");
+    const hidden = await newPool(server, owner, "Hidden");
     expect((await call(other, "PUT", `/app/api/pools/${hidden}/subscription`)).statusCode).toBe(404);
     // A named reader of a private pool may read it, but there is nothing to subscribe to.
     expect((await call(owner, "POST", `/app/api/pools/${hidden}/members`, { userId: other.id, role: "reader" })).statusCode).toBe(201);
@@ -189,7 +183,7 @@ async function db_rows(poolId: string): Promise<number> {
 
 describe("read-only course links", () => {
   it("gives the staff of a read-linked course `reader`, never `contributor`", async () => {
-    const id = await newPool("Read me", { isPublic: true });
+    const id = await newPool(server, owner, "Read me", { isPublic: true });
     const course = await courseOf([{ id: other.id }, { id: third.id, role: "assistant" }]);
     // Any course owner may read-link a public pool they reach, without subscribing.
     const linked = await put(other, course, [{ poolId: id, mode: "read" }]);
@@ -212,14 +206,14 @@ describe("read-only course links", () => {
   });
 
   it("contrasts with an edit link, which makes the staff contributors", async () => {
-    const id = await newPool("Edit me");
+    const id = await newPool(server, owner, "Edit me");
     const course = await courseOf([{ id: owner.id }, { id: other.id, role: "assistant" }]);
     expect((await put(owner, course, [{ poolId: id, mode: "edit" }])).statusCode).toBe(200);
     expect(PoolDetail.parse((await call(other, "GET", `/app/api/pools/${id}`)).json()).role).toBe("contributor");
   });
 
   it("keeps a link's mode, and the stronger of two modes wins", async () => {
-    const id = await newPool("Both", { isPublic: true });
+    const id = await newPool(server, owner, "Both", { isPublic: true });
     const course = await courseOf([{ id: owner.id }]);
     // The same pool twice in one body: edit wins.
     const twice = await put(owner, course, [
@@ -231,7 +225,7 @@ describe("read-only course links", () => {
     expect((await put(owner, course, [{ poolId: id, mode: "read" }])).json()).toMatchObject([{ id, mode: "edit" }]);
 
     // A read link is upgraded by asking for edit, which needs contributor on the pool.
-    const open = await newPool("Open", { isPublic: true });
+    const open = await newPool(server, owner, "Open", { isPublic: true });
     const mine = await courseOf([{ id: other.id }]);
     expect((await put(other, mine, [{ poolId: open, mode: "read" }])).statusCode).toBe(200);
     const upgrade = await put(other, mine, [{ poolId: open, mode: "edit" }]);
@@ -244,25 +238,25 @@ describe("read-only course links", () => {
   });
 
   it("refuses a read link to a pool that is not public, and a new edit link to a pool one only reads", async () => {
-    const hidden = await newPool("Private but readable");
+    const hidden = await newPool(server, owner, "Private but readable");
     const course = await courseOf([{ id: other.id }]);
     expect((await call(owner, "POST", `/app/api/pools/${hidden}/members`, { userId: other.id, role: "reader" })).statusCode).toBe(201);
     const refused = await put(other, course, [{ poolId: hidden, mode: "read" }]);
     expect(refused.statusCode).toBe(409);
     expect(refused.json()).toMatchObject({ error: "pool_not_public", poolIds: [hidden] });
     // A pool out of reach is simply not linked.
-    const secret = await newPool("Secret");
+    const secret = await newPool(server, owner, "Secret");
     expect((await put(other, course, [{ poolId: secret, mode: "read" }])).json()).toEqual([]);
     // Public, but only read: an edit link is refused (ADR-013).
-    const open = await newPool("Public only read", { isPublic: true });
+    const open = await newPool(server, owner, "Public only read", { isPublic: true });
     expect((await put(other, course, [{ poolId: open, mode: "edit" }])).statusCode).toBe(403);
   });
 
   it("keeps a read link read when a question is moved into the pool", async () => {
-    const target = await newPool("Move target", { isPublic: true }, owner);
+    const target = await newPool(server, owner, "Move target", { isPublic: true });
     const course = await courseOf([{ id: other.id }]);
     await server.app.db.insert(coursePools).values({ courseId: course, poolId: target, mode: "read" });
-    const source = await newPool("Move source", {}, owner);
+    const source = await newPool(server, owner, "Move source");
     const question = (await call(owner, "POST", `/app/api/pools/${source}/questions`, { type: "short", internalName: "to-move" })).json<{ meta: { id: string } }>().meta.id;
     const [record] = await server.app.db.select().from(questions).where(eq(questions.id, question));
     await service.moveQuestions(server.app.db, { questions: [record!], targetPoolId: target, categoryId: null, linkCourseIds: [course] });
@@ -311,7 +305,7 @@ describe("unpublishing", () => {
   });
 
   it("asks nothing of a pool nobody follows, and an edit link survives", async () => {
-    const id = await newPool("Quiet", { isPublic: true });
+    const id = await newPool(server, owner, "Quiet", { isPublic: true });
     const course = await courseOf([{ id: other.id }]);
     await server.app.db.insert(coursePools).values({ courseId: course, poolId: id, mode: "edit" });
     expect(PoolUnpublishImpact.parse((await call(owner, "GET", `/app/api/pools/${id}/unpublish-impact`)).json())).toEqual({
@@ -324,7 +318,7 @@ describe("unpublishing", () => {
   });
 
   it("tells the subscribers of a public pool that is deleted", async () => {
-    const id = await newPool("Soon gone", { isPublic: true });
+    const id = await newPool(server, owner, "Soon gone", { isPublic: true });
     await call(third, "PUT", `/app/api/pools/${id}/subscription`);
     expect((await call(owner, "DELETE", `/app/api/pools/${id}`)).statusCode).toBe(204);
     const bell = (await bells(third)).find((n) => n.payload.kind === "pool_unpublished" && n.payload.state === "deleted");
@@ -335,7 +329,7 @@ describe("unpublishing", () => {
 
 describe("the rule is stated, not trusted from the rows (ADR-095, invariant 6)", () => {
   it("opens nothing to a subscription or a read link that survived on a private pool", async () => {
-    const stray = await newPool("Was public once", { isPublic: true });
+    const stray = await newPool(server, owner, "Was public once", { isPublic: true });
     const course = await courseOf([{ id: other.id }]);
     // What a race between an unpublication and a write could leave behind: rows inserted by hand.
     await server.app.db.update(pools).set({ isPublic: false }).where(eq(pools.id, stray));
@@ -364,13 +358,13 @@ describe("the rule is stated, not trusted from the rows (ADR-095, invariant 6)",
   });
 
   it("does not subscribe to a pool that is not public", async () => {
-    const closed = await newPool("Closed");
+    const closed = await newPool(server, owner, "Closed");
     expect((await call(other, "PUT", `/app/api/pools/${closed}/subscription`)).statusCode).toBe(404);
     expect(await server.app.db.select().from(poolSubscriptions).where(eq(poolSubscriptions.poolId, closed))).toEqual([]);
   });
 
   it("does not offer Subscribe to a reader member, and refuses it with already_member", async () => {
-    const open = await newPool("Open with a reader", { isPublic: true });
+    const open = await newPool(server, owner, "Open with a reader", { isPublic: true });
     // A reader seat that predates the publication (the invitation offers none on a public pool).
     await server.app.db.insert(poolMembers).values({ poolId: open, userId: other.id, role: "reader" });
     const summary = (await shelf(other)).find((p) => p.id === open)!;
@@ -379,7 +373,7 @@ describe("the rule is stated, not trusted from the rows (ADR-095, invariant 6)",
   });
 
   it("keeps a read link when the teacher unsubscribes", async () => {
-    const open = await newPool("Follow and link", { isPublic: true });
+    const open = await newPool(server, owner, "Follow and link", { isPublic: true });
     const course = await courseOf([{ id: third.id }]);
     expect((await put(third, course, [{ poolId: open, mode: "read" }])).statusCode).toBe(200);
     await call(third, "PUT", `/app/api/pools/${open}/subscription`);
@@ -389,7 +383,7 @@ describe("the rule is stated, not trusted from the rows (ADR-095, invariant 6)",
   });
 
   it("closes the streams of the subscriber and of the read-linked staff when the pool is unpublished", async () => {
-    const open = await newPool("Closing time", { isPublic: true });
+    const open = await newPool(server, owner, "Closing time", { isPublic: true });
     const course = await courseOf([{ id: other.id }]);
     await put(other, course, [{ poolId: open, mode: "read" }]);
     await call(third, "PUT", `/app/api/pools/${open}/subscription`);
@@ -408,7 +402,7 @@ describe("the rule is stated, not trusted from the rows (ADR-095, invariant 6)",
 
 describe("a read link is written only to a public pool, whatever was read before", () => {
   it("refuses to save a list that still holds a read link whose pool was unpublished meanwhile", async () => {
-    const open = await newPool("Unpublished meanwhile", { isPublic: true });
+    const open = await newPool(server, owner, "Unpublished meanwhile", { isPublic: true });
     const course = await courseOf([{ id: other.id }]);
     expect((await put(other, course, [{ poolId: open, mode: "read" }])).statusCode).toBe(200);
     // The owner unpublishes; a stale list (the link as it stood) is saved afterwards.
@@ -421,7 +415,7 @@ describe("a read link is written only to a public pool, whatever was read before
   });
 
   it("drops what an unpublication meets even when the pool was loaded as already private", async () => {
-    const open = await newPool("Stale unpublish", { isPublic: true });
+    const open = await newPool(server, owner, "Stale unpublish", { isPublic: true });
     await call(third, "PUT", `/app/api/pools/${open}/subscription`);
     // The row says private (a concurrent request), a subscription survives: the next unpublish still sweeps.
     await server.app.db.update(pools).set({ isPublic: false }).where(eq(pools.id, open));

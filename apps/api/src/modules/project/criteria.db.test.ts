@@ -23,17 +23,23 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { CriteriaInvalid, ProjectCriteriaView, ProjectSummary, SchemaVersionFixed } from "@quiz/contracts";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 
-import { auditLog, courseStaff, githubClassroomLinks, githubOrganizations, projectCheckpoints, projectCriteria, projects } from "../../db/schema.js";
-import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { auditLog, courseStaff, projectCheckpoints, projectCriteria, projects } from "../../db/schema.js";
+import { orgsRoute } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
-import { repoWorld } from "./testing.js";
+import {
+  linkClassroom,
+  newOrg,
+  server,
+  teacher,
+  useProjectWorld,
+  world,
+  type Headers,
+} from "../../test/projectWorld.js";
 
 const LABO_00 = readFileSync(new URL("../../../../../packages/domain/fixtures/criteria/labo-00-revised.yml", import.meta.url), "utf8");
 const WORKFLOW = [
@@ -64,24 +70,13 @@ const LAB3 = [
   "",
 ].join("\n");
 
-const key = appKey();
-const gh = fakeGithub();
-const world = repoWorld();
 const ENV = {
-  GITHUB_APP_ID: "1",
-  GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
-  GITHUB_APP_SLUG: "quiz-test",
-  GITHUB_WEBHOOK_SECRET: "w".repeat(40),
   JOBS_DISABLED: "1",
 };
 const NOW = "2026-10-02T08:00:00.000Z";
 const IN_A_WEEK = "2026-10-09T22:00:00.000Z";
 
-type Headers = Record<string, string>;
-let server: TestServer;
-let teacher: { id: string; headers: Headers };
 let outsider: { id: string; headers: Headers };
-let nextOrg = 9100;
 
 const call = (method: "GET" | "POST" | "PATCH", url: string, headers: Headers, payload?: object) =>
   server.app.inject({ method, url, headers, ...(payload === undefined ? {} : { payload }) });
@@ -91,13 +86,9 @@ async function draft(files: Record<string, string>) {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: [], questions: 0 });
   await db.insert(courseStaff).values({ courseId: seeded.courseId, userId: teacher.id }).onConflictDoNothing();
-  const n = nextOrg++;
-  const login = `org-${n}`;
-  world.orgIds[login] = n;
+  const { login, orgId } = await newOrg("org");
   world.source(login, "lab", { main: { "README.md": "# Lab", ...files } });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId);
   const res = await call("POST", `/app/api/classrooms/${seeded.classroomId}/projects`, teacher.headers, {
     name: "Labo 00",
     sourceRepo: "lab",
@@ -115,24 +106,14 @@ const auditOf = (id: string, action: string) =>
     .from(auditLog)
     .where(and(eq(auditLog.subjectId, id), eq(auditLog.action, action)));
 
+useProjectWorld({ routes: [orgsRoute(() => []), world.route], env: ENV });
+
 beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
-  setRemoteBaseForTests(`file://${world.dir}`);
-  server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), world.route];
-  [teacher, outsider] = await Promise.all([server.signIn("teacher"), server.signIn("teacher")]);
+  outsider = await server.signIn("teacher");
 });
 
 beforeEach(() => {
   server.clock.set(NOW);
-});
-
-afterAll(async () => {
-  await server.close();
-  vi.unstubAllGlobals();
-  setRemoteBaseForTests(null);
-  world.remove();
-  key.remove();
 });
 
 const toCriteria = (id: string) => call("PATCH", url(id), teacher.headers, { gradingMode: "criteria" });

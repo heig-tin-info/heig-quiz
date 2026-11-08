@@ -20,6 +20,7 @@ import { testServer, type Payload, type TestServer } from "../../test/http.js";
 import type { LlmProvider } from "../llm/provider.js";
 import { LlmGateway, writeSettings } from "../llm/service.js";
 import { conceptLabelsOf, refreshDomain, runNightDomains } from "./domain.js";
+import { newPool, type Actor } from "../../test/pools.js";
 
 const SECRET = "test-llm-master-key-0123456789abcdef";
 
@@ -35,7 +36,6 @@ const fake: LlmProvider = {
 };
 
 let server: TestServer;
-type Actor = Awaited<ReturnType<TestServer["signIn"]>>;
 let owner: Actor;
 let reader: Actor;
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -56,12 +56,6 @@ beforeAll(async () => {
   await writeSettings(server.app.db, { LLM_KEY_SECRET: SECRET }, { apiKey: "sk-ant-api03-test-0123456789" }, owner.id, server.clock.now());
 });
 afterAll(() => server.close());
-
-async function newPool(name: string, extra: Record<string, unknown> = {}, who = owner): Promise<string> {
-  const res = await call(who, "POST", "/app/api/pools", { name, ...extra });
-  expect(res.statusCode).toBe(201);
-  return res.json<{ id: string }>().id;
-}
 
 const mcq = (prompt: string) => ({
   configVersion: 2,
@@ -105,9 +99,9 @@ const names = async (who: Actor, q: string) => (await search(who, q)).map((p) =>
 
 describe("the catalogue lists public pools only", () => {
   it("leaves out private and shared pools, even for an admin under Super Powers", async () => {
-    const open = await newPool("Cat open", { isPublic: true });
-    const hidden = await newPool("Cat hidden");
-    const shared = await newPool("Cat shared");
+    const open = await newPool(server, owner, "Cat open", { isPublic: true });
+    const hidden = await newPool(server, owner, "Cat hidden");
+    const shared = await newPool(server, owner, "Cat shared");
     await call(owner, "POST", `/app/api/pools/${shared}/members`, { userId: reader.id, role: "contributor" });
 
     const everyone = (await search(reader, "")).map((p) => p.id);
@@ -131,12 +125,12 @@ describe("the catalogue lists public pools only", () => {
 
 describe("the search", () => {
   it("finds a pool by name, description, domain and concept labels, accents and plurals aside", async () => {
-    await newPool("Thermodynamique appliquée", { isPublic: true });
-    const byDescription = await newPool("Pool B", { isPublic: true });
+    await newPool(server, owner, "Thermodynamique appliquée", { isPublic: true });
+    const byDescription = await newPool(server, owner, "Pool B", { isPublic: true });
     expect((await call(owner, "PATCH", `/app/api/pools/${byDescription}`, { description: "Cycles frigorifiques et pompes à chaleur" })).statusCode).toBe(200);
-    const byDomain = await newPool("Pool C", { isPublic: true });
+    const byDomain = await newPool(server, owner, "Pool C", { isPublic: true });
     await server.app.db.update(pools).set({ domainFr: "Électrochimie", domainEn: "Electrochemistry" }).where(eq(pools.id, byDomain));
-    const byConcept = await newPool("Pool D", { isPublic: true });
+    const byConcept = await newPool(server, owner, "Pool D", { isPublic: true });
     await tag(await question(byConcept, "q"), "Intégrale de Riemann", "Riemann integral");
 
     expect(await names(reader, "THERMODYNAMIQUE")).toContain("Thermodynamique appliquée");
@@ -153,21 +147,21 @@ describe("the search", () => {
   });
 
   it("folds the ligatures in the stored text as in the query: Cœur, cœur, coeur", async () => {
-    await newPool("Cœur et Œuvre", { isPublic: true });
-    await newPool("Straße", { isPublic: true });
-    await newPool("Cæsar", { isPublic: true });
+    await newPool(server, owner, "Cœur et Œuvre", { isPublic: true });
+    await newPool(server, owner, "Straße", { isPublic: true });
+    await newPool(server, owner, "Cæsar", { isPublic: true });
     for (const q of ["cœur", "coeur", "COEUR", "œuvre"]) expect(await names(reader, q)).toContain("Cœur et Œuvre");
     expect(await names(reader, "strasse")).toEqual(["Straße"]);
     expect(await names(reader, "caesar")).toEqual(["Cæsar"]);
   });
 
   it("folds Central-European letters like the TypeScript fold: Dvořák, Škoda", async () => {
-    await newPool("Dvořák et Škoda", { isPublic: true });
+    await newPool(server, owner, "Dvořák et Škoda", { isPublic: true });
     for (const q of ["dvorak", "DVOŘÁK", "skoda", "škoda"]) expect(await names(reader, q)).toContain("Dvořák et Škoda");
   });
 
   it("reads published, non-deleted questions only", async () => {
-    const pool = await newPool("Pool E", { isPublic: true });
+    const pool = await newPool(server, owner, "Pool E", { isPublic: true });
     await tag(await question(pool, "draft", false), "Concept brouillon", "Draft concept");
     const gone = await question(pool, "gone");
     await tag(gone, "Concept supprimé", "Deleted concept");
@@ -180,7 +174,7 @@ describe("the search", () => {
   });
 
   it("treats a wildcard as text and a short query whole", async () => {
-    await newPool("Rate 100% sure", { isPublic: true });
+    await newPool(server, owner, "Rate 100% sure", { isPublic: true });
     expect(await names(reader, "100%")).toEqual(["Rate 100% sure"]);
     expect(await names(reader, "%")).toEqual(["Rate 100% sure"]);
   });
@@ -188,9 +182,9 @@ describe("the search", () => {
 
 describe("the ranking", () => {
   it("puts the most followed first: subscribers plus members, then name", async () => {
-    const quiet = await newPool("Rank quiet", { isPublic: true });
-    const liked = await newPool("Rank liked", { isPublic: true });
-    const shared = await newPool("Rank shared", { isPublic: true });
+    const quiet = await newPool(server, owner, "Rank quiet", { isPublic: true });
+    const liked = await newPool(server, owner, "Rank liked", { isPublic: true });
+    const shared = await newPool(server, owner, "Rank shared", { isPublic: true });
     await call(reader, "PUT", `/app/api/pools/${liked}/subscription`);
     await call(owner, "POST", `/app/api/pools/${shared}/members`, { userId: reader.id, role: "contributor" });
     const third = await server.signIn("teacher");
@@ -205,7 +199,7 @@ describe("the ranking", () => {
 
 describe("the domain", () => {
   it("is inferred from the concept labels alone, in both languages, and only redone when they change", async () => {
-    const pool = await newPool("Secret pool name for the domain", { isPublic: true });
+    const pool = await newPool(server, owner, "Secret pool name for the domain", { isPublic: true });
     const first = await question(pool, "first");
     await tag(first, "Contrainte normale", "Normal stress");
     await tag(first, "Moment fléchissant", null);
@@ -239,7 +233,7 @@ describe("the domain", () => {
   });
 
   it("is inferred when the pool is published, in the background", async () => {
-    const pool = await newPool("Published later");
+    const pool = await newPool(server, owner, "Published later");
     await tag(await question(pool, "p"), "Oxydation", "Oxidation");
     reply = { fr: "Chimie", en: "Chemistry" };
     prompts = [];
@@ -259,7 +253,7 @@ describe("the domain", () => {
   });
 
   it("is cleared, without a call, when the pool has no concept to read", async () => {
-    const pool = await newPool("No concept", { isPublic: true });
+    const pool = await newPool(server, owner, "No concept", { isPublic: true });
     await server.app.db.update(pools).set({ domainFr: "Ancien", domainEn: "Old", domainKey: "x" }).where(eq(pools.id, pool));
     prompts = [];
     expect(await refreshDomain(server.app.db, server.app.llmGateway, pool, [], { userId: null, now: server.clock.now() })).toBe("empty");
@@ -269,9 +263,9 @@ describe("the domain", () => {
   });
 
   it("is redone by the night for the public pools whose concepts changed, and only at night", async () => {
-    const pool = await newPool("Night pool", { isPublic: true });
+    const pool = await newPool(server, owner, "Night pool", { isPublic: true });
     await tag(await question(pool, "n"), "Optique géométrique", "Geometric optics");
-    const private_ = await newPool("Night private");
+    const private_ = await newPool(server, owner, "Night private");
     await tag(await question(private_, "n"), "Jamais envoyé", "Never sent");
     reply = { fr: "Optique", en: "Optics" };
 
@@ -297,7 +291,7 @@ describe("the domain", () => {
 
   it("stops before its share of the cap", async () => {
     await writeSettings(server.app.db, { LLM_KEY_SECRET: SECRET }, { dailyCapUsd: 0.001 }, owner.id, server.clock.now());
-    const pool = await newPool("Cap pool", { isPublic: true });
+    const pool = await newPool(server, owner, "Cap pool", { isPublic: true });
     await tag(await question(pool, "c"), "Plafond", "Cap");
     server.clock.set("2026-07-04T00:30:00Z");
     prompts = [];
