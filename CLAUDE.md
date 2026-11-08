@@ -19,9 +19,9 @@ not default context or current implementation instructions. Code and tests
 establish what exists; a mismatch with an accepted requirement must be
 reported, not silently turned into a new product decision.
 
-For classroom migration work, read `docs/merge/README.md`, then the relevant
-row of `PROGRESS.md` and task card. Those files own delivery progress; an
-accepted ADR does not imply that its feature has shipped.
+The remaining post-merge tasks are the M6/L rows of `docs/merge/PROGRESS.md`;
+delivery is otherwise tracked in `changes/`. For one of them, read
+`docs/merge/README.md`, then its row and its task card (`docs/merge/09-tasks.md`).
 
 ## Layout
 
@@ -40,11 +40,10 @@ extension (ADR-051); `infra/` the Keycloak development realm.
 `core` never imports a `qt-*` package: register types through both registry
 entry points (`./server`, `./client`). Generic web primitives go in
 `apps/web/src/ui/`; `packages/ui` holds primitives shared by question types
-and must not import a `qt-*` package or `apps/web`. The accepted `ui-kit`
-extraction remains in ADR-035; do not create the superseded external npm
-library of ADR-029. `ui-kit`, then `canonical`, then `cli` (in this order)
-are planned, not present; consult the relevant spec/task
-before implementing them.
+and must not import a `qt-*` package or `apps/web`. `ui-kit` (accepted,
+ADR-035), then `canonical`, then `cli`, in this order, are planned, not
+present: consult the spec/task before implementing them, and do not create
+the superseded npm library of ADR-029.
 
 For UI work, read `apps/web/DESIGN.md` and `.claude/skills/quiz-ui/SKILL.md`.
 Screenshots are in `docs/assets/screenshots/`. Runner work also requires
@@ -90,8 +89,7 @@ Never work around these, not even "temporarily".
    `drill` module (ADR-098), which names only the concepts the course declares,
    validated, and only from cards whose key the student may already see — and
    the concepts it offers for targeted revision, the same list (ADR-115).
-   **The journal's one exit is the student view of the `journal` module**
-   (M4-01/M4-02):
+   **The journal's one exit is the student view of the `journal` module**:
    no draft page, no page whose `visible_from` has not passed (the
    database's clock), no markdown, no blob sha, no warning, no count of what
    is hidden; an asset only when a page of that payload references it
@@ -132,14 +130,12 @@ Never work around these, not even "temporarily".
 9. **The audit log is a closed TypeScript union** (`apps/api/src/audit.ts`).
    A typo at a trigger site is a compile error.
 
-### Runner invariants (`apps/runner`, from the sibling codespace project)
+### Runner invariants (`apps/runner`)
 
-These are already proven in the sibling project, and `apps/runner` implements
-them. Do not re-derive them, and do not relax one to make a test simpler.
-They bind `apps/runner`. The online workspace (`apps/codespace`, merge task
-M6-03) is not held to 11 and 12: it has its own `CLAUDE.md` with its two
-sanctioned divergences (a persistent work volume, a git channel on an
-internal bridge).
+These invariants bind `apps/runner`. Do not re-derive them, and do not relax
+one to make a test simpler. The online workspace (`apps/codespace`) is not held to 11 and
+12: its own `CLAUDE.md` has two sanctioned divergences (a persistent work
+volume, a git channel on an internal bridge).
 
 10. **No secret inside the container.** No token, no key, no credential
     helper. The set of environment variables passed at `podman run` is a
@@ -167,17 +163,14 @@ internal bridge).
     `podman --remote --url unix://<socket> …`. Without `--remote` the binary
     silently falls back to local rootless mode and every isolation test
     measures something else. Production is a ROOTFUL socket
-    (`/run/podman/podman.sock`, or the runner's own gVisor service
-    `/run/quiz-runner-podman/podman.sock` once switched; `--userns=auto`
-    always available); a development workstation is the user one, where
-    `--userns=auto` is probed once at startup and dropped with a log line
-    when the engine cannot do it. gVisor is never a flag of `containerArgs`:
-    a `--remote` client rejects `--runtime`. It is the default runtime of
-    the runner's own rootful Podman service
-    (`apps/runner/deploy/install-gvisor.sh`, runsc with `--oci-seccomp`),
-    and `RUNNER_RUNTIME=runsc` makes the runner refuse to start unless a
-    container built from `containerArgs` runs under it (`proveRuntime`,
-    ADR-016 amendment of 2026-10-11).
+    (`--userns=auto` always available); a development workstation is the
+    user one, where `--userns=auto` is probed once at startup and dropped
+    with a log line when the engine cannot do it. gVisor is never a flag of
+    `containerArgs` (a `--remote` client rejects `--runtime`): it is the
+    default runtime of the runner's own rootful Podman service, and
+    `RUNNER_RUNTIME=runsc` makes the runner refuse to start unless a
+    container built from `containerArgs` runs under it (`proveRuntime`).
+    Socket paths and the gVisor install: `apps/runner/README.md`.
 14. **The source sent to the runner is rebuilt server-side** from the
     template and the student's editable regions — never taken as-is. A
     project's source is fetched by the server at a commit the server chose
@@ -187,51 +180,38 @@ internal bridge).
 
 ### GitHub invariant (ADR-035, N-SEC-16..18)
 
-15. **Quiz's own GitHub App, and its secrets never at rest.** Every rule
-    below is in force; the task named with each one delivered it (M1-02,
-    M2-03, M2-04, M2-06). Quiz talks to
+15. **Quiz's own GitHub App, and its secrets never at rest.** Quiz talks to
     GitHub only through its own App (D23), never heig-classroom's; staging
     has a separate App on a test organization and never holds the
-    production one (N-SEC-18; M2-06). The App key, webhook secret and
+    production one (N-SEC-18). The App key, webhook secret and
     client secret stay out of the repository and the database (ADR-010);
     installation tokens live in memory only; no token is ever stored nor
-    logged, and the redaction knows `x-access-token:` and `gh?_` (M1-02);
+    logged, and the redaction knows `x-access-token:` and `gh?_`;
     a token is never in a URL, a file or git's argv: `gitRunner({ token })`
     hands it to git through the environment only; a repository's tarball
     redirects to a `codeload` URL carrying a `token=`, which is never
     logged, stored, nor put in an error payload, and the redaction knows
-    `token=` (ADR-106 §3, card L-02b); a graded run's `results` artifact
+    `token=` (ADR-106 §3); a graded run's `results` artifact
     redirects to a signed blob URL carrying a `sig=`, under the same rule,
-    and the redaction knows `sig=` beside `token=` (ADR-119 §6, card
-    L-06b); the user token of an account
-    link reads the account once and is discarded (M2-03). Under
+    and the redaction knows `sig=` beside `token=` (ADR-119 §6); the user
+    token of an account link reads the account once and is discarded. Under
     `NODE_ENV=production`, `config.ts` refuses to start with an App id whose
     key file is unreadable, a webhook secret under 32 characters, no App
-    slug, or no OAuth client id and secret (M2-03); with no `GITHUB_*` set the GitHub features are off and the rest
-    starts (M1-02). `/webhooks/github` trusts nothing before its HMAC over the
-    raw body is verified in constant time (M2-04).
-    The online workspace portal (`apps/codespace`) never holds an App
-    credential: it obtains from Quiz, through the HS256 service route of
-    ADR-078, an installation token scoped to one repository (`contents`
-    only), valid at most an hour, which it keeps in memory only and hands to
-    git through the environment, never in a URL, argv or file; Quiz issues
-    one only for a repository of an online project the student launched,
-    before its effective deadline plus the grace, or, for an `online`
-    project under the `commit` strategy, while the repository is
-    writable, and audits each issuance
-    without the token; an App push counts as the student's only when the
-    portal declared its head beforehand — a rule that keeps Quiz's own
-    commits from being misread, not a defence against a compromised portal,
-    which holds the signing secret.
+    slug, or no OAuth client id and secret; with no `GITHUB_*` set the
+    GitHub features are off and the rest starts. `/webhooks/github` trusts
+    nothing before its HMAC over the raw body is verified in constant time.
+    The workspace portal (`apps/codespace`) never holds an App credential: it
+    gets from Quiz a one-repository, `contents`-only installation token (at
+    most an hour, in memory, to git through the environment only), issued only
+    under ADR-078's conditions and audited without the token. ADR-078 owns
+    the full rule set, the declared-head rule included.
 
 ## Development
 
-The [development guide](docs/development/index.md) owns setup, demo personas,
-the smoke test and optional PostgreSQL/OIDC/Podman paths. Use Node as required
-by `package.json` and the pinned pnpm version. Build packages before running
-the apps: they import workspace `dist/` outputs.
-
-No Docker, Podman or PostgreSQL is needed for this path.
+The [development guide](docs/development/index.md) owns setup, personas and
+the optional paths. Use Node as required by `package.json` and the pinned pnpm
+version. Build packages before running the apps: they import the workspace
+packages' `dist/`.
 
 ```bash
 corepack enable pnpm && pnpm install --frozen-lockfile
