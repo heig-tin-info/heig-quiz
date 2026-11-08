@@ -342,28 +342,6 @@ export async function fetchOrgPlan(
 }
 
 /**
- * GET /orgs/{org}/installation; null if the App is not installed there. The
- * login is only what GitHub resolves TODAY: the caller compares the
- * returned `githubOrgId` with the one it holds (a login can be reused by
- * another organization).
- */
-export async function resolveOrgInstallation(
-  config: AppConfig,
-  orgLogin: string,
-  read: ReadOptions = {},
-): Promise<AppInstallation | null> {
-  const app = githubApp(config);
-  if (!app) return null;
-  return unless404(async () => {
-    const { data } = await app.octokit.request("GET /orgs/{org}/installation", {
-      org: orgLogin,
-      request: read,
-    });
-    return orgInstallation(data as RawInstallation);
-  });
-}
-
-/**
  * Is the GitHub account an active OWNER of the organization?
  * `GET /orgs/{org}/memberships/{username}` through `octokit`, an
  * installation client of that organization (the App's organization
@@ -396,22 +374,30 @@ export async function isOrgOwner(
 }
 
 /**
- * GET /app/installations/{id} with the App JWT: null when GitHub does not
+ * An organization's installation, with the App JWT: by its id
+ * (`GET /app/installations/{id}`, the one proof the setup return accepts,
+ * N-SEC-17) or by the organization's login (`GET /orgs/{org}/installation`).
+ * A login is only what GitHub resolves TODAY: the caller compares the
+ * returned `githubOrgId` with the one it holds (a login can be reused by
+ * another organization). Null when the App is off, or when GitHub does not
  * know the installation (404) or it is not an organization's; any other
- * failure throws. The one proof the setup return accepts (N-SEC-17).
+ * failure throws.
  */
 export async function fetchInstallation(
   config: AppConfig,
-  installationId: number,
+  installation: number | string,
   read: ReadOptions = {},
 ): Promise<AppInstallation | null> {
   const app = githubApp(config);
   if (!app) return null;
   return unless404(async () => {
-    const { data } = await app.octokit.request("GET /app/installations/{installation_id}", {
-      installation_id: installationId,
-      request: read,
-    });
+    const { data } =
+      typeof installation === "number"
+        ? await app.octokit.request("GET /app/installations/{installation_id}", {
+            installation_id: installation,
+            request: read,
+          })
+        : await app.octokit.request("GET /orgs/{org}/installation", { org: installation, request: read });
     return orgInstallation(data as RawInstallation);
   });
 }

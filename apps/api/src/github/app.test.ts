@@ -2,12 +2,12 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 
 import { loadConfig } from "../config.js";
 import {
+  fetchInstallation,
   fetchOrgPlan,
   githubApp,
   installationClient,
   listInstalledOrgs,
   orgExistsOnGithub,
-  resolveOrgInstallation,
   ThrottledOctokit,
 } from "./app.js";
 import { appKey, fakeGithub, json, on } from "./testing.js";
@@ -93,7 +93,7 @@ describe("the App (Quiz's own, D23)", () => {
     const off = loadConfig({});
     expect(githubApp(off)).toBeNull();
     expect(await listInstalledOrgs(off)).toEqual([]);
-    expect(await resolveOrgInstallation(off, "heig-tin-info")).toBeNull();
+    expect(await fetchInstallation(off, "heig-tin-info")).toBeNull();
     expect(await fetchOrgPlan(off, 42, "heig-tin-info")).toBeNull();
     await expect(installationClient(off, 42)).rejects.toThrow(/not configured/);
     expect(gh.calls).toEqual([]);
@@ -115,14 +115,14 @@ describe("the App (Quiz's own, D23)", () => {
         }),
       ),
     ];
-    expect(await resolveOrgInstallation(config, "heig-tin-info")).toEqual({
+    expect(await fetchInstallation(config, "heig-tin-info")).toEqual({
       installationId: 42,
       githubOrgId: 7,
       login: "heig-tin-info",
       allRepositories: true,
       suspended: false,
     });
-    expect(await resolveOrgInstallation(config, "elsewhere")).toBeNull();
+    expect(await fetchInstallation(config, "elsewhere")).toBeNull();
     // Signed with the App JWT, not anonymous.
     const init = gh.inits[0]!;
     expect(String((init.headers as Record<string, string>).authorization)).toMatch(/^bearer ey/i);

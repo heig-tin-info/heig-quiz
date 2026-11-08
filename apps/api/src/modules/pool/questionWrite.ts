@@ -229,7 +229,7 @@ export async function keepUnsavedQuestion(
   for (let attempt = 0; ; attempt += 1) {
     const name =
       attempt < 3
-        ? await keptName(db, pool.id, question.internalName)
+        ? await freeName(db, pool.id, question.internalName, (n) => `${question.internalName} (${n + 1})`)
         : `${question.internalName} ${randomUUID().slice(0, 8)}`;
     try {
       const kept = await db.transaction(async (tx) => {
@@ -284,31 +284,6 @@ export async function keepUnsavedQuestion(
       throw error;
     }
   }
-}
-
-/**
- * `questions_pool_name_uq` is per pool and case-insensitive. A kept question
- * is named after its statement, and two polls may well have asked the same
- * thing: the second one becomes "… (2)" rather than a 409 in the middle of a
- * lecture.
- */
-async function keptName(db: Db, poolId: string, name: string): Promise<string> {
-  for (let n = 1; n < 50; n += 1) {
-    const candidate = n === 1 ? name : `${name} (${n})`;
-    const [taken] = await db
-      .select({ id: questions.id })
-      .from(questions)
-      .where(
-        and(
-          eq(questions.poolId, poolId),
-          isNull(questions.deletedAt),
-          sql`lower(${questions.internalName}) = lower(${candidate})`,
-        ),
-      )
-      .limit(1);
-    if (!taken) return candidate;
-  }
-  return `${name} ${randomUUID().slice(0, 8)}`;
 }
 
 /** The draft row of a question (`number is null`), or `MissingDraft`. */
@@ -796,7 +771,9 @@ export async function copyQuestion(
   const draft = await draftOf(db, question.id);
   const id = randomUUID();
   const now = new Date();
-  const name = await freeName(db, input.targetPoolId, question.internalName);
+  const name = await freeName(db, input.targetPoolId, question.internalName, (n) =>
+    n === 1 ? `${question.internalName} (copy)` : `${question.internalName} (copy ${n})`,
+  );
   return db.transaction(async (tx) => {
     await assertCategoryOf(tx, input.targetPoolId, input.categoryId);
     const [created] = await tx.insert(questions).values({
@@ -835,13 +812,20 @@ export async function copyQuestion(
 }
 
 /**
- * `questions_pool_name_uq` is case-insensitive and per pool: a copy landing
- * next to its original needs a name of its own, chosen here rather than
- * discovered as a 409 by the teacher.
+ * `questions_pool_name_uq` is case-insensitive and per pool: the first of
+ * `name`, then `variant(n)` for n = 1, 2, …, that no live question of the
+ * pool holds, chosen here rather than discovered as a 409. Two polls may well
+ * have asked the same thing: the second kept one becomes "… (2)"; a copy
+ * becomes "… (copy)", then "… (copy 2)".
  */
-async function freeName(db: Db, poolId: string, name: string): Promise<string> {
+async function freeName(
+  db: Db,
+  poolId: string,
+  name: string,
+  variant: (n: number) => string,
+): Promise<string> {
   for (let n = 0; n < 50; n += 1) {
-    const candidate = n === 0 ? name : n === 1 ? `${name} (copy)` : `${name} (copy ${n})`;
+    const candidate = n === 0 ? name : variant(n);
     const [taken] = await db
       .select({ id: questions.id })
       .from(questions)
