@@ -1561,10 +1561,9 @@ production will run next. It doubles as the restore test of §6. The inbox
 keeps only the latest copy; each export overwrites it. Both SQL files are
 tested against the real migrations by `apps/api/src/stagingScrub.db.test.ts`.
 
-`--keep-identities` exports the real copy, for the heig-classroom cutover
-rehearsal only (docs/merge/10-cutover-runbook.md §1.3): it is refused unless
-that rehearsal's `hgc.dump` is in the inbox, and its copies are deleted the
-same day (§5.1 there).
+The heig-classroom importer, and with it this script's `--keep-identities`
+export for the cutover rehearsal, was removed on 2026-11-08 after the
+cutover (docs/merge/10-cutover-runbook.md keeps the history).
 
 Once, after 2026-10-11: as `srv`,
 `rm -f /srv/staging-inbox/quiz.dump /srv/staging-inbox/assets.tar` (the last

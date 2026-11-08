@@ -1,13 +1,14 @@
 /**
  * The bookkeeping of the heig-classroom import (ADR-035, merge task M1-06,
  * docs/merge/02-data-and-migration.md §2.5), in a schema of its own,
- * `import_classroom`: nothing of the application reads or writes it. Owned
- * by `apps/api/src/import-classroom.ts`, its only writer.
+ * `import_classroom`. The importer filled these tables once, at the cutover
+ * of 2026-10-11, and was removed on 2026-11-08: nothing writes them any
+ * more. The rows stay as production holds them.
  *
- * `id_map` is what makes the import idempotent — a source row already mapped
- * is never imported again, so a second `--apply` writes nothing — and what
- * the legacy URL resolver will read (M8-02). `runs` records every `--apply`
- * that wrote something, with its report.
+ * `id_map` (each heig-classroom row and the Quiz row it became) is read by
+ * the legacy URL resolver, `modules/legacy` (M8-02). `runs` records every
+ * `--apply` of the importer that wrote something, with its report; nothing
+ * reads it. Dropping them is a later migration, with the resolver.
  */
 import {
   bigint,
@@ -58,7 +59,7 @@ export const importIdMap = importClassroom.table(
 
 /**
  * heig-classroom's `audit_log`, kept as it was (D11, settled 2026-10-01): a
- * history nothing in Quiz writes after the import, so Quiz's own closed
+ * history nothing in Quiz writes since the import, so Quiz's own closed
  * audit union stays clean. Kept indefinitely. No route reads it: like
  * `audit_log`, it is forensics, read by an admin with `psql`.
  *

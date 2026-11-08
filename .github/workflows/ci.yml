@@ -66,9 +66,6 @@ jobs:
       - run: node apps/web/scripts/fetch-runtimes.mjs --strict
       - run: pnpm build
       - run: pnpm typecheck
-      # The heig-classroom import is compiled with the API and run with plain
-      # Node in production (docs/merge/02-data-and-migration.md §2.5).
-      - run: node apps/api/dist/import-classroom.js --help
 
   # The API's and the SPA's suites, sharded, run side by side: in one job,
   # the API's db tests (each loading a PGlite, src/test/template.ts) and the
@@ -248,13 +245,6 @@ jobs:
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no image digest for $IMAGE ('$DIGEST')"; exit 1; }
           echo "${IMAGE//-/_}=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "$IMAGE: ghcr.io/heig-tin-info/$IMAGE:$GITHUB_SHA@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
-      # The image carries the heig-classroom import, runnable with plain Node
-      # and no fetch (the cutover runs it in a one-off `app` container). A
-      # failure here stops the deploys, which pull this digest.
-      - if: matrix.image == 'quiz'
-        env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: docker run --rm --network none "ghcr.io/heig-tin-info/quiz@$DIGEST" node dist/import-classroom.js --help
 
   # Deploy, in two steps (ADR-028): every push to main goes to STAGING
   # (quiz.dev.chevallier.io) automatically; the SAME sha goes to PRODUCTION
