@@ -2,65 +2,35 @@
 
 ## Status
 
-Accepted (2026-10-11, product owner Yves Chevallier).
-
-Amended 2026-10-13 (#798): §3 for the project page only — the lifecycle
-rail carries the page's one clock
-([amendment](#amendment-2026-10-13-the-project-rail-carries-its-own-clock)).
-
-Amended 2026-10-14: §3's "after the label" — a badge with a timer shows
-the timer alone, its word for a screen reader only
-([amendment](#amendment-2026-10-14-the-timer-replaces-the-word)).
-
-Amended 2026-10-13 (#786, #795): §1's zinc, §4's scheduled bar and §5's
-phases — blue for what is scheduled, a project's `scheduled` phase, and the
-rule for any further pill tone
-([amendment](#amendment-2026-10-13-blue-for-what-is-scheduled-and-the-rule-for-a-new-pill-tone)).
-
-Amended 2026-10-13 (#794): §3's format — two units instead of the largest
-one, and the seconds in the last ten minutes
-([amendment](#amendment-2026-10-13-the-time-left-in-two-units)).
-
-Amended 2026-10-14 (#857): the first 2026-10-13 amendment's item 1 — a
-dated draft is still zinc, and its word says it is not scheduled
-([amendment](#amendment-2026-10-14-a-dated-draft-is-not-scheduled)).
-
-Amended 2026-10-26 (#921, product owner): the 2026-10-14 amendment's item 2 — once a dated
-draft's opening has passed, the configuration says it did not open, and
-the Format summary and the MCP no longer present a draft's window as
-planned
-([amendment](#amendment-2026-10-26-a-dated-draft-whose-opening-passed)).
-
-Amended 2026-11-06 by [ADR-127](ADR-127-etat-planifie-des-projets.md)
-(product owner), scope: the first 2026-10-13 amendment's item 2 and the
-2026-10-14 amendment's opening sentence — a project's `scheduled` phase is
-its `scheduled` STATE, armed by Schedule; a draft holding a date is
-`draft`, and no draft project is published by the ticker any more.
-
-Amended 2026-10-29 (#958): §5's phases — `deadline_passed` in place of
-`locked` for a project under the `commit` deadline strategy, which locks
-nothing
-([amendment](#amendment-2026-10-29-a-deadline-that-locks-nothing-is-not-locked)).
+Accepted (2026-10-11, product owner Yves Chevallier); consolidated on
+2026-11-08 from its seven amendments (2026-10-13 ×3, 2026-10-14 ×2,
+2026-10-26, 2026-10-29) and the amendment of 2026-11-06 by
+[ADR-127](ADR-127-etat-planifie-des-projets.md) (a project's `scheduled`
+phase is its `scheduled` state). This consolidation changes no decision. The
+[historical record](history/ADR-104-badges-d-etat-unifies.md) keeps the
+original text, the reports that led to each amendment and the delivery
+notes; the [correspondence table](#correspondence-of-old-references) maps
+each old section.
 
 Scope: the state badge of an evaluation and of a project on every staff
 surface of `apps/web` (the classroom's Activities tab, `/activities`, the
-evaluation's configuration, the live header, the project page) and the bars
-of the Activities gantt; and, for a project, the server-derived phase the
-badge reads (§5): `ProjectPhase` in `packages/contracts`, `projectPhase` in
-`packages/domain`, and the phase counts of the staff's project lists in
-`apps/api` (`phaseCounts`, `views.ts` of the `project` module). The
-student's surfaces (the activity cards, `student/projectRow.ts`, the grades
-and feedback pages) keep their own grammar and are not governed here, and
-no student contract carries the phase.
+evaluation's configuration, the live header, the project page), the bars
+of the Activities gantt, the project page's lifecycle rail, and, for a
+project, the server-derived phase the badge reads (§5): `ProjectPhase` in
+`packages/contracts`, `projectPhase` in `packages/domain`, and the phase
+counts of the staff's project lists in `apps/api` (`phaseCounts`, `views.ts`
+of the `project` module). The student's surfaces (the activity cards,
+`student/projectRow.ts`, the grades and feedback pages) keep their own
+grammar and are not governed here, and no student contract carries the
+phase.
 
-Relations: amends `apps/web/DESIGN.md` (the Badge entry); reverses two
-delivered choices recorded in `docs/merge/history/09-tasks-delivered.md` —
-M3-10 ("amber badge and bar" for a published project) and M3-14a finding
-no. 6 (the time left in the Projects table's Deadline cell). Builds on
-ADR-094 (the `packages/ui` class lists).
-
-The two 2026-10-13 amendments amend `apps/web/DESIGN.md` again: #798 the
-project page's Lifecycle rail and Deadline tile, #786/#795 the Badge entry.
+Relations: amends `apps/web/DESIGN.md` (the Badge entry, the project page's
+Lifecycle rail and Deadline tile); reverses two delivered choices recorded
+in `docs/merge/history/09-tasks-delivered.md` — M3-10 ("amber badge and bar"
+for a published project) and M3-14a finding no. 6 (the time left in the
+Projects table's Deadline cell). Builds on ADR-094 (the `packages/ui` class
+lists). [ADR-086](ADR-086-planifiee-ou-en-direct.md#amendment-2026-10-14-the-scheduled-mode-is-labelled-automatic)
+owns the names of an evaluation's clock ("Automatic" / « Automatique »).
 
 ## Context
 
@@ -73,87 +43,186 @@ one state a teacher scans the list for — the students are in now — had no
 colour of its own. The time left of a published project sat in its Deadline
 cell as a relative distance (M3-14a no. 6), while a running evaluation showed
 none, and the gantt's legend had to spell "waiting room, paused, open
-project" under one amber swatch.
+project" under one amber swatch. Later, a scheduled evaluation's grey pill
+read as a draft's (#786), and a dated draft read as scheduled (#857, #921).
 
 ## Decision
 
-1. **One grammar, for staff surfaces only.** Green = open to the students
-   (an evaluation `running`, a project `published`). Amber = the staff's own
-   correction or publication is awaited (`lobby`, `paused`, `grading`). Zinc
-   = at rest (`draft`, `scheduled`, `closed`, `locked`). Outline, green =
-   finished with nothing awaited (`released`). One table per kind holds the
-   tone and the face together (`stateStyle` in `evaluation/common.ts`,
-   `projectPhaseStyle` in `project/common.ts`, keyed by the phase of §5); `KIND` in
-   `activities/model.ts` reads them, no view branches on a state's colour.
+### The grammar
+
+| Tone, face | Meaning | Evaluation state | Project phase (§5) |
+| --- | --- | --- | --- |
+| Green, soft | Open to the students | `running` | `published` |
+| Amber, soft | The staff's own correction or publication is awaited | `lobby`, `paused`, `grading` | `graded` |
+| Blue (`info`), soft | Scheduled: ready, it opens on its own at a known time | `scheduled` | `scheduled` |
+| Zinc, soft | At rest | `draft`, `closed` | `draft`, `locked`, `deadline_passed` |
+| Green, outline | Finished, nothing awaited | `released` | `released` |
+
+Words (`eval.state.*`, `project.state.*`, both languages): a project's
+`graded` / `released` read "graded" / "released", « corrigé » / « rendu »,
+never « publié », which already names a published project; `scheduled`
+« planifié »; `deadline_passed` "deadline passed" / « échéance passée ». A
+dated evaluation draft reads "draft · not scheduled" / « brouillon · non
+planifiée » (§7).
+
+1. **One grammar, for staff surfaces only**, the table above. One table per
+   kind holds the tone and the face together (`STATE_STYLE` / `stateStyle`
+   in `evaluation/common.ts`, `PHASE_STYLE` / `projectPhaseStyle` in
+   `project/common.ts`, keyed by the phase of §5); `KIND` in
+   `activities/model.ts` reads them, no view branches on a state's colour,
+   and these two tables are the only place a state meets its colour. Blue is
+   the `info` tone of `packages/ui`'s `badge` (`blue` in `apps/web`'s
+   `Tone`). **A pill is never the accent**: the brand red belongs to the
+   screen's one primary action (invariant 2 of `CLAUDE.md`). A future kind of
+   activity declares its tone, its face and its timer deadline in its `KIND`
+   entry and inherits every surface.
 2. **An outline face of the badge**, in `packages/ui` (`badge(tone, extra,
    "outline")`, `variant="outline"` on `Badge`): no fill, the tone's ink, a
-   1 px inset ring in the same colour (`ring-current`), for every tone. No solid-fill
-   variant: the soft green plus the timer is what marks a live row, and a
-   solid pill would compete with the row's one primary action (invariant 2
-   of `CLAUDE.md`).
-3. **The timer** — a `Timer` glyph and the time left in the largest non-zero
-   unit, to the minute ("4 d", "3 h", "35 min", "<1 min", never negative),
-   `TimeLeft` in `ui/dates.tsx`, ticking on the shared minute timer of
-   `useNow` — rides inside the badge, after the label, in exactly two
-   places: the evaluations list and the Projects group of a classroom's
-   Activities tab, and only while the students are in (`running`,
-   `published`; never a lobby or a pause, where nothing runs out). Everywhere
-   else the badge wears the tone and the face alone: the live header has the
-   screen's one clock, the project page shows the deadline, `/activities`
-   has its Closing column. The Projects table's Deadline cell keeps the
-   absolute date only.
+   1 px inset ring in the same colour (`ring-current`), for every tone. No
+   solid-fill variant: the soft green plus the timer is what marks a live
+   row, and a solid pill would compete with the row's one primary action.
+   **Nothing blinks**: motion pulls the eye from that action too.
+3. **The timer** — a `Timer` glyph and the time left (`TimeLeft` in
+   `ui/dates.tsx`) — rides inside the badge in exactly two places: the
+   evaluations list and the Projects group of a classroom's Activities tab,
+   and only while the students are in (`running`, `published`; never a lobby
+   or a pause, where nothing runs out). There **the timer replaces the
+   word**: the pill shows the glyph and the time left, the state's word only
+   as `sr-only` text ("running, closes in 2 d 4 h"). A live row with no
+   deadline (an evaluation running without `closesAt`) has no timer and keeps
+   its word: a pill is never empty. Everywhere else the badge wears the tone,
+   the face and the word: the live header has the screen's one clock, the
+   project page's clock is its rail (§8), `/activities` has its Closing
+   column. The Projects table's Deadline cell keeps the absolute date only.
+   - **Format: two units, floored.** From a day: days and hours ("2 d 5 h",
+     fr "2 j 5 h"). Under a day: hours and minutes ("1 h 40 min", fr
+     "1 h 40", the minutes on two digits as French writes a time). Under an
+     hour: minutes ("35 min"). Under ten minutes: minutes and seconds
+     ("9 min 32 s", "45 s"). A second unit that is zero is left out ("2 d",
+     "3 h", "5 min"). Floored — a badge never promises more than what is
+     left — and never negative: a deadline just passed (the +3 s grace of
+     invariant 5, a project's lock within the minute) reads "0 s" until the
+     state catches up. The same format serves every use of `TimeLeft`.
+   - **Ticking.** `TimeLeft` ticks on the shared minute timer of `useNow`,
+     and on the shared second timer only while under ten minutes and before
+     the deadline, so a list does not re-render every second for deadlines
+     days away; a timer armed for the ten-minute mark switches at that exact
+     moment.
+   - **Not the other clocks.** The live header's countdown and the Super
+     Powers banner keep `formatRemaining` (`ui/live.tsx`), a by-the-second
+     countdown rounded up, which a screen with one clock to watch needs.
 4. **The gantt's bar is derived from the badge's tone**: green and amber
    fill at full strength; three exceptions a badge does not draw stay
-   explicit — a dashed outline for a draft, an info ring for what is
-   scheduled, the recessed surface for everything over. The outline face
-   never reaches a bar. The legend reads "open to students" and "waiting
-   room, paused".
+   explicit — a dashed outline for a draft, an info ring for a bar whose
+   badge is blue (`KIND`'s `stateStyle`: a scheduled evaluation or project),
+   the recessed surface for everything over. The outline face never reaches a
+   bar. The legend reads "open to students" and "waiting room, paused".
 5. **A project's phase.** A project's stored state stops at `locked`, but
    behind it the staff must tell apart what an evaluation's `closed`,
    `grading` and `released` tell apart. The staff's project summaries and
-   the project page carry a derived **phase** — `draft | published | locked
-   | graded | released` (`projectPhase` of `@quiz/domain`, `ProjectPhase` of
-   the contracts) — and the badge reads it; the buckets, the sorting and the
-   gantt keep reading the state. `draft` and `published` follow the state;
-   `locked` refines into `locked` (the scores are not final), `graded` (final
-   per `scoresFinal`, the staff's release awaited: amber, an evaluation's
-   `grading`) and `released` (`releasedAt` set: outline green, a released
-   evaluation). Labels: "graded" / "released", "corrigé" / "rendu" — never
-   "publié", which already names a published project. Three choices of the
-   product owner (2026-10-11): the state comes first, so a project moved back
-   to `published` by a later deadline is `published` even with its
-   `releasedAt` kept (F-PROJ-09); a released project whose scores changed
-   since stays `released` on the list — the page's primary action already
-   says a re-release waits, and `changedAfterRelease` is not computed for a
-   list; a project graded `none` never has final scores, so it stays `locked`
-   after its deadline. The list stays cheap (F-PROJ-13): the counts behind
-   the phase come from one query, one row per live student repository of the
-   locked projects listed, their slot runs joined, no GitHub call and no
-   project detail loaded.
+   the project page carry a derived **phase** — `draft | scheduled |
+   published | locked | deadline_passed | graded | released`
+   (`projectPhase` of `@quiz/domain`, `ProjectPhase` of the contracts),
+   never stored — and the badge reads it; the buckets, the sorting and the
+   gantt keep reading the state.
+   - `draft`, `scheduled` and `published` follow the state (the `scheduled`
+     state of [ADR-127](ADR-127-etat-planifie-des-projets.md) §11, armed by
+     Schedule); a draft holding a date is `draft`.
+   - `locked` refines into `locked` (the scores are not final, `lock`
+     strategy), `deadline_passed` (the same under the `commit` deadline
+     strategy, F-PROJ-09, which locks nothing: never said "locked"),
+     `graded` (final per `scoresFinal`, the staff's release awaited, as an
+     evaluation's `grading`) and `released` (`releasedAt` set, as a released
+     evaluation), the last two for both strategies. The project page's status
+     line (`projectStatus`, `project/projectPage.ts`) says the deadline passed
+     on its date, never "locked since", for a `deadline_passed` project, with
+     the same freezing clause as a locked one.
+   - Three choices of the product owner (2026-10-11): the state comes first,
+     so a project moved back to `published` by a later deadline is
+     `published` even with its `releasedAt` kept (F-PROJ-09); a released
+     project whose scores changed since stays `released` on the list — the
+     page's primary action already says a re-release waits, and
+     `changedAfterRelease` is not computed for a list; a project graded
+     `none` never has final scores, so it stays `locked` after its deadline.
+   - The list stays cheap (F-PROJ-13): the counts behind the phase come from
+     one query, one row per live student repository of the locked projects
+     listed, their slot runs joined, no GitHub call and no project detail
+     loaded.
+   - The student's surfaces follow the same rule for one repository, under
+     their own grammar: past its effective deadline, a repository GitHub does
+     not hold locked is never said locked (`deadline_passed` of
+     `studentProjectStatus`, `@quiz/domain`).
+6. **A new pill tone needs a meaning of its own.** A pill tone joins this
+   grammar only for a meaning distinct from the ones it holds, and only by an
+   amendment of this record that names it, with its tokens readable at 4.5:1
+   in both themes and its entry in the two tone tables of §1.
+7. **A dated draft is never blue**: blue is a promise that it opens on its
+   own, and an evaluation opens by itself only once Launch's Schedule made it
+   `scheduled` (the ticker's `live.open_scheduled` opens nothing else, F-EVAL-04);
+   a project likewise (ADR-127).
+   - The zinc pill of an evaluation draft on the Scheduled clock (ADR-086)
+     with its `opensAt` set reads "draft · not scheduled"
+     (`evaluationBadgeLabel` in `evaluation/common.ts`, from the `clock` the
+     lists carry), everywhere the badge and the gantt's label are drawn; a
+     Live draft's date is a calendar hint and keeps "draft".
+   - **The configuration says what happened.** `schedulingPhase`
+     (`evaluation/common.ts`, over the domain's `isUnscheduledDraft`) tells a
+     draft to schedule, one that missed its opening and one whose end has
+     passed too. The steps before Launch show one neutral `Alert` per phase,
+     with the date and a pointer to Launch in words but no button, so Launch's
+     Schedule stays the one primary action; Launch's status line follows the
+     phase, and its primary opens it now. Scheduling at a past date stays
+     refused (`opens_at_past`).
+   - **A draft's window is never stated as a fact**: the Format summary and
+     Launch's timing check word it conditionally, by the clock. The Format
+     step's mode card is "Automatic" / « Automatique » and says it opens by
+     itself once scheduled in Launch.
+   - **The MCP says it**: `update_evaluation` returns the evaluation's `url`,
+     plus a `notice` for a dated draft on the Scheduled clock; no MCP tool
+     schedules or opens anything.
+8. **The project rail carries the project page's one clock.** While a
+   project is `published` and the server has not applied its deadline
+   (`deadlinePassed`, the server's word — invariant 5), the lifecycle rail
+   (`ProjectRail`) fills its line from Published toward the Deadline in
+   proportion to the time elapsed from the publication to the deadline
+   (clamped 0..100 %), and writes the time left under the deadline's date
+   through `TimeLeft` (§3's format, no new clock). Each segment between two
+   markers fills by its own two dates, since the markers are evenly spaced;
+   the value given to a screen reader is the overall fraction. The bar and
+   the figure wear the **accent**: they are not a control, so not a second
+   primary action, and with the accent stripped the rail still reads. Two
+   countdowns of one deadline on one page are refused, so the Deadline tile
+   (`ProjectOverview`) has no relative line while the rail carries the time
+   left, and says "passed" once the server applied the deadline. After the
+   deadline the rail is the plain one: no bar, no time left.
+9. **The start in sight.** The evaluations table of a classroom's Activities
+   tab has a Start column — when it started (`startedAt`; an evaluation
+   opened by hand has no `opensAt`), else when it is to open (`opensAt`), as
+   an absolute date and time, a dash when neither is set — then an End
+   column (`closesAt`), as the Projects table has Start and Deadline. A row
+   without a date sorts last in either direction. `/activities` files a
+   scheduled project under Current beside a scheduled evaluation (`tabOf`,
+   `isScheduled`, which the "Scheduled" filters also read), so its start and
+   deadline count in the "Next 7 days" tile, `nextEventOf` and the classroom
+   list's next event (`course/classroomSignals.ts`).
 
 ## Consequences
 
-- A published project turns from amber to green on every staff surface and
-  on the gantt — the reversal of M3-10's "amber badge and bar", which had
-  read amber as "open but nobody is in the room"; openness, not presence, is
-  what the colour says now. A released evaluation turns from soft green to
-  outline green.
-- The time left leaves the Projects table's Deadline cell for the badge —
-  the reversal of M3-14a finding no. 6, whose answer ("the deadline cell of a
-  published project says the time left") is now given by the badge, with a
-  live minute tick that finding had declined.
-- Two strings move: the gantt's legends. Five keys arrive (`time.left.*`,
-  `time.closesIn`) in both languages, then two (`project.state.graded`,
-  `project.state.released`) with the phase.
+- A published project is green, not amber, on every staff surface and on
+  the gantt — the reversal of M3-10, which had read amber as "open but nobody
+  is in the room"; openness, not presence, is what the colour says. A
+  released evaluation is outline green, not soft green.
+- The time left left the Projects table's Deadline cell for the badge — the
+  reversal of M3-14a finding no. 6, with a live tick that finding had
+  declined.
 - `phase` joins `state` on `ProjectActivitySummary` and `ProjectDetail`,
   staff contracts both; no student contract or view gains it (invariant 4 of
-  `CLAUDE.md`). A locked project's row costs the list one query over
-  its repositories and their slot runs; a draft or a published one costs
-  nothing more.
-- The student's cards are untouched: their amber still means "a step waits on
-  the student", a rule of their own that `DESIGN.md` keeps beside this one.
-- A future kind of activity declares its tone, its face and its timer
-  deadline in its `KIND` entry and inherits every surface.
+  `CLAUDE.md`). A locked project's row costs the list one query over its
+  repositories and their slot runs; a draft or a published one costs nothing
+  more.
+- The student's cards are untouched: their amber still means "a step waits
+  on the student", a rule of their own that `DESIGN.md` keeps beside this
+  one.
 
 ## Alternatives considered
 
@@ -166,203 +235,34 @@ project" under one amber swatch.
   Activities tab are the only staff surface with no clock at all.
 - **Keeping amber for a published project.** Rejected: one colour with two
   meanings in two tables that sit one above the other.
+- **A blinking running badge** (#786). Declined (§2).
+- **The time left in its largest unit only** ("1 h" with 1 h 40 min left,
+  #794). Replaced by two units (§3).
+- **The word beside the timer** ("running ⏱ 2 d 4 h"). Replaced by the timer
+  alone (§3): the soft green and the clock already say "open, closes in".
+- **After the deadline, completing the rail's segment in a neutral ink.** Set
+  aside as one more mark saying the same thing (§8).
 
-## Amendment 2026-10-13: the project rail carries its own clock
+## Correspondence of old references
 
-Settled with the product owner on 2026-10-13 (#798, asked by a teacher). It
-amends §3 for the project page only; the badge's timer, its two places and
-the rest of this record stand.
+Code and `apps/web/DESIGN.md` cite the amendments by date. Their full text is
+the [historical record](history/ADR-104-badges-d-etat-unifies.md); a citation
+now lives here:
 
-1. **The clock.** While a project is `published` and the server has not
-   applied its deadline (`deadlinePassed`, the server's word — invariant 5
-   of `CLAUDE.md`), the lifecycle rail (`ProjectRail`) fills its line from
-   Published toward the Deadline in proportion to the time elapsed from the
-   publication to the deadline (clamped 0..100 %), and writes the time left
-   under the deadline's date through `TimeLeft` — §3's format, on the shared
-   minute timer of `useNow`, no new clock. Each segment between two markers
-   fills by its own two dates: the markers are evenly spaced, so a straight
-   fraction would cross a review checkpoint at the wrong time. The value
-   given to a screen reader is the overall fraction.
-2. **The colour: the `accent`.** The bar and the figure are not a control,
-   so they are not a second primary action: the header's one primary button
-   (Publish, Sync, Release — invariant 2) stays the only accent a teacher
-   acts on, and with the accent stripped the rail still reads.
-3. **The page's only clock.** §3 rejected two countdowns of the same
-   deadline on one page, so the Deadline tile (`ProjectOverview`) drops its
-   relative line while the rail carries the time left, and keeps "passed"
-   once the server applied the deadline.
-4. **After the deadline the rail is the plain one**: no bar and no time
-   left, the done markers already say it is over. Completing the segment in
-   a neutral ink was set aside as one more mark saying the same thing.
+<a id="amendment-2026-10-13-the-project-rail-carries-its-own-clock"></a><a id="amendment-2026-10-13-blue-for-what-is-scheduled-and-the-rule-for-a-new-pill-tone"></a><a id="amendment-2026-10-13-the-time-left-in-two-units"></a><a id="amendment-2026-10-14-the-timer-replaces-the-word"></a><a id="amendment-2026-10-14-a-dated-draft-is-not-scheduled"></a><a id="amendment-2026-10-26-a-dated-draft-whose-opening-passed"></a><a id="amendment-2026-10-29-a-deadline-that-locks-nothing-is-not-locked"></a>
 
-## Amendment 2026-10-13: blue for what is scheduled, and the rule for a new pill tone
-
-Scope: §1's zinc, §4's scheduled bar, §5's phases, and how the grammar
-grows. Decided by the
-product owner on 2026-10-13, after a teacher's two reports: a scheduled
-evaluation's grey pill read as a draft's (#786), and every project he had
-scheduled still said "draft" exactly like one in preparation (#795).
-
-1. **Blue = scheduled**: ready, and it will open on its own at a known
-   time. An evaluation `scheduled` and a project in the `scheduled` phase
-   wear the soft blue — the `info` tone of `packages/ui`'s `badge`, `blue`
-   in `apps/web`'s `Tone`, the token the gantt's scheduled bar and its
-   legend already wore (§4). Zinc keeps what is at rest: a draft still in
-   preparation, `closed`, `locked`. The two tone tables stay the only place
-   a state meets its colour (`STATE_STYLE` in `evaluation/common.ts`,
-   `PHASE_STYLE` in `project/common.ts`).
-2. **A project's `scheduled` phase** (amended 2026-11-06 by
-   [ADR-127](ADR-127-etat-planifie-des-projets.md) §11: the phase reads the
-   `scheduled` state; the derivation from the publish mode below is
-   obsolete). §5's phases become `draft |
-   scheduled | published | locked | graded | released`: a project in the
-   `draft` state whose publish mode is `scheduled` (the create and
-   patch contracts then require its start) is `scheduled`; a draft published by hand stays
-   `draft`. Labels "scheduled" / "planifié". As §5 says, the buckets and
-   the sorting keep reading the state.
-3. **The gantt's scheduled ring follows the tone.** §4's info ring is now
-   drawn for a bar whose badge is blue (`KIND`'s `stateStyle`), so a
-   scheduled project wears it as a scheduled evaluation does; the dashed
-   draft outline stays for a draft in preparation. The `/activities` tabs
-   first filed a scheduled project under Drafts, by its state; since #787
-   (2026-10-13) `tabOf` in `activities/model.ts` files it under Current,
-   beside a scheduled evaluation (`isScheduled`, which the "Scheduled"
-   filter of `/activities` and of a classroom's Activities tab also reads).
-   A scheduled project's start and deadline therefore now count in the
-   "Next 7 days" tile, in `nextEventOf` and in the classroom list's next
-   event (#805, `course/classroomSignals.ts`), which read `tabOf`.
-4. **The start in sight.** The evaluations table of a classroom's
-   Activities tab gains a Start column — when it started (`startedAt`, an
-   evaluation opened by hand has no `opensAt`), else when it is to open
-   (`opensAt`), as an absolute date and time, a dash when neither is set —
-   as the Projects table under it already had, so a scheduled row says
-   when it begins without opening it. A row without a date sorts last in
-   either direction. Since #787 an End column (`closesAt`) follows it, as
-   the projects' Deadline follows their Start.
-5. **Nothing blinks.** The suggestion that a running badge blink (#786) is
-   declined: motion pulls the eye from the row's one primary action, and
-   the soft green with its timer (§3) already marks a live row.
-6. **A new pill tone needs a meaning of its own.** A pill tone joins this
-   grammar only for a meaning distinct from the ones it holds — green open
-   to the students, amber awaiting the staff, blue scheduled, zinc at rest,
-   the outline finished — and only by an amendment of this record that
-   names it, with its tokens readable at 4.5:1 in both themes and its entry
-   in the tone tables of item 1. A pill is never the accent: the brand red
-   belongs to the screen's one primary action.
-
-## Amendment 2026-10-13: the time left in two units
-
-Decided by the product owner on 2026-10-13 (#794, asked by a teacher: a
-project said "1 h" with 1 h 40 min left). It replaces §3's format — "the
-largest non-zero unit, to the minute, never a second" — everywhere
-`TimeLeft` is used (the badges of §3, the project rail of the first
-amendment); where the timer rides and what it means stand.
-
-1. **Two units, floored.** From a day: days and hours ("2 d 5 h", fr
-   "2 j 5 h"). Under a day: hours and minutes ("1 h 40 min", fr "1 h 40",
-   the minutes on two digits as French writes a time). Under an hour:
-   minutes ("35 min"). Under ten minutes: minutes and seconds
-   ("9 min 32 s", "45 s"). A second unit that is zero is left out ("2 d",
-   "3 h", "5 min"). Still floored — a badge never promises more than what
-   is left — and still never negative: a deadline just passed (the +3 s
-   grace of invariant 5, a project's lock within the minute) reads "0 s"
-   until the state catches up; "<1 min" is gone, the seconds say it.
-2. **The second timer only in the last ten minutes.** `TimeLeft` ticks on
-   the shared minute timer of `useNow`, and on the shared second timer
-   only while under ten minutes and before the deadline, so a list of
-   rows does not re-render every second for deadlines days away. A timer
-   armed for the ten-minute mark switches it at that exact moment.
-3. **Not the other clocks.** The live header's countdown and the Super
-   Powers banner keep `formatRemaining` (`ui/live.tsx`), a by-the-second
-   countdown rounded up, which they need for a screen with one clock to
-   watch; this amendment is about a figure on a row.
-
-## Amendment 2026-10-14: the timer replaces the word
-
-Decided by the product owner on 2026-10-14: "running ⏱ 2 d 4 h" and
-"published ⏱ 4 d 15 h" said the same thing twice. §3 rides the timer only
-in a live state (`running`, `published`), so the soft green and the clock
-already say "open, closes in". It replaces §3's "after the label" in the
-two places of §3; where the timer rides and what it means stand.
-
-1. **The timer alone in the pill.** `StateBadge` with `timer` shows the
-   glyph and the time left, and the state's word only as `sr-only` text,
-   so a screen reader hears "running, closes in 2 d 4 h".
-2. **No timer, the word.** A live row with no deadline (an evaluation
-   running without `closesAt`) has no timer, and keeps its word: a pill is
-   never empty. Every other state keeps its word as before.
-
-## Amendment 2026-10-14: a dated draft is not scheduled
-
-Recorded with #857: a teacher read an exercise whose Format step said
-"Scheduled", with its opening and closing dates set, as planned, and asked
-for it in blue like a scheduled project. It was a `draft`: an evaluation
-opens by itself only once it is `scheduled` (the ticker's
-`live.open_scheduled` opens nothing else), which the Launch
-step's Schedule does; a draft project whose publish mode is scheduled, by
-contrast, IS published by the ticker, hence its blue phase. (Obsolete since
-[ADR-127](ADR-127-etat-planifie-des-projets.md): a project too opens by
-itself only once Schedule made it `scheduled`.)
-
-1. **A draft is never blue**, dates or not: blue stays a promise that it
-   opens on its own. The zinc pill of a draft on the Scheduled clock
-   (ADR-086) with its `opensAt` set reads "draft · not scheduled" /
-   "brouillon · non planifiée" (`evaluationBadgeLabel` in
-   `evaluation/common.ts`, from the `clock` the lists carry), everywhere
-   the badge and the gantt's label are drawn; a Live draft's date is a
-   calendar hint and keeps "draft".
-2. **The configuration says where to schedule it.** While its opening is
-   to come, the steps before Launch show a neutral `Alert` with the date it
-   would open on, pointing to Launch in words; no button, so Launch's
-   Schedule stays the one primary action.
-3. **The mode's card no longer reads like the state.** The product owner
-   (2026-10-14) renamed the Format step's choice from "Scheduled" /
-   « Planifiée » to "Automatic" / « Automatique », and its description now
-   says it opens by itself once scheduled in Launch; the state and the
-   action keep their words. Recorded in
-   [ADR-086's amendment of 2026-10-14](ADR-086-planifiee-ou-en-direct.md#amendment-2026-10-14-the-scheduled-mode-is-labelled-automatic),
-   which owns the mode's names.
-
-## Amendment 2026-10-26: a dated draft whose opening passed
-
-Recorded with #921, validated by the product owner on 2026-10-26: a teacher took a dated draft, whose dates the MCP had
-set, for scheduled; its opening passed and it never opened. The model
-stays (a draft opens only once scheduled, F-EVAL-04); the screen now says
-what happened.
-
-1. **A passed opening is said.** `schedulingPhase` (`evaluation/common.ts`,
-   over the domain's `isUnscheduledDraft`) tells a draft to schedule, one
-   that missed its opening and one whose end has passed too. The steps
-   before Launch show one neutral `Alert` per phase, without a button;
-   Launch's status line follows the phase, and its primary opens it now.
-   Scheduling at a past date stays refused (`opens_at_past`).
-2. **A draft's window is never stated as a fact.** The Format summary and
-   Launch's timing check word a draft's window conditionally, by the clock.
-3. **The MCP says it.** `update_evaluation` returns the evaluation's `url`,
-   plus a `notice` for a dated draft on the Scheduled clock; no MCP tool
-   schedules or opens anything.
-
-## Amendment 2026-10-29: a deadline that locks nothing is not locked
-
-Scope: §5's phases and the project page's status line. Recorded with
-#958: under the `commit` deadline strategy (F-PROJ-09) the deadline marks
-a commit and leaves every repository open, yet the badge and the page said
-"locked".
-
-1. **A `deadline_passed` phase.** §5's phases become `draft | scheduled |
-   published | locked | deadline_passed | graded | released`: a project in
-   the `locked` state whose scores are not final is `deadline_passed` under
-   the `commit` strategy, `locked` under `lock`. `graded` and `released`
-   are unchanged for both strategies. Zinc, like `locked`: at rest, the
-   scores not final. Labels "deadline passed" / "échéance passée". The
-   stored state still stops at `locked`, and the buckets, the sorting and
-   the gantt keep reading it.
-2. **The page's sentence follows the phase.** The project page's status
-   line (`projectStatus`, `project/projectPage.ts`) says the deadline passed
-   on its date, never "locked since", for a `deadline_passed` project,
-   with the same freezing clause as a locked one.
-
-The student's surfaces stay outside this record (see Scope); their status
-`deadline_passed` (`studentProjectStatus` of `@quiz/domain`) follows the
-same rule for one repository: past its effective deadline, a repository
-GitHub does not hold locked is never said locked.
+| Old reference | Current section |
+| --- | --- |
+| §1–§5 | [The grammar](#the-grammar), same numbers |
+| Amendment 2026-10-13 (#798), the project rail's clock | §8 |
+| Amendment 2026-10-13 (#786, #795), blue for scheduled: items 1 and 3 | The table, §1 and §4; `/activities` filing: §9 |
+| Same, item 2 (a project's `scheduled` phase) | §5, as amended by ADR-127 |
+| Same, item 4 (Start column) | §9 |
+| Same, item 5 (nothing blinks) | §2 |
+| Same, item 6 (a new pill tone) | §6 and §1 (never the accent) |
+| Amendment 2026-10-13 (#794), two units | §3, Format and Ticking |
+| Amendment 2026-10-14, the timer replaces the word | §3 |
+| Amendment 2026-10-14 (#857), a dated draft is not scheduled | §7 |
+| Amendment 2026-10-26 (#921), a dated draft whose opening passed | §7 |
+| Amendment 2026-10-29 (#958), `deadline_passed` | §5 |
+| ADR-127 amendment (2026-11-06) | §5 and §7 |
