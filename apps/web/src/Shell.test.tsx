@@ -7,7 +7,7 @@ import type { CourseSummary, PoolDetail, PoolSummary } from "@quiz/contracts";
 import { circuitServer } from "@quiz/qt-circuit/server";
 
 import { QuestionEditorHost } from "./questionTypes";
-import { ModeBanner, Shell } from "./Shell";
+import { Shell } from "./Shell";
 import { resetShortcuts, useShortcuts } from "./shortcuts";
 import { modKey, PAGE_COLUMN } from "./ui";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures";
@@ -700,26 +700,6 @@ describe("Shell student view banner", () => {
     const banner = screen.getByRole("region", { name: "You are viewing the portal as a student." });
     expect(within(banner).getByText("Student view")).toHaveClass("sm:hidden");
     expect(within(banner).getByText("You are viewing the portal as a student.")).toHaveClass("hidden", "sm:inline");
-  });
-});
-
-describe("ModeBanner", () => {
-  it("carries any message and any way out", async () => {
-    const onClick = vi.fn();
-    renderWithProviders(
-      <ModeBanner message="Acting as Ada" action={{ label: "End", onClick }}>
-        <p>frame</p>
-      </ModeBanner>,
-    );
-    const banner = screen.getByRole("region", { name: "Acting as Ada" });
-    await userEvent.click(within(banner).getByRole("button", { name: "End" }));
-    expect(onClick).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("frame")).toBeVisible();
-  });
-
-  it("draws no button without an action", () => {
-    renderWithProviders(<ModeBanner message="Read only">{null}</ModeBanner>);
-    expect(within(screen.getByRole("region", { name: "Read only" })).queryByRole("button")).toBeNull();
   });
 });
 
