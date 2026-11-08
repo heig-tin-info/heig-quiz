@@ -20,21 +20,14 @@ import type { ConfigIssue, EditorProps } from "@quiz/core/client";
 import { CIRCUIT_LIBRARY, Plot, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
 import { COMPONENT_KINDS, offeredKinds, type ComponentKind } from "./library.js";
 import {
-  DEFAULT_AC_ANALYSIS,
-  DEFAULT_ANALYSIS,
   DEFAULT_BODE,
-  MAX_ANALYSIS_POINTS,
-  biasOf,
   emptyStimulus,
   totalStimulusPoints,
-  type Analysis,
   type BodeTolerance,
   type CircuitConfig,
   type CircuitDetails,
   type GradingMode,
-  type Load,
   type Schematic,
-  type Source,
   type Stimulus,
 } from "./schema.js";
 import {
@@ -54,17 +47,14 @@ import {
   FieldCell,
   hint,
   IssueList,
-  label,
   NumberField,
   patchAt,
   PromptSection,
   removeAt,
-  RowHead,
   RowList,
   RowListHeader,
   sectionTitle,
   Segmented,
-  Select,
   setting,
   textareaClass,
   TryPanel,
@@ -73,6 +63,8 @@ import {
   useReferenceTry,
 } from "@quiz/ui";
 
+import { BodeFields } from "./editor/BodeFields.js";
+import { StimulusFields } from "./editor/StimulusFields.js";
 import { chip } from "./styles.js";
 
 /**
@@ -132,31 +124,6 @@ const KIND_GROUPS: ReadonlyArray<{
   { title: "groupOpamp", kinds: ["OPAMP"] },
   { title: "groupTerminals", kinds: ["GND", "VCC", "VEE"] },
 ];
-
-/** A fresh source of each kind, so switching kinds never lands on an invalid one. */
-function defaultSource(kind: Source["kind"]): Source {
-  switch (kind) {
-    case "dc":
-      return { kind: "dc", volts: 5 };
-    case "sine":
-      return { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 };
-    case "pulse":
-      return { kind: "pulse", low: 0, high: 5, frequencyHz: 1000, dutyCycle: 0.5 };
-    case "step":
-      return { kind: "step", from: 0, to: 5, atMs: 1 };
-  }
-}
-
-function defaultLoad(kind: Load["kind"]): Load {
-  switch (kind) {
-    case "open":
-      return { kind: "open" };
-    case "resistor":
-      return { kind: "resistor", ohms: 10_000 };
-    case "capacitor":
-      return { kind: "capacitor", farads: 1e-7 };
-  }
-}
 
 /** What one simulation of the reference came back with, as a try state. */
 async function simulate(
@@ -456,278 +423,6 @@ export function CircuitEditor({
   );
 }
 
-/** One stimulus's panel: its head line, its source, its load and its analysis window. */
-function StimulusFields({
-  ids,
-  index: i,
-  stimulus,
-  s,
-  disabled,
-  patch,
-  onRemove,
-  issues,
-}: {
-  ids: string;
-  index: number;
-  stimulus: Stimulus;
-  s: CircuitEditorStrings;
-  disabled: boolean | undefined;
-  patch: (next: Partial<Stimulus>) => void;
-  onRemove: () => void;
-  issues: readonly ConfigIssue[];
-}): ReactNode {
-  const { analysis, source } = stimulus;
-  /*
-   * Switching to AC keeps a DC source (its volts become the bias) and turns
-   * anything else into a 0 V bias: a sine or a pulse has no operating point,
-   * and a stimulus the schema refuses is not a state to switch into.
-   */
-  const switchAnalysis = (kind: Analysis["kind"]) =>
-    kind === "ac"
-      ? patch({
-          analysis: { ...DEFAULT_AC_ANALYSIS },
-          source: source.kind === "dc" ? source : { kind: "dc", volts: 0 },
-        })
-      : patch({ analysis: { ...DEFAULT_ANALYSIS } });
-  return (
-    <>
-      <RowHead
-        disabled={disabled}
-        nameId={`${ids}-sname-${i}`}
-        nameLabel={fmt(s.stimulus, { n: i + 1 })}
-        nameAriaLabel={`${s.stimulusName} ${i + 1}`}
-        name={stimulus.name}
-        onNameChange={(name) => patch({ name })}
-        pointsId={`${ids}-spoints-${i}`}
-        pointsLabel={s.points}
-        points={stimulus.points}
-        onPointsChange={(points) => patch({ points })}
-        hiddenLabel={s.hidden}
-        hiddenAriaLabel={`${s.hidden} ${i + 1}`}
-        visible={stimulus.visible}
-        onVisibleChange={(visible) => patch({ visible })}
-        removeLabel={fmt(s.removeStimulus, { name: stimulus.name })}
-        removeDisabled={disabled}
-        onRemove={onRemove}
-      />
-
-      {/* First, because it decides what the source below may be. */}
-      <div className="mt-3 flex flex-col gap-2">
-        <span className={label} id={`${ids}-ank-${i}`}>
-          {s.analysisKind}
-        </span>
-        <Segmented
-          name={`${ids}-ank-${i}`}
-          labelledBy={`${ids}-ank-${i}`}
-          value={analysis.kind === "ac" ? "ac" : "tran"}
-          disabled={disabled}
-          options={[
-            { value: "tran", label: s.analysisTran },
-            { value: "ac", label: s.analysisAc },
-          ]}
-          onChange={switchAnalysis}
-        />
-        {analysis.kind === "ac" ? <p className={hint}>{s.acHint}</p> : null}
-      </div>
-
-      <div className="mt-3 flex flex-col gap-2">
-        <span className={label} id={`${ids}-src-${i}`}>
-          {s.source}
-        </span>
-        {/* Under AC the source is its bias alone: one field, no kind to pick. */}
-        {analysis.kind === "ac" ? null : (
-          <Segmented
-            name={`${ids}-srck-${i}`}
-            labelledBy={`${ids}-src-${i}`}
-            value={source.kind}
-            disabled={disabled}
-            options={[
-              { value: "dc", label: s.sourceDc },
-              { value: "sine", label: s.sourceSine },
-              { value: "pulse", label: s.sourcePulse },
-              { value: "step", label: s.sourceStep },
-            ]}
-            onChange={(kind) => patch({ source: defaultSource(kind) })}
-          />
-        )}
-        <div className="flex flex-wrap items-end gap-3">
-          {analysis.kind === "ac" ? (
-            <NumberField
-              id={`${ids}-bias-${i}`}
-              label={s.bias}
-              value={biasOf(source)}
-              step="any"
-              disabled={disabled}
-              onChange={(volts) => patch({ source: { kind: "dc", volts } })}
-            />
-          ) : (
-            <SourceFields
-              idPrefix={`${ids}-s${i}`}
-              source={source}
-              strings={s}
-              disabled={disabled}
-              onChange={(next) => patch({ source: next })}
-            />
-          )}
-          <NumberField
-            id={`${ids}-sohms-${i}`}
-            label={s.sourceOhms}
-            value={stimulus.sourceOhms}
-            min={0}
-            step="any"
-            disabled={disabled}
-            onChange={(sourceOhms) => patch({ sourceOhms })}
-          />
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-end gap-3">
-        <FieldCell label={s.load} htmlFor={`${ids}-load-${i}`}>
-          <Select
-            id={`${ids}-load-${i}`}
-            size="sm"
-            width="w-32"
-            disabled={disabled}
-            value={stimulus.load.kind}
-            onChange={(e) => patch({ load: defaultLoad(e.target.value as Load["kind"]) })}
-          >
-            <option value="open">{s.loadOpen}</option>
-            <option value="resistor">{s.loadResistor}</option>
-            <option value="capacitor">{s.loadCapacitor}</option>
-          </Select>
-        </FieldCell>
-        {stimulus.load.kind === "resistor" ? (
-          <NumberField
-            id={`${ids}-lohms-${i}`}
-            label={s.loadOhms}
-            value={stimulus.load.ohms}
-            min={0.001}
-            step="any"
-            disabled={disabled}
-            onChange={(ohms) => patch({ load: { kind: "resistor", ohms } })}
-          />
-        ) : null}
-        {stimulus.load.kind === "capacitor" ? (
-          <NumberField
-            id={`${ids}-lfarads-${i}`}
-            label={s.loadFarads}
-            value={stimulus.load.farads}
-            min={1e-15}
-            step="any"
-            disabled={disabled}
-            onChange={(farads) => patch({ load: { kind: "capacitor", farads } })}
-          />
-        ) : null}
-      </div>
-
-      {/* A heading over its three fields, like "Source" and "Load"
-          above: a group label parked on the baseline of the inputs
-          reads as a fourth field with no box. */}
-      <div className="mt-3 flex flex-col gap-2">
-        <span className={label}>{analysis.kind === "ac" ? s.sweep : s.analysis}</span>
-        <div className="flex flex-wrap items-end gap-3">
-          <AnalysisFields
-            idPrefix={`${ids}-a${i}`}
-            analysis={analysis}
-            s={s}
-            disabled={disabled}
-            onChange={(next) => patch({ analysis: next })}
-          />
-        </div>
-      </div>
-      <IssueList issues={issues} />
-    </>
-  );
-}
-
-/** The window of a transient, or the band of an AC sweep. */
-function AnalysisFields({
-  idPrefix,
-  analysis,
-  s,
-  disabled,
-  onChange,
-}: {
-  idPrefix: string;
-  analysis: Analysis;
-  s: CircuitEditorStrings;
-  disabled: boolean | undefined;
-  onChange: (analysis: Analysis) => void;
-}): ReactNode {
-  if (analysis.kind === "ac") {
-    return (
-      <>
-        <NumberField
-          id={`${idPrefix}-fstart`}
-          label={s.fStartHz}
-          value={analysis.fStartHz}
-          min={0.01}
-          step="any"
-          width="w-28"
-          disabled={disabled}
-          onChange={(fStartHz) => onChange({ ...analysis, fStartHz })}
-        />
-        <NumberField
-          id={`${idPrefix}-fstop`}
-          label={s.fStopHz}
-          value={analysis.fStopHz}
-          max={1e9}
-          step="any"
-          width="w-28"
-          disabled={disabled}
-          onChange={(fStopHz) => onChange({ ...analysis, fStopHz })}
-        />
-        <NumberField
-          id={`${idPrefix}-ppd`}
-          label={s.pointsPerDecade}
-          value={analysis.pointsPerDecade}
-          min={5}
-          max={200}
-          step={5}
-          width="w-24"
-          disabled={disabled}
-          onChange={(pointsPerDecade) => onChange({ ...analysis, pointsPerDecade })}
-        />
-      </>
-    );
-  }
-  return (
-    <>
-      <NumberField
-        id={`${idPrefix}-stop`}
-        label={s.stopMs}
-        value={analysis.stopMs}
-        min={0.001}
-        step="any"
-        width="w-24"
-        disabled={disabled}
-        onChange={(stopMs) => onChange({ ...analysis, stopMs })}
-      />
-      <NumberField
-        id={`${idPrefix}-skip`}
-        label={s.skipMs}
-        value={analysis.skipMs}
-        min={0}
-        step="any"
-        width="w-24"
-        disabled={disabled}
-        onChange={(skipMs) => onChange({ ...analysis, skipMs })}
-      />
-      <NumberField
-        id={`${idPrefix}-pts`}
-        label={s.samples}
-        value={analysis.points}
-        min={50}
-        max={MAX_ANALYSIS_POINTS}
-        step={50}
-        width="w-24"
-        disabled={disabled}
-        onChange={(points) => onChange({ ...analysis, points })}
-      />
-    </>
-  );
-}
-
 /** One plot per stimulus that produced a waveform, two abreast when there are several. */
 function TryPlots({
   details,
@@ -877,203 +572,5 @@ function GradingSection({
   );
 }
 
-/**
- * The envelope an AC stimulus is graded by. The phase has a checkbox of its
- * own rather than an empty field meaning "off": switching a comparison off is
- * a decision, and it should read as one.
- */
-function BodeFields({
-  ids,
-  bode,
-  s,
-  disabled,
-  onChange,
-}: {
-  ids: string;
-  bode: BodeTolerance;
-  s: CircuitEditorStrings;
-  disabled: boolean | undefined;
-  onChange: (next: Partial<BodeTolerance>) => void;
-}): ReactNode {
-  return (
-    <>
-      <div className="flex flex-wrap items-end gap-3">
-        <NumberField
-          id={`${ids}-magdb`}
-          label={s.bodeMagDb}
-          value={bode.magDb}
-          min={0.01}
-          max={40}
-          step={0.5}
-          width="w-24"
-          disabled={disabled}
-          onChange={(magDb) => onChange({ magDb })}
-        />
-        <NumberField
-          id={`${ids}-floordb`}
-          label={s.bodeFloorDb}
-          value={bode.floorDb}
-          min={1}
-          max={200}
-          step={10}
-          width="w-24"
-          disabled={disabled}
-          onChange={(floorDb) => onChange({ floorDb })}
-        />
-      </div>
-      <CheckboxField
-        className={setting}
-        label={s.bodePhase}
-        checked={bode.phaseDeg !== null}
-        disabled={disabled}
-        onChange={(on) => onChange({ phaseDeg: on ? DEFAULT_BODE.phaseDeg : null })}
-      />
-      {bode.phaseDeg === null ? null : (
-        <NumberField
-          id={`${ids}-phasedeg`}
-          label={s.bodePhaseDeg}
-          value={bode.phaseDeg}
-          min={0.1}
-          max={180}
-          step={1}
-          width="w-24"
-          disabled={disabled}
-          onChange={(phaseDeg) => onChange({ phaseDeg })}
-        />
-      )}
-      <p className={hint}>{s.bodeHint}</p>
-    </>
-  );
-}
-
-/** The parameters of one source kind; the kind itself is the segmented control above. */
-function SourceFields({
-  idPrefix,
-  source,
-  strings: s,
-  disabled,
-  onChange,
-}: {
-  idPrefix: string;
-  source: Source;
-  strings: CircuitEditorStrings;
-  disabled?: boolean | undefined;
-  onChange: (source: Source) => void;
-}): ReactNode {
-  switch (source.kind) {
-    case "dc":
-      return (
-        <NumberField
-          id={`${idPrefix}-volts`}
-          label={s.volts}
-          value={source.volts}
-          step="any"
-          disabled={disabled}
-          onChange={(volts) => onChange({ kind: "dc", volts })}
-        />
-      );
-    case "sine":
-      return (
-        <>
-          <NumberField
-            id={`${idPrefix}-amp`}
-            label={s.amplitude}
-            value={source.amplitude}
-            min={0}
-            step="any"
-            disabled={disabled}
-            onChange={(amplitude) => onChange({ ...source, amplitude })}
-          />
-          <NumberField
-            id={`${idPrefix}-freq`}
-            label={s.frequency}
-            value={source.frequencyHz}
-            min={0.01}
-            step="any"
-            disabled={disabled}
-            onChange={(frequencyHz) => onChange({ ...source, frequencyHz })}
-          />
-          <NumberField
-            id={`${idPrefix}-offset`}
-            label={s.offset}
-            value={source.offset}
-            step="any"
-            disabled={disabled}
-            onChange={(offset) => onChange({ ...source, offset })}
-          />
-        </>
-      );
-    case "pulse":
-      return (
-        <>
-          <NumberField
-            id={`${idPrefix}-low`}
-            label={s.low}
-            value={source.low}
-            step="any"
-            disabled={disabled}
-            onChange={(low) => onChange({ ...source, low })}
-          />
-          <NumberField
-            id={`${idPrefix}-high`}
-            label={s.high}
-            value={source.high}
-            step="any"
-            disabled={disabled}
-            onChange={(high) => onChange({ ...source, high })}
-          />
-          <NumberField
-            id={`${idPrefix}-pfreq`}
-            label={s.frequency}
-            value={source.frequencyHz}
-            min={0.01}
-            step="any"
-            disabled={disabled}
-            onChange={(frequencyHz) => onChange({ ...source, frequencyHz })}
-          />
-          <NumberField
-            id={`${idPrefix}-duty`}
-            label={s.dutyCycle}
-            value={source.dutyCycle}
-            min={0.01}
-            max={0.99}
-            step={0.05}
-            disabled={disabled}
-            onChange={(dutyCycle) => onChange({ ...source, dutyCycle })}
-          />
-        </>
-      );
-    case "step":
-      return (
-        <>
-          <NumberField
-            id={`${idPrefix}-from`}
-            label={s.stepFrom}
-            value={source.from}
-            step="any"
-            disabled={disabled}
-            onChange={(from) => onChange({ ...source, from })}
-          />
-          <NumberField
-            id={`${idPrefix}-to`}
-            label={s.stepTo}
-            value={source.to}
-            step="any"
-            disabled={disabled}
-            onChange={(to) => onChange({ ...source, to })}
-          />
-          <NumberField
-            id={`${idPrefix}-at`}
-            label={s.stepAt}
-            value={source.atMs}
-            min={0}
-            step="any"
-            disabled={disabled}
-            onChange={(atMs) => onChange({ ...source, atMs })}
-          />
-        </>
-      );
-  }
-}
 
 export default CircuitEditor;
