@@ -3,63 +3,120 @@
 ## Status
 
 Accepted (2026-10-02, settled by the product owner in conversation; the
-asynchronous git runner by the orchestrator of the merge). Implemented by
-merge task M3-02: `createProject` (`apps/api/src/modules/project/lifecycle.ts`),
-the adapter `createSquashedRepo` (`apps/api/src/github/squash.ts`) and the
-git runner (`apps/api/src/github/git.ts`). Tested by
-`modules/project/lifecycle.db.test.ts` against local bare repositories.
-Completes ADR-035 (the merge), D19 (`docs/merge/08-decisions.md`) and
-F-PROJ-02, F-PROJ-16.
+asynchronous git runner by the orchestrator of the merge). Completes ADR-035
+(the merge), D19 (`docs/merge/08-decisions.md`) and F-PROJ-02, F-PROJ-16.
+Implemented by merge task M3-02: `createProject`
+(`apps/api/src/modules/project/lifecycle.ts`), `createSquashedRepo`
+(`apps/api/src/github/squash.ts`) and the git runner
+(`apps/api/src/github/git.ts`), tested by `modules/project/lifecycle.db.test.ts`
+against local bare repositories. The dated text of every amendment is in the
+[historical record](history/ADR-062-depot-de-distribution.md#status).
 
-**Amended 2026-10-12 by [ADR-106](ADR-106-notation-des-projets-par-criteres.md)
-§3** (scope: a second use of addendum 1's reference; nothing here changes):
-the evidence run of a project graded by criteria overlays the
-distribution's current protected files on the student's tree, exactly as a
-restore takes them, and records the distribution sha it used.
-*Superseded 2026-10-26 by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)
-§6 for a v3 snapshot (whole with card L-06g): no overlay; the graded run
-is accepted only when the protected files are the distribution's.*
+Amendments in force:
 
-**Amended 2026-10-26 (#899, product owner)** (scope: who may read the
-distribution repository): Quiz grants nobody access to it at creation. A
-seat on the course staff asks for it on demand and is invited, by the login
-GitHub knows today for the account they linked, with `pull` and never more;
-a higher permission already held (an owner of the organization) is left as
-it is. On demand, because GitHub drops an invitation left unaccepted for
-seven days and staff join the course or link their account later; `pull`,
-because the distribution is the App's alone: a sync replays the source over
-it and a restore reads it as the reference (addendum below). **Known gap**,
-as for the journal (F-JRN-02): nobody is invited on joining the staff and
-nobody is revoked on leaving it; a former member keeps `pull` until the
-organization removes it.
+- 2026-10-02 (M3-04): the distribution repository is also the reference of
+  the protected files ([addendum](#addendum-2026-10-02-the-distribution-is-the-reference-of-the-protected-files), F-PROJ-08).
+- 2026-10-12, [ADR-106](ADR-106-notation-des-projets-par-criteres.md) §3: a
+  v2 evidence run overlays the distribution's current protected files on the
+  student's tree, as a restore takes them, and records the distribution sha;
+  superseded for a v3 snapshot by
+  [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md) §6 (no overlay; the
+  graded run counts only when the protected files are the distribution's),
+  whole with card L-06g.
+- 2026-10-26 (#899): staff read the distribution on demand, `pull` only ([decision 6](#decision)).
+- 2026-10-26 (#917), as amended 2026-10-28: each branch's root commit is
+  signed for the App, never by a forced move ([decision 7](#decision)).
 
-**Amended 2026-10-26 (#917, product owner; scope: the `squash` strategy's commit):** each
-branch's root commit is created by the API, GitHub-signed for the App
-(`signedCommit.ts`). git builds the tree and pushes a throwaway commit of it
-straight to `<branch>`; the branch is then forced once onto the signed root,
-on a repository nobody has cloned: no temporary ref. A build failing after
-that push leaves a non-empty distribution, so a retry steps to
-`-squashed-2` and leaves an orphan, as a partial multi-branch push already
-did. Identity, verification and older repositories: D23's addendum
-(`docs/merge/08-decisions.md`).
+## Context
 
-**Amended 2026-10-28 (product owner; scope: the amendment of 2026-10-26
-above):** the forced move is withdrawn. An organization ruleset refusing
-non-fast-forward updates of branches (Info1-MI-2026's) refused it with a
-422, and the build, reading every 422 as a name taken, stepped through
-twenty `-squashed-N` names, leaving a repository under each. The throwaway
-commit is now pushed to the temporary ref `refs/quiz/tmp-<branch>` (as the
-sync does, ADR-073), the branch is created on the signed root (`POST
-/git/refs`, nothing moved), the temporary ref deleted on a best-effort
-basis, and the default branch set to the first branch asked for. The build
-steps to the next name only when the name is taken (`RepoNameTaken`): a
-failure after the claim stops it with `distribution_failed` and leaves one
-repository, which a retry adopts when no branch was created yet, or steps
-over.
+Creating a project builds its **distribution repository** in the
+classroom's organization (F-PROJ-02): `<slug>-squashed`, one commit per
+handed-out branch after the hand-out overlay (`squash`), or the branches
+with their history (`whole`). Every student repository is later pushed from
+it.
 
-**Addendum (2026-10-02, product owner; merge task M3-04): the distribution
-repository is also the reference of the protected files.** F-PROJ-08 is
-amended to match:
+heig-classroom built the repository FIRST, then inserted the assignment's
+row. When the insert lost the race on the unique slug, it deleted the
+repository it had just built; deleting a draft deleted its distribution
+repository too. A deletion on GitHub cannot be undone, and the App's right
+to delete repositories is the one right a teacher's organization has the
+most reason to refuse it: D19 settled that Quiz deletes rows, never a
+repository, and the product owner extended it on 2026-10-02 to Quiz's own
+leftovers.
+
+The build takes seconds (a clone and a push per branch) and ran with
+`execFileSync`, which stops the whole process: the live clock of an exam,
+the SSE and every other request wait for it.
+
+## Decision
+
+1. **The row first, the claim before the push.** The draft is inserted
+   before anything is built, with `distribution_*` null: the UNIQUE
+   (classroom, slug) decides the slug (`-2` … `-20`, `409 duplicate_slug`
+   beyond), so two creations racing never take the same one and nothing
+   built has to be undone. The repository is then created or adopted, and
+   the row CLAIMS it — writes its id under a partial UNIQUE on
+   `projects.distribution_repo_id` (migration `0056`) — before anything is
+   pushed to it: two creations racing for one empty leftover, in two
+   classrooms of one organization, never both push into it; the loser steps
+   to the next name. Then the repository is built, and only then does the
+   row get the repository's name (`distribution_full_name`), the mark of a
+   BUILT distribution.
+2. **Never delete on GitHub.** Not a student's repository, not a
+   distribution repository, not a repository the App created a second ago.
+   A failed build deletes the ROW only and answers `502
+   distribution_failed`; the teacher retries.
+3. **An empty leftover is adopted.** A name GitHub refuses (422) is looked
+   at: an EMPTY and PRIVATE repository no project holds is what a failed
+   build leaves, and the next attempt builds into it. Anything else is
+   someone's — another classroom's project of the same slug, a year
+   earlier, in the same organization; a public repository, which a
+   distribution never is (F-PROJ-02); one an interrupted build still
+   claims — and the name steps to `-squashed-2` … `-squashed-20`.
+   Conversely a distribution repository is never a source: one named
+   `…-squashed[-N]` or held by a project is refused (`source_not_found`).
+4. **Asynchronous git.** The git runner uses `execFile`; the request still
+   waits for the build, the event loop does not. The token still reaches git
+   through the environment of the one process only (invariant 15). The
+   remotes have one seam (`setRemoteBaseForTests`), so the tests push to
+   local bare repositories.
+5. **A draft whose distribution is not built** — its name not written — is
+   listed and may be deleted, but not published (`409 distribution_missing`),
+   by hand or by the ticker: it is being built, or its build was
+   interrupted. So a failed build only ever deletes an unpublished draft (the
+   deletion says so in its condition), and nothing hands out a half-built
+   repository.
+
+6. **Staff read the distribution on demand** *(2026-10-26, #899)*. Quiz
+   grants nobody access at creation. A seat on the course staff asks for it
+   and is invited, by the login GitHub knows today for the account they
+   linked, with `pull` and never more; a higher permission already held (an
+   organization owner) is left as it is. On demand, because GitHub drops an
+   invitation left unaccepted for seven days; `pull`, because the
+   distribution is the App's alone (a sync replays the source over it, a
+   restore reads it as the reference). **Known gap**, as for the journal
+   (F-JRN-02): nobody is invited on joining the staff and nobody is revoked
+   on leaving it; a former member keeps `pull` until the organization
+   removes it.
+7. **A signed root commit per branch, never a forced move** *(2026-10-26,
+   #917; amended 2026-10-28)*. Under the `squash` strategy each branch's
+   root commit is created by the API, GitHub-signed for the App
+   (`signedCommit.ts`). git builds the tree and pushes a throwaway commit to
+   the temporary ref `refs/quiz/tmp-<branch>` (as the sync does, ADR-073);
+   the branch is created on the signed root (`POST /git/refs`, nothing
+   moved), the temporary ref deleted best-effort, and the default branch set
+   to the first branch asked for. No forced update: an organization ruleset
+   refusing non-fast-forward updates refused the first design's with a 422.
+   The build steps to the next name only when the name is taken
+   (`RepoNameTaken`); a failure after the claim stops it with
+   `distribution_failed` and leaves one repository, which a retry adopts
+   when no branch was created yet, or steps over. Identity, verification and
+   older repositories: D23's addendum (`docs/merge/08-decisions.md`).
+
+## Addendum (2026-10-02): the distribution is the reference of the protected files
+
+*Product owner; merge task M3-04.* F-PROJ-08 is amended to match. Its
+numbered points are cited as "ADR-062 addendum N".
 
 1. A restore puts back the distribution repository's **current** version
    of each protected file on the pushed branch, as heig-classroom's
@@ -157,66 +214,6 @@ amended to match:
    and the score never waited for the flag, it reads the set
    (`selectScoreRun`). The student never sees
    `to_verify` (N-SEC-20).
-
-## Context
-
-Creating a project builds its **distribution repository** in the
-classroom's organization (F-PROJ-02): `<slug>-squashed`, one commit per
-handed-out branch after the hand-out overlay (`squash`), or the branches
-with their history (`whole`). Every student repository is later pushed from
-it.
-
-heig-classroom built the repository FIRST, then inserted the assignment's
-row. When the insert lost the race on the unique slug, it deleted the
-repository it had just built; deleting a draft deleted its distribution
-repository too. A deletion on GitHub cannot be undone, and the App's right
-to delete repositories is the one right a teacher's organization has the
-most reason to refuse it: D19 settled that Quiz deletes rows, never a
-repository, and the product owner extended it on 2026-10-02 to Quiz's own
-leftovers.
-
-The build takes seconds (a clone and a push per branch) and ran with
-`execFileSync`, which stops the whole process: the live clock of an exam,
-the SSE and every other request wait for it.
-
-## Decision
-
-1. **The row first, the claim before the push.** The draft is inserted
-   before anything is built, with `distribution_*` null: the UNIQUE
-   (classroom, slug) decides the slug (`-2` … `-20`, `409 duplicate_slug`
-   beyond), so two creations racing never take the same one and nothing
-   built has to be undone. The repository is then created or adopted, and
-   the row CLAIMS it — writes its id under a partial UNIQUE on
-   `projects.distribution_repo_id` (migration `0056`) — before anything is
-   pushed to it: two creations racing for one empty leftover, in two
-   classrooms of one organization, never both push into it; the loser steps
-   to the next name. Then the repository is built, and only then does the
-   row get the repository's name (`distribution_full_name`), the mark of a
-   BUILT distribution.
-2. **Never delete on GitHub.** Not a student's repository, not a
-   distribution repository, not a repository the App created a second ago.
-   A failed build deletes the ROW only and answers `502
-   distribution_failed`; the teacher retries.
-3. **An empty leftover is adopted.** A name GitHub refuses (422) is looked
-   at: an EMPTY and PRIVATE repository no project holds is what a failed
-   build leaves, and the next attempt builds into it. Anything else is
-   someone's — another classroom's project of the same slug, a year
-   earlier, in the same organization; a public repository, which a
-   distribution never is (F-PROJ-02); one an interrupted build still
-   claims — and the name steps to `-squashed-2` … `-squashed-20`.
-   Conversely a distribution repository is never a source: one named
-   `…-squashed[-N]` or held by a project is refused (`source_not_found`).
-4. **Asynchronous git.** The git runner uses `execFile`; the request still
-   waits for the build, the event loop does not. The token still reaches git
-   through the environment of the one process only (invariant 15). The
-   remotes have one seam (`setRemoteBaseForTests`), so the tests push to
-   local bare repositories.
-5. **A draft whose distribution is not built** — its name not written — is
-   listed and may be deleted, but not published (`409 distribution_missing`),
-   by hand or by the ticker: it is being built, or its build was
-   interrupted. So a failed build only ever deletes an unpublished draft (the
-   deletion says so in its condition), and nothing hands out a half-built
-   repository.
 
 ## Consequences
 

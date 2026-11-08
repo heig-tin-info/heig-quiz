@@ -2,204 +2,21 @@
 
 ## Status
 
-Accepted (2026-09-21, first production deployment).
+Accepted (2026-09-21, first production deployment). Amended 2026-09-25,
+2026-09-30, 2026-10-07, 2026-10-08, 2026-10-11 (twice), 2026-10-12 and
+2026-10-26. Every rule the amendments added is under
+[Amendments in force](#amendments-in-force), where nothing of the runner's
+hardening (root `CLAUDE.md` invariants 10–13) is relaxed; their dated text,
+with the reasons and the transitions, is in the [historical record](history/ADR-016-runner-sur-vm-separee.md#status).
 
-**See also [ADR-101](ADR-101-budget-du-runner.md)** (2026-10-11, scope: the
-runner's capacity budget): a budget per request enforced by the runner, aged
-grading in its queue and a cap of runs per evaluation; it relies on the
-2026-10-08 amendment (a) below for the engine VM's size.
-
-**Amended 2026-10-12 by [ADR-106](ADR-106-notation-des-projets-par-criteres.md)
-§3** (scope: point 2, what the runner executes; product owner): a second
-action, `project`, with its lab image; the flags of `containerArgs` do not
-change and invariants 10–14 hold, invariant 12 gaining the archive rule.
-
-**Amended 2026-10-26 by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)
-§10** (scope: the amendment above, superseded once the v2 path is
-removed): the `project` action and the `lab-c` image leave with card
-L-06g, after the last project with a v2 snapshot is released; the runner
-then executes question code only.
-
-**Addendum (2026-09-30, ADR-035, the classroom merge):** the code VM
-(`code.chevallier.io`, "the engine VM") also hosts the online workspace
-portal (`apps/codespace`, ADR-047), which already runs there natively
-today. The merge adds no VM: the runner and the portal share it, each in
-its own cgroup slice (`CPUWeight`, `MemoryMax`) so that the sessions of an
-exam cannot starve grading, with orphan reaping scoped by label and one
-CI deploy dispatcher behind the forced command. The VM is resized before
-a real class uses the portal. `apps/codespace` keeps its own `CLAUDE.md`
-with its two sanctioned divergences from invariants 11–12 (a persistent
-work volume, a git channel on an internal bridge); invariants 10–14
-remain those of `apps/runner`. The plan is
-`docs/merge/06-codespace-seb-infra.md` §6.2; it ships with phase M6,
-after the cutover (D09, settled 2026-10-01).
-
-**Amended (2026-10-07, M6-04): how the portal is deployed beside the
-runner.** Scope: point 4 below and the addendum above; the runner's own
-deploy steps are unchanged.
-(a) *One dispatcher, two checkouts* (the staging half replaced on
-2026-10-11, audit H4, below: an approved key reaches a frozen dispatcher,
-not a checkout). `infra/engine/deploy.sh` is the
-engine VM's forced command for both components, with a scope fixed by the
-`authorized_keys` line: the production key runs the dispatcher of
-`/opt/quiz-runner` (the runner and the portal's `prod`), the staging key
-the dispatcher of its own clone `/opt/quiz-engine-staging` (the portal's
-`staging` only), so the production checkout only ever moves to approved
-commits. It parses `[force] <component> <instance> <sha> <token>`
-strictly, serialises the VM's deploys with one lock, refuses a sha that
-predates it, moves its checkout and runs the component's steps
-(`apps/runner/deploy/install.sh`, `apps/codespace/deploy/install.sh
-<instance>`), which share `infra/engine/lib.sh` (pull and retag by sha,
-then untag the older sha tags; no global prune on an engine other services
-share). *Transition:* it also accepts the runner's pre-M6-04 `<sha>
-<token>`, which the CI keeps sending, and the former
-`apps/runner/deploy/deploy.sh` forwards to it, so the existing key line
-keeps deploying and the first deploy hands over from the old script. Once
-`authorized_keys` names the dispatcher, the CI sends `runner prod <sha>
-<token>` and both go (a TODO in the dispatcher).
-(b) *Two portal instances on the VM*, `prod` (`code.chevallier.io`, for
-production) and `staging` (`code-dev.chevallier.io`, for
-`quiz.dev.chevallier.io`), with separate environment files and secrets,
-ports, data directories, SQLite and volumes. Because a portal removes the
-session containers its database does not know, every session container
-carries `heig-codespace.instance=<CODESPACE_INSTANCE>` and a name
-prefixed with it, and an instance lists only its own (both labels in the
-`ps` filter). Each instance has its own Podman network and bridge (`cs0`,
-`cs1`), the nftables table pinning each bridge to its own gateway, rather
-than one shared bridge: the git channel authenticates a push by source
-address against its own database, so a staging container must not reach
-production's channel at all. For the same reason the channel has no
-`0.0.0.0` fallback in production or for a named instance: no gateway, no
-start (the deploy replays the network setup first).
-(c) *An image per sha.* The portal is built by the CI
-(`ghcr.io/heig-tin-info/quiz-codespace:<sha>`, `apps/codespace/Dockerfile`,
-no secret inside) and runs as a quadlet like the runner — host network,
-the rootful socket, the data directory bound at the same path, read-only
-root, no capability — rather than as a `pnpm deploy` tarball on the
-host's Node: the build happens once, on the image's own glibc, and the
-deploy is the runner's (pull by sha, retag, restart). The student image
-follows the runner's language images: built on the VM by hand
-(`apps/codespace/images/build.sh`), never by a deploy, never pulled.
-(d) *The live-session guard.* A `prod` deploy refuses (exit 3) while a
-session container of that instance runs, unless the request starts with
-`force` (CI: `CODESPACE_FORCE_SHA` naming the run's sha), as the
-application's live-evaluation guard; `staging` is not guarded.
-(e) *Host-level pieces* (the nftables table, the AppArmor profile, the
-network and shadow units, under `/usr/local/lib/quiz-codespace`) are
-written by the bootstrap and by a `prod` deploy only, never by a staging
-deploy. Like the separate checkout, this prevents accidents (a staging
-commit changing what production runs under), not attacks. The switch from
-heig-classroom's portal and the operations are
-`apps/codespace/deploy/RUNBOOK.md`. The portal holds no GitHub App key
-(`FORGE_KIND=none`, root invariant 15).
-(f) *Risk accepted by the owner (2026-10-07; closed on 2026-10-11, audit
-H4, below):*
-the staging key deploys
-every commit of `main` before approval and runs that commit's scripts as
-root on the VM that hosts the production runner and portal, and the
-staging portal mounts the rootful Podman socket, which is root-equivalent.
-The app VM separates staging by account; this VM cannot, short of a
-staging engine of its own.
-
-**Amended (2026-10-08, M6-05 part 2): capacity and backups of the engine
-VM.** Scope: the addendum's resize and slices; the backups this VM lacked.
-(a) No resize while the workspace is test-only (owner); a real class needs it.
-(b) Two slices, `quiz-runner.slice` above `codespace.slice` in CPU and IO
-weight, the runner's memory protected, the workspace's capped (values and
-sizing: `infra/engine/*.slice`); containers join theirs through
-`--cgroup-parent`, an addition to invariant 12's list, set by the quadlets.
-(c) Backup, destination A as a stopgap: a root forced command (`restrict`,
-`from=`) streams each instance's SQLite `.backup` and volumes; `srv` on the
-app VM pulls it daily. No credential travels: env files stay in the vault
-(ADR-010), session cookie tokens are blanked in the copy. Accepted limits:
-volumes are read live (a repository may need its `shadow.git`), one
-provider, the app VM's small disk, a key that reads all workspace data, and
-monitoring by hand (not in ADR-055's status). (d) Destination B, restic to
-S3 from the engine VM, before a real class. Procedures: `deployment.md` §3.
-(e) The host's input policy drops by default, in its own table
-`inet host`, never with `flush ruleset` (the codespace and netavark tables
-belong to their owners); it is applied by hand behind a timed rollback,
-never by a deploy.
-
-**Amended (2026-10-11, security audit M6, L12, L13): gVisor, the container's
-state, the bind address.** Scope: point 2 (what the sandbox containers run
-under) and the runner's own startup; invariants 10–14 are unchanged.
-(a) *gVisor is the Podman service's runtime, never a flag.* A `--remote`
-client cannot choose the runtime of a container: it rejects `--runtime` as an
-unknown flag, so the `--runtime runsc` the runner used to append would have
-failed every run. gVisor is the default
-runtime of a Podman service of the runner's own,
-`quiz-runner-podman.socket` (`/run/quiz-runner-podman/podman.sock`), whose
-`CONTAINERS_CONF_OVERRIDE` names a wrapper running `runsc --oci-seccomp` —
-without that flag runsc ignores the seccomp profile of invariant 12. The
-system socket keeps crun for the workspace portal. One script,
-`apps/runner/deploy/install-gvisor.sh`, sets it up on the VM and on CI.
-(b) *Fail-closed only on demand* (owner): with `RUNNER_RUNTIME=runsc` the
-runner refuses to start unless the engine names runsc, a container created
-with the argv of a real run executes a command through `podman exec`, and
-that command sees another kernel release than the host's; the quadlet
-restarts it, `/healthz` reports it down, the ADR-055 alert fires. With `auto`
-(the default) a production runner without gVisor warns once, at startup —
-not on every `/health`, which the API polls on each `/healthz`; `none` is
-the explicit derogation, without that warning. Fail-closed is opt-in by the
-owner's decision: the owner installs gVisor and flips the variable by hand;
-no deploy does (`apps/runner/README.md`, Switching production to gVisor).
-(c) *The proof before production*: the runner integration workflow has a
-`runsc` leg running the whole suite through that socket; it blocks like the
-`default` leg since it first ran green (#736). Under gVisor the profile's
-refusals answer EPERM, never its ENOSYS: runsc's conversion of an OCI
-profile ignores `errnoRet` and `defaultErrnoRet`, and the suite expects
-exactly that on that leg. (d) `RunnerHealth` carries an optional `runtime`, tolerated
-absent on both sides. (e) A program's stderr or exit code only triggers a
-`podman container inspect`, whose answer alone says the container is gone.
-(f) The runner binds `127.0.0.1` by default and refuses a bind outside the
-loopback without `RUNNER_TOKEN`.
-
-**Amended (2026-10-11, security audit H4): the staging portal deploys only
-once approved, through a frozen dispatcher.** Scope: the staging half of
-the M6-04 amendment's (a), and its (f); production's path is unchanged. The
-owner chose this over a separate staging VM.
-(a) *An approval before anything of a commit reaches this VM.* Every commit
-of `main` reaches the `staging` environment before approval, and this VM
-holds the production runner and portal, their secrets and the rootful
-socket. So the `staging` key no longer reaches it: the staging portal is
-deployed by its own CI job, in a `staging-portal` environment with the
-same required reviewers and `main`-only rule as `production`, and by a key
-that environment alone holds. GitHub releases an environment's secret only
-to an approved job, so no workflow of an unapproved run, whatever it says,
-can reach this VM; an environment created unprotected on first use holds no
-key, so the job then deploys nothing. Nothing waits for that job: an
-unapproved staging portal never blocks a promotion.
-(b) *The frozen dispatcher, defence in depth.* That key's forced command is
-a copy of `infra/engine/staging-dispatch.sh` the operator installs by hand
-outside any checkout, root's, that no deploy rewrites: it pulls the portal
-image by digest and restarts the staging quadlet, and runs, sources and
-writes no file of a commit (its request and steps: its header; a shell test
-in `checks` holds it to them). An approved key still cannot make this VM
-run a repository script. `infra/engine/deploy.sh` refuses the staging
-scope; the staging checkout is retired.
-(c) *Who writes the staging instance's files*: its quadlet, Caddy site and
-seccomp profile come from approved commits only, written by every `prod`
-portal deploy and by `bootstrap.sh`; the next staging restart picks them
-up. The dispatcher itself is an operator's step (`deployment.md` §4), like
-the host firewall; a production deploy warns when the checkout's copy
-differs from the installed one.
-(d) *Production keeps running its commit's scripts as root*: the approval of
-the `production` environment is what makes that commit trusted on this VM.
-(e) *Closed, under two conditions the repository cannot enforce*: the
-staging portal's image still runs with the rootful Podman socket (the fixed
-quadlet), so an image that reaches this VM is root-equivalent on it; the
-approval gate is what keeps an unapproved one away. It holds while the
-`staging-portal` environment keeps its required reviewers and `main` rule
-and is the only place its key lives (`deployment.md` §4, *The
-environments*), and while a reviewer approves only a sha they would promote
-to production.
-(f) *Rejected*: `deploy.sh` delegating its staging scope to the frozen
-script, since the staging key would still start a file of the tree; a
-separate staging VM, or a staging portal on a rootless engine of its own
-(the owner's choice, for now); a gate in the workflow alone, without
-moving the key, since an unapproved run's workflow could use the `staging`
-key directly.
+- **2026-10-11 (security audit M6, L12, L13): gVisor is the default runtime of the runner's own Podman service** (`runsc --oci-seccomp`), never a `containerArgs` flag; `RUNNER_RUNTIME=runsc` makes the runner refuse to start unless a real container runs under it (`proveRuntime`); the runner binds the loopback ([amendment](#2026-10-11-gvisor-the-containers-state-the-bind-address)).
+- 2026-10-11 (security audit H4): the staging portal deploys only once approved, through a frozen dispatcher ([amendment](#2026-10-11-the-staging-portal-deploys-only-once-approved)).
+- 2026-10-08 (M6-05 part 2): the engine VM's cgroup slices (`--cgroup-parent`), backups and host firewall ([amendment](#2026-10-08-capacity-and-backups-of-the-engine-vm)).
+- 2026-10-07 (M6-04): one deploy dispatcher, two portal instances, an image per sha, the live-session guard ([amendment](#2026-10-07-the-portal-deployed-beside-the-runner)).
+- 2026-09-30 (ADR-035): the engine VM also hosts the online workspace portal ([addendum](#2026-09-30-the-portal-shares-the-engine-vm)).
+- 2026-09-25: the application VM moved to Hetzner ([update](#update-2026-09-25)).
+- 2026-10-12, [ADR-106](ADR-106-notation-des-projets-par-criteres.md) §3 (point 2): a second action, `project`, with its lab image (`lab-c`); the flags of `containerArgs` do not change, invariants 10–14 hold, invariant 12 gaining the archive rule. To leave with card L-06g, once the last v2 snapshot is released ([ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md) §10, 2026-10-26); the runner then executes question code only.
+- See also [ADR-101](ADR-101-budget-du-runner.md) (2026-10-11): the runner's capacity budget, relying on the 2026-10-08 sizing.
 
 ## Context
 
@@ -275,6 +92,164 @@ compose network only.
    the only thing to remember, and it lives in one `.env.prod` line.
 4. **Plain HTTP on a firewalled port**: student code and outputs in clear across the
    internet, for no saving.
+
+## Amendments in force
+
+### 2026-09-30: the portal shares the engine VM
+
+*ADR-035, the classroom merge.* The code VM (`code.chevallier.io`, "the
+engine VM") also hosts the online workspace portal (`apps/codespace`,
+ADR-047); the merge adds no VM. The runner and the portal each run in their
+own cgroup slice (`CPUWeight`, `MemoryMax`) so that the sessions of an exam
+cannot starve grading, with orphan reaping scoped by label and one CI
+deploy dispatcher behind the forced command. `apps/codespace` keeps its own
+`CLAUDE.md` with its two sanctioned divergences from invariants 11–12 (a
+persistent work volume, a git channel on an internal bridge); invariants
+10–14 remain those of `apps/runner`. Plan: `docs/merge/06-codespace-seb-infra.md` §6.2.
+
+### 2026-10-07: the portal deployed beside the runner
+
+*M6-04; scope: point 4 and the addendum above; the runner's own deploy
+steps are unchanged.*
+
+- **One dispatcher.** `infra/engine/deploy.sh` is the engine VM's forced
+  command, with a scope fixed by the `authorized_keys` line: the production
+  key runs it on `/opt/quiz-runner` (the runner and the portal's `prod`), so
+  the production checkout only ever moves to approved commits. It parses `[force] <component> <instance> <sha>
+  <token>` strictly, serialises the VM's deploys with one lock, **refuses a
+  sha that predates it**, moves its checkout and runs the component's steps
+  (`apps/runner/deploy/install.sh`, `apps/codespace/deploy/install.sh
+  <instance>`), which share `infra/engine/lib.sh` (pull and retag by sha,
+  untag older sha tags; **no global prune** on an engine other services
+  share). It **refuses the staging scope** (2026-10-11, below). *Transition:*
+  it still accepts the runner's pre-M6-04 `<sha> <token>`, which
+  `apps/runner/deploy/deploy.sh` forwards to it; once `authorized_keys`
+  names the dispatcher, the CI sends `runner prod <sha> <token>` and both
+  go (a TODO in the dispatcher).
+- **Two portal instances**, `prod` (`code.chevallier.io`) and `staging`
+  (`code-dev.chevallier.io`, for `quiz.dev.chevallier.io`), with separate
+  environment files, secrets, ports, data directories, SQLite and volumes.
+  Every session container carries `heig-codespace.instance=<CODESPACE_INSTANCE>`
+  and a name prefixed with it, and an instance lists only its own. Each
+  instance has its own Podman network and bridge (`cs0`, `cs1`), the
+  nftables table pinning each bridge to its own gateway, so a staging
+  container cannot reach production's git channel; the channel has **no
+  `0.0.0.0` fallback** in production or for a named instance: no gateway,
+  no start (the deploy replays the network setup first).
+- **An image per sha.** The portal is built by the CI
+  (`ghcr.io/heig-tin-info/quiz-codespace:<sha>`, `apps/codespace/Dockerfile`,
+  **no secret inside**) and runs as a quadlet like the runner: host
+  network, the rootful socket, the data directory bound at the same path,
+  **read-only root, no capability**. The student image is built on the VM
+  by hand (`apps/codespace/images/build.sh`), **never by a deploy, never
+  pulled**.
+- **The live-session guard.** A `prod` deploy **refuses (exit 3)** while a
+  session container of that instance runs, unless the request starts with
+  `force` (CI: `CODESPACE_FORCE_SHA` naming the run's sha); `staging` is not
+  guarded.
+- **Host-level pieces** (the nftables table, the AppArmor profile, the
+  network and shadow units, under `/usr/local/lib/quiz-codespace`) are
+  written by the bootstrap and by a `prod` deploy only, **never by a staging
+  deploy**: this prevents accidents, not attacks. Operations:
+  `apps/codespace/deploy/RUNBOOK.md`. The portal holds **no GitHub App key**
+  (`FORGE_KIND=none`, root invariant 15).
+
+### 2026-10-08: capacity and backups of the engine VM
+
+*M6-05 part 2; scope: the addendum's resize and slices; the backups this VM
+lacked.*
+
+- **(a) No resize** while the workspace is test-only (owner); a real class
+  needs it.
+- **(b) Two slices**, `quiz-runner.slice` above `codespace.slice` in CPU and IO
+  weight, the runner's memory protected, the workspace's capped
+  (`infra/engine/*.slice`); containers join theirs through
+  **`--cgroup-parent`, an addition to invariant 12's list**, set by the
+  quadlets.
+- **(c) Backup, destination A** (stopgap): a root forced command (`restrict`,
+  `from=`) streams each instance's SQLite `.backup` and volumes; `srv` on the
+  app VM pulls it daily. **No credential travels**: env files stay in the
+  vault (ADR-010), session cookie tokens are blanked in the copy. Accepted
+  limits: volumes are read live (a repository may need its `shadow.git`), one provider, the app VM's small disk, a
+  key that reads all workspace data, monitoring by hand (not in ADR-055's
+  status). Procedures: `deployment.md` §3.
+- **(d) Destination B**, restic to S3 from the engine VM, before a real
+  class.
+- **(e) The host's input policy drops by default**, in its own table
+  `inet host`, **never with `flush ruleset`** (the codespace and netavark
+  tables belong to their owners); applied by hand behind a timed rollback,
+  **never by a deploy**.
+
+### 2026-10-11: gVisor, the container's state, the bind address
+
+*Security audit M6, L12, L13; scope: point 2 (what the sandbox containers
+run under) and the runner's startup; invariants 10–14 are unchanged.*
+
+- **gVisor is the Podman service's runtime, never a flag.** A `--remote`
+  client rejects `--runtime`. gVisor is the default runtime of the runner's
+  own Podman service, `quiz-runner-podman.socket`
+  (`/run/quiz-runner-podman/podman.sock`), whose `CONTAINERS_CONF_OVERRIDE`
+  names a wrapper running **`runsc --oci-seccomp`** — without that flag
+  runsc ignores the seccomp profile of invariant 12. The system socket keeps
+  crun for the workspace portal. One script,
+  `apps/runner/deploy/install-gvisor.sh`, sets it up on the VM and on CI.
+- **Fail-closed on demand** (owner). With `RUNNER_RUNTIME=runsc` the runner
+  **refuses to start** unless the engine names runsc, a container created
+  with the argv of a real run executes a command through `podman exec`, and
+  that command sees another kernel release than the host's (`proveRuntime`);
+  the quadlet restarts it, `/healthz` reports it down, the ADR-055 alert
+  fires. With `auto` (the default) a production runner without gVisor warns
+  once, at startup; `none` is the explicit derogation, without that warning.
+  The owner installs gVisor and flips the variable by hand; **no deploy
+  does** (`apps/runner/README.md`, Switching production to gVisor).
+- **The proof before production**: the runner integration workflow's
+  `runsc` leg runs the whole suite through that socket and blocks like the
+  `default` leg (#736). Under gVisor the profile's refusals answer EPERM,
+  never ENOSYS (runsc ignores `errnoRet` and `defaultErrnoRet`), and the
+  suite expects exactly that on that leg.
+- `RunnerHealth` carries an optional `runtime`, tolerated absent on both
+  sides.
+- A program's stderr or exit code only triggers a `podman container
+  inspect`, whose answer alone says the container is gone.
+- **The runner binds `127.0.0.1` by default and refuses a bind outside the
+  loopback without `RUNNER_TOKEN`.**
+
+### 2026-10-11: the staging portal deploys only once approved
+
+*Security audit H4; scope: the staging half of the M6-04 amendment;
+production's path is unchanged. The owner chose this over a separate
+staging VM.*
+
+- **An approval before anything of a commit reaches this VM.** The `staging`
+  key no longer reaches it: the staging portal is deployed by its own CI
+  job, in a `staging-portal` environment with the same required reviewers
+  and `main`-only rule as `production`, by a key that environment alone
+  holds. An environment created unprotected on first use holds no key, so
+  the job then deploys nothing. Nothing waits for that job.
+- **The frozen dispatcher.** That key's forced command is a copy of
+  `infra/engine/staging-dispatch.sh` the operator installs by hand outside
+  any checkout, root's, that **no deploy rewrites**: it pulls the portal
+  image by digest and restarts the staging quadlet, and **runs, sources and
+  writes no file of a commit** (a shell test in `checks` holds it to its
+  header). `infra/engine/deploy.sh` refuses the staging scope; the staging
+  checkout is retired.
+- **Who writes the staging instance's files**: its quadlet, Caddy site and
+  seccomp profile come from approved commits only, written by every `prod`
+  portal deploy and by `bootstrap.sh`. Installing the dispatcher is an
+  operator's step (`deployment.md` §4); a production deploy warns when the
+  checkout's copy differs from the installed one.
+- **Production keeps running its commit's scripts as root**: the approval of
+  the `production` environment is what makes that commit trusted here.
+- **Closed under two conditions the repository cannot enforce**: the staging
+  portal's image still runs with the rootful Podman socket, so an image that
+  reaches this VM is root-equivalent on it. It holds while the
+  `staging-portal` environment keeps its required reviewers and `main` rule
+  and is the only place its key lives (`deployment.md` §4, *The
+  environments*), and while a reviewer approves only a sha they would
+  promote to production.
+- *Rejected*: `deploy.sh` delegating its staging scope to the frozen script;
+  a separate staging VM or a rootless staging engine (for now); a gate in
+  the workflow alone, without moving the key.
 
 ## Update 2026-09-25
 

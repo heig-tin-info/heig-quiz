@@ -2,7 +2,22 @@
 
 ## Status
 
-Accepted (2026-10-26, decisions of the product owner).
+Accepted (2026-10-26, decisions of the product owner); amended 2026-10-27
+three times, each folded into the decision it changes (2026-11-08). The
+[historical record](history/ADR-118-criteres-structures-des-essais.md#status)
+keeps the three amendments as written.
+
+<a id="amendment-of-2026-10-27-the-owners-feedback-on-the-shipped-editor"></a><a id="amendment-of-2026-10-27-per-criterion-grading"></a><a id="amendment-of-2026-10-27-the-owners-weighting-switch"></a>
+
+- 2026-10-27, the owner's feedback on the shipped editor: a legacy rubric
+  becomes criteria only through a teacher's wand action (decision 1,
+  alternative 3); the rubric is "Global instructions" beside criteria
+  (decision 4).
+- 2026-10-27, per-criterion grading: decision 6 settled (storage, total
+  derived from the criteria, `source: manual`, overrides, notifications,
+  who reads the breakdown).
+- 2026-10-27, the owner's weighting switch: decision 2's "no points field,
+  no switch" reversed by "Normalize" and a `totalPoints` default.
 
 Scope: the `rich` question type (docs/spec/04 §4.8), the LLM grading of an
 essay (ADR-063 §4, §5), and the free-rubric path of every LLM-graded type
@@ -12,101 +27,6 @@ item's points (§3).
 Relations: amends [ADR-037](ADR-037-materiel-reserve-a-l-enseignant.md) §1
 and [ADR-063](ADR-063-correction-llm.md) §4; settles the structured rubric
 that docs/spec/04 §4.8 and open question 27 (docs/spec/06) left deferred.
-
-### Amendment of 2026-10-27 (the owner's feedback on the shipped editor)
-
-Decision 1 and alternative 3 are amended. A teacher-triggered conversion of
-a legacy rubric into criteria is accepted as a wand action (ADR-059, target
-`criteriaFromRubric` of the `rich` generator). The model proposes criteria
-that land in the draft like an edit, undoable, and only the teacher saves
-them. What applies to every criterion stays the rubric. An automatic
-conversion, by migration or without the teacher, stays rejected. The same
-wand writes one criterion's grading prompt on request (target
-`criterionPrompt`). Beside criteria the rubric is labelled "Global
-instructions" and folded while empty (decision 4).
-
-### Amendment of 2026-10-27 (per-criterion grading)
-
-Decision 6 is settled as follows.
-
-- **Storage.** The validated breakdown lives in the grading's `details`
-  under `breakdown` (`BREAKDOWN_KEY`, `@quiz/core/reasons`): one entry
-  `{ id, title, points, maxPoints }` per criterion, in the config's order,
-  the titles snapshotted from the version the item holds, the points on the
-  item's scale to two decimals. Never a weight, a prompt, a sentence of the
-  model nor its name: `details.ai` keeps those, teacher-only.
-- **When it is written.** By every validation path: one Validate, the batch
-  "Validate N", and an override. As-is, only when every entry of
-  `details.ai.criteria` carries an id and those ids are exactly the item's
-  criteria; the proposal's points are copied and its total kept (a 0.01 gap
-  between the rounded parts and the total is accepted). A free rubric, a
-  diagram, or ids that match nothing get no breakdown, never a partial one.
-  The criteria come from the type's `gradingCriteria` hook on the version's
-  config; a type without it is graded by one total.
-- **The total is never typed for an essay with criteria.** The teacher sends
-  `criteria: [{ id, points }]`, each within `[0, maxPoints]` of its
-  criterion; the server derives the total, `clamp(round2(Σ points), 0,
-  itemPoints)` (`validatedBreakdown`, `@quiz/domain`), the rule the grading
-  form shows. `criteria` and `points` are exclusive in a body (400); a
-  missing, unknown or duplicate id, a point out of range, a bare `points`
-  for an essay with criteria, or `criteria` for an item without them is
-  `422 criteria_invalid`.
-- **Whose grading it is.** A validation with the teacher's points per
-  criterion becomes `source: manual` when the total changes, and also when
-  the points only move between criteria: a teacher's split is not the
-  machine's (F-GRADE-04). Sent unchanged, the proposal stays the model's.
-- **What an override keeps.** For an essay with criteria, the details of the
-  grading in force survive (`ai`, `justification`) beside `manual: true` and
-  the new breakdown; a teacher grading a cell no model proposed for gets a
-  breakdown without `ai`. Every other type keeps writing `{ manual: true }`.
-- **After the release.** `results_updated` compares grades only: a new split
-  with an unchanged total notifies nobody.
-- **Who reads it.** `rich`'s `studentDetails` drops `breakdown` unless the
-  key is shown: under `showKey` the feedback payload carries it, and the
-  essay's `Review` lists it under the answer, "Points per criterion", for
-  the student and the teacher alike (the teacher's list adds the model's
-  sentence per criterion). The score line stays the item's points.
-
-### Amendment of 2026-10-27 (the owner's weighting switch)
-
-Decision 2's last sentence ("no points field on the question, no 'use
-criteria' switch") is reversed. The essay editor gains a "Weighting"
-section (« Pondération ») with a "Normalize" switch (« Normaliser »), off by
-default.
-
-- **Two stored fields.** `normalize` (boolean, default `false`) and
-  `totalPoints` (0.5 to 1000).
-  `totalPoints` is required when `normalize` is true and refused when it is
-  false, so an MCP or import input says which reading it means. No
-  `configVersion` bump: a config without the fields reads as off, which is
-  what every stored essay meant.
-- **Off: the numbers are points.** The criteria's column reads "Points",
-  and `defaultPoints` is their sum, as before.
-- **On: the numbers are weights.** The column reads "Weight", and
-  `defaultPoints` is `totalPoints`; the criteria share it by weight.
-- **A default, not a second source.** `totalPoints`, like the sum in points
-  mode, is only the question's DEFAULT points. The evaluation item stays the
-  source of points and may differ: `scaleCriteria` scales the criteria to
-  the item's points in both modes, so in points mode a criterion's number is
-  its points by default, and its share of the item's points otherwise.
-  Grading, the model's scoring in weight units, the stored breakdown,
-  `toSolution`, the review and the grading screen are unchanged.
-- **Whole weights in both modes.** A weight stays an integer 1..100; a
-  teacher who needs half points switches Normalize on and types the total.
-- **The switch never rescales.** Turning it on prefills `totalPoints` with
-  the weights' sum, so nothing changes at that instant; turning it off keeps
-  the weights as they are and drops `totalPoints`, and the question is worth
-  their sum again.
-- **Only beside criteria.** Without criteria the section is hidden and the
-  default stays 1.
-- **The wand.** `criteriaFromRubric` asks for the rubric's own whole points
-  as weights; when the rubric uses half points, the model doubles every
-  weight and returns the rubric's total as `totalPoints`. A total that
-  differs from the weights' sum turns `normalize` on with it; otherwise the
-  proposal lands in points mode. Proposed criteria from "Generate answers"
-  are points, and land with the switch off.
-- **The student** never reads either field: `toStudent` builds its view
-  field by field, tested by forbidden key and by value.
 
 ## Context
 
@@ -125,12 +45,40 @@ cost them points.
    minted by the editor, letters, digits, `_` and `-` (it keys the model's
    reply); `title` a short name; `weight` an integer 1..100; `prompt` plain
    text, what earns the weight, for the grader only. v1 configs migrate to
-   `criteria: []`; no SQL migration, no conversion of an old rubric (amended 2026-10-27, see above: the teacher may ask the wand for one).
-2. **Points.** `defaultPoints(config)` is the sum of the weights, else 1.
-   The evaluation item's points (`evaluation_items.points`) stay the one
-   source of points and stay editable. No points field on the question, no
-   "use criteria" switch (reversed by the amendment of 2026-10-27: a
-   "Normalize" switch and a `totalPoints` default).
+   `criteria: []`; no SQL migration, and no automatic conversion of an old
+   rubric, by migration or without the teacher. *(2026-10-27)* A teacher may
+   ask the wand (ADR-059) to convert a legacy rubric into criteria (target
+   `criteriaFromRubric` of the `rich` generator), or to write one
+   criterion's grading prompt (target `criterionPrompt`): the proposal lands
+   in the draft like an edit, undoable, and only the teacher saves it.
+2. **Points.** The evaluation item's points (`evaluation_items.points`)
+   stay the one source of points and stay editable; the question only
+   carries a DEFAULT. *(2026-10-27, reversing "no points field on the
+   question, no 'use criteria' switch".)* The essay editor has a
+   "Weighting" section (« Pondération ») with a "Normalize" switch
+   (« Normaliser »), off by default, shown only beside criteria (without
+   criteria the default stays 1).
+   - **Two stored fields**: `normalize` (boolean, default `false`) and
+     `totalPoints` (0.5 to 1000), required when `normalize` is true and
+     refused when it is false, so an MCP or import input says which reading
+     it means. No `configVersion` bump: a config without them reads as off.
+   - **Off, the numbers are points**: the column reads "Points" and
+     `defaultPoints` is their sum. **On, they are weights**: the column
+     reads "Weight" and `defaultPoints` is `totalPoints`, shared by weight.
+   - Either way `scaleCriteria` scales the criteria to the item's points
+     (§3); grading, the stored breakdown, `toSolution`, the review and the
+     grading screen do not depend on the mode.
+   - A weight stays an integer 1..100 in both modes; half points need
+     Normalize and a typed total.
+   - **The switch never rescales**: on prefills `totalPoints` with the
+     weights' sum; off keeps the weights and drops `totalPoints`.
+   - **The wand**: `criteriaFromRubric` asks for the rubric's whole points
+     as weights; with half points the model doubles every weight and returns
+     the rubric's total as `totalPoints`, which turns `normalize` on when it
+     differs from the weights' sum. Criteria proposed by "Generate answers"
+     are points and land with the switch off.
+   - **The student** never reads either field: `toStudent` builds its view
+     field by field, tested by forbidden key and by value.
 3. **The model scores in weights; the server scales.** With criteria, the
    request carries them and the model scores each one from 0 to its weight
    in quarter points, its reply keyed by criterion id. The server scales to
@@ -141,18 +89,60 @@ cost them points.
    `[0, points]`. The free-rubric path of every LLM-graded type (an essay
    without criteria, a diagram) goes through the same rule, the model's
    maxima taken as the weights: its breakdown is rescaled to the item's
-   points instead of clamping the total alone.
-4. **The rubric stays**, labelled "Grading instructions" (amended 2026-10-27, see above: "Global instructions", folded while empty, once criteria exist): optional global
-   context for the grader, sent beside the criteria.
+   points instead of clamping the total alone. A corollary: in points mode
+   (§2, Normalize off) a criterion's number is its points by default, and
+   its share of the item's points otherwise.
+4. **The rubric stays**, labelled "Grading instructions", and "Global
+   instructions", folded while empty, once criteria exist *(2026-10-27)*:
+   optional global context for the grader, sent beside the criteria.
 5. **What a student sees**: under `showKey`, once the teacher has validated
    the grading, each criterion's title and its validated points. Never a
    criterion's prompt, never the model's sentence or justification. They
    come from the grading's validated breakdown (§6), never from the
    question: `toStudent` and `studentSolution` keep dropping the criteria,
    tested by forbidden key and by value.
-6. **Per-criterion grading**: the grading screen lets the teacher edit each
-   criterion's points; the validated breakdown is stored with the grading
-   under a student-readable key, distinct from `details.ai`.
+6. **Per-criterion grading** *(settled 2026-10-27)*: the grading screen
+   lets the teacher edit each criterion's points; the validated breakdown is
+   stored with the grading under a student-readable key, distinct from
+   `details.ai`.
+   - **Storage.** `details.breakdown` (`BREAKDOWN_KEY`, `@quiz/core/reasons`):
+     one entry `{ id, title, points, maxPoints }` per criterion, in the
+     config's order, titles snapshotted from the version the item holds,
+     points on the item's scale to two decimals. Never a weight, a prompt, a
+     sentence of the model nor its name: `details.ai` keeps those,
+     teacher-only.
+   - **When it is written.** By every validation path: one Validate, the
+     batch "Validate N", and an override. As-is only when every entry of
+     `details.ai.criteria` carries an id and those ids are exactly the
+     item's criteria; the proposal's points are copied and its total kept (a
+     0.01 gap between the rounded parts and the total is accepted). A free
+     rubric, a diagram, or ids that match nothing get no breakdown, never a
+     partial one. The criteria come from the type's `gradingCriteria` hook on
+     the version's config;
+     a type without it is graded by one total.
+   - **The total is never typed for an essay with criteria.** The teacher
+     sends `criteria: [{ id, points }]`, each within `[0, maxPoints]`; the
+     server derives `clamp(round2(Σ points), 0, itemPoints)`
+     (`validatedBreakdown`, `@quiz/domain`). `criteria` and `points` are
+     exclusive in a body (400); a missing, unknown or duplicate id, a point
+     out of range, a bare `points` for an essay with criteria, or `criteria`
+     for an item without them is `422 criteria_invalid`.
+   - **Whose grading it is.** The teacher's points per criterion make it
+     `source: manual` when the total changes and when points only move
+     between criteria (F-GRADE-04); sent unchanged, the proposal stays the
+     model's.
+   - **What an override keeps.** For an essay with criteria, the details in
+     force (`ai`, `justification`) survive beside `manual: true` and the new
+     breakdown; a cell no model proposed for gets a breakdown without `ai`.
+     Every other type keeps writing `{ manual: true }`.
+   - **After the release.** `results_updated` compares grades only: a new
+     split with an unchanged total notifies nobody.
+   - **Who reads it.** `rich`'s `studentDetails` drops `breakdown` unless the
+     key is shown: under `showKey` the feedback payload carries it, and the
+     essay's `Review` lists it under the
+     answer, "Points per criterion", for student and teacher alike (the
+     teacher's list adds the model's sentence per criterion). The score line
+     stays the item's points.
 
 `diagram` keeps its free rubric for now.
 
