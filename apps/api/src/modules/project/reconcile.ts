@@ -70,7 +70,7 @@ import { purgeEvidenceFiles } from "./evidence.js";
 import { ProjectError } from "./errors.js";
 import { aggregateCiStatus, completedRun, refreshScoreSelection } from "./grading.js";
 import { repoMembers } from "./groupRepos.js";
-import { followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, type RepoContext } from "./repos.js";
+import { followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, repoWithProject, type RepoContext } from "./repos.js";
 
 /** The completed runs read per repository (heig-classroom's figure): the lost webhooks of a quiet half hour fit in far fewer. */
 const RUNS_PER_REPO = 20;
@@ -120,10 +120,7 @@ async function candidates(db: Db, now: Date): Promise<Candidate[]> {
   const reviewAsked = sql<boolean>`(EXISTS (SELECT 1 FROM ${gradeDispatches}
     WHERE ${gradeDispatches.repoId} = ${projectRepos.id} AND ${gradeDispatches.trigger} = 'deadline'
     AND ${projects.gradingMode} = 'auto') OR ${ciPassOpen(db)})`.mapWith(Boolean);
-  const rows = await db
-    .select({ repo: projectRepos, project: projects, courseId: classrooms.courseId, reviewAsked })
-    .from(projectRepos)
-    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+  const rows = await repoWithProject(db, { courseId: classrooms.courseId, reviewAsked })
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
     .where(LIVE)
     .orderBy(asc(projects.id), asc(projectRepos.id));

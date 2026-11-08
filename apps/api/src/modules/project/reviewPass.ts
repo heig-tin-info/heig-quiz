@@ -63,7 +63,7 @@ import { llmFailure, type ProjectReviewCriterion } from "../llm/service.js";
 import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
 import { fetchSourceFiles, projectOctokit, runEvidence, TarballUnavailable, type EvidenceJob } from "./evidence.js";
 import { passScope, type PassScope } from "./milestone.js";
-import { hintProjectStaff, type RepoRow } from "./repos.js";
+import { hintProjectStaff, repoWithProject, type RepoRow } from "./repos.js";
 import { passTarget } from "./review.js";
 import type { ProjectRow } from "./views.js";
 
@@ -231,10 +231,7 @@ async function ciMaterial(app: FastifyInstance, config: AppConfig, { repo, proje
  */
 export async function runReview(app: FastifyInstance, config: AppConfig, job: ReviewJob): Promise<number> {
   const db = app.db;
-  const [row] = await db
-    .select({ repo: projectRepos, project: projects, snapshot: projectCriteria.criteria })
-    .from(projectRepos)
-    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+  const [row] = await repoWithProject(db, { snapshot: projectCriteria.criteria })
     .innerJoin(projectCriteria, eq(projectCriteria.projectId, projects.id))
     .where(eq(projectRepos.id, job.repoId));
   if (!row || row.project.gradingMode !== "criteria") return 0;
