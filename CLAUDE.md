@@ -20,7 +20,8 @@ establish what exists; a mismatch with an accepted requirement must be
 reported, not silently turned into a new product decision.
 
 The remaining post-merge tasks are the M6/L rows of `docs/merge/PROGRESS.md`;
-delivery is otherwise tracked in `changes/`.
+delivery is otherwise tracked in `changes/`. For one of them, read
+`docs/merge/README.md`, then its row and its task card (`docs/merge/09-tasks.md`).
 
 ## Layout
 
@@ -39,9 +40,10 @@ extension (ADR-051); `infra/` the Keycloak development realm.
 `core` never imports a `qt-*` package: register types through both registry
 entry points (`./server`, `./client`). Generic web primitives go in
 `apps/web/src/ui/`; `packages/ui` holds primitives shared by question types
-and must not import a `qt-*` package or `apps/web`. `ui-kit`, `canonical`
-and `cli` are planned, not present: consult the spec/task before implementing
-them, and do not create the superseded npm library of ADR-029.
+and must not import a `qt-*` package or `apps/web`. `ui-kit` (accepted,
+ADR-035), then `canonical`, then `cli`, in this order, are planned, not
+present: consult the spec/task before implementing them, and do not create
+the superseded npm library of ADR-029.
 
 For UI work, read `apps/web/DESIGN.md` and `.claude/skills/quiz-ui/SKILL.md`.
 Screenshots are in `docs/assets/screenshots/`. Runner work also requires
@@ -130,8 +132,8 @@ Never work around these, not even "temporarily".
 
 ### Runner invariants (`apps/runner`)
 
-They bind `apps/runner`. Do not re-derive them, and do not relax one to make
-a test simpler. The online workspace (`apps/codespace`) is not held to 11 and
+These invariants bind `apps/runner`. Do not re-derive them, and do not relax
+one to make a test simpler. The online workspace (`apps/codespace`) is not held to 11 and
 12: its own `CLAUDE.md` has two sanctioned divergences (a persistent work
 volume, a git channel on an internal bridge).
 
@@ -208,7 +210,8 @@ volume, a git channel on an internal bridge).
 
 The [development guide](docs/development/index.md) owns setup, personas and
 the optional paths. Use Node as required by `package.json` and the pinned pnpm
-version. Build packages before running the apps: they import their `dist/`.
+version. Build packages before running the apps: they import the workspace
+packages' `dist/`.
 
 ```bash
 corepack enable pnpm && pnpm install --frozen-lockfile

@@ -415,7 +415,9 @@ installed it, until the key is rotated.
   credential at rest on the engine VM; the M6-06 note "a private
   distribution repository cannot seed a workspace" is lifted by M6-10.
 - **Root `CLAUDE.md`, invariant 15, gains** (to be applied by the M6-10
-  PR, not by this record; `CLAUDE.md` now carries it word for word): "The
+  PR, not by this record; `CLAUDE.md` invariant 15 summarizes it and points
+  here; the quotation below, with the 2026-10-29 amendment, is the full
+  rule): "The
   online workspace portal (`apps/codespace`) never holds an App credential:
   it obtains from Quiz, through the HS256 service route of ADR-078, an
   installation token scoped to one repository (`contents` only), valid at
