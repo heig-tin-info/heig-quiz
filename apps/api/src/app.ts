@@ -28,6 +28,7 @@ import { publish } from "./events.js";
 import { githubApp } from "./github/app.js";
 import { registerHttpMetrics } from "./httpMetrics.js";
 import { activityPlugin } from "./modules/activity/routes.js";
+import { Unauthenticated, unauthenticated } from "./modules/http.js";
 import { adminPlugin } from "./modules/admin/routes.js";
 import { createPresenceRecorder } from "./modules/presence/service.js";
 import { adminGuard } from "./modules/guards.js";
@@ -148,6 +149,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // folds the cause chain into the message but drops the cause's own fields
   // — and for pg those (SQLSTATE `code`, `severity`) are the diagnosis.
   app.setErrorHandler((err: FastifyError, req, reply) => {
+    if (err instanceof Unauthenticated) return unauthenticated(reply);
     const status = err.statusCode ?? 500;
     if (status < 500) return reply.send(err);
     req.log.error({ err, cause: err.cause }, "request failed");

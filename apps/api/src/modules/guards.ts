@@ -35,6 +35,7 @@ import {
 
 import { PORTAL, confined, delegated, type SessionAuth, type SessionState } from "../auth/session.js";
 import { qualified, type Db } from "../db/client.js";
+import { Unauthenticated } from "./http.js";
 import {
   answers,
   attempts,
@@ -349,7 +350,7 @@ export function teacherGuard(app: FastifyInstance) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const denied = await app.requireSession(req, reply);
     if (denied) return denied;
-    if (req.user!.role !== "teacher" && req.user!.role !== "admin") {
+    if (callerOf(req).role !== "teacher" && callerOf(req).role !== "admin") {
       return reply.code(403).send({ error: "forbidden" });
     }
     return undefined;
@@ -373,7 +374,7 @@ export function adminGuard(app: FastifyInstance, { hidden = false } = {}) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const denied = await app.requireSession(req, reply);
     if (denied) return denied;
-    if (req.user!.role !== "admin") {
+    if (callerOf(req).role !== "admin") {
       return reply.code(hidden ? 404 : 403).send({ error: hidden ? "not_found" : "forbidden" });
     }
     if (req.endlessToken) {
@@ -493,8 +494,19 @@ export function reachOf(
  * which reads the clock once per request.
  */
 export function callerOf(req: FastifyRequest): Caller {
-  if (!req.caller) throw new Error("callerOf: the request has no authenticated user");
+  if (!req.caller) throw new Unauthenticated();
   return req.caller;
+}
+
+/**
+ * The whole user of an authenticated request, as the session hook resolved
+ * it — for a handler that reads more than {@link callerOf} carries (a name,
+ * an address, a locale). Both throw {@link Unauthenticated} without one,
+ * which answers `requireSession`'s own 401.
+ */
+export function userOf(req: FastifyRequest): NonNullable<FastifyRequest["user"]> {
+  if (!req.user) throw new Unauthenticated();
+  return req.user;
 }
 
 /** What the session hook stores as `req.caller`. */
@@ -1265,7 +1277,7 @@ export const reachableEvaluation = routeLoader((app, req, evaluationId: string) 
  * which is read-only and audited once per opening (`attempt.read`, #875).
  */
 export const ownAttempt = routeLoader((app, req, attemptId: string) =>
-  findOwnAttempt(app.db, req.user!.id, attemptId),
+  findOwnAttempt(app.db, callerOf(req).id, attemptId),
 );
 
 /**

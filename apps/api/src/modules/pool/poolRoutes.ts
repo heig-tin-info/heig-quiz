@@ -56,7 +56,7 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   app.post("/app/api/pools", { preHandler: requireTeacher }, async (req, reply) => {
     const body = PoolCreate.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
-    const pool = await service.createPool(app.db, { ...body.data, ownerId: req.user!.id });
+    const pool = await service.createPool(app.db, { ...body.data, ownerId: callerOf(req).id });
     await trace(req, "pool.create", "pool", pool.id, {
       name: pool.name,
       isPublic: pool.isPublic,
@@ -65,7 +65,7 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     // A brand-new pool has no `pool:<id>` subscriber yet — topics are computed
     // at connection time — so the teacher's own topic is the only one that can
     // carry it. It refreshes `GET /app/api/pools`, which emits nothing back.
-    publish("mutation", [`user:${req.user!.id}`]);
+    publish("mutation", [`user:${callerOf(req).id}`]);
     return reply.code(201).send(pool);
   });
 
@@ -115,7 +115,7 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
         if (isPublic !== undefined && isPublic !== pool.isPublic) {
           await trace(req, isPublic ? "pool.publish" : "pool.unpublish", "pool", pool.id, {});
           // Published: the domain is inferred in the background, after the answer (ADR-095).
-          if (isPublic) void service.refreshDomainInBackground(app.db, app.llmGateway, pool.id, req.user!.id, app.clock.now(), app.log);
+          if (isPublic) void service.refreshDomainInBackground(app.db, app.llmGateway, pool.id, callerOf(req).id, app.clock.now(), app.log);
         }
         // Whenever the patch unpublishes, whatever the pool was loaded as: nothing to drop, nobody told.
         if (dropped) await service.announceRetired(app.db, pool, dropped);
@@ -155,14 +155,14 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       if (pool.descriptionSource === "owner" && pool.description !== "") {
         throw new DomainError("description_owned", 409, "The owner's own description is kept");
       }
-      if (!proposals.spend(`describe:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
+      if (!proposals.spend(`describe:${callerOf(req).id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
         return rateLimited(reply, BUDGET_RETRY_AFTER_S);
       }
       const description = await service.proposeDescription(
         app.db,
         app.llmGateway,
         pool,
-        req.user!.id,
+        callerOf(req).id,
         readerLang(req),
       );
       return { description };

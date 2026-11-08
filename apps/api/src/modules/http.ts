@@ -63,6 +63,22 @@ export function notFound(reply: FastifyReply) {
   return reply.code(404).send({ error: "not_found" });
 }
 
+/** The refusal of a request without a user: `requireSession`'s 401. */
+export function unauthenticated(reply: FastifyReply) {
+  return reply.code(401).send({ error: "unauthenticated" });
+}
+
+/**
+ * Thrown by `callerOf` and `userOf` when a handler runs without a user; sent
+ * as {@link unauthenticated} by `sendFailure` and by the app's error handler.
+ */
+export class Unauthenticated extends Error {
+  constructor() {
+    super("unauthenticated");
+    this.name = "Unauthenticated";
+  }
+}
+
 /** A 429 with its `retry-after` (seconds), and a sentence for the log when the route has one. */
 export function rateLimited(reply: FastifyReply, retryAfterS: number, message?: string) {
   return reply
@@ -164,6 +180,7 @@ export function sendFailure(
 ): FastifyReply {
   const handled = arms?.(reply, error, now);
   if (handled) return handled;
+  if (error instanceof Unauthenticated) return unauthenticated(reply);
   if (error instanceof DomainError) {
     if (error.retryAfterS !== undefined) reply.header("retry-after", String(error.retryAfterS));
     return reply

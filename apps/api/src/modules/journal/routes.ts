@@ -147,7 +147,7 @@ async function registerWrites(app: FastifyInstance, config: AppConfig, base: str
   const as = (req: FastifyRequest, room: { id: string }): writes.WriteContext => ({
     app,
     config,
-    userId: req.user!.id,
+    userId: callerOf(req).id,
     note: (action, payload) => trace(req, action, "classroom", room.id, payload),
   });
 

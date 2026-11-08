@@ -44,7 +44,7 @@ import { audit, tracer, type AuditAction } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { delegated, endStationSessions } from "../../auth/session.js";
 import { users } from "../../db/schema.js";
-import { adminGuard, loadEvaluation, teacherGuard } from "../guards.js";
+import { adminGuard, callerOf, loadEvaluation, teacherGuard } from "../guards.js";
 import { emptyBody, invalid, notFound, rateLimited, sendFailure, teacherRoute } from "../http.js";
 import { AttestationUnavailable } from "./attestation.js";
 import { FixedWindowLimiter } from "../../limiter.js";
@@ -283,12 +283,12 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   app.get("/app/api/pair/:code", { preHandler: phone }, async (req, reply) => {
     const params = PairCodeParam.safeParse(req.params);
     if (!params.success) return pairingNotFound(reply);
-    const retryAfterS = previews.hit(req.user!.id, app.clock.now().getTime());
+    const retryAfterS = previews.hit(callerOf(req).id, app.clock.now().getTime());
     if (retryAfterS !== null) {
       return rateLimited(reply, retryAfterS);
     }
     try {
-      const found = await previewPairing(app.db, req.user!.id, params.data.code, app.clock.now());
+      const found = await previewPairing(app.db, callerOf(req).id, params.data.code, app.clock.now());
       if (!found) return pairingNotFound(reply);
       return { station: { label: found.label }, evaluations: found.evaluations } satisfies PairPreview;
     } catch (err) {
@@ -299,7 +299,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   app.post("/app/api/pair", { preHandler: phone }, async (req, reply) => {
     const body = PairApprove.safeParse(emptyBody(req.body));
     if (!body.success) return invalid(reply, body.error);
-    const userId = req.user!.id;
+    const userId = callerOf(req).id;
     const now = app.clock.now();
     try {
       const outcome = await approvePairing(app.db, { userId, ...body.data }, now);
@@ -345,7 +345,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
         try {
           const outcome = await approvePairing(
             app.db,
-            { userId: body.userId, code: body.userCode, evaluationId, approvedBy: req.user!.id },
+            { userId: body.userId, code: body.userCode, evaluationId, approvedBy: callerOf(req).id },
             now,
           );
           if (outcome.kind === "not_found") return pairingNotFound(reply);

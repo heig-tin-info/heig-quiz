@@ -14,6 +14,7 @@ import { IdParam, QuestionStarBody, type StarsCleared } from "@quiz/contracts";
 import { invalid, notFound } from "../http.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
+import { callerOf } from "../guards.js";
 
 export function starRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, teacher, inPool, questionsInReach } = ctx;
@@ -31,7 +32,7 @@ export function starRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
         const ids = [...new Set(body.data.questionIds)];
         if ((await questionsInReach(req, ids)).length !== ids.length) return notFound(reply);
         const write = method === "PUT" ? service.starQuestions : service.unstarQuestions;
-        await write(app.db, req.user!.id, ids);
+        await write(app.db, callerOf(req).id, ids);
         return reply.code(204).send();
       },
     });
@@ -42,7 +43,7 @@ export function starRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool() }, async ({ req, scope: pool }) => {
       const cleared: StarsCleared = {
-        cleared: await service.clearPoolStars(app.db, req.user!.id, pool.id),
+        cleared: await service.clearPoolStars(app.db, callerOf(req).id, pool.id),
       };
       return cleared;
     }),

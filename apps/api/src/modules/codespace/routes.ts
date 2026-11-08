@@ -52,6 +52,7 @@ import {
   ownPortalSession,
   sebProjectSession,
   withCourseRole,
+  userOf,
 } from "../guards.js";
 import { DomainError, notFound, teacherRoute } from "../http.js";
 import * as project from "../project/service.js";
@@ -80,23 +81,24 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
   app.get(
     "/app/api/projects/:id/workspace",
     session,
-    teacher(onProject, async ({ req, scope }) =>
-      projectWorkspace(app.db, scope.project, {
-        userId: req.user!.id,
-        owner: await isCourseOwner(app.db, scope.course.id, callerOf(req)),
-      }),
-    ),
+    teacher(onProject, async ({ req, scope }) => {
+      const caller = callerOf(req);
+      return projectWorkspace(app.db, scope.project, {
+        userId: caller.id,
+        owner: await isCourseOwner(app.db, scope.course.id, caller),
+      });
+    }),
   );
 
   app.put(
     "/app/api/projects/:id/workspace/mode",
     session,
     teacher({ ...onOwnedProject, body: ProjectWorkModeBody }, async ({ req, body, scope }) => {
-      const granted = (await grantOf(app.db, req.user!.id))?.enabled === true;
+      const granted = (await grantOf(app.db, callerOf(req).id))?.enabled === true;
       const row = await project.setWorkMode(app.db, scope.project.id, body.mode, { owner: true, granted }, actorOf(req));
       await requestCodespaceSync(app, config, row.id);
       project.projectsChanged([scope.course.id]);
-      return projectWorkspace(app.db, row, { userId: req.user!.id, owner: true });
+      return projectWorkspace(app.db, row, { userId: callerOf(req).id, owner: true });
     }),
   );
 
@@ -179,7 +181,7 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
       config,
       params.data.id,
       {
-        user: req.user!,
+        user: userOf(req),
         staffSeat: scope.seat.staff,
         classroomArchived: scope.room.archivedAt !== null,
         actor: actorOf(req),

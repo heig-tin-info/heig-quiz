@@ -21,7 +21,7 @@ import { publish } from "../../events.js";
 import { syncUserRole } from "../../roles.js";
 import { shownAvatar } from "../avatar.js";
 import { codespaceOn } from "../codespace/service.js";
-import { adminGuard } from "../guards.js";
+import { adminGuard, callerOf, userOf } from "../guards.js";
 import { invalid, rateLimited } from "../http.js";
 import { notificationAddress, sendTestMail } from "../notifications/service.js";
 import {
@@ -102,7 +102,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
         .code(409)
         .send({ error: "is_admin", message: "This e-mail is the administrator" });
     }
-    const created = await createTeacherGrant(app.db, { email, createdBy: req.user!.id });
+    const created = await createTeacherGrant(app.db, { email, createdBy: callerOf(req).id });
     if (!created) {
       return reply
         .code(409)
@@ -111,7 +111,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     // Immediate effect if the account already exists (otherwise: at login).
     await syncUserRole(app.db, config, email);
     await audit(app.db, {
-      actorUserId: req.user!.id,
+      actorUserId: callerOf(req).id,
       actorType: "user",
       action: "teacher.grant",
       subjectType: "teacher_grant",
@@ -138,7 +138,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     // Recomputed, not forced: a member of a course staff keeps the role.
     await syncUserRole(app.db, config, grant.email);
     await audit(app.db, {
-      actorUserId: req.user!.id,
+      actorUserId: callerOf(req).id,
       actorType: "user",
       action: "teacher.revoke",
       subjectType: "teacher_grant",
@@ -187,7 +187,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
   // against a double click or a script, not a quota.
   const testMails = new Budget();
   app.post("/app/api/admin/system/test-mail", { preHandler: requireAdmin }, async (req, reply) => {
-    const user = req.user!;
+    const user = userOf(req);
     // Where this admin's notifications go: the test is of that very path.
     const to = (await notificationAddress(app.db, user.id))?.address;
     if (!to) return reply.code(409).send({ error: "no_email", message: "Your account has no e-mail address" });

@@ -15,6 +15,7 @@ import { applyReviewFix, reviewVersion } from "./review.js";
 import { ignoreReview, latestVersionOf, poolReviews, reviewJson, reviewOf, setReviewEnabled } from "./reviewStore.js";
 import { LLM_CALLS_PER_MINUTE } from "../llm/service.js";
 import type { PoolRouteContext } from "./routeContext.js";
+import { callerOf } from "../guards.js";
 
 export function reviewRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, poolWrite, teacher, inPool, onQuestion } = ctx;
@@ -29,7 +30,7 @@ export function reviewRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     "/app/api/pools/:id/review",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, body: ReviewToggle, load: inPool("owner") }, async ({ req, body, scope: pool }) => {
-      await poolWrite(req, pool.id, () => setReviewEnabled(app.db, pool.id, body.enabled, req.user!.id), () => [
+      await poolWrite(req, pool.id, () => setReviewEnabled(app.db, pool.id, body.enabled, callerOf(req).id), () => [
         "pool.review", "pool", pool.id, { enabled: body.enabled },
       ]);
       return poolReviews(app.db, pool.id);
@@ -42,7 +43,7 @@ export function reviewRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     "/app/api/questions/:id/review",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: onQuestion("contributor") }, async ({ req, reply, scope }) => {
-      if (!calls.spend(`review:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
+      if (!calls.spend(`review:${callerOf(req).id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
         return rateLimited(reply, BUDGET_RETRY_AFTER_S);
       }
       const version = await latestVersionOf(app.db, scope.question.id);
@@ -51,7 +52,7 @@ export function reviewRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
         app.db,
         app.llmGateway,
         { id: version.id, number: version.number!, type: scope.question.type, config: version.config, explanation: version.explanation },
-        req.user!.id,
+        callerOf(req).id,
         app.clock.now(),
       );
       poolChanged(scope.pool.id);
@@ -72,7 +73,7 @@ export function reviewRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     teacher({ params: IdParam, load: onQuestion("contributor") }, async ({ req, reply, scope }) => {
       const latest = await latestReview(scope.question.id);
       if (!latest) return reply.code(400).send({ error: "no_review" });
-      const row = await ignoreReview(app.db, latest.version.id, req.user!.id, app.clock.now());
+      const row = await ignoreReview(app.db, latest.version.id, callerOf(req).id, app.clock.now());
       poolChanged(scope.pool.id);
       return reviewJson(row!, latest.version.number!);
     }),

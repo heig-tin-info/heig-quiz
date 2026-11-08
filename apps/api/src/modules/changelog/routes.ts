@@ -12,13 +12,13 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { ownSessionGuard } from "../guards.js";
+import { ownSessionGuard, userOf } from "../guards.js";
 import { bundledChangelog } from "./bundle.js";
 import { changelogFor } from "./service.js";
 
 export async function changelogPlugin(app: FastifyInstance) {
   const read = (unseen: boolean) => (req: FastifyRequest) =>
-    changelogFor(app.db, bundledChangelog(), req.user!, unseen);
+    changelogFor(app.db, bundledChangelog(), userOf(req), unseen);
   app.get(
     "/app/api/changelog",
     { preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply) },

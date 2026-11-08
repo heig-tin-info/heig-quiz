@@ -13,7 +13,7 @@ import { tracer } from "../../audit.js";
 import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import type { AppConfig } from "../../config.js";
 import { publish } from "../../events.js";
-import { adminGuard } from "../guards.js";
+import { adminGuard, callerOf, userOf } from "../guards.js";
 import { rateLimited } from "../http.js";
 import { LlmError, monthUsage, readSettings, writeSettings } from "./service.js";
 
@@ -45,7 +45,7 @@ export async function llmPlugin(app: FastifyInstance, opts: { config: AppConfig 
         message: `The daily cap cannot exceed ${config.LLM_DAILY_CAP_MAX_USD} USD`,
       });
     }
-    await writeSettings(app.db, config, body.data, req.user!.id, app.clock.now());
+    await writeSettings(app.db, config, body.data, callerOf(req).id, app.clock.now());
     // What changed, never the key: `key` says only whether it was set or removed.
     const { apiKey, ...rest } = body.data;
     await trace(req, "llm.settings", "llm_settings", "default", {
@@ -58,7 +58,7 @@ export async function llmPlugin(app: FastifyInstance, opts: { config: AppConfig 
 
   const tests = new Budget();
   app.post("/app/api/admin/llm/test", { preHandler: requireAdmin }, async (req, reply) => {
-    const user = req.user!;
+    const user = userOf(req);
     if (!tests.spend(`llm-test:${user.id}`, TESTS_PER_MINUTE, app.clock.now())) {
       return rateLimited(reply, BUDGET_RETRY_AFTER_S, "A few tests per minute");
     }

@@ -155,7 +155,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
 
   /** The teacher's own polls, newest first: the launcher's "run again". */
   app.get("/app/api/polls", { preHandler: requireTeacher }, async (req) =>
-    service.listPolls(app.db, req.user!.id),
+    service.listPolls(app.db, callerOf(req).id),
   );
 
   /**
@@ -166,8 +166,8 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
    */
   app.get("/app/api/polls/questions", { preHandler: requireTeacher }, async (req) =>
     service.questionPicks(app.db, {
-      userId: req.user!.id,
-      poolWhere: accessWhere(callerOf(req), poolAccess(req.user!.id)),
+      userId: callerOf(req).id,
+      poolWhere: accessWhere(callerOf(req), poolAccess(callerOf(req).id)),
     }),
   );
 
@@ -214,7 +214,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     }
     try {
       return await service.poolQuestionPage(app.db, {
-        poolWhere: accessWhere(callerOf(req), poolAccess(req.user!.id)),
+        poolWhere: accessWhere(callerOf(req), poolAccess(callerOf(req).id)),
         courseId,
         search: query.data,
         lang: readerLang(req),
@@ -246,14 +246,14 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       }
       return invalid(reply, body.error);
     }
-    const pool = await poolService.ensurePersonalPool(app.db, req.user!.id);
+    const pool = await poolService.ensurePersonalPool(app.db, callerOf(req).id);
     let created: poolService.QuestionRecord;
     try {
       created = await poolService.createQuestion(app.db, {
         poolId: pool.id,
         type: body.data.type,
         internalName: body.data.internalName,
-        createdBy: req.user!.id,
+        createdBy: callerOf(req).id,
       });
     } catch (error) {
       // `questionWriteError`'s `409 duplicate_name`, like `POST /pools/:id/questions`.
@@ -280,7 +280,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       const scope = await service.createPoll(app.db, {
         classroomId,
         questionId: question.id,
-        createdBy: req.user!.id,
+        createdBy: callerOf(req).id,
         now,
       });
       await trace(req, "poll.create", "evaluation", scope.evaluation.id, {
@@ -320,7 +320,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         classroomId,
         type: body.data.type,
         config: body.data.config,
-        createdBy: req.user!.id,
+        createdBy: callerOf(req).id,
         now,
       });
       await trace(req, "poll.create", "evaluation", scope.evaluation.id, {
@@ -416,7 +416,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       const again = await service.createPoll(app.db, {
         classroomId: scope.evaluation.classroomId,
         questionId: scope.item.question.id,
-        createdBy: req.user!.id,
+        createdBy: callerOf(req).id,
         now,
       });
       await trace(req, "poll.create", "evaluation", again.evaluation.id, {
@@ -441,7 +441,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     teacher({ params: IdParam, load: staffPoll }, async ({ req, now, scope }) => {
       const outcome = await poolService.keepUnsavedQuestion(app.db, {
         questionId: scope.item.question.id,
-        userId: req.user!.id,
+        userId: callerOf(req).id,
         now,
       });
       if (outcome.kept && outcome.poolId) {

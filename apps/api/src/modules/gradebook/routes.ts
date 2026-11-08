@@ -46,7 +46,7 @@ export async function gradebookPlugin(app: FastifyInstance) {
   const onClassroom = { params: IdParam, load: accessibleClassroom.bind(null, app) };
   const ctx = async (req: Parameters<typeof actorOf>[0], now: Date, courseId: string): Promise<service.WriteContext> => ({
     actor: actorOf(req),
-    userId: req.user!.id,
+    userId: callerOf(req).id,
     owner: await isCourseOwner(app.db, courseId, callerOf(req)),
     now,
   });

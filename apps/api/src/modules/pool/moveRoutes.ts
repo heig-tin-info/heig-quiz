@@ -126,7 +126,7 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     const reachesAll = callerOf(req).reach === "all";
     const seats = reachesAll
       ? new Map()
-      : await service.staffSeatsOf(app.db, req.user!.id, blocking.map((c) => c.courseId));
+      : await service.staffSeatsOf(app.db, callerOf(req).id, blocking.map((c) => c.courseId));
     return blocking.map((c) => {
       const role = effectiveCourseRole({ reachesAll, seatRole: seats.get(c.courseId) ?? null });
       return { ...c, reached: role !== null, mayLink: courseRoleAllows(role, "owner") };
@@ -196,7 +196,7 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
         addedPoolId: target.id,
         reason: "question.move",
       });
-      publish("courses", [`course:${courseId}`, `teacher:${req.user!.id}`]);
+      publish("courses", [`course:${courseId}`, `teacher:${callerOf(req).id}`]);
     }
     // Both ends refresh: the questions left one list and joined another.
     const poolIds = new Set([...sources.map((row) => row.pool.id), target.id]);

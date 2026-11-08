@@ -9,6 +9,7 @@ import { assets } from "../../db/schema.js";
 import { INERT_IMAGE_HEADERS, isAllowedMime, readAsset, sniffImage, storeAsset } from "./assets.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
+import { callerOf, userOf } from "../guards.js";
 
 export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { config, requireTeacher, trace, teacher, inPool } = ctx;
@@ -23,7 +24,7 @@ export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
         if (!upload) return reply;
         const { row, fresh } = await storeAsset(app.db, config.ASSETS_DIR, {
           ...upload,
-          ownerId: req.user!.id,
+          ownerId: callerOf(req).id,
           poolId: pool.id,
         });
         if (!fresh) return reply.code(200).send(assetJson(row));
@@ -84,7 +85,7 @@ export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       const [asset] = await app.db.select().from(assets).where(eq(assets.id, params.data.id)).limit(1);
       if (!asset || !isAllowedMime(asset.mime)) return reply.code(404).send({ error: "not_found" });
       // Staff, its uploader, or a student through the attempt that shows it (`assetAccess.ts`).
-      if (!(await service.mayReadAsset(app.db, asset, req.user!))) return reply.code(404).send({ error: "not_found" });
+      if (!(await service.mayReadAsset(app.db, asset, userOf(req)))) return reply.code(404).send({ error: "not_found" });
       let bytes: Buffer;
       try {
         bytes = await readAsset(config.ASSETS_DIR, asset.path);

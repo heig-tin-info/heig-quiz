@@ -65,7 +65,10 @@ type PoolAuditEntry = readonly [action: AuditAction, subjectType: string, subjec
 export function poolRouteContext(app: FastifyInstance, config: AppConfig) {
   const requireTeacher = teacherGuard(app);
   const trace = tracer(app);
-  const mine = (req: FastifyRequest) => accessWhere(callerOf(req), poolAccess(req.user!.id));
+  const mine = (req: FastifyRequest) => {
+    const caller = callerOf(req);
+    return accessWhere(caller, poolAccess(caller.id));
+  };
 
   const teacher = teacherRoute(app, poolFailure);
 

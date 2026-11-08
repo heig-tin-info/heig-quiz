@@ -27,7 +27,7 @@ import { ASSIST_TOOL_HEADER } from "../../auth/plugin.js";
 import { dropAssistToken, mintAssistToken } from "../../auth/tokens.js";
 import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import type { AppConfig } from "../../config.js";
-import { callerOf, ownSessionGuard, teacherGuard } from "../guards.js";
+import { callerOf, ownSessionGuard, teacherGuard, userOf } from "../guards.js";
 import { invalid, notFound, rateLimited } from "../http.js";
 import { llmArms } from "../llm/service.js";
 import { injectedApi } from "../mcp/service.js";
@@ -80,7 +80,7 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
   app.post("/app/api/assist/ask", { preHandler: requireAssist }, async (req, reply) => {
     const body = AssistAsk.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
-    const user = req.user!;
+    const user = userOf(req);
     const now = app.clock.now();
     if (!questions.spend(`assist:${user.id}`, ASSIST_TURNS_PER_MINUTE, now)) {
       return rateLimited(reply, BUDGET_RETRY_AFTER_S);
@@ -115,7 +115,7 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
     const body = AssistWriteDecision.safeParse(req.body);
     if (!params.success) return reply.code(404).send({ error: "write_not_found" });
     if (!body.success) return invalid(reply, body.error);
-    const user = req.user!;
+    const user = userOf(req);
     const now = app.clock.now();
     const write = pending.take(params.data.id, { userId: user.id, conversationId: body.data.conversationId }, now);
     if (!write) return reply.code(404).send({ error: "write_not_found" });
@@ -137,14 +137,14 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
     const params = IdParam.safeParse(req.params);
     const body = AssistWriteDecision.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
-    if (params.success) pending.take(params.data.id, { userId: req.user!.id, conversationId: body.data.conversationId }, app.clock.now());
+    if (params.success) pending.take(params.data.id, { userId: callerOf(req).id, conversationId: body.data.conversationId }, app.clock.now());
     return reply.code(204).send();
   });
 
   app.get("/app/api/assist/conversations", { preHandler: requireAssist }, async (req, reply) => {
     const query = AssistListQuery.safeParse(req.query ?? {});
     if (!query.success) return invalid(reply, query.error);
-    const user = req.user!;
+    const user = userOf(req);
     const owner = query.data.userId ?? user.id;
     if (owner === user.id) return listConversations(app.db, user.id);
     // Another person's list: an administrator's read, audited; anyone else learns nothing.
@@ -156,7 +156,7 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
   app.get("/app/api/assist/conversations/:id", { preHandler: requireAssist }, async (req, reply) => {
     const params = IdParam.safeParse(req.params);
     if (!params.success) return missing(reply);
-    const user = req.user!;
+    const user = userOf(req);
     const own = await findConversation(app.db, params.data.id, user.id);
     if (own) return conversationDetail(app.db, own);
     const other = readsEveryone(req) ? await findConversation(app.db, params.data.id, null) : null;
@@ -169,7 +169,7 @@ export async function assistPlugin(app: FastifyInstance, opts: { config: AppConf
   app.delete("/app/api/assist/conversations/:id", { preHandler: requireAssist }, async (req, reply) => {
     const params = IdParam.safeParse(req.params);
     if (!params.success) return missing(reply);
-    const own = await findConversation(app.db, params.data.id, req.user!.id);
+    const own = await findConversation(app.db, params.data.id, callerOf(req).id);
     if (!own) return missing(reply);
     await deleteConversation(app.db, own.id);
     return reply.code(204).send();
