@@ -2,7 +2,10 @@
 
 ## Status
 
-Proposed (2026-10-26). The product decisions are the **product owner's**
+Accepted (2026-10-26), delivered in part: §2 to §9 and §11 by tasks L-06a
+(#935), L-06b (#940, #943), L-06c (#945), L-06d (#941) and L-06e (#944);
+L-06f (StudentScore 1.0 and the lab repositories, external) and L-06g (§10,
+the removal of the v2 path) remain planned (`docs/merge/PROGRESS.md`). The product decisions are the **product owner's**
 (2026-10-26, numbered 1–10 below where they are cited; amended 2026-10-27:
 coexistence by the snapshot's schema version, §11); the schemas, the run's
 acceptance checks and the migration's arithmetic were fixed by the
@@ -477,8 +480,9 @@ preset read.
 
 10, 11 and 13 are unchanged.
 
-Delivery: task cards L-06a to L-06g (`docs/merge/09-tasks.md`,
-`PROGRESS.md`).
+Delivery: task cards L-06a to L-06g (`PROGRESS.md`; the open cards in
+`docs/merge/09-tasks.md`, the delivered ones in
+`docs/merge/history/09-tasks-delivered.md`).
 
 ## Consequences
 

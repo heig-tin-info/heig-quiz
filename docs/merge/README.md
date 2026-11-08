@@ -5,10 +5,12 @@ search:
 
 # Merging heig-classroom into Quiz
 
-> **Archived record (2026-10-11).** The cutover is done (M8-07): classroom
-> redirects to Quiz and its data is imported. These pages are kept as the
-> record of the merge and for the two tasks left, the observation period
-> and the decommission (M9-01, [`PROGRESS.md`](PROGRESS.md)); they are
+> **Archived record.** The merge is complete: the cutover was done on
+> 2026-10-11 (M8-07), the observation period was clean and the decommission
+> was done on 2026-10-15 (M9-01). This folder is frozen history, except the
+> rows of [`PROGRESS.md`](PROGRESS.md) still open (the M6 workspace tasks and
+> the L tasks after the merge) and their cards in [`09-tasks.md`](09-tasks.md).
+> Delivery outside those rows is tracked in `changes/`. These pages are
 > listed in no tab of the site and excluded from its search.
 
 This folder is the working plan of the merge decided by

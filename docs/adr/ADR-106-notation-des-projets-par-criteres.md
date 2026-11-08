@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed (2026-10-12). The five product decisions and the masking, opt-in
+Accepted (2026-10-12; delivered by tasks L-02a to L-02f, #793 to #820,
+`docs/merge/PROGRESS.md`; the labo 00 pilot, L-02g, is still to do). The five product decisions and the masking, opt-in
 and runner rules are **decisions of the product owner** (2026-10-12); the
 target commit, overlay, commands, score model, report, milestone edge cases,
 LLM budget, tarball fetch and retention are the orchestrator's, after the
@@ -400,7 +401,9 @@ Invariants: `CLAUDE.md` invariant 12 carries the `project` action's archive
 rule, invariant 14 the target commit the server chooses from its push
 receipts, invariant 15 the tarball redirect; 10, 11 and 13 are unchanged.
 
-Delivery: task cards L-02a to L-02g (`docs/merge/09-tasks.md`, `PROGRESS.md`).
+Delivery: task cards L-02a to L-02g (`PROGRESS.md`; the open card in
+`docs/merge/09-tasks.md`, the delivered ones in
+`docs/merge/history/09-tasks-delivered.md`).
 
 ## Consequences
 

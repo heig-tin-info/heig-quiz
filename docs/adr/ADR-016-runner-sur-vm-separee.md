@@ -4,6 +4,11 @@
 
 Accepted (2026-09-21, first production deployment).
 
+**See also [ADR-101](ADR-101-budget-du-runner.md)** (2026-10-11, scope: the
+runner's capacity budget): a budget per request enforced by the runner, aged
+grading in its queue and a cap of runs per evaluation; it relies on the
+2026-10-08 amendment (a) below for the engine VM's size.
+
 **Amended 2026-10-12 by [ADR-106](ADR-106-notation-des-projets-par-criteres.md)
 §3** (scope: point 2, what the runner executes; product owner): a second
 action, `project`, with its lab image; the flags of `containerArgs` do not

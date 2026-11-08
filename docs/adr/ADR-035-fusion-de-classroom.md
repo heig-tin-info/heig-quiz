@@ -32,7 +32,7 @@ record, is narrowed by [ADR-100](ADR-100-organisations-github-accordees-aux-cour
 ## Context
 
 Quiz started as a pruned copy of heig-classroom
-(`docs/spec/07-reutilisation-heig-classroom.md`). Three months later the two
+(`docs/spec/history/reuse-heig-classroom.md`). Three months later the two
 products serve the same people for the same courses:
 
 - **The same students and the same classes.** A class that takes quizzes

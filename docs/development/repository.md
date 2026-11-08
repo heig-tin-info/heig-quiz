@@ -280,7 +280,7 @@ hardening flags are documented in
 
 - [5. Architecture](../spec/05-architecture.md): the layout, the database
   schema, real-time, the runner, grading.
-- [7. Reuse of heig-classroom](../spec/07-reutilisation-heig-classroom.md):
+- [The original reuse of heig-classroom](../spec/history/reuse-heig-classroom.md) (history):
   what was kept, adapted or dropped from the sibling project this
   repository started from.
 - [The MVP plan](../PLAN-MVP.md): the decisions numbered D1 to D20 that the

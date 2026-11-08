@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed (2026-10-09). Points 1, 7 and 9 below (scope, suspension,
+Proposed (2026-10-09); deferred: waits on proof B, a real SEB run of the
+project flow (M6-07). Points 1, 7 and 9 below (scope, suspension,
 sequencing) are the product owner's decisions of 2026-10-09. The other
 points are assumed defaults the owner may amend at review; points 7 and 8
 flag two weaker guarantees for the owner's attention. Nothing is

@@ -1,6 +1,6 @@
 /**
  * Transactional e-mail through Scaleway TEM, ported from heig-classroom's
- * `mailer.ts` (docs/spec/07, "Mailer"): the same provider, the same
+ * `mailer.ts` (docs/spec/history/reuse-heig-classroom.md, "Mailer"): the same provider, the same
  * configuration (`SCW_SECRET_KEY`, `SCW_DEFAULT_PROJECT_ID`, `MAIL_FROM`,
  * `MAIL_FROM_NAME`, `MAIL_REGION`) and the same DRY-RUN — without both
  * credentials an e-mail is logged and never sent.

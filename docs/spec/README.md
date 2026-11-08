@@ -24,7 +24,7 @@ migration work, including accepted features not implemented yet.
 
 ## History, only when needed
 
-[07 — Original reuse of heig-classroom](07-reutilisation-heig-classroom.md)
+[The original reuse of heig-classroom](history/reuse-heig-classroom.md)
 is frozen history, not an implementation plan. The [MVP plan](../PLAN-MVP.md)
 also records historical decisions (D1–D20), not a current backlog; its full
 text, cited as "PLAN-MVP §x.y", is [archived](../history/PLAN-MVP.md). Follow the

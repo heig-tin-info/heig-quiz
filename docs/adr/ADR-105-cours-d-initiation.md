@@ -7,7 +7,7 @@ and left its open points to the implementation; the values taken are the
 **Assumptions** section, each marked as such until he confirms or changes it). The
 spec challenge of the same day corrected three claims of the first draft (no YAML
 import exists; a staff attempt earns no drill card and no statistic; a seat is per
-classroom). Delivery progress lives in `docs/merge/PROGRESS.md` and `changes/`.
+classroom). Delivery progress lives in `changes/`.
 Amended 2026-10-26 by [ADR-120](ADR-120-code-de-cours-non-unique.md): the training
 course's code is `INIT` (§1).
 

@@ -3,7 +3,7 @@
 ## Status
 
 Accepted (2026-10-10, product owner, issue #680; the six defaults of the review confirmed the
-same day). Delivery progress is in `docs/merge/PROGRESS.md` and `changes/`.
+same day). Delivery progress is in `changes/`.
 
 Scope: how a teacher finds and follows a colleague's public pool, how a course draws from it
 without making its staff contributors, and what taking a pool out of the catalogue ends.

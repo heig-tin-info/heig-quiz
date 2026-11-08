@@ -3,9 +3,12 @@
 ## Status
 
 Proposed (2026-10-05), on the product owner's decisions of the same day and
-the spec challenge. Accepted when the product owner settles the open points
-of [question 52](../spec/06-questions-ouvertes.md). Nothing is implemented:
-`apps/codespace` itself is not present (M6 is `todo`).
+the spec challenge; deferred. Accepted when the product owner settles the open
+points of [question 52](../spec/06-questions-ouvertes.md). The online
+workspace itself exists (`apps/codespace`, M6-03), but the workspace question
+type is not built: it waits on question 52 and on tasks M6-08 (the portal's
+freeze and collect contract) and M6-09 (`qt-workspace` and the Quiz side),
+both `todo` in `docs/merge/PROGRESS.md`.
 
 Scope: a new question type, `qt-workspace`, worked in the online workspace
 of a **supervised evaluation**; how its file is collected, graded and

@@ -1,5 +1,17 @@
 # Microsoft Teams notifications: the setup
 
+!!! warning "Status: blocked on HES-SO IT since 2026-09-28"
+
+    HEIG-VD's users live in the HES-SO tenant, and the product owner's test of
+    2026-09-28 found that tenant blocks both self-service paths this page
+    relies on: uploading a custom app that carries the resource-specific
+    permission, and a user's consent to a multitenant application of another
+    publisher. The channel therefore needs HES-SO IT (an administrator's
+    consent, or the Entra application registered inside the HES-SO tenant).
+    The code is present and the channel is effectively off: no HEIG-VD user
+    can install the app. The paragraph below on "no administrator involved"
+    describes the design, not what that tenant allows.
+
 The Teams channel of the notifications (ADR-030, rules 26–31; §4 before the 2026-10-09 renumbering) posts to each user's
 Teams **activity feed** through Microsoft Graph, as the app "HEIG Quiz". Each
 user installs that app in their own Teams by uploading a small package the

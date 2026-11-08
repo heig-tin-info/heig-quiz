@@ -27,7 +27,7 @@ records the initial rationale; it is not a current product comparison.
 ## 0.4 Constraints
 
 - Team: one person plus an AI assistant. The spec favours operational simplicity: one repository, one database, one VM.
-- Starting point: the `~/heig-classroom` repository by the same author, in production, provides the edu-ID auth, the design system, the deployment infrastructure and the container hardening. See [07-reutilisation-heig-classroom.md](07-reutilisation-heig-classroom.md).
+- Starting point: the `~/heig-classroom` repository by the same author, in production, provides the edu-ID auth, the design system, the deployment infrastructure and the container hardening. See [the original reuse of heig-classroom](history/reuse-heig-classroom.md) (history).
 - Load: 20 to 30 students per quiz, 100 students simultaneously on the platform, code execution peaks of 30 runs in 10 seconds; a project deadline applied to 100 repositories in under 5 minutes (N-PERF-07).
 - Languages: interface in French and in English. Question content in the teacher's language.
 - Auth: edu-ID only for named accounts; which edu-ID accounts may have one created is configured (F-AUTH-06, open to all by default). A session code allows anonymous participation in polls. Linking a GitHub account (F-GH-05) is never a way to sign in: it attaches a GitHub identity to an edu-ID account.
