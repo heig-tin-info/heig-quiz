@@ -158,7 +158,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 
 ### Classroom merge, projects and journal
 
-- [ADR-007 — Ephemeral self-hosted runners for grading, sized by the freeze](ADR-007-runner-self-hosted.md)
+- [ADR-007 — Where CI runs: GitHub-hosted runners for every workflow, Quiz's VMs for no CI job](ADR-007-runner-self-hosted.md)
 - [ADR-029 — A UI library shared by Quiz and Classroom](ADR-029-bibliotheque-ui-commune.md) (superseded by ADR-035)
 - [ADR-035 — Merging heig-classroom into Quiz: one platform, one roster, activities of several kinds](ADR-035-fusion-de-classroom.md)
 - [ADR-047 — Online workspace: no student credential, therefore no write access](ADR-047-espace-de-travail-en-ligne.md)
