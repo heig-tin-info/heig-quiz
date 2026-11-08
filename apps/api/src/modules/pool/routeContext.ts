@@ -9,7 +9,7 @@ import type { PoolRole } from "@quiz/contracts";
 import { QuizCoreError } from "@quiz/core/server";
 import { poolRoleAllows } from "@quiz/domain";
 
-import { tracer } from "../../audit.js";
+import { tracer, type AuditAction } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { pools, questions } from "../../db/schema.js";
 import {
@@ -27,6 +27,7 @@ import {
 import { notFound, teacherRoute, type FailureArms } from "../http.js";
 import { llmArms } from "../llm/service.js";
 import { userTopic } from "../realtime/bus.js";
+import { poolChanged } from "./events.js";
 import { GenerateRefusal } from "./generate.js";
 import { ReviewRefusal } from "./review.js";
 import * as service from "./service.js";
@@ -58,12 +59,31 @@ const poolFailure: FailureArms = (reply, error, now) => {
   return llmArms(reply, error, now) ?? coreFailure(reply, error);
 };
 
+/** `trace`'s arguments after `req`: a literal action stays checked against the closed union (invariant 9). */
+type PoolAuditEntry = readonly [action: AuditAction, subjectType: string, subjectId: string, payload?: unknown];
+
 export function poolRouteContext(app: FastifyInstance, config: AppConfig) {
   const requireTeacher = teacherGuard(app);
   const trace = tracer(app);
   const mine = (req: FastifyRequest) => accessWhere(callerOf(req), poolAccess(req.user!.id));
 
   const teacher = teacherRoute(app, poolFailure);
+
+  /**
+   * One audited write of a pool: the write (committed), then its audit entry,
+   * then the pool's refresh hint. An entry of `null` (the write changed
+   * nothing) sends neither; a write that throws sends nothing.
+   */
+  type Entry<T> = (result: T) => PoolAuditEntry | null;
+  async function poolWrite<T>(req: FastifyRequest, poolId: string, write: () => Promise<T>, entry: Entry<T>) {
+    const result = await write();
+    const audited = entry(result);
+    if (audited) {
+      await trace(req, ...audited);
+      poolChanged(poolId);
+    }
+    return result;
+  }
 
   /**
    * The questions of a batch, each with its pool, LOADED under `poolAccess`
@@ -125,6 +145,7 @@ export function poolRouteContext(app: FastifyInstance, config: AppConfig) {
     seesAllReports,
     requireTeacher,
     trace,
+    poolWrite,
     mine,
     teacher,
     inPool,

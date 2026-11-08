@@ -30,7 +30,7 @@ function refuseReaderOnPublic(isPublic: boolean, role: string): void {
 }
 
 export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
-  const { requireTeacher, trace, teacher, inPool, topicsOf } = ctx;
+  const { requireTeacher, trace, poolWrite, teacher, inPool, topicsOf } = ctx;
 
   /**
    * Who holds a seat on this pool. Readable by anyone the pool lets in: a
@@ -72,10 +72,8 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool() }, async ({ req, reply, scope: pool }) => {
       const me = req.user!.id;
-      if (await service.subscribe(app.db, pool.id, me)) {
-        await trace(req, "pool.subscribe", "pool", pool.id, {});
-        poolChanged(pool.id);
-      }
+      await poolWrite(req, pool.id, () => service.subscribe(app.db, pool.id, me), (done) =>
+        done ? ["pool.subscribe", "pool", pool.id, {}] : null);
       poolPeopleChanged([userTopic(me)]);
       return reply.code(204).send();
     }),
@@ -86,10 +84,8 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool() }, async ({ req, reply, scope: pool }) => {
       const me = req.user!.id;
-      if (await service.unsubscribe(app.db, pool.id, me)) {
-        await trace(req, "pool.unsubscribe", "pool", pool.id, {});
-        poolChanged(pool.id);
-      }
+      await poolWrite(req, pool.id, () => service.unsubscribe(app.db, pool.id, me), (done) =>
+        done ? ["pool.unsubscribe", "pool", pool.id, {}] : null);
       // Their streams were subscribed to the pool's topic when they opened: close them.
       accessRevoked([me]);
       return reply.code(204).send();
@@ -176,10 +172,10 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
         }
         refuseReaderOnPublic(pool.isPublic, body.role);
         const audience = await topicsOf(pool);
-        const done = await service.setMemberRole(app.db, pool.id, path.userId, body.role);
+        const write = () => service.setMemberRole(app.db, pool.id, path.userId, body.role);
+        const done = await poolWrite(req, pool.id, write, (ok) =>
+          ok ? ["pool.member_update", "pool", pool.id, { userId: path.userId, role: body.role }] : null);
         if (!done) return reply.code(404).send({ error: "not_found" });
-        await trace(req, "pool.member_update", "pool", pool.id, { userId: path.userId, role: body.role });
-        poolChanged(pool.id);
         poolPeopleChanged(audience);
         return service.listMembers(app.db, pool, true);
       },
@@ -204,10 +200,9 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
         });
       }
       const audience = await topicsOf(pool);
-      const done = await service.removeMember(app.db, pool.id, path.userId);
+      const done = await poolWrite(req, pool.id, () => service.removeMember(app.db, pool.id, path.userId), (ok) =>
+        ok ? ["pool.unshare", "pool", pool.id, { userId: path.userId, left: leaving }] : null);
       if (!done) return reply.code(404).send({ error: "not_found" });
-      await trace(req, "pool.unshare", "pool", pool.id, { userId: path.userId, left: leaving });
-      poolChanged(pool.id);
       poolPeopleChanged(audience);
       return reply.code(204).send();
     }),
