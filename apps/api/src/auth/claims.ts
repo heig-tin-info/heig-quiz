@@ -189,7 +189,7 @@ export async function recordIdpClaims(
  * once is never removed; `verified` only ever rises (a login address
  * verified later becomes verified, never the reverse); `first_seen_at`
  * keeps the earliest date known (a login's is now; the heig-classroom
- * import brings older ones). Returns the number of addresses added or
+ * import, removed on 2026-11-08, brought older ones). Returns the number of addresses added or
  * changed.
  */
 export async function addAddresses(

@@ -337,12 +337,6 @@ export type AuditAction =
   | "llm.settings"
   /** An admin ran the connection test (ADR-058 §6): `payload.ok`, and the error code. */
   | "llm.test"
-  /**
-   * One `--apply` of the heig-classroom import that wrote something (M1-06,
-   * 02-data-and-migration §2.5): actor the account given as `--actor`,
-   * subject the run (`import_classroom.runs`), `payload` the report's counts.
-   */
-  | "migration.classroom_import"
   | "oauth.grant"
   | "oauth.refresh_replay"
   | "oauth.revoke"

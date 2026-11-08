@@ -32,7 +32,7 @@ import type { OidcClaims } from "./oidc.js";
 /** The `oidc_sub` prefix of an account the heig-classroom import created. */
 export const CLASSROOM_SUB_PREFIX = "classroom:";
 
-/** The placeholder `oidc_sub` the import gives a new account. */
+/** The placeholder `oidc_sub` the import gave a new account. */
 export function placeholderSub(classroomSub: string): string {
   return `${CLASSROOM_SUB_PREFIX}${classroomSub}`;
 }

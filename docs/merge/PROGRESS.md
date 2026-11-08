@@ -20,9 +20,11 @@ cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
   are dropped. The gradebook (M5-03, M5-04), M6-01…06, M6-10, M7,
   M8-01…03 and the cutover runbook (M8-05,
   [`10-cutover-runbook.md`](10-cutover-runbook.md)) are merged; M8-04 is
-  dropped. The breadcrumb app-wide is merged (#576). The import runs from
-  the production image (#655, the runbook's O6). The projects and the
-  import go live together (D26) at the cutover (D20).
+  dropped. The breadcrumb app-wide is merged (#576). The import ran from
+  the production image (#655, the runbook's O6); the projects and the
+  import went live together (D26) at the cutover (D20). The importer was
+  removed on 2026-11-08 (product owner); the legacy URL resolver and the
+  login adoption stay.
 - **Next actions**: **the cutover is done** (M8-07, Sunday 2026-10-11
   07:07–07:50 UTC, rehearsed on staging the day before: M8-06): classroom
   redirects to Quiz, its data is imported, its App no longer acts. The

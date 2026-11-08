@@ -4,7 +4,7 @@
  * into nothing.
  *
  * Old ids reach Quiz through `import_classroom.id_map`, the table the import
- * (M8-01) keeps: a classroom id is mapped (the import carries a classroom
+ * (M8-01, removed on 2026-11-08) left behind: a classroom id is mapped (the import carries a classroom
  * into an EXISTING Quiz one, never under its old id), an assignment id and
  * a user id as the import wrote them. An id the map does not hold resolves
  * to nothing.

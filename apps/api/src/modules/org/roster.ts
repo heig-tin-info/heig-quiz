@@ -4,7 +4,6 @@ import { and, eq, exists, inArray, isNull, ne, sql, type SQL } from "drizzle-orm
 import { parseRosterCsv, rosterFromRows, type Cell, type RosterParse } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
-import { publish } from "../../events.js";
 import type { Db } from "../../db/client.js";
 import {
   avatars,
@@ -144,9 +143,8 @@ export interface ClaimMatch {
 }
 
 /**
- * Settles one claim pass. The person's own claim (`claimEnrollments`, at
- * sign-in or at their next own request) and the heig-classroom import's
- * both end here, so every conflict ends the same way (AU-21): an ambiguous match is
+ * Settles one claim pass: the person's own claim (`claimEnrollments`, at
+ * sign-in or at their next own request), so every conflict ends the same way (AU-21): an ambiguous match is
  * flagged; any other is attached, and flagged instead when the account
  * already holds a line of that classroom (UNIQUE(classroom_id, user_id)).
  *
@@ -213,19 +211,6 @@ async function settleClaims<M extends ClaimMatch>(
     await tellStaff(db, { kind: "roster_conflict", ...room, actorId });
   }
   return claimed;
-}
-
-/**
- * A claim pass on matches the caller found itself: the heig-classroom import
- * (M1-06) carries over the claims of its source rosters. Same settlement as
- * every claim. Inside a transaction the caller marks `ambiguous` a match
- * whose account already holds a line of the classroom: the unique violation
- * `settleClaims` otherwise catches would abort the transaction.
- */
-export async function claimLines(db: Db, matches: ClaimMatch[], actorId: string): Promise<number> {
-  return settleClaims(db, matches, actorId, (m) =>
-    publish("roster", [`classroom:${m.classroomId}`, `user:${m.userId}`]),
-  );
 }
 
 /**

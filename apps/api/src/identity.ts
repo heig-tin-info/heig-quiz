@@ -13,7 +13,7 @@
  * may end up sharing an address. Nothing is ever attached on an ambiguous
  * match; it is flagged for a teacher to resolve (AU-21).
  */
-import { and, eq, inArray, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import type { Db, Tx } from "./db/client.js";
 import { userEmails } from "./db/schema.js";
@@ -62,13 +62,4 @@ export async function sharedWithOthers(
       ),
     );
   return new Set(rows.map((r) => r.email));
-}
-
-/**
- * `column` (an e-mail column) matches any of `emails`, case-insensitively.
- * An empty set matches nothing — never everything.
- */
-export function emailIn(column: AnyColumn, emails: readonly string[]): SQL {
-  if (emails.length === 0) return sql`false`;
-  return inArray(sql`lower(${column})`, emails.map(normalizeEmail));
 }

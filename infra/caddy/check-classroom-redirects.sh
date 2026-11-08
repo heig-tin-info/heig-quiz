@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# The curl matrix of the classroom.chevallier.io fragments (merge task M8-03,
+# The curl matrix of the classroom.chevallier.io fragment (merge task M8-03,
 # docs/merge/06 §6.6): asserts the status and headers of every pattern of
-# classroom-redirect.caddy, or with --maintenance those of
-# classroom-maintenance.caddy. Prints every row, then exits nonzero if any
-# row mismatched. Needs curl >= 7.84 (`%header{}`).
+# classroom-redirect.caddy. Prints every row, then exits nonzero if any row
+# mismatched. Needs curl >= 7.84 (`%header{}`).
 #
 #   infra/caddy/check-classroom-redirects.sh https://classroom.chevallier.io
-#   infra/caddy/check-classroom-redirects.sh --maintenance https://classroom.chevallier.io
 #   # the production name against one address, before the DNS points there:
 #   infra/caddy/check-classroom-redirects.sh --resolve classroom.chevallier.io:443:128.140.71.35 https://classroom.chevallier.io
 #   # a local Caddy on a high port:
@@ -14,13 +12,11 @@
 #   infra/caddy/check-classroom-redirects.sh http://127.0.0.1:18480
 set -euo pipefail
 
-usage() { echo "usage: $0 [--maintenance] [--resolve HOST:PORT:ADDR] BASE_URL  (curl >= 7.84)" >&2; exit 2; }
+usage() { echo "usage: $0 [--resolve HOST:PORT:ADDR] BASE_URL  (curl >= 7.84)" >&2; exit 2; }
 
-mode=redirect
 curl_extra=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --maintenance) mode=maintenance; shift ;;
     --resolve) [[ $# -ge 2 ]] || usage; curl_extra+=(--resolve "$2"); shift 2 ;;
     -*) usage ;;
     *) break ;;
@@ -61,38 +57,31 @@ check() {
   fi
 }
 
-if [[ $mode == maintenance ]]; then
-  for path in / /classrooms/$cid "/app/auth/github/callback?code=x" /app/api/me /healthz; do
-    check GET "$path" 503 "retry-after=3600" "cache-control=no-store" "content-type=text/html; charset=utf-8"
-  done
-  check POST /webhooks/github 503 "retry-after=3600" "cache-control=no-store" "content-type=application/json"
-else
-  # Dead machine paths: 410 JSON, never a redirect.
-  for path in /webhooks/github /app/api/me /app/api/classrooms/$cid \
-    /app/api/journals/$cid/assets/img/fig.png /app/api/users/$uid /app/events \
-    /kc/realms/heig/protocol/openid-connect/auth /healthz /metrics; do
-    check GET "$path" 410 "location=" "content-type=application/json"
-  done
-  check POST /webhooks/github 410 "location=" "content-type=application/json"
+# Dead machine paths: 410 JSON, never a redirect.
+for path in /webhooks/github /app/api/me /app/api/classrooms/$cid \
+  /app/api/journals/$cid/assets/img/fig.png /app/api/users/$uid /app/events \
+  /kc/realms/heig/protocol/openid-connect/auth /healthz /metrics; do
+  check GET "$path" 410 "location=" "content-type=application/json"
+done
+check POST /webhooks/github 410 "location=" "content-type=application/json"
 
-  # Everything else: to the resolver, the path as sent, percent-encoding kept.
-  for path in / /classrooms/$cid /classrooms/$cid/assignments/$aid \
-    /classrooms/$cid/assignments/$aid/groups /classrooms/$cid/journal \
-    /classrooms/$cid/journal/week-01/lab.md "/classrooms/$cid/journal/a%20b%2Fc%3Fd.md" \
-    /app/codespace/start/$aid /app/api/users/$uid/avatar \
-    /app/auth/github/callback /app/auth/login /app/email/unsub /setup/github/installed \
-    /settings /admin /admin/users /classrooms /unknown; do
-    check GET "$path" 308 "location=$legacy$path"
-  done
+# Everything else: to the resolver, the path as sent, percent-encoding kept.
+for path in / /classrooms/$cid /classrooms/$cid/assignments/$aid \
+  /classrooms/$cid/assignments/$aid/groups /classrooms/$cid/journal \
+  /classrooms/$cid/journal/week-01/lab.md "/classrooms/$cid/journal/a%20b%2Fc%3Fd.md" \
+  /app/codespace/start/$aid /app/api/users/$uid/avatar \
+  /app/auth/github/callback /app/auth/login /app/email/unsub /setup/github/installed \
+  /settings /admin /admin/users /classrooms /unknown; do
+  check GET "$path" 308 "location=$legacy$path"
+done
 
-  # The query never reaches Quiz.
-  check GET "/app/auth/github/callback?code=c0de&state=s7" 308 "location=$legacy/app/auth/github/callback"
-  check GET "/app/email/unsub?t=t0ken" 308 "location=$legacy/app/email/unsub"
-  check GET "/classrooms/$cid?tab=journal" 308 "location=$legacy/classrooms/$cid"
-fi
+# The query never reaches Quiz.
+check GET "/app/auth/github/callback?code=c0de&state=s7" 308 "location=$legacy/app/auth/github/callback"
+check GET "/app/email/unsub?t=t0ken" 308 "location=$legacy/app/email/unsub"
+check GET "/classrooms/$cid?tab=journal" 308 "location=$legacy/classrooms/$cid"
 
 if [[ $failures -gt 0 ]]; then
   echo "$failures mismatch(es)" >&2
   exit 1
 fi
-echo "all $mode checks passed"
+echo "all redirect checks passed"
