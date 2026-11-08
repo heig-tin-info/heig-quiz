@@ -28,86 +28,63 @@ interface RowProps<V> {
   onChange: (value: V) => void;
 }
 
+/** One choice among a few, as a segmented control: every row here but the grace. */
+function ChoiceRow<V extends string>({
+  name,
+  title,
+  desc,
+  options,
+  ...choice
+}: RowProps<V> & { name: string; title: string; desc?: ReactNode; options: readonly { value: V; label: string }[] }) {
+  return (
+    <SettingRow title={title} desc={desc}>
+      <Segmented name={name} label={title} options={options} {...choice} />
+    </SettingRow>
+  );
+}
+
 /**
  * The start choice (ADR-127 §2): now or at a date. The column behind it is
  * `publishMode` — `manual` is now, `scheduled` a date — and the draft's one
  * button follows it: Publish for now, Schedule for a date to come.
  */
-export function PublishModeRow({ value, disabled, onChange, desc }: RowProps<PublishMode> & { desc?: ReactNode }) {
+export function PublishModeRow(props: RowProps<PublishMode> & { desc?: ReactNode }) {
   const t = useT();
-  return (
-    <SettingRow title={t("project.startChoice")} desc={desc}>
-      <Segmented
-        name="publishMode"
-        label={t("project.startChoice")}
-        value={value}
-        disabled={disabled}
-        onChange={onChange}
-        options={[
-          { value: "manual", label: t("project.startChoice.now") },
-          { value: "scheduled", label: t("project.startChoice.date") },
-        ]}
-      />
-    </SettingRow>
-  );
+  const options = [
+    { value: "manual" as const, label: t("project.startChoice.now") },
+    { value: "scheduled" as const, label: t("project.startChoice.date") },
+  ];
+  return <ChoiceRow {...props} name="publishMode" title={t("project.startChoice")} options={options} />;
 }
 
-export function DeadlineKindRow({ value, disabled, onChange }: RowProps<DeadlineKind>) {
+export function DeadlineKindRow(props: RowProps<DeadlineKind>) {
   const t = useT();
-  return (
-    <SettingRow title={t("project.deadlineKind")}>
-      <Segmented
-        name="deadlineKind"
-        label={t("project.deadlineKind")}
-        value={value}
-        disabled={disabled}
-        onChange={onChange}
-        options={[
-          { value: "date", label: t("project.deadlineKind.date") },
-          { value: "duration", label: t("project.deadlineKind.duration") },
-        ]}
-      />
-    </SettingRow>
-  );
+  const options = [
+    { value: "date" as const, label: t("project.deadlineKind.date") },
+    { value: "duration" as const, label: t("project.deadlineKind.duration") },
+  ];
+  return <ChoiceRow {...props} name="deadlineKind" title={t("project.deadlineKind")} options={options} />;
 }
 
-export function SourceStrategyRow({ value, disabled, onChange }: RowProps<SourceStrategy>) {
+export function SourceStrategyRow(props: RowProps<SourceStrategy>) {
   const t = useT();
-  return (
-    <SettingRow title={t("project.sourceStrategy")} desc={t(`project.sourceStrategy.desc.${value}`)}>
-      <Segmented
-        name="sourceStrategy"
-        label={t("project.sourceStrategy")}
-        value={value}
-        disabled={disabled}
-        onChange={onChange}
-        options={[
-          { value: "squash", label: t("project.sourceStrategy.squash") },
-          { value: "whole", label: t("project.sourceStrategy.whole") },
-        ]}
-      />
-    </SettingRow>
-  );
+  const options = [
+    { value: "squash" as const, label: t("project.sourceStrategy.squash") },
+    { value: "whole" as const, label: t("project.sourceStrategy.whole") },
+  ];
+  const desc = t(`project.sourceStrategy.desc.${props.value}`);
+  return <ChoiceRow {...props} name="sourceStrategy" title={t("project.sourceStrategy")} desc={desc} options={options} />;
 }
 
 /** What happens at the deadline. */
-export function DeadlineStrategyRow({ value, disabled, onChange }: RowProps<DeadlineStrategy>) {
+export function DeadlineStrategyRow(props: RowProps<DeadlineStrategy>) {
   const t = useT();
-  return (
-    <SettingRow title={t("project.deadlineStrategy")} desc={t(`project.deadlineStrategy.desc.${value}`)}>
-      <Segmented
-        name="deadlineStrategy"
-        label={t("project.deadlineStrategy")}
-        value={value}
-        disabled={disabled}
-        onChange={onChange}
-        options={[
-          { value: "lock", label: t("project.deadlineStrategy.lock") },
-          { value: "commit", label: t("project.deadlineStrategy.commit") },
-        ]}
-      />
-    </SettingRow>
-  );
+  const options = [
+    { value: "lock" as const, label: t("project.deadlineStrategy.lock") },
+    { value: "commit" as const, label: t("project.deadlineStrategy.commit") },
+  ];
+  const desc = t(`project.deadlineStrategy.desc.${props.value}`);
+  return <ChoiceRow {...props} name="deadlineStrategy" title={t("project.deadlineStrategy")} desc={desc} options={options} />;
 }
 
 /**
@@ -115,19 +92,11 @@ export function DeadlineStrategyRow({ value, disabled, onChange }: RowProps<Dead
  * project exists already (a draft, ADR-106 §1), since choosing it reads the
  * source's `criteria.yml` — and then each mode says what it does.
  */
-export function GradingModeRow<M extends ProjectGradingMode>({
-  value,
-  disabled,
-  onChange,
-  modes,
-}: RowProps<M> & { modes: readonly M[] }) {
+export function GradingModeRow<M extends ProjectGradingMode>({ modes, ...props }: RowProps<M> & { modes: readonly M[] }) {
   const t = useT();
   const options = modes.map((mode) => ({ value: mode, label: t(`project.gradingMode.${mode}`) }));
-  return (
-    <SettingRow title={t("project.gradingMode")} desc={modes.includes("criteria" as M) ? t(`project.gradingMode.desc.${value}`) : undefined}>
-      <Segmented name="gradingMode" label={t("project.gradingMode")} value={value} disabled={disabled} onChange={onChange} options={options} />
-    </SettingRow>
-  );
+  const desc = modes.includes("criteria" as M) ? t(`project.gradingMode.desc.${props.value}`) : undefined;
+  return <ChoiceRow {...props} name="gradingMode" title={t("project.gradingMode")} desc={desc} options={options} />;
 }
 
 /**
