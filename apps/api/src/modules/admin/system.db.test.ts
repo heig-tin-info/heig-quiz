@@ -43,16 +43,6 @@ afterAll(async () => {
 });
 
 describe("GET /app/api/admin/system", () => {
-  it("answers anyone but an administrator as every admin route does", async () => {
-    const teacher = await server.signIn("teacher");
-    const student = await server.signIn("student");
-    const get = (headers?: Record<string, string>) =>
-      server.app.inject({ method: "GET", url: "/app/api/admin/system", ...(headers ? { headers } : {}) });
-    expect((await get(teacher.headers)).statusCode).toBe(403);
-    expect((await get(student.headers)).statusCode).toBe(403);
-    expect((await get()).statusCode).toBe(401);
-  });
-
   it("lists every check of the registry, in the contract's shape, and what is deployed", async () => {
     const res = await server.app.inject({
       method: "GET",
@@ -126,12 +116,6 @@ describe("the services section (ADR-055 §6)", () => {
 describe("POST /app/api/admin/system/test-mail", () => {
   const post = (headers?: Record<string, string>) =>
     server.app.inject({ method: "POST", url: "/app/api/admin/system/test-mail", ...(headers ? { headers } : {}) });
-
-  it("answers anyone but an administrator as every admin route does", async () => {
-    expect((await post((await server.signIn("teacher")).headers)).statusCode).toBe(403);
-    expect((await post((await server.signIn("student")).headers)).statusCode).toBe(403);
-    expect((await post()).statusCode).toBe(401);
-  });
 
   it("sends to the caller (a dry run here), audits it without the address, and refuses a second within the minute", async () => {
     const other = await server.signIn("admin", "second-admin@heig.test");

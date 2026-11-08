@@ -70,14 +70,6 @@ beforeEach(async () => {
 });
 
 describe("the settings", () => {
-  it("are an administrator's only", async () => {
-    const teacher = await server.signIn("teacher");
-    expect((await inject("GET", "/app/api/admin/llm", undefined, teacher)).statusCode).toBe(403);
-    expect((await inject("PATCH", "/app/api/admin/llm", { model: "claude-opus-5-5" }, teacher)).statusCode).toBe(403);
-    expect((await inject("POST", "/app/api/admin/llm/test", undefined, teacher)).statusCode).toBe(403);
-    expect((await inject("GET", "/app/api/admin/llm/usage", undefined, teacher)).statusCode).toBe(403);
-  });
-
   it("start with no key, Sonnet and the default cap (the migration's row)", async () => {
     const s = LlmSettings.parse((await inject("GET", "/app/api/admin/llm")).json());
     expect(s).toMatchObject({

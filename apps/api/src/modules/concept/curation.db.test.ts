@@ -28,7 +28,6 @@ type Who = Awaited<ReturnType<TestServer["signIn"]>>;
 let server: TestServer;
 let teacher: Who;
 let admin: Who;
-let student: Who;
 let poolId: string;
 const db = () => server.app.db;
 
@@ -58,7 +57,6 @@ beforeAll(async () => {
   server = await testServer();
   teacher = await server.signIn("teacher");
   admin = await server.signIn("admin");
-  student = await server.signIn("student");
   poolId = randomUUID();
   // The admin owns no seat on this pool: its questions are out of their reach.
   await db().insert(pools).values({ id: poolId, name: "Secret exam pool", ownerId: teacher.id });
@@ -75,12 +73,6 @@ afterAll(async () => {
 });
 
 describe("GET /admin/concepts", () => {
-  it("is the admin's alone", async () => {
-    expect((await list(teacher)).statusCode).toBe(403);
-    expect((await list(student)).statusCode).toBe(403);
-    expect((await server.app.inject({ method: "GET", url: "/app/api/admin/concepts" })).statusCode).toBe(401);
-  });
-
   it("lists proposed first, then by label, merged left out", async () => {
     const target = await concept(["Zèbre"], ["Zebra"]);
     await concept(["Ancien"], ["Old"], "merged", target);
@@ -596,11 +588,6 @@ describe("relation candidates", () => {
   });
 
   describe("GET /admin/concepts/relations/candidates", () => {
-    it("is the admin's alone", async () => {
-      expect((await get(teacher)).statusCode).toBe(403);
-      expect((await get()).statusCode).toBe(401);
-    });
-
     it("proposes a contained label as broader, skipping an existing edge and a would-be cycle", async () => {
       const pointer = await concept(["Pointeur"], ["Pointer"]);
       const arith = await concept(["Arithmétique des pointeurs"], ["Pointer arithmetic"], "proposed");

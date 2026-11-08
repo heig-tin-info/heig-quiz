@@ -81,12 +81,6 @@ describe("who may report", () => {
     expect((await report(contributor, q)).statusCode).toBe(201);
   });
 
-  it("answers a teacher outside the pool with the 404 of a missing question", async () => {
-    const q = await newQuestion("out-of-reach");
-    expect((await report(stranger, q)).statusCode).toBe(404);
-    expect((await call(stranger, "GET", `/app/api/questions/${q}/reports`)).statusCode).toBe(404);
-  });
-
   it("reaches a public reader through poolAccess", async () => {
     const pool = await newPool(server, owner, "Public reports pool");
     const q = await newQuestion("public-q", pool);

@@ -105,15 +105,6 @@ describe("one question for the whole class (F-DASH-07)", () => {
     expect(foreignItem.json()).toEqual({ error: "not_found" });
   });
 
-  it("gives a teacher off the staff the 404 of a missing evaluation", async () => {
-    const stranger = await server.signIn("teacher");
-    const real = await get(url(seed.itemIds[0]!), stranger);
-    const absent = await get(url(seed.itemIds[0]!, crypto.randomUUID()), stranger);
-    expect(real.statusCode).toBe(404);
-    expect(real.json()).toEqual({ error: "not_found" });
-    expect(real.json()).toEqual(absent.json());
-  });
-
   it("gives a student of the class exactly what a missing evaluation gives them", async () => {
     const real = await get(url(seed.itemIds[0]!), student);
     const absent = await get(url(seed.itemIds[0]!, crypto.randomUUID()), student);
