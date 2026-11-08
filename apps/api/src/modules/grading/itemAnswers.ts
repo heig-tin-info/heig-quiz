@@ -29,7 +29,10 @@ import { answers, enrollments } from "../../db/schema.js";
 import { joinedItem, seatsOf, type EvaluationRecord } from "../evaluation/service.js";
 import { typeOf } from "../pool/config.js";
 import { parametersOf, readingPerAttempt } from "../pool/service.js";
-import { exportsText, expectedViews, GradingError, keptAttempts, pairKey, standingGradings } from "./service.js";
+import { keptAttempts } from "./kept.js";
+import { exportsText, expectedViews } from "./panel.js";
+import { standingGradings } from "./reads.js";
+import { GradingError, pairKey } from "./records.js";
 
 /** The record, with what the document needs beside it. */
 export interface ItemAnswers {

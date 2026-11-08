@@ -29,7 +29,7 @@ import { isLiveState } from "@quiz/domain";
 import { notifyMany } from "../notifications/service.js";
 import { byId, claimGradingReady, type EvaluationRecord } from "../evaluation/service.js";
 import { staffOf } from "./events.js";
-import { progressOf } from "./service.js";
+import { progressOf } from "./reads.js";
 
 /**
  * Tells the course's staff seats (`staffOf`: the rows `staffAccess` reads,
