@@ -369,7 +369,7 @@ description are in the [historical record](history/ADR-041-entrainement-espace.m
 - Interleaving groups the session by course and the question's first concept id (ADR-081 third addendum §8).
 - A review is scored on the type's `defaultPoints`, never the item's points.
 - The review in progress lives on the card (`serve_seed`, `shown_since`, `active_ms`), cleared by the answer.
-- Eligibility is decided once, at card creation, from the grading of an empty answer; a review whose grading is not final is refused and writes nothing.
+- Eligibility is decided once, at card creation, from the grading of an empty answer under the evaluation's settings; a review whose grading is not final is refused and writes nothing; the card and its history stay.
 - The hooks go one way: `results` and `live` call their listeners after the commit; the `drill` module registers them and neither imports it.
 
 <a id="14-implementation-choices-of-slice-3-the-screens"></a>
@@ -377,13 +377,15 @@ description are in the [historical record](history/ADR-041-entrainement-espace.m
 ### 14. The student's screens and the teacher's switches
 
 - The session starts on Start, the page's one primary; a card is served, its clock opened, only then.
+- Targeted revision (ADR-115 §13) is a secondary "Revise a concept" in a classroom's Concepts section, opening its own screen with its own Start; the drill page's primary and the empty day are unchanged.
 - One card at a time through the type's player (`QuestionHost`), then its review (`QuestionReviewHost`); an empty answer ("Show the answer") is a review, rated Again.
 - Visibility reports: hidden when the tab hides or the page is left unanswered, shown when it returns; a failed report is dropped (§11).
 - A card that cannot be served offers a retry and "Skip it"; the summary counts reviews only.
+- The next review is said in calendar days ("tomorrow", "in 4 days"), the empty day's next due date as a date (`dueIn`).
 - Opting out is confirmed with the two sentences of §6, not styled as destructive; opting back in takes no confirmation.
 - UI copy obligations: the "Allow drill" note (key after each review, §2; latest version served, §7) and the opt-out confirmation (§6).
 - The badge is a dot, never a count, drawn only for a student with a classroom whose drill is on.
-- The classroom's switch is a row of its Settings and states the cards the backfill made; "Allow drill" sits in the evaluation's second step, its note always shown; the removal is confirmed as destructive with its count.
+- The classroom's switch is a row of its Settings and states the cards the backfill made; "Allow drill" sits in the evaluation's second step, its note always shown; the removal is a secondary button offered while there are cards, confirmed as destructive with their count.
 
 <a id="15-implementation-choices-of-slice-4-the-teachers-view"></a>
 
@@ -392,7 +394,7 @@ description are in the [historical record](history/ADR-041-entrainement-espace.m
 - Every read (activity, one seat's progress, mastery, hours) is loaded through `staffAccess` on the classroom, in a bounded number of queries.
 - The recall rate of §8 is defined once (`drillRecallCounts`), a card's first review decided over its whole history; the API answers counts, never a ratio.
 - Windows roll from the server's now (30 days, and all); the trend needs 5 repeated reviews in each 30-day window and reads flat within 5 points.
-- Sessions are drill days with a review; weeks run Monday to Sunday over the classroom's period, empty weeks included, at most 104.
+- Sessions are drill days with a review; weeks run Monday to Sunday over the classroom's dated period cut at today, or, without one, from the week the drill was enabled (or the first review, if earlier), empty weeks included, at most 104.
 - The hours of the week (2026-10-14): the last 30 days by Europe/Zurich weekday and hour, distinct students per slot for the class, reviews for one student seat (any other seat is a 404); off-hours share as ADR-107 (`offHoursShare`).
 - After an opt-out a review counts in no read; mastery reads each card's current FSRS retrievability, an opted-out student's cards included.
 - Only the classroom's current student seats are listed or counted.
