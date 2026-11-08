@@ -51,8 +51,6 @@ import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import {
   auditLog,
-  githubClassroomLinks,
-  githubOrganizations,
   projectCheckpoints,
   projectCriteria,
   projectEvidence,
@@ -71,7 +69,8 @@ import { writeCriterionGrades } from "./criterionGrades.js";
 import { hintRepo, repoContext } from "./repos.js";
 import {
   call,
-  freshOrgId,
+  linkClassroom,
+  newOrg,
   newStudent,
   server,
   teacher,
@@ -96,13 +95,9 @@ interface Room extends Seeded {
 async function connectedClassroom(students: { id: string }[]): Promise<Room> {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
-  const n = freshOrgId();
-  const org = `sorg-${n}`;
-  world.orgIds[org] = n;
+  const { login: org, orgId } = await newOrg("sorg");
   world.source(org, "starter", { main: { "README.md": "# Lab", "src/main.c": "int main(){}" } });
-  const orgId = randomUUID();
-  await db.insert(githubOrganizations).values({ id: orgId, login: org, githubOrgId: n, installationId: n });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId);
   return { ...seeded, org };
 }
 

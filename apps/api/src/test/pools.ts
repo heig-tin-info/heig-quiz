@@ -6,10 +6,7 @@
  */
 import { expect } from "vitest";
 
-import type { TestServer } from "./http.js";
-
-/** A signed-in account, as `TestServer.signIn` returns it. */
-export type Actor = Awaited<ReturnType<TestServer["signIn"]>>;
+import type { Actor, TestServer } from "./http.js";
 
 /** A pool `name` created by `who` (with `extra` fields of the creation body); its id. */
 export async function newPool(server: TestServer, who: Actor, name: string, extra: Record<string, unknown> = {}): Promise<string> {

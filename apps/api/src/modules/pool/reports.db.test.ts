@@ -14,8 +14,8 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { auditLog, notifications, questionReports } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { type Payload, testServer, type TestServer } from "../../test/http.js";
-import { newPool, type Actor } from "../../test/pools.js";
+import { type Payload, testServer, type TestServer, type Actor } from "../../test/http.js";
+import { newPool } from "../../test/pools.js";
 
 let server: TestServer;
 let owner: Actor;

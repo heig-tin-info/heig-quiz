@@ -39,7 +39,6 @@ import {
   courseStaff,
   enrollments,
   githubClassroomLinks,
-  githubOrganizations,
   projectCriteria,
   projectGroupMembers,
   projectRepos,
@@ -49,7 +48,17 @@ import {
 import { orgsRoute, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { gradebookProjects } from "./gradebook.js";
-import { freshOrgId, gh, server, teacher, useProjectWorld, world, type Headers } from "../../test/projectWorld.js";
+import {
+  freshOrgId,
+  gh,
+  linkClassroom,
+  newOrg,
+  server,
+  teacher,
+  useProjectWorld,
+  world,
+  type Headers,
+} from "../../test/projectWorld.js";
 
 const NOW = "2026-10-02T08:00:00.000Z";
 const IN_A_WEEK = "2026-10-09T22:00:00.000Z";
@@ -67,18 +76,20 @@ async function connectedClassroom(opts: { connected?: boolean } = {}) {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
   await db.insert(courseStaff).values({ courseId: seeded.courseId, userId: colleague.id });
-  const n = freshOrgId();
-  const login = `org-${n}`;
-  world.orgIds[login] = n;
+  let login: string;
+  if (opts.connected !== false) {
+    const org = await newOrg("org");
+    login = org.login;
+    await linkClassroom(seeded.classroomId, org.orgId);
+  } else {
+    const n = freshOrgId();
+    login = `org-${n}`;
+    world.orgIds[login] = n;
+  }
   world.source(login, "lab", {
     main: { "README.md": "# Lab", "src/main.c": "int main(){}", "criteria.yml": "x: 1", "student/src/main.c": "// todo" },
     solution: { "README.md": "# Solution" },
   });
-  if (opts.connected !== false) {
-    const orgId = randomUUID();
-    await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-    await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
-  }
   return { id: seeded.classroomId, login, courseId: seeded.courseId };
 }
 

@@ -32,7 +32,6 @@ import {
   classrooms,
   enrollments,
   githubAccounts,
-  githubClassroomLinks,
   githubOrganizations,
   projectGroupMembers,
   projectGroups,
@@ -57,18 +56,13 @@ import {
   usersRoute,
   world,
   type Headers,
+  type Org as WorldOrg,
+  type Student,
 } from "../../test/projectWorld.js";
 
 const NOW = "2026-10-02T08:00:00.000Z";
 const IN_A_WEEK = "2026-10-09T22:00:00.000Z";
 const MINUTE = 60_000;
-
-interface Student {
-  id: string;
-  headers: Headers;
-  githubUserId: number;
-  login: string;
-}
 
 /** Every body a student received: none may name the source or the distribution (N-SEC-20). */
 const studentBodies: string[] = [];
@@ -82,10 +76,7 @@ const accept = async (projectId: string, who: { headers: Headers }) => {
 };
 const refusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, ProjectAcceptErrorCode.parse(res.json().error)];
 
-interface Org {
-  login: string;
-  orgId: string;
-}
+type Org = Pick<WorldOrg, "login" | "orgId">;
 
 /**
  * A classroom of `teacher`'s course connected to an organization holding the
@@ -95,7 +86,7 @@ async function connectedClassroom(students: Student[], org?: Org) {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
   if (org) {
-    await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId: org.orgId, linkedBy: teacher.id, linkedAt: new Date() });
+    await linkClassroom(seeded.classroomId, org.orgId);
     return { id: seeded.classroomId, ...org };
   }
   const { login, orgId } = await newOrg("org");

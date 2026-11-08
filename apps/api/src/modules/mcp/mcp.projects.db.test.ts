@@ -18,11 +18,11 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { ApiTokenCreated, TokenScope } from "@quiz/contracts";
 
 import { mintAssistToken } from "../../auth/tokens.js";
-import { auditLog, githubClassroomLinks, projects } from "../../db/schema.js";
+import { auditLog, projects } from "../../db/schema.js";
 import { orgsRoute } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { ApiError, injectedApi } from "./service.js";
-import { newOrg, server, useProjectWorld, world } from "../../test/projectWorld.js";
+import { linkClassroom, newOrg, server, useProjectWorld, world } from "../../test/projectWorld.js";
 
 const NOW = "2026-10-13T08:00:00.000Z";
 const IN_A_WEEK = "2026-10-20T22:00:00.000Z";
@@ -53,7 +53,7 @@ async function connectedClassroom(teacherId: string) {
   const seeded = await seedLive(db, { teacherId, studentIds: [], questions: 0 });
   const { login, orgId } = await newOrg("org");
   world.source(login, "lab", { main: { "README.md": "# Lab", "src/main.c": "int main(){}" } });
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacherId, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, orgId, teacherId);
   return seeded.classroomId;
 }
 

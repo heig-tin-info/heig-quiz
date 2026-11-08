@@ -2023,12 +2023,10 @@ describe("the lobby tick (step 3)", () => {
  */
 describe("the calculator", () => {
   let server: TestServer;
-  let restore: () => void;
   let teacher: { id: string; headers: Record<string, string> };
   let student: { id: string; headers: Record<string, string> };
 
   beforeAll(async () => {
-    restore = registerForTests(fakeShort);
     server = await testServer();
     server.clock.set("2026-10-04T08:00:00.000Z");
     teacher = await server.signIn("teacher");
@@ -2036,7 +2034,6 @@ describe("the calculator", () => {
   });
   afterAll(async () => {
     await server.close();
-    restore();
   });
 
   const db = () => server.app.db;
@@ -2103,12 +2100,10 @@ describe("the calculator", () => {
  */
 describe("the notepad", () => {
   let server: TestServer;
-  let restore: () => void;
   let teacher: { id: string; headers: Record<string, string> };
   let student: { id: string; headers: Record<string, string> };
 
   beforeAll(async () => {
-    restore = registerForTests(fakeShort);
     server = await testServer();
     server.clock.set("2026-10-04T08:00:00.000Z");
     teacher = await server.signIn("teacher");
@@ -2116,7 +2111,6 @@ describe("the notepad", () => {
   });
   afterAll(async () => {
     await server.close();
-    restore();
   });
 
   const db = () => server.app.db;

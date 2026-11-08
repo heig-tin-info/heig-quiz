@@ -8,8 +8,6 @@
  *
  * Test support only; nothing in the application imports it.
  */
-import { randomUUID } from "node:crypto";
-
 import { and, eq } from "drizzle-orm";
 import { beforeEach, expect } from "vitest";
 
@@ -25,8 +23,6 @@ import { loadConfig } from "../../config.js";
 import {
   auditLog,
   enrollments,
-  githubClassroomLinks,
-  githubOrganizations,
   projectRepoAccess,
   projectRepos,
 } from "../../db/schema.js";
@@ -35,7 +31,8 @@ import { seedLive } from "../../test/live.js";
 import {
   APP_ENV,
   call,
-  freshOrgId,
+  linkClassroom,
+  newOrg,
   server,
   staffCall,
   teacher,
@@ -43,6 +40,7 @@ import {
   usersRoute,
   world,
   type Headers,
+  type Org as WorldOrg,
 } from "../../test/projectWorld.js";
 
 export {
@@ -70,10 +68,8 @@ export const acceptRefusal = (res: { statusCode: number; json: () => { error: un
 export const groupRefusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, GroupErrorCode.parse(res.json().error)];
 export const rosterRefusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, RosterErrorCode.parse(res.json().error)];
 
-export interface Org {
-  login: string;
-  orgId: string;
-}
+/** An organization a classroom connects to: its login and its row. */
+export type Org = Pick<WorldOrg, "login" | "orgId">;
 
 export interface Room extends Org {
   id: string;
@@ -87,15 +83,10 @@ export async function connectedClassroom(students: { id: string }[], org?: Org):
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
   let at = org;
   if (!at) {
-    const n = freshOrgId();
-    const login = `gorg-${n}`;
-    world.orgIds[login] = n;
-    world.source(login, "starter", { main: { "README.md": "# Lab" } });
-    const orgId = randomUUID();
-    await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
-    at = { login, orgId };
+    at = await newOrg("gorg");
+    world.source(at.login, "starter", { main: { "README.md": "# Lab" } });
   }
-  await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId: at.orgId, linkedBy: teacher.id, linkedAt: new Date() });
+  await linkClassroom(seeded.classroomId, at.orgId);
   const lines = await db.select().from(enrollments).where(eq(enrollments.classroomId, seeded.classroomId));
   return { id: seeded.classroomId, login: at.login, orgId: at.orgId, lines: new Map(lines.map((l) => [l.userId!, l.id])) };
 }

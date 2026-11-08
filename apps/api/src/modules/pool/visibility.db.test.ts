@@ -14,10 +14,10 @@ import { PoolMembers, PoolSummary, type ParametersDraft } from "@quiz/contracts"
 import { loadConfig } from "../../config.js";
 import { auditLog, coursePools, courses, courseStaff, llmCalls, pools } from "../../db/schema.js";
 import { EXPLANATION, PARAMETERIZED, VARIABLES } from "../../test/parameterized.js";
-import { testServer, type Payload, type TestServer } from "../../test/http.js";
+import { testServer, type Payload, type TestServer, type Actor } from "../../test/http.js";
 import type { LlmProvider } from "../llm/provider.js";
 import { LlmGateway, writeSettings } from "../llm/service.js";
-import { newPool, type Actor } from "../../test/pools.js";
+import { newPool } from "../../test/pools.js";
 
 const SECRET = "test-llm-master-key-0123456789abcdef";
 

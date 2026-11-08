@@ -11,10 +11,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerForTests } from "@quiz/registry/server";
 
 import { auditLog, coursePools, courseStaff, courses, poolMembers, questions } from "../../db/schema.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { testServer, type TestServer, type Actor } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
-import { newPool, type Actor } from "../../test/pools.js";
+import { newPool } from "../../test/pools.js";
 
 
 let server: TestServer;

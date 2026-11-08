@@ -58,6 +58,7 @@ import {
   usersRoute,
   world,
   type Headers,
+  type Student,
 } from "../../test/projectWorld.js";
 
 const config = loadConfig({ NODE_ENV: "test", ...APP_ENV });
@@ -69,10 +70,6 @@ const at = (iso: string, plusMs = 0) => new Date(new Date(iso).getTime() + plusM
 interface Who {
   id: string;
   headers: Headers;
-}
-/** A student with a linked GitHub account. */
-interface Student extends Who {
-  login: string;
 }
 
 const accept = (projectId: string, who: Who) => call("POST", `/app/api/student/projects/${projectId}/accept`, who.headers);

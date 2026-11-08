@@ -37,11 +37,11 @@ import {
   attempts,
 } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { testServer, type Payload, type TestServer } from "../../test/http.js";
+import { testServer, type Payload, type TestServer, type Actor } from "../../test/http.js";
 import { seedLive, publishQuestion, type Seeded } from "../../test/live.js";
 import { listNotifications } from "../notifications/service.js";
 import * as service from "./service.js";
-import { newPool, type Actor } from "../../test/pools.js";
+import { newPool } from "../../test/pools.js";
 import { loadConfig } from "../../config.js";
 import { type LlmProvider } from "../llm/provider.js";
 import { LlmGateway, writeSettings } from "../llm/service.js";
@@ -749,7 +749,6 @@ describe("searching the catalogue", () => {
  */
 describe("stars", () => {
   let server: TestServer;
-  let restoreShort: () => void;
   let owner: Actor;
   let reader: Actor;
   let stranger: Actor;
@@ -802,7 +801,6 @@ describe("stars", () => {
   }
 
   beforeAll(async () => {
-    restoreShort = registerForTests(fakeShort);
     server = await testServer();
     owner = await server.signIn("teacher");
     reader = await server.signIn("teacher");
@@ -820,7 +818,6 @@ describe("stars", () => {
 
   afterAll(async () => {
     await server.close();
-    restoreShort();
   });
 
   describe("question stars", () => {
@@ -966,7 +963,6 @@ describe("stars", () => {
 describe("similar questions", () => {
   let server: TestServer;
   let db: Db;
-  let restore: () => void;
   let teacher: Actor;
   let colleague: Actor;
   let seed: Seeded;
@@ -1034,7 +1030,6 @@ describe("similar questions", () => {
   const TEXT = "Quelle est la complexité du tri rapide quand le pivot est mal choisi ?";
 
   beforeAll(async () => {
-    restore = registerForTests(fakeShort);
     server = await testServer();
     db = server.app.db;
     teacher = await server.signIn("teacher");
@@ -1069,7 +1064,6 @@ describe("similar questions", () => {
 
   afterAll(async () => {
     await server.close();
-    restore();
   });
 
   describe("GET /courses/:id/similar-questions", () => {
