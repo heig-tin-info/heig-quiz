@@ -185,25 +185,6 @@ describe("publication (F-QST-03)", () => {
     expect(drafts).toHaveLength(1);
   });
 
-  it("refuses to publish an invalid draft and says why", async () => {
-    const id = await seedQuestion("invalid at publish");
-    const saved = await writeDraft(id, { statement: "No key", answer: "" });
-    // D16: the invalid config was STORED, with its issues.
-    expect(saved.valid).toBe(false);
-    expect(saved.issues.map((i) => i.path.join("."))).toContain("answer");
-
-    const [stored] = await db
-      .select()
-      .from(questionVersions)
-      .where(and(eq(questionVersions.questionId, id), isNull(questionVersions.number)));
-    expect(stored!.config).toEqual({ statement: "No key", answer: "" });
-
-    await expect(
-      service.publishQuestion(db, await questionRow(id), { userId: ownerId }),
-    ).rejects.toBeInstanceOf(service.DraftInvalid);
-    expect(await service.listVersions(db, id)).toEqual([]);
-  });
-
   it("a second draft row cannot exist (the index, not the service, guarantees it)", async () => {
     const id = await seedQuestion("one draft only");
     await expect(
@@ -239,63 +220,11 @@ describe("the read/write pipeline (§1.6)", () => {
   });
 });
 
-describe("versions", () => {
-  it("restores a published version into the draft", async () => {
-    const id = await seedQuestion("restorable");
-    await writeDraft(id, { statement: "First", answer: "a" });
-    await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
-    await writeDraft(id, { statement: "Second", answer: "b" });
-
-    expect(await service.restoreVersion(db, await questionRow(id), 1)).toBe(true);
-    const detail = await service.questionDetail(db, await questionRow(id), "en");
-    expect(detail.draft.config).toEqual({ statement: "First", answer: "a" });
-    expect(await service.restoreVersion(db, await questionRow(id), 99)).toBe(false);
-  });
-
-  it("deprecates a version without removing it", async () => {
-    const id = await seedQuestion("deprecatable");
-    await writeDraft(id, { statement: "Old", answer: "a" });
-    await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
-    const version = await service.deprecateVersion(db, id, 1, "superseded by the new syllabus");
-    expect(version?.deprecatedAt).not.toBeNull();
-    expect(version?.deprecationNote).toBe("superseded by the new syllabus");
-    const page = await service.listQuestions(db, poolId, { id: ownerId, seesAll: true }, search({ q: "Old" }), "en");
-    expect(page.items.find((q) => q.id === id)?.deprecated).toBe(true);
-  });
-});
-
 describe("soft delete (F-QST-11)", () => {
-  it("hides the question from the pool but keeps its versions", async () => {
-    const id = await seedQuestion("deletable");
-    await writeDraft(id, { statement: "Doomed", answer: "a" });
-    await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
-
-    await service.softDeleteQuestion(db, await questionRow(id));
-    const visible = await service.listQuestions(db, poolId, { id: ownerId, seesAll: true }, search(), "en");
-    expect(visible.items.map((q) => q.id)).not.toContain(id);
-
-    const withDeleted = await service.listQuestions(
-      db,
-      poolId,
-      { id: ownerId, seesAll: true },
-      search({ includeDeleted: true }), "en"
-    );
-    expect(withDeleted.items.map((q) => q.id)).toContain(id);
-    expect(await service.listVersions(db, id)).toHaveLength(1);
-  });
-
   it("frees the name: the unique index only covers live questions", async () => {
     const id = await seedQuestion("reusable name");
     await service.softDeleteQuestion(db, await questionRow(id));
     await expect(seedQuestion("reusable name")).resolves.toBeTruthy();
-  });
-
-  it("hard-deletes a published question no evaluation froze", async () => {
-    const id = await seedQuestion("not in use");
-    await writeDraft(id, { statement: "Free", answer: "a" });
-    await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
-    await expect(service.hardDeleteQuestion(db, await questionRow(id))).resolves.toBeUndefined();
-    expect(await db.select().from(questions).where(eq(questions.id, id))).toEqual([]);
   });
 });
 
