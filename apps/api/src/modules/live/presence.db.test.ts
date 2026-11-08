@@ -176,7 +176,7 @@ describe("a staff member in the roster is a body in the room (F-LIVE-02, F-LIVE-
 
   it("does not count a teacher who holds NO seat, whatever they watch", async () => {
     const other = await server.signIn("teacher");
-    const { seed, evaluation } = await world("lobby");
+    const { evaluation } = await world("lobby");
     // An admin with Super Powers reaches every evaluation (ADR-054); a seat
     // is still what puts them in the room, and `enrolledCount` never counted
     // a seat that took nothing.
@@ -186,7 +186,6 @@ describe("a staff member in the roster is a body in the room (F-LIVE-02, F-LIVE-
     expect(presence.count(evaluation.id)).toBe(0);
     // And a stranger to the course gets the 404 of a missing entity.
     expect((await openStream(other.headers, `lobby:${evaluation.id}`)).statusCode).toBe(404);
-    expect(seed.classroomId).toBeTruthy();
   });
 
   it("counts the teacher who is answering: their OWN attempt is a presence", async () => {
@@ -205,8 +204,7 @@ describe("a staff member in the roster is a body in the room (F-LIVE-02, F-LIVE-
 
 describe("the Results switch colours a cell from the answer (ADR-020)", () => {
   it("returns a live verdict per cell, only when the results were asked for", async () => {
-    const db = server.app.db;
-    const { seed, evaluation, items } = await world("running", 2);
+    const { evaluation, items } = await world("running", 2);
     const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt/start`, student.headers);
     const attemptId = entered.json().view.attempt.id;
     const right = items[0]!;
@@ -250,8 +248,6 @@ describe("the Results switch colours a cell from the answer (ADR-020)", () => {
       await get(`/app/api/evaluations/${evaluation.id}/grading/progress`, teacher.headers)
     ).json();
     expect(progress.done).toBe(0);
-    expect(seed.classroomId).toBeTruthy();
-    expect(db).toBeTruthy();
   });
 
   it("leaves a PROPOSED grade uncoloured: an essay waits for a person, it is not wrong", async () => {

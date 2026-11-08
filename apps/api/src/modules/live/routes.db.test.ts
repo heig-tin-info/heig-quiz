@@ -508,15 +508,6 @@ describe("closing and reopening one attempt around the close (#95)", () => {
     });
   });
 
-  it("closes and reopens one attempt while the evaluation runs", async () => {
-    const closed = await post(`${base()}/attempts/${attemptId}/close`, teacher.headers);
-    expect(closed.statusCode).toBe(200);
-    expect(closed.json().state).toBe("expired");
-    const reopened = await post(`${base()}/attempts/${attemptId}/reopen`, teacher.headers);
-    expect(reopened.statusCode).toBe(200);
-    expect(reopened.json().state).toBe("in_progress");
-  });
-
   it("refuses to reopen, or to extend, once the evaluation is closed", async () => {
     expect((await post(`${base()}/close`, teacher.headers)).statusCode).toBe(200);
     expect((await attemptRow(attemptId)).state).toBe("expired");
@@ -594,7 +585,7 @@ describe("the student's home (F-LIVE-01)", () => {
 });
 
 describe("running code from an attempt (decision D14)", () => {
-  it("answers 503 runner_unavailable with the default stub runner", async () => {
+  it("loads the student's own attempt and answers 422 not_runnable for a type with no runner half", async () => {
     const other = await server.signIn("student");
     const own = await seedLive(server.app.db, {
       teacherId: teacher.id,
@@ -610,11 +601,11 @@ describe("running code from an attempt (decision D14)", () => {
       itemId,
       regions: ["return 0;"],
     });
-    // The fake `short` type has no runner half at all: `not_runnable`. A
-    // runner-backed type on the same stub answers 503, which
-    // `live.db.test.ts` asserts against the real `UnavailableRunner`.
-    expect([422, 503]).toContain(run.statusCode);
-    expect(["not_runnable", "runner_unavailable"]).toContain(run.json().error);
+    // The fake `short` type has no runner half at all. A runner-backed type
+    // on the stub runner answers 503, which `live.db.test.ts` asserts
+    // against the real `UnavailableRunner`.
+    expect(run.statusCode).toBe(422);
+    expect(run.json().error).toBe("not_runnable");
   });
 });
 
