@@ -26,7 +26,7 @@ import { answerFromStudent, answerToStudent } from "./studentView.js";
 import * as events from "./events.js";
 import { verdictOf } from "../grading/service.js";
 import { UnavailableRunner } from "../runner/unavailable.js";
-import { answersOf, type AnswerRecord, type AttemptRecord } from "./access.js";
+import { answersOf, lockAttempt, type AnswerRecord, type AttemptRecord } from "./access.js";
 import { AnswerInvalid, LiveError } from "./failures.js";
 import { assertWritable } from "./gates.js";
 import { lockedItemIds, orderItems } from "./order.js";
@@ -350,11 +350,7 @@ export async function writeAnswer(
   // before the hand-in must either commit first or be refused like any
   // write to a finished attempt — never land after the pass has read.
   const written = await db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select()
-      .from(attempts)
-      .where(eq(attempts.id, attempt.id))
-      .for("share");
+    const locked = await lockAttempt(tx, attempt.id, "share");
     assertWritable(evaluation, locked ?? attempt, now);
     return tx
       .insert(answers)

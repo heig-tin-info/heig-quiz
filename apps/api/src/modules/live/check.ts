@@ -13,11 +13,11 @@ import { checkAllowed, checkRefusal } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { JoinedItem } from "../evaluation/service.js";
-import { answers, attempts } from "../../db/schema.js";
+import { answers } from "../../db/schema.js";
 import { checkGrading, enqueueCheckRun, writeCheckGrading } from "../grading/jobs.js";
 import type { GradingRecord } from "../grading/service.js";
 import { studentItemCorrection } from "../results/service.js";
-import type { AnswerRecord, AttemptRecord } from "./access.js";
+import { lockAttempt, type AnswerRecord, type AttemptRecord } from "./access.js";
 import { LiveError } from "./failures.js";
 import { assertWritable } from "./gates.js";
 import { answeredBy, writeAnswer, type AnswerWrite } from "./autosave.js";
@@ -80,7 +80,7 @@ async function markChecked(
 ): Promise<{ attempt: AttemptRecord; answer: AnswerRecord }> {
   const answered = answeredBy(item);
   return app.db.transaction(async (tx) => {
-    const [locked] = await tx.select().from(attempts).where(eq(attempts.id, input.attempt.id)).for("update");
+    const locked = await lockAttempt(tx, input.attempt.id, "update");
     if (!locked) throw new LiveError("not_found");
     assertWritable(input.evaluation, locked, input.now);
     const [current] = await tx
