@@ -45,18 +45,28 @@ export const clozeGrading: QuestionTypeGrading<
         label: fmt(s.blank, { n: blank.index + 1 }),
         // ADR-128: the part an acceptance names for this blank.
         part: clozePart(blank.index),
-        cell: ({ answer, details }) => {
+        cell: ({ answer, details, accept }) => {
           const given = givenOf(blank, answer);
           if (given === null) return <NoAnswer>{s.empty}</NoAnswer>;
           const verdict = verdictOf(details, blank.index);
-          return verdict?.accepted ? (
-            <AcceptedChip label={s.accepted} title={given}>
-              {given}
-            </AcceptedChip>
-          ) : (
-            <AnswerChip tone={toneOf(verdict)} title={given}>
-              {given}
-            </AnswerChip>
+          // The host's accept control is the accepted sign when it is lent
+          // (ADR-128): the chip itself is then a plain right one.
+          const chip =
+            verdict?.accepted && !accept ? (
+              <AcceptedChip label={s.accepted} title={given}>
+                {given}
+              </AcceptedChip>
+            ) : (
+              <AnswerChip tone={toneOf(verdict)} title={given}>
+                {given}
+              </AnswerChip>
+            );
+          if (!accept) return chip;
+          return (
+            <span className="flex min-w-0 items-center gap-1">
+              <span className="min-w-0">{chip}</span>
+              {accept(clozePart(blank.index))}
+            </span>
           );
         },
         expected: () => {

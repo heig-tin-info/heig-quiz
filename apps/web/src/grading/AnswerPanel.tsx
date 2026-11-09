@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Check, PencilLine, RefreshCcw } from "lucide-react"
 import { useId, useState, type ReactNode } from "react";
 
 import type { GradingColumn } from "@quiz/core/client";
-import { AcceptedChip, AnswerChip, WandIcon } from "@quiz/ui";
+import { WandIcon } from "@quiz/ui";
 import {
   justificationOf,
   type Grading,
@@ -411,8 +411,8 @@ function EntryPanel({
 
 /**
  * ADR-128: the parts of this answer the teacher may accept — those the key
- * counts wrong, and those accepted already — each with the same corner
- * control as the table's cell. Nothing when there is none.
+ * counts wrong, and those accepted already — each drawn by the column's own
+ * cell with the table's control after its chip. Nothing when there is none.
  */
 function AcceptSection({
   acceptance,
@@ -424,31 +424,25 @@ function AcceptSection({
   entry: GradingEntry;
 }) {
   const t = useT();
-  const rows = columns.flatMap((c) => {
-    const offered = c.part === undefined ? null : offeredPart(acceptance, entry, c.part);
-    return offered ? [{ column: c, part: c.part!, ...offered }] : [];
-  });
-  if (rows.length === 0) return null;
+  const shown = columns.filter((c) => c.part !== undefined && offeredPart(acceptance, entry, c.part) !== null);
+  if (shown.length === 0) return null;
   return (
     <Section title={t("grading.accept.dialog")}>
       <ul className="space-y-1.5 text-[13px]">
-        {rows.map(({ column, part, given, inForce }) => (
-          <li key={part} className="flex items-center gap-3">
+        {shown.map((column) => (
+          <li key={column.key} className="flex items-center gap-3">
             <span className="w-40 shrink-0 truncate text-fg-muted" title={column.title ?? column.label}>
               {column.label}
             </span>
             <span className="min-w-0 flex-1">
-              {inForce ? (
-                <AcceptedChip label={t("grading.accept.accepted")} title={given.label}>
-                  {given.label}
-                </AcceptedChip>
-              ) : (
-                <AnswerChip tone="bad" title={given.label}>
-                  {given.label}
-                </AnswerChip>
-              )}
+              {column.cell({
+                answer: entry.answer,
+                details: entry.grading?.details ?? null,
+                accept: (part) => (
+                  <AcceptControl acceptance={acceptance} entry={entry} part={part} partLabel={column.label} />
+                ),
+              })}
             </span>
-            <AcceptControl acceptance={acceptance} entry={entry} part={part} partLabel={column.label} />
           </li>
         ))}
       </ul>

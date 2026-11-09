@@ -330,19 +330,17 @@ function AnswerRow({
         </td>
       ) : (
         columns.map((c) => (
-          <td key={c.key} className={cx(cell, "group/cell relative max-w-0", c.align === "center" && "text-center")}>
-            {c.cell({ answer: entry.answer, details: grading?.details ?? null })}
-            {acceptance && c.part !== undefined ? (
-              // Hidden, not removed, until the cell is hovered or the row
-              // focused; it stays while its card is open.
-              <AcceptControl
-                acceptance={acceptance}
-                entry={entry}
-                part={c.part}
-                partLabel={c.label}
-                className="hover-reveal invisible absolute right-0.5 top-0.5 group-focus-within:visible group-hover/cell:visible has-[[aria-expanded=true]]:visible"
-              />
-            ) : null}
+          <td key={c.key} className={cx(cell, "group/cell max-w-0", c.align === "center" && "text-center")}>
+            {c.cell({
+              answer: entry.answer,
+              details: grading?.details ?? null,
+              // ADR-128: the type sets the control right after the part's chip.
+              accept: acceptance
+                ? (part) => (
+                    <AcceptControl acceptance={acceptance} entry={entry} part={part} partLabel={c.label} reveal />
+                  )
+                : undefined,
+            })}
           </td>
         ))
       )}

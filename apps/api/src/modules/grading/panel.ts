@@ -34,8 +34,8 @@ import {
   writtenConfig,
   type Reading,
 } from "../pool/service.js";
-import { partsOf, queueAcceptance, takesAcceptance } from "./acceptance.js";
-import { acceptancesOf, type ItemRules } from "./acceptanceRules.js";
+import { partsOf, queueAcceptance } from "./acceptance.js";
+import { acceptanceHook, acceptancesOf, type AcceptanceHook, type ItemRules } from "./acceptanceRules.js";
 import { keptAttempts } from "./kept.js";
 import {
   criteriaOf,
@@ -247,7 +247,7 @@ async function loadQueueContext(
  * write of the panel addresses.
  */
 function entryOf(
-  { attempt, item, evaluation }: { attempt: AttemptRecord; item: JoinedItem; evaluation: EvaluationRecord },
+  { attempt, item, hook }: { attempt: AttemptRecord; item: JoinedItem; hook: AcceptanceHook | undefined },
   grading: GradingRecord | null,
   context: QueueContext,
   anonymous: boolean,
@@ -279,9 +279,7 @@ function entryOf(
     grading: grading ? toGrading(grading) : null,
     history: context.history.get(key) ?? [],
     // ADR-128: what of this answer an acceptance can name, where the item takes one.
-    ...(takesAcceptance(item.question.type, evaluation)
-      ? { parts: partsOf(item.question.type, evaluation, config, answer?.payload ?? null) }
-      : {}),
+    ...(hook ? { parts: partsOf(hook, item.question.type, config, answer?.payload ?? null) } : {}),
   };
 }
 
@@ -313,6 +311,8 @@ export async function gradingQueue(
     scope: { itemId: query.itemId },
   });
 
+  // ADR-128: whether each item takes acceptances, decided once.
+  const hooks = new Map(items.map((i) => [i.item.id, acceptanceHook(i.question.type, evaluation.mode)]));
   const entries: GradingEntry[] = [];
   let validated = 0;
   let proposed = 0;
@@ -323,7 +323,7 @@ export async function gradingQueue(
       const grading = context.standing.get(pairKey(attempt.id, item.item.id)) ?? null;
       if (counts && grading?.state === "validated") validated += 1;
       else if (counts && grading?.state === "proposed") proposed += 1;
-      entries.push(entryOf({ attempt, item, evaluation }, grading, context, query.anonymous));
+      entries.push(entryOf({ attempt, item, hook: hooks.get(item.item.id) }, grading, context, query.anonymous));
     }
   }
 
@@ -341,7 +341,7 @@ export async function gradingQueue(
       explanation: explanationOrNull(i.version.explanation),
       exportable: exportsText(i.question.type, i.version),
       ...(isParameterized(i.version) ? { parameters: writtenOf(i) } : {}),
-      ...acceptanceOf(i, evaluation, context, attemptRows),
+      ...acceptanceOf(hooks.get(i.item.id), i, context, attemptRows),
     })),
     entries,
     counts: { total, validated, proposed, missing: total - validated - proposed },
@@ -354,18 +354,21 @@ export async function gradingQueue(
  * config for no attempt in particular. Nothing when the item takes none.
  */
 function acceptanceOf(
+  hook: AcceptanceHook | undefined,
   item: JoinedItem,
-  evaluation: EvaluationRecord,
   context: QueueContext,
   attemptRows: readonly AttemptRecord[],
 ) {
+  if (!hook) return {};
   const reading = context.readings.get(item.item.id);
   const byId = new Map(attemptRows.map((a) => [a.id, a]));
-  const acceptance = queueAcceptance(item, evaluation, context.acceptances.get(item.item.id) ?? [], (attemptId) => {
-    const attempt = attemptId === null ? undefined : byId.get(attemptId);
-    return attempt && reading ? reading(attempt).config : writtenConfig(item.question.type, item.version).config;
-  });
-  return acceptance ? { acceptance } : {};
+  const rules = context.acceptances.get(item.item.id) ?? [];
+  return {
+    acceptance: queueAcceptance(hook, item, rules, (attemptId) => {
+      const attempt = attemptId === null ? undefined : byId.get(attemptId);
+      return attempt && reading ? reading(attempt).config : writtenConfig(item.question.type, item.version).config;
+    }),
+  };
 }
 
 /**

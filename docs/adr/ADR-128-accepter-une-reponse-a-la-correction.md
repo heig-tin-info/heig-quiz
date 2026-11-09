@@ -38,8 +38,12 @@ follow.
    `GradeContext.accepted`: the evaluation pass (the close, a re-run, a
    late, retake or paper copy) and the check of an exercise (ADR-124), which
    share one cell grader (`gradeCell`). A PRACTICE attempt (ADR-122), the
-   drill, a preview and the dashboard's live colour keep grading against the
-   pool's key. A runner's or a model's grading receives no acceptance.
+   drill and the question's preview keep grading against the pool's key. A
+   runner's or a model's grading receives no acceptance. The live
+   dashboard's colour preview (ADR-020, `liveGrader`) does not read them
+   either: it would cost a read on every autosave for a preview the grade
+   replaces, so an accepted answer may show red there while the evaluation
+   runs, never in the grading table, the results or a student's feedback.
 3. **"The same answer" is the question type's** (`QuestionTypeServer.acceptance`:
    `given` lists an answer's acceptable parts with their identity and whether
    the key already counts it right; `label` reads an identity back, or says
@@ -82,6 +86,18 @@ follow.
 12. **Student exit**: the `accepted` mark travels only where the blank's
     verdict does (`studentDetails`); it names no answer of the key, and the
     review reads it as "Accepted".
+13. **One lock per item.** The item's `evaluation_items` row, `FOR UPDATE`
+    (`lockItems`), serializes the rules of an item: the act writes its rule
+    under it, a regrade takes it before retargeting the item and dropping
+    rules, and the single writer's guard of every automatic grading of an
+    item that takes acceptances (`acceptanceGuard`, after the attempts' own
+    lock of ADR-067) takes it before reading the rules again — a grading
+    computed with rules that moved since is graded again before it is
+    written. The act's guard also locks the cells' standing gradings and
+    drops a cell whose grading in force is by then a manual override. The
+    act re-grades what it reaches whether its rule was new or not, writing
+    only what would change, so a repeated PUT or DELETE heals an act whose
+    re-grade failed.
 
 ## Consequences
 

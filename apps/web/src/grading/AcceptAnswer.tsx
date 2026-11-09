@@ -95,41 +95,61 @@ export function offeredPart(
 }
 
 /**
- * The small corner control of an answer's part (ADR-128): a seal button
- * that opens the acceptance card. Drawn only where there is something to
- * do — an answer the key counts wrong, or one accepted already. A click on
- * it never reaches the row under it (the row opens the panel).
+ * How a control shows in a table cell: an answer to accept stays out of
+ * sight — no width, so a narrow column keeps its chip whole, transparent,
+ * still focusable — until its row is hovered or focused, muted then, at
+ * full strength once its own cell is, or its card open; an accepted
+ * answer's seal always shows — it IS the accepted sign.
+ */
+const REVEAL =
+  "hover-reveal w-0 overflow-hidden opacity-0 group-hover:w-auto group-focus-within:w-auto group-hover:opacity-60 group-focus-within:opacity-60 group-hover/cell:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:w-auto has-[[aria-expanded=true]]:opacity-100";
+
+/**
+ * The control of an answer's part (ADR-128), set right after its chip: a
+ * seal button that opens the acceptance card. Drawn only where there is
+ * something to do — an answer the key counts wrong, or one accepted
+ * already, whose green seal is the accepted sign and the way to stop it.
+ * A reader who may not accept sees the seal of an accepted answer only. A
+ * click on it never reaches the row under it (the row opens the panel).
+ * `reveal`: the table's hover behaviour; the answer panel shows it as is.
  */
 export function AcceptControl({
   acceptance,
   entry,
   part,
   partLabel,
-  className,
+  reveal = false,
 }: {
   acceptance: Acceptance;
   entry: GradingEntry;
   part: string;
   /** The part as the table names it ("Blank 2"). */
   partLabel: string;
-  className?: string;
+  reveal?: boolean;
 }) {
   const t = useT();
   const offered = offeredPart(acceptance, entry, part);
-  const change = acceptance.change;
-  if (!offered || !change) return null;
+  if (!offered) return null;
   const { given, inForce } = offered;
+  const change = acceptance.change;
+  if (!change) {
+    return inForce ? (
+      <span role="img" aria-label={t("grading.accept.accepted")} className="inline-flex shrink-0 text-success">
+        <BadgeCheck className="size-3.5" />
+      </span>
+    ) : null;
+  }
   return (
     // React carries a click in the portalled card up the tree to the row:
     // stopped here, so neither the button nor the card opens the panel.
-    <span className={className} onClick={(e) => e.stopPropagation()}>
+    <span className={cx("inline-flex shrink-0", reveal && !inForce && REVEAL)} onClick={(e) => e.stopPropagation()}>
       <Popover
         label={t("grading.accept.dialog")}
         trigger={
           <IconButton
             size="xs"
             label={t(inForce ? "grading.accept.accepted" : "grading.accept.open")}
-            className={cx("bg-surface", inForce ? "text-success" : "text-fg-muted")}
+            className={inForce ? "text-success" : "text-fg-muted"}
           >
             <BadgeCheck />
           </IconButton>
@@ -226,7 +246,7 @@ function AcceptCard({
           options={scopes.map((s) => ({ value: s, label: t(SCOPE_LABEL[s]) }))}
         />
       ) : null}
-      {acceptance.released ? <p className="text-xs text-fg-muted">{t("grading.counting.confirm.released")}</p> : null}
+      {acceptance.released ? <p className="text-xs text-fg-muted">{t("grading.releasedTold")}</p> : null}
       {error ? <ErrorText>{error}</ErrorText> : null}
       <Button className="w-full" variant={inForce ? "secondary" : "primary"} loading={busy} onClick={() => void submit()}>
         {t(inForce ? "grading.accept.stop" : "grading.accept.do")}

@@ -1128,7 +1128,8 @@ describe("GradingPanel — accepting an answer (ADR-128)", () => {
     const t = await table();
     const [, expected] = within(t).getAllByRole("row");
     expect(within(expected!).getByRole("img", { name: "Accepted answer" })).toBeInTheDocument();
-    expect(within(rowOf("a1")).getByRole("img", { name: "Accepted" })).toBeInTheDocument();
+    // The seal after the chip is the accepted sign, and the way to stop it.
+    expect(within(rowOf("a1")).queryByRole("img", { name: "Accepted" })).toBeNull();
 
     await userEvent.click(within(rowOf("a1")).getByRole("button", { name: "Accepted answer" }));
     const card = await screen.findByRole("dialog", { name: "Accept an answer" });

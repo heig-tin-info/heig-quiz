@@ -12,6 +12,7 @@
  */
 import { z } from "zod";
 
+import type { AcceptablePart as TypeAcceptablePart, AcceptedAnswer } from "@quiz/core/server";
 import { LLM_CONFIDENCES } from "@quiz/core/llm";
 import { CRITERION_ID_PATTERN } from "@quiz/core/reasons";
 import { ACCEPTANCE_SCOPES, GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
@@ -125,7 +126,7 @@ export const AnswerAcceptanceBody = z.object({
   part: AcceptancePart,
   answer: AcceptanceAnswer,
   attemptId: z.uuid().nullable(),
-});
+}) satisfies z.ZodType<AcceptedAnswer & { attemptId: string | null }>;
 export type AnswerAcceptanceBody = z.infer<typeof AnswerAcceptanceBody>;
 
 /** What the act did. */
@@ -149,7 +150,7 @@ export const ItemAcceptance = z.object({
   label: z.string(),
   /** Null: everyone who gave the answer. */
   attemptId: z.uuid().nullable(),
-});
+}) satisfies z.ZodType<AcceptedAnswer>;
 export type ItemAcceptance = z.infer<typeof ItemAcceptance>;
 
 /** One part of an entry's answer an acceptance can name (the type's `acceptance.given`). */
@@ -159,7 +160,7 @@ export const AcceptablePart = z.object({
   label: z.string(),
   /** The key alone counts it right: nothing to accept. */
   right: z.boolean(),
-});
+}) satisfies z.ZodType<TypeAcceptablePart>;
 export type AcceptablePart = z.infer<typeof AcceptablePart>;
 
 export const GradingQueueItem = StaffItemRef.extend({

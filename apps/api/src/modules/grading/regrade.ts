@@ -23,9 +23,10 @@ import {
   officialAttempt,
   questionVersions,
 } from "../../db/schema.js";
-import { clearGradingReady, joinedItem, retargetItemVersion, type DbOrTx, type JoinedItem } from "../evaluation/service.js";
-import { parametersOf, writtenConfig } from "../pool/service.js";
+import { clearGradingReady, joinedItem, retargetItemVersion } from "../evaluation/service.js";
+import { parametersOf } from "../pool/service.js";
 import { dropVanishedAcceptances } from "./acceptance.js";
+import { lockItems } from "./acceptanceRules.js";
 import { GradingError, pairKey, type PairKey } from "./records.js";
 
 /**
@@ -53,6 +54,9 @@ export async function regradeItem(
   input: { note: string; toVersionNumber?: number | undefined },
 ): Promise<string | null> {
   return db.transaction(async (tx) => {
+    // ADR-128: the item's lock, which the acceptance act takes too — a
+    // retarget never races a rule written for the old version.
+    await lockItems(tx, [item.itemId]);
     let note = input.note.trim();
     if (input.toVersionNumber !== undefined) {
       const [version] = await tx
@@ -72,7 +76,7 @@ export async function regradeItem(
       const held = await joinedItem(tx, item.evaluationId, item.itemId);
       await retargetItemVersion(tx, item.itemId, version.id);
       note = `${note} (re-graded with version ${input.toVersionNumber})`;
-      const dropped = held ? await dropVanishedAcceptancesOn(tx, held, version) : [];
+      const dropped = held ? await dropVanishedAcceptances(tx, held, version) : [];
       if (dropped.length > 0) note = `${note} (accepted answers dropped: ${dropped.map((d) => `"${d}"`).join(", ")})`;
     }
     // A practice attempt's cells (ADR-122) keep their grading: the regrade's
@@ -98,30 +102,6 @@ export async function regradeItem(
     await clearGradingReady(tx, item.evaluationId);
     return note;
   });
-}
-
-/**
- * ADR-128: the acceptances of `held` that `version` no longer holds, dropped;
- * none when this build cannot read the new version.
- */
-async function dropVanishedAcceptancesOn(
-  tx: DbOrTx,
-  held: JoinedItem,
-  version: JoinedItem["version"],
-): Promise<string[]> {
-  const type = held.question.type;
-  const after = readable(type, version);
-  if (after === undefined) return [];
-  return dropVanishedAcceptances(tx, { itemId: held.item.id, type }, readable(type, held.version), after);
-}
-
-/** The question as `version` writes it, or undefined when this build cannot read it. */
-function readable(type: string, version: Parameters<typeof writtenConfig>[1]): unknown {
-  try {
-    return writtenConfig(type, version).config;
-  } catch {
-    return undefined;
-  }
 }
 
 /**

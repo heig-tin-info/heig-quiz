@@ -14,7 +14,7 @@ import {
   type GradingState,
 } from "@quiz/contracts";
 import { isGraded, isPendingRunner } from "@quiz/core/server";
-import { gradableNow, itemPoints, round2 } from "@quiz/domain";
+import { gradableNow, itemPoints, round2, rulesForAttempt, type AcceptanceRule } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { answers, attempts, officialAttempt } from "../../db/schema.js";
@@ -40,7 +40,13 @@ import {
   type LlmGradingJob,
   type RunnerGradingJob,
 } from "./passCommon.js";
-import { acceptancesOf, acceptedFor, type ItemRules } from "./acceptanceRules.js";
+import {
+  acceptanceGuard,
+  acceptanceHook,
+  acceptancesOf,
+  type ItemRules,
+  type RuleBound,
+} from "./acceptanceRules.js";
 import { announceGradingReady } from "./ready.js";
 import { standingGradings } from "./reads.js";
 import { pairKey, type AttemptRecord, type GradingRecord, type PairKey } from "./records.js";
@@ -202,8 +208,12 @@ export async function gradeCell(
     answer: typeof answers.$inferSelect | null;
     /** Whether a model may be asked (`offersLlm`), decided once per pass. */
     llm: boolean;
-    /** The acceptances in force on the item (ADR-128); `acceptedFor` picks the attempt's. */
-    acceptances: ItemRules;
+    /**
+     * The acceptances in force on the item (ADR-128): the cell is graded
+     * with those for everyone and the attempt's own — none on a practice
+     * attempt (ADR-122), graded against the pool's key like the drill.
+     */
+    rules: readonly AcceptanceRule[];
   },
 ): Promise<{ write: WriteGradingInput } | { runner: RunnerGradingJob } | { llm: LlmGradingJob }> {
   const { evaluation, job, item, attempt, answer } = cell;
@@ -249,7 +259,7 @@ export async function gradeCell(
       // The evaluation's per-type settings: what a question config
       // that says "inherit" defers to (an mcq's scoring policy).
       defaults: gradeDefaults(evaluation),
-      ...acceptedContext(cell.acceptances, item, attempt),
+      ...acceptedContext(rulesForAttempt(cell.rules, { id: attempt.id, practice: attempt.afterDue })),
     },
   });
   if (outcome.kind === "written") {
@@ -279,14 +289,24 @@ export async function gradeCell(
   };
 }
 
+/** The context's `accepted`, left out when there is none (ADR-128). */
+const acceptedContext = (accepted: readonly { part: string; answer: string }[]) =>
+  accepted.length === 0 ? {} : { accepted };
+
 /**
- * The answers accepted at grading time this cell is graded with (ADR-128):
- * the item's rules for everyone and the attempt's own; none on a practice
- * attempt, graded against the pool's key like the drill.
+ * A cell to grade, bound to the rules it is graded with (ADR-128): its
+ * grading now, and how to grade it again should the rules move before the
+ * write (`acceptanceGuard`).
  */
-function acceptedContext(acceptances: ItemRules, item: JoinedItem, attempt: AttemptRecord) {
-  const accepted = acceptedFor(acceptances.get(item.item.id), attempt);
-  return accepted.length === 0 ? {} : { accepted };
+export async function boundCell(
+  app: FastifyInstance,
+  cell: Parameters<typeof gradeCell>[1],
+): Promise<{ graded: Awaited<ReturnType<typeof gradeCell>>; bound: RuleBound }> {
+  const regrade = async (rules: readonly AcceptanceRule[]) => {
+    const again = await gradeCell(app, { ...cell, rules });
+    return "write" in again ? again.write : null;
+  };
+  return { graded: await gradeCell(app, cell), bound: { rules: cell.rules, regrade } };
 }
 
 /**
@@ -341,8 +361,12 @@ export async function runEvaluationGrading(
   // (D-01): a transaction per 500 cells instead of one per cell. A pass that
   // dies half-way writes nothing and is simply run again (idempotency).
   const writes: WriteGradingInput[] = [];
+  // ADR-128: the cells of an item that takes acceptances, written only with
+  // the rules in force at the write (`acceptanceGuard`).
+  const bound = new Map<PairKey, RuleBound>();
   for (const item of pass.items) {
     const { configOf, keyed } = readConfig(app, item);
+    const accepting = acceptanceHook(item.question.type, evaluation.mode) !== undefined;
     // An opinion poll's question has no key (ADR-014, addendum 2026-09-23):
     // there is nothing to be right about, so nothing is written — not a
     // zero per answer, which would mark the whole room wrong.
@@ -359,17 +383,12 @@ export async function runEvaluationGrading(
       // model asked twice for the same answer (ADR-063 §3).
       if (standing?.state !== "validated" && !(standing && keepsLlmProposal(standing, answer, job))) {
         const config = configOf(attempt);
-        const graded = await gradeCell(app, {
-          evaluation,
-          job,
-          item,
-          config,
-          attempt,
-          answer,
-          llm,
-          acceptances: pass.acceptances,
-        });
-        if ("write" in graded) writes.push(graded.write);
+        const rules = pass.acceptances.get(item.item.id) ?? [];
+        const { graded, bound: cell } = await boundCell(app, { evaluation, job, item, config, attempt, answer, llm, rules });
+        if ("write" in graded) {
+          writes.push(graded.write);
+          if (accepting) bound.set(key, cell);
+        }
         else if ("runner" in graded) runnerJobs.push(graded.runner);
         else llmJobs.push(graded.llm);
       }
@@ -379,7 +398,7 @@ export async function runEvaluationGrading(
   await writeGradings(
     app.db,
     writes,
-    passGuard(new Map(pass.attempts.map((a) => [a.id, endOf(a.closedAt)]))),
+    acceptanceGuard(passGuard(new Map(pass.attempts.map((a) => [a.id, endOf(a.closedAt)]))), bound),
   );
   progress.finish(runnerJobs.length + llmJobs.length > 0 ? "pending" : "done");
   for (const runnerJob of runnerJobs) {
@@ -429,7 +448,7 @@ export async function checkGrading(
     answer,
     llm: false,
     // ADR-124: the check of an exercise is graded with the acceptances too.
-    acceptances: await acceptancesOf(app.db, [item.item.id]),
+    rules: (await acceptancesOf(app.db, [item.item.id])).get(item.item.id) ?? [],
   });
   if ("runner" in graded) return graded;
   return "write" in graded && graded.write.state === "validated" ? graded : null;

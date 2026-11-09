@@ -4588,7 +4588,7 @@ export const fr: Record<keyof Dict, string> = {
   "grading.counting.effect.neutralized": "Ses points sortent du total et des points de chaque étudiant. Réponses et notes sont conservées.",
   "grading.counting.confirm.title": "Modifier le comptage de la question {n} ?",
   "grading.counting.confirm.total": "Total : {from} → {to} pts",
-  "grading.counting.confirm.released": "Les résultats sont publiés : les étudiants dont la note change seront avertis.",
+  "grading.releasedTold": "Les résultats sont publiés : les étudiants dont la note change seront avertis.",
   "grading.counting.confirm.ok": "Modifier",
   "grading.counting.done": "Le comptage de la question a été modifié.",
   "grading.counting.noGradedPoints": "Au moins une question doit compter dans le total.",

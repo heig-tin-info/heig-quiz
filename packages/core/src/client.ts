@@ -520,6 +520,14 @@ export interface QuestionTypeClient<
 export interface GradingCellInput<TAnswer, TDetails> {
   answer: TAnswer | null;
   details: TDetails | null;
+  /**
+   * The host's mark of an answer accepted at grading time, and its control
+   * (ADR-128), for the part the cell shows (`GradingColumn.part`): the cell
+   * places it right after that part's answer chip. Present, it IS the
+   * accepted sign — the cell then draws a plain right chip; absent (a
+   * reader outside the table), the cell draws its own accepted chip.
+   */
+  accept?: ((part: string) => ReactNode) | undefined;
 }
 
 /**

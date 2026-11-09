@@ -227,7 +227,11 @@ export interface GradeContext {
   accepted?: readonly AcceptedAnswer[];
 }
 
-/** One answer accepted at grading time (ADR-128): a part of the question, and the identity of the answer. */
+/**
+ * One answer of one part (ADR-128): a part of the question, and the type's
+ * identity of the answer given there. THE shape of a part's answer: the
+ * domain's rules and the wire's schemas are built on it.
+ */
 export interface AcceptedAnswer {
   part: string;
   answer: string;
@@ -601,6 +605,12 @@ export interface QuestionTypeServer<
   answerMisfit?(config: TConfig, answer: TAnswer): string | null;
 
   /**
+   * Accepting an answer at grading time (ADR-128). Absent: the grading
+   * screen offers no acceptance for the type's items.
+   */
+  readonly acceptance?: AnswerAcceptance<TConfig, TAnswer>;
+
+  /**
    * The per-type statistics of one item over the class (F-RES-03, audit
    * B-15): the answer distribution, a test-case pass rate.
    *
@@ -613,12 +623,6 @@ export interface QuestionTypeServer<
    * result is teacher-facing only. Omitting the hook means "no per-type
    * statistics": the item shows its success rate and nothing more.
    */
-  /**
-   * Accepting an answer at grading time (ADR-128). Absent: the grading
-   * screen offers no acceptance for the type's items.
-   */
-  readonly acceptance?: AnswerAcceptance<TConfig, TAnswer>;
-
   aggregate?(input: {
     answers: readonly unknown[];
     details: readonly unknown[];

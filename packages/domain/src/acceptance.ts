@@ -10,6 +10,8 @@
  * and the cells the server re-grades are one computation.
  */
 
+import type { AcceptedAnswer } from "@quiz/core/server";
+
 /** Who an acceptance reaches: everyone who gave the answer (the default), or one attempt. */
 export const ACCEPTANCE_SCOPES = ["everyone", "student"] as const;
 export type AcceptanceScope = (typeof ACCEPTANCE_SCOPES)[number];
@@ -23,12 +25,8 @@ export function acceptanceScopes(parameterized: boolean): readonly AcceptanceSco
   return parameterized ? ["student"] : ACCEPTANCE_SCOPES;
 }
 
-/** One answer of one part: what an acceptance names, and what a type reports of an answer. */
-export interface PartAnswer {
-  part: string;
-  /** The type's identity of the answer at that part (ADR-128 §3). */
-  answer: string;
-}
+/** One answer of one part: the question-type contract's own shape (`@quiz/core`). */
+export type PartAnswer = AcceptedAnswer;
 
 /** One acceptance in force on an item; `attemptId` null reaches everyone. */
 export interface AcceptanceRule extends PartAnswer {
@@ -77,9 +75,4 @@ export function acceptanceReach(
     (cell.manual ? unchanged : reached).push(cell.attemptId);
   }
   return { reached, unchanged };
-}
-
-/** Whether `rules` holds `rule` exactly: same part, answer and scope. */
-export function holdsRule(rules: readonly AcceptanceRule[], rule: AcceptanceRule): boolean {
-  return rules.some((r) => r.part === rule.part && r.answer === rule.answer && r.attemptId === rule.attemptId);
 }

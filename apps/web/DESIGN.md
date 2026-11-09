@@ -1892,16 +1892,21 @@ One question's answers as a table (`src/grading/`, origin
 - **Accepting an answer** (ADR-128). A cell of a column that names a part
   (`GradingColumn.part`) and holds an answer the key counts wrong — or one
   accepted already — carries an `xs` `IconButton` with the `BadgeCheck`
-  seal in its top-right corner, on `surface`, `fg-muted` (`success` once
-  accepted): hidden, not removed, until the cell is hovered or the row
-  focused, and kept while its card is open. Its `Popover` card (18 rem)
+  seal right after the answer's chip, in the chip's line, vertically
+  centred (the type places it, `GradingCellInput.accept`). An answer to
+  accept keeps it transparent but focusable; on row hover or focus it shows
+  muted (60 %), at full strength in the hovered cell or while its card is
+  open. An accepted answer's seal is `success` and always shown: it is the
+  accepted sign, and the same button stops accepting (a reader who may not
+  write sees the seal alone). Its `Popover` card (18 rem)
   says the part in the caption face, "Count “x” as right", the count of
   answers concerned and of those adjusted by hand, the scope as a
   `Segmented`, and one full-width action: Accept (`primary`) or Stop
-  accepting (`secondary`); a refusal stays on the card as `ErrorText`. An
-  accepted answer is the green chip with the seal in front (`AcceptedChip`,
-  `@quiz/ui`), never colour alone; the key's row lists the answers accepted
-  for everyone after the key's chips, the same way.
+  accepting (`secondary`); a refusal stays on the card as `ErrorText`.
+  Outside the table (a reader without the control), an accepted answer is
+  the green chip with the seal in front (`AcceptedChip`, `@quiz/ui`), never
+  colour alone; the key's row lists the answers accepted for everyone after
+  the key's chips, that way.
 - **The answer panel** is a `Sheet` with two optional slots added for it:
   `leading` (the verdict glyph before the title) and `actions` (↑ / ↓
   before the close button).

@@ -13,6 +13,7 @@ import type { AnswerAcceptanceResult, GradingQueue, StudentFeedback } from "@qui
 import {
   answerAcceptances,
   answers,
+  attempts,
   auditLog,
   courseStaff,
   gradings,
@@ -26,7 +27,11 @@ import { applyState, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as pool from "../pool/service.js";
-import { checkGrading, runEvaluationGrading } from "./evaluationPass.js";
+import { acceptanceGuard, type RuleBound } from "./acceptanceRules.js";
+import { boundCell, checkGrading, readConfig, runEvaluationGrading } from "./evaluationPass.js";
+import { passGuard } from "./passCommon.js";
+import { pairKey } from "./records.js";
+import { writeGradings } from "./writer.js";
 
 let server: TestServer;
 let teacher: { id: string; headers: Record<string, string> };
@@ -92,17 +97,26 @@ async function sit(evaluationId: string, student: number, blanks: (string | null
 }
 
 /**
- * Closed and graded: student 0 and 1 chose `invalid` (canonical 1), student 2
+ * Closed and graded. By default student 0 and 1 chose `invalid` (canonical 1), student 2
  * chose `long`; everyone wrote the text blank right. Student 1's grading is
- * then a teacher's manual override.
+ * then a teacher's manual override; other `blanks`, no override.
  */
-async function graded() {
+async function graded(
+  blanks: (string | null)[][] = [
+    ["1", "zorglub"],
+    ["1", "Zorglub"],
+    ["2", "zorglub"],
+  ],
+) {
   const built = await build();
-  const attempts = [await sit(built.evaluation.id, 0, ["1", "zorglub"]), await sit(built.evaluation.id, 1, ["1", "Zorglub"]), await sit(built.evaluation.id, 2, ["2", "zorglub"])];
+  const attempts = [];
+  for (const [student, given] of blanks.entries()) attempts.push(await sit(built.evaluation.id, student, given));
   expect((await send("POST", `/app/api/evaluations/${built.evaluation.id}/close`, { confirm: true })).statusCode).toBe(200);
-  const [answer] = await db().select().from(answers).where(eq(answers.attemptId, attempts[1]!.id));
-  const override = await send("POST", `/app/api/answers/${answer!.id}/gradings`, { points: 0.5, comment: "half" });
-  expect(override.statusCode).toBe(200);
+  if (attempts[1] && blanks.length === 3) {
+    const [answer] = await db().select().from(answers).where(eq(answers.attemptId, attempts[1].id));
+    const override = await send("POST", `/app/api/answers/${answer!.id}/gradings`, { points: 0.5, comment: "half" });
+    expect(override.statusCode).toBe(200);
+  }
   return { ...built, evaluation: await reload(db(), built.evaluation.id), attempts };
 }
 
@@ -272,12 +286,97 @@ describe("access and release (ADR-068 §3, ADR-108 §6)", () => {
       );
     expect(told.map((n) => n.userId)).toEqual([students[0]!.id]);
 
-    // The student reads the blank right, accepted, and never the key.
-    const feedback = await get(`/app/api/attempts/${attempts[0]!.id}/feedback`, students[0]!);
+  });
+
+  it("shows the student the blank right, accepted, and never the key nor another student's accepted answer (05 §5.7)", async () => {
+    const { evaluation, itemId, attempts: sat } = await graded([
+      ["1", "zorg"],
+      ["1", "gloubiboulga"],
+    ]);
+    expect((await send("PUT", url(evaluation.id, itemId), INVALID)).statusCode).toBe(200);
+    const own = { part: "b1", answer: "gloubiboulga", attemptId: sat[1]!.id };
+    expect((await send("PUT", url(evaluation.id, itemId), own)).statusCode).toBe(200);
+    expect((await send("POST", `/app/api/evaluations/${evaluation.id}/release`, { confirm: true })).statusCode).toBe(200);
+    const feedback = await get(`/app/api/attempts/${sat[0]!.id}/feedback`, students[0]!);
     const body = feedback.json() as StudentFeedback;
     if (!body.available) throw new Error("feedback expected");
     expect(firstBlank(body.items[0]!.details)).toMatchObject({ ok: true, accepted: true });
-    expect(feedback.body).not.toContain('"expected"');
-    expect(feedback.body).not.toContain('"given"');
+    for (const key of ['"expected"', '"given"', '"correct"']) expect(feedback.body).not.toContain(key);
+    // The text blank's key, and the other student's own accepted text. The
+    // dropdown's right label, `int`, is one of the options every student is
+    // shown: which option is right is the key, and `correct` is checked above.
+    expect(feedback.body).not.toContain("zorglub");
+    expect(feedback.body).not.toContain("gloubiboulga");
+  });
+});
+
+/**
+ * The act's serialization (ADR-128 §6): what reaches the single writer is
+ * decided under the item's lock, by `acceptanceGuard`. True concurrency is
+ * not reproducible on PGlite (one connection), so these tests hand the guard
+ * a grading computed BEFORE the competing write landed — exactly what a
+ * request that lost the race holds — and check what the guard lets through.
+ */
+describe("the act's serialization", () => {
+  /** Student 0's cell graded now, bound to `rules`: what a racing writer computed. */
+  async function stale(evaluationId: string, attemptId: string, rules: { part: string; answer: string; attemptId: string | null }[]) {
+    const evaluation = await reload(db(), evaluationId);
+    const [item] = await joinedItems(db(), evaluationId);
+    const attempt = (await db().select().from(attempts).where(eq(attempts.id, attemptId)))[0]!;
+    const [answer] = await db().select().from(answers).where(eq(answers.attemptId, attemptId));
+    const { graded, bound } = await boundCell(server.app, {
+      evaluation,
+      job: { evaluationId },
+      item: item!,
+      config: readConfig(server.app, item!).configOf(attempt),
+      attempt,
+      answer: answer!,
+      llm: false,
+      rules,
+    });
+    if (!("write" in graded)) throw new Error("a grading expected");
+    return { write: graded.write, bound: new Map<ReturnType<typeof pairKey>, RuleBound>([[pairKey(attemptId, item!.item.id), bound]]) };
+  }
+
+  it("never unseats a manual override that landed after the reach was read", async () => {
+    const { evaluation, itemId, attempts: sat } = await graded();
+    await send("PUT", url(evaluation.id, itemId), INVALID);
+    // The act's grading of student 0, computed; then the teacher overrides it.
+    const { write, bound } = await stale(evaluation.id, sat[0]!.id, [INVALID]);
+    const [answer] = await db().select().from(answers).where(eq(answers.attemptId, sat[0]!.id));
+    expect((await send("POST", `/app/api/answers/${answer!.id}/gradings`, { points: 1.5, comment: "mine" })).statusCode).toBe(200);
+    const written = await writeGradings(db(), [write], acceptanceGuard(passGuard(), bound, { leaveManual: true }));
+    expect(written).toEqual([]);
+    expect(await validated(sat[0]!.id, itemId)).toMatchObject({ source: "manual", points: 1.5 });
+  });
+
+  it("writes a grading computed before a second acceptance with both: an answer carrying both keeps both", async () => {
+    const { evaluation, itemId, attempts: sat } = await graded([["1", "zorg"]]);
+    const ZORG = { part: "b1", answer: "zorg", attemptId: null };
+    expect((await send("PUT", url(evaluation.id, itemId), INVALID)).json()).toMatchObject({ regraded: 1 });
+    // A pass (or the first act) that read the rules before the second act.
+    const { write, bound } = await stale(evaluation.id, sat[0]!.id, [INVALID]);
+    expect(write.points).toBe(1);
+    expect((await send("PUT", url(evaluation.id, itemId), ZORG)).json()).toMatchObject({ regraded: 1 });
+    expect((await validated(sat[0]!.id, itemId)).points).toBe(2);
+    const [written] = await writeGradings(db(), [write], acceptanceGuard(passGuard(), bound));
+    expect(written!.points).toBe(2);
+    expect((await validated(sat[0]!.id, itemId)).points).toBe(2);
+  });
+
+  it("heals on a retried PUT: a rule whose re-grade never ran is applied", async () => {
+    const { evaluation, itemId, attempts: sat } = await graded();
+    // The first act wrote its rule, then failed before its re-grade.
+    await db().insert(answerAcceptances).values({ id: crypto.randomUUID(), itemId, ...INVALID, createdBy: teacher.id });
+    expect((await validated(sat[0]!.id, itemId)).points).toBe(1);
+    const retried = await send("PUT", url(evaluation.id, itemId), INVALID);
+    expect(retried.json()).toMatchObject({ accepted: true, regraded: 1, unchanged: 1 });
+    expect((await validated(sat[0]!.id, itemId)).points).toBe(2);
+    // The act changed no rule: it audits nothing.
+    const audited = await db()
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "evaluation.answer_accepted"), eq(auditLog.subjectId, evaluation.id)));
+    expect(audited).toEqual([]);
   });
 });

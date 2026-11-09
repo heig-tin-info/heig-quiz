@@ -4616,7 +4616,7 @@ export const en = {
   "grading.counting.effect.neutralized": "Its points leave the total and every student's points. Answers and grades are kept.",
   "grading.counting.confirm.title": "Change how question {n} counts?",
   "grading.counting.confirm.total": "Total: {from} → {to} pts",
-  "grading.counting.confirm.released": "The results are released: students whose grade changes will be notified.",
+  "grading.releasedTold": "The results are released: students whose grade changes will be notified.",
   "grading.counting.confirm.ok": "Change",
   "grading.counting.done": "How the question counts has changed.",
   "grading.counting.noGradedPoints": "At least one question must count in the total.",

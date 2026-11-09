@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { acceptanceReach, acceptanceScopes, holdsRule, rulesForAttempt } from "./acceptance.js";
+import { acceptanceReach, acceptanceScopes, rulesForAttempt } from "./acceptance.js";
 
 describe("acceptanceScopes", () => {
   it("offers both scopes, and only one student for a parameterized question", () => {
@@ -52,13 +52,5 @@ describe("acceptanceReach", () => {
       reached: [],
       unchanged: [],
     });
-  });
-});
-
-describe("holdsRule", () => {
-  it("compares part, answer and scope", () => {
-    const rules = [{ part: "b1", answer: "1", attemptId: null }];
-    expect(holdsRule(rules, { part: "b1", answer: "1", attemptId: null })).toBe(true);
-    expect(holdsRule(rules, { part: "b1", answer: "1", attemptId: "a" })).toBe(false);
   });
 });

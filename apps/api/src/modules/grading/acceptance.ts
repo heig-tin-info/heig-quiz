@@ -9,6 +9,7 @@
  * (`QuestionTypeServer.acceptance`): nothing here knows a cloze.
  */
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -18,91 +19,77 @@ import {
   acceptanceReach,
   acceptanceScopes,
   itemListLock,
-  type AcceptanceRule,
+  round2,
   type AcceptanceCell,
+  type AcceptanceRule,
 } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { answerAcceptances, answers, attempts, officialAttempt } from "../../db/schema.js";
-import { attemptCount, type DbOrTx, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
+import {
+  attemptCount,
+  joinedItem,
+  type DbOrTx,
+  type EvaluationRecord,
+  type JoinedItem,
+} from "../evaluation/service.js";
 import { typeOf } from "../pool/config.js";
-import { configPerAttempt, isParameterized } from "../pool/service.js";
-import { acceptancesOf } from "./acceptanceRules.js";
-import { gradeCell, readConfig } from "./evaluationPass.js";
+import { configPerAttempt, isParameterized, writtenConfig } from "../pool/service.js";
+import {
+  acceptanceGuard,
+  acceptanceHook,
+  acceptancesOf,
+  lockItems,
+  ruleLabel,
+  type AcceptanceHook,
+  type RuleBound,
+} from "./acceptanceRules.js";
+import { boundCell, readConfig } from "./evaluationPass.js";
 import { endOf, passGuard } from "./passCommon.js";
 import { standingGradings } from "./reads.js";
-import { GradingError, pairKey, type AttemptRecord } from "./records.js";
+import { GradingError, pairKey, type AttemptRecord, type GradingRecord, type PairKey } from "./records.js";
 import { writeGradings, type WriteGradingInput } from "./writer.js";
-
-/** The type's acceptance hook, when an item of this type can accept an answer on this evaluation. */
-function hookOf(type: string, evaluation: Pick<EvaluationRecord, "mode">): AcceptanceHook | undefined {
-  // A poll has no grade to correct (ADR-014): never an acceptance there.
-  if (evaluation.mode === "poll") return undefined;
-  try {
-    return typeOf(type).acceptance;
-  } catch {
-    // A type this build does not carry takes none.
-    return undefined;
-  }
-}
-
-/** Whether an item of `type` can accept an answer at grading time on this evaluation (ADR-128). */
-export const takesAcceptance = (type: string, evaluation: Pick<EvaluationRecord, "mode">): boolean =>
-  hookOf(type, evaluation) !== undefined;
 
 /**
  * The parts of a stored answer an acceptance can name, with what a teacher
  * reads of each — the grading queue's `parts` (ADR-128). Empty when the
- * type takes no acceptance, or the answer no longer parses.
+ * answer no longer parses or the type cannot read it.
  */
-export function partsOf(
-  type: string,
-  evaluation: Pick<EvaluationRecord, "mode">,
-  config: unknown,
-  payload: unknown,
-): AcceptablePart[] {
-  const hook = hookOf(type, evaluation);
-  if (!hook || payload === null || config === undefined) return [];
+export function partsOf(hook: AcceptanceHook, type: string, config: unknown, payload: unknown): AcceptablePart[] {
+  if (payload === null || config === undefined) return [];
   const parsed = typeOf(type).answerSchema.safeParse(payload);
   if (!parsed.success) return [];
+  let given;
   try {
-    return hook.given(config, parsed.data).map((p) => ({ ...p, label: hook.label(config, p.part, p.answer) ?? p.answer }));
+    given = hook.given(config, parsed.data);
   } catch {
     // A config this build reads differently: no affordance, never a 500.
     return [];
   }
+  return given.map((p) => ({ ...p, label: ruleLabel(hook, () => config, p) ?? p.answer }));
 }
 
 /**
- * The `acceptance` of a grading queue's item (ADR-128): the scopes it
- * offers and the acceptances in force, each with its label — read on the
- * config of the attempt a single-student rule names, else on `configOf`'s
- * for no attempt in particular. Undefined when the item takes none.
+ * The `acceptance` of a grading queue's item that takes one (ADR-128): the
+ * scopes it offers and the acceptances in force, each with its label — read
+ * on the config of the attempt a single-student rule names, else on
+ * `configOf`'s for no attempt in particular.
  */
 export function queueAcceptance(
+  hook: AcceptanceHook,
   item: JoinedItem,
-  evaluation: Pick<EvaluationRecord, "mode">,
   rules: readonly AcceptanceRule[],
   configOf: (attemptId: string | null) => unknown,
-): { scopes: ("everyone" | "student")[]; accepted: ItemAcceptance[] } | undefined {
-  const hook = hookOf(item.question.type, evaluation);
-  if (!hook) return undefined;
-  const labelOf = (rule: AcceptanceRule) => {
-    try {
-      return hook.label(configOf(rule.attemptId), rule.part, rule.answer) ?? rule.answer;
-    } catch {
-      return rule.answer;
-    }
-  };
+): { scopes: ("everyone" | "student")[]; accepted: ItemAcceptance[] } {
   return {
     scopes: [...acceptanceScopes(isParameterized(item.version))],
-    accepted: rules.map((rule) => ({ ...rule, label: labelOf(rule) })),
+    accepted: rules.map((rule) => ({ ...rule, label: ruleLabel(hook, () => configOf(rule.attemptId), rule) ?? rule.answer })),
   };
 }
 
 /** What {@link changeAcceptance} did (`AnswerAcceptanceResult`). */
 export interface AcceptanceChange {
-  /** The act changed the rules: false when they already said so. */
+  /** The act changed the rules: false when they already said so (it audits nothing then). */
   changed: boolean;
   regraded: number;
   unchanged: number;
@@ -118,6 +105,12 @@ export interface AcceptanceChange {
  * a released evaluation is flagged and only the students whose shown grade
  * moved are told (ADR-108 §6, `writeGradings`). An answer not graded yet
  * gets the rule from the pass that grades it.
+ *
+ * Serialized per item (`lockItems`): the rule is written under the item's
+ * lock, and the re-grade is written by `acceptanceGuard`, which takes it
+ * again, reads the rules then in force and drops a cell overridden by hand
+ * meanwhile. The re-grade runs whether the rules changed or not, so a PUT
+ * or DELETE repeated after a failure heals what the first left undone.
  *
  * Refused on a poll and for a type without acceptances (`409
  * acceptance_unavailable`), before the item list is frozen (`409
@@ -136,7 +129,7 @@ export async function changeAcceptance(
   now: Date,
 ): Promise<AcceptanceChange | null> {
   const db = app.db;
-  const hook = hookOf(item.question.type, evaluation);
+  const hook = acceptanceHook(item.question.type, evaluation.mode);
   if (!hook) throw new GradingError("acceptance_unavailable");
   if (itemListLock(evaluation.state, await attemptCount(db, evaluation.id)) === null) {
     throw new GradingError("acceptance_not_frozen");
@@ -156,15 +149,26 @@ export async function changeAcceptance(
     );
   if (rule.attemptId !== null && attemptRows.length === 0) return null;
 
-  // A static question's config is every attempt's; a single student's rule
-  // is read on that student's instance.
-  if (labelOn(hook, item, attemptRows[0] ?? NO_ATTEMPT, rule) === null) throw new GradingError("acceptance_invalid");
+  const { held, changed } = await db.transaction(async (tx) => {
+    await lockItems(tx, [item.item.id]);
+    // The version in force under the lock: a regrade may have retargeted it.
+    const held = (await joinedItem(tx, evaluation.id, item.item.id)) ?? item;
+    // A static question's config is every attempt's; a single student's
+    // rule is read on that student's instance.
+    const sample = attemptRows[0] ?? NO_ATTEMPT;
+    if (ruleLabel(hook, () => configPerAttempt(held)(sample), rule) === null) throw new GradingError("acceptance_invalid");
+    const changed = accept
+      ? await insertRule(tx, item.item.id, rule, actorId, now)
+      : await deleteRule(tx, item.item.id, rule);
+    return { held, changed };
+  });
 
-  const changed = accept ? await insertRule(db, item.item.id, rule, actorId, now) : await deleteRule(db, item.item.id, rule);
-  if (!changed) return { changed, regraded: 0, unchanged: 0, modifiedAfterRelease: false };
-
-  const { writes, unchanged } = await regradeReached(app, evaluation, item, rule, attemptRows);
-  const written = await writeGradings(db, writes, passGuard(new Map(attemptRows.map((a) => [a.id, endOf(a.closedAt)]))));
+  const { writes, bound, unchanged } = await regradeReached(app, evaluation, held, hook, rule, attemptRows);
+  const written = await writeGradings(
+    db,
+    writes,
+    acceptanceGuard(passGuard(new Map(attemptRows.map((a) => [a.id, endOf(a.closedAt)]))), bound, { leaveManual: true }),
+  );
   return {
     changed,
     regraded: written.length,
@@ -176,21 +180,7 @@ export async function changeAcceptance(
 /** No attempt at all: what a static item's config, which reads none, is asked with. */
 const NO_ATTEMPT = { seed: 0, instances: {} };
 
-/** `rule`'s label on the item's config for `attempt`; null when it holds no such answer, or cannot be read. */
-function labelOn(
-  hook: AcceptanceHook,
-  item: JoinedItem,
-  attempt: Parameters<ReturnType<typeof configPerAttempt>>[0],
-  rule: AcceptanceRule,
-): string | null {
-  try {
-    return safeLabel(hook, configPerAttempt(item)(attempt), rule);
-  } catch {
-    return null;
-  }
-}
-
-async function insertRule(db: Db, itemId: string, rule: AcceptanceRule, actorId: string, now: Date): Promise<boolean> {
+async function insertRule(db: DbOrTx, itemId: string, rule: AcceptanceRule, actorId: string, now: Date): Promise<boolean> {
   const inserted = await db
     .insert(answerAcceptances)
     .values({ id: randomUUID(), itemId, ...rule, createdBy: actorId, createdAt: now })
@@ -199,7 +189,7 @@ async function insertRule(db: Db, itemId: string, rule: AcceptanceRule, actorId:
   return inserted.length > 0;
 }
 
-async function deleteRule(db: Db, itemId: string, rule: AcceptanceRule): Promise<boolean> {
+async function deleteRule(db: DbOrTx, itemId: string, rule: AcceptanceRule): Promise<boolean> {
   const deleted = await db
     .delete(answerAcceptances)
     .where(and(eq(answerAcceptances.itemId, itemId), ...ruleMatch(rule)))
@@ -215,17 +205,19 @@ const ruleMatch = (rule: AcceptanceRule) => [
 ];
 
 /**
- * The new gradings of the answers `rule` reaches, graded with the rules in
- * force now, and how many answers it reaches that a manual override keeps.
+ * The new gradings of the graded answers `rule` reaches, with the rules in
+ * force now, each bound to them for the write guard, and how many answers it
+ * reaches that a manual override keeps.
  */
 async function regradeReached(
   app: FastifyInstance,
   evaluation: EvaluationRecord,
   item: JoinedItem,
+  hook: AcceptanceHook,
   rule: AcceptanceRule,
   attemptRows: readonly AttemptRecord[],
-): Promise<{ writes: WriteGradingInput[]; unchanged: number }> {
-  const db = app.db;
+): Promise<{ writes: WriteGradingInput[]; bound: Map<PairKey, RuleBound>; unchanged: number }> {
+  const db: Db = app.db;
   const ids = attemptRows.map((a) => a.id);
   const [answerRows, standing, acceptances] = await Promise.all([
     ids.length === 0
@@ -237,21 +229,24 @@ async function regradeReached(
     standingGradings(db, evaluation.id, { itemId: item.item.id, attemptIds: ids }),
     acceptancesOf(db, [item.item.id]),
   ]);
+  const rules = acceptances.get(item.item.id) ?? [];
   const answerOf = new Map(answerRows.map((a) => [a.attemptId, a]));
   const { configOf } = readConfig(app, item);
   const cells: AcceptanceCell[] = attemptRows.flatMap((attempt) => {
     const answer = answerOf.get(attempt.id);
     if (!answer) return [];
-    const given = partsOf(item.question.type, evaluation, configOf(attempt)?.config, answer.payload);
+    const given = partsOf(hook, item.question.type, configOf(attempt)?.config, answer.payload);
     const grading = standing.get(pairKey(attempt.id, item.item.id));
     return [{ attemptId: attempt.id, given, manual: grading?.source === "manual" }];
   });
   const { reached, unchanged } = acceptanceReach(cells, rule);
   const writes: WriteGradingInput[] = [];
+  const bound = new Map<PairKey, RuleBound>();
   for (const attempt of attemptRows) {
+    const key = pairKey(attempt.id, item.item.id);
     // Not graded yet: the pass that grades it applies the rule.
-    if (!reached.includes(attempt.id) || !standing.has(pairKey(attempt.id, item.item.id))) continue;
-    const graded = await gradeCell(app, {
+    if (!reached.includes(attempt.id) || !standing.has(key)) continue;
+    const { graded, bound: cell } = await boundCell(app, {
       evaluation,
       job: { evaluationId: evaluation.id },
       item,
@@ -259,54 +254,66 @@ async function regradeReached(
       attempt,
       answer: answerOf.get(attempt.id) ?? null,
       llm: false,
-      acceptances,
+      rules,
     });
-    if ("write" in graded) writes.push(graded.write);
+    if (!("write" in graded)) continue;
+    // Already graded so (a repeated act): nothing to write, nobody to tell.
+    if (sameGrading(standing.get(key)!, graded.write)) continue;
+    writes.push(graded.write);
+    bound.set(key, cell);
   }
-  return { writes, unchanged: unchanged.length };
+  return { writes, bound, unchanged: unchanged.length };
+}
+
+/** Whether a new automatic grading would only repeat the one in force. */
+function sameGrading(standing: GradingRecord, write: WriteGradingInput): boolean {
+  return (
+    standing.source === write.source &&
+    standing.state === write.state &&
+    standing.points === round2(write.points) &&
+    // jsonb keeps no key order: compared as values, as stored.
+    isDeepStrictEqual(standing.details ?? null, JSON.parse(JSON.stringify(write.details ?? null)))
+  );
 }
 
 /**
- * A regrade onto another version (F-GRADE-06, ADR-128): the acceptances
- * whose part — or, for a dropdown, whose option — the new version no
- * longer holds are dropped, and the note says which. `before` and `after`
- * are the question as the old and the new version write it: an identity is
- * kept when the new version holds it under the same label (a dropdown's
- * canonical index may name another option there). Returns the labels
+ * A regrade onto another version (F-GRADE-06, ADR-128), under the item's
+ * lock: the acceptances of `held` whose part — or, for a dropdown, whose
+ * option — `version` no longer holds are dropped, and the note says which.
+ * An identity is kept when the new version holds it under the same label (a
+ * dropdown's canonical index may name another option there). Nothing is
+ * dropped when this build cannot read the new version. Returns the labels
  * dropped.
  */
 export async function dropVanishedAcceptances(
   tx: DbOrTx,
-  item: { itemId: string; type: string },
-  before: unknown,
-  after: unknown,
+  held: JoinedItem,
+  version: JoinedItem["version"],
 ): Promise<string[]> {
-  const hook = typeOf(item.type).acceptance;
+  const type = held.question.type;
+  const hook = acceptanceHook(type);
   if (!hook) return [];
-  const rules = (await acceptancesOf(tx, [item.itemId])).get(item.itemId) ?? [];
+  const before = () => writtenConfig(type, held.version).config;
+  const after = () => writtenConfig(type, version).config;
+  if (!reads(after)) return [];
+  const rules = (await acceptancesOf(tx, [held.item.id])).get(held.item.id) ?? [];
   const dropped: string[] = [];
   for (const rule of rules) {
-    // The same identity must still name the same thing: a dropdown's
-    // canonical index may now be another option's.
-    const was = safeLabel(hook, before, rule);
-    const now = safeLabel(hook, after, rule);
+    const was = ruleLabel(hook, before, rule);
+    const now = ruleLabel(hook, after, rule);
     if (now !== null && (was === null || was === now)) continue;
-    await tx.delete(answerAcceptances).where(and(eq(answerAcceptances.itemId, item.itemId), ...ruleMatch(rule)));
+    await tx.delete(answerAcceptances).where(and(eq(answerAcceptances.itemId, held.item.id), ...ruleMatch(rule)));
     dropped.push(was ?? rule.answer);
   }
   return dropped;
 }
 
-type AcceptanceHook = NonNullable<ReturnType<typeof typeOf>["acceptance"]>;
-
-function safeLabel(
-  hook: AcceptanceHook,
-  config: unknown,
-  rule: AcceptanceRule,
-): string | null {
+/** Whether a config reads at all; false when this build cannot read it. */
+function reads(config: () => unknown): boolean {
   try {
-    return hook.label(config, rule.part, rule.answer);
+    config();
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
