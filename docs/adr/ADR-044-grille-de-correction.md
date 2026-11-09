@@ -17,7 +17,10 @@ question as written (the template, with its `[[…]]`, or the example
 instance when the type cannot draw the template, said "per answer"), marked
 "Own key per answer"; the side panel shows each answer's own key and its
 student's values, and the rows group by verdict, an answer column sorting
-only within a verdict.
+only within a verdict. Amended 2026-11-09 by
+[ADR-128](ADR-128-accepter-une-reponse-a-la-correction.md): grouping identical
+answers becomes an act — a cell's corner control accepts its answer for
+everyone who gave it.
 
 ## Context
 

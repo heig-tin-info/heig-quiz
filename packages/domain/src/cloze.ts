@@ -20,6 +20,7 @@
 import { shuffle, streamSeed } from "@quiz/core/rng";
 import {
   applyTextOptions,
+  exactKey,
   matchExact,
   matchNumber,
   matchRegex,
@@ -422,6 +423,12 @@ export interface ClozeBlankResult {
    * again on the way out.
    */
   expected: string;
+  /**
+   * The blank is right only because the teacher accepted this answer at
+   * grading time (ADR-128): `ok` is then true, and the score counts it as
+   * any right blank. Absent otherwise.
+   */
+  accepted?: true;
 }
 
 export interface ClozeGrade {
@@ -431,14 +438,21 @@ export interface ClozeGrade {
   fraction: number;
 }
 
+/**
+ * The answers accepted at grading time (ADR-128), blank by blank: the blank's
+ * index to the identities ({@link clozeAnswerIdentity}) counted right there.
+ */
+export type ClozeAccepted = ReadonlyMap<number, ReadonlySet<string>>;
+
 export function gradeCloze(
   parse: ClozeParse,
   blanks: readonly (string | null)[],
   caseSensitive: boolean,
+  accepted: ClozeAccepted = new Map(),
 ): ClozeGrade {
   const perBlank = parse.blanks.map((blank): ClozeBlankResult => {
     const given = blanks[blank.index] ?? null;
-    return {
+    const result = {
       index: blank.index,
       weight: blank.weight,
       kind: blank.kind,
@@ -446,6 +460,11 @@ export function gradeCloze(
       given,
       expected: describeBlank(blank),
     };
+    if (result.ok) return result;
+    const identity = clozeAnswerIdentity(blank, given, caseSensitive);
+    return identity !== null && accepted.get(blank.index)?.has(identity) === true
+      ? { ...result, ok: true, accepted: true }
+      : result;
   });
   const total = perBlank.reduce((s, b) => s + b.weight, 0);
   const earned = perBlank.reduce((s, b) => (b.ok ? s + b.weight : s), 0);
@@ -468,6 +487,65 @@ export function matchBlank(blank: ClozeBlank, given: string | null, caseSensitiv
       return Number.isInteger(id) && blank.correct.includes(id);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Acceptance at grading time (ADR-128)
+// ---------------------------------------------------------------------------
+
+/** The part an acceptance names for blank `index`: `b<index>`, as the paper's answer zones name it. */
+export const clozePart = (index: number): string => `b${index}`;
+
+/** The blank a part names, or null when it names none. */
+export function clozePartIndex(part: string): number | null {
+  const m = /^b(\d+)$/.exec(part);
+  return m === null ? null : Number(m[1]);
+}
+
+/**
+ * The identity of what a student gave in `blank` (ADR-128 §3): two answers
+ * with the same identity are "the same answer", which an acceptance counts
+ * right for everyone who gave it.
+ *
+ *   - a text blank: the text as the blank's own matching compares it
+ *     ({@link exactKey}) — normalised, and folded unless the question is
+ *     case-sensitive, where the case is kept;
+ *   - a dropdown: the CANONICAL option index (D4, ADR-097), whatever order
+ *     the student's dropdown was shuffled in;
+ *   - a number or a regex blank: `null`, never accepted — a number has its
+ *     tolerance and a pattern is already a rule.
+ *
+ * `null` too for an empty blank, or a dropdown value that names no option.
+ */
+export function clozeAnswerIdentity(blank: ClozeBlank, given: string | null, caseSensitive: boolean): string | null {
+  if (given === null) return null;
+  switch (blank.kind) {
+    case "text": {
+      const key = exactKey(given, { caseSensitive });
+      return key === "" ? null : key;
+    }
+    case "select": {
+      const value = given.trim();
+      if (!/^\d+$/.test(value)) return null;
+      const index = Number(value);
+      return index < blank.options.length ? String(index) : null;
+    }
+    case "number":
+    case "regex":
+      return null;
+  }
+}
+
+/**
+ * What a teacher reads for the accepted `answer` of `blank` — a dropdown's
+ * option label, a text blank's text — or `null` when `answer` is no identity
+ * this blank can hold: a blank that cannot be accepted, an option the
+ * question no longer has (a regrade onto another version drops it, ADR-128).
+ */
+export function clozeAcceptedLabel(blank: ClozeBlank, answer: string, caseSensitive: boolean): string | null {
+  const identity = clozeAnswerIdentity(blank, answer, caseSensitive);
+  if (identity !== answer) return null;
+  return blank.kind === "select" ? (blank.options[Number(answer)] ?? null) : answer;
 }
 
 /**

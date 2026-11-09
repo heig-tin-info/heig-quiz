@@ -56,6 +56,7 @@ export { Button, IconButton, iconButtonClass, type IconButtonSize, Select, TextI
 export { CheckboxField, FieldCell, NumberField, Segmented, Switch } from "./fields.js";
 export { prefersReducedMotion, useMediaQuery } from "./media.js";
 export {
+  AcceptedChip,
   AnswerChip,
   ChoiceMark,
   ClampedCode,
@@ -69,7 +70,7 @@ export {
   type ChoiceMarkState,
   type RunStatus,
 } from "./grading.js";
-export { AlertIcon, CloseIcon, GripIcon, PlusIcon, StrokeIcon, TrashIcon, typeIcon, WandIcon } from "./icon.js";
+export { AcceptedIcon, AlertIcon, CloseIcon, GripIcon, PlusIcon, StrokeIcon, TrashIcon, typeIcon, WandIcon } from "./icon.js";
 export { ErrorText, IssueList } from "./issues.js";
 export {
   AsideSection,

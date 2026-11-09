@@ -116,6 +116,8 @@ export const ClozeDetailsSchema = z.object({
       ok: z.boolean(),
       given: z.string().nullable(),
       expected: z.string(),
+      /** Right only because the teacher accepted this answer at grading time (ADR-128). */
+      accepted: z.literal(true).optional(),
     }),
   ),
   earned: z.number(),

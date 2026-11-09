@@ -40,6 +40,7 @@ import {
   type LlmGradingJob,
   type RunnerGradingJob,
 } from "./passCommon.js";
+import { acceptancesOf, acceptedFor, type ItemRules } from "./acceptanceRules.js";
 import { announceGradingReady } from "./ready.js";
 import { standingGradings } from "./reads.js";
 import { pairKey, type AttemptRecord, type GradingRecord, type PairKey } from "./records.js";
@@ -59,6 +60,8 @@ interface Pass {
   answers: Map<PairKey, typeof answers.$inferSelect>;
   standing: Map<PairKey, GradingRecord>;
   teacherIds: string[];
+  /** The answers accepted at grading time on each item (ADR-128). */
+  acceptances: ItemRules;
 }
 
 /** The reads of a pass, or `null` when the grid is empty and there is nothing to do. */
@@ -101,6 +104,7 @@ async function loadPass(
     answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
     standing: await standingGradings(db, evaluation.id, { attemptIds: gradable.map((a) => a.id) }),
     teacherIds: await events.staffOf(db, evaluation),
+    acceptances: await acceptancesOf(db, items.map((i) => i.item.id)),
   };
 }
 
@@ -128,7 +132,7 @@ function progressReporter(evaluation: EvaluationRecord, teacherIds: string[], to
 }
 
 /** One item's config for one attempt, and the warning of its instance (ADR-056 §7). */
-interface CellConfig {
+export interface CellConfig {
   config: unknown;
   warning?: StoredInstance["fallback"];
 }
@@ -141,7 +145,7 @@ interface CellConfig {
  * a regrade retargeted). `null` when it cannot be read, and the cell
  * becomes a proposal.
  */
-function readConfig(
+export function readConfig(
   app: FastifyInstance,
   item: JoinedItem,
 ): { configOf: (attempt: AttemptRecord) => CellConfig | null; keyed: boolean } {
@@ -184,9 +188,10 @@ const NO_ATTEMPT = { seed: 0, instances: {} };
 /**
  * One cell that no teacher has settled yet: the grading to write, or the
  * runner job it needs. The pass writes the gradings in one batch, and
- * enqueues the runner jobs only once that batch is written.
+ * enqueues the runner jobs only once that batch is written. The answers
+ * accepted at grading time (ADR-128) reach the type through its context.
  */
-async function gradeCell(
+export async function gradeCell(
   app: FastifyInstance,
   cell: {
     evaluation: EvaluationRecord;
@@ -197,6 +202,8 @@ async function gradeCell(
     answer: typeof answers.$inferSelect | null;
     /** Whether a model may be asked (`offersLlm`), decided once per pass. */
     llm: boolean;
+    /** The acceptances in force on the item (ADR-128); `acceptedFor` picks the attempt's. */
+    acceptances: ItemRules;
   },
 ): Promise<{ write: WriteGradingInput } | { runner: RunnerGradingJob } | { llm: LlmGradingJob }> {
   const { evaluation, job, item, attempt, answer } = cell;
@@ -242,6 +249,7 @@ async function gradeCell(
       // The evaluation's per-type settings: what a question config
       // that says "inherit" defers to (an mcq's scoring policy).
       defaults: gradeDefaults(evaluation),
+      ...acceptedContext(cell.acceptances, item, attempt),
     },
   });
   if (outcome.kind === "written") {
@@ -269,6 +277,16 @@ async function gradeCell(
       finalizeState: outcome.finalizeState,
     },
   };
+}
+
+/**
+ * The answers accepted at grading time this cell is graded with (ADR-128):
+ * the item's rules for everyone and the attempt's own; none on a practice
+ * attempt, graded against the pool's key like the drill.
+ */
+function acceptedContext(acceptances: ItemRules, item: JoinedItem, attempt: AttemptRecord) {
+  const accepted = acceptedFor(acceptances.get(item.item.id), attempt);
+  return accepted.length === 0 ? {} : { accepted };
 }
 
 /**
@@ -341,7 +359,16 @@ export async function runEvaluationGrading(
       // model asked twice for the same answer (ADR-063 §3).
       if (standing?.state !== "validated" && !(standing && keepsLlmProposal(standing, answer, job))) {
         const config = configOf(attempt);
-        const graded = await gradeCell(app, { evaluation, job, item, config, attempt, answer, llm });
+        const graded = await gradeCell(app, {
+          evaluation,
+          job,
+          item,
+          config,
+          attempt,
+          answer,
+          llm,
+          acceptances: pass.acceptances,
+        });
         if ("write" in graded) writes.push(graded.write);
         else if ("runner" in graded) runnerJobs.push(graded.runner);
         else llmJobs.push(graded.llm);
@@ -401,6 +428,8 @@ export async function checkGrading(
     attempt,
     answer,
     llm: false,
+    // ADR-124: the check of an exercise is graded with the acceptances too.
+    acceptances: await acceptancesOf(app.db, [item.item.id]),
   });
   if ("runner" in graded) return graded;
   return "write" in graded && graded.write.state === "validated" ? graded : null;

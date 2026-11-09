@@ -182,6 +182,8 @@ The `label`s of a dropdown reach the student, they are the options, but `correct
 
 **Scoring**: sum of the weights of the correct blanks over the sum of the weights.
 
+**Accepted answers** (ADR-128, F-GRADE-11): on an evaluation item, a teacher may count right an answer the key counts wrong at a text or dropdown blank (part `b<index>`). A text answer is the same answer as another when the blank's own exact matching compares them equal (normalised, folded unless `caseSensitive`); a dropdown answer is its canonical option. A blank right only by acceptance carries `accepted: true` beside its `ok` in the breakdown; the student reads it as "Accepted".
+
 ## 4.7 Code `code`
 
 **Configuration**:

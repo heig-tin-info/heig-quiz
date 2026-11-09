@@ -8,6 +8,7 @@ import { Dash, NoAnswer, WandIcon } from "@quiz/ui";
 
 import { useT } from "../i18n";
 import { Badge, Button, cx, IconButton, pressable, TableHead, T, Tip, type Column } from "../ui";
+import { AcceptControl, AcceptedAnswers, type Acceptance } from "./AcceptAnswer";
 import type { SortColumn } from "./columns";
 import { confidenceLabelShort, whoOf } from "./labels";
 import { entryKey, EXPECTED, isMissing, rowAction, type Sort } from "./rows";
@@ -38,6 +39,12 @@ export interface GradingTableProps {
   label: string;
   /** The type's answer columns, which draw the cells. */
   columns: GradingColumn[];
+  /**
+   * ADR-128: the answers accepted at grading time, listed beside the key,
+   * and — where the reader may accept — the corner control of each cell of
+   * a column that names a part.
+   */
+  acceptance?: Acceptance | undefined;
   /** Every sortable column in the table's order: the header is drawn from it. */
   sortable: SortColumn[];
   rows: GradingEntry[];
@@ -190,6 +197,7 @@ export function GradingTable(props: GradingTableProps) {
 
 function ExpectedRow({
   columns,
+  acceptance,
   maxPoints,
   parameters,
   named,
@@ -230,7 +238,10 @@ function ExpectedRow({
           {parameters?.template.example ? (
             <span className="text-[13px] italic text-fg-muted">{t("grading.param.perAnswer")}</span>
           ) : (
-            c.expected()
+            <span className="flex flex-wrap items-center gap-1">
+              {c.expected()}
+              <AcceptedAnswers acceptance={acceptance} part={c.part} />
+            </span>
           )}
         </td>
       ))}
@@ -275,6 +286,7 @@ function ExpectedRow({
 function AnswerRow({
   entry,
   columns,
+  acceptance,
   named,
   selected,
   onOpen,
@@ -318,8 +330,19 @@ function AnswerRow({
         </td>
       ) : (
         columns.map((c) => (
-          <td key={c.key} className={cx(cell, "max-w-0", c.align === "center" && "text-center")}>
+          <td key={c.key} className={cx(cell, "group/cell relative max-w-0", c.align === "center" && "text-center")}>
             {c.cell({ answer: entry.answer, details: grading?.details ?? null })}
+            {acceptance && c.part !== undefined ? (
+              // Hidden, not removed, until the cell is hovered or the row
+              // focused; it stays while its card is open.
+              <AcceptControl
+                acceptance={acceptance}
+                entry={entry}
+                part={c.part}
+                partLabel={c.label}
+                className="hover-reveal invisible absolute right-0.5 top-0.5 group-focus-within:visible group-hover/cell:visible has-[[aria-expanded=true]]:visible"
+              />
+            ) : null}
           </td>
         ))
       )}

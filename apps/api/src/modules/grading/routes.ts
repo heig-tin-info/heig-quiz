@@ -10,6 +10,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
+  AnswerAcceptanceBody,
+  type AnswerAcceptanceResult,
   AnswerIdParam,
   BatchValidateBody,
   GradingIdParam,
@@ -36,6 +38,7 @@ import { joinedItem, joinedItems, type JoinedItem } from "../evaluation/service.
 import { listVersions } from "../pool/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
+import { changeAcceptance } from "./acceptance.js";
 import { itemAnswers, itemAnswersDocument } from "./itemAnswers.js";
 import { enqueueEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
@@ -391,6 +394,49 @@ export async function gradingPlugin(app: FastifyInstance) {
       },
     ),
   );
+
+  /**
+   * ADR-128: accepting an answer at grading time (`PUT`), or no longer
+   * (`DELETE`, the same body). The rule is the item's, applied by every
+   * automatic grading of an official attempt from then on; the act
+   * re-grades at once the answers it reaches, a manual override left alone.
+   * The gate is the counting act's (ADR-108 §3): once the item list is
+   * frozen, never on a poll, the owner's after the release
+   * (`gradedEvaluation`), and a released grade that moves tells its student
+   * (`writeGradings`).
+   */
+  for (const method of ["PUT", "DELETE"] as const) {
+    app.route({
+      method,
+      url: "/app/api/evaluations/:id/items/:itemId/acceptances",
+      preHandler: requireTeacher,
+      handler: teacher(
+        { params: ItemParam, body: AnswerAcceptanceBody, load: gradedEvaluation },
+        async ({ req, reply, now, params, body, scope }): Promise<AnswerAcceptanceResult | FastifyReply> => {
+          const item = await joinedItem(app.db, scope.evaluation.id, params.itemId);
+          if (!item) return notFound(reply);
+          const accepted = method === "PUT";
+          const outcome = await changeAcceptance(app, scope.evaluation, item, body, accepted, callerOf(req).id, now);
+          if (outcome === null) return notFound(reply);
+          const result = {
+            accepted,
+            regraded: outcome.regraded,
+            unchanged: outcome.unchanged,
+            modifiedAfterRelease: outcome.modifiedAfterRelease,
+          };
+          if (outcome.changed) {
+            await trace(req, "evaluation.answer_accepted", "evaluation", scope.evaluation.id, {
+              itemId: item.item.id,
+              ...body,
+              ...result,
+            });
+            events.gradingChanged(scope.evaluation);
+          }
+          return result;
+        },
+      ),
+    });
+  }
 
   /** What every single-cell correction does afterwards, in one place. */
   async function afterCorrection(

@@ -544,6 +544,13 @@ export interface GradingColumn<TAnswer = unknown, TDetails = unknown> {
   readonly short?: string;
   /** A column of marks rather than words (a tick box per choice). */
   readonly align?: "center";
+  /**
+   * The part of the answer this column shows, named as the server's
+   * `acceptance` hook names it (ADR-128): a cell of the column then offers
+   * to accept the answer it holds, when the server says that answer can be.
+   * Absent: nothing in the column can be accepted.
+   */
+  readonly part?: string;
   /** The student's answer in this column. */
   cell(input: GradingCellInput<TAnswer, TDetails>): ReactNode;
   /** The expected answer in this column: the pinned first row of the table. */
@@ -551,8 +558,12 @@ export interface GradingColumn<TAnswer = unknown, TDetails = unknown> {
   /**
    * What the column sorts by, as a NORMALISED string (`gradingSortKey`): two
    * answers a teacher would call the same give the same key. It is also the
-   * key that will group identical answers, so it depends on the answer
-   * alone — never on the student, the grading or the order of the rows.
+   * key that groups identical answers, so it depends on the answer alone —
+   * never on the student, the grading or the order of the rows. An
+   * acceptance (ADR-128) groups by the server's identity of the answer,
+   * which may only be FINER than this key (a case-sensitive blank keeps the
+   * case), never coarser: two answers one acceptance reaches always sort
+   * together.
    */
   sortKey(answer: TAnswer | null): string;
 }

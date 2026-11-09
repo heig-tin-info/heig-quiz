@@ -119,7 +119,7 @@ import type { AnyQuestionTypeServer, LlmGradeRequest, RunnerService } from "@qui
 import { shortServer } from "@quiz/qt-short/server";
 
 /** `rich` never runs anything; its grade context still names a runner. */
-const NO_RUNNER: RunnerService = {
+export const NO_RUNNER: RunnerService = {
   run: () => Promise.reject(new Error("the mock has no runner")),
   health: () => Promise.resolve({ ok: false, languages: [], queued: 0, avgMs: null }),
 };

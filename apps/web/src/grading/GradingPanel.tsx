@@ -22,6 +22,7 @@ import {
   Skeleton,
   useMinWidth,
 } from "../ui";
+import { useAnswerAcceptance, type Acceptance } from "./AcceptAnswer";
 import { AnswerPanel } from "./AnswerPanel";
 import { gradingColumns, sortColumns } from "./columns";
 import { whoOf } from "./labels";
@@ -123,6 +124,21 @@ export function GradingPanel({
     navigate,
     onRegrade: item ? regrade : undefined,
   });
+  const changeAcceptance = useAnswerAcceptance(evaluationId, item?.id);
+  // ADR-128: the counting act's gate (a frozen list, never a poll, the
+  // owner's once released); the accepted answers show whoever reads.
+  const acceptance = useMemo<Acceptance | undefined>(
+    () =>
+      data.acceptance
+        ? {
+            item: data.acceptance,
+            entries,
+            released,
+            change: countingAct.offered && !readOnly ? changeAcceptance : undefined,
+          }
+        : undefined,
+    [data.acceptance, entries, released, countingAct.offered, readOnly, changeAcceptance],
+  );
 
   const first = entries[0];
   // A parameterized question's columns come from the question AS WRITTEN,
@@ -292,6 +308,7 @@ export function GradingPanel({
       named={!anonymise}
       pane={pane}
       columns={columns}
+      acceptance={acceptance}
       student={shown?.student ?? null}
       parameters={parameters}
       explanation={data.explanation}
@@ -387,6 +404,7 @@ export function GradingPanel({
             <GradingTable
               label={t("grading.table.label", { n: index + 1 })}
               columns={columns}
+              acceptance={acceptance}
               sortable={sortable}
               rows={rows}
               maxPoints={item.points}

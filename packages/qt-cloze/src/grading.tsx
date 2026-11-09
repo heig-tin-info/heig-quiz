@@ -7,8 +7,8 @@
  */
 import type { GradingColumn, QuestionTypeGrading } from "@quiz/core/client";
 import { fmt, gradingSortKey, resolveStrings } from "@quiz/core/client";
-import { BLANK_ALTERNATIVES_SEPARATOR } from "@quiz/domain";
-import { AnswerChip, breakdownOf, NoAnswer, type AnswerTone } from "@quiz/ui";
+import { BLANK_ALTERNATIVES_SEPARATOR, clozePart } from "@quiz/domain";
+import { AcceptedChip, AnswerChip, breakdownOf, NoAnswer, type AnswerTone } from "@quiz/ui";
 
 import type { ClozeAnswer, ClozeDetails, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozeGradingStrings } from "./strings.js";
@@ -23,8 +23,11 @@ function givenOf(blank: Blank, answer: ClozeAnswer | null): string | null {
   return blank.options.find((option) => option.id === Number(raw))?.label ?? raw;
 }
 
-function toneOf(details: ClozeDetails | null, index: number): AnswerTone {
-  const verdict = breakdownOf(details, "perBlank")?.perBlank.find((b) => b.index === index);
+function verdictOf(details: ClozeDetails | null, index: number) {
+  return breakdownOf(details, "perBlank")?.perBlank.find((b) => b.index === index);
+}
+
+function toneOf(verdict: ReturnType<typeof verdictOf>): AnswerTone {
   return verdict === undefined ? "neutral" : verdict.ok ? "good" : "bad";
 }
 
@@ -40,12 +43,18 @@ export const clozeGrading: QuestionTypeGrading<
       (blank): GradingColumn<ClozeAnswer, ClozeDetails> => ({
         key: `blank-${blank.index}`,
         label: fmt(s.blank, { n: blank.index + 1 }),
+        // ADR-128: the part an acceptance names for this blank.
+        part: clozePart(blank.index),
         cell: ({ answer, details }) => {
           const given = givenOf(blank, answer);
-          return given === null ? (
-            <NoAnswer>{s.empty}</NoAnswer>
+          if (given === null) return <NoAnswer>{s.empty}</NoAnswer>;
+          const verdict = verdictOf(details, blank.index);
+          return verdict?.accepted ? (
+            <AcceptedChip label={s.accepted} title={given}>
+              {given}
+            </AcceptedChip>
           ) : (
-            <AnswerChip tone={toneOf(details, blank.index)} title={given}>
+            <AnswerChip tone={toneOf(verdict)} title={given}>
               {given}
             </AnswerChip>
           );

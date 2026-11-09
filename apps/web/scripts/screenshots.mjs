@@ -1616,6 +1616,22 @@ const scenes = [
       await p.waitForTimeout(400);
     } },
   { name: "grading-categorize", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 5) },
+  // ADR-128: the cloze appended last (13th), one dropdown answer accepted for everyone
+  // (the seal in its cells, the answer beside the key); a wrong cell's corner
+  // card; the panel's section of the answers to accept.
+  { name: "grading-cloze", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 12) },
+  { name: "grading-cloze-accept", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await nextQuestion(p, 12);
+      const corner = p.getByRole("button", { name: /^(Accept this answer|Accepter cette réponse)$/, includeHidden: true }).first();
+      await corner.locator("xpath=ancestor::td").hover();
+      await corner.click();
+      await p.waitForTimeout(300);
+    } },
+  { name: "grading-cloze-panel", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await nextQuestion(p, 12);
+      await p.locator("tbody tr", { has: p.getByRole("button", { name: /^(Accept this answer|Accepter cette réponse)$/, includeHidden: true }) }).first().click();
+      await p.waitForTimeout(400);
+    } },
   { name: "grading-codeimage", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 6) },
   { name: "grading-diagram", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 7) },
   { name: "grading-diagram-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => { await nextQuestion(p, 7); await openRow(p, 1); } },

@@ -168,6 +168,14 @@ export type AuditAction =
    * `payload.after` and `payload.modifiedAfterRelease`.
    */
   | "evaluation.item_counting"
+  /**
+   * ADR-128: an answer accepted at grading time, or no longer; subject the
+   * evaluation, `payload.itemId`, `payload.accepted` (true: accepted,
+   * false: removed), `payload.part`, `payload.answer`, `payload.attemptId`
+   * (null: everyone), `payload.regraded`, `payload.unchanged` and
+   * `payload.modifiedAfterRelease`.
+   */
+  | "evaluation.answer_accepted"
   | "evaluation.items_versions"
   | "evaluation.pause"
   | "evaluation.resume"

@@ -143,6 +143,16 @@ An essay with **criteria** is adjusted criterion by criterion. **Adjust** lists 
 
 The one red button of the screen, at the end of the filter row, says what comes next. While the table shows proposals it reads **Validate 4**: it validates the proposals shown, those of the filters you picked included (above ten, it asks first), and a toast counts what was validated; each grading stays editable. An essay or a program proposed at 0 points with nothing behind it (no grader could judge it) is never validated in a batch: read it and grade it. A proposal that states a confidence, an AI's zero included, is. Once every answer of the question is validated, the button becomes **Next question**, and on the last question **Results**. While what is left can only be graded by hand, it stays in place, greyed out, and its tooltip says why.
 
+### Accept an answer
+
+Sometimes an answer the key counts wrong deserves the point: a dropdown keyed `int` where `invalid` is defensible too. On a fill-in-the-blanks question, hover a dropdown or text cell the key counts wrong (or move to its row with the keyboard): a small seal appears in its corner. Clicking it opens a card, **Count “invalid” as right**, which counts the answers concerned and how many of them you already adjusted by hand. Choose **All these answers** (every student who gave the same answer to that blank) or **This answer only**, then **Accept**. The answers concerned are graded again at once: the blank counts right, fully, and its cell turns green with the seal. The question in the pool is not changed.
+
+"The same answer" is what the blank itself compares: a text is folded and its spaces collapsed as its matching does, keeping the case when the question is case-sensitive; a dropdown is the option chosen, whatever the order it was shown in. Number and regular-expression blanks cannot be accepted. On a question with variables, every student has their own key: only **This answer only** is offered.
+
+The accepted answers are listed, with the seal, beside the key on the expected row. They stay with the evaluation's question: an answer handed in later, a paper copy, a retake and the instant check of an exercise are graded with them, and so is a **Re-grade**; a re-grade onto a version that no longer holds the blank or the option drops the acceptance and its note says so. A practice attempt after the due date and the drill keep the pool's key. A grading you adjusted by hand is left as it is. The same seal opens the card again, which then offers **Stop accepting**. The open answer lists its answers to accept too, under **Accept an answer**.
+
+The rules are those of the question's counting: once the evaluation has started, never on a poll, and once the results are published, only the course's teacher; the students whose grade changes are then told. Copies of the evaluation do not carry the accepted answers.
+
 ### Re-grade a question
 
 **Re-grade**, on the expected row, runs the automatic grading again on every attempt of this item. The sheet lists the question's published versions, each with its change note, and a **Note, kept with every new grading**, which is mandatory and travels with each grading it produces. The gradings it replaces stay in the history, marked `Re-graded` with your note. The results page and, if they were published, the students' grades follow.

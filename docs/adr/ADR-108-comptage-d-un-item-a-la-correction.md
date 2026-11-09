@@ -12,7 +12,9 @@ builder is unchanged, the grading-time act is allowed once frozen), §3 and §4
 (negative marking floored at sum time), §5 (the total), §7 (copies) and §9
 (CSV); depends on [ADR-030](ADR-030-canaux-de-notification.md) §h
 (`results_updated`) and [ADR-068](ADR-068-roles-de-l-equipe-du-cours.md) §3
-(after the release, the owner's).
+(after the release, the owner's). Its gate and release consequences are
+reused by [ADR-128](ADR-128-accepter-une-reponse-a-la-correction.md), whose
+accepted answers, unlike a counting change, do move the item statistics.
 
 ## Context
 

@@ -39,6 +39,8 @@ export const clozeReviewStrings = {
   expected: "Expected",
   correct: "Correct",
   incorrect: "Incorrect",
+  /** A blank counted right because the teacher accepted the answer at grading time (ADR-128). */
+  accepted: "Accepted",
   score: "Score",
   weights: "Weighted blanks",
 } as const;
@@ -64,4 +66,6 @@ export const clozeGradingStrings = {
   /** A column's header: "Blank 2", numbered from 1 in the order of the text. */
   blank: "Blank {n}",
   empty: "empty",
+  /** The mark of a cell whose answer the teacher accepted (ADR-128): its tooltip and accessible name. */
+  accepted: "Accepted",
 } as const;

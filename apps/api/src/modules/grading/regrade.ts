@@ -23,8 +23,9 @@ import {
   officialAttempt,
   questionVersions,
 } from "../../db/schema.js";
-import { clearGradingReady, retargetItemVersion } from "../evaluation/service.js";
-import { parametersOf } from "../pool/service.js";
+import { clearGradingReady, joinedItem, retargetItemVersion, type DbOrTx, type JoinedItem } from "../evaluation/service.js";
+import { parametersOf, writtenConfig } from "../pool/service.js";
+import { dropVanishedAcceptances } from "./acceptance.js";
 import { GradingError, pairKey, type PairKey } from "./records.js";
 
 /**
@@ -34,6 +35,11 @@ import { GradingError, pairKey, type PairKey } from "./records.js";
  * validated grading, and nothing is deleted: the history of §4.5 is the whole
  * chain. Returns the note the pass writes on every new grading, or `null`
  * when the question has no such version (the route's 404).
+ *
+ * The answers accepted at grading time (ADR-128) are the item's and stay:
+ * the pass applies them. Onto another version, those whose part — or
+ * option — the new version no longer holds are dropped, and the note says
+ * which.
  */
 export async function regradeItem(
   db: Db,
@@ -50,7 +56,7 @@ export async function regradeItem(
     let note = input.note.trim();
     if (input.toVersionNumber !== undefined) {
       const [version] = await tx
-        .select({ id: questionVersions.id, variables: questionVersions.variables })
+        .select()
         .from(questionVersions)
         .where(
           and(
@@ -63,8 +69,11 @@ export async function regradeItem(
       // The values the students had are kept, and the new version's derived
       // rows replayed from them (ADR-056 §5): only under the same names.
       if (!sameTable(parametersOf(item), parametersOf(version))) throw new GradingError("variables_changed");
+      const held = await joinedItem(tx, item.evaluationId, item.itemId);
       await retargetItemVersion(tx, item.itemId, version.id);
       note = `${note} (re-graded with version ${input.toVersionNumber})`;
+      const dropped = held ? await dropVanishedAcceptancesOn(tx, held, version) : [];
+      if (dropped.length > 0) note = `${note} (accepted answers dropped: ${dropped.map((d) => `"${d}"`).join(", ")})`;
     }
     // A practice attempt's cells (ADR-122) keep their grading: the regrade's
     // pass covers the official attempts only.
@@ -89,6 +98,30 @@ export async function regradeItem(
     await clearGradingReady(tx, item.evaluationId);
     return note;
   });
+}
+
+/**
+ * ADR-128: the acceptances of `held` that `version` no longer holds, dropped;
+ * none when this build cannot read the new version.
+ */
+async function dropVanishedAcceptancesOn(
+  tx: DbOrTx,
+  held: JoinedItem,
+  version: JoinedItem["version"],
+): Promise<string[]> {
+  const type = held.question.type;
+  const after = readable(type, version);
+  if (after === undefined) return [];
+  return dropVanishedAcceptances(tx, { itemId: held.item.id, type }, readable(type, held.version), after);
+}
+
+/** The question as `version` writes it, or undefined when this build cannot read it. */
+function readable(type: string, version: Parameters<typeof writtenConfig>[1]): unknown {
+  try {
+    return writtenConfig(type, version).config;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
