@@ -64,7 +64,6 @@ import type { Diagnostic } from "./diagnostics.js";
 import {
   CodeArea,
   fitPx,
-  guardSebPaste,
   LazyMonaco,
   LINE_PX,
   MONACO_BASE_OPTIONS,
@@ -74,6 +73,7 @@ import {
 } from "./MonacoHost.js";
 import type { CodeLanguage, CodeSegment } from "./schema.js";
 import { isMarkerLine, stripMarkerLines, trimTrailingNewline } from "./segments.js";
+import { bridgeSebClipboard } from "./sebClipboard.js";
 
 // ---------------------------------------------------------------------------
 // The pure layout: segments + regions <-> one text.
@@ -616,7 +616,7 @@ export function LockedEditor(props: LockedEditorProps): ReactNode {
     <div
       className="overflow-hidden rounded-field border border-line-strong"
       data-testid="locked-editor"
-      ref={guardSebPaste}
+      ref={bridgeSebClipboard}
     >
       <MonacoBoundary fallback={stack}>
         <Suspense fallback={stack}>

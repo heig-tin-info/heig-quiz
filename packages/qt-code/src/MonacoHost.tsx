@@ -29,6 +29,7 @@ import type { EditorProps, OnMount } from "@monaco-editor/react";
 
 import type { CodeLanguage } from "./schema.js";
 import { codeArea, cx } from "@quiz/ui";
+import { bridgeSebClipboard } from "./sebClipboard.js";
 
 /** The Monaco language ids, which differ from ours for JavaScript. */
 export const MONACO_LANGUAGE: Record<CodeLanguage, string> = {
@@ -154,7 +155,7 @@ const PAGE_WHEEL = { alwaysConsumeMouseWheel: false } as const;
  * and re-inserts the text itself, only into a textarea, an input or a
  * `contenteditable`. On an EditContext surface the paste is silently lost.
  * Turned off, Monaco falls back to its hidden `<textarea>`, which that script
- * can write. {@link guardSebPaste} completes it.
+ * can write; `./sebClipboard.ts` reconciles the rest.
  */
 export const MONACO_BASE_OPTIONS = {
   editContext: false,
@@ -168,25 +169,6 @@ export const MONACO_BASE_OPTIONS = {
   overviewRulerLanes: 0,
   scrollbar: PAGE_WHEEL,
 } as const satisfies EditorOptions;
-
-/**
- * A paste SEB's `Clipboard.js` has already written into Monaco's textarea (it
- * cancelled the event on the document, in the capture phase) must not reach
- * Monaco's own paste handlers too, which ignore the cancellation: after a copy
- * inside the editor, the paste controller would insert its copy a second time
- * (#1079). One of them listens in the capture phase on Monaco's own container,
- * so the stop happens one level up, on the element wrapping it. Listeners on
- * the document, the integrity journal's included, have all run by then.
- */
-function dropHandledPaste(event: Event): void {
-  const seb = (globalThis as { SafeExamBrowser?: { clipboard?: unknown } }).SafeExamBrowser;
-  if (event.defaultPrevented && seb?.clipboard !== undefined) event.stopPropagation();
-}
-
-/** A ref for the element wrapping a Monaco: installs {@link dropHandledPaste}, idempotent. */
-export function guardSebPaste(node: HTMLElement | null): void {
-  node?.addEventListener("paste", dropHandledPaste, true);
-}
 
 function heightLines(value: string, minLines: number): number {
   return Math.min(MAX_LINES, Math.max(minLines, value.split("\n").length));
@@ -269,7 +251,7 @@ export function CodeArea({
     <div
       className={cx("overflow-hidden rounded-field border border-line-strong", className)}
       data-testid="monaco-host"
-      ref={guardSebPaste}
+      ref={bridgeSebClipboard}
     >
       <MonacoBoundary fallback={fallback}>
         <Suspense fallback={fallback}>
