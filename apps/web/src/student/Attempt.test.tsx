@@ -3,9 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AttemptEntry, AttemptOrLobby, AttemptView, LobbyView, ReadyView, ServerEvent } from "@quiz/contracts";
 
+import { KIOSK_REATTEST_MS } from "@quiz/domain";
+
 import { makeAttemptView } from "../test/attempt-fixtures";
 import { elapse, flowingClock } from "../test/clock";
-import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
+import { makeMe } from "../test/fixtures";
+import { fail, mockFetch, noContent, ok, renderWithProviders, type RouteHandler } from "../test/render";
 import { AttemptPage } from "./Attempt";
 
 /*
@@ -84,7 +87,7 @@ const started: ServerEvent = {
 };
 
 /** The entry route answers the lobby until `running`, then the attempt. */
-function stubs() {
+function stubs(extra: Record<string, RouteHandler> = {}) {
   let running = false;
   const mock = mockFetch({
     [`POST /app/api/evaluations/${EVAL}/attempt`]: () =>
@@ -97,6 +100,7 @@ function stubs() {
       ok({ kind: "attempt", view: attemptView } satisfies AttemptOrLobby),
     [`POST /app/api/attempts/${ATTEMPT}/position`]: noContent(),
     [`POST /app/api/attempts/${ATTEMPT}/events`]: noContent(),
+    ...extra,
   });
   return { ...mock, start: () => void (running = true) };
 }
@@ -104,9 +108,9 @@ function stubs() {
 const entryCalls = (calls: { url: string; method: string }[]) =>
   calls.filter((c) => c.method === "POST" && c.url === `/app/api/evaluations/${EVAL}/attempt`);
 
-function render() {
+function render(extra: Record<string, RouteHandler> = {}) {
   vi.stubGlobal("EventSource", FakeStream);
-  const mock = stubs();
+  const mock = stubs(extra);
   const result = renderWithProviders(<AttemptPage evaluationId={EVAL} navigate={() => {}} />, {
     locale: "fr",
     route: `/take/${EVAL}`,
@@ -160,6 +164,69 @@ describe("/take/:id", () => {
   });
 });
 
+
+/*
+ * ADR-051 §6, issue #1076: a station's attestation runs from the route's
+ * first screen. Started at the player's mount, it came ten minutes after the
+ * exam opened — later than the twelve minutes the server allows since the
+ * pairing screen's last one, and the station was suspended as silent.
+ */
+describe("/take/:id on a kiosk station", () => {
+  const station: Record<string, RouteHandler> = {
+    "GET /app/api/me": ok(
+      makeMe({
+        role: "student",
+        session: {
+          kind: "kiosk",
+          evaluationId: EVAL,
+          projectId: null,
+          readOnly: false,
+          superPowersUntil: null,
+          superPowersAvailable: false,
+        },
+      }),
+    ),
+    "GET /app/api/config": ok({ devLogin: false, kiosk: { extensionId: null, mock: true }, pdf: false }),
+    "POST /app/api/kiosk/attest/challenge": ok({ challenge: "Yw==" }),
+    "POST /app/api/kiosk/attest/verify": ok({ station: { label: "Poste n° 7", status: "active" } }),
+  };
+  const attestations = (calls: { url: string }[]) =>
+    calls.filter((c) => c.url === "/app/api/kiosk/attest/verify").length;
+
+  it("attests in the waiting room at once, and keeps that one schedule into the player", async () => {
+    flowingClock();
+    const { calls, start } = render(station);
+    expect(await screen.findByText("Salle d'attente")).toBeInTheDocument();
+    await waitFor(() => expect(attestations(calls)).toBe(1));
+
+    await elapse(KIOSK_REATTEST_MS / 2);
+    start();
+    streams.at(-1)!.emit(started);
+    expect(await screen.findByText("Question 1")).toBeInTheDocument();
+    // The player starts no schedule of its own: the next round is due ten
+    // minutes after the waiting room's, not after the start.
+    expect(attestations(calls)).toBe(1);
+    await elapse(KIOSK_REATTEST_MS / 2);
+    expect(attestations(calls)).toBe(2);
+  });
+
+  it("shows a suspended station's notice on the way in, and enters once an attestation lifts it", async () => {
+    flowingClock();
+    let verified = 0;
+    render({
+      ...station,
+      [`POST /app/api/evaluations/${EVAL}/attempt`]: () =>
+        verified > 1 ? ok({ kind: "lobby", view: lobbyView } satisfies AttemptOrLobby) : fail(423, { error: "kiosk_suspended" }),
+      // Refused on the way in, accepted on the next try.
+      "POST /app/api/kiosk/attest/verify": () =>
+        ++verified === 1 ? fail(403, { error: "not_attested" }) : ok({ station: { label: "Poste n° 7", status: "active" } }),
+    });
+    expect(await screen.findByText("Ce poste est suspendu")).toBeInTheDocument();
+    expect(screen.queryByText("Cette évaluation n'a pas pu être ouverte.")).not.toBeInTheDocument();
+    await elapse(30_000);
+    expect(await screen.findByText("Salle d'attente")).toBeInTheDocument();
+  });
+});
 
 it("keeps the mounted player and its local answer across a failed background entry read", async () => {
   const { start, queryClient } = render();

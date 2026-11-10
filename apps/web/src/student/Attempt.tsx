@@ -24,21 +24,24 @@
  * screen with its reason.
  */
 import { useQuery } from "@tanstack/react-query";
-import { Lock, UserX } from "lucide-react";
+import { useEffect } from "react";
+import { Lock, ShieldAlert, UserX } from "lucide-react";
 
 import type { AttemptEntry, PracticeRefusalReason } from "@quiz/contracts";
 
-import { ApiError, api, refusalCodeOf, useMe } from "../api";
+import { ApiError, api, refusalCodeOf, refusedWith, useMe } from "../api";
 import { feedbackLink } from "../grading";
 import { useT, type Dict } from "../i18n";
 import type { Navigate } from "../router";
 import { leaveStudentView, studentViewOn } from "../studentView";
 import { Button, Card, EmptyState, QueryError, Spinner } from "../ui";
 import { Lobby } from "./Lobby";
+import { ScreenOverlay } from "./PausedOverlay";
 import { Player } from "./Player";
 import { Ready } from "./Ready";
 import { attemptEntryKey, practiceEntryKey } from "../queryKeys";
 import { toKiosk } from "../kiosk/navigation";
+import { useStationAttestation } from "../kiosk/useStationAttestation";
 
 /** Why a practice attempt may not start, in the student's words (ADR-122). */
 const PRACTICE_REFUSED: Record<PracticeRefusalReason, keyof Dict> = {
@@ -90,6 +93,16 @@ export function AttemptPage({
   const station = kind === "kiosk";
   // ADR-051, ADR-027: the trusted client the attempt is sat in, if any.
   const confinement = kind === "kiosk" || kind === "seb" ? kind : undefined;
+  // ADR-051 §6: a station re-attests from its first screen here, the waiting
+  // room included, not from the player's mount (issue #1076).
+  const attestation = useStationAttestation(station);
+  // A suspended station's entry is refused like its writes: asked for again
+  // once an attestation lifts the suspension, under the same notice meanwhile.
+  const entrySuspended = refusedWith(entry.error, "kiosk_suspended");
+  const { refetch } = entry;
+  useEffect(() => {
+    if (station && entrySuspended && !attestation.suspended) void refetch();
+  }, [station, entrySuspended, attestation.suspended, refetch]);
   const home = station ? toKiosk : () => navigate({ view: "home" });
   /*
    * The one way out of the student view from inside an attempt (ADR-018
@@ -105,8 +118,11 @@ export function AttemptPage({
 
   // A failed background read must not unmount the player and discard its
   // unacknowledged answers. An explicit access refusal still takes it away.
-  const transient = !(entry.error instanceof ApiError) || entry.error.status >= 500;
+  const transient = !(entry.error instanceof ApiError) || entry.error.status >= 500 || entrySuspended;
   if (entry.isError && (!entry.data || !transient)) {
+    if (entrySuspended) {
+      return <ScreenOverlay show icon={ShieldAlert} title={t("player.suspended.title")} body={t("player.suspended.body")} />;
+    }
     const code = refusalCodeOf(entry.error);
     /*
      * The refusals that are an ANSWER and not a failure: retrying changes
@@ -181,6 +197,7 @@ export function AttemptPage({
       onHome={home}
       onResults={(attemptId, options) => navigate(feedbackLink(attemptId).route, options)}
       confinement={confinement}
+      attestation={attestation}
       {...(exitStudentView ? { onExitStudentView: exitStudentView } : {})}
     />
   );

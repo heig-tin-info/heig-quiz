@@ -66,7 +66,9 @@ const STATION = { sessions: [] } as const;
 /**
  * Attestation calls (challenge and verify together) per client address per
  * minute. One attestation is two calls, and a station attests every ten
- * minutes (ADR-051 §6) — but a room of stations sits behind one NAT address
+ * minutes (ADR-051 §6); after a failure the server recorded it waits 30 s,
+ * 1 min, then 2 min, and only a suspended station, or one whose request was
+ * lost, tries every 30 s — but a room of stations sits behind one NAT address
  * and they all start together: 240 lets about 120 stations attest in the
  * same minute, and still stops a script from spending the Google quota.
  */

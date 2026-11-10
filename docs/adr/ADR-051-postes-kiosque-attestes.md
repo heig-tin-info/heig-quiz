@@ -8,6 +8,9 @@ the session end is `endKioskSessions` (`auth/session.ts`), formerly named `endCo
 stays as §10; §1 names the stale-submit refusal (`423 kiosk_attestation_stale`) the code already answers.
 Amended 2026-10-10: proof B of §3 and §10 is recorded for evaluations, and production enforces the
 Config Key check (see "Amendment 2026-10-10" below).
+Amended 2026-11-10: §6's ten-minute schedule starts with an attestation when the attempt route opens,
+the waiting room included, and a failed attestation is tried again before the next round (see
+"Amendment 2026-11-10" below, issue #1076).
 
 Scope: for **evaluations only**, the part of merge decision D21 (`docs/merge/08-decisions.md`) that
 concerns how a SEB session is checked; the confinement of a session to an **activity** (a project) was
@@ -246,7 +249,8 @@ own service account key. The extension lists both origins in
 
 ### 6. Re-attestation and suspension
 
-While a kiosk session sits, the page re-attests every 10 minutes, and when
+While a kiosk session sits, the page re-attests every 10 minutes (from the
+attempt route's opening, and with its retries: see "Amendment 2026-11-10"), and when
 the submit is refused as stale (below) it re-attests and retries it once. A
 station waiting to be paired re-attests before each new code, so it is
 never silent when it starts sitting. The server distinguishes what only it
@@ -417,6 +421,30 @@ Scope: the "Audit-only until proof B" rule of §3 and the second check of §10, 
   default of the variable stays `0` for development.
 - Not covered: the project flow (cross-host 303 to the portal, `docs/merge/06-codespace-seb-infra.md`
   §6.3 steps 5-8) still waits for its own run.
+
+## Amendment 2026-11-10: the re-attestation schedule starts on the attempt route
+
+Scope: the station's side of §6, "the page re-attests every 10 minutes". The server's rules (silent
+after 12 minutes, the suspension, the fresh check of the submit) are unchanged.
+
+Rationale: a timer started at the player's mount let the pairing, the waiting room and the start add
+to the 10 minutes, past the server's 12 ([#1076](https://github.com/heig-tin-info/heig-quiz/issues/1076)).
+
+- **The rule.** A kiosk session attests at once when the attempt route (`/take/:id`) opens, then every
+  10 minutes, through the waiting room, the player and its end screen alike: one schedule, held by the
+  route, not by the player. `KIOSK_REATTEST_MS` lives in `@quiz/domain` beside
+  `KIOSK_SILENT_AFTER_MS`, which is defined from it with two minutes of slack, so the two cannot drift.
+- **A failed attestation is tried again before the next round**, without any notice:
+  - every 30 seconds when no attempt reached the server (no answer, a 5xx other than the challenge's
+    recorded 503, a 429): a lost request must not leave the station silent for a whole round;
+  - after 30 seconds, 1 minute, then every 2 minutes when the server recorded it (refused, or no
+    challenge from Google): each try costs a call to Google and an audit row, and 2 minutes stays well
+    under the silent threshold;
+  - not at all when the station is out of the registry (unnamed or revoked): the next round only.
+- **A suspended station** (a write answered `423 kiosk_suspended`) shows the notice and re-attests every
+  30 seconds, as before; the attempt route's entry, refused the same way, shows the same notice and is
+  asked for again once the suspension lifts.
+- **One attestation at a time**: the submit's re-attestation joins one already in flight.
 
 ## Alternatives considered
 
