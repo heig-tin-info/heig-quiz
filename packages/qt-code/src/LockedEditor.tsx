@@ -66,13 +66,14 @@ import {
   fitPx,
   LazyMonaco,
   LINE_PX,
+  MONACO_BASE_OPTIONS,
   MONACO_LANGUAGE,
   MonacoBoundary,
   monacoAvailable,
-  PAGE_WHEEL,
 } from "./MonacoHost.js";
 import type { CodeLanguage, CodeSegment } from "./schema.js";
 import { isMarkerLine, stripMarkerLines, trimTrailingNewline } from "./segments.js";
+import { bridgeSebClipboard } from "./sebClipboard.js";
 
 // ---------------------------------------------------------------------------
 // The pure layout: segments + regions <-> one text.
@@ -568,15 +569,7 @@ export function LockedEditor(props: LockedEditorProps): ReactNode {
       domReadOnly: readOnly,
       readOnlyMessage: { value: lockedLabel },
       ariaLabel: label,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      automaticLayout: true,
-      fontSize: 13,
-      tabSize: 4,
-      lineNumbersMinChars: 3,
-      renderLineHighlight: "none" as const,
-      overviewRulerLanes: 0,
-      scrollbar: PAGE_WHEEL,
+      ...MONACO_BASE_OPTIONS,
       padding: { top: 8, bottom: 8 },
       // A drop lands where the mouse is, not where the cursor was: the
       // read-only switch of decision 3 cannot see it coming.
@@ -623,6 +616,7 @@ export function LockedEditor(props: LockedEditorProps): ReactNode {
     <div
       className="overflow-hidden rounded-field border border-line-strong"
       data-testid="locked-editor"
+      ref={bridgeSebClipboard}
     >
       <MonacoBoundary fallback={stack}>
         <Suspense fallback={stack}>

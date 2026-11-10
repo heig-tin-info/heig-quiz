@@ -25,10 +25,11 @@
  */
 import { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { OnMount } from "@monaco-editor/react";
+import type { EditorProps, OnMount } from "@monaco-editor/react";
 
 import type { CodeLanguage } from "./schema.js";
 import { codeArea, cx } from "@quiz/ui";
+import { bridgeSebClipboard } from "./sebClipboard.js";
 
 /** The Monaco language ids, which differ from ours for JavaScript. */
 export const MONACO_LANGUAGE: Record<CodeLanguage, string> = {
@@ -118,6 +119,7 @@ export interface CodeLineDecoration {
 
 type MonacoEditor = Parameters<OnMount>[0];
 type MonacoApi = Parameters<OnMount>[1];
+type EditorOptions = NonNullable<EditorProps["options"]>;
 
 /** Monaco's line height at our font size, for estimates before it measures. */
 export const LINE_PX = 19;
@@ -138,7 +140,35 @@ export function fitPx(contentPx: number, minPx: number): number {
  * scroll, which stops the page under a student's cursor. It keeps the wheel
  * only while it can still scroll itself.
  */
-export const PAGE_WHEEL = { alwaysConsumeMouseWheel: false } as const;
+const PAGE_WHEEL = { alwaysConsumeMouseWheel: false } as const;
+
+/**
+ * The options every Monaco of this package shares (`CodeArea` and
+ * `./LockedEditor.tsx`); each adds its own on top.
+ *
+ * `editContext: false` must stay, whatever a Monaco upgrade suggests (#1079).
+ * Since 0.55 Monaco takes keyboard input through the browser's EditContext
+ * API by default, on a `div.native-edit-context` that is neither a textarea
+ * nor `contenteditable`. Safe Exam Browser on Windows, with the
+ * `enablePrivateClipboard` our `.seb` sets (`@quiz/seb`), injects its own
+ * `Clipboard.js` into every page: it cancels every paste in the capture phase
+ * and re-inserts the text itself, only into a textarea, an input or a
+ * `contenteditable`. On an EditContext surface the paste is silently lost.
+ * Turned off, Monaco falls back to its hidden `<textarea>`, which that script
+ * can write; `./sebClipboard.ts` reconciles the rest.
+ */
+export const MONACO_BASE_OPTIONS = {
+  editContext: false,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  automaticLayout: true,
+  fontSize: 13,
+  tabSize: 4,
+  lineNumbersMinChars: 3,
+  renderLineHighlight: "none",
+  overviewRulerLanes: 0,
+  scrollbar: PAGE_WHEEL,
+} as const satisfies EditorOptions;
 
 function heightLines(value: string, minLines: number): number {
   return Math.min(MAX_LINES, Math.max(minLines, value.split("\n").length));
@@ -221,6 +251,7 @@ export function CodeArea({
     <div
       className={cx("overflow-hidden rounded-field border border-line-strong", className)}
       data-testid="monaco-host"
+      ref={bridgeSebClipboard}
     >
       <MonacoBoundary fallback={fallback}>
         <Suspense fallback={fallback}>
@@ -235,15 +266,7 @@ export function CodeArea({
               readOnly: readOnly || onChange === undefined,
               domReadOnly: readOnly || onChange === undefined,
               ariaLabel: label,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              fontSize: 13,
-              tabSize: 4,
-              lineNumbersMinChars: 3,
-              renderLineHighlight: "none",
-              overviewRulerLanes: 0,
-              scrollbar: PAGE_WHEEL,
+              ...MONACO_BASE_OPTIONS,
             }}
           />
         </Suspense>
