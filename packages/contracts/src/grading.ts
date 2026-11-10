@@ -12,9 +12,10 @@
  */
 import { z } from "zod";
 
+import type { AcceptablePart as TypeAcceptablePart, AcceptedAnswer } from "@quiz/core/server";
 import { LLM_CONFIDENCES } from "@quiz/core/llm";
 import { CRITERION_ID_PATTERN } from "@quiz/core/reasons";
-import { GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
+import { ACCEPTANCE_SCOPES, GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
 
 import { IdParam, StaffItemRef } from "./common.js";
 import { ItemCounting } from "./evaluation.js";
@@ -104,6 +105,64 @@ export const GradingHistoryEntry = z.object({
 });
 export type GradingHistoryEntry = z.infer<typeof GradingHistoryEntry>;
 
+// --- Accepting an answer at grading time (ADR-128) -------------------------
+
+/** Who an acceptance reaches: everyone who gave the answer, or one student's attempt. */
+export const AcceptanceScope = z.enum(ACCEPTANCE_SCOPES);
+export type AcceptanceScope = z.infer<typeof AcceptanceScope>;
+
+/** A part of a question, as its type names it (`b2`, a cloze blank). */
+const AcceptancePart = z.string().min(1).max(64);
+/** The type's identity of an answer at a part: a cloze blank's normalised text, a dropdown's canonical option. */
+const AcceptanceAnswer = z.string().min(1).max(1000);
+
+/**
+ * `PUT` (accept) and `DELETE` (stop accepting)
+ * `/evaluations/:id/items/:itemId/acceptances`: the answer `answer` at
+ * `part` counts right — for everyone who gave it (`attemptId` null), or
+ * for that attempt only. The same body undoes it.
+ */
+export const AnswerAcceptanceBody = z.object({
+  part: AcceptancePart,
+  answer: AcceptanceAnswer,
+  attemptId: z.uuid().nullable(),
+}) satisfies z.ZodType<AcceptedAnswer & { attemptId: string | null }>;
+export type AnswerAcceptanceBody = z.infer<typeof AnswerAcceptanceBody>;
+
+/** What the act did. */
+export const AnswerAcceptanceResult = z.object({
+  /** The answer is accepted now. */
+  accepted: z.boolean(),
+  /** Answers re-graded by the act. */
+  regraded: z.number().int(),
+  /** Answers that gave it and were left alone: their grading is a manual override. */
+  unchanged: z.number().int(),
+  /** The evaluation was released: it is now "modified after publication" (F-GRADE-09). */
+  modifiedAfterRelease: z.boolean(),
+});
+export type AnswerAcceptanceResult = z.infer<typeof AnswerAcceptanceResult>;
+
+/** One acceptance in force on an item, with what a teacher reads of its answer. */
+export const ItemAcceptance = z.object({
+  part: AcceptancePart,
+  answer: AcceptanceAnswer,
+  /** A dropdown's option label, a blank's text. */
+  label: z.string(),
+  /** Null: everyone who gave the answer. */
+  attemptId: z.uuid().nullable(),
+}) satisfies z.ZodType<AcceptedAnswer>;
+export type ItemAcceptance = z.infer<typeof ItemAcceptance>;
+
+/** One part of an entry's answer an acceptance can name (the type's `acceptance.given`). */
+export const AcceptablePart = z.object({
+  part: AcceptancePart,
+  answer: AcceptanceAnswer,
+  label: z.string(),
+  /** The key alone counts it right: nothing to accept. */
+  right: z.boolean(),
+}) satisfies z.ZodType<TypeAcceptablePart>;
+export type AcceptablePart = z.infer<typeof AcceptablePart>;
+
 export const GradingQueueItem = StaffItemRef.extend({
   /**
    * The lowest points a manual correction may give (F-GRADE-05): 0, or
@@ -145,6 +204,17 @@ export const GradingQueueItem = StaffItemRef.extend({
     .object({
       variables: ParametersDraft,
       template: z.object({ student: z.unknown(), solution: z.unknown(), example: z.boolean() }),
+    })
+    .optional(),
+  /**
+   * ADR-128: present when the item's type can accept an answer and the
+   * evaluation is no poll — the scopes it offers (only `student` for a
+   * parameterized question) and the acceptances in force.
+   */
+  acceptance: z
+    .object({
+      scopes: z.array(AcceptanceScope),
+      accepted: z.array(ItemAcceptance),
     })
     .optional(),
 });
@@ -201,6 +271,12 @@ export const GradingEntry = z.object({
   solution: z.unknown(),
   grading: Grading.nullable(),
   history: z.array(GradingHistoryEntry),
+  /**
+   * ADR-128: the parts of this answer an acceptance can name, each with the
+   * identity of what was given there, when the item offers acceptances
+   * (`GradingQueueItem.acceptance`). Absent otherwise.
+   */
+  parts: z.array(AcceptablePart).optional(),
 });
 export type GradingEntry = z.infer<typeof GradingEntry>;
 

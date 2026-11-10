@@ -84,3 +84,38 @@ export const gradings = pgTable(
       .where(sql`${t.state} = 'validated'`),
   ],
 );
+
+/**
+ * The answers a teacher accepted at grading time (ADR-128): on one item of
+ * one evaluation, the answer whose identity is `answer` at `part` counts
+ * right — for everyone who gave it (`attempt_id` null) or for one attempt.
+ * `part` and `answer` are the question type's (`acceptance` hook); the pool
+ * question is never touched. Owned by the `grading` module; never copied
+ * with the evaluation (a duplicate, a template, an instance, a pull).
+ *
+ * One rule per (item, part, answer, scope): the two partial indexes say it
+ * for the two scopes, `attempt_id` being null in one.
+ */
+export const answerAcceptances = pgTable(
+  "answer_acceptances",
+  {
+    id: uuid("id").primaryKey(),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => evaluationItems.id, { onDelete: "cascade" }),
+    part: text("part").notNull(),
+    answer: text("answer").notNull(),
+    /** Null: everyone who gave the answer; else this attempt only. */
+    attemptId: uuid("attempt_id").references(() => attempts.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("answer_acceptances_everyone_uq")
+      .on(t.itemId, t.part, t.answer)
+      .where(sql`${t.attemptId} is null`),
+    uniqueIndex("answer_acceptances_attempt_uq")
+      .on(t.itemId, t.part, t.answer, t.attemptId)
+      .where(sql`${t.attemptId} is not null`),
+  ],
+);

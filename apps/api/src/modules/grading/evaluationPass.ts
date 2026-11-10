@@ -14,7 +14,7 @@ import {
   type GradingState,
 } from "@quiz/contracts";
 import { isGraded, isPendingRunner } from "@quiz/core/server";
-import { gradableNow, itemPoints, round2 } from "@quiz/domain";
+import { gradableNow, itemPoints, round2, rulesForAttempt, type AcceptanceRule } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { answers, attempts, officialAttempt } from "../../db/schema.js";
@@ -40,6 +40,13 @@ import {
   type LlmGradingJob,
   type RunnerGradingJob,
 } from "./passCommon.js";
+import {
+  acceptanceGuard,
+  acceptanceHook,
+  acceptancesOf,
+  type ItemRules,
+  type RuleBound,
+} from "./acceptanceRules.js";
 import { announceGradingReady } from "./ready.js";
 import { standingGradings } from "./reads.js";
 import { pairKey, type AttemptRecord, type GradingRecord, type PairKey } from "./records.js";
@@ -59,6 +66,8 @@ interface Pass {
   answers: Map<PairKey, typeof answers.$inferSelect>;
   standing: Map<PairKey, GradingRecord>;
   teacherIds: string[];
+  /** The answers accepted at grading time on each item (ADR-128). */
+  acceptances: ItemRules;
 }
 
 /** The reads of a pass, or `null` when the grid is empty and there is nothing to do. */
@@ -101,6 +110,7 @@ async function loadPass(
     answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
     standing: await standingGradings(db, evaluation.id, { attemptIds: gradable.map((a) => a.id) }),
     teacherIds: await events.staffOf(db, evaluation),
+    acceptances: await acceptancesOf(db, items.map((i) => i.item.id)),
   };
 }
 
@@ -128,7 +138,7 @@ function progressReporter(evaluation: EvaluationRecord, teacherIds: string[], to
 }
 
 /** One item's config for one attempt, and the warning of its instance (ADR-056 §7). */
-interface CellConfig {
+export interface CellConfig {
   config: unknown;
   warning?: StoredInstance["fallback"];
 }
@@ -141,7 +151,7 @@ interface CellConfig {
  * a regrade retargeted). `null` when it cannot be read, and the cell
  * becomes a proposal.
  */
-function readConfig(
+export function readConfig(
   app: FastifyInstance,
   item: JoinedItem,
 ): { configOf: (attempt: AttemptRecord) => CellConfig | null; keyed: boolean } {
@@ -179,14 +189,15 @@ function readConfig(
 }
 
 /** No attempt at all: what a static item's config, which reads none, is asked with. */
-const NO_ATTEMPT = { seed: 0, instances: {} };
+export const NO_ATTEMPT = { seed: 0, instances: {} };
 
 /**
  * One cell that no teacher has settled yet: the grading to write, or the
  * runner job it needs. The pass writes the gradings in one batch, and
- * enqueues the runner jobs only once that batch is written.
+ * enqueues the runner jobs only once that batch is written. The answers
+ * accepted at grading time (ADR-128) reach the type through its context.
  */
-async function gradeCell(
+export async function gradeCell(
   app: FastifyInstance,
   cell: {
     evaluation: EvaluationRecord;
@@ -197,6 +208,12 @@ async function gradeCell(
     answer: typeof answers.$inferSelect | null;
     /** Whether a model may be asked (`offersLlm`), decided once per pass. */
     llm: boolean;
+    /**
+     * The acceptances in force on the item (ADR-128): the cell is graded
+     * with those for everyone and the attempt's own — none on a practice
+     * attempt (ADR-122), graded against the pool's key like the drill.
+     */
+    rules: readonly AcceptanceRule[];
   },
 ): Promise<{ write: WriteGradingInput } | { runner: RunnerGradingJob } | { llm: LlmGradingJob }> {
   const { evaluation, job, item, attempt, answer } = cell;
@@ -242,6 +259,7 @@ async function gradeCell(
       // The evaluation's per-type settings: what a question config
       // that says "inherit" defers to (an mcq's scoring policy).
       defaults: gradeDefaults(evaluation),
+      ...acceptedContext(rulesForAttempt(cell.rules, { id: attempt.id, practice: attempt.afterDue })),
     },
   });
   if (outcome.kind === "written") {
@@ -268,6 +286,29 @@ async function gradeCell(
       request: outcome.request,
       finalizeState: outcome.finalizeState,
     },
+  };
+}
+
+/** The context's `accepted`, left out when there is none (ADR-128). */
+const acceptedContext = (accepted: readonly { part: string; answer: string }[]) =>
+  accepted.length === 0 ? {} : { accepted };
+
+/**
+ * A cell to grade, bound to the rules it is graded with (ADR-128): its
+ * grading now, and how to grade it again should the rules move before the
+ * write (`acceptanceGuard`).
+ */
+export async function boundCell(
+  app: FastifyInstance,
+  cell: Parameters<typeof gradeCell>[1],
+): Promise<{ graded: Awaited<ReturnType<typeof gradeCell>>; bound: RuleBound }> {
+  const regrade = async (rules: readonly AcceptanceRule[]) => {
+    const again = await gradeCell(app, { ...cell, rules });
+    return "write" in again ? again.write : null;
+  };
+  return {
+    graded: await gradeCell(app, cell),
+    bound: { rules: cell.rules, versionId: cell.item.item.questionVersionId, regrade },
   };
 }
 
@@ -323,8 +364,12 @@ export async function runEvaluationGrading(
   // (D-01): a transaction per 500 cells instead of one per cell. A pass that
   // dies half-way writes nothing and is simply run again (idempotency).
   const writes: WriteGradingInput[] = [];
+  // ADR-128: the cells of an item that takes acceptances, written only with
+  // the rules in force at the write (`acceptanceGuard`).
+  const bound = new Map<PairKey, RuleBound>();
   for (const item of pass.items) {
     const { configOf, keyed } = readConfig(app, item);
+    const accepting = acceptanceHook(item.question.type, evaluation.mode) !== undefined;
     // An opinion poll's question has no key (ADR-014, addendum 2026-09-23):
     // there is nothing to be right about, so nothing is written — not a
     // zero per answer, which would mark the whole room wrong.
@@ -341,8 +386,12 @@ export async function runEvaluationGrading(
       // model asked twice for the same answer (ADR-063 §3).
       if (standing?.state !== "validated" && !(standing && keepsLlmProposal(standing, answer, job))) {
         const config = configOf(attempt);
-        const graded = await gradeCell(app, { evaluation, job, item, config, attempt, answer, llm });
-        if ("write" in graded) writes.push(graded.write);
+        const rules = pass.acceptances.get(item.item.id) ?? [];
+        const { graded, bound: cell } = await boundCell(app, { evaluation, job, item, config, attempt, answer, llm, rules });
+        if ("write" in graded) {
+          writes.push(graded.write);
+          if (accepting) bound.set(key, cell);
+        }
         else if ("runner" in graded) runnerJobs.push(graded.runner);
         else llmJobs.push(graded.llm);
       }
@@ -352,7 +401,7 @@ export async function runEvaluationGrading(
   await writeGradings(
     app.db,
     writes,
-    passGuard(new Map(pass.attempts.map((a) => [a.id, endOf(a.closedAt)]))),
+    acceptanceGuard(passGuard(new Map(pass.attempts.map((a) => [a.id, endOf(a.closedAt)]))), bound),
   );
   progress.finish(runnerJobs.length + llmJobs.length > 0 ? "pending" : "done");
   for (const runnerJob of runnerJobs) {
@@ -388,12 +437,12 @@ export async function checkGrading(
     attempt: AttemptRecord;
     answer: typeof answers.$inferSelect;
   },
-): Promise<{ write: WriteGradingInput } | { runner: RunnerGradingJob } | null> {
+): Promise<{ write: WriteGradingInput; bound: RuleBound | null } | { runner: RunnerGradingJob } | null> {
   const { evaluation, item, attempt, answer } = cell;
   const { configOf, keyed } = readConfig(app, item);
   // A question with no key (an opinion) has nothing to be right about.
   if (!keyed) return null;
-  const graded = await gradeCell(app, {
+  const { graded, bound } = await boundCell(app, {
     evaluation,
     job: { evaluationId: evaluation.id },
     item,
@@ -401,9 +450,13 @@ export async function checkGrading(
     attempt,
     answer,
     llm: false,
+    // ADR-124: the check of an exercise is graded with the acceptances too.
+    rules: (await acceptancesOf(app.db, [item.item.id])).get(item.item.id) ?? [],
   });
   if ("runner" in graded) return graded;
-  return "write" in graded && graded.write.state === "validated" ? graded : null;
+  if (!("write" in graded) || graded.write.state !== "validated") return null;
+  // Written through the acceptances' guard, as the pass's (ADR-128 §13).
+  return { write: graded.write, bound: acceptanceHook(item.question.type, evaluation.mode) ? bound : null };
 }
 
 /**
@@ -413,8 +466,12 @@ export async function checkGrading(
  * every write statement refuses a checked row. `null` when the guard
  * dropped the write.
  */
-export async function writeCheckGrading(app: FastifyInstance, write: WriteGradingInput): Promise<GradingRecord | null> {
-  const [written] = await writeGradings(app.db, [write], passGuard());
+export async function writeCheckGrading(
+  app: FastifyInstance,
+  { write, bound }: { write: WriteGradingInput; bound: RuleBound | null },
+): Promise<GradingRecord | null> {
+  const cells = new Map(bound ? [[pairKey(write.attemptId, write.itemId), bound]] : []);
+  const [written] = await writeGradings(app.db, [write], acceptanceGuard(passGuard(), cells));
   return written ?? null;
 }
 

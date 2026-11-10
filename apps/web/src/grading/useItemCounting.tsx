@@ -76,7 +76,7 @@ export function useItemCounting(evaluationId: string, detail: EvaluationDetail |
             })}
           </p>
           {detail.evaluation.releasedAt !== null ? (
-            <p>{t("grading.counting.confirm.released")}</p>
+            <p>{t("grading.releasedTold")}</p>
           ) : null}
         </div>
       ),

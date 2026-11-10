@@ -115,7 +115,7 @@ async function gradeChecked(
   try {
     const graded = await checkGrading(app, cell);
     if (graded === null) return null;
-    if ("write" in graded) return await writeCheckGrading(app, graded.write);
+    if ("write" in graded) return await writeCheckGrading(app, graded);
     await enqueueCheckRun(app, graded.runner);
     return null;
   } catch (err) {

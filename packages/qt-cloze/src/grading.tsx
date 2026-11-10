@@ -7,7 +7,7 @@
  */
 import type { GradingColumn, QuestionTypeGrading } from "@quiz/core/client";
 import { fmt, gradingSortKey, resolveStrings } from "@quiz/core/client";
-import { BLANK_ALTERNATIVES_SEPARATOR } from "@quiz/domain";
+import { BLANK_ALTERNATIVES_SEPARATOR, clozePart } from "@quiz/domain";
 import { AnswerChip, breakdownOf, NoAnswer, type AnswerTone } from "@quiz/ui";
 
 import type { ClozeAnswer, ClozeDetails, ClozeSolution, ClozeStudent } from "./schema.js";
@@ -23,8 +23,11 @@ function givenOf(blank: Blank, answer: ClozeAnswer | null): string | null {
   return blank.options.find((option) => option.id === Number(raw))?.label ?? raw;
 }
 
-function toneOf(details: ClozeDetails | null, index: number): AnswerTone {
-  const verdict = breakdownOf(details, "perBlank")?.perBlank.find((b) => b.index === index);
+function verdictOf(details: ClozeDetails | null, index: number) {
+  return breakdownOf(details, "perBlank")?.perBlank.find((b) => b.index === index);
+}
+
+function toneOf(verdict: ReturnType<typeof verdictOf>): AnswerTone {
   return verdict === undefined ? "neutral" : verdict.ok ? "good" : "bad";
 }
 
@@ -40,14 +43,23 @@ export const clozeGrading: QuestionTypeGrading<
       (blank): GradingColumn<ClozeAnswer, ClozeDetails> => ({
         key: `blank-${blank.index}`,
         label: fmt(s.blank, { n: blank.index + 1 }),
-        cell: ({ answer, details }) => {
+        // ADR-128: the part an acceptance names for this blank.
+        parts: [clozePart(blank.index)],
+        cell: ({ answer, details, accept }) => {
           const given = givenOf(blank, answer);
-          return given === null ? (
-            <NoAnswer>{s.empty}</NoAnswer>
-          ) : (
-            <AnswerChip tone={toneOf(details, blank.index)} title={given}>
+          if (given === null) return <NoAnswer>{s.empty}</NoAnswer>;
+          // An accepted blank is right: the host's control after it is the sign.
+          const chip = (
+            <AnswerChip tone={toneOf(verdictOf(details, blank.index))} title={given}>
               {given}
             </AnswerChip>
+          );
+          if (!accept) return chip;
+          return (
+            <span className="flex min-w-0 items-center gap-1">
+              <span className="min-w-0">{chip}</span>
+              {accept(clozePart(blank.index))}
+            </span>
           );
         },
         expected: () => {

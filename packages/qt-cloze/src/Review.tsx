@@ -107,7 +107,7 @@ export function ClozeReview({
                   )}
                   {verdict ? (
                     <Verdict tone={verdictTone(verdict.ok)} className="ml-2">
-                      {verdict.ok ? s.correct : s.incorrect}
+                      {verdict.accepted ? s.accepted : verdict.ok ? s.correct : s.incorrect}
                     </Verdict>
                   ) : null}
                 </td>

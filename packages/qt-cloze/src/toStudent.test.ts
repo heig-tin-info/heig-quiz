@@ -152,6 +152,21 @@ describe("studentDetails", () => {
     expect(out.perBlank.some((blank) => "expected" in blank || "given" in blank)).toBe(false);
   });
 
+  it("keeps an acceptance's mark beside its verdict, and nothing of the key (ADR-128)", () => {
+    const answer = { blanks: ["Galilee", "10", "+=", "1", "N", "0"] };
+    const accepted = clozeServer.grade(SECRET_CONFIG, answer, {
+      ...testGradeContext(6),
+      accepted: [{ part: "b0", answer: "galilee" }],
+    });
+    if (accepted instanceof Promise || accepted.kind !== "graded") throw new Error("sync grade expected");
+    const out = clozeServer.studentDetails!(accepted.details, { showKey: false, showHiddenCaseNames: false }) as {
+      perBlank: Record<string, unknown>[];
+    };
+    expect(out.perBlank[0]).toMatchObject({ index: 0, ok: true, accepted: true });
+    expect(out.perBlank.some((blank) => "expected" in blank || "given" in blank)).toBe(false);
+    expect(JSON.stringify(out)).not.toContain("Newton");
+  });
+
   it("keeps the whole breakdown once the key is published", () => {
     expect(clozeServer.studentDetails!(graded.details, { showKey: true, showHiddenCaseNames: false })).toBe(graded.details);
   });

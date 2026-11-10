@@ -118,6 +118,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-050 — Publishing the correction of an exercise that is still running](ADR-050-publier-la-correction-d-un-exercice.md)
 - [ADR-052 — Bonus questions replace the threshold grade scale](ADR-052-questions-bonus.md)
 - [ADR-108 — How an item counts: normal, bonus or neutralized, changeable at grading time](ADR-108-comptage-d-un-item-a-la-correction.md)
+- [ADR-128 — Accepting an answer at grading time: a rule of the item, applied by every official grading](ADR-128-accepter-une-reponse-a-la-correction.md)
 - [ADR-121 — The export factory: a typed record per source, one document tree, a renderer per format](ADR-121-fabrique-d-exports.md)
 - [ADR-066 — A wide question beside a pinned rail](ADR-066-question-large-et-rail-fixe.md)
 - [ADR-067 — Grading an exercise at hand-in](ADR-067-correction-a-la-remise-des-exercices.md)

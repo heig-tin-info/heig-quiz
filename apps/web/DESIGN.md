@@ -1889,6 +1889,23 @@ One question's answers as a table (`src/grading/`, origin
   face. On the correction projection, "Example values" sits above the
   statement in the caption size with the dice icon, and a parameterized
   short or cloze draws no answer groups: the head's bar holds the verdicts.
+- **Accepting an answer** (ADR-128). A cell of a column that names a part
+  (`GradingColumn.parts`) and holds an answer the key counts wrong — or one
+  accepted already — carries an `xs` `IconButton` with the `BadgeCheck`
+  seal right after the answer's chip, in the chip's line, vertically
+  centred (the type places it, `GradingCellInput.accept`). An answer to
+  accept keeps it transparent but focusable; on row hover or focus it shows
+  muted (60 %), at full strength in the hovered cell or while its card is
+  open. An accepted answer's seal is `success` and always shown: it is the
+  accepted sign, and the same button stops accepting (a reader who may not
+  write sees the seal alone). Its `Popover` card (18 rem)
+  says the part in the caption face, "Count “x” as right", the count of
+  answers concerned and of those adjusted by hand, the scope as a
+  `Segmented`, and one full-width action: Accept (`primary`) or Stop
+  accepting (`secondary`); a refusal stays on the card as `ErrorText`.
+  The key's row lists the answers accepted for everyone after the key's
+  chips, each a green chip with the seal in front (`AcceptedChip`,
+  `@quiz/ui`), never colour alone.
 - **The answer panel** is a `Sheet` with two optional slots added for it:
   `leading` (the verdict glyph before the title) and `actions` (↑ / ↓
   before the close button).

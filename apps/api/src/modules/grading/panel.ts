@@ -12,7 +12,7 @@ import type {
   GradingQueue,
   GradingSteps,
 } from "@quiz/contracts";
-import { countsForStudent } from "@quiz/domain";
+import { acceptanceScopes, countsForStudent } from "@quiz/domain";
 import { formattedValues } from "@quiz/domain/parameters";
 
 import { iso } from "../../clock.js";
@@ -34,6 +34,8 @@ import {
   writtenConfig,
   type Reading,
 } from "../pool/service.js";
+import { partsOf } from "./acceptance.js";
+import { acceptanceHook, acceptancesOf, ruleLabel, type AcceptanceHook, type ItemRules } from "./acceptanceRules.js";
 import { keptAttempts } from "./kept.js";
 import {
   criteriaOf,
@@ -172,6 +174,8 @@ interface QueueContext {
    * key and its own values (ADR-056, `readingPerAttempt`).
    */
   readings: Map<string, (attempt: AttemptRecord) => Reading>;
+  /** The answers accepted at grading time on the selected items (ADR-128). */
+  acceptances: ItemRules;
 }
 
 /**
@@ -186,7 +190,7 @@ async function loadQueueContext(
   selection: { items: readonly JoinedItem[]; scope: CellScope },
 ): Promise<QueueContext> {
   const { scope } = selection;
-  const [answerRows, standing, history, roster, staffAttempts, kept] = await Promise.all([
+  const [answerRows, standing, history, roster, staffAttempts, kept, acceptances] = await Promise.all([
     attemptRows.length === 0 || selection.items.length === 0
       ? []
       : db
@@ -209,6 +213,10 @@ async function loadQueueContext(
     staffAttemptIds(db, evaluation),
     // Only worth a read when somebody retook: otherwise every attempt counts.
     attemptRows.some((a) => a.attemptNumber > 1) ? keptAttempts(db, evaluation) : null,
+    acceptancesOf(
+      db,
+      selection.items.map((i) => i.item.id),
+    ),
   ]);
   return {
     answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
@@ -227,6 +235,7 @@ async function loadQueueContext(
         readingPerAttempt(i),
       ]),
     ),
+    acceptances,
   };
 }
 
@@ -238,7 +247,7 @@ async function loadQueueContext(
  * write of the panel addresses.
  */
 function entryOf(
-  { attempt, item }: { attempt: AttemptRecord; item: JoinedItem },
+  { attempt, item, hook }: { attempt: AttemptRecord; item: JoinedItem; hook: AcceptanceHook | undefined },
   grading: GradingRecord | null,
   context: QueueContext,
   anonymous: boolean,
@@ -269,6 +278,8 @@ function entryOf(
     solution: solutionViewOf(item.question.type, config, view),
     grading: grading ? toGrading(grading) : null,
     history: context.history.get(key) ?? [],
+    // ADR-128: what of this answer an acceptance can name, where the item takes one.
+    ...(hook ? { parts: partsOf(hook, item.question.type, config, answer?.payload ?? null) } : {}),
   };
 }
 
@@ -300,6 +311,8 @@ export async function gradingQueue(
     scope: { itemId: query.itemId },
   });
 
+  // ADR-128: whether each item takes acceptances, decided once.
+  const hooks = new Map(items.map((i) => [i.item.id, acceptanceHook(i.question.type, evaluation.mode)]));
   const entries: GradingEntry[] = [];
   let validated = 0;
   let proposed = 0;
@@ -310,7 +323,7 @@ export async function gradingQueue(
       const grading = context.standing.get(pairKey(attempt.id, item.item.id)) ?? null;
       if (counts && grading?.state === "validated") validated += 1;
       else if (counts && grading?.state === "proposed") proposed += 1;
-      entries.push(entryOf({ attempt, item }, grading, context, query.anonymous));
+      entries.push(entryOf({ attempt, item, hook: hooks.get(item.item.id) }, grading, context, query.anonymous));
     }
   }
 
@@ -328,9 +341,41 @@ export async function gradingQueue(
       explanation: explanationOrNull(i.version.explanation),
       exportable: exportsText(i.question.type, i.version),
       ...(isParameterized(i.version) ? { parameters: writtenOf(i) } : {}),
+      ...acceptanceOf(hooks.get(i.item.id), i, context, attemptRows),
     })),
     entries,
     counts: { total, validated, proposed, missing: total - validated - proposed },
+  };
+}
+
+/**
+ * The `acceptance` of a queue's item (ADR-128): the scopes it offers (only
+ * one student's on a parameterized question) and the acceptances in force,
+ * each label read on the config of the attempt a single-student rule names,
+ * else on the question as written. Nothing when the item takes none.
+ */
+function acceptanceOf(
+  hook: AcceptanceHook | undefined,
+  item: JoinedItem,
+  context: QueueContext,
+  attemptRows: readonly AttemptRecord[],
+) {
+  if (!hook) return {};
+  const reading = context.readings.get(item.item.id);
+  const byId = new Map(attemptRows.map((a) => [a.id, a]));
+  const configOf = (attemptId: string | null) => {
+    const attempt = attemptId === null ? undefined : byId.get(attemptId);
+    return attempt && reading ? reading(attempt).config : writtenConfig(item.question.type, item.version).config;
+  };
+  const rules = context.acceptances.get(item.item.id) ?? [];
+  return {
+    acceptance: {
+      scopes: [...acceptanceScopes(isParameterized(item.version))],
+      accepted: rules.map((rule) => ({
+        ...rule,
+        label: ruleLabel(hook, () => configOf(rule.attemptId), rule) ?? rule.answer,
+      })),
+    },
   };
 }
 

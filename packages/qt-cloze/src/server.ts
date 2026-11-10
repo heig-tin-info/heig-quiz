@@ -10,7 +10,17 @@ import {
   type StudentView,
   type TallyEntry,
 } from "@quiz/core/server";
-import { clozeStudentTemplate, describeBlank, parseCloze, selectOptionOrder } from "@quiz/domain/cloze";
+import {
+  clozeAcceptedLabel,
+  clozeAnswerIdentity,
+  clozePart,
+  clozePartIndex,
+  clozeStudentTemplate,
+  describeBlank,
+  matchBlank,
+  parseCloze,
+  selectOptionOrder,
+} from "@quiz/domain/cloze";
 import { CONFIG_TOO_COMPLEX_KEY, configPatternProblems, PATTERN_PROBLEM_KEY } from "@quiz/domain/regex";
 import { toCanonical } from "./canonical.js";
 import { clozeAnswerDoc, clozeAnswerZone, clozeSolutionDoc, clozeStatementDoc, clozeStudentAnswerDoc } from "./document.js";
@@ -139,7 +149,9 @@ export const clozeServer: QuestionTypeServer<
 
   /**
    * `perBlank[].expected` is the key, blank by blank. The verdict, the weight
-   * and what the student typed stay: they are the feedback. The expected
+   * and what the student typed stay: they are the feedback — and so does
+   * `accepted` (ADR-128), which only qualifies the verdict it sits beside
+   * ("right, accepted at grading") and names no answer of the key. The expected
    * value only travels when the teacher publishes the key, and so does
    * `given`: a dropdown's is its canonical option index (D4), which would
    * name options by the teacher's order (ADR-097). The review reads what the
@@ -153,7 +165,28 @@ export const clozeServer: QuestionTypeServer<
     };
   },
 
-  grade: (config, answer, ctx) => gradeClozeAnswer(config, answer, ctx.itemPoints),
+  grade: (config, answer, ctx) => gradeClozeAnswer(config, answer, ctx.itemPoints, ctx.accepted),
+
+  /**
+   * ADR-128: a text blank or a dropdown can be accepted, never a number nor
+   * a regex. A text blank's identity is its text as the blank's matching
+   * compares it; a dropdown's, the canonical option (`clozeAnswerIdentity`).
+   */
+  acceptance: {
+    given(config, answer) {
+      return parseCloze(config.text).blanks.flatMap((blank) => {
+        const given = answer.blanks[blank.index] ?? null;
+        const identity = clozeAnswerIdentity(blank, given, config.caseSensitive);
+        if (identity === null) return [];
+        return [{ part: clozePart(blank.index), answer: identity, right: matchBlank(blank, given, config.caseSensitive) }];
+      });
+    },
+    label(config, part, answer) {
+      const index = clozePartIndex(part);
+      const blank = index === null ? undefined : parseCloze(config.text).blanks[index];
+      return blank === undefined ? null : clozeAcceptedLabel(blank, answer, config.caseSensitive);
+    },
+  },
 
   /**
    * The regex blanks RE2 refuses (ADR-099): first all of them together

@@ -13,6 +13,7 @@ import { useState, type ReactNode } from "react";
 
 import { isMachineReason, isRetryableReason, reasonOf } from "@quiz/core/reasons";
 
+import { AcceptedIcon } from "./icon.js";
 import { cx } from "./styles.js";
 
 /**
@@ -63,6 +64,31 @@ export function AnswerChip({
     >
       {children}
     </span>
+  );
+}
+
+/**
+ * A right answer that is right only because the teacher accepted it at
+ * grading time (ADR-128): the green chip of a right answer with the seal in
+ * front, so "accepted" never rests on the colour alone. `label` is the
+ * accessible name of the seal and ends the tooltip ("Accepted").
+ */
+export function AcceptedChip({
+  label,
+  title,
+  children,
+}: {
+  label: string;
+  title?: string | undefined;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <AnswerChip tone="good" title={title === undefined ? label : `${title} · ${label}`}>
+      <span role="img" aria-label={label} className="mr-1 inline-flex align-[-2px]">
+        <AcceptedIcon className="size-3" />
+      </span>
+      {children}
+    </AnswerChip>
   );
 }
 

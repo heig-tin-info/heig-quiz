@@ -1,6 +1,9 @@
 /** Section 5 of the mock — see `index.ts` for the layout. */
 import {
+  acceptanceReach,
+  acceptanceScopes,
   attemptTotal,
+  clozePart,
   debrief,
   describe,
   inStatistics,
@@ -17,7 +20,9 @@ import {
   round2,
   scaleCriteria,
   scoresNegatively,
+  rulesForAttempt,
   validatedBreakdown,
+  type AcceptanceRule,
   type AttemptTally,
   type DeclaredCriterion,
 } from "@quiz/domain";
@@ -82,6 +87,7 @@ import {
   studentView,
   tryAnswer,
   versionRow,
+  NO_RUNNER,
 } from "./pool";
 import {
   STUDENT_ATTEMPT,
@@ -167,6 +173,8 @@ interface MockGradingWorld {
   answers: Map<string, unknown>;
   /** `attemptId:itemId` -> the chain, oldest first, at most one standing. */
   gradings: Map<string, MockGrading[]>;
+  /** Item id -> the answers accepted at grading time (ADR-128). */
+  acceptances: Map<string, AcceptanceRule[]>;
 }
 
 const cellKey = (attemptId: string, itemId: string) => `${attemptId}:${itemId}`;
@@ -278,6 +286,30 @@ const isFall = (q: { id: string }) => q.id === "q-fall";
 const BLOCKS: MockQuestion | undefined = questions.find((q) => q.id === "q-blocks");
 /* The logic question (`q-logic`, docs/04 §4.18), appended after it the same way. */
 const LOGIC: MockQuestion | undefined = questions.find((q) => q.id === "q-logic");
+/*
+ * A cloze (`malloc-tableau`), appended last the same way, so the grading
+ * table shows an answer accepted at grading time (ADR-128).
+ */
+const CLOZE: MockQuestion | undefined = questions.find((q) => q.type === "cloze" && q.internalName === "malloc-tableau");
+
+/**
+ * A cloze answer from an attempt's ability alone: the able half fill every
+ * blank right; the others take the option after the key in each dropdown —
+ * the one `seededAcceptances` accepts — and miss every other text blank.
+ */
+function clozeAppendedAnswer(q: MockQuestion, ability: number): unknown {
+  const good = ability >= 0.6;
+  return {
+    blanks: parseCloze(String(publishedConfig(q).text ?? "")).blanks.map((blank) => {
+      if (blank.kind === "select") {
+        const key = blank.correct[0] ?? 0;
+        return String(good ? key : (key + 1) % Math.max(1, blank.options.length));
+      }
+      if (blank.kind === "text") return good || blank.index % 2 === 0 ? (blank.answers[0] ?? "") : "delete";
+      return null;
+    }),
+  };
+}
 
 /**
  * A question appended to the `closed` evaluation, graded in a pass of its own
@@ -331,6 +363,18 @@ const APPENDED: Appended[] = [
           // The able half wired the whole majority, the rest forgot the third AND.
           answer: (attempt: MockAttempt) => (attempt.ability >= 0.6 ? LOGIC_ANSWER : LOGIC_PARTIAL_ANSWER),
           // Validated at once: the simulation is the grade (ADR-123 §6).
+          proposed: () => false,
+        },
+      ]
+    : []),
+  ...(CLOZE
+    ? [
+        {
+          question: CLOZE,
+          suffix: "00000000c10e",
+          points: 3,
+          answer: (attempt: MockAttempt, attemptIndex: number) =>
+            attemptIndex === 4 ? null : clozeAppendedAnswer(CLOZE, attempt.ability),
           proposed: () => false,
         },
       ]
@@ -396,6 +440,48 @@ function fallAnswer(v: FallValues, ability: number, n: number): string {
 /** The published configuration of a mock question (its latest version). */
 function publishedConfig(q: MockQuestion): Record<string, unknown> {
   return q.versions.at(-1)?.config ?? q.draft.config;
+}
+
+/**
+ * ADR-128: the `closed` evaluation's first cloze arrives with one answer
+ * accepted — the dropdown option every student who missed it chose
+ * (`mockAnswer` picks the one after the key) — so the table shows the
+ * seal, and the key's row the accepted answer. Drawn from nothing random.
+ */
+function seededAcceptances(items: MockEvalItem[], allValidated: boolean): Map<string, AcceptanceRule[]> {
+  const out = new Map<string, AcceptanceRule[]>();
+  if (allValidated) return out;
+  for (const item of items) {
+    const q = questions.find((x) => x.id === item.questionId);
+    if (q?.type !== "cloze") continue;
+    const blank = parseCloze(String(publishedConfig(q).text ?? "")).blanks.find((b) => b.kind === "select");
+    if (blank?.kind !== "select") continue;
+    const wrong = ((blank.correct[0] ?? 0) + 1) % Math.max(1, blank.options.length);
+    out.set(item.id, [{ part: clozePart(blank.index), answer: String(wrong), attemptId: null }]);
+    break;
+  }
+  return out;
+}
+
+/** One answer through its type's own `grade`, with the acceptances in force (ADR-128). */
+function gradeAccepted(
+  q: MockQuestion,
+  config: Record<string, unknown>,
+  answer: unknown,
+  item: MockEvalItem,
+  attemptId: string,
+  accepted: { part: string; answer: string }[],
+): { points: number; maxPoints: number; details: unknown } {
+  const graded = MOCK_SERVERS[q.type]!.grade(config, answer, {
+    seed: 0,
+    itemId: item.id,
+    attemptId,
+    itemPoints: 1,
+    now: new Date(),
+    runner: NO_RUNNER,
+    accepted,
+  }) as { points: number; maxPoints: number; details: unknown };
+  return graded;
 }
 
 /** The answer a student of the given ability would have handed in. */
@@ -580,6 +666,7 @@ function buildGradingWorld(
 
   const answers = new Map<string, unknown>();
   const gradings = new Map<string, MockGrading[]>();
+  const acceptances = seededAcceptances(items, options.allValidated);
 
   attempts.forEach((attempt, attemptIndex) => {
     items.forEach((item, itemIndex) => {
@@ -628,11 +715,15 @@ function buildGradingWorld(
         points = halfPoints(built.fraction * item.points);
         details = built.details;
       } else {
-        const graded = tryAnswer(q, config, answer, evaluation.mcqPolicy, negativeOf(evaluation)) as {
-          points: number;
-          maxPoints: number;
-          details: unknown;
-        };
+        const accepted = rulesForAttempt(acceptances.get(item.id) ?? [], { id: attempt.id, practice: false });
+        const graded =
+          accepted.length > 0
+            ? gradeAccepted(q, config, answer, item, attempt.id, accepted)
+            : (tryAnswer(q, config, answer, evaluation.mcqPolicy, negativeOf(evaluation)) as {
+                points: number;
+                maxPoints: number;
+                details: unknown;
+              });
         // Each branch of the try grades on its own scale (an essay at the
         // sum of its weights, ADR-118): read as a fraction, then the item's.
         const fraction = graded.maxPoints > 0 ? graded.points / graded.maxPoints : 0;
@@ -739,10 +830,13 @@ function buildGradingWorld(
         const key = cellKey(attempt.id, item.id);
         const answer = appended.answer(attempt, attemptIndex, key);
         if (answer !== null) answers.set(key, answer);
+        const accepted = rulesForAttempt(acceptances.get(item.id) ?? [], { id: attempt.id, practice: false });
         const graded =
           answer === null
             ? { points: 0, details: null }
-            : (tryAnswer(q, attemptConfig(q, attempt.id), answer) as { points: number; details: unknown });
+            : accepted.length > 0
+              ? gradeAccepted(q, attemptConfig(q, attempt.id), answer, item, attempt.id, accepted)
+              : (tryAnswer(q, attemptConfig(q, attempt.id), answer) as { points: number; details: unknown });
         const proposed = !options.allValidated && graded.points > 0 && appended.proposed(key);
         gradings.set(key, [
           {
@@ -767,7 +861,7 @@ function buildGradingWorld(
     }
   }
 
-  return { evaluation, items, attempts, answers, gradings };
+  return { evaluation, items, attempts, answers, gradings, acceptances };
 }
 
 /**
@@ -879,6 +973,7 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
     student: studentView(q, config),
     solution,
     grading,
+    ...(MOCK_SERVERS[q.type]?.acceptance ? { parts: partsOf(q, config, answer) } : {}),
     history: [...chain]
       .reverse()
       .map((g) => ({
@@ -891,6 +986,30 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
         comment: g.comment,
         regradeNote: g.regradeNote,
       })),
+  };
+}
+
+/** What of an answer an acceptance can name, as the API's `partsOf` (ADR-128). */
+function partsOf(q: MockQuestion, config: Record<string, unknown>, answer: unknown) {
+  const hook = MOCK_SERVERS[q.type]?.acceptance;
+  if (!hook || answer === null) return [];
+  return hook.given(config, answer).map((p) => ({ ...p, label: hook.label(config, p.part, p.answer) ?? p.answer }));
+}
+
+/** The queue item's `acceptance` (ADR-128), for a type that takes one. */
+function itemAcceptance(e: MockGradingWorld, item: MockEvalItem) {
+  const q = questions.find((x) => x.id === item.questionId);
+  const hook = q ? MOCK_SERVERS[q.type]?.acceptance : undefined;
+  if (!q || !hook) return {};
+  const config = publishedConfig(q);
+  return {
+    acceptance: {
+      scopes: [...acceptanceScopes(isFall(q))],
+      accepted: (e.acceptances.get(item.id) ?? []).map((r) => ({
+        ...r,
+        label: hook.label(config, r.part, r.answer) ?? r.answer,
+      })),
+    },
   };
 }
 
@@ -922,6 +1041,7 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       explanation: questions.find((q) => q.id === i.questionId)?.versions.at(-1)?.explanation || null,
       // The server's rule (`exportsText`): the types with export hooks, never a parameterized item.
       exportable: i.type === "code" && !(FALL && i.questionId === FALL.id),
+      ...itemAcceptance(e, i),
       ...(FALL && i.questionId === FALL.id
         ? {
             parameters: {
@@ -1186,6 +1306,67 @@ on("PUT", "/app/api/evaluations/:id/items/:itemId/counting", (m, body) => {
   if (changed && e.evaluation.releasedAt !== null) e.evaluation.modifiedAfterRelease = true;
   return { counting, modifiedAfterRelease: changed && e.evaluation.releasedAt !== null };
 });
+
+/**
+ * ADR-128: accept an answer (`PUT`) or stop (`DELETE`), then re-grade the
+ * answers it reaches through the type's own `grade`, a manual override left
+ * alone — the API's `changeAcceptance`, on the mock's world.
+ */
+for (const method of ["PUT", "DELETE"] as const) {
+  on(method, "/app/api/evaluations/:id/items/:itemId/acceptances", (m, body) => {
+    const e = gradingWorldOr404(m.groups!.id!);
+    const item = e.items.find((i) => i.id === String(m.groups!.itemId));
+    const q = item ? questions.find((x) => x.id === item.questionId) : undefined;
+    if (!item || !q) throw new MockError(404, "Item not found");
+    if (!MOCK_SERVERS[q.type]?.acceptance) throw refuse(409, "acceptance_unavailable", "this question cannot accept an answer");
+    const rule: AcceptanceRule = {
+      part: String(body.part),
+      answer: String(body.answer),
+      attemptId: (body.attemptId as string | null) ?? null,
+    };
+    const rules = e.acceptances.get(item.id) ?? [];
+    const same = (r: AcceptanceRule) => r.part === rule.part && r.answer === rule.answer && r.attemptId === rule.attemptId;
+    const accept = method === "PUT";
+    const changed = accept !== rules.some(same);
+    e.acceptances.set(item.id, accept ? (changed ? [...rules, rule] : rules) : rules.filter((r) => !same(r)));
+    if (!changed) return { accepted: accept, regraded: 0, unchanged: 0, modifiedAfterRelease: false };
+    const config = publishedConfig(q);
+    const { reached, unchanged } = acceptanceReach(
+      e.attempts.map((a) => ({
+        attemptId: a.id,
+        given: partsOf(q, config, e.answers.get(cellKey(a.id, item.id)) ?? null),
+        manual: standingGrading(e, a.id, item.id)?.source === "manual",
+      })),
+      rule,
+    );
+    let regraded = 0;
+    for (const attemptId of reached) {
+      const chain = e.gradings.get(cellKey(attemptId, item.id)) ?? [];
+      const standing = chain.find((g) => g.state !== "superseded");
+      if (!standing) continue;
+      const accepted = rulesForAttempt(e.acceptances.get(item.id) ?? [], { id: attemptId, practice: false });
+      const graded = gradeAccepted(q, config, e.answers.get(cellKey(attemptId, item.id)) ?? null, item, attemptId, accepted);
+      const fraction = graded.maxPoints > 0 ? graded.points / graded.maxPoints : 0;
+      standing.state = "superseded";
+      chain.push({
+        ...standing,
+        id: `g${(gradingSeq += 1)}`,
+        points: itemPoints(halfPoints(fraction * item.points)),
+        source: "auto",
+        state: "validated",
+        details: graded.details,
+        confidence: null,
+        comment: null,
+        gradedAt: new Date().toISOString(),
+        supersedesId: standing.id,
+      });
+      regraded += 1;
+    }
+    const modifiedAfterRelease = regraded > 0 && e.evaluation.releasedAt !== null;
+    if (modifiedAfterRelease) e.evaluation.modifiedAfterRelease = true;
+    return { accepted: accept, regraded, unchanged: unchanged.length, modifiedAfterRelease };
+  });
+}
 
 /** A roster line's id for a mock user: what a gradebook mark addresses (`.../marks/:eid`). */
 const seatOf = (userId: string) => `00000000-0000-4000-9000-${[...userId].map((c) => c.charCodeAt(0) % 10).join("").padStart(12, "0").slice(-12)}`;

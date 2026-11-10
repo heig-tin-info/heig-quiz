@@ -216,6 +216,56 @@ export interface GradeContext {
    * and falls back to its built-in default when it is absent.
    */
   defaults?: Readonly<Record<string, unknown>>;
+  /**
+   * The answers the teacher accepted at grading time for THIS attempt
+   * (ADR-128): at `part`, the answer whose identity is `answer` counts as a
+   * right one, fully. Only for a type with an {@link AnswerAcceptance}; the
+   * API passes them on every automatic grading of an official attempt, and
+   * never on a practice attempt, a drill card or a preview. Absent or empty:
+   * the key alone.
+   */
+  accepted?: readonly AcceptedAnswer[];
+}
+
+/**
+ * One answer of one part (ADR-128): a part of the question, and the type's
+ * identity of the answer given there. THE shape of a part's answer: the
+ * domain's rules and the wire's schemas are built on it.
+ */
+export interface AcceptedAnswer {
+  part: string;
+  answer: string;
+}
+
+/** One part of a given answer an acceptance can name (ADR-128), from {@link AnswerAcceptance.given}. */
+export interface AcceptablePart extends AcceptedAnswer {
+  /** The key alone counts it right: there is nothing to accept. */
+  right: boolean;
+}
+
+/**
+ * What a type knows about accepting an answer at grading time (ADR-128):
+ * which parts of an answer can be accepted, what makes two answers "the
+ * same answer" there, and how to read one back. Grading with an accepted
+ * set is the type's own `grade`, through {@link GradeContext.accepted}.
+ * Only a type graded in process takes part: a runner's or a model's grading
+ * receives no acceptances.
+ */
+export interface AnswerAcceptance<TConfig, TAnswer> {
+  /**
+   * The parts of `answer` an acceptance can name, each with the identity of
+   * what was given there — never an empty part, nor one the type does not
+   * offer (a cloze's number and regex blanks). Pure; reads the key only to
+   * say `right`.
+   */
+  given(config: TConfig, answer: TAnswer): AcceptablePart[];
+  /**
+   * What a teacher reads for `answer` at `part` (a dropdown option's label),
+   * or `null` when `config` has no such acceptable part or `answer` is no
+   * identity it can hold — the check of a write, and of a regrade onto
+   * another version, which drops what no longer exists.
+   */
+  label(config: TConfig, part: string, answer: string): string | null;
 }
 
 /**
@@ -553,6 +603,12 @@ export interface QuestionTypeServer<
    * the grader still defends itself. Omitting the hook means "always fits".
    */
   answerMisfit?(config: TConfig, answer: TAnswer): string | null;
+
+  /**
+   * Accepting an answer at grading time (ADR-128). Absent: the grading
+   * screen offers no acceptance for the type's items.
+   */
+  readonly acceptance?: AnswerAcceptance<TConfig, TAnswer>;
 
   /**
    * The per-type statistics of one item over the class (F-RES-03, audit

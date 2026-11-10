@@ -1025,3 +1025,132 @@ describe("GradingPanel — every answer as one file (F-EXP-01)", () => {
     expect(screen.queryByRole("button", { name: "Copy" })).toBeNull();
   });
 });
+
+describe("GradingPanel — accepting an answer (ADR-128)", () => {
+  const ACCEPT = `${EVAL}/items/i1/acceptances`;
+  const CLOZE_STUDENT = {
+    template: "Type ⸢0⸣.",
+    blanks: [
+      {
+        index: 0,
+        weight: 1,
+        kind: "select",
+        options: [
+          { id: 0, label: "int" },
+          { id: 1, label: "invalid" },
+        ],
+      },
+    ],
+  };
+  const clozeEntry = (attemptId: string, accepted: boolean) =>
+    makeEntry({
+      attemptId,
+      answer: { blanks: ["1"] },
+      student: CLOZE_STUDENT,
+      solution: { blanks: [{ index: 0, expected: "int" }] },
+      parts: [{ part: "b0", answer: "1", label: "invalid", right: false }],
+      grading: makeGrading({
+        id: `g-${attemptId}`,
+        attemptId,
+        points: accepted ? 2 : 0,
+        state: "validated",
+        confidence: null,
+        details: {
+          perBlank: [
+            { index: 0, weight: 1, kind: "select", ok: accepted, given: "1", expected: "int", ...(accepted ? { accepted: true } : {}) },
+          ],
+          earned: accepted ? 1 : 0,
+          total: 1,
+          fraction: accepted ? 1 : 0,
+        },
+      }),
+    });
+  const detail = makeEvaluationDetail();
+  const clozeDetail = {
+    ...detail,
+    items: detail.items.map((i) => (i.id === "i1" ? { ...i, type: "cloze" } : i)),
+  };
+  const queue = (accepted: boolean) =>
+    makeQueue([clozeEntry("a1", accepted), clozeEntry("a2", accepted)], {
+      items: [
+        {
+          id: "i1",
+          position: 0,
+          internalName: "types",
+          type: "cloze",
+          points: 2,
+          acceptance: {
+            scopes: ["everyone", "student"],
+            accepted: accepted ? [{ part: "b0", answer: "1", label: "invalid", attemptId: null }] : [],
+          },
+        },
+      ],
+    });
+
+  it("opens its card from a cell's corner without opening the row, then accepts for every such answer", async () => {
+    const { calls } = mockFetch(
+      routes([], {
+        [`GET ${EVAL}`]: ok(clozeDetail),
+        [`GET ${QUEUE("i1")}`]: ok(queue(false)),
+        [`PUT ${ACCEPT}`]: ok({ accepted: true, regraded: 2, unchanged: 0, modifiedAfterRelease: false }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+
+    await userEvent.click(within(rowOf("a1")).getByRole("button", { name: "Accept this answer" }));
+    const card = await screen.findByRole("dialog", { name: "Accept an answer" });
+    // The row's panel stayed shut: the card is the only layer.
+    expect(screen.getAllByRole("dialog")).toEqual([card]);
+    expect(within(card).getByText("Count “invalid” as right")).toBeInTheDocument();
+    expect(within(card).getByText("2 answers")).toBeInTheDocument();
+    expect(within(card).getByRole("radio", { name: "All these answers" })).toBeChecked();
+
+    await userEvent.click(within(card).getByRole("button", { name: "Accept" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ part: "b0", answer: "1", attemptId: null }),
+    );
+    // Done, the card closes; a click on the row still opens its panel.
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await userEvent.click(rowOf("a2"));
+    expect(await screen.findByRole("dialog", { name: "Anonymous answer" })).toBeInTheDocument();
+  });
+
+  it("marks an accepted answer, lists it beside the key, and offers to stop accepting it", async () => {
+    const { calls } = mockFetch(
+      routes([], {
+        [`GET ${EVAL}`]: ok(clozeDetail),
+        [`GET ${QUEUE("i1")}`]: ok(queue(true)),
+        [`DELETE ${ACCEPT}`]: ok({ accepted: false, regraded: 2, unchanged: 0, modifiedAfterRelease: false }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    const t = await table();
+    const [, expected] = within(t).getAllByRole("row");
+    expect(within(expected!).getByRole("img", { name: "Accepted answer" })).toBeInTheDocument();
+    // The seal after the chip is the accepted sign, and the way to stop it.
+    expect(within(rowOf("a1")).queryByRole("img", { name: "Accepted" })).toBeNull();
+
+    await userEvent.click(within(rowOf("a1")).getByRole("button", { name: "Accepted answer" }));
+    const card = await screen.findByRole("dialog", { name: "Accept an answer" });
+    expect(within(card).getByText("Accepted for all these answers.")).toBeInTheDocument();
+    await userEvent.click(within(card).getByRole("button", { name: "Stop accepting" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "DELETE")?.body).toEqual({ part: "b0", answer: "1", attemptId: null }));
+  });
+
+  it("shows a refusal on the card instead of swallowing it", async () => {
+    mockFetch(
+      routes([], {
+        [`GET ${EVAL}`]: ok(clozeDetail),
+        [`GET ${QUEUE("i1")}`]: ok(queue(false)),
+        [`PUT ${ACCEPT}`]: { status: 403, body: { error: "owner_required" } },
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+    await userEvent.click(within(rowOf("a1")).getByRole("button", { name: "Accept this answer" }));
+    const card = await screen.findByRole("dialog", { name: "Accept an answer" });
+    await userEvent.click(within(card).getByRole("button", { name: "Accept" }));
+    expect(await within(card).findByText(/only a teacher of the course may change a grade/)).toBeInTheDocument();
+  });
+});

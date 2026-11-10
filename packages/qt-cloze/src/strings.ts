@@ -39,6 +39,8 @@ export const clozeReviewStrings = {
   expected: "Expected",
   correct: "Correct",
   incorrect: "Incorrect",
+  /** A blank counted right because the teacher accepted the answer at grading time (ADR-128). */
+  accepted: "Accepted",
   score: "Score",
   weights: "Weighted blanks",
 } as const;

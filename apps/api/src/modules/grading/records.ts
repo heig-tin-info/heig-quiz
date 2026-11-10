@@ -50,6 +50,14 @@ const REFUSALS = {
   // F-EXP-01 (ADR-121 §2): the Markdown export of an item whose type does not
   // render as text, or of a parameterized one; its JSON record still exists.
   not_exportable: [409, "this question does not export as text"],
+  // ADR-128: accepting an answer at grading time — never on a poll nor for a
+  // type that takes none, only once the item list is frozen (as ADR-108),
+  // only for one student on a parameterized question, and only an answer
+  // the part can hold.
+  acceptance_unavailable: [409, "this question cannot accept an answer"],
+  acceptance_not_frozen: [409, "an answer is accepted once the item list is frozen"],
+  acceptance_scope: [422, "a parameterized question accepts an answer for one student only"],
+  acceptance_invalid: [422, "this part of the question cannot hold this answer"],
 } satisfies Record<string, Refusal>;
 
 export class GradingError extends refusalClass("GradingError", REFUSALS) {}

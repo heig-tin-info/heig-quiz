@@ -525,12 +525,13 @@ html.dark {
 }
 /* What a hover reveals (row actions, a pencil, a sort arrow) is simply on
    where there is no hover to give: a control a finger cannot reveal is a
-   control a finger does not have. Unlayered, so it beats `opacity-0` and
-   `invisible`. */
+   control a finger does not have. Unlayered, so it beats `opacity-0`,
+   `invisible` and a `w-0` that folds it away (ADR-128's accept seal). */
 @media (hover: none) {
   .hover-reveal {
     opacity: 1;
     visibility: visible;
+    width: auto;
   }
 }
 

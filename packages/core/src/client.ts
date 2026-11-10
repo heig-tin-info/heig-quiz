@@ -520,6 +520,14 @@ export interface QuestionTypeClient<
 export interface GradingCellInput<TAnswer, TDetails> {
   answer: TAnswer | null;
   details: TDetails | null;
+  /**
+   * The host's mark of an answer accepted at grading time, and its control
+   * (ADR-128), for one part the cell shows (one of `GradingColumn.parts`):
+   * the cell places it right after that part's answer chip. It is the
+   * accepted sign — the cell itself draws the verdict's chip only. Absent
+   * where the item takes no acceptance.
+   */
+  accept?: ((part: string) => ReactNode) | undefined;
 }
 
 /**
@@ -544,6 +552,15 @@ export interface GradingColumn<TAnswer = unknown, TDetails = unknown> {
   readonly short?: string;
   /** A column of marks rather than words (a tick box per choice). */
   readonly align?: "center";
+  /**
+   * The parts of the answer this column shows, named as the server's
+   * `acceptance` hook names them (ADR-128): one for a cloze blank, several
+   * for a column summing up many (a categorize's cards). The key's row lists
+   * their accepted answers, the answer panel offers them; the cell places
+   * each one's control (`GradingCellInput.accept`). Absent: nothing in the
+   * column can be accepted.
+   */
+  readonly parts?: readonly string[];
   /** The student's answer in this column. */
   cell(input: GradingCellInput<TAnswer, TDetails>): ReactNode;
   /** The expected answer in this column: the pinned first row of the table. */
@@ -551,8 +568,12 @@ export interface GradingColumn<TAnswer = unknown, TDetails = unknown> {
   /**
    * What the column sorts by, as a NORMALISED string (`gradingSortKey`): two
    * answers a teacher would call the same give the same key. It is also the
-   * key that will group identical answers, so it depends on the answer
-   * alone — never on the student, the grading or the order of the rows.
+   * key that groups identical answers, so it depends on the answer alone —
+   * never on the student, the grading or the order of the rows. An
+   * acceptance (ADR-128) groups by the server's identity of the answer,
+   * which may only be FINER than this key (a case-sensitive blank keeps the
+   * case), never coarser: two answers one acceptance reaches always sort
+   * together.
    */
   sortKey(answer: TAnswer | null): string;
 }

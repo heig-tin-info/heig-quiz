@@ -354,7 +354,7 @@ export async function parameterizedItems(db: DbOrTx, evaluationId: string): Prom
 
 /** One item of one evaluation, by primary key — not the whole list filtered. */
 export async function joinedItem(
-  db: Db,
+  db: DbOrTx,
   evaluationId: string,
   itemId: string,
 ): Promise<JoinedItem | null> {

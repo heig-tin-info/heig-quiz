@@ -35,6 +35,7 @@ import {
   Textarea,
   Section,
 } from "../ui";
+import { AcceptControl, AcceptedAnswers, offeredPart, type Acceptance } from "./AcceptAnswer";
 import { AiJustification } from "./AiJustification";
 import {
   CriteriaFields,
@@ -60,6 +61,8 @@ interface PanelProps {
   /** The width of the pane it docks as beside the table; null, a sheet over it. */
   pane: string | null;
   columns: GradingColumn[];
+  /** ADR-128: the answers accepted at grading time, and the act where the reader may accept. */
+  acceptance?: Acceptance | undefined;
   /**
    * The question as its students saw it: the expected panel's statement —
    * of a parameterized question, the question as written (ADR-056 §9).
@@ -205,7 +208,7 @@ function ValuesSection({ values }: { values: NonNullable<GradingEntry["values"]>
   );
 }
 
-function ExpectedBody({ item, columns, student, parameters, explanation }: PanelProps) {
+function ExpectedBody({ item, columns, acceptance, student, parameters, explanation }: PanelProps) {
   const t = useT();
   return (
     <div className="space-y-6">
@@ -231,7 +234,10 @@ function ExpectedBody({ item, columns, student, parameters, explanation }: Panel
               <dt className="w-40 shrink-0 truncate text-fg-muted" title={c.title ?? c.label}>
                 {c.label}
               </dt>
-              <dd className="min-w-0">{c.expected()}</dd>
+              <dd className="flex min-w-0 flex-wrap items-center gap-1">
+                {c.expected()}
+                <AcceptedAnswers acceptance={acceptance} parts={c.parts} />
+              </dd>
             </div>
           ))}
         </dl>
@@ -252,6 +258,8 @@ function EntryPanel({
   item,
   named,
   pane,
+  columns,
+  acceptance,
   explanation,
   criteria,
   onClose,
@@ -354,6 +362,7 @@ function EntryPanel({
           maxPoints={grading?.maxPoints ?? item.points}
           audience="teacher"
         />
+        {acceptance?.change ? <AcceptSection acceptance={acceptance} columns={columns} entry={entry} /> : null}
         {entry.values ? <ValuesSection values={entry.values} /> : null}
         {/* A comment is the teacher's only when the grading is: an automatic
             pass puts its own note here ("runner unavailable"), and labelling
@@ -397,6 +406,47 @@ function EntryPanel({
         </Section>
       </div>
     </PaneOrSheet>
+  );
+}
+
+/**
+ * ADR-128: the parts of this answer the teacher may accept — those the key
+ * counts wrong, and those accepted already — each drawn by the column's own
+ * cell with the table's control after its chip. Nothing when there is none.
+ */
+function AcceptSection({
+  acceptance,
+  columns,
+  entry,
+}: {
+  acceptance: Acceptance;
+  columns: GradingColumn[];
+  entry: GradingEntry;
+}) {
+  const t = useT();
+  const shown = columns.filter((c) => c.parts?.some((part) => offeredPart(acceptance, entry, part) !== null));
+  if (shown.length === 0) return null;
+  return (
+    <Section title={t("grading.accept.dialog")}>
+      <ul className="space-y-1.5 text-[13px]">
+        {shown.map((column) => (
+          <li key={column.key} className="flex items-center gap-3">
+            <span className="w-40 shrink-0 truncate text-fg-muted" title={column.title ?? column.label}>
+              {column.label}
+            </span>
+            <span className="min-w-0 flex-1">
+              {column.cell({
+                answer: entry.answer,
+                details: entry.grading?.details ?? null,
+                accept: (part) => (
+                  <AcceptControl acceptance={acceptance} entry={entry} part={part} partLabel={column.label} />
+                ),
+              })}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Section>
   );
 }
 

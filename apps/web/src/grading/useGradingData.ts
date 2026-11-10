@@ -125,6 +125,8 @@ export function useGradingData(evaluationId: string, itemId: string | null, name
     exportable: queue.data?.items[0]?.exportable === true,
     /** An essay's criteria (ADR-118 §6); empty for every other question. */
     criteria: queue.data?.items[0]?.criteria ?? NO_CRITERIA,
+    /** The answers accepted at grading time and the scopes offered (ADR-128); null when the item takes none. */
+    acceptance: queue.data?.items[0]?.acceptance ?? null,
     progress: useGradingProgress(evaluationId),
   };
 }

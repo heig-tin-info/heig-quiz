@@ -1,6 +1,7 @@
 /** The contract surface of `clozeServer`. */
 import { readFileSync } from "node:fs";
 import { ConfigMigrationError } from "@quiz/core/server";
+import { testGradeContext } from "@quiz/core/testing";
 import { buildClock } from "@quiz/domain/regex";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { toCanonical } from "./canonical.js";
@@ -220,5 +221,38 @@ describe("aggregate (F-RES-03, audit B-15)", () => {
       { key: "0: main", label: "main", part: 0, correct: true, count: 1 },
       { key: "1: exit", label: "exit", part: 1, correct: false, count: 1 },
     ]);
+  });
+});
+
+describe("acceptance (ADR-128)", () => {
+  const accepting = config("Type {{=int|invalid|long}}, name {{count|n}}, size {{#4}}.");
+  const acceptance = clozeServer.acceptance!;
+
+  it("names the dropdown and the text blank given, never the number blank", () => {
+    expect(acceptance.given(accepting, { blanks: ["1", "Total ", "4"] })).toEqual([
+      { part: "b0", answer: "1", right: false },
+      { part: "b1", answer: "total", right: false },
+    ]);
+    expect(acceptance.given(accepting, { blanks: ["0", "", null] })).toEqual([{ part: "b0", answer: "0", right: true }]);
+  });
+
+  it("reads an accepted answer back, and refuses what the question cannot hold", () => {
+    expect(acceptance.label(accepting, "b0", "1")).toBe("invalid");
+    expect(acceptance.label(accepting, "b0", "9")).toBeNull();
+    expect(acceptance.label(accepting, "b2", "4")).toBeNull();
+    expect(acceptance.label(accepting, "b7", "x")).toBeNull();
+  });
+
+  it("grades with the accepted answers of the context", () => {
+    const answer = { blanks: ["1", "total", "4"] };
+    const plain = clozeServer.grade(accepting, answer, testGradeContext(3));
+    const accepted = clozeServer.grade(accepting, answer, {
+      ...testGradeContext(3),
+      accepted: [{ part: "b0", answer: "1" }],
+    });
+    if (plain instanceof Promise || accepted instanceof Promise) throw new Error("sync grade expected");
+    if (plain.kind !== "graded" || accepted.kind !== "graded") throw new Error("graded expected");
+    expect([plain.points, accepted.points]).toEqual([1, 2]);
+    expect(accepted.details.perBlank[0]).toMatchObject({ ok: true, accepted: true });
   });
 });

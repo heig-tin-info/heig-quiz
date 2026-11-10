@@ -84,9 +84,18 @@ export function matchExact(
   value: string,
   opts: TextOptions & { caseSensitive?: boolean | undefined } = {},
 ): boolean {
-  const a = applyTextOptions(normalizeInput(input), opts);
-  const b = applyTextOptions(normalizeInput(value), opts);
-  return opts.caseSensitive === true ? a === b : foldCase(a) === foldCase(b);
+  return exactKey(input, opts) === exactKey(value, opts);
+}
+
+/**
+ * What {@link matchExact} compares: the text normalised, then folded unless
+ * the comparison is case-sensitive. Two texts match exactly when their keys
+ * are equal — which is also what makes two students' answers "the same
+ * answer" to an acceptance at grading time (ADR-128 §3).
+ */
+export function exactKey(s: string, opts: TextOptions & { caseSensitive?: boolean | undefined } = {}): string {
+  const text = applyTextOptions(normalizeInput(s), opts);
+  return opts.caseSensitive === true ? text : foldCase(text);
 }
 
 // ---------------------------------------------------------------------------
