@@ -618,7 +618,9 @@ export const accessibleClassroom = routeLoader(classroomOfRequest);
 // token and anyone off the staff get the 404 of a missing project — except
 // that the three authoring routes of a classroom (its projects, its sources,
 // the creation) also take a personal or OAuth token
-// (`projectsAuthoringClassroom`, ADR-022 addendum of 2026-10-13).
+// (`projectsAuthoringClassroom`, ADR-022 addendum of 2026-10-13), and so do
+// the three grading routes by criteria (`gradingProject`,
+// `gradingProjectRepo`, ADR-022 addendum of 2026-11-10).
 // ---------------------------------------------------------------------------
 
 /** The project, its classroom and course, if the caller is on the course's staff; null otherwise. */
@@ -653,6 +655,24 @@ export const accessibleProjectRepo = routeLoader(
   (app, req, params: { id: string; rid: string }) =>
     findAccessibleProjectRepo(app.db, callerOf(req), params.id, params.rid),
   { admit: "portal" },
+);
+
+/**
+ * {@link accessibleProject} and {@link accessibleProjectRepo} for the three
+ * routes an MCP client grades by criteria through (ADR-022, addendum of
+ * 2026-11-10): the grading screen, a repository's criteria table and a
+ * teacher's points for one criterion. A token's owner on the course's staff
+ * reaches them as in their own portal session.
+ */
+export const gradingProject = routeLoader(
+  (app, req, params: { id: string }) => findAccessibleProject(app.db, callerOf(req), params.id),
+  { admit: "portalOrToken" },
+);
+
+export const gradingProjectRepo = routeLoader(
+  (app, req, params: { id: string; rid: string }) =>
+    findAccessibleProjectRepo(app.db, callerOf(req), params.id, params.rid),
+  { admit: "portalOrToken" },
 );
 
 /**

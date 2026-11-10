@@ -13,6 +13,10 @@
  *   score falls through), released like any other source;
  * - the release refused while a live student repository is not validated,
  *   a staff test repository excepted;
+ * - through the MCP server (ADR-022, addendum of 2026-11-10): a token reads
+ *   the screen and proposes a criterion's points, audited as `api_key`; a
+ *   reading token writes nothing, the help assistant's token reaches none
+ *   of it, and validation stays the portal's;
  * - staff only: an outsider gets the 404 of a missing project. The writes'
  *   course-role refusal (`403`) cannot be exercised here: every member of
  *   a course's staff is an owner or an assistant, and either may grade.
@@ -23,6 +27,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  type ApiTokenCreated,
   PointsOutOfRange,
   ProjectDetail,
   ProjectGradingRepo,
@@ -43,6 +48,8 @@ import {
   projectRepos,
   projects,
 } from "../../db/schema.js";
+import { mintAssistToken } from "../../auth/tokens.js";
+import { ApiError, injectedApi } from "../mcp/service.js";
 import { resetLiveStateCache } from "../../github/metrics.js";
 import { orgsRoute } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
@@ -423,5 +430,94 @@ describe("the release gate and Validate the rest (ADR-106 §8, F-PROJ-26)", () =
     await frozenRun(repo);
     await server.app.db.update(projects).set({ gradingMode: "auto" }).where(eq(projects.id, auto.projectId));
     expect((await call("POST", `/app/api/projects/${auto.projectId}/release`)).statusCode).toBe(200);
+  });
+});
+
+describe("grading through the MCP server (ADR-022, addendum of 2026-11-10)", () => {
+  const tokenFor = async (scope: "quiz" | "quiz:read" | "api") => {
+    const res = await call("POST", "/app/api/me/tokens", teacher.headers, { name: "mcp", scope });
+    return (res.json() as ApiTokenCreated).token;
+  };
+  let rpcId = 0;
+  const tool = async (token: string, name: string, args: object) => {
+    const res = await server.app.inject({
+      method: "POST",
+      url: "/app/api/mcp",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { jsonrpc: "2.0", id: ++rpcId, method: "tools/call", params: { name, arguments: args } },
+    });
+    const { result } = res.json() as { result: { isError: boolean; content: { text: string }[] } };
+    return { isError: result.isError, data: JSON.parse(result.content[0]!.text) };
+  };
+
+  it("reads the screen and proposes a criterion's points as the token's owner, audited as api_key", async () => {
+    const w = await world(1);
+    const repo = await repoOf(w, w.students[0]!.id);
+    await proposals(repo);
+    const token = await tokenFor("quiz");
+
+    const read = await tool(token, "get_project_grading", { projectId: w.projectId });
+    expect(read.isError, JSON.stringify(read.data)).toBe(false);
+    expect(read.data.repos.map((r: { id: string }) => r.id)).toEqual([repo]);
+    expect(read.data.url).toContain(`/projects/${w.projectId}`);
+    const one = await tool(token, "get_project_grading", { projectId: w.projectId, repoId: repo });
+    expect(one.data).toMatchObject({ id: repo, validation: { missing: ["git.commits"] } });
+
+    const graded = await tool(token, "grade_criterion", {
+      projectId: w.projectId,
+      repoId: repo,
+      criterionId: "git.commits",
+      points: 1.5,
+      rationale: "Des commits réguliers.",
+    });
+    expect(graded.isError, JSON.stringify(graded.data)).toBe(false);
+    expect(graded.data.validation).toMatchObject({ validated: false, missing: [] });
+    expect((await standing(repo)).find((r) => r.criterionId === "git.commits")).toMatchObject({
+      points: 1.5,
+      source: "manual",
+      state: "proposed",
+      rationale: "Des commits réguliers.",
+      createdBy: teacher.id,
+    });
+    const [audit] = await auditOf(repo, "project_repo.criterion_graded");
+    expect(audit).toMatchObject({ actorUserId: teacher.id, actorType: "api_key" });
+
+    // A range refusal comes back as the route's.
+    const out = await tool(token, "grade_criterion", { projectId: w.projectId, repoId: repo, criterionId: "rapport.style", points: 9 });
+    expect(out).toMatchObject({ isError: true });
+    expect(JSON.stringify(out.data)).toContain("points_out_of_range");
+  });
+
+  it("writes nothing with a reading token; validation, the release and the assistant's token stay out", async () => {
+    const w = await world(1);
+    const repo = await repoOf(w, w.students[0]!.id);
+    await proposals(repo);
+
+    const reader = await tokenFor("quiz:read");
+    expect((await tool(reader, "get_project_grading", { projectId: w.projectId })).isError).toBe(false);
+    const write = await tool(reader, "grade_criterion", { projectId: w.projectId, repoId: repo, criterionId: "git.commits", points: 1 });
+    expect(write.isError).toBe(true);
+
+    // A full API token, the only personal token that reaches these routes at all (ADR-113).
+    const bearer = { authorization: `Bearer ${await tokenFor("api")}` };
+    for (const [method, url] of [
+      ["POST", validateUrl(w, repo)],
+      ["POST", `/app/api/projects/${w.projectId}/validate`],
+      ["POST", `/app/api/projects/${w.projectId}/release`],
+      ["GET", `/app/api/projects/${w.projectId}`],
+    ] as const) {
+      expect((await call(method, url, bearer)).statusCode, `${method} ${url}`).toBe(404);
+    }
+    const assist = await mintAssistToken(server.app.db, teacher.id, server.app.clock.now());
+    const helper = injectedApi(server.app, `Bearer ${assist.token}`, "http://web.test");
+    for (const attempt of [
+      () => helper.get(`/projects/${w.projectId}/grading`),
+      () => helper.put(`/projects/${w.projectId}/repos/${repo}/criteria/git.commits`, { points: 1 }),
+    ]) {
+      const error = await attempt().then(() => null, (e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(404);
+    }
+    expect((await standing(repo)).map((r) => r.criterionId).sort()).toEqual([...MACHINE].sort());
   });
 });
