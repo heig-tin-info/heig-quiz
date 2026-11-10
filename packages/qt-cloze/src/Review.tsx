@@ -6,6 +6,10 @@
  * expected answer. `details.expected` is teacher-facing: the results endpoint
  * strips it for a student unless the key is revealed.
  *
+ * Each blank of the text carries its number, the table's first column, and,
+ * when the key is shown, a wrong or empty one is followed by its expected
+ * answer, so the correction reads in place (#1044).
+ *
  * `sections` (#109): the text is the prompt, and hiding it leaves the table,
  * which still gives every blank's answer and verdict; hiding the solution
  * drops the expected column.
@@ -66,18 +70,36 @@ export function ClozeReview({
           renderBlank={(index) => {
             const label = givenLabel(student, index, given[index] ?? null);
             const ok = verdicts.get(index)?.ok;
+            // The correction in place (#1044): a wrong or empty blank is
+            // followed by its key, when the key is shown at all.
+            const key = ok === false || label === null ? expected.get(index) : undefined;
             return (
-              <span
-                className={cx(
-                  "mx-0.5 rounded px-1.5 py-0.5 font-mono text-[0.9em]",
-                  ok === undefined
-                    ? "bg-surface-3 text-fg"
-                    : ok
-                      ? "bg-success-soft text-success"
-                      : "bg-danger-soft text-danger",
-                )}
-              >
-                {label ?? "…"}
+              // One box, so a chip and its key never part at a line's end.
+              <span className="inline-block max-w-full">
+                <span
+                  className={cx(
+                    "mx-0.5 rounded px-1.5 py-0.5 font-mono text-[0.9em]",
+                    ok === undefined
+                      ? "bg-surface-3 text-fg"
+                      : ok
+                        ? "bg-success-soft text-success"
+                        : "bg-danger-soft text-danger",
+                  )}
+                >
+                  {/* The table's first column, so the text and the table share a key (#1044). */}
+                  <span className="mr-1 text-[0.8em] tabular-nums text-fg-faint">{index + 1}</span>
+                  {label ?? "…"}
+                </span>
+                {key !== undefined ? (
+                  <span
+                    title={`${s.expected}: ${key}`}
+                    className="mr-0.5 inline-block max-w-[24ch] truncate align-bottom font-mono text-[0.9em] font-medium text-info"
+                  >
+                    <span aria-hidden="true">→ </span>
+                    <span className="sr-only">{s.expected}: </span>
+                    {key}
+                  </span>
+                ) : null}
               </span>
             );
           }}
