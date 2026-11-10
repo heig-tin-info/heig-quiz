@@ -4642,7 +4642,7 @@ export const fr: Record<keyof Dict, string> = {
   "export.limited": "Trop de téléchargements en une heure. Réessayez plus tard.",
   "export.notPrintable": "Cette série contient une question qui ne s'imprime pas.",
   "feedback.download": "Télécharger ma copie",
-  "grading.answers.copy": "Copier",
+  "grading.answers.clipboard": "Presse-papiers",
   "grading.answers.help": "Les réponses de toute la classe à cette question, nommées, dans un seul fichier.",
   "grading.answers.copied": "Réponses copiées",
   "grading.answers.copyFailed": "Impossible de copier les réponses.",
@@ -4673,6 +4673,7 @@ export const fr: Record<keyof Dict, string> = {
   "grading.panel.question": "Question {n}",
   "grading.panel.score": "{points} / {max} pts",
   "grading.panel.statement": "Énoncé",
+  "grading.statement.open": "Voir l'énoncé",
   "grading.panel.expectedHelp": "Réponse attendue erronée ? Publiez une nouvelle version de la question, puis recorrigez.",
   // Parameterized questions: grading and results (ADR-056 §9)
   "grading.param.badge": "Paramétrée",

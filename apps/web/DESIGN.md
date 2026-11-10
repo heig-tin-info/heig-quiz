@@ -41,8 +41,10 @@ raw values live in `src/style.css` and swap in dark mode without any
 A grade (`<Grade>`, `apps/web/src/Grade.tsx`) is written in `danger` below
 4.0 and in `warning` from 4.0 to 4.4, in the ink from 4.5; its ECTS label
 ("Satisfactory (D)") is on hover and in the text for a screen reader. The
-histogram's bars follow the same bands. Teacher and student see the same
-colours.
+histogram's bars follow the same bands, except that the bars past the
+borderline band are `success` rather than the ink (`GRADE_BAND_BAR`,
+#1083): a bar is a share of the class, and the passing share must read at
+a glance. Teacher and student see the same colours.
 
 Rule: strip the accent and every screen must still read. Hierarchy comes
 from size, weight and position, never from red.
@@ -1829,9 +1831,19 @@ One question's answers as a table (`src/grading/`, origin
   table must never show. Past the page's width it scrolls sideways under
   its sticky verdict (and student) column; every `<td>` carries its own fill
   so a sticky cell never lets the scrolled ones show through.
-- **Phone headers.** A column that declares a `short` form (`GradingColumn`:
-  the multiple-choice letter) shows it alone under `sm`; the full label stays
-  in the tooltip and as the accessible name. Desktop keeps the label.
+- **Short headers.** A column that declares a `short` form (`GradingColumn`:
+  the multiple-choice letter) shows it alone at every width and is sized to
+  it (`w-px`, at least `min-w-14`), out of the equal shares; the whole text
+  (`title`, else the label) is the header's tooltip and accessible name, and
+  the question's name in the question bar opens the key's panel on the
+  statement (owner decision, #1083). When every answer column is short, the
+  Points column takes the width left, so the figures and the actions still
+  close the row at its right edge. Over a centred column the letter carries
+  a left margin as wide as the sort arrow, so it stands over its marks.
+- **The toolbar** wraps its actions — Export, Anonymise, then the primary —
+  as one group held to the right (`ml-auto`): the primary closes the
+  filters' row and never stands alone at the start of a line. Copying the
+  answers is the Export menu's last item (Clipboard), not a button.
 - **Verdict glyph.** A 22 px `rounded-md` square: correct = solid `success`
   and an `on-fill` check; partial = HATCHED, `success` stripes over
   `success` at 40 % on `surface` (`color-mix`), a small solid check square

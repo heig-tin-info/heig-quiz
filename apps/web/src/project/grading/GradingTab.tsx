@@ -11,7 +11,7 @@ import { Grade } from "../../Grade";
 import { useT } from "../../i18n";
 import { projectGradingKey } from "../../queryKeys";
 import { GradeStats } from "../../charts/GradeStats";
-import { Histogram } from "../../charts/Histogram";
+import { GRADE_BAND_BAR, Histogram } from "../../charts/Histogram";
 import { Summary } from "../../charts/Summary";
 import type { Navigate } from "../../router";
 import {
@@ -26,7 +26,6 @@ import {
   SegmentedBar,
   Skeleton,
   T,
-  type BarTone,
 } from "../../ui";
 import {
   cellHeat,
@@ -136,9 +135,8 @@ export function GradingTab({ project, navigate }: { project: ProjectDetail; navi
   );
 }
 
-/** A band's tint on a cell, and its fill on a bar: the Histogram's meaning, never a new palette. */
+/** A band's tint on a cell (its fill on a bar is the Histogram's `GRADE_BAND_BAR`): never a new palette. */
 const HEAT_FILL: Record<GradeBand, string> = { fail: "bg-danger-soft", borderline: "bg-warning-soft", pass: "bg-success-soft" };
-const HEAT_BAR: Record<GradeBand, BarTone> = { fail: "danger", borderline: "warning", pass: "success" };
 
 /** The total and the mark stay in view while the criteria scroll, once the card has room (the gradebook's mean). */
 const PIN = "@2xl:sticky @2xl:z-10 @2xl:bg-surface";
@@ -352,7 +350,7 @@ function GradingStats({
                 </span>
                 <SegmentedBar
                   total={1}
-                  parts={[{ tone: HEAT_BAR[band], value: ratio, label: t("project.matrix.bar", { percent }) }]}
+                  parts={[{ tone: GRADE_BAND_BAR[band], value: ratio, label: t("project.matrix.bar", { percent }) }]}
                 />
                 <span className="text-right tabular-nums text-fg-muted">{percent}%</span>
               </li>

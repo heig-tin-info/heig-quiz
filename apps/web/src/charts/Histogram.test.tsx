@@ -43,6 +43,19 @@ describe("Histogram", () => {
     expect(onSelect).toHaveBeenCalledWith(1);
   });
 
+  it("fills each bar by its band: red below the pass mark, orange just above, green past it (#1083)", () => {
+    const buckets = histogram([3.5, 4, 4.5, 5, 6]);
+    renderWithProviders(<Histogram buckets={buckets} onSelect={vi.fn()} />);
+    const fill = (name: string) => screen.getByRole("button", { name }).querySelector("span:last-child");
+    expect(fill("3.5–4.0: 1")).toHaveClass("bg-danger");
+    expect(fill("4.0–4.5: 1")).toHaveClass("bg-warning");
+    expect(fill("4.5–5.0: 1")).toHaveClass("bg-success");
+    expect(fill("5.0–5.5: 1")).toHaveClass("bg-success");
+    expect(fill("6.0: 1")).toHaveClass("bg-success");
+    // An empty bar keeps the neutral stub, whatever its band.
+    expect(fill("5.5–6.0: 0")).toHaveClass("bg-surface-3");
+  });
+
   it("names the top bucket by its exact grade, not by a range", () => {
     expect(bucketLabel(6, 0.5)).toBe("6.0");
     expect(bucketLabel(1, 0.5)).toBe("1.0–1.5");

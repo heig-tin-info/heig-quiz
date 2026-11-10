@@ -90,7 +90,7 @@ export function SegmentedBar({
   );
 }
 
-const BAR_FILL = { danger: "bg-danger", warning: "bg-warning" } as const;
+const BAR_FILL = { danger: "bg-danger", warning: "bg-warning", success: "bg-success" } as const;
 
 /** A bar that is a button (`onSelect` of `Bars` and `StackedBars`). */
 const BAR_BUTTON =
@@ -105,8 +105,8 @@ export interface BarDatum {
   tick?: string;
   /** The bar's own tooltip, on hover. */
   title?: string;
-  /** A semantic fill instead of the neutral ink (a failing grade range). */
-  tone?: "danger" | "warning" | undefined;
+  /** A semantic fill instead of the neutral ink (a grade range's band). */
+  tone?: keyof typeof BAR_FILL | undefined;
 }
 
 /**
@@ -170,9 +170,10 @@ function ChartAxis({
  * Vertical bars on one axis, one count each: plain `<div>`s on the tokens
  * rather than a chart library — a bar whose height is a percentage survives
  * every width the page has. Neutral ink, not the accent: a chart is a
- * reading, not the thing to press; a bar that is a verdict (a failing grade
- * range) may take a semantic `tone`. An empty bar keeps a 2 px stub so the
- * axis reads, a non-empty one at least 6 px so it is never mistaken for one.
+ * reading, not the thing to press; a bar that is a verdict (a grade range
+ * failing, borderline or passing) may take a semantic `tone`. An empty bar
+ * keeps a 2 px stub so the axis reads, a non-empty one at least 6 px so it
+ * is never mistaken for one.
  *
  * The bars are `aria-hidden`, and the same numbers are published as a real
  * table, visually hidden: a screen reader gets the data, not a shape.

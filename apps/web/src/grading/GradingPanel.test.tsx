@@ -106,17 +106,33 @@ describe("GradingPanel — the table", () => {
       .map(headerText);
     // mcq: one column per choice, lettered canonically.
     expect(heads).toEqual(["Verdict", "A · 4", "B · 8", "Points", "Actions"]);
-    // The phone shows the letter alone: an aria-hidden short form beside the full label.
-    const a = within(t).getAllByRole("columnheader")[1];
-    const short = a?.querySelector("span[aria-hidden].sm\\:hidden");
-    expect(short?.textContent).toBe("A");
-    expect(a?.textContent).toContain("A · 4");
+    // A choice's header shows its letter alone, at every width (#1083): the
+    // whole text is its tooltip and accessible name, and the column fits it.
+    const a = within(t).getAllByRole("columnheader")[1]!;
+    expect(a.querySelector("span[aria-hidden]")?.textContent).toBe("A");
+    expect(a.querySelector(".sr-only")?.textContent).toBe("A · 4");
+    expect(a.querySelector("[title]")).toHaveAttribute("title", "A · 4");
+    expect(within(a).getByRole("button", { name: "A · 4" })).toBeInTheDocument();
+    expect(a).toHaveClass("w-px");
     // The expected row is the first one, marking the correct choice.
     const [, expected] = within(t).getAllByRole("row");
     expect(within(expected!).getByRole("img", { name: "Expected answer" })).toBeInTheDocument();
     expect(within(expected!).getByRole("img", { name: "Expected" })).toBeInTheDocument();
     expect(await answerRows()).toHaveLength(2);
     expect(screen.queryByText("Swift Otter")).toBeNull();
+  });
+
+  it("opens the statement from the question's name: the whole text a letter stands for", async () => {
+    mockFetch(routes([proposal("a1", 2)]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+
+    const name = screen.getByRole("button", { name: "sizeof-ptr" });
+    expect(name).toHaveAttribute("title", "Show the statement");
+    await userEvent.click(name);
+    const panel = await screen.findByRole("dialog", { name: "Question 1" });
+    expect(await within(panel).findByText("Statement")).toBeInTheDocument();
+    expect(within(panel).getByText("Expected answer")).toBeInTheDocument();
   });
 
   it("shows the names on request, in their own column, from a named request", async () => {
@@ -1034,19 +1050,33 @@ describe("GradingPanel — every answer as one file (F-EXP-01)", () => {
     return (await screen.findAllByRole("menuitem")).map((item) => item.textContent);
   };
 
-  it("offers Export and Copy beside the one primary action, and copies the file", async () => {
+  it("offers one Export menu beside the one primary action, its last item the clipboard", async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     mockFetch(routes([], { ...exportable(true), ...publicConfig(true), [`GET ${MD}`]: ok("# Answers") }));
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
 
-    await waitFor(async () => expect(await openExport()).toEqual(["Markdown", "PDF", "JSON"]));
+    await waitFor(async () => expect(await openExport()).toEqual(["Markdown", "PDF", "JSON", "Clipboard"]));
     expect(screen.getByRole("menuitem", { name: "Markdown" })).toHaveAttribute("href", MD);
     expect(screen.getByRole("menuitem", { name: "JSON" })).toHaveAttribute("href", `${EVAL}/items/i1/answers.json`);
-    await userEvent.keyboard("{Escape}");
-    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    // No Copy button of its own beside the menu.
+    expect(screen.queryByRole("button", { name: "Copy" })).toBeNull();
+    await userEvent.click(screen.getByRole("menuitem", { name: "Clipboard" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("# Answers")));
     expect(await screen.findByText("Answers copied")).toBeInTheDocument();
+  });
+
+  it("says so when the clipboard refuses the answers", async () => {
+    const writeText = vi.fn(async () => {
+      throw new Error("denied");
+    });
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    mockFetch(routes([], { ...exportable(true), ...publicConfig(true), [`GET ${MD}`]: ok("# Answers") }));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+
+    await waitFor(async () => expect(await openExport()).toContain("Clipboard"));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Clipboard" }));
+    expect(await screen.findByText("Could not copy the answers.")).toBeInTheDocument();
   });
 
   it("downloads the PDF without leaving the page, and words a refusal", async () => {
@@ -1077,7 +1107,7 @@ describe("GradingPanel — every answer as one file (F-EXP-01)", () => {
   it("hides the PDF when the server makes none", async () => {
     mockFetch(routes([], { ...exportable(true), ...publicConfig(false) }));
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
-    expect(await openExport()).toEqual(["Markdown", "JSON"]);
+    expect(await openExport()).toEqual(["Markdown", "JSON", "Clipboard"]);
   });
 
   it("offers neither for a question that does not export as text", async () => {

@@ -548,7 +548,11 @@ export interface GradingColumn<TAnswer = unknown, TDetails = unknown> {
   /** Plain text and short ("A · Une adresse…"); the whole of it goes in `title`. */
   readonly label: string;
   readonly title?: string;
-  /** What a phone shows instead of `label` ("A"); `label` stays its tooltip and accessible name. */
+  /**
+   * What the header shows instead of `label` ("A"), at every width, the
+   * column fitted to it; `title` (else `label`) stays its tooltip and
+   * accessible name.
+   */
   readonly short?: string;
   /** A column of marks rather than words (a tick box per choice). */
   readonly align?: "center";
