@@ -48,15 +48,79 @@ describe("useStationAttestation", () => {
     const { calls } = mockFetch({ ...CONFIG, ...ATTESTED });
     renderHook(() => useStationAttestation(true), { wrapper: providers() });
     await waitFor(() => expect(verifies(calls)).toBe(1));
-    await advance(KIOSK_REATTEST_MS - 1_000);
+    await advance(KIOSK_REATTEST_MS - 30_000);
     expect(verifies(calls)).toBe(1);
-    await advance(1_000);
+    await advance(30_000);
     expect(verifies(calls)).toBe(2);
     await advance(KIOSK_REATTEST_MS);
     expect(verifies(calls)).toBe(3);
   });
 
-  it("tries a failed attestation again every 30 s, without the notice, until one is accepted", async () => {
+  it("asks again for a configuration that failed to load, and attests with it", async () => {
+    let asked = 0;
+    const { calls } = mockFetch({
+      ...ATTESTED,
+      "GET /app/api/config": () =>
+        ++asked === 1 ? fail(502) : ok({ devLogin: false, kiosk: { extensionId: null, mock: true } }),
+    });
+    renderHook(() => useStationAttestation(true), { wrapper: providers() });
+    await waitFor(() => expect(verifies(calls)).toBe(1));
+    expect(asked).toBe(2);
+  });
+
+  it("backs off from a failure the server recorded: 30 s, 1 min, then every 2 min", async () => {
+    const { calls } = mockFetch({
+      ...CONFIG,
+      "POST /app/api/kiosk/attest/challenge": ok({ challenge: "Yw==" }),
+      "POST /app/api/kiosk/attest/verify": fail(403, { error: "not_attested" }),
+    });
+    const { result } = renderHook(() => useStationAttestation(true), { wrapper: providers() });
+    await waitFor(() => expect(verifies(calls)).toBe(1));
+    for (const [wait, count] of [
+      [30_000, 2],
+      [60_000, 3],
+      [120_000, 4],
+      [120_000, 5],
+    ] as const) {
+      await advance(wait - 1_000);
+      expect(verifies(calls)).toBe(count - 1);
+      await advance(1_000);
+      expect(verifies(calls)).toBe(count);
+    }
+    // No write was refused: no notice.
+    expect(result.current.suspended).toBe(false);
+  });
+
+  it("backs off the same way when Google gives no challenge (the server records it)", async () => {
+    const { calls } = mockFetch({
+      ...CONFIG,
+      "POST /app/api/kiosk/attest/challenge": fail(503, { error: "attestation_unavailable" }),
+    });
+    renderHook(() => useStationAttestation(true), { wrapper: providers() });
+    await waitFor(() => expect(challenges(calls)).toBe(1));
+    await advance(30_000);
+    expect(challenges(calls)).toBe(2);
+    await advance(59_000);
+    expect(challenges(calls)).toBe(2);
+    await advance(1_000);
+    expect(challenges(calls)).toBe(3);
+  });
+
+  it("waits for the next round when the station is out of the registry", async () => {
+    const { calls } = mockFetch({
+      ...CONFIG,
+      "POST /app/api/kiosk/attest/challenge": ok({ challenge: "Yw==" }),
+      "POST /app/api/kiosk/attest/verify": ok({ station: { label: null, status: "unnamed" } }),
+    });
+    renderHook(() => useStationAttestation(true), { wrapper: providers() });
+    await waitFor(() => expect(verifies(calls)).toBe(1));
+    await advance(KIOSK_REATTEST_MS - 30_000);
+    expect(verifies(calls)).toBe(1);
+    await advance(30_000);
+    expect(verifies(calls)).toBe(2);
+  });
+
+  it("tries a lost attestation again every 30 s, without the notice, until one is accepted", async () => {
     let verified = 0;
     const { calls } = mockFetch({
       ...CONFIG,

@@ -90,7 +90,6 @@ const started: ServerEvent = {
 function stubs(extra: Record<string, RouteHandler> = {}) {
   let running = false;
   const mock = mockFetch({
-    ...extra,
     [`POST /app/api/evaluations/${EVAL}/attempt`]: () =>
       ok(
         (running
@@ -101,6 +100,7 @@ function stubs(extra: Record<string, RouteHandler> = {}) {
       ok({ kind: "attempt", view: attemptView } satisfies AttemptOrLobby),
     [`POST /app/api/attempts/${ATTEMPT}/position`]: noContent(),
     [`POST /app/api/attempts/${ATTEMPT}/events`]: noContent(),
+    ...extra,
   });
   return { ...mock, start: () => void (running = true) };
 }
@@ -208,6 +208,23 @@ describe("/take/:id on a kiosk station", () => {
     expect(attestations(calls)).toBe(1);
     await elapse(KIOSK_REATTEST_MS / 2);
     expect(attestations(calls)).toBe(2);
+  });
+
+  it("shows a suspended station's notice on the way in, and enters once an attestation lifts it", async () => {
+    flowingClock();
+    let verified = 0;
+    render({
+      ...station,
+      [`POST /app/api/evaluations/${EVAL}/attempt`]: () =>
+        verified > 1 ? ok({ kind: "lobby", view: lobbyView } satisfies AttemptOrLobby) : fail(423, { error: "kiosk_suspended" }),
+      // Refused on the way in, accepted on the next try.
+      "POST /app/api/kiosk/attest/verify": () =>
+        ++verified === 1 ? fail(403, { error: "not_attested" }) : ok({ station: { label: "Poste n° 7", status: "active" } }),
+    });
+    expect(await screen.findByText("Ce poste est suspendu")).toBeInTheDocument();
+    expect(screen.queryByText("Cette évaluation n'a pas pu être ouverte.")).not.toBeInTheDocument();
+    await elapse(30_000);
+    expect(await screen.findByText("Salle d'attente")).toBeInTheDocument();
   });
 });
 

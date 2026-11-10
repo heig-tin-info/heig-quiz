@@ -91,19 +91,35 @@ async function attestationOf(
 }
 
 /**
- * One attestation: a challenge, the extension's answer, the verdict. Null
- * when the station is attested and `active`; otherwise what to show.
+ * How one attestation ended (ADR-051 §6):
+ *  - `ok`: attested, and the station is `active`;
+ *  - `revoked`: attested, but the station is out of the registry or unnamed;
+ *  - `refused` (a 403) and `unavailable` (no challenge from Google, the
+ *    route's 503): the server RECORDED the attempt;
+ *  - `lost`: no attempt reached it — no answer, another 5xx, a 429, or no
+ *    configuration to attest with.
  */
-export async function attest(kiosk: PublicConfig["kiosk"]): Promise<StationTrouble | null> {
-  if (!kiosk) return "unavailable";
+export type AttestOutcome = "ok" | "revoked" | "refused" | "unavailable" | "lost";
+
+/** One attestation: a challenge, the extension's answer, the verdict. */
+export async function attestOnce(kiosk: PublicConfig["kiosk"]): Promise<AttestOutcome> {
+  if (!kiosk) return "lost";
   try {
     const { challenge } = await post<KioskChallenge>("/app/api/kiosk/attest/challenge");
     const body = (await attestationOf(kiosk, challenge)) satisfies KioskAttestVerify;
     const verdict = await post<KioskAttested>("/app/api/kiosk/attest/verify", body);
-    return verdict.station.status === "active" ? null : "not_recognised";
+    return verdict.station.status === "active" ? "ok" : "revoked";
   } catch (err) {
-    return status(err) === 403 ? "not_recognised" : "unavailable";
+    if (status(err) === 403) return "refused";
+    return refusalCodeOf(err) === "attestation_unavailable" ? "unavailable" : "lost";
   }
+}
+
+/** One attestation, for the station's screen: null when attested and `active`; otherwise what to show. */
+export async function attest(kiosk: PublicConfig["kiosk"]): Promise<StationTrouble | null> {
+  const outcome = await attestOnce(kiosk);
+  if (outcome === "ok") return null;
+  return outcome === "revoked" || outcome === "refused" ? "not_recognised" : "unavailable";
 }
 
 // --- The pairing ---------------------------------------------------------------

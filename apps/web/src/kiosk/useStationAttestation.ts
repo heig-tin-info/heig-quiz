@@ -9,13 +9,17 @@
  *    before: the pairing screen's last one may be minutes old, and the
  *    server calls a station silent `KIOSK_SILENT_AFTER_MS` after it
  *    (issue #1076);
- *  - an attestation that fails, or a write answered `423 kiosk_suspended`
- *    (refused, or silent), is tried again every {@link KIOSK_RETRY_MS} until
- *    one is accepted: a lost request must not leave the station silent for a
- *    whole round. The suspension lifts by itself, and the autosave, which
- *    kept every answer and kept retrying, catches up. Only the 423 covers
- *    the page with the notice: a failure the server did not act on shows
- *    nothing;
+ *  - an attestation that never reached the server is tried again every
+ *    {@link KIOSK_RETRY_MS}: a lost request must not leave the station
+ *    silent for a whole round. One the server recorded (refused, or Google
+ *    unavailable) is tried again after 30 s, 1 min, then every 2 min — each
+ *    try costs a call to Google and an audit row; a station out of the
+ *    registry waits for the next round. None of these shows anything;
+ *  - a write answered `423 kiosk_suspended` (refused, or silent) covers the
+ *    page with the notice, and the station re-attests every
+ *    {@link KIOSK_RETRY_MS} until one is accepted. The suspension lifts by
+ *    itself, and the autosave, which kept every answer and kept retrying,
+ *    catches up;
  *  - `423 kiosk_attestation_stale` on the submit: re-attest, retry once.
  *
  * One attestation at a time: a call made while one is in flight joins it.
@@ -27,7 +31,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { KIOSK_REATTEST_MS } from "@quiz/domain";
 
 import { KIOSK_SUSPENDED_EVENT, refusedWith, usePublicConfig } from "../api";
-import { attest } from "./station";
+import { attestOnce, type AttestOutcome } from "./station";
 import { KIOSK_RETRY_MS } from "./useKioskStation";
 
 export interface StationAttestation {
@@ -37,26 +41,49 @@ export interface StationAttestation {
   guardSubmit: <T>(submit: () => Promise<T>) => Promise<T>;
 }
 
+/** The longest wait before a failed attestation the server recorded is tried again. */
+const RETRY_CAP_MS = 2 * 60_000;
+
+/**
+ * When a station tries again after an attestation that went wrong: soon when
+ * nothing reached the server; backing off (30 s, 1 min, then every 2) when it
+ * recorded the failure, since each try costs a call to Google and an audit
+ * row; never before the next round when the station is out of the registry.
+ */
+function retryAfter(outcome: AttestOutcome, recorded: number): number | null {
+  if (outcome === "ok" || outcome === "revoked") return null;
+  if (outcome === "lost") return KIOSK_RETRY_MS;
+  return Math.min(KIOSK_RETRY_MS * 2 ** recorded, RETRY_CAP_MS);
+}
+
 export function useStationAttestation(active: boolean): StationAttestation {
   const config = usePublicConfig();
   const kiosk = useRef(config.data?.kiosk ?? null);
   kiosk.current = config.data?.kiosk ?? null;
+  // A configuration that failed to load is asked for again before each try.
+  const refetchConfig = useRef(config.refetch);
+  refetchConfig.current = config.refetch;
   // The schedule waits for the configuration, which names the attestation mode.
   const running = active && !config.isLoading;
   const [suspended, setSuspended] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [retryMs, setRetryMs] = useState<number | null>(null);
+  const recorded = useRef(0);
   const inFlight = useRef<Promise<void> | null>(null);
 
   /** One attestation, or the one already in flight; an accepted one lifts the notice. */
   const reattest = useCallback(() => {
-    inFlight.current ??= attest(kiosk.current)
-      .then((trouble) => {
-        setFailed(trouble !== null);
-        if (trouble === null) setSuspended(false);
-      })
-      .finally(() => {
-        inFlight.current = null;
-      });
+    inFlight.current ??= (async () => {
+      const station = kiosk.current ?? (await refetchConfig.current()).data?.kiosk ?? null;
+      const outcome = await attestOnce(station);
+      setRetryMs(retryAfter(outcome, recorded.current));
+      if (outcome === "refused" || outcome === "unavailable") recorded.current += 1;
+      if (outcome === "ok") {
+        recorded.current = 0;
+        setSuspended(false);
+      }
+    })().finally(() => {
+      inFlight.current = null;
+    });
     return inFlight.current;
   }, []);
 
@@ -74,12 +101,13 @@ export function useStationAttestation(active: boolean): StationAttestation {
     return () => clearInterval(id);
   }, [running, reattest]);
 
-  const retrying = suspended || failed;
+  // A suspended station tries every 30 s whatever the last outcome: it is blocked until one is accepted.
+  const retryEvery = suspended ? KIOSK_RETRY_MS : retryMs;
   useEffect(() => {
-    if (!running || !retrying) return;
-    const id = setInterval(() => void reattest(), KIOSK_RETRY_MS);
+    if (!running || retryEvery === null) return;
+    const id = setInterval(() => void reattest(), retryEvery);
     return () => clearInterval(id);
-  }, [running, retrying, reattest]);
+  }, [running, retryEvery, reattest]);
 
   const guardSubmit = useCallback(
     async <T,>(submit: () => Promise<T>): Promise<T> => {
