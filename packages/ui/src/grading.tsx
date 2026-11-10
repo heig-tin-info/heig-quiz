@@ -34,6 +34,12 @@ const CHIP: Record<AnswerTone, string> = {
 };
 
 /**
+ * A tone's classes alone, for a mark that is not an `AnswerChip` but must
+ * read as one: a cloze review's blank in its text and the key beside it.
+ */
+export const answerToneClass = (tone: AnswerTone): string => CHIP[tone];
+
+/**
  * A piece of text answer as a chip: mono, because what a student typed is
  * compared character by character ("malloc()" is not "malloc"), and tinted
  * by its verdict. The key is the same chip without a fill, in `info`.

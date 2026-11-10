@@ -19,7 +19,7 @@ import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeDetails, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozeReviewStrings, type ClozeReviewStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { breakdownOf, caption, cx, ScoreHeader, Verdict, verdictTone } from "@quiz/ui";
+import { answerToneClass, breakdownOf, caption, cx, ScoreHeader, Verdict, verdictTone } from "@quiz/ui";
 
 type ClozeReviewProps = ReviewProps<
   ClozeStudent,
@@ -79,26 +79,35 @@ export function ClozeReview({
                 <span
                   className={cx(
                     "mx-0.5 rounded px-1.5 py-0.5 font-mono text-[0.9em]",
-                    ok === undefined
-                      ? "bg-surface-3 text-fg"
-                      : ok
-                        ? "bg-success-soft text-success"
-                        : "bg-danger-soft text-danger",
+                    answerToneClass(ok === undefined ? "neutral" : ok ? "good" : "bad"),
                   )}
                 >
                   {/* The table's first column, so the text and the table share a key (#1044). */}
-                  <span className="mr-1 text-[0.8em] tabular-nums text-fg-faint">{index + 1}</span>
+                  <span className="sr-only">
+                    {s.blank} {index + 1}:{" "}
+                  </span>
+                  <span aria-hidden="true" className="mr-1 text-[0.8em] tabular-nums text-fg-muted">
+                    {index + 1}
+                  </span>
                   {label ?? "…"}
                 </span>
                 {key !== undefined ? (
-                  <span
-                    title={`${s.expected}: ${key}`}
-                    className="mr-0.5 inline-block max-w-[24ch] truncate align-bottom font-mono text-[0.9em] font-medium text-info"
-                  >
-                    <span aria-hidden="true">→ </span>
-                    <span className="sr-only">{s.expected}: </span>
-                    {key}
-                  </span>
+                  <>
+                    <span className="sr-only">
+                      {s.expected}: {key}
+                    </span>
+                    {/* Cut when long; the whole key is in the title and the label above. */}
+                    <span
+                      aria-hidden="true"
+                      title={`${s.expected}: ${key}`}
+                      className={cx(
+                        "mr-0.5 inline-block max-w-[24ch] truncate align-bottom font-mono text-[0.9em]",
+                        answerToneClass("expected"),
+                      )}
+                    >
+                      → {key}
+                    </span>
+                  </>
                 ) : null}
               </span>
             );

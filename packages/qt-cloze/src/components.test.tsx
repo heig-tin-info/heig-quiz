@@ -271,15 +271,22 @@ describe("ClozeReview", () => {
     expect(screen.queryByText("Expected")).not.toBeInTheDocument();
   });
 
-  /** The expected answers written after a chip of the text, by their accessible title. */
-  const keysInText = (container: HTMLElement) =>
-    Array.from(container.querySelectorAll("[title^='Expected: ']"), (el) => el.getAttribute("title"));
+  /** What a screen reader says of an element: its text, the `aria-hidden` parts left out. */
+  const spoken = (el: Element) => {
+    const copy = el.cloneNode(true) as Element;
+    copy.querySelectorAll("[aria-hidden='true']").forEach((node) => node.remove());
+    return (copy.textContent ?? "").replace(/\s+/g, " ").trim();
+  };
+  /** The expected answers the text says after its chips, by their accessible label. */
+  const keysInText = () => screen.queryAllByText(/^Expected: /).map((el) => el.textContent);
+  const solution = { blanks: details.perBlank.map((b) => ({ index: b.index, expected: b.expected })) };
+  const answer = { blanks: ["Newton", "9", null, "0", "n", "0"] };
 
   it("numbers every blank of the text like the table's first column, an empty one too (#1044)", () => {
     render(
       <ClozeReview
         student={student}
-        answer={{ blanks: ["Newton", "9", null, "0", "n", "0"] }}
+        answer={answer}
         solution={null}
         details={details}
         points={2}
@@ -287,16 +294,19 @@ describe("ClozeReview", () => {
         audience="student"
       />,
     );
-    // The chip's own text is the answer; its number sits before it, inside the chip.
-    expect(screen.getAllByText("Newton").map((el) => el.textContent)).toContain("1Newton");
-    expect(screen.getAllByText("9").map((el) => el.textContent)).toContain("29");
-    expect(screen.getByText("…").textContent).toBe("3…");
-    expect(screen.getAllByText("n").map((el) => el.textContent)).toContain("5n");
+    // The chip's own text is the answer; its number is read as "Blank n", never glued to it.
+    expect(screen.getAllByText("Newton").map(spoken)).toContain("Blank 1: Newton");
+    expect(screen.getAllByText("9").map(spoken)).toContain("Blank 2: 9");
+    expect(spoken(screen.getByText("…"))).toBe("Blank 3: …");
+    expect(screen.getAllByText("n").map(spoken)).toContain("Blank 5: n");
+    // The visible numeral itself is hidden from the reader.
+    const chip = screen.getAllByText("9").find((el) => spoken(el) === "Blank 2: 9");
+    expect(chip?.querySelector("[aria-hidden='true']")?.textContent).toBe("2");
+    // Without the key (`solution: null`), no expected answer follows a chip.
+    expect(keysInText()).toEqual([]);
   });
 
   it("writes the expected answer after a wrong or empty blank when the solution is shown (#1044)", () => {
-    const solution = { blanks: details.perBlank.map((b) => ({ index: b.index, expected: b.expected })) };
-    const answer = { blanks: ["Newton", "9", null, "0", "n", "0"] };
     const { container } = render(
       <ClozeReview
         student={student}
@@ -309,10 +319,33 @@ describe("ClozeReview", () => {
       />,
     );
     // Blanks 2 and 5 are wrong, 3 is empty; the right ones carry no key.
-    expect(keysInText(container)).toEqual(["Expected: 10", "Expected: += | + =", "Expected: /^N$/"]);
+    expect(keysInText()).toEqual(["Expected: 10", "Expected: += | + =", "Expected: /^N$/"]);
+    // The visible key, cut when long, keeps the whole value in its title.
+    expect(container.querySelector("[title='Expected: += | + =']")?.textContent).toBe("→ += | + =");
+  });
 
-    // The solution section hidden (#109): the text keeps its numbers, not the key.
-    const hidden = render(
+  it("writes no expected answer after a right or accepted blank (#1044)", () => {
+    const accepted = {
+      ...details,
+      perBlank: details.perBlank.map((b) => (b.index === 1 ? { ...b, ok: true, accepted: true as const } : b)),
+    };
+    render(
+      <ClozeReview
+        student={student}
+        answer={answer}
+        solution={solution}
+        details={accepted}
+        points={2}
+        maxPoints={6}
+        audience="student"
+      />,
+    );
+    // Blank 1 right and blank 2 accepted at grading: only 3 (empty) and 5 (wrong) keep a key.
+    expect(keysInText()).toEqual(["Expected: += | + =", "Expected: /^N$/"]);
+  });
+
+  it("writes no expected answer when the solution section is hidden (#109), keeping the numbers", () => {
+    render(
       <ClozeReview
         student={student}
         answer={answer}
@@ -324,23 +357,8 @@ describe("ClozeReview", () => {
         sections={{ solution: false }}
       />,
     );
-    expect(keysInText(hidden.container)).toEqual([]);
-    expect(hidden.container.textContent).toContain("3…");
-  });
-
-  it("writes no expected answer when the policy hides the key", () => {
-    const { container } = render(
-      <ClozeReview
-        student={student}
-        answer={{ blanks: ["Newton", "9", null, "0", "n", "0"] }}
-        solution={null}
-        details={details}
-        points={2}
-        maxPoints={6}
-        audience="student"
-      />,
-    );
-    expect(keysInText(container)).toEqual([]);
+    expect(keysInText()).toEqual([]);
+    expect(spoken(screen.getByText("…"))).toBe("Blank 3: …");
   });
 
   it("hides the text and the expected column on request (#109), keeping every answer", () => {
