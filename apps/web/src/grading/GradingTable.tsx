@@ -35,10 +35,10 @@ const STICKY_VERDICT = "sticky left-0 z-1 w-12 min-w-12";
 const STICKY_NAME = "sticky left-12 z-1 whitespace-nowrap";
 /**
  * An answer column's width: its share of the `<colgroup>`, the cell never
- * asking for more (`max-w-0`); fitted to its short form when it has one,
- * no narrower than a tick and the sort arrow.
+ * asking for more (`max-w-0`); fitted to its short form and its marks when
+ * it has one — the sort arrow hangs outside the letter (`Column.center`).
  */
-const answerWidth = (c: { short?: string | undefined }) => (c.short ? cx(FIT, "min-w-14") : "max-w-0");
+const answerWidth = (c: { short?: string | undefined }) => (c.short ? FIT : "max-w-0");
 
 export interface GradingTableProps {
   /** Accessible name: which question these answers are to. */
@@ -148,11 +148,7 @@ export function GradingTable(props: GradingTableProps) {
           <span title={c.title ?? c.label} className="block truncate">
             {c.short ? (
               <>
-                {/* Over a centred column, a left margin as wide as the sort
-                    arrow and its gap: the letter stands over its marks. */}
-                <span aria-hidden className={c.align === "center" ? "ml-4" : undefined}>
-                  {c.short}
-                </span>
+                <span aria-hidden>{c.short}</span>
                 <span className="sr-only">{c.title ?? c.label}</span>
               </>
             ) : (
@@ -162,7 +158,9 @@ export function GradingTable(props: GradingTableProps) {
         ),
       srOnly: c.key === "verdict",
       right: c.align === "right",
-      className: place[c.key] ?? cx(answerWidth(c), c.align === "center" && "text-center"),
+      // Centred over its marks, the sort arrow hanging past the letter.
+      center: c.align === "center",
+      className: place[c.key] ?? answerWidth(c),
     })),
     {
       key: "actions",

@@ -90,8 +90,6 @@ export function SegmentedBar({
   );
 }
 
-const BAR_FILL = { danger: "bg-danger", warning: "bg-warning", success: "bg-success" } as const;
-
 /** A bar that is a button (`onSelect` of `Bars` and `StackedBars`). */
 const BAR_BUTTON =
   "rounded-t-[4px] transition-opacity duration-150 enabled:hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
@@ -106,7 +104,7 @@ export interface BarDatum {
   /** The bar's own tooltip, on hover. */
   title?: string;
   /** A semantic fill instead of the neutral ink (a grade range's band). */
-  tone?: keyof typeof BAR_FILL | undefined;
+  tone?: BarTone | undefined;
 }
 
 /**
@@ -219,7 +217,7 @@ export function Bars({
                 <span className="text-center text-[11px] tabular-nums text-fg-faint">{b.value || ""}</span>
               ) : null}
               <span
-                className={cx("w-full rounded-t-[4px]", b.value === 0 ? "bg-surface-3" : b.tone ? BAR_FILL[b.tone] : "bg-fg-muted")}
+                className={cx("w-full rounded-t-[4px]", b.value === 0 ? "bg-surface-3" : b.tone ? BAR_TONES[b.tone] : "bg-fg-muted")}
                 style={{ height: `${Math.max(b.value === 0 ? 2 : 6, (b.value / top) * 100)}%` }}
               />
             </>

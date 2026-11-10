@@ -92,8 +92,9 @@ export function QuestionBar({
           <button
             type="button"
             onClick={onOpenStatement}
-            title={t("grading.statement.open")}
-            className="min-w-0 truncate rounded-sm text-[13px] text-fg-muted underline-offset-2 transition-colors hover:text-fg hover:underline"
+            aria-label={t("grading.panel.openStatement", { name: item.internalName })}
+            title={t("grading.panel.openStatement", { name: item.internalName })}
+            className="min-w-0 truncate rounded-sm text-[13px] text-fg-muted underline decoration-line-strong decoration-dotted underline-offset-4 transition-colors hover:text-fg hover:decoration-solid"
           >
             {item.internalName}
           </button>

@@ -1833,13 +1833,18 @@ One question's answers as a table (`src/grading/`, origin
   so a sticky cell never lets the scrolled ones show through.
 - **Short headers.** A column that declares a `short` form (`GradingColumn`:
   the multiple-choice letter) shows it alone at every width and is sized to
-  it (`w-px`, at least `min-w-14`), out of the equal shares; the whole text
+  it and its marks (`w-px`), out of the equal shares; the whole text
   (`title`, else the label) is the header's tooltip and accessible name, and
   the question's name in the question bar opens the key's panel on the
   statement (owner decision, #1083). When every answer column is short, the
   Points column takes the width left, so the figures and the actions still
-  close the row at its right edge. Over a centred column the letter carries
-  a left margin as wide as the sort arrow, so it stands over its marks.
+  close the row at its right edge. A centred header (`Column.center`) hangs
+  its sort arrow past the letter, in the cell's padding, instead of
+  reserving its width: the letter stands over its marks and the column
+  stays narrow, which matters once the answer panel shares the width.
+- **The question's name** in the question bar is a text button with a
+  dotted `line-strong` underline at rest (solid on hover): it opens the
+  key's panel, and its accessible name says so ("Show the statement: …").
 - **The toolbar** wraps its actions — Export, Anonymise, then the primary —
   as one group held to the right (`ml-auto`): the primary closes the
   filters' row and never stands alone at the start of a line. Copying the

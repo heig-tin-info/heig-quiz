@@ -127,8 +127,8 @@ describe("GradingPanel — the table", () => {
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
     await table();
 
-    const name = screen.getByRole("button", { name: "sizeof-ptr" });
-    expect(name).toHaveAttribute("title", "Show the statement");
+    const name = screen.getByRole("button", { name: "Show the statement: sizeof-ptr" });
+    expect(name).toHaveTextContent("sizeof-ptr");
     await userEvent.click(name);
     const panel = await screen.findByRole("dialog", { name: "Question 1" });
     expect(await within(panel).findByText("Statement")).toBeInTheDocument();

@@ -2,7 +2,7 @@ import { formatGrade, gradeBand, MAX_GRADE, type GradeBand } from "@quiz/domain"
 import type { ResultsStats } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { Bars, type BarDatum } from "../ui";
+import { Bars, type BarTone } from "../ui";
 
 /**
  * A band's fill on a bar: red below the pass mark and orange just above it,
@@ -14,7 +14,7 @@ export const GRADE_BAND_BAR = {
   fail: "danger",
   borderline: "warning",
   pass: "success",
-} as const satisfies Record<GradeBand, NonNullable<BarDatum["tone"]>>;
+} as const satisfies Record<GradeBand, BarTone>;
 
 /** How the buckets of `@quiz/domain#histogram` are named on screen. */
 export function bucketLabel(bucket: number, step = 0.5): string {

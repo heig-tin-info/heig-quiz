@@ -4701,7 +4701,7 @@ export const en = {
   "grading.panel.question": "Question {n}",
   "grading.panel.score": "{points} / {max} pts",
   "grading.panel.statement": "Statement",
-  "grading.statement.open": "Show the statement",
+  "grading.panel.openStatement": "Show the statement: {name}",
   "grading.panel.expectedHelp": "Wrong expected answer? Publish a new version of the question, then re-grade.",
   // Parameterized questions: grading and results (ADR-056 §9)
   "grading.param.badge": "Own key per answer",

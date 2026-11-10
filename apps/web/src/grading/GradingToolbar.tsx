@@ -115,7 +115,7 @@ export function GradingToolbar({
         </>
       ) : null}
       {/* The actions wrap as one group, held to the right: the primary
-          always closes the row, never alone on a line of its own. */}
+          closes the filters' row and never stands alone at the start of a line. */}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2.5">
         {exports}
         <label className="flex items-center gap-2 text-[13px] font-medium text-fg-muted">

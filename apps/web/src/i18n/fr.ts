@@ -4673,7 +4673,7 @@ export const fr: Record<keyof Dict, string> = {
   "grading.panel.question": "Question {n}",
   "grading.panel.score": "{points} / {max} pts",
   "grading.panel.statement": "Énoncé",
-  "grading.statement.open": "Voir l'énoncé",
+  "grading.panel.openStatement": "Voir l'énoncé\u202f: {name}",
   "grading.panel.expectedHelp": "Réponse attendue erronée ? Publiez une nouvelle version de la question, puis recorrigez.",
   // Parameterized questions: grading and results (ADR-056 §9)
   "grading.param.badge": "Paramétrée",
