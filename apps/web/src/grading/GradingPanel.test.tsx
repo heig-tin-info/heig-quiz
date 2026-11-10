@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GradingEntry } from "@quiz/contracts";
 
 import { GradingPanel } from "./GradingPanel";
+import { QuestionHost } from "../student/QuestionHost";
 import { GRADING_VIEW_KEY } from "./view";
 import {
   makeEntry,
@@ -357,6 +358,68 @@ describe("GradingPanel — the answer panel", () => {
       await userEvent.keyboard("{ArrowRight}");
       await screen.findByRole("table", { name: "Answers to question 2" });
       expect(screen.queryByRole("complementary")).toBeNull();
+    });
+
+    it("waits for the next question's answers before drawing its statement (#1072)", async () => {
+      // The statement comes with the answers: until they arrive, the pane
+      // that followed the change of question has no view to hand a player,
+      // and a cloze player read `null.blanks` and took the page down —
+      // whenever its chunk was already loaded ("sometimes").
+      const cloze = {
+        template: "Type ⸢0⸣.",
+        blanks: [{ index: 0, weight: 1, kind: "text" }],
+      };
+      const warm = renderWithProviders(
+        <QuestionHost type="cloze" student={cloze} answer={null} onChange={vi.fn()} readOnly />,
+      );
+      await screen.findByRole("textbox", { name: "Blank 1" });
+      warm.unmount();
+      const detail = makeEvaluationDetail();
+      let arrive: (() => void) | undefined;
+      const { fetchMock } = mockFetch(
+        routes([proposal("a1", 2)], {
+          [`GET ${EVAL}`]: ok({
+            ...detail,
+            items: detail.items.map((i) => (i.id === "i2" ? { ...i, type: "cloze" } : i)),
+          }),
+          [`GET ${QUEUE("i2")}`]: ok(
+            makeQueue(
+              [
+                makeEntry({
+                  attemptId: "a1",
+                  itemId: "i2",
+                  answer: { blanks: ["int"] },
+                  student: cloze,
+                  solution: { blanks: [{ index: 0, expected: "int" }] },
+                  grading: null,
+                }),
+              ],
+              { items: [{ id: "i2", position: 1, internalName: "types", type: "cloze", points: 1 }] },
+            ),
+          ),
+        }),
+      );
+      const reply = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation((input, init) =>
+        String(input) === QUEUE("i2")
+          ? new Promise((resolve) => {
+              arrive = () => resolve(reply(input, init));
+            })
+          : reply(input, init),
+      );
+      renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+      await table();
+      await userEvent.click(rowOf("a1"));
+      await screen.findByRole("complementary", { name: "Anonymous answer" });
+
+      await userEvent.keyboard("{ArrowRight}");
+      const pane = await screen.findByRole("complementary", { name: "Question 2" });
+      await waitFor(() => expect(arrive).toBeDefined());
+      expect(within(pane).queryByText("Statement")).toBeNull();
+
+      arrive!();
+      expect(await within(pane).findByText("Statement")).toBeInTheDocument();
+      expect(await within(pane).findByRole("textbox", { name: "Blank 1" })).toBeInTheDocument();
     });
   });
 

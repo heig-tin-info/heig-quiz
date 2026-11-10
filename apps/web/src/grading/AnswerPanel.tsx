@@ -66,6 +66,9 @@ interface PanelProps {
   /**
    * The question as its students saw it: the expected panel's statement —
    * of a parameterized question, the question as written (ADR-056 §9).
+   * It travels with the question's answers, so it is `null` until they
+   * arrive (the pane stays open across a change of question, issue #1072)
+   * and when the question has none.
    */
   student: unknown;
   /** A parameterized question's table and template; null when static. */
@@ -212,17 +215,20 @@ function ExpectedBody({ item, columns, acceptance, student, parameters, explanat
   const t = useT();
   return (
     <div className="space-y-6">
-      <Section title={t("grading.panel.statement")}>
-        {/* No expand layer: a statement with nothing to draw; dense, among 13 px reviews. */}
-        <QuestionHost
-          type={item.type}
-          student={student}
-          answer={emptyAnswerOf(item.type, student)}
-          onChange={() => {}}
-          readOnly
-          size="sm"
-        />
-      </Section>
+      {/* Every player reads its view: none is ever handed a missing one (#1072). */}
+      {student == null ? null : (
+        <Section title={t("grading.panel.statement")}>
+          {/* No expand layer: a statement with nothing to draw; dense, among 13 px reviews. */}
+          <QuestionHost
+            type={item.type}
+            student={student}
+            answer={emptyAnswerOf(item.type, student)}
+            onChange={() => {}}
+            readOnly
+            size="sm"
+          />
+        </Section>
+      )}
       {parameters ? <VariablesList parameters={parameters} /> : null}
       <Section title={t("grading.expected")}>
         {parameters?.template.example ? (
