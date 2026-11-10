@@ -91,9 +91,9 @@ export function isWide(type: string): boolean {
 /**
  * The type's own empty answer, for "Clear" (issue #89, multiple choice only).
  * `null` for a type the registry does not know: nothing is offered then.
- * Also `null` when the type cannot build one from `student`: the grading
- * panel hands a `null` student while no answer is shown, and a `cloze` or a
- * `diagram` reads its empty answer off the student view.
+ * Also `null` when the type cannot build one from `student` (a `cloze` or a
+ * `diagram` reads its empty answer off the student view): a defence for a
+ * caller that hands a missing view.
  */
 export function emptyAnswerOf(type: string, student: unknown): unknown {
   const client = questionType(type);
