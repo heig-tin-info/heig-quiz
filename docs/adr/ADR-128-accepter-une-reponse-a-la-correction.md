@@ -110,6 +110,33 @@ follow.
     not, writing only what would change, so a repeated PUT or DELETE heals
     an act whose re-grade failed.
 
+### Categorize (2026-11-10, product owner)
+
+14. **Identity.** A part is a CARD, its answer the column the student put
+    it in. A card left in the tray has no answer and is never accepted.
+15. **Ordered mode.** With "the order counts", the answer is the column AND
+    the rank (`<column>#<rank>`). A rank moves with every card above it, so
+    such an answer is accepted for ONE answer only: the type says so
+    through its hook's `singleAnswer(config, part)`, which the act checks
+    (`422 acceptance_scope` for the everyone scope) and the queue passes to
+    the card (`AcceptablePart.singleAnswer`). This is the one extension the
+    generic contract took for categorize; no type is named in the API or
+    the web app.
+16. **Scoring.** An accepted card counts as a right target (`t`) inside the
+    type's own scoring, under every policy, negative marking included
+    (`categorizeCounts`, `@quiz/domain`): a target accepted is no longer
+    `x`; a placed distractor accepted becomes a target placed right (it
+    leaves `D` and `p` for `T` and `t`). An all-or-nothing answer may thus
+    go from 0 to full, and a penalty disappears.
+17. **Summary column.** Past eight cards the table has one summary column
+    (`GradingColumn.parts` lists every card) and no cell per card: the
+    summary cell says how many cards of the answer are accepted, and a card
+    is accepted from the answer panel, one row per offered card. The label
+    of an answer names the card and the column ("double → Integer"), so the
+    key's row and the panel read alone; a regrade onto a version that
+    changed the card's text or the column's label drops the rule, as one
+    that removed them.
+
 ## Consequences
 
 ADR-044 §2's promise that a column's key groups identical answers becomes an

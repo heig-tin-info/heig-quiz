@@ -1154,3 +1154,68 @@ describe("GradingPanel — accepting an answer (ADR-128)", () => {
     expect(await within(card).findByText(/only a teacher of the course may change a grade/)).toBeInTheDocument();
   });
 });
+
+describe("GradingPanel — accepting a card of a board past eight cards (ADR-128)", () => {
+  const ACCEPT = `${EVAL}/items/i1/acceptances`;
+  const cards = Array.from({ length: 9 }, (_, i) => ({ id: `card${i}`, text: `card ${i}` }));
+  const student = {
+    prompt: "Sort.",
+    columns: [
+      { id: "cola", label: "A" },
+      { id: "colb", label: "B" },
+    ],
+    cards,
+    ordered: true,
+  };
+  const detail = makeEvaluationDetail();
+  const entry = makeEntry({
+    attemptId: "a1",
+    answer: { columns: { cola: cards.map((c) => c.id) } },
+    student,
+    solution: null,
+    parts: [
+      { part: "card0", answer: "cola#1", label: "card 0 → A · 1", right: true, singleAnswer: true },
+      { part: "card8", answer: "cola#9", label: "card 8 → A · 9", right: false, singleAnswer: true },
+    ],
+    grading: makeGrading({ id: "g-a1", attemptId: "a1", points: 0, state: "validated", confidence: null }),
+  });
+
+  it("offers the summary column's cards in the panel, for this answer only when the type says so", async () => {
+    const { calls } = mockFetch(
+      routes([], {
+        [`GET ${EVAL}`]: ok({ ...detail, items: detail.items.map((i) => (i.id === "i1" ? { ...i, type: "categorize" } : i)) }),
+        [`GET ${QUEUE("i1")}`]: ok(
+          makeQueue([entry], {
+            items: [
+              {
+                id: "i1",
+                position: 0,
+                internalName: "sort",
+                type: "categorize",
+                points: 2,
+                acceptance: { scopes: ["everyone", "student"], accepted: [] },
+              },
+            ],
+          }),
+        ),
+        [`PUT ${ACCEPT}`]: ok({ accepted: true, regraded: 1, unchanged: 0, modifiedAfterRelease: false }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+    // One summary column: no control in the table.
+    expect(within(rowOf("a1")).queryByRole("button", { name: "Accept this answer" })).toBeNull();
+    await userEvent.click(rowOf("a1"));
+    const panel = await screen.findByRole("dialog", { name: "Anonymous answer" });
+    expect(within(panel).getByText("card 8 → A · 9")).toBeInTheDocument();
+    expect(within(panel).queryByText("card 0 → A · 1")).toBeNull();
+    await userEvent.click(within(panel).getByRole("button", { name: "Accept this answer" }));
+    const card = await screen.findByRole("dialog", { name: "Accept an answer" });
+    // An ordered board: one answer only, no scope to choose.
+    expect(within(card).queryByRole("radio")).toBeNull();
+    await userEvent.click(within(card).getByRole("button", { name: "Accept" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ part: "card8", answer: "cola#9", attemptId: "a1" }),
+    );
+  });
+});

@@ -56,7 +56,7 @@ const REFUSALS = {
   // the part can hold.
   acceptance_unavailable: [409, "this question cannot accept an answer"],
   acceptance_not_frozen: [409, "an answer is accepted once the item list is frozen"],
-  acceptance_scope: [422, "a parameterized question accepts an answer for one student only"],
+  acceptance_scope: [422, "this answer is accepted for one student only"],
   acceptance_invalid: [422, "this part of the question cannot hold this answer"],
 } satisfies Record<string, Refusal>;
 

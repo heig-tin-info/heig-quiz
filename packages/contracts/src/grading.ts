@@ -160,6 +160,8 @@ export const AcceptablePart = z.object({
   label: z.string(),
   /** The key alone counts it right: nothing to accept. */
   right: z.boolean(),
+  /** Accepted for this answer only, never for everyone (the type's `singleAnswer`). */
+  singleAnswer: z.literal(true).optional(),
 }) satisfies z.ZodType<TypeAcceptablePart>;
 export type AcceptablePart = z.infer<typeof AcceptablePart>;
 

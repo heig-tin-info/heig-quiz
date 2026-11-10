@@ -44,6 +44,19 @@ export function ruleLabel(hook: AcceptanceHook, config: () => unknown, rule: { p
   }
 }
 
+/**
+ * Whether the type accepts an answer at `part` for one answer only (its
+ * `singleAnswer`): a reading that throws says no, the evaluation's scopes
+ * then apply.
+ */
+export function singleAnswer(hook: AcceptanceHook, config: () => unknown, part: string): boolean {
+  try {
+    return hook.singleAnswer?.(config(), part) === true;
+  } catch {
+    return false;
+  }
+}
+
 /** The acceptances in force, by item id. */
 export type ItemRules = ReadonlyMap<string, readonly AcceptanceRule[]>;
 

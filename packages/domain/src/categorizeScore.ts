@@ -71,6 +71,59 @@ export interface CategorizeScoreInput extends CategorizeCounts {
   negativeMarking?: boolean | undefined;
 }
 
+/**
+ * One card of an answer, judged: whether the key puts it in a column (a
+ * target), whether the student placed it, whether it is at its place — and
+ * whether it is right only because the teacher accepted where the student
+ * put it (ADR-128).
+ */
+export interface CategorizeCardOutcome {
+  target: boolean;
+  placed: boolean;
+  right: boolean;
+  accepted?: boolean;
+}
+
+/**
+ * The counts of one answer. An ACCEPTED card counts as a right target (`t`)
+ * under every policy, negative marking included (ADR-128, product owner): a
+ * target accepted where the student put it is no longer `x`; a distractor
+ * accepted in the column the student chose is a target placed right — it
+ * leaves `D` and `p` for `T` and `t`, so an all-or-nothing answer may go
+ * from 0 to full and a penalty disappears.
+ */
+export function categorizeCounts(cards: readonly CategorizeCardOutcome[]): CategorizeCounts {
+  const counts = { T: 0, D: 0, t: 0, x: 0, p: 0 };
+  for (const card of cards) {
+    if (card.target || card.accepted === true) {
+      counts.T += 1;
+      if (card.right || card.accepted === true) counts.t += 1;
+      else if (card.placed) counts.x += 1;
+    } else {
+      counts.D += 1;
+      if (card.placed) counts.p += 1;
+    }
+  }
+  return counts;
+}
+
+/**
+ * The identity of where a student put one card, for an acceptance
+ * (ADR-128): the column; with "the order counts", the column AND the rank —
+ * a rank depends on every card above it, so such an answer is accepted for
+ * one answer only (`singleAnswer` of the type's hook).
+ */
+export function categorizePlaceIdentity(place: { column: string; rank: number }, ordered: boolean): string {
+  return ordered ? `${place.column}#${place.rank}` : place.column;
+}
+
+/** The place an identity names, or null when it names none (a malformed or stale identity). */
+export function categorizeIdentityPlace(identity: string, ordered: boolean): { column: string; rank: number | null } | null {
+  if (!ordered) return identity.includes("#") ? null : { column: identity, rank: null };
+  const m = /^([^#]+)#([1-9]\d*)$/.exec(identity);
+  return m === null ? null : { column: m[1]!, rank: Number(m[2]) };
+}
+
 export function categorizeFraction(input: CategorizeScoreInput): number {
   const { T, D, t, x, p, k } = input;
   // T === 0 is refused by the config schema; staying total keeps a corrupted

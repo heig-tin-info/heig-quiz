@@ -2419,6 +2419,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.categorize.r.score": "Points",
   "qt.categorize.r.breakdown": "Cartes justes",
   "qt.categorize.r.breakdownPlaced": "Justes parmi les cartes placées",
+  "qt.categorize.r.accepted": "Acceptée",
   "qt.categorize.r.negativeMarking": "Points négatifs : une carte mal placée coûte des points.",
   "qt.categorize.k.cards": "Cartes à classer",
   "qt.categorize.k.none": "Dans aucune colonne",
@@ -2428,6 +2429,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.categorize.g.right": "{right}/{total} justes",
   "qt.categorize.g.placed": "{placed}/{total} placées",
   "qt.categorize.g.total": "{total} cartes",
+  "qt.categorize.g.accepted": "{n} acceptées",
 
   // --- qt-cloze strings ---
   "qt.cloze.e.text": "Texte à trous",

@@ -127,7 +127,8 @@ const pseudonymOf = (index: number) =>
 
 /** The questions an evaluation may draw from: published, `p1` first. */
 function itemSource(): MockQuestion[] {
-  const published = questions.filter((q) => q.deletedAt === null && q.versions.length > 0);
+  // `q-sort-big` is appended to the closed evaluation only (`mock/grading.ts`, ADR-128): no item here moves.
+  const published = questions.filter((q) => q.deletedAt === null && q.versions.length > 0 && q.id !== "q-sort-big");
   const primary = published.filter((q) => q.poolId === "p1");
   /*
    * The `circuit` question lives in the SECOND pool — a sensor's front end is

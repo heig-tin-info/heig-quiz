@@ -88,6 +88,8 @@ export const categorizeReviewStrings = {
   breakdown: "Cards right",
   /** The count when the key is hidden: the student's own placements only. */
   breakdownPlaced: "Placed cards right",
+  /** A card counted right because the teacher accepted where it was put (ADR-128). */
+  accepted: "Accepted",
   /** Negative marking (ADR-026): why the score may be below zero. */
   negativeMarking: "Negative marking: wrong placements cost points.",
 } as const;
@@ -122,4 +124,6 @@ export const categorizeGradingStrings = {
   placed: "{placed}/{total} placed",
   /** The key's cell of the summary column. */
   total: "{total} cards",
+  /** The summary cell of an answer holding cards accepted at grading time (ADR-128). */
+  accepted: "{n} accepted",
 } as const;

@@ -884,6 +884,52 @@ export const CATEGORIZE_ANSWER = {
   },
 };
 
+/**
+ * A categorize question past eight cards (ADR-128): the grading table gives
+ * it one summary column, and a card is accepted from the answer panel.
+ */
+export const CATEGORIZE_BIG_CONFIG: Record<string, unknown> = {
+  configVersion: 1,
+  prompt: "Classez chaque fonction de la bibliothèque standard selon son en-tête.",
+  columns: [
+    { id: "hstdio01", label: "`stdio.h`", cards: ["fprintf1", "fscanf01", "fgets001"] },
+    { id: "hstdlib1", label: "`stdlib.h`", cards: ["malloc01", "free0001", "qsort001"] },
+    { id: "hstring1", label: "`string.h`", cards: ["strlen01", "memcpy01", "strcmp01"] },
+  ],
+  cards: [
+    { id: "fprintf1", text: "`fprintf`" },
+    { id: "fscanf01", text: "`fscanf`" },
+    { id: "fgets001", text: "`fgets`" },
+    { id: "malloc01", text: "`malloc`" },
+    { id: "free0001", text: "`free`" },
+    { id: "qsort001", text: "`qsort`" },
+    { id: "strlen01", text: "`strlen`" },
+    { id: "memcpy01", text: "`memcpy`" },
+    { id: "strcmp01", text: "`strcmp`" },
+    { id: "atoi0001", text: "`atoi`" },
+  ],
+  ordered: false,
+  shuffleCards: true,
+  shuffleColumns: false,
+  policy: "per_item",
+};
+
+/** The right answer to {@link CATEGORIZE_BIG_CONFIG}, and a near miss: `memcpy` in `stdlib.h`, `atoi` placed there too. */
+export const CATEGORIZE_BIG_RIGHT = {
+  columns: {
+    hstdio01: ["fprintf1", "fscanf01", "fgets001"],
+    hstdlib1: ["malloc01", "free0001", "qsort001"],
+    hstring1: ["strlen01", "memcpy01", "strcmp01"],
+  },
+};
+export const CATEGORIZE_BIG_MISS = {
+  columns: {
+    hstdio01: ["fprintf1", "fscanf01", "fgets001"],
+    hstdlib1: ["malloc01", "free0001", "qsort001", "memcpy01", "atoi0001"],
+    hstring1: ["strlen01", "strcmp01"],
+  },
+};
+
 /** A scene under ids of its own: the engine's examples number theirs, a starter must not share them. */
 const reid = (scene: Scene, prefix: string, keep: (id: string) => boolean = () => true): Scene => {
   const id = (old: string) => `${prefix}${old.slice(1)}`;
@@ -1563,6 +1609,20 @@ export const questions: MockQuestion[] = [
     config: RICH_LEGACY_CONFIG,
     explanation: "",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 30 }],
+  }),
+  /* Past eight cards (ADR-128): appended to the closed evaluation only (`mock/grading.ts`). Last, so no id above moves. */
+  makeQuestion({
+    id: "q-sort-big",
+    poolId: "p1",
+    type: "categorize",
+    internalName: "en-tetes-bibliotheque",
+    categoryId: "k1",
+    difficulty: 2,
+    randomizable: false,
+    concepts: [],
+    config: CATEGORIZE_BIG_CONFIG,
+    explanation: "`atoi` est déclarée dans `stdlib.h` ; elle ne fait pas partie du classement.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 1 }],
   }),
 ];
 

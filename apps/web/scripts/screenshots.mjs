@@ -1615,7 +1615,26 @@ const scenes = [
       await p.keyboard.press("a");
       await p.waitForTimeout(400);
     } },
-  { name: "grading-categorize", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 5) },
+  { name: "grading-categorize", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 6) },
+  // ADR-128: a card accepted where the class put it (`string` among the
+  // pointers, the seal after its chip), a wrong card's acceptance card, and
+  // the board past eight cards, appended last: one summary column ("1
+  // accepted"), its cards accepted from the answer panel.
+  { name: "grading-categorize-accept", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => {
+      await nextQuestion(p, 6);
+      const corner = p.getByRole("button", { name: /^(Accept this answer|Accepter cette réponse)$/, includeHidden: true }).first();
+      await corner.locator("xpath=ancestor::td").hover();
+      await corner.click();
+      await p.waitForTimeout(300);
+    } },
+  { name: "grading-categorize-big", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 13) },
+  { name: "grading-categorize-big-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => {
+      await nextQuestion(p, 13);
+      await p.locator("tbody tr", { hasText: /(accepted|acceptées)/ }).first().click();
+      await p.waitForTimeout(400);
+      await p.getByRole("heading", { name: /^(Accept an answer|Accepter une réponse)$/ }).scrollIntoViewIfNeeded().catch(() => {});
+      await p.waitForTimeout(200);
+    } },
   // ADR-128: the cloze appended last (13th), one dropdown answer accepted for everyone
   // (the seal in its cells, the answer beside the key); a wrong cell's corner
   // card; the panel's section of the answers to accept.

@@ -41,6 +41,7 @@ import {
   acceptancesOf,
   lockItems,
   ruleLabel,
+  singleAnswer,
   type AcceptanceHook,
   type RuleBound,
 } from "./acceptanceRules.js";
@@ -66,7 +67,11 @@ export function partsOf(hook: AcceptanceHook, type: string, config: unknown, pay
     // A config this build reads differently: no affordance, never a 500.
     return [];
   }
-  return given.map((p) => ({ ...p, label: ruleLabel(hook, () => config, p) ?? p.answer }));
+  return given.map((p) => ({
+    ...p,
+    label: ruleLabel(hook, () => config, p) ?? p.answer,
+    ...(singleAnswer(hook, () => config, p.part) ? { singleAnswer: true as const } : {}),
+  }));
 }
 
 /** What {@link changeAcceptance} did (`AnswerAcceptanceResult`). */
@@ -100,7 +105,8 @@ export interface AcceptanceChange {
  * Refused on a poll and for a type without acceptances (`409
  * acceptance_unavailable`), before the item list is frozen (`409
  * acceptance_not_frozen`), in the everyone scope on a parameterized
- * question (`422 acceptance_scope`), and for an answer the part cannot
+ * question or at a part the type accepts for one answer only (`422
+ * acceptance_scope`), and for an answer the part cannot
  * hold (`422 acceptance_invalid`). Null when the attempt is not an
  * official attempt of the evaluation (the route's 404).
  */
@@ -141,7 +147,10 @@ export async function changeAcceptance(
     // A static question's config is every attempt's; a single student's
     // rule is read on that student's instance.
     const sample = attemptRows[0] ?? NO_ATTEMPT;
-    if (ruleLabel(hook, () => configPerAttempt(held)(sample), rule) === null) throw new GradingError("acceptance_invalid");
+    const config = () => configPerAttempt(held)(sample);
+    if (ruleLabel(hook, config, rule) === null) throw new GradingError("acceptance_invalid");
+    // A part whose answers depend on each other is accepted for one answer only.
+    if (rule.attemptId === null && singleAnswer(hook, config, rule.part)) throw new GradingError("acceptance_scope");
     const changed = accept
       ? await insertRule(tx, item.item.id, rule, actorId, now)
       : await deleteRule(tx, item.item.id, rule);

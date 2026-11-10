@@ -158,6 +158,8 @@ export const CategorizeCardVerdictSchema = z.object({
   expected: z.string().nullable().optional(),
   expectedRank: z.number().int().optional(),
   right: z.boolean(),
+  /** Right only because the teacher accepted where the student put it (ADR-128). */
+  accepted: z.literal(true).optional(),
 });
 export type CategorizeCardVerdict = z.infer<typeof CategorizeCardVerdictSchema>;
 

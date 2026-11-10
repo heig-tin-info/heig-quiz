@@ -55,6 +55,8 @@ export function CategorizeReview({
   const labelOf = new Map(student.columns.map((column) => [column.id, column.label]));
   const breakdown = breakdownOf(details, "cards");
   const verdicts = new Map(breakdown?.cards.map((card) => [card.id, card.right]) ?? []);
+  // ADR-128: right because the teacher accepted where it was put.
+  const accepted = new Set(breakdown?.cards.filter((card) => card.accepted).map((card) => card.id) ?? []);
   const key = solution !== null && showsSection(sections, "solution") ? keyOf(solution.columns) : null;
   const ordered = student.ordered;
 
@@ -83,6 +85,7 @@ export function CategorizeReview({
           {markdown(renderMarkdown, text.get(card) ?? "")}
           {expected === null ? null : <span className="block text-xs font-medium text-fg-muted">{expected}</span>}
         </span>
+        {accepted.has(card) ? <span className="shrink-0 text-xs font-medium text-success">{s.accepted}</span> : null}
         {right === undefined ? null : (
           <span className={right ? "text-success" : "text-danger"}>
             {right ? <CheckIcon /> : <CloseIcon />}

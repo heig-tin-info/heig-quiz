@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Check, PencilLine, RefreshCcw } from "lucide-react"
 import { useId, useState, type ReactNode } from "react";
 
 import type { GradingColumn } from "@quiz/core/client";
-import { WandIcon } from "@quiz/ui";
+import { AnswerChip, WandIcon } from "@quiz/ui";
 import {
   justificationOf,
   type Grading,
@@ -411,8 +411,11 @@ function EntryPanel({
 
 /**
  * ADR-128: the parts of this answer the teacher may accept — those the key
- * counts wrong, and those accepted already — each drawn by the column's own
- * cell with the table's control after its chip. Nothing when there is none.
+ * counts wrong, and those accepted already. A column of one part is drawn
+ * by its own cell with the table's control after its chip; a column summing
+ * up several (a categorize board past eight cards) has no cell per part, so
+ * each of its parts gets a row: the answer as the server names it, and the
+ * same control. Nothing when there is none.
  */
 function AcceptSection({
   acceptance,
@@ -426,25 +429,44 @@ function AcceptSection({
   const t = useT();
   const shown = columns.filter((c) => c.parts?.some((part) => offeredPart(acceptance, entry, part) !== null));
   if (shown.length === 0) return null;
+  const control = (column: GradingColumn, part: string) => (
+    <AcceptControl acceptance={acceptance} entry={entry} part={part} partLabel={column.label} />
+  );
+  /** One row per offered part of a column summing up several. */
+  const partRows = (column: GradingColumn) =>
+    (column.parts ?? []).flatMap((part) => {
+      const offered = offeredPart(acceptance, entry, part);
+      if (!offered) return [];
+      return [
+        <li key={`${column.key}:${part}`} className="flex min-w-0 items-center gap-1">
+          <span className="min-w-0">
+            <AnswerChip tone={offered.inForce ? "good" : "bad"} title={offered.given.label} mono={false}>
+              {offered.given.label}
+            </AnswerChip>
+          </span>
+          {control(column, part)}
+        </li>,
+      ];
+    });
+  /** The column's own cell, the control after its chip. */
+  const cellRow = (column: GradingColumn) => (
+    <li key={column.key} className="flex items-center gap-3">
+      <span className="w-40 shrink-0 truncate text-fg-muted" title={column.title ?? column.label}>
+        {column.label}
+      </span>
+      <span className="min-w-0 flex-1">
+        {column.cell({
+          answer: entry.answer,
+          details: entry.grading?.details ?? null,
+          accept: (part) => control(column, part),
+        })}
+      </span>
+    </li>
+  );
   return (
     <Section title={t("grading.accept.dialog")}>
       <ul className="space-y-1.5 text-[13px]">
-        {shown.map((column) => (
-          <li key={column.key} className="flex items-center gap-3">
-            <span className="w-40 shrink-0 truncate text-fg-muted" title={column.title ?? column.label}>
-              {column.label}
-            </span>
-            <span className="min-w-0 flex-1">
-              {column.cell({
-                answer: entry.answer,
-                details: entry.grading?.details ?? null,
-                accept: (part) => (
-                  <AcceptControl acceptance={acceptance} entry={entry} part={part} partLabel={column.label} />
-                ),
-              })}
-            </span>
-          </li>
-        ))}
+        {shown.flatMap((column) => ((column.parts?.length ?? 0) > 1 ? partRows(column) : [cellRow(column)]))}
       </ul>
     </Section>
   );
