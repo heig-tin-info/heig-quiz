@@ -333,8 +333,6 @@ export const itemQuestion = (item: { questionId: string }): MockQuestion | null 
 interface MockCell {
   itemId: string;
   status: "empty" | "seen" | "in_progress" | "skipped" | "done";
-  /** The student's review flag (issue #89). */
-  flagged: boolean;
   /**
    * The live verdict of ADR-020: with the "Results" switch on, the real
    * server grades the answer it already holds. The mock fakes it the only
@@ -342,6 +340,8 @@ interface MockCell {
    * so the screen it draws is the screen the teacher gets.
    */
   verdict: "correct" | "partial" | "wrong" | null;
+  /** The share of the points that verdict stands for (#1069). */
+  rate: number | null;
   provisional: boolean;
   points: null;
   revision: number;
@@ -352,6 +352,12 @@ interface MockCell {
 export function mockVerdict(seed: number): "correct" | "partial" | "wrong" {
   const n = seed % 10;
   return n < 6 ? "correct" : n < 8 ? "partial" : "wrong";
+}
+
+/** The share of the points {@link mockVerdict} stands for: a partial one anywhere from 10 to 90 %. */
+export function mockRate(seed: number): number {
+  const verdict = mockVerdict(seed);
+  return verdict === "correct" ? 1 : verdict === "wrong" ? 0 : 0.1 + ((seed * 37) % 9) / 10;
 }
 
 const MOCK_INTRO_FIRST =
@@ -583,11 +589,8 @@ export function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
         return {
           itemId: item.id,
           status,
-          // The second question is the unclear one: most of the class that
-          // reached it flagged it — the story the column header tells.
-          flagged:
-            status !== "empty" && ((i === 1 && index % 3 !== 2) || (index * 5 + i) % 29 === 0),
           verdict: answered ? mockVerdict(index * 7 + i * 3) : null,
+          rate: answered ? mockRate(index * 7 + i * 3) : null,
           provisional: answered,
           points: null,
           revision: status === "empty" || status === "seen" ? 0 : 1 + i,
@@ -882,8 +885,8 @@ function staffRow(e: MockEvaluation): MockRowState {
     cells: e.items.map((item, i) => ({
       itemId: item.id,
       status: "in_progress" as const,
-      flagged: false,
       verdict: mockVerdict(i * 3),
+      rate: mockRate(i * 3),
       provisional: true,
       points: null,
       revision: 1 + i,
@@ -1201,10 +1204,7 @@ export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
         graded.length === 0
           ? null
           : round2(
-              graded.reduce(
-                (sum, c) => sum + (c!.verdict === "correct" ? 1 : c!.verdict === "partial" ? 0.5 : 0),
-                0,
-              ) / graded.length,
+              graded.reduce((sum, c) => sum + (c!.rate ?? 0), 0) / graded.length,
             );
       return {
         itemId: item.id,
@@ -1255,7 +1255,7 @@ export const attemptInspect = (e: MockEvaluation, attemptId: string) => {
         revision: cell?.revision ?? 0,
         markedDone: cell?.status === "done",
         skipped: cell?.status === "skipped",
-        flagged: cell?.flagged ?? false,
+        flagged: false,
         solution: solutionOf(q),
       }];
     }),

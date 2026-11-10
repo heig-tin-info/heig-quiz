@@ -138,10 +138,10 @@ describe("LiveDashboard — the grid", () => {
     expect(calls.every((c) => !c.url.includes("/attempts/"))).toBe(true);
   }, 30_000);
 
-  it("shows the class totals row and the legend", async () => {
+  it("shows the class totals row, and no legend under the grid (#1069)", async () => {
     setup();
     expect(await screen.findByText(/^class$/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/cell states/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/cell states/i)).toBeNull();
   });
 
   /* ADR-020: with the switch on, the class row is a LIVE rate and says so. */

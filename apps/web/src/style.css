@@ -407,6 +407,19 @@ html.dark {
   background: linear-gradient(var(--tint, transparent), var(--tint, transparent)), var(--surface);
 }
 
+/*
+ * A verdict cell of the live grid on the red-to-green ramp (#1069): `--rate`
+ * is the share of the points the answer earned, `0%` to `100%`. The hue runs
+ * `danger` → `success` through amber (oklch takes the short way round), laid
+ * over the surface as a tint; the ink is the same hue pulled toward `fg`, so
+ * it holds 4.5:1 on its tint at every step, in both themes (DESIGN.md).
+ */
+.score-ramp {
+  --ramp: color-mix(in oklch, var(--success) var(--rate, 0%), var(--danger));
+  background: color-mix(in oklab, var(--ramp) 26%, var(--surface));
+  color: color-mix(in oklab, var(--ramp) 70%, var(--fg));
+}
+
 .tip-bubble {
   animation: tip-in 0.12s var(--ease-out-emphasized);
 }

@@ -129,7 +129,7 @@ function cellFrame(itemIndex: number, revision: number, summary: string) {
   act(() => {
     FakeEventSource.instances.at(-1)!.send({
       type: "dashboard.cell",
-      flagged: false,
+      rate: null,
       evaluationId: EVALUATION_ID,
       attemptId: ATTEMPT,
       itemId: id("item", itemIndex),

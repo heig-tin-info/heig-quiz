@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { initialGrid, presence, applyGridEvent } from "../realtime/grid";
 import { EVALUATION_ID, id, makeCell, makeDashboard, makeRow } from "../test/live-fixtures";
-import { cellState, commonDeadline, ownDeadline } from "./cells";
+import { cellRate, cellState, commonDeadline, ownDeadline } from "./cells";
 
 /*
  * The two things the live dashboard says about a cell and about the room.
@@ -55,7 +55,7 @@ describe("dashboard.cell carries the live verdict forward", () => {
   const event = (verdict: "correct" | "wrong" | null, revision = 2) =>
     ({
       type: "dashboard.cell",
-      flagged: false,
+      rate: null,
       evaluationId: EVALUATION_ID,
       attemptId: id("attempt", 0),
       itemId: id("item", 0),
@@ -183,5 +183,30 @@ describe("commonDeadline", () => {
   it("is null when every student started on their own", () => {
     const rows = [running(at, 0), running("2026-09-28T10:00:07.000Z", 1), running(null, 2)];
     expect(commonDeadline(null, rows)).toBeNull();
+  });
+
+  // #1069: two students with the same extra time share a deadline that is
+  // still theirs, never the class's — even once the class's time is over.
+  it("never takes the shared deadline of the rows with a time bonus", () => {
+    const bonus = (n: number) =>
+      makeRow(n, [ITEM], { state: "in_progress", deadlineAt: "2026-09-28T10:13:30.000Z", timeBonusPercent: 15 });
+    const over = (n: number) => makeRow(n, [ITEM], { state: "expired", deadlineAt: at });
+    expect(commonDeadline(null, [bonus(0), bonus(1), over(2), over(3)], "duration")).toBeNull();
+    expect(commonDeadline(null, [bonus(0), bonus(1), running(at, 2), running(at, 3)], "duration")).toBe(at);
+  });
+});
+
+describe("cellRate — the ramp of a verdict (#1069)", () => {
+  const cell = (over: Partial<Parameters<typeof cellRate>[0]>) =>
+    makeCell({ itemId: ITEM, status: "in_progress", ...over });
+
+  it("is the verdict's share of the points, only with the results shown", () => {
+    expect(cellRate(cell({ verdict: "partial", rate: 0.4 }), true)).toBe(0.4);
+    expect(cellRate(cell({ verdict: "partial", rate: 0.4 }), false)).toBeUndefined();
+    expect(cellRate(cell({ verdict: null, rate: null }), true)).toBeUndefined();
+  });
+
+  it("clamps a negative mark to the red end", () => {
+    expect(cellRate(cell({ verdict: "wrong", rate: -0.5 }), true)).toBe(0);
   });
 });

@@ -233,6 +233,9 @@ describe("the Results switch colours a cell from the answer (ADR-020)", () => {
     expect(cellOf(right.item.id).verdict).toBe("correct");
     expect(cellOf(right.item.id).provisional).toBe(true);
     expect(cellOf(wrong.item.id).verdict).toBe("wrong");
+    // The share of the points each verdict stands for: the grid's ramp (#1069).
+    expect(cellOf(right.item.id).rate).toBe(1);
+    expect(cellOf(wrong.item.id).rate).toBe(0);
     // A preview is not a score: `points` stays what a validated grading fills.
     expect(cellOf(right.item.id).points).toBe(null);
 
@@ -316,5 +319,6 @@ describe("the Results switch colours a cell from the answer (ADR-020)", () => {
     const cell = view.rows.find((r: { userId: string }) => r.userId === student.id).cells[0];
     expect(cell.verdict).toBe("wrong");
     expect(cell.provisional).toBe(false);
+    expect(cell.rate).toBe(0);
   });
 });

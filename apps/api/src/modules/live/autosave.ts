@@ -187,7 +187,7 @@ export function liveGrader(
       const maxPoints = result.maxPoints;
       return {
         verdict: verdictOf({ points, maxPoints, state: "validated" }),
-        rate: maxPoints > 0 ? points / maxPoints : null,
+        rate: rateOf(points, maxPoints),
       };
     } catch {
       // A grader that throws on a half-typed answer is expected while the
@@ -197,6 +197,11 @@ export function liveGrader(
   };
 }
 
+/** The share of an item's points a score stands for; `null` for an item worth nothing. */
+export function rateOf(points: number, maxPoints: number): number | null {
+  return maxPoints > 0 ? points / maxPoints : null;
+}
+
 /** What {@link liveGrader} answers: a colour, and the share it counts for. */
 interface GradedCell {
   verdict: Verdict;
@@ -204,17 +209,17 @@ interface GradedCell {
 }
 
 /** {@link liveGrader} for ONE cell, which is what an autosave moves. */
-async function previewVerdict(
+async function previewCell(
   evaluation: EvaluationRecord,
   item: JoinedItem,
   attempt: AttemptRecord,
   payload: unknown,
   now: Date,
-): Promise<Verdict | null> {
+): Promise<GradedCell | null> {
   if (payload === null || payload === undefined) return null;
   const grade = liveGrader(item, evaluation, now);
   if (!grade) return null;
-  return (await grade(attempt, payload))?.verdict ?? null;
+  return grade(attempt, payload);
 }
 
 /**
@@ -268,15 +273,16 @@ async function publishCell(
   now: Date,
 ): Promise<void> {
   const answered = item ? answeredBy(item)(row.payload) : row.payload !== null;
+  const graded = item ? await previewCell(evaluation, item, attempt, row.payload, now) : null;
   events.cellChanged({
     evaluationId: evaluation.id,
     attemptId: attempt.id,
     itemId: row.itemId,
     status: cellStatus(row, answered),
     revision: row.revision,
-    flagged: row.flagged,
     summary: item && row.payload !== null ? summarizeAnswer(item, row.payload, attempt) : null,
-    verdict: item ? await previewVerdict(evaluation, item, attempt, row.payload, now) : null,
+    verdict: graded?.verdict ?? null,
+    rate: graded?.rate ?? null,
   });
 }
 

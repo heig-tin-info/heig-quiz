@@ -204,14 +204,11 @@ describe("the review flag (issue #89)", () => {
       caller: { id: "00000000-0000-4000-8000-000000000000", reach: "all" },
     });
     const mine = grid.rows.find((r) => r.userId === seed.studentIds[0]!)!;
-    expect(mine.cells.find((c) => c.itemId === itemId)).toMatchObject({
-      flagged: true,
-      status: "seen",
-    });
-    expect(mine.cells.find((c) => c.itemId === items[1]!.id)).toMatchObject({
-      flagged: false,
-      status: "skipped",
-    });
+    // The flag is the student's own note (#1069): the grid shows the cell's
+    // progress, never the flag.
+    expect(mine.cells.find((c) => c.itemId === itemId)).toMatchObject({ status: "seen" });
+    expect(mine.cells.find((c) => c.itemId === itemId)).not.toHaveProperty("flagged");
+    expect(mine.cells.find((c) => c.itemId === items[1]!.id)).toMatchObject({ status: "skipped" });
     // A skipped question counts as dealt with.
     expect(grid.totals.find((t) => t.itemId === items[1]!.id)!.completion).toBe(0.5);
 
@@ -243,8 +240,8 @@ describe("the review flag (issue #89)", () => {
       attemptId: attempt.id,
       itemId,
       status: "seen",
-      flagged: true,
     });
+    expect(message.event).not.toHaveProperty("flagged");
   });
 });
 

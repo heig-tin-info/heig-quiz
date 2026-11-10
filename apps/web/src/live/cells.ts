@@ -19,7 +19,7 @@
  *     must not leak the roster's alphabetical order (below).
  */
 import type { DashboardCell, DashboardRow, Timing } from "@quiz/contracts";
-import { countsAsCompleted } from "@quiz/domain";
+import { countsAsCompleted, displayedRate } from "@quiz/domain";
 
 import type { VerdictState } from "../ui";
 
@@ -46,6 +46,17 @@ export function cellState(cell: DashboardCell, showResults: boolean): VerdictSta
 }
 
 /**
+ * Where a VERDICT cell sits on the red-to-green ramp (#1069): the share of
+ * the points it stands for, clamped like every rate a screen shows. Only
+ * with the "results" toggle on, like the verdict itself; `undefined` lets
+ * the cell fall back on its verdict's own end of the ramp.
+ */
+export function cellRate(cell: DashboardCell, showResults: boolean): number | undefined {
+  if (!showResults || cell.verdict === null || cell.rate === null) return undefined;
+  return displayedRate(cell.rate);
+}
+
+/**
  * The ONE clock of the header (#227, F-DASH-03), or null when the class has
  * none.
  *
@@ -58,6 +69,12 @@ export function cellState(cell: DashboardCell, showResults: boolean): VerdictSta
  * most running rows share — compared as instants, since the same moment may
  * be serialised two ways — provided at least two share it. Students who each
  * started on their own share none, and every row keeps its own countdown.
+ *
+ * A row with a time bonus never votes (#1069): its deadline is its own by
+ * definition. Two students with the same bonus share a deadline too, and
+ * once the class's time is over they are the only rows still running — so
+ * their deadline became "the class's", the header showed it, and neither
+ * row showed its countdown any more.
  */
 export function commonDeadline(
   closesAt: string | null,
@@ -67,7 +84,7 @@ export function commonDeadline(
   if (closesAt !== null && timing !== "duration") return closesAt;
   const shared = new Map<number, { at: string; n: number }>();
   for (const row of rows) {
-    if (row.state !== "in_progress" || row.deadlineAt === null) continue;
+    if (row.state !== "in_progress" || row.deadlineAt === null || row.timeBonusPercent > 0) continue;
     const key = Date.parse(row.deadlineAt);
     const entry = shared.get(key);
     shared.set(key, { at: row.deadlineAt, n: (entry?.n ?? 0) + 1 });

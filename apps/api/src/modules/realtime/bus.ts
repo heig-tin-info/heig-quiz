@@ -332,8 +332,8 @@ export function dashboardCell(input: {
   revision: number;
   points: number | null;
   summary: string | null;
-  flagged: boolean;
   verdict: Verdict | null;
+  rate: number | null;
 }): void {
   cells.push(`${input.attemptId}:${input.itemId}`, { type: "dashboard.cell", ...input });
 }

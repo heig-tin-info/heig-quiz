@@ -309,7 +309,9 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     const dashboard = await get(`/app/api/evaluations/${seed.evaluationId}/dashboard`, teacher.headers);
     const row = dashboard.json().rows.find((r: { userId: string }) => r.userId === student.id);
     const cell = row.cells.find((c: { itemId: string }) => c.itemId === other);
-    expect(cell).toMatchObject({ flagged: true, status: "skipped" });
+    // The grid shows the skip, never the flag (#1069).
+    expect(cell).toMatchObject({ status: "skipped" });
+    expect(cell).not.toHaveProperty("flagged");
 
     const restored = await get(`/app/api/attempts/${attemptId}`, student.headers);
     const item = restored.json().view.items.find((i: { id: string }) => i.id === other);

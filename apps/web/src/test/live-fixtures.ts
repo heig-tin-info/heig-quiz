@@ -42,7 +42,7 @@ export function makeCell(overrides: Partial<DashboardCell> & { itemId: string })
     points: null,
     revision: 0,
     summary: null,
-    flagged: false,
+    rate: null,
     ...overrides,
   };
 }

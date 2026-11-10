@@ -108,9 +108,9 @@ export function cellChanged(input: {
   status: CellStatus;
   revision: number;
   summary: string | null;
-  /** The review flag (issue #89): staff only, like the rest of the frame. */
-  flagged: boolean;
   verdict: Verdict | null;
+  /** The share of the points the preview verdict stands for (#1069). */
+  rate: number | null;
 }): void {
   bus.dashboardCell({ ...input, points: null });
 }

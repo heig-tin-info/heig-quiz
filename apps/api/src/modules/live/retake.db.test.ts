@@ -619,8 +619,7 @@ describe("the screens with several attempts", () => {
     });
     let row = view.rows.find((r) => r.userId === student)!;
     expect(row.attemptId).toBe(second.id);
-    // Attempt 1's flag and skip do not leak into the row of attempt 2.
-    expect(row.cells.map((c) => c.flagged)).toEqual([false, false]);
+    // Attempt 1's skip does not leak into the row of attempt 2.
     expect(row.cells.map((c) => c.status)).toEqual(["empty", "empty"]);
 
     // The same writes work on attempt 2, and only there.
@@ -633,7 +632,6 @@ describe("the screens with several attempts", () => {
       caller: { id: "00000000-0000-4000-8000-000000000000", reach: "all" },
     });
     row = view.rows.find((r) => r.userId === student)!;
-    expect(row.cells.map((c) => c.flagged)).toEqual([false, true]);
     expect(row.cells[0]!.status).toBe("skipped");
     const secondView = await live.attemptView(db, evaluation, second, app.clock.now());
     expect(secondView.items.find((i) => i.id === items[1]!.item.id)).toMatchObject({ flagged: true });

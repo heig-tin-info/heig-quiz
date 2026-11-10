@@ -51,7 +51,7 @@ import { presence } from "../realtime/presence.js";
 import { solutionView, studentView } from "./studentView.js";
 import { answersOf, type AnswerRecord, type AttemptRecord } from "./access.js";
 import { reopenRefusal, reopenRole } from "./closing.js";
-import { answerSummarizer, answeredBy, liveGrader, cellStatus } from "./autosave.js";
+import { answerSummarizer, answeredBy, liveGrader, cellStatus, rateOf } from "./autosave.js";
 import { incidentOut, incidentsFrom, incidentsOf, journalOn } from "./incidents.js";
 import { attemptOwnerName, fullName } from "./names.js";
 import { itemInstance } from "../pool/service.js";
@@ -208,11 +208,13 @@ export async function dashboardView(
             // A grading on record always wins: a preview never overwrites a
             // teacher's validated verdict, nor a proposal awaiting their eyes.
             let verdict: Verdict | null = grading ? verdictOf(grading) : null;
+            let rate = grading && verdict !== "pending" ? rateOf(grading.points, grading.maxPoints) : null;
             let provisional = false;
             if (grading === null && attempt !== null && answer !== null && answer.payload !== null) {
               const graded = await preview.get(item.item.id)?.(attempt, answer.payload);
               if (graded) {
                 verdict = graded.verdict;
+                rate = graded.rate;
                 provisional = true;
                 if (!entry.staff && graded.rate !== null) {
                   const rates = liveRates.get(item.item.id) ?? [];
@@ -229,11 +231,11 @@ export async function dashboardView(
               ),
               verdict,
               provisional,
+              rate,
               points: grading && grading.state === "validated" ? grading.points : null,
               revision: answer?.revision ?? 0,
               summary:
                 answer && attempt ? (summarize.get(item.item.id)?.(answer.payload, attempt) ?? null) : null,
-              flagged: answer?.flagged ?? false,
             };
           }),
         ),

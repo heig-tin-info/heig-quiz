@@ -23,8 +23,9 @@ describe("VerdictCell", () => {
       const { container, unmount } = renderWithProviders(<VerdictCell state={state} />);
       expect(container.textContent?.trim()).not.toBe("");
       // #227: opened-and-empty and answered are plain shapes — an outlined
-      // box and a filled one. Every other state keeps a mark.
-      const plain = state === "inProgress" || state === "answered";
+      // box and a filled one; #1069: a partial answer is its tint on the
+      // ramp. Every other state keeps a mark.
+      const plain = state === "inProgress" || state === "answered" || state === "partial";
       expect(container.querySelector("svg") === null).toBe(plain);
       unmount();
     }
@@ -52,15 +53,38 @@ describe("VerdictCell", () => {
     expect(screen.getByText("NULL")).toBeInTheDocument();
   });
 
-  it("separates correct, partial and wrong by icon, not only by tint", () => {
+  it("separates correct, partial and wrong by shape, not only by tint", () => {
     const paths = (state: VerdictState) => {
       const { container, unmount } = renderWithProviders(<VerdictCell state={state} />);
-      const d = container.querySelector("svg")!.innerHTML;
+      const d = container.querySelector("svg")?.innerHTML ?? "";
       unmount();
       return d;
     };
+    // A check, nothing, a cross.
     const [ok, partial, bad] = [paths("correct"), paths("partial"), paths("wrong")];
+    expect(partial).toBe("");
     expect(new Set([ok, partial, bad]).size).toBe(3);
+  });
+
+  it("puts a verdict on the red-to-green ramp by its share, and says it (#1069)", () => {
+    const { container, unmount } = renderWithProviders(<VerdictCell state="partial" rate={0.4} />);
+    const el = container.firstElementChild as HTMLElement;
+    expect(el).toHaveClass("score-ramp");
+    expect(el.style.getPropertyValue("--rate")).toBe("40%");
+    expect(screen.getByText("Partly correct · 40 %")).toHaveClass("sr-only");
+    unmount();
+    // Without a share, each verdict sits at its own end.
+    const end = (state: VerdictState) => {
+      const r = renderWithProviders(<VerdictCell state={state} />);
+      const rate = (r.container.firstElementChild as HTMLElement).style.getPropertyValue("--rate");
+      r.unmount();
+      return rate;
+    };
+    expect([end("correct"), end("partial"), end("wrong")]).toEqual(["100%", "50%", "0%"]);
+    // A progress state ignores a share it is handed.
+    const progress = renderWithProviders(<VerdictCell state="answered" rate={0.4} />);
+    expect(progress.container.firstElementChild).not.toHaveClass("score-ramp");
+    expect((progress.container.firstElementChild as HTMLElement).style.getPropertyValue("--rate")).toBe("");
   });
 
   it("becomes a real button when the dashboard can inspect it", async () => {

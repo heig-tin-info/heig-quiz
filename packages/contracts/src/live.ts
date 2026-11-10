@@ -758,15 +758,18 @@ export const DashboardCell = z.object({
    * written nowhere. A validated or proposed grading is never provisional.
    */
   provisional: z.boolean(),
+  /**
+   * The share of the item's points the verdict stands for, `points /
+   * maxPoints` (negative under negative marking): the cell's place on the
+   * grid's red-to-green ramp (#1069). Set exactly when `verdict` is a
+   * correct / partial / wrong one; `null` with no verdict, a `pending` one
+   * or an item worth nothing.
+   */
+  rate: z.number().nullable(),
   points: z.number().nullable(),
   revision: z.number().int(),
   /** Only when `?includeAnswers=1` (F-DASH-02). */
   summary: z.string().nullable(),
-  /**
-   * The student flagged the question for review (issue #89). Staff only, like
-   * the whole grid: a question many students flag may be unclear.
-   */
-  flagged: z.boolean(),
 });
 export type DashboardCell = z.infer<typeof DashboardCell>;
 

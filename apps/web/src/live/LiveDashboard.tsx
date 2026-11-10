@@ -32,7 +32,6 @@ import { anonymousNumbers, commonDeadline } from "./cells";
 import { AnswerModal } from "./AnswerModal";
 import { IncidentsModal } from "./Incidents";
 import { InspectModal } from "./InspectModal";
-import { Legend } from "./Legend";
 import { LobbyPanel } from "./LobbyPanel";
 import { LiveHeader, type LiveControls } from "./LiveHeader";
 import { QuestionModal } from "./QuestionModal";
@@ -114,7 +113,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
 
   const { query, clock, connected } = useDashboard(id, toggles.answers, toggles.results, onAlert);
   // The grid fits the class on one screen (#227): the row height is what the
-  // viewport leaves under the grid's top, minus the legend under it and the
+  // viewport leaves under the grid's top, minus the shortcuts line under it and the
   // page's bottom padding, all measured by the hook.
   const { rowHeight, gridRef, belowRef } = useRowDensity(query.data?.view.rows.length ?? 0);
 
@@ -559,7 +558,6 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         ref={belowRef}
         className={cx("flex flex-wrap items-center justify-between gap-4", lobby && "hidden")}
       >
-        <Legend showResults={toggles.results} />
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-faint">
           <span>{t("live.hint")}</span>
           <span className="inline-flex items-center gap-1">
