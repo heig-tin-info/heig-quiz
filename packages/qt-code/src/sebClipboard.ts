@@ -108,11 +108,17 @@ export function bridgeSebClipboard(node: HTMLElement | null): (() => void) | und
     clipboard.text = text;
     clipboard.ranges = [];
     if (typeof clipboard.getContentEncoded === "function") {
-      sebGlobals().CefSharp?.PostMessage?.({
-        Type: "Clipboard",
-        Id: clipboard.id,
-        Content: clipboard.getContentEncoded(),
-      });
+      // SEB's encoder can throw on a very large copy; the page's own paste
+      // already has `clipboard.text`, only the sync to other windows is lost.
+      try {
+        sebGlobals().CefSharp?.PostMessage?.({
+          Type: "Clipboard",
+          Id: clipboard.id,
+          Content: clipboard.getContentEncoded(),
+        });
+      } catch {
+        // Nothing to do: SEB's own copy has the same limit.
+      }
     }
   };
 
