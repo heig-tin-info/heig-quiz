@@ -1255,7 +1255,6 @@ export const attemptInspect = (e: MockEvaluation, attemptId: string) => {
         revision: cell?.revision ?? 0,
         markedDone: cell?.status === "done",
         skipped: cell?.status === "skipped",
-        flagged: false,
         solution: solutionOf(q),
       }];
     }),

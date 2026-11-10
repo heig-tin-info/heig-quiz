@@ -410,14 +410,17 @@ html.dark {
 /*
  * A verdict cell of the live grid on the red-to-green ramp (#1069): `--rate`
  * is the share of the points the answer earned, `0%` to `100%`. The hue runs
- * `danger` → `success` through amber (oklch takes the short way round), laid
- * over the surface as a tint; the ink is the same hue pulled toward `fg`, so
- * it holds 4.5:1 on its tint at every step, in both themes (DESIGN.md).
+ * `danger` → `success` through amber (oklch takes the short way round), and
+ * the tint DEEPENS with the share, 10 % of the hue over the surface at zero
+ * to 40 % at full marks: the step is a step of lightness too, so it reads in
+ * grey, on a washed-out projector and without telling red from green. The
+ * ink is the same hue pulled toward `fg`; measured, it holds 5.4:1 or better
+ * on its tint in the light theme and 4.8:1 in the dark one (DESIGN.md).
  */
 .score-ramp {
   --ramp: color-mix(in oklch, var(--success) var(--rate, 0%), var(--danger));
-  background: color-mix(in oklab, var(--ramp) 26%, var(--surface));
-  color: color-mix(in oklab, var(--ramp) 70%, var(--fg));
+  background: color-mix(in oklab, var(--ramp) calc(10% + var(--rate, 0%) * 0.3), var(--surface));
+  color: color-mix(in oklab, var(--ramp) 55%, var(--fg));
 }
 
 .tip-bubble {

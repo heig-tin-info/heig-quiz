@@ -86,7 +86,6 @@ function paper(text: string, revision = 1): AttemptInspect & { serverNow: string
       revision: i === 1 ? revision : 0,
       markedDone: false,
       skipped: false,
-      flagged: false,
       solution: null,
     })),
     events: [],

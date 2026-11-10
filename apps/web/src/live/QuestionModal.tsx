@@ -4,11 +4,10 @@ import { EyeOff, RefreshCw, Users } from "lucide-react";
 import type { DashboardRow, DashboardView, ItemAnswers } from "@quiz/contracts";
 
 import { api } from "../api";
-import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { typeLabel } from "../questionTypes";
 import { itemAnswersKey } from "../queryKeys";
-import { Alert, Badge, Button, EmptyState, Modal, QueryError, Skeleton, VerdictCell, type VerdictState } from "../ui";
+import { Alert, Badge, Button, EmptyState, Modal, QueryError, Skeleton, VERDICT_STATES, VerdictCell, verdictKey, type VerdictState } from "../ui";
 import { AnswerCard } from "./AnswerCard";
 import { cellRate, cellState } from "./cells";
 
@@ -205,23 +204,6 @@ function AnswerList({
   );
 }
 
-/**
- * Every state the column's cells can wear, in the order a cell goes through
- * them: the progress states, pale to filled, then the verdicts the "Results"
- * switch puts in their place.
- */
-const SUMMARY_STATES = [
-  ["blank", "verdict.blank"],
-  ["inProgress", "verdict.inProgress"],
-  ["answered", "verdict.answered"],
-  ["skipped", "live.verdict.skipped"],
-  ["done", "live.verdict.done"],
-  ["correct", "verdict.correct"],
-  ["partial", "verdict.partial"],
-  ["wrong", "verdict.wrong"],
-  ["pending", "verdict.pending"],
-] as const satisfies readonly (readonly [VerdictState, keyof Dict])[];
-
 /** The column of the grid, counted by state: where the class stands on this question. */
 function Summary({
   states,
@@ -241,12 +223,12 @@ function Summary({
       aria-label={t("live.question.summary")}
       className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-card border border-line px-4 py-3 text-[13px] text-fg-muted"
     >
-      {SUMMARY_STATES.filter(([state]) => counts.has(state)).map(([state, key]) => (
+      {VERDICT_STATES.filter((state) => counts.has(state)).map((state) => (
         <li key={state} className="flex items-center gap-1.5">
           <span className="w-8">
             <VerdictCell state={state} />
           </span>
-          {t(key)}
+          {t(verdictKey(state))}
           <span className="font-semibold tabular-nums text-fg">{counts.get(state)}</span>
         </li>
       ))}

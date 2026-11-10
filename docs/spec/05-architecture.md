@@ -226,7 +226,7 @@ One stream per tab, `GET /events?watch=evaluation:<id>` or `watch=attempt:<id>`.
 | `evaluation.state` | `evaluation:<id>` | `state`, `pausedAt`, `closesAt` | students and teacher |
 | `attempt.deadline` | `attempt:<id>` | `deadlineAt`, `bonusS`, `reason` | one student, when the teacher adds time |
 | `attempt.closed` | `attempt:<id>` | `closedBy` | one student |
-| `dashboard.cell` | `evaluation:<id>` | `attemptId`, `itemId`, `status`, `revision`, `points` nullable, `flagged` (the student's review flag, issue #89) | teacher, coalesced |
+| `dashboard.cell` | `evaluation:<id>` | `attemptId`, `itemId`, `status`, `revision`, `points` nullable, `summary` nullable, `verdict` nullable (the live preview, ADR-020), `rate` nullable (the share of the points that verdict stands for, #1069) | teacher, coalesced |
 | `dashboard.presence` | `evaluation:<id>` | `userId`, `online`, `lastSeenAt` | teacher and waiting room |
 | `lobby.count` | `evaluation:<id>` | `present`, `enrolled` | waiting room |
 | `poll.tally` | `evaluation:<id>` | aggregated distribution | teacher and projection, coalesced 500 ms |

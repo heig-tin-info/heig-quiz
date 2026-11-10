@@ -10,8 +10,10 @@ yet, and who has extra time. Nothing starts until you press **Start**.
 
 Students down, questions across. The identity column stays put while the
 question columns scroll; it carries the score, the individual time left and
-a presence dot. A cell is blank, in progress, answered, and after grading
-correct, partial or wrong — the legend under the grid names all six.
+a presence dot. A cell shows how far the student got on the question:
+opened, answered, left unanswered on purpose. With **Results** on, it turns
+from red to green by the share of the points earned: a check for full marks,
+a cross for none, a bar for a partial answer.
 
 Three switches hide what you do not want on a projector: **Names**,
 **Answers**, **Results**. With the names off, each row keeps a stable

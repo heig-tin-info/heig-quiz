@@ -20,6 +20,7 @@ import {
   evaluationTotal,
   kioskAttestationState,
   kioskWatchOf,
+  rateOf,
   round2,
   uniquePseudonyms,
   type ItemCounting,
@@ -51,7 +52,7 @@ import { presence } from "../realtime/presence.js";
 import { solutionView, studentView } from "./studentView.js";
 import { answersOf, type AnswerRecord, type AttemptRecord } from "./access.js";
 import { reopenRefusal, reopenRole } from "./closing.js";
-import { answerSummarizer, answeredBy, liveGrader, cellStatus, rateOf } from "./autosave.js";
+import { answerSummarizer, answeredBy, liveGrader, cellStatus } from "./autosave.js";
 import { incidentOut, incidentsFrom, incidentsOf, journalOn } from "./incidents.js";
 import { attemptOwnerName, fullName } from "./names.js";
 import { itemInstance } from "../pool/service.js";
@@ -504,7 +505,6 @@ function staffAnswer(
     answer: answer?.payload ?? null,
     revision: answer?.revision ?? 0,
     skipped: answer?.skipped ?? false,
-    flagged: answer?.flagged ?? false,
     solution: solutionView({
       type: entry.question.type,
       version,

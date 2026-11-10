@@ -11,7 +11,7 @@ import { and, count, eq, getTableColumns, gte, isNull, sql } from "drizzle-orm";
 
 import type { AnswerCoordinates, AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
 import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer, type StudentView } from "@quiz/core/server";
-import { itemPoints, mayValidate, progressStatus } from "@quiz/domain";
+import { itemPoints, mayValidate, progressStatus, rateOf } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -195,11 +195,6 @@ export function liveGrader(
       return null;
     }
   };
-}
-
-/** The share of an item's points a score stands for; `null` for an item worth nothing. */
-export function rateOf(points: number, maxPoints: number): number | null {
-  return maxPoints > 0 ? points / maxPoints : null;
 }
 
 /** What {@link liveGrader} answers: a colour, and the share it counts for. */

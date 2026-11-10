@@ -731,18 +731,20 @@ type VerdictKey =
  *
  * The three verdicts are ONE ramp, red to green through amber, by the share
  * of the points the answer earned (`rate`, #1069): a 40 % answer and a 90 %
- * one were the same amber pie, and the pie said nothing the tint could not.
+ * one were the same amber pie, and the pie said nothing about the share.
  * Without a `rate`, each verdict sits at its own end (`ramp`): the full
- * green, the middle, the full red. Full marks keep their check and zero its
- * cross, so the ends are told apart by shape too; a partial answer is the
- * tint alone, its share said in the accessible name.
+ * green, the middle, the full red. Never by hue alone: the tint deepens with
+ * the share (`.score-ramp`), so the steps read in grey; full marks keep their
+ * check, zero its cross, and a partial answer draws its share as a bar along
+ * the bottom of the cell — a shape, which also tells it from the plain
+ * `answered` box beside it. The share is said in the accessible name.
  *
  * `icon: null` is a cell whose shape says it all; `glyph` marks the one state
  * (`blank`) whose icon is a small mark rather than a full-size pictogram.
  */
 const VERDICTS: Record<
   VerdictState,
-  { icon: IconType | null; tint: string; key: VerdictKey; glyph?: boolean; ramp?: number }
+  { icon: IconType | null; tint: string; key: VerdictKey; glyph?: boolean; ramp?: number; bar?: boolean }
 > = {
   blank: { icon: Square, tint: "text-line-strong", key: "verdict.blank", glyph: true },
   inProgress: {
@@ -758,10 +760,20 @@ const VERDICTS: Record<
   },
   done: { icon: CircleCheck, tint: "bg-info text-on-fill", key: "live.verdict.done" },
   correct: { icon: Check, tint: "score-ramp", key: "verdict.correct", ramp: 1 },
-  partial: { icon: null, tint: "score-ramp", key: "verdict.partial", ramp: 0.5 },
+  partial: { icon: null, tint: "score-ramp", key: "verdict.partial", ramp: 0.5, bar: true },
   wrong: { icon: X, tint: "score-ramp", key: "verdict.wrong", ramp: 0 },
   pending: { icon: Hourglass, tint: "bg-surface-2 text-fg-faint", key: "verdict.pending" },
 };
+
+/**
+ * Every state a cell can wear, in the order a cell goes through them: the
+ * progress states, pale to filled, then the verdicts the "Results" switch
+ * puts in their place — the order of {@link VERDICTS}.
+ */
+export const VERDICT_STATES = Object.keys(VERDICTS) as readonly VerdictState[];
+
+/** The dictionary key of a state's word, the one its cell is named by. */
+export const verdictKey = (state: VerdictState): VerdictKey => VERDICTS[state].key;
 
 /**
  * One cell of the live grid and of the grading list. Shape, icon
@@ -801,7 +813,7 @@ export function VerdictCell({
   className?: string;
 }) {
   const t = useT();
-  const { icon: Icon, tint, key, glyph, ramp } = VERDICTS[state];
+  const { icon: Icon, tint, key, glyph, ramp, bar } = VERDICTS[state];
   const share = ramp === undefined ? undefined : (rate ?? ramp);
   const name = `${label ?? t(key)}${ramp !== undefined && rate !== undefined ? ` · ${Math.round(rate * 100)} %` : ""}`;
   const style =
@@ -816,8 +828,19 @@ export function VerdictCell({
       {value != null && value !== "" ? (
         <span className="max-w-11.5 truncate text-xs font-medium">{value}</span>
       ) : null}
+      {bar && share !== undefined ? (
+        // The share as a length, in the cell's own ink over a faint track.
+        <span className="absolute inset-x-1.5 bottom-0.5 h-0.5 rounded-full bg-current/25" aria-hidden>
+          <span
+            data-part="share"
+            className="block h-full rounded-full bg-current"
+            style={{ width: `${Math.round(share * 100)}%` }}
+          />
+        </span>
+      ) : null}
     </>
   );
+  // `relative`: the share bar and the `sr-only` name are positioned inside it.
   const chrome = cx(
     "relative inline-flex h-[var(--cell-h,1.75rem)] w-full items-center justify-center gap-1 rounded-[7px] px-1",
     tint,

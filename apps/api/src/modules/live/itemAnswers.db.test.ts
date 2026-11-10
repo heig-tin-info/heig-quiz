@@ -80,7 +80,6 @@ describe("one question for the whole class (F-DASH-07)", () => {
       answer: "Rome",
       revision: 1,
       skipped: false,
-      flagged: false,
       solution: { answer: "answer-q0" },
     });
     // No name travels: the dashboard names the row itself (F-DASH-02).

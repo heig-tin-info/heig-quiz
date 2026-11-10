@@ -26,6 +26,15 @@ export function outcomeOf(points: number, maxPoints: number): Exclude<ItemOutcom
   return points > 0 ? "partial" : "wrong";
 }
 
+/**
+ * The share of an item's points a score stands for, `points / maxPoints` —
+ * negative under negative marking (ADR-026), above 1 never by itself — or
+ * `null` for an item worth nothing. The live grid's ramp (#1069) reads it.
+ */
+export function rateOf(points: number, maxPoints: number): number | null {
+  return maxPoints > 0 ? points / maxPoints : null;
+}
+
 /** What one counted attempt contributed to one item. */
 export interface AttemptTally {
   /** The validated grading of its answer; `null` when it left the item blank. */

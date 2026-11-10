@@ -1279,14 +1279,19 @@ live in `ui/state.ts`, each written once.
   "Results" switch puts in their place: `correct`, `partial`, `wrong`,
   `pending`. The first three are ONE ramp (`.score-ramp`, #1069): the
   share of the points (`rate`) picks a hue from `danger` to `success`
-  through amber (oklch), laid at 26 % over `surface`, its ink the same hue
-  at 70 % into `fg` (5.5:1 or better at every step, both themes);
-  without a rate each sits at its end (1, 0.5, 0).
-  Full marks keep a check and zero a cross; a partial answer is the tint
-  alone, its share in the accessible name ("· 40 %"). `pending` keeps its
-  hourglass. Shape
-  or icon, **and** tint, **and** word, never a tint alone: a dashboard
-  projected on a lecture-hall wall loses half its saturation. Its height is
+  through amber (oklch), and the tint deepens with it, from 10 % of the hue
+  over `surface` at zero to 40 % at full marks, so the steps differ in
+  lightness as well as hue and read in grey; the ink is the same hue at
+  55 % into `fg` (measured: 5.4:1 or better in light, 4.8:1 or better in
+  dark, at every step). Without a rate each sits at its end (1, 0.5, 0).
+  Each still has a shape of its own: full marks a check, zero a cross, a
+  partial answer a 2 px bar of its share along the bottom of the cell, in
+  its ink over a 25 % track — which also tells it from the plain
+  `answered` box. The share is in the accessible name ("· 40 %").
+  `pending` keeps its hourglass. So every state is shape or icon, **and**
+  tint, **and** word, never a tint alone: a dashboard projected on a
+  lecture-hall wall loses half its saturation, and a red-green reader the
+  rest. Its height is
   `--cell-h` (28 px by default): the live grid sets it from the row height
   it computes to fit the class on one screen (`--row-h`, 24 to 36 px). `value` holds
   the answer in a glyph or two ("A, C", "NULL", "12 L") beside the icon (or

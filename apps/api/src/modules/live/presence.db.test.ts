@@ -17,6 +17,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
+import { subscribe, type BusMessage } from "../../events.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
@@ -275,10 +276,71 @@ describe("the Results switch colours a cell from the answer (ADR-020)", () => {
       ).json();
       const cell = view.rows.find((r: { userId: string }) => r.userId === student.id).cells[0];
       expect(cell.verdict).toBe(null);
+      expect(cell.rate).toBe(null);
       expect(view.totals[0].successRate).toBe(null);
     } finally {
       undo();
     }
+  });
+
+  /* #1069: a partial answer carries its share, in the read and in the frame. */
+  it("carries the share of a partial preview, in the dashboard and in the published frame", async () => {
+    const undo = registerForTests({
+      ...fakeShort,
+      grade: (_config, _answer, ctx) => ({
+        kind: "graded",
+        points: ctx.itemPoints / 2,
+        maxPoints: ctx.itemPoints,
+        details: null,
+        state: "validated",
+      }),
+    });
+    const frames: BusMessage[] = [];
+    const unsubscribe = subscribe((message) => {
+      if (message.kind === "data" && message.event.type === "dashboard.cell") frames.push(message);
+    });
+    try {
+      const { evaluation, items } = await world("running", 1);
+      const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt/start`, student.headers);
+      await save(entered.json().view.attempt.id, items[0]!.item.id, "half of it");
+      bus.flushCoalescers();
+      const view = (
+        await get(`/app/api/evaluations/${evaluation.id}/dashboard?results=1`, teacher.headers)
+      ).json();
+      const cell = view.rows.find((r: { userId: string }) => r.userId === student.id).cells[0];
+      expect(cell).toMatchObject({ verdict: "partial", rate: 0.5, provisional: true });
+      const frame = frames.at(-1);
+      if (frame?.kind !== "data") throw new Error("no dashboard.cell frame");
+      expect(frame.event).toMatchObject({ type: "dashboard.cell", verdict: "partial", rate: 0.5 });
+    } finally {
+      unsubscribe();
+      undo();
+    }
+  });
+
+  it("says no share for a proposed grading on record: pending is not a score", async () => {
+    const db = server.app.db;
+    const { evaluation, items } = await world("running", 1);
+    const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt/start`, student.headers);
+    const attemptId = entered.json().view.attempt.id;
+    await save(attemptId, items[0]!.item.id, "answer-q0");
+    const grading = await import("../grading/service.js");
+    await grading.writeGrading(db, {
+      attemptId,
+      itemId: items[0]!.item.id,
+      answerId: null,
+      points: 0,
+      maxPoints: items[0]!.item.points,
+      source: "llm",
+      state: "proposed",
+      details: null,
+      now: server.clock.now(),
+    });
+    const view = (
+      await get(`/app/api/evaluations/${evaluation.id}/dashboard?results=1`, teacher.headers)
+    ).json();
+    const cell = view.rows.find((r: { userId: string }) => r.userId === student.id).cells[0];
+    expect(cell).toMatchObject({ verdict: "pending", rate: null, provisional: false });
   });
 
   it("leaves an unanswered cell blank rather than calling it wrong", async () => {

@@ -60,10 +60,12 @@ describe("VerdictCell", () => {
       unmount();
       return d;
     };
-    // A check, nothing, a cross.
+    // A check, a bar of the share (no icon), a cross.
     const [ok, partial, bad] = [paths("correct"), paths("partial"), paths("wrong")];
     expect(partial).toBe("");
     expect(new Set([ok, partial, bad]).size).toBe(3);
+    const { container } = renderWithProviders(<VerdictCell state="partial" />);
+    expect(container.querySelector("[data-part=share]")).not.toBeNull();
   });
 
   it("puts a verdict on the red-to-green ramp by its share, and says it (#1069)", () => {
@@ -71,6 +73,8 @@ describe("VerdictCell", () => {
     const el = container.firstElementChild as HTMLElement;
     expect(el).toHaveClass("score-ramp");
     expect(el.style.getPropertyValue("--rate")).toBe("40%");
+    // The share as a length too, never as the hue alone.
+    expect((el.querySelector("[data-part=share]") as HTMLElement).style.width).toBe("40%");
     expect(screen.getByText("Partly correct · 40 %")).toHaveClass("sr-only");
     unmount();
     // Without a share, each verdict sits at its own end.
