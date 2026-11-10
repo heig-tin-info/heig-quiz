@@ -12,7 +12,7 @@ import type {
   GradingQueue,
   GradingSteps,
 } from "@quiz/contracts";
-import { acceptanceScopes, countsForStudent } from "@quiz/domain";
+import { countsForStudent } from "@quiz/domain";
 import { formattedValues } from "@quiz/domain/parameters";
 
 import { iso } from "../../clock.js";
@@ -35,7 +35,7 @@ import {
   type Reading,
 } from "../pool/service.js";
 import { partsOf } from "./acceptance.js";
-import { acceptanceHook, acceptancesOf, ruleLabel, type AcceptanceHook, type ItemRules } from "./acceptanceRules.js";
+import { acceptanceHook, acceptancesOf, itemScopes, ruleLabel, type AcceptanceHook, type ItemRules } from "./acceptanceRules.js";
 import { keptAttempts } from "./kept.js";
 import {
   criteriaOf,
@@ -370,7 +370,7 @@ function acceptanceOf(
   const rules = context.acceptances.get(item.item.id) ?? [];
   return {
     acceptance: {
-      scopes: [...acceptanceScopes(isParameterized(item.version))],
+      scopes: [...itemScopes(hook, isParameterized(item.version), () => configOf(null))],
       accepted: rules.map((rule) => ({
         ...rule,
         label: ruleLabel(hook, () => configOf(rule.attemptId), rule) ?? rule.answer,

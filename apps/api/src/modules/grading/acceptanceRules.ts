@@ -7,7 +7,7 @@
  */
 import { and, inArray, ne, sql } from "drizzle-orm";
 
-import type { AcceptanceRule } from "@quiz/domain";
+import { acceptanceScopes, type AcceptanceRule, type AcceptanceScope } from "@quiz/domain";
 
 import { answerAcceptances, evaluationItems, gradings } from "../../db/schema.js";
 import type { DbOrTx, EvaluationRecord } from "../evaluation/service.js";
@@ -42,6 +42,21 @@ export function ruleLabel(hook: AcceptanceHook, config: () => unknown, rule: { p
   } catch {
     return null;
   }
+}
+
+/**
+ * THE scopes an item offers (ADR-128): the domain's one rule, read on the
+ * question's config through the type's guarded `singleAnswer` — a reading
+ * that throws offers one student only, the safe side.
+ */
+export function itemScopes(hook: AcceptanceHook, parameterized: boolean, config: () => unknown): readonly AcceptanceScope[] {
+  let single: boolean;
+  try {
+    single = hook.singleAnswer?.(config()) === true;
+  } catch {
+    single = true;
+  }
+  return acceptanceScopes({ parameterized, singleAnswer: single });
 }
 
 /** The acceptances in force, by item id. */

@@ -71,6 +71,46 @@ export interface CategorizeScoreInput extends CategorizeCounts {
   negativeMarking?: boolean | undefined;
 }
 
+/**
+ * One card of an answer, judged: whether the key puts it in a column (a
+ * target), whether the student placed it, whether it is at its place — and
+ * whether it is right only because the teacher accepted where the student
+ * put it (ADR-128).
+ */
+export interface CategorizeCardOutcome {
+  target: boolean;
+  placed: boolean;
+  right: boolean;
+  accepted?: boolean;
+}
+
+/**
+ * The counts of one answer. An ACCEPTED card counts as right under every
+ * policy, negative marking included (ADR-128, product owner):
+ *
+ *  - a target accepted where the student put it is at its place: `t`, no
+ *    longer `x` — so an all-or-nothing answer may go from 0 to full;
+ *  - a distractor accepted where the student put it stays a distractor, and
+ *    is no longer counted against them: right means "as if left out", so it
+ *    leaves `p` and stays in `D`. It never raises `T`: under negative marking
+ *    a student who placed it scores exactly as one who rightly left it out.
+ */
+export function categorizeCounts(cards: readonly CategorizeCardOutcome[]): CategorizeCounts {
+  const counts = { T: 0, D: 0, t: 0, x: 0, p: 0 };
+  for (const card of cards) {
+    const accepted = card.accepted === true;
+    if (card.target) {
+      counts.T += 1;
+      if (card.right || accepted) counts.t += 1;
+      else if (card.placed) counts.x += 1;
+    } else {
+      counts.D += 1;
+      if (card.placed && !accepted) counts.p += 1;
+    }
+  }
+  return counts;
+}
+
 export function categorizeFraction(input: CategorizeScoreInput): number {
   const { T, D, t, x, p, k } = input;
   // T === 0 is refused by the config schema; staying total keeps a corrupted

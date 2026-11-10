@@ -554,11 +554,12 @@ export interface GradingColumn<TAnswer = unknown, TDetails = unknown> {
   readonly align?: "center";
   /**
    * The parts of the answer this column shows, named as the server's
-   * `acceptance` hook names them (ADR-128): one for a cloze blank, several
-   * for a column summing up many (a categorize's cards). The key's row lists
-   * their accepted answers, the answer panel offers them; the cell places
-   * each one's control (`GradingCellInput.accept`). Absent: nothing in the
-   * column can be accepted.
+   * `acceptance` hook names them (ADR-128): one for a cloze blank or a
+   * categorize card, every card for a column summing up a whole board. The
+   * key's row lists their accepted answers; the answer panel offers each
+   * part on a row of its own, whatever the column; a cell places the
+   * control of the parts it draws (`GradingCellInput.accept`) — a summary
+   * cell draws none. Absent: nothing in the column can be accepted.
    */
   readonly parts?: readonly string[];
   /** The student's answer in this column. */

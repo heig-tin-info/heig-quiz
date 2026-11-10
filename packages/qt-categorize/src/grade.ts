@@ -15,10 +15,10 @@
  *      trusts that a stored payload went through it;
  *   3. judge every card, count, and put the fraction on the item's scale.
  */
-import type { GradeContext, GradedResult } from "@quiz/core/server";
-import { categorizeFraction, DEFAULT_CATEGORIZE_SCORE_POLICY } from "@quiz/domain/categorizeScore";
+import type { AcceptedAnswer, GradeContext, GradedResult } from "@quiz/core/server";
+import { categorizeCounts, categorizeFraction, DEFAULT_CATEGORIZE_SCORE_POLICY } from "@quiz/domain/categorizeScore";
 import { round2 } from "@quiz/domain/round";
-import { keyOf, placesOf } from "./placement.js";
+import { atPlace, keyOf, placeIdentity, placesOf } from "./placement.js";
 import {
   CategorizeDefaultsSchema,
   type CategorizeAnswer,
@@ -53,41 +53,42 @@ export function gradeCategorize(
   answer: CategorizeAnswer | null,
   itemPoints: number,
   defaults?: GradeContext["defaults"],
+  /** The answers accepted at grading time (ADR-128): a card id, and where the student put it. */
+  accepted: readonly AcceptedAnswer[] = [],
 ): GradedResult<CategorizeDetails> {
   const policy = resolvePolicy(config, defaults);
   const negativeMarking = negativeMarkingFrom(defaults);
   const key = keyOf(config.columns);
   const places = placesOf(config, answer);
+  const acceptedAt = new Set(accepted.map((a) => `${a.part}\u0000${a.answer}`));
 
-  const counts = { T: 0, D: 0, t: 0, x: 0, p: 0 };
-  const cards: CategorizeCardVerdict[] = config.cards.map((card) => {
+  const outcomes = config.cards.map((card) => {
     const expected = key.get(card.id) ?? null;
     const placed = places.get(card.id) ?? null;
-    let right: boolean;
-    if (expected === null) {
-      counts.D += 1;
-      // Left out is right only once the student placed something: an empty
-      // answer scores 0, and its review must not paint the distractors green.
-      right = placed === null && places.size > 0;
-      if (placed !== null) counts.p += 1;
-    } else {
-      counts.T += 1;
-      right =
-        placed !== null &&
-        placed.column === expected.column &&
-        (!config.ordered || placed.rank === expected.rank);
-      if (right) counts.t += 1;
-      else if (placed !== null) counts.x += 1;
-    }
-    return {
-      id: card.id,
-      placed: placed?.column ?? null,
-      ...(placed === null ? {} : { rank: placed.rank }),
-      expected: expected?.column ?? null,
-      ...(config.ordered && expected !== null ? { expectedRank: expected.rank } : {}),
-      right,
-    };
+    const right =
+      expected === null
+        ? // Left out is right only once the student placed something: an empty
+          // answer scores 0, and its review must not paint the distractors green.
+          placed === null && places.size > 0
+        : atPlace(expected, placed, config.ordered);
+    // A card is accepted where the student PUT it: never one left in the tray.
+    const isAccepted =
+      !right && placed !== null && acceptedAt.has(`${card.id}\u0000${placeIdentity(placed, config.ordered)}`);
+    return { card, expected, placed, right, accepted: isAccepted };
   });
+  // The counts are the domain's, an accepted card a right target (ADR-128).
+  const counts = categorizeCounts(
+    outcomes.map((o) => ({ target: o.expected !== null, placed: o.placed !== null, right: o.right, accepted: o.accepted })),
+  );
+  const cards: CategorizeCardVerdict[] = outcomes.map(({ card, expected, placed, right, accepted: isAccepted }) => ({
+    id: card.id,
+    placed: placed?.column ?? null,
+    ...(placed === null ? {} : { rank: placed.rank }),
+    expected: expected?.column ?? null,
+    ...(config.ordered && expected !== null ? { expectedRank: expected.rank } : {}),
+    right: right || isAccepted,
+    ...(isAccepted ? { accepted: true as const } : {}),
+  }));
 
   const fraction = categorizeFraction({ ...counts, k: config.columns.length, policy, negativeMarking });
 

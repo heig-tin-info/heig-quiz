@@ -58,6 +58,7 @@ export { prefersReducedMotion, useMediaQuery } from "./media.js";
 export {
   AcceptedChip,
   AnswerChip,
+  WithAccept,
   ChoiceMark,
   ClampedCode,
   countTone,

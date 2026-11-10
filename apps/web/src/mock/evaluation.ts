@@ -127,7 +127,7 @@ const pseudonymOf = (index: number) =>
 
 /** The questions an evaluation may draw from: published, `p1` first. */
 function itemSource(): MockQuestion[] {
-  const published = questions.filter((q) => q.deletedAt === null && q.versions.length > 0);
+  const published = questions.filter((q) => q.deletedAt === null && q.versions.length > 0 && !q.appendedOnly);
   const primary = published.filter((q) => q.poolId === "p1");
   /*
    * The `circuit` question lives in the SECOND pool — a sensor's front end is

@@ -110,6 +110,44 @@ follow.
     not, writing only what would change, so a repeated PUT or DELETE heals
     an act whose re-grade failed.
 
+### Categorize (2026-11-10, product owner)
+
+14. **Identity.** A part is a CARD, its answer the column the student put
+    it in. A card left in the tray has no answer and is never accepted.
+15. **Ordered mode.** With "the order counts", the answer is the column AND
+    the rank (`<column>#<rank>`). A rank moves with every card above it, so
+    such an answer is accepted for ONE answer only: the type says so
+    through its hook's `singleAnswer(config)`, which the one rule of the
+    scopes reads beside the parameterized one (`acceptanceScopes`,
+    `@quiz/domain`): the queue's `scopes` and the act's check (`422
+    acceptance_scope`, under the item's lock, on the version in force) come
+    from it. This is the one extension the generic contract took for
+    categorize; no type is named in the API or the web app.
+16. **Scoring.** An accepted card counts as right inside the type's own
+    scoring, under every policy, negative marking included
+    (`categorizeCounts`, `@quiz/domain`). A target accepted where it was
+    put is at its place: `t`, no longer `x` — an all-or-nothing answer may
+    go from 0 to full, a penalty disappears. A distractor accepted where it
+    was put stays a distractor and is no longer counted against the
+    student, as if left out: it leaves `p`, stays in `D`, never raises `T`
+    — under negative marking a student who placed it scores exactly as one
+    who rightly left it out (decided 2026-11-10 in review, within the
+    owner's "counts as right"). Its verdict reads right, "Accepted", in the
+    table's count, the teacher's review and the student's.
+17. **Summary column.** Past eight cards the table has one summary column
+    (`GradingColumn.parts` lists every card) and no cell per card: the
+    summary cell says how many cards of the answer are accepted, and a card
+    is accepted from the answer panel, one row per offered card. The label
+    of an answer names the card and the column ("double → Integer"), so the
+    key's row and the panel read alone; a regrade onto a version that
+    changed the card's text or the column's label drops the rule, as one
+    that removed them.
+
+    *Follow-up (not done):* a rule is kept across versions when its label
+    is unchanged, which a mere rename breaks. A stable identity for a
+    dropdown option, or an optional `sameAnswer(before, after, rule)` hook,
+    would let the ids decide for a type whose ids are stable (categorize).
+
 ## Consequences
 
 ADR-044 §2's promise that a column's key groups identical answers becomes an

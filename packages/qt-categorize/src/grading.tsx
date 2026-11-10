@@ -13,8 +13,8 @@
 import type { ReactNode } from "react";
 
 import type { GradingColumn, QuestionTypeGrading } from "@quiz/core/client";
-import { fmt, gradingSortKey, resolveStrings } from "@quiz/core/client";
-import { AnswerChip, breakdownOf, countTone, Dash, headerOf, WordChip } from "@quiz/ui";
+import { fmt, gradingSortKey, plural, resolveStrings } from "@quiz/core/client";
+import { AcceptedIcon, AnswerChip, breakdownOf, countTone, Dash, headerOf, WithAccept, WordChip } from "@quiz/ui";
 
 import { keyOf, placesOf, type Place } from "./placement.js";
 import type { CategorizeAnswer, CategorizeDetails, CategorizeSolution, CategorizeStudent } from "./schema.js";
@@ -67,19 +67,36 @@ function board(student: CategorizeStudent, s: Strings) {
 
 type Board = ReturnType<typeof board>;
 
-/** Past {@link CATEGORIZE_GRADING_MAX_COLUMNS} cards: one column counting the cards right. */
+/**
+ * Past {@link CATEGORIZE_GRADING_MAX_COLUMNS} cards: one column counting the
+ * cards right. It sums up every card (`parts`, ADR-128) but has no cell per
+ * card, so a card is accepted from the answer panel; the cell says how many
+ * of its cards are accepted.
+ */
 function summaryColumn(student: CategorizeStudent, b: Board, s: Strings): Column {
   const total = student.cards.length;
   return {
     key: "cards",
     label: s.cards,
+    parts: student.cards.map((card) => card.id),
     cell: ({ answer, details }) => {
       const verdicts = breakdownOf(details, "cards")?.cards;
       if (verdicts === undefined) {
         return <WordChip tone="neutral" text={fmt(s.placed, { placed: b.placesIn(answer).size, total })} />;
       }
       const right = verdicts.filter((card) => card.right).length;
-      return <WordChip tone={countTone(right, total)} text={fmt(s.right, { right, total })} />;
+      const accepted = verdicts.filter((card) => card.accepted).length;
+      const count = <WordChip tone={countTone(right, total)} text={fmt(s.right, { right, total })} />;
+      if (accepted === 0) return count;
+      return (
+        <span className="inline-flex items-center gap-1.5">
+          {count}
+          <span className="inline-flex items-center gap-0.5 text-[12px] text-success">
+            <AcceptedIcon className="size-3.5" />
+            {plural(s, "accepted", accepted)}
+          </span>
+        </span>
+      );
     },
     expected: () => (
       <AnswerChip tone="expected" mono={false}>
@@ -113,18 +130,20 @@ function cardColumn(
   return {
     key: `card-${card.id}`,
     ...headerOf(card.text, HEADER_CHARS),
-    cell: ({ answer, details }) => {
+    // ADR-128: the part an acceptance names for this card.
+    parts: [card.id],
+    cell: ({ answer, details, accept }) => {
       const place = b.placesIn(answer).get(card.id);
       if (place === undefined) return <Dash />;
       const right = breakdownOf(details, "cards")?.cards.find((c) => c.id === card.id)?.right;
       const text = b.text(place);
-      return (
-        <Fit>
-          <AnswerChip tone={right === undefined ? "neutral" : right ? "good" : "bad"} title={text} mono={false}>
-            {text}
-          </AnswerChip>
-        </Fit>
+      const chip = (
+        <AnswerChip tone={right === undefined ? "neutral" : right ? "good" : "bad"} title={text} mono={false}>
+          {text}
+        </AnswerChip>
       );
+      // The host's accept control, the accepted sign, right after the chip.
+      return accept ? <WithAccept accept={accept(card.id)}>{chip}</WithAccept> : <Fit>{chip}</Fit>;
     },
     expected: () => {
       if (key === null) return <Dash />;

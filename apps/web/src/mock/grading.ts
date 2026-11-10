@@ -30,6 +30,7 @@ import { AI_KEY, aiOf, BREAKDOWN_KEY, FeedbackPolicy, JUSTIFICATION_KEY, TEACHER
 import type { GradingConfidence, GradingSource, GradingState, ItemCounting } from "@quiz/contracts";
 import type { AnyQuestionTypeServer, ItemAggregate, StudentDetailsPolicy } from "@quiz/core/server";
 import { blocksServer } from "@quiz/qt-blocks/server";
+import { categorizeServer } from "@quiz/qt-categorize/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
 import { mcqServer } from "@quiz/qt-mcq/server";
 import { richServer } from "@quiz/qt-rich/server";
@@ -66,6 +67,8 @@ import {
 } from "./codeimage";
 import {
   BLOCKS_ANSWER,
+  CATEGORIZE_BIG_MISS,
+  CATEGORIZE_BIG_RIGHT,
   LOGIC_ANSWER,
   LOGIC_PARTIAL_ANSWER,
   BLOCKS_STRAIGHT_ANSWER,
@@ -190,6 +193,7 @@ const MOCK_SERVERS: Record<string, AnyQuestionTypeServer | undefined> = {
   mcq: mcqServer,
   short: shortServer,
   cloze: clozeServer,
+  categorize: categorizeServer,
   blocks: blocksServer,
   rich: richServer,
 };
@@ -291,6 +295,8 @@ const LOGIC: MockQuestion | undefined = questions.find((q) => q.id === "q-logic"
  * table shows an answer accepted at grading time (ADR-128).
  */
 const CLOZE: MockQuestion | undefined = questions.find((q) => q.type === "cloze" && q.internalName === "malloc-tableau");
+/* A categorize past eight cards (`q-sort-big`), appended last: a summary column, accepted from the panel (ADR-128). */
+const SORT_BIG: MockQuestion | undefined = questions.find((q) => q.id === "q-sort-big");
 
 /**
  * A cloze answer from an attempt's ability alone: the able half fill every
@@ -379,6 +385,17 @@ const APPENDED: Appended[] = [
         },
       ]
     : []),
+  ...(SORT_BIG
+    ? [
+        {
+          question: SORT_BIG,
+          suffix: "00000000b169",
+          points: 2,
+          answer: (attempt: MockAttempt) => (attempt.ability >= 0.6 ? CATEGORIZE_BIG_RIGHT : CATEGORIZE_BIG_MISS),
+          proposed: () => false,
+        },
+      ]
+    : []),
 ];
 const isAppended = (q: { id: string }) => APPENDED.some((a) => a.question.id === q.id);
 
@@ -460,8 +477,21 @@ function seededAcceptances(items: MockEvalItem[], allValidated: boolean): Map<st
     out.set(item.id, [{ part: clozePart(blank.index), answer: String(wrong), attemptId: null }]);
     break;
   }
+  // The categorize questions: `string` accepted among the pointers (the
+  // closed evaluation's board, eight cards), and `atoi`, a distractor,
+  // accepted in `stdlib.h` (the board past eight cards).
+  for (const item of items) {
+    const q = questions.find((x) => x.id === item.questionId);
+    const rule = q ? CATEGORIZE_SEEDS[q.internalName] : undefined;
+    if (rule) out.set(item.id, [rule]);
+  }
   return out;
 }
+
+const CATEGORIZE_SEEDS: Record<string, AcceptanceRule> = {
+  "types-c-classement": { part: "m5p2l6ak", answer: "r5j8g1h4", attemptId: null },
+  "en-tetes-bibliotheque": { part: "atoi0001", answer: "hstdlib1", attemptId: null },
+};
 
 /** One answer through its type's own `grade`, with the acceptances in force (ADR-128). */
 function gradeAccepted(
@@ -471,6 +501,7 @@ function gradeAccepted(
   item: MockEvalItem,
   attemptId: string,
   accepted: { part: string; answer: string }[],
+  negativeMarking = false,
 ): { points: number; maxPoints: number; details: unknown } {
   const graded = MOCK_SERVERS[q.type]!.grade(config, answer, {
     seed: 0,
@@ -480,6 +511,8 @@ function gradeAccepted(
     now: new Date(),
     runner: NO_RUNNER,
     accepted,
+    // As `tryAnswer` grades a categorize under the evaluation's negative marking.
+    ...(negativeMarking ? { defaults: { categorize: { policy: "per_item", negativeMarking: true } } } : {}),
   }) as { points: number; maxPoints: number; details: unknown };
   return graded;
 }
@@ -718,7 +751,7 @@ function buildGradingWorld(
         const accepted = rulesForAttempt(acceptances.get(item.id) ?? [], { id: attempt.id, practice: false });
         const graded =
           accepted.length > 0
-            ? gradeAccepted(q, config, answer, item, attempt.id, accepted)
+            ? gradeAccepted(q, config, answer, item, attempt.id, accepted, negativeOf(evaluation))
             : (tryAnswer(q, config, answer, evaluation.mcqPolicy, negativeOf(evaluation)) as {
                 points: number;
                 maxPoints: number;
@@ -835,7 +868,7 @@ function buildGradingWorld(
           answer === null
             ? { points: 0, details: null }
             : accepted.length > 0
-              ? gradeAccepted(q, attemptConfig(q, attempt.id), answer, item, attempt.id, accepted)
+              ? gradeAccepted(q, attemptConfig(q, attempt.id), answer, item, attempt.id, accepted, negativeOf(evaluation))
               : (tryAnswer(q, attemptConfig(q, attempt.id), answer) as { points: number; details: unknown });
         const proposed = !options.allValidated && graded.points > 0 && appended.proposed(key);
         gradings.set(key, [
@@ -844,7 +877,7 @@ function buildGradingWorld(
             answerId: answer === null ? null : `${key}-ans`,
             attemptId: attempt.id,
             itemId: item.id,
-            points: graded.points * item.points,
+            points: round2(graded.points * item.points),
             maxPoints: item.points,
             source: "auto",
             state: proposed ? "proposed" : "validated",
@@ -1004,7 +1037,7 @@ function itemAcceptance(e: MockGradingWorld, item: MockEvalItem) {
   const config = publishedConfig(q);
   return {
     acceptance: {
-      scopes: [...acceptanceScopes(isFall(q))],
+      scopes: [...acceptanceScopes({ parameterized: isFall(q), singleAnswer: hook.singleAnswer?.(config) === true })],
       accepted: (e.acceptances.get(item.id) ?? []).map((r) => ({
         ...r,
         label: hook.label(config, r.part, r.answer) ?? r.answer,
@@ -1345,7 +1378,15 @@ for (const method of ["PUT", "DELETE"] as const) {
       const standing = chain.find((g) => g.state !== "superseded");
       if (!standing) continue;
       const accepted = rulesForAttempt(e.acceptances.get(item.id) ?? [], { id: attemptId, practice: false });
-      const graded = gradeAccepted(q, config, e.answers.get(cellKey(attemptId, item.id)) ?? null, item, attemptId, accepted);
+      const graded = gradeAccepted(
+        q,
+        config,
+        e.answers.get(cellKey(attemptId, item.id)) ?? null,
+        item,
+        attemptId,
+        accepted,
+        negativeOf(e.evaluation),
+      );
       const fraction = graded.maxPoints > 0 ? graded.points / graded.maxPoints : 0;
       standing.state = "superseded";
       chain.push({

@@ -9,7 +9,7 @@ import { versionedMigrate, type QuestionTypeServer, type StudentView } from "@qu
 import { shuffle, streamSeed } from "@quiz/core/rng";
 import { categorizeGenerator } from "./generate.js";
 import { gradeCategorize, negativeMarkingFrom } from "./grade.js";
-import { placesOf } from "./placement.js";
+import { atPlace, identityPlace, keyOf, placeIdentity, placesOf } from "./placement.js";
 import {
   CATEGORIZE_CONFIG_VERSION,
   CategorizeAnswerSchema,
@@ -140,7 +140,35 @@ export const categorizeServer: QuestionTypeServer<
 
   // `ctx.defaults` carries the EVALUATION's per-type settings; the grader
   // reads its own `categorize` entry to resolve an `inherit` config.
-  grade: (config, answer, ctx) => gradeCategorize(config, answer, ctx.itemPoints, ctx.defaults),
+  grade: (config, answer, ctx) => gradeCategorize(config, answer, ctx.itemPoints, ctx.defaults, ctx.accepted),
+
+  /**
+   * ADR-128: a part is a CARD, an answer where the student put it — its
+   * column, and with "the order counts" its column and rank, which is
+   * accepted for one answer only (`singleAnswer`): a rank moves with every
+   * card above it. A card left in the tray gives nothing to accept.
+   */
+  acceptance: {
+    given(config, answer) {
+      const key = keyOf(config.columns);
+      return [...placesOf(config, answer)].map(([card, place]) => ({
+        part: card,
+        answer: placeIdentity(place, config.ordered),
+        right: atPlace(key.get(card), place, config.ordered),
+      }));
+    },
+    label(config, part, answer) {
+      const card = config.cards.find((c) => c.id === part);
+      const place = identityPlace(answer, config.ordered);
+      const column = place === null ? undefined : config.columns.find((c) => c.id === place.column);
+      if (!card || !column || place === null) return null;
+      if (place.rank !== null && place.rank > config.cards.length) return null;
+      const where = place.rank === null ? column.label : `${column.label} · ${place.rank}`;
+      // Plain text: a card or a label's inline code loses its backticks.
+      return `${card.text} → ${where}`.replace(/`/g, "");
+    },
+    singleAnswer: (config) => config.ordered,
+  },
 
   /**
    * The live grid (F-DASH-02): how many cards are placed, out of how many —

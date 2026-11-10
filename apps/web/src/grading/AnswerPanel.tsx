@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Check, PencilLine, RefreshCcw } from "lucide-react"
 import { useId, useState, type ReactNode } from "react";
 
 import type { GradingColumn } from "@quiz/core/client";
-import { WandIcon } from "@quiz/ui";
+import { AnswerChip, WandIcon } from "@quiz/ui";
 import {
   justificationOf,
   type Grading,
@@ -411,8 +411,11 @@ function EntryPanel({
 
 /**
  * ADR-128: the parts of this answer the teacher may accept — those the key
- * counts wrong, and those accepted already — each drawn by the column's own
- * cell with the table's control after its chip. Nothing when there is none.
+ * counts wrong, and those accepted already — one row per part, whatever its
+ * column holds (a blank, a card, a board past eight cards): the column's
+ * name on its first row, the answer as the server names it, tinted by
+ * whether it is accepted, and the table's control. Nothing when there is
+ * none.
  */
 function AcceptSection({
   acceptance,
@@ -424,24 +427,28 @@ function AcceptSection({
   entry: GradingEntry;
 }) {
   const t = useT();
-  const shown = columns.filter((c) => c.parts?.some((part) => offeredPart(acceptance, entry, part) !== null));
-  if (shown.length === 0) return null;
+  const rows = columns.flatMap((column) =>
+    (column.parts ?? []).flatMap((part) => {
+      const offered = offeredPart(acceptance, entry, part);
+      return offered ? [{ column, part, ...offered }] : [];
+    }),
+  );
+  if (rows.length === 0) return null;
   return (
     <Section title={t("grading.accept.dialog")}>
       <ul className="space-y-1.5 text-[13px]">
-        {shown.map((column) => (
-          <li key={column.key} className="flex items-center gap-3">
-            <span className="w-40 shrink-0 truncate text-fg-muted" title={column.title ?? column.label}>
-              {column.label}
+        {rows.map(({ column, part, given, inForce }, i) => (
+          <li key={`${column.key}:${part}`} className="flex items-center gap-3">
+            <span className="w-32 shrink-0 truncate text-fg-muted" title={column.title ?? column.label}>
+              {rows[i - 1]?.column === column ? null : column.label}
             </span>
-            <span className="min-w-0 flex-1">
-              {column.cell({
-                answer: entry.answer,
-                details: entry.grading?.details ?? null,
-                accept: (part) => (
-                  <AcceptControl acceptance={acceptance} entry={entry} part={part} partLabel={column.label} />
-                ),
-              })}
+            <span className="flex min-w-0 flex-1 items-center gap-1">
+              <span className="min-w-0">
+                <AnswerChip tone={inForce ? "good" : "bad"} title={given.label}>
+                  {given.label}
+                </AnswerChip>
+              </span>
+              <AcceptControl acceptance={acceptance} entry={entry} part={part} partLabel={column.label} />
             </span>
           </li>
         ))}

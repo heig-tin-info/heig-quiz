@@ -55,6 +55,8 @@ export function CategorizeReview({
   const labelOf = new Map(student.columns.map((column) => [column.id, column.label]));
   const breakdown = breakdownOf(details, "cards");
   const verdicts = new Map(breakdown?.cards.map((card) => [card.id, card.right]) ?? []);
+  // ADR-128: right because the teacher accepted where it was put.
+  const accepted = new Set(breakdown?.cards.filter((card) => card.accepted).map((card) => card.id) ?? []);
   const key = solution !== null && showsSection(sections, "solution") ? keyOf(solution.columns) : null;
   const ordered = student.ordered;
 
@@ -83,6 +85,7 @@ export function CategorizeReview({
           {markdown(renderMarkdown, text.get(card) ?? "")}
           {expected === null ? null : <span className="block text-xs font-medium text-fg-muted">{expected}</span>}
         </span>
+        {accepted.has(card) ? <span className="shrink-0 text-xs font-medium text-success">{s.accepted}</span> : null}
         {right === undefined ? null : (
           <span className={right ? "text-success" : "text-danger"}>
             {right ? <CheckIcon /> : <CloseIcon />}
@@ -99,11 +102,15 @@ export function CategorizeReview({
    * own placements — "right among the cards you placed" — since the rest
    * would count the distractors.
    */
+  // Counted from the cards' verdicts, so an accepted card (ADR-128) — a
+  // distractor accepted where it was placed included — reads right there
+  // as on the board.
+  const placedCards = breakdown?.cards.filter((card) => card.placed !== null) ?? [];
   const tally =
     breakdown === null
       ? null
       : breakdown.T === undefined
-        ? `${s.breakdownPlaced} ${breakdown.t}/${breakdown.t + breakdown.x + breakdown.p}`
+        ? `${s.breakdownPlaced} ${placedCards.filter((card) => card.right === true).length}/${placedCards.length}`
         : `${s.breakdown} ${breakdown.cards.filter((card) => card.right === true).length}/${student.cards.length}`;
 
   return (

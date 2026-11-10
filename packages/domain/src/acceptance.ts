@@ -17,12 +17,16 @@ export const ACCEPTANCE_SCOPES = ["everyone", "student"] as const;
 export type AcceptanceScope = (typeof ACCEPTANCE_SCOPES)[number];
 
 /**
- * The scopes an item offers. A parameterized question (ADR-056 §9) gives each
- * student their own key: the same text is not the same answer from one
- * student to the next, so only "this student only" is offered.
+ * The scopes an item offers, the one rule. Only "this student only" when
+ * the same answer is not the same from one student to the next:
+ *
+ *  - a parameterized question (ADR-056 §9) gives each student their own key;
+ *  - the type says its answers depend on the rest of the answer
+ *    (`singleAnswer` of its hook: a card's rank in an ordered categorize
+ *    column, which every card above it moves).
  */
-export function acceptanceScopes(parameterized: boolean): readonly AcceptanceScope[] {
-  return parameterized ? ["student"] : ACCEPTANCE_SCOPES;
+export function acceptanceScopes(item: { parameterized: boolean; singleAnswer: boolean }): readonly AcceptanceScope[] {
+  return item.parameterized || item.singleAnswer ? ["student"] : ACCEPTANCE_SCOPES;
 }
 
 /** One acceptance in force on an item; `attemptId` null reaches everyone. */

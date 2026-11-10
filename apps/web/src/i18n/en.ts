@@ -2448,6 +2448,7 @@ export const en = {
   "qt.categorize.r.score": "Score",
   "qt.categorize.r.breakdown": "Cards right",
   "qt.categorize.r.breakdownPlaced": "Right among placed cards",
+  "qt.categorize.r.accepted": "Accepted",
   "qt.categorize.r.negativeMarking": "Negative marking: wrong placements cost points.",
   "qt.categorize.k.cards": "Cards to sort",
   "qt.categorize.k.none": "In no column",
@@ -2457,6 +2458,8 @@ export const en = {
   "qt.categorize.g.right": "{right}/{total} right",
   "qt.categorize.g.placed": "{placed}/{total} placed",
   "qt.categorize.g.total": "{total} cards",
+  "qt.categorize.g.accepted": "{n} accepted",
+  "qt.categorize.g.accepted.one": "1 accepted",
 
   // --- qt-cloze strings ---
   "qt.cloze.e.text": "Text with blanks",

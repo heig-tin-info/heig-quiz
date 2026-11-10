@@ -266,6 +266,14 @@ export interface AnswerAcceptance<TConfig, TAnswer> {
    * another version, which drops what no longer exists.
    */
   label(config: TConfig, part: string, answer: string): string | null;
+  /**
+   * Whether an answer of this config can only be accepted for ONE answer,
+   * never for everyone who gave it: its identity depends on the rest of the
+   * answer (a card's rank in an ordered categorize column, which every card
+   * above it moves). Read with the parameterized rule by the one rule of the
+   * scopes (`acceptanceScopes`, `@quiz/domain`). Omitted: never.
+   */
+  singleAnswer?(config: TConfig): boolean;
 }
 
 /**
