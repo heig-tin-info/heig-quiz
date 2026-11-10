@@ -127,6 +127,7 @@ import {
   evaluations,
   findEvaluation,
   itemQuestion,
+  mockRate,
   mockVerdict,
   summaryOf,
   type MockEvaluation,
@@ -471,6 +472,7 @@ class MockEventSource {
       cell.status = cell.status === "empty" ? "seen" : "in_progress";
       cell.revision += 1;
       cell.verdict = cell.status === "in_progress" ? mockVerdict(index * 7 + cell.revision * 3) : null;
+      cell.rate = cell.status === "in_progress" ? mockRate(index * 7 + cell.revision * 3) : null;
       cell.provisional = cell.verdict !== null;
       cell.summary =
         cell.status === "in_progress" && question !== null
@@ -485,7 +487,7 @@ class MockEventSource {
         revision: cell.revision,
         points: null,
         summary: cell.summary,
-        flagged: cell.flagged,
+        rate: cell.rate,
         verdict: cell.verdict,
       });
     });

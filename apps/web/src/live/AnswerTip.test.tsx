@@ -86,7 +86,6 @@ function paper(text: string, revision = 1): AttemptInspect & { serverNow: string
       revision: i === 1 ? revision : 0,
       markedDone: false,
       skipped: false,
-      flagged: false,
       solution: null,
     })),
     events: [],
@@ -129,7 +128,7 @@ function cellFrame(itemIndex: number, revision: number, summary: string) {
   act(() => {
     FakeEventSource.instances.at(-1)!.send({
       type: "dashboard.cell",
-      flagged: false,
+      rate: null,
       evaluationId: EVALUATION_ID,
       attemptId: ATTEMPT,
       itemId: id("item", itemIndex),

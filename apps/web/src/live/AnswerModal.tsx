@@ -5,7 +5,7 @@ import type { DashboardRow } from "@quiz/contracts";
 import { useT } from "../i18n";
 import { Alert, Button, EmptyState, Modal, QueryError, Skeleton, VerdictCell } from "../ui";
 import { AnswerCard } from "./AnswerCard";
-import { cellState } from "./cells";
+import { cellRate, cellState } from "./cells";
 import { useAttemptInspect } from "./useAttemptInspect";
 
 /**
@@ -76,7 +76,7 @@ export function AnswerModal({
         <div className="space-y-4">
           {cell ? (
             <span className="block w-9">
-              <VerdictCell state={cellState(cell, showResults)} flagged={cell.flagged} />
+              <VerdictCell state={cellState(cell, showResults)} rate={cellRate(cell, showResults)} />
             </span>
           ) : null}
           <Alert icon={EyeOff}>{t("live.answersHidden")}</Alert>

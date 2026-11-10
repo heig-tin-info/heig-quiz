@@ -5,7 +5,7 @@ import type { DashboardCell } from "@quiz/contracts";
 import { useT } from "../i18n";
 import { QuestionReviewHost, typeLabel } from "../questionTypes";
 import { Badge, VerdictCell } from "../ui";
-import { cellState } from "./cells";
+import { cellRate, cellState } from "./cells";
 
 /**
  * One student's answer to one question, as the staff read it from the live
@@ -52,7 +52,7 @@ export function AnswerCard({
         {typeBadge ? <Badge tone="zinc">{typeLabel(t, type)}</Badge> : null}
         {cell ? (
           <span className="w-9">
-            <VerdictCell state={cellState(cell, showResults)} />
+            <VerdictCell state={cellState(cell, showResults)} rate={cellRate(cell, showResults)} />
           </span>
         ) : null}
         {/* Only a score that EXISTS is printed here: the type's own review

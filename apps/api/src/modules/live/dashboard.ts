@@ -20,6 +20,7 @@ import {
   evaluationTotal,
   kioskAttestationState,
   kioskWatchOf,
+  rateOf,
   round2,
   uniquePseudonyms,
   type ItemCounting,
@@ -208,11 +209,13 @@ export async function dashboardView(
             // A grading on record always wins: a preview never overwrites a
             // teacher's validated verdict, nor a proposal awaiting their eyes.
             let verdict: Verdict | null = grading ? verdictOf(grading) : null;
+            let rate = grading && verdict !== "pending" ? rateOf(grading.points, grading.maxPoints) : null;
             let provisional = false;
             if (grading === null && attempt !== null && answer !== null && answer.payload !== null) {
               const graded = await preview.get(item.item.id)?.(attempt, answer.payload);
               if (graded) {
                 verdict = graded.verdict;
+                rate = graded.rate;
                 provisional = true;
                 if (!entry.staff && graded.rate !== null) {
                   const rates = liveRates.get(item.item.id) ?? [];
@@ -229,11 +232,11 @@ export async function dashboardView(
               ),
               verdict,
               provisional,
+              rate,
               points: grading && grading.state === "validated" ? grading.points : null,
               revision: answer?.revision ?? 0,
               summary:
                 answer && attempt ? (summarize.get(item.item.id)?.(answer.payload, attempt) ?? null) : null,
-              flagged: answer?.flagged ?? false,
             };
           }),
         ),
@@ -502,7 +505,6 @@ function staffAnswer(
     answer: answer?.payload ?? null,
     revision: answer?.revision ?? 0,
     skipped: answer?.skipped ?? false,
-    flagged: answer?.flagged ?? false,
     solution: solutionView({
       type: entry.question.type,
       version,

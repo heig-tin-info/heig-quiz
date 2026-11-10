@@ -150,37 +150,50 @@ describe("StudentGrid — the rows", () => {
     expect(within(rowOf("Nadia Roux 0")).getByRole("button", { name: /Question 1/ })).toBeInTheDocument();
   });
 
-  it("marks a flagged cell and counts the class's flags in the column header (issue #89)", () => {
-    const view = viewIn("running", 3, 2);
-    const itemIds = view.items.map((i) => i.id);
-    const flag = (rowIndex: number) => {
-      const row = view.rows[rowIndex]!;
-      view.rows[rowIndex] = {
-        ...row,
-        cells: row.cells.map((c) => (c.itemId === itemIds[0] ? { ...c, status: "in_progress", flagged: true } : c)),
-      };
+  it("shows no review flag, in a cell or in a column header (#1069)", () => {
+    const view = viewIn("running", 2, 2);
+    view.rows[0] = {
+      ...view.rows[0]!,
+      cells: view.rows[0]!.cells.map((c) => ({ ...c, status: "in_progress" as const })),
     };
-    flag(0);
-    flag(1);
-    // A teacher's own test walk flags nothing about the paper's clarity.
-    view.rows[2] = { ...view.rows[2]!, staff: true };
-    flag(2);
     setup(view);
-
-    const headers = screen.getAllByRole("columnheader");
-    const q1 = headers.find((h) => h.textContent?.startsWith("Q1"))!;
-    // "Q1", the flag and "2" on one line (#227).
-    expect(q1).toHaveTextContent(/^Q12/);
-    expect(within(q1).getByText("2 students flagged this question for review")).toBeInTheDocument();
-    const q2 = headers.find((h) => h.textContent?.startsWith("Q2"))!;
-    expect(q2).toHaveTextContent(/^Q2$/);
-
+    const q1 = screen.getAllByRole("columnheader").find((h) => h.textContent?.startsWith("Q1"))!;
+    expect(q1).toHaveTextContent(/^Q1$/);
+    expect(screen.queryByText(/flagged/)).toBeNull();
     expect(
-      within(rowOf("Nadia Roux 0")).getByRole("button", { name: /Question 1 · flagged for review/ }),
+      within(rowOf("Nadia Roux 0")).getByRole("button", { name: "Nadia Roux 0 · Question 1" }),
     ).toBeInTheDocument();
-    expect(
-      within(rowOf("Nadia Roux 0")).getByRole("button", { name: /Question 2$/ }),
-    ).toBeInTheDocument();
+  });
+
+  /*
+   * #1069: under "Results", a verdict cell sits on a red-to-green ramp by the
+   * share of the points it earned, said in its name; the progress states keep
+   * their own colours and say no percentage.
+   */
+  it("tints a verdict cell by its share of the points, and says the share", () => {
+    const view = viewIn("running", 1, 3);
+    const [a, b, c] = view.items.map((i) => i.id);
+    view.rows[0] = {
+      ...view.rows[0]!,
+      cells: [
+        makeCell({ itemId: a!, status: "in_progress", verdict: "partial", rate: 0.4, provisional: true }),
+        makeCell({ itemId: b!, status: "in_progress", verdict: "correct", rate: 1, provisional: true }),
+        makeCell({ itemId: c!, status: "in_progress" }),
+      ],
+    };
+    const { unmount } = setup(view, { showResults: true });
+    const partial = screen.getByRole("button", { name: "Nadia Roux 0 · Question 1 · 40 %" });
+    expect(partial).toHaveClass("score-ramp");
+    expect(partial.style.getPropertyValue("--rate")).toBe("40%");
+    expect(screen.getByRole("button", { name: "Nadia Roux 0 · Question 2 · 100 %" }).style.getPropertyValue("--rate")).toBe("100%");
+    const answered = screen.getByRole("button", { name: "Nadia Roux 0 · Question 3" });
+    expect(answered).not.toHaveClass("score-ramp");
+    unmount();
+
+    // Results off: progress only, no share anywhere.
+    setup(view, { showResults: false });
+    expect(screen.getByRole("button", { name: "Nadia Roux 0 · Question 1" })).not.toHaveClass("score-ramp");
+    expect(screen.queryByRole("button", { name: /%$/ })).toBeNull();
   });
 
   it("badges a student who handed in, and one who ran out of time", () => {
@@ -248,11 +261,15 @@ describe("StudentGrid — the rows", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers no clickable cell for a student who never started", () => {
+  it("leaves the cells of a student who never started empty: no button, no mark (#1069)", () => {
     const view = viewIn("running", 1, 2);
     view.rows[0] = { ...view.rows[0]!, attemptId: null, state: "not_started" };
     setup(view);
     expect(screen.queryByRole("button", { name: /Question 1$/ })).toBeNull();
+    const cells = within(rowOf("Nadia Roux 0")).getAllByRole("cell");
+    // Progress (a dash), then the two question cells, then the actions.
+    expect(cells[1]).toBeEmptyDOMElement();
+    expect(cells[2]).toBeEmptyDOMElement();
   });
 
   it("gives every <label for> of the grid a control to point at", () => {
@@ -470,13 +487,14 @@ describe("StudentGrid — the class row", () => {
     expect(screen.getByText("75 % live")).toBeVisible();
   });
 
-  it("says where the missing rate will come from, and the answer depends on the switch", () => {
+  it("says a rate waits for the close only when the results are asked for (#1069)", () => {
     const view = viewIn("running", 3, 2);
     const { unmount } = setup(view, { showResults: true });
     expect(screen.getAllByText("graded at closing").length).toBe(2);
     unmount();
     setup(view, { showResults: false });
-    expect(screen.getAllByText("after closing").length).toBe(2);
+    expect(screen.queryByText("graded at closing")).toBeNull();
+    expect(screen.queryByText("after closing")).toBeNull();
   });
 });
 
@@ -514,6 +532,22 @@ describe("StudentGrid — the clock", () => {
     view.rows[1] = { ...view.rows[1]!, state: "in_progress", deadlineAt: liveAt(7 * 60_000) };
     setup(view);
     expect(screen.queryByRole("timer")).toBeNull();
+  });
+
+  /*
+   * #1069: once the class's time is over, the students with extra time are
+   * the only rows still running, and they share one deadline. It is still
+   * their own, not the class's: each row keeps its countdown.
+   */
+  it("keeps the countdown of time-bonus rows that outlive the class, even when they share it", () => {
+    const view = viewIn("running", 3, 2);
+    view.evaluation.closesAt = null;
+    view.rows[0] = { ...view.rows[0]!, state: "in_progress", timeBonusPercent: 15, deadlineAt: liveAt(9 * 60_000) };
+    view.rows[1] = { ...view.rows[1]!, state: "in_progress", timeBonusPercent: 15, deadlineAt: liveAt(9 * 60_000) };
+    view.rows[2] = { ...view.rows[2]!, state: "expired", deadlineAt: liveAt(-60_000) };
+    setup(view, { commonDeadline: commonDeadline(null, view.rows, "duration") });
+    expect(within(rowOf("Nadia Roux 0")).getByText("9:00")).toBeVisible();
+    expect(within(rowOf("Nadia Roux 1")).getByText("9:00")).toBeVisible();
   });
 
   it("shows every running row's countdown when there is no common close", () => {

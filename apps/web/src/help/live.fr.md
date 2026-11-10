@@ -12,8 +12,10 @@ avant que vous ne pressiez **Démarrer**.
 Les étudiants en lignes, les questions en colonnes. La colonne d'identité
 reste en place pendant que les colonnes de questions défilent ; elle porte
 le score, le temps restant individuel et une pastille de présence. Une
-cellule est vide, en cours, répondue, puis après correction juste,
-partielle ou fausse — la légende sous la grille nomme les six états.
+cellule montre où en est l'étudiant sur la question : ouverte, répondue,
+laissée sans réponse. Avec **Résultats**, elle passe du rouge au vert selon
+la part des points obtenus : une coche pour tous les points, une croix pour
+aucun, une barre pour une réponse partielle.
 
 Trois interrupteurs masquent ce que vous ne voulez pas projeter : **Noms**,
 **Réponses**, **Résultats**. Noms masqués, chaque ligne garde un pseudonyme

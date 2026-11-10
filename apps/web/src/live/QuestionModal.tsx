@@ -4,14 +4,12 @@ import { EyeOff, RefreshCw, Users } from "lucide-react";
 import type { DashboardRow, DashboardView, ItemAnswers } from "@quiz/contracts";
 
 import { api } from "../api";
-import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { typeLabel } from "../questionTypes";
 import { itemAnswersKey } from "../queryKeys";
-import { Alert, Badge, Button, EmptyState, Modal, QueryError, Skeleton, VerdictCell, type VerdictState } from "../ui";
+import { Alert, Badge, Button, EmptyState, Modal, QueryError, Skeleton, VERDICT_STATES, VerdictCell, verdictKey, type VerdictState } from "../ui";
 import { AnswerCard } from "./AnswerCard";
-import { cellState } from "./cells";
-import { LEGEND_STATES } from "./Legend";
+import { cellRate, cellState } from "./cells";
 
 /**
  * F-DASH-07: one question of the grid opened for the whole class — what the
@@ -24,7 +22,7 @@ import { LEGEND_STATES } from "./Legend";
  *     on the question, the grid's own cell states, and says how to show the
  *     answers. Pressing R with the view open switches it in place;
  *   - the summary first, then the students. The summary is the grid's column
- *     counted by state, in the legend's words — no aggregate a type would
+ *     counted by state, each state named — no aggregate a type would
  *     have to compute live (the class debrief's distributions wait for the
  *     grading, F-RES-03);
  *   - it is a SNAPSHOT. The answers are read once on opening
@@ -118,7 +116,7 @@ export function QuestionModal({
                 return (
                   <li key={row.seatId} className="flex min-w-0 items-center gap-2 py-1 text-[13px]">
                     <span className="w-9 shrink-0">
-                      {cell ? <VerdictCell state={cellState(cell, showResults)} flagged={cell.flagged} /> : null}
+                      {cell ? <VerdictCell state={cellState(cell, showResults)} rate={cellRate(cell, showResults)} /> : null}
                     </span>
                     <span className="truncate font-medium">{nameOf(row)}</span>
                   </li>
@@ -206,12 +204,6 @@ function AnswerList({
   );
 }
 
-/** Every state the column's cells can wear, in the legend's order and words. */
-const SUMMARY_STATES: readonly (readonly [VerdictState, keyof Dict])[] = [
-  ...LEGEND_STATES,
-  ["pending", "verdict.pending"],
-];
-
 /** The column of the grid, counted by state: where the class stands on this question. */
 function Summary({
   states,
@@ -226,30 +218,20 @@ function Summary({
     const state = cellState(cell, showResults);
     counts.set(state, (counts.get(state) ?? 0) + 1);
   }
-  const flagged = states.filter((c) => c.flagged).length;
   return (
     <ul
       aria-label={t("live.question.summary")}
       className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-card border border-line px-4 py-3 text-[13px] text-fg-muted"
     >
-      {SUMMARY_STATES.filter(([state]) => counts.has(state)).map(([state, key]) => (
+      {VERDICT_STATES.filter((state) => counts.has(state)).map((state) => (
         <li key={state} className="flex items-center gap-1.5">
           <span className="w-8">
             <VerdictCell state={state} />
           </span>
-          {t(key)}
+          {t(verdictKey(state))}
           <span className="font-semibold tabular-nums text-fg">{counts.get(state)}</span>
         </li>
       ))}
-      {flagged > 0 ? (
-        <li className="flex items-center gap-1.5">
-          <span className="w-8">
-            <VerdictCell state="blank" flagged />
-          </span>
-          {t("live.legend.flag")}
-          <span className="font-semibold tabular-nums text-fg">{flagged}</span>
-        </li>
-      ) : null}
     </ul>
   );
 }

@@ -11,7 +11,7 @@ import { and, count, eq, getTableColumns, gte, isNull, sql } from "drizzle-orm";
 
 import type { AnswerCoordinates, AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
 import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer, type StudentView } from "@quiz/core/server";
-import { itemPoints, mayValidate, progressStatus } from "@quiz/domain";
+import { itemPoints, mayValidate, progressStatus, rateOf } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -187,7 +187,7 @@ export function liveGrader(
       const maxPoints = result.maxPoints;
       return {
         verdict: verdictOf({ points, maxPoints, state: "validated" }),
-        rate: maxPoints > 0 ? points / maxPoints : null,
+        rate: rateOf(points, maxPoints),
       };
     } catch {
       // A grader that throws on a half-typed answer is expected while the
@@ -204,17 +204,17 @@ interface GradedCell {
 }
 
 /** {@link liveGrader} for ONE cell, which is what an autosave moves. */
-async function previewVerdict(
+async function previewCell(
   evaluation: EvaluationRecord,
   item: JoinedItem,
   attempt: AttemptRecord,
   payload: unknown,
   now: Date,
-): Promise<Verdict | null> {
+): Promise<GradedCell | null> {
   if (payload === null || payload === undefined) return null;
   const grade = liveGrader(item, evaluation, now);
   if (!grade) return null;
-  return (await grade(attempt, payload))?.verdict ?? null;
+  return grade(attempt, payload);
 }
 
 /**
@@ -268,15 +268,16 @@ async function publishCell(
   now: Date,
 ): Promise<void> {
   const answered = item ? answeredBy(item)(row.payload) : row.payload !== null;
+  const graded = item ? await previewCell(evaluation, item, attempt, row.payload, now) : null;
   events.cellChanged({
     evaluationId: evaluation.id,
     attemptId: attempt.id,
     itemId: row.itemId,
     status: cellStatus(row, answered),
     revision: row.revision,
-    flagged: row.flagged,
     summary: item && row.payload !== null ? summarizeAnswer(item, row.payload, attempt) : null,
-    verdict: item ? await previewVerdict(evaluation, item, attempt, row.payload, now) : null,
+    verdict: graded?.verdict ?? null,
+    rate: graded?.rate ?? null,
   });
 }
 

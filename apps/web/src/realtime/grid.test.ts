@@ -25,7 +25,7 @@ const state = () => initialGrid(makeDashboard(3, 4));
 function cellEvent(over: Partial<Extract<ServerEvent, { type: "dashboard.cell" }>> = {}) {
   return {
     type: "dashboard.cell",
-    flagged: false,
+    rate: null,
     evaluationId: EVALUATION_ID,
     attemptId: id("attempt", 0),
     itemId: ITEM(0),
@@ -86,13 +86,18 @@ describe("applyGridEvent — dashboard.cell", () => {
     expect(after.view.totals[0]!.completion).toBe(0.58);
   });
 
-  it("lands a flag on its own: same revision, only the flag moved (issue #89)", () => {
-    const first = applyGridEvent(state(), cellEvent());
-    const flagged = applyGridEvent(first, cellEvent({ flagged: true }));
-    expect(flagged).not.toBe(first);
-    expect(flagged.view.rows[0]!.cells[0]!.flagged).toBe(true);
-    const unflagged = applyGridEvent(flagged, cellEvent({ flagged: false }));
-    expect(unflagged.view.rows[0]!.cells[0]!.flagged).toBe(false);
+  it("carries the live rate with the live verdict, and keeps a grading's own (#1069)", () => {
+    const live = applyGridEvent(state(), cellEvent({ verdict: "partial", rate: 0.4 }));
+    expect(live.view.rows[0]!.cells[0]).toMatchObject({ verdict: "partial", rate: 0.4, provisional: true });
+    const graded = state();
+    graded.view.rows[0]!.cells[0] = {
+      ...graded.view.rows[0]!.cells[0]!,
+      verdict: "partial",
+      rate: 0.25,
+      provisional: false,
+    };
+    const after = applyGridEvent(graded, cellEvent({ verdict: "correct", rate: 1 }));
+    expect(after.view.rows[0]!.cells[0]).toMatchObject({ verdict: "partial", rate: 0.25 });
   });
 
   it("counts an answered, a skipped and a validated question toward completion, never a seen one", () => {
@@ -185,7 +190,7 @@ describe("applyGridEvent — dashboard.attempt", () => {
     const started = applyGridEvent(waiting(), event());
     const answered = applyGridEvent(started, {
       type: "dashboard.cell",
-      flagged: false,
+      rate: null,
       evaluationId: EVALUATION_ID,
       attemptId: id("attempt", 1),
       itemId: ITEM(0),
@@ -202,7 +207,7 @@ describe("applyGridEvent — dashboard.attempt", () => {
     // Two started rows, one of them done on Q1 — 50 %.
     const before = applyGridEvent(waiting(), {
       type: "dashboard.cell",
-      flagged: false,
+      rate: null,
       evaluationId: EVALUATION_ID,
       attemptId: id("attempt", 0),
       itemId: ITEM(0),

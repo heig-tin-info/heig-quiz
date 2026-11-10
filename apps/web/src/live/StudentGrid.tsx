@@ -1,5 +1,3 @@
-import { Flag } from "lucide-react";
-
 import type { DashboardRow, EvaluationState } from "@quiz/contracts";
 import { displayedRate } from "@quiz/domain";
 
@@ -105,18 +103,6 @@ export function StudentGrid({
   const { view } = state;
   const totals = new Map(view.totals.map((x) => [x.itemId, x]));
   const percent = (v: number) => `${Math.round(v * 100)} %`;
-  // Issue #89: how many students flagged each question for review. The CLASS
-  // only, like every total of this grid — a teacher's own test walk flags
-  // nothing about the paper's clarity. A question many students flag may be
-  // unclear, which is the one thing this count is for.
-  const flaggedBy = new Map(
-    view.items.map((item) => [
-      item.id,
-      view.rows.filter(
-        (r) => !r.staff && r.cells.some((c) => c.itemId === item.id && c.flagged),
-      ).length,
-    ]),
-  );
 
   // Mirrors of the server's own rules, so no button is offered that the API
   // would refuse (`live/closing.ts`, `live/control.ts`):
@@ -169,54 +155,33 @@ export function StudentGrid({
                 {t("live.grid.score")}
               </th>
             ) : null}
-            {view.items.map((item, index) => {
-              const flagged = flaggedBy.get(item.id) ?? 0;
-              return (
-                // ONE line, like Student and Actions beside it (#227): the
-                // type is in the tooltip, and the class's flags ride on the
-                // same line as the number — a flag and a count fit in 64 px.
-                <th
-                  key={item.id}
-                  scope="col"
-                  title={item.type}
-                  // 4 px sides, like the cells under it: "Q10", a flag and
-                  // "12" need 56 of the 64 px.
-                  className={cx(T.th, COL, "px-1! text-center")}
+            {view.items.map((item, index) => (
+              // ONE line, like Student and Actions beside it (#227): the
+              // type is in the tooltip. The students' review flags are not
+              // here (#1069): a note to oneself, not a signal for the room.
+              <th
+                key={item.id}
+                scope="col"
+                title={item.type}
+                // 4 px sides, like the cells under it.
+                className={cx(T.th, COL, "px-1! text-center")}
+              >
+                {/* The header opens the question for the whole class
+                    (F-DASH-07). A BUTTON inside the header, not a click
+                    on the header: F-DASH-03 may one day sort by column,
+                    and that would be the header's own affordance. */}
+                <button
+                  type="button"
+                  aria-label={t("live.question.open", { n: index + 1 })}
+                  onClick={() => onQuestion(item.id)}
+                  className="group/q inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-key px-0.5 py-0.5 hover:bg-surface-2"
                 >
-                  {/* The header opens the question for the whole class
-                      (F-DASH-07). A BUTTON inside the header, not a click
-                      on the header: F-DASH-03 may one day sort by column,
-                      and that would be the header's own affordance. */}
-                  <button
-                    type="button"
-                    aria-label={t("live.question.open", { n: index + 1 })}
-                    onClick={() => onQuestion(item.id)}
-                    className="group/q inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-key px-0.5 py-0.5 hover:bg-surface-2"
-                  >
-                    <span className="font-mono text-[11px] font-semibold text-fg underline decoration-fg-faint decoration-dotted underline-offset-4 group-hover/q:decoration-solid">
-                      Q{index + 1}
-                    </span>
-                    {/* The legend under the grid names the flag. */}
-                    {flagged > 0 ? (
-                      <span
-                        className="inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-warning"
-                        aria-hidden
-                      >
-                        <Flag className="size-2.5 fill-current" />
-                        {flagged}
-                      </span>
-                    ) : null}
-                  </button>
-                  {flagged > 0 ? (
-                    <span className="sr-only">
-                      {flagged === 1
-                        ? t("live.grid.flaggedLabelOne")
-                        : t("live.grid.flaggedLabel", { n: flagged })}
-                    </span>
-                  ) : null}
-                </th>
-              );
-            })}
+                  <span className="font-mono text-[11px] font-semibold text-fg underline decoration-fg-faint decoration-dotted underline-offset-4 group-hover/q:decoration-solid">
+                    Q{index + 1}
+                  </span>
+                </button>
+              </th>
+            ))}
             <th
               scope="col"
               className={cx(
@@ -290,13 +255,15 @@ export function StudentGrid({
                   {/* The success rate, and what KIND of rate it is. With the
                       "Results" switch on, the server grades the answers it
                       already holds (ADR-020), so this reads the live rate and
-                      says so; with it off, and before the grading pass has
-                      run, there is nothing to read yet. */}
+                      says so, or that this question waits for the close.
+                      With it off, and before the grading pass has run, there
+                      is nothing to read yet, and nothing is written: "after
+                      close" under every column only took room (#1069). */}
                   <span className="block text-[10px] text-fg-faint">
                     {total?.successRate == null
                       ? showResults
                         ? t("live.grid.noneGradable")
-                        : t("live.grid.afterClose")
+                        : null
                       : total.provisional
                         ? t("live.grid.successRateLive", { rate: percent(displayedRate(total.successRate)) })
                         : t("live.grid.successRate", { rate: percent(displayedRate(total.successRate)) })}

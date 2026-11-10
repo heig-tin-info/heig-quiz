@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { debrief, outcomeOf, type AttemptTally } from "./debrief.js";
+import { debrief, outcomeOf, rateOf, type AttemptTally } from "./debrief.js";
 
 const graded = (points: number, text: string, maxPoints = 1): AttemptTally => ({
   grading: { points, maxPoints },
@@ -16,6 +16,16 @@ describe("outcomeOf (ADR-033)", () => {
     // Negative marking (ADR-026): a wrong answer, not a category of its own.
     expect(outcomeOf(-1, 2)).toBe("wrong");
     expect(outcomeOf(0, 0)).toBe("wrong");
+  });
+});
+
+describe("rateOf (#1069)", () => {
+  it("is the share of the points, negative under negative marking, null for an item worth nothing", () => {
+    expect(rateOf(2, 2)).toBe(1);
+    expect(rateOf(1, 4)).toBe(0.25);
+    expect(rateOf(0, 2)).toBe(0);
+    expect(rateOf(-1, 2)).toBe(-0.5);
+    expect(rateOf(0, 0)).toBeNull();
   });
 });
 

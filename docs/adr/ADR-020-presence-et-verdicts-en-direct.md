@@ -174,6 +174,8 @@ dashboard; that edit is not made here, and this section is the record of it.
 - `live.grid.afterClose` is now only shown with the switch OFF; with it on and
   nothing gradable, the footer says "graded at closing", which is accurate for
   a `code` column.
+  *Amended 2026-11-10 (product owner, #1069): with the switch OFF the footer
+  says nothing at all; `live.grid.afterClose` is gone. Scope: this line only.*
 - The whole of it is one process's in-memory presence map, as before
   (ADR-001, ADR-009): with `WORKER_MODE` split across processes each web
   process would know its own connections, and that is unchanged.

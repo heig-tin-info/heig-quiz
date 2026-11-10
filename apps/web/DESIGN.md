@@ -59,7 +59,7 @@ Its second job is the PROGRESS half of a `VerdictCell` — `info-mid` for a
 question that holds an answer (`info-soft` was a tint that vanished on a
 projector and against the dark surface), the `info` fill for one they have validated
 (`forward_only`, a crossed checkpoint) — and it is the same job seen from another side: green, amber and red on
-that grid mean "right, partly, wrong", so progress cannot borrow any of them,
+that grid are the ramp of "right, partly, wrong", so progress cannot borrow any of them,
 and a blue that is not a link colour is exactly what is left. The two
 strengths are the progression itself; a column darkening downward is a class
 moving through the quiz, legible at squinting distance and on a projector.
@@ -1277,22 +1277,31 @@ live in `ui/state.ts`, each written once.
   DASHED `fg-faint` edge and a dash — a decision to leave the question, not
   progress through it, so not blue) — and VERDICT, which the grid's
   "Results" switch puts in their place: `correct`, `partial`, `wrong`,
-  `pending`, each with its icon, since there the icon is the meaning. Shape
-  or icon, **and** tint, **and** word, never a tint alone: a dashboard
-  projected on a lecture-hall wall loses half its saturation. Its height is
+  `pending`. The first three are ONE ramp (`.score-ramp`, #1069): the
+  share of the points (`rate`) picks a hue from `danger` to `success`
+  through amber (oklch), and the tint deepens with it, from 10 % of the hue
+  over `surface` at zero to 40 % at full marks, so the steps differ in
+  lightness as well as hue and read in grey; the ink is the same hue at
+  55 % into `fg` (measured: 5.4:1 or better in light, 4.8:1 or better in
+  dark, at every step). Without a rate each sits at its end (1, 0.5, 0).
+  Each still has a shape of its own: full marks a check, zero a cross, a
+  partial answer a 2 px bar of its share along the bottom of the cell, in
+  its ink over a 25 % track — which also tells it from the plain
+  `answered` box. The share is in the accessible name ("· 40 %").
+  `pending` keeps its hourglass. So every state is shape or icon, **and**
+  tint, **and** word, never a tint alone: a dashboard projected on a
+  lecture-hall wall loses half its saturation, and a red-green reader the
+  rest. Its height is
   `--cell-h` (28 px by default): the live grid sets it from the row height
   it computes to fit the class on one screen (`--row-h`, 24 to 36 px). `value` holds
   the answer in a glyph or two ("A, C", "NULL", "12 L") beside the icon (or
   alone in the box), and
   INHERITS the state's ink rather than carrying `fg` — that is what keeps it
-  readable on the filled `done` blue, where `fg` measured 2.9:1. `flagged`
-  (the student's review flag) is a third fact on top of the state,
-  so it is a corner mark rather than a tint: a solid `warning` flag on a
-  14 px `surface` disc with a `line` ring, top right, and "flagged for
-  review" in the accessible name. The column header counts the class's flags
-  (a flag and the number, `warning`) on the same line as `Q3`, so the header
-  row stays one line tall, level with Student and Actions; the question's
-  type is the header's tooltip.
+  readable on the filled `done` blue, where `fg` measured 2.9:1. The
+  students' review flags are not on the grid (#1069): the column header is
+  `Q3` alone, one line tall, level with Student and Actions; the question's
+  type is the header's tooltip. A row never started leaves its question
+  cells empty; no legend under the grid, the cells speak for themselves.
 - Master and detail (the grading panel): from `lg`, the step header
   (picker, chevrons, progress) sticks to the top on a strip of `canvas`; its
   measured height is the CSS variable `--grading-sticky`, under which the

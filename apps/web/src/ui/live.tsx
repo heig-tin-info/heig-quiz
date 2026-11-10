@@ -1,5 +1,4 @@
 import {
-  ChartPie,
   Check,
   CircleAlert,
   CircleCheck,
@@ -15,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { prefersReducedMotion } from "@quiz/ui";
 
 import type { AnswerMark } from "@quiz/domain";
@@ -728,14 +727,24 @@ type VerdictKey =
  * `verdict.*` ones. `skipped` is not blue: it is not progress through the
  * answer, it is a decision to leave it, so it wears the neutral recessed
  * fill with a DASHED edge and a dash — the student's own list draws it the
- * same way. The verdicts keep their icons: there the icon IS the meaning.
+ * same way.
+ *
+ * The three verdicts are ONE ramp, red to green through amber, by the share
+ * of the points the answer earned (`rate`, #1069): a 40 % answer and a 90 %
+ * one were the same amber pie, and the pie said nothing about the share.
+ * Without a `rate`, each verdict sits at its own end (`ramp`): the full
+ * green, the middle, the full red. Never by hue alone: the tint deepens with
+ * the share (`.score-ramp`), so the steps read in grey; full marks keep their
+ * check, zero its cross, and a partial answer draws its share as a bar along
+ * the bottom of the cell — a shape, which also tells it from the plain
+ * `answered` box beside it. The share is said in the accessible name.
  *
  * `icon: null` is a cell whose shape says it all; `glyph` marks the one state
  * (`blank`) whose icon is a small mark rather than a full-size pictogram.
  */
 const VERDICTS: Record<
   VerdictState,
-  { icon: IconType | null; tint: string; key: VerdictKey; glyph?: boolean }
+  { icon: IconType | null; tint: string; key: VerdictKey; glyph?: boolean; ramp?: number; bar?: boolean }
 > = {
   blank: { icon: Square, tint: "text-line-strong", key: "verdict.blank", glyph: true },
   inProgress: {
@@ -750,11 +759,21 @@ const VERDICTS: Record<
     key: "live.verdict.skipped",
   },
   done: { icon: CircleCheck, tint: "bg-info text-on-fill", key: "live.verdict.done" },
-  correct: { icon: Check, tint: "bg-success-soft text-success", key: "verdict.correct" },
-  partial: { icon: ChartPie, tint: "bg-warning-soft text-warning", key: "verdict.partial" },
-  wrong: { icon: X, tint: "bg-danger-soft text-danger", key: "verdict.wrong" },
+  correct: { icon: Check, tint: "score-ramp", key: "verdict.correct", ramp: 1 },
+  partial: { icon: null, tint: "score-ramp", key: "verdict.partial", ramp: 0.5, bar: true },
+  wrong: { icon: X, tint: "score-ramp", key: "verdict.wrong", ramp: 0 },
   pending: { icon: Hourglass, tint: "bg-surface-2 text-fg-faint", key: "verdict.pending" },
 };
+
+/**
+ * Every state a cell can wear, in the order a cell goes through them: the
+ * progress states, pale to filled, then the verdicts the "Results" switch
+ * puts in their place — the order of {@link VERDICTS}.
+ */
+export const VERDICT_STATES = Object.keys(VERDICTS) as readonly VerdictState[];
+
+/** The dictionary key of a state's word, the one its cell is named by. */
+export const verdictKey = (state: VerdictState): VerdictKey => VERDICTS[state].key;
 
 /**
  * One cell of the live grid and of the grading list. Shape, icon
@@ -771,32 +790,34 @@ const VERDICTS: Record<
 export function VerdictCell({
   state,
   value,
+  rate,
   onClick,
   label,
   describedBy,
-  flagged = false,
   className = "",
 }: {
   state: VerdictState;
   /** The answer in a glyph or two; `—` and the like belong in the caller. */
   value?: ReactNode;
+  /**
+   * A verdict's share of the points, 0 to 1: its place on the red-to-green
+   * ramp, said as a percentage in the accessible name. Ignored by the
+   * progress states; without it a verdict sits at its own end of the ramp.
+   */
+  rate?: number | undefined;
   onClick?: () => void;
   /** Overrides the accessible name (to add the student and the question). */
   label?: string;
   /** Id of a tooltip that describes the cell while it is shown (`aria-describedby`). */
   describedBy?: string;
-  /**
-   * The student flagged the question for review (issue #89): a small solid
-   * flag in the top-right corner, amber on the grid's own surface. A corner
-   * mark rather than a tint, because the tint already says the progress or
-   * the verdict, and the flag is a third fact on top of them.
-   */
-  flagged?: boolean;
   className?: string;
 }) {
   const t = useT();
-  const { icon: Icon, tint, key, glyph } = VERDICTS[state];
-  const name = `${label ?? t(key)}${flagged ? ` · ${t("live.verdict.flagged")}` : ""}`;
+  const { icon: Icon, tint, key, glyph, ramp, bar } = VERDICTS[state];
+  const share = ramp === undefined ? undefined : (rate ?? ramp);
+  const name = `${label ?? t(key)}${ramp !== undefined && rate !== undefined ? ` · ${Math.round(rate * 100)} %` : ""}`;
+  const style =
+    share === undefined ? undefined : ({ "--rate": `${Math.round(share * 100)}%` } as CSSProperties);
   // The answer carries no colour of its own: it INHERITS the state's ink,
   // which is the only way it stays legible on every tint. `text-fg` on the
   // filled `done` blue measured 2.9:1, under half of what a teacher three
@@ -807,16 +828,19 @@ export function VerdictCell({
       {value != null && value !== "" ? (
         <span className="max-w-11.5 truncate text-xs font-medium">{value}</span>
       ) : null}
-      {flagged ? (
-        <span
-          className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-surface ring-1 ring-line"
-          aria-hidden
-        >
-          <Flag className="size-2.25 fill-current text-warning" />
+      {bar && share !== undefined ? (
+        // The share as a length, in the cell's own ink over a faint track.
+        <span className="absolute inset-x-1.5 bottom-0.5 h-0.5 rounded-full bg-current/25" aria-hidden>
+          <span
+            data-part="share"
+            className="block h-full rounded-full bg-current"
+            style={{ width: `${Math.round(share * 100)}%` }}
+          />
         </span>
       ) : null}
     </>
   );
+  // `relative`: the share bar and the `sr-only` name are positioned inside it.
   const chrome = cx(
     "relative inline-flex h-[var(--cell-h,1.75rem)] w-full items-center justify-center gap-1 rounded-[7px] px-1",
     tint,
@@ -824,7 +848,7 @@ export function VerdictCell({
   );
   if (!onClick) {
     return (
-      <span className={chrome} title={name}>
+      <span className={chrome} style={style} title={name}>
         {content}
         <span className="sr-only">{name}</span>
       </span>
@@ -836,6 +860,7 @@ export function VerdictCell({
       onClick={onClick}
       aria-label={name}
       aria-describedby={describedBy}
+      style={style}
       className={cx(chrome, "transition-opacity hover:opacity-80")}
     >
       {content}

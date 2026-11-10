@@ -6,7 +6,7 @@
  * projector, and a grid that needs scrolling is a grid of which half is never
  * seen. So the row height is not a constant: it is what is left of the
  * viewport under the grid's top, minus the grid's own header and footer and
- * what the page puts under it (the legend), shared among the rows — clamped
+ * what the page puts under it (the shortcuts line), shared among the rows — clamped
  * so a class of five does not get 80 px balloons and a class of sixty does
  * not get unreadable slivers. Under the minimum the grid simply grows past
  * the screen and the page scrolls, as it always did.
@@ -31,7 +31,7 @@ export const ROW_MAX_PX = 36;
  * - `top`: where the grid starts, from the top of that area when scrolled to
  *   the very top — so scrolling never changes the answer;
  * - `chrome`: the grid's header and footer rows, which do not shrink;
- * - `below`: whatever must stay visible under the grid (legend, gaps);
+ * - `below`: whatever must stay visible under the grid (the shortcuts line, gaps);
  * - `rows`: the student rows to fit.
  *
  * Anything it cannot use (no rows, a measurement that is not a positive
@@ -69,7 +69,7 @@ function offsetTopOf(el: HTMLElement): number {
  * The padding under the page's content: every ancestor's `padding-bottom`,
  * summed — the Shell's `<main>` in the page, the stage's own in the page's
  * full screen. Read from the DOM rather than copied from `Shell.tsx`, so
- * restyling either does not silently cut the legend off.
+ * restyling either does not silently cut the shortcuts line off.
  */
 function paddingBelow(el: HTMLElement): number {
   let sum = 0;
@@ -95,7 +95,7 @@ function blocksAbove(el: HTMLElement): HTMLElement[] {
  * also what entering the browser's full screen does, F-DASH-06) and when
  * anything that moves the grid's top or its bottom margin changes size: the
  * header and the switches above it (a title that wraps, "Go to grading"
- * appearing), its own header and footer rows, the legend under it.
+ * appearing), its own header and footer rows, the shortcuts line under it.
  *
  * The two elements come in through CALLBACK refs, held in state: the grid is
  * mounted late (after the lobby, after loading) and remounted when the page
@@ -126,8 +126,8 @@ export function useRowDensity(rows: number): {
         setRowHeight(ROW_MAX_PX);
         return;
       }
-      // The gap between the grid and the legend, as laid out (`space-y-5`).
-      // A hidden legend (the lobby) has no box, and reserves nothing.
+      // The gap between the grid and the shortcuts line, as laid out (`space-y-5`).
+      // A hidden line (the lobby) has no box, and reserves nothing.
       const gap =
         below && below.offsetHeight > 0
           ? Math.max(0, below.getBoundingClientRect().top - grid.getBoundingClientRect().bottom)

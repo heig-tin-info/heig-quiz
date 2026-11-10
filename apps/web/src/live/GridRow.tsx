@@ -20,7 +20,7 @@ import { PaperBadge } from "../paper/PaperBadge";
 import { Badge, ClockCountdown, cx, Dash, IconButton, T, VerdictCell } from "../ui";
 import { AnswerTip } from "./AnswerTip";
 import { IncidentBadge } from "./Incidents";
-import { cellState, cellValue, completionOf, ownDeadline } from "./cells";
+import { cellRate, cellState, cellValue, completionOf, ownDeadline } from "./cells";
 
 /** Fixed width of a question column: two glyphs and the icon, and no more. */
 export const COL = "w-16 min-w-16";
@@ -337,7 +337,10 @@ export const GridRow = memo(function GridRow({
         const label = `${name} · ${t("live.grid.question", { n: index + 1 })}`;
         return (
           <td key={item.id} className={cx(TD, COL, "px-1 text-center")}>
-            {cell === undefined ? (
+            {/* A row never started stays empty: its progress dash says it
+                once, where a grey "never opened" mark said it again on
+                every question (#1069). */}
+            {row.attemptId === null ? null : cell === undefined ? (
               <Dash />
             ) : (
               // The complete answer on hover or focus (#94), read
@@ -351,18 +354,16 @@ export const GridRow = memo(function GridRow({
                 itemId={item.id}
                 fallback={cell.summary ?? ""}
                 revision={cell.revision}
-                enabled={showAnswers && !!cell.summary && row.attemptId !== null}
+                enabled={showAnswers && !!cell.summary}
               >
                 {(describedBy) => (
                   <VerdictCell
                     state={cellState(cell, showResults)}
                     value={cellValue(cell, showAnswers)}
-                    flagged={cell.flagged}
+                    rate={cellRate(cell, showResults)}
                     label={label}
                     describedBy={describedBy}
-                    onClick={
-                      row.attemptId === null ? undefined : () => onCell(row, item.id)
-                    }
+                    onClick={() => onCell(row, item.id)}
                   />
                 )}
               </AnswerTip>

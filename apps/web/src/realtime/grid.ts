@@ -136,11 +136,10 @@ function applyCell(state: GridState, event: Extract<ServerEvent, { type: "dashbo
     points: event.points,
     verdict: keepGrading ? cell.verdict : event.verdict,
     provisional: keepGrading ? cell.provisional : event.verdict !== null,
+    rate: keepGrading ? cell.rate : event.rate,
     // `summary` only travels when the teacher asked for the answers; keeping
     // the previous one on a null would show an answer the toggle just hid.
     summary: event.summary,
-    // Every frame carries the WHOLE cell, the flag included (issue #89).
-    flagged: event.flagged,
   };
   if (
     next.status === cell.status &&
@@ -148,8 +147,8 @@ function applyCell(state: GridState, event: Extract<ServerEvent, { type: "dashbo
     next.points === cell.points &&
     next.verdict === cell.verdict &&
     next.provisional === cell.provisional &&
-    next.summary === cell.summary &&
-    next.flagged === cell.flagged
+    next.rate === cell.rate &&
+    next.summary === cell.summary
   ) {
     return state;
   }
