@@ -25,7 +25,7 @@
  */
 import { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { OnMount } from "@monaco-editor/react";
+import type { EditorProps, OnMount } from "@monaco-editor/react";
 
 import type { CodeLanguage } from "./schema.js";
 import { codeArea, cx } from "@quiz/ui";
@@ -118,6 +118,7 @@ export interface CodeLineDecoration {
 
 type MonacoEditor = Parameters<OnMount>[0];
 type MonacoApi = Parameters<OnMount>[1];
+type EditorOptions = NonNullable<EditorProps["options"]>;
 
 /** Monaco's line height at our font size, for estimates before it measures. */
 export const LINE_PX = 19;
@@ -138,7 +139,54 @@ export function fitPx(contentPx: number, minPx: number): number {
  * scroll, which stops the page under a student's cursor. It keeps the wheel
  * only while it can still scroll itself.
  */
-export const PAGE_WHEEL = { alwaysConsumeMouseWheel: false } as const;
+const PAGE_WHEEL = { alwaysConsumeMouseWheel: false } as const;
+
+/**
+ * The options every Monaco of this package shares (`CodeArea` and
+ * `./LockedEditor.tsx`); each adds its own on top.
+ *
+ * `editContext: false` must stay, whatever a Monaco upgrade suggests (#1079).
+ * Since 0.55 Monaco takes keyboard input through the browser's EditContext
+ * API by default, on a `div.native-edit-context` that is neither a textarea
+ * nor `contenteditable`. Safe Exam Browser on Windows, with the
+ * `enablePrivateClipboard` our `.seb` sets (`@quiz/seb`), injects its own
+ * `Clipboard.js` into every page: it cancels every paste in the capture phase
+ * and re-inserts the text itself, only into a textarea, an input or a
+ * `contenteditable`. On an EditContext surface the paste is silently lost.
+ * Turned off, Monaco falls back to its hidden `<textarea>`, which that script
+ * can write. {@link guardSebPaste} completes it.
+ */
+export const MONACO_BASE_OPTIONS = {
+  editContext: false,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  automaticLayout: true,
+  fontSize: 13,
+  tabSize: 4,
+  lineNumbersMinChars: 3,
+  renderLineHighlight: "none",
+  overviewRulerLanes: 0,
+  scrollbar: PAGE_WHEEL,
+} as const satisfies EditorOptions;
+
+/**
+ * A paste SEB's `Clipboard.js` has already written into Monaco's textarea (it
+ * cancelled the event on the document, in the capture phase) must not reach
+ * Monaco's own paste handlers too, which ignore the cancellation: after a copy
+ * inside the editor, the paste controller would insert its copy a second time
+ * (#1079). One of them listens in the capture phase on Monaco's own container,
+ * so the stop happens one level up, on the element wrapping it. Listeners on
+ * the document, the integrity journal's included, have all run by then.
+ */
+function dropHandledPaste(event: Event): void {
+  const seb = (globalThis as { SafeExamBrowser?: { clipboard?: unknown } }).SafeExamBrowser;
+  if (event.defaultPrevented && seb?.clipboard !== undefined) event.stopPropagation();
+}
+
+/** A ref for the element wrapping a Monaco: installs {@link dropHandledPaste}, idempotent. */
+export function guardSebPaste(node: HTMLElement | null): void {
+  node?.addEventListener("paste", dropHandledPaste, true);
+}
 
 function heightLines(value: string, minLines: number): number {
   return Math.min(MAX_LINES, Math.max(minLines, value.split("\n").length));
@@ -221,6 +269,7 @@ export function CodeArea({
     <div
       className={cx("overflow-hidden rounded-field border border-line-strong", className)}
       data-testid="monaco-host"
+      ref={guardSebPaste}
     >
       <MonacoBoundary fallback={fallback}>
         <Suspense fallback={fallback}>
@@ -235,15 +284,7 @@ export function CodeArea({
               readOnly: readOnly || onChange === undefined,
               domReadOnly: readOnly || onChange === undefined,
               ariaLabel: label,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              fontSize: 13,
-              tabSize: 4,
-              lineNumbersMinChars: 3,
-              renderLineHighlight: "none",
-              overviewRulerLanes: 0,
-              scrollbar: PAGE_WHEEL,
+              ...MONACO_BASE_OPTIONS,
             }}
           />
         </Suspense>
