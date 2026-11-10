@@ -172,6 +172,7 @@ function SortHeader<K extends string>({
   children,
   className = "",
   right,
+  center,
   width,
 }: {
   k: K;
@@ -181,15 +182,20 @@ function SortHeader<K extends string>({
   children: ReactNode;
   className?: string;
   right?: boolean | undefined;
+  center?: boolean | undefined;
   width?: string | undefined;
 }) {
   const active = sort !== null && sort.key === k;
+  // A centred label (a column of marks under a letter) keeps its centre over
+  // the marks and its column as narrow as the letter: the arrow hangs past
+  // its right edge, in the cell's padding, and reserves no width.
+  const hang = center ? "absolute left-full top-1/2 ml-0.5 -translate-y-1/2" : undefined;
   return (
     <th
       scope="col"
       role="columnheader"
       aria-sort={active ? (sort.dir === 1 ? "ascending" : "descending") : undefined}
-      className={cx(T.th, right && "text-right", className)}
+      className={cx(T.th, right && "text-right", center && "text-center", className)}
       style={width === undefined ? undefined : { width }}
     >
       <button
@@ -200,6 +206,7 @@ function SortHeader<K extends string>({
           // under it, so the arrow hangs on the label's left instead of
           // pushing the word out of line with its own numbers.
           right && "flex-row-reverse",
+          center && "relative",
           active && "text-fg",
         )}
         onClick={() => onToggle(k)}
@@ -207,14 +214,17 @@ function SortHeader<K extends string>({
         {children}
         {active ? (
           sort.dir === 1 ? (
-            <ArrowUp aria-hidden className="size-3 shrink-0" />
+            <ArrowUp aria-hidden className={cx("size-3 shrink-0", hang)} />
           ) : (
-            <ArrowDown aria-hidden className="size-3 shrink-0" />
+            <ArrowDown aria-hidden className={cx("size-3 shrink-0", hang)} />
           )
         ) : (
           <ArrowUpDown
             aria-hidden
-            className="hover-reveal size-3 shrink-0 text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+            className={cx(
+              "hover-reveal size-3 shrink-0 text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100",
+              hang,
+            )}
           />
         )}
       </button>
@@ -272,6 +282,11 @@ export type Column<K extends string> = {
   /** The label is for screen readers only (the actions column). */
   srOnly?: boolean;
   right?: boolean;
+  /**
+   * Centred over a column of marks (the grading table's choice letters): a
+   * sort arrow hangs past the label instead of reserving its width.
+   */
+  center?: boolean;
   /** Extra classes: a `T.col*` priority, a width, `T.stickyEnd`. */
   className?: string;
   /**
@@ -324,7 +339,7 @@ export function TableHead<K extends string>({
               key={c.key}
               scope="col"
               role="columnheader"
-              className={cx(T.th, c.right && "text-right", c.className, role(c))}
+              className={cx(T.th, c.right && "text-right", c.center && "text-center", c.className, role(c))}
               style={c.width === undefined ? undefined : { width: c.width }}
             >
               {c.srOnly ? <span className="sr-only">{c.label}</span> : c.label}
@@ -336,6 +351,7 @@ export function TableHead<K extends string>({
               sort={sort}
               onToggle={onToggle}
               right={c.right}
+              center={c.center}
               width={c.width}
               className={cx(c.className, role(c))}
             >

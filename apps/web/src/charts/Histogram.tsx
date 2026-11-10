@@ -1,9 +1,20 @@
-import { formatGrade, gradeBand, MAX_GRADE } from "@quiz/domain";
+import { formatGrade, gradeBand, MAX_GRADE, type GradeBand } from "@quiz/domain";
 import type { ResultsStats } from "@quiz/contracts";
 
-import { GRADE_BAND_TONE } from "../Grade";
 import { useT } from "../i18n";
-import { Bars } from "../ui";
+import { Bars, type BarTone } from "../ui";
+
+/**
+ * A band's fill on a bar: red below the pass mark and orange just above it,
+ * as a grade is written (`GRADE_BAND_TONE`); green above that, where the
+ * written grade keeps the ink — a bar is a share of the class, and the
+ * passing share reads at a glance (#1083).
+ */
+export const GRADE_BAND_BAR = {
+  fail: "danger",
+  borderline: "warning",
+  pass: "success",
+} as const satisfies Record<GradeBand, BarTone>;
 
 /** How the buckets of `@quiz/domain#histogram` are named on screen. */
 export function bucketLabel(bucket: number, step = 0.5): string {
@@ -49,7 +60,7 @@ export function Histogram({
         tick: Number.isInteger(b.bucket) ? b.bucket.toFixed(0) : "",
         // The buckets are half grades, so 4.0 and 4.5 fall on their edges:
         // a bucket's band is its lower bound's (the letters would not be).
-        tone: GRADE_BAND_TONE[gradeBand(b.bucket)],
+        tone: GRADE_BAND_BAR[gradeBand(b.bucket)],
       }))}
     />
   );

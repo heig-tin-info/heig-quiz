@@ -90,8 +90,6 @@ export function SegmentedBar({
   );
 }
 
-const BAR_FILL = { danger: "bg-danger", warning: "bg-warning" } as const;
-
 /** A bar that is a button (`onSelect` of `Bars` and `StackedBars`). */
 const BAR_BUTTON =
   "rounded-t-[4px] transition-opacity duration-150 enabled:hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
@@ -105,8 +103,8 @@ export interface BarDatum {
   tick?: string;
   /** The bar's own tooltip, on hover. */
   title?: string;
-  /** A semantic fill instead of the neutral ink (a failing grade range). */
-  tone?: "danger" | "warning" | undefined;
+  /** A semantic fill instead of the neutral ink (a grade range's band). */
+  tone?: BarTone | undefined;
 }
 
 /**
@@ -170,9 +168,10 @@ function ChartAxis({
  * Vertical bars on one axis, one count each: plain `<div>`s on the tokens
  * rather than a chart library — a bar whose height is a percentage survives
  * every width the page has. Neutral ink, not the accent: a chart is a
- * reading, not the thing to press; a bar that is a verdict (a failing grade
- * range) may take a semantic `tone`. An empty bar keeps a 2 px stub so the
- * axis reads, a non-empty one at least 6 px so it is never mistaken for one.
+ * reading, not the thing to press; a bar that is a verdict (a grade range
+ * failing, borderline or passing) may take a semantic `tone`. An empty bar
+ * keeps a 2 px stub so the axis reads, a non-empty one at least 6 px so it
+ * is never mistaken for one.
  *
  * The bars are `aria-hidden`, and the same numbers are published as a real
  * table, visually hidden: a screen reader gets the data, not a shape.
@@ -218,7 +217,7 @@ export function Bars({
                 <span className="text-center text-[11px] tabular-nums text-fg-faint">{b.value || ""}</span>
               ) : null}
               <span
-                className={cx("w-full rounded-t-[4px]", b.value === 0 ? "bg-surface-3" : b.tone ? BAR_FILL[b.tone] : "bg-fg-muted")}
+                className={cx("w-full rounded-t-[4px]", b.value === 0 ? "bg-surface-3" : b.tone ? BAR_TONES[b.tone] : "bg-fg-muted")}
                 style={{ height: `${Math.max(b.value === 0 ? 2 : 6, (b.value / top) * 100)}%` }}
               />
             </>

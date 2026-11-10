@@ -4670,7 +4670,7 @@ export const en = {
   "export.limited": "Too many downloads in an hour. Try again later.",
   "export.notPrintable": "This series has a question that does not print.",
   "feedback.download": "Download my copy",
-  "grading.answers.copy": "Copy",
+  "grading.answers.clipboard": "Clipboard",
   "grading.answers.help": "Every student's answer to this question, in one file, with names.",
   "grading.answers.copied": "Answers copied",
   "grading.answers.copyFailed": "Could not copy the answers.",
@@ -4701,6 +4701,7 @@ export const en = {
   "grading.panel.question": "Question {n}",
   "grading.panel.score": "{points} / {max} pts",
   "grading.panel.statement": "Statement",
+  "grading.panel.openStatement": "Show the statement: {name}",
   "grading.panel.expectedHelp": "Wrong expected answer? Publish a new version of the question, then re-grade.",
   // Parameterized questions: grading and results (ADR-056 §9)
   "grading.param.badge": "Own key per answer",

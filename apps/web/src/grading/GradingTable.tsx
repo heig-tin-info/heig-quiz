@@ -33,6 +33,12 @@ const FIT = "w-px whitespace-nowrap";
 /** 48 px: the glyph and its padding, so the Student column knows where to stick. */
 const STICKY_VERDICT = "sticky left-0 z-1 w-12 min-w-12";
 const STICKY_NAME = "sticky left-12 z-1 whitespace-nowrap";
+/**
+ * An answer column's width: its share of the `<colgroup>`, the cell never
+ * asking for more (`max-w-0`); fitted to its short form and its marks when
+ * it has one — the sort arrow hangs outside the letter (`Column.center`).
+ */
+const answerWidth = (c: { short?: string | undefined }) => (c.short ? FIT : "max-w-0");
 
 export interface GradingTableProps {
   /** Accessible name: which question these answers are to. */
@@ -120,12 +126,17 @@ export function GradingTable(props: GradingTableProps) {
     }
   }, [selected]);
 
-  // Where each host column sticks and how wide it is; an answer column is
-  // capped by its `<col>` and cuts its label.
+  // When every answer column fits its short form, the points take what is
+  // left: the figures and the actions still close the row at its right edge.
+  const shared = columns.filter((c) => !c.short).length;
+  // Where each host column sticks and how wide it is. An answer column is
+  // capped by its `<col>` and cuts its label; one with a short form (a
+  // choice's letter) shows that alone and fits it, its whole text the
+  // header's tooltip and accessible name, and the statement in the key's panel.
   const place: Record<string, string> = {
     verdict: cx("whitespace-nowrap", STICKY_VERDICT, "bg-surface"),
     name: cx(FIT, STICKY_NAME, "bg-surface"),
-    points: FIT,
+    points: shared === 0 ? "whitespace-nowrap" : FIT,
   };
   const head: Column<string>[] = [
     ...props.sortable.map((c) => ({
@@ -137,10 +148,8 @@ export function GradingTable(props: GradingTableProps) {
           <span title={c.title ?? c.label} className="block truncate">
             {c.short ? (
               <>
-                <span aria-hidden className="sm:hidden">
-                  {c.short}
-                </span>
-                <span className="max-sm:sr-only">{c.label}</span>
+                <span aria-hidden>{c.short}</span>
+                <span className="sr-only">{c.title ?? c.label}</span>
               </>
             ) : (
               c.label
@@ -149,7 +158,9 @@ export function GradingTable(props: GradingTableProps) {
         ),
       srOnly: c.key === "verdict",
       right: c.align === "right",
-      className: place[c.key] ?? cx("max-w-0", c.align === "center" && "text-center"),
+      // Centred over its marks, the sort arrow hanging past the letter.
+      center: c.align === "center",
+      className: place[c.key] ?? answerWidth(c),
     })),
     {
       key: "actions",
@@ -164,14 +175,14 @@ export function GradingTable(props: GradingTableProps) {
   return (
     <div className={cx(T.container, "overflow-x-auto")}>
       <table aria-label={props.label} className={cx(T.table, "border-separate border-spacing-0")}>
-        {/* Each answer column takes an equal share; the others are `w-px`. */}
+        {/* Each wide answer column takes an equal share; the others are `w-px`. */}
         <colgroup>
           <col />
           {named ? <col /> : null}
           {columns.map((c) => (
-            <col key={c.key} style={{ width: `${100 / columns.length}%` }} />
+            <col key={c.key} style={c.short ? undefined : { width: `${100 / shared}%` }} />
           ))}
-          <col />
+          <col style={shared === 0 ? { width: "100%" } : undefined} />
           <col />
         </colgroup>
         <TableHead columns={head} sort={props.sort} onToggle={props.onSort} />
@@ -238,7 +249,7 @@ function ExpectedRow({
           {parameters?.template.example ? (
             <span className="text-[13px] italic text-fg-muted">{t("grading.param.perAnswer")}</span>
           ) : (
-            <span className="flex flex-wrap items-center gap-1">
+            <span className={cx("flex flex-wrap items-center gap-1", c.align === "center" && "justify-center")}>
               {c.expected()}
               <AcceptedAnswers acceptance={acceptance} parts={c.parts} />
             </span>
@@ -330,7 +341,7 @@ function AnswerRow({
         </td>
       ) : (
         columns.map((c) => (
-          <td key={c.key} className={cx(cell, "group/cell max-w-0", c.align === "center" && "text-center")}>
+          <td key={c.key} className={cx(cell, "group/cell", answerWidth(c), c.align === "center" && "text-center")}>
             {c.cell({
               answer: entry.answer,
               details: grading?.details ?? null,

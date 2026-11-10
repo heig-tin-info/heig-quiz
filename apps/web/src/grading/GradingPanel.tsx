@@ -340,6 +340,7 @@ export function GradingPanel({
         index={index}
         states={data.states}
         onJump={goTo}
+        onOpenStatement={() => open(EXPECTED)}
         counting={
           item && countingAct.offered && !readOnly
             ? {

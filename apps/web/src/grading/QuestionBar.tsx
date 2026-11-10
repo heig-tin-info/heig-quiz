@@ -49,12 +49,15 @@ export function QuestionBar({
   index,
   states,
   onJump,
+  onOpenStatement,
   counting,
 }: {
   items: GradingItem[];
   index: number;
   states: ReadonlyMap<string, StepState>;
   onJump: (index: number) => void;
+  /** Opens the panel on the key's row: the statement and the expected answer. */
+  onOpenStatement: () => void;
   /** Absent before the list is frozen, and for a reader who may not grade. */
   counting?: CountingMenu | undefined;
 }) {
@@ -84,7 +87,17 @@ export function QuestionBar({
             <Badge tone="zinc">{t("grading.points", { n: item.points })}</Badge>
             <CountingLabel counting={item.counting} />
           </span>
-          <span className="min-w-0 truncate text-[13px] text-fg-muted">{item.internalName}</span>
+          {/* The question's name opens its statement in the key's panel: the
+              whole text a choice's column cuts to its letter. */}
+          <button
+            type="button"
+            onClick={onOpenStatement}
+            aria-label={t("grading.panel.openStatement", { name: item.internalName })}
+            title={t("grading.panel.openStatement", { name: item.internalName })}
+            className="min-w-0 truncate rounded-sm text-[13px] text-fg-muted underline decoration-line-strong decoration-dotted underline-offset-4 transition-colors hover:text-fg hover:decoration-solid"
+          >
+            {item.internalName}
+          </button>
         </>
       }
       status={

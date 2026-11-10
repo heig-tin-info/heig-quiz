@@ -58,7 +58,7 @@ export function GradingToolbar({
   toValidate: number | null;
   anonymise: boolean;
   onAnonymise: (on: boolean) => void;
-  /** The question's Export and Copy (F-EXP-01), when its type renders as text. */
+  /** The question's Export menu (F-EXP-01), when its type renders as text. */
   exports?: ReactNode;
   primary: ReactNode;
 }) {
@@ -114,13 +114,16 @@ export function GradingToolbar({
           />
         </>
       ) : null}
-      <span className="flex-1" />
-      {exports}
-      <label className="flex items-center gap-2 text-[13px] font-medium text-fg-muted">
-        <Switch checked={anonymise} onChange={onAnonymise} label={t("grading.anonymise")} />
-        <span aria-hidden>{t("grading.anonymise")}</span>
-      </label>
-      {primary}
+      {/* The actions wrap as one group, held to the right: the primary
+          closes the filters' row and never stands alone at the start of a line. */}
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2.5">
+        {exports}
+        <label className="flex items-center gap-2 text-[13px] font-medium text-fg-muted">
+          <Switch checked={anonymise} onChange={onAnonymise} label={t("grading.anonymise")} />
+          <span aria-hidden>{t("grading.anonymise")}</span>
+        </label>
+        {primary}
+      </div>
     </div>
   );
 }
