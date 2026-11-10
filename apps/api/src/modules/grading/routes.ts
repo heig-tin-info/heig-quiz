@@ -424,7 +424,8 @@ export async function gradingPlugin(app: FastifyInstance) {
             unchanged: outcome.unchanged,
             modifiedAfterRelease: outcome.modifiedAfterRelease,
           };
-          if (outcome.changed) {
+          // A rule changed, or a repeated act healed gradings it had left undone.
+          if (outcome.changed || outcome.regraded > 0) {
             await trace(req, "evaluation.answer_accepted", "evaluation", scope.evaluation.id, {
               itemId: item.item.id,
               ...body,

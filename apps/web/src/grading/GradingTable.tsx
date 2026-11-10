@@ -240,7 +240,7 @@ function ExpectedRow({
           ) : (
             <span className="flex flex-wrap items-center gap-1">
               {c.expected()}
-              <AcceptedAnswers acceptance={acceptance} part={c.part} />
+              <AcceptedAnswers acceptance={acceptance} parts={c.parts} />
             </span>
           )}
         </td>

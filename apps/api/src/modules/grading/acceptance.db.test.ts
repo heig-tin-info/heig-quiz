@@ -28,7 +28,7 @@ import * as live from "../live/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as pool from "../pool/service.js";
 import { acceptanceGuard, type RuleBound } from "./acceptanceRules.js";
-import { boundCell, checkGrading, readConfig, runEvaluationGrading } from "./evaluationPass.js";
+import { boundCell, checkGrading, readConfig, runEvaluationGrading, writeCheckGrading } from "./evaluationPass.js";
 import { passGuard } from "./passCommon.js";
 import { pairKey } from "./records.js";
 import { writeGradings } from "./writer.js";
@@ -311,11 +311,13 @@ describe("access and release (ADR-068 §3, ADR-108 §6)", () => {
 });
 
 /**
- * The act's serialization (ADR-128 §6): what reaches the single writer is
+ * The act's serialization (ADR-128 §13): what reaches the single writer is
  * decided under the item's lock, by `acceptanceGuard`. True concurrency is
  * not reproducible on PGlite (one connection), so these tests hand the guard
  * a grading computed BEFORE the competing write landed — exactly what a
  * request that lost the race holds — and check what the guard lets through.
+ * They prove the guard's logic, not the row locks' behaviour, which needs
+ * two connections.
  */
 describe("the act's serialization", () => {
   /** Student 0's cell graded now, bound to `rules`: what a racing writer computed. */
@@ -372,11 +374,45 @@ describe("the act's serialization", () => {
     const retried = await send("PUT", url(evaluation.id, itemId), INVALID);
     expect(retried.json()).toMatchObject({ accepted: true, regraded: 1, unchanged: 1 });
     expect((await validated(sat[0]!.id, itemId)).points).toBe(2);
-    // The act changed no rule: it audits nothing.
+    // No rule changed, but gradings did: the healing act is audited.
     const audited = await db()
       .select()
       .from(auditLog)
       .where(and(eq(auditLog.action, "evaluation.answer_accepted"), eq(auditLog.subjectId, evaluation.id)));
-    expect(audited).toEqual([]);
+    expect(audited.map((a) => a.payload)).toEqual([
+      { itemId, ...INVALID, accepted: true, regraded: 1, unchanged: 1, modifiedAfterRelease: false },
+    ]);
+  });
+
+  it("re-grades an exercise check computed before an act with the rules in force at its write", async () => {
+    const built = await build("exercise");
+    const first = await sit(built.evaluation.id, 0, ["1", "zorglub"]);
+    const evaluation = await reload(db(), built.evaluation.id);
+    const [item] = await joinedItems(db(), evaluation.id);
+    const [answer] = await db().select().from(answers).where(eq(answers.attemptId, first.id));
+    // The check graded the answer, then the act committed before its write.
+    const check = await checkGrading(server.app, { evaluation, item: item!, attempt: first, answer: answer! });
+    if (!check || !("write" in check)) throw new Error("a check grading expected");
+    expect(check.write.points).toBe(1);
+    expect((await send("PUT", url(evaluation.id, built.itemId), INVALID)).statusCode).toBe(200);
+    const written = await writeCheckGrading(server.app, check);
+    expect(written?.points).toBe(2);
+    expect((written?.details as { perBlank: { accepted?: true }[] }).perBlank[0]!.accepted).toBe(true);
+  });
+
+  it("drops a grading computed on the item's former version: the regrade's pass grades it", async () => {
+    const { evaluation, itemId, attempts: sat, questionId } = await graded();
+    const { write, bound } = await stale(evaluation.id, sat[0]!.id, []);
+    const [question] = await db().select().from(questions).where(eq(questions.id, questionId));
+    await pool.putDraft(db(), question!, { config: { ...CLOZE, text: "Type {{=int|long|short}}, name {{zorglub}}." } });
+    await pool.publishQuestion(db(), question!, { userId: teacher.id });
+    const regrade = await send("POST", `/app/api/evaluations/${evaluation.id}/items/${itemId}/regrade`, {
+      note: "v2",
+      toVersionNumber: 2,
+    });
+    expect(regrade.statusCode).toBe(202);
+    const after = await validated(sat[0]!.id, itemId);
+    expect(await writeGradings(db(), [write], acceptanceGuard(passGuard(), bound))).toEqual([]);
+    expect((await validated(sat[0]!.id, itemId)).id).toBe(after.id);
   });
 });

@@ -189,7 +189,7 @@ export function readConfig(
 }
 
 /** No attempt at all: what a static item's config, which reads none, is asked with. */
-const NO_ATTEMPT = { seed: 0, instances: {} };
+export const NO_ATTEMPT = { seed: 0, instances: {} };
 
 /**
  * One cell that no teacher has settled yet: the grading to write, or the
@@ -306,7 +306,10 @@ export async function boundCell(
     const again = await gradeCell(app, { ...cell, rules });
     return "write" in again ? again.write : null;
   };
-  return { graded: await gradeCell(app, cell), bound: { rules: cell.rules, regrade } };
+  return {
+    graded: await gradeCell(app, cell),
+    bound: { rules: cell.rules, versionId: cell.item.item.questionVersionId, regrade },
+  };
 }
 
 /**
@@ -434,12 +437,12 @@ export async function checkGrading(
     attempt: AttemptRecord;
     answer: typeof answers.$inferSelect;
   },
-): Promise<{ write: WriteGradingInput } | { runner: RunnerGradingJob } | null> {
+): Promise<{ write: WriteGradingInput; bound: RuleBound | null } | { runner: RunnerGradingJob } | null> {
   const { evaluation, item, attempt, answer } = cell;
   const { configOf, keyed } = readConfig(app, item);
   // A question with no key (an opinion) has nothing to be right about.
   if (!keyed) return null;
-  const graded = await gradeCell(app, {
+  const { graded, bound } = await boundCell(app, {
     evaluation,
     job: { evaluationId: evaluation.id },
     item,
@@ -451,7 +454,9 @@ export async function checkGrading(
     rules: (await acceptancesOf(app.db, [item.item.id])).get(item.item.id) ?? [],
   });
   if ("runner" in graded) return graded;
-  return "write" in graded && graded.write.state === "validated" ? graded : null;
+  if (!("write" in graded) || graded.write.state !== "validated") return null;
+  // Written through the acceptances' guard, as the pass's (ADR-128 §13).
+  return { write: graded.write, bound: acceptanceHook(item.question.type, evaluation.mode) ? bound : null };
 }
 
 /**
@@ -461,8 +466,12 @@ export async function checkGrading(
  * every write statement refuses a checked row. `null` when the guard
  * dropped the write.
  */
-export async function writeCheckGrading(app: FastifyInstance, write: WriteGradingInput): Promise<GradingRecord | null> {
-  const [written] = await writeGradings(app.db, [write], passGuard());
+export async function writeCheckGrading(
+  app: FastifyInstance,
+  { write, bound }: { write: WriteGradingInput; bound: RuleBound | null },
+): Promise<GradingRecord | null> {
+  const cells = new Map(bound ? [[pairKey(write.attemptId, write.itemId), bound]] : []);
+  const [written] = await writeGradings(app.db, [write], acceptanceGuard(passGuard(), cells));
   return written ?? null;
 }
 

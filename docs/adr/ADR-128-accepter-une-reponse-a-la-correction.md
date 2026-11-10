@@ -52,8 +52,11 @@ follow.
    case folded unless `caseSensitive`); a dropdown's, the canonical option
    (ADR-097), whatever the shuffle; number and regex blanks are never
    accepted. A blank right by acceptance carries `accepted: true` beside its
-   `ok`. The client column names its part (`GradingColumn.part`); no type is
-   named in the API or the web app. `categorize` plugs in the same way.
+   `ok`. A client column names the parts it shows (`GradingColumn.parts`:
+   one for a blank, several for a column summing up many cards) and places
+   the host's control after each part's chip (`GradingCellInput.accept`);
+   no type is named in the API or the web app. `categorize` plugs in the
+   same way.
 4. **Scope**: everyone who gave the answer (default) or one attempt. A
    parameterized question (ADR-056 §9) offers only the second: each student
    has their own key.
@@ -61,7 +64,8 @@ follow.
    is frozen (`409 acceptance_not_frozen`), never on a poll nor for a type
    without the hook (`409 acceptance_unavailable`), before the close too,
    the owner's once released (`403 owner_required`). `PUT` accepts, `DELETE`
-   with the same body stops; a write that changes nothing audits nothing.
+   with the same body stops; an act that changes no rule and re-grades
+   nothing audits nothing (one that heals a failed re-grade is audited).
 6. **Manual overrides are left alone.** The act re-grades at once the answers
    it reaches whose grading in force is not a manual override; the others are
    counted `unchanged` and the card says how many. An answer not graded yet
@@ -86,18 +90,25 @@ follow.
 12. **Student exit**: the `accepted` mark travels only where the blank's
     verdict does (`studentDetails`); it names no answer of the key, and the
     review reads it as "Accepted".
-13. **One lock per item.** The item's `evaluation_items` row, `FOR UPDATE`
-    (`lockItems`), serializes the rules of an item: the act writes its rule
-    under it, a regrade takes it before retargeting the item and dropping
-    rules, and the single writer's guard of every automatic grading of an
-    item that takes acceptances (`acceptanceGuard`, after the attempts' own
-    lock of ADR-067) takes it before reading the rules again — a grading
-    computed with rules that moved since is graded again before it is
-    written. The act's guard also locks the cells' standing gradings and
-    drops a cell whose grading in force is by then a manual override. The
-    act re-grades what it reaches whether its rule was new or not, writing
-    only what would change, so a repeated PUT or DELETE heals an act whose
-    re-grade failed.
+13. **One lock per item.** The item's `evaluation_items` row, `FOR NO KEY
+    UPDATE` (`lockItems`, which leaves the foreign-key checks of answers and
+    gradings written meanwhile alone), is the single serialization point of
+    every writer of an item's gradings that acceptances concern, always
+    after the attempts' locks (ADR-067) and before the gradings' and the
+    evaluation's rows: the act writes its rule under it; a regrade takes it
+    before retargeting the item and dropping rules; a manual override takes
+    its attempt's lock, then it; a partial retake's copy takes it after its
+    attempt locks; the counting act (ADR-108) takes it before the
+    evaluation's row; and the single writer's guard of every automatic
+    grading of an item that takes acceptances — the pass's and the
+    exercise check's (`acceptanceGuard`) — takes it before reading, under
+    it, the item's version and its rules. A grading computed on another
+    version is dropped (the regrade's pass grades it); one computed with
+    rules that moved since is graded again, which must keep its state. The
+    act's guard also drops a cell whose grading in force is by then a manual
+    override. The act re-grades what it reaches whether its rule was new or
+    not, writing only what would change, so a repeated PUT or DELETE heals
+    an act whose re-grade failed.
 
 ## Consequences
 

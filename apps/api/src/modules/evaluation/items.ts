@@ -192,6 +192,10 @@ export async function setItemCounting(
   counting: ItemCounting,
 ): Promise<ItemCounting | null> {
   if (row.mode === "poll") throw new EvaluationError("counting_poll");
+  // The item first, then the evaluation: the order of every grading writer,
+  // which locks the item (ADR-128 §13) before it flags the evaluation
+  // modified after release. The other way round, the two deadlock.
+  await tx.select({ id: evaluationItems.id }).from(evaluationItems).where(eq(evaluationItems.id, itemId)).for("no key update");
   const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, row.id)).for("update");
   if (!locked) return null;
   const items = await tx

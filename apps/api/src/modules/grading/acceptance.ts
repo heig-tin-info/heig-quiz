@@ -14,7 +14,7 @@ import { isDeepStrictEqual } from "node:util";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
-import type { AcceptablePart, ItemAcceptance } from "@quiz/contracts";
+import type { AcceptablePart } from "@quiz/contracts";
 import {
   acceptanceReach,
   acceptanceScopes,
@@ -44,7 +44,7 @@ import {
   type AcceptanceHook,
   type RuleBound,
 } from "./acceptanceRules.js";
-import { boundCell, readConfig } from "./evaluationPass.js";
+import { boundCell, NO_ATTEMPT, readConfig } from "./evaluationPass.js";
 import { endOf, passGuard } from "./passCommon.js";
 import { standingGradings } from "./reads.js";
 import { GradingError, pairKey, type AttemptRecord, type GradingRecord, type PairKey } from "./records.js";
@@ -69,27 +69,12 @@ export function partsOf(hook: AcceptanceHook, type: string, config: unknown, pay
   return given.map((p) => ({ ...p, label: ruleLabel(hook, () => config, p) ?? p.answer }));
 }
 
-/**
- * The `acceptance` of a grading queue's item that takes one (ADR-128): the
- * scopes it offers and the acceptances in force, each with its label — read
- * on the config of the attempt a single-student rule names, else on
- * `configOf`'s for no attempt in particular.
- */
-export function queueAcceptance(
-  hook: AcceptanceHook,
-  item: JoinedItem,
-  rules: readonly AcceptanceRule[],
-  configOf: (attemptId: string | null) => unknown,
-): { scopes: ("everyone" | "student")[]; accepted: ItemAcceptance[] } {
-  return {
-    scopes: [...acceptanceScopes(isParameterized(item.version))],
-    accepted: rules.map((rule) => ({ ...rule, label: ruleLabel(hook, () => configOf(rule.attemptId), rule) ?? rule.answer })),
-  };
-}
-
 /** What {@link changeAcceptance} did (`AnswerAcceptanceResult`). */
 export interface AcceptanceChange {
-  /** The act changed the rules: false when they already said so (it audits nothing then). */
+  /**
+   * The act changed the rules: false when they already said so. The route
+   * audits an act that changed them or re-graded something (a healing one).
+   */
   changed: boolean;
   regraded: number;
   unchanged: number;
@@ -176,9 +161,6 @@ export async function changeAcceptance(
     modifiedAfterRelease: evaluation.releasedAt !== null && written.some((w) => w.state === "validated"),
   };
 }
-
-/** No attempt at all: what a static item's config, which reads none, is asked with. */
-const NO_ATTEMPT = { seed: 0, instances: {} };
 
 async function insertRule(db: DbOrTx, itemId: string, rule: AcceptanceRule, actorId: string, now: Date): Promise<boolean> {
   const inserted = await db

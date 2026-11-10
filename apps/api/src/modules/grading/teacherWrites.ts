@@ -19,6 +19,7 @@ import { isBatchable, round2, type DeclaredCriterion, validatedBreakdown } from 
 import type { Db, Tx } from "../../db/client.js";
 import { answers, attempts, gradings, officialAttempt } from "../../db/schema.js";
 import { joinedItems, type DbOrTx, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
+import { lockItems } from "./acceptanceRules.js";
 import { criteriaOf, pointsRangeOf } from "./reads.js";
 import { GradingError, NEWEST_FIRST, type GradingRecord } from "./records.js";
 import { writeGrading, writeGradings, type WriteGradingInput } from "./writer.js";
@@ -79,17 +80,32 @@ export async function manualOverride(
     gradedBy: userId,
     now,
   };
-  if (!graded.breakdown) return writeGrading(db, write);
+  if (!graded.breakdown) {
+    const [row] = await writeGradings(db, [write], (tx, inputs) => lockCell(tx, write).then(() => inputs));
+    return row!;
+  }
   // The details kept are read inside the write's transaction, the row locked
   // (`gradingInForce`): a correction of the cell committing at the same time
   // waits for this one, or this one reads after it. At worst, a correction
   // that supersedes the read row first leaves this override without the
   // proposal's `ai`; the override itself still wins (F-GRADE-05).
   const [row] = await writeGradings(db, [write], async (tx, inputs) => {
+    await lockCell(tx, write);
     const previous = await gradingInForce(tx, write.attemptId, write.itemId);
     return inputs.map((i) => ({ ...i, details: { ...teacherKept(previous?.details), ...(i.details as object) } }));
   });
   return row!;
+}
+
+/**
+ * An override's locks (ADR-128 §13): its attempt, then its item — the order
+ * of every automatic writer of the cell (`passGuard`, `acceptanceGuard`).
+ * An acceptance act re-grading this cell either commits first, and this
+ * override supersedes it, or reads this override in force and leaves it.
+ */
+async function lockCell(tx: Tx, cell: { attemptId: string; itemId: string }): Promise<void> {
+  await tx.select({ id: attempts.id }).from(attempts).where(eq(attempts.id, cell.attemptId)).for("update");
+  await lockItems(tx, [cell.itemId]);
 }
 
 /** What an override keeps of the details it replaces: the model's proposal, for the teacher. */

@@ -72,9 +72,10 @@ const WRITE_CHUNK = 500;
  * cell or state (`results_updated` reads the cells before it). The grading
  * jobs lock the attempts there and drop the cells of one reopened meanwhile
  * (ADR-067); an override keeps the proposal it replaces there (ADR-118 §6).
- * One guard may also grade an automatic input again, its points included:
+ * One guard may also grade an automatic input again — its points and
+ * details, never its cell nor its state, which it throws on —
  * `acceptanceGuard` (ADR-128), when the accepted answers it was graded with
- * moved before the write — the "after" of `results_updated` is read after
+ * moved before the write; the "after" of `results_updated` is read after
  * the commit, so it sees the points written.
  * The rows of the dropped inputs are simply not returned.
  */

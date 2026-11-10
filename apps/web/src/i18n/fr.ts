@@ -2458,7 +2458,6 @@ export const fr: Record<keyof Dict, string> = {
   "qt.cloze.k.filled": "remplis",
   "qt.cloze.g.blank": "Trou {n}",
   "qt.cloze.g.empty": "vide",
-  "qt.cloze.g.accepted": "Acceptée",
 
   // --- qt-code editor strings ---
   "qt.code.e.questionSection": "Question",

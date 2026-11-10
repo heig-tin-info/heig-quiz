@@ -67,25 +67,36 @@ export async function acceptancesOf(db: DbOrTx, itemIds: readonly string[]): Pro
 
 /**
  * THE per-item lock of the acceptances (ADR-128): the items' own
- * `evaluation_items` rows, `FOR UPDATE`, in id order. Taken by the rule's
- * write, by a regrade (which may retarget the item and drop rules), and by
- * the write guard below before it reads the rules a grading must carry —
- * so a grading is never written with rules that changed under it.
+ * `evaluation_items` rows, `FOR NO KEY UPDATE` — which leaves the foreign-key
+ * checks of the answers and gradings written meanwhile alone — in id order.
+ * The single serialization point of every writer of an item's gradings that
+ * acceptances concern: the rule's write, a regrade (which may retarget the
+ * item and drop rules), a manual override, a partial retake's copy, and the
+ * write guard below before it reads the rules a grading must carry. Always
+ * after the attempts' locks and before the gradings' rows (ADR-067). Returns
+ * the version each item holds, read under the lock.
  */
-export async function lockItems(tx: DbOrTx, itemIds: readonly string[]): Promise<void> {
+export async function lockItems(tx: DbOrTx, itemIds: readonly string[]): Promise<Map<string, string>> {
   const ids = [...new Set(itemIds)].sort();
-  if (ids.length === 0) return;
-  await tx
-    .select({ id: evaluationItems.id })
+  if (ids.length === 0) return new Map();
+  const rows = await tx
+    .select({ id: evaluationItems.id, versionId: evaluationItems.questionVersionId })
     .from(evaluationItems)
     .where(inArray(evaluationItems.id, ids))
     .orderBy(evaluationItems.id)
-    .for("update");
+    .for("no key update");
+  return new Map(rows.map((r) => [r.id, r.versionId]));
 }
 
-/** One cell graded with the rules read when it was computed, and how to grade it again. */
+/**
+ * One cell graded with the rules and the item's version read when it was
+ * computed, and how to grade it again. Only a type graded in process takes
+ * acceptances, so grading again gives a grading of the same state; a
+ * re-grade that does not is a bug, and the guard throws on it.
+ */
 export interface RuleBound {
   rules: readonly AcceptanceRule[];
+  versionId: string;
   regrade(rules: readonly AcceptanceRule[]): Promise<WriteGradingInput | null>;
 }
 
@@ -95,12 +106,14 @@ const sameRules = (a: readonly AcceptanceRule[], b: readonly AcceptanceRule[]) =
 
 /**
  * The write guard of a grading that depends on acceptances (ADR-128): after
- * `inner` (the attempts' lock, `passGuard`), it takes the items' lock,
- * reads their rules again and re-grades every `bound` cell whose rules
- * moved since it was computed — a pass that loaded them before an act, two
- * acts on one item. With `leaveManual`, the cells' standing gradings are
- * locked and a cell whose grading in force is now a manual override is
- * dropped: the act never unseats a teacher's word (ADR-128 §6).
+ * `inner` (the attempts' lock, `passGuard`), it takes the items' lock and
+ * reads, under it, their version and their rules. A `bound` cell computed
+ * on another version is dropped (the regrade that retargeted the item
+ * grades it); one whose rules moved since it was computed — a pass that
+ * loaded them before an act, two acts on one item — is graded again. With
+ * `leaveManual`, a cell whose grading in force is now a manual override is
+ * dropped: the act never unseats a teacher's word (ADR-128 §6). An override
+ * takes the same lock, so what is read here is settled.
  */
 export function acceptanceGuard(
   inner: WriteGuard,
@@ -111,39 +124,38 @@ export function acceptanceGuard(
     const kept = await inner(tx, inputs);
     const tied = kept.filter((i) => bound.has(pairKey(i.attemptId, i.itemId)));
     if (tied.length === 0) return kept;
-    await lockItems(
-      tx,
-      tied.map((i) => i.itemId),
-    );
-    const rules = await acceptancesOf(
-      tx,
-      tied.map((i) => i.itemId),
-    );
+    const itemIds = tied.map((i) => i.itemId);
+    const versions = await lockItems(tx, itemIds);
+    const rules = await acceptancesOf(tx, itemIds);
     const manual = options.leaveManual ? await manualCells(tx, tied) : new Set<PairKey>();
     const out: WriteGradingInput[] = [];
     for (const input of kept) {
       const key = pairKey(input.attemptId, input.itemId);
-      if (manual.has(key)) continue;
       const cell = bound.get(key);
+      if (!cell) {
+        out.push(input);
+        continue;
+      }
+      if (manual.has(key) || versions.get(input.itemId) !== cell.versionId) continue;
       const now = rules.get(input.itemId) ?? [];
-      if (!cell || sameRules(cell.rules, now)) {
+      if (sameRules(cell.rules, now)) {
         out.push(input);
         continue;
       }
       const again = await cell.regrade(now);
-      if (again) out.push(again);
+      if (!again || again.state !== input.state) throw new Error(`acceptanceGuard: the re-grade of ${key} changed its state`);
+      out.push(again);
     }
     return out;
   };
 }
 
-/** The cells whose standing grading is a manual override, those rows locked. */
+/** The cells whose standing grading is a manual override (read under the items' lock an override takes too). */
 async function manualCells(tx: DbOrTx, inputs: readonly WriteGradingInput[]): Promise<Set<PairKey>> {
   const pairs = inputs.map((i) => sql`(${i.attemptId}::uuid, ${i.itemId}::uuid)`);
   const rows = await tx
     .select({ attemptId: gradings.attemptId, itemId: gradings.itemId, source: gradings.source })
     .from(gradings)
-    .where(and(ne(gradings.state, "superseded"), sql`(${gradings.attemptId}, ${gradings.itemId}) in (${sql.join(pairs, sql`, `)})`))
-    .for("update");
+    .where(and(ne(gradings.state, "superseded"), sql`(${gradings.attemptId}, ${gradings.itemId}) in (${sql.join(pairs, sql`, `)})`));
   return new Set(rows.filter((r) => r.source === "manual").map((r) => pairKey(r.attemptId, r.itemId)));
 }

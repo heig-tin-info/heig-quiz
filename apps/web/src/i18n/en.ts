@@ -2487,7 +2487,6 @@ export const en = {
   "qt.cloze.k.filled": "filled in",
   "qt.cloze.g.blank": "Blank {n}",
   "qt.cloze.g.empty": "empty",
-  "qt.cloze.g.accepted": "Accepted",
 
   // --- qt-code editor strings ---
   "qt.code.e.questionSection": "Question",

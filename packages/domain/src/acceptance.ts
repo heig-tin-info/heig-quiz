@@ -25,11 +25,8 @@ export function acceptanceScopes(parameterized: boolean): readonly AcceptanceSco
   return parameterized ? ["student"] : ACCEPTANCE_SCOPES;
 }
 
-/** One answer of one part: the question-type contract's own shape (`@quiz/core`). */
-export type PartAnswer = AcceptedAnswer;
-
 /** One acceptance in force on an item; `attemptId` null reaches everyone. */
-export interface AcceptanceRule extends PartAnswer {
+export interface AcceptanceRule extends AcceptedAnswer {
   attemptId: string | null;
 }
 
@@ -41,7 +38,7 @@ export interface AcceptanceRule extends PartAnswer {
 export function rulesForAttempt(
   rules: readonly AcceptanceRule[],
   attempt: { id: string; practice: boolean },
-): PartAnswer[] {
+): AcceptedAnswer[] {
   if (attempt.practice) return [];
   return rules
     .filter((r) => r.attemptId === null || r.attemptId === attempt.id)
@@ -52,7 +49,7 @@ export function rulesForAttempt(
 export interface AcceptanceCell {
   attemptId: string;
   /** The parts of the answer a rule can name, with their identities (the type's `given`). */
-  given: readonly PartAnswer[];
+  given: readonly AcceptedAnswer[];
   /** The grading in force is a teacher's manual override (F-GRADE-05). */
   manual: boolean;
 }

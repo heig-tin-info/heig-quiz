@@ -255,16 +255,22 @@ function AcceptCard({
   );
 }
 
-/** The answers accepted for everyone at `part`, beside the key in the expected row and the key's panel. */
-export function AcceptedAnswers({ acceptance, part }: { acceptance: Acceptance | undefined; part: string | undefined }) {
+/** The answers accepted for everyone at `parts`, beside the key in the expected row and the key's panel. */
+export function AcceptedAnswers({
+  acceptance,
+  parts,
+}: {
+  acceptance: Acceptance | undefined;
+  parts: readonly string[] | undefined;
+}) {
   const t = useT();
-  if (!acceptance || part === undefined) return null;
-  const accepted = acceptance.item.accepted.filter((a) => a.part === part && a.attemptId === null);
+  if (!acceptance || parts === undefined) return null;
+  const accepted = acceptance.item.accepted.filter((a) => parts.includes(a.part) && a.attemptId === null);
   if (accepted.length === 0) return null;
   return (
     <>
       {accepted.map((a) => (
-        <AcceptedChip key={a.answer} label={t("grading.accept.accepted")} title={a.label}>
+        <AcceptedChip key={`${a.part}:${a.answer}`} label={t("grading.accept.accepted")} title={a.label}>
           {a.label}
         </AcceptedChip>
       ))}

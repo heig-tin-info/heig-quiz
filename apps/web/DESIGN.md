@@ -1890,7 +1890,7 @@ One question's answers as a table (`src/grading/`, origin
   statement in the caption size with the dice icon, and a parameterized
   short or cloze draws no answer groups: the head's bar holds the verdicts.
 - **Accepting an answer** (ADR-128). A cell of a column that names a part
-  (`GradingColumn.part`) and holds an answer the key counts wrong — or one
+  (`GradingColumn.parts`) and holds an answer the key counts wrong — or one
   accepted already — carries an `xs` `IconButton` with the `BadgeCheck`
   seal right after the answer's chip, in the chip's line, vertically
   centred (the type places it, `GradingCellInput.accept`). An answer to
@@ -1903,10 +1903,9 @@ One question's answers as a table (`src/grading/`, origin
   answers concerned and of those adjusted by hand, the scope as a
   `Segmented`, and one full-width action: Accept (`primary`) or Stop
   accepting (`secondary`); a refusal stays on the card as `ErrorText`.
-  Outside the table (a reader without the control), an accepted answer is
-  the green chip with the seal in front (`AcceptedChip`, `@quiz/ui`), never
-  colour alone; the key's row lists the answers accepted for everyone after
-  the key's chips, that way.
+  The key's row lists the answers accepted for everyone after the key's
+  chips, each a green chip with the seal in front (`AcceptedChip`,
+  `@quiz/ui`), never colour alone.
 - **The answer panel** is a `Sheet` with two optional slots added for it:
   `leading` (the verdict glyph before the title) and `actions` (↑ / ↓
   before the close button).

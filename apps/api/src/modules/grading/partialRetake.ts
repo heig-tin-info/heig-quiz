@@ -10,6 +10,7 @@ import { itemStanding, type StoodItem } from "@quiz/domain";
 
 import { gradings } from "../../db/schema.js";
 import type { DbOrTx, JoinedItem } from "../evaluation/service.js";
+import { lockItems } from "./acceptanceRules.js";
 import type { GradingRecord } from "./records.js";
 
 /** The VALIDATED gradings of one attempt: what a partial retake reads, once. */
@@ -60,6 +61,12 @@ export async function copyGradings(
   },
 ): Promise<void> {
   if (input.rows.length === 0) return;
+  // ADR-128: the items' lock, after the retake's attempt locks — no
+  // acceptance act re-grades these cells while they are copied.
+  await lockItems(
+    tx,
+    input.rows.map((row) => row.itemId),
+  );
   await tx.insert(gradings).values(
     input.rows.map((row) => ({
       ...row,

@@ -522,10 +522,10 @@ export interface GradingCellInput<TAnswer, TDetails> {
   details: TDetails | null;
   /**
    * The host's mark of an answer accepted at grading time, and its control
-   * (ADR-128), for the part the cell shows (`GradingColumn.part`): the cell
-   * places it right after that part's answer chip. Present, it IS the
-   * accepted sign — the cell then draws a plain right chip; absent (a
-   * reader outside the table), the cell draws its own accepted chip.
+   * (ADR-128), for one part the cell shows (one of `GradingColumn.parts`):
+   * the cell places it right after that part's answer chip. It is the
+   * accepted sign — the cell itself draws the verdict's chip only. Absent
+   * where the item takes no acceptance.
    */
   accept?: ((part: string) => ReactNode) | undefined;
 }
@@ -553,12 +553,14 @@ export interface GradingColumn<TAnswer = unknown, TDetails = unknown> {
   /** A column of marks rather than words (a tick box per choice). */
   readonly align?: "center";
   /**
-   * The part of the answer this column shows, named as the server's
-   * `acceptance` hook names it (ADR-128): a cell of the column then offers
-   * to accept the answer it holds, when the server says that answer can be.
-   * Absent: nothing in the column can be accepted.
+   * The parts of the answer this column shows, named as the server's
+   * `acceptance` hook names them (ADR-128): one for a cloze blank, several
+   * for a column summing up many (a categorize's cards). The key's row lists
+   * their accepted answers, the answer panel offers them; the cell places
+   * each one's control (`GradingCellInput.accept`). Absent: nothing in the
+   * column can be accepted.
    */
-  readonly part?: string;
+  readonly parts?: readonly string[];
   /** The student's answer in this column. */
   cell(input: GradingCellInput<TAnswer, TDetails>): ReactNode;
   /** The expected answer in this column: the pinned first row of the table. */

@@ -12,7 +12,7 @@ import type {
   GradingQueue,
   GradingSteps,
 } from "@quiz/contracts";
-import { countsForStudent } from "@quiz/domain";
+import { acceptanceScopes, countsForStudent } from "@quiz/domain";
 import { formattedValues } from "@quiz/domain/parameters";
 
 import { iso } from "../../clock.js";
@@ -34,8 +34,8 @@ import {
   writtenConfig,
   type Reading,
 } from "../pool/service.js";
-import { partsOf, queueAcceptance } from "./acceptance.js";
-import { acceptanceHook, acceptancesOf, type AcceptanceHook, type ItemRules } from "./acceptanceRules.js";
+import { partsOf } from "./acceptance.js";
+import { acceptanceHook, acceptancesOf, ruleLabel, type AcceptanceHook, type ItemRules } from "./acceptanceRules.js";
 import { keptAttempts } from "./kept.js";
 import {
   criteriaOf,
@@ -349,9 +349,10 @@ export async function gradingQueue(
 }
 
 /**
- * The acceptances of a queue's item (ADR-128), each label read on the
- * config of the attempt a single-student rule names, else on the item's
- * config for no attempt in particular. Nothing when the item takes none.
+ * The `acceptance` of a queue's item (ADR-128): the scopes it offers (only
+ * one student's on a parameterized question) and the acceptances in force,
+ * each label read on the config of the attempt a single-student rule names,
+ * else on the question as written. Nothing when the item takes none.
  */
 function acceptanceOf(
   hook: AcceptanceHook | undefined,
@@ -362,12 +363,19 @@ function acceptanceOf(
   if (!hook) return {};
   const reading = context.readings.get(item.item.id);
   const byId = new Map(attemptRows.map((a) => [a.id, a]));
+  const configOf = (attemptId: string | null) => {
+    const attempt = attemptId === null ? undefined : byId.get(attemptId);
+    return attempt && reading ? reading(attempt).config : writtenConfig(item.question.type, item.version).config;
+  };
   const rules = context.acceptances.get(item.item.id) ?? [];
   return {
-    acceptance: queueAcceptance(hook, item, rules, (attemptId) => {
-      const attempt = attemptId === null ? undefined : byId.get(attemptId);
-      return attempt && reading ? reading(attempt).config : writtenConfig(item.question.type, item.version).config;
-    }),
+    acceptance: {
+      scopes: [...acceptanceScopes(isParameterized(item.version))],
+      accepted: rules.map((rule) => ({
+        ...rule,
+        label: ruleLabel(hook, () => configOf(rule.attemptId), rule) ?? rule.answer,
+      })),
+    },
   };
 }
 

@@ -236,7 +236,7 @@ function ExpectedBody({ item, columns, acceptance, student, parameters, explanat
               </dt>
               <dd className="flex min-w-0 flex-wrap items-center gap-1">
                 {c.expected()}
-                <AcceptedAnswers acceptance={acceptance} part={c.part} />
+                <AcceptedAnswers acceptance={acceptance} parts={c.parts} />
               </dd>
             </div>
           ))}
@@ -424,7 +424,7 @@ function AcceptSection({
   entry: GradingEntry;
 }) {
   const t = useT();
-  const shown = columns.filter((c) => c.part !== undefined && offeredPart(acceptance, entry, c.part) !== null);
+  const shown = columns.filter((c) => c.parts?.some((part) => offeredPart(acceptance, entry, part) !== null));
   if (shown.length === 0) return null;
   return (
     <Section title={t("grading.accept.dialog")}>
