@@ -102,11 +102,15 @@ export function CategorizeReview({
    * own placements — "right among the cards you placed" — since the rest
    * would count the distractors.
    */
+  // Counted from the cards' verdicts, so an accepted card (ADR-128) — a
+  // distractor accepted where it was placed included — reads right there
+  // as on the board.
+  const placedCards = breakdown?.cards.filter((card) => card.placed !== null) ?? [];
   const tally =
     breakdown === null
       ? null
       : breakdown.T === undefined
-        ? `${s.breakdownPlaced} ${breakdown.t}/${breakdown.t + breakdown.x + breakdown.p}`
+        ? `${s.breakdownPlaced} ${placedCards.filter((card) => card.right === true).length}/${placedCards.length}`
         : `${s.breakdown} ${breakdown.cards.filter((card) => card.right === true).length}/${student.cards.length}`;
 
   return (

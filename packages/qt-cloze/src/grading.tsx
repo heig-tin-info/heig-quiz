@@ -8,7 +8,7 @@
 import type { GradingColumn, QuestionTypeGrading } from "@quiz/core/client";
 import { fmt, gradingSortKey, resolveStrings } from "@quiz/core/client";
 import { BLANK_ALTERNATIVES_SEPARATOR, clozePart } from "@quiz/domain";
-import { AnswerChip, breakdownOf, NoAnswer, type AnswerTone } from "@quiz/ui";
+import { AnswerChip, breakdownOf, NoAnswer, WithAccept, type AnswerTone } from "@quiz/ui";
 
 import type { ClozeAnswer, ClozeDetails, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozeGradingStrings } from "./strings.js";
@@ -54,13 +54,7 @@ export const clozeGrading: QuestionTypeGrading<
               {given}
             </AnswerChip>
           );
-          if (!accept) return chip;
-          return (
-            <span className="flex min-w-0 items-center gap-1">
-              <span className="min-w-0">{chip}</span>
-              {accept(clozePart(blank.index))}
-            </span>
-          );
+          return accept ? <WithAccept accept={accept(clozePart(blank.index))}>{chip}</WithAccept> : chip;
         },
         expected: () => {
           const expected = solution?.blanks.find((b) => b.index === blank.index)?.expected ?? "";

@@ -117,17 +117,23 @@ follow.
 15. **Ordered mode.** With "the order counts", the answer is the column AND
     the rank (`<column>#<rank>`). A rank moves with every card above it, so
     such an answer is accepted for ONE answer only: the type says so
-    through its hook's `singleAnswer(config, part)`, which the act checks
-    (`422 acceptance_scope` for the everyone scope) and the queue passes to
-    the card (`AcceptablePart.singleAnswer`). This is the one extension the
-    generic contract took for categorize; no type is named in the API or
-    the web app.
-16. **Scoring.** An accepted card counts as a right target (`t`) inside the
-    type's own scoring, under every policy, negative marking included
-    (`categorizeCounts`, `@quiz/domain`): a target accepted is no longer
-    `x`; a placed distractor accepted becomes a target placed right (it
-    leaves `D` and `p` for `T` and `t`). An all-or-nothing answer may thus
-    go from 0 to full, and a penalty disappears.
+    through its hook's `singleAnswer(config)`, which the one rule of the
+    scopes reads beside the parameterized one (`acceptanceScopes`,
+    `@quiz/domain`): the queue's `scopes` and the act's check (`422
+    acceptance_scope`, under the item's lock, on the version in force) come
+    from it. This is the one extension the generic contract took for
+    categorize; no type is named in the API or the web app.
+16. **Scoring.** An accepted card counts as right inside the type's own
+    scoring, under every policy, negative marking included
+    (`categorizeCounts`, `@quiz/domain`). A target accepted where it was
+    put is at its place: `t`, no longer `x` — an all-or-nothing answer may
+    go from 0 to full, a penalty disappears. A distractor accepted where it
+    was put stays a distractor and is no longer counted against the
+    student, as if left out: it leaves `p`, stays in `D`, never raises `T`
+    — under negative marking a student who placed it scores exactly as one
+    who rightly left it out (decided 2026-11-10 in review, within the
+    owner's "counts as right"). Its verdict reads right, "Accepted", in the
+    table's count, the teacher's review and the student's.
 17. **Summary column.** Past eight cards the table has one summary column
     (`GradingColumn.parts` lists every card) and no cell per card: the
     summary cell says how many cards of the answer are accepted, and a card
@@ -136,6 +142,11 @@ follow.
     key's row and the panel read alone; a regrade onto a version that
     changed the card's text or the column's label drops the rule, as one
     that removed them.
+
+    *Follow-up (not done):* a rule is kept across versions when its label
+    is unchanged, which a mere rename breaks. A stable identity for a
+    dropdown option, or an optional `sameAnswer(before, after, rule)` hook,
+    would let the ids decide for a type whose ids are stable (categorize).
 
 ## Consequences
 

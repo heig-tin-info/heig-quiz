@@ -1174,13 +1174,13 @@ describe("GradingPanel — accepting a card of a board past eight cards (ADR-128
     student,
     solution: null,
     parts: [
-      { part: "card0", answer: "cola#1", label: "card 0 → A · 1", right: true, singleAnswer: true },
-      { part: "card8", answer: "cola#9", label: "card 8 → A · 9", right: false, singleAnswer: true },
+      { part: "card0", answer: "cola#1", label: "card 0 → A · 1", right: true },
+      { part: "card8", answer: "cola#9", label: "card 8 → A · 9", right: false },
     ],
     grading: makeGrading({ id: "g-a1", attemptId: "a1", points: 0, state: "validated", confidence: null }),
   });
 
-  it("offers the summary column's cards in the panel, for this answer only when the type says so", async () => {
+  it("offers the summary column's cards in the panel, for this answer only when the item says so", async () => {
     const { calls } = mockFetch(
       routes([], {
         [`GET ${EVAL}`]: ok({ ...detail, items: detail.items.map((i) => (i.id === "i1" ? { ...i, type: "categorize" } : i)) }),
@@ -1193,7 +1193,8 @@ describe("GradingPanel — accepting a card of a board past eight cards (ADR-128
                 internalName: "sort",
                 type: "categorize",
                 points: 2,
-                acceptance: { scopes: ["everyone", "student"], accepted: [] },
+                // An ordered board: the server offers one answer only.
+                acceptance: { scopes: ["student"], accepted: [] },
               },
             ],
           }),

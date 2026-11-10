@@ -194,8 +194,7 @@ function AcceptCard({
   onDone: () => void;
 }) {
   const t = useT();
-  // A part the type accepts for one answer only (its `singleAnswer`).
-  const scopes = given.singleAnswer ? (["student"] as const) : acceptance.item.scopes;
+  const scopes = acceptance.item.scopes;
   const [scope, setScope] = useState<AcceptanceScope>(
     inForce ? (inForce.attemptId === null ? "everyone" : "student") : (scopes[0] ?? "student"),
   );

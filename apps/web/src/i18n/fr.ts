@@ -2430,6 +2430,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.categorize.g.placed": "{placed}/{total} placées",
   "qt.categorize.g.total": "{total} cartes",
   "qt.categorize.g.accepted": "{n} acceptées",
+  "qt.categorize.g.accepted.one": "1 acceptée",
 
   // --- qt-cloze strings ---
   "qt.cloze.e.text": "Texte à trous",

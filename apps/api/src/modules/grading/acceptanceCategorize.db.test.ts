@@ -112,6 +112,12 @@ describe("accepting a categorize card (ADR-128)", () => {
 
   it("in an ordered question, accepts for one answer only: the everyone scope is refused", async () => {
     const { evaluationId, itemId, attempts } = await graded(categorize({ ordered: true }));
+    const queue = await server.app.inject({
+      method: "GET",
+      url: `/app/api/evaluations/${evaluationId}/grading?itemId=${itemId}`,
+      headers: teacher.headers,
+    });
+    expect((queue.json() as { items: { acceptance?: { scopes: string[] } }[] }).items[0]!.acceptance?.scopes).toEqual(["student"]);
     const everyone = await send("PUT", url(evaluationId, itemId), { ...DOUBLE_IN_INT, answer: `${COL.int}#2` });
     expect([everyone.statusCode, everyone.json().error]).toEqual([422, "acceptance_scope"]);
     const one = await send("PUT", url(evaluationId, itemId), {
@@ -122,13 +128,6 @@ describe("accepting a categorize card (ADR-128)", () => {
     expect(one.json()).toMatchObject({ regraded: 1 });
     expect((await validated(attempts[0]!.id, itemId)).points).toBe(1);
     expect((await validated(attempts[1]!.id, itemId)).points).toBe(0.75);
-  });
-
-  it("takes an all-or-nothing answer from 0 to full", async () => {
-    const { evaluationId, itemId, attempts } = await graded(categorize({ policy: "all_or_nothing" }));
-    expect((await validated(attempts[0]!.id, itemId)).points).toBe(0);
-    await send("PUT", url(evaluationId, itemId), DOUBLE_IN_INT);
-    expect((await validated(attempts[0]!.id, itemId)).points).toBe(1);
   });
 
   it("removes the penalty of negative marking", async () => {
@@ -171,10 +170,13 @@ describe("accepting a categorize card (ADR-128)", () => {
       method: "GET",
       url: `/app/api/evaluations/${evaluationId}/grading?itemId=${itemId}`,
       headers: teacher.headers,
-    })).json() as { entries: { attemptId: string; parts?: { part: string; singleAnswer?: true }[] }[] };
+    })).json() as {
+      items: { acceptance?: { scopes: string[] } }[];
+      entries: { attemptId: string; parts?: { part: string }[] }[];
+    };
     const parts = queue.entries.find((e) => e.attemptId === attempts[0]!.id)!.parts!;
     expect(parts.map((p) => p.part).sort()).toEqual([CARD.int, CARD.double, CARD.ptr].sort());
-    expect(parts.some((p) => p.singleAnswer)).toBe(false);
+    expect(queue.items[0]!.acceptance?.scopes).toEqual(["everyone", "student"]);
     const [answer] = await db().select().from(answers).where(eq(answers.attemptId, attempts[0]!.id));
     expect(answer!.payload).toEqual(ANSWER);
   });

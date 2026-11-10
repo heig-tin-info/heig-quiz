@@ -877,7 +877,7 @@ function buildGradingWorld(
             answerId: answer === null ? null : `${key}-ans`,
             attemptId: attempt.id,
             itemId: item.id,
-            points: graded.points * item.points,
+            points: round2(graded.points * item.points),
             maxPoints: item.points,
             source: "auto",
             state: proposed ? "proposed" : "validated",
@@ -1026,11 +1026,7 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
 function partsOf(q: MockQuestion, config: Record<string, unknown>, answer: unknown) {
   const hook = MOCK_SERVERS[q.type]?.acceptance;
   if (!hook || answer === null) return [];
-  return hook.given(config, answer).map((p) => ({
-    ...p,
-    label: hook.label(config, p.part, p.answer) ?? p.answer,
-    ...(hook.singleAnswer?.(config, p.part) ? { singleAnswer: true as const } : {}),
-  }));
+  return hook.given(config, answer).map((p) => ({ ...p, label: hook.label(config, p.part, p.answer) ?? p.answer }));
 }
 
 /** The queue item's `acceptance` (ADR-128), for a type that takes one. */
@@ -1041,7 +1037,7 @@ function itemAcceptance(e: MockGradingWorld, item: MockEvalItem) {
   const config = publishedConfig(q);
   return {
     acceptance: {
-      scopes: [...acceptanceScopes(isFall(q))],
+      scopes: [...acceptanceScopes({ parameterized: isFall(q), singleAnswer: hook.singleAnswer?.(config) === true })],
       accepted: (e.acceptances.get(item.id) ?? []).map((r) => ({
         ...r,
         label: hook.label(config, r.part, r.answer) ?? r.answer,

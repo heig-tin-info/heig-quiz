@@ -16,14 +16,9 @@
  *   3. judge every card, count, and put the fraction on the item's scale.
  */
 import type { AcceptedAnswer, GradeContext, GradedResult } from "@quiz/core/server";
-import {
-  categorizeCounts,
-  categorizeFraction,
-  categorizePlaceIdentity,
-  DEFAULT_CATEGORIZE_SCORE_POLICY,
-} from "@quiz/domain/categorizeScore";
+import { categorizeCounts, categorizeFraction, DEFAULT_CATEGORIZE_SCORE_POLICY } from "@quiz/domain/categorizeScore";
 import { round2 } from "@quiz/domain/round";
-import { keyOf, placesOf } from "./placement.js";
+import { atPlace, keyOf, placeIdentity, placesOf } from "./placement.js";
 import {
   CategorizeDefaultsSchema,
   type CategorizeAnswer,
@@ -75,10 +70,10 @@ export function gradeCategorize(
         ? // Left out is right only once the student placed something: an empty
           // answer scores 0, and its review must not paint the distractors green.
           placed === null && places.size > 0
-        : placed !== null && placed.column === expected.column && (!config.ordered || placed.rank === expected.rank);
+        : atPlace(expected, placed, config.ordered);
     // A card is accepted where the student PUT it: never one left in the tray.
     const isAccepted =
-      !right && placed !== null && acceptedAt.has(`${card.id}\u0000${categorizePlaceIdentity(placed, config.ordered)}`);
+      !right && placed !== null && acceptedAt.has(`${card.id}\u0000${placeIdentity(placed, config.ordered)}`);
     return { card, expected, placed, right, accepted: isAccepted };
   });
   // The counts are the domain's, an accepted card a right target (ADR-128).

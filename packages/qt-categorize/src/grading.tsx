@@ -13,8 +13,8 @@
 import type { ReactNode } from "react";
 
 import type { GradingColumn, QuestionTypeGrading } from "@quiz/core/client";
-import { fmt, gradingSortKey, resolveStrings } from "@quiz/core/client";
-import { AcceptedIcon, AnswerChip, breakdownOf, countTone, Dash, headerOf, WordChip } from "@quiz/ui";
+import { fmt, gradingSortKey, plural, resolveStrings } from "@quiz/core/client";
+import { AcceptedIcon, AnswerChip, breakdownOf, countTone, Dash, headerOf, WithAccept, WordChip } from "@quiz/ui";
 
 import { keyOf, placesOf, type Place } from "./placement.js";
 import type { CategorizeAnswer, CategorizeDetails, CategorizeSolution, CategorizeStudent } from "./schema.js";
@@ -93,7 +93,7 @@ function summaryColumn(student: CategorizeStudent, b: Board, s: Strings): Column
           {count}
           <span className="inline-flex items-center gap-0.5 text-[12px] text-success">
             <AcceptedIcon className="size-3.5" />
-            {fmt(s.accepted, { n: accepted })}
+            {plural(s, "accepted", accepted)}
           </span>
         </span>
       );
@@ -143,14 +143,7 @@ function cardColumn(
         </AnswerChip>
       );
       // The host's accept control, the accepted sign, right after the chip.
-      return accept ? (
-        <span className="flex w-0 min-w-full items-center gap-1">
-          <span className="min-w-0">{chip}</span>
-          {accept(card.id)}
-        </span>
-      ) : (
-        <Fit>{chip}</Fit>
-      );
+      return accept ? <WithAccept accept={accept(card.id)}>{chip}</WithAccept> : <Fit>{chip}</Fit>;
     },
     expected: () => {
       if (key === null) return <Dash />;

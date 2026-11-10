@@ -17,7 +17,6 @@ import type { FastifyInstance } from "fastify";
 import type { AcceptablePart } from "@quiz/contracts";
 import {
   acceptanceReach,
-  acceptanceScopes,
   itemListLock,
   round2,
   type AcceptanceCell,
@@ -40,8 +39,8 @@ import {
   acceptanceHook,
   acceptancesOf,
   lockItems,
+  itemScopes,
   ruleLabel,
-  singleAnswer,
   type AcceptanceHook,
   type RuleBound,
 } from "./acceptanceRules.js";
@@ -67,11 +66,7 @@ export function partsOf(hook: AcceptanceHook, type: string, config: unknown, pay
     // A config this build reads differently: no affordance, never a 500.
     return [];
   }
-  return given.map((p) => ({
-    ...p,
-    label: ruleLabel(hook, () => config, p) ?? p.answer,
-    ...(singleAnswer(hook, () => config, p.part) ? { singleAnswer: true as const } : {}),
-  }));
+  return given.map((p) => ({ ...p, label: ruleLabel(hook, () => config, p) ?? p.answer }));
 }
 
 /** What {@link changeAcceptance} did (`AnswerAcceptanceResult`). */
@@ -105,8 +100,8 @@ export interface AcceptanceChange {
  * Refused on a poll and for a type without acceptances (`409
  * acceptance_unavailable`), before the item list is frozen (`409
  * acceptance_not_frozen`), in the everyone scope on a parameterized
- * question or at a part the type accepts for one answer only (`422
- * acceptance_scope`), and for an answer the part cannot
+ * question or a config the type accepts for one answer only (`422
+ * acceptance_scope`, under the item's lock), and for an answer the part cannot
  * hold (`422 acceptance_invalid`). Null when the attempt is not an
  * official attempt of the evaluation (the route's 404).
  */
@@ -124,9 +119,6 @@ export async function changeAcceptance(
   if (!hook) throw new GradingError("acceptance_unavailable");
   if (itemListLock(evaluation.state, await attemptCount(db, evaluation.id)) === null) {
     throw new GradingError("acceptance_not_frozen");
-  }
-  if (!acceptanceScopes(isParameterized(item.version)).includes(rule.attemptId === null ? "everyone" : "student")) {
-    throw new GradingError("acceptance_scope");
   }
   const attemptRows = await db
     .select()
@@ -148,9 +140,10 @@ export async function changeAcceptance(
     // rule is read on that student's instance.
     const sample = attemptRows[0] ?? NO_ATTEMPT;
     const config = () => configPerAttempt(held)(sample);
+    // The one rule of the scopes, on the version in force.
+    const scope = rule.attemptId === null ? "everyone" : "student";
+    if (!itemScopes(hook, isParameterized(held.version), config).includes(scope)) throw new GradingError("acceptance_scope");
     if (ruleLabel(hook, config, rule) === null) throw new GradingError("acceptance_invalid");
-    // A part whose answers depend on each other is accepted for one answer only.
-    if (rule.attemptId === null && singleAnswer(hook, config, rule.part)) throw new GradingError("acceptance_scope");
     const changed = accept
       ? await insertRule(tx, item.item.id, rule, actorId, now)
       : await deleteRule(tx, item.item.id, rule);

@@ -126,4 +126,5 @@ export const categorizeGradingStrings = {
   total: "{total} cards",
   /** The summary cell of an answer holding cards accepted at grading time (ADR-128). */
   accepted: "{n} accepted",
+  "accepted.one": "1 accepted",
 } as const;

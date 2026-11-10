@@ -3,9 +3,10 @@ import { describe, expect, it } from "vitest";
 import { acceptanceReach, acceptanceScopes, rulesForAttempt } from "./acceptance.js";
 
 describe("acceptanceScopes", () => {
-  it("offers both scopes, and only one student for a parameterized question", () => {
-    expect(acceptanceScopes(false)).toEqual(["everyone", "student"]);
-    expect(acceptanceScopes(true)).toEqual(["student"]);
+  it("offers both scopes, and only one student for a parameterized question or a type that says so", () => {
+    expect(acceptanceScopes({ parameterized: false, singleAnswer: false })).toEqual(["everyone", "student"]);
+    expect(acceptanceScopes({ parameterized: true, singleAnswer: false })).toEqual(["student"]);
+    expect(acceptanceScopes({ parameterized: false, singleAnswer: true })).toEqual(["student"]);
   });
 });
 

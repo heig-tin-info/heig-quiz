@@ -1,15 +1,11 @@
 /**
  * Accepting a categorize answer at grading time (ADR-128): an accepted card
- * counts as a right target under every policy.
+ * counts as right under every policy — a target at its place, a distractor
+ * as if left out.
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  categorizeCounts,
-  categorizeFraction,
-  categorizeIdentityPlace,
-  categorizePlaceIdentity,
-} from "./categorizeScore.js";
+import { categorizeCounts, categorizeFraction } from "./categorizeScore.js";
 
 const target = (right: boolean, placed = true) => ({ target: true, placed, right });
 const distractor = (placed: boolean) => ({ target: false, placed, right: !placed });
@@ -29,11 +25,11 @@ describe("categorizeCounts", () => {
     expect(categorizeCounts([target(true), { ...target(false), accepted: true }])).toEqual({ T: 2, D: 0, t: 2, x: 0, p: 0 });
   });
 
-  it("turns an accepted placed distractor into a right target", () => {
+  it("keeps an accepted placed distractor a distractor, no longer counted against the student", () => {
     expect(categorizeCounts([target(true), { ...distractor(true), accepted: true }, distractor(false)])).toEqual({
-      T: 2,
-      D: 1,
-      t: 2,
+      T: 1,
+      D: 2,
+      t: 1,
       x: 0,
       p: 0,
     });
@@ -47,19 +43,17 @@ describe("categorizeCounts", () => {
     expect(categorizeFraction({ ...before, k: 3, policy: "per_item", negativeMarking: true })).toBe(0.25);
     expect(categorizeFraction({ ...after, k: 3, policy: "per_item", negativeMarking: true })).toBe(1);
   });
-});
 
-describe("the identity of a place", () => {
-  it("is the column, or the column and the rank when the order counts", () => {
-    expect(categorizePlaceIdentity({ column: "c1", rank: 2 }, false)).toBe("c1");
-    expect(categorizePlaceIdentity({ column: "c1", rank: 2 }, true)).toBe("c1#2");
-  });
-
-  it("reads back, refusing a shape of the other mode", () => {
-    expect(categorizeIdentityPlace("c1", false)).toEqual({ column: "c1", rank: null });
-    expect(categorizeIdentityPlace("c1#2", true)).toEqual({ column: "c1", rank: 2 });
-    expect(categorizeIdentityPlace("c1#2", false)).toBeNull();
-    expect(categorizeIdentityPlace("c1", true)).toBeNull();
-    expect(categorizeIdentityPlace("c1#0", true)).toBeNull();
+  it("never lets an accepted distractor beat the student who rightly left it out", () => {
+    // Targets A and B, distractor Z, three columns: A right, B wrong.
+    const leftOut = categorizeCounts([target(true), target(false), distractor(false)]);
+    const accepted = categorizeCounts([target(true), target(false), { ...distractor(true), accepted: true }]);
+    for (const policy of ["per_item", "all_or_nothing"] as const) {
+      for (const negativeMarking of [false, true]) {
+        const score = (counts: typeof leftOut) => categorizeFraction({ ...counts, k: 3, policy, negativeMarking });
+        expect(score(accepted)).toBe(score(leftOut));
+      }
+    }
+    expect(categorizeFraction({ ...accepted, k: 3, policy: "per_item", negativeMarking: true })).toBe(0.25);
   });
 });

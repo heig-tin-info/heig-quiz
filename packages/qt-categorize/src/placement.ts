@@ -87,6 +87,39 @@ export function placesOf(
 }
 
 /**
+ * Whether a card is where the key puts it: its column, and with "the order
+ * counts" its rank too. The ONE reading of a target's verdict, for the
+ * grader and the acceptance hook alike.
+ */
+export function atPlace(expected: Place | undefined | null, placed: Place | undefined | null, ordered: boolean): boolean {
+  return (
+    expected !== undefined &&
+    expected !== null &&
+    placed !== undefined &&
+    placed !== null &&
+    placed.column === expected.column &&
+    (!ordered || placed.rank === expected.rank)
+  );
+}
+
+/**
+ * The identity of where a student put one card, for an acceptance
+ * (ADR-128): the column; with "the order counts", the column AND the rank
+ * (`<column>#<rank>`) — a rank depends on every card above it, so such an
+ * answer is accepted for one answer only (`singleAnswer` of the hook).
+ */
+export function placeIdentity(place: Place, ordered: boolean): string {
+  return ordered ? `${place.column}#${place.rank}` : place.column;
+}
+
+/** The place an identity names, or null when it names none (a malformed or stale identity). */
+export function identityPlace(identity: string, ordered: boolean): { column: string; rank: number | null } | null {
+  if (!ordered) return identity.includes("#") ? null : { column: identity, rank: null };
+  const m = /^([^#]+)#([1-9]\d*)$/.exec(identity);
+  return m === null ? null : { column: m[1]!, rank: Number(m[2]) };
+}
+
+/**
  * The key as a place per TARGET card; a distractor has none. It reads the
  * `{ id, cards }` shape the config's columns and the served solution share,
  * so the grader and the review's "Expected: …" line read one key one way.

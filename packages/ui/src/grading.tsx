@@ -68,6 +68,20 @@ export function AnswerChip({
 }
 
 /**
+ * An answer's chip and the host's accept control right after it (ADR-128,
+ * `GradingCellInput.accept`): one line, vertically centred, the chip cut
+ * before the control is, in a cell that asks its column for no width.
+ */
+export function WithAccept({ accept, children }: { accept: ReactNode; children: ReactNode }): ReactNode {
+  return (
+    <span className="flex w-0 min-w-full items-center gap-1">
+      <span className="min-w-0">{children}</span>
+      {accept}
+    </span>
+  );
+}
+
+/**
  * A right answer that is right only because the teacher accepted it at
  * grading time (ADR-128): the green chip of a right answer with the seal in
  * front, so "accepted" never rests on the colour alone. `label` is the

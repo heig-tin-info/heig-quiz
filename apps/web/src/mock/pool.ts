@@ -160,6 +160,11 @@ export interface MockQuestion {
   updatedAt: string;
   draft: { config: Record<string, unknown>; explanation: string; variables: ParametersDraft | null };
   versions: MockVersion[];
+  /**
+   * Appended to the closed evaluation by `mock/grading.ts` only: no
+   * evaluation draws it from the pool (`itemSource`), so no item moves.
+   */
+  appendedOnly?: true;
 }
 
 interface MockPool {
@@ -1613,6 +1618,7 @@ export const questions: MockQuestion[] = [
   /* Past eight cards (ADR-128): appended to the closed evaluation only (`mock/grading.ts`). Last, so no id above moves. */
   makeQuestion({
     id: "q-sort-big",
+    appendedOnly: true,
     poolId: "p1",
     type: "categorize",
     internalName: "en-tetes-bibliotheque",
