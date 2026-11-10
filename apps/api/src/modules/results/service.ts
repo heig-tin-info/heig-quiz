@@ -38,7 +38,7 @@ import type {
   StudentFeedback,
   StudentResultItem,
 } from "@quiz/contracts";
-import { TEACHER_ONLY_DETAIL_KEYS } from "@quiz/contracts";
+import { BREAKDOWN_KEY, TEACHER_ONLY_DETAIL_KEYS } from "@quiz/contracts";
 import {
   evaluationTotal,
   attemptTotal,
@@ -1138,10 +1138,28 @@ export function filterDetails(
 ): unknown {
   if (details === null || details === undefined) return null;
   if (audience === "staff") return stripKeys(details, teacherOnlyDetailKeys);
-  const hook = typeOf(type).studentDetails;
-  const shaped = hook ? hook(details, policy) : details;
+  const shaped = isManualOverride(details)
+    ? manualStudentDetails(details, policy)
+    : (typeOf(type).studentDetails?.(details, policy) ?? details);
   if (policy.showKey) return stripKeys(shaped, teacherOnlyDetailKeys);
   return stripKeys(shaped, forbiddenDetailKeys, publishedExpected);
+}
+
+/**
+ * A teacher's override (`manualOverride`, `grading/teacherWrites.ts`) replaces
+ * the type's details with `{ manual: true }` and, for a type graded by
+ * criteria, the validated breakdown: not the shape the type's
+ * `studentDetails` hook reads (a `code` hook maps over `cases`), so it never
+ * goes through it. The breakdown is the key's (ADR-118 §5), the rest is the
+ * marker.
+ */
+const isManualOverride = (details: unknown): details is Record<string, unknown> =>
+  typeof details === "object" && details !== null && (details as Record<string, unknown>)["manual"] === true;
+
+function manualStudentDetails(details: Record<string, unknown>, policy: FeedbackPolicy): Record<string, unknown> {
+  if (policy.showKey) return details;
+  const { [BREAKDOWN_KEY]: _breakdown, ...rest } = details;
+  return rest;
 }
 
 /** A row of `studentEvaluationRows`: one per evaluation, with the latest attempt. */

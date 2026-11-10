@@ -252,3 +252,31 @@ describe("the details filter for `code` (decision D15, deviation W3-5)", () => {
     expect(staff).toContain("hidden-overflow");
   });
 });
+
+describe("the details filter for a teacher's override", () => {
+  const policy = (showKey: boolean) => ({
+    when: "on_release" as const,
+    showAnswer: true,
+    showKey,
+    showExplanation: false,
+    showHiddenCaseNames: false,
+    showTeacherComment: true,
+  });
+
+  // `{ manual: true }` holds none of a run's `cases`: the case-masking hooks
+  // of `code`, `blocks` and `circuit` threw on it, and the student's whole
+  // feedback page failed (2026-11-10).
+  it("serves the override of any type, under every policy", () => {
+    for (const type of ["code", "blocks", "circuit", "cloze", "categorize", "mcq"]) {
+      for (const showKey of [false, true]) {
+        expect(service.filterDetails(type, { manual: true }, policy(showKey))).toEqual({ manual: true });
+      }
+    }
+  });
+
+  it("gives the validated breakdown of an override only with the key (ADR-118 §5)", () => {
+    const breakdown = [{ id: "thesis", title: "BREAKDOWN-TITLE-SECRET", points: 1, maxPoints: 2 }];
+    expect(service.filterDetails("rich", { manual: true, breakdown }, policy(false))).toEqual({ manual: true });
+    expect(service.filterDetails("rich", { manual: true, breakdown }, policy(true))).toEqual({ manual: true, breakdown });
+  });
+});
