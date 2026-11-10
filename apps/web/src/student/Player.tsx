@@ -87,7 +87,7 @@ import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
 import { IntroPassage, RereadButton } from "./IntroPassage";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay, ScreenOverlay } from "./PausedOverlay";
-import { useStationAttestation } from "../kiosk/useStationAttestation";
+import type { StationAttestation } from "../kiosk/useStationAttestation";
 import { PlayerActions } from "./PlayerActions";
 import { PlayerEnd, type Confinement } from "./PlayerEnd";
 import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
@@ -154,6 +154,7 @@ export function Player({
   onResults,
   onExitStudentView,
   confinement,
+  attestation,
 }: {
   initial: AttemptView;
   onHome: () => void;
@@ -161,6 +162,12 @@ export function Player({
   onResults: OnResults;
   /** The trusted client it is sat in (ADR-051 §7, ADR-027): see {@link PlayerEnd}. */
   confinement?: Confinement | undefined;
+  /**
+   * ADR-051 §6: the station's attestation, held by the attempt route so that
+   * its schedule runs from the waiting room on (issue #1076). Inert off a
+   * station.
+   */
+  attestation: StationAttestation;
   /**
    * Given only to a TEACHER walking their own test attempt (ADR-018
    * addendum): the exam screen carries no teacher chrome — that is the point
@@ -243,8 +250,7 @@ export function Player({
       postSimulate(`/app/api/attempts/${attemptId}/simulate`, { itemId, answer }),
     [attemptId],
   );
-  // ADR-051 §6: on a station, the page re-attests on its own, and before the submit.
-  const attestation = useStationAttestation(confinement === "kiosk");
+  // ADR-051 §6: on a station, the submit is re-attested when the server finds it stale.
   const { submit } = attempt;
   const { guardSubmit } = attestation;
   const guardedSubmit = useCallback(() => guardSubmit(submit), [guardSubmit, submit]);

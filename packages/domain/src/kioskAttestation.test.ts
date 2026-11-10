@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   KIOSK_FRESH_MS,
+  KIOSK_REATTEST_MS,
   KIOSK_SILENT_AFTER_MS,
   kioskAttestationState,
   kioskCheckFresh,
@@ -10,6 +11,7 @@ import {
   kioskWatchOf,
   type KioskCheck,
 } from "./kioskAttestation.js";
+import { PAIRING_EXPIRES_IN_S } from "./kioskPairing.js";
 
 const now = new Date("2026-09-30T10:00:00.000Z");
 const ago = (ms: number) => new Date(now.getTime() - ms);
@@ -30,6 +32,13 @@ describe("kioskAttestationState (ADR-051 §6)", () => {
     for (const a of ["ok", "unavailable", "refused"] as const) {
       expect(kioskAttestationState(check(a, KIOSK_SILENT_AFTER_MS), now)).toBe("silent");
     }
+  });
+
+  it("leaves a station that keeps its schedule room to be late (issue #1076)", () => {
+    // The page re-attests every ten minutes, the pairing screen before each
+    // new code: both well before the server calls the station silent.
+    expect(KIOSK_SILENT_AFTER_MS - KIOSK_REATTEST_MS).toBeGreaterThanOrEqual(2 * 60_000);
+    expect(KIOSK_SILENT_AFTER_MS - PAIRING_EXPIRES_IN_S * 1000).toBeGreaterThanOrEqual(2 * 60_000);
   });
 
   it("is silent for a station that never attempted", () => {

@@ -39,6 +39,7 @@ import { Player } from "./Player";
 import { Ready } from "./Ready";
 import { attemptEntryKey, practiceEntryKey } from "../queryKeys";
 import { toKiosk } from "../kiosk/navigation";
+import { useStationAttestation } from "../kiosk/useStationAttestation";
 
 /** Why a practice attempt may not start, in the student's words (ADR-122). */
 const PRACTICE_REFUSED: Record<PracticeRefusalReason, keyof Dict> = {
@@ -90,6 +91,9 @@ export function AttemptPage({
   const station = kind === "kiosk";
   // ADR-051, ADR-027: the trusted client the attempt is sat in, if any.
   const confinement = kind === "kiosk" || kind === "seb" ? kind : undefined;
+  // ADR-051 §6: a station re-attests from its first screen here, the waiting
+  // room included, not from the player's mount (issue #1076).
+  const attestation = useStationAttestation(station);
   const home = station ? toKiosk : () => navigate({ view: "home" });
   /*
    * The one way out of the student view from inside an attempt (ADR-018
@@ -181,6 +185,7 @@ export function AttemptPage({
       onHome={home}
       onResults={(attemptId, options) => navigate(feedbackLink(attemptId).route, options)}
       confinement={confinement}
+      attestation={attestation}
       {...(exitStudentView ? { onExitStudentView: exitStudentView } : {})}
     />
   );

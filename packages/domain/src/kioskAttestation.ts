@@ -10,8 +10,15 @@
  *  - what the supervisor is told when the state changes.
  */
 
-/** The page re-attests every 10 minutes; two missed rounds and it is silent. */
-export const KIOSK_SILENT_AFTER_MS = 12 * 60_000;
+/**
+ * How often a station's page re-attests while a kiosk session sits, counted
+ * from the attestation it makes on opening (ADR-051 §6). The station's
+ * client reads it from here, so it cannot drift from the server's
+ * {@link KIOSK_SILENT_AFTER_MS}.
+ */
+export const KIOSK_REATTEST_MS = 10 * 60_000;
+/** One round of re-attestation, and two minutes of slack, without an attempt: silent. */
+export const KIOSK_SILENT_AFTER_MS = KIOSK_REATTEST_MS + 2 * 60_000;
 /** The submit of a kiosk sitting needs a check younger than this (ADR-051 §6). */
 export const KIOSK_FRESH_MS = 2 * 60_000;
 

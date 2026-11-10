@@ -8,6 +8,9 @@ the session end is `endKioskSessions` (`auth/session.ts`), formerly named `endCo
 stays as §10; §1 names the stale-submit refusal (`423 kiosk_attestation_stale`) the code already answers.
 Amended 2026-10-10: proof B of §3 and §10 is recorded for evaluations, and production enforces the
 Config Key check (see "Amendment 2026-10-10" below).
+Amended 2026-11-10: §6's ten-minute schedule starts with an attestation when the attempt route opens,
+the waiting room included, and a failed attestation is tried again every 30 seconds (see "Amendment
+2026-11-10" below, issue #1076).
 
 Scope: for **evaluations only**, the part of merge decision D21 (`docs/merge/08-decisions.md`) that
 concerns how a SEB session is checked; the confinement of a session to an **activity** (a project) was
@@ -417,6 +420,24 @@ Scope: the "Audit-only until proof B" rule of §3 and the second check of §10, 
   default of the variable stays `0` for development.
 - Not covered: the project flow (cross-host 303 to the portal, `docs/merge/06-codespace-seb-infra.md`
   §6.3 steps 5-8) still waits for its own run.
+
+## Amendment 2026-11-10: the re-attestation schedule starts on the attempt route
+
+Scope: the station's side of §6, "the page re-attests every 10 minutes". The server's rules (silent
+after 12 minutes, the suspension, the fresh check of the submit) are unchanged.
+
+- **The incident (issue #1076).** The page's 10-minute timer started when the player mounted, not at
+  the station's last attestation. The pairing screen attests before each code, at most five minutes
+  apart (§7), but the time to be paired, the waiting room and the start all came on top: two stations
+  of the 2026-11-09 exam were suspended as silent about 12 minutes after their last attestation.
+- **The rule.** A kiosk session attests at once when the attempt route (`/take/:id`) opens, then every
+  10 minutes, through the waiting room, the player and its end screen alike: one schedule, held by the
+  route, not by the player. `KIOSK_REATTEST_MS` lives in `@quiz/domain` beside
+  `KIOSK_SILENT_AFTER_MS`, which is defined from it with two minutes of slack, so the two cannot drift.
+- **A failure is tried again every 30 seconds** (the pairing screen's period), until one is accepted:
+  a request lost on the way must not leave the station silent for a whole round. It raises no notice;
+  only a `423 kiosk_suspended` does, as before.
+- **One attestation at a time**: the submit's re-attestation joins one already in flight.
 
 ## Alternatives considered
 
