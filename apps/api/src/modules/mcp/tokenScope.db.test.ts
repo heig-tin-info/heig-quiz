@@ -144,6 +144,7 @@ describe("a quiz:read token over MCP (ADR-113 §4)", () => {
       get_template: { templateId: randomUUID() },
       list_projects: { classroomId: room.id },
       list_project_sources: { classroomId: room.id },
+      get_project_grading: { projectId: randomUUID() },
     };
     expect(Object.keys(args).sort()).toEqual([...READING].sort());
     for (const name of READING) {

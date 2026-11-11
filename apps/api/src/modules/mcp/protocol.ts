@@ -40,7 +40,7 @@ const INSTRUCTIONS = [
   "To write about what a classroom covered, read its journal (the course documentation) with get_journal and get_journal_page.",
   "Before writing a question, call describe_question_types with its type and follow the schema and rules exactly.",
   "Every Markdown field renders KaTeX: write formulas, symbols and units in math mode, `$…$` inline or `$$…$$` for a display equation, never bare LaTeX nor Unicode approximations.",
-  "A classroom may also hand out GitHub projects (one repository per student or group, from a source repository of its organization): list_projects, list_project_sources, then create_project, which makes a DRAFT the teacher publishes from the web app (it already builds the distribution repository on GitHub, so never create one twice).",
+  "A classroom may also hand out GitHub projects (one repository per student or group, from a source repository of its organization): list_projects, list_project_sources, then create_project, which makes a DRAFT the teacher publishes from the web app (it already builds the distribution repository on GitHub, so never create one twice). A project graded by criteria is read with get_project_grading, and grade_criterion proposes a criterion's points with a rationale the student reads; the teacher validates from the web app.",
   "Look before creating: list_courses, get_course and list_pools, so nothing is created twice. Evaluations are created as drafts; the teacher opens them from the web app. Give the teacher the returned `url` links.",
 ].join(" ");
 

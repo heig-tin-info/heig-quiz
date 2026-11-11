@@ -14,8 +14,9 @@
  * browser does.
  *
  * Deliberately absent: every deletion, and every transition of a live
- * evaluation (start, pause, close, grading, release). A model may prepare
- * work; a teacher runs it. Removing an item from a quiz's list is an edit of
+ * evaluation (start, pause, close, grading, release). A project's criteria
+ * may be proposed (`grade_criterion`), never validated nor released. A
+ * model may prepare work; a teacher runs it. Removing an item from a quiz's list is an edit of
  * that list, not a deletion (ADR-022, amendment of 2026-10-29): the question
  * stays in its pool.
  */
@@ -32,6 +33,7 @@ import {
   encodeJournalPath,
   JournalPagePath,
   CoursePoolMode,
+  CriterionGradeWrite,
   OAUTH_SCOPE,
   ParametersDraft,
   PoolCreate,
@@ -1030,6 +1032,52 @@ export const TOOLS: Tool[] = [
       requireGithub(api);
       const project = await api.post(`/classrooms/${classroomId}/projects`, { ...body, publishMode: "manual" });
       return { ...project, url: api.link(`/projects/${project.id}`) };
+    },
+  }),
+
+  // --- Grading a project by criteria (ADR-106 §8; ADR-022, addendum of 2026-11-10)
+
+  tool({
+    name: "get_project_grading",
+    title: "Read a project's grading by criteria",
+    description:
+      "The grading screen of a GitHub project graded by criteria: for each student or group repository (its " +
+      "`id`, the student's or group's `label`), every criterion of `criteria.yml` with its description, `max` " +
+      "(negative for a penalty), `bonus`, current `points` (null without a row), `state`, `source` (`auto` from " +
+      "the CI, `llm`, `manual`), `rationale` and `reason`; the last evidence (target sha, tests) and the " +
+      "repository's validation (`missing`: the criteria nobody graded yet). Pass `repoId` for one repository " +
+      "only. `409 not_criteria` for a project not graded by criteria. Needs a seat on the course's staff: 404 " +
+      "otherwise.",
+    input: z.object({ projectId: Id, repoId: Id.optional() }),
+    annotations: READ,
+    run: async (api, a) => {
+      requireGithub(api);
+      const url = api.link(`/projects/${a.projectId}`);
+      if (a.repoId) return { ...(await api.get(`/projects/${a.projectId}/repos/${a.repoId}/criteria`)), url };
+      return { ...(await api.get(`/projects/${a.projectId}/grading`)), url };
+    },
+  }),
+
+  tool({
+    name: "grade_criterion",
+    title: "Propose the points of one criterion",
+    description:
+      "Writes a teacher's points for one criterion of one repository of a project graded by criteria (`criterionId` " +
+      "and `repoId` from `get_project_grading`), as a PROPOSAL: it replaces the criterion's current row, and the " +
+      "teacher validates it from the grading screen — this tool never validates nor releases anything. `points` " +
+      "lies in `[0, max]`, `[max, 0]` for a penalty, `[0, bonus]` for a bonus (`422 points_out_of_range`). The " +
+      "student sees it AT ONCE on their project page, as indicative points with the `rationale` (like the CI's " +
+      "and the LLM's proposals): plain text, factual, addressed to them with \"vous\" in French; none given " +
+      "keeps the current one. On a released project it replaces a validated row until the teacher releases again. `409 not_frozen` before the repository's " +
+      "definitive freeze. Needs the owner or assistant role on the course. Answers the repository's criteria.",
+    input: z
+      .object({ projectId: Id, repoId: Id, criterionId: z.string().min(1).max(300), ...CriterionGradeWrite.shape })
+      .strict(),
+    annotations: { ...WRITE, idempotentHint: true },
+    run: async (api, { projectId, repoId, criterionId, ...body }) => {
+      requireGithub(api);
+      const repo = await api.put(`/projects/${projectId}/repos/${repoId}/criteria/${encodeURIComponent(criterionId)}`, body);
+      return { ...repo, url: api.link(`/projects/${projectId}`) };
     },
   }),
 ];

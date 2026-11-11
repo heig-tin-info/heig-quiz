@@ -316,7 +316,7 @@ describe("the writes it may prepare (decision 4)", () => {
       "update_question", "update_evaluation", "add_questions_to_evaluation", "create_evaluation", "instantiate_template",
       "create_pool", "create_classroom", "create_poll", "create_course", "create_project",
       "remove_question_from_evaluation", "update_evaluation_item_versions", "update_evaluation_item",
-      "remove_question_from_template", "update_template_item_versions", "update_template_item",
+      "remove_question_from_template", "update_template_item_versions", "update_template_item", "grade_criterion",
     ];
     const writes = TOOLS.filter((t) => t.annotations.readOnlyHint !== true).map((t) => t.name);
     expect(writes.filter((w) => !(ASSIST_WRITE_TOOLS as readonly string[]).includes(w)).sort()).toEqual([...excluded].sort());

@@ -162,6 +162,8 @@ describe("the transport", () => {
         "list_projects",
         "list_project_sources",
         "create_project",
+        "get_project_grading",
+        "grade_criterion",
       ].sort(),
     );
     // …and its reading half, the one set annotated read-only.
@@ -185,6 +187,7 @@ describe("the transport", () => {
         "get_template",
         "list_projects",
         "list_project_sources",
+        "get_project_grading",
       ].sort(),
     );
     for (const t of result.tools) expect(t.inputSchema.type, t.name).toBe("object");
@@ -741,6 +744,8 @@ describe("GitHub projects without Quiz's App", () => {
       ["list_projects", { classroomId: room.id }],
       ["list_project_sources", { classroomId: room.id }],
       ["create_project", { classroomId: room.id, name: "Lab 1", sourceRepo: "lab", durationMinutes: 10_080 }],
+      ["get_project_grading", { projectId: room.id }],
+      ["grade_criterion", { projectId: room.id, repoId: room.id, criterionId: "a", points: 1 }],
     ] as const) {
       const { isError, data } = await call(name, args);
       expect(isError, name).toBe(true);

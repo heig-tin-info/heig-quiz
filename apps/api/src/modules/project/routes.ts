@@ -21,7 +21,9 @@
  * session get the 404 of a missing entity. A classroom's projects, its
  * sources and the creation also take a personal or OAuth token
  * (`projectsAuthoringClassroom`), so the MCP server creates a draft through
- * them (ADR-022, addendum of 2026-10-13).
+ * them (ADR-022, addendum of 2026-10-13); the grading screen, a
+ * repository's criteria table and a teacher's points for one criterion too
+ * (`gradingProject`, `gradingProjectRepo`, addendum of 2026-11-10).
  *
  * The student's side: Accept (M3-03) and their own resend of an invitation
  * (M3-09a), on a project of a classroom where the caller holds a claimed
@@ -66,6 +68,8 @@ import {
   accessibleProject,
   accessibleProjectRepo,
   callerOf,
+  gradingProject,
+  gradingProjectRepo,
   projectsAuthoringClassroom,
   projectsClassroom,
   seatOf,
@@ -241,7 +245,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   app.get(
     "/app/api/projects/:id/grading",
     session,
-    teacher(onProject, async ({ scope }) => ProjectGradingView.parse(await service.gradingView(app.db, scope.project))),
+    teacher({ params: IdParam, load: gradingProject.bind(null, app) }, async ({ scope }) => ProjectGradingView.parse(await service.gradingView(app.db, scope.project))),
   );
 
   app.post(
@@ -385,6 +389,12 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     params: ProjectRepoParams,
     load: withCourseRole(app, accessibleProjectRepo.bind(null, app), (scope) => scope.courseId, "assistant"),
   };
+  // The criteria table and a criterion's points also take a token (ADR-022, addendum of 2026-11-10).
+  const onGradedRepo = { params: ProjectRepoParams, load: gradingProjectRepo.bind(null, app) };
+  const onGradingRepo = {
+    params: ProjectRepoParams,
+    load: withCourseRole(app, gradingProjectRepo.bind(null, app), (scope) => scope.courseId, "assistant"),
+  };
 
   /**
    * ADR-106 §6: the repository's criteria table for its staff — each
@@ -394,7 +404,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   app.get(
     "/app/api/projects/:id/repos/:rid/criteria",
     session,
-    teacher(onRepo, async ({ scope }) => ProjectGradingRepo.parse(await service.gradingRepo(app.db, scope.project, scope.repo))),
+    teacher(onGradedRepo, async ({ scope }) => ProjectGradingRepo.parse(await service.gradingRepo(app.db, scope.project, scope.repo))),
   );
 
   /** ADR-119 §8: a criterion's CI log for its staff, read when its fold opens (a 404 for an unknown criterion). */
@@ -431,7 +441,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/projects/:id/repos/:rid/criteria/:criterionId",
     session,
     teacher(
-      { params: ProjectCriterionParams, body: CriterionGradeWrite, load: onStaffedRepo.load },
+      { params: ProjectCriterionParams, body: CriterionGradeWrite, load: onGradingRepo.load },
       async ({ req, now, params, body, scope }) =>
         ProjectGradingRepo.parse(
           await service.gradeCriterion(app.db, scope.project, scope.repo, params.criterionId, body, actorOf(req), callerOf(req).id, now),

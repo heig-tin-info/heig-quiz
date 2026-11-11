@@ -67,6 +67,14 @@ list is an edit, not a deletion: the reading tool `get_template` and six
 item tools join the closed list, and the in-process client reaches a
 closed list of DELETE routes — see the addendum at the end of §C.
 
+**Amended 2026-11-10 (asked for by the product owner), scope: §C, the
+consent's "cannot read grades", and the addendum of 2026-10-13's "the
+grading stays portal-only".** The reading tool `get_project_grading` and
+the writing tool `grade_criterion` join the closed list, so an assistant
+reads a project's grading by criteria and proposes a criterion's points;
+three grading routes take a personal or OAuth token — see the addendum at
+the end of §C.
+
 ## Context
 
 A teacher wants to ask an assistant — Claude Desktop, Claude Code, ChatGPT,
@@ -140,7 +148,8 @@ Reading: `list_courses`, `get_course`, `list_pools`, `get_pool`,
 `get_pool_question_stats`, `find_similar_questions`, `list_questions`,
 `get_question`, `list_evaluations`, `get_evaluation`,
 `describe_question_types`, `list_templates`, `get_template`, `get_journal`,
-`get_journal_page`, `list_projects`, `list_project_sources`.
+`get_journal_page`, `list_projects`, `list_project_sources`,
+`get_project_grading`.
 
 Writing: `create_course`, `create_classroom`, `create_pool`,
 `link_pool_to_course`, `create_category`, `create_question`,
@@ -149,7 +158,7 @@ Writing: `create_course`, `create_classroom`, `create_pool`,
 `add_questions_to_template`, `instantiate_template`, `create_project`,
 `remove_question_from_evaluation`, `remove_question_from_template`,
 `update_evaluation_item_versions`, `update_template_item_versions`,
-`update_evaluation_item`, `update_template_item`.
+`update_evaluation_item`, `update_template_item`, `grade_criterion`.
 
 - `describe_question_types` hands the model the JSON Schema of the type's
   `configSchema` — generated, so it cannot drift from the publication gate —
@@ -353,6 +362,40 @@ version, and no tool could move, change or remove its items.
 - **Consent.** The consent screen's "cannot delete" line now names what it
   cannot delete, and a line says it can change a quiz's questions; tokens
   granted before are not asked again, as for `create_project` (#788).
+
+**Addendum of 2026-11-10 — propose a project's criteria** (asked for by the
+product owner). The criteria nobody else grades — a teacher-only criterion
+(`git.*`), or every LLM criterion of a repository whose pass failed — were
+written by hand into the database, because no tool reached the grading
+screen.
+
+- **Two tools over three routes (ADR-106 §8).** `get_project_grading({
+  projectId, repoId? })` is `GET /projects/:id/grading`, or `GET
+  /projects/:id/repos/:rid/criteria` for one repository: each criterion's
+  description, range, current row, source, rationale and reason, and the
+  repository's validation. `grade_criterion({ projectId, repoId,
+  criterionId, points, rationale? })` is `PUT
+  /projects/:id/repos/:rid/criteria/:criterionId` (`CriterionGradeWrite`):
+  the route's own range check (`422 points_out_of_range`), freeze check
+  (`409 not_frozen`), course role (owner or assistant) and audit
+  (`project_repo.criterion_graded`, as `api_key`).
+- **A proposal, never a validation.** The route writes a `manual` row,
+  still `proposed`: validating a repository, *Validate the rest*, a
+  Regrade and the release stay portal-only, so what counts in the grade is
+  still a teacher's act in the web app. A proposal is not hidden, though:
+  like the CI's and the LLM's, the student's view shows it at once as
+  indicative points with its rationale (ADR-106 §9, the repository being
+  frozen for good), and on a released project it replaces a validated row
+  until the teacher releases again. The tool's description says both.
+- **The narrowed M3-02 rule, again.** Those three routes take a personal or
+  OAuth token (loaders `gradingProject`, `gradingProjectRepo`, `authVia:
+  "token"`); the help assistant's token reaches none of them, and
+  `grade_criterion` is not among the writes it may prepare.
+- **Consent.** The "cannot read students' answers or grades" line would
+  be false of projects: it now names evaluations, and a line says the
+  client may read a project's grading by criteria and propose points.
+  Tokens granted before are not asked again, as for `create_project`
+  (#788).
 
 ## Consequences
 
