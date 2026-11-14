@@ -100,6 +100,40 @@ describe("the requests it signs (ADR-078 §2)", () => {
     expect(claims.exp - claims.iat).toBe(60);
   });
 
+  it("a review session names the reviewed project and repository on EVERY token request (ADR-129 §7)", async () => {
+    const review = { projectId: "33333333-3333-4333-8333-333333333333", projectRepoId: "44444444-4444-4444-8444-444444444444" };
+    const owner = { assignment: `review-${review.projectRepoId}`, student: OWNER.student, review };
+    const w = world();
+    // The first grant, a refresh past the margin, a new request after GitHub's refusal.
+    await w.forge.authorization(REPO, owner, GH);
+    w.advance(55 * MIN);
+    await w.forge.authorization(REPO, owner, GH);
+    w.forge.invalidate?.(REPO, owner);
+    await w.forge.authorization(REPO, owner, GH);
+    // The staff member's own workspace of the same project asks without it.
+    await w.forge.authorization(REPO, OWNER, GH);
+
+    const claims = await Promise.all(
+      w.quizCalls().map(async (call) => {
+        const jwt = call.authorization!.replace(/^Bearer /, "");
+        const { iat } = JSON.parse(Buffer.from(jwt.split(".")[1]!, "base64url").toString()) as { iat: number };
+        const verdict = await verifyHs256<Record<string, unknown>>(jwt, SECRET, {
+          audience: GIT_TOKEN_AUDIENCE,
+          issuer: PORTAL_ISSUER,
+          requireJti: true,
+          now: () => iat,
+        });
+        return GitTokenRequestClaims.parse(verdict.ok ? verdict.claims : null);
+      }),
+    );
+    expect(claims).toHaveLength(4);
+    for (const c of claims.slice(0, 3)) {
+      expect(c).toMatchObject({ projectId: review.projectId, reviewRepoId: review.projectRepoId, userId: OWNER.student });
+    }
+    expect(claims[3]?.projectId).toBe(OWNER.assignment);
+    expect(claims[3]?.reviewRepoId).toBeUndefined();
+  });
+
   it("presents the token to git as x-access-token, scoped to github.com, through the environment only", async () => {
     const w = world();
     const header = await w.forge.authorization(REPO, OWNER, GH);

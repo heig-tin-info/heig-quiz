@@ -29,7 +29,7 @@ import type { Db } from "../db/client.js";
 import type { SessionRow } from "../db/schema.js";
 import { checkExamRequest, replyOutsideSeb } from "../seb/index.js";
 import type { SessionManager } from "../sessions/manager.js";
-import { findAssignment, findSession } from "../sessions/store.js";
+import { findAssignment, findSession, isReview } from "../sessions/store.js";
 import { requestLang, t, type MessageKey } from "../web/i18n.js";
 import { errorPage } from "../web/pages.js";
 
@@ -187,7 +187,8 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
         reply,
         410,
         "sessionClosedTitle",
-        "sessionClosedDetail",
+        // A review session keeps nothing (ADR-129 §10): no "your work is kept".
+        isReview(assignment) ? "reviewClosedDetail" : "sessionClosedDetail",
       );
     }
 

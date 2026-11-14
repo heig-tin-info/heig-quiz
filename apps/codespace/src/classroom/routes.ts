@@ -1,14 +1,19 @@
 /**
  * HTTP boundary with the platform (`@quiz/contracts`, `codespace.ts`; ADR-047).
  *
- * Three routes, and nothing else knows them:
+ * Four routes, and nothing else knows them:
  *
  *   PUT  /api/assignments/:id            the platform pushes an assignment (service token)
  *   GET  /api/assignments/:id/sessions   the platform's teacher view (service token)
  *   GET  /launch?token=…                 the student arrives, launch token
+ *   GET  /review?token=…                 a staff member opens a repository, review launch token (ADR-129)
+ *
+ * `/launch` and `/review` differ in what they verify and which assignment
+ * they resolve; from upserting the user to the redirect they run one tail,
+ * `openSession`.
  *
  * The plugin is **not registered** when `CODESPACE_LAUNCH_SECRET` is empty: the
- * three routes then answer 404 and the portal opens no session at all (it has
+ * four routes then answer 404 and the portal opens no session at all (it has
  * no login of its own). A launch token from either issuer of the transition,
  * `heig-classroom` or `heig-quiz` (`CODESPACE_ISSUERS`), is accepted; a
  * service token from Quiz only.
@@ -36,6 +41,8 @@ import {
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
   QUIZ_CODESPACE_ISSUER,
+  REVIEW_AUDIENCE,
+  ReviewLaunchTokenClaims,
   SERVICE_AUDIENCE,
   ServiceTokenClaims,
   isSafeId,
@@ -53,6 +60,7 @@ import {
   assignments,
   launchTokensUsed,
   users,
+  type AssignmentRepoRef,
   type AssignmentRow,
   type UserRow,
 } from "../db/schema.js";
@@ -65,13 +73,20 @@ import {
   outsideSebPage,
   type SebVerifier,
 } from "../seb/index.js";
-import { WorkspaceBootstrapError, type SessionManager } from "../sessions/manager.js";
+import {
+  REVIEW_ASSIGNMENT_PREFIX,
+  REVIEW_SESSIONS_PER_HOLDER,
+  WorkspaceBootstrapError,
+  type SessionManager,
+} from "../sessions/manager.js";
 import {
   assignmentSessionRows,
   countLiveSessionsForTeacher,
   findAssignment,
   findLiveSession,
   isOpen,
+  isReview,
+  liveReviewSessions,
   splitRepoRef,
 } from "../sessions/store.js";
 import { requestLang, t, type MessageKey } from "../web/i18n.js";
@@ -113,6 +128,13 @@ function html(reply: FastifyReply, code: number, page: string): FastifyReply {
 }
 
 /**
+ * Who opens a portal session, as both launch tokens carry it: the identity
+ * claims `@quiz/contracts` defines once for `LaunchTokenClaims` and
+ * `ReviewLaunchTokenClaims` (ADR-129 §7).
+ */
+export type LaunchIdentity = Pick<LaunchTokenClaims, "sub" | "email" | "displayName" | "githubLogin">;
+
+/**
  * User coming from the platform.
  *
  * `oidcSub` is the **prefixed** subject of the token (the column keeps the name
@@ -120,7 +142,7 @@ function html(reply: FastifyReply, code: number, page: string): FastifyReply {
  * `login`, on the other hand, is the bare subject — the one that names the
  * volume directory, hence the `isSafeId` checked upstream by the contract.
  */
-export function upsertLaunchUser(db: Db, claims: LaunchTokenClaims): UserRow {
+export function upsertLaunchUser(db: Db, claims: LaunchIdentity): UserRow {
   const now = new Date();
   const oidcSub = `${CLASSROOM_SUB_PREFIX}${claims.sub}`;
   const existing =
@@ -136,8 +158,9 @@ export function upsertLaunchUser(db: Db, claims: LaunchTokenClaims): UserRow {
   };
   if (existing) {
     // The role is **not** touched: a launch token never grants one (docs/history/v1.md
-    // D-V1-3). Every account is created through this path, as a student; the
-    // OIDC login that once wrote `users.role` is gone (M6-03).
+    // D-V1-3). Every account is created through this path, as a student —
+    // a staff member's from a review token too (ADR-129 §10); the OIDC
+    // login that once wrote `users.role` is gone (M6-03).
     const [row] = db.update(users).set(fields).where(eq(users.id, existing.id)).returning().all();
     if (!row) throw new Error("user update returned no row");
     return row;
@@ -377,7 +400,8 @@ async function classroomRoutesImpl(
     }
 
     const assignment: AssignmentRow | undefined = findAssignment(db, claims.assignmentId);
-    if (!assignment) {
+    // A review assignment opens through `/review` only (ADR-129 §7).
+    if (!assignment || isReview(assignment)) {
       return refuse(
         "launchUnknownAssignment",
         "unknown-assignment",
@@ -399,35 +423,130 @@ async function classroomRoutesImpl(
         "bad-assignment-id",
       );
     }
+    return openSession(request, reply, { claims, assignment, targetRepo: claims.repo });
+  });
+
+  // --- GET /review?token=… -------------------------------------------------
+  // A staff member opens one repository of a project, read-only (ADR-129
+  // §10). Its own audience, from Quiz only: a review token is never read as
+  // a student's launch, nor the reverse. No `isOpen` gate, no SEB.
+  app.get<{ Querystring: { token?: string } }>("/review", async (request, reply) => {
+    const lang = requestLang(request);
+    const refuse = (detail: MessageKey, reason: string, code = 403): FastifyReply => {
+      request.log.warn({ review: { reason, clientAddress: request.ip } }, "review refused");
+      return html(reply, code, errorPage(lang, t(lang, "launchRefused"), t(lang, detail)));
+    };
+
+    const token = request.query.token ?? "";
+    if (token === "") return refuse("launchMissingToken", "missing-token");
+
+    const verdict = await verifyHs256<Record<string, unknown>>(token, secret, {
+      audience: REVIEW_AUDIENCE,
+      issuer: QUIZ_CODESPACE_ISSUER,
+      requireJti: true,
+    });
+    if (!verdict.ok) {
+      return refuse(verdict.reason === "expired" ? "reviewExpired" : "reviewInvalid", verdict.reason);
+    }
+    const claimed = ReviewLaunchTokenClaims.safeParse(verdict.claims);
+    if (!claimed.success) return refuse("launchIncomplete", "bad-claims");
+    const claims: ReviewLaunchTokenClaims = claimed.data;
+
+    // Single use, before any side effect: a replay stops here (invariant 7).
+    if (!consumeJti(db, claims.jti, claims.exp)) return refuse("reviewReplayed", "jti-replayed");
+    if (!claims.repo) return refuse("reviewRepoMissing", "repo-missing");
+
+    // One assignment per reviewed repository, never the project's own: its
+    // sessions are never listed among the project's (ADR-129 §10).
+    const id = `${REVIEW_ASSIGNMENT_PREFIX}${claims.projectRepoId}`;
+    if (!isSafeId(id)) return refuse("launchBadAssignmentId", "bad-assignment-id");
+    const previous = findAssignment(db, id);
+    const row = {
+      id,
+      title: claims.repo.fullName,
+      mode: "lab" as const,
+      image: config.CODESPACE_DEFAULT_IMAGE,
+      uploadPack: true,
+      templateRepo: null,
+      targetRepo: null,
+      targetRepoPattern: null,
+      // The project's quota holder carries the session (ADR-129 §3).
+      teacherId: claims.holder.id,
+      teacherEmail: claims.holder.email,
+      maxActiveSessions: claims.maxActiveSessions,
+      classroomId: null,
+      classroomName: null,
+      sourceRepo: null,
+      opensAt: null,
+      closesAt: null,
+      beks: [],
+      reviewOf: { projectId: claims.projectId, projectRepoId: claims.projectRepoId },
+      createdAt: previous?.createdAt ?? new Date(),
+    };
+    const { createdAt: _keep, ...updatable } = row;
+    db.insert(assignments).values(row).onConflictDoUpdate({ target: assignments.id, set: updatable }).run();
+    const assignment = findAssignment(db, id);
+    if (!assignment) throw new Error("review assignment upsert returned no row");
+
+    return openSession(request, reply, { claims, assignment, targetRepo: claims.repo });
+  });
+
+  /**
+   * The tail `/launch` and `/review` share (ADR-129 §10): the user, the
+   * quota — and for a review its cap and the switch —, the SEB check of an
+   * exam, the start, the cookies, the log and the redirect.
+   */
+  async function openSession(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    opening: {
+      claims: LaunchIdentity & Pick<LaunchTokenClaims, "jti" | "seb">;
+      assignment: AssignmentRow;
+      targetRepo: AssignmentRepoRef;
+    },
+  ): Promise<FastifyReply> {
+    const { claims, assignment } = opening;
+    const lang = requestLang(request);
+    const review = isReview(assignment);
     const user = upsertLaunchUser(db, claims);
 
     // --- per-teacher quota -------------------------------------------------
     // Resuming a session already alive on this assignment consumes nothing: it
     // does not open one more container (analyse.md D5).
     const resuming = findLiveSession(db, user.login, assignment.id) !== undefined;
-    if (!resuming && assignment.teacherId && assignment.maxActiveSessions !== null) {
-      const active = countLiveSessionsForTeacher(db, assignment.teacherId);
-      if (active >= assignment.maxActiveSessions) {
+    // A staff member keeps one live review session (ADR-129 §1): a new one
+    // replaces the previous, which therefore does not count against the
+    // quota it is about to free.
+    const replaced = review && !resuming ? liveReviewSessions(db, { student: user.login }).map((s) => s.id) : [];
+    if (!resuming && assignment.teacherId) {
+      const active = countLiveSessionsForTeacher(db, assignment.teacherId, replaced);
+      const reviews = review
+        ? liveReviewSessions(db, { teacherId: assignment.teacherId }).filter((s) => !replaced.includes(s.id)).length
+        : 0;
+      const quotaFull = assignment.maxActiveSessions !== null && active >= assignment.maxActiveSessions;
+      if (quotaFull || reviews >= REVIEW_SESSIONS_PER_HOLDER) {
         request.log.warn(
           {
             launch: {
-              reason: "quota-reached",
+              reason: quotaFull ? "quota-reached" : "review-cap-reached",
               teacherId: assignment.teacherId,
               active,
               max: assignment.maxActiveSessions,
+              reviews: review ? reviews : undefined,
               assignmentId: assignment.id,
             },
           },
           "launch refused: the teacher's session quota is reached",
         );
+        // Nothing is closed: the previous review stays open.
         return html(
           reply,
           429,
-          errorPage(lang, t(lang, "quotaTitle"), t(lang, "quotaDetail")),
+          errorPage(lang, t(lang, "quotaTitle"), t(lang, review ? "reviewQuotaDetail" : "quotaDetail")),
         );
       }
     }
-
+    for (const id of replaced) await manager.close(id, "replaced by another review session");
     // --- exam mode: the SEB verification, here and only once ---------------
     // D21 point 4: the platform's `seb` session of this project minted the
     // token, and signed into its `seb` claim the Config Key of the student's
@@ -477,7 +596,7 @@ async function classroomRoutesImpl(
         sebVerified: assignment.mode === "exam",
         teacherId: assignment.teacherId,
         launchJti: claims.jti,
-        targetRepo: claims.repo,
+        targetRepo: opening.targetRepo,
       });
     } catch (err) {
       // The student's repository could not be fetched: **no container was
@@ -491,7 +610,7 @@ async function classroomRoutesImpl(
             jti: claims.jti,
             assignmentId: assignment.id,
             login: user.login,
-            repo: claims.repo?.fullName ?? null,
+            repo: opening.targetRepo.fullName,
             cause: err.shortCause,
           },
           err: err.message,
@@ -534,12 +653,13 @@ async function classroomRoutesImpl(
           mode: assignment.mode,
           launched: result.launched,
           resumed: resuming,
+          review,
         },
       },
       "session opened from a platform launch token",
     );
     return reply.redirect(`/s/${result.session.id}/`, 303);
-  });
+  }
 }
 
 export const classroomRoutes = fp(classroomRoutesImpl, {

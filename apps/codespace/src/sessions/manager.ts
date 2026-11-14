@@ -8,16 +8,21 @@
  *    teacher's template, never from the student's repository —
  *    invariant 6, applied by choosing the `StagingSource`;
  *  - the anchor container is never seen: the engine only returns the
- *    containers carrying the session label.
+ *    containers carrying the session label;
+ *  - a staff member's review session (ADR-129 §10) is read-only and
+ *    ephemeral: no snapshot, its directory removed when it closes and swept
+ *    at startup.
  */
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { readdir, rm } from "node:fs/promises";
+import { join } from "node:path";
 
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
 
 import type { Engine } from "../engine/index.js";
 import type { Db } from "../db/client.js";
 import type { AssignmentRepoRef, AssignmentRow, SessionRow, UserRow } from "../db/schema.js";
-import { sessions } from "../db/schema.js";
+import { assignments, sessions } from "../db/schema.js";
 import type { BootstrapCause } from "../web/i18n.js";
 import {
   ForgeUnconfiguredError,
@@ -43,10 +48,13 @@ import {
 } from "./workspace.js";
 import { snapshot } from "./shadow.js";
 import {
+  LIVE_STATES,
   findAnySession,
   findAssignment,
+  findLiveSession,
   findSession,
   findUser,
+  isReview,
   listLiveSessions,
   targetRepoOfSession,
   updateSession,
@@ -117,6 +125,11 @@ export interface SessionManager {
   reconcile(): Promise<{ resumed: number; stopped: number; orphans: number }>;
   collect(now?: Date): Promise<{ closed: number }>;
   snapshotAll(): Promise<{ committed: number; skipped: number }>;
+  /**
+   * At startup, after `reconcile`: removes every review directory and every
+   * review assignment row without a live session (ADR-129 §10).
+   */
+  sweepReviews(): Promise<{ directories: number; assignments: number }>;
   startTimers(): void;
   stopTimers(): Promise<void>;
   /** For `git/httpBackend.ts`: the container's address authenticates the session. */
@@ -170,6 +183,21 @@ export const CONTAINER_ENV_KEYS = [
   "GIT_AUTHOR_EMAIL",
   "GIT_COMMITTER_NAME",
   "GIT_COMMITTER_EMAIL",
+] as const;
+
+/**
+ * Empties `/work` from inside a review session's container, as its user
+ * (ADR-129 §10). After `:U` the work tree belongs to the container's UID
+ * range, and the portal — root in its own container with every capability
+ * dropped — may not unlink inside it; this is the in-container route the
+ * portal already takes for what it does not own (`completionScript`).
+ * `find -delete` never follows a symbolic link (`-P`, the default); the
+ * `chmod` first undoes a directory the session made read-only.
+ */
+export const REVIEW_WIPE_ARGV = [
+  "sh",
+  "-c",
+  "chmod -R u+rwX /work 2>/dev/null; find /work -mindepth 1 -delete",
 ] as const;
 
 /** Base URL made absolute, or `undefined` if it cannot be used. */
@@ -328,6 +356,31 @@ export function shortCauseOf(err: unknown, repo: RepoRef | undefined): Bootstrap
   return { key: "causeFetchFailed", repo: where };
 }
 
+/** The portal's id of a review assignment is this prefix and Quiz's `project_repos.id` (ADR-129 §10). */
+export const REVIEW_ASSIGNMENT_PREFIX = "review-";
+
+/**
+ * At most this many live review sessions per quota holder (ADR-129 §3), so
+ * that reviews cannot starve the students. The portal alone enforces it.
+ */
+export const REVIEW_SESSIONS_PER_HOLDER = 2;
+
+/**
+ * Whose workspace the forge serves: for a review, the reviewed project and
+ * repository travel with it, so that EVERY token request of the session
+ * carries `reviewRepoId` (ADR-129 §7, §10).
+ */
+export function forgeOwnerOf(
+  session: Pick<SessionRow, "student">,
+  assignment: Pick<AssignmentRow, "id" | "reviewOf">,
+): ForgeOwner {
+  return {
+    assignment: assignment.id,
+    student: session.student,
+    ...(assignment.reviewOf ? { review: { ...assignment.reviewOf } } : {}),
+  };
+}
+
 export function createSessionManager(opts: ManagerDeps): SessionManager {
   const { db, engine, log } = opts;
   let gcTimer: NodeJS.Timeout | null = null;
@@ -339,6 +392,37 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     const row = findAssignment(db, session.assignmentId);
     if (!row) throw new Error(`assignment ${session.assignmentId} not found`);
     return row;
+  }
+
+  /**
+   * Removes a review session's directory, `<VOLUMES_ROOT>/<login>/review-<id>/`
+   * (ADR-129 §10). `fs.rm` never follows a link. What the host may not
+   * unlink — the work tree, the container's after `:U` — is emptied first
+   * from inside a container with the same hardened run as a session's
+   * (`engine.run`, then {@link REVIEW_WIPE_ARGV}, then `rm`), when the
+   * session's own container is gone already. False when something stays:
+   * the next startup sweep tries again.
+   */
+  async function removeReviewDir(student: string, assignmentId: string): Promise<boolean> {
+    const paths = stagingPaths(opts.volumesRoot, student, assignmentId);
+    const removed = () =>
+      rm(paths.dir, { recursive: true, force: true }).then(
+        () => true,
+        () => false,
+      );
+    if (await removed()) return true;
+    const name = engine.containerName(`wipe-${randomUUID()}`);
+    try {
+      await engine.run({ sessionId: `wipe-${assignmentId}`, name, workDir: paths.workDir });
+      await engine.exec(name, [...REVIEW_WIPE_ARGV]);
+    } catch (err) {
+      log.warn({ student, assignment: assignmentId, err: redactSecrets(String((err as Error).message ?? err)) }, "emptying a review directory failed");
+    } finally {
+      await engine.rm(name);
+    }
+    if (await removed()) return true;
+    log.warn({ student, assignment: assignmentId }, "review directory left behind; the next startup sweep tries again");
+    return false;
   }
 
   /**
@@ -382,7 +466,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     let authError: unknown;
     if (sourceRepo && from && opts.forgeAuthorization) {
       try {
-        authorization = await opts.forgeAuthorization(sourceRepo, { assignment: assignment.id, student: session.student }, from);
+        authorization = await opts.forgeAuthorization(sourceRepo, forgeOwnerOf(session, assignment), from);
       } catch (err) {
         authError = err;
       }
@@ -395,6 +479,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         assignment: assignment.id,
         source,
         uploadPack: assignment.uploadPack,
+        readOnly: isReview(assignment),
         defaultBranch: defaultBranchOf(session, assignment),
         ...(authorization ? { authorization } : {}),
       }).finally(() => {
@@ -767,16 +852,25 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     async close(sessionId, reason) {
       const session = findSession(db, sessionId);
       if (!session) return;
-      // Last snapshot before losing the container: without it, a session closed
-      // right after a keystroke would have nothing in shadow.git.
-      await snapshot(session.volumeDir).catch((err: unknown) => {
-        log.warn(
-          { sessionId, err: String((err as Error).message ?? err) },
-          "closing snapshot impossible",
-        );
-        return null;
-      });
+      const assignment = findAssignment(db, session.assignmentId);
+      const review = assignment !== undefined && isReview(assignment);
       const name = session.containerName ?? engine.containerName(session.id);
+      if (review) {
+        // No snapshot, no persistent volume (ADR-129 §10): the work tree is
+        // emptied by its own container while it still runs. A container
+        // already gone fails here; `removeReviewDir` then takes over.
+        await engine.exec(name, [...REVIEW_WIPE_ARGV]).catch(() => "");
+      } else {
+        // Last snapshot before losing the container: without it, a session closed
+        // right after a keystroke would have nothing in shadow.git.
+        await snapshot(session.volumeDir).catch((err: unknown) => {
+          log.warn(
+            { sessionId, err: String((err as Error).message ?? err) },
+            "closing snapshot impossible",
+          );
+          return null;
+        });
+      }
       await engine.stop(name);
       await engine.rm(name);
       updateSession(db, sessionId, {
@@ -788,7 +882,12 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         // old cookie must not come back to life with it.
         cookieToken: newCookieToken(),
       });
-      log.info({ sessionId, reason }, "session closed, volume kept");
+      if (review) {
+        await removeReviewDir(session.student, session.assignmentId);
+        log.info({ sessionId, reason }, "review session closed, directory removed");
+      } else {
+        log.info({ sessionId, reason }, "session closed, volume kept");
+      }
       await Promise.resolve(opts.onSessionClosed?.({ assignment: session.assignmentId, student: session.student })).catch(
         (err: unknown) => log.warn({ sessionId, err: redactSecrets(String((err as Error).message ?? err)) }, "forgetting the session's credentials failed"),
       );
@@ -857,6 +956,9 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       let committed = 0;
       let skipped = 0;
       for (const session of listLiveSessions(db)) {
+        // A review session keeps no history of what it opened (ADR-129 §10).
+        const assignment = findAssignment(db, session.assignmentId);
+        if (assignment && isReview(assignment)) continue;
         try {
           const result = await snapshot(session.volumeDir);
           if (result.sha) committed += 1;
@@ -876,6 +978,48 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         }
       }
       return { committed, skipped };
+    },
+
+    async sweepReviews() {
+      // The rows: a review assignment's dead sessions, then the assignment
+      // once it has no session left. Nothing references a session row (a
+      // review writes no `PushEvent`).
+      const reviewIds = db
+        .select({ id: assignments.id })
+        .from(assignments)
+        .where(isNotNull(assignments.reviewOf))
+        .all()
+        .map((r) => r.id);
+      let removedAssignments = 0;
+      if (reviewIds.length > 0) {
+        db.delete(sessions)
+          .where(and(inArray(sessions.assignmentId, reviewIds), notInArray(sessions.state, [...LIVE_STATES])))
+          .run();
+        for (const id of reviewIds) {
+          if (db.select({ id: sessions.id }).from(sessions).where(eq(sessions.assignmentId, id)).get()) continue;
+          db.delete(assignments).where(eq(assignments.id, id)).run();
+          removedAssignments += 1;
+        }
+      }
+      // The directories, read from the disk: also those whose row is gone.
+      // `withFileTypes` never follows a link, and only directories count.
+      let removedDirectories = 0;
+      const logins = await readdir(opts.volumesRoot, { withFileTypes: true }).catch(() => []);
+      for (const login of logins) {
+        if (!login.isDirectory()) continue;
+        const entries = await readdir(join(opts.volumesRoot, login.name), { withFileTypes: true }).catch(() => []);
+        for (const entry of entries) {
+          if (!entry.isDirectory() || !entry.name.startsWith(REVIEW_ASSIGNMENT_PREFIX)) continue;
+          if (findLiveSession(db, login.name, entry.name)) continue;
+          try {
+            if (await removeReviewDir(login.name, entry.name)) removedDirectories += 1;
+          } catch {
+            // An identifier `stagingPaths` refuses: not a directory the portal made.
+          }
+        }
+      }
+      log.info({ directories: removedDirectories, assignments: removedAssignments }, "review sweep");
+      return { directories: removedDirectories, assignments: removedAssignments };
     },
 
     startTimers() {
@@ -918,6 +1062,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
           assignment: session.assignmentId,
           containerIp: session.containerIp,
           uploadPack: assignment.uploadPack,
+          readOnly: isReview(assignment),
           ...(repo ? { targetRepo: repo } : {}),
         };
       },
@@ -925,6 +1070,9 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
 
     repoOfEvent(row) {
       const assignment = findAssignment(db, row.assignment);
+      // A review session never pushes (ADR-129 §10); should a row ever name
+      // one, it has no relay destination, so nothing reaches the forge.
+      if (assignment && isReview(assignment)) return undefined;
       // The launch token's repository, when the session carries one; the
       // assignment's convention otherwise. The session is looked up by its id,
       // not by the pair, because it survives its own closing: the relay must

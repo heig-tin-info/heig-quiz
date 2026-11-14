@@ -115,9 +115,13 @@ export function createQuizForge(opts: QuizForgeOptions): Forge {
         iat,
         exp: iat + GIT_REQUEST_TTL_SECONDS,
         jti: randomUUID(),
-        projectId: owner.assignment,
+        // A review names the reviewed project and repository (ADR-129 §7):
+        // without `reviewRepoId` Quiz would decide the request by ADR-078's
+        // launch rule, which a staff member never meets.
+        projectId: owner.review?.projectId ?? owner.assignment,
         userId: owner.student,
         repository: fullName(repo),
+        ...(owner.review ? { reviewRepoId: owner.review.projectRepoId } : {}),
         ...extra,
       },
       opts.secret,

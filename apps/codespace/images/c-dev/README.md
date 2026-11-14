@@ -170,6 +170,14 @@ Added on top, not required but consistent: `extensions.autoCheckUpdates`,
 `clangd.checkUpdates: false` — without which the clangd extension tries to
 download its binary and fails, the network being cut off (docs/history/analyse.md § 3.5).
 
+`task.allowAutomaticTasks: off` ([ADR-129](../../../../docs/adr/ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md) §10):
+a repository's `runOn: folderOpen` task never starts by itself. It is set
+for every session, not only a staff member's review session: no template
+relies on an automatic task, and a student starts a task by hand as before.
+A mitigation, not a guarantee (ADR-129 §9). It takes effect with the next
+image build; `test.sh` § 7 checks the name in the bundled package
+(TODO(verify) on 4.137.0 at that build).
+
 ### The two settings added after the first real trial (2026-09-18)
 
 Feedback 1 and 2 of [docs/history/leads.md](../../docs/history/leads.md), "Feedback from the first

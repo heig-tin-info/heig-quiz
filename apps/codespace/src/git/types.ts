@@ -31,6 +31,12 @@ export interface StagingSession {
    * portal *puts* in the staging repository).
    */
   uploadPack: boolean;
+  /**
+   * A staff member's review session (ADR-129 §10): `receive-pack` is
+   * refused, so no push lands, no `PushEvent` is written and nothing is
+   * relayed. Absent or false: a student's session, which may always push.
+   */
+  readOnly?: boolean;
   /** Where successful pushes are relayed. Absent = keep locally only. */
   targetRepo?: RepoRef;
 }

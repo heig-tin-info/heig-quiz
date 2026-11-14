@@ -178,12 +178,25 @@ export const assignments = sqliteTable("assignments", {
     .notNull()
     .default([]),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  /**
+   * A staff member's review session (ADR-129 §10): the reviewed project and
+   * repository, both Quiz's ids. Null on every synchronized assignment; an
+   * assignment is a review if and only if it is set. Its row is upserted by
+   * `GET /review` (id `review-<projectRepoId>`), never by a sync.
+   */
+  reviewOf: text("review_of", { mode: "json" }).$type<ReviewOf>(),
 });
 
 /** Repository on the forge, as classroom names it (`CodespaceRepoRef`). */
 export interface AssignmentRepoRef {
   fullName: string;
   defaultBranch: string;
+}
+
+/** What a review assignment reviews (ADR-129 §10): Quiz's project and `project_repos.id`. */
+export interface ReviewOf {
+  projectId: string;
+  projectRepoId: string;
 }
 
 export type AssignmentRow = typeof assignments.$inferSelect;

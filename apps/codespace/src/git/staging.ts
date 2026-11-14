@@ -40,6 +40,12 @@ export interface StagingOptions {
   /** Default branch of a fresh repository. */
   defaultBranch?: string;
   /**
+   * `http.receivepack false`: a staff member's review session (ADR-129
+   * §10), which never pushes. The per-request check of `serviceAllowed` is
+   * the authority; this is the repository's own lock behind it.
+   */
+  readOnly?: boolean;
+  /**
    * `Authorization` header value for the seeding `git fetch`. A student
    * repository provisioned by classroom is **private**: without it the fetch
    * is refused and the workspace opens empty (observed in production on
@@ -109,8 +115,8 @@ async function pickHead(gitDir: string, preferred: string): Promise<void> {
  * source. Idempotent: called at every session start, and again when the
  * teacher pushes a fix to the exam template.
  *
- * `http.receivepack` is always true — the student must be able to push even
- * when the forge is down. `http.uploadpack` follows the assignment, and is
+ * `http.receivepack` is true for every student — the student must be able to
+ * push even when the forge is down — and false for a review session. `http.uploadpack` follows the assignment, and is
  * also enforced per request in httpBackend.ts, because the repository config
  * is not the authority on a policy that can change mid-session.
  */
@@ -139,7 +145,7 @@ export async function ensureStagingRepo(opts: StagingOptions): Promise<StagingRe
     await mkdir(paths.gitDir, { recursive: true });
     await git(["init", "--bare", `--initial-branch=${defaultBranch}`, paths.gitDir]);
   }
-  await gitBare(paths.gitDir, ["config", "http.receivepack", "true"]);
+  await gitBare(paths.gitDir, ["config", "http.receivepack", String(opts.readOnly !== true)]);
   await gitBare(paths.gitDir, [
     "config",
     "http.uploadpack",

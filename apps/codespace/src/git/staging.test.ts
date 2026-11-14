@@ -127,6 +127,18 @@ describe("ensureStagingRepo", () => {
     expect((await gitBare(staging.gitDir, ["config", "http.receivepack"])).trim()).toBe("true");
   });
 
+  it("a review session's staging repository refuses pushes by its own config (ADR-129 §10)", async () => {
+    const base = await root();
+    const staging = await ensureStagingRepo({
+      volumesRoot: join(base, "volumes"),
+      student: "u-sam",
+      assignment: "review-r1",
+      source: { mode: "empty" },
+      readOnly: true,
+    });
+    expect((await gitBare(staging.gitDir, ["config", "http.receivepack"])).trim()).toBe("false");
+  });
+
   it("returns the number of refs, and zero is not an error", async () => {
     const base = await root();
     const empty = await ensureStagingRepo({

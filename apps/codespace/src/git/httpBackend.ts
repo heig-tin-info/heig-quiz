@@ -126,13 +126,20 @@ export function requestedService(
 }
 
 /**
- * `receive-pack` is always allowed: a student must be able to submit even
- * when the forge is down, and even in exam mode. `upload-pack` follows the
- * assignment — and refusing it protects nothing by itself (analyse.md 3.2);
- * what protects the exam is what the portal *put* in the staging repository.
+ * `receive-pack` is allowed to every student's session: a student must be
+ * able to submit even when the forge is down, and even in exam mode. A
+ * staff member's review session is read-only (ADR-129 §10): this check, per
+ * request, is the authority; the staging repository's `http.receivepack
+ * false` is the second lock. `upload-pack` follows the assignment — and
+ * refusing it protects nothing by itself (analyse.md 3.2); what protects the
+ * exam is what the portal *put* in the staging repository.
  */
-export function serviceAllowed(service: GitService, session: Pick<StagingSession, "uploadPack">) {
-  return service === "git-receive-pack" || session.uploadPack;
+export function serviceAllowed(
+  service: GitService,
+  session: Pick<StagingSession, "uploadPack" | "readOnly">,
+): boolean {
+  if (service === "git-receive-pack") return session.readOnly !== true;
+  return session.uploadPack;
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +260,10 @@ export const gitBackendPlugin: FastifyPluginAsync<GitBackendOptions> = async (ap
       }
       const service = requestedService(request.method, rest, request.query as Record<string, unknown>);
       if (!serviceAllowed(service, session)) {
+        if (service === "git-receive-pack") {
+          request.log.info({ sessionId, service }, "push refused: a review session is read-only");
+          return deny(reply, 403, "this workspace is read-only: nothing is pushed from it");
+        }
         request.log.info({ sessionId, service }, "upload-pack disabled for this assignment");
         return deny(
           reply,

@@ -41,6 +41,9 @@ failed=0
 shopt -s nullglob
 for work in "$VOLUMES"/*/*/work; do
 	vol="$(dirname "$work")"
+	# A staff member's review session keeps no history of what it opened
+	# (ADR-129 §10): its directory goes when the session closes.
+	case "$(basename "$vol")" in review-*) continue ;; esac
 	gitdir="$vol/shadow.git"
 
 	if [ ! -d "$gitdir" ]; then

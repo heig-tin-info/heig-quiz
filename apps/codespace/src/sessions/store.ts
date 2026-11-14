@@ -2,7 +2,7 @@
  * Database access to assignments and sessions. No hidden ORM: functions that
  * take the Drizzle handle, as everywhere else in the portal.
  */
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
 
 import type { Db } from "../db/client.js";
 import {
@@ -138,13 +138,45 @@ export function targetRepoOfSession(
  * sessions per teacher"). `sessions.teacherId` is copied from the assignment
  * at creation time, so the count fits in a single query.
  */
-export function countLiveSessionsForTeacher(db: Db, teacherId: string): number {
+export function countLiveSessionsForTeacher(db: Db, teacherId: string, exclude: readonly string[] = []): number {
   const rows = db
     .select({ id: sessions.id })
     .from(sessions)
-    .where(and(eq(sessions.teacherId, teacherId), inArray(sessions.state, [...LIVE_STATES])))
+    .where(
+      and(
+        eq(sessions.teacherId, teacherId),
+        inArray(sessions.state, [...LIVE_STATES]),
+        exclude.length > 0 ? notInArray(sessions.id, [...exclude]) : undefined,
+      ),
+    )
     .all();
   return rows.length;
+}
+
+/** A staff member's review assignment (ADR-129 §10), as opposed to a synchronized project. */
+export function isReview(assignment: Pick<AssignmentRow, "reviewOf">): boolean {
+  return Boolean(assignment.reviewOf);
+}
+
+/**
+ * Live review sessions (ADR-129 §10), of one portal login (the staff
+ * member, at most one by construction) or of one quota holder (at most
+ * `REVIEW_SESSIONS_PER_HOLDER`).
+ */
+export function liveReviewSessions(db: Db, by: { student: string } | { teacherId: string }): SessionRow[] {
+  return db
+    .select({ session: sessions })
+    .from(sessions)
+    .innerJoin(assignments, eq(sessions.assignmentId, assignments.id))
+    .where(
+      and(
+        isNotNull(assignments.reviewOf),
+        inArray(sessions.state, [...LIVE_STATES]),
+        "student" in by ? eq(sessions.student, by.student) : eq(sessions.teacherId, by.teacherId),
+      ),
+    )
+    .all()
+    .map((r) => r.session);
 }
 
 /** Sessions of an assignment, with their user: the platform's teacher table. */
