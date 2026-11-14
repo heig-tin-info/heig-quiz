@@ -10,7 +10,10 @@ LLM budget, tarball fetch and retention are the orchestrator's, after the
 spec challenge and the lean review of the same day. Amended 2026-10-14
 (product owner, M3-14f): §10 only — the organization's `ANTHROPIC_API_KEY`
 check (F-GH-03) is dropped outright, not course by course; the CI's
-`llm-review` tier still retires course by course.
+`llm-review` tier still retires course by course. Amended 2026-11-14
+(product owner): §10 only — that retirement is complete; the organization's
+`ANTHROPIC_API_KEY` is no longer used, and an organization that still holds
+the secret deletes it.
 
 **Superseded in part by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)
 (2026-10-26, product owner), for a project whose snapshot is schema
@@ -395,7 +398,10 @@ the freeze, searched for in every response and event of the first.
   once their projects run in `criteria` mode (M3-14f). *Amended 2026-10-14
   (product owner, M3-14f): the check was dropped outright on that day, and
   the App no longer reads organization secrets; the CI's `llm-review` tier
-  still retires course by course.*
+  still retires course by course.* *Amended 2026-11-14 (product owner): the
+  tier is retired for every course. The review dispatch of the `auto` mode
+  is unchanged, and an organization that still holds the secret deletes
+  it.*
 
 Invariants: `CLAUDE.md` invariant 12 carries the `project` action's archive
 rule, invariant 14 the target commit the server chooses from its push
