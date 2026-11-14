@@ -164,6 +164,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-035 — Merging heig-classroom into Quiz: one platform, one roster, activities of several kinds](ADR-035-fusion-de-classroom.md)
 - [ADR-047 — Online workspace: no student credential, therefore no write access](ADR-047-espace-de-travail-en-ligne.md)
 - [ADR-078 — The workspace's git relay: Quiz issues a token scoped to one repository, the App key stays on the app VM](ADR-078-codespace-git-relay-tokens.md)
+- [ADR-129 — The staff's review session: a course's staff open a project repository in the online workspace, read-only](ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md)
 - [ADR-048 — Group assignments: groups per assignment, formed by the staff, delivered in three lots](ADR-048-projets-de-groupe.md) (superseded, folded into ADR-070)
 - [ADR-070 — Group sets: a classroom's reusable groups, which a project follows until its deadline](ADR-070-repartitions-de-groupes.md)
 - [ADR-077 — A staff seat accepts a project: the teacher's test repository](ADR-077-depots-de-test-du-personnel.md)

@@ -19,7 +19,10 @@ address (it said it waited for the owner, #744). Delivered by merge task M6-10
 ([task card](../merge/history/09-tasks-delivered.md#m6-10-git-relay-through-quiz-issued-scoped-tokens-adr-078));
 its staging checks are tracked in [progress](../merge/PROGRESS.md).
 `CLAUDE.md` invariant 15 summarizes this record and points here; the full
-summary is under [Consequences](#consequences).
+summary is under [Consequences](#consequences). Amended 2026-11-14 by
+[ADR-129](ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md)
+(the staff's review session: a read grant on a reviewed repository, §2,
+§6, §9): [§12](#12-amendment-2026-11-14-the-staffs-review-session-adr-129).
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -551,6 +554,39 @@ applies as written.
   comes first.
 - **Open.** Whether criteria and LLM grading should read commits received
   after the deadline: [06](../spec/06-questions-ouvertes.md), question 61.
+
+<a id="amendment-2026-11-14-the-staffs-review-session"></a>
+
+### 12. Amendment 2026-11-14: the staff's review session (ADR-129)
+
+Scope: §2 (the token route's checks and its two routes' claims), §6 (the
+launch records) and §9 (the blast radius), for a request that names a
+reviewed repository. [ADR-129](ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md)
+owns the rule (product owner and orchestrator, 2026-11-14); this section
+names what changes here.
+
+- **A third kind of grant.** The claims of both routes gain an optional
+  `reviewRepoId` (a `project_repos.id`). The token route decides a request
+  that carries it by ADR-129 §7 (`reviewTokenRefusal`) and only by it: a
+  `codespace_reviews` row of that user on that repository whose
+  `grant_until` is ahead, the user's staff access still held, the
+  repository live, the classroom not archived, an `online_seb` repository's
+  deadline applied — then a **read** grant, `useUntil` = `expiresAt`,
+  whatever the work mode, deadline or lock. A request without the claim is
+  decided by checks 2–5 above, unchanged: a review launch is never a launch
+  of check 2.
+- **The relay declaration refuses a review.** `relay-heads` with
+  `reviewRepoId` is `404 not_found` before any read: no head is ever
+  declared for a review session, which never pushes.
+- **Launch records (§6).** A review launch writes `codespace_reviews`
+  (ADR-129 §6), never `codespace_launches`, and never `markLaunched`.
+- **Audit (§2).** A review grant's `codespace.git_token_issued` carries
+  `permission: "read"` and `reviewRepoId`; the launch itself is
+  `codespace.review_launched` (ADR-129 §8).
+- **Blast radius (§9).** A compromised portal may also obtain read tokens
+  on every repository a staff member launched a review of within the last
+  twelve hours, whatever its mode — `free` repositories and frozen exams
+  included —; contents only, never a write. ADR-129, Consequences.
 
 ## Consequences
 
