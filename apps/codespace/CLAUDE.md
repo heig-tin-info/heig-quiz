@@ -88,7 +88,12 @@ them on exactly two points, and on nothing else:
    member's **review session** ([ADR-129](../../docs/adr/ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md),
    accepted 2026-11-14) has one directory per (staff member, repository),
    removed when the session closes and swept at startup, never snapshotted:
-   narrower than this divergence, not a third one.
+   narrower than this divergence, not a third one. The `review-` prefix is
+   the portal's own (`REVIEW_ASSIGNMENT_PREFIX`; the sync answers
+   `400 reserved_id`), and the sweep never removes a `review-*` directory
+   whose assignment row exists with `reviewOf` null; one with no row at all
+   is swept (rows go before directories, so a crash leaves exactly those;
+   ADR-129 §10, correction of 2026-11-15).
 2. **A git channel on an internal bridge.** Containers run on the Podman
    network `codespace` (`--internal --disable-dns`, subnet `10.77.0.0/24`,
    gateway `10.77.0.254`), started with `--dns=none --add-host
