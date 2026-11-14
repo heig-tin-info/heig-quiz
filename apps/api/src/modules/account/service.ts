@@ -2,8 +2,10 @@
  * The `account` module (ADR-117, issue #681): the end of an account's
  * identity. `pseudonymizeUser` replaces who a person is and keeps what they
  * did under the same id; `lastActivity` is the last activity the lifecycle
- * reads. The routes (self-service, administration) and the daily job come
- * with the module's `routes.ts` and `jobs.ts`.
+ * reads, `dueForPseudonymization` the one rule of when the lifecycle may
+ * pseudonymize, `lifecycleHealth` what the System status reads of it. The
+ * daily job is `jobs.ts`, its stages `lifecycle.ts`; the routes
+ * (self-service, administration) come with the module's `routes.ts`.
  *
  * A module of its own rather than `admin`: two of its three callers are not
  * an administrator (the person, the lifecycle job), and the wipe touches
@@ -42,7 +44,9 @@
  *   seats; pool seats and pools until the hand-over (ADR-013 §5).
  */
 import type { FastifyBaseLogger } from "fastify";
-import { and, eq, isNotNull, isNull, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lte, not, notInArray, or, sql, type SQL } from "drizzle-orm";
+
+import { HEALTH_THRESHOLDS } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -87,8 +91,21 @@ const REFUSALS: Record<PseudonymizeRefusal, Refusal> = {
 
 export class AccountError extends refusalClass("AccountError", REFUSALS) {}
 
-/** The months between the inactivity notice and the pseudonymization (product owner, 2026-11-05). */
-const NOTICE_TO_PSEUDONYMIZATION_MONTHS = 12;
+/** The lifecycle's terms (ADR-117 §3, §10; product owner, 2026-11-05). */
+export const LIFECYCLE = {
+  /** Years without activity before the notice. */
+  noticeAfterYears: 2,
+  /** Notices sent in one run at most, the longest unused accounts first. */
+  noticesPerRun: 50,
+  /** Months from the notice to the reminder. */
+  reminderAfterMonths: 9,
+  /** Months from the notice to the pseudonymization. */
+  pseudonymizeAfterMonths: 12,
+  /** Months from the reminder to the pseudonymization: never right after a reminder a paused task sent late. */
+  afterReminderMonths: 3,
+  /** Pseudonymizations in one run at most; the rest waits for the next day. */
+  perRun: 20,
+} as const;
 
 /**
  * What production writes in place of the identity. The `anon-` subject is
@@ -107,7 +124,7 @@ const anonymousIdentity = (userId: string) => ({
  * A staff account (ADR-117 §6): the role rule of `roles.ts` gives it more
  * than student, or it owns a pool or holds a seat in one.
  */
-async function isStaff(db: Db | Tx, config: AppConfig, userId: string): Promise<boolean> {
+export async function isStaff(db: Db | Tx, config: AppConfig, userId: string): Promise<boolean> {
   if ((await roleForUser(db, config, userId)).role !== "student") return true;
   const [row] = await db
     .select({
@@ -130,8 +147,7 @@ async function refusalOf(
   const query = db
     .select({
       anonymizedAt: users.anonymizedAt,
-      due: sql<boolean>`${users.inactivityNotifiedAt} IS NOT NULL
-        AND ${users.inactivityNotifiedAt} <= now() - make_interval(months => ${NOTICE_TO_PSEUDONYMIZATION_MONTHS})`,
+      due: sql<boolean>`coalesce(${dueForPseudonymization}, false)`,
     })
     .from(users)
     .where(eq(users.id, userId));
@@ -256,3 +272,49 @@ export const lastActivity = (): SQL<Date> =>
     (SELECT max(t.last_used_at) FROM ${apiTokens} t WHERE t.user_id = ${users}.id),
     (SELECT max(g.last_used_at) FROM ${oauthGrants} g WHERE g.user_id = ${users}.id)
   ), ${users}.created_at)`.mapWith(users.createdAt);
+
+/**
+ * A dormant account used since its notice (a token, or a session opened
+ * before it): the dormancy is over, as a sign-in would have ended it.
+ */
+export const usedSinceNotice: SQL = sql`${lastActivity()} > ${users.inactivityNotifiedAt}`;
+
+/**
+ * Due for pseudonymization at `lateDays` past the term (ADR-117 §3, §10):
+ * twelve months after the notice, three after the reminder, and no
+ * activity since the notice (a token or a session used meanwhile ends the
+ * dormancy as a sign-in does). The database's clock.
+ */
+function duePast(lateDays: number): SQL {
+  const ago = (months: number) => sql`now() - make_interval(months => ${months}, days => ${lateDays})`;
+  return and(
+    lte(users.inactivityNotifiedAt, ago(LIFECYCLE.pseudonymizeAfterMonths)),
+    lte(users.inactivityRemindedAt, ago(LIFECYCLE.afterReminderMonths)),
+    not(usedSinceNotice),
+  )!;
+}
+
+/**
+ * THE rule of when the lifecycle may pseudonymize an account: the locked
+ * re-check of `pseudonymizeUser`, the job's selection and the System
+ * status's count read this one condition on `users`.
+ */
+export const dueForPseudonymization: SQL = duePast(0);
+
+/**
+ * What the System status's `accounts` check reads (ADR-117 §10): the
+ * accounts due for pseudonymization now, and those still not pseudonymized
+ * {@link HEALTH_THRESHOLDS.accountLateDays} days past their term, whatever
+ * the cause (a refusal, GitHub, the cap).
+ */
+export async function lifecycleHealth(db: Db): Promise<{ due: number; late: number }> {
+  const late = duePast(HEALTH_THRESHOLDS.accountLateDays);
+  const [row] = await db
+    .select({
+      due: sql<number>`count(*) FILTER (WHERE ${dueForPseudonymization})::int`,
+      late: sql<number>`count(*) FILTER (WHERE ${late})::int`,
+    })
+    .from(users)
+    .where(isNull(users.anonymizedAt));
+  return { due: row?.due ?? 0, late: row?.late ?? 0 };
+}

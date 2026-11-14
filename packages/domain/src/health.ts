@@ -47,6 +47,11 @@ export const HEALTH_THRESHOLDS = {
   llmBudgetWarn: 0.8,
   /** Server errors (5xx) of the last 24 h from which the page asks for a look; never a failure. */
   serverErrorsWarn: 5,
+  /**
+   * Days an account may stay due for pseudonymization before the account
+   * lifecycle fails (ADR-117 §10): a refusal, GitHub or the cap held it.
+   */
+  accountLateDays: 3,
 } as const;
 
 const T = HEALTH_THRESHOLDS;
@@ -60,6 +65,16 @@ export function worstStatus(statuses: readonly CheckStatus[]): CheckStatus {
 /** The ticker's lag: time since its last completed pass. */
 export function tickerStatus(lagMs: number, tickMs: number): CheckStatus {
   return lagMs > Math.max(T.tickerStaleMs, 3 * tickMs) ? "fail" : "ok";
+}
+
+/**
+ * The account lifecycle (ADR-117 §10): it fails when more accounts are due
+ * than one run pseudonymizes (`perRun`), or when one stayed due
+ * {@link HEALTH_THRESHOLDS.accountLateDays} days (`late`, counted by the
+ * caller against that threshold).
+ */
+export function accountsStatus(due: number, perRun: number, late: number): CheckStatus {
+  return due > perRun || late > 0 ? "fail" : "ok";
 }
 
 /** Attempts or evaluations the ticker should have closed a minute ago. */
