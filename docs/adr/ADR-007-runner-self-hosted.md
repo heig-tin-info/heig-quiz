@@ -25,8 +25,10 @@ heig-classroom no longer exists (its importer was removed by #1042).
   the project's CI again, through a staggered `quiz-grade` dispatch of the
   platform; its review stays the platform's LLM pass.
 - Amended 2026-11-14 (product owner): the `llm-review` tier is retired for
-  every course, and the organization's `ANTHROPIC_API_KEY` with it
-  (ADR-106, same date).
+  every course as a supported path, and Quiz no longer needs or asks for the
+  organization's `ANTHROPIC_API_KEY` (ADR-106, same date). The `auto` mode's
+  review dispatch is unchanged: a repository whose organization still holds
+  the secret may still run that tier, until the organization deletes it.
 
 What this record states was read from the workflows on 2026-11-08; what
 could not be read is listed under [Open points](#open-points).
@@ -116,9 +118,10 @@ on commits received before the deadline must finish within the grace.
 - A hosted runner is a fresh VM per job: nothing persists between jobs.
 - Decision 7 holds for v3 runs only: a v2 shim still names
   `ANTHROPIC_API_KEY` for `grading.yml@0.7.5`. *Amended 2026-11-14 (product
-  owner): the CI's LLM review is retired and that secret is no longer used;
-  an organization that still holds it deletes it, so that no secret sits
-  beside the student's code of a v2 lab.*
+  owner): the CI's LLM review is retired and Quiz no longer needs that
+  secret; while an organization still holds it, the student's code of a v2
+  lab may still run beside it. The organization deletes it, so that no
+  secret sits there.*
 
 ## Rejected alternatives
 

@@ -11,9 +11,11 @@ spec challenge and the lean review of the same day. Amended 2026-10-14
 (product owner, M3-14f): §10 only — the organization's `ANTHROPIC_API_KEY`
 check (F-GH-03) is dropped outright, not course by course; the CI's
 `llm-review` tier still retires course by course. Amended 2026-11-14
-(product owner): §10 only — that retirement is complete; the organization's
-`ANTHROPIC_API_KEY` is no longer used, and an organization that still holds
-the secret deletes it.
+(product owner): §10 only — the tier is retired for every course as a
+supported path, and Quiz no longer needs or asks for the organization's
+`ANTHROPIC_API_KEY`; the `auto` mode's review dispatch is unchanged, so a
+project in that mode whose organization still holds the secret may still be
+reviewed from its repository's checks, until the organization deletes it.
 
 **Superseded in part by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)
 (2026-10-26, product owner), for a project whose snapshot is schema
@@ -399,9 +401,10 @@ the freeze, searched for in every response and event of the first.
   (product owner, M3-14f): the check was dropped outright on that day, and
   the App no longer reads organization secrets; the CI's `llm-review` tier
   still retires course by course.* *Amended 2026-11-14 (product owner): the
-  tier is retired for every course. The review dispatch of the `auto` mode
-  is unchanged, and an organization that still holds the secret deletes
-  it.*
+  tier is retired for every course as a supported path. The review dispatch
+  of the `auto` mode is unchanged: a project in that mode whose organization
+  still holds the secret may still be reviewed from its repository's checks,
+  until the organization deletes the secret.*
 
 Invariants: `CLAUDE.md` invariant 12 carries the `project` action's archive
 rule, invariant 14 the target commit the server chooses from its push
@@ -428,7 +431,10 @@ Delivery: task cards L-02a to L-02g (`PROGRESS.md`; the open card in
   dependencies are in the image.
 - Two systems coexist until the CI's `llm-review` tier retires: CI review
   for `auto` projects, platform pass for `criteria` ones (the secret's
-  check already went, M3-14f, 2026-10-14).
+  check already went, M3-14f, 2026-10-14). *Amended 2026-11-14 (product
+  owner): the tier is retired as a supported path; the `auto` mode's
+  dispatch is unchanged, so the CI review still runs for an `auto` project
+  whose organization holds the secret, until the organization deletes it.*
 
 ## Alternatives considered
 
