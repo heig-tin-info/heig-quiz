@@ -468,7 +468,7 @@ describe("every validated write after the release raises the flag (D-06 review)"
 });
 
 describe("the student's pages read in a fixed number of statements (audit D-05)", () => {
-  it("draws the home and the Grades page of three released evaluations in one statement each", async () => {
+  it("draws the home and the tab's evaluation cells of three released evaluations in one statement each, the Grades page in two", async () => {
     const app = await appFor();
     let studentId: string | undefined;
     const expected = new Map<string, { points: number; totalPoints: number; grade: number; pendingCount: number }>();
@@ -511,11 +511,17 @@ describe("the student's pages read in a fixed number of statements (audit D-05)"
     const statements = vi.spyOn(client, "query");
     try {
       // One: every row is served from `released_grades` (D-06), so the two
-      // grouped queries of the live computation have nothing to read.
+      // grouped queries of the live computation have nothing to read; and one
+      // for the released projects (none here: no repository to read either).
       const rows = await gradeRows(studentId!, app.clock.now());
-      expect(statements).toHaveBeenCalledTimes(1);
+      expect(statements).toHaveBeenCalledTimes(2);
       expect(rows).toHaveLength(3);
       for (const row of rows) expect(row.score).toEqual(expected.get(row.evaluationId));
+
+      // The evaluations' rows alone, as the gradebook tab's evaluation adapter reads them: one, no project query.
+      statements.mockClear();
+      expect(evaluationRows(await live.studentEvaluationGrades(db, studentId!, app.clock.now()))).toEqual(rows);
+      expect(statements).toHaveBeenCalledTimes(1);
 
       statements.mockClear();
       const home = await live.studentHome(db, studentId!, app.clock.now());

@@ -38,7 +38,7 @@ import {
 } from "../../db/schema.js";
 import { testDatabase } from "../../test/db.js";
 import { seedLive } from "../../test/live.js";
-import { projectLiveScores, projectReleasedScore } from "./gradebook.js";
+import { projectLiveScores, studentProjectGrades } from "./gradebook.js";
 import type { ProjectRow } from "./views.js";
 
 const MIGRATION = new URL("../../../drizzle/0122_score_is_grade_linear.sql", import.meta.url);
@@ -176,7 +176,8 @@ async function grades(projectId: string, oracle?: (points: number, max: number) 
       const snap = row.releasedAt !== null && r?.releasedPoints != null && r.releasedMax != null ? oracle(r.releasedPoints, r.releasedMax) : null;
       out[i] = { live: cell ? oracle(cell.points, cell.max) : null, released: snap };
     } else {
-      out[i] = { live: cell?.grade ?? null, released: (await projectReleasedScore(db, row, seat.enrollmentId))?.grade ?? null };
+      const snapshot = (await studentProjectGrades(db, seat.userId, row.classroomId)).find((g) => g.project.id === row.id);
+      out[i] = { live: cell?.grade ?? null, released: snapshot?.score?.grade ?? null };
     }
   }
   return out;

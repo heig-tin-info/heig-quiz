@@ -9,7 +9,7 @@
  * The gradebook entries (M5-03a, F-GBOOK, ADR-074) read, never recompute:
  * the staff's cells are the evaluation's results (`resultsView`, the table
  * of the results page), the student's the rows of their Grades page
- * (`studentGrades`: F-RES-04's policy, the counted attempt of F-EVAL-15).
+ * (`studentEvaluationGrades`: F-RES-04's policy, the counted attempt of F-EVAL-15).
  * A released exam not taken is an absence (a1.0), an exercise not taken an
  * empty cell (`notTakenCell`); a poll never has a column.
  */
@@ -19,7 +19,7 @@ import { ABSENT_GRADE, evaluationColumnKind, gradeFromPoints, isFinishedAttempt,
 import type { Db } from "../../db/client.js";
 import { gradebookEvaluations, listActivities, scaleOf, type EvaluationRecord } from "../evaluation/service.js";
 import { ownEvaluationAccess } from "../guards.js";
-import { studentGrades, studentHome } from "../live/service.js";
+import { studentEvaluationGrades, studentHome } from "../live/service.js";
 import { resultsView } from "../results/service.js";
 import type {
   ActivityKind,
@@ -149,10 +149,10 @@ export const evaluationActivity: ActivityKind<"evaluation"> = {
     }));
   },
   /** An evaluation the student has no Grades row for (open, or not theirs yet) has no column for them. */
-  async studentGradebookEntries(db, userId, _seat, classroomId, now) {
+  async studentGradebookEntries(db, userId, classroomId, now) {
     const [evaluations, groups] = await Promise.all([
       gradebookEvaluations(db, classroomId),
-      studentGrades(db, userId, now, classroomId),
+      studentEvaluationGrades(db, userId, now, classroomId),
     ]);
     const rows = new Map<string, EvaluationGradeRow>();
     for (const row of groups.flatMap((g) => g.rows)) if (row.kind === "evaluation") rows.set(row.evaluationId, row);

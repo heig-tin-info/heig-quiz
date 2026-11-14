@@ -505,13 +505,11 @@ describe("the criteria table (ADR-106 §9, L-02f)", () => {
     expect(within(jalon!).getByRole("img", { name: /locked/ })).toBeInTheDocument();
     expect(within(commits!).getByText("—")).toBeInTheDocument();
     expect(within(commits!).queryByText("indicative")).toBeNull();
-    // Folded, then the rationale as a text node: no element of its markup reaches the page.
-    expect(within(jalon!).queryByText(XSS)).toBeNull();
-    await userEvent.click(within(jalon!).getByRole("button", { name: "Rationale" }));
+    // Unfolded, the rationale as a text node: no element of its markup reaches the page.
     expect(within(jalon!).getByText(XSS)).toBeInTheDocument();
     expect(document.querySelector("script, b")).toBeNull();
-    // No action of its own: the page's one action is the header's.
-    expect(within(table).queryAllByRole("button").map((b) => b.textContent)).toEqual(["Rationale"]);
+    // No action of its own, not even a fold: the page's one action is the header's.
+    expect(within(table).queryAllByRole("button")).toEqual([]);
   });
 
   it("says final once every row is validated, without the indicative badge", async () => {

@@ -5,8 +5,10 @@
  * criterion (its description), max, obtained. Obtained is `—` until a pass
  * or the teacher graded it; an `indicative` badge marks every row not yet
  * validated and released (F-PROJ-14); a lock, a row a milestone graded and
- * locked. The rationale, folded under its criterion, exists only after the
- * repository's definitive freeze: the server sends none before. It is plain
+ * locked. The rationale, shown unfolded under its criterion (product owner,
+ * 2026-11-06: the student reads why, without a click; the staff's table keeps
+ * its fold), exists only after the repository's definitive freeze: the
+ * server sends none before. It is plain
  * text — a text node, never markup (N-SEC-14's rule). The table is final
  * once every row is `validated`.
  *
@@ -21,7 +23,7 @@ import type { StudentCriteriaRow } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { RationaleFold, RationaleText } from "../project/grading/RationaleFold";
+import { RationaleText } from "../project/grading/RationaleFold";
 import { Badge, Card, cx, SectionHeading, T, TableHead, Tip, type Column } from "../ui";
 
 export function CriteriaSection({ rows }: { rows: StudentCriteriaRow[] }) {
@@ -88,15 +90,14 @@ function CriteriaList({ rows }: { rows: StudentCriteriaRow[] }) {
   );
 }
 
-/** The criterion's description, and its rationale folded under it when the server sent one. */
+/**
+ * The criterion's description, and its rationale unfolded under it when the
+ * server sent one, held to a reading measure (ADR-106 §9, amended 2026-11-06).
+ */
 const Criterion = ({ row }: { row: StudentCriteriaRow }) => (
   <span className="flex flex-col gap-0.5">
     <span className="text-sm font-semibold leading-snug text-fg">{row.description}</span>
-    {row.rationale !== undefined ? (
-      <RationaleFold>
-        <RationaleText>{row.rationale}</RationaleText>
-      </RationaleFold>
-    ) : null}
+    {row.rationale !== undefined ? <RationaleText>{row.rationale}</RationaleText> : null}
   </span>
 );
 

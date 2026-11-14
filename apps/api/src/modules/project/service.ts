@@ -68,7 +68,12 @@ export { regrade } from "./regrade.js";
 export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";
-export { gradebookProjects, projectLiveScores, projectReleasedScore } from "./gradebook.js";
+export {
+  gradebookProjects,
+  projectLiveScores,
+  studentProjectGrades,
+  type StudentProjectGrade,
+} from "./gradebook.js";
 export { projectsChanged } from "./events.js";
 export { ConfirmationNeeded, copiesBefore, followingCopies, RepoGroupTouched, setFrozen, stepCopies, stopProjects } from "./groupCopy.js";
 export { requestGroupSync } from "./groupSync.js";

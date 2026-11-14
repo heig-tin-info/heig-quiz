@@ -5,8 +5,9 @@
  * everything a row says (`GET /app/api/student/results`): its status, whether
  * it carries points and a grade (never under the feedback policy `none`,
  * never a grade before the release: an `available` row carries its points
- * alone, marked indicative), and whether it opens a feedback page. This page
- * computes nothing; it draws.
+ * alone, marked indicative), and whether it opens a feedback page. A
+ * released project's row opens the project's page. This page computes
+ * nothing; it draws.
  *
  * Inside a classroom, the rows that count toward the mean ("Count toward
  * your average") come before the others ("Indicative"), whose grades are
@@ -103,11 +104,13 @@ export function StudentGrades({ navigate }: { navigate: (r: Route) => void }) {
 function ClassroomGrades({ group, navigate }: { group: GradeGroup; navigate: (r: Route) => void }) {
   const t = useT();
   const room = group.classroom;
-  // A project's row opens nothing: its score lives on the project's page (F-PROJ-15).
+  // A project's row opens the project's page, where its score and its comment live (F-PROJ-15).
   const open = (row: GradeRow) =>
-    row.kind === "evaluation" && row.feedbackAttemptId !== null
-      ? () => navigate(feedbackLink(row.feedbackAttemptId!).route)
-      : null;
+    row.kind === "project"
+      ? () => navigate({ view: "project", id: row.projectId })
+      : row.feedbackAttemptId !== null
+        ? () => navigate(feedbackLink(row.feedbackAttemptId!).route)
+        : null;
   return (
     <section className="space-y-3">
       <SectionHeading
