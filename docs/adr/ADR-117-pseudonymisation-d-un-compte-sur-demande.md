@@ -164,11 +164,11 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
 
 8. **One wipe list, shared with staging.** The per-account fragment is the
    database function `quiz_pseudonymize_account(...)`, created by migration
-   `0129`; a later migration changes the list with `CREATE OR REPLACE`. The
+   `0132`; a later migration changes the list with `CREATE OR REPLACE`. The
    service runs it inside its transaction (§10), and
    `scripts/staging-pseudonymize.sql` calls it once per person, the whole-copy
    rest staying in the script. The staging export therefore requires
-   production at migration `0129` or later. The function is parameterized: the subject prefix (`anon-` here, `staging:` on staging),
+   production at migration `0132` or later. The function is parameterized: the subject prefix (`anon-` here, `staging:` on staging),
    the replacement names, and whether it sets `anonymized_at` — production
    does, staging does not, else every copied account would lose its role and
    leave the admin list. `apps/api/src/stagingScrub.db.test.ts`, which searches
@@ -313,7 +313,7 @@ upserts on `oidc_sub` and writes the fresh edu-ID name, address and picture
   under the one test.
 - The routine writes other modules' tables directly (§8): accepted for this
   one fragment, not as a precedent.
-- The staging export requires production at migration `0129` or later, since
+- The staging export requires production at migration `0132` or later, since
   `scripts/staging-pseudonymize.sql` calls the function it creates (§8).
 - In the millisecond window where a sign-in has passed its refusal check
   before the wipe commits, that sign-in creates a fresh, empty account without

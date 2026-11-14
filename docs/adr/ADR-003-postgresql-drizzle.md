@@ -44,7 +44,7 @@ mechanism (NFR-09), revocable sessions (AU-06), a durable job queue and a simple
    *Amendment of 2026-11-05 (ruled on the product owner's delegation, issue #681,
    [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) §11): the audit log has a
    retention of three years.* The trigger becomes one row-level trigger,
-   `BEFORE UPDATE OR DELETE FOR EACH ROW` (migration `0130_audit_log_retention`, beside
+   `BEFORE UPDATE OR DELETE FOR EACH ROW` (migration `0133_audit_log_retention`, beside
    `0096_audit_log_immutable`), that lets a row be deleted only when its `created_at` is older
    than `now() - interval '3 years'`, by the database's clock; `UPDATE` stays refused for
    every row (a statement that matches no row changes nothing and passes). A daily job

@@ -1517,7 +1517,7 @@ there (ADR-028, *Update 2026-10-11*):
 ```
 
 Since 2026-11-05 (ADR-117 §8) the export requires production at migration
-`0129` or later: `scripts/staging-pseudonymize.sql` calls the database function
+`0132` or later: `scripts/staging-pseudonymize.sql` calls the database function
 `quiz_pseudonymize_account(...)` that migration creates, once per person.
 
 The export copies production's database into a scratch database of
