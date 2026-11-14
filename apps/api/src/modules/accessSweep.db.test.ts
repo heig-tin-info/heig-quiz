@@ -442,6 +442,13 @@ describe("every staff route of a project, and of the App (invariant 6, N-SEC-20)
 /** The administration routes whose refusal is the 404 of a missing entity (`adminGuard(app, { hidden: true })`): the kiosk stations. */
 const HIDDEN_ADMIN = /^\/app\/api\/admin\/kiosk-devices(\/|$)/;
 
+/**
+ * The administration routes that also take Super Powers (`superPowersGuard`,
+ * ADR-054): an admin without them meets that guard's 403, and passes once
+ * they are on. ADR-117 §6: pseudonymizing an account.
+ */
+const SUPER_POWERS_ADMIN = new Set(["POST /app/api/admin/users/:id/pseudonymize"]);
+
 /** An administration route's inner parameters: any value, the role being refused before anything is read. */
 const anyParams = (path: string) => path.replace(/:(\w+)/g, () => randomUUID());
 
@@ -455,6 +462,8 @@ describe("every administration route (the admin's alone)", () => {
     const teacher = await server.signIn("teacher");
     const student = await server.signIn("student");
     const admin = await server.signIn("admin");
+    const superAdmin = await server.signInWithSuperPowers();
+    expect(routes.filter(({ method, path }) => SUPER_POWERS_ADMIN.has(`${method} ${path}`)).length).toBe(SUPER_POWERS_ADMIN.size);
     for (const { method, path } of routes) {
       const name = `${method} ${path}`;
       const url = anyParams(path);
@@ -469,8 +478,15 @@ describe("every administration route (the admin's alone)", () => {
       );
       expect(await seen(server, method, anyParams(path), teacher), name).toEqual(asTeacher);
       expect(await seen(server, method, url, student), name).toEqual(asTeacher);
-      // And the admin passes the guard.
-      expect([401, 403], name).not.toContain((await call(server, method, url, admin)).statusCode);
+      // And the admin passes the guard; with Super Powers where the route takes them.
+      if (SUPER_POWERS_ADMIN.has(name)) {
+        expect(await seen(server, method, url, admin), name).toEqual({
+          status: 403,
+          body: JSON.stringify({ error: "super_powers_required", message: "This takes Super Powers" }),
+        });
+      }
+      const passer = SUPER_POWERS_ADMIN.has(name) ? superAdmin : admin;
+      expect([401, 403], name).not.toContain((await call(server, method, url, passer)).statusCode);
     }
   });
 });
