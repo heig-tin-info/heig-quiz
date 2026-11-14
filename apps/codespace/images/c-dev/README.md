@@ -175,8 +175,8 @@ a repository's `runOn: folderOpen` task never starts by itself. It is set
 for every session, not only a staff member's review session: no template
 relies on an automatic task, and a student starts a task by hand as before.
 A mitigation, not a guarantee (ADR-129 §9). It takes effect with the next
-image build; `test.sh` § 7 checks the name in the bundled package
-(TODO(verify) on 4.137.0 at that build).
+image build; `test.sh` § 7 checks the name in the bundled package (listed
+under [TODO(verify)](#todoverify)).
 
 ### The two settings added after the first real trial (2026-09-18)
 
@@ -726,6 +726,11 @@ listed here.
   `seed/templates/exam-c/.vscode/launch.json`), as asked for by
   [docs/history/milestone-0.md](../../docs/history/milestone-0.md) § V1 and as observed by the
   end-to-end test ([docs/history/v1.md](../../docs/history/v1.md) § 2, step 3).
+- `TODO(verify)` **VS Code 1.137.0** — `task.allowAutomaticTasks: off`
+  (ADR-129 §10): that the name exists in the embedded package, and that a
+  repository's `runOn: folderOpen` task does not start on opening. `test.sh`
+  § 7 checks the first at the next image build; the second requires a
+  browser.
 - `TODO(verify)` **VS Code 1.137.0** — `workbench.secondarySideBar.defaultVisibility:
   hidden`: the key, the enumeration and the upstream default are collected from the
   embedded package, but the effect (bar absent on opening) requires a

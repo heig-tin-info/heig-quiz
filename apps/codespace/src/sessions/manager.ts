@@ -17,12 +17,12 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 
-import { and, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { Engine } from "../engine/index.js";
 import type { Db } from "../db/client.js";
 import type { AssignmentRepoRef, AssignmentRow, SessionRow, UserRow } from "../db/schema.js";
-import { assignments, sessions } from "../db/schema.js";
+import { sessions } from "../db/schema.js";
 import type { BootstrapCause } from "../web/i18n.js";
 import {
   ForgeUnconfiguredError,
@@ -48,7 +48,8 @@ import {
 } from "./workspace.js";
 import { snapshot } from "./shadow.js";
 import {
-  LIVE_STATES,
+  REVIEW_ASSIGNMENT_PREFIX,
+  deleteDeadReviews,
   findAnySession,
   findAssignment,
   findLiveSession,
@@ -355,15 +356,6 @@ export function shortCauseOf(err: unknown, repo: RepoRef | undefined): Bootstrap
   }
   return { key: "causeFetchFailed", repo: where };
 }
-
-/** The portal's id of a review assignment is this prefix and Quiz's `project_repos.id` (ADR-129 §10). */
-export const REVIEW_ASSIGNMENT_PREFIX = "review-";
-
-/**
- * At most this many live review sessions per quota holder (ADR-129 §3), so
- * that reviews cannot starve the students. The portal alone enforces it.
- */
-export const REVIEW_SESSIONS_PER_HOLDER = 2;
 
 /**
  * Whose workspace the forge serves: for a review, the reviewed project and
@@ -691,6 +683,9 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         existing.containerName !== null &&
         (await engine.inspect(existing.containerName))?.state === "running";
       if (alive) {
+        // A live review resumed is not re-fetched: ADR-129 §10's "each launch
+        // re-fetches" means each new review session, whose directory is
+        // always fresh since the previous one was removed at its close.
         // The container is already running: it is not restarted (invariant
         // 10). But a staging repository **with no ref at all** is the symptom of
         // a missed seeding, and that is exactly the state left by the first real
@@ -955,10 +950,8 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     async snapshotAll() {
       let committed = 0;
       let skipped = 0;
-      for (const session of listLiveSessions(db)) {
-        // A review session keeps no history of what it opened (ADR-129 §10).
-        const assignment = findAssignment(db, session.assignmentId);
-        if (assignment && isReview(assignment)) continue;
+      // A review session keeps no history of what it opened (ADR-129 §10).
+      for (const session of listLiveSessions(db, { reviews: false })) {
         try {
           const result = await snapshot(session.volumeDir);
           if (result.sha) committed += 1;
@@ -981,28 +974,13 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     },
 
     async sweepReviews() {
-      // The rows: a review assignment's dead sessions, then the assignment
-      // once it has no session left. Nothing references a session row (a
-      // review writes no `PushEvent`).
-      const reviewIds = db
-        .select({ id: assignments.id })
-        .from(assignments)
-        .where(isNotNull(assignments.reviewOf))
-        .all()
-        .map((r) => r.id);
-      let removedAssignments = 0;
-      if (reviewIds.length > 0) {
-        db.delete(sessions)
-          .where(and(inArray(sessions.assignmentId, reviewIds), notInArray(sessions.state, [...LIVE_STATES])))
-          .run();
-        for (const id of reviewIds) {
-          if (db.select({ id: sessions.id }).from(sessions).where(eq(sessions.assignmentId, id)).get()) continue;
-          db.delete(assignments).where(eq(assignments.id, id)).run();
-          removedAssignments += 1;
-        }
-      }
+      const started = Date.now();
+      const removedAssignments = deleteDeadReviews(db);
       // The directories, read from the disk: also those whose row is gone.
-      // `withFileTypes` never follows a link, and only directories count.
+      // `withFileTypes` never follows a link, and only directories count. A
+      // directory named like a review is removed only when no assignment of
+      // that name exists or it IS a review: a synchronized project's volume
+      // is a student's work, never swept, whatever its name.
       let removedDirectories = 0;
       const logins = await readdir(opts.volumesRoot, { withFileTypes: true }).catch(() => []);
       for (const login of logins) {
@@ -1010,6 +988,8 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         const entries = await readdir(join(opts.volumesRoot, login.name), { withFileTypes: true }).catch(() => []);
         for (const entry of entries) {
           if (!entry.isDirectory() || !entry.name.startsWith(REVIEW_ASSIGNMENT_PREFIX)) continue;
+          const assignment = findAssignment(db, entry.name);
+          if (assignment && !isReview(assignment)) continue;
           if (findLiveSession(db, login.name, entry.name)) continue;
           try {
             if (await removeReviewDir(login.name, entry.name)) removedDirectories += 1;
@@ -1018,7 +998,10 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
           }
         }
       }
-      log.info({ directories: removedDirectories, assignments: removedAssignments }, "review sweep");
+      log.info(
+        { directories: removedDirectories, assignments: removedAssignments, ms: Date.now() - started },
+        "review sweep",
+      );
       return { directories: removedDirectories, assignments: removedAssignments };
     },
 
@@ -1070,8 +1053,9 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
 
     repoOfEvent(row) {
       const assignment = findAssignment(db, row.assignment);
-      // A review session never pushes (ADR-129 §10); should a row ever name
-      // one, it has no relay destination, so nothing reaches the forge.
+      // A deliberate second wall (ADR-129 §10): a review session never pushes
+      // (`serviceAllowed` refuses it), and should a row ever name one, it has
+      // no relay destination, so nothing reaches the forge.
       if (assignment && isReview(assignment)) return undefined;
       // The launch token's repository, when the session carries one; the
       // assignment's convention otherwise. The session is looked up by its id,

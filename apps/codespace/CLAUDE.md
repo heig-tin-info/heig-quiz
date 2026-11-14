@@ -150,10 +150,11 @@ channel divergence for its containers.
 9. **A token grants no role.** Every portal account is born from a launch
    token as a student, or from a review launch token (ADR-129, audience
    `heig-codespace-review`, `GET /review` only) as a staff member's own
-   account, still with no role; nothing writes `users.role` any more. A review session is never listed
-   among a project's sessions (`GET /api/assignments/:id/sessions`) and
-   never pushes: its staging repository refuses `git-receive-pack` and its
-   GitHub token is read-only, so no `PushEvent` and no relay exist.
+   account, still with no role; nothing writes `users.role` any more. A
+   review session is never listed among a project's sessions
+   (`GET /api/assignments/:id/sessions`) and never pushes: its staging
+   repository refuses `git-receive-pack` and its GitHub token is read-only,
+   so no `PushEvent` and no relay exist.
 10. **`PushEvent` before relay.** A push's `PushEvent` row is written before
     any relay attempt (none while the relay is off): it is the proof of
     submission. The relay never forces and never deletes a branch

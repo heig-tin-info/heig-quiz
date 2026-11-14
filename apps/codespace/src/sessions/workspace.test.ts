@@ -630,12 +630,17 @@ describe("review session (ADR-129 §10)", () => {
     const live = await reviewAssignment("review-live");
     const dead = await reviewAssignment("review-dead");
     const lab = await insertAssignment();
+    // A synchronized project whose id merely looks like a review (an old
+    // portal accepted it): its student's volume is never swept.
+    const lookalike = await insertAssignment({ id: "review-x" });
     const manager = makeManager();
     const kept = await manager.start(user, live);
     const gone = await manager.start(user, dead);
     const own = await manager.start(user, lab);
+    const student = await manager.start(user, lookalike);
     await manager.close(gone.session.id, "test");
     await manager.close(own.session.id, "test");
+    await manager.close(student.session.id, "test");
     // Leftovers: the dead review's directory back on disk, and one whose row is gone.
     await mkdir(join(gone.session.volumeDir, "work"), { recursive: true });
     await mkdir(join(root, "u-other", "review-orphan", "work"), { recursive: true });
@@ -646,7 +651,9 @@ describe("review session (ADR-129 §10)", () => {
     expect(await exists(join(root, "u-other", "review-orphan"))).toBe(false);
     // A student's volume is kept after its close, as always.
     expect(await exists(own.session.volumeDir)).toBe(true);
+    expect(await exists(join(student.session.volumeDir, "work"))).toBe(true);
     expect(findAnySession(db, "student", "review-dead")).toBeUndefined();
-    expect(db.select().from(assignments).all().map((a) => a.id).sort()).toEqual(["review-live", "tp"]);
+    expect(findAnySession(db, "student", "review-x")?.state).toBe("closed");
+    expect(db.select().from(assignments).all().map((a) => a.id).sort()).toEqual(["review-live", "review-x", "tp"]);
   });
 });

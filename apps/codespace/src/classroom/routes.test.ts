@@ -136,6 +136,8 @@ function fakeManager(db: Db, starts: Harness["starts"], closes: string[] = []): 
   return {
     async close(sessionId: string): Promise<void> {
       closes.push(sessionId);
+      // A real close stops a container: it yields, and another request may run meanwhile.
+      await new Promise((resolve) => setTimeout(resolve, 20));
       db.update(sessions).set({ state: "closed" }).where(eq(sessions.id, sessionId)).run();
     },
     async start(
@@ -307,6 +309,13 @@ describe("PUT /api/assignments/:id", () => {
   it("400 if the body id and the URL id differ", async () => {
     const reply = await put(syncBody({ id: "a-other" }), {}, "a-lab");
     expect(reply.statusCode).toBe(400);
+  });
+
+  it("400 on an id under the review prefix, the portal's own (ADR-129 §10)", async () => {
+    const reply = await put(syncBody({ id: "review-x" }), {}, "review-x");
+    expect(reply.statusCode).toBe(400);
+    expect((reply.json() as { error: string }).error).toBe("reserved_id");
+    expect(findAssignment(h.db, "review-x")).toBeUndefined();
   });
 
   it("400 if the id cannot name a volume directory", async () => {
@@ -971,6 +980,16 @@ describe("GET /review", () => {
     const bob = await review({ sub: "u-bob", email: "u-bob@heig-vd.ch", projectRepoId: REPO_C });
     expect(bob.statusCode).toBe(303);
     expect(h.closes).toEqual([`sess-u-bob-review-${REPO_B}`]);
+  });
+
+  it("two simultaneous openings by one staff member leave one live review (one at a time per login)", async () => {
+    const first = await liveReview("u-sam", REPO_A);
+    const [b, c] = await Promise.all([review({ projectRepoId: REPO_B }), review({ projectRepoId: REPO_C })]);
+    expect([b.statusCode, c.statusCode]).toEqual([303, 303]);
+    // B replaced A, then C replaced B: never two at once.
+    expect(h.closes).toEqual([first, `sess-u-sam-review-${REPO_B}`]);
+    const live = h.db.all<{ id: string }>("SELECT id FROM sessions WHERE student = 'u-sam' AND state = 'running'");
+    expect(live).toEqual([{ id: `sess-u-sam-review-${REPO_C}` }]);
   });
 
   it("resuming the same repository's live review consults no quota and closes nothing", async () => {

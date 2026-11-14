@@ -2,7 +2,7 @@
  * Database access to assignments and sessions. No hidden ORM: functions that
  * take the Drizzle handle, as everywhere else in the portal.
  */
-import { and, desc, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, notInArray, type SQL } from "drizzle-orm";
 
 import type { Db } from "../db/client.js";
 import {
@@ -11,6 +11,7 @@ import {
   sessions,
   users,
   type AssignmentRow,
+  type NewAssignmentRow,
   type PushEventRow,
   type SessionRow,
   type UserRow,
@@ -25,8 +26,33 @@ import { lastRejectedPush, type RejectedPush, type RepoRef } from "../git/index.
  */
 export const LIVE_STATES = ["starting", "running", "stopped"] as const;
 
+/** The portal's id of a review assignment is this prefix and Quiz's `project_repos.id` (ADR-129 §10). */
+export const REVIEW_ASSIGNMENT_PREFIX = "review-";
+
+/**
+ * At most this many live review sessions per quota holder (ADR-129 §3), so
+ * that reviews cannot starve the students. The portal alone enforces it.
+ */
+export const REVIEW_SESSIONS_PER_HOLDER = 2;
+
 export function findAssignment(db: Db, id: string): AssignmentRow | undefined {
   return db.select().from(assignments).where(eq(assignments.id, id)).get();
+}
+
+/**
+ * Inserts an assignment or updates every field of it but `createdAt`: the
+ * platform's sync and a review launch alike.
+ */
+export function upsertAssignment(db: Db, row: NewAssignmentRow): AssignmentRow {
+  const { createdAt: _keep, ...updatable } = row;
+  const saved = db
+    .insert(assignments)
+    .values(row)
+    .onConflictDoUpdate({ target: assignments.id, set: updatable })
+    .returning()
+    .get();
+  if (!saved) throw new Error(`assignment ${row.id} upsert returned no row`);
+  return saved;
 }
 
 export function isOpen(assignment: AssignmentRow, now: Date = new Date()): boolean {
@@ -87,12 +113,20 @@ export function findAnySession(
     .get();
 }
 
-export function listLiveSessions(db: Db): SessionRow[] {
+/** Live sessions; `{ reviews: false }` leaves out the staff's review sessions (ADR-129 §10). */
+export function listLiveSessions(db: Db, opts: { reviews?: boolean } = {}): SessionRow[] {
   return db
-    .select()
+    .select({ session: sessions })
     .from(sessions)
-    .where(inArray(sessions.state, [...LIVE_STATES]))
-    .all();
+    .innerJoin(assignments, eq(sessions.assignmentId, assignments.id))
+    .where(
+      and(
+        inArray(sessions.state, [...LIVE_STATES]),
+        opts.reviews === false ? isNull(assignments.reviewOf) : undefined,
+      ),
+    )
+    .all()
+    .map((r) => r.session);
 }
 
 export function updateSession(db: Db, id: string, patch: Partial<SessionRow>): SessionRow {
@@ -158,25 +192,58 @@ export function isReview(assignment: Pick<AssignmentRow, "reviewOf">): boolean {
   return Boolean(assignment.reviewOf);
 }
 
-/**
- * Live review sessions (ADR-129 §10), of one portal login (the staff
- * member, at most one by construction) or of one quota holder (at most
- * `REVIEW_SESSIONS_PER_HOLDER`).
- */
-export function liveReviewSessions(db: Db, by: { student: string } | { teacherId: string }): SessionRow[] {
+/** Live review sessions (ADR-129 §10) matching `where`. */
+function liveReviewIds(db: Db, where: SQL | undefined): string[] {
   return db
-    .select({ session: sessions })
+    .select({ id: sessions.id })
     .from(sessions)
     .innerJoin(assignments, eq(sessions.assignmentId, assignments.id))
-    .where(
-      and(
-        isNotNull(assignments.reviewOf),
-        inArray(sessions.state, [...LIVE_STATES]),
-        "student" in by ? eq(sessions.student, by.student) : eq(sessions.teacherId, by.teacherId),
-      ),
-    )
+    .where(and(isNotNull(assignments.reviewOf), inArray(sessions.state, [...LIVE_STATES]), where))
     .all()
-    .map((r) => r.session);
+    .map((r) => r.id);
+}
+
+/** A staff member's live review sessions: at most one by construction (ADR-129 §1). */
+export function liveReviewSessionIds(db: Db, student: string): string[] {
+  return liveReviewIds(db, eq(sessions.student, student));
+}
+
+/** A quota holder's live review sessions, but those in `exclude` (ADR-129 §3). */
+export function countLiveReviewSessions(db: Db, teacherId: string, exclude: readonly string[] = []): number {
+  return liveReviewIds(
+    db,
+    and(eq(sessions.teacherId, teacherId), exclude.length > 0 ? notInArray(sessions.id, [...exclude]) : undefined),
+  ).length;
+}
+
+/**
+ * At startup (ADR-129 §10): deletes the review assignments' dead sessions,
+ * then every review assignment left without a session. Nothing references a
+ * session row (a review writes no `PushEvent`). Returns the number of
+ * assignments deleted.
+ */
+export function deleteDeadReviews(db: Db): number {
+  const reviewIds = db
+    .select({ id: assignments.id })
+    .from(assignments)
+    .where(isNotNull(assignments.reviewOf))
+    .all()
+    .map((r) => r.id);
+  if (reviewIds.length === 0) return 0;
+  db.delete(sessions)
+    .where(and(inArray(sessions.assignmentId, reviewIds), notInArray(sessions.state, [...LIVE_STATES])))
+    .run();
+  const kept = new Set(
+    db
+      .select({ id: sessions.assignmentId })
+      .from(sessions)
+      .where(inArray(sessions.assignmentId, reviewIds))
+      .all()
+      .map((r) => r.id),
+  );
+  const gone = reviewIds.filter((id) => !kept.has(id));
+  if (gone.length > 0) db.delete(assignments).where(inArray(assignments.id, gone)).run();
+  return gone.length;
 }
 
 /** Sessions of an assignment, with their user: the platform's teacher table. */
