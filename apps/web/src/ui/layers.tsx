@@ -632,13 +632,17 @@ export function IconLink({ label, href, children }: { label: string; href: strin
 /**
  * Icon-only round button on the shared Tip tooltip (label = accessible name
  * too). The disc, its sizes, `danger` and `active` are `@quiz/ui`'s; this adds
- * the tooltip and the shortcut.
+ * the tooltip and the shortcut. With a `disabledReason` the button is
+ * disabled and the tooltip says why; a wrapper takes the hover and the focus
+ * a disabled button cannot, as `HeldButton` does, and a click on it never
+ * reaches the row or the card it sits in.
  */
 export function IconButton({
   label,
   shortcut,
   size = "md",
   tipSide,
+  disabledReason,
   ...props
 }: Omit<ComponentProps<typeof IconButtonBase>, "size" | "label"> & {
   label: string;
@@ -652,9 +656,20 @@ export function IconButton({
   size?: IconButtonSize;
   /** Where the tooltip opens (`Tip`'s `side`). */
   tipSide?: TipSide;
+  /** Why the action cannot be taken now: the button is held, this is its tooltip. */
+  disabledReason?: string | null;
 }) {
   const t = useT();
   const key = shortcut === "Space" ? t("key.space") : shortcut;
+  if (disabledReason) {
+    return (
+      <Tip label={disabledReason} side={tipSide}>
+        <span tabIndex={0} className="rounded-full" onClick={(e) => e.stopPropagation()}>
+          <IconButtonBase {...props} label={label} size={size} disabled />
+        </span>
+      </Tip>
+    );
+  }
   return (
     <Tip label={key ? `${label} (${key})` : label} side={tipSide}>
       <IconButtonBase {...props} label={label} size={size} aria-keyshortcuts={shortcut} />

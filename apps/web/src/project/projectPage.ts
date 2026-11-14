@@ -397,10 +397,10 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   command_needs_network: "project.criteria.error.command_needs_network",
   seb_required: "project.refusal.sebRequired",
   // ADR-129 §5: the staff's *Open in workspace*.
-  review_not_granted: "project.repo.review.refusal.review_not_granted",
-  review_archived: "project.repo.review.refusal.review_archived",
-  review_repo_unavailable: "project.repo.review.refusal.review_repo_unavailable",
-  review_exam_open: "project.repo.review.refusal.review_exam_open",
+  review_not_granted: "project.refusal.reviewNotGranted",
+  review_archived: "project.refusal.reviewArchived",
+  review_repo_unavailable: "project.refusal.reviewRepoUnavailable",
+  review_exam_open: "project.refusal.reviewExamOpen",
 };
 
 /** The dictionary key wording a refusal the page knows, or null (the server's message then). */

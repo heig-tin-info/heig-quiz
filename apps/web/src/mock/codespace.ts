@@ -9,9 +9,7 @@
  * "Labo 3 — listes chaînées" is a draft in the students' own tools whose
  * mode the persona may set (an owner with the grant; `?assistant=1` makes
  * them an assistant, refused); "Labo 5 — arbres" runs under Safe Exam
- * Browser (D21, M6-07); with `?pjstates=1`, "Labo 8 — sans note" runs
- * under Safe Exam Browser too, its deadline not applied: the staff's *Open
- * in workspace* (ADR-129) is held on each of its rows. The student persona's
+ * Browser (D21, M6-07). The student persona's
  * open project runs in the workspace, and the invited one under Safe Exam
  * Browser (`mock/student.ts`; `?sebproject=1` puts the student inside SEB,
  * on that project's `seb` session). The administration's teachers carry a
@@ -41,8 +39,6 @@ const WORKSPACES = new Map<string, MockWorkspace>([
   ["pj-published", { mode: "online", launched: true, syncedAt: iso(-2 * H), syncError: null }],
   // D21 (M6-07): a draft under Safe Exam Browser, synced like an online project.
   ["pj-draft-manual", { mode: "online_seb", launched: false, syncedAt: iso(-30 * 60_000), syncError: null }],
-  // ADR-129 §11 (`?pjstates=1`): a published exam under Safe Exam Browser, the deadline ahead.
-  ["pj-ungraded", { mode: "online_seb", launched: true, syncedAt: iso(-3 * H), syncError: null }],
 ]);
 
 function workspaceOr404(id: string): MockWorkspace {

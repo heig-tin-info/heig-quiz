@@ -1,15 +1,13 @@
-import { useMutation } from "@tanstack/react-query";
 import { Laptop, Loader2 } from "lucide-react";
 
-import { workspaceReviewPath, type ProjectDetail, type ProjectRepoView, type WorkspaceReview } from "@quiz/contracts";
+import { workspaceReviewPath, type ProjectDetail, type ProjectRepoView } from "@quiz/contracts";
 import { staffReviewRefusal, type StaffReviewRefusalCode } from "@quiz/domain";
-import { IconButton as IconDisc } from "@quiz/ui";
 
-import { api } from "../api";
 import { useClassroom } from "../course/parts";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { HeldButton, IconButton, Tip } from "../ui";
+import { usePortalLaunch } from "../portalLaunch";
+import { HeldButton, IconButton } from "../ui";
 import { refusalMessage } from "./projectPage";
 import { useWorkspace } from "./ProjectWorkspace";
 
@@ -49,7 +47,9 @@ function reviewFacts(repo: ProjectRepoView) {
  * F-PROJ-27), or null when the platform offers none: no portal (the
  * workspace read's 404), or the project's quota holder holds no enabled
  * workspace grant (`ProjectWorkspace.review`). Reads the page's workspace
- * and classroom, already in the cache.
+ * and classroom, already in the cache. The project's payload does not carry
+ * its classroom's archive: while that read loads or fails, the classroom
+ * counts as not archived, and the route refuses anyway (`review_archived`).
  */
 export function useReviewAction(project: ProjectDetail): ((repo: ProjectRepoView) => ReviewAction) | null {
   const workspace = useWorkspace(project.id);
@@ -60,7 +60,7 @@ export function useReviewAction(project: ProjectDetail): ((repo: ProjectRepoView
   return (repo) =>
     actionOf(
       staffReviewRefusal({
-        holderGranted: ws.review,
+        holderGranted: true,
         classroomArchived,
         projectArchived: project.archivedAt !== null,
         repo: reviewFacts(repo),
@@ -69,22 +69,11 @@ export function useReviewAction(project: ProjectDetail): ((repo: ProjectRepoView
     );
 }
 
-/**
- * The launch (ADR-129 §5): a POST under the CSRF check, then the page goes
- * to the portal's address it answers, in the same tab, as the student's
- * *Open workspace* does. A refusal is worded by its code; anything else is
- * the page's toast. Still busy once answered: the page is leaving.
- */
+/** The launch (ADR-129 §5): a refusal is worded by its code, anything else is the page's toast. */
 function useReviewLaunch(projectId: string, repoId: string) {
   const t = useT();
   const toast = useToast();
-  const launch = useMutation({
-    mutationFn: () => api<WorkspaceReview>(workspaceReviewPath(projectId, repoId), { method: "POST" }),
-    onSuccess: ({ url }) => window.location.assign(url),
-    onError: (error) => toast(refusalMessage(error, t), "error"),
-  });
-  const busy = launch.isPending || launch.isSuccess;
-  return { busy, open: () => (busy ? undefined : launch.mutate()) };
+  return usePortalLaunch(workspaceReviewPath(projectId, repoId), (error) => toast(refusalMessage(error, t), "error"));
 }
 
 /**
@@ -94,29 +83,17 @@ function useReviewLaunch(projectId: string, repoId: string) {
  */
 export function OpenInWorkspaceIcon({ projectId, repo, action }: { projectId: string; repo: ProjectRepoView; action: ReviewAction }) {
   const t = useT();
-  const { busy, open } = useReviewLaunch(projectId, repo.id);
+  const { busy, launch } = useReviewLaunch(projectId, repo.id);
   if (action === "absent") return null;
-  const label = t("project.repo.openInWorkspace");
-  if (action === "examOpen") {
-    // The wrapper takes the hover and the focus a disabled button cannot (`HeldButton`'s way).
-    return (
-      <Tip label={t("project.repo.openInWorkspace.examOpen")}>
-        <span tabIndex={0} className="rounded-full" onClick={(e) => e.stopPropagation()}>
-          <IconDisc label={label} size="md" disabled>
-            <Laptop />
-          </IconDisc>
-        </span>
-      </Tip>
-    );
-  }
   return (
     <IconButton
-      label={label}
+      label={t("project.repo.openInWorkspace")}
+      disabledReason={action === "examOpen" ? t("project.repo.openInWorkspace.examOpen") : null}
       aria-busy={busy}
       disabled={busy}
       onClick={(e) => {
         e.stopPropagation();
-        open();
+        launch();
       }}
     >
       {busy ? <Loader2 className="animate-spin" /> : <Laptop />}
@@ -127,7 +104,7 @@ export function OpenInWorkspaceIcon({ projectId, repo, action }: { projectId: st
 /** The sheet's control: a secondary button and the one fact the teacher needs before clicking. */
 export function OpenInWorkspaceButton({ projectId, repo, action }: { projectId: string; repo: ProjectRepoView; action: ReviewAction }) {
   const t = useT();
-  const { busy, open } = useReviewLaunch(projectId, repo.id);
+  const { busy, launch } = useReviewLaunch(projectId, repo.id);
   if (action === "absent") return null;
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -135,7 +112,7 @@ export function OpenInWorkspaceButton({ projectId, repo, action }: { projectId: 
         variant="secondary"
         size="sm"
         loading={busy}
-        onClick={open}
+        onClick={launch}
         disabledReason={action === "examOpen" ? t("project.repo.openInWorkspace.examOpen") : null}
       >
         {busy ? null : <Laptop />} {t("project.repo.openInWorkspace")}

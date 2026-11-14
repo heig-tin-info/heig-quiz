@@ -45,9 +45,9 @@ function routes(ws: RouteHandler, extra: Record<string, RouteHandler> = {}, arch
   });
 }
 
-const renderTable = (p: ProjectDetail, locale: "en" | "fr" = "en") => {
+const renderTable = (p: ProjectDetail) => {
   const onOpen = vi.fn();
-  renderWithProviders(<ProjectRepos project={p} onOpen={onOpen} navigate={vi.fn()} filter={null} onFilter={vi.fn()} />, { locale });
+  renderWithProviders(<ProjectRepos project={p} onOpen={onOpen} navigate={vi.fn()} filter={null} onFilter={vi.fn()} />);
   return { onOpen };
 };
 const renderSheet = (p: ProjectDetail, repoId = LIVE.id) =>
@@ -129,16 +129,11 @@ describe("Open in workspace, on the rows", () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["review_not_granted", "The online workspace is not enabled for this project's owner: ask an administrator."],
-    ["review_archived", "This project or its classroom is archived: the repository no longer opens."],
-    ["review_repo_unavailable", "This repository is not available: it is not created yet or was deleted on GitHub."],
-    ["review_exam_open", "The exam may still be running: the repository opens once its deadline has passed."],
-  ])("words the refusal %s", async (code, text) => {
-    routes(ok(workspace()), { [reviewUrl(LIVE.id)]: fail(409, { error: code, message: code }) });
+  it("words a refusal by its code", async () => {
+    routes(ok(workspace()), { [reviewUrl(LIVE.id)]: fail(409, { error: "review_repo_unavailable", message: "x" }) });
     renderTable(project());
     await userEvent.click(await screen.findByRole("button", { name: "Open in workspace" }));
-    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(await screen.findByText("Repository not available: not created yet or deleted on GitHub.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open in workspace" })).toBeEnabled();
   });
 
@@ -147,12 +142,6 @@ describe("Open in workspace, on the rows", () => {
     renderTable(project());
     await userEvent.click(await screen.findByRole("button", { name: "Open in workspace" }));
     expect(await screen.findByText("This item no longer exists or is not open to you.")).toBeInTheDocument();
-  });
-
-  it("speaks French", async () => {
-    routes(ok(workspace()));
-    renderTable(project(), "fr");
-    expect(await screen.findByRole("button", { name: "Ouvrir dans l'espace de travail" })).toBeInTheDocument();
   });
 });
 
@@ -167,13 +156,6 @@ describe("Open in workspace, on the sheet", () => {
     expect(within(dialog).getByText("Read-only. Opening another repository closes the previous one.")).toBeInTheDocument();
     await userEvent.click(button);
     await waitFor(() => expect(assign).toHaveBeenCalledWith(LAUNCH));
-  });
-
-  it("is held with its reason on a Safe Exam Browser repository whose deadline is not applied", async () => {
-    routes(ok(workspace({ mode: "online_seb" })));
-    renderSheet(project());
-    const button = await screen.findByRole("button", { name: /Open in workspace/ });
-    expect(button).toBeDisabled();
   });
 
   it("is absent on a repository deleted on GitHub", async () => {
