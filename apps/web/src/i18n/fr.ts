@@ -6703,7 +6703,7 @@ export const fr: Record<keyof Dict, string> = {
   "github.check.notInstalled": "L'app GitHub de Quiz n'est plus installée sur cette organisation : installez-la de nouveau.",
   "github.check.orgDeleted": "Cette organisation n'existe plus sur GitHub : déconnectez la classe, puis connectez-en une autre.",
   "github.check.plan": "Offre : {plan}.",
-  "github.check.planFree": "Offre gratuite : pas de règles de protection ni de secrets d'organisation pour les dépôts privés. L'offre Education a les deux.",
+  "github.check.planFree": "Offre gratuite : pas de règles de protection pour les dépôts privés. L'offre Education en dispose.",
   "github.check.planUnknown": "L'offre de l'organisation n'a pas encore été lue.",
   "github.level.ok": "OK",
   "github.level.warning": "Avertissement",

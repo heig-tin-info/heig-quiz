@@ -146,7 +146,9 @@ classroom without it is a plain Quiz classroom. The Settings tab's
    organization secrets for private repositories — what "an Education
    organization" buys). *The third check, the `ANTHROPIC_API_KEY`
    organization secret for the LLM review of projects (I50), was dropped
-   on 2026-10-14 (product owner, M3-14f): Quiz reviews with its own LLM.*
+   on 2026-10-14 (product owner, M3-14f): Quiz reviews with its own LLM.
+   The plan's warning names the rulesets alone since 2026-11-14 (product
+   owner): Quiz needs no organization secret.*
 3. optionally link their own GitHub account (the expert clone-and-push
    path and collaborator invitations need it; browser editing does not).
 

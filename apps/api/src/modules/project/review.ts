@@ -7,9 +7,10 @@
  * - **The final review**: once a repository's freeze is definitive (ITS
  *   `frozen_at`, at its effective deadline + the grace), one
  *   `repository_dispatch` `grade-final` carrying the frozen run's commit and
- *   the repository's EFFECTIVE deadline. Its `grading.yml` runs the LLM
- *   review on the organization's key, whose run comes back through the
- *   ordinary ingestion (`grading.ts`) and fills the review slot — only when
+ *   the repository's EFFECTIVE deadline. Its `grading.yml` runs the review
+ *   (the LLM review on the organization's key is retired, product owner,
+ *   2026-11-14), whose run comes back through the ordinary ingestion
+ *   (`grading.ts`) and fills the review slot — only when
  *   Quiz's App triggered it, after this dispatch. Never for a project graded
  *   `none`, a repository without a frozen run (nothing to review), one
  *   archived as its lock (H8; never un-archived for a review) nor one whose
