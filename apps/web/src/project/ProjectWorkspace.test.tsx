@@ -20,6 +20,7 @@ const workspace = (over: Partial<Workspace> = {}): Workspace => ({
   refusal: null,
   syncedAt: null,
   syncError: null,
+  review: true,
   ...over,
 });
 const sessions: ProjectWorkspaceSessions = {

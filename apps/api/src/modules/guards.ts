@@ -57,6 +57,7 @@ import {
   ownedPollSql,
   projectRepos,
   projects,
+  sessions,
   STAFF_ROLES,
   users,
 } from "../db/schema.js";
@@ -485,6 +486,21 @@ export function reachOf(
     auth!.superPowersUntil !== null &&
     auth!.superPowersUntil.getTime() > now.getTime();
   return on ? "all" : "seats";
+}
+
+/**
+ * {@link reachOf} read for a user with no session in hand, as a predicate:
+ * `userId` holds the `admin` role and one of their own sessions
+ * ({@link mayHoldSuperPowers}: `portal`, not delegated), live, with Super
+ * Powers running — the database's clock. For a server-to-server call made
+ * on a user's behalf (the review token route, ADR-129 §7), beside
+ * `staffAccess` as {@link accessWhere} pairs them.
+ */
+export function superPowersHeld(userId: string): SQL {
+  return sql`EXISTS (SELECT 1 FROM ${sessions} JOIN ${users} ON ${qualified(users.id)} = ${qualified(sessions.userId)}
+    WHERE ${qualified(sessions.userId)} = ${userId} AND ${qualified(users.role)} = 'admin'
+      AND ${qualified(sessions.kind)} = ${PORTAL.kind} AND ${qualified(sessions.actorUserId)} IS NULL
+      AND ${qualified(sessions.expiresAt)} > now() AND ${qualified(sessions.superPowersUntil)} > now())`;
 }
 
 /**

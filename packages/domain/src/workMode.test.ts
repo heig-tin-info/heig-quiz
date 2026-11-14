@@ -6,10 +6,12 @@ import {
   isOnlineMode,
   quotaHolder,
   portalDeadline,
+  staffReviewRefusal,
   workModeRefusal,
   workspaceClosed,
   workspaceStartRefusal,
   type GitTokenFacts,
+  type StaffReviewFacts,
   type WorkModeFacts,
   type WorkspaceStartFacts,
 } from "./workMode.js";
@@ -229,5 +231,46 @@ describe("gitTokenRefusal (ADR-078 §2)", () => {
     expect(gitTokenRefusal(commit({ repo: applied, repository: "org/lab-squashed" }, { workMode: "online_seb" }), LATE)).toBe("closed");
     // Under lock, unchanged: closed at the deadline plus the grace.
     expect(gitTokenRefusal(facts({ repo: applied }), GRACE_END)).toBe("closed");
+  });
+});
+
+describe("staffReviewRefusal (ADR-129 §5)", () => {
+  const repo = { provisionStatus: "ok", fullName: "org/lab-kid", githubRepoId: 101, deletedAt: null, deadlineAppliedAt: null };
+  const facts = (over: Partial<StaffReviewFacts> = {}): StaffReviewFacts => ({
+    holderGranted: true,
+    classroomArchived: false,
+    projectArchived: false,
+    repo,
+    workMode: "free",
+    ...over,
+  });
+
+  it("opens a live repository of a free or online project at any time", () => {
+    expect(staffReviewRefusal(facts())).toBeNull();
+    expect(staffReviewRefusal(facts({ workMode: "online" }))).toBeNull();
+    expect(staffReviewRefusal(facts({ workMode: "online", repo: { ...repo, deadlineAppliedAt: "2026-10-14T22:00:00Z" } }))).toBeNull();
+  });
+
+  it("opens an online_seb repository only once its deadline is applied", () => {
+    expect(staffReviewRefusal(facts({ workMode: "online_seb" }))).toBe("review_exam_open");
+    expect(staffReviewRefusal(facts({ workMode: "online_seb", repo: { ...repo, deadlineAppliedAt: new Date() } }))).toBeNull();
+  });
+
+  it("refuses an archived classroom or project, and a repository that is not live or has no GitHub id", () => {
+    expect(staffReviewRefusal(facts({ classroomArchived: true }))).toBe("review_archived");
+    expect(staffReviewRefusal(facts({ projectArchived: true }))).toBe("review_archived");
+    expect(staffReviewRefusal(facts({ repo: { ...repo, provisionStatus: "pending" } }))).toBe("review_repo_unavailable");
+    expect(staffReviewRefusal(facts({ repo: { ...repo, fullName: null } }))).toBe("review_repo_unavailable");
+    expect(staffReviewRefusal(facts({ repo: { ...repo, deletedAt: new Date() } }))).toBe("review_repo_unavailable");
+    expect(staffReviewRefusal(facts({ repo: { ...repo, githubRepoId: null } }))).toBe("review_repo_unavailable");
+  });
+
+  it("answers in order: the grant, the archive, the repository, the exam", () => {
+    const dead = { ...repo, deletedAt: new Date() };
+    const all = facts({ holderGranted: false, classroomArchived: true, repo: dead, workMode: "online_seb" });
+    expect(staffReviewRefusal(all)).toBe("review_not_granted");
+    expect(staffReviewRefusal({ ...all, holderGranted: true })).toBe("review_archived");
+    expect(staffReviewRefusal({ ...all, holderGranted: true, classroomArchived: false })).toBe("review_repo_unavailable");
+    expect(staffReviewRefusal({ ...all, holderGranted: true, classroomArchived: false, repo })).toBe("review_exam_open");
   });
 });

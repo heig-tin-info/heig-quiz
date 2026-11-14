@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { groupRepoName, isLiveIndividualRepo, pickStudentRepo, type RepoLifeLike } from "./groupRepo.js";
+import { groupRepoName, isLiveIndividualRepo, isLiveRepo, pickStudentRepo, type RepoLifeLike } from "./groupRepo.js";
 
 describe("groupRepoName", () => {
   it("joins the project slug and the group slug", () => {
@@ -20,8 +20,22 @@ const row = (o: Partial<RepoLifeLike> & { id: string }) => ({
   ...o,
 });
 
+describe("isLiveRepo", () => {
+  it("is a provisioned, named, undeleted repository, a group's too", () => {
+    expect(isLiveRepo(row({ id: "a" }))).toBe(true);
+    expect(isLiveRepo(row({ id: "a", groupId: "g" }))).toBe(true);
+  });
+
+  it("is not a failed, pending, unnamed or deleted repository", () => {
+    expect(isLiveRepo(row({ id: "a", provisionStatus: "error" }))).toBe(false);
+    expect(isLiveRepo(row({ id: "a", provisionStatus: "pending" }))).toBe(false);
+    expect(isLiveRepo(row({ id: "a", fullName: null }))).toBe(false);
+    expect(isLiveRepo(row({ id: "a", deletedAt: "2026-09-20T10:00:00Z" }))).toBe(false);
+  });
+});
+
 describe("isLiveIndividualRepo", () => {
-  it("is a provisioned, named, undeleted repository of no group", () => {
+  it("is a live repository of no group", () => {
     expect(isLiveIndividualRepo(row({ id: "a" }))).toBe(true);
   });
 

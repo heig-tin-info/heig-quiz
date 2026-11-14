@@ -30,7 +30,16 @@ export interface RepoLifeLike {
 }
 
 /**
- * A live individual repository: provisioned, named, not deleted, no group.
+ * A live repository — a student's, a group's or a staff seat's test one
+ * alike: provisioned, named, not deleted. THE one definition of a live
+ * repository (ADR-129 §5); {@link isLiveIndividualRepo} adds "no group".
+ */
+export function isLiveRepo(r: Omit<RepoLifeLike, "groupId">): boolean {
+  return r.provisionStatus === "ok" && r.fullName !== null && r.deletedAt === null;
+}
+
+/**
+ * A live individual repository: {@link isLiveRepo}, and no group.
  * In a group project it can only be a leftover, created before acceptance
  * knew about groups — and its student keeps working in it. The ONE
  * definition of that "holder": the read views, the acceptance, the
@@ -39,7 +48,7 @@ export interface RepoLifeLike {
  * while another place already invited them into it.
  */
 export function isLiveIndividualRepo(r: RepoLifeLike): boolean {
-  return r.groupId === null && r.provisionStatus === "ok" && r.fullName !== null && r.deletedAt === null;
+  return isLiveRepo(r) && r.groupId === null;
 }
 
 /**

@@ -13,6 +13,8 @@
  *     of its workspaces (`GET /api/assignments/:id/sessions`).
  *   - student → portal: a 5-minute single-use launch token, minted by the
  *     start route (`routes.ts`, {@link launchToken}) and carried in a 303.
+ *   - staff → portal: a review launch token on one repository of a project
+ *     ({@link startReview}, ADR-129), its own audience.
  *
  * Off — `CODESPACE_URL` empty — the module registers nothing (every route a
  * 404) and {@link requestCodespaceSync} does nothing.
@@ -35,10 +37,14 @@ import {
   LAUNCH_AUDIENCE,
   LAUNCH_TOKEN_TTL_SECONDS,
   QUIZ_CODESPACE_ISSUER,
+  REVIEW_AUDIENCE,
+  REVIEW_GRANT_MINUTES,
   SERVICE_AUDIENCE,
   SERVICE_TOKEN_TTL_SECONDS,
   WORK_MODES,
   type LaunchTokenClaims,
+  type ReviewLaunchTokenClaims,
+  type StaffReviewRefusal,
   type WorkMode,
   type WorkspaceStartRefusal,
   type ProjectWorkspace,
@@ -46,16 +52,16 @@ import {
   type ServiceTokenClaims,
   type TeacherCodespaceGrant,
 } from "@quiz/contracts";
-import { isOnlineMode, portalDeadline, projectIsLive, quotaHolder, requestBinding, signHs256, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
+import { isOnlineMode, portalDeadline, projectIsLive, quotaHolder, requestBinding, signHs256, staffReviewRefusal, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { classrooms, codespaceLaunches, codespaceProjects, courseStaff, enrollments, githubAccounts, projectRepos, projects, teacherGrants, users } from "../../db/schema.js";
+import { classrooms, codespaceLaunches, codespaceProjects, codespaceReviews, courseStaff, enrollments, githubAccounts, projectRepos, projects, teacherGrants, users } from "../../db/schema.js";
 import { knownEmails, normalizeEmail } from "../../identity.js";
 import { CODESPACE_SYNC_QUEUE } from "../../jobs.js";
 import { PORTAL } from "../../auth/session.js";
-import { findStudentProjectView, type Caller } from "../guards.js";
+import { findStudentProjectView, type Caller, type Reach } from "../guards.js";
 
 /** The portal is wired up at all: an empty `CODESPACE_URL` means the feature does not exist (ADR-047 §5). */
 export function codespaceOn(config: Pick<AppConfig, "CODESPACE_URL">): boolean {
@@ -114,7 +120,8 @@ async function portalState(db: Db, projectId: string) {
  */
 export async function projectWorkspace(
   db: Db,
-  project: { id: string; workMode: WorkMode; groupMode: boolean },
+  project: { id: string; workMode: WorkMode; groupMode: boolean; createdBy: string },
+  courseId: string,
   caller: { userId: string; owner: boolean },
 ): Promise<ProjectWorkspace> {
   const state = await portalState(db, project.id);
@@ -127,7 +134,14 @@ export async function projectWorkspace(
     refusal: judged.find((j) => j.refusal !== null)?.refusal ?? null,
     syncedAt: state.syncedAt?.toISOString() ?? null,
     syncError: state.syncError,
+    review: await holderGranted(db, courseId, project.createdBy),
   };
+}
+
+/** The project's quota holder holds an enabled workspace grant (ADR-129 §3): a review session may exist. */
+export async function holderGranted(db: Db | Tx, courseId: string, createdBy: string): Promise<boolean> {
+  const holder = await quotaHolderOf(db, courseId, createdBy);
+  return holder !== null && (await grantOf(db, holder.id))?.enabled === true;
 }
 
 // ---------------------------------------------------------------- tokens
@@ -173,28 +187,35 @@ async function portalCall(
  * is ever written down (the audit log); the token itself is a bearer
  * credential, never logged, stored nor audited.
  */
-export async function launchToken(
+export function launchToken(
   config: AppConfig,
   claims: Omit<LaunchTokenClaims, "iss" | "aud" | "iat" | "exp" | "jti">,
   now: Date,
 ): Promise<{ token: string; jti: string }> {
+  return sessionToken<LaunchTokenClaims>(config, LAUNCH_AUDIENCE, claims, now);
+}
+
+/**
+ * THE signer of a token that opens a portal session — a student's launch or
+ * a staff member's review (ADR-129 §7), each with its own audience: five
+ * minutes, a random `jti`, over `CODESPACE_LAUNCH_SECRET`.
+ */
+async function sessionToken<C extends LaunchTokenClaims | ReviewLaunchTokenClaims>(
+  config: AppConfig,
+  aud: C["aud"],
+  claims: Omit<C, "iss" | "aud" | "iat" | "exp" | "jti">,
+  now: Date,
+): Promise<{ token: string; jti: string }> {
   const iat = Math.floor(now.getTime() / 1000);
   const jti = randomUUID();
-  const full: LaunchTokenClaims = {
-    ...claims,
-    iss: QUIZ_CODESPACE_ISSUER,
-    aud: LAUNCH_AUDIENCE,
-    iat,
-    exp: iat + LAUNCH_TOKEN_TTL_SECONDS,
-    jti,
-  };
-  return { token: await signHs256({ ...full }, config.CODESPACE_LAUNCH_SECRET), jti };
+  const full = { ...claims, iss: QUIZ_CODESPACE_ISSUER, aud, iat, exp: iat + LAUNCH_TOKEN_TTL_SECONDS, jti };
+  return { token: await signHs256(full, config.CODESPACE_LAUNCH_SECRET), jti };
 }
 
 // ---------------------------------------------------------------- the sync (Quiz → portal)
 
 /** The account that carries a project's quota (decision C): its creator while an owner, else the oldest owner seat. */
-async function quotaHolderOf(db: Db, courseId: string, createdBy: string): Promise<{ id: string; email: string } | null> {
+async function quotaHolderOf(db: Db | Tx, courseId: string, createdBy: string): Promise<{ id: string; email: string } | null> {
   const owners = await db
     .select({ userId: courseStaff.userId, createdAt: courseStaff.createdAt })
     .from(courseStaff)
@@ -466,6 +487,86 @@ export async function startWorkspace(
       subjectType: "project",
       subjectId: project.id,
       payload: { jti: issued.jti, mode: project.workMode, ...(fromSeb && { seb: true }) },
+    });
+    return issued;
+  });
+}
+
+// ---------------------------------------------------------------- the staff's review (ADR-129)
+
+/** Who launches a review, as the review route loaded them. */
+export interface Reviewer {
+  user: { id: string; email: string; givenName: string; familyName: string };
+  /** Their reach at the launch (ADR-054), for the audit. */
+  reach: Reach;
+  actor: AuditActor;
+}
+
+/**
+ * The review route's work (ADR-129 §5), in one transaction: the repository
+ * of the project with its classroom, the project's quota holder and their
+ * grant, judged by `staffReviewRefusal`; then the launch recorded
+ * (`codespace_reviews`, its window `REVIEW_GRANT_MINUTES` from the
+ * database's clock, §6), a review launch token signed (§7) and audited
+ * `codespace.review_launched` by its `jti` (§8) — the token never. It never
+ * marks the project launched, never writes `codespace_launches` and never
+ * asks for a sync: a review freezes no mode and opens nothing to students.
+ * Null: no such repository in that project.
+ */
+export async function startReview(
+  db: Db,
+  config: AppConfig,
+  ids: { projectId: string; repoId: string },
+  who: Reviewer,
+  now: Date,
+): Promise<{ token: string; jti: string } | StaffReviewRefusal | null> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ project: projects, repo: projectRepos, classroomArchivedAt: classrooms.archivedAt, courseId: classrooms.courseId })
+      .from(projectRepos)
+      .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+      .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
+      .where(and(eq(projectRepos.id, ids.repoId), eq(projects.id, ids.projectId)));
+    if (!row) return null;
+    const { project, repo } = row;
+    const holder = await quotaHolderOf(tx, row.courseId, project.createdBy);
+    const grant = holder === null ? null : await grantOf(tx, holder.id);
+    const refusal = staffReviewRefusal({
+      holderGranted: grant?.enabled === true,
+      classroomArchived: row.classroomArchivedAt !== null,
+      projectArchived: project.archivedAt !== null,
+      repo,
+      workMode: project.workMode,
+    });
+    if (refusal) return refusal;
+    await tx
+      .insert(codespaceReviews)
+      .values({ userId: who.user.id, projectRepoId: repo.id, grantUntil: sql`now() + make_interval(mins => ${REVIEW_GRANT_MINUTES})` })
+      .onConflictDoUpdate({ target: [codespaceReviews.userId, codespaceReviews.projectRepoId], set: { grantUntil: sql`excluded.grant_until` } });
+    const [account] = await tx.select({ login: githubAccounts.login }).from(githubAccounts).where(eq(githubAccounts.userId, who.user.id));
+    const { user } = who;
+    const issued = await sessionToken<ReviewLaunchTokenClaims>(
+      config,
+      REVIEW_AUDIENCE,
+      {
+        sub: user.id,
+        email: user.email,
+        displayName: `${user.givenName} ${user.familyName}`.trim() || user.email,
+        githubLogin: account?.login ?? null,
+        repo: { fullName: repo.fullName!, defaultBranch: repo.defaultBranch ?? project.branches[0] ?? "main" },
+        projectId: project.id,
+        projectRepoId: repo.id,
+        holder: { id: holder!.id, email: holder!.email || holder!.id },
+        maxActiveSessions: grant!.maxActiveSessions,
+      },
+      now,
+    );
+    await audit(tx, {
+      ...who.actor,
+      action: "codespace.review_launched",
+      subjectType: "project",
+      subjectId: project.id,
+      payload: { projectRepoId: repo.id, repository: repo.fullName, jti: issued.jti, reach: who.reach },
     });
     return issued;
   });

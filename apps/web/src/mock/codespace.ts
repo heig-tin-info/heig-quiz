@@ -61,6 +61,7 @@ function view(ws: MockWorkspace): ProjectWorkspace {
     refusal: judged.find((j) => j.refusal !== null)?.refusal ?? null,
     syncedAt: ws.syncedAt,
     syncError: ws.syncError,
+    review: true,
   };
 }
 
