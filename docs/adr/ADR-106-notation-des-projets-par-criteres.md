@@ -399,9 +399,9 @@ the freeze, searched for in every response and event of the first.
   (product owner, M3-14f): the check was dropped outright on that day, and
   the App no longer reads organization secrets; the CI's `llm-review` tier
   still retires course by course.* *Amended 2026-11-14 (product owner): the
-  tier is retired for every course. No project runs in the `auto` mode on
-  production on that date; the review dispatch of that mode is unchanged,
-  and an organization that still holds the secret deletes it.*
+  tier is retired for every course. The review dispatch of the `auto` mode
+  is unchanged, and an organization that still holds the secret deletes
+  it.*
 
 Invariants: `CLAUDE.md` invariant 12 carries the `project` action's archive
 rule, invariant 14 the target commit the server chooses from its push
