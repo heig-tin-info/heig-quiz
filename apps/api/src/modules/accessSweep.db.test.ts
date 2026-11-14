@@ -59,7 +59,8 @@ import { json, orgsRoute, type FakeOrg, type Route } from "../github/testing.js"
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
-import { gh, linkClassroom, newOrg, server as projectServer, useProjectWorld } from "../test/projectWorld.js";
+import { linkClassroom, newOrg, server as projectServer, useProjectWorld } from "../test/projectWorld.js";
+import { CODESPACE_ENV, fakePortal } from "./codespace/testing.js";
 import * as evaluationService from "./evaluation/service.js";
 import { sha256Of, writeAsset } from "./pool/assets.js";
 
@@ -369,18 +370,13 @@ describe("every staff route of a project, and of the App (invariant 6, N-SEC-20)
     if (m![2]) return json([{ name: "main" }]);
     return json({ id: 9_000_000 + org.githubOrgId, name: "template", owner: { id: org.githubOrgId, login: org.login }, default_branch: "main" });
   };
-  // With the online workspace too (ADR-047, ADR-129): its routes under `/projects/:id` are swept as well.
-  // The portal answers as one that knows nothing: an empty list, an accepted sync.
-  const portal = "http://portal.test";
-  const fetchStub = (input: string | URL | Request, init: RequestInit = {}) => {
-    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-    if (url.origin !== portal) return gh.fetch(input, init);
-    return Promise.resolve(init.method === "PUT" ? json({ id: url.pathname.split("/").pop(), configKey: null, sebLink: null }) : json([]));
-  };
+  // With the online workspace too (ADR-047, ADR-129): its routes under `/projects/:id` are swept as well,
+  // against a portal that knows nothing (an empty list, an accepted sync).
+  const portal = fakePortal();
   useProjectWorld({
     routes: [orgsRoute(() => orgs), templateRoute],
-    env: { CODESPACE_URL: portal, CODESPACE_LAUNCH_SECRET: "s".repeat(40) },
-    fetch: fetchStub,
+    env: CODESPACE_ENV,
+    fetch: portal.fetch,
     repos: false,
     teacher: false,
   });

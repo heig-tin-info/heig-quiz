@@ -126,15 +126,7 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     WORKSPACE_REVIEW_ROUTE,
     session,
     teacher({ params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) }, async ({ req, reply, now, scope }) => {
-      const caller = callerOf(req);
-      const review = await startReview(
-        app.db,
-        config,
-        { projectId: scope.project.id, repoId: scope.repo.id },
-        { user: userOf(req), reach: caller.reach, actor: actorOf(req) },
-        now,
-      );
-      if (review === null) return notFound(reply);
+      const review = await startReview(app.db, config, scope, { user: userOf(req), reach: callerOf(req).reach, actor: actorOf(req) }, now);
       if (typeof review === "string") return reply.code(409).send({ error: review });
       const started: WorkspaceReview = { url: `${config.CODESPACE_URL}/review?token=${encodeURIComponent(review.token)}` };
       return reply.header("cache-control", "no-store").send(started);

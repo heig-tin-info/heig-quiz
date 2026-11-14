@@ -25,7 +25,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
-  CSRF_COOKIE,
   GIT_TOKEN_AUDIENCE,
   GIT_TOKEN_PATH,
   GitTokenGrant,
@@ -39,11 +38,9 @@ import {
   ReviewLaunchTokenClaims,
   WorkspaceReview,
   workspaceReviewPath,
-  type SessionKind,
 } from "@quiz/contracts";
 import { signHs256, verifyHs256 } from "@quiz/domain";
 
-import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import {
   auditLog,
@@ -57,17 +54,24 @@ import {
   projects,
   sessions,
   teacherGrants,
+  users,
 } from "../../db/schema.js";
-import { json, orgsRoute, type Route } from "../../github/testing.js";
-import { type TestServer } from "../../test/http.js";
-import { seedLive, type Seeded } from "../../test/live.js";
-import { call, gh, linkClassroom, newOrg, newStudent, server, useProjectWorld, usersRoute, world, type Headers } from "../../test/projectWorld.js";
+import { orgsRoute } from "../../github/testing.js";
+import { sessionOf } from "../../test/http.js";
+import { call, newStudent, server, useProjectWorld, usersRoute, world, type Headers } from "../../test/projectWorld.js";
+import {
+  CODESPACE_ENV,
+  PORTAL,
+  PORTAL_SECRET as SECRET,
+  captureLog,
+  connectedClassroom,
+  fakePortal,
+  grantedTeacher as grantedWith,
+  scopedMint,
+  type Room,
+} from "./testing.js";
 
-const SECRET = "s".repeat(40);
-const PORTAL = "http://portal.test";
-const ENV = { CODESPACE_URL: PORTAL, CODESPACE_LAUNCH_SECRET: SECRET };
-const MINUTE = 60_000;
-const DAY = 24 * 60 * MINUTE;
+const DAY = 24 * 60 * 60_000;
 
 interface Person {
   id: string;
@@ -78,67 +82,17 @@ let owner: Person;
 
 // ---------------------------------------------------------------- the fakes
 
-/** Every scoped token GitHub minted. */
-const minted: { body: { repository_ids?: number[]; permissions?: Record<string, string> }; token: string }[] = [];
-let mintStatus: number | null = null;
-const mintRoute: Route = (url, init) => {
-  const m = /^\/app\/installations\/(\d+)\/access_tokens$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || init.method !== "POST" || !m || typeof init.body !== "string") return undefined;
-  const body = JSON.parse(init.body) as (typeof minted)[number]["body"];
-  if (!body.repository_ids) return undefined;
-  if (mintStatus !== null) return json({ message: "boom" }, mintStatus);
-  const token = `ghs_review${randomUUID().replaceAll("-", "")}`;
-  minted.push({ body, token });
-  return json({ token, expires_at: new Date(server.clock.now().getTime() + 60 * MINUTE).toISOString() }, 201);
-};
-
-/** The portal's calls (the sync's PUTs). */
-const portalCalls: { method: string; path: string }[] = [];
-const fetchStub = (input: string | URL | Request, init: RequestInit = {}) => {
-  const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-  if (url.origin !== PORTAL) return gh.fetch(input, init);
-  portalCalls.push({ method: init.method ?? "GET", path: url.pathname });
-  return Promise.resolve(init.method === "PUT" ? json({ id: url.pathname.split("/").pop(), configKey: null, sebLink: null }) : json([]));
-};
-
-const logLines: string[] = [];
-function captureLog(app: TestServer["app"]) {
-  const log = app.log as unknown as Record<symbol, { write: (line: string) => boolean }>;
-  const streamSym = Object.getOwnPropertySymbols(Object.getPrototypeOf(log))
-    .concat(Object.getOwnPropertySymbols(log))
-    .find((s) => s.description === "pino.stream");
-  if (!streamSym) throw new Error("pino stream not found");
-  log[streamSym]!.write = (line: string) => {
-    logLines.push(line);
-    return true;
-  };
-  app.log.level = "trace";
-}
+const mint = scopedMint();
+const { minted } = mint;
+const portal = fakePortal();
+/** Every line pino writes, from `beforeAll` on. */
+let logLines: string[] = [];
 
 // ---------------------------------------------------------------- the world
 
-interface Room extends Seeded {
-  org: string;
-}
-
-async function grantedTeacher(enabled: boolean | null): Promise<Person> {
-  const email = `t-${randomUUID().slice(0, 8)}@heig.test`;
-  const signed = await server.signIn("teacher", email);
-  if (enabled !== null) {
-    await server.app.db
-      .insert(teacherGrants)
-      .values({ id: randomUUID(), email, createdBy: signed.id, codespaceEnabled: enabled, codespaceMaxActiveSessions: 5 });
-  }
-  return signed;
-}
-
-async function connectedClassroom(students: { id: string }[], teacher: Person = owner): Promise<Room> {
-  const seeded = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
-  const { login: org, orgId } = await newOrg("vorg");
-  world.source(org, "starter", { main: { "README.md": "# Lab" } });
-  await linkClassroom(seeded.classroomId, orgId, teacher.id);
-  return { ...seeded, org };
-}
+/** A teacher with or without the workspace grant, a quota of five. */
+const grantedTeacher = (enabled: boolean | null) => grantedWith(enabled, 5);
+const connected = (students: { id: string }[], teacher: Person = owner) => connectedClassroom(teacher, students, { prefix: "vorg" });
 
 const seat = (room: Room, userId: string, role: "owner" | "assistant") =>
   server.app.db.insert(courseStaff).values({ courseId: room.courseId, userId, role });
@@ -164,7 +118,7 @@ const repoOf = async (projectId: string, userId: string) =>
 /** A student's accepted repository on a fresh project of `mode`, an assistant on the course. */
 async function reviewable(mode: "free" | "online" | "online_seb" = "free") {
   const student = await newStudent();
-  const room = await connectedClassroom([student]);
+  const room = await connected([student]);
   const lab = await project(room, mode);
   const accepted = await call("POST", `/app/api/student/projects/${lab.id}/accept`, student.headers);
   expect(accepted.statusCode, accepted.body).toBe(200);
@@ -190,17 +144,6 @@ async function extraRepo(projectId: string, userId: string, over: Partial<typeof
     ...over,
   });
   return id;
-}
-
-async function sessionOf(userId: string, auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string; projectId?: string }): Promise<Headers> {
-  const s = await createSession(server.app.db, userId, 8, {
-    kind: auth.kind,
-    actorUserId: auth.actorUserId ?? null,
-    evaluationId: auth.evaluationId ?? null,
-    projectId: auth.projectId ?? null,
-    sebConfigKey: auth.kind === "seb" ? "c".repeat(64) : null,
-  });
-  return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
 }
 
 const review = (projectId: string, repoId: string, headers: Headers = {}) => call("POST", workspaceReviewPath(projectId, repoId), headers);
@@ -239,10 +182,10 @@ async function askReview(userId: string, projectId: string, repository: string, 
 const askFor = (f: Fixture, who: Person, over: { projectId?: string; repository?: string } = {}) =>
   askReview(who.id, over.projectId ?? f.lab.id, over.repository ?? f.repo.fullName!, f.repo.id);
 
-useProjectWorld({ routes: [mintRoute, orgsRoute(() => []), usersRoute, world.route], env: ENV, fetch: fetchStub, teacher: false });
+useProjectWorld({ routes: [mint.route, orgsRoute(() => []), usersRoute, world.route], env: CODESPACE_ENV, fetch: portal.fetch, teacher: false });
 
 beforeAll(async () => {
-  captureLog(server.app);
+  logLines = captureLog(server.app);
   owner = await grantedTeacher(true);
 });
 
@@ -250,7 +193,7 @@ beforeEach(() => {
   // The wall clock: the review window and the Super Powers are the database's `now()`.
   server.clock.set(new Date().toISOString());
   world.allowPushes();
-  mintStatus = null;
+  mint.status = null;
 });
 
 // ---------------------------------------------------------------- the launch
@@ -258,7 +201,7 @@ beforeEach(() => {
 describe("POST /app/api/projects/:id/repos/:rid/workspace/review (ADR-129 §5)", () => {
   it("launches a review for an assistant and an owner: a review token, recorded, audited, never a launch", async () => {
     const f = await reviewable("online");
-    portalCalls.length = 0;
+    portal.calls.length = 0;
     const before = await server.app.db.select().from(codespaceProjects).where(eq(codespaceProjects.projectId, f.lab.id));
 
     const { token, claims } = await launchReview(f.lab.id, f.repo.id, f.assistant);
@@ -285,7 +228,7 @@ describe("POST /app/api/projects/:id/repos/:rid/workspace/review (ADR-129 §5)",
     // No launch record, no frozen mode, no sync: the mode still changes.
     expect(await server.app.db.select().from(codespaceLaunches).where(eq(codespaceLaunches.projectId, f.lab.id))).toEqual([]);
     expect(await server.app.db.select().from(codespaceProjects).where(eq(codespaceProjects.projectId, f.lab.id))).toEqual(before);
-    expect(portalCalls).toEqual([]);
+    expect(portal.calls).toEqual([]);
     expect((await call("PUT", `/app/api/projects/${f.lab.id}/workspace/mode`, owner.headers, { mode: "free" })).statusCode).toBe(200);
     // The token is in no audit row and no log line.
     const audits = JSON.stringify(await server.app.db.select().from(auditLog).where(eq(auditLog.subjectId, f.lab.id)));
@@ -303,11 +246,11 @@ describe("POST /app/api/projects/:id/repos/:rid/workspace/review (ADR-129 §5)",
     expect((await review(f.lab.id, f.repo.id)).statusCode).toBe(401);
     const noCsrf = { cookie: headers.cookie! };
     expect(refused(await review(f.lab.id, f.repo.id, noCsrf))).toEqual([403, "csrf"]);
-    const impersonation = await sessionOf(f.student.id, { kind: "impersonation", actorUserId: admin.id });
+    const impersonation = await sessionOf(server.app.db, f.student.id, { kind: "impersonation", actorUserId: admin.id });
     expect(refused(await review(f.lab.id, f.repo.id, impersonation))).toEqual([403, "impersonation_read_only"]);
     // A confined session is not served here at all (ADR-027): anonymous, the 401.
-    expect((await review(f.lab.id, f.repo.id, await sessionOf(f.assistant.id, { kind: "seb", projectId: f.lab.id }))).statusCode).toBe(401);
-    expect((await review(f.lab.id, f.repo.id, await sessionOf(f.assistant.id, { kind: "kiosk", evaluationId: f.room.evaluationId }))).statusCode).toBe(401);
+    expect((await review(f.lab.id, f.repo.id, await sessionOf(server.app.db, f.assistant.id, { kind: "seb", projectId: f.lab.id }))).statusCode).toBe(401);
+    expect((await review(f.lab.id, f.repo.id, await sessionOf(server.app.db, f.assistant.id, { kind: "kiosk", evaluationId: f.room.evaluationId }))).statusCode).toBe(401);
     // A personal token: `quiz` does not reach the route (N-SEC-22), `api` does and meets the loader's 404.
     const quiz = await createApiToken(server.app.db, f.assistant.id, { name: "q", expiresInDays: 30, scope: "quiz" });
     expect(refused(await review(f.lab.id, f.repo.id, { authorization: `Bearer ${quiz.token}` }))).toEqual([403, "insufficient_scope"]);
@@ -362,7 +305,7 @@ describe("POST /app/api/projects/:id/repos/:rid/workspace/review (ADR-129 §5)",
   it("does not exist while the quota holder holds no enabled grant", async () => {
     const ungranted = await grantedTeacher(false);
     const student = await newStudent();
-    const room = await connectedClassroom([student], ungranted);
+    const room = await connected([student], ungranted);
     const lab = await project(room, "free", ungranted);
     expect((await call("POST", `/app/api/student/projects/${lab.id}/accept`, student.headers)).statusCode).toBe(200);
     const repo = await repoOf(lab.id, student.id);
@@ -448,14 +391,65 @@ describe("POST /app/codespace/git-token for a review (ADR-129 §7)", () => {
     expect(refused(await askFor(f, admin))).toEqual([404, "not_found"]);
   });
 
+  it("counts Super Powers only on a live portal session of the admin's own, while the admin role holds", async () => {
+    const f = await reviewable();
+    const db = server.app.db;
+    const admin = await server.signInWithSuperPowers();
+    await launchReview(f.lab.id, f.repo.id, admin);
+    const ahead = sql`now() + interval '30 minutes'`;
+    const own = eq(sessions.userId, admin.id);
+
+    // The only session holding them has expired, its Super Powers still ahead.
+    await db.update(sessions).set({ expiresAt: sql`now() - interval '1 second'` }).where(own);
+    expect(refused(await askFor(f, admin))).toEqual([404, "not_found"]);
+    // A delegated session of theirs, and an impersonation one, live and holding them, count for nothing.
+    await db.delete(sessions).where(own);
+    await sessionOf(db, admin.id, { kind: "portal", actorUserId: f.assistant.id });
+    await sessionOf(db, admin.id, { kind: "impersonation", actorUserId: f.assistant.id });
+    await db.update(sessions).set({ superPowersUntil: ahead }).where(own);
+    expect(refused(await askFor(f, admin))).toEqual([404, "not_found"]);
+    // Their own live portal session holding them: granted; then the admin role lost, refused.
+    await sessionOf(db, admin.id, { kind: "portal" });
+    await db.update(sessions).set({ superPowersUntil: ahead }).where(own);
+    expect((await askFor(f, admin)).statusCode).toBe(200);
+    await db.update(users).set({ role: "teacher" }).where(eq(users.id, admin.id));
+    expect(refused(await askFor(f, admin))).toEqual([404, "not_found"]);
+  });
+
+  it("refuses a seat kept by an account demoted to student (ADR-013 rule 5)", async () => {
+    const f = await reviewable();
+    await launchReview(f.lab.id, f.repo.id, f.assistant);
+    await server.app.db.update(users).set({ role: "student" }).where(eq(users.id, f.assistant.id));
+    expect(refused(await askFor(f, f.assistant))).toEqual([404, "not_found"]);
+    await server.app.db.update(users).set({ role: "teacher" }).where(eq(users.id, f.assistant.id));
+    expect((await askFor(f, f.assistant)).statusCode).toBe(200);
+  });
+
+  it("answers 404 once the holder's grant is off or the repository deleted", async () => {
+    const f = await reviewable();
+    const db = server.app.db;
+    await launchReview(f.lab.id, f.repo.id, f.assistant);
+    const [holder] = await db.select({ email: users.email }).from(users).where(eq(users.id, owner.id));
+    const ownersGrant = eq(teacherGrants.email, holder!.email);
+    await db.update(teacherGrants).set({ codespaceEnabled: false }).where(ownersGrant);
+    try {
+      expect(refused(await askFor(f, f.assistant))).toEqual([404, "not_found"]);
+    } finally {
+      await db.update(teacherGrants).set({ codespaceEnabled: true }).where(ownersGrant);
+    }
+    expect((await askFor(f, f.assistant)).statusCode).toBe(200);
+    await db.update(projectRepos).set({ deletedAt: new Date() }).where(eq(projectRepos.id, f.repo.id));
+    expect(refused(await askFor(f, f.assistant))).toEqual([404, "not_found"]);
+  });
+
   it("closes on an archive and on an exam reopened; 503 when GitHub fails", async () => {
     const f = await reviewable("online_seb");
     const db = server.app.db;
     await db.update(projectRepos).set({ deadlineAppliedAt: new Date() }).where(eq(projectRepos.id, f.repo.id));
     await launchReview(f.lab.id, f.repo.id, f.assistant);
-    mintStatus = 500;
+    mint.status = 500;
     expect(refused(await askFor(f, f.assistant))).toEqual([503, "github_unavailable"]);
-    mintStatus = null;
+    mint.status = null;
     await db.update(projectRepos).set({ deadlineAppliedAt: null }).where(eq(projectRepos.id, f.repo.id));
     expect(refused(await askFor(f, f.assistant))).toEqual([409, "closed"]);
     await db.update(projectRepos).set({ deadlineAppliedAt: new Date() }).where(eq(projectRepos.id, f.repo.id));

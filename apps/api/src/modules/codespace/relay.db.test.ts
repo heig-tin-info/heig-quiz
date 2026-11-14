@@ -60,14 +60,10 @@ import {
 } from "../../db/schema.js";
 import { createPresenceRecorder } from "../presence/service.js";
 import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
-import { type TestServer } from "../../test/http.js";
-import { seedLive, type Seeded } from "../../test/live.js";
 import { purgeRelayJtis, RELAY_JTI_RETENTION_AFTER_EXP_MS } from "./relay.js";
+import { CODESPACE_ENV, PORTAL, PORTAL_SECRET, captureLog, connectedClassroom, fakePortal, scopedMint, type Room } from "./testing.js";
 import {
   call,
-  gh,
-  linkClassroom,
-  newOrg,
   newStudent,
   server,
   useProjectWorld,
@@ -76,14 +72,9 @@ import {
   type Headers,
 } from "../../test/projectWorld.js";
 
-const SECRET = "s".repeat(40);
+const SECRET = PORTAL_SECRET;
 const HOOK_SECRET = "w".repeat(40);
-const PORTAL = "http://portal.test";
-const ENV = {
-  GITHUB_WEBHOOK_SECRET: HOOK_SECRET,
-  CODESPACE_URL: PORTAL,
-  CODESPACE_LAUNCH_SECRET: SECRET,
-};
+const ENV = { GITHUB_WEBHOOK_SECRET: HOOK_SECRET, ...CODESPACE_ENV };
 const APP_BOT = "quiz-test[bot]";
 const NOW = "2026-10-07T08:00:00.000Z";
 const DEADLINE = "2026-10-14T22:00:00.000Z";
@@ -100,21 +91,9 @@ let owner: Person;
 
 // ---------------------------------------------------------------- the fakes
 
-/** Every scoped token GitHub minted: its installation, its body, the token. */
-const minted: { installationId: number; body: { repository_ids?: number[]; permissions?: Record<string, string> }; token: string }[] = [];
-/** GitHub answers the scoped mint with this status when set. */
-let mintStatus: number | null = null;
-/** The scoped mint: an access token asked with `repository_ids` (the App's own installation tokens fall through). */
-const mintRoute: Route = (url, init) => {
-  const m = /^\/app\/installations\/(\d+)\/access_tokens$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || init.method !== "POST" || !m || typeof init.body !== "string") return undefined;
-  const body = JSON.parse(init.body) as (typeof minted)[number]["body"];
-  if (!body.repository_ids) return undefined;
-  if (mintStatus !== null) return json({ message: "boom" }, mintStatus);
-  const token = `ghs_scoped${randomUUID().replaceAll("-", "")}`;
-  minted.push({ installationId: Number(m[1]), body, token });
-  return json({ token, expires_at: new Date(Date.parse(server.clock.now().toISOString()) + 60 * MINUTE).toISOString() }, 201);
-};
+/** GitHub's scoped mint: what it minted, and the status it answers instead when set. */
+const mint = scopedMint();
+const { minted } = mint;
 
 /** The CI of a commit: a GRADE annotation for every sha in `scored`. */
 const scored = new Set<string>();
@@ -133,43 +112,15 @@ const ciRoute: Route = (url, req) => {
   return undefined;
 };
 
-const portalStub = (url: URL, init: RequestInit) =>
-  init.method === "PUT" ? json({ id: url.pathname.split("/").pop(), configKey: null, sebLink: null }) : json([]);
-const fetchStub = (input: string | URL | Request, init: RequestInit = {}) => {
-  const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-  return url.origin === PORTAL ? Promise.resolve(portalStub(url, init)) : gh.fetch(input, init);
-};
+const portal = fakePortal();
 
-/** Every line pino writes, as `codespace.db.test.ts` captures it. */
-const logLines: string[] = [];
-function captureLog(app: TestServer["app"]) {
-  const log = app.log as unknown as Record<symbol, { write: (line: string) => boolean }>;
-  const streamSym = Object.getOwnPropertySymbols(Object.getPrototypeOf(log))
-    .concat(Object.getOwnPropertySymbols(log))
-    .find((s) => s.description === "pino.stream");
-  if (!streamSym) throw new Error("pino stream not found");
-  log[streamSym]!.write = (line: string) => {
-    logLines.push(line);
-    return true;
-  };
-  app.log.level = "trace";
-}
+/** Every line pino writes, from `beforeAll` on. */
+let logLines: string[] = [];
 
 // ---------------------------------------------------------------- the world
 
-interface Room extends Seeded {
-  org: string;
-  installationId: number;
-}
-
-async function connectedClassroom(students: { id: string }[]): Promise<Room> {
-  const db = server.app.db;
-  const seeded = await seedLive(db, { teacherId: owner.id, studentIds: students.map((s) => s.id), questions: 0 });
-  const { n, login: org, orgId } = await newOrg("rorg");
-  world.source(org, "starter", { main: { "README.md": "# Lab", [GRADING_WORKFLOW_PATH]: "grade: v1" } });
-  await linkClassroom(seeded.classroomId, orgId, owner.id);
-  return { ...seeded, org, installationId: n };
-}
+const connected = (students: { id: string }[]) =>
+  connectedClassroom(owner, students, { prefix: "rorg", files: { "README.md": "# Lab", [GRADING_WORKFLOW_PATH]: "grade: v1" } });
 
 async function onlineProject(room: Room, name: string, mode: "online" | "online_seb" = "online"): Promise<ProjectSummary> {
   const created = await call("POST", `/app/api/classrooms/${room.classroomId}/projects`, owner.headers, {
@@ -201,7 +152,7 @@ const launch = async (projectId: string, headers: Headers) => {
 /** A student who launched the workspace of a fresh online project: the fixture of most tests. */
 async function launched(mode: "online" | "online_seb" = "online") {
   const student = await newStudent();
-  const room = await connectedClassroom([student]);
+  const room = await connected([student]);
   const project = await onlineProject(room, `Relay ${randomUUID().slice(0, 6)}`, mode);
   await accept(project.id, student);
   if (mode === "online") {
@@ -230,10 +181,10 @@ const declare = async (f: Fixture, heads: { ref: string; sha: string }[], over: 
 
 const refused = (res: { statusCode: number; json: () => { error: string } }) => [res.statusCode, res.json().error];
 
-useProjectWorld({ routes: [mintRoute, orgsRoute(() => []), usersRoute, ciRoute, world.route], env: ENV, fetch: fetchStub, teacher: false });
+useProjectWorld({ routes: [mint.route, orgsRoute(() => []), usersRoute, ciRoute, world.route], env: ENV, fetch: portal.fetch, teacher: false });
 
 beforeAll(async () => {
-  captureLog(server.app);
+  logLines = captureLog(server.app);
   const email = `t-${randomUUID().slice(0, 8)}@heig.test`;
   owner = await server.signIn("teacher", email);
   await server.app.db.insert(teacherGrants).values({ id: randomUUID(), email, createdBy: owner.id, codespaceEnabled: true, codespaceMaxActiveSessions: 5 });
@@ -242,7 +193,7 @@ beforeAll(async () => {
 beforeEach(() => {
   server.clock.set(NOW);
   world.allowPushes();
-  mintStatus = null;
+  mint.status = null;
 });
 
 // ---------------------------------------------------------------- the token
@@ -438,9 +389,9 @@ describe("POST /app/codespace/git-token (ADR-078 §2)", () => {
   it("answers 503 when GitHub refuses or the installation is gone, naming its status only", async () => {
     const f = await launched();
     logLines.length = 0;
-    mintStatus = 502;
+    mint.status = 502;
     expect(refused(await askToken(f))).toEqual([503, "github_unavailable"]);
-    mintStatus = null;
+    mint.status = null;
     await server.app.db.update(githubOrganizations).set({ suspendedAt: new Date(NOW) }).where(eq(githubOrganizations.login, f.room.org));
     expect(refused(await askToken(f))).toEqual([503, "github_unavailable"]);
     expect(logLines.some((l) => l.includes("GitHub unavailable") && l.includes("502"))).toBe(true);
@@ -490,10 +441,10 @@ describe("a relay request is served once (ADR-078, amendment of 2026-10-11, #743
 
   it("spends a request refused further on: the portal signs a fresh one per call", async () => {
     const f = await launched();
-    mintStatus = 502;
+    mint.status = 502;
     const token = await requestToken(GIT_TOKEN_AUDIENCE, { projectId: f.project.id, userId: f.student.id, repository: f.repo.fullName! });
     expect(refused(await post(GIT_TOKEN_PATH, token))).toEqual([503, "github_unavailable"]);
-    mintStatus = null;
+    mint.status = null;
     expect(refused(await post(GIT_TOKEN_PATH, token))).toEqual([401, "unauthorized"]);
   });
 

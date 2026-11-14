@@ -24,7 +24,7 @@
  * reported by its status alone.
  */
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
-import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, isNull, lt, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import {
@@ -36,14 +36,7 @@ import {
   RelayHeadsClaims,
   type GitTokenError,
 } from "@quiz/contracts";
-import {
-  HS256_SKEW_SECONDS,
-  gitTokenRefusal,
-  staffReviewRefusal,
-  verifyHs256,
-  type GitTokenGrantDecision,
-  type GitTokenRefusalCode,
-} from "@quiz/domain";
+import { HS256_SKEW_SECONDS, gitTokenRefusal, verifyHs256, type GitTokenGrantDecision, type GitTokenRefusalCode } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import { bearerOf } from "../../auth/plugin.js";
@@ -52,8 +45,8 @@ import { qualified, type Db, type Tx } from "../../db/client.js";
 import { classrooms, codespaceLaunches, codespaceRelayJtis, codespaceRelays, codespaceReviews, projectRepos, projects } from "../../db/schema.js";
 import { githubStatus, mintRepositoryToken } from "../../github/app.js";
 import { projectInstallation } from "../github/service.js";
-import { staffAccess, superPowersHeld } from "../guards.js";
-import { holderGranted } from "./service.js";
+import { userReachesCourse } from "../guards.js";
+import { reviewDecision } from "./service.js";
 
 /** A refusal of either route: its HTTP status and its code (`GitTokenError`). */
 export interface GitRelayRefusal {
@@ -193,17 +186,18 @@ async function authorizeCall<S extends typeof GitTokenRequestClaims | typeof Rel
  * prologue's transaction. One read for its first two checks: (1) a
  * `codespace_reviews` row of this user on `reviewRepoId`, whose repository
  * belongs to the request's project and whose `grant_until` is ahead of the
- * database's clock; (2) the user's access re-read NOW — a seat on the
- * course's staff, or Super Powers held in a session of their own
- * (`staffAccess`, `superPowersHeld`) — so a grant never outlives either.
- * Then (3) the stored name is the one asked for, and (4)
- * `staffReviewRefusal` on the facts read now: a holder without the grant
- * or a repository that is no longer live is `not_found`, an archive or an
- * exam reopened `closed`. Always a read grant, until the token's own expiry.
+ * database's clock; (2) the user's access re-read NOW
+ * (`userReachesCourse`: Super Powers held in a session of their own, or a
+ * seat on the course's staff with a staff role) — so a grant never outlives
+ * either. Then (3) the stored name is the one asked for, and (4) the
+ * launch's `reviewDecision` on the facts read now: a holder without the
+ * grant or a repository that is no longer live is `not_found`, an archive
+ * or an exam reopened `closed`. Always a read grant, until the token's own
+ * expiry.
  */
 async function reviewGrant(tx: Tx, claims: Pick<GitTokenRequestClaims, "userId" | "projectId" | "repository">, reviewRepoId: string) {
   const [row] = await tx
-    .select({ project: projects, repo: projectRepos, classroomArchivedAt: classrooms.archivedAt, courseId: classrooms.courseId })
+    .select({ project: projects, repo: projectRepos, courseId: classrooms.courseId, classroomArchivedAt: classrooms.archivedAt })
     .from(codespaceReviews)
     .innerJoin(projectRepos, eq(projectRepos.id, codespaceReviews.projectRepoId))
     .innerJoin(projects, eq(projects.id, projectRepos.projectId))
@@ -214,21 +208,15 @@ async function reviewGrant(tx: Tx, claims: Pick<GitTokenRequestClaims, "userId" 
         eq(codespaceReviews.projectRepoId, reviewRepoId),
         eq(projects.id, claims.projectId),
         sql`${qualified(codespaceReviews.grantUntil)} > now()`,
-        or(staffAccess(claims.userId, qualified(classrooms.courseId)), superPowersHeld(claims.userId)),
+        userReachesCourse(claims.userId, qualified(classrooms.courseId)),
       ),
     );
   if (!row || row.repo.fullName?.toLowerCase() !== claims.repository.toLowerCase()) return "not_found" as const;
-  const refusal = staffReviewRefusal({
-    holderGranted: await holderGranted(tx, row.courseId, row.project.createdBy),
-    classroomArchived: row.classroomArchivedAt !== null,
-    projectArchived: row.project.archivedAt !== null,
-    repo: row.repo,
-    workMode: row.project.workMode,
-  });
-  if (refusal === "review_not_granted" || refusal === "review_repo_unavailable") return "not_found" as const;
-  if (refusal !== null) return "closed" as const;
-  const grant: GitTokenGrantDecision = { permission: "read", githubRepoId: row.repo.githubRepoId!, useUntil: null };
-  return { grant, fullName: row.repo.fullName, orgId: row.project.orgId };
+  const decision = await reviewDecision(tx, row);
+  if (decision.refusal === "review_not_granted" || decision.refusal === "review_repo_unavailable") return "not_found" as const;
+  if (decision.refusal !== null) return "closed" as const;
+  const grant: GitTokenGrantDecision = { permission: "read", githubRepoId: decision.githubRepoId, useUntil: null };
+  return { grant, fullName: decision.fullName, orgId: row.project.orgId };
 }
 
 /**

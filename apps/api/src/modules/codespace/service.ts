@@ -134,14 +134,9 @@ export async function projectWorkspace(
     refusal: judged.find((j) => j.refusal !== null)?.refusal ?? null,
     syncedAt: state.syncedAt?.toISOString() ?? null,
     syncError: state.syncError,
-    review: await holderGranted(db, courseId, project.createdBy),
+    // A review session exists while the quota holder holds an enabled grant (ADR-129 §3).
+    review: (await holderGrant(db, courseId, project.createdBy))?.grant?.enabled === true,
   };
-}
-
-/** The project's quota holder holds an enabled workspace grant (ADR-129 §3): a review session may exist. */
-export async function holderGranted(db: Db | Tx, courseId: string, createdBy: string): Promise<boolean> {
-  const holder = await quotaHolderOf(db, courseId, createdBy);
-  return holder !== null && (await grantOf(db, holder.id))?.enabled === true;
 }
 
 // ---------------------------------------------------------------- tokens
@@ -214,8 +209,17 @@ async function sessionToken<C extends LaunchTokenClaims | ReviewLaunchTokenClaim
 
 // ---------------------------------------------------------------- the sync (Quiz → portal)
 
-/** The account that carries a project's quota (decision C): its creator while an owner, else the oldest owner seat. */
-async function quotaHolderOf(db: Db | Tx, courseId: string, createdBy: string): Promise<{ id: string; email: string } | null> {
+/**
+ * The account that carries a project's quota (decision C) — its creator
+ * while an owner, else the oldest owner seat; its address as the portal
+ * names it (the id when it has none) — and that account's grant
+ * ({@link grantOf}). Null for a course without an owner.
+ */
+export async function holderGrant(
+  db: Db | Tx,
+  courseId: string,
+  createdBy: string,
+): Promise<{ holder: { id: string; email: string }; grant: TeacherCodespaceGrant | null } | null> {
   const owners = await db
     .select({ userId: courseStaff.userId, createdAt: courseStaff.createdAt })
     .from(courseStaff)
@@ -223,7 +227,8 @@ async function quotaHolderOf(db: Db | Tx, courseId: string, createdBy: string): 
   const id = quotaHolder(createdBy, owners);
   if (id === null) return null;
   const [user] = await db.select({ id: users.id, email: users.email }).from(users).where(eq(users.id, id));
-  return user ?? null;
+  if (!user) return null;
+  return { holder: { id: user.id, email: user.email || user.id }, grant: await grantOf(db, user.id) };
 }
 
 /**
@@ -248,9 +253,9 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     .where(eq(projects.id, projectId));
   if (!row || !isOnlineMode(row.project.workMode) || row.project.distributionFullName === null) return null;
   const { project } = row;
-  const holder = await quotaHolderOf(db, row.courseId, project.createdBy);
-  if (holder === null) return null;
-  const grant = await grantOf(db, holder.id);
+  const held = await holderGrant(db, row.courseId, project.createdBy);
+  if (held === null) return null;
+  const { holder, grant } = held;
   return CodespaceAssignmentSync.parse({
     id: project.id,
     slug: project.slug,
@@ -261,7 +266,7 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     image: null,
     sourceRepo: { fullName: project.distributionFullName, defaultBranch: project.branches[0] ?? "main" },
     browserExamKeys: [],
-    teacher: { id: holder.id, email: holder.email || holder.id },
+    teacher: holder,
     quota: { maxActiveSessions: grant?.maxActiveSessions ?? DEFAULT_MAX_ACTIVE_SESSIONS },
     startAt: project.startAt.toISOString(),
     deadlineAt: portalDeadline(project)?.toISOString() ?? null,
@@ -494,51 +499,68 @@ export async function startWorkspace(
 
 // ---------------------------------------------------------------- the staff's review (ADR-129)
 
-/** Who launches a review, as the review route loaded them. */
-export interface Reviewer {
-  user: { id: string; email: string; givenName: string; familyName: string };
-  /** Their reach at the launch (ADR-054), for the audit. */
-  reach: Reach;
-  actor: AuditActor;
+/** A repository of a project, as both review routes read it: `findAccessibleProjectRepo`'s row, and the token route's. */
+export interface ReviewedRepo {
+  project: typeof projects.$inferSelect;
+  repo: typeof projectRepos.$inferSelect;
+  courseId: string;
+  classroomArchivedAt: Date | null;
 }
 
 /**
- * The review route's work (ADR-129 §5), in one transaction: the repository
- * of the project with its classroom, the project's quota holder and their
- * grant, judged by `staffReviewRefusal`; then the launch recorded
- * (`codespace_reviews`, its window `REVIEW_GRANT_MINUTES` from the
+ * THE one place the facts of `staffReviewRefusal` (ADR-129 §5) are built,
+ * for the launch and for the token route (§7): the row's archives, its
+ * repository, its mode, and the quota holder's grant read now. Granted: the
+ * live repository's name and GitHub id, the holder and their grant.
+ */
+export async function reviewDecision(
+  db: Db | Tx,
+  row: ReviewedRepo,
+): Promise<
+  | { refusal: StaffReviewRefusal }
+  | { refusal: null; fullName: string; githubRepoId: number; holder: { id: string; email: string }; grant: TeacherCodespaceGrant }
+> {
+  const { project, repo } = row;
+  const held = await holderGrant(db, row.courseId, project.createdBy);
+  const refusal = staffReviewRefusal({
+    holderGranted: held?.grant?.enabled === true,
+    classroomArchived: row.classroomArchivedAt !== null,
+    projectArchived: project.archivedAt !== null,
+    repo,
+    workMode: project.workMode,
+  });
+  if (refusal !== null) return { refusal };
+  // Granted and live, by the rule above; the test only tells the compiler so.
+  if (!held?.grant || repo.fullName === null || repo.githubRepoId === null) return { refusal: "review_repo_unavailable" };
+  return { refusal: null, fullName: repo.fullName, githubRepoId: repo.githubRepoId, holder: held.holder, grant: held.grant };
+}
+
+/**
+ * The review route's work (ADR-129 §5) on the repository its loader read
+ * (`findAccessibleProjectRepo`): {@link reviewDecision}; then the launch
+ * recorded (`codespace_reviews`, its window `REVIEW_GRANT_MINUTES` from the
  * database's clock, §6), a review launch token signed (§7) and audited
  * `codespace.review_launched` by its `jti` (§8) — the token never. It never
  * marks the project launched, never writes `codespace_launches` and never
  * asks for a sync: a review freezes no mode and opens nothing to students.
- * Null: no such repository in that project.
+ *
+ * The holder's grant is read in the transaction that records the launch;
+ * the row's own facts (archives, repository, mode) are the loader's read,
+ * just before it. That is safe: the launch grants nothing by itself — the
+ * token route applies the same decision again, on facts it reads at its own
+ * request (§7, check 4), so a change between the two reads is refused there.
  */
 export async function startReview(
   db: Db,
   config: AppConfig,
-  ids: { projectId: string; repoId: string },
-  who: Reviewer,
+  row: ReviewedRepo,
+  who: { user: { id: string; email: string; givenName: string; familyName: string }; reach: Reach; actor: AuditActor },
   now: Date,
-): Promise<{ token: string; jti: string } | StaffReviewRefusal | null> {
+): Promise<{ token: string; jti: string } | StaffReviewRefusal> {
   return db.transaction(async (tx) => {
-    const [row] = await tx
-      .select({ project: projects, repo: projectRepos, classroomArchivedAt: classrooms.archivedAt, courseId: classrooms.courseId })
-      .from(projectRepos)
-      .innerJoin(projects, eq(projects.id, projectRepos.projectId))
-      .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
-      .where(and(eq(projectRepos.id, ids.repoId), eq(projects.id, ids.projectId)));
-    if (!row) return null;
     const { project, repo } = row;
-    const holder = await quotaHolderOf(tx, row.courseId, project.createdBy);
-    const grant = holder === null ? null : await grantOf(tx, holder.id);
-    const refusal = staffReviewRefusal({
-      holderGranted: grant?.enabled === true,
-      classroomArchived: row.classroomArchivedAt !== null,
-      projectArchived: project.archivedAt !== null,
-      repo,
-      workMode: project.workMode,
-    });
-    if (refusal) return refusal;
+    const decision = await reviewDecision(tx, row);
+    if (decision.refusal !== null) return decision.refusal;
     await tx
       .insert(codespaceReviews)
       .values({ userId: who.user.id, projectRepoId: repo.id, grantUntil: sql`now() + make_interval(mins => ${REVIEW_GRANT_MINUTES})` })
@@ -553,11 +575,11 @@ export async function startReview(
         email: user.email,
         displayName: `${user.givenName} ${user.familyName}`.trim() || user.email,
         githubLogin: account?.login ?? null,
-        repo: { fullName: repo.fullName!, defaultBranch: repo.defaultBranch ?? project.branches[0] ?? "main" },
+        repo: { fullName: decision.fullName, defaultBranch: repo.defaultBranch ?? project.branches[0] ?? "main" },
         projectId: project.id,
         projectRepoId: repo.id,
-        holder: { id: holder!.id, email: holder!.email || holder!.id },
-        maxActiveSessions: grant!.maxActiveSessions,
+        holder: decision.holder,
+        maxActiveSessions: decision.grant.maxActiveSessions,
       },
       now,
     );
@@ -566,7 +588,7 @@ export async function startReview(
       action: "codespace.review_launched",
       subjectType: "project",
       subjectId: project.id,
-      payload: { projectRepoId: repo.id, repository: repo.fullName, jti: issued.jti, reach: who.reach },
+      payload: { projectRepoId: repo.id, repository: decision.fullName, jti: issued.jti, reach: who.reach },
     });
     return issued;
   });

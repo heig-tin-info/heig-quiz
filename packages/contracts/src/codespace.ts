@@ -167,6 +167,12 @@ const launchIdentityClaims = <A extends string>(aud: A) =>
     repo: CodespaceRepoRef.nullable(),
   });
 
+/** Who opens a portal session, on which repository: the claims both launch tokens share. */
+export type LaunchIdentityClaims = Pick<
+  z.infer<ReturnType<typeof launchIdentityClaims>>,
+  "sub" | "email" | "displayName" | "githubLogin" | "repo"
+>;
+
 /**
  * Launch token (5 min, single use): minted when a student clicks Start,
  * verified by the portal on `GET /launch?token=`. `seb` is present when the
@@ -410,7 +416,7 @@ export const ProjectWorkspace = z.object({
    */
   review: z.boolean(),
 });
-export type ProjectWorkspace =z.infer<typeof ProjectWorkspace>;
+export type ProjectWorkspace = z.infer<typeof ProjectWorkspace>;
 
 /**
  * One workspace of the project as the staff read it
