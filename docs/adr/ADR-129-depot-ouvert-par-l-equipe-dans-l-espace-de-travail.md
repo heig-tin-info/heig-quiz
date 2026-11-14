@@ -151,16 +151,21 @@ the same rule the token route applies (§7) and the page reads (§11):
 |---|---|---|
 | 1 | No session | `401` |
 | 2 | An impersonation session | `403 impersonation_read_only` (the auth plugin, ADR-034; the 404 in development) |
-| 3a | A personal or OAuth token whose scope does not reach the route | `403` of N-SEC-22 (the auth plugin) |
+| 3a | A personal token whose scope does not reach the route | `403` of N-SEC-22 (the auth plugin); an OAuth token off its audience is anonymous to the auth plugin and gets row 1's `401` (N-SEC-22 keeps its 401 elsewhere) |
 | 3b | An `api`-scope token, a `seb` or `kiosk` session, a caller without `staffAccess` on the course (Super Powers inactive), an unknown project, or a `:rid` that is not a repository of that project | `404 not_found`, indistinguishable from a missing project |
 | 4 | The quota holder holds no enabled workspace grant | `409 review_not_granted` |
 | 5 | The classroom or the project is archived | `409 review_archived` |
-| 6 | The repository is not live (`isLiveRepo`: `provision_status` `ok`, `full_name` and `github_repo_id` set, `deleted_at` null) — individual, group or staff test repository alike | `409 review_repo_unavailable` |
+| 6 | The repository is not live (`isLiveRepo`: `provision_status` `ok`, `full_name` set, `deleted_at` null), or has no `github_repo_id` — individual, group or staff test repository alike | `409 review_repo_unavailable` |
 | 7 | An `online_seb` project whose repository's deadline is not applied (`deadline_applied_at` null) | `409 review_exam_open` |
 | — | Otherwise | `200 { url }` |
 
-`isLiveRepo` generalises `isLiveIndividualRepo` (`groupRepo.ts`), which
-becomes `isLiveRepo` plus "no group": one definition of a live repository.
+`isLiveRepo` generalises `isLiveIndividualRepo` (`groupRepo.ts`) without
+changing it: `isLiveRepo(r)` is today's predicate minus the group
+condition, and `isLiveIndividualRepo(r)` becomes `isLiveRepo(r) &&
+r.groupId === null`, the same answer for its callers (acceptance,
+invitations, read views). `staffReviewRefusal` checks `github_repo_id`
+separately, as `gitTokenRefusal` already does, still answering
+`review_repo_unavailable`.
 
 The route never refuses on the deadline, the staff lock, the freeze, the
 release or the deadline strategy (§2), and not on the portal's capacity:
