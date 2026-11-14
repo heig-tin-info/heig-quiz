@@ -22,6 +22,7 @@ import {
   type ProjectStudent,
   type ProjectSummary,
   type ReviewCheckpoint,
+  type StaffReviewRefusal,
   type WorkModeRefusal,
   type WorkspaceStartRefusal,
 } from "@quiz/contracts";
@@ -332,7 +333,8 @@ type KnownCode =
   | ProjectCheckpointErrorCode
   | Extract<ProjectAcceptErrorCode, "github_account_stale">
   | WorkModeRefusal
-  | Extract<WorkspaceStartRefusal, "not_online" | "seb_required">;
+  | Extract<WorkspaceStartRefusal, "not_online" | "seb_required">
+  | StaffReviewRefusal;
 const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   not_draft: "project.refusal.notDraft",
   not_scheduled: "project.refusal.notScheduled",
@@ -394,6 +396,11 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   regrade_limit: "project.refusal.regradeLimit",
   command_needs_network: "project.criteria.error.command_needs_network",
   seb_required: "project.refusal.sebRequired",
+  // ADR-129 §5: the staff's *Open in workspace*.
+  review_not_granted: "project.repo.review.refusal.review_not_granted",
+  review_archived: "project.repo.review.refusal.review_archived",
+  review_repo_unavailable: "project.repo.review.refusal.review_repo_unavailable",
+  review_exam_open: "project.repo.review.refusal.review_exam_open",
 };
 
 /** The dictionary key wording a refusal the page knows, or null (the server's message then). */

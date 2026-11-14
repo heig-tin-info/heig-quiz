@@ -459,6 +459,40 @@ const scenes = [
   { name: "project-workspace-assistant", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1&assistant=1" },
   // D21 (M6-07): a project under Safe Exam Browser, synced like an online one.
   { name: "project-workspace-seb", role: "teacher", path: "/projects/pj-draft-manual?projects=1&codespace=1" },
+  // ADR-129 §11 (`?codespace=1`): the staff's *Open in workspace* — the rows' last column (none on a repository
+  // being created or deleted), the sheet's secondary button, the rows held under Safe Exam Browser while the
+  // deadline is ahead, and the refusal of the repository imported without GitHub's id (a desktop scene: under
+  // `@2xl` the column is dropped and the action is the sheet's).
+  { name: "project-open-in-workspace", role: "teacher", path: "/projects/pj-published?projects=1&codespace=1&tab=repositories", settle: 2500 },
+  {
+    name: "project-open-in-workspace-sheet",
+    role: "teacher",
+    path: "/projects/pj-published?projects=1&codespace=1&tab=repositories",
+    fold: true,
+    settle: 2500,
+    act: async (p) => {
+      await p.locator("tbody tr").first().click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    name: "project-open-in-workspace-seb",
+    role: "teacher",
+    path: "/projects/pj-ungraded?projects=1&pjstates=1&codespace=1&tab=repositories",
+    settle: 2500,
+    act: (p) => p.locator("tbody tr").first().locator("[tabindex='0'].rounded-full").focus(),
+  },
+  {
+    name: "project-open-in-workspace-refused",
+    role: "teacher",
+    path: "/projects/pj-published?projects=1&codespace=1&tab=repositories",
+    fold: true,
+    settle: 2500,
+    act: async (p) => {
+      await p.locator("tbody tr").filter({ hasText: /eleve-ancien|Ancien/ }).getByRole("button", { name: /^(open in workspace|ouvrir dans l'espace de travail)$/i }).click();
+      await p.getByText(/^(This repository is not available|Ce dépôt n'est pas disponible)/).waitFor();
+    },
+  },
   // M3-12b: the sheet of the repository whose score is the teacher's (its
   // form filled, the final review received); M3-12c: the locked project not
   // yet released (`?unreleased=1`), Release its one action and its

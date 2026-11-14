@@ -82,6 +82,7 @@ import {
   type ProjectSummary,
   type ReviewCheckpoint,
   type RosterEntry,
+  type WorkspaceReview,
 } from "@quiz/contracts";
 import {
   awardedRange,
@@ -108,6 +109,7 @@ import {
   reviewState,
   scoreGrade,
   teacherScoreMax,
+  staffReviewRefusal,
   withForcedProtected,
   type CriterionGradeLike,
   type ProjectDatesChange,
@@ -125,6 +127,7 @@ import {
   setGroupsOf,
   unplacedClaimed,
 } from "./groups";
+import { mockWorkspace } from "./codespace";
 import { classroomRoster, courses, rooms } from "./org";
 import { D, flags, H, iso, MockError, MockPayload, nextId, now, on, refuse, role } from "./runtime";
 
@@ -1718,6 +1721,34 @@ const setLock = (m: RegExpMatchArray, on: boolean) => {
   return deadlineState(p, r);
 };
 on("POST", "/app/api/projects/:id/repos/:rid/lock", (m) => setLock(m, true));
+
+/**
+ * The staff's *Open in workspace* (ADR-129 §5, `?codespace=1`): THE rule of
+ * `@quiz/domain`, then the portal's address. The repository whose student
+ * left the roster came over from heig-classroom without GitHub's id: the
+ * page offers it, and the route refuses it, `409 review_repo_unavailable`.
+ */
+on("POST", "/app/api/projects/:id/repos/:rid/workspace/review", (m): WorkspaceReview => {
+  const ws = mockWorkspace(m.groups!.id!);
+  const p = projectOr404(m.groups!.id!);
+  const r = p.repos.find((x) => x.id === m.groups!.rid);
+  if (!r) throw new MockError(404, "Not found");
+  const refusal = staffReviewRefusal({
+    holderGranted: ws.review,
+    classroomArchived: rooms.find((room) => room.id === p.classroom.id)?.archivedAt != null,
+    projectArchived: p.summary.archivedAt !== null,
+    repo: {
+      provisionStatus: r.provisionStatus,
+      fullName: r.fullName,
+      deletedAt: r.deleted ? iso(0) : null,
+      githubRepoId: r.enrollmentId === null ? null : 1,
+      deadlineAppliedAt: r.deadlineAppliedAt,
+    },
+    workMode: ws.mode,
+  });
+  if (refusal) throw refuse(409, refusal, refusal);
+  return { url: `https://workspace.heig-vd.example/review?token=mock-${r.id}` };
+});
 on("POST", "/app/api/projects/:id/repos/:rid/unlock", (m) => setLock(m, false));
 
 /**
