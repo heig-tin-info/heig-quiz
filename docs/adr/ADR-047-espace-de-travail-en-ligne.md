@@ -335,8 +335,10 @@ owns the rule (product owner, 2026-11-14).
   workspace; a review session loads a student's repository and programs in
   a staff member's browser, beside any other portal session open there.
   Decision: at most one live review session per staff member, and the
-  residual risk — the two gaps above, reaching the staff member's own
-  sessions open in that browser — accepted in writing (ADR-129 §1, §9).
+  residual risk — the two gaps above, and whatever the reviewed
+  repository can make run on the origin once opened, reaching the staff
+  member's own sessions open in that browser — accepted in writing
+  (ADR-129 §1, §9).
   The subdomain per session stays the full fix (06, question 70).
 - **Quota (M6-06 (C)).** A review session counts against the project's
   quota holder like a student's, with at most two live review sessions per
