@@ -948,6 +948,8 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
   const latest = r.runs[0];
   return {
     ...deadlineState(p, r),
+    // GitHub's id once provisioned: a stable number drawn from the mock's own id.
+    githubRepoId: r.provisionStatus === "ok" ? [...r.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 1_000_000_000, 7) + 1 : null,
     provisionStatus: r.provisionStatus,
     provisionError: r.provisionError,
     invitationStatus: r.invitationStatus,
