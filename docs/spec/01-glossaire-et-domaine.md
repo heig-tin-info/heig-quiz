@@ -273,3 +273,5 @@ by the product owner on 2026-10-20.
 | Correct / wrong (a verdict) | correct / wrong | juste / faux | correct, bon |
 | Not answered | unanswered | sans réponse | pas répondu, non répondue |
 | Default | default | par défaut | défaut |
+| Pseudonymized account (UI word; its identity replaced, its results kept, ADR-117) | anonymized | anonymisé | supprimé (and *deleted* in English) |
+| Dormant account (no activity for two years, the lifecycle e-mail sent; active again at the next sign-in; not an archived classroom, ADR-117, 2026-11-05) | dormant | en sommeil | archivé |

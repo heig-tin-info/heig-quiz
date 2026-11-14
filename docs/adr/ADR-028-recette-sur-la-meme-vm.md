@@ -199,7 +199,9 @@ copy only. One exception, `--keep-identities`, serves the heig-classroom
 cutover rehearsal, whose copies are deleted the same day. The scrub also
 empties the secrets kept in rows (audit L17). This concerns the staging copy
 only: pseudonymizing production's accounts is still not a requirement
-(ADR-003, #681).
+(ADR-003, #681). *Obsolete since 2026-11-05: it is one
+([ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md), N-DATA-08), and
+this script's per-account part becomes the fragment both share (ADR-117 §8).*
 
 §2 now pins the bytes too (audit M8): the deploys pull
 `<image>:<sha>@sha256:<digest>`, the digest the CI's `image` job pushed

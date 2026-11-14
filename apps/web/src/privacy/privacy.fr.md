@@ -2,7 +2,7 @@
 
 - Vous vous connectez avec Switch edu-ID. Quiz n'a pas de mot de passe à lui.
 - L'équipe enseignante de votre cours voit votre travail dans ce cours. Les autres étudiants ne voient jamais vos notes (sauf vos coéquipiers, pour le score commun d'un projet de groupe) ; ce qu'un enseignant montre en classe est sans nom, sauf s'il choisit de les afficher.
-- Ce que vous faites est conservé jusqu'à ce que votre enseignant supprime l'évaluation, la classe ou le cours auquel cela appartient. Quelques types de données sont supprimés plus tôt, automatiquement ; d'autres, à commencer par votre compte, ne le sont jamais automatiquement (voir *Combien de temps*).
+- Ce que vous faites est conservé jusqu'à ce que votre enseignant supprime l'évaluation, la classe ou le cours auquel cela appartient. Quelques types de données sont supprimés plus tôt, automatiquement. Votre compte est anonymisé quand vous n'utilisez plus Quiz ; vos résultats restent, sans votre nom (voir *Combien de temps*).
 - Certaines de vos réponses et une partie de votre code sont envoyées à un modèle d'IA (Anthropic), le plus souvent noms masqués, pour aider votre enseignant à corriger ; c'est votre enseignant qui décide de la note. L'assistant d'aide de votre enseignant peut envoyer votre nom et vos résultats finaux (voir *Intelligence artificielle*).
 - Pas de publicité, pas de mesure d'audience au-delà des heures d'activité, pas de script de suivi. Rien n'est vendu.
 
@@ -56,7 +56,7 @@ Pour vous donner accès à vos classes, pour faire passer les évaluations (l'ho
 
 Par défaut, ce que vous faites dans un cours est conservé jusqu'à ce que votre enseignant supprime l'évaluation, le projet, la classe ou le cours auquel cela appartient. Rien n'est supprimé automatiquement à la fin de vos études. Si vous êtes retiré d'une liste de classe, vos réponses, vos notes et votre activité de révision dans cette classe restent jusqu'à la suppression de la classe.
 
-Certaines données ne sont jamais supprimées automatiquement : votre compte, avec vos adresses e-mail et ce qu'edu-ID a transmis ; le journal d'audit, qui enregistre des actions comme les connexions, les modifications des listes de classe et les corrections, avec les noms ; le journal des appels au modèle d'IA, qui nomme la personne pour qui chaque appel a été fait (jamais son contenu) ; vos notifications ; quel poste kiosque vous avez utilisé pour quel examen ; et vos nom, adresse e-mail et fichiers dans l'espace de travail en ligne.
+Certaines données ne sont jamais supprimées automatiquement : le journal des appels au modèle d'IA, qui nomme la personne pour qui chaque appel a été fait (jamais son contenu) ; quel poste kiosque vous avez utilisé pour quel examen ; et vos nom, adresse e-mail et fichiers dans l'espace de travail en ligne. Votre compte, vos adresses e-mail, ce qu'edu-ID a transmis et vos notifications restent jusqu'à ce que votre compte soit anonymisé (voir plus bas).
 
 Certaines données sont supprimées automatiquement :
 
@@ -69,9 +69,12 @@ Certaines données sont supprimées automatiquement :
 | Les fichiers, commits et sorties de tests gardés pour noter un projet par critères, et les fichiers de résultats de ses vérifications avec leurs journaux | Six mois après la publication des résultats du projet (la liste des tests et leurs résultats, et les points de chaque critère, restent) |
 | Le contenu des messages de GitHub sur vos dépôts | 30 jours après leur arrivée |
 | Les conversations d'un enseignant avec l'assistant d'aide, qui peuvent citer votre nom ou votre note | 30 jours après chaque échange |
+| Le journal d'audit, qui enregistre des actions comme les connexions, les modifications des listes de classe et les corrections, avec les noms | Trois ans après chaque entrée |
 | Un sondage auquel vous avez répondu sans compte : la trace du cookie et vos réponses | 30 jours après la fin du sondage. Les résultats du sondage restent pour l'enseignant, liés à personne, mais avec ce que vous y avez écrit |
 
 Les données supprimées restent environ quatre mois de plus dans les sauvegardes de la plateforme. Ce délai ne tient que si les plus anciennes sauvegardes sont retirées comme prévu, ce qui se fait à la main. Les copies quotidiennes de la base de données gardées sur le serveur lui-même ne sont pas chiffrées ; la copie conservée en Finlande l'est.
+
+**Votre compte.** Après deux ans sans connexion, vous recevez un e-mail. Sans connexion dans l'année qui suit, votre compte est anonymisé : votre nom, vos adresses, votre photo et vos liens quittent Quiz. Le journal d'audit les garde jusqu'à trois ans, les sauvegardes environ quatre mois. Vos résultats restent, sans votre nom. Une connexion suffit pour garder votre compte. Vous pouvez aussi l'anonymiser plus tôt, dans les **Réglages**.
 
 ## Qui voit quoi
 
@@ -109,6 +112,7 @@ Quiz ne charge aucun script, police ou image d'une autre entreprise : tout vient
 - **En télécharger une copie** : dans les **Réglages** › **Vos données**, *Télécharger mes données* vous donne un fichier JSON de tout ce que la plateforme vous montre, avec vos adresses e-mail vérifiées et vos heures d'activité. Ce que seuls vos enseignants voient n'y figure pas.
 - **Les corriger** : votre nom et votre adresse viennent d'edu-ID et sont mis à jour à chaque connexion. Une erreur dans une liste de classe est corrigée par votre enseignant.
 - **Les supprimer vous-même** : votre photo de profil, votre lien GitHub et votre lien Teams, dans les **Réglages**.
+- **Anonymiser votre compte**, dans les **Réglages** : vos résultats restent, sans votre nom.
 - **Arrêter les révisions** d'une classe, depuis vos révisions.
 
 Pour toute autre demande (une copie plus complète de vos données, une correction, une suppression), adressez-vous d'abord à l'enseignant de votre cours.
