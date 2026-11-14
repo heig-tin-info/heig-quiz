@@ -13,6 +13,10 @@ mirroring "Staff attempts"), and
 [ADR-070](ADR-070-repartitions-de-groupes.md) §2 (staff seats stay unplaced).
 Depends on [ADR-053](ADR-053-retrait-des-codes-d-entree.md) for the seat.
 
+Note 2026-11-14: [ADR-129](ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md)
+lets any staff member open a staff seat's test repository, like a student's,
+in a read-only review session of the workspace; it changes nothing above.
+
 ## Context
 
 In heig-classroom a teacher could hold a seat, accept a project and push as a

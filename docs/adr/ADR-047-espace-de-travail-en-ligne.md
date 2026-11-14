@@ -19,6 +19,7 @@ amendment is in the [historical record](history/ADR-047-espace-de-travail-en-lig
 - 2026-10-11, audit M11 and L25: the service token is single use and bound to its request, every token's lifetime capped ([ADR-078's amendment](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use)).
 - 2026-10-11, audit L7: the start route is a POST ([amendment](#2026-10-11-the-start-route-is-a-post)).
 - 2026-10-11, audit L24: one origin for every session ([amendment](#amendment-2026-10-11-one-origin-for-every-session-audit-l24)).
+- 2026-11-14, [ADR-129](ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md): the staff's review session — a staff member opens a project repository in the workspace, read-only, whatever its mode; it breaks the L24 premise ([amendment](#amendment-2026-11-14-the-staffs-review-session-adr-129)).
 - 2026-10-29, #958: under `commit`, an `online` project's start route opens while the repository is writable ([ADR-078's amendment](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-29-958-under-commit-the-workspace-follows-the-repositorys-writability)).
 - Extended 2026-10-05 by ADR-075 (proposed): the `workspace` question type opens the workspace in a supervised evaluation, without a git channel; the project rules are unchanged.
 
@@ -321,4 +322,28 @@ Either can set a `path=/` cookie in that student's own browser; neither can
 widen a service worker's scope, and another browser never loads the page
 without the session's cookie. An image that must serve a web application
 waits for that fix.
+
+## Amendment 2026-11-14: the staff's review session (ADR-129)
+
+Scope: the premise of the amendment of 2026-10-11 (audit L24) above,
+M6-06 (C) (whose quota a session consumes) and M6-03 (b) ("every portal
+account is a student"). [ADR-129](ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md)
+owns the rule (product owner, 2026-11-14).
+
+- **The L24 premise no longer holds for a review.** "Another browser never
+  loads the page without the session's cookie" stays true of a student's
+  workspace; a review session loads a student's repository and programs in
+  a staff member's browser, beside any other portal session open there.
+  Decision: at most one live review session per staff member, and the
+  residual risk — the two gaps above, and whatever the reviewed
+  repository can make run on the origin once opened, reaching the staff
+  member's own sessions open in that browser — accepted in writing
+  (ADR-129 §1, §9).
+  The subdomain per session stays the full fix (06, question 70).
+- **Quota (M6-06 (C)).** A review session counts against the project's
+  quota holder like a student's, with at most two live review sessions per
+  holder; no review without the holder's enabled grant (ADR-129 §3).
+- **Accounts (M6-03 (b)).** A staff member's portal account is born from a
+  review launch token, with no role, like a student's; its review sessions
+  are never listed among a project's workspaces (ADR-129 §10).
 

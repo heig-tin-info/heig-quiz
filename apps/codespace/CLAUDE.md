@@ -84,7 +84,11 @@ them on exactly two points, and on nothing else:
    (student, assignment) under `VOLUMES_ROOT`, kept across container
    restarts and after the session closes (with its `shadow.git`
    snapshots). The runner's `/work` is a tmpfs and nothing from the host is
-   mounted; here the student's work must survive the container.
+   mounted; here the student's work must survive the container. A staff
+   member's **review session** ([ADR-129](../../docs/adr/ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md),
+   accepted 2026-11-14; planned, not present until its PRs land) has one
+   directory per (staff member, repository), removed when the session
+   closes: narrower than this divergence, not a third one.
 2. **A git channel on an internal bridge.** Containers run on the Podman
    network `codespace` (`--internal --disable-dns`, subnet `10.77.0.0/24`,
    gateway `10.77.0.254`), started with `--dns=none --add-host
@@ -138,16 +142,29 @@ channel divergence for its containers.
    lifetime rules: [ADR-078, amendment of 2026-10-11](../../docs/adr/ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use).
 8. **The quota is per teacher, across all assignments**, counted on
    `sessions.teacherId` in the live states. Resuming a live session does
-   not consult it.
+   not consult it. A review session (ADR-129; planned, not present until
+   its PRs land) counts against the project's quota holder too, with at
+   most `REVIEW_SESSIONS_PER_HOLDER` (2, a portal constant) live review
+   sessions per holder, and at most one per staff member: a new review,
+   once the quota allows it, closes the staff member's previous one.
 9. **A token grants no role.** Every portal account is born from a launch
-   token as a student; nothing writes `users.role` any more.
+   token as a student, or from a review launch token (ADR-129, audience
+   `heig-codespace-review`, `GET /review` only; planned, not present until
+   its PRs land) as a staff member's own account, still with no role;
+   nothing writes `users.role` any more. A review session is never listed
+   among a project's sessions (`GET /api/assignments/:id/sessions`) and
+   never pushes: its staging repository refuses `git-receive-pack` and its
+   GitHub token is read-only, so no `PushEvent` and no relay exist.
 10. **`PushEvent` before relay.** A push's `PushEvent` row is written before
     any relay attempt (none while the relay is off): it is the proof of
     submission. The relay never forces and never deletes a branch
     (ADR-078 §6); a GitHub token never reaches argv, a URL, a file, SQLite,
     a log line or a container.
 11. **The exam staging repository is seeded from the teacher's template**,
-    never from the student's repository.
+    never from the student's repository. A review session (ADR-129;
+    planned, not present until its PRs land) is no exam session: it mirrors
+    the reviewed repository, and an `online_seb` one only once its deadline
+    is applied.
 12. **The platform owns the `.seb`** (D21, M6-07): it builds the file,
     whose `startURL` is the platform's one-time ticket and whose URL filter
     allows the platform, the portal and the platform's
