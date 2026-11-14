@@ -55,6 +55,22 @@ export const AdminUser = z.object({
   questions: z.number().int(),
   /** Non-archived classrooms of the courses where the account holds a staff seat. */
   classrooms: z.number().int(),
+  /**
+   * The account's last activity as the lifecycle reads it (ADR-117 §2): the
+   * latest of its last sign-in, its last own request and the last use of its
+   * tokens; its creation when none.
+   */
+  lastActivityAt: z.iso.datetime(),
+  /** That last activity is a year old or more, by the database's clock: the administration's "Inactive" list (ADR-117 §6). */
+  inactive: z.boolean(),
+  /** When the lifecycle's notice made the account dormant (ADR-117 §3); null when it is not. */
+  dormantSince: z.iso.datetime().nullable(),
+  /**
+   * Past the lifecycle's horizon: due for pseudonymization by its notice, or,
+   * never notified (a staff account, a lifecycle switched off), without
+   * activity for as long as the notice and its term add up to (three years).
+   */
+  due: z.boolean(),
 });
 export type AdminUser = z.infer<typeof AdminUser>;
 

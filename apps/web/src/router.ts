@@ -984,3 +984,31 @@ export function useSearchParam(name: string, fallback: string): [string, (v: str
   );
   return [value, set];
 }
+
+/**
+ * A one-time word a redirect left in the address (`?github=` of a GitHub
+ * link, `?reactivated` of a sign-in, `?anonymized` of the landing page): its
+ * value, or null, and the address without it, the rest of the query and the
+ * fragment kept, so a reload or a shared link never says it again.
+ */
+export function takeSearchParam(name: string): string | null {
+  const url = new URL(window.location.href);
+  const value = url.searchParams.get(name);
+  if (value === null) return null;
+  url.searchParams.delete(name);
+  window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  return value;
+}
+
+/**
+ * The first of `names` the address carried when the page loaded, read once
+ * and taken out of it by {@link takeSearchParam} after the render (React may
+ * run a state initializer twice). Null when none was there.
+ */
+export function useOneTimeParam(names: readonly string[]): string | null {
+  const [found] = useState(() => names.find((n) => new URLSearchParams(window.location.search).has(n)) ?? null);
+  useEffect(() => {
+    if (found !== null) takeSearchParam(found);
+  }, [found]);
+  return found;
+}

@@ -11,6 +11,7 @@ import { GithubLinkOutcome } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { useToast } from "../notify";
+import { takeSearchParam } from "../router";
 
 const TONES = { linked: "success", conflict: "error", error: "error" } as const;
 
@@ -20,11 +21,8 @@ export function useGithubLinkReturn(enabled: boolean): void {
   const toast = useToast();
   useEffect(() => {
     if (!enabled) return;
-    const url = new URL(window.location.href);
-    const raw = url.searchParams.get("github");
+    const raw = takeSearchParam("github");
     if (raw === null) return;
-    url.searchParams.delete("github");
-    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
     // Anything but a known outcome is dropped silently: the parameter is
     // the callback's, and a forged one must not put words on the screen.
     const outcome = GithubLinkOutcome.safeParse(raw);

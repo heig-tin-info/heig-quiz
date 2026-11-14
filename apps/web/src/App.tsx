@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, LogOut } from "lucide-react";
+import { ArrowRight, CircleCheck, LogOut } from "lucide-react";
 
-import type { KioskStation, Me } from "@quiz/contracts";
+import { ANONYMIZED_PARAM, type KioskStation, type Me } from "@quiz/contracts";
 import { isTrustedClient } from "@quiz/domain";
 
 import { api, useMe, usePublicConfig } from "./api";
@@ -21,7 +21,7 @@ import { AssistDock } from "./assist/AssistDock";
 import { CoachLayer } from "./coach/CoachLayer";
 import { FestiveAmbient } from "./festive/festive";
 import { useWhatsNew } from "./changelog/useWhatsNew";
-import { answeringAt, ROUTES, useRoute, type Navigate, type Route, type RouteOf } from "./router";
+import { answeringAt, ROUTES, useOneTimeParam, useRoute, type Navigate, type Route, type RouteOf } from "./router";
 import { ImpersonationBanner, Shell, StudentViewBanner } from "./Shell";
 import { SuperPowersBanner } from "./SuperPowers";
 import {
@@ -31,7 +31,8 @@ import {
   studentRouteFor,
   useStudentView,
 } from "./studentView";
-import { Button, Card, EmptyState, ErrorText, LinkButton, setDateFormat, Spinner } from "./ui";
+import { Alert, Button, Card, EmptyState, ErrorText, LinkButton, setDateFormat, Spinner } from "./ui";
+import { ReactivatedNotice } from "./AccountAnonymize";
 
 // One chunk per page: a student never downloads the teacher UI and vice versa.
 const TeacherHome = lazyPage(() => import("./TeacherHome").then((m) => ({ default: m.TeacherHome })));
@@ -149,17 +150,21 @@ const DevGallery = import.meta.env.DEV
  * - Finish: a sheet of paper (`surface` + hairline + card radius) on the warm
  *   canvas. No shadow: it sits in the page flow.
  */
-/** A one-time link that was refused lands on the landing page with its query parameter. */
-const REFUSALS: readonly (readonly [string, keyof Dict])[] = [
-  ["seb", "seb.invalid"], // ADR-027: a `.seb` launch, in SEB
-  ["impersonation", "impersonation.invalid"], // ADR-034: an impersonation link
-];
+/**
+ * What lands on the landing page with a one-time query parameter, said once:
+ * a one-time link that was refused, or the end of the session's account.
+ */
+const LANDING_NOTICES: Readonly<Record<string, readonly [keyof Dict, "error" | "success"]>> = {
+  seb: ["seb.invalid", "error"], // ADR-027: a `.seb` launch, in SEB
+  impersonation: ["impersonation.invalid", "error"], // ADR-034: an impersonation link
+  [ANONYMIZED_PARAM]: ["account.anonymized", "success"], // ADR-117 §5: the account anonymized itself
+};
 
 function Landing() {
   const t = useT();
-  const search = new URLSearchParams(window.location.search);
-  const refused = REFUSALS.find(([param]) => search.has(param))?.[1] ?? null;
-  const seb = refused === "seb.invalid" && inSebBrowser();
+  const param = useOneTimeParam(Object.keys(LANDING_NOTICES));
+  const [notice, tone] = param === null ? [null, null] : LANDING_NOTICES[param]!;
+  const seb = notice === "seb.invalid" && inSebBrowser();
   // The one unauthenticated endpoint. A failure is not an error state here:
   // the OIDC button is the real door and it is always there.
   const config = usePublicConfig();
@@ -174,10 +179,17 @@ function Landing() {
         <p className="mt-6 text-base leading-relaxed text-fg-muted">{t("landing.tagline")}</p>
         {/* ADR-027: a SEB launch that was refused lands here, in SEB; and
             ADR-034: so does a used or expired impersonation link. */}
-        {refused ? (
+        {notice && tone === "error" ? (
           <ErrorText role="alert" className="mt-4">
-            {t(refused)}
+            {t(notice)}
           </ErrorText>
+        ) : null}
+        {notice && tone === "success" ? (
+          <div className="mt-6 text-left">
+            <Alert tone="success" icon={CircleCheck}>
+              {t(notice)}
+            </Alert>
+          </div>
         ) : null}
         {/* ADR-027: inside SEB, signing in is out of its URL filter's reach. */}
         {seb ? (
@@ -765,6 +777,8 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
       wide={WIDE.has(shown.view)}
       quiet={QUIET.has(shown.view)}
     >
+      {/* ADR-117 §5: a sign-in that ended a dormancy, said once above the page. */}
+      <ReactivatedNotice navigate={navigate} />
       {page}
     </Shell>
     {/* Inside the frame only: a full-screen view (an exam, a projection)

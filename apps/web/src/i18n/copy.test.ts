@@ -50,6 +50,9 @@ const BUTTON = [
 /** The sub-texts under a ceiling (DESIGN.md, Voice): one sentence, a fact the label does not carry. */
 const SUBTEXT = ["desc", "hint", "help"];
 
+/** The keys that speak of an account's identity and its end (ADR-117): the glossary's anonymized and dormant hold there. */
+const ACCOUNT_KEY = /^(account|admin\.inactive)\./;
+
 const BOTH: Lang[] = ["fr", "en"];
 const FR: Lang[] = ["fr"];
 const EN: Lang[] = ["en"];
@@ -90,6 +93,11 @@ const RULES: Rule[] = [
   { name: "word-marque", langs: FR, fix: "note, points or saisie", test: has(/\b(la|une|les|des|vos|votre|sa|ses|cette)\s+marques?\b/i) },
   { name: "word-gele", langs: FR, fix: "figé", test: has(/\bgelée?s?\b/i) },
   { name: "word-soumettre", langs: FR, fix: "rendre", test: has(/\bsoum(ettre|is|ise|ission)/i) },
+  // An account's end (ADR-117): anonymized, never deleted; dormant, never archived (a classroom's state).
+  { name: "word-account-deleted", langs: FR, fix: "anonymisé: the results stay, only the identity leaves", test: (t, k) => ACCOUNT_KEY.test(k) && has(/supprim/i)(t) },
+  { name: "word-account-deleted", langs: EN, fix: "anonymized: the results stay, only the identity leaves", test: (t, k) => ACCOUNT_KEY.test(k) && has(/\bdelet/i)(t) },
+  { name: "word-account-archived", langs: FR, fix: "en sommeil (a dormant account); archivé is a classroom's", test: (t, k) => ACCOUNT_KEY.test(k) && has(/archiv/i)(t) },
+  { name: "word-account-archived", langs: EN, fix: "dormant; archived is a classroom's", test: (t, k) => ACCOUNT_KEY.test(k) && has(/archiv/i)(t) },
   // Ceilings (both).
   { name: "button-over-24", langs: BOTH, fix: "a verb, at most 24 characters", test: (t, k) => BUTTON.includes(suffix(k)) && !isSentence(t) && longerThan(24)(t) },
   { name: "tab-over-18", langs: BOTH, fix: "at most 18 characters", test: (t, k) => /\.tab\.[^.]+$/.test(k) && longerThan(18)(t) },
