@@ -14,7 +14,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { escapeHtml } from "@quiz/docrender/highlight";
 
 import type { UserRole } from "@quiz/contracts";
@@ -84,7 +84,12 @@ export async function upsertPersona(
         // to student by the absence of a grant.
         role: persona.role,
         lastLoginAt: now,
+        // A sign-in ends the dormancy (ADR-117), as `signIn`'s does.
+        inactivityNotifiedAt: null,
+        inactivityRemindedAt: null,
       },
+      // Never onto a pseudonymized row (ADR-117 §7): no row, refused below.
+      setWhere: isNull(users.anonymizedAt),
     })
     .returning();
   if (!row) throw new Error("Persona upsert returned no row");
