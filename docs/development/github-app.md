@@ -72,8 +72,10 @@ and *Members*, *Plan* (organization); *read* is "Read-only", *write* is
 **Organization secrets are no longer read** (M3-14f, product owner,
 2026-10-14). Quiz used to check that an organization held an
 `ANTHROPIC_API_KEY` secret for the CI's LLM review; the projects' review
-now runs on Quiz's own LLM, and the key a repository's CI may still use is
-the organization's own business. No code reads an organization's secrets.
+now runs on Quiz's own LLM. The CI's LLM review is retired too (product
+owner, 2026-11-14): an organization that still holds that secret deletes it
+(*Settings → Secrets and variables → Actions*). No code reads an
+organization's secrets.
 An App created before that change still holds *Secrets: Read-only*: its
 owner removes it on GitHub (*Settings → Permissions & events →
 Organization permissions → Secrets → No access*, then *Save changes*).

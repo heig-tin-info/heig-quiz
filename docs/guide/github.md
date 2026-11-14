@@ -29,7 +29,7 @@ Once connected, the **GitHub** section shows the organization and two checks, ea
 | Check | Meaning |
 | --- | --- |
 | **App installed, with access to all repositories** | The only **blocking** one. Without it no project can be created or accepted. |
-| **Plan** | On GitHub's *Free* plan an organization has no rulesets and no organization secrets for private repositories. Projects still work, but the deadline lock falls back to archiving the repository, and the LLM review cannot be configured. An Education organization has both. The line links to **GitHub Education**, where a verified teacher upgrades an academic organization (a teacher not yet verified is offered to apply there). |
+| **Plan** | On GitHub's *Free* plan an organization has no rulesets and no organization secrets for private repositories. Projects still work, but the deadline lock falls back to archiving the repository. An Education organization has both. The line links to **GitHub Education**, where a verified teacher upgrades an academic organization (a teacher not yet verified is offered to apply there). |
 
 <figure markdown="span">
   ![The GitHub section with a warning on the plan](../assets/screenshots/mock-classroom-settings-github-checks-warn-light.png#only-light)
