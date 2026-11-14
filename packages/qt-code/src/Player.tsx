@@ -19,8 +19,8 @@
  * 2026-09-25, #129). The last result of each stays on screen.
  *
  * The statement and the program stand side by side when the player has the
- * room (`ProgramSplit`); the free try and the visible cases come after them,
- * across the whole width.
+ * room (`ProgramSplit`); the tools and the free try are docked under the
+ * program, the visible cases come after, across the whole width.
  */
 import { useId, useState } from "react";
 
@@ -256,137 +256,148 @@ export function CodePlayer({
           />
 
           {/*
-           * The toolbar of the student's tools, right under the code. ONE
-           * primary action — Run the tests, the question's own check — and
-           * two secondary ones: Compile, the quick look at the compiler's
-           * words, and Free try, which opens a panel rather than running.
+           * The dock (#1087): the tools stay at the bottom of the screen while
+           * the program scrolls with the page, and the free try opens above
+           * them, like a terminal panel, so no run needs a scroll to the end.
            */}
-          {canRun ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <RunButton
-                state={compile}
-                variant="secondary"
-                className=""
-                icon={<HammerIcon />}
-                label={s.compile}
-                busyLabel={s.compiling}
-                disabled={locked || busy}
-                onClick={() => {
-                  setLastAction("compile");
-                  void runInto(compileInto, { compileOnly: true });
-                }}
-                s={s}
-              />
-              <RunButton
-                state={run}
-                className=""
-                icon={<ListChecksIcon />}
-                label={s.runTests}
-                variant={testsPrimary ? "primary" : "secondary"}
-                disabled={locked || busy}
-                cooldown={cooldown}
-                onClick={() => {
-                  setLastAction("tests");
-                  void runInto(runVisibleInto, {});
-                }}
-                s={s}
-              />
-              {canFreeTry ? (
-                <Button
-                  variant={freeOpen ? "subtle" : "secondary"}
-                  size="sm"
-                  aria-expanded={freeOpen}
-                  aria-controls={`${ids}-free`}
-                  onClick={() => setFreeOpen((open) => !open)}
-                >
-                  <TerminalIcon />
-                  {s.freeTry}
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-          <RunStatus state={status} s={s} />
+          <div className="sticky bottom-0 z-10 flex flex-col gap-2 bg-surface py-2">
+            {/*
+             * The free try of §4.7: one command line and one stdin of the student's
+             * own. It is the ONE thing a client chooses about a run — the visible
+             * cases keep the arguments the teacher wrote, assembled server-side
+             * (invariant 14) — and it exists only where the host can honour it.
+             */}
+            {canFreeTry && freeOpen ? (
+              <section id={`${ids}-free`} className={cx(
+                card,
+                "flex max-h-[45dvh] flex-col gap-3 overflow-y-auto p-4 [scrollbar-width:thin]",
+              )}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h3 className={sectionTitle}>{s.manual}</h3>
+                  <RunButton
+                    state={manual}
+                    variant="secondary"
+                    label={s.manualRun}
+                    disabled={locked || busy}
+                    cooldown={cooldown}
+                    onClick={() =>
+                      void runInto(runManualInto, {
+                        manual: { args: manualArgs, stdin: manualStdin },
+                      })
+                    }
+                    s={s}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <span id={`${ids}-manual-args`} className="text-[13px] font-medium text-fg">
+                      {s.manualArgs}
+                    </span>
+                    <ArgsInput
+                      value={manualArgs}
+                      onChange={setManualArgs}
+                      language={student.language}
+                      s={s}
+                      disabled={locked}
+                      labelledBy={`${ids}-manual-args`}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      className="text-[13px] font-medium text-fg"
+                      htmlFor={`${ids}-manual-stdin`}
+                    >
+                      {s.stdin}
+                    </label>
+                    <textarea
+                      id={`${ids}-manual-stdin`}
+                      rows={3}
+                      aria-label={s.stdin}
+                      className={cx(textareaClass, "w-full font-mono")}
+                      disabled={locked}
+                      value={manualStdin}
+                      onChange={(e) => setManualStdin(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <RunStatus state={manual} s={s} />
+                {manualResult === null ? null : (
+                  <div className="flex flex-col gap-1.5">
+                    <h4 className="text-[13px] font-medium text-fg-muted">{s.manualOutput}</h4>
+                    <pre className={lockedBlock} aria-label={s.manualOutput}>
+                      <code>
+                        {manualResult.stdout || manualResult.stderr || "—"}
+                      </code>
+                    </pre>
+                    <p className={hint}>
+                      {manualResult.timedOut
+                        ? s.timedOut
+                        : manualResult.oom
+                          ? s.outOfMemory
+                          : manualResult.exitCode === null
+                            ? s.crashed
+                            : fmt(s.exitCode, { code: String(manualResult.exitCode) })}
+                    </p>
+                  </div>
+                )}
+              </section>
+            ) : null}
+
+            {/*
+             * The toolbar of the student's tools, right under the code. ONE
+             * primary action — Run the tests, the question's own check — and
+             * two secondary ones: Compile, the quick look at the compiler's
+             * words, and Free try, which opens a panel rather than running.
+             */}
+            {canRun ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <RunButton
+                  state={compile}
+                  variant="secondary"
+                  className=""
+                  icon={<HammerIcon />}
+                  label={s.compile}
+                  busyLabel={s.compiling}
+                  disabled={locked || busy}
+                  onClick={() => {
+                    setLastAction("compile");
+                    void runInto(compileInto, { compileOnly: true });
+                  }}
+                  s={s}
+                />
+                <RunButton
+                  state={run}
+                  className=""
+                  icon={<ListChecksIcon />}
+                  label={s.runTests}
+                  variant={testsPrimary ? "primary" : "secondary"}
+                  disabled={locked || busy}
+                  cooldown={cooldown}
+                  onClick={() => {
+                    setLastAction("tests");
+                    void runInto(runVisibleInto, {});
+                  }}
+                  s={s}
+                />
+                {canFreeTry ? (
+                  <Button
+                    variant={freeOpen ? "subtle" : "secondary"}
+                    size="sm"
+                    aria-expanded={freeOpen}
+                    aria-controls={`${ids}-free`}
+                    onClick={() => setFreeOpen((open) => !open)}
+                  >
+                    <TerminalIcon />
+                    {s.freeTry}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+            <RunStatus state={status} s={s} />
+          </div>
         </div>
       </ProgramSplit>
 
-      {/*
-       * The free try of §4.7: one command line and one stdin of the student's
-       * own. It is the ONE thing a client chooses about a run — the visible
-       * cases keep the arguments the teacher wrote, assembled server-side
-       * (invariant 14) — and it exists only where the host can honour it.
-       */}
-      {canFreeTry && freeOpen ? (
-        <section id={`${ids}-free`} className={cx(card, "flex flex-col gap-3 p-4")}>
-          <div className="flex flex-wrap items-center gap-3">
-            <h3 className={sectionTitle}>{s.manual}</h3>
-            <RunButton
-              state={manual}
-              variant="secondary"
-              label={s.manualRun}
-              disabled={locked || busy}
-              cooldown={cooldown}
-              onClick={() =>
-                void runInto(runManualInto, {
-                  manual: { args: manualArgs, stdin: manualStdin },
-                })
-              }
-              s={s}
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <span id={`${ids}-manual-args`} className="text-[13px] font-medium text-fg">
-                {s.manualArgs}
-              </span>
-              <ArgsInput
-                value={manualArgs}
-                onChange={setManualArgs}
-                language={student.language}
-                s={s}
-                disabled={locked}
-                labelledBy={`${ids}-manual-args`}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label
-                className="text-[13px] font-medium text-fg"
-                htmlFor={`${ids}-manual-stdin`}
-              >
-                {s.stdin}
-              </label>
-              <textarea
-                id={`${ids}-manual-stdin`}
-                rows={3}
-                aria-label={s.stdin}
-                className={cx(textareaClass, "w-full font-mono")}
-                disabled={locked}
-                value={manualStdin}
-                onChange={(e) => setManualStdin(e.target.value)}
-              />
-            </div>
-          </div>
-          <RunStatus state={manual} s={s} />
-          {manualResult === null ? null : (
-            <div className="flex flex-col gap-1.5">
-              <h4 className="text-[13px] font-medium text-fg-muted">{s.manualOutput}</h4>
-              <pre className={lockedBlock} aria-label={s.manualOutput}>
-                <code>
-                  {manualResult.stdout || manualResult.stderr || "—"}
-                </code>
-              </pre>
-              <p className={hint}>
-                {manualResult.timedOut
-                  ? s.timedOut
-                  : manualResult.oom
-                    ? s.outOfMemory
-                    : manualResult.exitCode === null
-                      ? s.crashed
-                      : fmt(s.exitCode, { code: String(manualResult.exitCode) })}
-              </p>
-            </div>
-          )}
-        </section>
-      ) : null}
 
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
         <div className="flex flex-wrap items-center justify-between gap-2">

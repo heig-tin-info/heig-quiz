@@ -213,7 +213,20 @@ export function ProgramSplit({
   return (
     <div className="@container">
       <div className="flex flex-col gap-5 @min-[60rem]:grid @min-[60rem]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] @min-[60rem]:items-start @min-[60rem]:gap-6">
-        <div className="flex flex-col gap-5">{statement}</div>
+        <div
+          className={cx(
+            "flex flex-col gap-5",
+            // Side by side, the statement stays in view under the player's bar
+            // while the program scrolls with the page, and scrolls on its own
+            // when taller than the screen (#1087); a thin scrollbar, on hover.
+            "@min-[60rem]:sticky @min-[60rem]:top-[calc(var(--banner-h,0px)+var(--bar-h,0px)+1.5rem)]",
+            "@min-[60rem]:max-h-[calc(100dvh-var(--banner-h,0px)-var(--bar-h,0px)-3rem)]",
+            "@min-[60rem]:overflow-y-auto @min-[60rem]:pr-3",
+            "[scrollbar-width:thin] [scrollbar-color:transparent_transparent] hover:[scrollbar-color:var(--line-strong)_transparent]",
+          )}
+        >
+          {statement}
+        </div>
         {children}
       </div>
     </div>
