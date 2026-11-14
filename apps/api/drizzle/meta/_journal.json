@@ -932,6 +932,13 @@
       "when": 1794689870298,
       "tag": "0132_account_pseudonymization",
       "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1794691016600,
+      "tag": "0133_audit_log_retention",
+      "breakpoints": true
     }
   ]
 }

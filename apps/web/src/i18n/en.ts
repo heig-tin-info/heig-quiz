@@ -634,6 +634,8 @@ export const en = {
   "admin.activity.empty.body": "Hours are recorded since this view went live.",
   "admin.task.presence.purge": "Activity hours purge",
   "admin.task.presence.purge.desc": "Deletes the hours of activity older than eight days.",
+  "admin.task.audit.purge": "Audit log purge",
+  "admin.task.audit.purge.desc": "Deletes the audit log entries older than three years.",
   "admin.tab.people": "People",
   "admin.tab.system": "System status",
   "admin.tab.tasks": "Scheduled tasks",

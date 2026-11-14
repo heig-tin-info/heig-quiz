@@ -88,6 +88,7 @@ export const SCHEDULED_TASK_KEYS = [
   "poll.purge_guests",
   "paper.scan_sweep",
   "accounts.lifecycle",
+  "audit.purge",
 ] as const;
 export type ScheduledTaskKey = (typeof SCHEDULED_TASK_KEYS)[number];
 
