@@ -42,6 +42,7 @@ describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", ()
       question_report_resolved: on,
       pool_unpublished: on,
       system_alert: { bell: true, email: true, teams: false },
+      account_dormant: { bell: false, email: true, teams: false },
     });
   });
 
