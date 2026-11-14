@@ -6750,7 +6750,7 @@ export const en = {
   "github.check.notInstalled": "Quiz's GitHub App is no longer installed on this organization: install it again.",
   "github.check.orgDeleted": "This organization no longer exists on GitHub: disconnect the classroom, then connect another one.",
   "github.check.plan": "Plan: {plan}.",
-  "github.check.planFree": "Free plan: no rulesets and no organization secrets for private repositories. An Education organization has both.",
+  "github.check.planFree": "Free plan: no rulesets for private repositories. An Education organization has them.",
   "github.check.planUnknown": "The organization's plan has not been read yet.",
   "github.level.ok": "OK",
   "github.level.warning": "Warning",

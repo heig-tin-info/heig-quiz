@@ -62,7 +62,7 @@ on GitHub (*Settings → Permissions & events*), never the other way round.
 | `pull_requests` | repository | write | the source sync's pull requests (opened, commented, their state read) |
 | `workflows` | repository | write | pushing `.github/workflows/*` (the grading workflow) into the distribution, the students' repositories and the sync branches |
 | `members` | organization | read | the `member` and `organization` events (an invitation accepted, an organization renamed or deleted) |
-| `organization_plan` | organization | read | the Free-plan check (`plan` of `GET /orgs/{org}`): no organization secrets for private repositories, no rulesets |
+| `organization_plan` | organization | read | the Free-plan check (`plan` of `GET /orgs/{org}`): no rulesets for private repositories |
 
 On GitHub's settings page the names read *Actions*, *Administration*,
 *Checks*, *Contents*, *Metadata*, *Pull requests*, *Workflows* (repository)
