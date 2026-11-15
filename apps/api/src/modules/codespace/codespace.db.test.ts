@@ -65,6 +65,7 @@ import {
   connectedClassroom,
   fakePortal,
   grantedTeacher,
+  workModeBody,
   type PortalCall,
   type Room,
 } from "./testing.js";
@@ -140,7 +141,7 @@ async function project(room: Room, name: string, opts: { publish?: boolean; body
 }
 
 const setMode = (projectId: string, mode: string, who: Person = owner) =>
-  call("PUT", `/app/api/projects/${projectId}/workspace/mode`, who.headers, { mode });
+  call("PUT", `/app/api/projects/${projectId}/workspace/mode`, who.headers, workModeBody(mode));
 const accept = async (projectId: string, who: Person) => {
   const res = await call("POST", `/app/api/student/projects/${projectId}/accept`, who.headers);
   expect(res.statusCode, res.body).toBe(200);
@@ -204,7 +205,7 @@ describe("the work mode (ADR-047 as amended 2026-10-07)", () => {
     const back = ProjectWorkspace.parse((await call("GET", `/app/api/projects/${lab.id}/workspace`, ungranted.headers)).json());
     expect(back).toMatchObject({ allowed: ["free", "online"], refusal: "codespace_not_granted" });
     const audits = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.work_mode"), eq(auditLog.subjectId, lab.id)));
-    expect(audits.map((a) => a.payload)).toEqual([{ from: "free", to: "online" }]);
+    expect(audits.map((a) => a.payload)).toEqual([{ from: "free", to: "online", devices: { from: "any", to: "any" } }]);
   });
 
   it("is always granted to an administrator, with the default quota (amendment 2026-10-08)", async () => {
@@ -262,6 +263,36 @@ describe("the work mode (ADR-047 as amended 2026-10-07)", () => {
     // A second Accept answers the repository, and still invites nobody.
     await accept(exam.id, b);
     expect(world.collaborators.get(examRepo.fullName!)?.has(b.login) ?? false).toBe(false);
+  });
+});
+
+describe("kiosk stations for projects, flag off (ADR-089, amendment point 1)", () => {
+  // This server has `KIOSK_ATTESTATION=off`: `kioskProjectsOn` is false. Its other side is `kiosk.db.test.ts`.
+  const level = (projectId: string, devices: string) =>
+    call("PUT", `/app/api/projects/${projectId}/workspace/mode`, owner.headers, { mode: "online_seb", devices });
+
+  it("refuses a change TO a station level (422 kiosk_unavailable), and says so in the payload", async () => {
+    const room = await connected([]);
+    const lab = await project(room, "No station lab");
+    for (const devices of ["either", "kiosk"]) {
+      const refused = await level(lab.id, devices);
+      expect([refused.statusCode, refused.json().error]).toEqual([422, "kiosk_unavailable"]);
+    }
+    const ok = await level(lab.id, "seb");
+    expect(ok.statusCode, ok.body).toBe(200);
+    expect(ProjectWorkspace.parse(ok.json())).toMatchObject({ mode: "online_seb", devices: "seb", kioskOffered: false });
+  });
+
+  it("lets a live project keep the station level it holds: re-sent unchanged passes, leaving passes, coming back is refused", async () => {
+    const room = await connected([]);
+    const lab = await project(room, "Held station lab");
+    // The level it got while the flag was on.
+    await server.app.db.update(projects).set({ workMode: "online_seb", devices: "kiosk" }).where(eq(projects.id, lab.id));
+    const read = ProjectWorkspace.parse((await call("GET", `/app/api/projects/${lab.id}/workspace`, owner.headers)).json());
+    expect(read).toMatchObject({ mode: "online_seb", devices: "kiosk", kioskOffered: false, refusal: null });
+    expect((await level(lab.id, "kiosk")).statusCode).toBe(200);
+    expect((await level(lab.id, "seb")).statusCode).toBe(200);
+    expect((await level(lab.id, "kiosk")).json().error).toBe("kiosk_unavailable");
   });
 });
 
@@ -565,7 +596,7 @@ describe("POST /app/api/projects/:id/workspace/start", () => {
       expect(body).not.toContain(signature);
     }
     const view = (await call("GET", `/app/api/student/projects/${lab.id}`, student.headers)).json();
-    expect(view.workspace).toEqual({ mode: "online" });
+    expect(view.workspace).toEqual({ mode: "online", devices: "any" });
     const [state] = await server.app.db.select().from(codespaceProjects).where(eq(codespaceProjects.projectId, lab.id));
     expect(state!.firstLaunchAt?.toISOString()).toBe(NOW);
 

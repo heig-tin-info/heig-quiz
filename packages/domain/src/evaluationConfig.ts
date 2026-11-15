@@ -249,6 +249,9 @@ export type TrustedClient = (typeof TRUSTED_CLIENTS)[number];
 export const isTrustedClient = (kind: string): kind is TrustedClient =>
   (TRUSTED_CLIENTS as readonly string[]).includes(kind);
 
+/** The exam setting that turns each trusted client on (ADR-051 §2): THE mapping between the two. */
+export const TRUSTED_CLIENT_SWITCH = { seb: "safeExamBrowser", kiosk: "kiosk" } as const satisfies Record<TrustedClient, string>;
+
 /** Only an exam may require a trusted client: the settings screen offers the choice there alone. */
 export function trustedClientsAllowedFor(mode: EvaluationModeName): boolean {
   return mode === "exam";
@@ -267,8 +270,7 @@ export function trustedClientsOf(
   settings: { safeExamBrowser?: boolean | undefined; kiosk?: boolean | undefined },
 ): TrustedClient[] {
   if (!trustedClientsAllowedFor(mode)) return [];
-  const on: Record<TrustedClient, boolean | undefined> = { seb: settings.safeExamBrowser, kiosk: settings.kiosk };
-  return TRUSTED_CLIENTS.filter((client) => on[client] === true);
+  return TRUSTED_CLIENTS.filter((client) => settings[TRUSTED_CLIENT_SWITCH[client]] === true);
 }
 
 /**

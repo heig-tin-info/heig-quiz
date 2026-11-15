@@ -203,8 +203,9 @@ the tick with 100 due projects) was deferred (product owner, 2026-10-06).
     session** (ADR-051), like a `seb` one, is confined to one exam or one
     supervised project (ADR-089); it is worth nothing without its station's
     cookie beside it (`trustRefusal`, `auth/trust.ts`), and it ends with
-    the attempt or, for a project, at the first of Leave, replacement, the
-    effective deadline, its 6 h, the station's retirement."
+    the attempt or, for a project, at the first of its replacement, its
+    6 h, the station's retirement." — only the ends that hold after M6-11b
+    (security review of #1099); M6-11d writes the rest.
 - **M6-11c, portal.** The `kiosk: { deviceId, sitting }` claim of
   `LaunchTokenClaims`; `/launch` accepting it in exam mode without the SEB
   header check, its `exam_session` carrying the `sitting`; each upgraded
@@ -226,8 +227,10 @@ the tick with 100 due projects) was deferred (product owner, 2026-10-06).
   `codespace.session_closed` and `codespace.session_close_failed` in the
   audit union, `kiosk.paired`/`kiosk.suspended` naming a project; removes
   the bare-cookie fallback of M6-11a, **merged only once M6-11a has run in
-  production for 12 h**. Appends to `CLAUDE.md` invariant 6's kiosk
-  sentence: "— each closing the portal session".
+  production for 12 h**. Ends `CLAUDE.md` invariant 6's kiosk sentence
+  with: "… and it ends with the attempt or, for a project, at the first of
+  Leave, replacement, the effective deadline, its 6 h, the station's
+  retirement — each closing the portal session."
 - **M6-11e, web.** The station page (bar, deadline, **Leave this
   station**, the sandboxed frame fed by the start route's `{ url }`, the
   overlay while suspended), Quiz's `frame-src` on that page only; the

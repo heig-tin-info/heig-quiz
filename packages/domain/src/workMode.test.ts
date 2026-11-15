@@ -4,19 +4,25 @@ import {
   collaboratorPermission,
   gitTokenRefusal,
   isOnlineMode,
+  kioskProjectPairable,
   quotaHolder,
   portalDeadline,
   staffReviewRefusal,
+  workModeChoices,
   workModeRefusal,
+  workSettingFor,
+  workSettingOf,
   workspaceClosed,
   workspaceStartRefusal,
   type GitTokenFacts,
   type StaffReviewFacts,
   type WorkModeFacts,
+  type WorkSetting,
   type WorkspaceStartFacts,
 } from "./workMode.js";
+import { DEVICE_LEVEL_IDS } from "./deviceLevels.js";
 
-const OWNER: WorkModeFacts = { owner: true, granted: true, launched: false, groupMode: false };
+const OWNER: WorkModeFacts = { owner: true, granted: true, launched: false, groupMode: false, kioskOffered: true };
 
 describe("collaboratorPermission (ADR-047 §2)", () => {
   it("pushes in the student's own tools, pulls online, invites nobody under SEB", () => {
@@ -27,37 +33,98 @@ describe("collaboratorPermission (ADR-047 §2)", () => {
   });
 });
 
+/** A stored setting: a mode, and its level (`any` unless given). */
+const S = (mode: WorkSetting["mode"], devices: WorkSetting["devices"] = "any"): WorkSetting => ({ mode, devices });
+const FREE = S("free");
+const ONLINE = S("online");
+const SEB = S("online_seb", "seb");
+const EITHER = S("online_seb", "either");
+const KIOSK = S("online_seb", "kiosk");
+
 describe("workModeRefusal", () => {
   it("lets an owner with the grant choose any mode", () => {
-    expect(workModeRefusal(OWNER, "free", "online")).toBeNull();
-    expect(workModeRefusal(OWNER, "online", "online_seb")).toBeNull();
-    expect(workModeRefusal(OWNER, "online", "free")).toBeNull();
+    expect(workModeRefusal(OWNER, FREE, ONLINE)).toBeNull();
+    expect(workModeRefusal(OWNER, ONLINE, SEB)).toBeNull();
+    expect(workModeRefusal(OWNER, ONLINE, FREE)).toBeNull();
   });
 
   it("refuses an assistant, whatever the mode", () => {
-    expect(workModeRefusal({ ...OWNER, owner: false }, "free", "online")).toBe("owner_required");
-    expect(workModeRefusal({ ...OWNER, owner: false }, "online", "free")).toBe("owner_required");
+    expect(workModeRefusal({ ...OWNER, owner: false }, FREE, ONLINE)).toBe("owner_required");
+    expect(workModeRefusal({ ...OWNER, owner: false }, ONLINE, FREE)).toBe("owner_required");
+    expect(workModeRefusal({ ...OWNER, owner: false }, SEB, EITHER)).toBe("owner_required");
   });
 
   it("needs the grant to go online, not to come back to free", () => {
     const ungranted = { ...OWNER, granted: false };
-    expect(workModeRefusal(ungranted, "free", "online")).toBe("codespace_not_granted");
-    expect(workModeRefusal(ungranted, "free", "online_seb")).toBe("codespace_not_granted");
-    expect(workModeRefusal(ungranted, "online", "free")).toBeNull();
+    expect(workModeRefusal(ungranted, FREE, ONLINE)).toBe("codespace_not_granted");
+    expect(workModeRefusal(ungranted, FREE, SEB)).toBe("codespace_not_granted");
+    expect(workModeRefusal(ungranted, ONLINE, FREE)).toBeNull();
   });
 
-  it("freezes the mode once a workspace was launched", () => {
+  it("freezes the pair once a workspace was launched: the mode and the level alike (ADR-089)", () => {
     const launched = { ...OWNER, launched: true };
-    expect(workModeRefusal(launched, "online", "free")).toBe("work_mode_frozen");
-    expect(workModeRefusal(launched, "online", "online_seb")).toBe("work_mode_frozen");
+    expect(workModeRefusal(launched, ONLINE, FREE)).toBe("work_mode_frozen");
+    expect(workModeRefusal(launched, ONLINE, SEB)).toBe("work_mode_frozen");
+    expect(workModeRefusal(launched, SEB, EITHER)).toBe("work_mode_frozen");
+    expect(workModeRefusal(launched, KIOSK, SEB)).toBe("work_mode_frozen");
   });
 
   it("keeps a group project in the students' own tools", () => {
-    expect(workModeRefusal({ ...OWNER, groupMode: true }, "free", "online")).toBe("work_mode_group");
+    expect(workModeRefusal({ ...OWNER, groupMode: true }, FREE, ONLINE)).toBe("work_mode_group");
   });
 
-  it("never refuses the mode the project already has", () => {
-    expect(workModeRefusal({ owner: false, granted: false, launched: true, groupMode: true }, "online", "online")).toBeNull();
+  it("never refuses the pair the project already has, a station level with the flag off included", () => {
+    const nobody = { owner: false, granted: false, launched: true, groupMode: true, kioskOffered: false };
+    for (const setting of [FREE, ONLINE, SEB, EITHER, KIOSK]) expect(workModeRefusal(nobody, setting, { ...setting })).toBeNull();
+  });
+
+  it("refuses a change TO a station level while kiosk stations are not offered; leaving one passes (ADR-089 point 1)", () => {
+    const off = { ...OWNER, kioskOffered: false };
+    for (const [from, to] of [[ONLINE, EITHER], [SEB, KIOSK], [EITHER, KIOSK], [KIOSK, EITHER]] as const) {
+      expect(workModeRefusal(off, from, to)).toBe("kiosk_unavailable");
+      expect(workModeRefusal(OWNER, from, to)).toBeNull();
+    }
+    for (const [from, to] of [[KIOSK, SEB], [EITHER, ONLINE], [KIOSK, FREE], [ONLINE, SEB]] as const) {
+      expect(workModeRefusal(off, from, to)).toBeNull();
+    }
+    // The order of the record: the freeze before the flag.
+    expect(workModeRefusal({ ...off, launched: true }, SEB, KIOSK)).toBe("work_mode_frozen");
+  });
+});
+
+describe("workModeChoices", () => {
+  it("judges each mode as it would be written: online_seb keeps the level in force, else SEB", () => {
+    expect(workModeChoices(OWNER, FREE)).toEqual({ allowed: ["free", "online", "online_seb"], refusal: null });
+    // A Kiosk only project with the flag off: its own pair passes, SEB from it passes too.
+    expect(workModeChoices({ ...OWNER, kioskOffered: false }, KIOSK)).toEqual({ allowed: ["free", "online", "online_seb"], refusal: null });
+    expect(workModeChoices({ ...OWNER, launched: true }, EITHER)).toEqual({ allowed: ["online_seb"], refusal: "work_mode_frozen" });
+  });
+});
+
+describe("the mapping between the setting and the screen (ADR-089 point 2)", () => {
+  it("is own tools, or a level in the workspace: any is online, the others online_seb", () => {
+    expect(workSettingFor(false, "kiosk")).toEqual(FREE);
+    expect(workSettingFor(true, "any")).toEqual(ONLINE);
+    for (const level of ["seb", "either", "kiosk"] as const) expect(workSettingFor(true, level)).toEqual(S("online_seb", level));
+  });
+
+  it("reads back the level from the stored devices, and turns the write's body into the setting", () => {
+    for (const level of DEVICE_LEVEL_IDS) expect(workSettingFor(true, level).devices).toBe(level);
+    expect([workSettingOf({ mode: "free" }), workSettingOf({ mode: "online" })]).toEqual([FREE, ONLINE]);
+    for (const level of ["seb", "either", "kiosk"] as const) expect(workSettingOf({ mode: "online_seb", devices: level })).toEqual(S("online_seb", level));
+  });
+});
+
+describe("kioskProjectPairable (ADR-089 §5)", () => {
+  const NOW = new Date("2026-10-07T08:00:00Z");
+  const deadlineAt = new Date("2026-10-14T22:00:00Z");
+  it("is a station level, before the student's effective deadline", () => {
+    expect(kioskProjectPairable({ ...EITHER, deadlineAt }, null, NOW)).toBe(true);
+    expect(kioskProjectPairable({ ...KIOSK, deadlineAt }, { deadlineAt: null }, NOW)).toBe(true);
+    for (const setting of [FREE, ONLINE, SEB]) expect(kioskProjectPairable({ ...setting, deadlineAt }, null, NOW)).toBe(false);
+    expect(kioskProjectPairable({ ...KIOSK, deadlineAt }, null, deadlineAt)).toBe(false);
+    // An extension of the student's own repository moves it (ADR-078 §2).
+    expect(kioskProjectPairable({ ...KIOSK, deadlineAt }, { deadlineAt: new Date("2026-10-21T22:00:00Z") }, deadlineAt)).toBe(true);
   });
 });
 
@@ -82,29 +149,42 @@ describe("workspaceStartRefusal (ADR-047 §6)", () => {
   const NOW = new Date("2026-10-07T08:00:00Z");
   const DEADLINE = new Date("2026-10-14T22:00:00Z");
   const repo = { groupId: null, provisionStatus: "ok", fullName: "org/lab-kid", deletedAt: null, deadlineAt: null, staffLock: null, deadlineAppliedAt: null, lockedAt: null };
-  const base = { deadlineAt: DEADLINE, deadlineStrategy: "lock", archivedAt: null } as const;
+  const base = { deadlineAt: DEADLINE, deadlineStrategy: "lock", archivedAt: null, devices: "any" } as const;
   const facts = (over: Partial<WorkspaceStartFacts> = {}): WorkspaceStartFacts => ({
     project: { ...base, workMode: "online" },
     repo,
     classroomArchived: false,
-    fromSeb: false,
+    via: null,
     ...over,
   });
-  const exam = { ...base, workMode: "online_seb" } as const;
+  const exam = { ...base, workMode: "online_seb", devices: "seb" } as const;
 
   it("opens an online project's workspace on the student's live repository", () => {
     expect(workspaceStartRefusal(facts(), NOW)).toBeNull();
   });
 
   it("opens a Safe Exam Browser project's from its seb session only (D21)", () => {
-    expect(workspaceStartRefusal(facts({ project: exam, fromSeb: true }), NOW)).toBeNull();
+    expect(workspaceStartRefusal(facts({ project: exam, via: "seb" }), NOW)).toBeNull();
     expect(workspaceStartRefusal(facts({ project: exam }), NOW)).toBe("seb_required");
+    expect(workspaceStartRefusal(facts({ project: exam, via: "kiosk" }), NOW)).toBe("seb_required");
     // The session's activity is still checked: no repository, no workspace.
-    expect(workspaceStartRefusal(facts({ project: exam, fromSeb: true, repo: null }), NOW)).toBe("not_accepted");
+    expect(workspaceStartRefusal(facts({ project: exam, via: "seb", repo: null }), NOW)).toBe("not_accepted");
+  });
+
+  it("opens a supervised project from the clients its level accepts only (ADR-089 point 2)", () => {
+    const at = (devices: "seb" | "either" | "kiosk") => ({ ...exam, devices });
+    const verdicts = (["seb", "either", "kiosk"] as const).map((level) =>
+      ([null, "seb", "kiosk"] as const).map((via) => workspaceStartRefusal(facts({ project: at(level), via }), NOW)),
+    );
+    expect(verdicts).toEqual([
+      ["seb_required", null, "seb_required"],
+      ["seb_required", null, null],
+      ["kiosk_required", "kiosk_required", null],
+    ]);
   });
 
   it("refuses, in order: not online, SEB only, not accepted, closed", () => {
-    expect(workspaceStartRefusal(facts({ project: { ...base, workMode: "free" }, repo: null, fromSeb: true }), NOW)).toBe("not_online");
+    expect(workspaceStartRefusal(facts({ project: { ...base, workMode: "free" }, repo: null, via: "seb" }), NOW)).toBe("not_online");
     expect(workspaceStartRefusal(facts({ project: exam, repo: null }), NOW)).toBe("seb_required");
     expect(workspaceStartRefusal(facts({ repo: null }), NOW)).toBe("not_accepted");
     expect(workspaceStartRefusal(facts({ repo: { ...repo, provisionStatus: "pending" } }), NOW)).toBe("not_accepted");
@@ -126,7 +206,7 @@ describe("workspaceStartRefusal (ADR-047 §6)", () => {
     expect(workspaceStartRefusal(facts({ project: commit, repo: { ...applied, staffLock: true } }), LATE)).toBe("closed");
     expect(workspaceStartRefusal(facts({ project: commit, repo: applied, classroomArchived: true }), LATE)).toBe("closed");
     // Under Safe Exam Browser, and under lock, the deadline still closes it.
-    expect(workspaceStartRefusal(facts({ project: { ...commit, workMode: "online_seb" }, repo: applied, fromSeb: true }), LATE)).toBe("closed");
+    expect(workspaceStartRefusal(facts({ project: { ...commit, workMode: "online_seb", devices: "seb" }, repo: applied, via: "seb" }), LATE)).toBe("closed");
     expect(workspaceStartRefusal(facts({ repo: applied }), LATE)).toBe("closed");
   });
 

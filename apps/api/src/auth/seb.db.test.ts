@@ -29,7 +29,7 @@ import {
   openImpersonation,
   openProjectSebSession,
   openSebSession,
-  PROJECT_SEB_ROUTES,
+  PROJECT_CONFINED_ROUTES,
   sebSessionOf,
   sebStartUrl,
   SITTING_ROUTES,
@@ -467,6 +467,7 @@ describe("the seb session of a project (D21)", () => {
       gradingScale: defaultProjectGradingScale(),
       createdBy: teacher.id,
       workMode,
+      devices: workMode === "online_seb" ? "seb" : "any",
     });
     return id;
   }
@@ -516,7 +517,7 @@ describe("the seb session of a project (D21)", () => {
     expect((await call("GET", "/app/api/me", seb)).json().session).toMatchObject({ kind: "seb", evaluationId: null, projectId: lab });
     const page = await call("GET", `/app/api/student/projects/${lab}`, seb);
     expect(page.statusCode, page.body).toBe(200);
-    expect(page.json().workspace).toEqual({ mode: "online_seb" });
+    expect(page.json().workspace).toEqual({ mode: "online_seb", devices: "seb" });
     for (const other of [otherLab, online]) {
       expect((await call("GET", `/app/api/student/projects/${other}`, seb)).statusCode).toBe(404);
     }
@@ -542,13 +543,13 @@ describe("the seb session of a project (D21)", () => {
 
   it("is no session at all on every route that does not declare it", async () => {
     // As for an evaluation's: every route of Fastify's tree, with the session
-    // and with none; outside PROJECT_SEB and `GET /me`, the same answer.
+    // and with none; outside PROJECT_CONFINED and `GET /me`, the same answer.
     const anonymous = (url: string) => {
       const { cookie: _, ...rest } = seb(url);
       return rest;
     };
     for (const { method, path } of routesOf(server.app.printRoutes({ commonPrefix: false }))) {
-      if (PROJECT_SEB_ROUTES.has(`${method} ${path}`) || /^\/app\/auth\/(login|callback)$/.test(path)) continue;
+      if (PROJECT_CONFINED_ROUTES.has(`${method} ${path}`) || /^\/app\/auth\/(login|callback)$/.test(path)) continue;
       const url = path.replace(/:\w+/g, "00000000-0000-4000-8000-000000000000").replace("*", "x");
       const [asSeb, asNobody] = await Promise.all([call(method, url, seb), call(method, url, anonymous)]);
       expect(asSeb.statusCode, `${method} ${path}`).toBe(asNobody.statusCode);

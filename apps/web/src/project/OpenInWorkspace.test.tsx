@@ -27,6 +27,8 @@ const LAUNCH = "https://workspace.heig-vd.ch/review?token=t";
 
 const workspace = (over: Partial<ProjectWorkspace> = {}): ProjectWorkspace => ({
   mode: "free",
+  devices: "any",
+  kioskOffered: false,
   allowed: ["free"],
   refusal: null,
   syncedAt: null,

@@ -127,8 +127,8 @@ export async function openSebSession(
   return sebSessionOf(await launchSeb(server, startUrl), startUrl);
 }
 
-/** The routes that declare `PROJECT_SEB` (D21), and `GET /me`: all a project's `seb` session reaches. */
-export const PROJECT_SEB_ROUTES = new Set([
+/** The routes that declare `PROJECT_CONFINED` (D21, ADR-089), and `GET /me`: all a project's confined session reaches. */
+export const PROJECT_CONFINED_ROUTES = new Set([
   "GET /app/api/me",
   "GET /app/api/student/projects/:id",
   "POST /app/api/projects/:id/workspace/start",

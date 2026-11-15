@@ -20,6 +20,14 @@ export const PORTAL_SECRET = "s".repeat(40);
 /** The configuration that turns the online workspace on, beside the App's. */
 export const CODESPACE_ENV = { CODESPACE_URL: PORTAL, CODESPACE_LAUNCH_SECRET: PORTAL_SECRET };
 
+/**
+ * The body of `PUT …/workspace/mode` for `mode`: under supervision with a
+ * device level (ADR-089), SEB by default — the level M6-07's `online_seb`
+ * had.
+ */
+export const workModeBody = (mode: string, devices = "seb"): { mode: string; devices?: string } =>
+  mode === "online_seb" ? { mode, devices } : { mode };
+
 /** A call the stub portal received. */
 export interface PortalCall {
   method: string;

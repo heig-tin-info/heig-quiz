@@ -133,7 +133,7 @@ export async function testServer(
 export async function sessionOf(
   db: Db,
   userId: string,
-  auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string; deviceId?: string; projectId?: string; sebConfigKey?: string },
+  auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string; deviceId?: string; projectId?: string; sebConfigKey?: string; kioskPairingId?: string },
 ): Promise<Record<string, string>> {
   const session = await createSession(db, userId, 8, {
     kind: auth.kind,
@@ -142,6 +142,7 @@ export async function sessionOf(
     deviceId: auth.deviceId ?? null,
     projectId: auth.projectId ?? null,
     sebConfigKey: auth.sebConfigKey ?? null,
+    kioskPairingId: auth.kioskPairingId ?? null,
   });
   return { cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`, "x-csrf-token": session.csrf };
 }

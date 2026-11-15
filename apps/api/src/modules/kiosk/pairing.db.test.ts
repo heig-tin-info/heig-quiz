@@ -7,14 +7,14 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { DEVICE_CODE_GRANT, KioskDeviceAuthorization, PairPreview, CSRF_COOKIE } from "@quiz/contracts";
+import { DEVICE_CODE_GRANT, PairPreview, CSRF_COOKIE } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { createSession, SESSION_COOKIE } from "../../auth/session.js";
 import { auditLog, kioskPairings, sessions } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
-import { kioskStation, type TestStation } from "../../test/kiosk.js";
+import { authorize as authorizeStation, kioskStation, stationHeaders, stationPost as postAsStation, type TestStation } from "../../test/kiosk.js";
 import { seedLive } from "../../test/live.js";
 import { PAIR_MAX_FAILURES } from "./pairing.js";
 import { PAIR_PREVIEW_LIMIT } from "./routes.js";
@@ -33,24 +33,8 @@ afterAll(async () => {
 
 type Headers = Record<string, string>;
 
-/** Each station call from its own address: the attestation limiter is not under test. */
-let host = 0;
-const nextAddress = () => `10.9.${Math.floor(++host / 250)}.${host % 250}`;
-
-const stationPost = (url: string, station: TestStation | null, payload?: Payload) =>
-  server.app.inject({
-    method: "POST",
-    url,
-    remoteAddress: nextAddress(),
-    headers: station ? { cookie: station.cookie } : {},
-    ...(payload ? { payload } : {}),
-  });
-
-async function authorize(station: TestStation) {
-  const res = await stationPost("/app/api/kiosk/device_authorization", station);
-  expect(res.statusCode, res.body).toBe(200);
-  return KioskDeviceAuthorization.parse(res.json());
-}
+const stationPost = (url: string, station: TestStation | null, payload?: Payload) => postAsStation(server.app, url, station, payload);
+const authorize = (station: TestStation) => authorizeStation(server.app, station);
 
 const poll = (station: TestStation | null, deviceCode: string) =>
   stationPost("/app/api/kiosk/token", station, { grant_type: DEVICE_CODE_GRANT, device_code: deviceCode });
@@ -76,16 +60,6 @@ async function running(settings: { safeExamBrowser?: boolean; kiosk?: boolean } 
   return { evaluationId: seeded.evaluationId, student, teacher };
 }
 
-/** The session cookies a response set, as one `cookie` header value. */
-function sessionCookies(res: { headers: Record<string, unknown> }) {
-  const all = [res.headers["set-cookie"]].flat().filter((c): c is string => typeof c === "string");
-  const pick = (name: string) => all.find((c) => c.startsWith(`${name}=`))?.split(";")[0];
-  const session = pick(SESSION_COOKIE);
-  const csrf = pick(CSRF_COOKIE);
-  expect(session).toBeDefined();
-  return { cookie: `${session}; ${csrf}`, csrf: csrf!.slice(CSRF_COOKIE.length + 1) };
-}
-
 /** A station paired for `student` on `evaluationId`: the headers of its kiosk session, station cookie included. */
 async function paired(station: TestStation, student: { headers: Headers }, evaluationId: string) {
   const auth = await authorize(station);
@@ -93,11 +67,7 @@ async function paired(station: TestStation, student: { headers: Headers }, evalu
   const res = await poll(station, auth.device_code);
   expect(res.statusCode, res.body).toBe(200);
   expect(res.json()).toEqual({ redirect: `/take/${evaluationId}` });
-  const { cookie, csrf } = sessionCookies(res);
-  return {
-    station: { cookie: `${cookie}; ${station.cookie}`, "x-csrf-token": csrf },
-    alone: { cookie, "x-csrf-token": csrf },
-  };
+  return { station: stationHeaders(res, station), alone: stationHeaders(res) };
 }
 
 const me = (headers: Headers) => server.app.inject({ method: "GET", url: "/app/api/me", headers });
@@ -167,8 +137,7 @@ describe("the whole pairing, station → phone → station", () => {
     expect(res.statusCode, res.body).toBe(200);
     expect(res.json()).toEqual({ redirect: `/take/${evaluationId}` });
     expect(res.headers["cache-control"]).toBe("no-store");
-    const { cookie, csrf } = sessionCookies(res);
-    const withStation = { cookie: `${cookie}; ${station.cookie}`, "x-csrf-token": csrf };
+    const withStation = stationHeaders(res, station);
 
     // The session: the student, the exam, the station — and no actor.
     const [row] = await server.app.db
@@ -186,12 +155,12 @@ describe("the whole pairing, station → phone → station", () => {
     expect((await server.app.inject({ method: "GET", url: "/app/api/student/home", headers: withStation })).statusCode).toBe(401);
 
     // Without the station's cookie, the session cookie is worth nothing.
-    const alone = { cookie, "x-csrf-token": csrf };
+    const alone = stationHeaders(res);
     expect((await me(alone)).statusCode).toBe(401);
     expect((await enter(evaluationId, alone)).statusCode).toBe(401);
     // Nor with another station's.
     const elsewhere = await kioskStation(server.app);
-    expect((await me({ ...alone, cookie: `${cookie}; ${elsewhere.cookie}` })).statusCode).toBe(401);
+    expect((await me({ ...alone, cookie: `${alone.cookie}; ${elsewhere.cookie}` })).statusCode).toBe(401);
 
     // The audit names the pairing, never a code.
     const entries = await server.app.db

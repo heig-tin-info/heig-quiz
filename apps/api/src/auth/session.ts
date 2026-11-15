@@ -74,6 +74,14 @@ export interface SessionState extends SessionAuth {
    * (D21 point 4): a hash of the student's own `.seb`, not a secret.
    */
   sebConfigKey: string | null;
+  /**
+   * The station of a `kiosk` session, and the pairing that opened it — its
+   * sitting (ADR-089, amendment point 4); null on every other kind. A
+   * project's workspace launch from a station carries both to the portal
+   * (the `kiosk` claim, ADR-089 §4).
+   */
+  deviceId: string | null;
+  kioskPairingId: string | null;
 }
 
 /** How long Super Powers last once switched on: one fixed hour, never extended (ADR-054). */
@@ -130,8 +138,8 @@ export const delegated = (auth: Pick<SessionAuth, "actorUserId"> | null): boolea
 /**
  * A confined session (ADR-027, ADR-051): one of a trusted client's kinds
  * (`TRUSTED_CLIENTS`: `seb`, `kiosk`), opened for ONE activity — to sit one
- * evaluation, `evaluationId`, or (a `seb` one, D21) to work in one
- * project's workspace, `projectId` — and nothing else.
+ * evaluation, `evaluationId`, or to work in one supervised project's
+ * workspace, `projectId` (D21, ADR-089) — and nothing else.
  */
 export const confined = <A extends Pick<SessionAuth, "kind">>(
   auth: A | null | undefined,
@@ -141,11 +149,13 @@ export const confined = <A extends Pick<SessionAuth, "kind">>(
  * What opening a session records beside its {@link SessionAuth}: the proof a
  * confined session is later checked against on every request (ADR-051 §1,
  * `trust.ts`). The Config Key of a `seb` launch (hex), the station of a
- * `kiosk` one; absent on every other kind.
+ * `kiosk` one and the pairing that opened it (its sitting, ADR-089);
+ * absent on every other kind.
  */
 export interface NewSession extends SessionAuth {
   sebConfigKey?: string | null;
   deviceId?: string | null;
+  kioskPairingId?: string | null;
 }
 
 /**
@@ -168,11 +178,14 @@ const FIXED_HOURS: Record<SessionKind, number | null> = {
 export const SITTING = { sessions: ["portal", "seb", "kiosk"] } as const;
 
 /**
- * The route config of the routes a `seb` session of a project may call (D21,
- * M6-07): its project's student page and *Open workspace*. An evaluation's
- * confined session is not there on them, as a project's is not on `SITTING`.
+ * The route config of the routes a session confined to a project may call
+ * — a `seb` one (D21, M6-07) or a kiosk station's (ADR-089 §4): its
+ * project's student page and *Open workspace*, each loading through
+ * `confinedProjectSession`, which admits a confined session of THAT project
+ * only. An evaluation's confined session is not there on them, as a
+ * project's is not on `SITTING`.
  */
-export const PROJECT_SEB = { sessions: ["portal", "seb"], activities: ["project"] } as const;
+export const PROJECT_CONFINED = { sessions: ["portal", "seb", "kiosk"], activities: ["project"] } as const;
 
 /** What a route declares of the sessions it serves (`FastifyContextConfig`). */
 export interface RouteSessions {
@@ -218,6 +231,7 @@ export async function createSession(
     projectId: auth.projectId,
     sebConfigKey: auth.sebConfigKey ?? null,
     deviceId: auth.deviceId ?? null,
+    kioskPairingId: auth.kioskPairingId ?? null,
   };
   if (!confined(auth)) {
     await db.insert(sessions).values(row);
@@ -331,8 +345,9 @@ export async function findSessionUser(
         projectId: sessions.projectId,
         superPowersUntil: sessions.superPowersUntil,
         sebConfigKey: sessions.sebConfigKey,
+        deviceId: sessions.deviceId,
+        kioskPairingId: sessions.kioskPairingId,
       },
-      deviceId: sessions.deviceId,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
@@ -392,8 +407,6 @@ export async function findSessionUser(
     renewedTo,
     /** The session's id as the server knows it: how its streams are found (`bus.sessionsEnded`). */
     sidHash: row.sidHash,
-    sebConfigKey: row.auth.sebConfigKey,
-    deviceId: row.deviceId,
   };
 }
 

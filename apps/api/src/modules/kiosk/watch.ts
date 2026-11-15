@@ -39,17 +39,31 @@ const ALERT_OF: Record<KioskWatch, KioskAlert> = {
   suspended: "kiosk_suspended",
 };
 
-/** The student and the exam the station sits now, from its live `kiosk` session; null when it sits nothing. */
-async function sittingOn(db: Db, deviceId: string, now: Date) {
+/**
+ * The student and the activity the station sits now, from its live `kiosk`
+ * session — an exam, or a supervised project (ADR-089 §5); null when it
+ * sits nothing.
+ */
+async function sittingOn(
+  db: Db,
+  deviceId: string,
+  now: Date,
+): Promise<{ userId: string; evaluationId: string } | { userId: string; projectId: string } | null> {
   const [row] = await db
-    .select({ userId: sessions.userId, evaluationId: sessions.evaluationId })
+    .select({ userId: sessions.userId, evaluationId: sessions.evaluationId, projectId: sessions.projectId })
     .from(sessions)
     .where(and(eq(sessions.deviceId, deviceId), eq(sessions.kind, "kiosk"), gt(sessions.expiresAt, now)))
     .limit(1);
-  return row?.evaluationId ? { userId: row.userId, evaluationId: row.evaluationId } : null;
+  if (row?.evaluationId) return { userId: row.userId, evaluationId: row.evaluationId };
+  if (row?.projectId) return { userId: row.userId, projectId: row.projectId };
+  return null;
 }
 
-/** The audit of a suspension or its end, and the alert — for the sitting the station carries, if any. */
+/**
+ * The audit of a suspension or its end, and the alert — for the sitting the
+ * station carries, if any. A project has no live dashboard (ADR-089 §5): its
+ * sitting is told to the audit only.
+ */
 async function tell(
   db: Db,
   deviceId: string,
@@ -68,7 +82,7 @@ async function tell(
       payload: { ...(told.suspension === "suspended" && { reason: told.reason }), ...sitting },
     });
   }
-  if (told.alert !== null) bus.dashboardAlert({ ...sitting, kind: told.alert, at: now });
+  if (told.alert !== null && "evaluationId" in sitting) bus.dashboardAlert({ ...sitting, kind: told.alert, at: now });
 }
 
 /** Moves the station's `watch` to what `state` means, and tells the change — once, whoever races. */

@@ -107,7 +107,7 @@ export const KIOSK_TOKEN_ERRORS = [
 export const KioskTokenError = z.object({ error: z.enum(KIOSK_TOKEN_ERRORS) });
 export type KioskTokenError = z.infer<typeof KioskTokenError>;
 
-/** An approved poll: the station now holds a `kiosk` session, and goes to its exam. */
+/** An approved poll: the station now holds a `kiosk` session, and goes to its exam or its project (ADR-089). */
 export const KioskTokenApproved = z.object({ redirect: z.string() });
 export type KioskTokenApproved = z.infer<typeof KioskTokenApproved>;
 
@@ -122,10 +122,24 @@ export const PairableEvaluation = z.object({
 });
 export type PairableEvaluation = z.infer<typeof PairableEvaluation>;
 
-/** `GET /app/api/pair/:code`: the station to compare with the screen, and the exams. */
+/**
+ * What `/pair` also offers (ADR-089 §5): a supervised project the student
+ * can start on a station now — a claimed seat, open, at a level that
+ * accepts a kiosk station, before their effective deadline.
+ */
+export const PairableProject = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  classroomName: z.string(),
+  courseCode: z.string(),
+});
+export type PairableProject = z.infer<typeof PairableProject>;
+
+/** `GET /app/api/pair/:code`: the station to compare with the screen, the exams and the projects. */
 export const PairPreview = z.object({
   station: z.object({ label: z.string() }),
   evaluations: z.array(PairableEvaluation),
+  projects: z.array(PairableProject),
 });
 export type PairPreview = z.infer<typeof PairPreview>;
 
@@ -133,11 +147,11 @@ export type PairPreview = z.infer<typeof PairPreview>;
 export const PairCodeParam = z.object({ code: z.string().min(1).max(32) });
 export type PairCodeParam = z.infer<typeof PairCodeParam>;
 
-/** `POST /app/api/pair`: the student approves the pairing for one exam. */
-export const PairApprove = z.strictObject({
-  code: z.string().min(1).max(32),
-  evaluationId: z.uuid(),
-});
+/** `POST /app/api/pair`: the student approves the pairing for one exam, or one project (ADR-089 §5). */
+export const PairApprove = z.union([
+  z.strictObject({ code: z.string().min(1).max(32), evaluationId: z.uuid() }),
+  z.strictObject({ code: z.string().min(1).max(32), projectId: z.uuid() }),
+]);
 export type PairApprove = z.infer<typeof PairApprove>;
 
 /** The approval, answered with the station's label. */

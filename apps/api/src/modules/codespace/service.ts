@@ -41,10 +41,10 @@ import {
   REVIEW_GRANT_MINUTES,
   SERVICE_AUDIENCE,
   SERVICE_TOKEN_TTL_SECONDS,
-  WORK_MODES,
   type LaunchTokenClaims,
   type ReviewLaunchTokenClaims,
   type StaffReviewRefusal,
+  type DeviceLevel,
   type WorkMode,
   type WorkspaceStartRefusal,
   type ProjectWorkspace,
@@ -52,10 +52,21 @@ import {
   type ServiceTokenClaims,
   type TeacherCodespaceGrant,
 } from "@quiz/contracts";
-import { isOnlineMode, portalDeadline, projectIsLive, quotaHolder, requestBinding, signHs256, staffReviewRefusal, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
+import {
+  isOnlineMode,
+  portalDeadline,
+  projectIsLive,
+  deviceLevelClients,
+  quotaHolder,
+  requestBinding,
+  signHs256,
+  staffReviewRefusal,
+  workModeChoices,
+  workspaceStartRefusal,
+} from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
-import type { AppConfig } from "../../config.js";
+import { kioskProjectsOn, type AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { classrooms, codespaceLaunches, codespaceProjects, codespaceReviews, courseStaff, enrollments, githubAccounts, projectRepos, projects, teacherGrants, users } from "../../db/schema.js";
 import { knownEmails, normalizeEmail } from "../../identity.js";
@@ -115,23 +126,27 @@ async function portalState(db: Db, projectId: string) {
 /**
  * `GET /app/api/projects/:id/workspace`: the mode, why the CALLER may not
  * change it now (`workModeRefusal`, the very rule `setWorkMode` applies:
- * the screen never offers what the server would refuse), and the last
+ * the screen never offers what the server would refuse), the device level
+ * and whether stations are offered to projects (`kioskProjectsOn`, one of
+ * its two readers, ADR-089 amendment point 1), and the last
  * synchronization.
  */
 export async function projectWorkspace(
   db: Db,
-  project: { id: string; workMode: WorkMode; groupMode: boolean; createdBy: string },
+  config: Pick<AppConfig, "KIOSK_ATTESTATION" | "KIOSK_PROJECTS">,
+  project: { id: string; workMode: WorkMode; devices: DeviceLevel; groupMode: boolean; createdBy: string },
   courseId: string,
   caller: { userId: string; owner: boolean },
 ): Promise<ProjectWorkspace> {
   const state = await portalState(db, project.id);
   const granted = caller.owner && (await grantOf(db, caller.userId))?.enabled === true;
-  const facts = { owner: caller.owner, granted, launched: state.firstLaunchAt !== null, groupMode: project.groupMode };
-  const judged = WORK_MODES.map((to) => ({ to, refusal: workModeRefusal(facts, project.workMode, to) }));
+  const kioskOffered = kioskProjectsOn(config);
+  const facts = { owner: caller.owner, granted, launched: state.firstLaunchAt !== null, groupMode: project.groupMode, kioskOffered };
   return {
     mode: project.workMode,
-    allowed: judged.filter((j) => j.refusal === null).map((j) => j.to),
-    refusal: judged.find((j) => j.refusal !== null)?.refusal ?? null,
+    devices: project.devices,
+    kioskOffered,
+    ...workModeChoices(facts, { mode: project.workMode, devices: project.devices }),
     syncedAt: state.syncedAt?.toISOString() ?? null,
     syncError: state.syncError,
     // A review session exists while the quota holder holds an enabled grant (ADR-129 §3).
@@ -407,7 +422,8 @@ export async function projectSessions(
  * the project's student view (`findStudentProjectView`, read as the
  * caller's own portal would: published, not archived) with a claimed seat
  * of the caller's (a staff seat testing it included, ADR-077), in
- * `online_seb`, open (`projectIsLive`: a scheduled project serves no `.seb`
+ * `online_seb` at a level that accepts SEB — at Kiosk only none is served
+ * (ADR-089 amendment point 2) —, open (`projectIsLive`: a scheduled project serves no `.seb`
  * and says nothing of its mode, ADR-127, N-SEC-20), of a classroom not archived — checked when the `.seb` is
  * downloaded and again when SEB trades its ticket, where the caller is the
  * ticket's user (`callerFor(user, null)`: no Super Powers). Null otherwise.
@@ -418,12 +434,24 @@ export async function sebProjectSeat(db: Db, caller: Caller, projectId: string):
     scope !== null &&
     scope.seat !== null &&
     projectIsLive(scope.project.state) &&
-    scope.project.workMode === "online_seb" &&
+    deviceLevelClients(scope.project.devices).includes("seb") &&
     scope.room.archivedAt === null;
   return ok ? { id: scope.project.id } : null;
 }
 
 // ---------------------------------------------------------------- the start (student → portal)
+
+/**
+ * The session confined to this project a launch comes from (D21 point 4,
+ * ADR-089 §4), null from the student's portal session: a `seb` one with the
+ * Config Key it was launched with — the token's `seb` claim, which the
+ * portal checks SEB's header against —, or a kiosk station's with its
+ * device and its sitting (the approving pairing's id) — the `kiosk` claim.
+ */
+export type LaunchVia =
+  | { kind: "seb"; configKey: string }
+  | { kind: "kiosk"; deviceId: string; sitting: string }
+  | null;
 
 /** Who launches, as the start route loaded them. */
 export interface Launcher {
@@ -432,12 +460,7 @@ export interface Launcher {
   staffSeat: boolean;
   classroomArchived: boolean;
   actor: AuditActor;
-  /**
-   * The Config Key of the `seb` session confined to this project the launch
-   * comes from (D21 point 4), null from a portal session. It travels in the
-   * token's `seb` claim: the portal checks SEB's header against it.
-   */
-  sebConfigKey: string | null;
+  via: LaunchVia;
 }
 
 /**
@@ -446,8 +469,8 @@ export interface Launcher {
  * finds it frozen —, the student's own repository (online modes are
  * individual), the decision of `workspaceStartRefusal`; then the first
  * launch marked (never by a staff seat: a teacher testing the project does
- * not freeze its mode), a launch token minted — with this student's Config
- * Key from a `seb` session — and its `jti` audited
+ * not freeze its mode), a launch token minted — with the claim of the
+ * trusted client it comes from ({@link LaunchVia}) — and its `jti` audited
  * (`codespace.launch_issued`; the token never). Null: no such project.
  */
 export async function startWorkspace(
@@ -464,8 +487,11 @@ export async function startWorkspace(
       .select()
       .from(projectRepos)
       .where(and(eq(projectRepos.projectId, project.id), eq(projectRepos.userId, who.user.id), isNull(projectRepos.groupId)));
-    const fromSeb = who.sebConfigKey !== null;
-    const refusal = workspaceStartRefusal({ project, repo: repo ?? null, classroomArchived: who.classroomArchived, fromSeb }, now);
+    const { via } = who;
+    const refusal = workspaceStartRefusal(
+      { project, repo: repo ?? null, classroomArchived: who.classroomArchived, via: via?.kind ?? null },
+      now,
+    );
     if (refusal) return refusal;
     const [account] = await tx.select({ login: githubAccounts.login }).from(githubAccounts).where(eq(githubAccounts.userId, who.user.id));
     if (!who.staffSeat) await markLaunched(tx, project.id, now);
@@ -481,7 +507,8 @@ export async function startWorkspace(
         githubLogin: account?.login ?? null,
         assignmentId: project.id,
         repo: { fullName: repo!.fullName!, defaultBranch: repo!.defaultBranch ?? project.branches[0] ?? "main" },
-        ...(fromSeb && { seb: { configKey: who.sebConfigKey! } }),
+        ...(via?.kind === "seb" && { seb: { configKey: via.configKey } }),
+        ...(via?.kind === "kiosk" && { kiosk: { deviceId: via.deviceId, sitting: via.sitting } }),
       },
       now,
     );
@@ -491,7 +518,7 @@ export async function startWorkspace(
       action: "codespace.launch_issued",
       subjectType: "project",
       subjectId: project.id,
-      payload: { jti: issued.jti, mode: project.workMode, ...(fromSeb && { seb: true }) },
+      payload: { jti: issued.jti, mode: project.workMode, ...(via && { [via.kind]: true }) },
     });
     return issued;
   });

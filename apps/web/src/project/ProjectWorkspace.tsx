@@ -66,11 +66,18 @@ export function WorkModeSetting({ projectId, archived }: { projectId: string; ar
   const qc = useQueryClient();
   const toast = useToast();
   const workspace = useWorkspace(projectId);
+  // Under supervision the body names a device level (ADR-089): the one in force, else SEB — the
+  // three-way choice of M6-06, until the setting offers the levels (M6-11e).
+  const bodyOf = (mode: WorkMode): ProjectWorkModeBody => {
+    if (mode !== "online_seb") return { mode };
+    const held = workspace.data?.mode === "online_seb" ? workspace.data.devices : "any";
+    return { mode, devices: held === "any" ? "seb" : held };
+  };
   const setMode = useMutation({
     mutationFn: (mode: WorkMode) =>
       api<Workspace>(`/app/api/projects/${projectId}/workspace/mode`, {
         method: "PUT",
-        body: JSON.stringify({ mode } satisfies ProjectWorkModeBody),
+        body: JSON.stringify(bodyOf(mode)),
       }),
     onSuccess: (next) => {
       qc.setQueryData(projectWorkspaceKey(projectId), next);

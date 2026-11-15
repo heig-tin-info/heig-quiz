@@ -68,6 +68,7 @@ import {
   fakePortal,
   grantedTeacher as grantedWith,
   scopedMint,
+  workModeBody,
   type Room,
 } from "./testing.js";
 
@@ -107,7 +108,7 @@ async function project(room: Room, mode: "free" | "online" | "online_seb" = "fre
   const summary = ProjectSummary.parse(created.json());
   expect((await call("POST", `/app/api/projects/${summary.id}/publish`, by.headers)).statusCode).toBe(200);
   if (mode !== "free") {
-    expect((await call("PUT", `/app/api/projects/${summary.id}/workspace/mode`, by.headers, { mode })).statusCode).toBe(200);
+    expect((await call("PUT", `/app/api/projects/${summary.id}/workspace/mode`, by.headers, workModeBody(mode))).statusCode).toBe(200);
   }
   return summary;
 }

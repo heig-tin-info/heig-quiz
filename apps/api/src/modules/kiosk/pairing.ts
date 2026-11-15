@@ -10,13 +10,14 @@
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
-import { and, count, desc, eq, gt, min, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, min, sql } from "drizzle-orm";
 
-import type { PairableEvaluation } from "@quiz/contracts";
+import type { PairableEvaluation, PairableProject } from "@quiz/contracts";
 import {
   PAIRING_EXPIRES_IN_S,
   PAIRING_INTERVAL_S,
   generateUserCode,
+  kioskProjectPairable,
   normalizeUserCode,
   pollAnswer,
   type PairingPollOutcome,
@@ -24,7 +25,8 @@ import {
 
 import { audit, type AuditAction } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
-import { auditLog, kioskDevices, kioskPairings } from "../../db/schema.js";
+import { auditLog, classrooms, courses, enrollments, kioskDevices, kioskPairings, projectRepos, projects } from "../../db/schema.js";
+import { liveProject } from "../guards.js";
 import { studentHome } from "../live/service.js";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -54,6 +56,61 @@ export async function pairableEvaluations(
       // drops the exam silently.
       conditions: conditions!,
     }));
+}
+
+/**
+ * The supervised projects `userId` can start on a station now (ADR-089 §5):
+ * a claimed seat in the project's classroom — a staff seat testing it
+ * counts, as for its `.seb` (ADR-077) —, the project open (published or
+ * locked, not archived) in a classroom not archived, and the rule of
+ * `kioskProjectPairable`: a level that accepts a kiosk station, before the
+ * student's effective deadline. The same rule for the phone's list, the
+ * approval and the station's consumption.
+ */
+export async function pairableProjects(db: Db, userId: string, now: Date): Promise<PairableProject[]> {
+  const rows = await db
+    .selectDistinct({
+      id: projects.id,
+      title: projects.name,
+      classroomName: classrooms.name,
+      courseCode: courses.code,
+      devices: projects.devices,
+      deadlineAt: projects.deadlineAt,
+      repoDeadlineAt: projectRepos.deadlineAt,
+      repoId: projectRepos.id,
+    })
+    .from(projects)
+    .innerJoin(enrollments, and(eq(enrollments.classroomId, projects.classroomId), eq(enrollments.userId, userId)))
+    .innerJoin(classrooms, and(eq(classrooms.id, projects.classroomId), isNull(classrooms.archivedAt)))
+    .innerJoin(courses, eq(courses.id, classrooms.courseId))
+    .leftJoin(
+      projectRepos,
+      and(eq(projectRepos.projectId, projects.id), eq(projectRepos.userId, userId), isNull(projectRepos.groupId)),
+    )
+    .where(and(liveProject(), eq(projects.workMode, "online_seb")))
+    .orderBy(projects.deadlineAt, projects.name);
+  return rows
+    .filter((r) => kioskProjectPairable(r, r.repoId === null ? null : { deadlineAt: r.repoDeadlineAt }, now))
+    .map(({ id, title, classroomName, courseCode }) => ({ id, title, classroomName, courseCode }));
+}
+
+/**
+ * What a pairing seats the student for: one exam, or one supervised project
+ * (ADR-089 §5) — the other null, so it spreads as the pairing's and the
+ * session's two columns.
+ */
+export type PairActivity = { evaluationId: string; projectId: null } | { evaluationId: null; projectId: string };
+
+/** The activity a pairing row names, or null when it names none. */
+function activityOf(row: { evaluationId: string | null; projectId: string | null }): PairActivity | null {
+  if (row.evaluationId !== null) return { evaluationId: row.evaluationId, projectId: null };
+  return row.projectId !== null ? { evaluationId: null, projectId: row.projectId } : null;
+}
+
+/** Whether `userId` can start `activity` on a station now: the list's own rule, for the approval and the consumption. */
+async function pairable(db: Db, userId: string, activity: PairActivity, now: Date): Promise<boolean> {
+  if (activity.projectId !== null) return (await pairableProjects(db, userId, now)).some((p) => p.id === activity.projectId);
+  return (await pairableEvaluations(db, userId, now)).some((e) => e.id === activity.evaluationId);
 }
 
 // --- The station -------------------------------------------------------------
@@ -102,14 +159,15 @@ function prunePolls(now: Date) {
 
 export type TokenOutcome =
   | { kind: "error"; error: Exclude<PairingPollOutcome, "approved"> | "invalid_grant" }
-  | { kind: "approved"; pairingId: string; userId: string; evaluationId: string };
+  | { kind: "approved"; pairingId: string; userId: string; activity: PairActivity };
 
 /**
  * A station's poll (RFC 8628 §3.4–3.5). A `device_code` that is unknown, or
  * another station's, is `invalid_grant`: a station polls its own pairings
  * only. An approved pairing is consumed by ONE conditional UPDATE, so two
- * polls in flight cannot both get a session; the seat and the exam are then
- * checked again, since minutes may have passed since the phone approved.
+ * polls in flight cannot both get a session; the seat and the exam — or the
+ * project (ADR-089 §5) — are then checked again, since minutes may have
+ * passed since the phone approved.
  */
 export async function pollPairing(
   db: Db,
@@ -145,18 +203,13 @@ export async function pollPairing(
         gt(kioskPairings.expiresAt, now),
       ),
     )
-    .returning({ userId: kioskPairings.userId, evaluationId: kioskPairings.evaluationId });
+    .returning({ userId: kioskPairings.userId, evaluationId: kioskPairings.evaluationId, projectId: kioskPairings.projectId });
   // Lost to a concurrent poll: that one has the session.
-  if (!consumed?.userId || !consumed.evaluationId) return { kind: "error", error: "access_denied" };
+  const activity = consumed ? activityOf(consumed) : null;
+  if (!consumed?.userId || activity === null) return { kind: "error", error: "access_denied" };
   polls.delete(pairing.id);
-  const still = await pairableEvaluations(db, consumed.userId, now);
-  if (!still.some((e) => e.id === consumed.evaluationId)) return { kind: "error", error: "access_denied" };
-  return {
-    kind: "approved",
-    pairingId: pairing.id,
-    userId: consumed.userId,
-    evaluationId: consumed.evaluationId,
-  };
+  if (!(await pairable(db, consumed.userId, activity, now))) return { kind: "error", error: "access_denied" };
+  return { kind: "approved", pairingId: pairing.id, userId: consumed.userId, activity };
 }
 
 // --- The phone ---------------------------------------------------------------
@@ -256,52 +309,53 @@ async function pendingByCode(
 }
 
 /**
- * `GET /pair/:code`: the station the code names and the exams the user can
- * start on it; null when the code names no pending pairing (not counted:
- * see {@link pendingByCode}).
+ * `GET /pair/:code`: the station the code names and the exams and the
+ * projects (ADR-089 §5) the user can start on it; null when the code names
+ * no pending pairing (not counted: see {@link pendingByCode}).
  */
 export async function previewPairing(
   db: Db,
   userId: string,
   code: string,
   now: Date,
-): Promise<{ label: string; evaluations: PairableEvaluation[] } | null> {
+): Promise<{ label: string; evaluations: PairableEvaluation[]; projects: PairableProject[] } | null> {
   const found = await pendingByCode(db, userId, code, now, { count: false });
   if (!found) return null;
-  return { label: found.device.label!, evaluations: await pairableEvaluations(db, userId, now) };
+  const [evaluations, projects] = await Promise.all([pairableEvaluations(db, userId, now), pairableProjects(db, userId, now)]);
+  return { label: found.device.label!, evaluations, projects };
 }
 
 export type ApproveOutcome =
   | { kind: "not_found" }
-  | { kind: "evaluation" }
+  | { kind: "not_pairable" }
   | { kind: "approved"; pairingId: string; deviceId: string; label: string };
 
 /**
  * `POST /pair`: the student approves the pairing for one of their pairable
- * exams — or, `approvedBy` a supervisor, `kiosk-assign` does it for a
- * student without a phone (ADR-051 §7): the same pairing, and the wrong
- * codes counted against whoever typed them. The code is checked first (the
- * limit, then the pairing); one conditional UPDATE from `pending` then
- * approves it, so a code approved twice (two phones, one code) is approved
- * once. An exam the student cannot start there is refused (reason
- * `evaluation`), and does not count as a wrong code.
+ * exams or projects (ADR-089 §5) — or, `approvedBy` a supervisor,
+ * `kiosk-assign` does it for a student of an exam without a phone (ADR-051
+ * §7): the same pairing, and the wrong codes counted against whoever typed
+ * them. The code is checked first (the limit, then the pairing); one
+ * conditional UPDATE from `pending` then approves it, so a code approved
+ * twice (two phones, one code) is approved once. An activity the student
+ * cannot start there — one the phone's list would not show — is refused
+ * (`not_pairable`), and does not count as a wrong code.
  */
 export async function approvePairing(
   db: Db,
-  input: { userId: string; code: string; evaluationId: string; approvedBy?: string },
+  input: { userId: string; code: string; activity: PairActivity; approvedBy?: string },
   now: Date,
 ): Promise<ApproveOutcome> {
   const approvedBy = input.approvedBy ?? input.userId;
   const found = await pendingByCode(db, approvedBy, input.code, now, { count: true });
   if (!found) return { kind: "not_found" };
-  const pairable = await pairableEvaluations(db, input.userId, now);
-  if (!pairable.some((e) => e.id === input.evaluationId)) return { kind: "evaluation" };
+  if (!(await pairable(db, input.userId, input.activity, now))) return { kind: "not_pairable" };
   const [approved] = await db
     .update(kioskPairings)
     .set({
       state: "approved",
       userId: input.userId,
-      evaluationId: input.evaluationId,
+      ...input.activity,
       approvedBy,
       approvedAt: now,
     })

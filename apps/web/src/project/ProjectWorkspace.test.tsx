@@ -16,6 +16,8 @@ const WS = "GET /app/api/projects/p1/workspace";
 const SESSIONS = "GET /app/api/projects/p1/workspace/sessions";
 const workspace = (over: Partial<Workspace> = {}): Workspace => ({
   mode: "free",
+  devices: "any",
+  kioskOffered: false,
   allowed: ["free", "online", "online_seb"],
   refusal: null,
   syncedAt: null,

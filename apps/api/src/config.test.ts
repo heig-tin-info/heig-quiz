@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { loadConfig, loginAllowed, mailEnabled, pgliteDir, teamsEnabled } from "./config.js";
+import { kioskProjectsOn, loadConfig, loginAllowed, mailEnabled, pgliteDir, teamsEnabled } from "./config.js";
 
 /*
  * The configuration is the last place a development convenience can be
@@ -219,6 +219,16 @@ describe("LOGIN_DOMAINS (ADR-111)", () => {
     for (const value of ["@heig-vd.ch", "https://heig-vd.ch", "x@heig-vd.ch", "heig-vd"]) {
       expect(() => loadConfig({ LOGIN_DOMAINS: value }), value).toThrow(/bare domain/);
     }
+  });
+});
+
+describe("KIOSK_PROJECTS (ADR-089, amendment point 1)", () => {
+  it("offers stations to projects only with the flag on and kiosk stations at all, off by default", () => {
+    expect(kioskProjectsOn(loadConfig({}))).toBe(false);
+    expect(kioskProjectsOn(loadConfig({ KIOSK_ATTESTATION: "mock" }))).toBe(false);
+    expect(kioskProjectsOn(loadConfig({ KIOSK_PROJECTS: "1" }))).toBe(false);
+    expect(kioskProjectsOn(loadConfig({ KIOSK_ATTESTATION: "mock", KIOSK_PROJECTS: "1" }))).toBe(true);
+    expect(kioskProjectsOn(loadConfig({ KIOSK_ATTESTATION: "mock", KIOSK_PROJECTS: "true" }))).toBe(true);
   });
 });
 

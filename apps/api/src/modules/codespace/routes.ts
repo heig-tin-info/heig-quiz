@@ -43,12 +43,12 @@ import {
   type WorkspaceReview,
   type WorkspaceStart,
 } from "@quiz/contracts";
-import { isOnlineMode, projectIsLive } from "@quiz/domain";
+import { isOnlineMode, projectIsLive, workSettingOf } from "@quiz/domain";
 
 import { actorOf, audit } from "../../audit.js";
 import { sendLaunchFile } from "../../auth/seb.js";
-import { PROJECT_SEB } from "../../auth/session.js";
-import type { AppConfig } from "../../config.js";
+import { PROJECT_CONFINED } from "../../auth/session.js";
+import { kioskProjectsOn, type AppConfig } from "../../config.js";
 import {
   accessibleProject,
   accessibleProjectRepo,
@@ -56,7 +56,7 @@ import {
   findStudentProjectView,
   isCourseOwner,
   ownPortalSession,
-  sebProjectSession,
+  confinedProjectSession,
   withCourseRole,
   userOf,
 } from "../guards.js";
@@ -71,6 +71,7 @@ import {
   sebProjectSeat,
   startReview,
   startWorkspace,
+  type LaunchVia,
 } from "./service.js";
 
 export async function codespacePlugin(app: FastifyInstance, opts: { config: AppConfig }) {
@@ -90,7 +91,7 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     session,
     teacher(onProject, async ({ req, scope }) => {
       const caller = callerOf(req);
-      return projectWorkspace(app.db, scope.project, scope.course.id, {
+      return projectWorkspace(app.db, config, scope.project, scope.course.id, {
         userId: caller.id,
         owner: await isCourseOwner(app.db, scope.course.id, caller),
       });
@@ -102,10 +103,12 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     session,
     teacher({ ...onOwnedProject, body: ProjectWorkModeBody }, async ({ req, body, scope }) => {
       const granted = (await grantOf(app.db, callerOf(req).id))?.enabled === true;
-      const row = await project.setWorkMode(app.db, scope.project.id, body.mode, { owner: true, granted }, actorOf(req));
+      const to = workSettingOf(body);
+      const caller = { owner: true, granted, kioskOffered: kioskProjectsOn(config) };
+      const row = await project.setWorkMode(app.db, scope.project.id, to, caller, actorOf(req));
       await requestCodespaceSync(app, config, row.id);
       project.projectsChanged([scope.course.id]);
-      return projectWorkspace(app.db, row, scope.course.id, { userId: callerOf(req).id, owner: true });
+      return projectWorkspace(app.db, config, row, scope.course.id, { userId: callerOf(req).id, owner: true });
     }),
   );
 
@@ -177,21 +180,28 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
    *
    *   1. a session (`401` without: the project page is behind the sign-in;
    *      an impersonation writes nothing, `403` before the route, ADR-034),
-   *      the caller's OWN portal session, or a `seb` session confined to
-   *      THIS project (D21 point 3, `PROJECT_SEB`) — a Bearer token,
-   *      another project's `seb` session: the 404 —, and the
-   *      project through its classroom's student branch
-   *      (`findStudentProjectView`: published, not archived) with a claimed
-   *      seat of theirs — anyone else, the 404 of a missing project;
+   *      the caller's OWN portal session, or a session confined to THIS
+   *      project (`confinedProjectSession`: a `seb` one, D21 point 3, or a
+   *      kiosk station's, ADR-089 §4; `PROJECT_CONFINED`) — a Bearer token,
+   *      another project's confined session: the 404; an evaluation's is not
+   *      served here at all —, and the project through its classroom's
+   *      student branch (`findStudentProjectView`: published, not archived)
+   *      with a claimed seat of theirs — anyone else, the 404 of a missing
+   *      project. A station's request also needs an attestation under two
+   *      minutes old (`freshAttestation`, else `423
+   *      kiosk_attestation_stale`), and a suspended station's is the `423
+   *      kiosk_suspended` (ADR-051 §6), both before the route;
    *   2. the refusals a student can read (`workspaceStartRefusal` of
    *      `@quiz/domain`, in `startWorkspace`'s transaction), `409 { error }`:
-   *      `not_online`, `seb_required` (an `online_seb` project opens from
-   *      its `seb` session only), `not_accepted`, `closed`;
+   *      `not_online`, `seb_required` / `kiosk_required` (an `online_seb`
+   *      project opens from the trusted clients of its level only),
+   *      `not_accepted`, `closed`;
    *   3. the first launch marked (the mode frozen from then on; never by a
    *      staff seat, ADR-077: a teacher testing it freezes nothing), a 5-minute
    *      launch token with a random `jti` — and, from a `seb` session, its
    *      Config Key in the `seb` claim, which the portal checks SEB's header
-   *      against (D21 point 4) —, audited `codespace.launch_issued` by its
+   *      against (D21 point 4); from a station, the `kiosk` claim: the
+   *      station and the sitting —, audited `codespace.launch_issued` by its
    *      `jti` alone, and `{ url }`, the portal's `/launch?token=…`, which
    *      the page navigates to. The answer is `no-store`; the token is never
    *      logged, stored nor audited, and the request log never sees a body.
@@ -199,11 +209,19 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
    * A full quota is the portal's to refuse (its 429): Quiz cannot count the
    * live workspaces.
    */
-  app.post(WORKSPACE_START_ROUTE, { ...session, config: PROJECT_SEB }, async (req, reply) => {
+  app.post(WORKSPACE_START_ROUTE, { ...session, config: { ...PROJECT_CONFINED, freshAttestation: true } }, async (req, reply) => {
     const params = IdParam.safeParse(req.params);
     if (!params.success) return notFound(reply);
-    const fromSeb = sebProjectSession(req.auth, params.data.id);
-    if (!ownPortalSession(req.auth) && !fromSeb) return notFound(reply);
+    const kind = confinedProjectSession(req.auth, params.data.id);
+    if (!ownPortalSession(req.auth) && kind === null) return notFound(reply);
+    // The trusted client's claim (D21 point 4, ADR-089 §4); a `seb` session with no stored Config Key carries none.
+    const auth = req.auth!;
+    let via: LaunchVia = kind === "seb" && auth.sebConfigKey !== null ? { kind, configKey: auth.sebConfigKey } : null;
+    if (kind === "kiosk") {
+      // A type guard: a station's session always names its station and its sitting, which the claim needs.
+      if (auth.deviceId === null || auth.kioskPairingId === null) return notFound(reply);
+      via = { kind, deviceId: auth.deviceId, sitting: auth.kioskPairingId };
+    }
     const scope = await findStudentProjectView(app.db, callerOf(req), req.auth, params.data.id);
     // A project not open yet (scheduled, ADR-127) is a 404 before any test of its mode (N-SEC-20).
     if (scope === null || scope.seat === null || !projectIsLive(scope.project.state)) return notFound(reply);
@@ -216,7 +234,7 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
         staffSeat: scope.seat.staff,
         classroomArchived: scope.room.archivedAt !== null,
         actor: actorOf(req),
-        sebConfigKey: fromSeb ? req.auth!.sebConfigKey : null,
+        via,
       },
       app.clock.now(),
     );

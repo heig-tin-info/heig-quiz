@@ -181,7 +181,8 @@ const pairable = (): PairPreview["evaluations"] =>
 
 on("GET", "/app/api/pair/:code", (m): PairPreview => {
   pending(decodeURIComponent(m.groups!.code!));
-  return { station: { label: pairedLabel() }, evaluations: pairable() };
+  // No supervised project at a station level here: `KIOSK_PROJECTS` stays off until M6-11d (ADR-089).
+  return { station: { label: pairedLabel() }, evaluations: pairable(), projects: [] };
 });
 
 on("POST", "/app/api/pair", (_m, body): PairApproved => {

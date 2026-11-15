@@ -97,6 +97,7 @@ const STATUS: Record<Code, number> = {
   codespace_not_granted: 403,
   work_mode_frozen: 409,
   work_mode_group: 409,
+  kiosk_unavailable: 422,
 };
 
 /** A refusal: `{ error: code, message, ...details }`. */

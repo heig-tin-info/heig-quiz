@@ -36,6 +36,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   doublePrecision,
   index,
   integer,
@@ -67,6 +68,7 @@ import type { ProjectStep } from "@quiz/core/server";
 import {
   CI_STATUSES,
   DEADLINE_STRATEGIES,
+  DEVICE_LEVEL_IDS,
   EVIDENCE_STATUSES,
   GRADING_SOURCES,
   GRADING_STATES,
@@ -152,6 +154,14 @@ export const projects = pgTable(
      * It decides the invitation's permission (`collaboratorPermission`).
      */
     workMode: text("work_mode", { enum: WORK_MODES }).notNull().default("free"),
+    /**
+     * The device level of a supervised project (ADR-089, amendment of
+     * 2026-11-15, point 2): `seb`, `either` (SEB or a kiosk station) or
+     * `kiosk` with `online_seb`, `any` with every other mode — the check
+     * below backs up the body's schema. Written with the mode by
+     * `setWorkMode`, frozen with it.
+     */
+    devices: text("devices", { enum: DEVICE_LEVEL_IDS }).notNull().default("any"),
     /**
      * The source's head when it is ahead of the distribution repository
      * (F-PROJ-12, M3-07): the `after` of the last push to a handed-out
@@ -307,6 +317,8 @@ export const projects = pgTable(
     index("projects_scheduled_publish_idx")
       .on(t.startAt)
       .where(sql`${t.state} = 'scheduled' AND ${t.archivedAt} IS NULL`),
+    // `any` exactly with the unsupervised modes (ADR-089 point 2).
+    check("projects_devices_supervised", sql`(${t.workMode} = 'online_seb') = (${t.devices} <> 'any')`),
   ],
 );
 

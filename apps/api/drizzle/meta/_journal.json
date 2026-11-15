@@ -946,6 +946,13 @@
       "when": 1794694031765,
       "tag": "0134_codespace_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1794739756044,
+      "tag": "0135_kiosk_projects",
+      "breakpoints": true
     }
   ]
 }
