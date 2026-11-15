@@ -48,13 +48,29 @@ warn_manual_drift() {
 }
 
 # drop_old_sha_tags <repository> <sha to keep>: untags every other 40-hex
-# tag of the repository. An image that keeps another tag (:latest, :prod,
-# :staging) stays; one left with none and unused is deleted. Never a global
-# prune: other services and sessions share this engine.
+# tag of the repository, then deletes the repository's images no tag names
+# any more. Never a global prune: other services and sessions share this
+# engine.
+#
+# Untagging alone deletes nothing since the pull is by digest (pull_retag):
+# the image keeps its `<repository>@sha256:…` name, shows as `<none>`, is
+# not dangling, and `podman image prune` (without -a) keeps it. Hence the
+# second loop, by image ID, on the IDs of the repository's `<none>` rows that
+# have no tag left at all (RepoTags empty: `podman rmi <id>` deletes an image
+# named by a single tag, so the check is not optional). An image that keeps
+# any tag (:latest, :prod, :staging, the current sha), of any repository,
+# stays: the prod and staging portals share this store and protect each
+# other's image by their tag. Never `rmi -f`, which removes the containers
+# using the image: an image in use refuses the rmi and stays.
 drop_old_sha_tags() {
-	local old
+	local old id
 	for old in $(pd images --format '{{.Tag}}' --filter "reference=$1" \
 		| grep -E '^[0-9a-f]{40}$' | grep -vx "$2" | sort -u || true); do
 		pd rmi "$1:$old" >/dev/null 2>&1 || true
+	done
+	for id in $(pd images --no-trunc --format '{{.ID}} {{.Tag}}' --filter "reference=$1" \
+		| awk '$2 == "<none>" { print $1 }' | sort -u || true); do
+		[ "$(pd image inspect --format '{{len .RepoTags}}' "$id" 2>/dev/null)" = 0 ] || continue
+		pd rmi "$id" >/dev/null 2>&1 || true
 	done
 }

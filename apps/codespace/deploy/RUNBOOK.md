@@ -360,6 +360,20 @@ VM, not in the repository:
 - [ ] **A free-space alert** on both file systems (say, under 15 %), in the
   VM's monitoring, before a push is refused.
 
+The engine's image store fills the root disk otherwise. Each runner or prod
+portal deploy deletes its repository's images that no tag names and no
+container uses (`drop_old_sha_tags`, `infra/engine/lib.sh`); the frozen
+staging dispatcher only untags, so staging's leftovers wait for the next prod
+portal deploy. Before that fix (2026-11-15) a digest-pulled image survived
+its untag as `<none>`. To reclaim them by hand, as root, under the deploy
+lock (never `prune -a`, never `rmi -f`):
+
+```bash
+cd /opt/quiz-runner && flock -w 60 /run/quiz-engine-deploy.lock bash -c '. infra/engine/lib.sh
+  for r in quiz-runner quiz-codespace; do drop_old_sha_tags "ghcr.io/heig-tin-info/$r" "$(git rev-parse HEAD)"; done'
+podman --remote --url unix:///run/podman/podman.sock system df
+```
+
 ### The service API's door (audit L25)
 
 `PUT /api/assignments/:id` and `GET /api/assignments/:id/sessions` are on

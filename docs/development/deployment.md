@@ -754,8 +754,9 @@ done). Then they diverge:
   runs), install the seccomp profile, the quadlet and the Caddy fragment
   from the checkout, `caddy validate`, `systemctl daemon-reload`, restart
   `quiz-runner.service`, reload Caddy, untag the older sha-tagged runner
-  images (no global prune: the portal's sessions share the engine), print
-  the deployed commit.
+  images and delete the runner images no tag names any more and no
+  container uses (`drop_old_sha_tags`; no global prune: the portal's
+  sessions share the engine), print the deployed commit.
 
 `.github/workflows/image-artifact.yml` is a keyless fallback for the
 application image only: run by hand, it builds the image and publishes it as
