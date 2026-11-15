@@ -27,7 +27,7 @@ import { registerForTests } from "@quiz/registry/server";
 import { SYSTEM_ACTOR } from "../../audit.js";
 import { endKioskSessions, purgeExpiredSessions } from "../../auth/session.js";
 import type { AppConfig } from "../../config.js";
-import { auditLog, kioskPairings, projects, sessions } from "../../db/schema.js";
+import { auditLog, kioskDevices, kioskPairings, projects, sessions } from "../../db/schema.js";
 import type { JobQueue } from "../../jobs.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { sessionOf, testServer, type Payload, type TestServer } from "../../test/http.js";
@@ -36,7 +36,7 @@ import { seedLive } from "../../test/live.js";
 import { gradedProject } from "../../test/project.js";
 import { pseudonymizeUser } from "../account/service.js";
 import { runSittingClose, sweepProjectSittings } from "./jobs.js";
-import { closeSittingCloses, openSittingCloses, stationHeld, type SittingCloseJob } from "./sittings.js";
+import { SITTING_START_GRACE_MS, closeSittingCloses, openSittingCloses, stationHeld, type SittingCloseJob } from "./sittings.js";
 
 const PORTAL = "http://portal.test";
 const CONFIG = {
@@ -53,9 +53,10 @@ const CONFIG = {
 let server: TestServer;
 let restore: () => void;
 
-/** The portal's answer to a close, and the closes it was sent. */
+/** The portal's answer to a close, the closes it was sent, and what happens while it answers. */
 let portalStatus = 204;
 const closes: string[] = [];
+let whileClosing: (() => Promise<void>) | null = null;
 
 /** The queue `dropSessions` enqueues through, recording instead of running. */
 const jobs: SittingCloseJob[] = [];
@@ -75,6 +76,7 @@ beforeAll(async () => {
     const url = new URL(String(input));
     if (url.origin !== PORTAL || url.pathname !== "/api/sittings/close" || init.method !== "POST") throw new TypeError("unexpected fetch");
     closes.push(String((init.headers as Record<string, string>).authorization));
+    await whileClosing?.();
     return new Response(null, { status: portalStatus });
   });
 });
@@ -87,6 +89,7 @@ beforeEach(() => {
   jobs.length = 0;
   closes.length = 0;
   portalStatus = 204;
+  whileClosing = null;
   openSittingCloses(recorder, server.app.log);
 });
 afterEach(() => closeSittingCloses());
@@ -104,24 +107,32 @@ async function world() {
   return { student, teacher, evaluationId: seeded.evaluationId, projectId: project.id };
 }
 
-/** A station's sitting of `projectId` for `userId`: the consumed pairing and the session it opened. */
-async function sitting(userId: string, activity: { projectId: string } | { evaluationId: string }, station?: TestStation) {
-  const st = station ?? (await kioskStation(server.app));
+/** A pairing consumed long enough ago that the sweep may take it for forgotten. */
+const settled = () => new Date(server.clock.now().getTime() - SITTING_START_GRACE_MS - 1000);
+
+/** A consumed project pairing of `userId` with no session (yet). */
+async function consumedPairing(deviceId: string, userId: string, activity: { projectId: string } | { evaluationId: string }, consumedAt: Date) {
   const id = randomUUID();
-  const now = server.clock.now();
   await db()
     .insert(kioskPairings)
     .values({
       id,
-      deviceId: st.deviceId,
+      deviceId,
       deviceCodeHash: createHash("sha256").update(randomUUID()).digest("hex"),
       userCodeHash: createHash("sha256").update(randomUUID()).digest("hex"),
       state: "consumed",
       userId,
       ...activity,
-      expiresAt: new Date(now.getTime() + 300_000),
-      consumedAt: now,
+      expiresAt: new Date(server.clock.now().getTime() + 300_000),
+      consumedAt,
     });
+  return id;
+}
+
+/** A station's sitting of `projectId` for `userId`: the consumed pairing and the session it opened. */
+async function sitting(userId: string, activity: { projectId: string } | { evaluationId: string }, station?: TestStation) {
+  const st = station ?? (await kioskStation(server.app));
+  const id = await consumedPairing(st.deviceId, userId, activity, settled());
   const headers = await sessionOf(db(), userId, { kind: "kiosk", deviceId: st.deviceId, kioskPairingId: id, ...activity });
   return { station: st, sitting: id, headers: { ...headers, cookie: `${headers.cookie}; ${st.cookie}` } as Headers };
 }
@@ -305,6 +316,39 @@ describe("the close job", () => {
     expect(closes).toEqual([]);
     expect(await pairingOf(s.sitting)).toMatchObject({ closeCompletedAt: null, closeRequestedAt: null });
   });
+
+  it("does not complete a close when a session appeared while the portal was told: the station stays held", async () => {
+    const s = await ended();
+    const [row] = await db().select({ userId: kioskPairings.userId }).from(kioskPairings).where(eq(kioskPairings.id, s.sitting));
+    whileClosing = async () => {
+      await sessionOf(db(), row!.userId!, { kind: "kiosk", deviceId: s.station.deviceId, kioskPairingId: s.sitting, projectId: s.projectId });
+    };
+    expect(await run(s.job)).toBe("live");
+    expect(closes).toHaveLength(1);
+    expect(await pairingOf(s.sitting)).toMatchObject({ closeCompletedAt: null, closeRequestedAt: null });
+    expect(await audits("codespace.session_closed", s.sitting)).toEqual([]);
+    expect(await stationHeld(db(), s.station.deviceId)).toBe(true);
+  });
+});
+
+describe("a sitting still starting (security review of #1108, S1)", () => {
+  it("is not taken for forgotten by the sweep until its consumption is two minutes old", async () => {
+    const { student, projectId } = await world();
+    const station = await kioskStation(server.app);
+    // The station's poll consumed the pairing; its session has not committed yet.
+    const starting = await consumedPairing(station.deviceId, student.id, { projectId }, server.clock.now());
+    await sweepProjectSittings(app(), CONFIG);
+    expect(jobs).toEqual([]);
+    expect((await pairingOf(starting)).closeRequestedAt).toBeNull();
+    const before = server.clock.now();
+    server.clock.advance(SITTING_START_GRACE_MS + 1000);
+    try {
+      await sweepProjectSittings(app(), CONFIG);
+    } finally {
+      server.clock.set(before);
+    }
+    expect(jobs).toEqual([{ sitting: starting, projectId, cause: "swept" }]);
+  });
 });
 
 describe("the hold (amendment point 4)", () => {
@@ -380,6 +424,16 @@ describe("Leave this station", () => {
     expect((await inject("GET", "/app/api/me", student.headers)).statusCode).toBe(200);
     expect((await inject("GET", "/app/api/me", other.headers)).statusCode).toBe(200);
     expect((await inject("GET", "/app/api/me", s.headers)).statusCode).toBe(401);
+  });
+
+  it("answers a suspended station the 423 of every write of its sitting", async () => {
+    const { student, projectId } = await world();
+    const s = await sitting(student.id, { projectId });
+    await db().update(kioskDevices).set({ attestation: "refused" }).where(eq(kioskDevices.id, s.station.deviceId));
+    const res = await leave(s.headers);
+    expect(res.statusCode).toBe(423);
+    expect(res.json()).toEqual({ error: "kiosk_suspended" });
+    expect(await sessionsOf(s.sitting)).toHaveLength(1);
   });
 
   it("is refused to every other session kind, and without the CSRF header", async () => {

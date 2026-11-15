@@ -157,8 +157,9 @@ export type AuditAction =
    * (`session_close_failed`; the station stays held until an administrator's
    * Retire then Reactivate gets a close through). Subject the sitting, the
    * approving pairing (`kiosk_pairing`); `payload.projectId` (null once the
-   * project is deleted), `payload.cause` ({@link SittingCloseCause}) and, on a
-   * failure, `payload.error`, the portal's status — never a token.
+   * project is deleted), `payload.cause` (`SittingCloseCause`,
+   * `modules/kiosk/sittings.ts`) and, on a failure, `payload.error`, the
+   * portal's status — never a token.
    */
   | "codespace.session_closed"
   | "codespace.session_close_failed"
@@ -690,7 +691,7 @@ export type AuditAction =
    * actor and subject the admin, `payload.until` the server's end of it.
    */
   | "superpowers.enabled"
-  /** …and they went off: `payload.reason` is `manual`, `expired` or `logout`. */
+  /** …and they went off: `payload.reason` is `manual`, `expired`, `logout` or `revoked` (the account pseudonymized within the hour). */
   | "superpowers.disabled"
   /**
    * An admin sent themselves the test e-mail of the System status (ADR-055
@@ -740,15 +741,6 @@ export type AuditAction =
  * (migration 0133) refuses every UPDATE on this table, and the DELETE of a
  * row younger than three years (ADR-003 §5, N-SEC-09).
  */
-/**
- * Why a kiosk station's project sitting ended, as `codespace.session_closed`
- * records it (ADR-089 §13 and its amendment of 2026-11-15, point 4): Leave
- * this station, a newer confined session of the pair, the student's
- * effective deadline, the 6 h lifetime, the station's retirement, or any
- * other disappearance the sweep or a deletion caught.
- */
-export type SittingCloseCause = "left" | "superseded" | "deadline" | "expired" | "retired" | "swept";
-
 export async function audit(
   db: Db | Tx,
   entry: {

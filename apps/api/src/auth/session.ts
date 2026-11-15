@@ -10,10 +10,10 @@ import { and, eq, inArray, isNotNull, lt, lte, or, sql, type SQL } from "drizzle
 import type { NotificationPayload, SessionKind } from "@quiz/contracts";
 import { TRUSTED_CLIENTS, isTrustedClient, type TrustedClient } from "@quiz/domain";
 
-import { audit, type SittingCloseCause } from "../audit.js";
+import { audit } from "../audit.js";
 import type { Db, Tx } from "../db/client.js";
 import { kioskDevices, sessions, users } from "../db/schema.js";
-import { requestSittingCloses } from "../modules/kiosk/sittings.js";
+import { requestSittingCloses, type SittingCloseCause } from "../modules/kiosk/sittings.js";
 import { notifyUsers } from "../modules/notifications/service.js";
 import * as bus from "../modules/realtime/bus.js";
 
@@ -88,7 +88,12 @@ export interface SessionState extends SessionAuth {
 /** How long Super Powers last once switched on: one fixed hour, never extended (ADR-054). */
 export const SUPER_POWERS_MS = 3_600_000;
 
-export type SuperPowersEnd = "manual" | "expired" | "logout";
+/**
+ * Why Super Powers went off: switched off, their hour over, signed out
+ * within it, or their session removed by the system within it (`revoked`:
+ * an account pseudonymized).
+ */
+export type SuperPowersEnd = "manual" | "expired" | "logout" | "revoked";
 
 /**
  * THE record of Super Powers going off, whoever notices: the audit entry
@@ -97,7 +102,7 @@ export type SuperPowersEnd = "manual" | "expired" | "logout";
  * their ordinary reach (invariant 6; `accessRevoked`).
  */
 export async function superPowersEnded(db: Db, userId: string, reason: SuperPowersEnd) {
-  const byUser = reason !== "expired";
+  const byUser = reason === "manual" || reason === "logout";
   await audit(db, {
     actorUserId: byUser ? userId : null,
     actorType: byUser ? "user" : "system",
@@ -498,8 +503,8 @@ export async function dropSessions(db: Db | Tx, where: SQL, reason: DropReason, 
   });
   for (const session of gone) {
     if (session.superPowersUntil !== null) {
-      const live = reason === "logout" && session.superPowersUntil.getTime() > now.getTime();
-      await superPowersEnded(db, session.userId, live ? "logout" : "expired");
+      const live = (reason === "logout" || reason === "revoked") && session.superPowersUntil.getTime() > now.getTime();
+      await superPowersEnded(db, session.userId, live ? reason : "expired");
     }
     const subject = { subjectType: "user", subjectId: session.userId } as const;
     if (delegated(session)) {

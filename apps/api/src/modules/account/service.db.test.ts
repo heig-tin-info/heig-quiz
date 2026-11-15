@@ -19,7 +19,8 @@ import { registerForTests } from "@quiz/registry/server";
 import { SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { attempts, auditLog, courseStaff, drillCards, enrollments, poolMembers, pools, users } from "../../db/schema.js";
+import { createSession } from "../../auth/session.js";
+import { attempts, auditLog, courseStaff, drillCards, enrollments, poolMembers, pools, sessions, users } from "../../db/schema.js";
 import { testApp, testDatabase } from "../../test/db.js";
 import { tableDumps, tablesHolding } from "../../test/everything.js";
 import { fakeShort } from "../../test/fakeType.js";
@@ -258,6 +259,18 @@ describe("pseudonymizeUser", () => {
     await pseudonymizeUser(db, seated, ctx("self"));
     const [row] = await db.select({ anonymizedAt: users.anonymizedAt }).from(users).where(eq(users.id, seated));
     expect(row!.anonymizedAt).not.toBeNull();
+  });
+
+  it("removes its sessions the one way a session goes: an impersonation of it ends, audited (M6-11d)", async () => {
+    const seed = await seedLive(db, { students: 1, questions: 0 });
+    const [student] = seed.studentIds as [string];
+    const admin = randomUUID();
+    await db.insert(users).values({ id: admin, oidcSub: `test-${admin}`, email: `admin-${admin.slice(0, 8)}@heig.test`, role: "admin" });
+    await createSession(db, student, 8, { kind: "impersonation", actorUserId: admin, evaluationId: null, projectId: null });
+    await pseudonymizeUser(db, student, ctx("admin"));
+    expect(await db.select().from(sessions).where(eq(sessions.userId, student))).toEqual([]);
+    const ended = await db.select().from(auditLog).where(eq(auditLog.action, "impersonation.ended"));
+    expect(ended.filter((e) => e.subjectId === student).map((e) => e.payload)).toEqual([{ reason: "revoked", actorUserId: admin }]);
   });
 
   it("never waits for an exercise attempt left in progress, nor for an exam the ticker closed", async () => {

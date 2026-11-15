@@ -14,7 +14,7 @@
  * run whatever `KIOSK_ATTESTATION` and `KIOSK_PROJECTS` say, and with
  * `KIOSK_ATTESTATION=off` the sweep ends every station session of a project.
  */
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import { effectiveDeadline } from "@quiz/domain";
@@ -29,12 +29,15 @@ import { sendSittingClose } from "../codespace/service.js";
 import {
   KIOSK_CLOSE_QUEUE,
   closeSittingCloses,
+  completeSittingClose,
   forgottenSittings,
+  giveBackIfLive,
   openSittingCloses,
   requestSittingCloses,
   sittingClosesQueued,
   type SittingCloseJob,
 } from "./sittings.js";
+import { ownRepository } from "./pairing.js";
 import { sweepSilentStations } from "./watch.js";
 
 export const KIOSK_TASKS: TickTask[] = [
@@ -49,9 +52,7 @@ export const KIOSK_TASKS: TickTask[] = [
   {
     name: "kiosk.sittings",
     everyMs: 60_000,
-    run: async (app, config) => {
-      await sweepProjectSittings(app, config);
-    },
+    run: sweepProjectSittings,
   },
 ];
 
@@ -78,10 +79,7 @@ export async function sweepProjectSittings(app: App, config: AppConfig): Promise
     })
     .from(sessions)
     .innerJoin(projects, eq(projects.id, sessions.projectId))
-    .leftJoin(
-      projectRepos,
-      and(eq(projectRepos.projectId, projects.id), eq(projectRepos.userId, sessions.userId), isNull(projectRepos.groupId)),
-    )
+    .leftJoin(projectRepos, ownRepository(sessions.userId))
     .where(and(eq(sessions.kind, "kiosk"), isNotNull(sessions.projectId)));
   const due = new Map<string, string[]>();
   for (const row of seated) {
@@ -90,7 +88,7 @@ export async function sweepProjectSittings(app: App, config: AppConfig): Promise
   }
   for (const [projectId, userIds] of due) await endKioskSessions(app.db, { evaluationId: null, projectId }, userIds, "deadline");
 
-  const forgotten = await forgottenSittings(app.db);
+  const forgotten = await forgottenSittings(app.db, now);
   if (sittingClosesQueued()) {
     await requestSittingCloses(
       app.db,
@@ -114,9 +112,14 @@ export async function sweepProjectSittings(app: App, config: AppConfig): Promise
  * The `kiosk.close` job: the portal told to close `sitting`
  * (`sendSittingClose`), then `close_completed_at` set — the hold lifted —
  * and `codespace.session_closed` written with the cause. Idempotent: a
- * sitting already closed is done. A sitting that still has a session (a
- * transaction that dropped it rolled back) is not closed: its request is
- * given back for the end that will come. A portal that does not answer 204
+ * sitting already closed is done. A sitting a session points to is not
+ * closed — one still starting (the station's poll consumes the pairing
+ * before its session commits), or one a job was asked for while it ran —:
+ * its request is given back for the end that will come. That holds before
+ * the call, and again at the completion, which is atomic with the absence
+ * of a session (`completeSittingClose`): a session born while the portal was
+ * told keeps the station held, and its own end closes again. A portal that
+ * does not answer 204
  * throws, for the queue to retry; the last try's failure is audited
  * (`codespace.session_close_failed`) and leaves the station held until an
  * administrator's Retire then Reactivate.
@@ -139,15 +142,7 @@ export async function runSittingClose(
     .from(kioskPairings)
     .where(eq(kioskPairings.id, job.sitting));
   if (pairing?.closeCompletedAt) return "done";
-  const [live] = await db
-    .select({ one: sessions.sidHash })
-    .from(sessions)
-    .where(eq(sessions.kioskPairingId, job.sitting))
-    .limit(1);
-  if (live) {
-    await db.update(kioskPairings).set({ closeRequestedAt: null }).where(eq(kioskPairings.id, job.sitting));
-    return "live";
-  }
+  if (await giveBackIfLive(db, job.sitting)) return "live";
   const projectId = pairing ? pairing.projectId : job.projectId;
   const now = app.clock.now();
   const subject = { ...SYSTEM_ACTOR, subjectType: "kiosk_pairing", subjectId: job.sitting } as const;
@@ -161,10 +156,8 @@ export async function runSittingClose(
     }
     throw err;
   }
-  await db
-    .update(kioskPairings)
-    .set({ closeCompletedAt: now })
-    .where(and(eq(kioskPairings.id, job.sitting), isNull(kioskPairings.closeCompletedAt)));
+  const completed = await completeSittingClose(db, job.sitting, now);
+  if (completed !== "closed") return completed;
   if (outcome === "off") return "off";
   await audit(db, { ...subject, action: "codespace.session_closed", payload: { projectId, cause: job.cause } });
   return "closed";

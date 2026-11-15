@@ -438,6 +438,12 @@ reviewer in charge), marked *review*: it is not the owner's.
      supervisor seats the student at another station, or in SEB at "SEB or
      kiosk". Retries exhausted: an administrator retires and reactivates
      the station once the portal answers and the workspace shows closed.
+     *Delivery, 2026-11-15 (M6-11d review):* with the portal off
+     (`CODESPACE_URL` empty) the close completes without a call and without
+     an audit row, since no launch could be issued; a portal turned off
+     after a launch therefore leaves that portal session unclosed. A close
+     request is marked before it is enqueued, so a crash between the two
+     leaves the station held until that Retire then Reactivate.
 5. **Accepted residual risks** (*owner*):
    - (a) **Suspension** (§7): a suspended station only covers the frame;
      the portal's writes continue — weaker than an exam's `423` (N-SEC-10).
