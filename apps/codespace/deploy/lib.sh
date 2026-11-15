@@ -48,8 +48,9 @@ cs_instance() {
 
 # Host-level pieces, shared by both instances: the network scripts and the
 # nftables table, the AppArmor profile, the shadow snapshot and backup export
-# scripts, the systemd templates and the VM's two slices (shared with the
-# runner's deploy, as is the drift warning of the manual pieces). Written by
+# scripts, the systemd templates, the VM's two slices (shared with the
+# runner's deploy, as is the drift warning of the manual pieces) and the
+# inotify limits (deploy/sysctl.conf). Written by
 # bootstrap.sh and by a prod deploy only, both from production's approved
 # checkout.
 cs_install_host() {
@@ -61,6 +62,9 @@ cs_install_host() {
 		"$CS_APP/deploy/quiz-codespace-shadow@.service" \
 		"$CS_APP/deploy/quiz-codespace-shadow@.timer" /etc/systemd/system/
 	install_slices
+	# The inotify budget every session container shares (the file says why).
+	install -m 0644 "$CS_APP/deploy/sysctl.conf" /etc/sysctl.d/60-quiz-codespace.conf
+	sysctl -q -p /etc/sysctl.d/60-quiz-codespace.conf
 	warn_manual_drift
 	# The backup export's one dependency (deployment.md §3, Backup).
 	command -v sqlite3 >/dev/null 2>&1 \

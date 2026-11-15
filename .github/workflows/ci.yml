@@ -119,6 +119,8 @@ jobs:
       - run: pnpm -r --filter "!@quiz/api" --filter "!@quiz/web" test
       # Not a workspace package: no dependency, no build (its README).
       - run: node --test extensions/kiosk-attestation/*.test.mjs
+      # The engine VM's load test (standard library only, run there as root).
+      - run: node --test apps/codespace/deploy/*.test.mjs
 
   # The ONE required status check (the `main` ruleset names `checks`), and
   # what `image` waits for. It passes when every job above passed, or when
@@ -150,6 +152,7 @@ jobs:
       - run: shellcheck -x -P SCRIPTDIR infra/engine/*.sh
       - run: bash infra/engine/staging-dispatch.test.sh
       - run: bash infra/engine/lib.test.sh
+      - run: bash infra/engine/slices.test.sh
       - env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && 'HEAD^1' || '' }}
         run: node scripts/check-changes.mjs ${BASE:+--base "$BASE"}

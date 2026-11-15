@@ -358,10 +358,13 @@ RUNNER_TOKEN="$(sed -n 's/^RUNNER_TOKEN=//p' .env.prod)" \
 
 ### The slices: grading before sessions (M6-05)
 
-The VM is not resized (owner, 2026-10-08). The runner and the workspace
-portals share it in two systemd slices, so that an exam's sessions cannot
-starve grading. Their weights and memory lines, and why those values, are
-in the unit files themselves, the only place they are written:
+The runner and the workspace portals share the VM in two systemd slices, so
+that an exam's sessions cannot starve grading. Their weights and memory
+lines, and why those values, are in the unit files themselves, except
+`codespace.slice`'s memory lines: `install_slices` computes them from the
+VM's RAM into the drop-in `codespace.slice.d/50-memory.conf` (the formula,
+its values and the command to run after a resize: the codespace RUNBOOK,
+Capacity):
 
 | Slice | Holds | Values and sizing |
 | --- | --- | --- |
@@ -381,6 +384,7 @@ cgroup it was created in: a session started before the rollout stays in
 
 ```bash
 systemctl show quiz-runner.slice codespace.slice -p CPUWeight,IOWeight,MemoryLow,MemoryHigh,MemoryMax
+cat /etc/systemd/system/codespace.slice.d/50-memory.conf
 systemd-cgls --no-pager -u quiz-runner.slice; systemd-cgls --no-pager -u codespace.slice
 systemd-cgtop -m -n 1 --depth=2 | grep -E 'slice|machine'
 ```
