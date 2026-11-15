@@ -30,6 +30,7 @@ import {
   KioskTokenRequest,
   PairApprove,
   PairCodeParam,
+  projectStationPath,
   type KioskAttested,
   type KioskChallenge,
   type KioskDevice,
@@ -273,7 +274,10 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
     });
     // The supervisor's row shows the station at once, and its state (§6).
     await stationSeated(app.db, station.id, app.clock.now());
-    return { redirect: activity.projectId !== null ? `/projects/${activity.projectId}` : `/take/${activity.evaluationId}` } satisfies KioskTokenApproved;
+    // ADR-089 §3: a project sitting opens the station page of that project, whose CSP admits the portal.
+    return {
+      redirect: activity.projectId !== null ? projectStationPath(activity.projectId) : `/take/${activity.evaluationId}`,
+    } satisfies KioskTokenApproved;
   });
 
   /**

@@ -9,16 +9,21 @@ import {
   type KioskAttested,
   type KioskChallenge,
   type KioskDeviceAuthorization,
+  type KioskStation,
   type KioskTokenApproved,
   type KioskTokenRequest,
   type PublicConfig,
 } from "@quiz/contracts";
 
-import { ApiError, api, refusalCodeOf } from "../api";
+import { ApiError, api, refusalCodeOf, refusedWith } from "../api";
 import { readStored, writeStored } from "../ui/state";
 
-/** Why a station cannot show a code: not in the registry (or not named), or the platform is out of reach. */
-export type StationTrouble = "not_recognised" | "unavailable";
+/**
+ * Why a station cannot show a code: not in the registry (or not named), the
+ * platform out of reach, or held — its last project sitting's workspace is
+ * not closed yet (ADR-089, amendment of 2026-11-15, point 4).
+ */
+export type StationTrouble = "not_recognised" | "unavailable" | "held";
 
 const post = <T>(path: string, body?: unknown) =>
   api<T>(path, { method: "POST", ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -101,25 +106,63 @@ async function attestationOf(
  */
 export type AttestOutcome = "ok" | "revoked" | "refused" | "unavailable" | "lost";
 
-/** One attestation: a challenge, the extension's answer, the verdict. */
-export async function attestOnce(kiosk: PublicConfig["kiosk"]): Promise<AttestOutcome> {
+/** One attestation: the station the server answered, or how it went wrong. */
+async function attestStation(kiosk: PublicConfig["kiosk"]): Promise<KioskStation | Exclude<AttestOutcome, "ok" | "revoked">> {
   if (!kiosk) return "lost";
   try {
     const { challenge } = await post<KioskChallenge>("/app/api/kiosk/attest/challenge");
     const body = (await attestationOf(kiosk, challenge)) satisfies KioskAttestVerify;
-    const verdict = await post<KioskAttested>("/app/api/kiosk/attest/verify", body);
-    return verdict.station.status === "active" ? "ok" : "revoked";
+    return (await post<KioskAttested>("/app/api/kiosk/attest/verify", body)).station;
   } catch (err) {
     if (status(err) === 403) return "refused";
     return refusalCodeOf(err) === "attestation_unavailable" ? "unavailable" : "lost";
   }
 }
 
-/** One attestation, for the station's screen: null when attested and `active`; otherwise what to show. */
+/** One attestation: a challenge, the extension's answer, the verdict. */
+export async function attestOnce(kiosk: PublicConfig["kiosk"]): Promise<AttestOutcome> {
+  const station = await attestStation(kiosk);
+  if (typeof station === "string") return station;
+  return station.status === "active" ? "ok" : "revoked";
+}
+
+/**
+ * One attestation, for the station's screen: null when attested, `active`
+ * and not held; otherwise what to show. The hold is read here only, before a
+ * code: during its own sitting a station is held too, and that is no trouble.
+ */
 export async function attest(kiosk: PublicConfig["kiosk"]): Promise<StationTrouble | null> {
-  const outcome = await attestOnce(kiosk);
-  if (outcome === "ok") return null;
-  return outcome === "revoked" || outcome === "refused" ? "not_recognised" : "unavailable";
+  const station = await attestStation(kiosk);
+  if (typeof station === "string") return station === "refused" ? "not_recognised" : "unavailable";
+  if (station.status !== "active") return "not_recognised";
+  return station.held ? "held" : null;
+}
+
+// --- A project sitting (ADR-089) ---------------------------------------------------
+
+/**
+ * How **Leave this station** ended: `left` when the server will not hear
+ * this station's sitting any more — ended now (the 204), already ended by
+ * another end (a 404), or the station no longer trusted with it (a 401: the
+ * sitting then ends at its expiry or the sweep); `suspended` when the station must be
+ * checked again first (the `423`, whose notice the page already shows);
+ * `failed` otherwise, the sitting still running.
+ */
+export type LeaveOutcome = "left" | "suspended" | "failed";
+
+/**
+ * **Leave this station** (`POST /app/api/kiosk/leave`, no body, a `204`):
+ * ends the station's project sitting on the server, which closes the portal
+ * session it opened (ADR-089, amendment of 2026-11-15, point 4).
+ */
+export async function endProjectSitting(): Promise<LeaveOutcome> {
+  try {
+    await post<void>("/app/api/kiosk/leave");
+    return "left";
+  } catch (err) {
+    if (status(err) === 401 || status(err) === 404) return "left";
+    return refusedWith(err, "kiosk_suspended") ? "suspended" : "failed";
+  }
 }
 
 // --- The pairing ---------------------------------------------------------------
@@ -129,6 +172,7 @@ export async function authorize(): Promise<KioskDeviceAuthorization | StationTro
   try {
     return await post<KioskDeviceAuthorization>("/app/api/kiosk/device_authorization");
   } catch (err) {
+    if (refusedWith(err, "station_held")) return "held";
     return status(err) === 403 ? "not_recognised" : "unavailable";
   }
 }

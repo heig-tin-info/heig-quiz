@@ -103,15 +103,16 @@ describe("workModeChoices", () => {
 
 describe("the mapping between the setting and the screen (ADR-089 point 2)", () => {
   it("is own tools, or a level in the workspace: any is online, the others online_seb", () => {
-    expect(workSettingFor(false, "kiosk")).toEqual(FREE);
-    expect(workSettingFor(true, "any")).toEqual(ONLINE);
-    for (const level of ["seb", "either", "kiosk"] as const) expect(workSettingFor(true, level)).toEqual(S("online_seb", level));
+    expect(workSettingFor(false, "kiosk")).toEqual({ mode: "free" });
+    expect(workSettingFor(true, "any")).toEqual({ mode: "online" });
+    for (const level of ["seb", "either", "kiosk"] as const) {
+      expect(workSettingFor(true, level)).toEqual({ mode: "online_seb", devices: level });
+    }
   });
 
-  it("reads back the level from the stored devices, and turns the write's body into the setting", () => {
-    for (const level of DEVICE_LEVEL_IDS) expect(workSettingFor(true, level).devices).toBe(level);
-    expect([workSettingOf({ mode: "free" }), workSettingOf({ mode: "online" })]).toEqual([FREE, ONLINE]);
-    for (const level of ["seb", "either", "kiosk"] as const) expect(workSettingOf({ mode: "online_seb", devices: level })).toEqual(S("online_seb", level));
+  it("reads back every choice of the screen as the stored setting: the level is the stored devices", () => {
+    for (const level of DEVICE_LEVEL_IDS) expect(workSettingOf(workSettingFor(true, level))).toEqual(level === "any" ? ONLINE : S("online_seb", level));
+    for (const level of DEVICE_LEVEL_IDS) expect(workSettingOf(workSettingFor(false, level))).toEqual(FREE);
   });
 });
 

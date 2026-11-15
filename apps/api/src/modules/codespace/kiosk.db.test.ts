@@ -123,7 +123,7 @@ async function seated(station: TestStation, student: Person, projectId: string) 
   expect(approved.statusCode, approved.body).toBe(200);
   const polled = await stationPost("/app/api/kiosk/token", station, { grant_type: DEVICE_CODE_GRANT, device_code: auth.device_code });
   expect(polled.statusCode, polled.body).toBe(200);
-  expect(polled.json()).toEqual({ redirect: `/projects/${projectId}` });
+  expect(polled.json()).toEqual({ redirect: `/projects/${projectId}/station` });
   const [pairing] = await server.app.db.select().from(kioskPairings).where(eq(kioskPairings.deviceId, station.deviceId));
   return { headers: stationHeaders(polled, station), sitting: pairing!.id };
 }
@@ -208,7 +208,10 @@ describe("the device level of a supervised project (ADR-089 point 2)", () => {
       const refused = await setMode(lab.id, "online_seb", level);
       expect([refused.statusCode, refused.json().error]).toEqual([409, "work_mode_frozen"]);
     }
-    expect((await setMode(lab.id, "online_seb", "either")).statusCode).toBe(200);
+    const kept = await setMode(lab.id, "online_seb", "either");
+    expect(kept.statusCode).toBe(200);
+    // ADR-089 point 7: the holder's quota beside the classroom's one claimed student, for the setting's warning.
+    expect(ProjectWorkspace.parse(kept.json()).quota).toEqual({ max: expect.any(Number), seats: 1 });
   });
 });
 

@@ -28,7 +28,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -133,13 +133,14 @@ async function portalState(db: Db, projectId: string) {
  * change it now (`workModeRefusal`, the very rule `setWorkMode` applies:
  * the screen never offers what the server would refuse), the device level
  * and whether stations are offered to projects (`kioskProjectsOn`, one of
- * its two readers, ADR-089 amendment point 1), and the last
- * synchronization.
+ * its two readers, ADR-089 amendment point 1), the last synchronization,
+ * and the quota the setting warns against (ADR-089 amendment point 7): the
+ * holder's `maxActiveSessions` beside the classroom's claimed student seats.
  */
 export async function projectWorkspace(
   db: Db,
   config: Pick<AppConfig, "KIOSK_ATTESTATION" | "KIOSK_PROJECTS">,
-  project: { id: string; workMode: WorkMode; devices: DeviceLevel; groupMode: boolean; createdBy: string },
+  project: { id: string; classroomId: string; workMode: WorkMode; devices: DeviceLevel; groupMode: boolean; createdBy: string },
   courseId: string,
   caller: { userId: string; owner: boolean },
 ): Promise<ProjectWorkspace> {
@@ -147,6 +148,11 @@ export async function projectWorkspace(
   const granted = caller.owner && (await grantOf(db, caller.userId))?.enabled === true;
   const kioskOffered = kioskProjectsOn(config);
   const facts = { owner: caller.owner, granted, launched: state.firstLaunchAt !== null, groupMode: project.groupMode, kioskOffered };
+  const holder = await holderGrant(db, courseId, project.createdBy);
+  const [claimed] = await db
+    .select({ seats: sql<number>`count(*)::int` })
+    .from(enrollments)
+    .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, false), isNotNull(enrollments.userId)));
   return {
     mode: project.workMode,
     devices: project.devices,
@@ -155,7 +161,8 @@ export async function projectWorkspace(
     syncedAt: state.syncedAt?.toISOString() ?? null,
     syncError: state.syncError,
     // A review session exists while the quota holder holds an enabled grant (ADR-129 §3).
-    review: (await holderGrant(db, courseId, project.createdBy))?.grant?.enabled === true,
+    review: holder?.grant?.enabled === true,
+    quota: holder?.grant ? { max: holder.grant.maxActiveSessions, seats: claimed?.seats ?? 0 } : null,
   };
 }
 

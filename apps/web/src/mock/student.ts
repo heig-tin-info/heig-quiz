@@ -37,6 +37,7 @@ import {
   on,
   refuse,
   scene,
+  STUDENT_PROJECT_INVITED,
 } from "./runtime";
 import {
   BLOCKS_CONFIG,
@@ -794,7 +795,7 @@ export const STUDENT_PROJECT_OPEN = "77777777-7777-4777-8777-777777777701";
 export const STUDENT_PROJECT_SOON = "77777777-7777-4777-8777-777777777702";
 export const STUDENT_PROJECT_PAST = "77777777-7777-4777-8777-777777777703";
 export const STUDENT_PROJECT_ACCEPT = "77777777-7777-4777-8777-777777777704";
-export const STUDENT_PROJECT_INVITED = "77777777-7777-4777-8777-777777777705";
+export { STUDENT_PROJECT_INVITED };
 export const STUDENT_PROJECT_LOCKED = "77777777-7777-4777-8777-777777777706";
 export const STUDENT_PROJECT_DELETED = "77777777-7777-4777-8777-777777777707";
 /** Locked at the deadline with a repository: its score is frozen, still indicative (M3-14l). */
@@ -965,13 +966,16 @@ const studentProjectView = (card: CardFacts): StudentProject => {
       ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5 }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste." }
       : null,
     criteria,
-    // `?codespace=1` (ADR-047, M6-06): the open project runs in the workspace, the invited one under Safe Exam Browser.
+    // `?codespace=1` (ADR-047, M6-06): the open project runs in the workspace, the invited one under Safe Exam Browser;
+    // `?pjkiosk=1` (ADR-089): the open one at SEB or kiosk, the invited one at Kiosk only.
     workspace: !flags.codespace
       ? null
       : card.id === STUDENT_PROJECT_OPEN
-        ? { mode: "online", devices: "any" }
+        ? flags.pjkiosk
+          ? { mode: "online_seb", devices: "either" }
+          : { mode: "online", devices: "any" }
         : card.id === STUDENT_PROJECT_INVITED
-          ? { mode: "online_seb", devices: "seb" }
+          ? { mode: "online_seb", devices: flags.pjkiosk ? "kiosk" : "seb" }
           : null,
     serverNow: new Date().toISOString(),
   };

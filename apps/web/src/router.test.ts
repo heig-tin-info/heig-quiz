@@ -194,6 +194,7 @@ describe("ROUTES", () => {
     classroomGrades: { view: "classroomGrades", id: "c-1" },
     project: { view: "project", id: "p-1" },
     projectGrading: { view: "projectGrading", id: "p-1" },
+    projectStation: { view: "projectStation", id: "p-1" },
     classroomGroups: { view: "classroomGroups", id: "c-1" },
     groupSet: { view: "groupSet", classroomId: "c-1", id: "s-1" },
     projectNew: { view: "projectNew", classroomId: "c-1" },
@@ -262,6 +263,8 @@ describe("ROUTES", () => {
       "privacy",
       // F-PROJ-15 (M3-13): one address, the student's project for a student.
       "project",
+      // ADR-089 §3: a kiosk station's project sitting.
+      "projectStation",
       // ADR-115: targeted revision, from the drill.
       "revise",
       "sebQuit",
@@ -300,6 +303,7 @@ describe("ROUTES", () => {
       admin: "admin",
       project: "activities",
       projectGrading: "activities",
+      projectStation: "activities",
     });
     const unlit = ROUTE_VIEWS.filter((v) => lit[v] === null).sort();
     expect(unlit).toEqual(
@@ -380,6 +384,7 @@ describe("the classroom merge's routes", () => {
       [{ view: "classroomGrades", id: "c-1" }, "/classrooms/c-1/grades"],
       [{ view: "project", id: "p-1" }, "/projects/p-1"],
       [{ view: "projectGrading", id: "p-1" }, "/projects/p-1/grading"],
+      [{ view: "projectStation", id: "p-1" }, "/projects/p-1/station"],
       [{ view: "classroomGroups", id: "c-1" }, "/classrooms/c-1/groups"],
       [{ view: "groupSet", classroomId: "c-1", id: "s-1" }, "/classrooms/c-1/groups/s-1"],
       [{ view: "projectNew", classroomId: "c-1" }, "/classrooms/c-1/projects/new"],

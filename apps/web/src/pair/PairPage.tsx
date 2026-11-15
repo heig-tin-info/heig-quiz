@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CircleCheck, MonitorSmartphone, ScanQrCode, TriangleAlert } from "lucide-react";
 
-import type { Me, PairApprove, PairApproved, PairPreview, PairableEvaluation } from "@quiz/contracts";
+import type { Me, PairApprove, PairApproved, PairPreview, PairableEvaluation, PairableProject } from "@quiz/contracts";
 import { formatUserCode, normalizeUserCode } from "@quiz/domain";
 
 import { ApiError, api } from "../api";
@@ -20,7 +20,8 @@ import { canScan } from "./scan";
  * F-EVAL-28). The code comes from the station's QR (`?code=`), is typed, or
  * is read by the page's own camera scanner (a secondary action under the
  * field); the page then shows the station's NAME, to compare with the screen in
- * front of the student, and the exams they can start there. ONE primary
+ * front of the student, and the exams and supervised projects (ADR-089 §5)
+ * they can start there, as one choice. ONE primary
  * action at a time: Continue while there is only a code, then "Start on
  * this station".
  *
@@ -46,6 +47,21 @@ export function PairPage({ me, navigate }: { me: Me | null; navigate?: Navigate 
 }
 
 const errorOf = (err: unknown) => (err instanceof ApiError ? { status: err.status } : null);
+
+/** One thing the station can open: an exam (its conditions read before confirming) or a project. */
+type Pairable =
+  | { kind: "exam"; key: string; item: PairableEvaluation }
+  | { kind: "project"; key: string; item: PairableProject };
+
+/** The exams, then the projects, each keyed by its kind: an exam and a project never share a radio value. */
+const pairablesOf = (preview: PairPreview | undefined): Pairable[] => [
+  ...(preview?.evaluations ?? []).map((item) => ({ kind: "exam" as const, key: `exam:${item.id}`, item })),
+  ...(preview?.projects ?? []).map((item) => ({ kind: "project" as const, key: `project:${item.id}`, item })),
+];
+
+/** The approval's body for one choice (`PairApprove`). */
+const approvalOf = (code: string, choice: Pairable): PairApprove =>
+  choice.kind === "exam" ? { code, evaluationId: choice.item.id } : { code, projectId: choice.item.id };
 
 function Pairing({ initial, navigate }: { initial: string | null; navigate?: Navigate | undefined }) {
   const t = useT();
@@ -74,11 +90,8 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
   });
 
   const approve = useMutation({
-    mutationFn: (evaluationId: string) =>
-      api<PairApproved>("/app/api/pair", {
-        method: "POST",
-        body: JSON.stringify({ code: code!, evaluationId } satisfies PairApprove),
-      }),
+    mutationFn: (choice: Pairable) =>
+      api<PairApproved>("/app/api/pair", { method: "POST", body: JSON.stringify(approvalOf(code!, choice)) }),
   });
 
   const lookUp = (value: string) => {
@@ -117,15 +130,16 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
     approve.reset();
   };
 
-  if (approve.isSuccess) return <Done label={approve.data.station.label} navigate={navigate} />;
+  if (approve.isSuccess) {
+    return <Done label={approve.data.station.label} kind={approve.variables.kind} navigate={navigate} />;
+  }
 
   const lookupError = errorOf(preview.error);
   // A refusal the student answers by typing a code again; any other failure is a retry.
   const codeRefused = lookupError?.status === 404 || lookupError?.status === 429;
   const found = preview.data;
-  const exams = found?.evaluations ?? [];
-  const chosen = exams.length === 1 ? exams[0]!.id : picked;
-  const chosenExam = exams.find((exam) => exam.id === chosen);
+  const choices = pairablesOf(found);
+  const chosen = choices.length === 1 ? choices[0]! : (choices.find((c) => c.key === picked) ?? null);
   const approveError = errorOf(approve.error);
 
   return (
@@ -198,16 +212,16 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
               <p className="mt-1 text-[13px] text-fg-muted">{t("pair.station.check")}</p>
             </section>
 
-            {exams.length === 0 ? (
+            {choices.length === 0 ? (
               <EmptyState icon={TriangleAlert} title={t("pair.none.title")} className="pt-6 pb-2">
                 {t("pair.none.body")}
               </EmptyState>
             ) : (
-              <ExamPicker exams={exams} chosen={chosen} onPick={setPicked} />
+              <Picker choices={choices} chosen={chosen?.key ?? null} onPick={setPicked} />
             )}
 
             {/* ADR-079 §7: the station begins the attempt directly, so the chosen exam's conditions are read here, before confirming. */}
-            {chosenExam ? <ConditionsList conditions={chosenExam.conditions} className="mt-5" /> : null}
+            {chosen?.kind === "exam" ? <ConditionsList conditions={chosen.item.conditions} className="mt-5" /> : null}
 
             {approveError ? (
               <div className="mt-4">
@@ -217,13 +231,13 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
                       ? "pair.limited"
                       : approveError.status === 404
                         ? "pair.invalid.body"
-                        : "pair.refused",
+                        : `pair.refused.${approve.variables?.kind ?? "exam"}`,
                   )}
                 </Alert>
               </div>
             ) : null}
 
-            {exams.length > 0 ? (
+            {choices.length > 0 ? (
               // A sticky dock on a phone (DESIGN.md, the launch step's): the conditions above may run past the fold.
               <div data-bottom-dock="" data-action-bar="" className="sticky bottom-0 z-10 -mx-5 mt-5 border-t border-line bg-surface px-5 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:p-0">
                 <Button
@@ -248,53 +262,51 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
   );
 }
 
-/** The exams the student may open on the station: one shown as chosen, several as a radio group. */
-function ExamPicker({
-  exams,
+/**
+ * What the student may open on the station, exams then projects: one shown
+ * as chosen, several as a radio group. The legend names the kinds listed;
+ * mixed, each line says its kind.
+ */
+function Picker({
+  choices,
   chosen,
   onPick,
 }: {
-  exams: PairableEvaluation[];
+  choices: Pairable[];
   chosen: string | null;
-  onPick: (id: string) => void;
+  onPick: (key: string) => void;
 }) {
   const t = useT();
   const name = useId();
+  const kinds = new Set(choices.map((c) => c.kind));
+  const mixed = kinds.size > 1;
+  const legend = mixed ? "pair.activity" : kinds.has("project") ? "pair.project" : "pair.exam";
   return (
     <fieldset className="mt-5 space-y-1.5">
-      <legend className="text-[13px] font-medium text-fg">{t("pair.exam")}</legend>
+      <legend className="text-[13px] font-medium text-fg">{t(legend)}</legend>
       <div className="divide-y divide-line overflow-hidden rounded-card border border-line">
-        {exams.map((exam) => {
-          const checked = chosen === exam.id;
-          return (
-            <RadioRow
-              key={exam.id}
-              name={name}
-              value={exam.id}
-              checked={checked}
-              onPick={onPick}
-              className="px-4 py-3 text-[15px]"
-            >
-              <span className="block font-semibold text-fg">{exam.title}</span>
-              <span className="block text-[13px] text-fg-muted">
-                {exam.courseCode} · {exam.classroomName}
-              </span>
-            </RadioRow>
-          );
-        })}
+        {choices.map(({ key, kind, item }) => (
+          <RadioRow key={key} name={name} value={key} checked={chosen === key} onPick={onPick} className="px-4 py-3 text-[15px]">
+            <span className="block font-semibold text-fg">{item.title}</span>
+            <span className="block text-[13px] text-fg-muted">
+              {mixed ? `${t(kind === "exam" ? "pair.exam" : "pair.project")} · ` : null}
+              {item.courseCode} · {item.classroomName}
+            </span>
+          </RadioRow>
+        ))}
       </div>
     </fieldset>
   );
 }
 
-function Done({ label, navigate }: { label: string; navigate?: Navigate | undefined }) {
+function Done({ label, kind, navigate }: { label: string; kind: Pairable["kind"]; navigate?: Navigate | undefined }) {
   const t = useT();
   return (
     <GateCard
       role="status"
       icon={<CircleCheck className="mx-auto size-10 text-success" aria-hidden />}
-      title={t("pair.done.title")}
-      body={t("pair.done.body", { label })}
+      title={t(`pair.done.${kind}.title`)}
+      body={t(`pair.done.${kind}.body`, { label })}
     >
       {navigate ? (
         <Button variant="secondary" className="mt-6" onClick={() => navigate({ view: "home" })}>

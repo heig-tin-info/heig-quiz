@@ -13,10 +13,11 @@ import type {
   PairApproved,
   PairPreview,
 } from "@quiz/contracts";
+import { projectStationPath } from "@quiz/contracts";
 import { generateUserCode, normalizeUserCode } from "@quiz/domain";
 
 import { D, flags, H, iso, MockError, MockPayload, on, rand } from "./runtime";
-import { STUDENT_EVAL, studentConditions } from "./student";
+import { STUDENT_EVAL, STUDENT_PROJECT_INVITED, studentConditions } from "./student";
 
 const devices: KioskDevice[] = flags.empty
   ? []
@@ -87,8 +88,12 @@ on("GET", "/app/api/kiosk/station", () => station());
 function station(): KioskStation {
   const d = devices.find((x) => x.status === "active");
   if (!d) throw new MockError(404, "Not found");
-  return { label: d.label, status: d.status, held: false };
+  return { label: d.label, status: d.status, held: flags.stationheld };
 }
+
+// Leave this station (ADR-089, amendment point 4): the sitting ends; the
+// session the mock plays stays, since the station's page leaves to `/kiosk`.
+on("POST", "/app/api/kiosk/leave", () => undefined);
 
 // --- The pairing (ADR-051 §7) ---------------------------------------------------
 //
@@ -104,6 +109,8 @@ interface MockPairing {
   expiresAt: number;
   state: "pending" | "approved" | "consumed";
   evaluationId: string | null;
+  /** ADR-089 §5: a project pairing instead of an exam's. */
+  projectId?: string | null;
 }
 
 function readPairing(): MockPairing | null {
@@ -128,6 +135,7 @@ const refusal = (status: number, error: string) => new MockPayload(status, { err
 on("POST", "/app/api/kiosk/device_authorization", (): KioskDeviceAuthorization => {
   const d = devices.find((x) => x.status === "active");
   if (!d?.label) throw refusal(403, "not_recognised");
+  if (flags.stationheld) throw refusal(409, "station_held");
   const userCode = generateUserCode((n) => Uint8Array.from({ length: n }, () => Math.floor(rand() * 256)));
   const deviceCode = `mock-device-${Date.now()}`;
   writePairing({ deviceCode, userCode, expiresAt: Date.now() + 300_000, state: "pending", evaluationId: null });
@@ -150,7 +158,7 @@ on("POST", "/app/api/kiosk/token", (_m, body) => {
   if (p.state === "consumed") throw refusal(400, "access_denied");
   if (p.state === "pending") throw refusal(400, "authorization_pending");
   writePairing({ ...p, state: "consumed" });
-  return { redirect: `/take/${p.evaluationId}` };
+  return { redirect: p.projectId ? projectStationPath(p.projectId) : `/take/${p.evaluationId}` };
 });
 
 /** The pending pairing `code` names, or the 404 a wrong code gets. */
@@ -179,16 +187,26 @@ const pairable = (): PairPreview["evaluations"] =>
         },
       ];
 
+/** `?kioskprojects=1` (ADR-089 §5): the student's supervised project at Kiosk only, beside the exam. */
+const pairableProjects = (): PairPreview["projects"] =>
+  flags.kioskprojects && !flags.empty
+    ? [{ id: STUDENT_PROJECT_INVITED, title: "Mini-projet — Jeu de la vie", classroomName: "PRG1-2026", courseCode: "PRG1" }]
+    : [];
+
 on("GET", "/app/api/pair/:code", (m): PairPreview => {
   pending(decodeURIComponent(m.groups!.code!));
-  // No supervised project at a station level here: `KIOSK_PROJECTS` stays off until M6-11d (ADR-089).
-  return { station: { label: pairedLabel() }, evaluations: pairable(), projects: [] };
+  return { station: { label: pairedLabel() }, evaluations: pairable(), projects: pairableProjects() };
 });
 
 on("POST", "/app/api/pair", (_m, body): PairApproved => {
   const p = pending(String(body.code ?? ""));
-  if (!pairable().some((e) => e.id === body.evaluationId)) throw refusal(409, "evaluation_not_pairable");
-  writePairing({ ...p, state: "approved", evaluationId: String(body.evaluationId) });
+  if ("projectId" in body) {
+    if (!pairableProjects().some((x) => x.id === body.projectId)) throw refusal(409, "project_not_pairable");
+    writePairing({ ...p, state: "approved", evaluationId: null, projectId: String(body.projectId) });
+  } else {
+    if (!pairable().some((e) => e.id === body.evaluationId)) throw refusal(409, "evaluation_not_pairable");
+    writePairing({ ...p, state: "approved", evaluationId: String(body.evaluationId) });
+  }
   return { station: { label: pairedLabel() } };
 });
 

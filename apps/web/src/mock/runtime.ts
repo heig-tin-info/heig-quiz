@@ -26,6 +26,13 @@ if (asParam === "teacher" || asParam === "student" || asParam === "admin") {
 }
 export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "teacher";
 
+/**
+ * The student persona's supervised project (`mock/student.ts`): here, below
+ * every mock, because the session (`mock/session.ts`) is confined to it
+ * under `?sebproject=1` and `?stationproject=1`.
+ */
+export const STUDENT_PROJECT_INVITED = "77777777-7777-4777-8777-777777777705";
+
 /** Scene flags: read from the URL, then remembered like the persona. */
 /**
  * `negative`: every evaluation of the mock scores its choice questions negatively (ADR-026).
@@ -71,6 +78,18 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `sebproject`: the student persona is in Safe Exam Browser, on the `seb`
  *   session of its `online_seb` project (D21, M6-07; `mock/session.ts`):
  *   that project page and nothing else. With `codespace`.
+ * `kioskprojects`: the platform offers kiosk stations to projects
+ *   (`KIOSK_PROJECTS`, ADR-089): the setting offers the station levels, and
+ *   the phone's pairing list carries the student's invited project, as if it
+ *   held a station level whatever `pjkiosk` says (`mock/kiosk.ts`).
+ * `pjkiosk`: with `codespace`, the projects hold station levels: the staff's
+ *   SEB draft is at Kiosk only, the student's invited project at Kiosk only
+ *   and its open one at SEB or kiosk (`mock/codespace.ts`, `mock/student.ts`).
+ * `stationproject`: the student persona sits on a kiosk station, on the
+ *   `kiosk` session of its invited project (ADR-089 §3, `mock/session.ts`):
+ *   `/projects/<id>/station`, the portal framed by a stand-in.
+ * `stationheld`: the mock's station is held, its previous project sitting
+ *   not closed yet: `/kiosk` shows no code (ADR-089, amendment point 4).
  * `staffseat`: the student persona is a teacher on a STAFF seat (ADR-077): their
  *   project page offers the real actions; `staffrepo`: the staff project page
  *   shows that teacher's test repository, badged (`mock/project.ts`).
@@ -128,6 +147,10 @@ export const FLAG_NAMES = [
   "staffrepo",
   "codespace",
   "sebproject",
+  "kioskprojects",
+  "pjkiosk",
+  "stationproject",
+  "stationheld",
   "nollm",
   "showkey",
   "unstated",

@@ -65,22 +65,26 @@ export interface WorkSetting {
   devices: DeviceLevel;
 }
 
+/** The body of the mode's write (`ProjectWorkModeBody` of `@quiz/contracts`): the level under supervision only. */
+export type WorkSettingBody =
+  | { mode: Exclude<WorkModeName, "online_seb"> }
+  | { mode: "online_seb"; devices: SupervisedDeviceLevel };
+
 /**
- * THE mapping between a project's stored setting and what its screen shows
+ * THE mapping between what a project's screen shows and the mode's write
  * (ADR-089, amendment point 2, "One column, one mapping"): out of the
  * workspace, the students' own tools; in it, a device level — `any` is
- * `online`, the three others `online_seb` with that level. Back, the
- * stored `devices` is the level: it is `any` outside `online_seb`.
+ * `online`, the three others `online_seb` with that level. Back,
+ * {@link workSettingOf}: the stored `devices` is the level, `any` outside
+ * `online_seb`.
  */
-export function workSettingFor(online: boolean, level: DeviceLevel): WorkSetting {
-  if (!online) return { mode: "free", devices: "any" };
-  return level === "any" ? { mode: "online", devices: "any" } : { mode: "online_seb", devices: level };
+export function workSettingFor(online: boolean, level: DeviceLevel): WorkSettingBody {
+  if (!online) return { mode: "free" };
+  return level === "any" ? { mode: "online" } : { mode: "online_seb", devices: level };
 }
 
 /** The setting a body of the mode's write stands for (`ProjectWorkModeBody`): the level is `any` unless supervised. */
-export function workSettingOf(
-  body: { mode: Exclude<WorkModeName, "online_seb"> } | { mode: "online_seb"; devices: SupervisedDeviceLevel },
-): WorkSetting {
+export function workSettingOf(body: WorkSettingBody): WorkSetting {
   return body.mode === "online_seb" ? { mode: body.mode, devices: body.devices } : { mode: body.mode, devices: "any" };
 }
 

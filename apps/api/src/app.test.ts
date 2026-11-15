@@ -187,6 +187,9 @@ describe("app (serving the built SPA)", () => {
         STATIC_DIR: dir,
         STATIC_HISTORY_DIR: history,
         COMMIT_SHA: "c0ffee",
+        // ADR-089 §10: the portal a project's station page may frame.
+        CODESPACE_URL: "https://code.example.ch",
+        CODESPACE_LAUNCH_SECRET: "s".repeat(32),
       }),
     });
   });
@@ -205,6 +208,18 @@ describe("app (serving the built SPA)", () => {
     const res = await app.inject({ method: "GET", url: "/classrooms/c1" });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("<title>SPA</title>");
+  });
+
+  // ADR-089 §10: the deep link of a project's station page admits the portal in a frame; the project's own page does not.
+  it("sends frame-src with the portal on a project's station page only", async () => {
+    const station = await app.inject({ method: "GET", url: "/projects/p1/station" });
+    expect(station.statusCode).toBe(200);
+    expect(station.body).toContain("<title>SPA</title>");
+    expect(station.headers["content-security-policy"]).toMatch(/(^|; )frame-src https:\/\/code\.example\.ch(;|$)/);
+    const page = await app.inject({ method: "GET", url: "/projects/p1" });
+    expect(page.statusCode).toBe(200);
+    expect(page.headers["content-security-policy"]).toBe(CSP);
+    expect(page.headers["content-security-policy"]).not.toMatch(/frame-src/);
   });
 
   // ADR-110: an old tab's lazy chunk must never be answered with HTML.

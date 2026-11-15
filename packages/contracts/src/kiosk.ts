@@ -114,9 +114,16 @@ export const KIOSK_TOKEN_ERRORS = [
 export const KioskTokenError = z.object({ error: z.enum(KIOSK_TOKEN_ERRORS) });
 export type KioskTokenError = z.infer<typeof KioskTokenError>;
 
-/** An approved poll: the station now holds a `kiosk` session, and goes to its exam or its project (ADR-089). */
+/** An approved poll: the station now holds a `kiosk` session, and goes to its exam or its project's station page (ADR-089). */
 export const KioskTokenApproved = z.object({ redirect: z.string() });
 export type KioskTokenApproved = z.infer<typeof KioskTokenApproved>;
+
+/**
+ * A project's station page (ADR-089 §3): where an approved project pairing
+ * sends the station, and the one page whose CSP admits the portal in a frame
+ * (§10, `apps/api/src/csp.ts`).
+ */
+export const projectStationPath = (projectId: string): string => `/projects/${encodeURIComponent(projectId)}/station`;
 
 /** What `/pair` offers: an exam the student can start on the station now. */
 export const PairableEvaluation = z.object({

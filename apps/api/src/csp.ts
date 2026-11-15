@@ -33,12 +33,21 @@ const TEAMS_TAB_PATH = "/teams";
  */
 const TEAMS_VALID_DOMAINS = "https://res.cdn.office.net";
 
+/**
+ * A project's station page (ADR-089 §3, §10), `/projects/:id/station`
+ * exactly (`projectStationPath` of `@quiz/contracts`): the one page that
+ * frames the online workspace portal.
+ */
+const STATION_PAGE = /^\/projects\/[^/]+\/station$/;
+
 interface PageSources {
   frameAncestors: string[];
   connect: string[];
+  /** The frames the page may hold; absent, `default-src` decides (our own origin). */
+  frames?: string[];
 }
 
-function policy({ frameAncestors, connect }: PageSources): string {
+function policy({ frameAncestors, connect, frames }: PageSources): string {
   const directives: Record<string, string[]> = {
     // Everything not named below: our own origin only.
     "default-src": ["'self'"],
@@ -70,6 +79,7 @@ function policy({ frameAncestors, connect }: PageSources): string {
     // OAuth consent leaves by `location.assign`, not by a form.
     "form-action": ["'self'"],
     "frame-ancestors": frameAncestors,
+    ...(frames ? { "frame-src": frames } : {}),
   };
   return Object.entries(directives)
     .map(([name, sources]) => `${name} ${sources.join(" ")}`)
@@ -84,20 +94,38 @@ export const TEAMS_TAB_CSP = policy({
   connect: [TEAMS_VALID_DOMAINS],
 });
 
+/**
+ * The policy of a project's station page: the same, and the portal's origin
+ * in a frame (ADR-089 §10), that origin only. Null without a portal
+ * (`CODESPACE_URL` empty): the page then keeps the common policy.
+ */
+export function stationCsp(codespaceUrl: string): string | null {
+  if (codespaceUrl === "") return null;
+  return policy({ frameAncestors: ["'self'"], connect: [], frames: [new URL(codespaceUrl).origin] });
+}
+
 /** The CSP and the legacy framing header for a request path (query stripped). */
-function securityHeaders(path: string): Record<string, string> {
+function securityHeaders(path: string, station: string | null): Record<string, string> {
   if (path === TEAMS_TAB_PATH) return { "content-security-policy": TEAMS_TAB_CSP };
+  if (station !== null && STATION_PAGE.test(path)) {
+    return { "content-security-policy": station, "x-frame-options": "SAMEORIGIN" };
+  }
   // `X-Frame-Options` for the browsers that predate `frame-ancestors`; it is
   // left off the Teams tab, where it would override the list above.
   return { "content-security-policy": CSP, "x-frame-options": "SAMEORIGIN" };
 }
 
-/** Sets the headers on every response that did not choose its own policy. */
-export function registerSecurityHeaders(app: FastifyInstance): void {
+/**
+ * Sets the headers on every response that did not choose its own policy.
+ * `codespaceUrl` is the portal's address (`CODESPACE_URL`), which the
+ * station page may frame.
+ */
+export function registerSecurityHeaders(app: FastifyInstance, codespaceUrl: string): void {
+  const station = stationCsp(codespaceUrl);
   app.addHook("onSend", async (req, reply, payload) => {
     if (!reply.hasHeader("content-security-policy")) {
       const path = req.url.split("?", 1)[0] ?? "";
-      for (const [name, value] of Object.entries(securityHeaders(path))) reply.header(name, value);
+      for (const [name, value] of Object.entries(securityHeaders(path, station))) reply.header(name, value);
     }
     return payload;
   });

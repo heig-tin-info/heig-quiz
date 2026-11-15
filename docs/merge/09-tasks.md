@@ -245,6 +245,9 @@ the tick with 100 due projects) was deferred (product owner, 2026-10-06).
   Online, and the quota warning; `/kiosk` and `/pair` with projects; the
   student's project page at Kiosk only (no `.seb`, sends the student to a
   station); en/fr; mock and screenshots.
+  Follow-up: the station page relaunches the frame on a timer mirroring
+  the portal's default `EXAM_COOKIE_MAX_AGE_MS`; the launch reply, or the
+  portal, should tell the page the cookie's expiry.
 - **Acceptance**:
   - M6-11a: a station holding only the bare cookie keeps its sitting
     across its next attestation and leaves it holding

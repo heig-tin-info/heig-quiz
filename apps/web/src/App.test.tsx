@@ -176,6 +176,37 @@ describe("a Safe Exam Browser session (ADR-027)", () => {
   });
 });
 
+describe("a kiosk station's project session (ADR-089 §3)", () => {
+  it("shows the station page of its own project, framing the portal, whatever the project in the address", async () => {
+    const streams: string[] = [];
+    vi.stubGlobal(
+      "EventSource",
+      class extends FakeStream {
+        constructor(url: string) {
+          super();
+          streams.push(url);
+        }
+      },
+    );
+    const PROJECT = "33333333-3333-4333-8333-333333333333";
+    const { calls } = mockFetch({
+      "GET /app/api/me": ok(makeMe({ session: { kind: "kiosk", evaluationId: null, projectId: PROJECT, readOnly: false, superPowersUntil: null, superPowersAvailable: false } })),
+      "GET /app/api/config": ok({ devLogin: false, kiosk: { extensionId: null, mock: true } }),
+      "POST /app/api/kiosk/attest/challenge": ok({ challenge: "Yw==" }),
+      "POST /app/api/kiosk/attest/verify": ok({ station: { label: "Poste n° 7", status: "active" } }),
+      "GET /app/api/kiosk/station": ok({ label: "Poste n° 7", status: "active" }),
+      [`GET /app/api/student/projects/${PROJECT}`]: fail(404, { error: "not_found" }),
+      [`POST /app/api/projects/${PROJECT}/workspace/start`]: ok({ url: "https://code.example.ch/launch?token=t" }),
+    });
+    renderWithProviders(<App />, { route: "/projects/44444444-4444-4444-8444-444444444444/station" });
+    await waitFor(() => expect(document.querySelector("iframe")).toHaveAttribute("src", "https://code.example.ch/launch?token=t"));
+    expect(calls.every((c) => !c.url.includes("4444"))).toBe(true);
+    expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
+    // The event stream serves no project session: the page asks for its session instead.
+    expect(streams).toEqual([]);
+  });
+});
+
 describe("a refused Safe Exam Browser launch (ADR-027)", () => {
   const SEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 SEB/3.8";
 

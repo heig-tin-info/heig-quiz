@@ -417,6 +417,22 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     expect(assign).toHaveBeenCalledWith("/app/api/projects/p1/seb");
   });
 
+  // ADR-089, amendment point 2: Kiosk only serves no `.seb`; the student is sent to a station.
+  it("at Kiosk only, offers no `.seb` and sends the student to a station", async () => {
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb", devices: "kiosk" } })) });
+    render();
+    expect(await screen.findByText(/opens only on a school kiosk station\. Scan the station's QR code/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open in Safe Exam Browser" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open workspace" })).toBeNull();
+  });
+
+  it("at SEB or kiosk, says both paths and offers the `.seb`", async () => {
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb", devices: "either" } })) });
+    render();
+    expect(await screen.findByText("This workspace opens in Safe Exam Browser or on a school kiosk station.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open in Safe Exam Browser" })).toBeInTheDocument();
+  });
+
   it("inside SEB, on the project's own session, opens the workspace as the page's one action", async () => {
     const me = makeMe({
       role: "student",

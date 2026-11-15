@@ -159,7 +159,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   });
 
   // The CSP and the framing header, on every response (N-SEC-02, `csp.ts`).
-  registerSecurityHeaders(app);
+  registerSecurityHeaders(app, config.CODESPACE_URL);
 
   // The scrape registry, and the HTTP metrics fed by a hook that must come
   // before every route (N-OPS-02, `httpMetrics.ts`).

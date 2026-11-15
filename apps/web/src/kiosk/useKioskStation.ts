@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KioskDeviceAuthorization, PublicConfig } from "@quiz/contracts";
 import { SLOW_DOWN_STEP_S } from "@quiz/domain";
 
+import { parsePath } from "../router";
 import { attest, authorize, pollToken, type StationTrouble } from "./station";
 
 /** What the station's screen shows (ADR-051 §7). */
@@ -10,7 +11,7 @@ export type KioskPhase =
   | { kind: "starting" }
   | { kind: StationTrouble }
   | { kind: "code"; auth: KioskDeviceAuthorization; expiresAt: number }
-  | { kind: "opening" };
+  | { kind: "opening"; project: boolean };
 
 /** A station that cannot show a code tries again, from the attestation, this often. */
 export const KIOSK_RETRY_MS = 30_000;
@@ -72,7 +73,8 @@ export function useKioskStation(
         const answer = await pollToken(auth.device_code);
         if (!alive) return "done";
         if ("redirect" in answer) {
-          setPhase({ kind: "opening" });
+          // ADR-089 §5: a project pairing opens the station page of that project.
+          setPhase({ kind: "opening", project: parsePath(answer.redirect).view === "projectStation" });
           opener.current(answer.redirect);
           return "done";
         }

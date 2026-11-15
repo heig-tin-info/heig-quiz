@@ -22,6 +22,7 @@ import {
   type ProjectWorkspaceSessions,
   type ProjectWorkspaceSyncAccepted,
   type WorkMode,
+  type WorkspaceStart,
 } from "@quiz/contracts";
 import { workModeChoices, workModeRefusal, workSettingOf } from "@quiz/domain";
 
@@ -40,11 +41,15 @@ interface MockWorkspace {
 const WORKSPACES = new Map<string, MockWorkspace>([
   ["pj-published", { mode: "online", devices: "any", launched: true, syncedAt: iso(-2 * H), syncError: null }],
   // D21 (M6-07): a draft under Safe Exam Browser, synced like an online project.
-  ["pj-draft-manual", { mode: "online_seb", devices: "seb", launched: false, syncedAt: iso(-30 * 60_000), syncError: null }],
+  // `?pjkiosk=1` (ADR-089): at Kiosk only instead.
+  [
+    "pj-draft-manual",
+    { mode: "online_seb", devices: flags.pjkiosk ? "kiosk" : "seb", launched: false, syncedAt: iso(-30 * 60_000), syncError: null },
+  ],
 ]);
 
-/** Kiosk stations are not offered to projects here: `KIOSK_PROJECTS` stays off until M6-11d (ADR-089). */
-const KIOSK_OFFERED = false;
+/** `?kioskprojects=1`: the platform offers kiosk stations to projects (`KIOSK_PROJECTS`, ADR-089). */
+const KIOSK_OFFERED = flags.kioskprojects;
 
 function workspaceOr404(id: string): MockWorkspace {
   if (!flags.codespace) throw new MockError(404, "Not found");
@@ -67,6 +72,8 @@ function view(ws: MockWorkspace): ProjectWorkspace {
     syncedAt: ws.syncedAt,
     syncError: ws.syncError,
     review: true,
+    // ADR-089 point 7: the persona's grant (mock/org.ts, 3 at once) against PRG1-2026's claimed students.
+    quota: { max: 3, seats: classroomRoster("r1").filter((s) => s.status === "claimed" && !s.staff).length },
   };
 }
 
@@ -90,6 +97,19 @@ on("PUT", "/app/api/projects/:id/workspace/mode", (m, raw) => {
   // The portal takes an online project at once, under Safe Exam Browser too (M6-07).
   if (ws.mode !== "free") ws.syncedAt = iso(0);
   return view(ws);
+});
+
+/**
+ * The student's start route (ADR-047 §6): the portal's launch address. The
+ * mock has no portal: a stand-in page, which a station's frame shows (ADR-089 §3).
+ */
+const STAND_IN =
+  '<!doctype html><body style="margin:0;display:grid;place-items:center;height:100vh;background:#1e1e1e;color:#ccc;font:14px system-ui">' +
+  '<div style="text-align:center"><div style="font-size:18px;color:#fff">code-server</div><div>Portal stand-in (mock)</div></div></body>';
+
+on("POST", "/app/api/projects/:id/workspace/start", (): WorkspaceStart => {
+  if (!flags.codespace) throw new MockError(404, "Not found");
+  return { url: URL.createObjectURL(new Blob([STAND_IN], { type: "text/html" })) };
 });
 
 on("POST", "/app/api/projects/:id/workspace/sync", (m) => {

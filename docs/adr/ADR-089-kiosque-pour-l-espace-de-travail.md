@@ -464,3 +464,8 @@ reviewer in charge), marked *review*: it is not the owner's.
    step**. Revisit if sittings fail on it.
 8. **Delivery**: six PRs, M6-11a–f in [merge progress](../merge/PROGRESS.md),
    card M6-11 of [the task cards](../merge/09-tasks.md).
+9. **The station page** (*review*, 2026-11-15, M6-11e). §3's event stream does not run there:
+   `/app/api/events` serves no project session and is not widened. The station page polls
+   `/me` every 60 s and covers its frame when its own attestation is refused or silent; the
+   ends are enforced by the portal close of point 4. Proof K (§9) also checks: focus the editor,
+   trigger a refused attestation, then type — do keystrokes still reach the editor under `inert`?
