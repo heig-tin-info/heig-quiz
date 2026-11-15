@@ -111,6 +111,13 @@ const EnvSchema = z.object({
   // --- Session lifecycle (sessions/) ---------------------------------------
   /** Grace period after the last heartbeat before the container is destroyed. */
   SESSION_GRACE_MS: z.coerce.number().int().min(1000).default(10 * 60 * 1000),
+  /**
+   * How long open websockets alone keep a session alive (#1101): counted from
+   * the last page load (or reload), not renewed by a websocket reconnect. A
+   * forgotten tab then frees its quota slot this long plus the grace period
+   * after it was last loaded. One value for students and review sessions.
+   */
+  SESSION_MAX_HELD_MS: z.coerce.number().int().min(60_000).default(12 * 60 * 60 * 1000),
   /** Period of the garbage collector. */
   SESSION_GC_INTERVAL_MS: z.coerce.number().int().min(1000).default(60 * 1000),
   /** Period of the shadow repository snapshots (analyse.md 3.3). */
@@ -235,6 +242,11 @@ export type ForgeKind = "quiz" | "forgejo" | "github" | "none";
 export type AppConfig = Omit<z.infer<typeof EnvSchema>, "FORGE_KIND"> & {
   /** Resolved at load time: the explicit value, else `quiz` with the platform configured, else `none`. */
   FORGE_KIND: ForgeKind;
+  /**
+   * `PLATFORM_URL` (or its alias) when it was set, else undefined: the link
+   * back from a refusal page. The schema's localhost default never counts.
+   */
+  platformReturnUrl: string | undefined;
   /** Made absolute at load time, relative to the repository root. */
   volumesRoot: string;
   seccompProfile: string;
@@ -331,6 +343,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     ...data,
     FORGE_KIND,
+    platformReturnUrl: (aliased["PLATFORM_URL"] ?? "").trim() !== "" ? data.PLATFORM_URL : undefined,
     volumesRoot: fromRepoRoot(data.VOLUMES_ROOT),
     seccompProfile: fromRepoRoot(data.SECCOMP_PROFILE),
     databasePath: fromRepoRoot(data.DATABASE_PATH),

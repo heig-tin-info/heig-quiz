@@ -302,6 +302,15 @@ gh variable delete CODESPACE_FORCE_SHA --repo heig-tin-info/heig-quiz
 
 `DEPLOY_FORCE_SHA` (the application's guard) does not force this one.
 
+### How long a workspace stays up
+
+`SESSION_GRACE_MS` (10 minutes) after its tab closes, the portal closes a
+session: container removed, volume kept, quota slot freed. An open tab keeps
+it alive through its websockets, for at most `SESSION_MAX_HELD_MS` (12 hours)
+after the tab last loaded the page; a reload renews it, a reconnect does not.
+A forgotten tab is then closed after the cap plus the grace. One value serves
+students and review sessions. Both live in `/etc/quiz-codespace/<i>/env`.
+
 ### Where to look
 
 ```bash

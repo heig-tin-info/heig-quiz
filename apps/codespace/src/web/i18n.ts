@@ -63,7 +63,7 @@ const en = {
   sessionUnknownTitle: "Unknown session",
   sessionUnknownDetail: "This session does not exist, or no longer does.",
   sessionDeniedTitle: "Session not allowed",
-  sessionDeniedDetail: "Open the session from the platform: this browser has no cookie for it.",
+  sessionDeniedDetail: "This browser's access to the session has ended, or was never given. Open it again from the platform.",
   assignmentGoneDetail: "The activity of this session no longer exists.",
   sessionClosedTitle: "Session closed",
   sessionClosedDetail: "This session was closed. Open it again from the platform; your work is kept.",
@@ -132,7 +132,7 @@ const fr: Record<MessageKey, string> = {
   sessionUnknownDetail: "Cette session n'existe pas ou plus.",
   sessionDeniedTitle: "Session non autorisée",
   sessionDeniedDetail:
-    "Ouvrez la session depuis la plateforme : ce navigateur n'a pas de cookie pour elle.",
+    "L'accès de ce navigateur à la session a pris fin, ou n'a jamais été donné. Rouvrez-la depuis la plateforme.",
   assignmentGoneDetail: "L'activité de cette session a disparu.",
   sessionClosedTitle: "Session fermée",
   sessionClosedDetail:

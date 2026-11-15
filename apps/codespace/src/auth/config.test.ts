@@ -35,6 +35,13 @@ describe("PLATFORM_URL", () => {
     });
     expect(config.PLATFORM_URL).toBe("https://quiz.example");
   });
+
+  it("is a refusal page's link back only when it was set: its localhost default never is (#1101)", () => {
+    expect(loadConfig({}).platformReturnUrl).toBeUndefined();
+    expect(loadConfig({ PLATFORM_URL: " " }).platformReturnUrl).toBeUndefined();
+    expect(loadConfig({ PLATFORM_URL: "https://quiz.example" }).platformReturnUrl).toBe("https://quiz.example");
+    expect(loadConfig({ CLASSROOM_URL: "https://classroom.example" }).platformReturnUrl).toBe("https://classroom.example");
+  });
 });
 
 describe("GitHub relay", () => {
