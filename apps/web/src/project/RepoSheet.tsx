@@ -19,6 +19,7 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { projectKey, projectRunsKey } from "../queryKeys";
 import { Badge, Button, Dash, Fact, FieldError, fieldErrorProps, isoDateTime, RelativeTime, RepoLink, Sheet } from "../ui";
+import { OpenInWorkspaceButton, useReviewAction } from "./OpenInWorkspace";
 import { CiBadge, MemberList, SyncBadge } from "./parts";
 import { actionable, refusalMessage, repoEntryOf, repoFlags, shortSha } from "./projectPage";
 import { RunHistory } from "./RunHistory";
@@ -42,7 +43,8 @@ function Section({ title, children }: { title: ReactNode; children: ReactNode })
  * — an own deadline set or taken back, a lock or an unlock by hand (F-PROJ-09,
  * M3-05a) —, the resend of a pending invitation (F-PROJ-07) and the
  * re-enable of its protected files (F-PROJ-08), each written at once, and
- * the history of its runs. The row is read from the page's own data, so a
+ * the history of its runs, and the staff's *Open in workspace* (ADR-129
+ * §11) where the platform offers it. The row is read from the page's own data, so a
  * write here is seen on the table behind the sheet. The sheet's one primary
  * action is the score's Save. A group's repository (M3-16b) is titled by
  * its group and lists its current members, by name and GitHub login, and
@@ -109,6 +111,7 @@ export function RepoSheet({
     },
     onError: failed,
   });
+  const reviewOf = useReviewAction(project);
   const reenable = useMutation({
     mutationFn: () => api<ProjectRepoProtection>(`${base}/protection`, { method: "POST" }),
     onSuccess: () => {
@@ -145,6 +148,8 @@ export function RepoSheet({
               ))}
             </div>
           ) : null}
+          {/* ADR-129 §11: a secondary action; the sheet's primary stays the score's Save. */}
+          {reviewOf ? <OpenInWorkspaceButton projectId={project.id} repo={repo} action={reviewOf(repo)} /> : null}
           {repo.flags.malformed ? (
             <p className="font-mono text-xs text-fg-muted">{repo.flags.malformed}</p>
           ) : null}

@@ -22,6 +22,7 @@ import {
   useSortableTable,
   type Column,
 } from "../ui";
+import { OpenInWorkspaceIcon, useReviewAction } from "./OpenInWorkspace";
 import { CiBadge, MemberList, Score, StudentAccount, SyncBadge } from "./parts";
 import {
   commitTone,
@@ -213,6 +214,9 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
  * deadline) are in the row's sheet, which a row with a repository opens.
  * A deleted repository stays, muted: it is a fact of the project.
  *
+ * The staff's *Open in workspace* (ADR-129 §11, F-PROJ-27) is the last
+ * column's icon, where the platform offers it; a phone drops the column and keeps the sheet's button.
+ *
  * Nothing here waits for GitHub: `live` only adds counters when the cache
  * had them, and `liveStale` is said on the heading while the next refetch
  * fills it.
@@ -235,6 +239,8 @@ export function ProjectRepos({
   const entries = repoEntries(project);
   const shown = filterEntries(entries, filter, project);
   const graded = projectGraded(project.gradingMode);
+  /** *Open in workspace* (ADR-129 §11): a last column, only where the platform offers it. */
+  const reviewOf = useReviewAction(project);
   const { sorted, sort, toggle } = useSortableTable<RepoEntry, SortKey>(
     shown,
     (entry, key) => (key === "student" ? entry.label : (entry.repo?.scores.final?.points ?? -1)),
@@ -285,6 +291,9 @@ export function ProjectRepos({
     { key: "ci", label: t("project.col.ci"), sortable: false, className: T.colMid },
     ...(graded ? [{ key: "score", label: t("project.col.score"), right: true } satisfies Column<SortKey>] : []),
     { key: "state", label: t("project.col.state"), sortable: false },
+    ...(reviewOf
+      ? [{ key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: cx(T.colHigh, T.stickyEnd) } satisfies Column<SortKey>]
+      : []),
   ];
   const noneAccepted = project.state === "published" && entries.every((e) => e.repo === null);
   /** The row the tour points at to say a row opens its sheet: the first one that has a repository. */
@@ -338,6 +347,11 @@ export function ProjectRepos({
                     </td>
                   ) : null}
                   <td className={T.td}>{repo ? <StateCell repo={repo} /> : null}</td>
+                  {reviewOf ? (
+                    <td className={cx(T.td, T.colHigh, "whitespace-nowrap text-right", T.stickyEnd)}>
+                      {repo ? <OpenInWorkspaceIcon projectId={project.id} repo={repo} action={reviewOf(repo)} /> : null}
+                    </td>
+                  ) : null}
                 </tr>
               );
             })}

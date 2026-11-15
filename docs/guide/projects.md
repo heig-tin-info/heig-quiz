@@ -141,6 +141,16 @@ Where the platform has the online workspace, the project page has a **Workspace*
 
 Only an owner of the course whose account the administrator enabled for the workspace (an administrator always is) can choose a mode other than **Own tools**, and a group project stays in the students' own tools. Once a student has opened a workspace, the mode no longer changes. The section says when the workspace last received the project, with **Resync** if it failed, and lists the workspaces open now. How many may run at once is the administrator's setting for the course's owner who created the project (or its oldest owner).
 
+### Open a student's repository in the workspace
+
+Any member of the course's staff can open a student's (or a group's) repository in the online workspace, whatever the project's work mode, own tools included: **Open in workspace**, the laptop icon at the end of its row or the button of its sheet. You build, run and browse the code and its history there, read-only: nothing is ever pushed. It is offered as long as the repository exists on GitHub; on a project in Safe Exam Browser, only once that repository's deadline has passed. One repository at a time: opening another closes the previous one. It counts against the same owner's workspaces as the students' (at most two such sessions at once), and is not there when that owner's account is not enabled for the workspace. Every opening is recorded in the audit log; the student is not notified. *(ADR-129.)*
+
+<figure markdown="span">
+  ![A repository's sheet with Open in workspace, read-only](../assets/screenshots/mock-project-open-in-workspace-light.png#only-light)
+  ![A repository's sheet with Open in workspace, read-only](../assets/screenshots/mock-project-open-in-workspace-dark.png#only-dark)
+  <figcaption>Opening a student's repository in the workspace. (Mock data.)</figcaption>
+</figure>
+
 ## Archive and delete
 
 **Archive** takes a project out of the lists, reversibly. **Delete project** removes its rows in Quiz (repositories, runs, scores, groups) after a confirmation, and **never a repository on GitHub**: the students' repositories, the distribution repository and the source stay where they are.

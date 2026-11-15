@@ -40,12 +40,12 @@ import {
   workspaceStartPath,
   WorkspaceStartRefusal,
   type ProjectInvitationResent,
-  type WorkspaceStart,
   type StudentProject,
   type StudentProjectRepo,
 } from "@quiz/contracts";
 
 import { api, apiErrorMessage, isNotFound, refusalCodeOf, useMe } from "../api";
+import { usePortalLaunch } from "../portalLaunch";
 import { Grade } from "../Grade";
 import { useT } from "../i18n";
 import { useNoticeToasts } from "../notifications/notices";
@@ -309,18 +309,13 @@ function OpenWorkspaceButton({ projectId, variant }: { projectId: string; varian
   const t = useT();
   const toast = useToast();
   const [, setRefusal] = useSearchParam("workspace", "");
-  const open = useMutation({
-    mutationFn: () => api<WorkspaceStart>(workspaceStartPath(projectId), { method: "POST" }),
-    onSuccess: ({ url }) => window.location.assign(url),
-    onError: (error) => {
-      const refusal = WorkspaceStartRefusal.safeParse(refusalCodeOf(error));
-      if (refusal.success) setRefusal(refusal.data);
-      else toast(apiErrorMessage(error, t("error.save")), "error");
-    },
+  const { busy, launch } = usePortalLaunch(workspaceStartPath(projectId), (error) => {
+    const refusal = WorkspaceStartRefusal.safeParse(refusalCodeOf(error));
+    if (refusal.success) setRefusal(refusal.data);
+    else toast(apiErrorMessage(error, t("error.save")), "error");
   });
-  // Still busy once answered: the page is leaving for the portal.
   return (
-    <Button variant={variant} onClick={() => open.mutate()} loading={open.isPending || open.isSuccess}>
+    <Button variant={variant} onClick={launch} loading={busy}>
       <Laptop /> {t("sproj.workspace.open")}
     </Button>
   );

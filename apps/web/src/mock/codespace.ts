@@ -67,6 +67,9 @@ function view(ws: MockWorkspace): ProjectWorkspace {
 
 on("GET", "/app/api/projects/:id/workspace", (m) => view(workspaceOr404(m.groups!.id!)));
 
+/** The project's workspace as the staff's review launch reads it (ADR-129 §5, `mock/project.ts`); 404 without the portal. */
+export const mockWorkspace = (projectId: string): ProjectWorkspace => view(workspaceOr404(projectId));
+
 on("PUT", "/app/api/projects/:id/workspace/mode", (m, raw) => {
   const ws = workspaceOr404(m.groups!.id!);
   const body = ProjectWorkModeBody.safeParse(raw);

@@ -82,6 +82,7 @@ import {
   type ProjectSummary,
   type ReviewCheckpoint,
   type RosterEntry,
+  type WorkspaceReview,
 } from "@quiz/contracts";
 import {
   awardedRange,
@@ -108,6 +109,7 @@ import {
   reviewState,
   scoreGrade,
   teacherScoreMax,
+  staffReviewRefusal,
   withForcedProtected,
   type CriterionGradeLike,
   type ProjectDatesChange,
@@ -125,6 +127,7 @@ import {
   setGroupsOf,
   unplacedClaimed,
 } from "./groups";
+import { mockWorkspace } from "./codespace";
 import { classroomRoster, courses, rooms } from "./org";
 import { D, flags, H, iso, MockError, MockPayload, nextId, now, on, refuse, role } from "./runtime";
 
@@ -940,6 +943,10 @@ function deadlineState(p: MockProject, r: MockRepo): ProjectRepoDeadlineState {
   };
 }
 
+/** GitHub's id once provisioned: a stable number drawn from the mock's own id. */
+const githubRepoIdOf = (r: MockRepo): number | null =>
+  r.provisionStatus === "ok" ? [...r.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 1_000_000_000, 7) + 1 : null;
+
 function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
   const scale = p.summary.gradingScale;
   const graded = (s: { runId: string; points: number | null; max: number | null } | null) =>
@@ -948,8 +955,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
   const latest = r.runs[0];
   return {
     ...deadlineState(p, r),
-    // GitHub's id once provisioned: a stable number drawn from the mock's own id.
-    githubRepoId: r.provisionStatus === "ok" ? [...r.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 1_000_000_000, 7) + 1 : null,
+    githubRepoId: githubRepoIdOf(r),
     provisionStatus: r.provisionStatus,
     provisionError: r.provisionError,
     invitationStatus: r.invitationStatus,
@@ -1718,6 +1724,32 @@ const setLock = (m: RegExpMatchArray, on: boolean) => {
   return deadlineState(p, r);
 };
 on("POST", "/app/api/projects/:id/repos/:rid/lock", (m) => setLock(m, true));
+
+/**
+ * The staff's *Open in workspace* (ADR-129 §5, `?codespace=1`): THE rule of
+ * `@quiz/domain`, then the portal's address.
+ */
+on("POST", "/app/api/projects/:id/repos/:rid/workspace/review", (m): WorkspaceReview => {
+  const ws = mockWorkspace(m.groups!.id!);
+  const p = projectOr404(m.groups!.id!);
+  const r = p.repos.find((x) => x.id === m.groups!.rid);
+  if (!r) throw new MockError(404, "Not found");
+  const refusal = staffReviewRefusal({
+    holderGranted: ws.review,
+    classroomArchived: rooms.find((room) => room.id === p.classroom.id)?.archivedAt != null,
+    projectArchived: p.summary.archivedAt !== null,
+    repo: {
+      provisionStatus: r.provisionStatus,
+      fullName: r.fullName,
+      deletedAt: r.deleted ? iso(0) : null,
+      githubRepoId: githubRepoIdOf(r),
+      deadlineAppliedAt: r.deadlineAppliedAt,
+    },
+    workMode: ws.mode,
+  });
+  if (refusal) throw refuse(409, refusal, refusal);
+  return { url: `https://workspace.heig-vd.example/review?token=mock-${r.id}` };
+});
 on("POST", "/app/api/projects/:id/repos/:rid/unlock", (m) => setLock(m, false));
 
 /**

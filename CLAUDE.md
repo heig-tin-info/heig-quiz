@@ -204,8 +204,7 @@ volume, a git channel on an internal bridge).
     gets from Quiz a one-repository, `contents`-only installation token (at
     most an hour, in memory, to git through the environment only), issued only
     under ADR-078's conditions — or, `read` only, for a staff member's review
-    session under ADR-129's (accepted 2026-11-14; planned, not present until
-    its PRs land) — and audited without the token. ADR-078 owns
+    session under ADR-129's — and audited without the token. ADR-078 owns
     the full rule set, the declared-head rule included.
 
 ## Development
