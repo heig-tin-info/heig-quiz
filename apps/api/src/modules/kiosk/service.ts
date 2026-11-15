@@ -11,6 +11,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { asc, eq, getTableColumns, sql } from "drizzle-orm";
+import type { FastifyRequest } from "fastify";
 
 import type { KioskDevice, KioskDevicePatch, KioskStation } from "@quiz/contracts";
 import type { KioskAttestation } from "@quiz/domain";
@@ -19,10 +20,32 @@ import type { Db } from "../../db/client.js";
 import { kioskDevices } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 
-/** The station's own cookie: its identity, never a user's. */
+/**
+ * The station's own cookie, its identity, never a user's: the base name,
+ * the cookie itself being `app.cookieName(KIOSK_COOKIE)`, `__Host-quiz_kiosk`
+ * on `Path=/` over https (ADR-089's amendment of 2026-11-15, point 3).
+ */
 export const KIOSK_COOKIE = "quiz_kiosk";
 /** Every accepted attestation re-issues it for this long (ADR-051 §5). */
 export const KIOSK_COOKIE_HOURS = 12;
+/**
+ * The path the bare `quiz_kiosk` was set on before the prefix: `verify`
+ * expires it there, host-only, as Quiz set it. M6-11d removes it.
+ */
+export const BARE_KIOSK_COOKIE_PATH = "/app/api";
+
+/**
+ * The station credential a request carries: the one reader of the station's
+ * cookie. The prefixed cookie when present, else the bare `quiz_kiosk` of
+ * before the prefix, so that a station keeps working until its next
+ * attestation moves it (ADR-089, point 3).
+ */
+export function stationCredential(req: FastifyRequest): string | undefined {
+  // M6-11d removes this bare-name fallback, merged only once this has run
+  // 12 h in production: no bare cookie, never issued since, outlives
+  // KIOSK_COOKIE_HOURS.
+  return req.cookies[req.server.cookieName(KIOSK_COOKIE)] ?? req.cookies[KIOSK_COOKIE];
+}
 
 export type KioskDeviceRow = typeof kioskDevices.$inferSelect;
 

@@ -164,8 +164,9 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   /**
    * The session pair's names, and the sign-in stash's: `__Host-` prefixed
    * whenever they are `Secure` (audit L8, `cookieName`). Decorated as
-   * `app.cookieName` for the tests' cookie headers; the kiosk, guest and
-   * GitHub-link cookies are path-scoped and read by their bare names.
+   * `app.cookieName` for the tests' cookie headers and the kiosk station's
+   * cookie (ADR-089, point 3); the guest and GitHub-link cookies are
+   * path-scoped and read by their bare names.
    */
   const named = (base: string) => cookieName(base, secure);
   const sessionCookie = named(SESSION_COOKIE);

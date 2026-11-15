@@ -8,7 +8,6 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { sessions } from "../db/schema.js";
-import { KIOSK_COOKIE } from "../modules/kiosk/service.js";
 import { testServer, type TestServer } from "../test/http.js";
 import { hashToken } from "./session.js";
 
@@ -30,9 +29,9 @@ const valueOf = (cookie: string, name: string) =>
 const expired = (line: string | undefined) => /Expires=Thu, 01 Jan 1970/i.test(line ?? "") || /Max-Age=0/i.test(line ?? "");
 
 describe.each([
-  { mode: "production", production: true, session: "__Host-quiz_session", csrf: "__Host-quiz_csrf" },
-  { mode: "development", production: false, session: "quiz_session", csrf: "quiz_csrf" },
-])("the session cookies in $mode", ({ production, session, csrf }) => {
+  { mode: "production", production: true, session: "__Host-quiz_session", csrf: "__Host-quiz_csrf", kiosk: "__Host-quiz_kiosk" },
+  { mode: "development", production: false, session: "quiz_session", csrf: "quiz_csrf", kiosk: "quiz_kiosk" },
+])("the session cookies in $mode", ({ production, session, csrf, kiosk }) => {
   let server: TestServer;
 
   beforeAll(async () => {
@@ -142,13 +141,21 @@ describe.each([
     expect((await me(bare)).statusCode).toBe(401);
   });
 
-  it("leave the kiosk station's cookie bare, Secure exactly in production (ADR-089)", async () => {
+  it(`name the kiosk station's cookie ${kiosk}, on Path=/, HttpOnly, SameSite=Strict, without a Domain, Secure exactly in production (ADR-089, point 3)`, async () => {
     const res = await server.app.inject({
       method: "POST",
       url: "/app/api/kiosk/attest/verify",
       payload: { response: `mock:station-${production ? "prod" : "dev"}` },
     });
     expect(res.statusCode).toBe(200);
-    expect(/; Secure/.test(setCookies(res)[KIOSK_COOKIE]!)).toBe(production);
+    const cookies = setCookies(res);
+    const line = cookies[kiosk]!;
+    expect(line).toMatch(/; Path=\/(;|$)/);
+    expect(line).toMatch(/; HttpOnly/);
+    expect(line).toMatch(/; SameSite=Strict/);
+    expect(line).not.toMatch(/Domain=/i);
+    expect(/; Secure/.test(line)).toBe(production);
+    // A station that held no bare cookie is sent no expiry of one.
+    if (production) expect(cookies.quiz_kiosk).toBeUndefined();
   });
 });

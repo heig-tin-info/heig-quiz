@@ -38,8 +38,16 @@ A station attests before each new code it shows, so it is never silent
 when a student starts sitting; it re-attests every 10 minutes while an exam
 is sat on it, and once more when the hand-in finds its last check more than
 two minutes old (ADR-051 §6). A re-attestation keeps the station's cookie
-(`quiz_kiosk`) and only extends it: an answer saved while it is in flight
-still belongs to the station.
+and only extends it: an answer saved while it is in flight still belongs to
+the station. Over https the cookie is `__Host-quiz_kiosk` (`Path=/`, host-only,
+`Secure`, `HttpOnly`, `SameSite=Strict`), in development over http
+`quiz_kiosk`; how a station holding the bare cookie of before moves to it
+is [ADR-089's amendment of 2026-11-15, point 3](../adr/ADR-089-kiosque-pour-l-espace-de-travail.md#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag).
+Nothing to do on the stations, nor in the extension, which never reads the
+cookie. Rolling this change back (or forward again) while stations are in
+use costs each moved station up to one re-attestation period (about
+10 minutes) of refused writes, its session surviving: do not roll it back
+during an exam.
 
 ## 1. Google Cloud: the service account
 

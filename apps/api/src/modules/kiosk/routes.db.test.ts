@@ -19,10 +19,14 @@ afterAll(async () => {
   await server.close();
 });
 
-/** The `quiz_kiosk` credential a response sets, with the cookie's attributes. */
+/**
+ * The station credential a response sets, with the cookie's attributes; not
+ * the expiry of the bare cookie of before, which in development shares its
+ * name (ADR-089, point 3).
+ */
 function kioskCookie(res: { headers: Record<string, unknown> }) {
   const all = [res.headers["set-cookie"]].flat().filter((c): c is string => typeof c === "string");
-  const line = all.find((c) => c.startsWith(`${KIOSK_COOKIE}=`));
+  const line = all.find((c) => c.startsWith(`${KIOSK_COOKIE}=`) && !/; Max-Age=0/i.test(c));
   return line ? { value: line.split(";")[0]!.slice(KIOSK_COOKIE.length + 1), line } : null;
 }
 
@@ -77,7 +81,7 @@ describe("the station's attestation (ADR-051 §5)", () => {
     expect(cookie.value).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(cookie.line).toMatch(/HttpOnly/);
     expect(cookie.line).toMatch(/SameSite=Strict/);
-    expect(cookie.line).toMatch(/Path=\/app\/api(;|$)/);
+    expect(cookie.line).toMatch(/Path=\/(;|$)/);
     expect(cookie.line).toMatch(/Max-Age=43200/);
 
     const row = await device("station-new");
