@@ -17,13 +17,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { loadConfig, type AppConfig } from "../auth/config.js";
 import { openDb, type Db, type DbHandle } from "../db/client.js";
-import { sessions, users, type AssignmentRow, type SessionRow, type UserRow } from "../db/schema.js";
+import { closedSittings, sessions, users, type AssignmentRow, type SessionRow, type UserRow } from "../db/schema.js";
 import { CONFIG_KEY_HEADER, REQUEST_HASH_HEADER, expectedHash } from "@quiz/seb";
 
 import { createPushEventStore } from "../git/index.js";
 import { portalLogger } from "../logging.js";
-import { createSebVerifier } from "../seb/index.js";
+import { EXAM_COOKIE, createSebVerifier, verifyExamCookie } from "../seb/index.js";
 import type { SessionManager, StartOptions, StartResult } from "../sessions/manager.js";
+import { createSittingSockets } from "../sessions/sittings.js";
 import { findAssignment } from "../sessions/store.js";
 
 import { JTI_RETENTION_AFTER_EXP_MS, classroomRoutes, consumeJti } from "./routes.js";
@@ -132,6 +133,9 @@ interface Harness {
   closes: string[];
 }
 
+/** Runs inside the fake `start`, before its row is written: what lands while the real one awaits. */
+let duringStart: (() => void) | null = null;
+
 function fakeManager(db: Db, starts: Harness["starts"], closes: string[] = []): SessionManager {
   return {
     async close(sessionId: string): Promise<void> {
@@ -146,6 +150,7 @@ function fakeManager(db: Db, starts: Harness["starts"], closes: string[] = []): 
       opts: StartOptions = {},
     ): Promise<StartResult> {
       starts.push({ login: user.login, assignmentId: assignment.id, opts });
+      duringStart?.();
       const id = `sess-${user.login}-${assignment.id}`;
       const at = new Date();
       const row = {
@@ -162,6 +167,7 @@ function fakeManager(db: Db, starts: Harness["starts"], closes: string[] = []): 
         teacherId: opts.teacherId ?? null,
         launchJti: opts.launchJti ?? null,
         targetRepo: opts.targetRepo ?? null,
+        openedBySitting: opts.openedBySitting ?? null,
       };
       const [session] = db
         .insert(sessions)
@@ -194,6 +200,7 @@ async function harness(over: Record<string, string> = {}, logLines?: string[]): 
     manager: fakeManager(handle.db, starts, closes),
     verifier: createSebVerifier({ mode: config.SEB_VERIFIER, nodeEnv: config.NODE_ENV, url: { publicOrigin: PORTAL } }),
     repoUrl: (repo) => `http://forge.test/${repo.owner}/${repo.name}.git`,
+    sittingSockets: createSittingSockets(),
   });
   await app.ready();
   return { app, db: handle.db, handle, config, starts, closes };
@@ -204,6 +211,7 @@ beforeEach(async () => {
   h = await harness();
 });
 afterEach(async () => {
+  duringStart = null;
   await h.app.close();
   h.handle.close();
 });
@@ -744,6 +752,86 @@ describe("GET /launch", () => {
       expect(h.starts[0]?.opts.sebVerified).toBe(true);
     });
 
+    describe("from a kiosk station (ADR-089 §4)", () => {
+      const KIOSK = {
+        kiosk: { deviceId: "6f1c2a3b-0000-4000-8000-0000000000d1", sitting: "6f1c2a3b-0000-4000-8000-0000000000a1" },
+      };
+      const examClaims = (reply: { cookies: unknown }) => {
+        const value = (reply.cookies as Array<{ name: string; value: string }>).find((c) => c.name === EXAM_COOKIE)?.value;
+        const verdict = verifyExamCookie(value, { secret: h.config.EXAM_COOKIE_SECRET, clientAddress: "127.0.0.1" });
+        return verdict.ok ? verdict.claims : null;
+      };
+
+      it("accepts a `kiosk` claim without any SEB header, its cookie carrying the sitting", async () => {
+        await h.app.close();
+        h.handle.close();
+        // The real verifier: no header would satisfy it, and none is read.
+        h = await harness({ SEB_VERIFIER: "real" });
+        await syncedExam();
+        const reply = await h.app.inject({ url: `/launch?token=${await launchToken(KIOSK)}` });
+        expect(reply.statusCode).toBe(303);
+        expect(examClaims(reply)).toMatchObject({ sessionId: "sess-u-sacha-a-lab", sitting: KIOSK.kiosk.sitting });
+        expect(h.starts[0]?.opts).toMatchObject({ sebVerified: false, openedBySitting: KIOSK.kiosk.sitting });
+      });
+
+      it("leaves a `seb` launch as it was: no sitting on its cookie, no opener", async () => {
+        await syncedExam();
+        const reply = await h.app.inject({ url: `/launch?token=${await launchToken(SEB)}`, headers: { "x-dev-seb": "ok" } });
+        expect(reply.statusCode).toBe(303);
+        const claims = examClaims(reply);
+        expect(claims).not.toBeNull();
+        expect(claims).not.toHaveProperty("sitting");
+        expect(h.starts[0]?.opts).toMatchObject({ sebVerified: true, openedBySitting: null });
+      });
+
+      it("refuses a token with both claims, as one with neither", async () => {
+        await syncedExam();
+        for (const claims of [{ ...SEB, ...KIOSK }, {}]) {
+          const reply = await h.app.inject({ url: `/launch?token=${await launchToken(claims)}`, headers: { "x-dev-seb": "ok" } });
+          expect(reply.statusCode).toBe(403);
+          expect(reply.headers["set-cookie"]).toBeUndefined();
+        }
+        expect(h.starts).toHaveLength(0);
+      });
+
+      it("uses a station's token once", async () => {
+        await syncedExam();
+        const url = `/launch?token=${await launchToken(KIOSK)}`;
+        expect((await h.app.inject({ url })).statusCode).toBe(303);
+        const replay = await h.app.inject({ url, headers: { "accept-language": "en" } });
+        expect(replay.statusCode).toBe(403);
+        expect(replay.body).toContain("already been used");
+        expect(h.starts).toHaveLength(1);
+      });
+
+      it("refuses a `kiosk` claim outside an exam, before any side effect (ADR-089 §1)", async () => {
+        await syncedAssignment();
+        const reply = await h.app.inject({ url: `/launch?token=${await launchToken(KIOSK)}` });
+        expect(reply.statusCode).toBe(403);
+        expect(reply.headers["set-cookie"]).toBeUndefined();
+        expect(h.starts).toHaveLength(0);
+      });
+
+      it("refuses, with no cookie, a launch whose sitting closed while the session started", async () => {
+        await syncedExam();
+        duringStart = () => void h.db.insert(closedSittings).values({ sitting: KIOSK.kiosk.sitting, closedAt: new Date() }).run();
+        const reply = await h.app.inject({ url: `/launch?token=${await launchToken(KIOSK)}`, headers: { "accept-language": "en" } });
+        expect(h.starts).toHaveLength(1);
+        expect(reply.statusCode).toBe(403);
+        expect(reply.body).toContain("Your session on this station has ended");
+        expect(reply.headers["set-cookie"]).toBeUndefined();
+      });
+
+      it("refuses a token of a sitting already closed, before any side effect", async () => {
+        await syncedExam();
+        h.db.insert(closedSittings).values({ sitting: KIOSK.kiosk.sitting, closedAt: new Date() }).run();
+        const reply = await h.app.inject({ url: `/launch?token=${await launchToken(KIOSK)}`, headers: { "accept-language": "en" } });
+        expect(reply.statusCode).toBe(403);
+        expect(reply.body).toContain("Your session on this station has ended");
+        expect(h.starts).toHaveLength(0);
+      });
+    });
+
     describe("with the real verifier", () => {
       let lines: string[];
       beforeEach(async () => {
@@ -902,6 +990,8 @@ describe("GET /review", () => {
           teacherId: "t-tania",
           launchJti: expect.stringMatching(/^review-jti-/) as unknown as string,
           targetRepo: { fullName: "org/tp-sacha", defaultBranch: "master" },
+          // A review is never a station's: its close never rotates it (ADR-089).
+          openedBySitting: null,
         },
       },
     ]);
@@ -1025,6 +1115,88 @@ describe("GET /review", () => {
     const signature = token.split(".")[2] as string;
     expect(lines.length).toBeGreaterThan(0);
     expect(lines.join("\n")).not.toContain(signature);
+  });
+});
+
+// --- POST /api/sittings/close (ADR-089) ---------------------------------------
+
+describe("POST /api/sittings/close", () => {
+  const SITTING = "6f1c2a3b-0000-4000-8000-0000000000a1";
+  const OTHER = "6f1c2a3b-0000-4000-8000-0000000000a2";
+  const PROJECT = "6f1c2a3b-0000-4000-8000-0000000000b1";
+
+  function closeToken(over: Record<string, unknown> = {}, secret = SECRET): Promise<string> {
+    jtiCounter += 1;
+    return signHs256(
+      { iss: "heig-quiz", aud: "heig-codespace-sitting-close", iat: now(), exp: now() + 120, jti: `close-${jtiCounter}`, sitting: SITTING, projectId: PROJECT, ...over },
+      secret,
+    );
+  }
+  const close = async (token: string | null) =>
+    h.app.inject({ method: "POST", url: "/api/sittings/close", ...(token === null ? {} : { headers: { authorization: `Bearer ${token}` } }) });
+
+  /** A session opened last by `sitting` (null: by SEB or a browser), its cookie token `token`. */
+  function session(id: string, sitting: string | null, token = `tok-${id}`): void {
+    const at = new Date();
+    h.db.insert(users).values({ id: `user-${id}`, oidcSub: `classroom:${id}`, login: id, email: `${id}@heig-vd.ch`, displayName: id, createdAt: at }).run();
+    h.db.insert(sessions).values({ id, userId: `user-${id}`, student: id, assignmentId: "a-lab", volumeDir: `/tmp/${id}`, state: "running", createdAt: at, lastSeen: at, cookieToken: token, openedBySitting: sitting }).run();
+  }
+  const row = (id: string) => h.db.select().from(sessions).where(eq(sessions.id, id)).get();
+  const closed = () => h.db.select().from(closedSittings).all().map((r) => r.sitting);
+
+  beforeEach(async () => {
+    expect((await put(syncBody({ mode: "online_seb" }))).statusCode).toBe(200);
+  });
+
+  it("401 without a token, with another secret, another audience or issuer, expired, over two minutes, without a jti", async () => {
+    expect((await close(null)).statusCode).toBe(401);
+    for (const token of [
+      await closeToken({}, "another-secret-0123456789012345678"),
+      await closeToken({ aud: "heig-codespace-api" }),
+      await closeToken({ iss: "heig-classroom" }),
+      await closeToken({ iat: now() - 400, exp: now() - 280 }),
+      await closeToken({ exp: now() + 121 }),
+      await closeToken({ jti: undefined }),
+      await closeToken({ sitting: "not-a-uuid" }),
+      await serviceToken("POST", "/api/sittings/close"),
+    ]) {
+      expect((await close(token)).statusCode).toBe(401);
+    }
+    expect(closed()).toEqual([]);
+  });
+
+  it("revokes that sitting only, and rotates the session that sitting opened last", async () => {
+    session("station", SITTING);
+    session("other-station", OTHER);
+    session("seb", null);
+    const reply = await close(await closeToken());
+    expect(reply.statusCode).toBe(204);
+    expect(closed()).toEqual([SITTING]);
+    expect(row("station")?.cookieToken).not.toBe("tok-station");
+    expect(row("station")?.openedBySitting).toBeNull();
+    // Container and state untouched: only the cookie moved.
+    expect(row("station")?.state).toBe("running");
+    expect(row("other-station")).toMatchObject({ cookieToken: "tok-other-station", openedBySitting: OTHER });
+    expect(row("seb")).toMatchObject({ cookieToken: "tok-seb", openedBySitting: null });
+    expect(h.closes).toEqual([]);
+  });
+
+  it("leaves a session another browser resumed since: its cookie already left the station", async () => {
+    session("resumed", null);
+    expect((await close(await closeToken())).statusCode).toBe(204);
+    expect(row("resumed")?.cookieToken).toBe("tok-resumed");
+  });
+
+  it("is idempotent: a replay, a second close and an unknown sitting answer 204 without effect", async () => {
+    session("station", SITTING);
+    const token = await closeToken();
+    expect((await close(token)).statusCode).toBe(204);
+    const rotated = row("station")?.cookieToken;
+    expect((await close(token)).statusCode).toBe(204);
+    expect((await close(await closeToken())).statusCode).toBe(204);
+    expect(row("station")?.cookieToken).toBe(rotated);
+    expect((await close(await closeToken({ sitting: OTHER, projectId: null }))).statusCode).toBe(204);
+    expect(closed().sort()).toEqual([SITTING, OTHER].sort());
   });
 });
 

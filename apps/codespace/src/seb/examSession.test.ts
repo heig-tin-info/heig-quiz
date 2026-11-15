@@ -25,6 +25,13 @@ describe("exam cookie", () => {
     expect(verdict).toEqual({ ok: true, claims: CLAIMS });
   });
 
+  it("carries a station's sitting, and only a string (ADR-089 §4)", () => {
+    const station = { ...CLAIMS, sitting: "6f1c2a3b-0000-4000-8000-000000000002" };
+    expect(verifyExamCookie(issueExamCookie(station, { secret: SECRET }), check)).toEqual({ ok: true, claims: station });
+    const odd = { ...CLAIMS, sitting: 7 } as unknown as ExamClaims;
+    expect(verifyExamCookie(issueExamCookie(odd, { secret: SECRET }), check)).toEqual({ ok: false, reason: "malformed" });
+  });
+
   it("the cookie contains no character that needs escaping", () => {
     expect(cookie).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
   });

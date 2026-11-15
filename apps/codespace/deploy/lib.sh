@@ -88,16 +88,24 @@ cs_install_instance() {
 	local subst=(
 		-e "s|@INSTANCE@|$CS_INSTANCE|g"
 		-e "s|@HOST@|$CS_HOST|g"
+		-e "s|@PLATFORM_URL@|$CS_PLATFORM|g"
 		-e "s|@PORT@|$CS_PORT|g"
 		-e "s|@NETWORK@|$CS_NET|g"
 		-e "s|@GATEWAY@|$CS_GATEWAY|g"
 		-e "s|@GIT_PORT@|$CS_GIT_PORT|g"
 	)
-	sed "${subst[@]}" "$CS_APP/deploy/quiz-codespace.container" \
-		> "/etc/containers/systemd/$CS_UNIT.container"
 	install -d -m 0755 /etc/caddy/conf.d
-	sed "${subst[@]}" "$CS_APP/deploy/Caddyfile" > "/etc/caddy/conf.d/$CS_UNIT.caddy"
-	chmod 0644 "/etc/containers/systemd/$CS_UNIT.container" "/etc/caddy/conf.d/$CS_UNIT.caddy"
+	local quadlet="/etc/containers/systemd/$CS_UNIT.container" site="/etc/caddy/conf.d/$CS_UNIT.caddy" f
+	sed "${subst[@]}" "$CS_APP/deploy/quiz-codespace.container" > "$quadlet"
+	sed "${subst[@]}" "$CS_APP/deploy/Caddyfile" > "$site"
+	# A template naming a value this table lacks would ship its placeholder.
+	for f in "$quadlet" "$site"; do
+		if grep -q '@[A-Z_][A-Z_]*@' "$f"; then
+			echo "deploy: $f still holds a @PLACEHOLDER@" >&2
+			return 1
+		fi
+	done
+	chmod 0644 "$quadlet" "$site"
 	caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 }
 

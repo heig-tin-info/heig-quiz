@@ -255,6 +255,14 @@ export const sessions = sqliteTable(
      * the YAML seed: the assignment then carries the convention.
      */
     targetRepo: text("target_repo", { mode: "json" }).$type<AssignmentRepoRef>(),
+    /**
+     * The kiosk sitting (ADR-089) whose launch opened or resumed this session
+     * LAST: the launch token's `kiosk.sitting`, null after any other launch.
+     * The close of that sitting rotates the session's cookie only while it
+     * still names it (`sessions/sittings.ts`): a browser that resumed the
+     * session since already rotated the cookie away from the station.
+     */
+    openedBySitting: text("opened_by_sitting"),
   },
   (t) => [
     index("sessions_pair_idx").on(t.student, t.assignmentId, t.state),
@@ -289,3 +297,23 @@ export const launchTokensUsed = sqliteTable(
 );
 
 export type LaunchTokenUsedRow = typeof launchTokensUsed.$inferSelect;
+
+/**
+ * The kiosk sittings Quiz closed (ADR-089, amendment of 2026-11-15, point
+ * 4): the durable revocation of their `exam_session` cookies, which are
+ * signed and stateless. The proxy refuses a cookie whose `sitting` has a row
+ * here, and `/launch` a token whose `kiosk.sitting` has one, so a close
+ * survives a restart. A row is purged once no cookie nor launch token of its
+ * sitting can still be valid (`SITTING_RETENTION_MS` of
+ * `sessions/sittings.ts`).
+ */
+export const closedSittings = sqliteTable(
+  "closed_sittings",
+  {
+    sitting: text("sitting").primaryKey(),
+    closedAt: integer("closed_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("closed_sittings_closed_at_idx").on(t.closedAt)],
+);
+
+export type ClosedSittingRow = typeof closedSittings.$inferSelect;

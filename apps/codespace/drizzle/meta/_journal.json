@@ -29,6 +29,13 @@
       "when": 1794697267769,
       "tag": "0003_review_of",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794745728066,
+      "tag": "0004_kiosk_sittings",
+      "breakpoints": true
     }
   ]
 }

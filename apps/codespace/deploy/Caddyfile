@@ -12,11 +12,17 @@
 @HOST@ {
 	encode gzip
 
+	# Framing (ADR-089 §10): the portal itself and this instance's Quiz,
+	# @PLATFORM_URL@ (lib.sh, CS_PLATFORM), never a wildcard; it replaces
+	# X-Frame-Options SAMEORIGIN. `+` adds it beside an answer's own
+	# Content-Security-Policy (portal invariant 14's sandbox): the browser
+	# enforces both. `defer` applies the block to the answer as written.
 	header {
+		defer
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		X-Frame-Options "SAMEORIGIN"
+		+Content-Security-Policy "frame-ancestors 'self' @PLATFORM_URL@"
 		-Server
 	}
 
@@ -51,9 +57,10 @@
 
 	# The service API answers Quiz's application VM only (#744, audit L25).
 	# `/api/*` holds the portal's service routes and nothing else: `PUT
-	# /api/assignments/:id` and `GET /api/assignments/:id/sessions`
-	# (src/classroom/routes.ts), which only Quiz's API calls, with a service
-	# token. `/launch`, the proxy `/s/<session>/…` and the pages stay public.
+	# /api/assignments/:id`, `GET /api/assignments/:id/sessions` and `POST
+	# /api/sittings/close` (src/classroom/routes.ts), which only Quiz's API
+	# calls, each with its signed token. `/launch`, the proxy
+	# `/s/<session>/…` and the pages stay public.
 	# The addresses are the application VM's egress, IPv4 and IPv6, from which
 	# both production and staging Quiz call (docs/development/deployment.md
 	# §1, its A and AAAA); when that VM moves, change them here too, beside
