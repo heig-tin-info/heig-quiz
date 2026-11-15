@@ -36,7 +36,7 @@ import { seedLive } from "../../test/live.js";
 import { gradedProject } from "../../test/project.js";
 import { pseudonymizeUser } from "../account/service.js";
 import { runSittingClose, sweepProjectSittings } from "./jobs.js";
-import { SITTING_START_GRACE_MS, closeSittingCloses, openSittingCloses, stationHeld, type SittingCloseJob } from "./sittings.js";
+import { SITTING_START_GRACE_MS, closeSittingCloses, completeSittingClose, openSittingCloses, stationHeld, type SittingCloseJob } from "./sittings.js";
 
 const PORTAL = "http://portal.test";
 const CONFIG = {
@@ -328,6 +328,51 @@ describe("the close job", () => {
     expect(await pairingOf(s.sitting)).toMatchObject({ closeCompletedAt: null, closeRequestedAt: null });
     expect(await audits("codespace.session_closed", s.sitting)).toEqual([]);
     expect(await stationHeld(db(), s.station.deviceId)).toBe(true);
+  });
+});
+
+describe("a session dropped between the completion's UPDATE and what follows it (final review of #1108)", () => {
+  /** `builder`'s promise, `hook` run once it resolved: the drop lands right after the UPDATE. */
+  function after<T extends object>(builder: T, hook: () => Promise<void>): T {
+    return new Proxy(builder, {
+      get(target, prop) {
+        const value = Reflect.get(target, prop, target) as unknown;
+        if (prop === "then") {
+          const then = (value as PromiseLike<unknown>["then"]).bind(target);
+          return (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) => then(async (v) => (await hook(), v)).then(ok, ko);
+        }
+        if (typeof value !== "function") return value;
+        return (...args: unknown[]) => {
+          const out = (value as (...a: unknown[]) => unknown).apply(target, args);
+          return out !== null && typeof out === "object" ? after(out, hook) : out;
+        };
+      },
+    });
+  }
+
+  it("gives the request back, so that the sweep asks again", async () => {
+    const { student, projectId } = await world();
+    const s = await sitting(student.id, { projectId });
+    await db().update(kioskPairings).set({ closeRequestedAt: server.clock.now() }).where(eq(kioskPairings.id, s.sitting));
+    // The session's own drop, its request lost to the mark still set: no job.
+    const drop = async () => {
+      await db().delete(sessions).where(eq(sessions.kioskPairingId, s.sitting));
+    };
+    let first = true;
+    const racing = new Proxy(db(), {
+      get(target, prop) {
+        const value = Reflect.get(target, prop, target) as unknown;
+        if (prop === "update" && first) {
+          first = false;
+          return (...args: unknown[]) => after((value as (...a: unknown[]) => object).apply(target, args), drop);
+        }
+        return typeof value === "function" ? (value as (...a: unknown[]) => unknown).bind(target) : value;
+      },
+    });
+    expect(await completeSittingClose(racing, s.sitting, server.clock.now())).toBe("done");
+    expect(await pairingOf(s.sitting)).toMatchObject({ closeCompletedAt: null, closeRequestedAt: null });
+    await sweepProjectSittings(app(), CONFIG);
+    expect(jobs).toEqual([{ sitting: s.sitting, projectId, cause: "swept" }]);
   });
 });
 

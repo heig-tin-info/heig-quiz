@@ -191,7 +191,16 @@ export async function completeSittingClose(db: Db, sitting: string, now: Date): 
     .where(and(eq(kioskPairings.id, sitting), isNull(kioskPairings.closeCompletedAt), sittingWithoutSession()))
     .returning({ id: kioskPairings.id });
   if (completed) return "closed";
-  return (await giveBackIfLive(db, sitting)) ? "live" : "done";
+  // Another job completed it, or a session pointed to it at the UPDATE —
+  // perhaps dropped since, its own request lost to the mark still set. The
+  // mark is given back while the close is incomplete, so that the session's
+  // end, or the sweep, asks again.
+  await db
+    .update(kioskPairings)
+    .set({ closeRequestedAt: null })
+    .where(and(eq(kioskPairings.id, sitting), isNull(kioskPairings.closeCompletedAt)));
+  const [live] = await db.select({ one: sessions.sidHash }).from(sessions).where(eq(sessions.kioskPairingId, sitting)).limit(1);
+  return live ? "live" : "done";
 }
 
 /**
