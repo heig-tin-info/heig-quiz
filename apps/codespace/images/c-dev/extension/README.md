@@ -14,7 +14,7 @@ workspace's `origin` remote, every 30 s. No other network access, no
 telemetry, no dependency, no credential.
 
 Since 0.2.0 it also gives every gdb launch of webfreak.debug the debugged
-program's own terminal, « Programme » (`debugIo.js`): without it the program's
+program's own terminal, "Program" (`debugIo.js`): without it the program's
 stdin and stdout stay on gdb's pipes, where the student can neither see what
 it prints nor type what it reads.
 

@@ -77,4 +77,22 @@ function holderArgs(ttyFile) {
   return ["-c", 'stty sane 2>/dev/null; exec python3 -I -c "$2" "$1"', "sh", ttyFile, HOLDER_PY];
 }
 
-module.exports = { TTY_RE, wantsProgramTerminal, programTerminalConfig, holderArgs };
+/**
+ * `create` behind a gate: callers that arrive while it runs share its pending
+ * promise instead of starting another. Two launches at once (a compound
+ * configuration) would otherwise each open a terminal, the second disposing
+ * the first's while its program is about to run on it.
+ */
+function sharedPending(create) {
+  let pending;
+  return () => {
+    pending ??= Promise.resolve()
+      .then(create)
+      .finally(() => {
+        pending = undefined;
+      });
+    return pending;
+  };
+}
+
+module.exports = { TTY_RE, wantsProgramTerminal, programTerminalConfig, holderArgs, sharedPending };

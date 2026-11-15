@@ -162,6 +162,12 @@ commands above; building from `/opt/quiz-engine-staging` would put an
 unapproved commit's image under production's new sessions. A running session
 keeps the image it started with until its container restarts.
 
+Since 2026-11-15 (#1102, Baygon) the build also downloads from PyPI
+(`pypi.org` for the index, `files.pythonhosted.org` for the wheels of `images/c-dev/baygon/requirements.txt`,
+each checked against its hash), beside Debian's mirror, GitHub (code-server)
+and Open VSX: the engine VM's outbound traffic must allow it during the build.
+The containers themselves still have no network.
+
 ### 8. The CI keys
 
 ```bash

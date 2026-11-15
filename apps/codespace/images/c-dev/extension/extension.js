@@ -37,7 +37,7 @@ const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 const vscode = require("vscode");
-const { holderArgs, programTerminalConfig, TTY_RE, wantsProgramTerminal } = require("./debugIo");
+const { holderArgs, programTerminalConfig, sharedPending, TTY_RE, wantsProgramTerminal } = require("./debugIo");
 
 /** Refresh period of the countdown. */
 const TICK_MS = 30_000;
@@ -95,7 +95,14 @@ const STRINGS = {
   },
 };
 
-/** French as soon as the interface language starts with "fr". */
+/**
+ * French as soon as the interface language starts with "fr". Not reached
+ * today: the image ships no language pack, so `vscode.env.language` is "en"
+ * whatever the browser's language. Kept because a pack could be added
+ * without touching this extension: install Open VSX's
+ * `MS-CEINTL.vscode-language-pack-fr` beside the other extensions and start
+ * code-server with `--locale fr` (entrypoint.sh) — not tried.
+ */
 function pickStrings(language) {
   return String(language || "en").toLowerCase().startsWith("fr") ? STRINGS.fr : STRINGS.en;
 }
@@ -193,7 +200,8 @@ function registerProgramTerminal(context, t) {
   let terminal;
   let tty;
 
-  const ensure = async () => {
+  // One at a time: concurrent launches share the terminal being opened.
+  const ensure = sharedPending(async () => {
     if (terminal && terminal.exitStatus === undefined && tty) return tty;
     if (terminal) terminal.dispose();
     fs.rmSync(ttyFile, { force: true });
@@ -206,7 +214,7 @@ function registerProgramTerminal(context, t) {
     });
     tty = await waitForTty(ttyFile, TTY_WAIT_MS);
     return tty;
-  };
+  });
 
   context.subscriptions.push(
     vscode.window.onDidCloseTerminal((closed) => {

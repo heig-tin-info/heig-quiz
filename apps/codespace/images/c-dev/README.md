@@ -569,8 +569,9 @@ the image of `origin/main` in headless Chromium.
 (not `attach`, not `ssh`, not a configuration whose `autorun` already sets
 `inferior-tty` or `tty`):
 
-1. it opens one integrated terminal, **Program** (**Programme** in French),
-   reused by every later launch while it lives. Its process, run by
+1. it opens one integrated terminal, **Program**, reused by every later
+   launch while it lives (one creation at a time: launches that arrive
+   together, a compound configuration, share it). Its process, run by
    code-server's pty host like any terminal, gives the tty up as its
    controlling terminal (`TIOCNOTTY`), writes the tty's name to a file of
    `/tmp`, then waits without ever reading;
@@ -597,12 +598,28 @@ Verified:
 - by hand on 2026-11-15, in headless Chromium against the image: F5 on a
   `launch.json` like the one below, with and without `preLaunchTask`, opens
   **Program** focused, the `7` typed reaches the program, and a second F5
-  reuses the terminal. The browser console logs `Invalid debug adapter`
-  once per session end (a message of the adapter after its disposal; not
-  shown to the student, and absent from the same run on the image of
-  `origin/main`, cause not pinned).
+  reuses the terminal.
 
-Not verified: a real browser on Windows, and Safe Exam Browser.
+Not verified: a real browser on Windows, Safe Exam Browser, Ctrl+C and
+Ctrl+D in the terminal.
+
+Known limits:
+
+- **The terminal is always "Program".** The extension has French strings,
+  but code-server shows its interface, and gives extensions
+  `vscode.env.language`, in English: the image ships no language pack (the
+  comment above `pickStrings` in `extension/extension.js` says how one
+  could be added without touching the extension).
+- **`Invalid debug adapter` in the browser's console** once per session
+  that ends normally. Not ours, and not shown to the student: VS Code
+  (`getDebugAdapter`, `$acceptDAMessage` of the workbench) reports a
+  message for an adapter it has already disposed. That message is
+  webfreak.debug's second `terminated` event: it sends one when the program
+  exits (`exited-normally`), then, after answering VS Code's `disconnect`,
+  another when gdb quits (`mibase.js`, `quitEvent` on `quit`). Observed with
+  the DAP driver of `test-debug-io.js`, with and without `set inferior-tty`
+  alike; a matter of timing whether the second arrives after the disposal
+  (it was not logged once in a run on the image without this change).
 
 ### What a lab template should hold
 
