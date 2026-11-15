@@ -19,6 +19,7 @@ import type { KioskAttestation } from "@quiz/domain";
 import type { Db } from "../../db/client.js";
 import { kioskDevices } from "../../db/schema.js";
 import { DomainError } from "../http.js";
+import { stationHeld } from "./sittings.js";
 
 /**
  * The station's own cookie, its identity, never a user's: the base name,
@@ -30,7 +31,7 @@ export const KIOSK_COOKIE = "quiz_kiosk";
 export const KIOSK_COOKIE_HOURS = 12;
 /**
  * The path the bare `quiz_kiosk` was set on before the prefix: `verify`
- * expires it there, host-only, as Quiz set it. M6-11d removes it.
+ * expires it there, host-only, as Quiz set it. M6-11f removes it.
  */
 export const BARE_KIOSK_COOKIE_PATH = "/app/api";
 
@@ -41,7 +42,7 @@ export const BARE_KIOSK_COOKIE_PATH = "/app/api";
  * attestation moves it (ADR-089, point 3).
  */
 export function stationCredential(req: FastifyRequest): string | undefined {
-  // M6-11d removes this bare-name fallback, merged only once this has run
+  // M6-11f removes this bare-name fallback, merged only once this has run
   // 12 h in production: no bare cookie, never issued since, outlives
   // KIOSK_COOKIE_HOURS.
   return req.cookies[req.server.cookieName(KIOSK_COOKIE)] ?? req.cookies[KIOSK_COOKIE];
@@ -71,7 +72,12 @@ export async function deviceByCredential(
 /** What a station's page shows of itself; null when the cookie names no station. */
 export async function stationOf(db: Db, cookie: string | undefined): Promise<KioskStation | null> {
   const device = await deviceByCredential(db, cookie);
-  return device ? { label: device.label, status: device.status } : null;
+  return device ? stationView(db, device) : null;
+}
+
+/** A known station as its own page sees it, the hold included (ADR-089, amendment point 4). */
+export async function stationView(db: Db, device: KioskDeviceRow): Promise<KioskStation> {
+  return { label: device.label, status: device.status, held: await stationHeld(db, device.id) };
 }
 
 /**

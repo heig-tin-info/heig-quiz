@@ -198,7 +198,7 @@ export async function announcePaperAttempt(
 ): Promise<void> {
   await notifyEnded(app.db, inserted.ended, now);
   for (const ended of inserted.ended) events.attemptClosed(evaluation.id, ended, "teacher", now);
-  if (inserted.ended.length > 0) await endKioskSessions(app.db, evaluation.id, seated(inserted.ended));
+  if (inserted.ended.length > 0) await endKioskSessions(app.db, { evaluationId: evaluation.id, projectId: null }, seated(inserted.ended));
   events.attemptRowChanged(evaluation.id, inserted.attempt);
   // The row's origin, attempt count and cells changed with it: a re-read.
   events.rosterChanged(evaluation.id);

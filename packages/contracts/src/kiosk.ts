@@ -29,10 +29,17 @@ export const KioskAttestVerify = z.union([
 ]);
 export type KioskAttestVerify = z.infer<typeof KioskAttestVerify>;
 
-/** What a station shows of itself: its label (null until an admin names it) and its status. */
+/**
+ * What a station shows of itself: its label (null until an admin names it),
+ * its status, and whether it is held (ADR-089, amendment of 2026-11-15,
+ * point 4): a project sitting of it has not had its portal session closed
+ * yet, so it cannot be paired — its waiting screen says to call the
+ * supervisor, and `device_authorization` answers `409 station_held`.
+ */
 export const KioskStation = z.object({
   label: z.string().nullable(),
   status: z.enum(KIOSK_DEVICE_STATUSES),
+  held: z.boolean(),
 });
 export type KioskStation = z.infer<typeof KioskStation>;
 

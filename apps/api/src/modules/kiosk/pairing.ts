@@ -10,7 +10,7 @@
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
-import { and, count, desc, eq, gt, isNull, min, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, min, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 import type { PairableEvaluation, PairableProject } from "@quiz/contracts";
 import {
@@ -24,10 +24,12 @@ import {
 } from "@quiz/domain";
 
 import { audit, type AuditAction } from "../../audit.js";
+import type { KioskActivity } from "../../auth/session.js";
 import type { Db, Tx } from "../../db/client.js";
 import { auditLog, classrooms, courses, enrollments, kioskDevices, kioskPairings, projectRepos, projects } from "../../db/schema.js";
 import { liveProject } from "../guards.js";
 import { studentHome } from "../live/service.js";
+import { stationHeld } from "./sittings.js";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
@@ -59,6 +61,16 @@ export async function pairableEvaluations(
 }
 
 /**
+ * The join to the student's own repository of a project, whose deadline is
+ * the student's when it has one (`effectiveDeadline`, ADR-078 §2): the
+ * pairing list's rule and the kiosk sweep's deadline read it alike. A group
+ * repository is never read: an online project — every station level is
+ * `online_seb` — cannot be a group project.
+ */
+export const ownRepository = (userId: AnyColumn | string): SQL =>
+  and(eq(projectRepos.projectId, projects.id), eq(projectRepos.userId, userId), isNull(projectRepos.groupId))!;
+
+/**
  * The supervised projects `userId` can start on a station now (ADR-089 §5):
  * a claimed seat in the project's classroom — a staff seat testing it
  * counts, as for its `.seb` (ADR-077) —, the project open (published or
@@ -83,10 +95,7 @@ export async function pairableProjects(db: Db, userId: string, now: Date): Promi
     .innerJoin(enrollments, and(eq(enrollments.classroomId, projects.classroomId), eq(enrollments.userId, userId)))
     .innerJoin(classrooms, and(eq(classrooms.id, projects.classroomId), isNull(classrooms.archivedAt)))
     .innerJoin(courses, eq(courses.id, classrooms.courseId))
-    .leftJoin(
-      projectRepos,
-      and(eq(projectRepos.projectId, projects.id), eq(projectRepos.userId, userId), isNull(projectRepos.groupId)),
-    )
+    .leftJoin(projectRepos, ownRepository(userId))
     .where(and(liveProject(), eq(projects.workMode, "online_seb")))
     .orderBy(projects.deadlineAt, projects.name);
   return rows
@@ -97,9 +106,10 @@ export async function pairableProjects(db: Db, userId: string, now: Date): Promi
 /**
  * What a pairing seats the student for: one exam, or one supervised project
  * (ADR-089 §5) — the other null, so it spreads as the pairing's and the
- * session's two columns.
+ * session's two columns; the key `endKioskSessions` ends a station's
+ * sessions by.
  */
-export type PairActivity = { evaluationId: string; projectId: null } | { evaluationId: null; projectId: string };
+export type PairActivity = KioskActivity;
 
 /** The activity a pairing row names, or null when it names none. */
 function activityOf(row: { evaluationId: string | null; projectId: string | null }): PairActivity | null {
@@ -118,13 +128,16 @@ async function pairable(db: Db, userId: string, activity: PairActivity, now: Dat
 /**
  * A new pairing for `device`, the previous pending one expired first — one
  * code on the screen at a time. Answers the two codes in clear, once: only
- * their digests are kept.
+ * their digests are kept. Null while the station is held (ADR-089,
+ * amendment point 4): a project sitting of it has not had its portal
+ * session closed, so no student, for an exam too, sits down there.
  */
 export async function issuePairing(
   db: Db,
   deviceId: string,
   now: Date,
-): Promise<{ deviceCode: string; userCode: string; expiresIn: number; interval: number }> {
+): Promise<{ deviceCode: string; userCode: string; expiresIn: number; interval: number } | null> {
+  if (await stationHeld(db, deviceId)) return null;
   const deviceCode = randomBytes(32).toString("base64url");
   const userCode = generateUserCode((n) => randomBytes(n));
   await db.transaction(async (tx) => {
@@ -192,6 +205,9 @@ export async function pollPairing(
   });
   polls.set(pairing.id, { lastPollAt: now, interval: answer.interval, expiresAt: pairing.expiresAt });
   if (answer.outcome !== "approved") return { kind: "error", error: answer.outcome };
+  // Held since the code was shown (amendment point 4): the approval waits,
+  // unconsumed, and dies with its code.
+  if (await stationHeld(db, deviceId)) return { kind: "error", error: "authorization_pending" };
 
   const [consumed] = await db
     .update(kioskPairings)

@@ -150,6 +150,19 @@ export type AuditAction =
   | "codespace.sync_requested"
   | "codespace.synced"
   | "codespace.git_token_issued"
+  /**
+   * ADR-089 §13, amendment of 2026-11-15 point 4: the portal session a kiosk
+   * station's project sitting opened was closed (`session_closed`, once the
+   * portal answered), or the close job gave up after its retries
+   * (`session_close_failed`; the station stays held until an administrator's
+   * Retire then Reactivate gets a close through). Subject the sitting, the
+   * approving pairing (`kiosk_pairing`); `payload.projectId` (null once the
+   * project is deleted), `payload.cause` (`SittingCloseCause`,
+   * `modules/kiosk/sittings.ts`) and, on a failure, `payload.error`, the
+   * portal's status — never a token.
+   */
+  | "codespace.session_closed"
+  | "codespace.session_close_failed"
   /** The teacher enabled the drill for a classroom (ADR-041 §6). */
   | "drill.enable"
   /** …and disabled it: its cards leave the sessions, their data is kept. */
@@ -323,9 +336,10 @@ export type AuditAction =
   | "kiosk.device_reactivated"
   /**
    * ADR-051 §7: a student approved a station's pairing from their phone
-   * (subject the pairing; `payload.evaluationId`, `payload.deviceId`), or a
+   * (subject the pairing; `payload.evaluationId` — or `payload.projectId`
+   * for a supervised project, ADR-089 §13 — and `payload.deviceId`), or a
    * pairing was refused (`payload.reason`: `code` — a wrong, expired or used
-   * code, counted towards the limit — or `evaluation`). Never a code.
+   * code, counted towards the limit —, `evaluation` or `project`). Never a code.
    */
   | "kiosk.paired"
   | "kiosk.pair_refused"
@@ -340,7 +354,8 @@ export type AuditAction =
    * ADR-051 §6: the station a kiosk session sits on was suspended
    * (`payload.reason`: `refused` or `silent`), or its suspension lifted by an
    * accepted attestation. Subject the station's device id; the payload names
-   * the student and the evaluation it sat, when it sat one.
+   * the student and the evaluation — or the project (ADR-089 §13) — it sat,
+   * when it sat one.
    */
   | "kiosk.suspended"
   | "kiosk.resumed"
@@ -676,7 +691,7 @@ export type AuditAction =
    * actor and subject the admin, `payload.until` the server's end of it.
    */
   | "superpowers.enabled"
-  /** …and they went off: `payload.reason` is `manual`, `expired` or `logout`. */
+  /** …and they went off: `payload.reason` is `manual`, `expired`, `logout` or `revoked` (the account pseudonymized within the hour). */
   | "superpowers.disabled"
   /**
    * An admin sent themselves the test e-mail of the System status (ADR-055

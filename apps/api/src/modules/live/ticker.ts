@@ -69,7 +69,7 @@ export async function expireDueAttempts(
   }
   // ADR-051 §7: their stations go back to pairing, after the frames above.
   for (const evaluationId of new Set(closed.map((row) => row.evaluationId))) {
-    await endKioskSessions(db, evaluationId, seated(closed.filter((row) => row.evaluationId === evaluationId)));
+    await endKioskSessions(db, { evaluationId, projectId: null }, seated(closed.filter((row) => row.evaluationId === evaluationId)));
   }
   // An exercise grades each attempt as it ends (ADR-067), the ones time ran
   // out on included: the student reads that score next.

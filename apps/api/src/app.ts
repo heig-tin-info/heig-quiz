@@ -50,6 +50,7 @@ import { groupPlugin } from "./modules/group/routes.js";
 import { registerJournalJobs } from "./modules/journal/jobs.js";
 import { journalPlugin } from "./modules/journal/routes.js";
 import { createKioskAttestor } from "./modules/kiosk/attestation.js";
+import { registerKioskJobs } from "./modules/kiosk/jobs.js";
 import { kioskPlugin } from "./modules/kiosk/routes.js";
 import { legacyPlugin } from "./modules/legacy/routes.js";
 import { livePlugin } from "./modules/live/routes.js";
@@ -331,6 +332,10 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     await step("system jobs registration", () => registerSystemJobs(app, started, config));
     // A brainstorm's AI passes (ADR-072). Without a queue a pass runs inline.
     await step("poll jobs registration", () => registerPollJobs(app, started));
+    // The close of a kiosk station's project sitting (ADR-089), whatever
+    // KIOSK_ATTESTATION and KIOSK_PROJECTS say: the kill switch never stops
+    // a close. Without a queue the kiosk sweep closes inline.
+    await step("kiosk jobs registration", () => registerKioskJobs(app, started, config));
     // The webhook worker (M2-04), only with Quiz's App: without it there is no intake.
     if (githubApp(config)) {
       await step("github jobs registration", () => registerGithubJobs(app, started, config));

@@ -229,7 +229,7 @@ describe("a sitting on a kiosk station, from its first attestation to the next s
     const station = new Station();
     const first = await station.attest();
     expect(first.statusCode, first.body).toBe(200);
-    expect(KioskAttested.parse(first.json()).station).toEqual({ label: null, status: "unnamed" });
+    expect(KioskAttested.parse(first.json()).station).toEqual({ label: null, status: "unnamed", held: false });
     expect(station.jar.has(KIOSK_COOKIE)).toBe(true);
     expect((await station.post("/app/api/kiosk/device_authorization")).json()).toEqual({ error: "not_recognised" });
 
@@ -243,6 +243,7 @@ describe("a sitting on a kiosk station, from its first attestation to the next s
     expect((await station.get("/app/api/kiosk/station")).json()).toEqual({
       label: "Poste de secours n° 7",
       status: "active",
+      held: false,
     });
 
     // The station shows a code; nothing is approved yet.

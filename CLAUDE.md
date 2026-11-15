@@ -121,8 +121,9 @@ Never work around these, not even "temporarily".
    **A `kiosk` session** (ADR-051), like a `seb` one, is confined to one
    exam or one supervised project (ADR-089); it is worth nothing without
    its station's cookie beside it (`trustRefusal`, `auth/trust.ts`), and it
-   ends with the attempt or, for a project, at the first of its
-   replacement, its 6 h, the station's retirement.
+   ends with the attempt or, for a project, at the first of Leave,
+   replacement, the effective deadline, its 6 h, the station's
+   retirement — each closing the portal session.
 7. **Every HTTP input is validated by a schema from `packages/contracts`,**
    and the client uses the same schema. A route change breaks both sides at
    compile time.

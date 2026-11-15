@@ -87,7 +87,7 @@ on("GET", "/app/api/kiosk/station", () => station());
 function station(): KioskStation {
   const d = devices.find((x) => x.status === "active");
   if (!d) throw new MockError(404, "Not found");
-  return { label: d.label, status: d.status };
+  return { label: d.label, status: d.status, held: false };
 }
 
 // --- The pairing (ADR-051 §7) ---------------------------------------------------

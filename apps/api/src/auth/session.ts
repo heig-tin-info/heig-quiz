@@ -13,6 +13,7 @@ import { TRUSTED_CLIENTS, isTrustedClient, type TrustedClient } from "@quiz/doma
 import { audit } from "../audit.js";
 import type { Db, Tx } from "../db/client.js";
 import { kioskDevices, sessions, users } from "../db/schema.js";
+import { requestSittingCloses, type SittingCloseCause } from "../modules/kiosk/sittings.js";
 import { notifyUsers } from "../modules/notifications/service.js";
 import * as bus from "../modules/realtime/bus.js";
 
@@ -87,7 +88,12 @@ export interface SessionState extends SessionAuth {
 /** How long Super Powers last once switched on: one fixed hour, never extended (ADR-054). */
 export const SUPER_POWERS_MS = 3_600_000;
 
-export type SuperPowersEnd = "manual" | "expired" | "logout";
+/**
+ * Why Super Powers went off: switched off, their hour over, signed out
+ * within it, or their session removed by the system within it (`revoked`:
+ * an account pseudonymized).
+ */
+export type SuperPowersEnd = "manual" | "expired" | "logout" | "revoked";
 
 /**
  * THE record of Super Powers going off, whoever notices: the audit entry
@@ -96,7 +102,7 @@ export type SuperPowersEnd = "manual" | "expired" | "logout";
  * their ordinary reach (invariant 6; `accessRevoked`).
  */
 export async function superPowersEnded(db: Db, userId: string, reason: SuperPowersEnd) {
-  const byUser = reason !== "expired";
+  const byUser = reason === "manual" || reason === "logout";
   await audit(db, {
     actorUserId: byUser ? userId : null,
     actorType: byUser ? "user" : "system",
@@ -187,6 +193,14 @@ export const SITTING = { sessions: ["portal", "seb", "kiosk"] } as const;
  */
 export const PROJECT_CONFINED = { sessions: ["portal", "seb", "kiosk"], activities: ["project"] } as const;
 
+/**
+ * The route config of **Leave this station** (ADR-089 §3, amendment point
+ * 4): a kiosk station's session of a project, and nothing else — not a
+ * portal, not a `seb` session, not a station sitting an exam, which ends
+ * with its attempt (ADR-051 §7).
+ */
+export const STATION_PROJECT = { sessions: ["kiosk"], activities: ["project"] } as const;
+
 /** What a route declares of the sessions it serves (`FastifyContextConfig`). */
 export interface RouteSessions {
   /** The kinds it serves; absent, `portal` only. */
@@ -243,8 +257,9 @@ export async function createSession(
     return gone;
   });
   // After the commit: a stream closed earlier could reconnect on a session
-  // the rollback kept. The dashboard is an evaluation's.
-  bus.sessionsEnded(superseded.map((s) => s.sidHash));
+  // the rollback kept, a portal closed for a sitting that still runs. The
+  // dashboard is an evaluation's.
+  await sessionsDropped(db, superseded, "superseded", now);
   for (const pair of pairsOf(superseded)) {
     if (pair.subjectType === "evaluation") {
       bus.dashboardAlert({ userId: pair.userId, evaluationId: pair.subjectId, kind: "session_superseded", at: now });
@@ -411,6 +426,50 @@ export async function findSessionUser(
 }
 
 /**
+ * Why sessions go. `left`, `deadline`, `retired` and `swept` are a kiosk
+ * station's project sitting's ends (ADR-089, amendment point 4); `ended` an
+ * exam's attempt over (ADR-051 §7); `revoked` an actor's right lost
+ * (ADR-034) or an account pseudonymized (ADR-117).
+ */
+export type DropReason =
+  | "logout"
+  | "expired"
+  | "revoked"
+  | "superseded"
+  | "ended"
+  | "left"
+  | "deadline"
+  | "retired"
+  | "swept";
+
+/** The cause a sitting's close records for a drop's reason: the ends of the record by name, any other `swept`. */
+const CLOSE_CAUSE: Record<DropReason, SittingCloseCause> = {
+  left: "left",
+  superseded: "superseded",
+  deadline: "deadline",
+  expired: "expired",
+  retired: "retired",
+  swept: "swept",
+  logout: "swept",
+  revoked: "swept",
+  ended: "swept",
+};
+
+/**
+ * What follows a committed {@link dropSessions}: the removed sessions'
+ * event streams closed, and the close of the portal session of every
+ * removed `kiosk` row of a project enqueued (`modules/kiosk/sittings.ts`).
+ * An exam's station opened no portal session: nothing to close.
+ */
+export async function sessionsDropped(db: Db, gone: readonly Dropped[], reason: DropReason, now: Date): Promise<void> {
+  bus.sessionsEnded(gone.map((s) => s.sidHash));
+  const sittings = gone.flatMap((s) =>
+    s.kind === "kiosk" && s.projectId !== null && s.kioskPairingId !== null ? [s.kioskPairingId] : [],
+  );
+  await requestSittingCloses(db, sittings, CLOSE_CAUSE[reason], now);
+}
+
+/**
  * THE way a session row goes, and the one owner of what the audit says about
  * it. Signing out writes `auth.logout` — or, for a delegated session,
  * `impersonation.ended`, the admin as actor and the student as subject: the
@@ -421,15 +480,14 @@ export async function findSessionUser(
  * `logout` if the admin signed out within the hour, `expired` otherwise. One
  * superseded by a new confined session is audited by `supersede`.
  *
- * It returns the rows it removed: whoever called it ends their event streams
- * (`bus.sessionsEnded`) once the deletion is committed ({@link endSessions}).
+ * It returns the rows it removed: whoever called it hands them to
+ * {@link sessionsDropped} once the deletion is committed — their event
+ * streams closed, and the portal close of every removed `kiosk` row of a
+ * project asked for (ADR-089, amendment of 2026-11-15, point 4: every
+ * disappearance closes). It is THE delete of `sessions`: the account's
+ * pseudonymization goes through it too, before its SQL wipe list.
  */
-async function dropSessions(
-  db: Db | Tx,
-  where: SQL,
-  reason: "logout" | "expired" | "revoked" | "superseded" | "ended",
-  now: Date = new Date(),
-) {
+export async function dropSessions(db: Db | Tx, where: SQL, reason: DropReason, now: Date = new Date()) {
   const gone = await db.delete(sessions).where(where).returning({
     sidHash: sessions.sidHash,
     userId: sessions.userId,
@@ -438,14 +496,15 @@ async function dropSessions(
     evaluationId: sessions.evaluationId,
     projectId: sessions.projectId,
     deviceId: sessions.deviceId,
+    kioskPairingId: sessions.kioskPairingId,
     superPowersUntil: sessions.superPowersUntil,
     createdAt: sessions.createdAt,
     expiresAt: sessions.expiresAt,
   });
   for (const session of gone) {
     if (session.superPowersUntil !== null) {
-      const live = reason === "logout" && session.superPowersUntil.getTime() > now.getTime();
-      await superPowersEnded(db, session.userId, live ? "logout" : "expired");
+      const live = (reason === "logout" || reason === "revoked") && session.superPowersUntil.getTime() > now.getTime();
+      await superPowersEnded(db, session.userId, live ? reason : "expired");
     }
     const subject = { subjectType: "user", subjectId: session.userId } as const;
     if (delegated(session)) {
@@ -465,24 +524,26 @@ async function dropSessions(
 }
 
 /**
- * {@link dropSessions} outside a transaction, the streams of what it removed
- * closed, and the student of each delegated one told ({@link
+ * {@link dropSessions} outside a transaction, followed by {@link
+ * sessionsDropped}, and the student of each delegated one told ({@link
  * impersonationNotice}). Returns how many went.
  *
  * The notice is here, not in `dropSessions`: a notification follows the
  * write it announces, never inside its transaction (`notifyMany`), and the
  * ended session's stream is closed first, so that session never reads it.
- * The one transactional caller, `supersede`, removes confined sessions only,
- * never a delegated one.
+ * The transactional callers, `supersede` and the account's
+ * pseudonymization, call {@link sessionsDropped} after their commit; the
+ * first removes confined sessions only, never a delegated one, and the
+ * second's student is the account wiped.
  */
 async function endSessions(
   db: Db,
   where: SQL,
-  reason: "logout" | "expired" | "revoked" | "ended",
+  reason: Exclude<DropReason, "superseded">,
   now: Date = new Date(),
 ): Promise<number> {
   const gone = await dropSessions(db, where, reason, now);
-  bus.sessionsEnded(gone.map((s) => s.sidHash));
+  await sessionsDropped(db, gone, reason, now);
   for (const session of gone) {
     if (delegated(session)) await notifyUsers(db, [session.userId], impersonationNotice(session, now));
   }
@@ -508,38 +569,76 @@ function impersonationNotice(session: Pick<Dropped, "createdAt" | "expiresAt">, 
 }
 
 /**
- * ADR-051 §7: the `kiosk` sessions that sit `evaluationId` — of these users,
- * or of everybody when `userIds` is absent (the evaluation closed) —
- * deleted in one statement, and their event streams closed. The users'
- * other sessions stay: the phone's portal, and a `seb` session, which
- * outlives the submit (ADR-027). `live` calls it wherever an attempt ends,
- * after it has emitted `attempt.closed`, so the station's stream carries
- * that frame before it closes.
+ * What a station sits: one exam, or one supervised project (ADR-089 §5) —
+ * the other null, so it spreads as the pairing's and the session's two
+ * columns (`PairActivity`, `modules/kiosk/pairing.ts`).
+ */
+export type KioskActivity = { evaluationId: string; projectId: null } | { evaluationId: null; projectId: string };
+
+/**
+ * THE end of the `kiosk` sessions that sit `activity` — of these users, or
+ * of everybody when `userIds` is absent — in one statement, their event
+ * streams closed. The users' other sessions stay: the phone's portal, and a
+ * `seb` session, which outlives the submit (ADR-027).
+ *
+ * An exam (ADR-051 §7): `live` calls it wherever an attempt ends, after it
+ * has emitted `attempt.closed`, so the station's stream carries that frame
+ * before it closes; the reason is `ended`. A project (ADR-089, amendment
+ * point 4): the kiosk sweep, at the student's effective deadline
+ * (`deadline`); each removed session's portal close follows, as for every
+ * drop ({@link sessionsDropped}).
  */
 export async function endKioskSessions(
   db: Db,
-  evaluationId: string,
+  activity: KioskActivity,
   userIds?: readonly string[],
+  reason: "ended" | "deadline" = "ended",
 ): Promise<void> {
   if (userIds !== undefined && userIds.length === 0) return;
   await endSessions(
     db,
     and(
       eq(sessions.kind, "kiosk"),
-      eq(sessions.evaluationId, evaluationId),
+      activity.projectId !== null
+        ? eq(sessions.projectId, activity.projectId)
+        : eq(sessions.evaluationId, activity.evaluationId),
       userIds === undefined ? undefined : inArray(sessions.userId, [...userIds]),
     )!,
-    "ended",
+    reason,
   );
 }
 
 /**
  * ADR-051 §5: the session a station holds, deleted and its event stream
  * closed — a retired station sits nothing more, not even until its next
- * request.
+ * request. A project's sitting there closes its portal (`retired`).
  */
 export async function endStationSessions(db: Db, deviceId: string): Promise<void> {
-  await endSessions(db, eq(sessions.deviceId, deviceId), "revoked");
+  await endSessions(db, eq(sessions.deviceId, deviceId), "retired");
+}
+
+/** A station's session of a project (ADR-089): every end of one closes its portal session. */
+const stationProjectSession = (): SQL => and(eq(sessions.kind, "kiosk"), isNotNull(sessions.projectId))!;
+
+/**
+ * **Leave this station** (ADR-089 §3): the caller's own session, when it is
+ * a station's session of a project, ended (`left`). Returns whether it went.
+ */
+export async function leaveStation(db: Db, sidHash: string, now: Date): Promise<boolean> {
+  return (await endSessions(db, and(eq(sessions.sidHash, sidHash), stationProjectSession())!, "left", now)) > 0;
+}
+
+/**
+ * The kiosk sweep's part here (ADR-089, amendment point 4): a station's
+ * session of a project ends past its `expires_at` (`expired`; the 6 h,
+ * otherwise lazy, at the next request) — and every one of them while the
+ * kiosk path is off (`all`: `KIOSK_ATTESTATION=off`, `swept`). Each closes
+ * its portal session. An exam's station session is left to its attempt, as
+ * before. Returns how many went.
+ */
+export async function sweepStationSessions(db: Db, now: Date, all: boolean): Promise<number> {
+  const swept = all ? await endSessions(db, stationProjectSession(), "swept", now) : 0;
+  return swept + (await endSessions(db, and(stationProjectSession(), lte(sessions.expiresAt, now))!, "expired", now));
 }
 
 export async function deleteSession(db: Db, token: string, now: Date = new Date()) {

@@ -39,6 +39,7 @@ import {
 import { verifyHs256 } from "@quiz/domain";
 
 import { SESSION_COOKIE } from "../../auth/session.js";
+import { PROJECT_CONFINED_ROUTES } from "../../auth/testing.js";
 import { auditLog, enrollments, kioskDevices, kioskPairings, projects, sessions } from "../../db/schema.js";
 import { orgsRoute } from "../../github/testing.js";
 import { routesOf, sessionOf } from "../../test/http.js";
@@ -436,7 +437,8 @@ describe("a project's kiosk session reaches its project only (invariant 6)", () 
     const { headers } = await kioskSession(student.id, lab.id);
     // The station's cookie stays in both: only the session differs.
     const anonymous = { ...headers, cookie: headers.cookie!.split("; ").filter((c) => !c.startsWith(`${SESSION_COOKIE}=`)).join("; ") };
-    const declared = new Set(["GET /app/api/me", "GET /app/api/student/projects/:id", "POST /app/api/projects/:id/workspace/start"]);
+    // PROJECT_CONFINED and `GET /me`, and Leave this station, a station's session of a project only (M6-11d).
+    const declared = new Set([...PROJECT_CONFINED_ROUTES, "POST /app/api/kiosk/leave"]);
     for (const { method, path } of routesOf(server.app.printRoutes({ commonPrefix: false }))) {
       if (declared.has(`${method} ${path}`) || /^\/app\/auth\/(login|callback)$/.test(path)) continue;
       const url = path.replace(/:\w+/g, "00000000-0000-4000-8000-000000000000").replace("*", "x");
