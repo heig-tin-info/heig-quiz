@@ -365,7 +365,7 @@ describe("GET /app/api/student/results — a project's row (F-PROJ-14, F-ORG-14)
         method: "PUT",
         url: `${gradebookUrl(room.classroomId, p.id)}/marks/${await seatOf(room.classroomId, mine.id)}`,
         headers: teacher.headers,
-        payload: { kind: "excused", comment: "Medical certificate 4242", override: true },
+        payload: { kind: "excused", comment: "Medical certificate, kept private", override: true },
       });
       expect(res.statusCode, res.body).toBe(200);
     }
@@ -409,7 +409,8 @@ describe("GET /app/api/student/results — a project's row (F-PROJ-14, F-ORG-14)
     for (const name of ["Excused", "Excused scored"]) {
       expect(of(name)).toMatchObject({ status: "excused", score: null, counts: false });
     }
-    expect(body).not.toContain("4242");
+    // A marker no random id can spell (a short digit run can appear in a UUID).
+    expect(body).not.toContain("Medical certificate");
     // The classmate is not excused, and holds no repository: no row.
     expect((await projectRows(other.headers)).of("Excused")).toBeUndefined();
   });
