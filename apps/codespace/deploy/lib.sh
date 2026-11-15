@@ -88,6 +88,7 @@ cs_install_instance() {
 	local subst=(
 		-e "s|@INSTANCE@|$CS_INSTANCE|g"
 		-e "s|@HOST@|$CS_HOST|g"
+		-e "s|@PLATFORM@|$CS_PLATFORM|g"
 		-e "s|@PORT@|$CS_PORT|g"
 		-e "s|@NETWORK@|$CS_NET|g"
 		-e "s|@GATEWAY@|$CS_GATEWAY|g"
@@ -97,6 +98,10 @@ cs_install_instance() {
 		> "/etc/containers/systemd/$CS_UNIT.container"
 	install -d -m 0755 /etc/caddy/conf.d
 	sed "${subst[@]}" "$CS_APP/deploy/Caddyfile" > "/etc/caddy/conf.d/$CS_UNIT.caddy"
+	if grep -q '@[A-Z_]*@' "/etc/caddy/conf.d/$CS_UNIT.caddy"; then
+		echo "deploy: /etc/caddy/conf.d/$CS_UNIT.caddy still holds a @PLACEHOLDER@" >&2
+		return 1
+	fi
 	chmod 0644 "/etc/containers/systemd/$CS_UNIT.container" "/etc/caddy/conf.d/$CS_UNIT.caddy"
 	caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 }

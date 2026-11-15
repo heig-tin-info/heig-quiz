@@ -113,6 +113,12 @@ export interface StartOptions {
   launchJti?: string | null;
   /** Student repository brought by the token; replaces the assignment's convention. */
   targetRepo?: AssignmentRepoRef | null;
+  /**
+   * The kiosk sitting of a station's launch (ADR-089), null for any other
+   * launch: the opener the close of that sitting looks for
+   * (`sessions/sittings.ts`).
+   */
+  openedBySitting?: string | null;
 }
 
 export interface SessionManager {
@@ -371,6 +377,24 @@ export function forgeOwnerOf(
     student: session.student,
     ...(assignment.reviewOf ? { review: { ...assignment.reviewOf } } : {}),
   };
+}
+
+/**
+ * A fresh proxy cookie token. 32 bytes from the CSPRNG, base64url so that
+ * it needs no escaping in a `Set-Cookie`.
+ *
+ * Audit L3 of 2026-09-18: the token used to be handed out unchanged on
+ * every resume, so a copy of `cs_session` taken once stayed valid for the
+ * whole life of the volume — weeks, across every close and reopen. Every
+ * route that opens or resumes a session now issues a new one and sets it on
+ * the response, which retires the previous value on the spot. Within one
+ * browser this is invisible (the new `Set-Cookie` replaces the old value
+ * for every tab); a copy taken to another browser or another machine stops
+ * working at the next launch, and the proxy answers its "Session non
+ * autorisée" page.
+ */
+export function newCookieToken(): string {
+  return randomBytes(32).toString("base64url");
 }
 
 export function createSessionManager(opts: ManagerDeps): SessionManager {
@@ -634,30 +658,13 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     return { session: updated, healthyInMs };
   }
 
-  /**
-   * A fresh proxy cookie token. 32 bytes from the CSPRNG, base64url so that
-   * it needs no escaping in a `Set-Cookie`.
-   *
-   * Audit L3 of 2026-09-18: the token used to be handed out unchanged on
-   * every resume, so a copy of `cs_session` taken once stayed valid for the
-   * whole life of the volume — weeks, across every close and reopen. Every
-   * route that opens or resumes a session now issues a new one and sets it on
-   * the response, which retires the previous value on the spot. Within one
-   * browser this is invisible (the new `Set-Cookie` replaces the old value
-   * for every tab); a copy taken to another browser or another machine stops
-   * working at the next launch, and the proxy answers its "Session non
-   * autorisée" page.
-   */
-  function newCookieToken(): string {
-    return randomBytes(32).toString("base64url");
-  }
-
   /** Fields the launch token brings, set both at creation and at resumption. */
   function launchPatch(startOpts: StartOptions): Partial<SessionRow> {
     const patch: Partial<SessionRow> = {};
     if (startOpts.teacherId !== undefined) patch.teacherId = startOpts.teacherId;
     if (startOpts.launchJti !== undefined) patch.launchJti = startOpts.launchJti;
     if (startOpts.targetRepo !== undefined) patch.targetRepo = startOpts.targetRepo;
+    if (startOpts.openedBySitting !== undefined) patch.openedBySitting = startOpts.openedBySitting;
     return patch;
   }
 
@@ -767,6 +774,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         teacherId: startOpts.teacherId ?? assignment.teacherId,
         launchJti: startOpts.launchJti ?? null,
         targetRepo: startOpts.targetRepo ?? null,
+        openedBySitting: startOpts.openedBySitting ?? null,
       })
       .returning()
       .all();

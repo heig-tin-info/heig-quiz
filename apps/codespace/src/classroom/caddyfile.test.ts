@@ -24,6 +24,7 @@ import type { Engine } from "../engine/index.js";
 import { buildPortal, type Portal } from "../server.js";
 
 const CADDYFILE = readFileSync(new URL("../../deploy/Caddyfile", import.meta.url), "utf8");
+const LIB = readFileSync(new URL("../../deploy/lib.sh", import.meta.url), "utf8");
 const DEPLOYMENT = readFileSync(
   new URL("../../../../docs/development/deployment.md", import.meta.url),
   "utf8",
@@ -33,6 +34,7 @@ const DEPLOYMENT = readFileSync(
 const SERVICE_ROUTES = [
   "GET /api/assignments/:assignmentId/sessions",
   "HEAD /api/assignments/:assignmentId/sessions",
+  "POST /api/sittings/close",
   "PUT /api/assignments/:assignmentId",
 ];
 
@@ -123,6 +125,26 @@ describe("the Caddy allow-list of the service API", () => {
       const reply = await portal.app.inject({ method, url: concrete(path), ...(method === "PUT" ? { payload: {} } : {}) });
       expect(reply.statusCode, route).toBe(401);
     }
+  });
+
+  it("lets only the portal and its own Quiz frame it, keeping the other headers (ADR-089 §10)", () => {
+    const block = /^\theader \{\n([\s\S]*?)\n\t\}/m.exec(CADDYFILE)?.[1] ?? "";
+    const lines = block.split("\n").map((line) => line.trim());
+    expect(lines).toEqual([
+      "defer",
+      'Strict-Transport-Security "max-age=31536000; includeSubDomains"',
+      'X-Content-Type-Options "nosniff"',
+      'Referrer-Policy "strict-origin-when-cross-origin"',
+      `+Content-Security-Policy "frame-ancestors 'self' @PLATFORM@"`,
+      "-Server",
+    ]);
+    expect(CADDYFILE).not.toMatch(/^\s*[^#\s].*X-Frame-Options/m);
+    // `@PLATFORM@` is each instance's Quiz origin, filled by lib.sh from
+    // CS_PLATFORM: an https origin, no wildcard, no path.
+    expect(LIB).toContain('-e "s|@PLATFORM@|$CS_PLATFORM|g"');
+    const platforms = [...LIB.matchAll(/^\t+CS_PLATFORM=(\S+)$/gm)].map((m) => m[1]);
+    expect(platforms).toEqual(["https://quiz.chevallier.io", "https://quiz.dev.chevallier.io"]);
+    for (const origin of platforms) expect(new URL(origin ?? "").origin).toBe(origin);
   });
 
   it("answers the application VM's addresses only, as deployment.md records them", () => {

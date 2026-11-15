@@ -36,6 +36,7 @@ const en = {
   launchUnknownAssignment:
     "This activity was not synchronized from the platform. Tell your teacher: the activity must be saved on the platform before it is opened.",
   launchClosed: "This activity is not open at the moment.",
+  launchSittingClosed: "Your session on this station has ended. Call the supervisor.",
   launchRepoMissing: "Your repository is not ready for this activity yet. Try again in a moment.",
   launchBadAssignmentId: "This activity has an identifier the portal cannot use.",
   quotaTitle: "Quota reached",
@@ -102,6 +103,7 @@ const fr: Record<MessageKey, string> = {
   launchUnknownAssignment:
     "Activité non synchronisée depuis la plateforme. Prévenez votre enseignant : l'activité doit être enregistrée sur la plateforme avant d'être lancée.",
   launchClosed: "La fenêtre d'ouverture de cette activité est close.",
+  launchSittingClosed: "Votre session sur ce poste est terminée. Appelez le surveillant.",
   launchRepoMissing:
     "Votre dépôt n'est pas encore prêt pour cette activité. Réessayez dans quelques instants.",
   launchBadAssignmentId: "Cette activité porte un identifiant inutilisable par le portail.",

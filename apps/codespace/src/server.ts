@@ -39,6 +39,7 @@ import { proxyPlugin } from "./proxy/index.js";
 import { portalLogger, type LogStream } from "./logging.js";
 import { createSebVerifier } from "./seb/index.js";
 import { createSessionManager, type SessionManager } from "./sessions/manager.js";
+import { createSittingSockets } from "./sessions/sittings.js";
 import { webRoutes } from "./web/routes.js";
 
 export { loadConfig, type AppConfig } from "./auth/config.js";
@@ -105,6 +106,8 @@ export interface BuildOptions {
   withTimers?: boolean;
   /** Where the log lines go (tests read them back); stdout otherwise. */
   logStream?: LogStream;
+  /** code-server's port in a container (tests only: a local upstream); 8080 otherwise. */
+  upstreamPort?: number;
 }
 
 export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
@@ -204,6 +207,10 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
         : { defaultProtocol: "http" as const },
   });
 
+  // The sockets the proxy upgrades under a kiosk sitting, which the close of
+  // that sitting drops (ADR-089): shared by the proxy and the platform routes.
+  const sittingSockets = createSittingSockets();
+
   // --- boundary with the platform ------------------------------------------
   // Without a shared secret, the plugin is not registered: `/launch` and
   // `/api/assignments/*` answer 404 and the portal opens no session.
@@ -213,6 +220,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
       db,
       manager,
       verifier,
+      sittingSockets,
       ...(forge ? { repoUrl: (repo) => forge.pushUrl(repo) } : {}),
     });
   } else {
@@ -228,6 +236,8 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
     manager,
     examCookieSecret: config.EXAM_COOKIE_SECRET,
     examCookieMaxAgeMs: config.EXAM_COOKIE_MAX_AGE_MS,
+    sittingSockets,
+    ...(options.upstreamPort !== undefined ? { upstreamPort: options.upstreamPort } : {}),
   });
 
   app.get("/healthz", async () => ({ ok: true }));

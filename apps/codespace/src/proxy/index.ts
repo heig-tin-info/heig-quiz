@@ -29,6 +29,7 @@ import type { Db } from "../db/client.js";
 import type { SessionRow } from "../db/schema.js";
 import { checkExamRequest, replyOutsideSeb } from "../seb/index.js";
 import type { SessionManager } from "../sessions/manager.js";
+import { isSittingClosed, type SittingSockets } from "../sessions/sittings.js";
 import { findAssignment, findSession, isReview } from "../sessions/store.js";
 import { requestLang, t, type MessageKey } from "../web/i18n.js";
 import { errorPage } from "../web/pages.js";
@@ -41,7 +42,14 @@ export interface ProxyOptions {
   manager: SessionManager;
   examCookieSecret: string;
   examCookieMaxAgeMs: number;
+  /** Where each socket upgraded under a kiosk sitting is tagged, for its close (ADR-089). */
+  sittingSockets: SittingSockets;
+  /** code-server's port in the container; 8080 (tests point it at a local upstream). */
+  upstreamPort?: number;
 }
+
+/** code-server's port inside the student container (`images/c-dev`). */
+export const CODE_SERVER_PORT = 8080;
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -162,7 +170,9 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
 
     // Exam mode: the SEB cookie, and it alone (invariant 5). A client address
     // different from the one of the initial verification is refused
-    // (analyse.md D5).
+    // (analyse.md D5). A station's cookie carries its sitting: once Quiz
+    // closed that sitting, the cookie is revoked (ADR-089).
+    let sitting: string | undefined;
     if (assignment.mode === "exam") {
       const verdict = checkExamRequest(request, {
         secret: opts.examCookieSecret,
@@ -179,6 +189,11 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
       if (verdict.claims.sessionId !== sessionId) {
         request.log.warn({ sessionId }, "exam cookie from another session");
         return replyOutsideSeb(reply, { ok: false, reason: "address-mismatch" });
+      }
+      sitting = verdict.claims.sitting;
+      if (sitting !== undefined && isSittingClosed(db, sitting)) {
+        request.log.warn({ sessionId, sitting, clientAddress: request.ip }, "proxy access refused: kiosk sitting closed");
+        return replyOutsideSeb(reply, { ok: false, reason: "sitting-closed" });
       }
     }
 
@@ -213,7 +228,12 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
     if (!session.containerIp) {
       return deny(reply, 502, "sessionUnavailableTitle", "sessionNoAddress");
     }
-    upstreams.set(sessionId, `http://${session.containerIp}:8080`);
+    upstreams.set(sessionId, `http://${session.containerIp}:${opts.upstreamPort ?? CODE_SERVER_PORT}`);
+    // A websocket upgraded under a station's cookie is tagged with its
+    // sitting: the close drops it, whoever holds the session by then.
+    if (sitting !== undefined && request.headers.upgrade !== undefined) {
+      opts.sittingSockets.track(sitting, request.raw.socket);
+    }
     // Heartbeat: it is the proxy that keeps `lastSeen`, so an open tab is
     // enough to keep the session alive, and closing it starts the grace
     // period.

@@ -14,6 +14,8 @@ import {
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
   SERVICE_AUDIENCE,
+  SITTING_CLOSE_AUDIENCE,
+  SittingCloseClaims,
   projectSebPath,
   ProjectWorkModeBody,
   ServiceTokenClaims,
@@ -130,6 +132,26 @@ describe("ServiceTokenClaims", () => {
     }
     expect(ServiceTokenClaims.safeParse({ ...claims, path: "api/x" }).success).toBe(false);
     expect(ServiceTokenClaims.safeParse({ ...claims, exp: 122 }).success).toBe(false);
+  });
+});
+
+describe("SittingCloseClaims (ADR-089, amendment point 4)", () => {
+  const SITTING = "6f1c2a3b-0000-4000-8000-000000000002";
+  const PROJECT = "6f1c2a3b-0000-4000-8000-000000000003";
+  const claims = { iss: "heig-quiz", aud: SITTING_CLOSE_AUDIENCE, iat: 1, exp: 121, jti: "j", sitting: SITTING, projectId: PROJECT };
+
+  it("names a sitting, and its project while it exists", () => {
+    expect(SittingCloseClaims.safeParse(claims).success).toBe(true);
+    expect(SittingCloseClaims.safeParse({ ...claims, projectId: null }).success).toBe(true);
+    expect(SittingCloseClaims.safeParse({ ...claims, projectId: undefined }).success).toBe(false);
+    expect(SittingCloseClaims.safeParse({ ...claims, sitting: "not-a-uuid" }).success).toBe(false);
+  });
+
+  it("comes from Quiz only, on its own audience, with a jti, for two minutes at most", () => {
+    expect(SittingCloseClaims.safeParse({ ...claims, iss: "heig-classroom" }).success).toBe(false);
+    expect(SittingCloseClaims.safeParse({ ...claims, aud: SERVICE_AUDIENCE }).success).toBe(false);
+    expect(SittingCloseClaims.safeParse({ ...claims, jti: undefined }).success).toBe(false);
+    expect(SittingCloseClaims.safeParse({ ...claims, exp: 122 }).success).toBe(false);
   });
 });
 

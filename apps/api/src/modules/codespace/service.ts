@@ -15,6 +15,8 @@
  *     start route (`routes.ts`, {@link launchToken}) and carried in a 303.
  *   - staff → portal: a review launch token on one repository of a project
  *     ({@link startReview}, ADR-129), its own audience.
+ *   - Quiz → portal: the close of a kiosk station's sitting
+ *     ({@link sendSittingClose}, ADR-089), its own audience.
  *
  * Off — `CODESPACE_URL` empty — the module registers nothing (every route a
  * 404) and {@link requestCodespaceSync} does nothing.
@@ -41,7 +43,10 @@ import {
   REVIEW_GRANT_MINUTES,
   SERVICE_AUDIENCE,
   SERVICE_TOKEN_TTL_SECONDS,
+  SITTING_CLOSE_AUDIENCE,
+  SITTING_CLOSE_PATH,
   type LaunchTokenClaims,
+  type SittingCloseClaims,
   type ReviewLaunchTokenClaims,
   type StaffReviewRefusal,
   type DeviceLevel,
@@ -203,6 +208,40 @@ export function launchToken(
   now: Date,
 ): Promise<{ token: string; jti: string }> {
   return sessionToken<LaunchTokenClaims>(config, LAUNCH_AUDIENCE, claims, now);
+}
+
+/**
+ * The close of a kiosk station's sitting (ADR-089, amendment of 2026-11-15,
+ * point 4): `POST <CODESPACE_URL>/api/sittings/close`, the bearer token
+ * being the whole message — its own audience, two minutes, a fresh `jti`,
+ * the `sitting` (the approving pairing's id) and its project while it
+ * exists. The portal answers 204 to a close it applied and to a replay or an
+ * unknown sitting alike, so a retry is always safe; any other answer, or no
+ * answer, throws, for the caller's job to retry. Only with the portal wired
+ * up (`codespaceOn`); the token is never logged.
+ */
+export async function sendSittingClose(
+  config: Pick<AppConfig, "CODESPACE_URL" | "CODESPACE_LAUNCH_SECRET">,
+  close: { sitting: string; projectId: string | null },
+  now: Date,
+): Promise<void> {
+  const iat = Math.floor(now.getTime() / 1000);
+  const claims: SittingCloseClaims = {
+    iss: QUIZ_CODESPACE_ISSUER,
+    aud: SITTING_CLOSE_AUDIENCE,
+    iat,
+    exp: iat + SERVICE_TOKEN_TTL_SECONDS,
+    jti: randomUUID(),
+    sitting: close.sitting,
+    projectId: close.projectId,
+  };
+  const token = await signHs256({ ...claims }, config.CODESPACE_LAUNCH_SECRET);
+  const reply = await fetch(`${config.CODESPACE_URL}${SITTING_CLOSE_PATH}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(PORTAL_TIMEOUT_MS),
+  });
+  if (reply.status !== 204) throw new Error(`the portal answered ${reply.status} to the close of a sitting`);
 }
 
 /**

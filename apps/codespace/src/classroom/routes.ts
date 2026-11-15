@@ -1,10 +1,11 @@
 /**
  * HTTP boundary with the platform (`@quiz/contracts`, `codespace.ts`; ADR-047).
  *
- * Four routes, and nothing else knows them:
+ * Five routes, and nothing else knows them:
  *
  *   PUT  /api/assignments/:id            the platform pushes an assignment (service token)
  *   GET  /api/assignments/:id/sessions   the platform's teacher view (service token)
+ *   POST /api/sittings/close             the platform closes a kiosk sitting (its own token, ADR-089)
  *   GET  /launch?token=…                 the student arrives, launch token
  *   GET  /review?token=…                 a staff member opens a repository, review launch token (ADR-129)
  *
@@ -24,7 +25,9 @@
  *    from Safe Exam Browser: it is here, once and only once, that the
  *    `SebVerifier` looks at the SEB headers, against the Config Key the
  *    platform signed into the token (D21) and the assignment's optional
- *    Browser Exam Keys. The proxy will never see one.
+ *    Browser Exam Keys. The proxy will never see one. A token carrying a
+ *    `kiosk` claim instead comes from an attested station's session in Quiz
+ *    (ADR-089 §4): no SEB header to check, the station framing the portal.
  *  - **Single use.** The token's `jti` is consumed by an `INSERT` whose primary
  *    key is the guarantee; a replay cannot run alongside a first call, SQLite
  *    refuses the second row. A service token is single use too, and bound to
@@ -45,7 +48,10 @@ import {
   REVIEW_AUDIENCE,
   ReviewLaunchTokenClaims,
   SERVICE_AUDIENCE,
+  SITTING_CLOSE_AUDIENCE,
+  SITTING_CLOSE_PATH,
   ServiceTokenClaims,
+  SittingCloseClaims,
   isSafeId,
   type CodespaceAssignmentSyncResult,
   type CodespaceSessionSummary,
@@ -81,6 +87,7 @@ import {
   type SebVerifier,
 } from "../seb/index.js";
 import { WorkspaceBootstrapError, type SessionManager } from "../sessions/manager.js";
+import { closeSitting, isSittingClosed, type SittingSockets } from "../sessions/sittings.js";
 import {
   REVIEW_ASSIGNMENT_PREFIX,
   REVIEW_SESSIONS_PER_HOLDER,
@@ -125,6 +132,8 @@ export interface ClassroomRoutesOptions {
    * fails, which is the intended behaviour (invariant 6).
    */
   repoUrl?: (repo: RepoRef) => string;
+  /** The sockets the proxy upgraded under a kiosk sitting, which its close drops (ADR-089). */
+  sittingSockets: SittingSockets;
 }
 
 // --- helpers ----------------------------------------------------------------
@@ -400,6 +409,39 @@ async function classroomRoutesImpl(
         return reply.code(200).send(summaries);
       },
     );
+
+    // --- POST /api/sittings/close ----------------------------------------------
+    // A kiosk station's sitting ended in Quiz (ADR-089, amendment of
+    // 2026-11-15, point 4). The token is the message: its own audience,
+    // from Quiz only, single use. Idempotent: a replay, or a sitting the
+    // portal never saw, answers 204 too and changes nothing a close has not
+    // already changed. Every other refusal is the service routes' 401.
+    api.post(SITTING_CLOSE_PATH, async (request, reply) => {
+      const header = request.headers.authorization ?? "";
+      const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
+      const read =
+        token === ""
+          ? { reason: "missing-token" }
+          : await tokenRefusal(token, secret, SittingCloseClaims, {
+              audience: SITTING_CLOSE_AUDIENCE,
+              issuer: QUIZ_CODESPACE_ISSUER,
+              requireJti: true,
+            });
+      if ("reason" in read) {
+        if (read.reason !== "missing-token") request.log.warn({ reason: read.reason }, "sitting close refused");
+        return reply.code(401).send({ error: "unauthenticated" });
+      }
+      const { sitting, projectId, jti, exp } = read.claims;
+      if (!consumeJti(db, jti, exp)) {
+        request.log.info({ sittingClose: { sitting, jti, replayed: true } }, "sitting close replayed: nothing done");
+        return reply.code(204).send();
+      }
+      const result = closeSitting(db, opts.sittingSockets, sitting, {
+        examCookieMaxAgeMs: config.EXAM_COOKIE_MAX_AGE_MS,
+      });
+      request.log.info({ sittingClose: { sitting, projectId, jti, ...result } }, "kiosk sitting closed");
+      return reply.code(204).send();
+    });
   });
 
   // --- GET /launch?token=… -------------------------------------------------
@@ -456,6 +498,11 @@ async function classroomRoutesImpl(
         "launchBadAssignmentId",
         "bad-assignment-id",
       );
+    }
+    // A station's launch token minted just before its sitting closed: the
+    // close already revoked that sitting, nothing opens under it (ADR-089).
+    if (claims.kiosk && isSittingClosed(db, claims.kiosk.sitting)) {
+      return refuse("launchSittingClosed", "sitting-closed");
     }
     return openSession(request, reply, { claims, assignment, targetRepo: claims.repo, replaces: [], quotaDetail: "quotaDetail" });
   });
@@ -540,7 +587,7 @@ async function classroomRoutesImpl(
     request: FastifyRequest,
     reply: FastifyReply,
     opening: {
-      claims: LaunchIdentityClaims & Pick<LaunchTokenClaims, "jti" | "seb">;
+      claims: LaunchIdentityClaims & Pick<LaunchTokenClaims, "jti" | "seb" | "kiosk">;
       assignment: AssignmentRow;
       targetRepo: AssignmentRepoRef;
       /** Live sessions this opening replaces: excluded from the quota, closed once it allows. */
@@ -583,6 +630,12 @@ async function classroomRoutesImpl(
     // the Browser Exam Keys, when the project has any). A token without the
     // claim did not come from Safe Exam Browser: refused, whatever the
     // verifier.
+    //
+    // A `kiosk` claim instead (ADR-089 §4): the token was minted by an
+    // attested station's session, which Quiz checked (a fresh attestation);
+    // there is no SEB header to verify, and the portal never calls Google.
+    // Its cookie carries the sitting, whose close revokes it. The schema
+    // refuses a token with both claims.
     // TODO(verify) SEB 3.x / 2.2.3: the `startURL` is the platform's and SEB
     // arrives here after a 303 **to another host**. That its headers are
     // added to that very request, hashed over the portal's URL with its query
@@ -590,7 +643,7 @@ async function classroomRoutesImpl(
     // mode does not prove it. Proof B (docs/merge/06-codespace-seb-infra.md
     // §6.3, "Proof B, by hand") settles it; plan B is an auto-submitted POST
     // form from the platform.
-    if (assignment.mode === "exam") {
+    if (assignment.mode === "exam" && !claims.kiosk) {
       const seb = claims.seb
         ? opts.verifier.verifyStart(
             { url: request.url, headers: request.headers },
@@ -622,10 +675,12 @@ async function classroomRoutesImpl(
     let result: Awaited<ReturnType<SessionManager["start"]>>;
     try {
       result = await manager.start(user, assignment, {
-        sebVerified: assignment.mode === "exam",
+        sebVerified: assignment.mode === "exam" && !claims.kiosk,
         teacherId: assignment.teacherId,
         launchJti: claims.jti,
         targetRepo: opening.targetRepo,
+        // Every launch says who opened the session last: a station's sitting, or nobody.
+        openedBySitting: claims.kiosk?.sitting ?? null,
       });
     } catch (err) {
       // The student's repository could not be fetched: **no container was
@@ -658,6 +713,7 @@ async function classroomRoutesImpl(
             sessionId: result.session.id,
             clientAddress: request.ip,
             issuedAt: Date.now(),
+            ...(claims.kiosk ? { sitting: claims.kiosk.sitting } : {}),
           },
           { secret: config.EXAM_COOKIE_SECRET, maxAgeMs: config.EXAM_COOKIE_MAX_AGE_MS },
         ),
@@ -680,6 +736,8 @@ async function classroomRoutesImpl(
           sessionId: result.session.id,
           login: user.login,
           mode: assignment.mode,
+          // Neither id is a secret: the station and its sitting, for the trail.
+          ...(claims.kiosk ? { kiosk: { deviceId: claims.kiosk.deviceId, sitting: claims.kiosk.sitting } } : {}),
           launched: result.launched,
           resumed: resuming,
           review: isReview(assignment),

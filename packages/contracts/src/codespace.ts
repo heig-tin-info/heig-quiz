@@ -260,6 +260,39 @@ export const ServiceTokenClaims = z
   .refine(lifetimeWithin(SERVICE_TOKEN_TTL_SECONDS), "a service token lives two minutes at most");
 export type ServiceTokenClaims = z.infer<typeof ServiceTokenClaims>;
 
+// ---------------------------------------------------------- the close of a kiosk sitting (ADR-089)
+
+/**
+ * The close of a kiosk station's sitting (ADR-089, amendment of 2026-11-15,
+ * point 4): Quiz → portal, `POST /api/sittings/close` with the token as its
+ * bearer and no body. Its own audience, so it is never read as a service
+ * token nor a launch, nor the reverse.
+ */
+export const SITTING_CLOSE_AUDIENCE = "heig-codespace-sitting-close";
+export const SITTING_CLOSE_PATH = "/api/sittings/close";
+
+/**
+ * The message IS the token (as ADR-078's requests are): two minutes at most,
+ * single use (`jti`), naming the `sitting` — the approving pairing's id, the
+ * `kiosk.sitting` of the launch tokens it opened — and its project while the
+ * project still exists (null once deleted). The portal revokes that
+ * sitting's `exam_session` cookies, drops the sockets upgraded under them and
+ * rotates the portal session that sitting opened last; idempotent, a
+ * replay or an unknown sitting answering success without effect.
+ */
+export const SittingCloseClaims = z
+  .object({
+    iss: z.literal(QUIZ_CODESPACE_ISSUER),
+    aud: z.literal(SITTING_CLOSE_AUDIENCE),
+    iat: z.number(),
+    exp: z.number(),
+    jti: z.string().min(1).max(200),
+    sitting: z.uuid(),
+    projectId: z.uuid().nullable(),
+  })
+  .refine(lifetimeWithin(SERVICE_TOKEN_TTL_SECONDS), "a close lives two minutes at most");
+export type SittingCloseClaims = z.infer<typeof SittingCloseClaims>;
+
 // ---------------------------------------------------------- the git relay's tokens (ADR-078)
 
 /** `POST /app/codespace/git-token`'s audience: refused anywhere else, and anything else refused there. */

@@ -12,11 +12,23 @@
 @HOST@ {
 	encode gzip
 
+	# Framing (ADR-089 §10): the portal itself ('self': code-server frames
+	# its webviews on this origin) and this instance's Quiz, @PLATFORM@,
+	# whose kiosk station page frames the portal — production Quiz for prod,
+	# staging Quiz for staging (lib.sh, CS_PLATFORM), never a wildcard. It
+	# replaces X-Frame-Options SAMEORIGIN, which cannot name another origin,
+	# and covers ADR-129's review pages too (harmless: only Quiz may frame
+	# them, and only its station page does). `+` adds the header beside any
+	# Content-Security-Policy of the answer (the sandbox of
+	# /vscode-remote-resource, portal invariant 14): a browser enforces
+	# every policy it receives, so neither replaces the other. `defer` (already
+	# implied by `-Server`) applies the block to the portal's answer as written.
 	header {
+		defer
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		X-Frame-Options "SAMEORIGIN"
+		+Content-Security-Policy "frame-ancestors 'self' @PLATFORM@"
 		-Server
 	}
 
@@ -51,9 +63,9 @@
 
 	# The service API answers Quiz's application VM only (#744, audit L25).
 	# `/api/*` holds the portal's service routes and nothing else: `PUT
-	# /api/assignments/:id` and `GET /api/assignments/:id/sessions`
-	# (src/classroom/routes.ts), which only Quiz's API calls, with a service
-	# token. `/launch`, the proxy `/s/<session>/…` and the pages stay public.
+	# /api/assignments/:id`, `GET /api/assignments/:id/sessions` and `POST
+	# /api/sittings/close` (src/classroom/routes.ts), which only Quiz's API
+	# calls, with a service token or, for the close, its own (ADR-089). `/launch`, the proxy `/s/<session>/…` and the pages stay public.
 	# The addresses are the application VM's egress, IPv4 and IPv6, from which
 	# both production and staging Quiz call (docs/development/deployment.md
 	# §1, its A and AAAA); when that VM moves, change them here too, beside

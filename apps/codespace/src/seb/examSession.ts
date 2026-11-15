@@ -30,6 +30,12 @@ export interface ExamClaims {
   readonly clientAddress: string;
   /** Issue time, in milliseconds since the epoch. */
   readonly issuedAt: number;
+  /**
+   * The kiosk sitting of a station's launch (ADR-089 §4): the cookie the
+   * close of that sitting revokes. Absent from a `seb` launch's cookie, which
+   * no close ever touches.
+   */
+  readonly sitting?: string;
 }
 
 export type ExamCookieRefusal =
@@ -38,7 +44,9 @@ export type ExamCookieRefusal =
   | "bad-signature"
   | "expired"
   | "address-mismatch"
-  | "assignment-mismatch";
+  | "assignment-mismatch"
+  /** Its kiosk sitting was closed (ADR-089): read by the proxy, never by `verifyExamCookie`. */
+  | "sitting-closed";
 
 export type ExamCookieVerdict =
   | { readonly ok: true; readonly claims: ExamClaims }
@@ -89,7 +97,8 @@ function parseClaims(json: string): ExamClaims | null {
     typeof c["sessionId"] !== "string" ||
     typeof c["clientAddress"] !== "string" ||
     typeof c["issuedAt"] !== "number" ||
-    !Number.isFinite(c["issuedAt"])
+    !Number.isFinite(c["issuedAt"]) ||
+    (c["sitting"] !== undefined && typeof c["sitting"] !== "string")
   ) {
     return null;
   }
@@ -98,6 +107,7 @@ function parseClaims(json: string): ExamClaims | null {
     sessionId: c["sessionId"],
     clientAddress: c["clientAddress"],
     issuedAt: c["issuedAt"],
+    ...(typeof c["sitting"] === "string" ? { sitting: c["sitting"] } : {}),
   };
 }
 
