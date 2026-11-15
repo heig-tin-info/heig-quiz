@@ -290,6 +290,8 @@ describe("proxy refusals", () => {
     });
     expect(res.statusCode).toBe(403);
     expect(res.body).toContain("Session non autorisée");
+    // No PLATFORM_URL set here: the link stays the portal's own, never the localhost default (#1101).
+    expect(res.body).toContain('href="/"');
   });
 
   it("404 for an unknown session", async () => {

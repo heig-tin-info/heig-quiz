@@ -49,6 +49,8 @@ export interface ProxyOptions {
   upstreamPort?: number;
   /** Where a refusal page sends the reader back: the platform (`PLATFORM_URL`); the portal's `/` without it. */
   platformUrl?: string;
+  /** How long open websockets alone keep a session, from its last page load (`SESSION_MAX_HELD_MS`). */
+  maxHeldMs: number;
 }
 
 /** code-server's port inside the student container (`images/c-dev`). */
@@ -147,8 +149,19 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
   const upstreams = new Map<string, string>();
   /** sid → its open websockets: a connected tab is a live one (#1101). */
   const sockets = new Map<string, number>();
+  /** Sockets already counted: a socket is counted once, whatever comes through it. */
+  const counted = new WeakSet<Socket>();
+  /**
+   * sid → its last page load, while it has sockets: past `maxHeldMs`, open
+   * sockets alone no longer keep it (a forgotten tab). A reload renews it, a
+   * websocket reconnect does not; after a restart, the first socket counts as now.
+   */
+  const loadedAt = new Map<string, number>();
   const heartbeat = setInterval(() => {
-    for (const sessionId of sockets.keys()) manager.touch(sessionId);
+    const now = Date.now();
+    for (const sessionId of sockets.keys()) {
+      if (now - (loadedAt.get(sessionId) ?? now) < opts.maxHeldMs) manager.touch(sessionId);
+    }
   }, SOCKET_HEARTBEAT_MS);
   heartbeat.unref();
   app.addHook("onClose", async () => clearInterval(heartbeat));
@@ -156,12 +169,20 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
 
   /** Counts `socket` for `sessionId` until it closes; the grace period starts then. */
   function holdWhileOpen(sessionId: string, socket: Socket): void {
+    if (counted.has(socket) || socket.destroyed) return;
+    counted.add(socket);
     sockets.set(sessionId, (sockets.get(sessionId) ?? 0) + 1);
+    if (!loadedAt.has(sessionId)) loadedAt.set(sessionId, Date.now());
     socket.once("close", () => {
       const left = (sockets.get(sessionId) ?? 1) - 1;
-      if (left > 0) sockets.set(sessionId, left);
-      else sockets.delete(sessionId);
-      manager.touch(sessionId);
+      if (left > 0) {
+        sockets.set(sessionId, left);
+        return;
+      }
+      sockets.delete(sessionId);
+      // Past the cap, the close does not renew the session either.
+      if (Date.now() - (loadedAt.get(sessionId) ?? 0) < opts.maxHeldMs) manager.touch(sessionId);
+      loadedAt.delete(sessionId);
     });
   }
 
@@ -279,7 +300,11 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
     // period. An HTTP request counts once; a websocket for as long as it is
     // open, counted only here, after every refusal above.
     manager.touch(sessionId);
-    if (request.headers.upgrade?.toLowerCase() === "websocket") holdWhileOpen(sessionId, request.raw.socket);
+    if (isEntryRequest(request.url, sessionId)) loadedAt.set(sessionId, Date.now());
+    // The upgrade path only: Node hands a request to it on `Connection: upgrade`.
+    if (/\bupgrade\b/i.test(request.headers.connection ?? "") && request.headers.upgrade?.toLowerCase() === "websocket") {
+      holdWhileOpen(sessionId, request.raw.socket);
+    }
     return undefined;
   }
 
