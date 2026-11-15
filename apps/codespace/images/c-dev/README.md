@@ -1,6 +1,6 @@
 # images/c-dev — hardened student image (task P1)
 
-The working environment of a student: a complete C toolchain, a `gdb` that is really
+The working environment of a student: complete C and C++ toolchains, a `gdb` that is really
 usable (ASLR can be disabled), code-server without network, without an extension
 gallery and unable to write anywhere outside the work volume.
 
@@ -15,6 +15,7 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | `Containerfile` | image `codespace/c-dev` |
 | `entrypoint.sh` | copies the machine settings into the tmpfs `user-data-dir`, trusts the return URL's origin, then `code-server` |
 | `settings.json` | machine settings, installed as `/etc/code-server/settings.json` |
+| `clangd.yaml` | clangd's default flags per language, installed as `/etc/clangd/config.yaml` and `~/.config/clangd/config.yaml` (§ C++) |
 | `resolv.conf` | empty resolver, installed as `/etc/resolv.conf` |
 | `extension/` | source of `heig.codespace-statusbar`, packaged into a `.vsix` at build time |
 | `baygon/baygon.in`, `baygon/requirements.txt` | Baygon's one requirement, and everything it installs, pinned by hash (§ Baygon) |
@@ -31,6 +32,7 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | Base | Debian 13.6 "trixie" slim | digest `sha256:abc9cb88a5587630d7f915f47b23b0668fe250fbfc6457aa4d52b534c1bbf73f` |
 | code-server | **4.137.0** (VS Code 1.137.0, commit `b11dabda`) | `ARG CS_VERSION`, `.deb` from the GitHub release `coder/code-server` |
 | gcc | 14.2.0 (Debian 14.2.0-19) | Debian stable repository |
+| g++ | 14.2.0 (Debian 14.2.0-19), with `libstdc++-14-dev` | Debian stable repository (package `g++`, Debian's default, the same GCC as `gcc`) |
 | gdb | 16.3 (Debian 16.3-1) | Debian stable repository |
 | clangd | 19.1.7 | package `clangd` |
 | git | 2.47.3 | Debian stable repository |
@@ -79,12 +81,13 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 
 ## Modifying the image
 
+- **Change clangd's default flags**: edit `clangd.yaml` (one fragment per language) and the two `clangd --check` assertions of `test.sh` § 13.
 - **Add an apt package**: add it to the `apt-get install` list of the `Containerfile` (step 1), add its binary to the presence assertion of `test.sh` § 7 (`test -x /usr/bin/…`), and add a row to the pinned-versions table above.
 - **Add an extension**: one `ARG` for its identifier, one `--install-extension` in the same `RUN`, one `grep -qi "^<id>@"` against `/etc/code-server/extensions.lock` so that the build fails if it is missing, its id in `extensions.allowed` of `settings.json`, the exact expected list asserted in `test.sh` § 3 (three ids, sorted), and a row in the pinned-versions table.
 - **Bump Baygon**: the version in `baygon/baygon.in`, then the `uv pip compile` command in the header of `baygon/requirements.txt` (keep the header), the version asserted by `test.sh` § 11, and the row above. A dependency that ships no wheel for CPython 3.13 on x86_64 fails the build (`--only-binary=:all:`): no compiler is ever brought in for it.
 - **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/history/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`).
 - **Deploy**: classroom's `deploy/push.sh --rebuild-image` rebuilds the image on the VM; without the flag it is only built there when the tag is missing.
-- **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its thirteen sections prove, in order:
+- **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its fourteen sections prove, in order:
   - § 0 the container starts under `run-hardened.sh` and answers `/healthz` (prints `MESURE_DEMARRAGE_SECONDES`);
   - § 1 `gdb` runs a program and produces a backtrace, with no "Operation not permitted", and breaks in `main`, steps over a line and into a call;
   - § 2 `personality(ADDR_NO_RANDOMIZE)` passes the project seccomp profile, and the control container on the default profile still varies;
@@ -97,7 +100,8 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
   - § 9 the container carries the seven portal variables and nothing else, the git identity works without a configuration file, and the VS Code server inherits the environment.
   - § 10 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`;
   - § 11 Baygon 0.7.0 is on `PATH`, passes a trivial test file and reports a failing one without network, `/opt/baygon` is read-only, holds no `pip` and its byte-code was compiled at build time, and the image sets no `PYTHON*` variable;
-  - § 12 a program debugged through webfreak.debug's real adapter, launched with the configuration the status-bar extension makes, prints its prompt in its own terminal, reads the `7` typed there, stops on a breakpoint, and none of its I/O reaches the debug console.
+  - § 12 a program debugged through webfreak.debug's real adapter, launched with the configuration the status-bar extension makes, prints its prompt in its own terminal, reads the `7` typed there, stops on a breakpoint, and none of its I/O reaches the debug console;
+  - § 13 C++: `g++` has the major version of `gcc`; a C++20 program on `<vector>`, `<ranges>` and `<format>` compiles with `-std=c++20 -Wall -Wextra -pedantic` and runs; gdb breaks in it and prints a `std::vector` through libstdc++'s auto-loaded pretty-printers; § 12's debug session, on a C++ program, keeps its I/O in the Program terminal; `clangd --check` parses the `.cpp` with `-std=c++20` and no error, and a `.c` still with `-std=c17`.
 
 ## Measurements (2026-09-17, WSL2, 24 cores, Podman 5.7 rootful, crun, overlay)
 
@@ -105,7 +109,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 | --- | --- |
 | Full `--no-cache` build | **45 – 51 s** (of which ~25 s downloading the 233 MB `.deb`) |
 | Build with layer cache | 4.0 s |
-| Image size | **1.50 GB** (1,499,111,868 bytes); **1.55 GB** (1,547,182,164) with Baygon, 2026-11-15 (§ Baygon) |
+| Image size | **1.50 GB** (1,499,111,868 bytes); **1.55 GB** (1,547,182,164) with Baygon, 2026-11-15 (§ Baygon); **1.61 GB** (1,607,441,416) with g++, 2026-11-15 (§ C++) |
 | `podman run` (command returns) | 0.18 s |
 | `podman run` → `/healthz` 200 | **0.61 – 0.76 s** warm, **1.0 s** on the first start after a build (cold page cache). Measurement printed by `test.sh`: `MESURE_DEMARRAGE_SECONDES` |
 | `podman run` → `GET /` (workbench HTML served) | 0.95 – 1.01 s |
@@ -623,6 +627,10 @@ Known limits:
 
 ### What a lab template should hold
 
+The same for a C lab and a C++ lab: the image's debugging is not
+language-specific (the program's terminal applies to every `gdb` launch,
+`test.sh` § 12 and § 13 run it on a C and on a C++ program).
+
 webfreak.debug is the only debugger in the image. A `launch.json` written
 for Microsoft's C/C++ extension (`"type": "cppdbg"`, and a `tasks.json` of
 `"type": "cppbuild"`) does not work here: that extension is not in the image
@@ -664,10 +672,50 @@ student's *Output* panel said). A teacher's template should hold, in
 }
 ```
 
-`target` is the lab's executable; the `Makefile` must build it with `-g`.
+`target` is the lab's executable; the `Makefile` must build it with `-g`
+(`gcc` for C, `g++` for C++).
 No `terminal`, no `autorun` setting `inferior-tty`: the image provides the
 program's terminal. `problemMatcher` stays empty: `$gcc` comes from
 Microsoft's extension too; clangd reports the errors in the editor.
+
+## C++ (2026-11-15)
+
+The school's labs are in C and in C++; the image first shipped `gcc` only,
+and a C++ lab's `make` failed with `g++: No such file or directory`.
+
+- **Compiler.** `g++`, Debian trixie's default (`g++-14` 14.2.0-19, the same
+  GCC as `gcc`), with `--no-install-recommends`; it brings
+  `libstdc++-14-dev`. C++20 is the standard the labs use: `<vector>`,
+  `<ranges>` and `<format>` compile with GCC 14 (`std::format` since GCC 13;
+  `std::print` is C++23 and not asserted). **Cost: +60.3 MB**
+  (1,547,184,215 → 1,607,441,416 bytes, +3.9 %, both built `--no-cache` on
+  2026-11-15).
+- **gdb.** `libstdc++6`, already in the image, ships the standard library's
+  pretty-printers in `/usr/share/gdb/auto-load/`; gdb's Python loads them
+  from the read-only root with no setting: `print v` on a `std::vector<int>`
+  shows `std::vector of length 3, capacity 3 = {2, 4, 6}` (`test.sh` § 13).
+  Debugging needs nothing else: § Debugging's `launch.json` works as it is.
+- **clangd.** `clangd.yaml`, one source file installed at the paths clangd
+  reads (`/etc/clangd/config.yaml`, copied to `~/.config/clangd/` at build
+  time and into the tmpfs `XDG_CONFIG_HOME` by the entrypoint), gives each
+  language its flags through `If: PathMatch:` fragments: `.c` gets
+  `-std=c17 -Wall -Wextra`; `.cpp`, `.cc`, `.cxx`, `.C`, `.c++` and the C++
+  header extensions (`.hpp`, `.hh`, `.hxx`, `.h++`, `.ipp`, `.tpp`) get
+  `-std=c++20 -Wall -Wextra`. Before, `-std=c17` went to every file, and
+  clangd refused it on a `.cpp` (`invalid argument '-std=c17' not allowed
+  with 'C++'`, six errors on a two-line program) — and on every `.h` opened
+  without its `.c` (clangd's fallback for a header is Objective-C++).
+  A `.h` now matches no fragment: it gets clangd's own default, which parses
+  without error but in C++ mode when no source file including it is open.
+
+Limit: clangd applies the user configuration **after** the project's, and
+`Add` appends to the command, so the image's `-std` also follows a
+project's `compile_commands.json` or `.clangd` and wins over theirs
+(measured: a database's `-std=c++17` and a `.clangd`'s `Add: [-std=c++17]`
+both end before `-std=c++20`). Every other flag of the project is kept. The
+same held for `-std=c17` before this change. A lab on another standard is
+not served by the image's default; clangd 19 has no condition on "no
+compilation database", and `clangd.fallbackFlags` cannot tell C from C++.
 
 ## Resolver: `/etc/resolv.conf` shipped by the image
 
@@ -888,7 +936,10 @@ listed here.
   Second layer already planned: `allowDownUploads: false` on the SEB side
   (docs/history/analyse.md § 4.3).
 - `TODO(verify)` **clangd 19.1.7 + extension 0.6.0** — does the language server
-  start without `compile_commands.json` and without network? The default
+  start without `compile_commands.json` and without network? `clangd --check`
+  does, on a `.c` and a `.cpp`, with the image's per-language flags
+  (`test.sh` § 13, 2026-11-15); the server started by the extension is what
+  remains unobserved. The default
   configuration is placed at both paths that clangd actually reads
   (`/home/student/.config/clangd/config.yaml` in the image, and
   `$XDG_CONFIG_HOME/clangd/config.yaml` copied by the entry point, which
@@ -965,6 +1016,6 @@ listed here.
 - `CAP_SYS_PTRACE` stays dropped (docs/history/analyse.md § 3.5): `gdb ./prog`
   works, `gdb -p <pid>` on a process from another terminal will not
   work. That is the decision, not a defect.
-- The image size (1.55 GB) is dominated by code-server (723 MB installed).
+- The image size (1.61 GB) is dominated by code-server (723 MB installed).
   No effort at reduction has been made: the image is local, the `podman run`
   does not transfer it.

@@ -63,7 +63,7 @@ Clone your repository on your computer as you would any GitHub repository (`git 
 
 Some projects run in the **online workspace**: once you accepted, **Open workspace** on the project page opens an editor in your browser, set up with your repository. You work and push there, not from your own machine. If it does not open, the page says why (the deadline has passed on a project that closes then, or the project was not accepted yet). A project in **Safe Exam Browser** has **Open in Safe Exam Browser** instead: download the file (it works once, for 5 minutes) and open it; Safe Exam Browser shows the project page, where **Open workspace** opens your editor.
 
-The workspace's editor has a terminal with `gcc`, `make`, `gdb` and `baygon` (the lab tests behind `make test`), and debugging with breakpoints (**Run and Debug**, F5). While a program runs under the debugger, what it prints and what it reads go through the **Program** terminal, which opens by itself: type the program's input there, not in the debug console.
+The workspace's editor has a terminal with `gcc` (C), `g++` (C++), `make`, `gdb` and `baygon` (the lab tests behind `make test`), and debugging with breakpoints (**Run and Debug**, F5). While a program runs under the debugger, what it prints and what it reads go through the **Program** terminal, which opens by itself: type the program's input there, not in the debug console.
 
 ## 5. Read your score
 

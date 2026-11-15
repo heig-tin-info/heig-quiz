@@ -1,0 +1,16 @@
+# Default clangd flags of the student image, per language (Containerfile § 6).
+# Installed as /etc/clangd/config.yaml and ~student/.config/clangd/config.yaml;
+# the entrypoint copies it into the tmpfs XDG_CONFIG_HOME. A `-std` for C is
+# an invalid argument for C++ (and the reverse), so each fragment matches its
+# own file extensions. These flags are appended to a project's
+# compile_commands.json command too (README, § C++, the limit). Headers `.h`
+# match no fragment: they are C or C++, and clangd's own default parses them.
+If:
+  PathMatch: .*\.c
+CompileFlags:
+  Add: [-std=c17, -Wall, -Wextra]
+---
+If:
+  PathMatch: .*\.(cpp|cc|cxx|C|c\+\+|hpp|hh|hxx|h\+\+|ipp|tpp)
+CompileFlags:
+  Add: [-std=c++20, -Wall, -Wextra]
