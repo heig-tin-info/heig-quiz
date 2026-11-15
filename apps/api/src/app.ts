@@ -267,7 +267,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(pollPlugin, { config });
   if (app.kioskAttestor) await app.register(kioskPlugin, { config });
   await app.register(evaluationPlugin, { config });
-  await app.register(activityPlugin);
+  await app.register(activityPlugin, { config });
   // The journal: a Quiz-mode one needs no App (ADR-057); its GitHub routes do.
   await app.register(journalPlugin, { config });
   await app.register(legacyPlugin);

@@ -269,6 +269,8 @@ describe("the student's cards (F-PROJ-04, F-ORG-14, F-ORG-15)", () => {
       repoFullName: null,
       repoUrl: null,
       work: null,
+      // No online workspace on this platform (ADR-047 §5): the card says none, as the view does.
+      workspace: null,
     });
     const page = await classroomPage(room.classroomId, student.headers);
     expect(projectCards(page.activities.open)).toEqual(projectCards(h.open));
@@ -822,6 +824,8 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
           repoFullName: null,
           repoUrl: null,
           work: null,
+          // Its mode stays unsaid until it opens (ADR-127), as on its page.
+          workspace: null,
         },
       ]);
       const page = await classroomPage(room.classroomId, student.headers);

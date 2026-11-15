@@ -101,7 +101,7 @@ export async function personalDataExport(
     if (own) feedback.push(await studentFeedback(db, own.evaluation, own.attempt, now));
   }
 
-  const cards = await studentProjectCards(db, userId, now);
+  const cards = await studentProjectCards(db, userId, now, { codespace });
   const projects: StudentProject[] = [];
   for (const card of [...cards.open, ...cards.upcoming, ...cards.past]) {
     const scope = await findStudentProjectView(db, caller, PORTAL, card.id);

@@ -2,12 +2,17 @@ import type { FastifyInstance } from "fastify";
 
 import { IdParam } from "@quiz/contracts";
 
+import type { AppConfig } from "../../config.js";
+import { codespaceOn } from "../codespace/service.js";
+
 import { callerOf, readableClassroom, teacherGuard } from "../guards.js";
 import { studentRoute } from "../http.js";
 import * as service from "./service.js";
 
-export async function activityPlugin(app: FastifyInstance) {
+export async function activityPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const requireTeacher = teacherGuard(app);
+  // ADR-047: a project card says its workspace only while the portal exists.
+  const codespace = codespaceOn(opts.config);
   const student = studentRoute(app);
 
   /**
@@ -38,7 +43,7 @@ export async function activityPlugin(app: FastifyInstance) {
    * input, so no schema.
    */
   app.get("/app/api/student/home", { preHandler: (req, reply) => app.requireSession(req, reply) }, async (req) =>
-    service.studentHome(app.db, callerOf(req), req.auth, app.clock.now()),
+    service.studentHome(app.db, callerOf(req), req.auth, app.clock.now(), { codespace }),
   );
 
   /**
@@ -58,7 +63,7 @@ export async function activityPlugin(app: FastifyInstance) {
         params: IdParam,
         load: (req, reply, p) => readableClassroom(app, req, reply, p, { studentView: true }),
       },
-      ({ req, now, scope }) => service.studentClassroomPage(app.db, callerOf(req), scope, now),
+      ({ req, now, scope }) => service.studentClassroomPage(app.db, callerOf(req), scope, now, { codespace }),
     ),
   );
 }

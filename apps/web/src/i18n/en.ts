@@ -3562,6 +3562,7 @@ export const en = {
   "sproj.relink": "Relink GitHub",
   "sproj.openInvitation": "Open the invitation",
   "sproj.openRepo": "Open repository",
+  "sproj.openPage": "Open project",
   "sproj.readOnly": "Read-only: student actions disabled",
   "sproj.accepted.invited": "Your repository is ready: accept the invitation GitHub sent you.",
   "sproj.accepted.ready": "Your repository is ready.",

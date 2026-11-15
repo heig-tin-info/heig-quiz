@@ -3537,6 +3537,7 @@ export const fr: Record<keyof Dict, string> = {
   "sproj.relink": "Relier GitHub",
   "sproj.openInvitation": "Ouvrir l'invitation",
   "sproj.openRepo": "Ouvrir le dépôt",
+  "sproj.openPage": "Ouvrir le projet",
   "sproj.readOnly": "Lecture seule : actions désactivées",
   "sproj.accepted.invited": "Votre dépôt est prêt : acceptez l'invitation que GitHub vous a envoyée.",
   "sproj.accepted.ready": "Votre dépôt est prêt.",

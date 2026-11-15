@@ -82,6 +82,24 @@ export function projectActionKind(facts: ProjectFacts, now: number): ProjectActi
   return Date.parse(facts.startAt) > now ? "notStarted" : "accept";
 }
 
+/**
+ * What a card offers instead of GitHub when its project runs in the online
+ * workspace (ADR-047, ADR-089) and its repository is live, from the mode the
+ * card carries (`StudentProjectCard.workspace`, the page's own rule):
+ *   - `launch`: on any device, while in progress — the workspace opens from
+ *     the card, as from the page; the repository stays a quiet icon;
+ *   - `page`: under supervision (Safe Exam Browser, a kiosk station) — the
+ *     project's page holds the steps, and never leads to GitHub (ADR-047 §2);
+ * null otherwise: the card's own action stands.
+ */
+export type CardWorkspaceAction = "launch" | "page";
+
+export function cardWorkspaceAction(card: Pick<StudentProjectCard, "workspace" | "repoUrl" | "status">): CardWorkspaceAction | null {
+  if (card.workspace === null || card.repoUrl === null) return null;
+  if (card.workspace.mode === "online_seb") return "page";
+  return card.status === "in_progress" ? "launch" : null;
+}
+
 /** The kinds whose button may wear the page's accent: a step the student has to take. A ready project never does. */
 export const ACCENT_KINDS: ReadonlySet<ProjectActionKind> = new Set(["link", "accept", "invitation"]);
 

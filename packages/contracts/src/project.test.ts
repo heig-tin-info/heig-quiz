@@ -46,10 +46,21 @@ describe("the student's project card (F-PROJ-04)", () => {
     repoUrl: "https://github.com/heig-prg1/lab2-alice",
     // M3-14i: the state of the work, as the view reads it.
     work: { lastCommit: { sha: "a".repeat(40), at: START }, commits: 4, ciStatus: "pass", score: null },
+    workspace: null,
   } as const;
 
   it("is a member of StudentActivityCard", () => {
     expect(StudentActivityCard.parse(card)).toEqual(card);
+  });
+
+  it("says the workspace's mode and device level, as the project's view does (ADR-047, ADR-089)", () => {
+    expect(StudentProjectCard.parse({ ...card, workspace: { mode: "online", devices: "any" } }).workspace).toEqual({ mode: "online", devices: "any" });
+    expect(StudentProjectCard.safeParse({ ...card, workspace: { mode: "free", devices: "any" } }).success).toBe(false);
+    // Nothing of the portal's state reaches the card.
+    expect(StudentProjectCard.parse({ ...card, workspace: { mode: "online_seb", devices: "kiosk", quota: 3 } }).workspace).toEqual({
+      mode: "online_seb",
+      devices: "kiosk",
+    });
   });
 
   it("drops what the student view never carries (N-SEC-20)", () => {
@@ -79,7 +90,6 @@ describe("the student's project card (F-PROJ-04)", () => {
         score: { points: 7, max: 10, grade: { grade: 4.5 }, frozen: false },
       },
       release: null,
-      workspace: null,
       criteria: null,
       serverNow: START,
     };

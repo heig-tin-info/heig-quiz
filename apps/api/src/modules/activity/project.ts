@@ -55,7 +55,7 @@ export const projectActivity: ActivityKind<"project"> = {
   listForTeacher: (db, caller) => teacherProjects(db, caller),
   studentCards: async (db, caller, now, scope) => ({
     polls: [],
-    ...(scope.confined ? { open: [], upcoming: [], past: [] } : await studentProjectCards(db, caller.id, now, scope.classroomId)),
+    ...(scope.confined ? { open: [], upcoming: [], past: [] } : await studentProjectCards(db, caller.id, now, { classroomId: scope.classroomId, codespace: scope.codespace })),
   }),
   async gradebookEntries(db, classroomId) {
     return (await gradebookProjects(db, classroomId)).map((project) => ({

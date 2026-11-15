@@ -1494,6 +1494,12 @@ export const StudentProjectCard = z.object({
   repoUrl: z.url().nullable(),
   /** The state of their work while the repository is live (M3-14i); null otherwise. */
   work: StudentProjectWork.nullable(),
+  /**
+   * The online workspace (ADR-047, M6-06): the mode and its device level
+   * when the project runs in the portal and the feature is on; null
+   * otherwise. The card and the page read the same rule.
+   */
+  workspace: StudentProjectWorkspace.nullable(),
 });
 export type StudentProjectCard = z.infer<typeof StudentProjectCard>;
 
@@ -1579,8 +1585,6 @@ export const StudentProject = StudentProjectCard.omit({ invitation: true, repoFu
    * every row is `validated` (validated and released).
    */
   criteria: z.array(StudentCriteriaRow).nullable(),
-  /** The online workspace (ADR-047, M6-06): the mode when the project runs in the portal and the feature is on; null otherwise. */
-  workspace: StudentProjectWorkspace.nullable(),
   serverNow: z.iso.datetime(),
 });
 export type StudentProject = z.infer<typeof StudentProject>;

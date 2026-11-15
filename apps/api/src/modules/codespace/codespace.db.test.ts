@@ -35,6 +35,8 @@ import {
   ProjectWorkspaceSessions,
   SERVICE_AUDIENCE,
   ServiceTokenClaims,
+  StudentClassroomPage,
+  StudentHome,
   WorkspaceStart,
   WorkspaceStartRefusal,
   workspaceStartPath,
@@ -597,6 +599,13 @@ describe("POST /app/api/projects/:id/workspace/start", () => {
     }
     const view = (await call("GET", `/app/api/student/projects/${lab.id}`, student.headers)).json();
     expect(view.workspace).toEqual({ mode: "online", devices: "any" });
+    // The home's and the classroom's card say the same (one rule, `studentWorkspace`): the card offers Open workspace.
+    const home = StudentHome.parse((await call("GET", "/app/api/student/home", student.headers)).json());
+    const page = StudentClassroomPage.parse((await call("GET", `/app/api/student/classrooms/${room.classroomId}`, student.headers)).json());
+    for (const cards of [home.open, page.activities.open]) {
+      const card = cards.find((c) => c.kind === "project" && c.id === lab.id);
+      expect(card?.kind === "project" ? card.workspace : "missing").toEqual({ mode: "online", devices: "any" });
+    }
     const [state] = await server.app.db.select().from(codespaceProjects).where(eq(codespaceProjects.projectId, lab.id));
     expect(state!.firstLaunchAt?.toISOString()).toBe(NOW);
 
