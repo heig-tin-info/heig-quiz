@@ -6,7 +6,7 @@ Accepted (2026-11-15): the product owner's four decisions and the model and rule
 the same day, in the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag),
 which overrides §1, §2, §4, §6, §9 and §12 where it says so. Proposed 2026-10-09 (points 1, 7 and 9 the
 owner's then). Built behind `KIOSK_PROJECTS`; production waits for project proof B and proof K.
-Delivery: [merge progress](../merge/PROGRESS.md), M6-11a–d.
+Delivery: [merge progress](../merge/PROGRESS.md), M6-11a–e.
 
 - 2026-10-11, audit L7: the student's start route is `POST /app/api/projects/:id/workspace/start` (ADR-047), formerly a GET.
 - 2026-10-11, audit L24: the "Same-site exposure" consequence pointed to [ADR-047's amendment](ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24); its premise no longer holds here (amendment of 2026-11-15, point 4 (b)).
@@ -44,11 +44,7 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
   declares `PROJECT_SEB`, `sessions: ["portal", "seb"]`
   (`apps/api/src/auth/session.ts`). The session hook (`auth/plugin.ts`)
   checks `serves` before any trust check, so a `kiosk` session is anonymous
-  there and the station is sent to the sign-in. *(Until audit L7 the route
-  was `GET /app/codespace/start/:id`, outside the `/app/api` path of the
-  station's `quiz_kiosk` cookie, which is why the first draft of §4 added a
-  route of its own; since L7 the route is a CSRF-checked write under
-  `/app/api`, where that cookie is sent.)* The portal must never see the
+  there and the station is sent to the sign-in. The portal must never see the
   station's cookie; widening it to `Domain=chevallier.io` would hand it to a
   host that serves student-controlled content.
 - **Quiz and the portal are the same site** (`chevallier.io`; on staging
@@ -111,34 +107,34 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
 4. **The launch.** *Amended 2026-11-15 (review): one start route.* The
    station page asks the student's own start route,
    `POST /app/api/projects/:id/workspace/start`, for the launch URL and puts
-   the returned `{ url }` in its frame. That route already is a write under
-   `/app/api` (the station's cookie is sent, a suspended station gets the
-   `423`, CSRF applies); its declaration `PROJECT_SEB` is widened to the
-   three kinds and renamed `PROJECT_CONFINED`
-   (`{ sessions: ["portal", "seb", "kiosk"], activities: ["project"] }`), and
-   it gains `freshAttestation: true`, which `trust.ts` reads in its `kiosk`
-   branch only (`kioskAttestationRefusal`): a station's launch needs an
-   attestation less than two minutes old, as the submit does (ADR-051 §6),
-   and nothing changes for a portal or `seb` session. **Access is loaded
-   first** (invariant 6): `sebProjectSession` (`modules/guards.ts`) becomes
-   one `confinedProjectSession(auth, projectId)` over
-   `isTrustedClient(auth.kind)` — a non-delegated confined session of THIS
-   `:id` — which feeds `findStudentProjectView` (the classroom's student
-   branch with the caller's claimed seat) and the session's trusted kind
-   `via`. Any mismatch, another project's confined session included,
-   answers the 404 of a missing project. Then `workspaceStartRefusal`
-   decides the refusals a student can read, the level check among them
-   (amendment, point 2). From a `kiosk` session the launch token carries a
-   new claim `kiosk: { deviceId, sitting }` in `LaunchTokenClaims`
-   (`@quiz/contracts`; `sitting`, the station session's non-secret id, is
-   what the close of point 6 names); the answer stays `no-store`, the token
-   unlogged, its `jti` audited. The portal's `/launch` in exam mode refuses a
-   token with neither `seb` nor `kiosk`; with `kiosk` it skips the SEB
-   header check and sets its `exam_session` as today, carrying the
-   `sitting`. The portal never calls Google.
-   *Until 2026-11-15 this point named a separate
-   `POST …/workspace/launch` for stations, kept the cookie's `/app/api`
-   path for it, and taught the refusal a `fromKiosk` beside `fromSeb`.*
+   the returned `{ url }` in its frame. That route is a write under
+   `/app/api`: the station's cookie is sent, a suspended station gets the
+   `423`, CSRF applies. The declaration `PROJECT_SEB` becomes
+   `PROJECT_CONFINED`, `{ sessions: ["portal", "seb", "kiosk"],
+   activities: ["project"] }`; it declares the two routes `PROJECT_SEB`
+   declares today, this one and `GET /app/api/student/projects/:id`
+   (`modules/project/routes.ts`), and the test set `PROJECT_SEB_ROUTES`
+   (`auth/testing.ts`) becomes `PROJECT_CONFINED_ROUTES`. Widening both is
+   safe: each loads through the same guard below, which admits a confined
+   session of THIS project only. The start route also gains
+   `freshAttestation: true`, which `trust.ts` reads in its `kiosk` branch
+   only (`kioskAttestationRefusal`): a station's launch needs an
+   attestation less than two minutes old, as the submit does (ADR-051 §6).
+   **Access is loaded first** (invariant 6): `sebProjectSession`
+   (`modules/guards.ts`) becomes one `confinedProjectSession(auth,
+   projectId)` over `isTrustedClient(auth.kind)` — a non-delegated
+   confined session of THIS `:id` — which feeds `findStudentProjectView`
+   (the classroom's student branch with the caller's claimed seat) and the
+   session's trusted kind `via`. Any mismatch answers the 404 of a missing
+   project. Then `workspaceStartRefusal` decides the refusals a student can
+   read, the level among them (amendment, point 2). From a `kiosk` session
+   the launch token carries a new claim `kiosk: { deviceId, sitting }` in
+   `LaunchTokenClaims` (`@quiz/contracts`), `sitting` being the approving
+   pairing's id (amendment, point 4); the answer stays `no-store`, the token
+   unlogged, its `jti` audited. The portal's `/launch` in exam mode refuses
+   a token with neither `seb` nor `kiosk`; with `kiosk` it skips the SEB
+   header check and sets its `exam_session`, carrying the `sitting`. The
+   portal never calls Google.
 5. **Pairing and supersession.** `kiosk_pairings` gains a nullable
    `project_id` with a one-activity check, as `sessions` has.
    `GET /app/api/pair/:code` also lists the open projects the student can
@@ -151,28 +147,12 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
    `supersede` already does. Supervision in v1 is the phone only: projects
    have no live dashboard, hence no **Assign a station**. Alerts go to the
    audit and to the project's workspace list.
-6. **The end, and the shared station.** A project kiosk session ends at the
-   earliest of: **Leave this station**; supersession; the student's
-   effective deadline, by the ticker-sweeper on the server's clock
-   (ADR-006, invariant 5); the 6 h fixed lifetime. Each ends the Quiz
-   session and its event streams, through a project variant of
-   `endKioskSessions` (new work: today's is keyed by evaluation), and
-   *(amended 2026-11-15: the station's retirement is an end too, the 6 h
-   is swept rather than left to the lazy expiry, `endKioskSessions` is keyed
-   by activity, the close names the sitting, and the hold follows the
-   station's last project session — point 4 of the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag))*
-   enqueues a **portal close**: a pg-boss job, retried, idempotent, that
-   sends a new HS256 service message (its own audience) naming the user and
-   the project. The portal then invalidates both the user's `exam_session`
-   cookies issued before the close and the `/s/<id>` session of that
-   workspace, and drops their sockets; the container and its volume are
-   untouched. **While a close for a station is pending, that station
-   cannot be paired** (`/kiosk` shows "call the supervisor"); a close whose
-   retries are exhausted is audited and keeps the station unpairable until
-   an admin retires and reactivates it. So a workspace is never left open
-   to the next student. Leaving early hands nothing in: the project is
-   graded from its repository at the deadline, as ever. The portal never
-   decides the end.
+6. **The end, and the shared station.** A project kiosk session's end
+   closes the portal session it opened, so a workspace is never left open
+   to the next student; leaving early hands nothing in (the project is
+   graded from its repository at the deadline, as ever), and the portal
+   never decides the end. *Amended 2026-11-15: the ends, the close and the
+   hold are point 4 of the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag).*
 7. **Suspension v1** (owner). A suspended station covers the iframe with
    ADR-051's suspension screen, and `kiosk.suspended` names the project.
    The work is not frozen on the portal: like SEB, the portal checks trust
@@ -224,7 +204,7 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
 13. **Audit.** `codespace.launch_issued` gains `kiosk: true` for a station's
     launch; `kiosk.paired` and `kiosk.suspended` may name a project; the
     union gains `codespace.session_closed` (the cause: `left`,
-    `superseded`, `deadline`, `expired`) and `codespace.session_close_failed`
+    `superseded`, `deadline`, `expired`; since 2026-11-15 also `retired` and `swept`, amendment point 4) and `codespace.session_close_failed`
     for the portal close of point 6; the setting is audited as point 2
     says. No token or cookie is written.
 
@@ -253,7 +233,7 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
 - `00` §0.6 ("fallback stations for an exam") becomes "for an exam or a
   supervised project" when this ADR is accepted; the spec edit lands with
   acceptance (*done 2026-11-15; `CLAUDE.md` invariant 6 changes with the
-  code, M6-11a*). N-SEC-10's blocking exception applies at launch.
+  code, M6-11b and M6-11d*). N-SEC-10's blocking exception applies at launch.
 - A future split of Quiz and its portal onto two sites breaks this design
   (point 11).
 
@@ -272,12 +252,13 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
 - **Widening `quiz_kiosk` to `Domain=chevallier.io`.** Rejected: the
   station's credential would reach the portal's host.
 - **A station launch route of its own** (`POST …/workspace/launch`, this
-  record's first §4). Dropped at review, 2026-11-15: since audit L7 the
-  student's start route is already a POST under `/app/api` with CSRF and
-  the `423`; a second route would duplicate its loader and its refusals.
-  (The draft's other option, widening the cookie's path and adding `kiosk`
-  to the then-GET start route, was rejected because a GET passes a
-  suspended station and escapes CSRF; L7 removed that objection.)
+  record's first §4, which also kept the station's cookie on `/app/api` and
+  taught the refusal a `fromKiosk` beside `fromSeb`). The start route was
+  then `GET /app/codespace/start/:id`, outside that cookie's path, and a GET
+  passes a suspended station and escapes CSRF. Dropped at review,
+  2026-11-15: since audit L7 the start route is a POST under `/app/api`
+  with CSRF and the `423`; a second route would duplicate its loader and
+  its refusals.
 - **Keeping the bare `quiz_kiosk` and accepting its shadowing.** The owner
   accepted that denial of service before the `__Host-` rename was on the
   table; rejected at review (amendment, point 3).
@@ -311,11 +292,11 @@ reviewer in charge), marked *review*: it is not the owner's.
    level always passes. **A live project that already holds a station
    level keeps it, and its stations keep working, flag off or on**: the flag
    gates new choices, it is not a kill switch. That is safe because no
-   guarantee of the station path depends on the flag, and the platform's
-   kill switch stays `KIOSK_ATTESTATION=off`, which removes every kiosk
-   route and stops every station, exams included, as today. The other
-   reading — refuse the stations of a live project — would strand a Kiosk
-   only project, whose level is frozen once launched.
+   guarantee of the station path depends on the flag, and the kill switch
+   stays `KIOSK_ATTESTATION=off`, which removes every kiosk route and stops
+   every station, exams included, as today (its effect on project sittings:
+   point 4). The other reading — refuse the stations of a live project —
+   would strand a Kiosk only project, whose level is frozen once launched.
 2. **Four levels** (*owner*), like an exam: **Any / SEB / SEB or kiosk /
    Kiosk only**. This reverses §1's deferral of kiosk-only projects.
    *The model* (*review*: proposed in this record and accepted at review,
@@ -333,19 +314,19 @@ reviewer in charge), marked *review*: it is not the owner's.
      station level: nobody invited, the workspace seeded from the
      distribution repository, the deadline kept under `commit`, the staff's
      review refused until the deadline is applied, the portal's exam mode.
-   - **One column**, `projects.devices`, holding a level id of
-     `DEVICE_LEVELS`, default `any`, and `any` exactly when the mode is not
-     `online_seb` (a check constraint). One pure pair of functions in
-     `@quiz/domain` maps `(work_mode, devices) ⇄ level` for the screen: Any
-     is `online` with `any`; SEB, SEB or kiosk and Kiosk only are
-     `online_seb` with `seb`, `either`, `kiosk`. No second vocabulary
-     appears, and the constraint leaves no unsupervised `online_seb`.
-     `ProjectWorkModeBody` gains `devices`; `codespace.work_mode`'s payload
-     carries it.
+   - **One column, one mapping.** `projects.devices` holds a level id,
+     default `any`. `ProjectWorkModeBody` becomes a union discriminated by
+     `mode`: `devices` (`seb`, `either` or `kiosk`) is present with
+     `online_seb` only and absent otherwise, where the server writes `any`;
+     the schema refuses a mismatched pair (invariant 7), and a check
+     constraint on the column only backs it up. One pure mapping in
+     `@quiz/domain` turns `(work_mode, devices)` into the level the screen
+     shows and back. `codespace.work_mode`'s payload carries `devices`.
    - **One control.** The project's setting is a Segmented
      **Own tools | Online workspace**, and under Online the same
      `AllowedDevices` radio list, its props generalised to a level,
-     `kioskOffered` and `onPick`.
+     `kioskOffered` and `onPick`: Any is `online`, the three others
+     `online_seb` with their level.
    - **The refusal.** `workspaceStartRefusal` takes the session's trusted
      kind (`via: TrustedClient | null`, from `confinedProjectSession`, §4)
      instead of `fromSeb`, and refuses unless the project's level accepts
@@ -358,41 +339,37 @@ reviewer in charge), marked *review*: it is not the owner's.
      grant and group rules stay the mode's. A staff seat's launch still
      freezes nothing (ADR-077) and launches at the project's level.
 3. **The station's cookie becomes `__Host-quiz_kiosk`** (*review*,
-   2026-11-15; the owner had accepted the shadowing below as a denial of
-   service before this was known). The bare `quiz_kiosk` (`Path=/app/api`)
-   had one stated reason, this record's first §4 (audit L8 left it out of
-   the prefix for it, `apps/api/src/auth/cookies.db.test.ts`); with one
-   start route under `/app/api` nothing needs it. Over https the station's
-   cookie is `__Host-quiz_kiosk; Path=/; Secure; HttpOnly;
-   SameSite=Strict`, named by `cookieName` like the session's; a sibling
-   host can neither set nor shadow it. N-SEC-01 says so.
-   - **Why a planted cookie could only deny.** Quiz's session and CSRF
-     cookies are `__Host-` (audit L8), so student script on the portal's
-     origin (ADR-047's L24 gaps) forges no Quiz identity. With the bare
-     name it could set `quiz_kiosk` for the parent domain; a longer `Path`
-     is sent first (RFC 6265 §5.4) and the parser keeps the first cookie of
-     a name (`@fastify/cookie` over `cookie` 1.x), so the station was
-     refused. The prefix closes that.
-   - **Second barrier.** A request carrying two cookies under the name the
-     reader takes (counted in the raw `Cookie` header) fails closed with a
-     supervisor message, with a test. A prefixed cookie beside a bare one
-     during the transition below is not that case: the prefixed one wins.
-   - **Transition without stranding a station** (19 active production
-     stations serve exams on the bare cookie). One reader,
-     `stationCredential(req)`, replaces every `req.cookies[KIOSK_COOKIE]`
-     (`auth/trust.ts`, `modules/kiosk/routes.ts`): the prefixed cookie
-     when present, else the bare one. The credential's value is unchanged:
-     `verify` keeps the credential the request already holds for that
-     device, now writes it under the new name, and expires the bare one
-     (`Path=/app/api`, `Max-Age=0`, host-only: the one Quiz set). A station
-     re-attests within minutes — before each pairing code at rest, every 10
-     minutes in a sitting (ADR-051's amendment of 2026-11-10) — so it moves
-     at its next attestation without losing its session. A bare cookie is
-     never issued after that deploy and lived 12 h at most
-     (`KIOSK_COOKIE_HOURS`), so the fallback is removed by M6-11d, deployed
-     to production no sooner than 12 h after M6-11a; until then
-     `KIOSK_PROJECTS` stays off and no station frames the portal, so no
-     shadow can be planted.
+   2026-11-15; the owner had accepted a shadowed station cookie as a denial
+   of service before this was known). The bare `quiz_kiosk`
+   (`Path=/app/api`) had one stated reason, this record's first §4 (audit
+   L8 left it out of the prefix for it, `apps/api/src/auth/cookies.db.test.ts`);
+   with one start route nothing needs it. Over https the station's cookie
+   is `__Host-quiz_kiosk; Path=/; Secure; HttpOnly; SameSite=Strict`,
+   named by `cookieName` like the session's. A sibling host can neither set
+   nor shadow it, and the browser holds one per host and path, so two
+   cannot arrive. Before, student script on the portal's origin (ADR-047's
+   L24 gaps) could set `quiz_kiosk` for the parent domain; a longer `Path`
+   is sent first (RFC 6265 §5.4) and the parser keeps the first cookie of a
+   name (`@fastify/cookie` over `cookie` 1.x), so the station was refused.
+   It could only deny: Quiz's session and CSRF cookies are already
+   `__Host-` (audit L8).
+   - **Its own PR, first, without a flag** (M6-11a): it touches the 19
+     active production stations, which serve exams, and nothing of
+     projects. One reader, `stationCredential(req)`, replaces every
+     `req.cookies[KIOSK_COOKIE]` (`auth/trust.ts`,
+     `modules/kiosk/routes.ts`): the prefixed cookie when present, else the
+     bare one. The credential's value is unchanged: `verify` keeps the
+     credential the request holds for that device, writes it under the new
+     name and expires the bare one (`Path=/app/api`, `Max-Age=0`,
+     host-only: the one Quiz set). A station re-attests within minutes —
+     before each pairing code at rest, every 10 minutes in a sitting
+     (ADR-051's amendment of 2026-11-10) — so it moves at its next
+     attestation without losing its sitting.
+   - **The fallback's removal** belongs to M6-11d and is **merged only once
+     M6-11a has run in production for 12 h**: a production approval ships
+     whatever `main` holds, and a bare cookie, never issued after M6-11a,
+     lived 12 h at most (`KIOSK_COOKIE_HOURS`). Until then no station frames
+     the portal (`KIOSK_PROJECTS` is off), so no shadow can be planted.
    - **What remains on a shared station.** The L24 premise ("another
      browser never loads the page without the session's cookie") fails
      twice: ADR-129's review session ([ADR-047's amendment of
@@ -404,31 +381,61 @@ reviewer in charge), marked *review*: it is not the owner's.
      sandbox. Left: cookies planted for the parent domain in volume can make
      the station's requests too large to serve — a denial of service, no
      identity, repaired by clearing the station's browser data (question
-     74). The full fix stays a subdomain per session (question 70).
-4. **Every end closes the portal** (*review*; amends §6).
-   - **The ends**: **Leave this station**; replacement by a newer confined
+     73). The full fix stays a subdomain per session (question 70).
+4. **Every end closes the portal** (*review*; owns the ends, the close and
+   the hold of §6).
+   - **The sitting is the pairing row.** The approving `kiosk_pairings`
+     row is the durable record of a project sitting: it names the station
+     (`device_id`), the student (`user_id`, set on approval) and the
+     activity (`project_id`, added beside `evaluation_id` with a
+     one-activity check), outlives the session (no code deletes a pairing;
+     a consumed one stays `consumed`), and gains `close_completed_at`. Its
+     id is the `sitting` of §4. A session row is never the record and its
+     key never leaves Quiz: `sessions.sid_hash` is the hash of the bearer
+     token (`apps/api/src/db/auth.ts`). The session points to its sitting
+     by a new `sessions.kiosk_pairing_id`, set when the station consumes
+     its approved pairing. `project_id` is `ON DELETE SET NULL`, so
+     deleting a project leaves the sitting to be closed by its id alone.
+   - **The ends.** Leave this station; replacement by a newer confined
      session of the pair (`supersede`); the student's effective deadline;
-     the 6 h lifetime, which today expires lazily at the next request, so
-     the ticker's sweep (ADR-006) also ends station sessions past their
-     `expires_at`; the station's retirement (`endStationSessions`). Each
-     goes through one `endKioskSessions`, keyed by activity
-     (`{ evaluationId } | { projectId }`), and enqueues the close.
-   - **The close** names the user, the project and the `sitting` of §4. The
-     portal revokes the `exam_session` cookies carrying that `sitting` and
-     no other: a `seb` launch's cookie carries none, so the student's own
-     SEB session is never cut. (Not by `issuedAt`: that is the portal's
-     clock, and the end is Quiz's.) The portal session (`/s/<id>`, one per
-     student and assignment) is rotated and its sockets dropped only when
-     that sitting opened it last; if another browser resumed it since, its
-     cookie was already rotated away from the station and the close leaves
-     it. The container and its volume are untouched.
-   - **The hold** follows the station's LAST project session: the station
-     cannot be paired until that session's close has completed (`/kiosk`
-     shows "call the supervisor"). With the portal down the job retries;
-     the supervisor seats the student at another station, or in SEB at
-     "SEB or kiosk". Retries exhausted: audited, and an administrator
-     retires and reactivates the station once the portal answers and the
-     workspace shows closed.
+     the 6 h lifetime; the station's retirement (`endStationSessions`).
+     The ticker's sweep (ADR-006) ends station sessions at the effective
+     deadline and past their `expires_at` (expiry is otherwise lazy, at
+     the next request). One `endKioskSessions`, keyed by activity
+     (`{ evaluationId } | { projectId }`), serves them all.
+   - **Every disappearance closes.** Session rows also vanish by lazy
+     expiry, by `purgeExpiredSessions`, by the account module
+     (`modules/account/service.ts`, through `quiz_pseudonymize_account`)
+     and by cascades. Two rules cover them all: (1) `dropSessions`
+     (`auth/session.ts`), the one place sessions are deleted, enqueues the
+     close for every removed `kiosk` row with a `project_id`, whatever the
+     reason, and the account module goes through it; (2) the sweep enqueues
+     the close of every `consumed` project pairing with no live session and
+     no `close_completed_at` — the safety net that makes a cascade or any
+     forgotten path harmless.
+   - **The close** is a pg-boss job, retried and idempotent, sending a new
+     HS256 service message (its own audience) naming the `sitting` (and the
+     project when it still exists). The portal tags each socket it upgrades
+     with the `sitting` of the `exam_session` it was upgraded under; the
+     close revokes the `exam_session` cookies of that sitting and drops
+     every socket of that sitting, unconditionally. A `seb` launch's cookie
+     carries no sitting, so the student's own SEB session is never cut.
+     The portal session (`/s/<id>`, one per student and assignment) is
+     rotated only when that sitting opened it last: if another browser
+     resumed it since, its cookie was already rotated away from the
+     station. The container and its volume are untouched. On success Quiz
+     sets `close_completed_at`; retries exhausted are audited.
+   - **The kill switch never stops a close.** The sweep and the close job
+     run whatever `KIOSK_ATTESTATION` and `KIOSK_PROJECTS` say (today the
+     kiosk ticker task returns early when `KIOSK_ATTESTATION` is off,
+     `modules/kiosk/jobs.ts`); with `KIOSK_ATTESTATION=off` the sweep ends
+     every project station session, which enqueues their closes by rule (1).
+   - **The hold.** A station cannot be paired, for an exam too, while it
+     has a project pairing without `close_completed_at` (`/kiosk` shows
+     "call the supervisor"). With the portal down the job retries; the
+     supervisor seats the student at another station, or in SEB at "SEB or
+     kiosk". Retries exhausted: an administrator retires and reactivates
+     the station once the portal answers and the workspace shows closed.
 5. **Accepted residual risks** (*owner*):
    - (a) **Suspension** (§7): a suspended station only covers the frame;
      the portal's writes continue — weaker than an exam's `423` (N-SEC-10).
@@ -447,6 +454,5 @@ reviewer in charge), marked *review*: it is not the owner's.
    default: every grant is 2 (`DEFAULT_MAX_ACTIVE_SESSIONS`, and all seven
    production grants on 2026-11-15), so **a room does not fit without that
    step**. Revisit if sittings fail on it.
-8. **Delivery**: four PRs, M6-11a–d in [merge progress](../merge/PROGRESS.md),
+8. **Delivery**: five PRs, M6-11a–e in [merge progress](../merge/PROGRESS.md),
    card M6-11 of [the task cards](../merge/09-tasks.md).
-
