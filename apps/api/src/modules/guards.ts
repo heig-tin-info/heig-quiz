@@ -57,6 +57,7 @@ import {
   ownedPollSql,
   projectRepos,
   projects,
+  sessions,
   STAFF_ROLES,
   users,
 } from "../db/schema.js";
@@ -461,7 +462,8 @@ export function ownSessionGuard(app: FastifyInstance) {
 /**
  * Who may hold Super Powers at all (ADR-054), pure: an admin, through their
  * {@link ownPortalSession}. The enable and disable routes ask this; so does
- * {@link reachOf}, and `GET /me` (`superPowersAvailable`).
+ * {@link reachOf}, and `GET /me` (`superPowersAvailable`). Encoded a second
+ * time, in SQL, by {@link superPowersHeld}: a change to one is a change to both.
  */
 export function mayHoldSuperPowers(
   user: { role: string },
@@ -474,6 +476,8 @@ export function mayHoldSuperPowers(
  * THE rule of the reach (ADR-054), pure: everyone's content while the
  * Super Powers of a session that may hold them run by the server's clock
  * (invariant 5); the role alone reaches nothing more than a teacher's seats.
+ * Its other encoding, for a user with no session in hand, is the SQL
+ * predicate {@link superPowersHeld}: a change to one is a change to both.
  */
 export function reachOf(
   user: { role: string },
@@ -485,6 +489,32 @@ export function reachOf(
     auth!.superPowersUntil !== null &&
     auth!.superPowersUntil.getTime() > now.getTime();
   return on ? "all" : "seats";
+}
+
+/**
+ * {@link mayHoldSuperPowers} and {@link reachOf} — the same rule, the
+ * second encoding of it — read for a user with no session in hand, as a
+ * predicate: `userId` holds the `admin` role and one of their own sessions
+ * (`portal`, not delegated), live, with Super Powers running, by the
+ * database's clock. A change to either encoding is a change to both.
+ */
+function superPowersHeld(userId: string): SQL {
+  return sql`EXISTS (SELECT 1 FROM ${sessions} JOIN ${users} ON ${qualified(users.id)} = ${qualified(sessions.userId)}
+    WHERE ${qualified(sessions.userId)} = ${userId} AND ${qualified(users.role)} = 'admin'
+      AND ${qualified(sessions.kind)} = ${PORTAL.kind} AND ${qualified(sessions.actorUserId)} IS NULL
+      AND ${qualified(sessions.expiresAt)} > now() AND ${qualified(sessions.superPowersUntil)} > now())`;
+}
+
+/**
+ * {@link accessWhere} over {@link staffAccess}, for a user with no session in
+ * hand (a server-to-server call on their behalf, the review token route,
+ * ADR-129 §7): Super Powers held now ({@link superPowersHeld}), or a seat on
+ * the course (`courseId`, in the query's scope) while the account's STORED
+ * role is staff, as the pool predicates read it — a seat kept by an account
+ * demoted to student opens nothing (ADR-013 rule 5).
+ */
+export function userReachesCourse(userId: string, courseId: AnyColumn | SQL): SQL {
+  return sql`(${superPowersHeld(userId)} OR (${staffAccount(userId)} AND ${staffAccess(userId, courseId)}))`;
 }
 
 /**
@@ -644,7 +674,9 @@ export const accessibleProject = routeLoader(
  * project is as missing as one that does not exist.
  */
 export function findAccessibleProjectRepo(db: Db, user: Caller, projectId: string, repoId: string) {
-  const query = db.select({ project: projects, repo: projectRepos, courseId: classrooms.courseId }).from(projectRepos)
+  const query = db
+    .select({ project: projects, repo: projectRepos, courseId: classrooms.courseId, classroomArchivedAt: classrooms.archivedAt })
+    .from(projectRepos)
     .innerJoin(projects, eq(projectRepos.projectId, projects.id))
     .innerJoin(classrooms, eq(projects.classroomId, classrooms.id));
   return staffScoped(user, query, and(eq(projectRepos.id, repoId), eq(projects.id, projectId)), classrooms.courseId);

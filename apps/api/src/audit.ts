@@ -138,9 +138,14 @@ export type AuditAction =
    * a token, a secret or a Browser Exam Key is ever written here.
    * `git_token_issued` (ADR-078 §2): Quiz minted the portal an installation
    * token on one repository (`payload.userId`, `repository`, `githubRepoId`,
-   * `permission`, `expiresAt`, the request's `jti`) — never the token.
+   * `permission`, `expiresAt`, the request's `jti` and, for a review
+   * session's read grant, `reviewRepoId`, ADR-129 §8) — never the token.
+   * `review_launched` (ADR-129 §8): a staff member launched a review
+   * session of one repository (subject the project; `payload.projectRepoId`,
+   * `repository`, `jti`, the caller's `reach`) — never the token.
    */
   | "codespace.launch_issued"
+  | "codespace.review_launched"
   | "codespace.work_mode"
   | "codespace.sync_requested"
   | "codespace.synced"

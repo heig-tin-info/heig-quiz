@@ -17,7 +17,9 @@
  *   - `POST /app/api/projects/:id/workspace/sync` — *Resync*: the job sent
  *     again (202);
  *   - `GET  /app/api/projects/:id/workspace/sessions` — the project's
- *     workspaces, live from the portal.
+ *     workspaces, live from the portal;
+ *   - `POST /app/api/projects/:id/repos/:rid/workspace/review` — a review
+ *     session of one repository (ADR-129), described on the route.
  *
  * The student's: `GET /app/api/projects/:id/seb`, the `.seb` of an
  * `online_seb` project (D21 point 2), and `POST
@@ -32,10 +34,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   GIT_TOKEN_PATH,
   IdParam,
+  ProjectRepoParams,
   ProjectWorkModeBody,
   ProjectWorkspaceSyncAccepted,
   RELAY_HEADS_PATH,
+  WORKSPACE_REVIEW_ROUTE,
   WORKSPACE_START_ROUTE,
+  type WorkspaceReview,
   type WorkspaceStart,
 } from "@quiz/contracts";
 import { isOnlineMode, projectIsLive } from "@quiz/domain";
@@ -46,6 +51,7 @@ import { PROJECT_SEB } from "../../auth/session.js";
 import type { AppConfig } from "../../config.js";
 import {
   accessibleProject,
+  accessibleProjectRepo,
   callerOf,
   findStudentProjectView,
   isCourseOwner,
@@ -63,6 +69,7 @@ import {
   projectWorkspace,
   requestCodespaceSync,
   sebProjectSeat,
+  startReview,
   startWorkspace,
 } from "./service.js";
 
@@ -83,7 +90,7 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     session,
     teacher(onProject, async ({ req, scope }) => {
       const caller = callerOf(req);
-      return projectWorkspace(app.db, scope.project, {
+      return projectWorkspace(app.db, scope.project, scope.course.id, {
         userId: caller.id,
         owner: await isCourseOwner(app.db, scope.course.id, caller),
       });
@@ -98,7 +105,31 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
       const row = await project.setWorkMode(app.db, scope.project.id, body.mode, { owner: true, granted }, actorOf(req));
       await requestCodespaceSync(app, config, row.id);
       project.projectsChanged([scope.course.id]);
-      return projectWorkspace(app.db, row, { userId: callerOf(req).id, owner: true });
+      return projectWorkspace(app.db, row, scope.course.id, { userId: callerOf(req).id, owner: true });
+    }),
+  );
+
+  /**
+   * The staff's review session (ADR-129 §5): a session write (double-submit
+   * CSRF), no body. Before the route, the auth plugin: no session `401`, an
+   * impersonation `403 impersonation_read_only`, a token whose scope does
+   * not reach it N-SEC-22's `403`; a `seb` or `kiosk` session is not served
+   * here (ADR-027: anonymous, the `401`). Then the loader: the caller's own
+   * portal session, `staffAccess` on the project's course (or Super Powers),
+   * and the repository by its id WITHIN that project — anyone and anything
+   * else, an `api`-scope token included, the 404 of a missing project
+   * (invariant 6). Then `staffReviewRefusal`, `409 { error }`; otherwise
+   * `{ url }`, the portal's `/review?token=…`, `no-store`. The token is never
+   * logged, stored nor audited (its `jti` is).
+   */
+  app.post(
+    WORKSPACE_REVIEW_ROUTE,
+    session,
+    teacher({ params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) }, async ({ req, reply, now, scope }) => {
+      const review = await startReview(app.db, config, scope, { user: userOf(req), reach: callerOf(req).reach, actor: actorOf(req) }, now);
+      if (typeof review === "string") return reply.code(409).send({ error: review });
+      const started: WorkspaceReview = { url: `${config.CODESPACE_URL}/review?token=${encodeURIComponent(review.token)}` };
+      return reply.header("cache-control", "no-store").send(started);
     }),
   );
 

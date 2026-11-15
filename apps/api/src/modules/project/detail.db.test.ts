@@ -249,6 +249,11 @@ describe("the project page (F-PROJ-13)", () => {
     });
     expect(rowOf(d, b!.id).repo).toBeNull();
     expect(d.rows.at(-1)!.student).toMatchObject({ enrollmentId: null, userId: leaver.id, claimed: false });
+    // GitHub's id is the stored column (ADR-129 §11), null until provisioned.
+    const [stored] = await server.app.db.select({ githubRepoId: projectRepos.githubRepoId }).from(projectRepos).where(eq(projectRepos.id, repo));
+    expect(row.repo!.githubRepoId).toBe(stored!.githubRepoId);
+    const pending = await repoOf(w, b!.id, { provisionStatus: "pending", githubRepoId: null, fullName: null });
+    expect(rowOf(await detail(w.projectId), b!.id).repo).toMatchObject({ id: pending, githubRepoId: null });
   });
 
   it("draws the repository of a user who holds a staff seat as a badged test row, counted nowhere (ADR-077)", async () => {

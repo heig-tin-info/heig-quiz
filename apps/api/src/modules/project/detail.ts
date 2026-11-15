@@ -263,6 +263,7 @@ function repoView(
   const runs = scored.runs;
   return {
     ...repoDeadlineState(repo, project),
+    githubRepoId: repo.githubRepoId,
     provisionStatus: repo.provisionStatus,
     provisionError: repo.provisionError,
     invitationStatus: repo.invitationStatus,

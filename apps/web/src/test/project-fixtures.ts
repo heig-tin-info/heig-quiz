@@ -49,6 +49,7 @@ export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): Projec
     archived: false,
     staffLock: null,
     degraded: false,
+    githubRepoId: 700_000 + n,
     provisionStatus: "ok",
     provisionError: null,
     invitationStatus: "accepted",

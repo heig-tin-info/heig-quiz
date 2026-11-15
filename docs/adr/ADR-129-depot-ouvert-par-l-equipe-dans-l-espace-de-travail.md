@@ -152,12 +152,19 @@ the same rule the token route applies (§7) and the page reads (§11):
 | 1 | No session | `401` |
 | 2 | An impersonation session | `403 impersonation_read_only` (the auth plugin, ADR-034; the 404 in development) |
 | 3a | A personal token whose scope does not reach the route | `403` of N-SEC-22 (the auth plugin); an OAuth token off its audience is anonymous to the auth plugin and gets row 1's `401` (N-SEC-22 keeps its 401 elsewhere) |
-| 3b | An `api`-scope token, a `seb` or `kiosk` session, a caller without `staffAccess` on the course (Super Powers inactive), an unknown project, or a `:rid` that is not a repository of that project | `404 not_found`, indistinguishable from a missing project |
+| 3b | An `api`-scope token, a caller without `staffAccess` on the course (Super Powers inactive), an unknown project, or a `:rid` that is not a repository of that project | `404 not_found`, indistinguishable from a missing project |
+| 3c | A `seb` or `kiosk` session | `401`: the route does not serve its kind, so the auth plugin treats it as anonymous (ADR-027's default deny), as on every staff route |
 | 4 | The quota holder holds no enabled workspace grant | `409 review_not_granted` |
 | 5 | The classroom or the project is archived | `409 review_archived` |
 | 6 | The repository is not live (`isLiveRepo`: `provision_status` `ok`, `full_name` set, `deleted_at` null), or has no `github_repo_id` — individual, group or staff test repository alike | `409 review_repo_unavailable` |
 | 7 | An `online_seb` project whose repository's deadline is not applied (`deadline_applied_at` null) | `409 review_exam_open` |
 | — | Otherwise | `200 { url }` |
+
+Corrected 2026-11-14 (the API pull request, #1092): row 3b first listed a
+`seb` or `kiosk` session among the `404`s. The auth plugin answers it
+before any loader: a confined session on a route that does not serve its
+kind is not there at all (ADR-027), hence row 3c's `401`. A refusal
+either way; no rule changed.
 
 `isLiveRepo` generalises `isLiveIndividualRepo` (`groupRepo.ts`) without
 changing it: `isLiveRepo(r)` is today's predicate minus the group
@@ -220,13 +227,19 @@ without it by ADR-078's `gitTokenRefusal`, unchanged:
    `now()`. Otherwise `404 not_found`.
 2. **The access holds now**, re-evaluated for the recorded user by one
    read: a seat on the staff of the project's course (`staffAccess` on the
-   user id), **or** the `admin` role with a live session of their own
+   user id) held by an account whose stored role is staff (`STAFF_ROLES`,
+   as the pool predicates read it), **or** the `admin` role with a live session of their own
    (`kind = 'portal'`, not delegated, `expires_at > now()`) whose
    `super_powers_until > now()` — the database's clock, the conditions of
    `mayHoldSuperPowers` and `reachOf` read on the user's `sessions` rows,
    since no helper reads them by user without a session in hand. So a grant
    never outlives the seat or the Super Powers (invariant 6). Otherwise
-   `404 not_found`.
+   `404 not_found`. Corrected 2026-11-15 (the security review of #1092):
+   this check first read the seat through `staffAccess` alone, which does
+   not read the account's role; a seat kept by an account demoted to
+   student (ADR-013 rule 5) would then still have obtained a read token
+   within the window. The seat now counts only while the stored role is
+   staff (`userReachesCourse`, `guards.ts`).
 3. **The repository is the one recorded**: its stored `full_name` equals
    the request's `repository` (case-insensitive); the token is minted on
    its stored `github_repo_id`. Otherwise `404 not_found`.

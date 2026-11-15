@@ -13,7 +13,7 @@
 import { bigint, index, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 import { users } from "./auth.js";
-import { projects } from "./project.js";
+import { projectRepos, projects } from "./project.js";
 
 export const codespaceProjects = pgTable("codespace_projects", {
   projectId: uuid("project_id")
@@ -51,6 +51,27 @@ export const codespaceLaunches = pgTable(
     lastLaunchAt: timestamp("last_launch_at", { withTimezone: true }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.userId] })],
+);
+
+/**
+ * The staff's review launches (ADR-129 §6): per (staff member, repository),
+ * until when the portal may ask for the read token of the review session
+ * just launched — the launch time plus `REVIEW_GRANT_MINUTES`, by the
+ * database's clock, moved by every launch. The token route's only proof
+ * that this user launched a review of this repository; never a credential.
+ */
+export const codespaceReviews = pgTable(
+  "codespace_reviews",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    projectRepoId: uuid("project_repo_id")
+      .notNull()
+      .references(() => projectRepos.id, { onDelete: "cascade" }),
+    grantUntil: timestamp("grant_until", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.projectRepoId] })],
 );
 
 /**

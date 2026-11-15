@@ -980,6 +980,12 @@ export type ProjectRepoSync = z.infer<typeof ProjectRepoSync>;
  *     snapshot (only once the project was released).
  */
 export const ProjectRepoView = ProjectRepoDeadlineState.extend({
+  /**
+   * GitHub's id of the repository (`project_repos.github_repo_id`), null
+   * until provisioned: what `staffReviewRefusal` reads beside the row's
+   * life (ADR-129 §11). The staff's payload only.
+   */
+  githubRepoId: z.number().int().positive().nullable(),
   provisionStatus: ProvisionStatus,
   provisionError: z.string().nullable(),
   invitationStatus: InvitationStatus,

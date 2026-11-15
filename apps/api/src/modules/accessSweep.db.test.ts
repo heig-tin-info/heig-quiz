@@ -60,6 +60,7 @@ import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
 import { linkClassroom, newOrg, server as projectServer, useProjectWorld } from "../test/projectWorld.js";
+import { CODESPACE_ENV, fakePortal } from "./codespace/testing.js";
 import * as evaluationService from "./evaluation/service.js";
 import { sha256Of, writeAsset } from "./pool/assets.js";
 
@@ -78,6 +79,8 @@ const STUDENT_ROUTES = new Set([
   "GET /app/api/classrooms/:id/journal/pages*",
   // The group sets that reach the students, through the student branch (F-PROJ-22, M3-17).
   "GET /app/api/classrooms/:id/group-sets/student",
+  // The student's *Open workspace* (ADR-047 §6): refused 409 on a project out of the portal, never 404.
+  "POST /app/api/projects/:id/workspace/start",
 ]);
 
 /**
@@ -85,13 +88,13 @@ const STUDENT_ROUTES = new Set([
  * asks someone else, or nobody:
  * - the student routes: the enrolled student;
  * - acting as a student (ADR-034): an admin with Super Powers (ADR-054);
- * - the `.seb` download: a student seated in an exam that requires SEB, in
- *   a state `seb.db.test.ts` builds — here every caller gets the 404, and
- *   the sweeps below only hold that a real evaluation answers like a
- *   missing one.
+ * - the `.seb` downloads: a student seated in an exam that requires SEB, in
+ *   a state `seb.db.test.ts` builds, or of an `online_seb` project
+ *   (`codespace.db.test.ts`) — here every caller gets the 404, and the
+ *   sweeps below only hold that a real object answers like a missing one.
  */
 const IMPERSONATION = "POST /app/api/classrooms/:id/roster/:eid/impersonation";
-const SEB_DOWNLOAD = "GET /app/api/evaluations/:id/seb";
+const SEB_DOWNLOADS = new Set(["GET /app/api/evaluations/:id/seb", "GET /app/api/projects/:id/seb"]);
 /** The one route of a swept family that is no staff route (see the header). */
 const NOT_STAFF = new Set(["DELETE /app/api/courses/:id/github/grants/:orgId"]);
 
@@ -183,7 +186,7 @@ function sweepStaffRoutes(sweep: () => Sweep) {
     const admin = await s.server.signInWithSuperPowers();
     const unreached: string[] = [];
     for (const { method, name, real } of routes) {
-      if (name === SEB_DOWNLOAD) continue;
+      if (SEB_DOWNLOADS.has(name)) continue;
       const w = method === "GET" ? s.shared : await s.world();
       // A draft is the staff's alone (audit 2026-10-10, §6): the enrolled
       // student enters an evaluation from `scheduled` on.
@@ -367,7 +370,16 @@ describe("every staff route of a project, and of the App (invariant 6, N-SEC-20)
     if (m![2]) return json([{ name: "main" }]);
     return json({ id: 9_000_000 + org.githubOrgId, name: "template", owner: { id: org.githubOrgId, login: org.login }, default_branch: "main" });
   };
-  useProjectWorld({ routes: [orgsRoute(() => orgs), templateRoute], repos: false, teacher: false });
+  // With the online workspace too (ADR-047, ADR-129): its routes under `/projects/:id` are swept as well,
+  // against a portal that knows nothing (an empty list, an accepted sync).
+  const portal = fakePortal();
+  useProjectWorld({
+    routes: [orgsRoute(() => orgs), templateRoute],
+    env: CODESPACE_ENV,
+    fetch: portal.fetch,
+    repos: false,
+    teacher: false,
+  });
 
   /**
    * The world of the other families, its classroom connected to an

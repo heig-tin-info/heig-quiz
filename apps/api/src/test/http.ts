@@ -133,14 +133,15 @@ export async function testServer(
 export async function sessionOf(
   db: Db,
   userId: string,
-  auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string; deviceId?: string },
+  auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string; deviceId?: string; projectId?: string; sebConfigKey?: string },
 ): Promise<Record<string, string>> {
   const session = await createSession(db, userId, 8, {
     kind: auth.kind,
     actorUserId: auth.actorUserId ?? null,
     evaluationId: auth.evaluationId ?? null,
     deviceId: auth.deviceId ?? null,
-    projectId: null,
+    projectId: auth.projectId ?? null,
+    sebConfigKey: auth.sebConfigKey ?? null,
   });
   return { cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`, "x-csrf-token": session.csrf };
 }

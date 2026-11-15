@@ -7,7 +7,7 @@
  * The closed lists live HERE, `as const`; `@quiz/contracts` re-exports them
  * and builds its zod enums from them, so the two never drift.
  */
-import { isLiveIndividualRepo, type RepoLifeLike } from "./groupRepo.js";
+import { isLiveIndividualRepo, isLiveRepo, type RepoLifeLike } from "./groupRepo.js";
 import { effectiveDeadline, writableUnderCommit, type DeadlineStrategyName } from "./projectRuns.js";
 
 /** Where the students work: their own tools, the portal's workspace, the workspace under Safe Exam Browser. */
@@ -186,6 +186,41 @@ export function quotaHolder(creatorId: string, owners: readonly OwnerSeat[]): st
     (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0),
   )[0];
   return oldest?.userId ?? null;
+}
+
+// ---------------------------------------------------------------- the staff's review session (ADR-129)
+
+/** Why a review session of a repository is refused (ADR-129 §5, rows 4–7): {@link staffReviewRefusal}. */
+export const STAFF_REVIEW_REFUSALS = ["review_not_granted", "review_archived", "review_repo_unavailable", "review_exam_open"] as const;
+export type StaffReviewRefusalCode = (typeof STAFF_REVIEW_REFUSALS)[number];
+
+/** The facts {@link staffReviewRefusal} decides on. */
+export interface StaffReviewFacts {
+  /** The project's quota holder holds an enabled workspace grant (`grantOf`). */
+  holderGranted: boolean;
+  classroomArchived: boolean;
+  projectArchived: boolean;
+  /** The reviewed repository: a student's, a group's or a staff seat's test one. */
+  repo: Omit<RepoLifeLike, "groupId"> & { githubRepoId: number | null; deadlineAppliedAt: Date | string | null };
+  workMode: WorkModeName;
+}
+
+/**
+ * THE rule of the staff's review session (ADR-129 §5), the launch route's,
+ * the token route's (§7) and the page's (§11), in order: the quota holder
+ * holds no enabled grant (`review_not_granted`), the classroom or the
+ * project archived (`review_archived`), the repository not live
+ * (`review_repo_unavailable`: {@link isLiveRepo} and its GitHub id known), an `online_seb`
+ * repository whose deadline is not applied yet — the exam may be running —
+ * (`review_exam_open`). Never the deadline, a lock, the release or the
+ * deadline strategy (§2). Null: the review may open.
+ */
+export function staffReviewRefusal(facts: StaffReviewFacts): StaffReviewRefusalCode | null {
+  if (!facts.holderGranted) return "review_not_granted";
+  if (facts.classroomArchived || facts.projectArchived) return "review_archived";
+  if (!isLiveRepo(facts.repo) || facts.repo.githubRepoId === null) return "review_repo_unavailable";
+  if (facts.workMode === "online_seb" && facts.repo.deadlineAppliedAt === null) return "review_exam_open";
+  return null;
 }
 
 // ---------------------------------------------------------------- the git relay's tokens (ADR-078)

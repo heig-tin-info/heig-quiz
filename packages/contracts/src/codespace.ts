@@ -9,13 +9,13 @@
  */
 import { z } from "zod";
 
-import { GIT_TOKEN_REFUSALS, WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS } from "@quiz/domain";
+import { GIT_TOKEN_REFUSALS, STAFF_REVIEW_REFUSALS, WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS } from "@quiz/domain";
 
 /**
  * Work mode of a project; `online_seb` opens only from Safe Exam Browser.
  * The lists are `@quiz/domain`'s (`workMode.ts`), re-exported here.
  */
-export { GIT_TOKEN_REFUSALS, WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS };
+export { GIT_TOKEN_REFUSALS, STAFF_REVIEW_REFUSALS, WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS };
 export const WorkMode = z.enum(WORK_MODES);
 export type WorkMode = z.infer<typeof WorkMode>;
 
@@ -148,6 +148,32 @@ export const CodespaceSessionSummary = z.object({
 export type CodespaceSessionSummary = z.infer<typeof CodespaceSessionSummary>;
 
 /**
+ * The claims every token that opens a portal session carries, defined once
+ * (ADR-129 §7): the signature's frame and who opens it, on which repository.
+ */
+const launchIdentityClaims = <A extends string>(aud: A) =>
+  z.object({
+    iss: z.enum(CODESPACE_ISSUERS),
+    aud: z.literal(aud),
+    iat: z.number(),
+    exp: z.number(),
+    jti: z.string().min(1),
+    /** The user's stable id on the platform; names a volume directory. */
+    sub: z.string().refine(isSafeId, "subject unsuitable for a volume path"),
+    email: z.string().min(1),
+    displayName: z.string(),
+    githubLogin: z.string().nullable(),
+    /** The target repository; null when it is not provisioned yet. */
+    repo: CodespaceRepoRef.nullable(),
+  });
+
+/** Who opens a portal session, on which repository: the claims both launch tokens share. */
+export type LaunchIdentityClaims = Pick<
+  z.infer<ReturnType<typeof launchIdentityClaims>>,
+  "sub" | "email" | "displayName" | "githubLogin" | "repo"
+>;
+
+/**
  * Launch token (5 min, single use): minted when a student clicks Start,
  * verified by the portal on `GET /launch?token=`. `seb` is present when the
  * launch comes from a `seb` session (D21, M6-07): the Config Key of this
@@ -155,23 +181,36 @@ export type CodespaceSessionSummary = z.infer<typeof CodespaceSessionSummary>;
  * `X-SafeExamBrowser-ConfigKeyHash` against this claim, and refuses an exam
  * launch without it (docs/merge/06 §6.3 point 4).
  */
-export const LaunchTokenClaims = z.object({
-  iss: z.enum(CODESPACE_ISSUERS),
-  aud: z.literal(LAUNCH_AUDIENCE),
-  iat: z.number(),
-  exp: z.number(),
-  jti: z.string().min(1),
-  /** The user's stable id on the platform; names a volume directory. */
-  sub: z.string().refine(isSafeId, "subject unsuitable for a volume path"),
-  email: z.string().min(1),
-  displayName: z.string(),
-  githubLogin: z.string().nullable(),
-  assignmentId: z.string().min(1),
-  /** The target repository; null when it is not provisioned yet. */
-  repo: CodespaceRepoRef.nullable(),
-  seb: z.object({ configKey: ConfigKey }).optional(),
-}).refine(lifetimeWithin(LAUNCH_TOKEN_TTL_SECONDS), "a launch token lives five minutes at most");
+export const LaunchTokenClaims = launchIdentityClaims(LAUNCH_AUDIENCE)
+  .extend({
+    assignmentId: z.string().min(1),
+    seb: z.object({ configKey: ConfigKey }).optional(),
+  })
+  .refine(lifetimeWithin(LAUNCH_TOKEN_TTL_SECONDS), "a launch token lives five minutes at most");
 export type LaunchTokenClaims = z.infer<typeof LaunchTokenClaims>;
+
+/**
+ * The staff's review session (ADR-129): its own audience, so that a review
+ * token is never read as a student's launch, nor the reverse; verified by
+ * the portal on its own route, `GET /review?token=`, never on `/launch`.
+ */
+export const REVIEW_AUDIENCE = "heig-codespace-review";
+
+/**
+ * Review launch token (5 min, single use, ADR-129 §7): a staff member opens
+ * one repository of a project. `repo` is the reviewed repository; `holder`
+ * the project's quota holder, whose quota the session counts against, and
+ * `maxActiveSessions` that holder's grant.
+ */
+export const ReviewLaunchTokenClaims = launchIdentityClaims(REVIEW_AUDIENCE)
+  .extend({
+    projectId: z.uuid(),
+    projectRepoId: z.uuid(),
+    holder: z.object({ id: z.string().min(1), email: z.string().min(1) }),
+    maxActiveSessions: z.number().int().min(0),
+  })
+  .refine(lifetimeWithin(LAUNCH_TOKEN_TTL_SECONDS), "a launch token lives five minutes at most");
+export type ReviewLaunchTokenClaims = z.infer<typeof ReviewLaunchTokenClaims>;
 
 /**
  * Service token (2 min) for Quiz's calls to the portal
@@ -229,8 +268,15 @@ const gitRequestClaims = <A extends string>(aud: A) =>
     repository: RepositoryFullName,
   });
 
-/** `POST /app/codespace/git-token`: an installation token on ONE repository. */
-export const GitTokenRequestClaims = gitRequestClaims(GIT_TOKEN_AUDIENCE).refine(lifetimeWithin(GIT_REQUEST_TTL_SECONDS), "a request lives one minute at most");
+/**
+ * `POST /app/codespace/git-token`: an installation token on ONE repository.
+ * `reviewRepoId` (a `project_repos.id`) names a repository a staff member
+ * launched a review session of (ADR-129 §7): a read grant, decided by that
+ * record and the user's staff access, never by ADR-078's launch rule.
+ */
+export const GitTokenRequestClaims = gitRequestClaims(GIT_TOKEN_AUDIENCE)
+  .extend({ reviewRepoId: z.uuid().optional() })
+  .refine(lifetimeWithin(GIT_REQUEST_TTL_SECONDS), "a request lives one minute at most");
 export type GitTokenRequestClaims = z.infer<typeof GitTokenRequestClaims>;
 
 /** A head the portal is about to push: a ref and a full sha (SHA-1 or SHA-256). */
@@ -302,6 +348,33 @@ export const WorkspaceStart = z.object({ url: z.url() });
 export type WorkspaceStart = z.infer<typeof WorkspaceStart>;
 
 /**
+ * The staff's review session (ADR-129 §5): `POST
+ * /app/api/projects/:id/repos/:rid/workspace/review`, a session write of the
+ * project page, no body, answering {@link WorkspaceReview}. Its refusals
+ * past the 404 are `409 { error: <code> }` ({@link StaffReviewRefusal}, the
+ * rule `staffReviewRefusal` of `@quiz/domain`).
+ */
+export const StaffReviewRefusal = z.enum(STAFF_REVIEW_REFUSALS);
+export type StaffReviewRefusal = z.infer<typeof StaffReviewRefusal>;
+
+/**
+ * How long after a review launch the portal may ask for its read token
+ * (ADR-129 §6, which owns the figure), in minutes.
+ */
+export const REVIEW_GRANT_MINUTES = 15;
+
+/** The review route, as the server registers it. */
+export const WORKSPACE_REVIEW_ROUTE = "/app/api/projects/:id/repos/:rid/workspace/review";
+
+/** The review route of one repository of a project. */
+export const workspaceReviewPath = (projectId: string, repoId: string): string =>
+  `/app/api/projects/${encodeURIComponent(projectId)}/repos/${encodeURIComponent(repoId)}/workspace/review`;
+
+/** The review route's answer: the portal's `/review?token=…`, where the page goes. Never cached. */
+export const WorkspaceReview = z.object({ url: z.url() });
+export type WorkspaceReview = z.infer<typeof WorkspaceReview>;
+
+/**
  * The student's `.seb` of an `online_seb` project (D21, M6-07): a one-time
  * file whose start URL opens a `seb` session confined to the project.
  */
@@ -337,6 +410,11 @@ export const ProjectWorkspace = z.object({
   refusal: WorkModeRefusal.nullable(),
   syncedAt: z.iso.datetime().nullable(),
   syncError: z.string().nullable(),
+  /**
+   * The staff may open a repository in a review session (ADR-129 §3, §11):
+   * the project's quota holder holds an enabled workspace grant.
+   */
+  review: z.boolean(),
 });
 export type ProjectWorkspace = z.infer<typeof ProjectWorkspace>;
 
