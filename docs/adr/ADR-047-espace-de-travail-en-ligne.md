@@ -15,7 +15,7 @@ amendment is in the [historical record](history/ADR-047-espace-de-travail-en-lig
 - 2026-10-07, M6-07: Safe Exam Browser for a project ([amendment](#m6-07-2026-10-07-safe-exam-browser-for-a-project)); no SEB project opens to students before proof B is recorded.
 - 2026-10-07, [ADR-078](ADR-078-codespace-git-relay-tokens.md): no App key on the engine VM; the portal seeds and relays with installation tokens Quiz issues for one repository.
 - 2026-10-08: an administrator always holds the workspace grant ([amendment](#2026-10-08-an-administrator-always-holds-the-grant)).
-- 2026-10-09, [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md) (proposed): an `online_seb` project may also accept a kiosk station (a `kiosk` claim instead of `seb`).
+- 2026-10-09, [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md) (accepted 2026-11-15): an `online_seb` project may accept kiosk stations; it amends M6-06 (A) and M6-07 here ([its amendment](ADR-089-kiosque-pour-l-espace-de-travail.md#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag)).
 - 2026-10-11, audit M11 and L25: the service token is single use and bound to its request, every token's lifetime capped ([ADR-078's amendment](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use)).
 - 2026-10-11, audit L7: the start route is a POST ([amendment](#2026-10-11-the-start-route-is-a-post)).
 - 2026-10-11, audit L24: one origin for every session ([amendment](#amendment-2026-10-11-one-origin-for-every-session-audit-l24)).

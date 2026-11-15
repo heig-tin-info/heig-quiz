@@ -72,7 +72,7 @@ intended behaviour; their presence alone does not certify implementation.
 
 ## 0.6 Out of scope
 
-- Heavy proctoring: webcam, lockdown of a student's own device. (Safe Exam Browser is in scope since ADR-027: an exam may require it, launched from the portal without a second sign-in. The school's own Chromebooks, locked in a web kiosk and attested by Chrome Verified Access, are in scope since ADR-051 as fallback stations for an exam, paired from the student's phone.)
+- Heavy proctoring: webcam, lockdown of a student's own device. (Safe Exam Browser is in scope since ADR-027: an exam may require it, launched from the portal without a second sign-in. The school's own Chromebooks, locked in a web kiosk and attested by Chrome Verified Access, are in scope since ADR-051 as fallback stations for an exam or a supervised project (ADR-089, 2026-11-15), paired from the student's phone.)
 - Comparison of electronic schematics by topology: netlist isomorphism, series/parallel
   canonicalisation, "the same circuit drawn differently". The `circuit` question type
   grades a schematic by SIMULATING it and comparing the output waveform with the

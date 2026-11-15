@@ -35,7 +35,7 @@ cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
   is on the owner's workstation, and classroom's stack, CI credentials,
   GHCR package, SWITCH resource and App are gone (runbook §5, the M9-01
   row below). M6-07's code is merged; proof B is done for evaluations (2026-10-10, Config Key
-  enforced in production) and waits for the project flow (a real SEB, the owner, on staging); M6-08 and M6-09 are to do. Quiz's production App
+  enforced in production) and waits for the project flow (a real SEB, the owner, on staging); M6-08 and M6-09 are to do. Kiosk stations for projects (ADR-089, accepted 2026-11-15) are M6-11a–e, built behind `KIOSK_PROJECTS`, off in production until that proof and proof K. Quiz's production App
   exists (registered by hand); staging's, `heig-quiz-staging`, exists
   since 2026-10-06 (M2-06). Teachers create their Quiz classrooms; the
   merge then writes the correspondence table (D22).
@@ -193,6 +193,11 @@ In the critical path only if D09 finds online assignments in production.
 | M6-08 | Freeze and collect contract on the portal (ADR-075) | todo | M6-03, M6-05 | | | |
 | M6-09 | `qt-workspace` type and Quiz side (ADR-075) | todo | M6-06, M6-08 | | | Kiosk use waits for proof B (M6-07) |
 | M6-10 | Git relay through Quiz-issued scoped tokens (ADR-078) | done | M6-04, M6-06 | `merge/M6-10-git-relay` | #594 | The codespace git relay through installation tokens issued by Quiz (migration `0082`, invariant 15 amended), its staging checks pending: card M6-10, "As delivered". |
+| M6-11a | Kiosk stations: the `__Host-` station cookie (ADR-089 point 3) | todo | ADR-089 accepted | | | Exams only, no flag, alone: the rename, its reader with the bare-name fallback, `verify` re-writing and expiring, N-SEC-01: card M6-11. |
+| M6-11b | Kiosk projects: the API behind `KIOSK_PROJECTS` (ADR-089) | todo | M6-11a, M6-07 code | | | Device levels, the project's level and its write, one start route and one confined guard, the sitting on the pairing row, pairing for projects: card M6-11. |
+| M6-11c | Kiosk projects: the portal (ADR-089) | todo | M6-11b | | | The `kiosk` claim and its `sitting`, sockets tagged by sitting, `frame-ancestors`, the close message: card M6-11. |
+| M6-11d | Kiosk projects: every end closes the portal (ADR-089) | todo | M6-11b, M6-11c; M6-11a run 12 h in production | | | Ends, `dropSessions` and the sweep enqueue the close, the hold, the kill switch never stops a close, the bare-cookie fallback removed (merged only once M6-11a has run 12 h in production): card M6-11. |
+| M6-11e | Kiosk projects: the web (ADR-089) | todo | M6-11b, M6-11c, M6-11d | | | The station page, the setting through `AllowedDevices`, `/kiosk` and `/pair`, the Kiosk only student page, en/fr: card M6-11. `KIOSK_PROJECTS` stays off everywhere, staging included, until M6-11d is merged. |
 
 ## M7 — Finishing
 
