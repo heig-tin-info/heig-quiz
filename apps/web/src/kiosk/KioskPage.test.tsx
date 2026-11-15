@@ -186,6 +186,37 @@ describe("the station's loop (ADR-051 §7)", () => {
     expect(calls.find((c) => c.url === "/app/api/kiosk/attest/verify")!.body).toEqual({ response: "UkVTUA==" });
   });
 
+  // ADR-089, amendment of 2026-11-15, point 4: the hold, read from the attestation's station.
+  it("shows no code while the station is held, and asks for one once the hold lifts", async () => {
+    let verified = 0;
+    const { calls } = station({
+      "POST /app/api/kiosk/attest/verify": () =>
+        ok({ station: { label: "Poste de secours n° 7", status: "active", held: ++verified === 1 } }),
+      "POST /app/api/kiosk/token": fail(400, { error: "authorization_pending" }),
+    });
+    const { result } = renderHook(() => useKioskStation(MOCK, true, vi.fn()), { wrapper });
+    await advance();
+    expect(result.current.kind).toBe("held");
+    expect(count(calls, "/app/api/kiosk/device_authorization")).toBe(0);
+    await advance(KIOSK_RETRY_MS);
+    expect(result.current.kind).toBe("code");
+  });
+
+  it("says the station is held when the code is refused 409 station_held, and tries again", async () => {
+    let asked = 0;
+    const { calls } = station({
+      "POST /app/api/kiosk/device_authorization": () =>
+        ++asked === 1 ? fail(409, { error: "station_held" }) : ok(auth()),
+      "POST /app/api/kiosk/token": fail(400, { error: "authorization_pending" }),
+    });
+    const { result } = renderHook(() => useKioskStation(MOCK, true, vi.fn()), { wrapper });
+    await advance();
+    expect(result.current.kind).toBe("held");
+    await advance(KIOSK_RETRY_MS);
+    expect(result.current.kind).toBe("code");
+    expect(count(calls, "/app/api/kiosk/device_authorization")).toBe(2);
+  });
+
   it("waits for the configuration, and says the platform is out of reach without the kiosk path", async () => {
     const { calls } = station({});
     const { result, rerender } = renderHook(({ ready }) => useKioskStation(null, ready, vi.fn()), {
@@ -232,5 +263,18 @@ describe("the station's screen", () => {
     await advance();
     expect(screen.getByRole("heading", { name: "Station not recognised" })).toBeVisible();
     expect(screen.getByText("Call the supervisor.")).toBeVisible();
+  });
+
+  it("says a held station is closing the previous session, to wait or call the supervisor", async () => {
+    station({
+      "GET /app/api/config": ok({ devLogin: false, kiosk: MOCK }),
+      "POST /app/api/kiosk/device_authorization": fail(409, { error: "station_held" }),
+    });
+    renderWithProviders(<KioskPage />, { route: "/kiosk" });
+    await advance();
+    await advance();
+    expect(screen.getByRole("heading", { name: "Closing the previous session" })).toBeVisible();
+    expect(screen.getByText(/Wait a moment, or call the supervisor/)).toBeVisible();
+    expect(screen.queryByText("BCDF-GHJK")).toBeNull();
   });
 });

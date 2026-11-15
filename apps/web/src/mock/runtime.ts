@@ -88,6 +88,8 @@ export const STUDENT_PROJECT_INVITED = "77777777-7777-4777-8777-777777777705";
  * `stationproject`: the student persona sits on a kiosk station, on the
  *   `kiosk` session of its invited project (ADR-089 §3, `mock/session.ts`):
  *   `/projects/<id>/station`, the portal framed by a stand-in.
+ * `stationheld`: the mock's station is held, its previous project sitting
+ *   not closed yet: `/kiosk` shows no code (ADR-089, amendment point 4).
  * `staffseat`: the student persona is a teacher on a STAFF seat (ADR-077): their
  *   project page offers the real actions; `staffrepo`: the staff project page
  *   shows that teacher's test repository, badged (`mock/project.ts`).
@@ -148,6 +150,7 @@ export const FLAG_NAMES = [
   "kioskprojects",
   "pjkiosk",
   "stationproject",
+  "stationheld",
   "nollm",
   "showkey",
   "unstated",

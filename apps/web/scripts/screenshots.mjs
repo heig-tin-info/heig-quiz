@@ -1010,6 +1010,7 @@ const scenes = [
   { name: "student-project-workspace-either", role: "student", path: `/projects/${SPROJ.open}?projects=1&codespace=1&pjkiosk=1` },
   // ADR-089 §3: the station page of a project, the mock's stand-in in the frame.
   { name: "station-project", role: "student", path: `/projects/${SPROJ.invited}/station?projects=1&codespace=1&stationproject=1`, settle: 2500, fold: true },
+  { name: "station-project-leave", role: "student", path: `/projects/${SPROJ.invited}/station?projects=1&codespace=1&stationproject=1`, settle: 2500, fold: true, act: (p) => p.getByRole("button", { name: "Leave this station" }).dispatchEvent("click") },
   { name: "student-project-accept", role: "student", path: `/projects/${SPROJ.accept}?projects=1` },
   { name: "student-project-unlinked", role: "student", path: `/projects/${SPROJ.accept}?projects=1&unlinked=1` },
   { name: "student-project-invited", role: "student", path: `/projects/${SPROJ.invited}?projects=1` },
@@ -1293,6 +1294,8 @@ const scenes = [
   // mock keeps the one pending pairing in localStorage (mock/kiosk.ts), so
   // the phone's scenes seed it.
   { name: "kiosk-station", role: "student", path: "/kiosk", settle: 1500, fold: true },
+  // ADR-089, amendment point 4: a station held while its previous project sitting closes.
+  { name: "kiosk-station-held", role: "student", path: "/kiosk?stationheld=1", settle: 1500, fold: true },
   { name: "pair", role: "student", path: "/pair?code=BCDF-GHJK", ls: KIOSK_PAIRING },
   { name: "pair-code", role: "student", path: "/pair" },
   { name: "pair-invalid", role: "student", path: "/pair?code=CCCC-DDDD", ls: KIOSK_PAIRING },

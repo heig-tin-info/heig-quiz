@@ -88,8 +88,12 @@ on("GET", "/app/api/kiosk/station", () => station());
 function station(): KioskStation {
   const d = devices.find((x) => x.status === "active");
   if (!d) throw new MockError(404, "Not found");
-  return { label: d.label, status: d.status, held: false };
+  return { label: d.label, status: d.status, held: flags.stationheld };
 }
+
+// Leave this station (ADR-089, amendment point 4): the sitting ends; the
+// session the mock plays stays, since the station's page leaves to `/kiosk`.
+on("POST", "/app/api/kiosk/leave", () => undefined);
 
 // --- The pairing (ADR-051 §7) ---------------------------------------------------
 //
@@ -131,6 +135,7 @@ const refusal = (status: number, error: string) => new MockPayload(status, { err
 on("POST", "/app/api/kiosk/device_authorization", (): KioskDeviceAuthorization => {
   const d = devices.find((x) => x.status === "active");
   if (!d?.label) throw refusal(403, "not_recognised");
+  if (flags.stationheld) throw refusal(409, "station_held");
   const userCode = generateUserCode((n) => Uint8Array.from({ length: n }, () => Math.floor(rand() * 256)));
   const deviceCode = `mock-device-${Date.now()}`;
   writePairing({ deviceCode, userCode, expiresAt: Date.now() + 300_000, state: "pending", evaluationId: null });

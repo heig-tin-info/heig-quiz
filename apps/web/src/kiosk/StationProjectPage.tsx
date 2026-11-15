@@ -40,6 +40,7 @@ import {
 import { api, refusalCodeOf, refusedWith } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
+import { useToast } from "../notify";
 import { kioskStationKey, meKey, studentProjectKey } from "../queryKeys";
 import { useServerClock } from "../realtime/useServerClock";
 import { ScreenOverlay } from "../student/PausedOverlay";
@@ -55,7 +56,7 @@ import { useStationAttestation } from "./useStationAttestation";
  * (`apps/codespace/src/auth/config.ts`): a portal configured shorter
  * outruns this. The page cannot read the frame's 403 across origins; the
  * launch reply or the portal telling the page its expiry is a follow-up
- * (M6-11d card).
+ * (M6-11e card).
  */
 export const PORTAL_RELAUNCH_MS = 4 * 3_600_000 - 10 * 60_000;
 
@@ -76,6 +77,8 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const toast = useToast();
+  const [leaving, setLeaving] = useState(false);
   const attestation = useStationAttestation(true, { suspendOnRefusal: true });
   const { suspended, guardSubmit } = attestation;
   const station = useQuery<KioskStation>({
@@ -109,8 +112,13 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
       confirmLabel: t("kiosk.station.leave.confirm"),
     });
     if (!ok) return;
-    await endProjectSitting(id);
-    toKiosk();
+    setLeaving(true);
+    const outcome = await endProjectSitting();
+    // Only a sitting the server ended goes back to the station's screen; a suspended
+    // station already shows its notice, and a failure leaves the sitting as it was.
+    if (outcome === "left") return toKiosk();
+    setLeaving(false);
+    if (outcome === "failed") toast(t("kiosk.station.leave.failed"), "error");
   };
 
   const url = frame.state.kind === "open" || frame.state.kind === "launching" ? frame.state.url : null;
@@ -125,7 +133,7 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
         <span className="hidden min-w-0 truncate text-fg-muted md:inline">{project.data?.title ?? ""}</span>
         <span className="ml-auto flex shrink-0 items-center gap-3">
           {project.data ? <ClockCountdown deadlineAt={Date.parse(project.data.deadlineAt)} clock={clock.now} /> : null}
-          <Button variant="secondary" size="sm" onClick={() => void leave()}>
+          <Button variant="secondary" size="sm" loading={leaving} onClick={() => void leave()}>
             <LogOut /> {t("kiosk.station.leave")}
           </Button>
         </span>

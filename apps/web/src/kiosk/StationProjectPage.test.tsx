@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { StudentProject } from "@quiz/contracts";
 
-import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { KIOSK_RETRY_MS } from "./useKioskStation";
 import { StationProjectPage } from "./StationProjectPage";
 
@@ -16,6 +16,7 @@ import { StationProjectPage } from "./StationProjectPage";
  */
 
 const START = "POST /app/api/projects/p1/workspace/start";
+const LEAVE = "POST /app/api/kiosk/leave";
 const PORTAL = "https://code.example.ch/launch?token=t1";
 const NOW = Date.now();
 
@@ -150,8 +151,8 @@ describe("the station page of a project", () => {
     expect(starts(calls)).toBe(2);
   });
 
-  it("asks before leaving, then goes back to the station's screen", async () => {
-    mockFetch({ ...STATION, [START]: ok({ url: PORTAL }) });
+  it("asks before leaving, ends the sitting on the server, then goes back to the station's screen", async () => {
+    const { calls } = mockFetch({ ...STATION, [START]: ok({ url: PORTAL }), [LEAVE]: noContent() });
     const replace = vi.fn();
     vi.stubGlobal("location", { ...window.location, replace });
     renderWithProviders(<StationProjectPage id="p1" />);
@@ -160,5 +161,45 @@ describe("the station page of a project", () => {
     expect(dialog).toHaveTextContent("The project is graded from your repository at the deadline.");
     await userEvent.click(screen.getByRole("button", { name: "Leave" }));
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/kiosk"));
+    expect(calls.filter((c) => c.method === "POST" && c.url === "/app/api/kiosk/leave")).toHaveLength(1);
+  });
+
+  it("goes back to the station's screen when the sitting had already ended (404)", async () => {
+    mockFetch({ ...STATION, [START]: ok({ url: PORTAL }), [LEAVE]: fail(404, { error: "not_found" }) });
+    const replace = vi.fn();
+    vi.stubGlobal("location", { ...window.location, replace });
+    renderWithProviders(<StationProjectPage id="p1" />);
+    await confirmLeave();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/kiosk"));
+  });
+
+  it("stays on the sitting and says so when Leave failed", async () => {
+    mockFetch({ ...STATION, [START]: ok({ url: PORTAL }), [LEAVE]: fail(502) });
+    const replace = vi.fn();
+    vi.stubGlobal("location", { ...window.location, replace });
+    renderWithProviders(<StationProjectPage id="p1" />);
+    await confirmLeave();
+    expect(await screen.findByText("Could not leave this station. Try again, or call the supervisor.")).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+    expect(frame()).toHaveAttribute("src", PORTAL);
+    expect(screen.getByRole("button", { name: "Leave this station" })).toBeEnabled();
+  });
+
+  it("stays on the sitting under the suspension notice when the station is suspended (423)", async () => {
+    mockFetch({ ...STATION, [START]: ok({ url: PORTAL }), [LEAVE]: fail(423, { error: "kiosk_suspended" }) });
+    const replace = vi.fn();
+    vi.stubGlobal("location", { ...window.location, replace });
+    renderWithProviders(<StationProjectPage id="p1" />);
+    await confirmLeave();
+    expect(await screen.findByText("This station is suspended")).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Could not leave this station/)).toBeNull();
   });
 });
+
+async function confirmLeave() {
+  await waitFor(() => expect(frame()).toHaveAttribute("src", PORTAL));
+  await userEvent.click(screen.getByRole("button", { name: "Leave this station" }));
+  await screen.findByRole("dialog", { name: "Leave this station?" });
+  await userEvent.click(screen.getByRole("button", { name: "Leave" }));
+}

@@ -1,4 +1,4 @@
-import { CloudOff, MonitorX } from "lucide-react";
+import { CloudOff, Hourglass, MonitorX } from "lucide-react";
 import { useEffect } from "react";
 
 import type { KioskDeviceAuthorization } from "@quiz/contracts";
@@ -9,6 +9,7 @@ import { useT } from "../i18n";
 import { purgeAllNotepads } from "../notepad/store";
 import { PollQr } from "../poll/PollQr";
 import { formatRemaining, Spinner, useNow } from "../ui";
+import type { StationTrouble } from "./station";
 import { useKioskStation } from "./useKioskStation";
 
 /**
@@ -36,7 +37,7 @@ export function KioskPage() {
       <div className="flex flex-1 flex-col items-center justify-center py-8 text-center">
         {phase.kind === "code" ? (
           <CodeScreen auth={phase.auth} expiresAt={phase.expiresAt} />
-        ) : phase.kind === "not_recognised" || phase.kind === "unavailable" ? (
+        ) : phase.kind === "not_recognised" || phase.kind === "unavailable" || phase.kind === "held" ? (
           <Trouble kind={phase.kind} />
         ) : (
           <Spinner
@@ -93,19 +94,26 @@ function CodeScreen({ auth, expiresAt }: { auth: KioskDeviceAuthorization; expir
   );
 }
 
-/** No code to show: the station is not a named one, or the platform cannot be reached. It tries again by itself. */
-function Trouble({ kind }: { kind: "not_recognised" | "unavailable" }) {
+/** The words and icon of each reason a station shows no code. */
+const TROUBLE = {
+  not_recognised: { icon: MonitorX, title: "kiosk.notRecognised.title", body: "kiosk.notRecognised.body" },
+  unavailable: { icon: CloudOff, title: "kiosk.unavailable.title", body: "kiosk.unavailable.body" },
+  held: { icon: Hourglass, title: "kiosk.held.title", body: "kiosk.held.body" },
+} as const satisfies Record<StationTrouble, { icon: unknown; title: string; body: string }>;
+
+/**
+ * No code to show: the station is not a named one, the platform cannot be
+ * reached, or it is held while its previous project sitting closes (ADR-089,
+ * amendment of 2026-11-15, point 4). It tries again by itself.
+ */
+function Trouble({ kind }: { kind: StationTrouble }) {
   const t = useT();
-  const Icon = kind === "not_recognised" ? MonitorX : CloudOff;
+  const { icon: Icon, title, body } = TROUBLE[kind];
   return (
     <div role="alert" className="flex max-w-2xl flex-col items-center gap-4">
       <Icon className="size-14 text-fg-faint" aria-hidden />
-      <h1 className="text-[clamp(28px,3.4vw,48px)] leading-tight font-bold tracking-[-0.02em]">
-        {t(kind === "not_recognised" ? "kiosk.notRecognised.title" : "kiosk.unavailable.title")}
-      </h1>
-      <p className="text-[clamp(18px,1.8vw,26px)] text-fg-muted">
-        {t(kind === "not_recognised" ? "kiosk.notRecognised.body" : "kiosk.unavailable.body")}
-      </p>
+      <h1 className="text-[clamp(28px,3.4vw,48px)] leading-tight font-bold tracking-[-0.02em]">{t(title)}</h1>
+      <p className="text-[clamp(18px,1.8vw,26px)] text-fg-muted">{t(body)}</p>
     </div>
   );
 }
