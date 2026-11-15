@@ -141,9 +141,10 @@ export async function attest(kiosk: PublicConfig["kiosk"]): Promise<StationTroub
 // --- A project sitting (ADR-089) ---------------------------------------------------
 
 /**
- * How **Leave this station** ended: `left` when the sitting is over on the
- * server — ended now, or already by another end (no station session of a
- * project any more: a 401 or a 404); `suspended` when the station must be
+ * How **Leave this station** ended: `left` when the server will not hear
+ * this station's sitting any more — ended now (the 204), already ended by
+ * another end (a 404), or the station no longer trusted with it (a 401: the
+ * sitting then ends at its expiry or the sweep); `suspended` when the station must be
  * checked again first (the `423`, whose notice the page already shows);
  * `failed` otherwise, the sitting still running.
  */

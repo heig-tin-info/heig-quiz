@@ -3469,7 +3469,7 @@ export const fr: Record<keyof Dict, string> = {
   "kiosk.notRecognised.body": "Appelez la surveillance.",
   "kiosk.unavailable.title": "Poste indisponible",
   "kiosk.unavailable.body": "Appelez la surveillance. Le poste réessaie automatiquement.",
-  "kiosk.held.title": "Fermeture de la séance précédente",
+  "kiosk.held.title": "Fermeture de l'espace de travail précédent",
   "kiosk.held.body": "Patientez un instant ou appelez la surveillance. Le poste réessaie automatiquement.",
   "kiosk.step.scan": "Scannez le code QR avec votre téléphone, ou ouvrez {url} et saisissez le code.",
   "kiosk.step.check": "Vérifiez que votre téléphone affiche le nom de ce poste, choisissez votre examen ou projet et confirmez.",

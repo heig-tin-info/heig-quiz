@@ -3494,7 +3494,7 @@ export const en = {
   "kiosk.notRecognised.body": "Call the supervisor.",
   "kiosk.unavailable.title": "Station unavailable",
   "kiosk.unavailable.body": "Call the supervisor. The station keeps trying by itself.",
-  "kiosk.held.title": "Closing the previous session",
+  "kiosk.held.title": "Closing the previous workspace",
   "kiosk.held.body": "Wait a moment, or call the supervisor. The station keeps trying by itself.",
   "kiosk.step.scan": "Scan the QR code with your phone, or open {url} and type the code.",
   "kiosk.step.check": "Check that your phone shows this station's name, pick your exam or project and confirm.",

@@ -273,7 +273,7 @@ describe("the station's screen", () => {
     renderWithProviders(<KioskPage />, { route: "/kiosk" });
     await advance();
     await advance();
-    expect(screen.getByRole("heading", { name: "Closing the previous session" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Closing the previous workspace" })).toBeVisible();
     expect(screen.getByText(/Wait a moment, or call the supervisor/)).toBeVisible();
     expect(screen.queryByText("BCDF-GHJK")).toBeNull();
   });
