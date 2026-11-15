@@ -117,15 +117,18 @@ export function FieldLabel({
   htmlFor,
   help,
   hint,
+  hidden = false,
 }: {
   children: ReactNode;
   /** Id of the control this labels; omit for a label with no control. */
   htmlFor?: string;
   help?: string;
   hint?: ReactNode;
+  /** Read, not shown: a `SettingRow`'s title shows it. */
+  hidden?: boolean;
 }) {
   return (
-    <div className={fieldLabel}>
+    <div className={hidden ? "sr-only" : fieldLabel}>
       <label htmlFor={htmlFor}>{children}</label>
       {help ? <HelpIcon topic={help} /> : null}
       {hint ? <span className="ml-auto font-normal text-fg-faint">{hint}</span> : null}
@@ -153,6 +156,8 @@ export function Field({
   label,
   help,
   hint,
+  labelHidden = false,
+  action,
   description,
   suffix,
   fullWidth,
@@ -165,6 +170,13 @@ export function Field({
   help?: string;
   /** Right-aligned note on the label line. */
   hint?: ReactNode;
+  /**
+   * The label is read, not shown: the field sits at the right of a
+   * `SettingRow` whose title says it.
+   */
+  labelHidden?: boolean;
+  /** A button beside the input, outside its width: a shortcut that fills it (`EndOfWeek`). */
+  action?: ReactNode;
   /** What the value is, one line under the input, read with it (`aria-describedby`). */
   description?: ReactNode;
   /**
@@ -186,25 +198,37 @@ export function Field({
 }) {
   const auto = useId();
   const id = props.id ?? auto;
+  const box = fullWidth ? "w-full" : width;
+  const input = (
+    <SuffixWrap suffix={suffix} id={id} size={size}>
+      <TextInput
+        {...props}
+        // Added to, never replaced by, a caller's own (`fieldErrorProps`).
+        aria-describedby={
+          [description ? `${id}-description` : null, suffix ? `${id}-suffix` : null, props["aria-describedby"]]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
+        id={id}
+        size={size}
+        className={cx("w-full", suffix && controlSize[size].padRight, className)}
+      />
+    </SuffixWrap>
+  );
   return (
-    <div className={cx("flex flex-col gap-1.5", fullWidth ? "w-full" : width)}>
-      <FieldLabel htmlFor={id} help={help} hint={hint}>
+    // With an action, the width is the input's and the action stands beside it.
+    <div className={cx("flex flex-col gap-1.5", !action && box)}>
+      <FieldLabel htmlFor={id} help={help} hint={hint} hidden={labelHidden}>
         {label}
       </FieldLabel>
-      <SuffixWrap suffix={suffix} id={id} size={size}>
-        <TextInput
-          {...props}
-          // Added to, never replaced by, a caller's own (`fieldErrorProps`).
-          aria-describedby={
-            [description ? `${id}-description` : null, suffix ? `${id}-suffix` : null, props["aria-describedby"]]
-              .filter(Boolean)
-              .join(" ") || undefined
-          }
-          id={id}
-          size={size}
-          className={cx("w-full", suffix && controlSize[size].padRight, className)}
-        />
-      </SuffixWrap>
+      {action ? (
+        <div className="flex items-center gap-1">
+          <div className={box}>{input}</div>
+          {action}
+        </div>
+      ) : (
+        input
+      )}
       {description ? (
         <p id={`${id}-description`} className="text-xs text-fg-muted">
           {description}

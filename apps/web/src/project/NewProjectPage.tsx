@@ -346,11 +346,14 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
                   />
                 ) : null}
                 {byDuration(draft) ? (
-                  <DurationDaysField
-                    value={draft.durationDays}
-                    onChange={(e) => update({ durationDays: e.target.value })}
-                    message={message("duration")}
-                  />
+                  <div className="flex flex-col gap-1">
+                    <DurationDaysField
+                      value={draft.durationDays}
+                      onChange={(e) => update({ durationDays: e.target.value })}
+                      message={message("duration")}
+                    />
+                    <FieldError id={FIELD_ID.duration}>{message("duration")}</FieldError>
+                  </div>
                 ) : (
                   <DateInput
                     field="deadline"
@@ -453,7 +456,7 @@ function DateInput({
         label={label}
         type="datetime-local"
         width="w-56"
-        hint={field === "deadline" ? <EndOfWeek onPick={(iso) => onChange(toLocalInput(iso))} /> : undefined}
+        action={field === "deadline" ? <EndOfWeek onPick={(iso) => onChange(toLocalInput(iso))} /> : undefined}
         min={toLocalInput(new Date().toISOString())}
         value={value}
         onChange={(e) => onChange(e.target.value)}

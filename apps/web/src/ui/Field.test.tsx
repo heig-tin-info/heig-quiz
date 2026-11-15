@@ -35,6 +35,26 @@ describe("Field and Select", () => {
     expect(byLabel("Stretched").parentElement).toHaveClass("w-full");
   });
 
+  it("keeps the name of a field whose label a row's title shows, and puts an action beside its input", () => {
+    renderWithProviders(
+      <Field
+        label="Deadline"
+        labelHidden
+        width="w-52"
+        action={
+          <button type="button" aria-label="End of week">
+            x
+          </button>
+        }
+      />,
+    );
+    const input = screen.getByLabelText("Deadline");
+    expect(screen.getByText("Deadline").closest("div")).toHaveClass("sr-only");
+    // The width is the input's; the action stands outside it, on the same line.
+    expect(input.parentElement).toHaveClass("w-52");
+    expect(input.parentElement?.parentElement).toContainElement(screen.getByRole("button", { name: "End of week" }));
+  });
+
   it("labels a Select and carries its width on the control wrapper", async () => {
     const onChange = vi.fn();
     renderWithProviders(

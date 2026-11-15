@@ -5,11 +5,11 @@ import type { ProjectDetail } from "@quiz/contracts";
 import { refusalCodeOf, refusedWith } from "../api";
 import { DateField } from "../evaluation/TimingStep";
 import { useT, type TFunction } from "../i18n";
-import { Card, FieldError, fieldErrorProps, useNumberDraft } from "../ui";
+import { Card, fieldErrorProps, useNumberDraft } from "../ui";
 import { applyChange, draftPatch, draftView, validDays, type DraftChange } from "./draftPatch";
 import { FIELD_ID, foreignZone } from "./newProject";
 import type { WriteProject } from "./projectPage";
-import { DeadlineKindRow, DurationDaysField, PublishModeRow } from "./ProjectSettingRows";
+import { DeadlineKindRow, DurationDaysField, FieldRow, PublishModeRow } from "./ProjectSettingRows";
 
 type Place = "start" | "deadline";
 
@@ -34,8 +34,8 @@ export function publicationRefusal(error: unknown, t: TFunction): PlacedRefusal 
   return null;
 }
 
-/** The days of a duration, written when the teacher leaves the field. */
-function DaysField({
+/** The days of a duration, written when the teacher leaves the field: at the right of its row. */
+function DaysRow({
   days,
   disabled,
   message,
@@ -49,10 +49,9 @@ function DaysField({
   const t = useT();
   const input = useNumberDraft(days, onCommit);
   return (
-    <div className="flex flex-col gap-1">
-      <DurationDaysField size="sm" disabled={disabled} message={message} {...input} />
-      <p className="text-xs text-fg-muted">{t("project.draft.duration.desc")}</p>
-    </div>
+    <FieldRow id={FIELD_ID.duration} title={t("project.duration")} message={message}>
+      <DurationDaysField size="sm" labelHidden disabled={disabled} message={message} {...input} />
+    </FieldRow>
   );
 }
 
@@ -138,51 +137,43 @@ export function ProjectDraftPublication({
         />
       )}
 
-      <div className="space-y-2 py-3">
-        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start">
-          {scheduled ? (
-            <div className="flex flex-col gap-1">
-              <DateField
-                key="start"
-                id={FIELD_ID.start}
-                label={t("project.start")}
-                disabled={held || !can("startAt")}
-                value={view.startAt}
-                onCommit={(value) => change({ type: "start", at: value })}
-                {...fieldErrorProps(FIELD_ID.start, at("start"))}
-              />
-              <FieldError id={FIELD_ID.start} className="max-w-52">
-                {at("start")}
-              </FieldError>
-            </div>
-          ) : null}
-          {view.kind === "duration" && !scheduled ? (
-            <DaysField
-              days={view.days}
-              disabled={held || !can("durationMinutes")}
-              message={view.days !== null && !validDays(view.days) ? t("project.missing.duration") : undefined}
-              onCommit={(days) => change({ type: "days", days })}
-            />
-          ) : (
-            <div className="flex flex-col gap-1">
-              <DateField
-                key={scheduled ? "scheduled-deadline" : "manual-deadline"}
-                id={FIELD_ID.deadline}
-                label={t("project.deadline")}
-                endOfWeek
-                disabled={held || !can("deadlineAt")}
-                value={view.deadlineAt}
-                onCommit={(value) => change({ type: "deadline", at: value })}
-                {...fieldErrorProps(FIELD_ID.deadline, at("deadline"))}
-              />
-              <FieldError id={FIELD_ID.deadline} className="max-w-52">
-                {at("deadline")}
-              </FieldError>
-            </div>
-          )}
-        </div>
-        {zone ? <p className="text-[13px] text-fg-muted">{t("project.zone", { zone })}</p> : null}
-      </div>
+      {scheduled ? (
+        <FieldRow id={FIELD_ID.start} title={t("project.start")} message={at("start")}>
+          <DateField
+            key="start"
+            id={FIELD_ID.start}
+            label={t("project.start")}
+            labelHidden
+            disabled={held || !can("startAt")}
+            value={view.startAt}
+            onCommit={(value) => change({ type: "start", at: value })}
+            {...fieldErrorProps(FIELD_ID.start, at("start"))}
+          />
+        </FieldRow>
+      ) : null}
+      {view.kind === "duration" && !scheduled ? (
+        <DaysRow
+          days={view.days}
+          disabled={held || !can("durationMinutes")}
+          message={view.days !== null && !validDays(view.days) ? t("project.missing.duration") : undefined}
+          onCommit={(days) => change({ type: "days", days })}
+        />
+      ) : (
+        <FieldRow id={FIELD_ID.deadline} title={t("project.deadline")} message={at("deadline")}>
+          <DateField
+            key={scheduled ? "scheduled-deadline" : "manual-deadline"}
+            id={FIELD_ID.deadline}
+            label={t("project.deadline")}
+            labelHidden
+            endOfWeek
+            disabled={held || !can("deadlineAt")}
+            value={view.deadlineAt}
+            onCommit={(value) => change({ type: "deadline", at: value })}
+            {...fieldErrorProps(FIELD_ID.deadline, at("deadline"))}
+          />
+        </FieldRow>
+      )}
+      {zone ? <p className="py-3 text-[13px] text-fg-muted">{t("project.zone", { zone })}</p> : null}
     </Card>
   );
 }

@@ -1597,6 +1597,18 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     expect(screen.getByRole("link", { name: /prg1-labo-02-pointeurs/ })).toBeInTheDocument();
   });
 
+  it("says what the deadline form means, and sets the end of the week from the icon beside the date", async () => {
+    const { calls } = routes(makeDraft({ durationMinutes: 7 * 1440 }), { [`PATCH ${BASE}`]: ok({}) });
+    renderPage();
+    expect(await screen.findByText(/Counted from the publication/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "A date" }));
+    expect(screen.getByText("Fixed, whatever day you publish.")).toBeInTheDocument();
+    expect(screen.queryByText(/Counted from the publication/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "End of week" }));
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(screen.getByLabelText("Deadline")).not.toHaveValue("");
+  });
+
   it("says the distribution repository is missing, and that the draft must be created again", async () => {
     routes(makeDraft({ distribution: null }));
     renderPage();

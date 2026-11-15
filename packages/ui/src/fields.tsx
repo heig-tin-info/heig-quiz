@@ -119,11 +119,11 @@ export function Segmented<T extends string>({
       {...(labelledBy === undefined ? {} : { "aria-labelledby": labelledBy })}
       className={cx(
         "relative gap-0.5 bg-surface-3 p-0.75",
-        // A track two rows tall is not a pill any more: a full radius on it
-        // draws two half-circles the height of both rows. It becomes what it
-        // now is — a recessed panel — and keeps the card radius of the design
-        // scale, while the options inside stay pills.
-        wrap ? "flex w-full flex-wrap rounded-card" : "inline-flex shrink-0 rounded-control",
+        // The track's radius is half a row plus its padding (`controlSize.track`):
+        // concentric with the pills inside. On one row that is a full pill; a
+        // wrapped track two rows tall keeps the same corners instead of
+        // drawing two half-circles the height of both rows.
+        wrap ? cx("flex w-full flex-wrap", controlSize[size].track) : "inline-flex shrink-0 rounded-control",
         disabled && "opacity-60",
       )}
     >
