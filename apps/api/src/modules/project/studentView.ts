@@ -55,6 +55,7 @@ import type {
   StudentProjectRepo,
   StudentProjectScore,
   StudentProjectWork,
+  StudentProjectWorkspace,
 } from "@quiz/contracts";
 import {
   criteriaTable,
@@ -130,7 +131,7 @@ interface CardRow {
 }
 
 /** The card's facts, without the repository's fields: what the card and the view share. */
-type CardFacts = Omit<StudentProjectCard, "invitation" | "repoFullName" | "repoUrl" | "work">;
+type CardFacts = Omit<StudentProjectCard, "invitation" | "repoFullName" | "repoUrl" | "work" | "workspace">;
 
 /** The facts of `row` at `now`, judged by `@quiz/domain`, and the group of the Activities they fall in. */
 function cardFacts(row: CardRow, linked: boolean, now: Date): { facts: CardFacts; group: StudentActivityGroup } {
@@ -159,6 +160,15 @@ function cardFacts(row: CardRow, linked: boolean, now: Date): { facts: CardFacts
   };
 }
 
+/**
+ * The online workspace as its student reads it (ADR-047, M6-06): the mode
+ * and its device level (ADR-089) when the project runs in the portal and
+ * the feature is on (`codespace`), once it is open (ADR-127); null
+ * otherwise. THE rule of the card and the page alike.
+ */
+const studentWorkspace = (project: ProjectRow, codespace: boolean): StudentProjectWorkspace | null =>
+  codespace && projectIsLive(project.state) && project.workMode !== "free" ? { mode: project.workMode, devices: project.devices } : null;
+
 /** The seat's repository while it is live: provisioned, not deleted, its project not archived. */
 const liveRepo = (row: RepoRow | null, project: ProjectRow): ProvisionedRepo | null => {
   const repo = provisioned(row);
@@ -171,7 +181,13 @@ const liveRepo = (row: RepoRow | null, project: ProjectRow): ProvisionedRepo | n
  * theirs, the invitation accepted (M3-14i) — the view's reading, its
  * indicative score left out once released.
  */
-function card(row: CardRow, linked: boolean, now: Date, read: Readings): { card: StudentProjectCard; group: StudentActivityGroup } {
+function card(
+  row: CardRow,
+  linked: boolean,
+  now: Date,
+  read: Readings,
+  codespace: boolean,
+): { card: StudentProjectCard; group: StudentActivityGroup } {
   const { facts, group } = cardFacts(row, linked, now);
   const live = liveRepo(row.repo, row.project);
   let work: StudentProjectWork | null = null;
@@ -187,6 +203,7 @@ function card(row: CardRow, linked: boolean, now: Date, read: Readings): { card:
       repoFullName: live?.fullName ?? null,
       repoUrl: live === null ? null : htmlUrl(live.fullName),
       work,
+      workspace: studentWorkspace(row.project, codespace),
     },
   };
 }
@@ -204,7 +221,12 @@ export type StudentProjectCards = Record<StudentActivityGroup, StudentProjectCar
  * (F-PROJ-04, F-PROJ-16); the soonest EFFECTIVE deadline first, then by
  * name.
  */
-export async function studentProjectCards(db: Db, userId: string, now: Date, classroomId?: string): Promise<StudentProjectCards> {
+export async function studentProjectCards(
+  db: Db,
+  userId: string,
+  now: Date,
+  { classroomId, codespace }: { classroomId?: string | undefined; codespace: boolean },
+): Promise<StudentProjectCards> {
   const scope: (SQL | undefined)[] = [
     eq(enrollments.userId, userId),
     classroomId === undefined ? undefined : eq(enrollments.classroomId, classroomId),
@@ -231,7 +253,7 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
   ]);
   const groups: StudentProjectCards = { open: [], upcoming: [], past: [] };
   for (const row of cards) {
-    const placed = card(row, linked, now, read);
+    const placed = card(row, linked, now, read, codespace);
     groups[placed.group].push(placed.card);
   }
   return groups;
@@ -346,8 +368,7 @@ export async function studentProject(
             comment: repo?.releasedComment ?? null,
           },
     criteria,
-    // ADR-047 (M6-06): the mode and its device level (ADR-089), when the project runs in the portal and the feature is on — once it is open (ADR-127).
-    workspace: codespace && projectIsLive(project.state) && project.workMode !== "free" ? { mode: project.workMode, devices: project.devices } : null,
+    workspace: studentWorkspace(project, codespace),
     serverNow: iso(now),
   };
 }

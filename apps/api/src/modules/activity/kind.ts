@@ -54,6 +54,8 @@ export interface StudentScope {
    * never reaches here confined (`readableClassroom` refuses it).
    */
   confined: boolean;
+  /** The online workspace is on (`codespaceOn`): a project card says its mode (ADR-047). */
+  codespace: boolean;
 }
 
 /** A claimed student seat of the classroom: the roster line and its account. */

@@ -969,6 +969,8 @@ const scenes = [
   // refused on a stale account (`?stale=1`, Relink GitHub).
   { name: "student-home-projects", role: "student", path: "/?projects=1" },
   { name: "student-home-projects-unlinked", role: "student", path: "/?projects=1&unlinked=1" },
+  // ADR-047: an online project's card opens the workspace, the repository an icon beside it; a SEB one leads to its page.
+  { name: "student-home-projects-workspace", role: "student", path: "/?projects=1&codespace=1" },
   { name: "student-classroom-projects", role: "student", path: "/classrooms/r1?projects=1" },
   { name: "student-view-classroom-projects", role: "teacher", path: "/classrooms/r1?projects=1", ss: { "quiz-view-as": "student", "quiz-view-as-return": "/classrooms/r1" } },
   { name: "student-project", role: "student", path: `/projects/${SPROJ.open}?projects=1` },

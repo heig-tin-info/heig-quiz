@@ -20,26 +20,40 @@
  *
  * `now` is the page's, read off the server's clock (invariant 5): the start
  * and the deadline are judged against it, never against the browser's.
+ *
+ * A project worked in the online workspace (ADR-047, ADR-089) trades GitHub
+ * for the workspace on the card (`cardWorkspaceAction`): *Open workspace*,
+ * the page's launch, with the repository as a quiet icon beside it; under
+ * supervision, the project's page, where its steps are.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { CalendarClock, CircleSlash, Eye, FolderGit2, Gauge, GitCommitHorizontal, Lock, MailCheck, TriangleAlert } from "lucide-react";
+import { CalendarClock, CircleSlash, Eye, FolderGit2, Gauge, GitCommitHorizontal, Laptop, Lock, MailCheck, TriangleAlert } from "lucide-react";
 
 import type { StudentActivityGroup } from "@quiz/domain";
-import type { ProjectAcceptance, StudentProjectCard, StudentProjectStatus, StudentProjectWork } from "@quiz/contracts";
+import {
+  workspaceStartPath,
+  WorkspaceStartRefusal,
+  type ProjectAcceptance,
+  type StudentProjectCard,
+  type StudentProjectStatus,
+  type StudentProjectWork,
+} from "@quiz/contracts";
 
-import { api, useMe } from "../api";
+import { api, apiErrorMessage, refusalCodeOf, useMe } from "../api";
 import { githubLinkHref } from "../github/api";
 import { useI18n, useT, type Locale, type TFunction } from "../i18n";
 import { useToast } from "../notify";
+import { usePortalLaunch } from "../portalLaunch";
 import { CiBadge } from "../project/parts";
 import { shortSha } from "../project/projectPage";
 import { studentRootKey } from "../queryKeys";
 import { routeToPath, type Navigate } from "../router";
-import { GithubIcon, isoDateTime, MetaItem, relativeTime, type IconType } from "../ui";
+import { GithubIcon, IconLink, isoDateTime, MetaItem, relativeTime, type IconType } from "../ui";
 import { ActivityRow, leftLine, startsLine, type RowAction, type RowStatus } from "./ActivityRow";
 import {
   ACCENT_KINDS,
+  cardWorkspaceAction,
   factsOfCard,
   invitationHref,
   PROJECT_STATUS_KEY,
@@ -116,6 +130,20 @@ export function useProjectAction(
         };
   }
   return null;
+}
+
+/**
+ * *Open workspace* from a card (ADR-047): the project page's launch, the
+ * same start route through `usePortalLaunch`. The page words a refusal in
+ * its own alert; the card is elsewhere, so a toast says the same words.
+ */
+function useWorkspaceLaunch(projectId: string) {
+  const t = useT();
+  const toast = useToast();
+  return usePortalLaunch(workspaceStartPath(projectId), (error) => {
+    const refusal = WorkspaceStartRefusal.safeParse(refusalCodeOf(error));
+    toast(refusal.success ? t(`sproj.workspace.refusal.${refusal.data}`) : apiErrorMessage(error, t("error.save")), "error");
+  });
 }
 
 /** The status badge of a project (F-PROJ-04), toned by `PROJECT_STATUS_TONE`. */
@@ -251,6 +279,21 @@ export function ProjectRow({
   const upcoming = group === "upcoming" || notStarted(card, now);
   const action = useProjectAction(facts, { now, primary, readOnly });
   const route = { view: "project", id: card.id } as const;
+  // The workspace's action replaces GitHub's, never the accent (a ready repository); a read-only reader still gets none.
+  const workspace = action ? cardWorkspaceAction(card) : null;
+  const launch = useWorkspaceLaunch(card.id);
+  const shown: RowAction | null =
+    workspace === "launch"
+      ? { label: t("sproj.workspace.open"), icon: Laptop, loading: launch.busy, onClick: launch.launch }
+      : workspace === "page"
+        ? { label: t("sproj.openPage"), onClick: () => void navigate(route) }
+        : action;
+  const repoIcon =
+    workspace === "launch" && action?.href !== undefined ? (
+      <IconLink label={action.label} href={action.href}>
+        <GithubIcon />
+      </IconLink>
+    ) : undefined;
   return (
     <ActivityRow
       kind={{ label: t("activities.kind.project"), icon: FolderGit2 }}
@@ -265,7 +308,8 @@ export function ProjectRow({
         </>
       }
       workMeta={card.work && !upcoming ? <ProjectWorkMeta work={card.work} deadlineAt={card.deadlineAt} now={now} /> : undefined}
-      action={group === "upcoming" ? undefined : (action ?? undefined)}
+      tools={group === "upcoming" ? undefined : repoIcon}
+      action={group === "upcoming" ? undefined : (shown ?? undefined)}
     />
   );
 }

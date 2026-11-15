@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { defaultProjectGradingScale, StudentProject, type AdminTeacher } from "@quiz/contracts";
+import { defaultProjectGradingScale, StudentHome, StudentProject, type AdminTeacher } from "@quiz/contracts";
 
 import { githubOrganizations, projects } from "../../db/schema.js";
 import { appKey } from "../../github/testing.js";
@@ -81,5 +81,9 @@ describe("the online workspace off (CODESPACE_URL empty)", () => {
     const view = await inject("GET", `/app/api/student/projects/${id}`, student.headers);
     expect(view.statusCode, view.body).toBe(200);
     expect(StudentProject.parse(view.json()).workspace).toBeNull();
+    // Its card on the home says no workspace either: the card offers no launch the route would refuse.
+    const home = StudentHome.parse((await inject("GET", "/app/api/student/home", student.headers)).json());
+    const card = [...home.open, ...home.upcoming, ...home.past].find((c) => c.id === id);
+    expect(card?.kind === "project" ? card.workspace : "missing").toBeNull();
   });
 });

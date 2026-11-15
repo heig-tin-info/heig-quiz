@@ -6,6 +6,7 @@ import { ApiError } from "../api";
 import { en } from "../i18n/en";
 import type { TFunction } from "../i18n";
 import {
+  cardWorkspaceAction,
   factsOfCard,
   factsOfProject,
   invitationHref,
@@ -41,6 +42,7 @@ const card = (over: Partial<StudentProjectCard> = {}): StudentProjectCard => ({
   repoFullName: null,
   repoUrl: null,
   work: null,
+  workspace: null,
   ...over,
 });
 
@@ -170,5 +172,30 @@ describe("the refusals of Accept and Resend", () => {
 
   it("re-reads instead of resending when the server is already at it, or the invitation moved on", () => {
     expect([...REREAD_REFUSALS].sort()).toEqual(["invitation_not_pending", "provision_in_progress"]);
+  });
+});
+
+describe("the workspace's action on a card (ADR-047, ADR-089)", () => {
+  const REPO = { repoFullName: "heig/labo-1-lea", repoUrl: "https://github.com/heig/labo-1-lea", invitation: "accepted" as const };
+  const online = { mode: "online", devices: "any" } as const;
+
+  it("launches the workspace of an online project in progress, its repository live", () => {
+    expect(cardWorkspaceAction(card({ status: "in_progress", ...REPO, workspace: online }))).toBe("launch");
+  });
+
+  it("leads to the page under supervision, whatever the state", () => {
+    for (const devices of ["seb", "either", "kiosk"] as const) {
+      for (const status of ["in_progress", "locked", "released"] as const) {
+        expect(cardWorkspaceAction(card({ status, ...REPO, workspace: { mode: "online_seb", devices } }))).toBe("page");
+      }
+    }
+  });
+
+  it("leaves the card's own action otherwise: own tools, no repository, a closed project", () => {
+    expect(cardWorkspaceAction(card({ status: "in_progress", ...REPO }))).toBeNull();
+    expect(cardWorkspaceAction(card({ status: "to_accept", workspace: online }))).toBeNull();
+    expect(cardWorkspaceAction(card({ status: "in_progress", workspace: online }))).toBeNull();
+    expect(cardWorkspaceAction(card({ status: "locked", ...REPO, workspace: online }))).toBeNull();
+    expect(cardWorkspaceAction(card({ status: "deadline_passed", ...REPO, workspace: online }))).toBeNull();
   });
 });

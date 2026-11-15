@@ -104,9 +104,15 @@ async function studentCards(
  * teacher through their staff seat (ADR-018), an impersonation session. A
  * confined session (`seb`, `kiosk`) gets its evaluations and no project.
  */
-export async function studentHome(db: Db, caller: Caller, auth: SessionAuth | null, now: Date): Promise<StudentHome> {
+export async function studentHome(
+  db: Db,
+  caller: Caller,
+  auth: SessionAuth | null,
+  now: Date,
+  { codespace }: { codespace: boolean } = { codespace: false },
+): Promise<StudentHome> {
   const isConfined = confined(auth);
-  const { practice, ...cards } = await studentCards(db, caller, now, { confined: isConfined });
+  const { practice, ...cards } = await studentCards(db, caller, now, { confined: isConfined, codespace });
   // ADR-122, "Past series": never on a trusted client, which sits one evaluation.
   return { ...cards, practice: isConfined ? [] : practice, serverNow: iso(now) };
 }
@@ -125,12 +131,13 @@ export async function studentClassroomPage(
   caller: Caller,
   scope: ReadableClassroom,
   now: Date,
+  { codespace }: { codespace: boolean } = { codespace: false },
 ): Promise<StudentClassroomPage> {
   // A confined session never reaches this route (`readableClassroom`), so
   // the past series (ADR-122) need no trusted-client guard here.
   const [classroom, { practice, ...activities }, journal, groups] = await Promise.all([
     studentClassroomHeader(db, scope),
-    studentCards(db, caller, now, { classroomId: scope.room.id, confined: false }),
+    studentCards(db, caller, now, { classroomId: scope.room.id, confined: false, codespace }),
     hasJournal(db, scope.room.id),
     hasStudentGroupSets(db, scope.room.id, now),
   ]);

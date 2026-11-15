@@ -379,6 +379,7 @@ const project = (over: Partial<StudentProjectCard>): StudentProjectCard => ({
   repoFullName: null,
   repoUrl: null,
   work: null,
+  workspace: null,
   ...over,
 });
 

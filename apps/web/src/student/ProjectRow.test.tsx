@@ -38,6 +38,7 @@ const card = (over: Partial<StudentProjectCard> = {}): StudentProjectCard => ({
   repoFullName: null,
   repoUrl: null,
   work: null,
+  workspace: null,
   ...over,
 });
 const REPO = { repoFullName: "heig/labo-1-lea", repoUrl: "https://github.com/heig/labo-1-lea" };
@@ -305,5 +306,95 @@ describe("Accept", () => {
     expect(await screen.findByText(message)).toBeInTheDocument();
     // The button stays: a refusal the student can act on is retried here.
     expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument();
+  });
+});
+
+describe("a project worked in the online workspace (ADR-047, ADR-089)", () => {
+  const START = "POST /app/api/projects/p1/workspace/start";
+  const ONLINE = { workspace: { mode: "online", devices: "any" } } as const;
+  const ready = (over: Partial<StudentProjectCard> = {}) => card({ status: "in_progress", invitation: "accepted", ...REPO, ...ONLINE, ...over });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("opens the workspace from the card, as the page does: a POST, then the portal's address", async () => {
+    const launch = "https://code.example/launch?token=abc";
+    const { calls } = mockFetch({ [START]: ok({ url: launch }) });
+    render(ready());
+    const open = await screen.findByRole("button", { name: "Open workspace" });
+    // The card's one button, never the accent: the repository is ready.
+    expect(open).not.toHaveClass("bg-accent");
+    expect(open.querySelector("svg")).not.toBeNull();
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    await userEvent.click(open);
+    await waitFor(() => expect(assign).toHaveBeenCalledWith(launch));
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual(["/app/api/projects/p1/workspace/start"]);
+  });
+
+  it("keeps the repository as a quiet icon beside it, in a new tab", async () => {
+    mockFetch({});
+    render(ready());
+    await screen.findByRole("button", { name: "Open workspace" });
+    const repo = screen.getByRole("link", { name: "Open repository" });
+    expect(repo).toHaveAttribute("href", "https://github.com/heig/labo-1-lea");
+    expect(repo).toHaveAttribute("target", "_blank");
+    expect(repo).not.toHaveClass("bg-accent");
+  });
+
+  it("opens it too while the GitHub invitation waits: the invitation an icon, and still said", async () => {
+    mockFetch({});
+    render(ready({ invitation: "pending" }));
+    expect(await screen.findByRole("button", { name: "Open workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open the invitation" })).toHaveAttribute("href", "https://github.com/heig/labo-1-lea/invitations");
+    expect(screen.getByText(/Invitation pending on GitHub$/)).toBeInTheDocument();
+  });
+
+  it("words the start route's refusal in a toast, and the card stays", async () => {
+    mockFetch({ [START]: fail(409, { error: "not_accepted", message: "x" }) });
+    render(ready(), { locale: "fr" });
+    await userEvent.click(await screen.findByRole("button", { name: "Ouvrir l'espace de travail" }));
+    expect(await screen.findByText("Acceptez d'abord le projet : l'espace de travail s'ouvre sur votre dépôt.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ouvrir l'espace de travail" })).toBeEnabled();
+  });
+
+  it("says another failure with the server's message", async () => {
+    mockFetch({ [START]: fail(503, { error: "portal_unavailable", message: "The portal did not answer" }) });
+    render(ready());
+    await userEvent.click(await screen.findByRole("button", { name: "Open workspace" }));
+    expect(await screen.findByText("The portal did not answer")).toBeInTheDocument();
+  });
+
+  it.each(["seb", "either", "kiosk"] as const)("under supervision (%s) leads to the project's page, never to GitHub", async (devices) => {
+    mockFetch({});
+    const { navigate } = render(ready({ invitation: null, workspace: { mode: "online_seb", devices } }));
+    const open = await screen.findByRole("button", { name: "Open project" });
+    expect(screen.queryByRole("button", { name: "Open workspace" })).toBeNull();
+    expect(actionLink(/GitHub|repository|invitation/)).toBeNull();
+    await userEvent.click(open);
+    expect(navigate).toHaveBeenCalledWith({ view: "project", id: "p1" });
+  });
+
+  it("offers GitHub again once the project is closed: the workspace no longer opens", async () => {
+    mockFetch({});
+    render(ready({ status: "locked", deadlineAt: at(-1) }), { group: "past" });
+    expect(await screen.findByRole("link", { name: "Open repository" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open workspace" })).toBeNull();
+  });
+
+  it("changes nothing before Accept, nor for a read-only reader", async () => {
+    mockFetch({});
+    const { unmount } = render(card({ ...ONLINE }));
+    expect(await screen.findByRole("button", { name: "Accept" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open workspace" })).toBeNull();
+    unmount();
+
+    const me = makeMe({
+      role: "student",
+      session: { kind: "impersonation", evaluationId: null, projectId: null, readOnly: true, superPowersUntil: null, superPowersAvailable: false },
+    });
+    render(ready(), { me });
+    expect(await screen.findByText(/Read-only/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open workspace" })).toBeNull();
+    expect(actionLink("Open repository")).toBeNull();
   });
 });

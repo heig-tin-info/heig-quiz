@@ -828,8 +828,8 @@ export function arriveStudentProjectActivity(): void {
   pushedHere += 1;
 }
 
-/** A card before the state of its work, which the view below reads (M3-14i). */
-type CardFacts = Omit<StudentProjectCard, "work">;
+/** A card before the state of its work and its workspace, which the view below reads (M3-14i). */
+type CardFacts = Omit<StudentProjectCard, "work" | "workspace">;
 
 const cardFacts = (): CardFacts[] => {
   if (!flags.projects || flags.empty) return [];
@@ -978,16 +978,18 @@ const studentProjectView = (card: CardFacts): StudentProject => {
 };
 
 /**
- * The cards with the state of their work (M3-14i), read off their view as
- * the server reads both: once the invitation is accepted, the indicative
- * score left out once released.
+ * The cards with the state of their work (M3-14i) and their workspace, read
+ * off their view as the server reads both: once the invitation is accepted,
+ * the indicative score left out once released.
  */
 const studentProjectCards = (): StudentProjectCard[] =>
   cardFacts().map((card) => {
-    const repo = card.invitation === "accepted" ? studentProjectView(card).repo : null;
-    if (repo === null) return { ...card, work: null };
+    const view = studentProjectView(card);
+    const repo = card.invitation === "accepted" ? view.repo : null;
+    const workspace = view.workspace;
+    if (repo === null) return { ...card, work: null, workspace };
     const { lastCommit, commits, ciStatus, score } = repo;
-    return { ...card, work: { lastCommit, commits, ciStatus, score: card.status === "released" ? null : score } };
+    return { ...card, work: { lastCommit, commits, ciStatus, score: card.status === "released" ? null : score }, workspace };
   });
 
 /** The home as the `activity` module serves it: every kind, tagged, the projects grouped by the domain's rule (M3-09a). */
