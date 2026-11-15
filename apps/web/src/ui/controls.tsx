@@ -171,8 +171,9 @@ export function Field({
   /** Right-aligned note on the label line. */
   hint?: ReactNode;
   /**
-   * The label is read, not shown: the field sits at the right of a
-   * `SettingRow` whose title says it.
+   * The field sits at the right of a `SettingRow` whose title says it: the
+   * label is read, not shown, and an `action` comes before the input, so
+   * the inputs of two rows end on one edge.
    */
   labelHidden?: boolean;
   /** A button beside the input, outside its width: a shortcut that fills it (`EndOfWeek`). */

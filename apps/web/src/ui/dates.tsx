@@ -83,6 +83,7 @@ export function EndOfWeek({ onPick, disabled = false }: { onPick: (iso: string) 
   const at = endOfWeek();
   return (
     <Tip label={disabled ? null : t("time.endOfWeek.tip", { when: isoDateTime(at) })}>
+      {/* The base button: the web one would make its label the tooltip, and the tooltip here is the date. */}
       <IconButtonBase label={t("time.endOfWeek")} disabled={disabled} onClick={() => onPick(endOfWeek())}>
         <CalendarCheck2 />
       </IconButtonBase>
