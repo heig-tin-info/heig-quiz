@@ -25,19 +25,18 @@ const actionOf = (refusal: StaffReviewRefusalCode | null): ReviewAction =>
 /**
  * The repository's facts as the staff's page holds them, for THE rule of
  * `@quiz/domain` (`staffReviewRefusal`, ADR-129 §5), never a second
- * derivation of it. Two facts are read under another name:
- *   - `deletedAt`: `flags.deleted` (gone from GitHub, stored or just seen);
- *   - `githubRepoId`: the page does not carry GitHub's id. A repository is
- *     `ok` only once Accept recorded it, in the same write (`accept.ts`), so
- *     a provisioned row holds one; a row that would not gets the route's
- *     `409 review_repo_unavailable`, worded like any refusal.
+ * derivation of it. The row carries no deletion time, only
+ * `flags.deleted`, and the rule asks only whether one is set: a deleted row
+ * stands for it with the epoch. The flag is also raised when GitHub just
+ * reported the repository missing, so it hides the action more often than
+ * the server refuses it, never less.
  */
 function reviewFacts(repo: ProjectRepoView) {
   return {
     provisionStatus: repo.provisionStatus,
     fullName: repo.fullName,
-    deletedAt: repo.flags.deleted ? "deleted" : null,
-    githubRepoId: repo.provisionStatus === "ok" ? Number.MAX_SAFE_INTEGER : null,
+    deletedAt: repo.flags.deleted ? new Date(0) : null,
+    githubRepoId: repo.githubRepoId,
     deadlineAppliedAt: repo.deadlineAppliedAt,
   };
 }

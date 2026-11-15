@@ -94,6 +94,13 @@ describe("Open in workspace, on the rows", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Open in workspace" })).toBeNull());
   });
 
+  it("is absent on a repository whose GitHub id is not known", async () => {
+    const { calls } = routes(ok(workspace()));
+    renderTable(makeProject({ rows: [row(1, LIVE), row(5, makeRepo(5, { githubRepoId: null }))] }));
+    await waitFor(() => expect(calls.some((c) => c.url === `${BASE}/workspace`)).toBe(true));
+    expect(await screen.findAllByRole("button", { name: "Open in workspace" })).toHaveLength(1);
+  });
+
   it.each<[WorkMode, string | null, boolean]>([
     ["online_seb", null, true],
     ["online_seb", PAST, false],

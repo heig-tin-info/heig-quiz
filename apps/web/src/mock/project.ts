@@ -943,6 +943,10 @@ function deadlineState(p: MockProject, r: MockRepo): ProjectRepoDeadlineState {
   };
 }
 
+/** GitHub's id once provisioned: a stable number drawn from the mock's own id. */
+const githubRepoIdOf = (r: MockRepo): number | null =>
+  r.provisionStatus === "ok" ? [...r.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 1_000_000_000, 7) + 1 : null;
+
 function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
   const scale = p.summary.gradingScale;
   const graded = (s: { runId: string; points: number | null; max: number | null } | null) =>
@@ -951,8 +955,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
   const latest = r.runs[0];
   return {
     ...deadlineState(p, r),
-    // GitHub's id once provisioned: a stable number drawn from the mock's own id.
-    githubRepoId: r.provisionStatus === "ok" ? [...r.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 1_000_000_000, 7) + 1 : null,
+    githubRepoId: githubRepoIdOf(r),
     provisionStatus: r.provisionStatus,
     provisionError: r.provisionError,
     invitationStatus: r.invitationStatus,
@@ -1724,9 +1727,7 @@ on("POST", "/app/api/projects/:id/repos/:rid/lock", (m) => setLock(m, true));
 
 /**
  * The staff's *Open in workspace* (ADR-129 §5, `?codespace=1`): THE rule of
- * `@quiz/domain`, then the portal's address. The repository whose student
- * left the roster came over from heig-classroom without GitHub's id: the
- * page offers it, and the route refuses it, `409 review_repo_unavailable`.
+ * `@quiz/domain`, then the portal's address.
  */
 on("POST", "/app/api/projects/:id/repos/:rid/workspace/review", (m): WorkspaceReview => {
   const ws = mockWorkspace(m.groups!.id!);
@@ -1741,7 +1742,7 @@ on("POST", "/app/api/projects/:id/repos/:rid/workspace/review", (m): WorkspaceRe
       provisionStatus: r.provisionStatus,
       fullName: r.fullName,
       deletedAt: r.deleted ? iso(0) : null,
-      githubRepoId: r.enrollmentId === null ? null : 1,
+      githubRepoId: githubRepoIdOf(r),
       deadlineAppliedAt: r.deadlineAppliedAt,
     },
     workMode: ws.mode,
