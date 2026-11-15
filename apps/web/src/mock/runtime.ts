@@ -71,6 +71,15 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `sebproject`: the student persona is in Safe Exam Browser, on the `seb`
  *   session of its `online_seb` project (D21, M6-07; `mock/session.ts`):
  *   that project page and nothing else. With `codespace`.
+ * `kioskprojects`: the platform offers kiosk stations to projects
+ *   (`KIOSK_PROJECTS`, ADR-089): the setting offers the station levels, and
+ *   the phone's pairing list carries a supervised project (`mock/kiosk.ts`).
+ * `pjkiosk`: with `codespace`, the projects hold station levels: the staff's
+ *   SEB draft is at Kiosk only, the student's invited project at Kiosk only
+ *   and its open one at SEB or kiosk (`mock/codespace.ts`, `mock/student.ts`).
+ * `stationproject`: the student persona sits on a kiosk station, on the
+ *   `kiosk` session of its invited project (ADR-089 §3, `mock/session.ts`):
+ *   `/projects/<id>/station`, the portal framed by a stand-in.
  * `staffseat`: the student persona is a teacher on a STAFF seat (ADR-077): their
  *   project page offers the real actions; `staffrepo`: the staff project page
  *   shows that teacher's test repository, badged (`mock/project.ts`).
@@ -128,6 +137,9 @@ export const FLAG_NAMES = [
   "staffrepo",
   "codespace",
   "sebproject",
+  "kioskprojects",
+  "pjkiosk",
+  "stationproject",
   "nollm",
   "showkey",
   "unstated",

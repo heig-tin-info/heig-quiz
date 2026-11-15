@@ -378,6 +378,7 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   codespace_not_granted: "project.workspace.refusal.codespace_not_granted",
   work_mode_frozen: "project.workspace.refusal.work_mode_frozen",
   work_mode_group: "project.workspace.refusal.work_mode_group",
+  kiosk_unavailable: "project.workspace.refusal.kiosk_unavailable",
   not_online: "project.refusal.notOnline",
   // ADR-106 §2: a `criteria.yml` missing or invalid (its errors are listed where it was asked).
   criteria_invalid: "project.criteria.invalid",

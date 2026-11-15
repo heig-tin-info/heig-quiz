@@ -21,7 +21,7 @@ import { usePublicConfig } from "../api";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { Disclosure, Section, Segmented, Select, SettingRow, Switch } from "../ui";
-import { AllowedDevices } from "./AllowedDevices";
+import { EvaluationDevices } from "./AllowedDevices";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 
 /** The choice of the multiple-answer select that stands for negative marking. */
@@ -180,7 +180,7 @@ export function AdvancedDisclosure({
         {/* ADR-027, ADR-051 §2: where an exam may be sat — its two trusted
             clients, chosen as one. */}
         {trustedClientsAllowedFor(mode) ? (
-          <AllowedDevices settings={settings} kioskOffered={kioskOffered} disabled={disabled} onChange={set} />
+          <EvaluationDevices settings={settings} kioskOffered={kioskOffered} disabled={disabled} onChange={set} />
         ) : null}
       </Section>
 

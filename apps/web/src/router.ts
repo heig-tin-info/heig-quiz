@@ -92,6 +92,12 @@ export type Route =
   /** The grading screen of a project graded by criteria (ADR-106 §8; `project/grading/ProjectGradingPage`); `?repo=` the repository on screen. */
   | { view: "projectGrading"; id: string }
   /**
+   * A kiosk station's project sitting (ADR-089 §3): the bar and the framed
+   * workspace, for a `kiosk` session confined to that project only. Its
+   * own address, so the API widens the CSP's `frame-src` there alone (§10).
+   */
+  | { view: "projectStation"; id: string }
+  /**
    * A new project in one classroom (F-PROJ-01): where "New ▾ › Project" leads
    * on a connected classroom (M3-10), M3-11's form (`project/NewProjectPage`).
    */
@@ -506,6 +512,15 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: false,
     section: "activities",
     bottomSlot: { teacher: "activities" },
+  },
+  // ADR-089 §3: the station's page of a project, a tail of the project; full screen (`App.tsx`).
+  projectStation: {
+    path: (r) => `/projects/${r.id}/station`,
+    match: ([head, id, tail, leaf]) =>
+      head === "projects" && id && tail === "station" && leaf === undefined ? { view: "projectStation", id } : null,
+    studentSafe: true,
+    // The frame holds the student's open editor: a newer build never reloads it (ADR-110).
+    answering: true,
   },
   activities: {
     ...fixed("activities", { view: "activities" }),

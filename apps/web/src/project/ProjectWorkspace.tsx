@@ -2,17 +2,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Laptop, RefreshCw } from "lucide-react";
 
 import {
-  WORK_MODES,
   type CodespaceSessionState,
   type ProjectWorkModeBody,
   type ProjectWorkspace as Workspace,
   type ProjectWorkspaceSessions,
   type ProjectWorkspaceSyncAccepted,
-  type WorkMode,
 } from "@quiz/contracts";
+import { workSettingBody, workSettingFor, type DeviceLevel, type WorkSetting } from "@quiz/domain";
 
 import { api, isNotFound } from "../api";
-import { useT } from "../i18n";
+import { AllowedDevices } from "../evaluation/AllowedDevices";
+import { useT, type Dict } from "../i18n";
 import { useToast } from "../notify";
 import { projectKey, projectWorkspaceKey, projectWorkspaceSessionsKey } from "../queryKeys";
 import {
@@ -53,31 +53,35 @@ export function useWorkspace(projectId: string) {
   });
 }
 
+/** The project's level's sub-texts: a project's own where the exam's speaks of an exam. */
+const PROJECT_DESC = (level: DeviceLevel): keyof Dict =>
+  level === "any" || level === "seb" ? `project.devices.${level}.desc` : `eval.devices.${level}.desc`;
+
+/** The two places of the Segmented: the students' own tools, or the online workspace (at a device level). */
+type Place = "own" | "online";
+
 /**
- * Where the students work (ADR-047 as amended 2026-10-07, M6-06): a setting
- * of the project, in the page's Settings tab. Chosen by an owner of the
- * course whose account has the workspace grant, until a workspace was
- * opened — the server says which modes the caller may set, and why not the
- * others: `allowed`, `refusal`. Nothing at all when the feature is off (the
- * route is then a 404).
+ * Where the students work (ADR-047 as amended 2026-10-07, M6-06; ADR-089,
+ * amendment of 2026-11-15, "One control"): a setting of the project, in the
+ * page's Settings tab. A Segmented **Own tools | Online workspace**, and
+ * under Online the exam's **Allowed devices**: Any is `online`, the three
+ * others `online_seb` at that level (`workSettingFor`, the one mapping).
+ * The station levels are offered only where the platform offers them to
+ * projects (`kioskOffered`). Chosen by an owner of the course whose account
+ * has the workspace grant, until a workspace was opened — the server says
+ * which modes the caller may set, and why not the others: `allowed`,
+ * `refusal`. Nothing at all when the feature is off (the route is then a 404).
  */
 export function WorkModeSetting({ projectId, archived }: { projectId: string; archived: boolean }) {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   const workspace = useWorkspace(projectId);
-  // Under supervision the body names a device level (ADR-089): the one in force, else SEB — the
-  // three-way choice of M6-06, until the setting offers the levels (M6-11e).
-  const bodyOf = (mode: WorkMode): ProjectWorkModeBody => {
-    if (mode !== "online_seb") return { mode };
-    const held = workspace.data?.mode === "online_seb" ? workspace.data.devices : "any";
-    return { mode, devices: held === "any" ? "seb" : held };
-  };
   const setMode = useMutation({
-    mutationFn: (mode: WorkMode) =>
+    mutationFn: (setting: WorkSetting) =>
       api<Workspace>(`/app/api/projects/${projectId}/workspace/mode`, {
         method: "PUT",
-        body: JSON.stringify(bodyOf(mode)),
+        body: JSON.stringify(workSettingBody(setting) satisfies ProjectWorkModeBody),
       }),
     onSuccess: (next) => {
       qc.setQueryData(projectWorkspaceKey(projectId), next);
@@ -98,36 +102,55 @@ export function WorkModeSetting({ projectId, archived }: { projectId: string; ar
     );
   }
   const changeable = !archived && ws.allowed.length > 1;
-  const options = WORK_MODES.filter((m) => !changeable || ws.allowed.includes(m)).map((value) => ({
-    value,
-    label: t(`project.workspace.mode.${value}`),
-  }));
+  // What the screen shows: the pending choice while it is written, else the stored one.
+  const shown: WorkSetting = setMode.isPending && setMode.variables ? setMode.variables : ws;
+  const place: Place = shown.mode === "free" ? "own" : "online";
+  const online = ws.allowed.some((m) => m !== "free");
+  const options = (["own", "online"] as const)
+    .filter((p) => !changeable || (p === "own" ? ws.allowed.includes("free") : online))
+    .map((value) => ({ value, label: t(`project.workspace.place.${value}`) }));
+  // A level is a choice of the workspace's two modes: open only while both are the caller's to set.
+  const levelsOpen = changeable && ws.allowed.includes("online") && ws.allowed.includes("online_seb");
+  const pick = (next: WorkSetting) => setMode.mutate(next);
 
   return (
-    // Aligned right like the other options' controls (ADR-119 §9); the row wraps it under its title on a phone.
-    <SettingRow
-      title={<span id="project-work-mode">{t("project.workspace.mode")}</span>}
-      desc={
-        <>
-          {t(`project.workspace.mode.desc.${ws.mode}`)}
-          {ws.refusal && !archived ? (
-            <span className="mt-1 block text-fg-faint" data-testid="workspace-refusal">
-              {t(`project.workspace.refusal.${ws.refusal}`)}
-            </span>
-          ) : null}
-        </>
-      }
-    >
-      <Segmented
-        name="workMode"
-        labelledBy="project-work-mode"
-        value={setMode.isPending && setMode.variables ? setMode.variables : ws.mode}
-        disabled={!changeable || setMode.isPending}
-        wrap
-        onChange={(mode) => setMode.mutate(mode)}
-        options={options}
-      />
-    </SettingRow>
+    <div>
+      {/* Aligned right like the other options' controls (ADR-119 §9); the row wraps it under its title on a phone. */}
+      <SettingRow
+        title={<span id="project-work-mode">{t("project.workspace.mode")}</span>}
+        desc={
+          <>
+            {t(shown.mode === "free" ? "project.workspace.mode.desc.free" : "project.workspace.mode.desc.online")}
+            {shown.mode === "online_seb" ? <span className="block">{t("project.workspace.mode.desc.supervised")}</span> : null}
+            {ws.refusal && !archived ? (
+              <span className="mt-1 block text-fg-faint" data-testid="workspace-refusal">
+                {t(`project.workspace.refusal.${ws.refusal}`)}
+              </span>
+            ) : null}
+          </>
+        }
+      >
+        <Segmented
+          name="workMode"
+          labelledBy="project-work-mode"
+          value={place}
+          disabled={!changeable || setMode.isPending}
+          wrap
+          // Online from own tools starts at Any (`online`); the level is chosen below.
+          onChange={(p) => pick(workSettingFor(p === "online", "any"))}
+          options={options}
+        />
+      </SettingRow>
+      {place === "online" ? (
+        <AllowedDevices
+          level={shown.devices}
+          kioskOffered={ws.kioskOffered}
+          disabled={!levelsOpen || setMode.isPending}
+          onPick={(level) => pick(workSettingFor(true, level))}
+          descOf={PROJECT_DESC}
+        />
+      ) : null}
+    </div>
   );
 }
 

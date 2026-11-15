@@ -274,21 +274,30 @@ function WorkspaceSection({
   const t = useT();
   const [launching, setLaunching] = useState(false);
   const online = project.workspace?.mode === "online";
+  // ADR-089: at Kiosk only there is no `.seb` to offer; the student is sent to a station.
+  const devices = project.workspace?.devices ?? "any";
   const variant = primary ? "primary" : "secondary";
   const action = !live ? null : online || inSeb ? (
     <OpenWorkspaceButton projectId={project.id} variant={variant} />
-  ) : readOnly ? null : (
+  ) : readOnly || devices === "kiosk" ? null : (
     <Button variant={variant} onClick={() => setLaunching(true)}>
       <Lock /> {t("sproj.workspace.openInSeb")}
     </Button>
   );
+  const where = inSeb
+    ? "sproj.workspace.inSeb"
+    : online
+      ? "sproj.workspace.online"
+      : devices === "kiosk"
+        ? "sproj.workspace.kiosk"
+        : devices === "either"
+          ? "sproj.workspace.either"
+          : "sproj.workspace.seb";
   return (
     <section className="space-y-3" data-testid="sproj-workspace">
       <SectionHeading title={t("sproj.workspace")} />
       <Card className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm">
-        <p className="text-fg-muted">
-          {t(inSeb ? "sproj.workspace.inSeb" : online ? "sproj.workspace.online" : "sproj.workspace.seb")}
-        </p>
+        <p className="text-fg-muted">{t(where)}</p>
         {action}
       </Card>
       {launching ? (

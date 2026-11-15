@@ -52,6 +52,18 @@ export let me: Me | null = {
           superPowersAvailable: false,
         },
       }
+    : flags.stationproject && role === "student"
+      ? {
+          // ADR-089 §3: on a kiosk station, confined to the student's invited project.
+          session: {
+            kind: "kiosk",
+            evaluationId: null,
+            projectId: "77777777-7777-4777-8777-777777777705",
+            readOnly: false,
+            superPowersUntil: null,
+            superPowersAvailable: false,
+          },
+        }
     : flags.sebproject && role === "student"
       ? {
           // D21 (M6-07): inside SEB, confined to the student's `online_seb`

@@ -10,7 +10,7 @@ export type KioskPhase =
   | { kind: "starting" }
   | { kind: StationTrouble }
   | { kind: "code"; auth: KioskDeviceAuthorization; expiresAt: number }
-  | { kind: "opening" };
+  | { kind: "opening"; project: boolean };
 
 /** A station that cannot show a code tries again, from the attestation, this often. */
 export const KIOSK_RETRY_MS = 30_000;
@@ -72,7 +72,8 @@ export function useKioskStation(
         const answer = await pollToken(auth.device_code);
         if (!alive) return "done";
         if ("redirect" in answer) {
-          setPhase({ kind: "opening" });
+          // ADR-089 §5: a project pairing opens the station page of that project.
+          setPhase({ kind: "opening", project: answer.redirect.startsWith("/projects/") });
           opener.current(answer.redirect);
           return "done";
         }

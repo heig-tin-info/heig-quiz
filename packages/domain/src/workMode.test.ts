@@ -10,6 +10,7 @@ import {
   staffReviewRefusal,
   workModeChoices,
   workModeRefusal,
+  workSettingBody,
   workSettingFor,
   workSettingOf,
   workspaceClosed,
@@ -112,6 +113,18 @@ describe("the mapping between the setting and the screen (ADR-089 point 2)", () 
     for (const level of DEVICE_LEVEL_IDS) expect(workSettingFor(true, level).devices).toBe(level);
     expect([workSettingOf({ mode: "free" }), workSettingOf({ mode: "online" })]).toEqual([FREE, ONLINE]);
     for (const level of ["seb", "either", "kiosk"] as const) expect(workSettingOf({ mode: "online_seb", devices: level })).toEqual(S("online_seb", level));
+  });
+
+  it("writes every choice of the screen back as the body that stands for it", () => {
+    for (const online of [false, true]) {
+      for (const level of DEVICE_LEVEL_IDS) {
+        const setting = workSettingFor(online, level);
+        expect(workSettingOf(workSettingBody(setting))).toEqual(setting);
+      }
+    }
+    expect(workSettingBody(ONLINE)).toEqual({ mode: "online" });
+    expect(workSettingBody(S("online_seb", "kiosk"))).toEqual({ mode: "online_seb", devices: "kiosk" });
+    expect(() => workSettingBody(S("online_seb", "any"))).toThrow(RangeError);
   });
 });
 

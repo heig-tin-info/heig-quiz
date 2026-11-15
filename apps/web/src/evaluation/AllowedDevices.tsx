@@ -11,7 +11,7 @@ import {
 import { Shield, ShieldCheck, ShieldHalf, type LucideIcon } from "lucide-react";
 import { useId } from "react";
 
-import { useT } from "../i18n";
+import { useT, type Dict } from "../i18n";
 import { RadioRow } from "../ui";
 
 type Devices = Pick<EvaluationSettings, "safeExamBrowser" | "kiosk">;
@@ -30,20 +30,72 @@ const KEYS = TRUSTED_CLIENTS.map((c) => TRUSTED_CLIENT_SWITCH[c]);
 const devicesOf = (level: DeviceLevel): Devices =>
   Object.fromEntries(TRUSTED_CLIENTS.map((c) => [TRUSTED_CLIENT_SWITCH[c], deviceLevelClients(level).includes(c)])) as Devices;
 
-/** The level in force; the table covers every pair of the two booleans. */
+/** An exam's level in force; the table covers every pair of the two booleans. */
 const levelOf = (settings: EvaluationSettings): DeviceLevel => {
   const now: Devices = { safeExamBrowser: safeExamBrowserOf(settings), kiosk: kioskOf(settings) };
   return deviceLevelOf(TRUSTED_CLIENTS.filter((c) => now[TRUSTED_CLIENT_SWITCH[c]]));
 };
 
+/** The sub-text of each level: an exam's by default; a project words its own where the exam's says "exam". */
+const EXAM_DESC = (level: DeviceLevel): keyof Dict => `eval.devices.${level}.desc`;
+
 /**
- * "Allowed devices" of an exam: one choice over `safeExamBrowser` and `kiosk`,
- * written as the keys that change, in one patch. Where the platform has no
- * kiosk path the server refuses `kiosk: true` (`kiosk_unavailable`), so the
- * kiosk choices are offered only there — except the one in force, kept in
- * sight so it can be left.
+ * "Allowed devices" (ADR-089, amendment point 2, "One control"): one choice
+ * among the device levels, for an exam and for a supervised project alike.
+ * Where the platform has no kiosk path for the activity the server refuses a
+ * change to a station level (`kiosk_unavailable`), so those choices are
+ * offered only there — except the one in force, kept in sight so it can be
+ * left. Picking the level in force sends nothing.
  */
 export function AllowedDevices({
+  level,
+  kioskOffered,
+  disabled,
+  onPick,
+  descOf = EXAM_DESC,
+}: {
+  level: DeviceLevel;
+  kioskOffered: boolean;
+  disabled: boolean;
+  onPick: (next: DeviceLevel) => void;
+  descOf?: (level: DeviceLevel) => keyof Dict;
+}) {
+  const t = useT();
+  const name = useId();
+  const choices = DEVICE_LEVELS.filter((l) => kioskOffered || !acceptsKiosk(l.id) || l.id === level).map((l) => ({
+    id: l.id,
+    icon: ICONS[l.id],
+  }));
+  const pick = (next: DeviceLevel) => {
+    if (next !== level) onPick(next);
+  };
+
+  return (
+    <fieldset disabled={disabled} className="space-y-2 py-3">
+      <legend className="sr-only">{t("eval.devices")}</legend>
+      <p aria-hidden className="text-sm font-medium text-fg">{t("eval.devices")}</p>
+      <div className="divide-y divide-line overflow-hidden rounded-field border border-line">
+        {choices.map(({ id, icon: Icon }) => (
+          <RadioRow key={id} name={name} value={id} checked={id === level} disabled={disabled} onPick={pick}>
+            <span className="flex items-start gap-2.5">
+              <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-muted" />
+              <span className="min-w-0">
+                <span className="block font-medium text-fg">{t(`eval.devices.${id}`)}</span>
+                <span className="mt-0.5 block text-[13px] text-fg-muted">{t(descOf(id))}</span>
+              </span>
+            </span>
+          </RadioRow>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+/**
+ * An exam's "Allowed devices": the level its two switches (`safeExamBrowser`,
+ * `kiosk`) stand for, written back as the keys that change, in one patch.
+ */
+export function EvaluationDevices({
   settings,
   kioskOffered,
   disabled,
@@ -54,37 +106,10 @@ export function AllowedDevices({
   disabled: boolean;
   onChange: (next: Partial<EvaluationSettings>) => void;
 }) {
-  const t = useT();
-  const name = useId();
   const current = levelOf(settings);
-  const choices = DEVICE_LEVELS.filter((l) => kioskOffered || !acceptsKiosk(l.id) || l.id === current).map((l) => ({
-    id: l.id,
-    icon: ICONS[l.id],
-  }));
-
   const pick = (next: DeviceLevel) => {
     const [from, to] = [devicesOf(current), devicesOf(next)];
-    const changed: Partial<Devices> = Object.fromEntries(KEYS.filter((k) => to[k] !== from[k]).map((k) => [k, to[k]]));
-    if (Object.keys(changed).length > 0) onChange(changed);
+    onChange(Object.fromEntries(KEYS.filter((k) => to[k] !== from[k]).map((k) => [k, to[k]])));
   };
-
-  return (
-    <fieldset disabled={disabled} className="space-y-2 py-3">
-      <legend className="sr-only">{t("eval.devices")}</legend>
-      <p aria-hidden className="text-sm font-medium text-fg">{t("eval.devices")}</p>
-      <div className="divide-y divide-line overflow-hidden rounded-field border border-line">
-        {choices.map(({ id, icon: Icon }) => (
-          <RadioRow key={id} name={name} value={id} checked={id === current} disabled={disabled} onPick={pick}>
-            <span className="flex items-start gap-2.5">
-              <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-muted" />
-              <span className="min-w-0">
-                <span className="block font-medium text-fg">{t(`eval.devices.${id}`)}</span>
-                <span className="mt-0.5 block text-[13px] text-fg-muted">{t(`eval.devices.${id}.desc`)}</span>
-              </span>
-            </span>
-          </RadioRow>
-        ))}
-      </div>
-    </fieldset>
-  );
+  return <AllowedDevices level={current} kioskOffered={kioskOffered} disabled={disabled} onPick={pick} />;
 }

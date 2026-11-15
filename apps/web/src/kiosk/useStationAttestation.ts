@@ -20,7 +20,11 @@
  *    {@link KIOSK_RETRY_MS} until one is accepted. The suspension lifts by
  *    itself, and the autosave, which kept every answer and kept retrying,
  *    catches up;
- *  - `423 kiosk_attestation_stale` on the submit: re-attest, retry once.
+ *  - `423 kiosk_attestation_stale` on the submit: re-attest, retry once;
+ *  - on a page that writes almost nothing (a project's station page, which
+ *    frames the portal, ADR-089 §7), `suspendOnRefusal` also covers it as
+ *    soon as one of its own attestations is refused, the verdict the server
+ *    suspends on, instead of waiting for a write to be refused.
  *
  * One attestation at a time: a call made while one is in flight joins it.
  * The server records each attempt against the station's cookie and decides
@@ -56,7 +60,10 @@ function retryAfter(outcome: AttestOutcome, recorded: number): number | null {
   return Math.min(KIOSK_RETRY_MS * 2 ** recorded, RETRY_CAP_MS);
 }
 
-export function useStationAttestation(active: boolean): StationAttestation {
+export function useStationAttestation(
+  active: boolean,
+  { suspendOnRefusal = false }: { suspendOnRefusal?: boolean } = {},
+): StationAttestation {
   const config = usePublicConfig();
   const kiosk = useRef(config.data?.kiosk ?? null);
   kiosk.current = config.data?.kiosk ?? null;
@@ -69,6 +76,9 @@ export function useStationAttestation(active: boolean): StationAttestation {
   const [retryMs, setRetryMs] = useState<number | null>(null);
   const recorded = useRef(0);
   const inFlight = useRef<Promise<void> | null>(null);
+  // Read at the verdict, so that the one `reattest` keeps its identity.
+  const coverOnRefusal = useRef(suspendOnRefusal);
+  coverOnRefusal.current = suspendOnRefusal;
 
   /** One attestation, or the one already in flight; an accepted one lifts the notice. */
   const reattest = useCallback(() => {
@@ -77,6 +87,7 @@ export function useStationAttestation(active: boolean): StationAttestation {
       const outcome = await attestOnce(station);
       setRetryMs(retryAfter(outcome, recorded.current));
       if (outcome === "refused" || outcome === "unavailable") recorded.current += 1;
+      if (outcome === "refused" && coverOnRefusal.current) setSuspended(true);
       if (outcome === "ok") {
         recorded.current = 0;
         setSuspended(false);

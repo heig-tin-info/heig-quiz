@@ -24,6 +24,7 @@ const TEACHER_HIDDEN: readonly Route["view"][] = [
   "oauthConsent",
   "teamsLink",
   "pair",
+  "projectStation",
   // Drawn with no session or no frame at all.
   "teamsTab",
   "kiosk",

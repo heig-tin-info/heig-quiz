@@ -459,6 +459,24 @@ const scenes = [
   { name: "project-workspace-assistant", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1&assistant=1" },
   // D21 (M6-07): a project under Safe Exam Browser, synced like an online one.
   { name: "project-workspace-seb", role: "teacher", path: "/projects/pj-draft-manual?projects=1&codespace=1" },
+  // ADR-089 (M6-11e): Own tools | Online workspace, and under it the exam's Allowed devices. At Any (picked on
+  // screen) and at Kiosk only (`?pjkiosk=1`), with the station levels offered (`?kioskprojects=1`) and not.
+  ...[
+    ["project-devices-any", "", true],
+    ["project-devices-any-nokiosk", "", false],
+    ["project-devices-kiosk", "&pjkiosk=1", true],
+    ["project-devices-kiosk-nokiosk", "&pjkiosk=1", false],
+  ].map(([name, level, offered]) => ({
+    name,
+    role: "teacher",
+    path: `/projects/pj-draft-manual?projects=1&codespace=1${level}${offered ? "&kioskprojects=1" : ""}`,
+    // The draft's setting is under its Advanced options.
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(advanced options|options avancées)/i }).first().click();
+      if (!level) await p.getByText(/^(any device|tout appareil)$/i).first().click();
+      await p.waitForTimeout(500);
+    },
+  })),
   // ADR-129 §11 (`?codespace=1`): the staff's *Open in workspace* — the rows' last column (none on a repository
   // being created or deleted) and the sheet's secondary button. The column is a desktop one: under `@2xl` it is
   // dropped and the action is the sheet's, which a 390 px run of the table scene shows.
@@ -987,6 +1005,11 @@ const scenes = [
     act: (p) => p.getByRole("button", { name: /open in safe exam browser|ouvrir dans safe exam browser/i }).first().click(),
   },
   { name: "student-project-in-seb", role: "student", path: `/projects/${SPROJ.invited}?projects=1&codespace=1&sebproject=1` },
+  // ADR-089 (M6-11e, `?pjkiosk=1`): Kiosk only (no `.seb`, sent to a station) and SEB or kiosk (both said).
+  { name: "student-project-workspace-kiosk", role: "student", path: `/projects/${SPROJ.invited}?projects=1&codespace=1&pjkiosk=1` },
+  { name: "student-project-workspace-either", role: "student", path: `/projects/${SPROJ.open}?projects=1&codespace=1&pjkiosk=1` },
+  // ADR-089 §3: the station page of a project, the mock's stand-in in the frame.
+  { name: "station-project", role: "student", path: `/projects/${SPROJ.invited}/station?projects=1&codespace=1&stationproject=1`, settle: 2500, fold: true },
   { name: "student-project-accept", role: "student", path: `/projects/${SPROJ.accept}?projects=1` },
   { name: "student-project-unlinked", role: "student", path: `/projects/${SPROJ.accept}?projects=1&unlinked=1` },
   { name: "student-project-invited", role: "student", path: `/projects/${SPROJ.invited}?projects=1` },
@@ -1274,6 +1297,8 @@ const scenes = [
   { name: "pair-code", role: "student", path: "/pair" },
   { name: "pair-invalid", role: "student", path: "/pair?code=CCCC-DDDD", ls: KIOSK_PAIRING },
   { name: "pair-none", role: "student", path: "/pair?code=BCDF-GHJK&empty=1", ls: KIOSK_PAIRING },
+  // ADR-089 §5 (`?kioskprojects=1`): the phone's list with a supervised project beside the exam.
+  { name: "pair-project", role: "student", path: "/pair?code=BCDF-GHJK&kioskprojects=1", ls: KIOSK_PAIRING },
   { name: "join-mcq", role: "teacher", path: "/p/QZ4F7K?as=guest" },
   { name: "join-revealed", role: "teacher", path: "/p/QZ4F7K?as=guest&revealed=1" },
   // Votes and key both shown while the poll runs: the question and Send stay

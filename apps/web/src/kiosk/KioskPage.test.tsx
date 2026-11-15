@@ -97,7 +97,18 @@ describe("the station's loop (ADR-051 §7)", () => {
     await advance(1);
     expect(count(calls, "/app/api/kiosk/token")).toBe(3);
     expect(open).toHaveBeenCalledWith("/take/e1");
-    expect(result.current.kind).toBe("opening");
+    expect(result.current).toEqual({ kind: "opening", project: false });
+  });
+
+  // ADR-089 §5: an approved project opens the station page of that project.
+  it("opens the station page of an approved project, and says it opens a workspace", async () => {
+    station({ "POST /app/api/kiosk/token": tokens(ok({ redirect: "/projects/p1/station" })) });
+    const open = vi.fn();
+    const { result } = renderHook(() => useKioskStation(MOCK, true, open), { wrapper });
+    await advance();
+    await advance(2_000);
+    expect(open).toHaveBeenCalledWith("/projects/p1/station");
+    expect(result.current).toEqual({ kind: "opening", project: true });
   });
 
   it("renews the code when it expires, and when the server says it is spent", async () => {

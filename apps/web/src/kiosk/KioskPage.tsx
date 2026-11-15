@@ -40,7 +40,7 @@ export function KioskPage() {
           <Trouble kind={phase.kind} />
         ) : (
           <Spinner
-            label={t(phase.kind === "opening" ? "kiosk.opening" : "kiosk.starting")}
+            label={t(phase.kind !== "opening" ? "kiosk.starting" : phase.project ? "kiosk.opening.workspace" : "kiosk.opening")}
             className="py-24 [&_p]:text-[clamp(18px,1.6vw,24px)] [&_svg]:size-8"
           />
         )}

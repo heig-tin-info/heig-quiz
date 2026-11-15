@@ -965,13 +965,16 @@ const studentProjectView = (card: CardFacts): StudentProject => {
       ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5 }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste." }
       : null,
     criteria,
-    // `?codespace=1` (ADR-047, M6-06): the open project runs in the workspace, the invited one under Safe Exam Browser.
+    // `?codespace=1` (ADR-047, M6-06): the open project runs in the workspace, the invited one under Safe Exam Browser;
+    // `?pjkiosk=1` (ADR-089): the open one at SEB or kiosk, the invited one at Kiosk only.
     workspace: !flags.codespace
       ? null
       : card.id === STUDENT_PROJECT_OPEN
-        ? { mode: "online", devices: "any" }
+        ? flags.pjkiosk
+          ? { mode: "online_seb", devices: "either" }
+          : { mode: "online", devices: "any" }
         : card.id === STUDENT_PROJECT_INVITED
-          ? { mode: "online_seb", devices: "seb" }
+          ? { mode: "online_seb", devices: flags.pjkiosk ? "kiosk" : "seb" }
           : null,
     serverNow: new Date().toISOString(),
   };

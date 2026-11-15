@@ -163,6 +163,56 @@ describe("the phone's pairing page (ADR-051 §7)", () => {
   });
 });
 
+/* ADR-089 §5: a supervised project the student can start on the station, beside the exams. */
+describe("a project on the phone's list", () => {
+  const P1 = "22222222-2222-4222-8222-222222222221";
+  const project = { id: P1, title: "Mini-projet — Jeu de la vie", classroomName: "PRG1-2026", courseCode: "PRG1" };
+  const withProject = (evaluations: PairPreview["evaluations"]): PairPreview => ({ ...preview(evaluations), projects: [project] });
+
+  it("starts the one project, with no conditions to read, and says the workspace opens", async () => {
+    const { calls } = render({
+      "GET /app/api/pair/BCDF-GHJK": ok(withProject([])),
+      "POST /app/api/pair": ok({ station: { label: "Poste de secours n° 7" } }),
+    });
+    const group = await screen.findByRole("group", { name: "Project" });
+    expect(within(group).getByRole("radio", { name: /Mini-projet — Jeu de la vie/ })).toBeChecked();
+    expect(screen.queryByText("Conditions")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Start on this station" }));
+    expect(calls.at(-1)).toMatchObject({ method: "POST", url: "/app/api/pair", body: { code: "BCDF-GHJK", projectId: P1 } });
+    expect(await screen.findByRole("heading", { name: "The station is opening your workspace" })).toBeVisible();
+    expect(screen.getByText(/Your workspace appears on Poste de secours n° 7/)).toBeVisible();
+  });
+
+  it("lists exams and projects as one choice, each line naming its kind", async () => {
+    const { calls } = render({
+      "GET /app/api/pair/BCDF-GHJK": ok(withProject([exam(E1, "Test 1 — pointeurs", conditionsOf("Une feuille A4"))])),
+      "POST /app/api/pair": ok({ station: { label: "Poste de secours n° 7" } }),
+    });
+    const group = await screen.findByRole("group", { name: "Exam or project" });
+    const radios = within(group).getAllByRole("radio");
+    expect(radios).toHaveLength(2);
+    expect(radios[0]).toHaveAccessibleName(/Test 1 — pointeurs.*Exam · PRG1/);
+    expect(radios[1]).toHaveAccessibleName(/Mini-projet — Jeu de la vie.*Project · PRG1/);
+    expect(screen.getByRole("button", { name: "Start on this station" })).toBeDisabled();
+    // The exam's conditions are read before confirming; a project has none.
+    await userEvent.click(radios[0]!);
+    expect(await screen.findByText("Une feuille A4")).toBeVisible();
+    await userEvent.click(radios[1]!);
+    expect(screen.queryByText("Une feuille A4")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Start on this station" }));
+    expect(calls.at(-1)).toMatchObject({ method: "POST", body: { code: "BCDF-GHJK", projectId: P1 } });
+  });
+
+  it("says a project that can no longer be started there is refused", async () => {
+    render({
+      "GET /app/api/pair/BCDF-GHJK": ok(withProject([])),
+      "POST /app/api/pair": fail(409, { error: "project_not_pairable" }),
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Start on this station" }));
+    expect(await screen.findByText("This project can no longer be started on a station. Ask the supervisor.")).toBeVisible();
+  });
+});
+
 describe("scanning the station's QR with the page's camera", () => {
   const stop = vi.fn();
   const getUserMedia = vi.fn();

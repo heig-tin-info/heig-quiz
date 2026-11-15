@@ -83,6 +83,9 @@ const GroupSetPage = lazyPage(() => import("./group/GroupSetPage").then((m) => (
 const StudentProjectPage = lazyPage(() =>
   import("./student/StudentProjectPage").then((m) => ({ default: m.StudentProjectPage })),
 );
+const StationProjectPage = lazyPage(() =>
+  import("./kiosk/StationProjectPage").then((m) => ({ default: m.StationProjectPage })),
+);
 // The pool screens (WP7): the teacher's authoring surface, one chunk each,
 // so a student — or a teacher who only runs quizzes — never downloads them.
 const PoolsPage = lazyPage(() => import("./pool/PoolsPage").then((m) => ({ default: m.PoolsPage })));
@@ -389,12 +392,10 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // F-PROJ-13: the staff's project page (M3-12); F-PROJ-15: one address, the
   // student's project for a student, a teacher in the student view, an
   // impersonation (M3-13).
-  project: (r, c) =>
-    c.teacherUi ? (
-      <ProjectPage id={r.id} navigate={c.navigate} />
-    ) : (
-      <StudentProjectPage id={r.id} navigate={c.navigate} />
-    ),
+  project: (r, c) => projectPage(r.id, c),
+  // ADR-089 §3: a station's project sitting; anyone else reads the project's own page.
+  projectStation: (r, c) =>
+    c.me.session?.kind === "kiosk" ? <StationProjectPage id={r.id} /> : projectPage(r.id, c),
   // F-PROJ-01: "New ▾ › Project" (M3-10) leads here, M3-11's form.
   // ADR-106 §8: the grading screen of a project graded by criteria (staff only).
   projectGrading: (r, c) => <ProjectGradingPage id={r.id} navigate={c.navigate} />,
@@ -429,6 +430,11 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   correction: (r, c) => <CorrectionProjection evaluationId={r.evaluationId} navigate={c.navigate} />,
 };
 
+/** F-PROJ-13, F-PROJ-15: the staff's project page, or the student's at the same address. */
+function projectPage(id: string, c: PageContext): ReactNode {
+  return c.teacherUi ? <ProjectPage id={id} navigate={c.navigate} /> : <StudentProjectPage id={id} navigate={c.navigate} />;
+}
+
 /** The page of `route` (the one cast of the table, as in `router.ts`). */
 function renderPage(route: Route, ctx: PageContext): ReactNode {
   return (PAGES[route.view] as Page<Route["view"]>)(route, ctx);
@@ -452,6 +458,7 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
   "oauthConsent",
   "teamsLink",
   "pair",
+  "projectStation",
 ]);
 
 /**
@@ -513,7 +520,7 @@ function SignedOut({ route, navigate }: { route: Route; navigate: (r: Route) => 
   }
   // A kiosk station whose session just ended (ADR-051 §7) goes back to its
   // pairing screen rather than to a sign-in nobody can use there.
-  if (route.view === "attempt") return <StationOrLanding />;
+  if (route.view === "attempt" || route.view === "projectStation") return <StationOrLanding />;
   // An assistant's sign-in (ADR-023) must come back to its consent page.
   if (route.view === "oauthConsent") {
     return (
@@ -666,16 +673,19 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   // ADR-027: a `seb` session has one activity, and no other page — its
   // evaluation's attempt, or (D21) its project's student page.
   const session = me.data?.session;
+  // ADR-089 §3: a station's project session has its own page, the station page.
+  const onStation = me.data?.session?.kind === "kiosk";
   const confinedTo: Route | null = session?.evaluationId
     ? { view: "attempt", evaluationId: session.evaluationId }
     : session?.projectId
-      ? { view: "project", id: session.projectId }
+      ? { view: onStation ? "projectStation" : "project", id: session.projectId }
       : null;
   // ADR-051 §7: a station's session ends with the attempt, or with the
   // evaluation — sometimes while the page only waits (a lobby the teacher
-  // closed). Its stream dropping is how the page learns it.
-  const onStation = me.data?.session?.kind === "kiosk";
-  useStationSessionWatch(onStation);
+  // closed). Its stream dropping is how the page learns it. The stream
+  // serves no project session: the station page of a project watches its
+  // session itself (`StationProjectPage`).
+  useStationSessionWatch(onStation && !session?.projectId);
   // ADR-110: a confined session keeps the client it was opened with.
   const confined = session !== undefined && isTrustedClient(session.kind);
   useEffect(() => build.confine(confined), [confined]);

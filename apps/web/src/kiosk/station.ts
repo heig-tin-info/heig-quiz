@@ -122,6 +122,18 @@ export async function attest(kiosk: PublicConfig["kiosk"]): Promise<StationTroub
   return outcome === "revoked" || outcome === "refused" ? "not_recognised" : "unavailable";
 }
 
+// --- A project sitting (ADR-089) ---------------------------------------------------
+
+/**
+ * **Leave this station**: ends the station's project sitting on the server,
+ * which closes the portal session it opened (ADR-089, amendment of
+ * 2026-11-15, point 4). That end is M6-11d's and has no route yet — no
+ * existing sign-out serves a `kiosk` session —, so for now nothing is ended
+ * here: the station only goes back to its screen, and the session lasts
+ * until it is replaced or its 6 h run out. M6-11d gives this its call.
+ */
+export async function endProjectSitting(_projectId: string): Promise<void> {}
+
 // --- The pairing ---------------------------------------------------------------
 
 /** A new code for the station, or why there is none. */
