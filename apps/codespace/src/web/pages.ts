@@ -44,12 +44,12 @@ export function landingPage(lang: Lang): string {
   return layout(lang, t(lang, "landingTitle"), "", `<p>${escapeHtml(t(lang, "landingBody"))}</p>`);
 }
 
-/** Generic portal error page, without technical detail. */
-export function errorPage(lang: Lang, title: string, detail: string): string {
+/** Generic portal error page, without technical detail; its link goes back to `back`, the portal's `/` by default. */
+export function errorPage(lang: Lang, title: string, detail: string, back = "/"): string {
   return layout(
     lang,
     title,
-    `<a href="/">${escapeHtml(t(lang, "back"))}</a>`,
+    `<a href="${escapeHtml(back)}">${escapeHtml(t(lang, "back"))}</a>`,
     `<p>${escapeHtml(detail)}</p>`,
   );
 }

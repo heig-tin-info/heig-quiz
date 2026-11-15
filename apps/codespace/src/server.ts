@@ -238,6 +238,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
     examCookieMaxAgeMs: config.EXAM_COOKIE_MAX_AGE_MS,
     sittingSockets,
     ...(options.upstreamPort !== undefined ? { upstreamPort: options.upstreamPort } : {}),
+    ...(config.PLATFORM_URL ? { platformUrl: config.PLATFORM_URL } : {}),
   });
 
   app.get("/healthz", async () => ({ ok: true }));

@@ -20,6 +20,7 @@
  * portal invariant 14 (CLAUDE.md) and ADR-047's amendment of 2026-10-11.
  */
 import type { IncomingHttpHeaders } from "node:http";
+import type { Socket } from "node:net";
 
 import httpProxy from "@fastify/http-proxy";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -46,10 +47,21 @@ export interface ProxyOptions {
   sittingSockets: SittingSockets;
   /** code-server's port in the container; 8080 (tests point it at a local upstream). */
   upstreamPort?: number;
+  /** Where a refusal page sends the reader back: the platform (`PLATFORM_URL`); the portal's `/` without it. */
+  platformUrl?: string;
 }
 
 /** code-server's port inside the student container (`images/c-dev`). */
 export const CODE_SERVER_PORT = 8080;
+
+/**
+ * How often an open websocket counts as a heartbeat (#1101). code-server's
+ * traffic after the first load is websocket frames, which the `preHandler`
+ * never sees: without this, an open tab looked idle `SESSION_GRACE_MS` after
+ * its last HTTP request, and `collect` closed it under the student's feet.
+ * Well under the grace period (10 minutes in production).
+ */
+export const SOCKET_HEARTBEAT_MS = 30_000;
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -71,13 +83,13 @@ export function parseCookieValue(
   return { sessionId: raw.slice(0, dot), token: raw.slice(dot + 1) };
 }
 
-/** A refusal page in the reader's language (`web/i18n.ts`). */
-function deny(reply: FastifyReply, code: number, title: MessageKey, detail: MessageKey): FastifyReply {
+/** A refusal page in the reader's language (`web/i18n.ts`), its link back to `back`. */
+function deny(reply: FastifyReply, code: number, title: MessageKey, detail: MessageKey, back?: string): FastifyReply {
   const lang = requestLang(reply.request);
   return reply
     .code(code)
     .type("text/html; charset=utf-8")
-    .send(errorPage(lang, t(lang, title), t(lang, detail)));
+    .send(errorPage(lang, t(lang, title), t(lang, detail), back));
 }
 
 /** A request on exactly `/s/<id>/`: the student's page reload. */
@@ -133,6 +145,25 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
   const { db, manager } = opts;
   /** sid → `http://<ip>:8080`. Filled by the `preHandler`, read by `getUpstream`. */
   const upstreams = new Map<string, string>();
+  /** sid → its open websockets: a connected tab is a live one (#1101). */
+  const sockets = new Map<string, number>();
+  const heartbeat = setInterval(() => {
+    for (const sessionId of sockets.keys()) manager.touch(sessionId);
+  }, SOCKET_HEARTBEAT_MS);
+  heartbeat.unref();
+  app.addHook("onClose", async () => clearInterval(heartbeat));
+  const back = opts.platformUrl;
+
+  /** Counts `socket` for `sessionId` until it closes; the grace period starts then. */
+  function holdWhileOpen(sessionId: string, socket: Socket): void {
+    sockets.set(sessionId, (sockets.get(sessionId) ?? 0) + 1);
+    socket.once("close", () => {
+      const left = (sockets.get(sessionId) ?? 1) - 1;
+      if (left > 0) sockets.set(sessionId, left);
+      else sockets.delete(sessionId);
+      manager.touch(sessionId);
+    });
+  }
 
   app.decorateRequest("codespaceUpstream", null);
 
@@ -160,6 +191,7 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
         403,
         "sessionDeniedTitle",
         "sessionDeniedDetail",
+        back,
       );
     }
 
@@ -207,6 +239,7 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
         "sessionClosedTitle",
         // A review session keeps nothing (ADR-129 §10): no "your work is kept".
         isReview(assignment) ? "reviewClosedDetail" : "sessionClosedDetail",
+        back,
       );
     }
 
@@ -243,8 +276,10 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
     }
     // Heartbeat: it is the proxy that keeps `lastSeen`, so an open tab is
     // enough to keep the session alive, and closing it starts the grace
-    // period.
+    // period. An HTTP request counts once; a websocket for as long as it is
+    // open, counted only here, after every refusal above.
     manager.touch(sessionId);
+    if (request.headers.upgrade?.toLowerCase() === "websocket") holdWhileOpen(sessionId, request.raw.socket);
     return undefined;
   }
 
