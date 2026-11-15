@@ -474,6 +474,15 @@ cexec "grep -qF '\"keyboard.dispatch\":{scope:1,type:\"string\",enum:[\"code\",\
   || fail "keyCode is not a declared value of keyboard.dispatch"
 ok "both settings exist in the bundled VS Code 1.137.0, with the values set present in their enum"
 
+# ADR-129 §10: a repository's `runOn: folderOpen` task never starts by
+# itself, in a staff member's review session as in a student's. The name
+# must exist in the bundled package, and the value be in the machine settings.
+cexec "grep -q 'task.allowAutomaticTasks' $WB" >/dev/null 2>&1 \
+  || fail "task.allowAutomaticTasks unknown to the bundled VS Code package"
+cexec "grep -qF '\"task.allowAutomaticTasks\": \"off\"' /run/code-server/Machine/settings.json" >/dev/null 2>&1 \
+  || fail "task.allowAutomaticTasks is not off in the machine settings"
+ok "automatic tasks off (task.allowAutomaticTasks), a name the bundled VS Code knows"
+
 # "Use the fonts on your computer" prompt: the causal chain, traced in the
 # bundled package (see README). The terminal's sticky scroll loads the
 # ligatures addon **unconditionally**, and that addon calls

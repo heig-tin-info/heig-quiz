@@ -18,7 +18,7 @@ import {
   serviceAllowed,
 } from "./httpBackend.js";
 import { createPushEventStore, type PushEventRow, type PushEventStore } from "./pushEvents.js";
-import { ensureStagingRepo } from "./staging.js";
+import { ensureStagingRepo, refSnapshot } from "./staging.js";
 import type { SessionLookup, StagingSession } from "./types.js";
 
 const dirs: string[] = [];
@@ -90,10 +90,16 @@ describe("requested service and policy", () => {
     expect(requestedService("GET", "objects/ab/cdef", {})).toBe("git-upload-pack");
   });
 
-  it("always allows receive-pack, and upload-pack according to the assignment", () => {
+  it("always allows a student's receive-pack, and upload-pack according to the assignment", () => {
     expect(serviceAllowed("git-receive-pack", { uploadPack: false })).toBe(true);
+    expect(serviceAllowed("git-receive-pack", { uploadPack: true, readOnly: false })).toBe(true);
     expect(serviceAllowed("git-upload-pack", { uploadPack: true })).toBe(true);
     expect(serviceAllowed("git-upload-pack", { uploadPack: false })).toBe(false);
+  });
+
+  it("refuses receive-pack to a review session, which still fetches (ADR-129 §10)", () => {
+    expect(serviceAllowed("git-receive-pack", { uploadPack: true, readOnly: true })).toBe(false);
+    expect(serviceAllowed("git-upload-pack", { uploadPack: true, readOnly: true })).toBe(true);
   });
 });
 
@@ -174,6 +180,7 @@ async function harness(overrides: Partial<StagingSession> = {}) {
     assignment: session.assignment,
     source: { mode: "lab", mirrorFrom: src.gitDir },
     ...(overrides.uploadPack === undefined ? {} : { uploadPack: overrides.uploadPack }),
+    ...(overrides.readOnly === undefined ? {} : { readOnly: overrides.readOnly }),
   });
 
   const { db, close } = openGitDb(":memory:");
@@ -293,6 +300,21 @@ describe("Git channel end to end (loopback)", () => {
     expect(rows.map((r) => r.ref)).toContain("refs/heads/submission");
     open.close();
     closed.close();
+  });
+
+  it("a review session clones, and its push is refused: no PushEvent, nothing relayed (ADR-129 §10)", async () => {
+    const h = await harness({ sessionId: "s-review", assignment: "review-r1", readOnly: true });
+    const clone = join(h.base, "clone");
+    await git(["clone", h.remote, clone], { env: FIXTURE_ENV });
+    await git(["-C", clone, "commit", "--allow-empty", "-m", "a staff note"], { env: FIXTURE_ENV });
+    const failure = await git(["-C", clone, "push", "origin", "HEAD:main"], { env: FIXTURE_ENV }).catch(
+      (err: Error) => err.message,
+    );
+    expect(String(failure)).toMatch(/read-only|403/);
+    expect(await h.store.bySession("s-review")).toEqual([]);
+    expect(h.relayed).toEqual([]);
+    expect((await refSnapshot(h.staging.gitDir)).get("refs/heads/main")).toBe(h.src.sha);
+    h.close();
   });
 
   it("a gzipped body is decompressed by http-backend (HTTP_CONTENT_ENCODING)", async () => {

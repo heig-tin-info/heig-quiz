@@ -1,14 +1,19 @@
 /**
  * HTTP boundary with the platform (`@quiz/contracts`, `codespace.ts`; ADR-047).
  *
- * Three routes, and nothing else knows them:
+ * Four routes, and nothing else knows them:
  *
  *   PUT  /api/assignments/:id            the platform pushes an assignment (service token)
  *   GET  /api/assignments/:id/sessions   the platform's teacher view (service token)
  *   GET  /launch?token=…                 the student arrives, launch token
+ *   GET  /review?token=…                 a staff member opens a repository, review launch token (ADR-129)
+ *
+ * `/launch` and `/review` differ in what they verify and which assignment
+ * they resolve; from upserting the user to the redirect they run one tail,
+ * `openSession`.
  *
  * The plugin is **not registered** when `CODESPACE_LAUNCH_SECRET` is empty: the
- * three routes then answer 404 and the portal opens no session at all (it has
+ * four routes then answer 404 and the portal opens no session at all (it has
  * no login of its own). A launch token from either issuer of the transition,
  * `heig-classroom` or `heig-quiz` (`CODESPACE_ISSUERS`), is accepted; a
  * service token from Quiz only.
@@ -35,24 +40,34 @@ import {
   CodespaceAssignmentSync,
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
+  type LaunchIdentityClaims,
   QUIZ_CODESPACE_ISSUER,
+  REVIEW_AUDIENCE,
+  ReviewLaunchTokenClaims,
   SERVICE_AUDIENCE,
   ServiceTokenClaims,
   isSafeId,
   type CodespaceAssignmentSyncResult,
   type CodespaceSessionSummary,
 } from "@quiz/contracts";
-import { HS256_SKEW_SECONDS, bindingMismatch, requestBinding, verifyHs256 } from "@quiz/domain";
+import {
+  HS256_SKEW_SECONDS,
+  bindingMismatch,
+  requestBinding,
+  verifyHs256,
+  type VerifyHs256Options,
+} from "@quiz/domain";
 import { eq, lt } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
+import type { z } from "zod";
 
 import type { AppConfig } from "../auth/config.js";
 import type { Db } from "../db/client.js";
 import {
-  assignments,
   launchTokensUsed,
   users,
+  type AssignmentRepoRef,
   type AssignmentRow,
   type UserRow,
 } from "../db/schema.js";
@@ -67,12 +82,18 @@ import {
 } from "../seb/index.js";
 import { WorkspaceBootstrapError, type SessionManager } from "../sessions/manager.js";
 import {
+  REVIEW_ASSIGNMENT_PREFIX,
+  REVIEW_SESSIONS_PER_HOLDER,
   assignmentSessionRows,
+  countLiveReviewSessions,
   countLiveSessionsForTeacher,
   findAssignment,
   findLiveSession,
   isOpen,
+  isReview,
+  liveReviewSessionIds,
   splitRepoRef,
+  upsertAssignment,
 } from "../sessions/store.js";
 import { requestLang, t, type MessageKey } from "../web/i18n.js";
 import { errorPage, workspaceErrorPage } from "../web/pages.js";
@@ -120,7 +141,7 @@ function html(reply: FastifyReply, code: number, page: string): FastifyReply {
  * `login`, on the other hand, is the bare subject — the one that names the
  * volume directory, hence the `isSafeId` checked upstream by the contract.
  */
-export function upsertLaunchUser(db: Db, claims: LaunchTokenClaims): UserRow {
+export function upsertLaunchUser(db: Db, claims: LaunchIdentityClaims): UserRow {
   const now = new Date();
   const oidcSub = `${CLASSROOM_SUB_PREFIX}${claims.sub}`;
   const existing =
@@ -136,8 +157,9 @@ export function upsertLaunchUser(db: Db, claims: LaunchTokenClaims): UserRow {
   };
   if (existing) {
     // The role is **not** touched: a launch token never grants one (docs/history/v1.md
-    // D-V1-3). Every account is created through this path, as a student; the
-    // OIDC login that once wrote `users.role` is gone (M6-03).
+    // D-V1-3). Every account is created through this path, as a student —
+    // a staff member's from a review token too (ADR-129 §10); the OIDC
+    // login that once wrote `users.role` is gone (M6-03).
     const [row] = db.update(users).set(fields).where(eq(users.id, existing.id)).returning().all();
     if (!row) throw new Error("user update returned no row");
     return row;
@@ -180,6 +202,42 @@ export function consumeJti(db: Db, jti: string, expSeconds: number, now = new Da
   }
 }
 
+/**
+ * A token's signature, frame and claims, read once for the three kinds the
+ * portal receives (launch, review, service): the claims, or why not.
+ * `bad-claims` is the schema's refusal; the others are `verifyHs256`'s.
+ */
+export async function tokenRefusal<S extends z.ZodType>(
+  token: string,
+  secret: string,
+  schema: S,
+  opts: Pick<VerifyHs256Options, "audience" | "issuer" | "requireJti">,
+): Promise<{ claims: z.infer<S> } | { reason: string }> {
+  const verdict = await verifyHs256<Record<string, unknown>>(token, secret, opts);
+  if (!verdict.ok) return { reason: verdict.reason };
+  const parsed = schema.safeParse(verdict.claims);
+  return parsed.success ? { claims: parsed.data } : { reason: "bad-claims" };
+}
+
+/**
+ * Runs `fn` after every earlier call of the same key has settled: one review
+ * opening at a time per staff member, so that two simultaneous `/review`
+ * calls cannot both pass the check before either closes or starts
+ * (ADR-129 §1). In memory: the portal is one process.
+ */
+export function serializer(): <T>(key: string, fn: () => Promise<T>) => Promise<T> {
+  const tails = new Map<string, Promise<unknown>>();
+  return (key, fn) => {
+    const run = (tails.get(key) ?? Promise.resolve()).then(fn, fn);
+    const tail = run.catch(() => undefined);
+    tails.set(key, tail);
+    void tail.then(() => {
+      if (tails.get(key) === tail) tails.delete(key);
+    });
+    return run;
+  };
+}
+
 // --- the plugin -------------------------------------------------------------
 
 async function classroomRoutesImpl(
@@ -212,19 +270,19 @@ async function classroomRoutesImpl(
   }
 
   async function serviceTokenRefusal(request: FastifyRequest, token: string): Promise<string | null> {
-    const verdict = await verifyHs256(token, secret, {
+    const read = await tokenRefusal(token, secret, ServiceTokenClaims, {
       audience: SERVICE_AUDIENCE,
       issuer: QUIZ_CODESPACE_ISSUER,
       requireJti: true,
     });
-    if (!verdict.ok) return verdict.reason;
-    const claims = ServiceTokenClaims.safeParse(verdict.claims);
-    if (!claims.success) return "bad-claims";
+    if ("reason" in read) return read.reason;
     const actual = await requestBinding(request.method, request.url, rawBodies.get(request));
-    const mismatch = bindingMismatch(claims.data, actual);
+    const mismatch = bindingMismatch(read.claims, actual);
     if (mismatch !== null) return `unbound-${mismatch}`;
-    return consumeJti(db, claims.data.jti, claims.data.exp) ? null : "jti-replayed";
+    return consumeJti(db, read.claims.jti, read.claims.exp) ? null : "jti-replayed";
   }
+
+  const oneReviewAtATime = serializer();
 
   // The service routes in a context of their own, whose only body parser is
   // JSON kept as bytes: the body hash is computed over what was received,
@@ -256,6 +314,12 @@ async function classroomRoutesImpl(
         const body: CodespaceAssignmentSync = parsed.data;
         if (body.id !== request.params.assignmentId) {
           return reply.code(400).send({ error: "id_mismatch" });
+        }
+        // The review prefix is the portal's own (ADR-129 §10): a project
+        // never takes it, so the startup sweep never meets a student's
+        // volume under it, and a sync never overwrites a review.
+        if (body.id.startsWith(REVIEW_ASSIGNMENT_PREFIX)) {
+          return reply.code(400).send({ error: "reserved_id" });
         }
 
         // An exam's Browser Exam Keys are optional (D21 point 5): none means
@@ -291,13 +355,9 @@ async function classroomRoutesImpl(
           closesAt: body.deadlineAt ? new Date(body.deadlineAt) : null,
           // Teacher-side secrets (ADR-047 §7): stored, never logged.
           beks: mode === "exam" ? body.browserExamKeys : [],
-          createdAt: previous?.createdAt ?? new Date(),
+          createdAt: new Date(),
         };
-        const { createdAt: _keep, ...updatable } = row;
-        db.insert(assignments)
-          .values(row)
-          .onConflictDoUpdate({ target: assignments.id, set: updatable })
-          .run();
+        upsertAssignment(db, row);
 
         request.log.info(
           { assignmentId: body.id, mode, classroomId: body.classroomId },
@@ -353,20 +413,17 @@ async function classroomRoutesImpl(
     const token = request.query.token ?? "";
     if (token === "") return refuse("launchMissingToken", "missing-token");
 
-    const verdict = await verifyHs256<Record<string, unknown>>(token, secret, {
+    // Five minutes at most (`exp - iat`, audit M11), besides the fields. No
+    // `requireJti`, as before: the schema requires the `jti` itself.
+    const read = await tokenRefusal(token, secret, LaunchTokenClaims, {
       audience: LAUNCH_AUDIENCE,
       issuer: CODESPACE_ISSUERS,
     });
-    if (!verdict.ok) {
-      return refuse(
-        verdict.reason === "expired" ? "launchExpired" : "launchInvalid",
-        verdict.reason,
-      );
+    if ("reason" in read) {
+      const detail = read.reason === "bad-claims" ? "launchIncomplete" : read.reason === "expired" ? "launchExpired" : "launchInvalid";
+      return refuse(detail, read.reason);
     }
-    // Five minutes at most (`exp - iat`, audit M11), besides the fields.
-    const claimed = LaunchTokenClaims.safeParse(verdict.claims);
-    if (!claimed.success) return refuse("launchIncomplete", "bad-claims");
-    const claims: LaunchTokenClaims = claimed.data;
+    const claims: LaunchTokenClaims = read.claims;
 
     // Single use, before any side effect: a replay stops here.
     if (!consumeJti(db, claims.jti, claims.exp)) {
@@ -377,7 +434,8 @@ async function classroomRoutesImpl(
     }
 
     const assignment: AssignmentRow | undefined = findAssignment(db, claims.assignmentId);
-    if (!assignment) {
+    // A review assignment opens through `/review` only (ADR-129 §7).
+    if (!assignment || isReview(assignment)) {
       return refuse(
         "launchUnknownAssignment",
         "unknown-assignment",
@@ -399,6 +457,99 @@ async function classroomRoutesImpl(
         "bad-assignment-id",
       );
     }
+    return openSession(request, reply, { claims, assignment, targetRepo: claims.repo, replaces: [], quotaDetail: "quotaDetail" });
+  });
+
+  // --- GET /review?token=… -------------------------------------------------
+  // A staff member opens one repository of a project, read-only (ADR-129
+  // §10). Its own audience, from Quiz only: a review token is never read as
+  // a student's launch, nor the reverse. No `isOpen` gate, no SEB.
+  app.get<{ Querystring: { token?: string } }>("/review", async (request, reply) => {
+    const lang = requestLang(request);
+    const refuse = (detail: MessageKey, reason: string, code = 403): FastifyReply => {
+      request.log.warn({ review: { reason, clientAddress: request.ip } }, "review refused");
+      return html(reply, code, errorPage(lang, t(lang, "launchRefused"), t(lang, detail)));
+    };
+
+    const token = request.query.token ?? "";
+    if (token === "") return refuse("launchMissingToken", "missing-token");
+
+    const read = await tokenRefusal(token, secret, ReviewLaunchTokenClaims, {
+      audience: REVIEW_AUDIENCE,
+      issuer: QUIZ_CODESPACE_ISSUER,
+      requireJti: true,
+    });
+    if ("reason" in read) {
+      const detail = read.reason === "bad-claims" ? "launchIncomplete" : read.reason === "expired" ? "reviewExpired" : "reviewInvalid";
+      return refuse(detail, read.reason);
+    }
+    const claims: ReviewLaunchTokenClaims = read.claims;
+
+    // Single use, before any side effect: a replay stops here (invariant 7).
+    if (!consumeJti(db, claims.jti, claims.exp)) return refuse("reviewReplayed", "jti-replayed");
+    const repo = claims.repo;
+    if (!repo) return refuse("reviewRepoMissing", "repo-missing");
+
+    // One assignment per reviewed repository, never the project's own: its
+    // sessions are never listed among the project's (ADR-129 §10).
+    const id = `${REVIEW_ASSIGNMENT_PREFIX}${claims.projectRepoId}`;
+    return oneReviewAtATime(claims.sub, async () => {
+      // A staff member keeps one live review session (ADR-129 §1): a new one
+      // replaces the previous, which therefore counts against neither cap.
+      // Resuming this repository's live review replaces nothing.
+      const resuming = findLiveSession(db, claims.sub, id) !== undefined;
+      const replaces = resuming ? [] : liveReviewSessionIds(db, claims.sub);
+      const reviews = resuming ? 0 : countLiveReviewSessions(db, claims.holder.id, replaces);
+      if (reviews >= REVIEW_SESSIONS_PER_HOLDER) {
+        request.log.warn({ review: { reason: "review-cap-reached", teacherId: claims.holder.id, reviews } }, "review refused");
+        // Nothing is closed: the previous review stays open.
+        return html(reply, 429, errorPage(lang, t(lang, "quotaTitle"), t(lang, "reviewQuotaDetail")));
+      }
+      const assignment = upsertAssignment(db, {
+        id,
+        title: repo.fullName,
+        mode: "lab",
+        image: config.CODESPACE_DEFAULT_IMAGE,
+        uploadPack: true,
+        templateRepo: null,
+        targetRepo: null,
+        targetRepoPattern: null,
+        // The project's quota holder carries the session (ADR-129 §3).
+        teacherId: claims.holder.id,
+        teacherEmail: claims.holder.email,
+        maxActiveSessions: claims.maxActiveSessions,
+        classroomId: null,
+        classroomName: null,
+        sourceRepo: null,
+        opensAt: null,
+        closesAt: null,
+        beks: [],
+        reviewOf: { projectId: claims.projectId, projectRepoId: claims.projectRepoId },
+        createdAt: new Date(),
+      });
+      return openSession(request, reply, { claims, assignment, targetRepo: repo, replaces, quotaDetail: "reviewQuotaDetail" });
+    });
+  });
+
+  /**
+   * The tail `/launch` and `/review` share (ADR-129 §10): the user, the
+   * quota (the sessions in `replaces` excluded, then closed), the SEB check
+   * of an exam, the start, the cookies, the log and the redirect.
+   */
+  async function openSession(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    opening: {
+      claims: LaunchIdentityClaims & Pick<LaunchTokenClaims, "jti" | "seb">;
+      assignment: AssignmentRow;
+      targetRepo: AssignmentRepoRef;
+      /** Live sessions this opening replaces: excluded from the quota, closed once it allows. */
+      replaces: readonly string[];
+      quotaDetail: MessageKey;
+    },
+  ): Promise<FastifyReply> {
+    const { claims, assignment, replaces } = opening;
+    const lang = requestLang(request);
     const user = upsertLaunchUser(db, claims);
 
     // --- per-teacher quota -------------------------------------------------
@@ -406,7 +557,7 @@ async function classroomRoutesImpl(
     // does not open one more container (analyse.md D5).
     const resuming = findLiveSession(db, user.login, assignment.id) !== undefined;
     if (!resuming && assignment.teacherId && assignment.maxActiveSessions !== null) {
-      const active = countLiveSessionsForTeacher(db, assignment.teacherId);
+      const active = countLiveSessionsForTeacher(db, assignment.teacherId, replaces);
       if (active >= assignment.maxActiveSessions) {
         request.log.warn(
           {
@@ -420,13 +571,10 @@ async function classroomRoutesImpl(
           },
           "launch refused: the teacher's session quota is reached",
         );
-        return html(
-          reply,
-          429,
-          errorPage(lang, t(lang, "quotaTitle"), t(lang, "quotaDetail")),
-        );
+        return html(reply, 429, errorPage(lang, t(lang, "quotaTitle"), t(lang, opening.quotaDetail)));
       }
     }
+    for (const id of replaces) await manager.close(id, "replaced by another review session");
 
     // --- exam mode: the SEB verification, here and only once ---------------
     // D21 point 4: the platform's `seb` session of this project minted the
@@ -477,7 +625,7 @@ async function classroomRoutesImpl(
         sebVerified: assignment.mode === "exam",
         teacherId: assignment.teacherId,
         launchJti: claims.jti,
-        targetRepo: claims.repo,
+        targetRepo: opening.targetRepo,
       });
     } catch (err) {
       // The student's repository could not be fetched: **no container was
@@ -491,7 +639,7 @@ async function classroomRoutesImpl(
             jti: claims.jti,
             assignmentId: assignment.id,
             login: user.login,
-            repo: claims.repo?.fullName ?? null,
+            repo: opening.targetRepo.fullName,
             cause: err.shortCause,
           },
           err: err.message,
@@ -534,12 +682,13 @@ async function classroomRoutesImpl(
           mode: assignment.mode,
           launched: result.launched,
           resumed: resuming,
+          review: isReview(assignment),
         },
       },
       "session opened from a platform launch token",
     );
     return reply.redirect(`/s/${result.session.id}/`, 303);
-  });
+  }
 }
 
 export const classroomRoutes = fp(classroomRoutesImpl, {

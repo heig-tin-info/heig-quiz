@@ -40,6 +40,14 @@ const en = {
   launchBadAssignmentId: "This activity has an identifier the portal cannot use.",
   quotaTitle: "Quota reached",
   quotaDetail: "All of your teacher's environment places are taken. Try again later.",
+  // --- /review (classroom/routes.ts): a staff member opens a repository -----
+  reviewExpired: "This link has expired. Go back to the project page and open the repository in the workspace again.",
+  reviewInvalid: "This link is not valid. Go back to the project page and open the repository in the workspace again.",
+  reviewReplayed:
+    "This link has already been used. Go back to the project page and open the repository in the workspace again.",
+  reviewRepoMissing: "This repository is not available.",
+  reviewQuotaDetail:
+    "All the workspace places of this project are taken, or the staff already have two repositories open in the workspace. Close one and try again.",
   examOnlyInSeb: "This exam opens only from Safe Exam Browser.",
   // --- Safe Exam Browser (seb/routes.ts) -------------------------------------
   unknownAssignment: "Unknown activity",
@@ -58,6 +66,8 @@ const en = {
   assignmentGoneDetail: "The activity of this session no longer exists.",
   sessionClosedTitle: "Session closed",
   sessionClosedDetail: "This session was closed. Open it again from the platform; your work is kept.",
+  reviewClosedDetail:
+    "This workspace was closed, and nothing of it is kept. Open the repository in the workspace again from the project page.",
   sessionUnavailableTitle: "Session unavailable",
   sessionRestartFailed: "The container could not be restarted. Your volume is intact; try again.",
   sessionNoAddress: "The container has no address.",
@@ -98,6 +108,15 @@ const fr: Record<MessageKey, string> = {
   quotaTitle: "Quota atteint",
   quotaDetail:
     "Toutes les places d'environnement de votre enseignant sont occupées. Réessayez plus tard.",
+  reviewExpired:
+    "Ce lien a expiré. Retournez sur la page du projet et ouvrez de nouveau le dépôt dans l'espace de travail.",
+  reviewInvalid:
+    "Ce lien n'est pas valide. Retournez sur la page du projet et ouvrez de nouveau le dépôt dans l'espace de travail.",
+  reviewReplayed:
+    "Ce lien a déjà servi. Retournez sur la page du projet et ouvrez de nouveau le dépôt dans l'espace de travail.",
+  reviewRepoMissing: "Ce dépôt n'est pas disponible.",
+  reviewQuotaDetail:
+    "Toutes les places d'espace de travail de ce projet sont occupées, ou l'équipe a déjà deux dépôts ouverts dans l'espace de travail. Fermez-en un et réessayez.",
   examOnlyInSeb: "Cette épreuve ne s'ouvre que depuis Safe Exam Browser.",
   unknownAssignment: "Activité inconnue",
   outsideSebTitle: "Session hors Safe Exam Browser",
@@ -116,6 +135,8 @@ const fr: Record<MessageKey, string> = {
   sessionClosedTitle: "Session fermée",
   sessionClosedDetail:
     "Cette session a été fermée. Rouvrez-la depuis la plateforme ; votre travail est conservé.",
+  reviewClosedDetail:
+    "Cet espace de travail a été fermé, et rien n'en est conservé. Ouvrez de nouveau le dépôt dans l'espace de travail depuis la page du projet.",
   sessionUnavailableTitle: "Session indisponible",
   sessionRestartFailed: "Le conteneur n'a pas pu être relancé. Votre volume est intact ; réessayez.",
   sessionNoAddress: "Le conteneur n'a pas d'adresse.",

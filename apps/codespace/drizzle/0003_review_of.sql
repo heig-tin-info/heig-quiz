@@ -1,0 +1,1 @@
+ALTER TABLE `assignments` ADD `review_of` text;

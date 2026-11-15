@@ -13,10 +13,17 @@
  */
 import type { RepoRef } from "./types.js";
 
-/** Whose workspace a repository is reached for: the project (`assignment`) and the platform's user (`student`). */
+/**
+ * Whose workspace a repository is reached for: the portal's assignment and
+ * the platform's user (`student`). `review` is set for a staff member's
+ * review session (ADR-129 §10): the project and repository Quiz's token
+ * route reads its review record by, since `assignment` is then the portal's
+ * `review-<projectRepoId>`, not the project.
+ */
 export interface ForgeOwner {
   assignment: string;
   student: string;
+  review?: { projectId: string; projectRepoId: string };
 }
 
 export interface Forge {

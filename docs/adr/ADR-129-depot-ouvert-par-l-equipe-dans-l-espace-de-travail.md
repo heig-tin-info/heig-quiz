@@ -370,6 +370,29 @@ dated amendment.
 - **The token stays out of the container**, argv, URLs, files, SQLite and
   logs, as ADR-078 §3 and portal invariant 10 require.
 
+Corrected 2026-11-15 (the portal pull request, #1093): the bullet *No
+persistent volume* said the startup sweep removes every `review-*`
+assignment row and every review directory without a live session. A name
+alone does not make a review, so two rules hold instead. The `review-`
+prefix is reserved to the portal: the platform's sync refuses a project id
+that starts with it (`400 reserved_id`), so no project ever takes it and a
+sync never overwrites a review. The sweep deletes the review rows — those
+whose `reviewOf` is set — without a live session, then a `review-*`
+directory without a live session only when no assignment row of that name
+exists or its row is a review: a directory whose row exists with
+`reviewOf` null is a project's student volume and is never swept. A
+directory with no row at all is swept, because the rows are deleted before
+the directories, so a crash between the two leaves exactly those. No rule
+of the decision changed: the sweep is narrower.
+
+*Known and accepted:* the portal serializes one staff member's openings
+(check, close, start), so one staff member never holds two live review
+sessions. Two **different** staff members opening reviews of one holder's
+projects at the same instant are not serialized, and may pass
+`REVIEW_SESSIONS_PER_HOLDER` by one until one of those sessions closes —
+as two students' simultaneous `/launch` may already pass the holder's
+`maxActiveSessions` by one.
+
 ### 11. The web
 
 A secondary action on the repository sheet and row of the project page,

@@ -253,6 +253,9 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
 
   if (options.withTimers !== false) {
     await manager.reconcile();
+    // After the reconciliation, which settles which sessions are live: a
+    // review directory or row without one goes (ADR-129 §10).
+    await manager.sweepReviews();
     manager.startTimers();
     relay?.start();
   }

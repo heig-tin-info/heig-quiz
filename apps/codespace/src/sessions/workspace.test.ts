@@ -5,14 +5,15 @@
  * and the "forge" is a local bare repository. They fit in a `pnpm test`,
  * without Podman nor Forgejo, because what is checked here is the portal's
  * logic: loud failure, empty target repository allowed in lab mode, re-seeding
- * on resumption, working branch with tracking.
+ * on resumption, working branch with tracking — and the staff's review
+ * session, read-only and ephemeral (ADR-129).
  *
  * What the portal used to do, and what cost the production trial: anonymous
  * `git fetch` on a private repository, failure swallowed, session opened on an
  * empty directory.
  */
 import { execFile } from "node:child_process";
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -21,13 +22,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db, type DbHandle } from "../db/client.js";
 import { assignments, users, type AssignmentRow, type UserRow } from "../db/schema.js";
 import type { ContainerInfo, Engine, RunRequest } from "../engine/index.js";
-import { ForgeUnconfiguredError, git, gitBare, refSnapshot } from "../git/index.js";
+import { ForgeUnconfiguredError, git, gitBare, refSnapshot, type ForgeOwner } from "../git/index.js";
 import { FIXTURE_ENV, makeSourceRepo } from "../git/fixtures.js";
 import { causeText } from "../web/i18n.js";
 
 import {
+  REVIEW_WIPE_ARGV,
   createSessionManager,
   defaultBranchOf,
+  forgeOwnerOf,
   repoRefFromUrl,
   shortCauseOf,
   WorkspaceBootstrapError,
@@ -500,5 +503,157 @@ describe("default branch", () => {
         await git(["-C", work, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
       ).trim(),
     ).toBe("origin/master");
+  });
+});
+
+/**
+ * A staff member's review session (ADR-129 §10): read-only, no snapshot, its
+ * directory removed when it closes and swept at startup.
+ */
+describe("review session (ADR-129 §10)", () => {
+  const REVIEW_OF = { projectId: "p-1", projectRepoId: "r-1" };
+  const reviewAssignment = (id = "review-r-1") =>
+    insertAssignment({ id, title: "org/tp-sacha", reviewOf: REVIEW_OF, teacherId: "t-holder", maxActiveSessions: 4 });
+  const exists = (path: string) => lstat(path).then(() => true, () => false);
+
+  it("its staging repository refuses pushes, and the git channel learns it is read-only", async () => {
+    const review = await reviewAssignment();
+    const lab = await insertAssignment();
+    const manager = makeManager();
+    const { session } = await manager.start(user, review);
+    const own = await manager.start(user, lab);
+    const receivepack = (dir: string) => gitBare(join(dir, "staging.git"), ["config", "http.receivepack"]);
+    expect((await receivepack(session.volumeDir)).trim()).toBe("false");
+    expect((await receivepack(own.session.volumeDir)).trim()).toBe("true");
+    expect((await manager.lookup.bySessionId(session.id))?.readOnly).toBe(true);
+    expect((await manager.lookup.bySessionId(own.session.id))?.readOnly).toBe(false);
+    // Should a row ever name it, the relay finds no destination for it.
+    expect(manager.repoOfEvent({ sessionId: session.id, student: "student", assignment: review.id })).toBeUndefined();
+  });
+
+  it("the forge owner of a review carries the reviewed project and repository", async () => {
+    expect(forgeOwnerOf({ student: "u-sam" }, { id: "review-r-1", reviewOf: REVIEW_OF })).toEqual({
+      assignment: "review-r-1",
+      student: "u-sam",
+      review: { projectId: "p-1", projectRepoId: "r-1" },
+    });
+    expect(forgeOwnerOf({ student: "u-sam" }, { id: "tp", reviewOf: null })).toEqual({ assignment: "tp", student: "u-sam" });
+
+    // And the seeding asks with it.
+    const review = await reviewAssignment();
+    const owners: ForgeOwner[] = [];
+    const manager = makeManager({
+      forgeUrlOf: (repo) => `http://127.0.0.1:1/${repo.owner}/${repo.name}.git`,
+      forgeAuthorization: async (_repo, owner) => {
+        owners.push(owner);
+        return "Bearer ghs_token";
+      },
+    });
+    await expect(
+      manager.start(user, review, { targetRepo: { fullName: "org/tp-sacha", defaultBranch: "main" } }),
+    ).rejects.toThrow();
+    expect(owners).toEqual([{ assignment: "review-r-1", student: "student", review: REVIEW_OF }]);
+  });
+
+  it("closing takes no snapshot, empties the work tree in its container and removes the directory", async () => {
+    const review = await reviewAssignment();
+    const manager = makeManager();
+    const { session } = await manager.start(user, review);
+    await writeFile(join(session.volumeDir, "work", "notes.txt"), "read", "utf8");
+    await manager.close(session.id, "test");
+    expect(engine.execs).toContainEqual({ name: engine.containerName(session.id), argv: [...REVIEW_WIPE_ARGV] });
+    expect(await exists(session.volumeDir)).toBe(false);
+    expect(findAnySession(db, "student", review.id)?.state).toBe("closed");
+  });
+
+  it("the idle collection removes it too, and the next launch fetches afresh", async () => {
+    const review = await reviewAssignment();
+    const manager = makeManager();
+    const { session } = await manager.start(user, review);
+    manager.touch(session.id, new Date(Date.now() - 120_000));
+    expect((await manager.collect()).closed).toBe(1);
+    expect(await exists(session.volumeDir)).toBe(false);
+    const again = await manager.start(user, review);
+    expect(await exists(join(again.session.volumeDir, "staging.git"))).toBe(true);
+  });
+
+  it("removing never follows a link out of the directory", async () => {
+    const review = await reviewAssignment();
+    const manager = makeManager();
+    const { session } = await manager.start(user, review);
+    const outside = join(root, "outside");
+    await mkdir(outside);
+    await writeFile(join(outside, "keep.txt"), "keep", "utf8");
+    await symlink(outside, join(session.volumeDir, "work", "escape"));
+    await manager.close(session.id, "test");
+    expect(await exists(session.volumeDir)).toBe(false);
+    expect(await exists(join(outside, "keep.txt"))).toBe(true);
+  });
+
+  it("what the host may not unlink is emptied through a container of the same hardened run", async () => {
+    const review = await reviewAssignment();
+    const manager = makeManager();
+    const { session } = await manager.start(user, review);
+    // A directory the portal may not write in, as `:U` leaves the work tree,
+    // and a container already gone: the session's own exec cannot help.
+    const locked = join(session.volumeDir, "work", "locked");
+    await mkdir(locked);
+    await writeFile(join(locked, "a.txt"), "a", "utf8");
+    await chmod(locked, 0o555);
+    engine.kill(engine.containerName(session.id));
+    const wipes: string[] = [];
+    engine.exec = async (name, argv) => {
+      if (argv.join(" ") === REVIEW_WIPE_ARGV.join(" ") && engine.containers.has(name)) {
+        wipes.push(name);
+        await chmod(locked, 0o755);
+      }
+      return "";
+    };
+    await manager.close(session.id, "test");
+    expect(wipes).toHaveLength(1);
+    expect(wipes[0]).toMatch(/^cs-test-wipe-/);
+    // The throwaway container is gone, and so is the directory.
+    expect(engine.containers.has(wipes[0] as string)).toBe(false);
+    expect(await exists(session.volumeDir)).toBe(false);
+  });
+
+  it("snapshots skip review sessions", async () => {
+    const review = await reviewAssignment();
+    const manager = makeManager();
+    const { session } = await manager.start(user, review);
+    await writeFile(join(session.volumeDir, "work", "notes.txt"), "read", "utf8");
+    await manager.snapshotAll();
+    expect(await exists(join(session.volumeDir, "shadow.git"))).toBe(false);
+  });
+
+  it("the startup sweep removes review directories and rows without a live session, and nothing else", async () => {
+    const live = await reviewAssignment("review-live");
+    const dead = await reviewAssignment("review-dead");
+    const lab = await insertAssignment();
+    // A synchronized project whose id merely looks like a review (an old
+    // portal accepted it): its student's volume is never swept.
+    const lookalike = await insertAssignment({ id: "review-x" });
+    const manager = makeManager();
+    const kept = await manager.start(user, live);
+    const gone = await manager.start(user, dead);
+    const own = await manager.start(user, lab);
+    const student = await manager.start(user, lookalike);
+    await manager.close(gone.session.id, "test");
+    await manager.close(own.session.id, "test");
+    await manager.close(student.session.id, "test");
+    // Leftovers: the dead review's directory back on disk, and one whose row is gone.
+    await mkdir(join(gone.session.volumeDir, "work"), { recursive: true });
+    await mkdir(join(root, "u-other", "review-orphan", "work"), { recursive: true });
+
+    expect(await manager.sweepReviews()).toEqual({ directories: 2, assignments: 1 });
+    expect(await exists(kept.session.volumeDir)).toBe(true);
+    expect(await exists(gone.session.volumeDir)).toBe(false);
+    expect(await exists(join(root, "u-other", "review-orphan"))).toBe(false);
+    // A student's volume is kept after its close, as always.
+    expect(await exists(own.session.volumeDir)).toBe(true);
+    expect(await exists(join(student.session.volumeDir, "work"))).toBe(true);
+    expect(findAnySession(db, "student", "review-dead")).toBeUndefined();
+    expect(findAnySession(db, "student", "review-x")?.state).toBe("closed");
+    expect(db.select().from(assignments).all().map((a) => a.id).sort()).toEqual(["review-live", "review-x", "tp"]);
   });
 });

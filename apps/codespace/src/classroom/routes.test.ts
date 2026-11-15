@@ -11,6 +11,7 @@
 import cookie from "@fastify/cookie";
 import { CodespaceSessionSummary } from "@quiz/contracts";
 import { HS256_SKEW_SECONDS, requestBinding, signHs256 } from "@quiz/domain";
+import { eq } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -20,6 +21,7 @@ import { sessions, users, type AssignmentRow, type SessionRow, type UserRow } fr
 import { CONFIG_KEY_HEADER, REQUEST_HASH_HEADER, expectedHash } from "@quiz/seb";
 
 import { createPushEventStore } from "../git/index.js";
+import { portalLogger } from "../logging.js";
 import { createSebVerifier } from "../seb/index.js";
 import type { SessionManager, StartOptions, StartResult } from "../sessions/manager.js";
 import { findAssignment } from "../sessions/store.js";
@@ -126,10 +128,18 @@ interface Harness {
   handle: DbHandle;
   config: AppConfig;
   starts: Array<{ login: string; assignmentId: string; opts: StartOptions }>;
+  /** Sessions the routes closed, in order. */
+  closes: string[];
 }
 
-function fakeManager(db: Db, starts: Harness["starts"]): SessionManager {
+function fakeManager(db: Db, starts: Harness["starts"], closes: string[] = []): SessionManager {
   return {
+    async close(sessionId: string): Promise<void> {
+      closes.push(sessionId);
+      // A real close stops a container: it yields, and another request may run meanwhile.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      db.update(sessions).set({ state: "closed" }).where(eq(sessions.id, sessionId)).run();
+    },
     async start(
       user: UserRow,
       assignment: AssignmentRow,
@@ -173,19 +183,20 @@ async function harness(over: Record<string, string> = {}, logLines?: string[]): 
   const config = testConfig(over);
   const handle = openDb(":memory:");
   const starts: Harness["starts"] = [];
+  const closes: string[] = [];
   const app = Fastify({
-    logger: logLines ? { level: "trace", stream: { write: (line: string) => void logLines.push(line) } } : false,
+    logger: logLines ? portalLogger("trace", { write: (line: string) => void logLines.push(line) }) : false,
   });
   await app.register(cookie);
   await app.register(classroomRoutes, {
     config,
     db: handle.db,
-    manager: fakeManager(handle.db, starts),
+    manager: fakeManager(handle.db, starts, closes),
     verifier: createSebVerifier({ mode: config.SEB_VERIFIER, nodeEnv: config.NODE_ENV, url: { publicOrigin: PORTAL } }),
     repoUrl: (repo) => `http://forge.test/${repo.owner}/${repo.name}.git`,
   });
   await app.ready();
-  return { app, db: handle.db, handle, config, starts };
+  return { app, db: handle.db, handle, config, starts, closes };
 }
 
 let h: Harness;
@@ -298,6 +309,13 @@ describe("PUT /api/assignments/:id", () => {
   it("400 if the body id and the URL id differ", async () => {
     const reply = await put(syncBody({ id: "a-other" }), {}, "a-lab");
     expect(reply.statusCode).toBe(400);
+  });
+
+  it("400 on an id under the review prefix, the portal's own (ADR-129 §10)", async () => {
+    const reply = await put(syncBody({ id: "review-x" }), {}, "review-x");
+    expect(reply.statusCode).toBe(400);
+    expect((reply.json() as { error: string }).error).toBe("reserved_id");
+    expect(findAssignment(h.db, "review-x")).toBeUndefined();
   });
 
   it("400 if the id cannot name a volume directory", async () => {
@@ -790,6 +808,225 @@ describe("GET /launch", () => {
 });
 
 // --- registry of consumed tokens --------------------------------------------
+
+// --- GET /review (ADR-129) --------------------------------------------------
+
+describe("GET /review", () => {
+  const PROJECT = "11111111-1111-4111-8111-111111111111";
+  const REPO_A = "22222222-2222-4222-8222-222222222222";
+  const REPO_B = "33333333-3333-4333-8333-333333333333";
+  const REPO_C = "44444444-4444-4444-8444-444444444444";
+
+  /** A review launch token as Quiz signs one: the staff member Sam opens a student's repository. */
+  function reviewToken(over: Record<string, unknown> = {}, secret = SECRET): Promise<string> {
+    jtiCounter += 1;
+    return signHs256(
+      {
+        iss: "heig-quiz",
+        aud: "heig-codespace-review",
+        iat: now(),
+        exp: now() + 300,
+        jti: `review-jti-${jtiCounter}`,
+        sub: "u-sam",
+        email: "sam@heig-vd.ch",
+        displayName: "Sam Staff",
+        githubLogin: null,
+        repo: { fullName: "org/tp-sacha", defaultBranch: "master" },
+        projectId: PROJECT,
+        projectRepoId: REPO_A,
+        holder: { id: "t-tania", email: "tania@heig-vd.ch" },
+        maxActiveSessions: 10,
+        ...over,
+      },
+      secret,
+    );
+  }
+
+  // A synchronized project of the same holder, whose students' sessions fill the quota.
+  beforeEach(async () => {
+    expect((await put(syncBody())).statusCode).toBe(200);
+  });
+
+  const review = async (over: Record<string, unknown> = {}) =>
+    h.app.inject({ url: `/review?token=${await reviewToken(over)}` });
+
+  /** A live session of `student` on `assignmentId`, carried by the holder Tania. */
+  function occupy(student: string, assignmentId: string): string {
+    const at = new Date();
+    h.db
+      .insert(users)
+      .values({ id: `user-${student}`, oidcSub: `classroom:${student}`, login: student, email: `${student}@heig-vd.ch`, displayName: student, createdAt: at })
+      .onConflictDoNothing()
+      .run();
+    const id = `sess-${student}-${assignmentId}`;
+    h.db
+      .insert(sessions)
+      .values({ id, userId: `user-${student}`, student, assignmentId, volumeDir: `/tmp/${id}`, state: "running", createdAt: at, lastSeen: at, cookieToken: "x", teacherId: "t-tania" })
+      .run();
+    return id;
+  }
+
+  /** A live review session of `staff` on `repoId`, opened through the route itself. */
+  async function liveReview(staff: string, repoId: string): Promise<string> {
+    const reply = await review({ sub: staff, email: `${staff}@heig-vd.ch`, projectRepoId: repoId });
+    expect(reply.statusCode).toBe(303);
+    return `sess-${staff}-review-${repoId}`;
+  }
+
+  it("opens a review session on its own assignment, carried by the quota holder", async () => {
+    const reply = await review();
+    expect(reply.statusCode).toBe(303);
+    expect(reply.headers.location).toBe(`/s/sess-u-sam-review-${REPO_A}/`);
+    expect(String(reply.headers["set-cookie"])).toContain("cs_session=");
+
+    const row = findAssignment(h.db, `review-${REPO_A}`);
+    expect(row).toMatchObject({
+      mode: "lab",
+      uploadPack: true,
+      teacherId: "t-tania",
+      teacherEmail: "tania@heig-vd.ch",
+      maxActiveSessions: 10,
+      opensAt: null,
+      closesAt: null,
+      beks: [],
+      templateRepo: null,
+      image: h.config.CODESPACE_DEFAULT_IMAGE,
+      reviewOf: { projectId: PROJECT, projectRepoId: REPO_A },
+    });
+    expect(h.starts).toEqual([
+      {
+        login: "u-sam",
+        assignmentId: `review-${REPO_A}`,
+        opts: {
+          sebVerified: false,
+          teacherId: "t-tania",
+          launchJti: expect.stringMatching(/^review-jti-/) as unknown as string,
+          targetRepo: { fullName: "org/tp-sacha", defaultBranch: "master" },
+        },
+      },
+    ]);
+    // The staff member's own account, with no role (portal invariant 9).
+    expect(h.db.all<{ role: string }>("SELECT role FROM users WHERE login = 'u-sam'")).toEqual([{ role: "student" }]);
+  });
+
+  it("a review token never opens /launch, nor a launch token /review", async () => {
+    await put(syncBody({ id: PROJECT }), {}, PROJECT);
+    const asLaunch = await h.app.inject({ url: `/launch?token=${await reviewToken()}` });
+    expect(asLaunch.statusCode).toBe(403);
+    const asReview = await h.app.inject({ url: `/review?token=${await launchToken({ assignmentId: PROJECT })}` });
+    expect(asReview.statusCode).toBe(403);
+    expect(h.starts).toHaveLength(0);
+  });
+
+  it("accepts Quiz's review tokens only: another issuer, a forged or a long token is refused", async () => {
+    expect((await review({ iss: "heig-classroom" })).statusCode).toBe(403);
+    expect((await h.app.inject({ url: `/review?token=${await reviewToken({}, "another-secret-of-thirty-two-chars")}` })).statusCode).toBe(403);
+    expect((await review({ exp: now() + 301 })).statusCode).toBe(403);
+    expect((await review({ jti: undefined })).statusCode).toBe(403);
+    expect((await h.app.inject({ url: "/review" })).statusCode).toBe(403);
+    expect(h.starts).toHaveLength(0);
+    expect(findAssignment(h.db, `review-${REPO_A}`)).toBeUndefined();
+  });
+
+  it("burns the jti before any other check: a refused token stays refused (invariant 7)", async () => {
+    const token = await reviewToken({ repo: null });
+    const first = await h.app.inject({ url: `/review?token=${token}` });
+    expect(first.statusCode).toBe(403);
+    expect(first.body).toContain("pas disponible");
+    const replay = await h.app.inject({ url: `/review?token=${token}` });
+    expect(replay.statusCode).toBe(403);
+    expect(replay.body).toContain("déjà servi");
+    expect(h.starts).toHaveLength(0);
+  });
+
+  it("the review assignment opens through /review only", async () => {
+    await liveReview("u-sam", REPO_A);
+    const reply = await h.app.inject({ url: `/launch?token=${await launchToken({ assignmentId: `review-${REPO_A}` })}` });
+    expect(reply.statusCode).toBe(403);
+    expect(h.starts).toHaveLength(1);
+  });
+
+  it("429 with the review wording when the holder's quota is full, and nothing is closed", async () => {
+    occupy("u-s1", "a-lab");
+    occupy("u-s2", "a-lab");
+    const mine = await liveReview("u-sam", REPO_A);
+    const reply = await review({ projectRepoId: REPO_B, maxActiveSessions: 2 });
+    // Sam's own review is excluded, and the two students fill the quota.
+    expect(reply.statusCode).toBe(429);
+    expect(reply.body).toContain("Quota atteint");
+    expect(reply.body).toContain("deux dépôts ouverts dans l'espace de travail");
+    expect(h.closes).toEqual([]);
+    expect(h.db.select().from(sessions).where(eq(sessions.id, mine)).get()?.state).toBe("running");
+  });
+
+  it("the quota excludes the staff member's review it replaces, then closes it (one per staff member)", async () => {
+    occupy("u-s1", "a-lab");
+    const previous = await liveReview("u-sam", REPO_A);
+    // Holder's live sessions: u-s1 and Sam's review of A. Without the
+    // exclusion a quota of 2 would refuse; with it, B replaces A.
+    const reply = await review({ projectRepoId: REPO_B, maxActiveSessions: 2 });
+    expect(reply.statusCode).toBe(303);
+    expect(h.closes).toEqual([previous]);
+    expect(h.starts.map((s) => s.assignmentId)).toEqual([`review-${REPO_A}`, `review-${REPO_B}`]);
+  });
+
+  it("at most two live review sessions per holder, the replaced one excluded", async () => {
+    await liveReview("u-ana", REPO_A);
+    await liveReview("u-bob", REPO_B);
+    const refused = await review({ projectRepoId: REPO_C });
+    expect(refused.statusCode).toBe(429);
+    expect(h.closes).toEqual([]);
+    // Bob switching repositories frees his own place first: allowed.
+    const bob = await review({ sub: "u-bob", email: "u-bob@heig-vd.ch", projectRepoId: REPO_C });
+    expect(bob.statusCode).toBe(303);
+    expect(h.closes).toEqual([`sess-u-bob-review-${REPO_B}`]);
+  });
+
+  it("two simultaneous openings by one staff member leave one live review (one at a time per login)", async () => {
+    const first = await liveReview("u-sam", REPO_A);
+    const [b, c] = await Promise.all([review({ projectRepoId: REPO_B }), review({ projectRepoId: REPO_C })]);
+    expect([b.statusCode, c.statusCode]).toEqual([303, 303]);
+    // B replaced A, then C replaced B: never two at once.
+    expect(h.closes).toEqual([first, `sess-u-sam-review-${REPO_B}`]);
+    const live = h.db.all<{ id: string }>("SELECT id FROM sessions WHERE student = 'u-sam' AND state = 'running'");
+    expect(live).toEqual([{ id: `sess-u-sam-review-${REPO_C}` }]);
+  });
+
+  it("resuming the same repository's live review consults no quota and closes nothing", async () => {
+    await liveReview("u-sam", REPO_A);
+    occupy("u-s1", "a-lab");
+    const reply = await review({ maxActiveSessions: 1 });
+    expect(reply.statusCode).toBe(303);
+    expect(h.closes).toEqual([]);
+  });
+
+  it("a student's session is never closed by a review, and a review is never one of the project's sessions", async () => {
+    await put(syncBody({ id: PROJECT }), {}, PROJECT);
+    expect((await h.app.inject({ url: `/launch?token=${await launchToken({ assignmentId: PROJECT })}` })).statusCode).toBe(303);
+    // Sam, also enrolled, has a student workspace of the project: it stays.
+    expect((await h.app.inject({ url: `/launch?token=${await launchToken({ assignmentId: PROJECT, sub: "u-sam", email: "sam@heig-vd.ch" })}` })).statusCode).toBe(303);
+    await liveReview("u-sam", REPO_A);
+    await liveReview("u-sam", REPO_B);
+    expect(h.closes).toEqual([`sess-u-sam-review-${REPO_A}`]);
+
+    const list = CodespaceSessionSummary.array().parse((await sessionsOf(PROJECT)).json());
+    expect(list.map((s) => s.userId).sort()).toEqual(["u-sacha", "u-sam"]);
+    expect(list.every((s) => !s.sessionId.includes("review-"))).toBe(true);
+  });
+
+  it("no log line carries the token (invariant 15)", async () => {
+    await h.app.close();
+    h.handle.close();
+    const lines: string[] = [];
+    h = await harness({}, lines);
+    const token = await reviewToken();
+    expect((await h.app.inject({ url: `/review?token=${token}` })).statusCode).toBe(303);
+    expect((await h.app.inject({ url: `/review?token=${token}` })).statusCode).toBe(403);
+    const signature = token.split(".")[2] as string;
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.join("\n")).not.toContain(signature);
+  });
+});
 
 describe("consumeJti", () => {
   it("accepts a fresh `jti`, refuses the second one, purges the expired ones", () => {
