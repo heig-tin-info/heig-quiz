@@ -143,12 +143,13 @@ jobs:
       # the previous main on a push.
       - run: node scripts/check-deletions.mjs --base HEAD^1
       - run: node --test scripts/*.test.mjs
-      # The engine VM's deploy scripts and the staging dispatcher's test
-      # (audit H4). No install: bash and the hosted runner's shellcheck,
-      # whose version is the image's, unpinned (a new release may warn on
-      # unchanged scripts).
+      # The engine VM's deploy scripts, the staging dispatcher's test
+      # (audit H4) and lib.sh's image cleanup. No install: bash and the
+      # hosted runner's shellcheck, whose version is the image's, unpinned
+      # (a new release may warn on unchanged scripts).
       - run: shellcheck -x -P SCRIPTDIR infra/engine/*.sh
       - run: bash infra/engine/staging-dispatch.test.sh
+      - run: bash infra/engine/lib.test.sh
       - env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && 'HEAD^1' || '' }}
         run: node scripts/check-changes.mjs ${BASE:+--base "$BASE"}

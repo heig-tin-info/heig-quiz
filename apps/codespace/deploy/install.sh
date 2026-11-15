@@ -11,7 +11,8 @@
 # :prod, the tag the quadlet runs, 3. install the host-level files and the
 # instance's files, 4. replay the instance's network setup, restart the
 # portal and wait for its /healthz, 5. write the staging instance's files,
-# 6. untag older sha tags. The student image is NOT touched: it is built on
+# 6. untag older sha tags and delete the repository's images no tag names
+# and no container uses. The student image is NOT touched: it is built on
 # the VM on purpose (images/build.sh).
 set -euo pipefail
 
