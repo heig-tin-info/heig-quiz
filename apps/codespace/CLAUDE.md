@@ -174,7 +174,9 @@ channel divergence for its containers.
     allows the platform, the portal and the platform's
     `SEB_EXTRA_ALLOWED_HOSTS`; the student's Config Key reaches `/launch`
     signed in the launch token (`seb` claim). An exam token without it is
-    refused.
+    refused — once [ADR-089](../../docs/adr/ADR-089-kiosque-pour-l-espace-de-travail.md)
+    (accepted 2026-11-15) is built, unless it carries a `kiosk` claim
+    instead, which skips the SEB header check.
 13. **The host never reads nor runs git on a student's `.git`** (audit
     L23). Of `work/.git` the host knows one thing, whether it exists
     (`inspectWorkspace`, an `lstat`); it reads none of its contents. Host

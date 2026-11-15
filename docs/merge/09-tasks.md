@@ -169,6 +169,50 @@ the tick with 100 due projects) was deferred (product owner, 2026-10-06).
   refuses the type; portal-down opening is refused with the fallback
   offered; `invariant-reviewer` finds no second exit of question content.
 
+### M6-11 — Kiosk stations for projects (ADR-089), in four PRs
+- **Depends on**: M6-07's code (merged); ADR-089 as amended 2026-11-15.
+  Production also waits for project proof B (M6-07) and proof K (06,
+  question 72); the code does not.
+- **Goal**: an `online_seb` project accepts SEB, SEB or kiosk, or Kiosk
+  only (ADR-089's amendment of 2026-11-15, point 2), a station framing the
+  portal from a Quiz page, everything behind the server flag
+  `KIOSK_PROJECTS` (default off; with it off, or `KIOSK_ATTESTATION=off`,
+  no route of ADR-089 exists and no station level is offered).
+  - **M6-11a, API.** `KIOSK_LEVELS` and `projectTrustedClients` in
+    `@quiz/domain`; `workModeRefusal` over (mode, level);
+    `workspaceStartRefusal` by the session's trusted kind
+    (`kiosk_required`); `ProjectWorkModeBody.kiosk` and
+    `codespace.work_mode`'s payload; the migration (`projects.kiosk`,
+    `kiosk_pairings.project_id` with its one-activity check); the kiosk
+    counterpart of `sebProjectSession`; `POST
+    /app/api/projects/:id/workspace/launch` (§4); `GET /pair/:code`'s
+    projects and approval with `projectId`; supersession across kinds;
+    the fail-closed refusal of a request carrying two `quiz_kiosk`
+    cookies, with its test (point 4 (b)).
+  - **M6-11b, portal.** The `kiosk` claim of `LaunchTokenClaims` and
+    `/launch` accepting it in exam mode without the SEB header check;
+    `Content-Security-Policy: frame-ancestors 'self' <Quiz origin>`
+    replacing `X-Frame-Options` in `deploy/Caddyfile`; the close message
+    (its own audience), invalidating the user's `exam_session` and the
+    workspace's `/s/<id>` session.
+  - **M6-11c, end of a session.** The project variant of
+    `endKioskSessions`; the deadline sweep on the ticker (the effective
+    deadline, ADR-006); the retried, idempotent close job; the pairing
+    hold; `codespace.session_closed` and `codespace.session_close_failed`
+    in the audit union, `kiosk.paired`/`kiosk.suspended` naming a project.
+  - **M6-11d, web.** The station page (bar, deadline, **Leave this
+    station**, the sandboxed `iframe`, the overlay while suspended), Quiz's
+    `frame-src` on that page only, the level in **Where students work**
+    with the evaluation's device wording and the quota warning, `/kiosk`
+    and `/pair` listing projects, en/fr; mock and screenshots.
+- **Acceptance**: a kiosk session of one project reaches no other project
+  and no evaluation (404); a level change after the first student launch
+  is `409 work_mode_frozen`; Kiosk only refuses a `seb` session
+  (`kiosk_required`) and serves no `.seb`; two `quiz_kiosk` cookies fail
+  closed; the session ends at the effective deadline and the portal close
+  runs; a station stays unpairable while its close is pending; the flag
+  off answers 404 on every new route.
+
 ## Loose ends recorded on delivered cards
 
 Open follow-ups that are not tasks of their own; the detail is on each

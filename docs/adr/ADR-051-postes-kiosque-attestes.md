@@ -20,9 +20,10 @@ implementation boundary.
 
 Relations: amends ADR-027 (§2 the Config Key, §3 the cookie and the lifetime of a confined session)
 and the scope of `docs/spec/00-cadre-et-perimetre.md` §0.6. **Amended by
-[ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md) (proposed, 2026-10-09)**: §1, §4 and §7 for a
-`kiosk` session confined to an `online_seb` project, which frames the online workspace from a Quiz
-page; the rules below for evaluations are unchanged.
+[ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md) (accepted 2026-11-15, behind `KIOSK_PROJECTS`)**:
+§1, §4 and §7 for a `kiosk` session confined to an `online_seb` project, which frames the online
+workspace from a Quiz page; the Scope's "evaluations only" no longer holds for that project (its
+amendment of 2026-11-15). The rules below for evaluations are unchanged.
 
 ## Context
 
