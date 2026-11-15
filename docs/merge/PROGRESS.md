@@ -193,10 +193,10 @@ In the critical path only if D09 finds online assignments in production.
 | M6-08 | Freeze and collect contract on the portal (ADR-075) | todo | M6-03, M6-05 | | | |
 | M6-09 | `qt-workspace` type and Quiz side (ADR-075) | todo | M6-06, M6-08 | | | Kiosk use waits for proof B (M6-07) |
 | M6-10 | Git relay through Quiz-issued scoped tokens (ADR-078) | done | M6-04, M6-06 | `merge/M6-10-git-relay` | #594 | The codespace git relay through installation tokens issued by Quiz (migration `0082`, invariant 15 amended), its staging checks pending: card M6-10, "As delivered". |
-| M6-11a | Kiosk projects: the API behind `KIOSK_PROJECTS` (ADR-089) | todo | M6-07 code, ADR-089 accepted | | | The level setting and its audit, the domain rules, the confined-session guard, the station launch, `kiosk_pairings.project_id`, the `/pair` list, supersession: card M6-11. |
-| M6-11b | Kiosk projects: the portal (ADR-089) | todo | M6-11a | | | The `kiosk` launch claim, `frame-ancestors`, the close message: card M6-11. |
-| M6-11c | Kiosk projects: the end of a station's session (ADR-089) | todo | M6-11a, M6-11b | | | The project variant of `endKioskSessions`, the deadline sweep, the close job, the pairing hold, the audit union's members: card M6-11. |
-| M6-11d | Kiosk projects: the web (ADR-089) | todo | M6-11a | | | The station page and its sandboxed frame, the level setting, `/kiosk` and `/pair`, en/fr: card M6-11. Production turns the flag on only after project proof B (M6-07) and proof K (06, question 72). |
+| M6-11a | Kiosk projects: the API behind `KIOSK_PROJECTS` (ADR-089) | todo | M6-07 code, ADR-089 accepted | | | Device levels in `@quiz/domain`, the project's level and its write, one start route and one confined guard, the `__Host-` station cookie and its transition, pairing for projects: card M6-11. |
+| M6-11b | Kiosk projects: the portal (ADR-089) | todo | M6-11a | | | The `kiosk` claim and its `sitting`, `frame-ancestors`, the close message: card M6-11. |
+| M6-11c | Kiosk projects: every end closes the portal (ADR-089) | todo | M6-11a, M6-11b | | | `endKioskSessions` by activity, the sweep (deadline and 6 h), retirement and supersession enqueue the close, the hold, the audit members: card M6-11. |
+| M6-11d | Kiosk projects: the web (ADR-089) | todo | M6-11a, M6-11b, M6-11c | | | The station page, the setting through `AllowedDevices`, `/kiosk` and `/pair`, the Kiosk only student page, en/fr; removes the bare-cookie fallback: card M6-11. `KIOSK_PROJECTS` stays off everywhere, staging included, until M6-11c is merged. |
 
 ## M7 — Finishing
 
