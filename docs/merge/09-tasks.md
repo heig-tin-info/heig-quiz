@@ -169,9 +169,10 @@ the tick with 100 due projects) was deferred (product owner, 2026-10-06).
   refuses the type; portal-down opening is refused with the fallback
   offered; `invariant-reviewer` finds no second exit of question content.
 
-### M6-11 — Kiosk stations for projects (ADR-089), in five PRs
+### M6-11 — Kiosk stations for projects (ADR-089), in six PRs
 - **Depends on**: M6-07's code (merged); ADR-089 and its amendment of
-  2026-11-15, which owns every rule cited here. Order: a, b, c, d, then e.
+  2026-11-15, which owns every rule cited here. Order: a, b, c, d, then e;
+  f once its gate holds.
   `KIOSK_PROJECTS` stays off everywhere, staging included, until M6-11d is
   merged; production also waits for project proof B (M6-07) and proof K
   (06, question 72).
@@ -225,12 +226,17 @@ the tick with 100 due projects) was deferred (product owner, 2026-10-06).
   `KIOSK_ATTESTATION` and `KIOSK_PROJECTS` say, and
   `KIOSK_ATTESTATION=off` ends project station sessions; the hold;
   `codespace.session_closed` and `codespace.session_close_failed` in the
-  audit union, `kiosk.paired`/`kiosk.suspended` naming a project; removes
-  the bare-cookie fallback of M6-11a, **merged only once M6-11a has run in
-  production for 12 h**. Ends `CLAUDE.md` invariant 6's kiosk sentence
-  with: "… and it ends with the attempt or, for a project, at the first of
-  Leave, replacement, the effective deadline, its 6 h, the station's
-  retirement — each closing the portal session."
+  audit union, `kiosk.paired`/`kiosk.suspended` naming a project. Ends
+  `CLAUDE.md` invariant 6's kiosk sentence with: "… and it ends with the
+  attempt or, for a project, at the first of Leave, replacement, the
+  effective deadline, its 6 h, the station's retirement — each closing the
+  portal session." The bare-cookie fallback's removal is M6-11f.
+- **M6-11f, the bare cookie's end** (split from M6-11d at delivery,
+  2026-11-15, so that the closes wait for no gate): removes the bare-name
+  fallback of M6-11a — `stationCredential`'s second read,
+  `BARE_KIOSK_COOKIE_PATH` and the expiry in `verify`, the test block
+  marked "M6-11f deletes this block" — **merged only once M6-11a has run in
+  production for 12 h**.
 - **M6-11e, web.** The station page (bar, deadline, **Leave this
   station**, the sandboxed frame fed by the start route's `{ url }`, the
   overlay while suspended), Quiz's `frame-src` on that page only; the

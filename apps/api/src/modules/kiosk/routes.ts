@@ -58,8 +58,10 @@ import {
   recordAttested,
   stationCredential,
   stationOf,
+  stationView,
   updateDevice,
 } from "./service.js";
+import { retryStationCloses } from "./sittings.js";
 import { recordAttempt, stationSeated } from "./watch.js";
 
 /** A station is no session kind: every user session is anonymous on its routes. */
@@ -168,7 +170,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       // it (host-only, `Path=/app/api`): the station then holds the
       // credential under its new name only (ADR-089, point 3). In development
       // the new cookie bears the bare name, so the expiry fires at every
-      // `verify` until M6-11d removes it with the fallback of
+      // `verify` until M6-11f removes it with the fallback of
       // `stationCredential`.
       if (req.cookies[KIOSK_COOKIE] !== undefined) {
         reply.clearCookie(KIOSK_COOKIE, { path: BARE_KIOSK_COOKIE_PATH, httpOnly: true, secure, sameSite: "strict" });
@@ -180,7 +182,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
         sameSite: "strict",
         maxAge: KIOSK_COOKIE_HOURS * 3600,
       });
-      return { station: { label: device.label, status: device.status } } satisfies KioskAttested;
+      return { station: await stationView(app.db, device) } satisfies KioskAttested;
     }
 
     // A failure is audited for a known station only: an unknown caller is
@@ -223,6 +225,9 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
     const station = await pairableStation(req, reply);
     if (!station) return reply;
     const issued = await issuePairing(app.db, station.id, app.clock.now());
+    // Held (ADR-089, amendment point 4): a project sitting's portal session
+    // is not closed yet; the station's page says to call the supervisor.
+    if (!issued) return reply.code(409).send({ error: "station_held" });
     const verification = new URL("/pair", opts.config.PUBLIC_URL);
     const complete = new URL(verification);
     complete.searchParams.set("code", issued.userCode);
@@ -409,7 +414,14 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       const changed = await updateDevice(app.db, params.data.id, body.data);
       if (!changed) return notFound(reply);
       await auditChange(req, changed.before, changed.after);
-      // A retired station's sitting ends now, its stream with it.
+      // Retire, then Reactivate once the portal answers (ADR-089, amendment
+      // point 4): each asks again for the close of every ended project
+      // sitting of the station still unclosed, a job that gave up included.
+      // Only a completed close lifts the hold.
+      if (changed.after.status === "retired" || changed.before.status === "retired") {
+        await retryStationCloses(app.db, changed.after.id, app.clock.now());
+      }
+      // A retired station's sitting ends now, its stream with it, and its close is asked for once.
       if (changed.after.status === "retired") await endStationSessions(app.db, changed.after.id);
       return changed.after;
     } catch (err) {

@@ -24,10 +24,12 @@ import {
 } from "@quiz/domain";
 
 import { audit, type AuditAction } from "../../audit.js";
+import type { KioskActivity } from "../../auth/session.js";
 import type { Db, Tx } from "../../db/client.js";
 import { auditLog, classrooms, courses, enrollments, kioskDevices, kioskPairings, projectRepos, projects } from "../../db/schema.js";
 import { liveProject } from "../guards.js";
 import { studentHome } from "../live/service.js";
+import { stationHeld } from "./sittings.js";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
@@ -97,9 +99,10 @@ export async function pairableProjects(db: Db, userId: string, now: Date): Promi
 /**
  * What a pairing seats the student for: one exam, or one supervised project
  * (ADR-089 §5) — the other null, so it spreads as the pairing's and the
- * session's two columns.
+ * session's two columns; the key `endKioskSessions` ends a station's
+ * sessions by.
  */
-export type PairActivity = { evaluationId: string; projectId: null } | { evaluationId: null; projectId: string };
+export type PairActivity = KioskActivity;
 
 /** The activity a pairing row names, or null when it names none. */
 function activityOf(row: { evaluationId: string | null; projectId: string | null }): PairActivity | null {
@@ -118,13 +121,16 @@ async function pairable(db: Db, userId: string, activity: PairActivity, now: Dat
 /**
  * A new pairing for `device`, the previous pending one expired first — one
  * code on the screen at a time. Answers the two codes in clear, once: only
- * their digests are kept.
+ * their digests are kept. Null while the station is held (ADR-089,
+ * amendment point 4): a project sitting of it has not had its portal
+ * session closed, so no student, for an exam too, sits down there.
  */
 export async function issuePairing(
   db: Db,
   deviceId: string,
   now: Date,
-): Promise<{ deviceCode: string; userCode: string; expiresIn: number; interval: number }> {
+): Promise<{ deviceCode: string; userCode: string; expiresIn: number; interval: number } | null> {
+  if (await stationHeld(db, deviceId)) return null;
   const deviceCode = randomBytes(32).toString("base64url");
   const userCode = generateUserCode((n) => randomBytes(n));
   await db.transaction(async (tx) => {
@@ -192,6 +198,9 @@ export async function pollPairing(
   });
   polls.set(pairing.id, { lastPollAt: now, interval: answer.interval, expiresAt: pairing.expiresAt });
   if (answer.outcome !== "approved") return { kind: "error", error: answer.outcome };
+  // Held since the code was shown (amendment point 4): the approval waits,
+  // unconsumed, and dies with its code.
+  if (await stationHeld(db, deviceId)) return { kind: "error", error: "authorization_pending" };
 
   const [consumed] = await db
     .update(kioskPairings)

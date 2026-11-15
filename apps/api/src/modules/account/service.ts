@@ -50,6 +50,7 @@ import type { PseudonymizeRefusal } from "@quiz/contracts";
 import { HEALTH_THRESHOLDS } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
+import { dropSessions, sessionsDropped } from "../../auth/session.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import {
@@ -69,7 +70,7 @@ import { roleForUser } from "../../roles.js";
 import { refusalClass, type Refusal } from "../http.js";
 import { revokeAccountAccess } from "../org/service.js";
 import { handOverPools } from "../pool/service.js";
-import { accessRevoked, sessionsEnded } from "../realtime/bus.js";
+import { accessRevoked } from "../realtime/bus.js";
 
 /** Who asked for a pseudonymization: the inactivity job, the person, an administrator. */
 export type PseudonymizedBy = "lifecycle" | "self" | "admin";
@@ -230,13 +231,14 @@ export async function pseudonymizeUser(db: Db, userId: string, ctx: Pseudonymize
   // GitHub repository access, which the student gets back through "Request
   // access" (the on-demand pull of #899). Accepted.
   await revokeAccountAccess(db, userId, { config: ctx.config, actor: ctx.actor, now: ctx.now, log: ctx.log });
-  const { staff, ended } = await db.transaction(async (tx) => {
+  const { staff, gone } = await db.transaction(async (tx) => {
     const now = await refusalOf(tx, ctx.config, userId, ctx.by, true);
     if (now.refused) throw new AccountError(now.refused);
-    const gone = await tx
-      .select({ sidHash: sessions.sidHash })
-      .from(sessions)
-      .where(or(eq(sessions.userId, userId), eq(sessions.actorUserId, userId)));
+    // Its sessions, and those of anyone who acted through it, go the one way
+    // a session goes (`dropSessions`), before the wipe list's own DELETE,
+    // which then finds none: a kiosk station's project sitting among them
+    // has its portal closed (ADR-089, amendment of 2026-11-15, point 4).
+    const gone = await dropSessions(tx, or(eq(sessions.userId, userId), eq(sessions.actorUserId, userId))!, "revoked", ctx.now);
     const anonymous = anonymousIdentity(userId);
     await tx.execute(
       sql`SELECT quiz_pseudonymize_account(${userId}::uuid, ${ANONYMOUS_PREFIX}, ${anonymous.email},
@@ -249,10 +251,10 @@ export async function pseudonymizeUser(db: Db, userId: string, ctx: Pseudonymize
       subjectId: userId,
       payload: { userId, by: ctx.by },
     });
-    return { staff: now.staff, ended: gone.map((s) => s.sidHash) };
+    return { staff: now.staff, gone };
   });
-  // Its open streams, and those of anyone who acted through it, close.
-  sessionsEnded(ended);
+  // Its open streams, and those of anyone who acted through it, close; a sitting's portal close is asked for.
+  await sessionsDropped(db, gone, "revoked", ctx.now);
   accessRevoked([userId]);
   // After the commit: the hand-over notifies; the heir's notice names the pseudonym.
   if (staff) await handOverPools(db, userId, "owner_pseudonymized");

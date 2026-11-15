@@ -44,6 +44,7 @@ import {
   PORTAL,
   SESSION_COOKIE,
   SITTING,
+  STATION_PROJECT,
   confined,
   type Activity,
   createSession,
@@ -51,6 +52,7 @@ import {
   serves,
   deleteSession,
   findSessionUser,
+  leaveStation,
   sameSecret,
   type NewSession,
   type SessionAuth,
@@ -518,6 +520,30 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       return reply.code(204).send();
     },
   );
+
+  /**
+   * **Leave this station** (ADR-089 §3, amendment of 2026-11-15 point 4): a
+   * kiosk station's session of a project ends its own sitting — that
+   * session only, never another of the student's (the phone's portal, a
+   * `seb` session) — and its portal session is closed (`left`). Declared for
+   * that session alone (`STATION_PROJECT`): any other is anonymous here, a
+   * 401. A write under CSRF and the station's own checks (`trust.ts`): a
+   * suspended station gets the `423` like every write of its sitting. The
+   * station's own cookie stays: it is the station's identity. Registered
+   * with the other kiosk routes only (`KIOSK_ATTESTATION` not `off`): off,
+   * the kiosk sweep ends every station session of a project itself.
+   */
+  if (config.KIOSK_ATTESTATION !== "off") {
+    app.post(
+      "/app/api/kiosk/leave",
+      { preHandler: (req, reply) => app.requireSession(req, reply), config: STATION_PROJECT },
+      async (req, reply) => {
+        if (req.sid === null || !(await leaveStation(app.db, req.sid, app.clock.now()))) return reply.code(404).send({ error: "not_found" });
+        clearSessionCookies(reply);
+        return reply.code(204).send();
+      },
+    );
+  }
 
   app.get(
     "/app/api/me",

@@ -234,7 +234,7 @@ async function afterClose(
   for (const attempt of open) events.attemptClosed(next.id, attempt, closedBy, now);
   events.stateChanged(next, now);
   // Every station seated for it goes back to pairing, a waiting one included.
-  await endKioskSessions(db, next.id);
+  await endKioskSessions(db, { evaluationId: next.id, projectId: null });
   if (app) await enqueueEvaluationGrading(app, { evaluationId: next.id });
   return next;
 }

@@ -75,7 +75,7 @@ describe("the station's attestation (ADR-051 §5)", () => {
   it("registers a new device unnamed, and sets the station's cookie", async () => {
     const res = await attest({ response: "mock:station-new" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ station: { label: null, status: "unnamed" } });
+    expect(res.json()).toEqual({ station: { label: null, status: "unnamed", held: false } });
 
     const cookie = kioskCookie(res)!;
     expect(cookie.value).toMatch(/^[A-Za-z0-9_-]{43}$/);
@@ -95,7 +95,7 @@ describe("the station's attestation (ADR-051 §5)", () => {
     expect(await audits("kiosk.device_registered", row.id)).toHaveLength(1);
     expect(await audits("kiosk.attested", row.id)).toHaveLength(1);
 
-    expect((await station(cookie.value)).json()).toEqual({ label: null, status: "unnamed" });
+    expect((await station(cookie.value)).json()).toEqual({ label: null, status: "unnamed", held: false });
   });
 
   it("keeps the credential its cookie holds, re-set for 12 h, and draws a new one only without it", async () => {

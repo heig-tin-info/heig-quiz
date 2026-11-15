@@ -1,0 +1,1 @@
+ALTER TABLE "kiosk_pairings" ADD COLUMN "close_requested_at" timestamp with time zone;

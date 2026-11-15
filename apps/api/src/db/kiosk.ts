@@ -91,6 +91,14 @@ export const kioskPairings = pgTable(
      * pairing, which opens none.
      */
     closeCompletedAt: timestamp("close_completed_at", { withTimezone: true }),
+    /**
+     * A close job of this sitting was enqueued (M6-11d): the sweep's safety
+     * net skips it, so a portal that stays down never piles up one job per
+     * minute. Cleared when the enqueue fails or the job finds the sitting
+     * still live; set again by an administrator's Retire or Reactivate after
+     * the job gave up (`modules/kiosk/sittings.ts`).
+     */
+    closeRequestedAt: timestamp("close_requested_at", { withTimezone: true }),
   },
   (t) => [
     index("kiosk_pairings_user_code_idx").on(t.userCodeHash),

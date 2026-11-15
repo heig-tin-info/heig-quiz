@@ -2,7 +2,7 @@
  * The station's cookie over https is `__Host-quiz_kiosk` (ADR-089's amendment
  * of 2026-11-15, point 3; M6-11a), read by every reader of a station. The
  * bare `quiz_kiosk` of before is still read until the station's next
- * attestation moves it: that is the "bare-name fallback" block, which M6-11d
+ * attestation moves it: that is the "bare-name fallback" block, which M6-11f
  * deletes with the fallback itself. Production mode throughout.
  */
 import { CSRF_COOKIE } from "@quiz/contracts";
@@ -76,7 +76,7 @@ describe("the station cookie over https (ADR-089, point 3)", () => {
   });
 });
 
-describe("the bare-name fallback — M6-11d deletes this block", () => {
+describe("the bare-name fallback — M6-11f deletes this block", () => {
   it("serves a station holding the bare cookie, then moves it at verify with the same credential", async () => {
     const { station, readers } = await seated();
     const bare = `${BARE}=${station.credential}`;

@@ -6,7 +6,7 @@ Accepted (2026-11-15): the product owner's four decisions and the model and rule
 the same day, in the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag),
 which overrides §1, §2, §4, §6, §9 and §12 where it says so. Proposed 2026-10-09 (points 1, 7 and 9 the
 owner's then). Built behind `KIOSK_PROJECTS`; production waits for project proof B and proof K.
-Delivery: [merge progress](../merge/PROGRESS.md), M6-11a–e.
+Delivery: [merge progress](../merge/PROGRESS.md), M6-11a–f.
 
 - 2026-10-11, audit L7: the student's start route is `POST /app/api/projects/:id/workspace/start` (ADR-047), formerly a GET.
 - 2026-10-11, audit L24: the "Same-site exposure" consequence pointed to [ADR-047's amendment](ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24); its premise no longer holds here (amendment of 2026-11-15, point 4 (b)).
@@ -365,7 +365,9 @@ reviewer in charge), marked *review*: it is not the owner's.
      before each pairing code at rest, every 10 minutes in a sitting
      (ADR-051's amendment of 2026-11-10) — so it moves at its next
      attestation without losing its sitting.
-   - **The fallback's removal** belongs to M6-11d and is **merged only once
+   - **The fallback's removal** belongs to M6-11d — delivered as its own
+     PR, M6-11f (split at delivery, 2026-11-15, so that the closes of
+     M6-11d wait for no gate) — and is **merged only once
      M6-11a has run in production for 12 h**: a production approval ships
      whatever `main` holds, and a bare cookie, never issued after M6-11a,
      lived 12 h at most (`KIOSK_COOKIE_HOURS`). Until then no station frames
@@ -454,5 +456,5 @@ reviewer in charge), marked *review*: it is not the owner's.
    default: every grant is 2 (`DEFAULT_MAX_ACTIVE_SESSIONS`, and all seven
    production grants on 2026-11-15), so **a room does not fit without that
    step**. Revisit if sittings fail on it.
-8. **Delivery**: five PRs, M6-11a–e in [merge progress](../merge/PROGRESS.md),
+8. **Delivery**: six PRs, M6-11a–f in [merge progress](../merge/PROGRESS.md),
    card M6-11 of [the task cards](../merge/09-tasks.md).
