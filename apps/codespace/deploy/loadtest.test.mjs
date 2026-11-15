@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  abortReason,
   formatReport,
   isSessionScope,
   parseArgs,
@@ -32,7 +33,7 @@ test("durations", () => {
 });
 
 test("load arguments", () => {
-  const o = parseArgs(["staging", "--port", "3120", "--sessions", "50", "--ramp", "0", "--work"]);
+  const o = parseArgs(["staging", "--sessions", "50", "--ramp", "0", "--work"]);
   assert.deepEqual(o, {
     mode: "load",
     instance: "staging",
@@ -44,18 +45,38 @@ test("load arguments", () => {
     dryRun: false,
     yesProd: false,
     besideLive: false,
+    abortOnOom: true,
     out: null,
   });
-  assert.equal(parseArgs(["prod", "--port", "3110", "--dry-run"]).sessions, 1);
-  assert.equal(parseArgs(["prod", "--port", "3110", "--sessions", "5", "--yes-prod"]).yesProd, true);
-  assert.throws(() => parseArgs(["staging", "--sessions", "5"]), /--port/);
-  assert.throws(() => parseArgs(["staging", "--port", "3120"]), /--sessions/);
-  assert.throws(() => parseArgs(["staging", "--port", "3120", "--sessions", "201"]), /--sessions/);
-  assert.throws(() => parseArgs(["staging", "--port", "3120", "--sessions", "0"]), /--sessions/);
-  assert.throws(() => parseArgs(["staging", "--port", "3120", "--sessions", "5", "--force"]), /unknown option/);
-  assert.throws(() => parseArgs(["staging", "--port"]), /needs a value/);
-  assert.throws(() => parseArgs(["../etc", "--port", "1", "--sessions", "1"]), /instance/);
-  assert.throws(() => parseArgs([]), /instance/);
+  assert.equal(parseArgs(["staging", "--sessions", "5", "--no-abort-on-oom"]).abortOnOom, false);
+  assert.equal(parseArgs(["staging", "--dry-run"]).sessions, 1);
+  const prod = parseArgs(["prod", "--sessions", "5", "--yes-prod"]);
+  assert.equal(prod.yesProd, true);
+  assert.equal(prod.port, 3110);
+  assert.throws(() => parseArgs(["prod", "--sessions", "5"]), /--yes-prod/);
+  assert.throws(() => parseArgs(["prod", "--dry-run"]), /--yes-prod/);
+  assert.equal(parseArgs(["prod", "--dry-run", "--yes-prod"]).dryRun, true);
+  assert.throws(() => parseArgs(["staging", "--port", "3120", "--sessions", "5"]), /unknown option --port/);
+  assert.throws(() => parseArgs(["staging"]), /--sessions/);
+  assert.throws(() => parseArgs(["staging", "--sessions", "201"]), /--sessions/);
+  assert.throws(() => parseArgs(["staging", "--sessions", "0"]), /--sessions/);
+  assert.throws(() => parseArgs(["staging", "--sessions", "5", "--force"]), /unknown option/);
+  assert.throws(() => parseArgs(["staging", "--sessions"]), /needs a value/);
+  assert.throws(() => parseArgs(["default", "--sessions", "1"]), /prod, staging/);
+  assert.throws(() => parseArgs(["../etc", "--sessions", "1"]), /prod, staging/);
+  assert.throws(() => parseArgs([]), /prod, staging/);
+});
+
+test("the run stops on an OOM kill or a stalled host", () => {
+  const at = (oomKill, full) => ({
+    slices: { "codespace.slice": { events: { oom_kill: oomKill } } },
+    psi: { memory: { full: { avg10: full } } },
+  });
+  assert.equal(abortReason(at(2, 0), at(2, 9.9)), null);
+  assert.match(abortReason(at(2, 0), at(3, 0)), /oom_kill 2 → 3/);
+  assert.match(abortReason(at(0, 0), at(0, 10.5)), /full avg10 10.5/);
+  assert.equal(abortReason(at(0, 0), {}), null);
+  assert.equal(abortReason({}, { slices: { "codespace.slice": null } }), null);
 });
 
 test("watch and report arguments", () => {

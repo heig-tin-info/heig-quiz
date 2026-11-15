@@ -5,8 +5,8 @@
  * rootful Podman socket). Node's standard library only, like smoke.mjs: the
  * checkout has no node_modules. RUNBOOK.md, Capacity, says when and how.
  *
- *   node loadtest.mjs <staging|prod> --port <n> --sessions 50 [--ramp 60s] [--hold 10m]
- *        [--work] [--dry-run] [--yes-prod] [--beside-live] [--out <file.json>]
+ *   node loadtest.mjs <staging|prod> --sessions 50 [--ramp 60s] [--hold 10m] [--work]
+ *        [--dry-run] [--yes-prod] [--beside-live] [--no-abort-on-oom] [--out <file.json>]
  *   node loadtest.mjs watch [--every 10s] [--out /var/log/quiz-engine/load-YYYYMMDD.jsonl]
  *   node loadtest.mjs report <file.jsonl>
  *
@@ -29,9 +29,14 @@
  * The portal has no API to close a session: the sessions close
  * SESSION_GRACE_MS after the last proxied request (the script prints when,
  * and the cleanup of the `load-*` volumes). SIGINT or SIGTERM stops the
- * launches and the work, then reports. Refuses prod without --yes-prod, and
- * an instance with running sessions without --beside-live. --dry-run checks
- * the secret, the health and the sync, and launches nothing.
+ * launches and the work, then reports; so does, unless --no-abort-on-oom, an
+ * OOM kill in codespace.slice or memory PSI full avg10 above 10 %, which
+ * also prints a `podman stop` line per load session. Refuses prod without
+ * --yes-prod (a dry run too), and running sessions on either instance (they
+ * share codespace.slice) without --beside-live. --dry-run checks the secret,
+ * the health and the sync, and launches nothing. The port is the instance's
+ * (3110 prod, 3120 staging); LOADTEST_PORT and LOADTEST_ENV_FILE serve a run
+ * against a portal elsewhere (a workstation).
  *
  * Watch mode launches nothing: one JSON line per sample, appended, until
  * stopped. Aggregates only: never a container name, a student, a teacher, a
@@ -53,6 +58,10 @@ const INSTANCES = ["prod", "staging"];
 const ASSIGNMENT = "loadtest";
 const TEACHER = "loadtest-teacher";
 const MAX_SESSIONS = 200;
+/** Each instance's loopback port (deploy/lib.sh, cs_instance). */
+const PORTS = { prod: 3110, staging: 3120 };
+/** Memory PSI `full avg10` (%) above which a load run stops. */
+const ABORT_PSI_FULL = 10;
 
 // --- pure parts (loadtest.test.mjs) ------------------------------------------
 
@@ -66,8 +75,8 @@ export function parseDuration(text) {
 
 export function parseArgs(argv) {
   const [first, ...rest] = argv;
-  const flags = new Set(["--work", "--dry-run", "--yes-prod", "--beside-live"]);
-  const valued = new Set(["--port", "--sessions", "--ramp", "--hold", "--every", "--out"]);
+  const flags = new Set(["--work", "--dry-run", "--yes-prod", "--beside-live", "--no-abort-on-oom"]);
+  const valued = new Set(["--sessions", "--ramp", "--hold", "--every", "--out"]);
   const opts = {};
   const positional = [];
   for (let i = 0; i < rest.length; i++) {
@@ -87,8 +96,10 @@ export function parseArgs(argv) {
   if (first === "watch") {
     return { mode: "watch", everyMs: parseDuration(opts.every ?? "10s"), out: opts.out ?? null };
   }
-  if (!/^[a-z][a-z0-9]{0,15}$/.test(first ?? "")) throw new Error("the first argument is an instance, `watch` or `report`");
-  if (!/^\d+$/.test(opts.port ?? "")) throw new Error("--port <n> is required (the instance's PORT, deploy/lib.sh)");
+  if (!Object.hasOwn(PORTS, first ?? "")) throw new Error("the first argument is prod, staging, `watch` or `report`");
+  if (first === "prod" && !opts["yes-prod"]) {
+    throw new Error("prod: add --yes-prod (even a dry run writes the `loadtest` assignment; its sessions hold the prod deploy's live-session guard)");
+  }
   const sessions = Number(opts.sessions ?? (opts["dry-run"] ? 1 : NaN));
   if (!Number.isInteger(sessions) || sessions < 1 || sessions > MAX_SESSIONS) {
     throw new Error(`--sessions <1..${MAX_SESSIONS}> is required`);
@@ -96,7 +107,7 @@ export function parseArgs(argv) {
   return {
     mode: "load",
     instance: first,
-    port: Number(opts.port),
+    port: PORTS[first],
     sessions,
     rampMs: parseDuration(opts.ramp ?? "60s"),
     holdMs: parseDuration(opts.hold ?? "10m"),
@@ -104,8 +115,23 @@ export function parseArgs(argv) {
     dryRun: Boolean(opts["dry-run"]),
     yesProd: Boolean(opts["yes-prod"]),
     besideLive: Boolean(opts["beside-live"]),
+    abortOnOom: !opts["no-abort-on-oom"],
     out: opts.out ?? null,
   };
+}
+
+/**
+ * Why a load run must stop, from its first sample and the current one: an
+ * OOM kill in codespace.slice since the start, or memory PSI `full avg10`
+ * above ABORT_PSI_FULL (every task of the host stalled on memory). Null
+ * while neither.
+ */
+export function abortReason(first, current) {
+  const kills = (s) => s?.slices?.["codespace.slice"]?.events?.oom_kill ?? 0;
+  if (kills(current) > kills(first)) return `codespace.slice oom_kill ${kills(first)} → ${kills(current)}`;
+  const full = current?.psi?.memory?.full?.avg10 ?? 0;
+  if (full > ABORT_PSI_FULL) return `memory PSI full avg10 ${full} % > ${ABORT_PSI_FULL} %`;
+  return null;
 }
 
 /** Nearest-rank percentile; null for no value. */
@@ -459,11 +485,10 @@ async function load(opts) {
     process.exit(1);
   };
   const ok = (m) => console.log(`ok    ${m}`);
-  if (opts.instance === "prod" && !opts.yesProd && !opts.dryRun) fail("prod: add --yes-prod (its sessions also hold the prod deploy's live-session guard)");
   const env = readEnv(opts.instance);
   const secret = env.CODESPACE_LAUNCH_SECRET ?? "";
   if (secret.length < 32) fail(`CODESPACE_LAUNCH_SECRET of ${opts.instance} missing or short`);
-  const base = `http://127.0.0.1:${opts.port}`;
+  const base = `http://127.0.0.1:${process.env.LOADTEST_PORT ?? opts.port}`;
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const sign = (claims) => {
     const head = `${b64({ alg: "HS256", typ: "JWT" })}.${b64(claims)}`;
@@ -480,10 +505,13 @@ async function load(opts) {
   if (health.status !== 200) fail(`/healthz answered ${health.status}`);
   ok(`${base}/healthz`);
 
-  const live = await liveSessions(opts.instance);
+  // Both instances: their sessions share codespace.slice.
+  const counts = await Promise.all(INSTANCES.map(liveSessions));
+  const live = counts.includes(null) ? null : counts.reduce((a, b) => a + b, 0);
+  const named = INSTANCES.map((i, k) => `${i} ${counts[k] ?? "?"}`).join(", ");
   if (live === null && !opts.besideLive) fail("podman ps failed: cannot tell whether real sessions run (--beside-live to go on)");
-  if (live > 0 && !opts.besideLive && !opts.dryRun) fail(`${live} session(s) running on ${opts.instance}: wait, or add --beside-live`);
-  ok(`${live ?? "?"} session(s) running on ${opts.instance}`);
+  if (live > 0 && !opts.besideLive && !opts.dryRun) fail(`running sessions (${named}) share codespace.slice: wait, or add --beside-live`);
+  ok(`running sessions: ${named}`);
 
   const [owner, name] = (process.env.LOADTEST_REPO ?? "octocat/Hello-World").split("/");
   const branch = process.env.LOADTEST_BRANCH ?? "master";
@@ -529,7 +557,9 @@ async function load(opts) {
   const workers = [];
   const startedAt = Date.now();
   const samples = [];
-  // One sample every 10 s, and a last one once the run is over.
+  let abortedFor = null;
+  // One sample every 10 s, and a last one once the run is over. An OOM kill
+  // or a stalled host stops the run (abortReason), unless --no-abort-on-oom.
   const sampler = (async () => {
     for (;;) {
       const s = await sample();
@@ -537,6 +567,13 @@ async function load(opts) {
       const up = launches.filter((l) => l.ok).length;
       console.log(sampleLine(s, Date.now() - startedAt, `up=${up}/${opts.sessions} work ok=${counters.ok} failed=${counters.failed}`));
       if (aborter.signal.aborted) break;
+      const reason = opts.abortOnOom ? abortReason(samples[0], s) : null;
+      if (reason) {
+        abortedFor = reason;
+        console.log(`\nABORT: ${reason}: no more launches, stopping the work, reporting`);
+        aborter.abort();
+        break;
+      }
       await abortable(10_000);
     }
   })();
@@ -625,6 +662,7 @@ async function load(opts) {
     latency303: stats(launches.map((l) => l.ms303)),
     latencyHealth: stats(okLaunches.map((l) => l.msHealth)),
     work: counters,
+    abortedFor,
   };
   const ms = (s) => `p50 ${s.p50 ?? "-"} ms, p95 ${s.p95 ?? "-"} ms, max ${s.max ?? "-"} ms`;
   console.log(`\n--- ${opts.instance}: ${opts.sessions} sessions, ramp ${opts.rampMs / 1000} s, hold ${opts.holdMs / 1000} s, work ${opts.work}`);
@@ -639,6 +677,15 @@ async function load(opts) {
   writeFileSync(out, `${JSON.stringify({ opts, summary, launches: saved, samples }, null, 1)}\n`, { mode: 0o600 });
   console.log(`\nwritten: ${out}`);
 
+  if (abortedFor) {
+    // Stopping the containers frees the memory now; the portal still closes
+    // the sessions after the grace, as below.
+    console.log(`\nAborted (${abortedFor}). To free the memory now, as root:`);
+    for (const l of launches.filter((x) => x.sessionId)) {
+      const ps = await run(["ps", "--filter", `label=heig-codespace.session=${l.sessionId}`, "--format", "{{.Names}}"]);
+      for (const n of ps.stdout.split("\n").filter(Boolean)) console.log(`  podman --remote --url ${SOCKET} stop ${n}`);
+    }
+  }
   const grace = Math.round(Number(env.SESSION_GRACE_MS ?? 600_000) / 60_000);
   const gc = Math.round(Number(env.SESSION_GC_INTERVAL_MS ?? 60_000) / 60_000);
   console.log(
@@ -657,7 +704,7 @@ async function main() {
   try {
     opts = parseArgs(process.argv.slice(2));
   } catch (e) {
-    console.error(`${e.message}\nusage: loadtest.mjs <staging|prod> --port <n> --sessions <n> [--ramp 60s] [--hold 10m] [--work] [--dry-run] [--yes-prod] [--beside-live] [--out f.json]\n       loadtest.mjs watch [--every 10s] [--out f.jsonl]\n       loadtest.mjs report <f.jsonl>`);
+    console.error(`${e.message}\nusage: loadtest.mjs <staging|prod> --sessions <n> [--ramp 60s] [--hold 10m] [--work] [--dry-run] [--yes-prod] [--beside-live] [--no-abort-on-oom] [--out f.json]\n       loadtest.mjs watch [--every 10s] [--out f.jsonl]\n       loadtest.mjs report <f.jsonl>`);
     process.exit(2);
   }
   if (opts.mode === "report") return printReport(opts.file);
