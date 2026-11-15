@@ -1,6 +1,7 @@
 /**
  * A kiosk station for the route tests (ADR-051 §5): a device in the registry,
- * `active` under `label`, and the `quiz_kiosk` cookie that names it — made
+ * `active` under `label`, and the station cookie that names it (named by
+ * the instance's `cookieName`: `__Host-quiz_kiosk` in production mode) — made
  * through the registry's own service, the way an accepted attestation and an
  * admin's naming make one.
  */
@@ -13,13 +14,13 @@ import { KIOSK_COOKIE, recordAttested, updateDevice } from "../modules/kiosk/ser
 export interface TestStation {
   deviceId: string;
   credential: string;
-  /** `quiz_kiosk=<credential>`, to join to a request's `cookie` header. */
+  /** `<station cookie>=<credential>`, to join to a request's `cookie` header. */
   cookie: string;
 }
 
 /** Attested at the SERVER's instant (`app.clock`), so a test's clock and the station's last check agree. */
 export async function kioskStation(
-  app: { db: Db; clock: Clock },
+  app: { db: Db; clock: Clock; cookieName: (base: string) => string },
   opts: { label?: string | null; status?: "active" | "retired" } = {},
 ): Promise<TestStation> {
   const { db } = app;
@@ -27,5 +28,5 @@ export async function kioskStation(
   const label = opts.label === undefined ? "Poste n° 7" : opts.label;
   if (label !== null) await updateDevice(db, device.id, { label });
   if (opts.status === "retired") await updateDevice(db, device.id, { status: "retired" });
-  return { deviceId: device.id, credential, cookie: `${KIOSK_COOKIE}=${credential}` };
+  return { deviceId: device.id, credential, cookie: `${app.cookieName(KIOSK_COOKIE)}=${credential}` };
 }

@@ -4,9 +4,9 @@
  *
  *   - a STATION, which has no user and no session: it asks for a challenge,
  *     hands back the extension's response, and is answered with its
- *     `quiz_kiosk` cookie — its identity, never a user's. These routes serve
- *     no session kind at all (`sessions: []`): a user session riding along is
- *     anonymous here. They are public POSTs, under the same double-submit
+ *     station cookie (`__Host-quiz_kiosk` over https) — its identity, never
+ *     a user's. These routes serve no session kind at all (`sessions: []`):
+ *     a user session riding along is anonymous here. They are public POSTs, under the same double-submit
  *     rule as the poll's (`app.csrfRefused`);
  *   - an ADMIN, who names, retires and reactivates stations. The registry is
  *     platform-wide and admin-only: anyone else gets a 404 (invariant 6);
@@ -50,11 +50,13 @@ import { AttestationUnavailable } from "./attestation.js";
 import { FixedWindowLimiter } from "../../limiter.js";
 import { PairRateLimited, approvePairing, issuePairing, pollPairing, previewPairing } from "./pairing.js";
 import {
+  BARE_KIOSK_COOKIE_PATH,
   KIOSK_COOKIE,
   KIOSK_COOKIE_HOURS,
   deviceByCredential,
   listDevices,
   recordAttested,
+  stationCredential,
   stationOf,
   updateDevice,
 } from "./service.js";
@@ -124,7 +126,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
         // An attempt all the same (ADR-051 §6): a known station that cannot
         // even get a challenge is `unavailable`, never silent — a Google
         // outage must not suspend it twelve minutes later.
-        const known = await deviceByCredential(app.db, req.cookies[KIOSK_COOKIE]);
+        const known = await deviceByCredential(app.db, stationCredential(req));
         if (known) await recordAttempt(app.db, known.id, "unavailable", app.clock.now());
         return reply.code(503).send({ error: "attestation_unavailable" });
       }
@@ -146,7 +148,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
 
     // Every attempt of a known station is compared with what its supervisor
     // was last told (ADR-051 §6): a suspension, an outage, their end.
-    const cookie = req.cookies[KIOSK_COOKIE];
+    const cookie = stationCredential(req);
     const known = await deviceByCredential(app.db, cookie);
     if (verdict.ok) {
       // The cookie that already names this device is kept, and re-set for
@@ -162,8 +164,16 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       if (registered) await stationAudit("kiosk.device_registered", device.id);
       await stationAudit("kiosk.attested", device.id);
       if (!registered) await recordAttempt(app.db, device.id, "ok", now);
-      reply.setCookie(KIOSK_COOKIE, credential, {
-        path: "/app/api",
+      // The bare cookie of before the prefix, expired exactly where Quiz set
+      // it (host-only, `Path=/app/api`): the station then holds the
+      // credential under its new name only (ADR-089, point 3). Sent before
+      // the new cookie, which in development bears the same name on `Path=/`.
+      // M6-11d removes this with the fallback of `stationCredential`.
+      if (req.cookies[KIOSK_COOKIE] !== undefined) {
+        reply.clearCookie(KIOSK_COOKIE, { path: BARE_KIOSK_COOKIE_PATH, httpOnly: true, secure, sameSite: "strict" });
+      }
+      reply.setCookie(app.cookieName(KIOSK_COOKIE), credential, {
+        path: "/",
         httpOnly: true,
         secure,
         sameSite: "strict",
@@ -185,7 +195,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   });
 
   app.get("/app/api/kiosk/station", { config: STATION }, async (req, reply) => {
-    const station: KioskStation | null = await stationOf(app.db, req.cookies[KIOSK_COOKIE]);
+    const station: KioskStation | null = await stationOf(app.db, stationCredential(req));
     return station ?? notFound(reply);
   });
 
@@ -194,13 +204,13 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   // =========================================================================
 
   /**
-   * The station the request's `quiz_kiosk` cookie names, when it may be
-   * paired: `active`, hence named. Anything else — no cookie, a rotated one,
+   * The station the request's cookie names (`stationCredential`), when it
+   * may be paired: `active`, hence named. Anything else — no cookie, a rotated one,
    * an unnamed or retired station — is the one 403 the page words as
    * "Station not recognised, call the supervisor".
    */
   const pairableStation = async (req: FastifyRequest, reply: FastifyReply) => {
-    const device = await deviceByCredential(app.db, req.cookies[KIOSK_COOKIE]);
+    const device = await deviceByCredential(app.db, stationCredential(req));
     if (device?.status === "active" && device.label !== null) return { ...device, label: device.label };
     reply.code(403).send({ error: "not_recognised" });
     return null;

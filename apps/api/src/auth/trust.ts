@@ -12,14 +12,14 @@ import { CONFIG_KEY_HEADER, absoluteRequestUrl } from "@quiz/seb";
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import type { Db } from "../db/client.js";
-import { KIOSK_COOKIE, deviceByCredential, type KioskDeviceRow } from "../modules/kiosk/service.js";
+import { deviceByCredential, stationCredential, type KioskDeviceRow } from "../modules/kiosk/service.js";
 import { configKeyHashMatches } from "./seb.js";
 import { activityOf, type SessionAuth } from "./session.js";
 
 /**
  * Why a confined session's request is not trusted: SEB's Config Key does not
  * match; the request does not come from the station the kiosk session was
- * opened on (no `quiz_kiosk` cookie, or not that device's); that station is
+ * opened on (no station cookie, or not that device's); that station is
  * no longer `active`; its attestation suspends the sitting (refused, or
  * silent, ADR-051 §6); or the route wants a check fresher than its last one
  * (the submit).
@@ -43,7 +43,7 @@ export interface TrustRequest {
   /** The absolute URL, path and query as received (`absoluteRequestUrl`). */
   url: string;
   headers: FastifyRequest["headers"];
-  /** The station the request's `quiz_kiosk` cookie names (`deviceByCredential`); null without one. */
+  /** The station the request's cookie names (`stationCredential`, `deviceByCredential`); null without one. */
   station: KioskDeviceRow | null;
   /** The route wants a fresh attestation (`freshAttestation`: the submit). */
   fresh: boolean;
@@ -131,7 +131,7 @@ export async function trustRefused(
   now: Date,
 ): Promise<TrustOutcome> {
   const station =
-    session.auth.kind === "kiosk" ? await deviceByCredential(db, req.cookies[KIOSK_COOKIE]) : null;
+    session.auth.kind === "kiosk" ? await deviceByCredential(db, stationCredential(req)) : null;
   const refusal = trustRefusal(session, {
     url: absoluteRequestUrl(config.PUBLIC_URL, req.raw.url ?? req.url),
     headers: req.headers,

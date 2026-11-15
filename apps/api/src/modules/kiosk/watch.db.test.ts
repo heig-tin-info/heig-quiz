@@ -69,7 +69,9 @@ async function running(settings: { kiosk?: boolean; safeExamBrowser?: boolean } 
 
 function setCookie(res: { headers: Record<string, unknown> }, name: string) {
   const all = [res.headers["set-cookie"]].flat().filter((c): c is string => typeof c === "string");
-  return all.find((c) => c.startsWith(`${name}=`))?.split(";")[0];
+  // An expiry is not what the browser keeps: in development the station's
+  // cookie and the expired bare one of before share a name (ADR-089, point 3).
+  return all.find((c) => c.startsWith(`${name}=`) && !/; Max-Age=0/i.test(c))?.split(";")[0];
 }
 
 /** The station's code, approved by `approve`, and the kiosk session the station's poll gets. */
@@ -90,7 +92,7 @@ async function pairStation(station: TestStation, approve: (code: string) => Prom
 
 /**
  * A student sitting `evaluationId` on a fresh station, and the station's
- * handles: its session's headers (which follow the rotating `quiz_kiosk`
+ * handles: its session's headers (which follow the rotating station
  * cookie) and its re-attestation.
  */
 async function sitting(exam: Awaited<ReturnType<typeof running>>) {

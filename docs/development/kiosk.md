@@ -38,8 +38,14 @@ A station attests before each new code it shows, so it is never silent
 when a student starts sitting; it re-attests every 10 minutes while an exam
 is sat on it, and once more when the hand-in finds its last check more than
 two minutes old (ADR-051 §6). A re-attestation keeps the station's cookie
-(`quiz_kiosk`) and only extends it: an answer saved while it is in flight
-still belongs to the station.
+and only extends it: an answer saved while it is in flight still belongs to
+the station. Over https the cookie is `__Host-quiz_kiosk` (`Path=/`, host-only,
+`Secure`, `HttpOnly`, `SameSite=Strict`), in development over http
+`quiz_kiosk` (ADR-089's amendment of 2026-11-15, point 3). A station that
+still holds the bare `quiz_kiosk` of before (`Path=/app/api`) keeps working:
+its next attestation re-writes the same credential under the new name and
+expires the bare one. Nothing to do on the stations, nor in the extension,
+which never reads the cookie.
 
 ## 1. Google Cloud: the service account
 

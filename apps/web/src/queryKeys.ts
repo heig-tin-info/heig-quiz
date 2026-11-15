@@ -58,7 +58,7 @@ export const adminConceptsKey = [...adminTeachersKey, "concepts"] as const;
 export const adminConceptCandidatesKey = ["admin-concept-candidates"] as const;
 /** The kiosk station registry (ADR-051 §5). */
 export const adminKioskKey = ["admin-kiosk-devices"] as const;
-/** Whether this browser is a kiosk station: its `quiz_kiosk` cookie, read by the server. */
+/** Whether this browser is a kiosk station: its station cookie (`__Host-quiz_kiosk`), read by the server. */
 export const kioskStationKey = ["kiosk-station"] as const;
 /** What a station's code names, on the phone (ADR-051 §7): the station and the exams. */
 export const pairPreviewKey = (code: string) => ["pair-preview", code] as const;
