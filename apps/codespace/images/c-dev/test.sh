@@ -131,6 +131,40 @@ int main(void) {
 EOF
 cp "${HERE}/test-debug-io.js" "${VOL_BASE}/a/work/test-debug-io.js"
 
+# § 13: a C++20 program on the standard library (<vector>, <ranges>, <format>,
+# all in GCC 14's libstdc++), and a C file for clangd's per-language flags.
+# The breakpoint of § 13 is line 9, once `evens` is built.
+cat > "${VOL_BASE}/a/work/cpp20.cpp" <<'EOF'
+#include <format>
+#include <iostream>
+#include <ranges>
+#include <vector>
+int main() {
+  std::vector<int> v{1, 2, 3, 4, 5, 6};
+  auto even = v | std::views::filter([](int x) { return x % 2 == 0; });
+  std::vector<int> evens(even.begin(), even.end());
+  std::cout << std::format("evens={} first={}\n", evens.size(), evens.front());
+  return 0;
+}
+EOF
+# The C++ counterpart of io.c, for test-debug-io.js: same lines, same I/O,
+# the breakpoint on line 7.
+cat > "${VOL_BASE}/a/work/iocpp.cpp" <<'EOF'
+#include <iostream>
+int main() {
+  int a = 0;
+  std::cout << "enter a=" << std::endl;
+  if (!(std::cin >> a)) return 2;
+  int b = a * 2;
+  std::cout << "a*2=" << b << std::endl;
+  return 0;
+}
+EOF
+cat > "${VOL_BASE}/a/work/clangd-c.c" <<'EOF'
+#include <stdio.h>
+int main(void) { printf("%ld\n", __STDC_VERSION__); return 0; }
+EOF
+
 echo "P1: hardened student image, working gdb"
 echo "image   : ${IMAGE}"
 echo "seccomp : ${REPO_ROOT}/infra/seccomp/codespace.json"
@@ -585,11 +619,11 @@ ERRS=$(printf '%s\n' "$LOGS_A" | grep -c 'Uncaught exception')
 [ "$ERRS" = "0" ] || fail "code-server logged $ERRS uncaught exception(s)" "$(printf '%s\n' "$LOGS_A" | tail -20)"
 ok "no uncaught exception at code-server start-up"
 
-cexec 'test -x /usr/bin/clangd && test -x /usr/bin/gdb && test -x /usr/bin/gcc && test -x /usr/bin/make && test -x /usr/bin/git && test -x /usr/bin/python3 && test -x /usr/local/bin/baygon' >/dev/null 2>&1 \
-  || fail "one of the expected binaries is missing (clangd, gdb, gcc, make, git, python3, baygon)"
-ok "gcc, gdb, make, git, clangd, python3, baygon present"
+cexec 'test -x /usr/bin/clangd && test -x /usr/bin/gdb && test -x /usr/bin/gcc && test -x /usr/bin/g++ && test -x /usr/bin/make && test -x /usr/bin/git && test -x /usr/bin/python3 && test -x /usr/local/bin/baygon' >/dev/null 2>&1 \
+  || fail "one of the expected binaries is missing (clangd, gdb, gcc, g++, make, git, python3, baygon)"
+ok "gcc, g++, gdb, make, git, clangd, python3, baygon present"
 
-cexec 'test -r /home/student/.config/clangd/config.yaml && test -r /run/code-server/xdg-config/clangd/config.yaml' >/dev/null 2>&1 \
+cexec 'cmp /etc/clangd/config.yaml /home/student/.config/clangd/config.yaml && cmp /etc/clangd/config.yaml /run/code-server/xdg-config/clangd/config.yaml' >/dev/null 2>&1 \
   || fail "the clangd configuration is not at both expected paths"
 ok "clangd configuration present in ~/.config and in the server's XDG_CONFIG_HOME"
 
@@ -797,6 +831,61 @@ ok "the terminal showed the prompt, took the 7 typed and showed a*2=14"
 [ "$(dbg '"controlling terminal" in d["screen"]')" = "False" ] \
   || fail "gdb could not make the terminal the program's controlling terminal" "$DBG"
 ok "the program's I/O stays out of gdb's stream; the terminal is its controlling terminal"
+
+# --------------------------------------------------------------------------
+head2 "13. C++: g++, the standard library, gdb's pretty-printers, clangd"
+# --------------------------------------------------------------------------
+# The labs are in C and in C++: g++ is Debian's default, the same GCC as gcc.
+GCCV=$(cexec 'gcc -dumpversion' 2>&1); GXXV=$(cexec 'g++ -dumpversion' 2>&1)
+[ -n "$GCCV" ] && [ "${GCCV%%.*}" = "${GXXV%%.*}" ] || fail "g++ ($GXXV) is not the major version of gcc ($GCCV)"
+ok "g++ $GXXV, the major version of gcc $GCCV"
+OUT=$(cexec 'cd /work && g++ -std=c++20 -g -O0 -Wall -Wextra -pedantic -o cpp20 cpp20.cpp && ./cpp20' 2>&1) \
+  || fail "the C++20 program (<vector>, <ranges>, <format>) did not compile or run" "$OUT"
+[ "$OUT" = "evens=3 first=2" ] || fail "the C++20 program printed something else" "$OUT"
+ok "g++ -std=c++20: <vector>, <ranges> and <format> compile and run (evens=3 first=2)"
+# libstdc++6's printers are auto-loaded from /usr/share/gdb/auto-load, on the
+# read-only root, by gdb's Python: `print evens` shows the elements, not the
+# vector's three raw pointers.
+OUT=$(cexec 'cd /work && gdb -batch -ex "break 9" -ex run -ex "print evens" -ex "info auto-load python-scripts" ./cpp20' 2>&1) \
+  || fail "gdb on the C++ program failed" "$OUT"
+case "$OUT" in
+  *"Breakpoint 1, main ()"*"std::vector of length 3"*"{2, 4, 6}"*) : ;;
+  *) fail "gdb did not stop in main or did not pretty-print the std::vector" "$OUT" ;;
+esac
+case "$OUT" in
+  *"Yes"*"libstdc++.so."*"-gdb.py"*) : ;;
+  *) fail "libstdc++'s pretty-printers were not auto-loaded" "$OUT" ;;
+esac
+ok "gdb breaks in main and prints the std::vector through libstdc++'s auto-loaded printers"
+# The program's terminal of § 12 is not C-specific: the same debug session
+# on a C++ program (iostream), through webfreak.debug's real adapter.
+cexec 'cd /work && g++ -std=c++20 -g -O0 -o iocpp iocpp.cpp' >/dev/null 2>&1 || fail "g++ iocpp.cpp failed"
+DBG=$(cexec "cd /work && /usr/lib/code-server/lib/node test-debug-io.js ${STATUSBAR_DIR} /opt/code-server/extensions/webfreak.debug-*-universal iocpp iocpp.cpp" 2>&1)
+[ "$(dbg 'd["error"]')" = "None" ] || fail "the C++ debug session failed" "$DBG"
+[ "$(dbg 'd["stoppedLine"]')" = "7" ] || fail "the breakpoint on line 7 of the C++ program was not hit" "$DBG"
+[ "$(dbg '"enter a=" in d["screen"] and "a*2=14" in d["screen"] and "a*2=14" not in d["console"]')" = "True" ] \
+  || fail "the C++ program's I/O did not go through its terminal" "$DBG"
+ok "webfreak.debug on a C++ program: stopped on line 7, its I/O in the Program terminal only"
+# clangd with the image's configuration only (no compile_commands.json):
+# C++ gets -std=c++20 and resolves the standard library, C keeps -std=c17.
+OUT=$(cexec 'cd /work && clangd --check=/work/cpp20.cpp 2>&1')
+case "$OUT" in
+  *"invalid argument"*|*"not allowed with"*|*"file not found"*) fail "clangd reports an error on the C++ file" "$OUT" ;;
+esac
+case "$OUT" in
+  *"-std=c++20"*"All checks completed, 0 errors"*) : ;;
+  *) fail "clangd did not parse the C++ file with -std=c++20 and no error" "$OUT" ;;
+esac
+ok "clangd on a .cpp: -std=c++20, <vector>, <ranges> and <format> resolved, 0 errors"
+OUT=$(cexec 'cd /work && clangd --check=/work/clangd-c.c 2>&1')
+case "$OUT" in
+  *"-std=c++20"*) fail "clangd gave the C file the C++ flags" "$OUT" ;;
+esac
+case "$OUT" in
+  *"-std=c17"*"All checks completed, 0 errors"*) : ;;
+  *) fail "clangd did not parse the C file with -std=c17 and no error" "$OUT" ;;
+esac
+ok "clangd on a .c: still -std=c17, 0 errors"
 
 printf '\n%d assertions, all green.\n' "$NTEST"
 printf 'MESURE_DEMARRAGE_SECONDES=%s\n' "$BOOT"

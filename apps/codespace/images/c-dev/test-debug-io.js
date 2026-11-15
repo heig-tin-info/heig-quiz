@@ -13,7 +13,10 @@
  * Then it types "7" into the terminal as a student would and prints, as JSON,
  * what the terminal showed, what reached the debug console, and the events.
  *
- *   node test-debug-io.js <statusbar extension dir> <webfreak.debug dir> <target>
+ *   node test-debug-io.js <statusbar extension dir> <webfreak.debug dir> <target> [<source>]
+ *
+ * <source> is the file holding the breakpoint, `<target>.c` by default
+ * (§ 13 passes `io.cpp` for the C++ program).
  */
 "use strict";
 
@@ -22,7 +25,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const pty = require("/usr/lib/code-server/lib/vscode/node_modules/node-pty");
 
-const [statusbarDir, debugDir, target] = process.argv.slice(2);
+const [statusbarDir, debugDir, target, source = `${target}.c`] = process.argv.slice(2);
 const { holderArgs, programTerminalConfig } = require(path.join(statusbarDir, "debugIo.js"));
 
 const ttyFile = `/tmp/t12-tty-${process.pid}`;
@@ -76,7 +79,7 @@ const onMessage = (msg) => {
     result.events.push(msg.event);
     if (msg.event === "output") result.console += msg.body.output;
     if (msg.event === "initialized") {
-      send("setBreakpoints", { source: { path: path.resolve("/work", target + ".c") }, breakpoints: [{ line: 7 }] });
+      send("setBreakpoints", { source: { path: path.resolve("/work", source) }, breakpoints: [{ line: 7 }] });
       send("configurationDone", {});
     }
     if (msg.event === "stopped") send("stackTrace", { threadId: msg.body.threadId || 1, startFrame: 0, levels: 1 });

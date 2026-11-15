@@ -1,4 +1,4 @@
-# heig-codespace student image: C, gdb, code-server.
+# heig-codespace student image: C and C++, gdb, code-server.
 # Construite par : podman --remote --url unix:///run/podman/podman.sock \
 #                    build -t codespace/c-dev images/c-dev
 # Run by images/c-dev/run-hardened.sh (hardening is mandatory, CLAUDE.md invariant 3).
@@ -67,13 +67,16 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #    its pages. The other exclusions (doc, locale, info) are kept.
 RUN printf 'path-include /usr/share/man/*\n' > /etc/dpkg/dpkg.cfg.d/heig-man-pages
 
-# 1. C toolchain, gdb, git, manual pages, clangd.
+# 1. C and C++ toolchains, gdb, git, manual pages, clangd.
+#    g++ is Debian's default, the same GCC as gcc (it brings libstdc++-dev;
+#    libstdc++6 already ships the gdb pretty-printers of the standard library).
 #    curl and ca-certificates serve the .deb download and the /healthz
 #    acceptance test; procps and less the comfort of the terminal; python3
 #    is Baygon's interpreter (step 4b; gdb already pulls libpython3.13).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         gcc \
+        g++ \
         gdb \
         make \
         git \
@@ -166,17 +169,15 @@ RUN chmod 0644 /etc/code-server/settings.json && \
 COPY resolv.conf /etc/resolv.conf
 RUN chmod 0644 /etc/resolv.conf
 
-# 6. Default clangd settings for a C lab. clangd only reads
+# 6. Default clangd settings, per language (clangd.yaml: -std=c17 for C,
+#    -std=c++20 for C++). clangd only reads
 #    $XDG_CONFIG_HOME/clangd/config.yaml (that is ~/.config/clangd/config.yaml)
-#    and the project's .clangd files: the template is therefore dropped in both
-#    useful places. ~/.config is on the read-only root; the entrypoint copies
-#    the same file into the tmpfs XDG_CONFIG_HOME, which code-server, its
+#    and the project's .clangd files: the one source file is therefore dropped
+#    in both useful places. ~/.config is on the read-only root; the entrypoint
+#    copies the same file into the tmpfs XDG_CONFIG_HOME, which code-server, its
 #    extension host and the integrated terminal all inherit.
-RUN mkdir -p /etc/clangd /home/student/.config/clangd && \
-    printf '%s\n' \
-    'CompileFlags:' \
-    '  Add: [-std=c17, -Wall, -Wextra]' \
-    > /etc/clangd/config.yaml && \
+COPY clangd.yaml /etc/clangd/config.yaml
+RUN mkdir -p /home/student/.config/clangd && \
     cp /etc/clangd/config.yaml /home/student/.config/clangd/config.yaml && \
     chmod 0644 /etc/clangd/config.yaml /home/student/.config/clangd/config.yaml && \
     chown -R 1000:1000 /home/student/.config
