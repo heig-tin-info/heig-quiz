@@ -284,15 +284,7 @@ function WorkspaceSection({
       <Lock /> {t("sproj.workspace.openInSeb")}
     </Button>
   );
-  const where = inSeb
-    ? "sproj.workspace.inSeb"
-    : online
-      ? "sproj.workspace.online"
-      : devices === "kiosk"
-        ? "sproj.workspace.kiosk"
-        : devices === "either"
-          ? "sproj.workspace.either"
-          : "sproj.workspace.seb";
+  const where = inSeb ? "sproj.workspace.inSeb" : (`sproj.workspace.${devices}` as const);
   return (
     <section className="space-y-3" data-testid="sproj-workspace">
       <SectionHeading title={t("sproj.workspace")} />

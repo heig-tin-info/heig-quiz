@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { LOGIN_REFUSED_PATH, SEB_QUIT_PATH, encodeJournalPath, safeJournalPath } from "@quiz/contracts";
+import { LOGIN_REFUSED_PATH, SEB_QUIT_PATH, encodeJournalPath, projectStationPath, safeJournalPath } from "@quiz/contracts";
 import { COURSE_TABS, type AdminTab, type ClassroomQueryTab, type CourseTab } from "@quiz/domain";
 
 import { build, useHold } from "./build";
@@ -513,14 +513,17 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     section: "activities",
     bottomSlot: { teacher: "activities" },
   },
-  // ADR-089 §3: the station's page of a project, a tail of the project; full screen (`App.tsx`).
+  // ADR-089 §3: the station's page of a project, a tail of the project. A kiosk session draws it
+  // confined, without the frame; anyone else gets the project's page there, in the frame (`App.tsx`).
   projectStation: {
-    path: (r) => `/projects/${r.id}/station`,
+    path: (r) => projectStationPath(r.id),
     match: ([head, id, tail, leaf]) =>
       head === "projects" && id && tail === "station" && leaf === undefined ? { view: "projectStation", id } : null,
     studentSafe: true,
     // The frame holds the student's open editor: a newer build never reloads it (ADR-110).
     answering: true,
+    section: "activities",
+    bottomSlot: { student: "courses", teacher: "activities" },
   },
   activities: {
     ...fixed("activities", { view: "activities" }),

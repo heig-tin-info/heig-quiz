@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { KIOSK_REATTEST_MS } from "@quiz/domain";
+import { KIOSK_REATTEST_MS, KIOSK_SILENT_AFTER_MS } from "@quiz/domain";
 
 import { ApiError, api } from "../api";
 import { fail, makeQueryClient, mockFetch, ok } from "../test/render";
@@ -214,5 +214,52 @@ describe("useStationAttestation", () => {
     await act(async () => void (await result.current.guardSubmit(submit)));
     expect(submit).toHaveBeenCalledOnce();
     expect(calls.filter((c) => c.url.startsWith("/app/api/kiosk"))).toHaveLength(0);
+  });
+});
+
+/*
+ * ADR-089 §7: the project's station page writes nothing to Quiz, so under
+ * `suspendOnRefusal` the hook covers it when the server would suspend it:
+ * refused, or silent (no attempt recorded for KIOSK_SILENT_AFTER_MS).
+ */
+describe("useStationAttestation with suspendOnRefusal", () => {
+  it("covers the page once no attempt reached the server for the silent delay, and an accepted one lifts it", async () => {
+    let lost = true;
+    const { calls } = mockFetch({
+      ...CONFIG,
+      "POST /app/api/kiosk/attest/challenge": ok({ challenge: "Yw==" }),
+      // A network failure: the server records nothing.
+      "POST /app/api/kiosk/attest/verify": () => (lost ? fail(502) : ok({ station: { label: "Poste n° 7", status: "active" } })),
+    });
+    const { result } = renderHook(() => useStationAttestation(true, { suspendOnRefusal: true }), { wrapper: providers() });
+    await waitFor(() => expect(verifies(calls)).toBe(1));
+    await advance(KIOSK_SILENT_AFTER_MS - 1_000);
+    expect(result.current.suspended).toBe(false);
+    await advance(1_000);
+    expect(result.current.suspended).toBe(true);
+    lost = false;
+    await advance(KIOSK_RETRY_MS);
+    await waitFor(() => expect(result.current.suspended).toBe(false));
+  });
+
+  it("covers the page on a refused attestation", async () => {
+    mockFetch({
+      ...CONFIG,
+      "POST /app/api/kiosk/attest/challenge": ok({ challenge: "Yw==" }),
+      "POST /app/api/kiosk/attest/verify": fail(403, { error: "not_attested" }),
+    });
+    const { result } = renderHook(() => useStationAttestation(true, { suspendOnRefusal: true }), { wrapper: providers() });
+    await waitFor(() => expect(result.current.suspended).toBe(true));
+  });
+
+  it("leaves an exam's page alone: without the option, silence and refusal raise nothing", async () => {
+    mockFetch({
+      ...CONFIG,
+      "POST /app/api/kiosk/attest/challenge": ok({ challenge: "Yw==" }),
+      "POST /app/api/kiosk/attest/verify": fail(403, { error: "not_attested" }),
+    });
+    const { result } = renderHook(() => useStationAttestation(true), { wrapper: providers() });
+    await advance(KIOSK_SILENT_AFTER_MS + 1_000);
+    expect(result.current.suspended).toBe(false);
   });
 });

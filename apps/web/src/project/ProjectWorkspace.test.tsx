@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ProjectWorkspace as Workspace, ProjectWorkspaceSessions } from "@quiz/contracts";
 
-import { DEVICE_LEVEL_IDS, workSettingBody, workSettingFor, type DeviceLevel } from "@quiz/domain";
+import { DEVICE_LEVEL_IDS, workSettingFor, workSettingOf, type DeviceLevel } from "@quiz/domain";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { ProjectWorkspace, WorkModeSetting } from "./ProjectWorkspace";
@@ -25,6 +25,7 @@ const workspace = (over: Partial<Workspace> = {}): Workspace => ({
   syncedAt: null,
   syncError: null,
   review: true,
+  quota: null,
   ...over,
 });
 const sessions: ProjectWorkspaceSessions = {
@@ -157,10 +158,10 @@ describe("the project's device level", () => {
     kiosk: /^Kiosk station only/,
   };
   const at = (level: DeviceLevel, over: Partial<Workspace> = {}) =>
-    workspace({ ...workSettingFor(true, level), kioskOffered: true, ...over });
-  const pairs = DEVICE_LEVEL_IDS.flatMap((from) => DEVICE_LEVEL_IDS.filter((to) => to !== from).map((to) => [from, to] as const));
+    workspace({ ...workSettingOf(workSettingFor(true, level)), kioskOffered: true, ...over });
 
-  it.each(pairs)("from %s to %s, writes the setting the domain maps the level to", async (from, to) => {
+  it.each(DEVICE_LEVEL_IDS)("to %s, writes the setting the domain maps the level to", async (to) => {
+    const from: DeviceLevel = to === "seb" ? "kiosk" : "seb";
     const { calls } = mockFetch({
       [WS]: ok(at(from)),
       [PUT]: ok(at(to)),
@@ -171,7 +172,7 @@ describe("the project's device level", () => {
     const devices = await screen.findByRole("group", { name: "Allowed devices" });
     expect(within(devices).getByRole("radio", { name: NAMES[from] })).toBeChecked();
     await userEvent.click(within(devices).getByRole("radio", { name: NAMES[to] }));
-    await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual(workSettingBody(workSettingFor(true, to))));
+    await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual(workSettingFor(true, to)));
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
   });
 
@@ -215,6 +216,20 @@ describe("the project's device level", () => {
     const devices = await screen.findByRole("group", { name: "Allowed devices" });
     await userEvent.click(within(devices).getByRole("radio", { name: NAMES.kiosk }));
     expect(await screen.findByText("Kiosk stations are not available for projects on this platform.")).toBeInTheDocument();
+  });
+
+  it("warns when the classroom's seats exceed the quota, at a station level only", async () => {
+    const quota = { max: 2, seats: 24 };
+    mockFetch({ [WS]: ok(at("either", { quota })), [SESSIONS]: ok({ reachable: true, sessions: [] }) });
+    const { unmount } = render();
+    expect(await screen.findByTestId("workspace-quota")).toHaveTextContent(
+      "24 students for a quota of 2 workspaces at once. Ask an administrator to raise it before the sitting.",
+    );
+    unmount();
+    mockFetch({ [WS]: ok(at("seb", { quota })), [SESSIONS]: ok({ reachable: true, sessions: [] }) });
+    render();
+    await screen.findByRole("group", { name: "Allowed devices" });
+    expect(screen.queryByTestId("workspace-quota")).toBeNull();
   });
 
   it("says what a supervised project hides from its students, in the project's words", async () => {

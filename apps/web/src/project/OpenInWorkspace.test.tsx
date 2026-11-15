@@ -34,6 +34,7 @@ const workspace = (over: Partial<ProjectWorkspace> = {}): ProjectWorkspace => ({
   syncedAt: null,
   syncError: null,
   review: true,
+  quota: null,
   ...over,
 });
 const project = (over: Partial<ProjectDetail> = {}) =>

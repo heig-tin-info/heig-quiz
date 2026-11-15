@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KioskDeviceAuthorization, PublicConfig } from "@quiz/contracts";
 import { SLOW_DOWN_STEP_S } from "@quiz/domain";
 
+import { parsePath } from "../router";
 import { attest, authorize, pollToken, type StationTrouble } from "./station";
 
 /** What the station's screen shows (ADR-051 §7). */
@@ -73,7 +74,7 @@ export function useKioskStation(
         if (!alive) return "done";
         if ("redirect" in answer) {
           // ADR-089 §5: a project pairing opens the station page of that project.
-          setPhase({ kind: "opening", project: answer.redirect.startsWith("/projects/") });
+          setPhase({ kind: "opening", project: parsePath(answer.redirect).view === "projectStation" });
           opener.current(answer.redirect);
           return "done";
         }

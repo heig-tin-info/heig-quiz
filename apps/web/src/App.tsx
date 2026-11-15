@@ -392,10 +392,15 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // F-PROJ-13: the staff's project page (M3-12); F-PROJ-15: one address, the
   // student's project for a student, a teacher in the student view, an
   // impersonation (M3-13).
-  project: (r, c) => projectPage(r.id, c),
-  // ADR-089 §3: a station's project sitting; anyone else reads the project's own page.
+  project: (r, c) =>
+    c.teacherUi ? (
+      <ProjectPage id={r.id} navigate={c.navigate} />
+    ) : (
+      <StudentProjectPage id={r.id} navigate={c.navigate} />
+    ),
+  // ADR-089 §3: a station's project sitting, drawn confined (no frame); anyone else reads the project's own page.
   projectStation: (r, c) =>
-    c.me.session?.kind === "kiosk" ? <StationProjectPage id={r.id} /> : projectPage(r.id, c),
+    c.me.session?.kind === "kiosk" ? <StationProjectPage id={r.id} /> : renderPage({ view: "project", id: r.id }, c),
   // F-PROJ-01: "New ▾ › Project" (M3-10) leads here, M3-11's form.
   // ADR-106 §8: the grading screen of a project graded by criteria (staff only).
   projectGrading: (r, c) => <ProjectGradingPage id={r.id} navigate={c.navigate} />,
@@ -430,11 +435,6 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   correction: (r, c) => <CorrectionProjection evaluationId={r.evaluationId} navigate={c.navigate} />,
 };
 
-/** F-PROJ-13, F-PROJ-15: the staff's project page, or the student's at the same address. */
-function projectPage(id: string, c: PageContext): ReactNode {
-  return c.teacherUi ? <ProjectPage id={id} navigate={c.navigate} /> : <StudentProjectPage id={id} navigate={c.navigate} />;
-}
-
 /** The page of `route` (the one cast of the table, as in `router.ts`). */
 function renderPage(route: Route, ctx: PageContext): ReactNode {
   return (PAGES[route.view] as Page<Route["view"]>)(route, ctx);
@@ -458,7 +458,6 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
   "oauthConsent",
   "teamsLink",
   "pair",
-  "projectStation",
 ]);
 
 /**

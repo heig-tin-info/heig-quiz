@@ -8,7 +8,7 @@ import {
   type ProjectWorkspaceSessions,
   type ProjectWorkspaceSyncAccepted,
 } from "@quiz/contracts";
-import { workSettingBody, workSettingFor, type DeviceLevel, type WorkSetting } from "@quiz/domain";
+import { acceptsKiosk, workSettingFor, workSettingOf, type DeviceLevel, type WorkSetting } from "@quiz/domain";
 
 import { api, isNotFound } from "../api";
 import { AllowedDevices } from "../evaluation/AllowedDevices";
@@ -78,11 +78,8 @@ export function WorkModeSetting({ projectId, archived }: { projectId: string; ar
   const toast = useToast();
   const workspace = useWorkspace(projectId);
   const setMode = useMutation({
-    mutationFn: (setting: WorkSetting) =>
-      api<Workspace>(`/app/api/projects/${projectId}/workspace/mode`, {
-        method: "PUT",
-        body: JSON.stringify(workSettingBody(setting) satisfies ProjectWorkModeBody),
-      }),
+    mutationFn: (body: ProjectWorkModeBody) =>
+      api<Workspace>(`/app/api/projects/${projectId}/workspace/mode`, { method: "PUT", body: JSON.stringify(body) }),
     onSuccess: (next) => {
       qc.setQueryData(projectWorkspaceKey(projectId), next);
       // The page itself only: the answer IS the workspace now.
@@ -103,7 +100,7 @@ export function WorkModeSetting({ projectId, archived }: { projectId: string; ar
   }
   const changeable = !archived && ws.allowed.length > 1;
   // What the screen shows: the pending choice while it is written, else the stored one.
-  const shown: WorkSetting = setMode.isPending && setMode.variables ? setMode.variables : ws;
+  const shown: WorkSetting = setMode.isPending && setMode.variables ? workSettingOf(setMode.variables) : ws;
   const place: Place = shown.mode === "free" ? "own" : "online";
   const online = ws.allowed.some((m) => m !== "free");
   const options = (["own", "online"] as const)
@@ -111,7 +108,9 @@ export function WorkModeSetting({ projectId, archived }: { projectId: string; ar
     .map((value) => ({ value, label: t(`project.workspace.place.${value}`) }));
   // A level is a choice of the workspace's two modes: open only while both are the caller's to set.
   const levelsOpen = changeable && ws.allowed.includes("online") && ws.allowed.includes("online_seb");
-  const pick = (next: WorkSetting) => setMode.mutate(next);
+  const pick = (next: ProjectWorkModeBody) => setMode.mutate(next);
+  // ADR-089 amendment point 7: a station sitting takes a workspace per student, the holder's quota caps them.
+  const quota = place === "online" && ws.quota && ws.quota.seats > ws.quota.max && acceptsKiosk(shown.devices) ? ws.quota : null;
 
   return (
     <div>
@@ -149,6 +148,12 @@ export function WorkModeSetting({ projectId, archived }: { projectId: string; ar
           onPick={(level) => pick(workSettingFor(true, level))}
           descOf={PROJECT_DESC}
         />
+      ) : null}
+      {quota ? (
+        <p className="-mt-1 flex items-start gap-1.5 pb-3 text-[13px] text-warning" data-testid="workspace-quota">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          {t("project.workspace.quota", { seats: quota.seats, max: quota.max })}
+        </p>
       ) : null}
     </div>
   );

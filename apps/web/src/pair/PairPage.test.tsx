@@ -146,7 +146,7 @@ describe("the phone's pairing page (ADR-051 §7)", () => {
 
   it("explains when no exam can be started on a station, and offers no start", async () => {
     render({ "GET /app/api/pair/BCDF-GHJK": ok(preview([])) });
-    expect(await screen.findByText("No exam to start on a station")).toBeVisible();
+    expect(await screen.findByText("No exam or project to start here")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Start on this station" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Change the code" }));
     expect(screen.getByLabelText("Code shown on the station")).toHaveValue("");

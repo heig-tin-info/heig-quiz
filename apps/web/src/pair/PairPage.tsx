@@ -131,7 +131,7 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
   };
 
   if (approve.isSuccess) {
-    return <Done label={approve.data.station.label} project={approve.variables.kind === "project"} navigate={navigate} />;
+    return <Done label={approve.data.station.label} kind={approve.variables.kind} navigate={navigate} />;
   }
 
   const lookupError = errorOf(preview.error);
@@ -231,9 +231,7 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
                       ? "pair.limited"
                       : approveError.status === 404
                         ? "pair.invalid.body"
-                        : approve.variables?.kind === "project"
-                          ? "pair.refused.project"
-                          : "pair.refused",
+                        : `pair.refused.${approve.variables?.kind ?? "exam"}`,
                   )}
                 </Alert>
               </div>
@@ -301,14 +299,14 @@ function Picker({
   );
 }
 
-function Done({ label, project, navigate }: { label: string; project: boolean; navigate?: Navigate | undefined }) {
+function Done({ label, kind, navigate }: { label: string; kind: Pairable["kind"]; navigate?: Navigate | undefined }) {
   const t = useT();
   return (
     <GateCard
       role="status"
       icon={<CircleCheck className="mx-auto size-10 text-success" aria-hidden />}
-      title={t(project ? "pair.done.project.title" : "pair.done.title")}
-      body={t(project ? "pair.done.project.body" : "pair.done.body", { label })}
+      title={t(`pair.done.${kind}.title`)}
+      body={t(`pair.done.${kind}.body`, { label })}
     >
       {navigate ? (
         <Button variant="secondary" className="mt-6" onClick={() => navigate({ view: "home" })}>

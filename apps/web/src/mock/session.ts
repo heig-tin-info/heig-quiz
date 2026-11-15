@@ -23,6 +23,7 @@ import {
   on,
   refuse,
   role,
+  STUDENT_PROJECT_INVITED,
 } from "./runtime";
 
 // --- Session ---
@@ -58,7 +59,7 @@ export let me: Me | null = {
           session: {
             kind: "kiosk",
             evaluationId: null,
-            projectId: "77777777-7777-4777-8777-777777777705",
+            projectId: STUDENT_PROJECT_INVITED,
             readOnly: false,
             superPowersUntil: null,
             superPowersAvailable: false,
@@ -66,12 +67,11 @@ export let me: Me | null = {
         }
     : flags.sebproject && role === "student"
       ? {
-          // D21 (M6-07): inside SEB, confined to the student's `online_seb`
-          // project (`STUDENT_PROJECT_INVITED` of `mock/student.ts`).
+          // D21 (M6-07): inside SEB, confined to the student's `online_seb` project.
           session: {
             kind: "seb",
             evaluationId: null,
-            projectId: "77777777-7777-4777-8777-777777777705",
+            projectId: STUDENT_PROJECT_INVITED,
             readOnly: false,
             superPowersUntil: null,
             superPowersAvailable: false,

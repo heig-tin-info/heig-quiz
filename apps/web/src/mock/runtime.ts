@@ -26,6 +26,13 @@ if (asParam === "teacher" || asParam === "student" || asParam === "admin") {
 }
 export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "teacher";
 
+/**
+ * The student persona's supervised project (`mock/student.ts`): here, below
+ * every mock, because the session (`mock/session.ts`) is confined to it
+ * under `?sebproject=1` and `?stationproject=1`.
+ */
+export const STUDENT_PROJECT_INVITED = "77777777-7777-4777-8777-777777777705";
+
 /** Scene flags: read from the URL, then remembered like the persona. */
 /**
  * `negative`: every evaluation of the mock scores its choice questions negatively (ADR-026).
@@ -73,7 +80,8 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  *   that project page and nothing else. With `codespace`.
  * `kioskprojects`: the platform offers kiosk stations to projects
  *   (`KIOSK_PROJECTS`, ADR-089): the setting offers the station levels, and
- *   the phone's pairing list carries a supervised project (`mock/kiosk.ts`).
+ *   the phone's pairing list carries the student's invited project, as if it
+ *   held a station level whatever `pjkiosk` says (`mock/kiosk.ts`).
  * `pjkiosk`: with `codespace`, the projects hold station levels: the staff's
  *   SEB draft is at Kiosk only, the student's invited project at Kiosk only
  *   and its open one at SEB or kiosk (`mock/codespace.ts`, `mock/student.ts`).

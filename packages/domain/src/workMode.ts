@@ -65,38 +65,27 @@ export interface WorkSetting {
   devices: DeviceLevel;
 }
 
-/**
- * THE mapping between a project's stored setting and what its screen shows
- * (ADR-089, amendment point 2, "One column, one mapping"): out of the
- * workspace, the students' own tools; in it, a device level — `any` is
- * `online`, the three others `online_seb` with that level. Back, the
- * stored `devices` is the level: it is `any` outside `online_seb`.
- */
-export function workSettingFor(online: boolean, level: DeviceLevel): WorkSetting {
-  if (!online) return { mode: "free", devices: "any" };
-  return level === "any" ? { mode: "online", devices: "any" } : { mode: "online_seb", devices: level };
-}
-
 /** The body of the mode's write (`ProjectWorkModeBody` of `@quiz/contracts`): the level under supervision only. */
 export type WorkSettingBody =
   | { mode: Exclude<WorkModeName, "online_seb"> }
   | { mode: "online_seb"; devices: SupervisedDeviceLevel };
 
+/**
+ * THE mapping between what a project's screen shows and the mode's write
+ * (ADR-089, amendment point 2, "One column, one mapping"): out of the
+ * workspace, the students' own tools; in it, a device level — `any` is
+ * `online`, the three others `online_seb` with that level. Back,
+ * {@link workSettingOf}: the stored `devices` is the level, `any` outside
+ * `online_seb`.
+ */
+export function workSettingFor(online: boolean, level: DeviceLevel): WorkSettingBody {
+  if (!online) return { mode: "free" };
+  return level === "any" ? { mode: "online" } : { mode: "online_seb", devices: level };
+}
+
 /** The setting a body of the mode's write stands for (`ProjectWorkModeBody`): the level is `any` unless supervised. */
 export function workSettingOf(body: WorkSettingBody): WorkSetting {
   return body.mode === "online_seb" ? { mode: body.mode, devices: body.devices } : { mode: body.mode, devices: "any" };
-}
-
-/**
- * The body that writes `setting`, {@link workSettingOf} backwards: what the
- * staff's screen sends for a choice it read through {@link workSettingFor}.
- * Throws on `online_seb` at `any`, a pair no setting holds.
- */
-export function workSettingBody(setting: WorkSetting): WorkSettingBody {
-  const { mode, devices } = setting;
-  if (mode !== "online_seb") return { mode };
-  if (devices === "any") throw new RangeError("online_seb holds a supervised device level");
-  return { mode, devices };
 }
 
 /** The facts {@link workModeRefusal} decides on. */

@@ -496,6 +496,13 @@ export const ProjectWorkspace = z.object({
    * the project's quota holder holds an enabled workspace grant.
    */
   review: z.boolean(),
+  /**
+   * The quota a station sitting runs against (ADR-089, amendment point 7):
+   * the quota holder's `maxActiveSessions` and the classroom's claimed
+   * student seats; the setting warns when the seats exceed it. Null without
+   * a quota holder or without a grant.
+   */
+  quota: z.object({ max: z.number().int().min(0), seats: z.number().int().min(0) }).nullable(),
 });
 export type ProjectWorkspace = z.infer<typeof ProjectWorkspace>;
 

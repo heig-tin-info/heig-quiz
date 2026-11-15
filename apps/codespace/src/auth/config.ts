@@ -189,6 +189,12 @@ const EnvSchema = z.object({
   SEB_PUBLIC_ORIGIN: z.string().default(""),
   /** HMAC secret of the `exam_session` cookie. */
   EXAM_COOKIE_SECRET: z.string().min(16).default("dev-exam-cookie-secret-change-me"),
+  /**
+   * The `exam_session` cookie's lifetime. Quiz's kiosk station page
+   * (`apps/web/src/kiosk/StationProjectPage.tsx`, `PORTAL_RELAUNCH_MS`)
+   * relaunches its frame before this DEFAULT runs out (ADR-089 §8): change
+   * one, change the other.
+   */
   EXAM_COOKIE_MAX_AGE_MS: z.coerce
     .number()
     .int()

@@ -50,8 +50,12 @@ import { useStationAttestation } from "./useStationAttestation";
 
 /**
  * When the frame is relaunched, after its last launch: under the portal's
- * 4 h `exam_session` (`EXAM_COOKIE_MAX_AGE_MS` of `apps/codespace`), with
- * ten minutes to spare. The page cannot read the frame's 403 across origins.
+ * `exam_session`, with ten minutes to spare. The 4 h mirror the DEFAULT of
+ * the portal's configurable `EXAM_COOKIE_MAX_AGE_MS`
+ * (`apps/codespace/src/auth/config.ts`): a portal configured shorter
+ * outruns this. The page cannot read the frame's 403 across origins; the
+ * launch reply or the portal telling the page its expiry is a follow-up
+ * (M6-11d card).
  */
 export const PORTAL_RELAUNCH_MS = 4 * 3_600_000 - 10 * 60_000;
 

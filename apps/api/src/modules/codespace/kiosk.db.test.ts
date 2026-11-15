@@ -208,7 +208,10 @@ describe("the device level of a supervised project (ADR-089 point 2)", () => {
       const refused = await setMode(lab.id, "online_seb", level);
       expect([refused.statusCode, refused.json().error]).toEqual([409, "work_mode_frozen"]);
     }
-    expect((await setMode(lab.id, "online_seb", "either")).statusCode).toBe(200);
+    const kept = await setMode(lab.id, "online_seb", "either");
+    expect(kept.statusCode).toBe(200);
+    // ADR-089 point 7: the holder's quota beside the classroom's one claimed student, for the setting's warning.
+    expect(ProjectWorkspace.parse(kept.json()).quota).toEqual({ max: expect.any(Number), seats: 1 });
   });
 });
 

@@ -72,6 +72,8 @@ function view(ws: MockWorkspace): ProjectWorkspace {
     syncedAt: ws.syncedAt,
     syncError: ws.syncError,
     review: true,
+    // ADR-089 point 7: the persona's grant (mock/org.ts, 3 at once) against PRG1-2026's claimed students.
+    quota: { max: 3, seats: classroomRoster("r1").filter((s) => s.status === "claimed" && !s.staff).length },
   };
 }
 

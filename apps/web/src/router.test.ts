@@ -303,6 +303,7 @@ describe("ROUTES", () => {
       admin: "admin",
       project: "activities",
       projectGrading: "activities",
+      projectStation: "activities",
     });
     const unlit = ROUTE_VIEWS.filter((v) => lit[v] === null).sort();
     expect(unlit).toEqual(
@@ -335,8 +336,6 @@ describe("ROUTES", () => {
         "pair",
         "privacy",
         "projectNew",
-        // A kiosk station's project sitting (ADR-089 §3): no sidebar at all.
-        "projectStation",
         "questionPreview",
         "results",
         "revise",
