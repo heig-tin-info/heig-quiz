@@ -257,16 +257,21 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
     if (outcome.kind === "error") return reply.code(400).send({ error: outcome.error });
     const [user] = await app.db.select().from(users).where(eq(users.id, outcome.userId));
     if (!user) return reply.code(400).send({ error: "access_denied" });
+    // An exam, or a supervised project (ADR-089 §5); the session points to its sitting, the pairing.
+    const { activity } = outcome;
+    const evaluationId = "evaluationId" in activity ? activity.evaluationId : null;
+    const projectId = "projectId" in activity ? activity.projectId : null;
     await app.openSession(reply, user, {
       kind: "kiosk",
       actorUserId: null,
-      evaluationId: outcome.evaluationId,
-      projectId: null,
+      evaluationId,
+      projectId,
       deviceId: station.id,
+      kioskPairingId: outcome.pairingId,
     });
     // The supervisor's row shows the station at once, and its state (§6).
     await stationSeated(app.db, station.id, app.clock.now());
-    return { redirect: `/take/${outcome.evaluationId}` } satisfies KioskTokenApproved;
+    return { redirect: projectId ? `/projects/${projectId}` : `/take/${evaluationId}` } satisfies KioskTokenApproved;
   });
 
   // =========================================================================
@@ -303,7 +308,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
     try {
       const found = await previewPairing(app.db, callerOf(req).id, params.data.code, app.clock.now());
       if (!found) return pairingNotFound(reply);
-      return { station: { label: found.label }, evaluations: found.evaluations } satisfies PairPreview;
+      return { station: { label: found.label }, evaluations: found.evaluations, projects: found.projects } satisfies PairPreview;
     } catch (err) {
       return pairThrottled(reply, err);
     }
@@ -317,16 +322,14 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
     try {
       const outcome = await approvePairing(app.db, { userId, ...body.data }, now);
       if (outcome.kind === "not_found") return pairingNotFound(reply);
-      if (outcome.kind === "evaluation") {
-        await trace(req, "kiosk.pair_refused", "evaluation", body.data.evaluationId, {
-          reason: "evaluation",
-        });
-        return reply.code(409).send({ error: "evaluation_not_pairable" });
+      // An exam's pairing as before; a project's (ADR-089 §5) the same, naming the project.
+      const { code: _code, ...activity } = body.data;
+      if (outcome.kind === "evaluation" || outcome.kind === "project") {
+        const [subjectType, subjectId] = "projectId" in activity ? ["project", activity.projectId] as const : ["evaluation", activity.evaluationId] as const;
+        await trace(req, "kiosk.pair_refused", subjectType, subjectId, { reason: outcome.kind });
+        return reply.code(409).send({ error: `${outcome.kind}_not_pairable` });
       }
-      await trace(req, "kiosk.paired", "kiosk_pairing", outcome.pairingId, {
-        evaluationId: body.data.evaluationId,
-        deviceId: outcome.deviceId,
-      });
+      await trace(req, "kiosk.paired", "kiosk_pairing", outcome.pairingId, { ...activity, deviceId: outcome.deviceId });
       return { station: { label: outcome.label } } satisfies PairApproved;
     } catch (err) {
       return pairThrottled(reply, err);
@@ -362,7 +365,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
             now,
           );
           if (outcome.kind === "not_found") return pairingNotFound(reply);
-          if (outcome.kind === "evaluation") {
+          if (outcome.kind !== "approved") {
             await trace(req, "kiosk.pair_refused", "evaluation", evaluationId, {
               reason: "evaluation",
               userId: body.userId,

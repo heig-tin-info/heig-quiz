@@ -45,6 +45,7 @@ const exam = (id: string, title: string, conditions: EvaluationConditions = NONE
 const preview = (evaluations: PairPreview["evaluations"] = [exam(E1, "Test 1 — pointeurs")]): PairPreview => ({
   station: { label: "Poste de secours n° 7" },
   evaluations,
+  projects: [],
 });
 
 function render(routes: Record<string, RouteHandler>, route = "/pair?code=bcdf-ghjk", who: Me | null = me) {

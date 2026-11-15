@@ -7,6 +7,8 @@
  * The closed lists live HERE, `as const`; `@quiz/contracts` re-exports them
  * and builds its zod enums from them, so the two never drift.
  */
+import { acceptsKiosk, deviceLevelClients, type DeviceLevel } from "./deviceLevels.js";
+import type { TrustedClient } from "./evaluationConfig.js";
 import { isLiveIndividualRepo, isLiveRepo, type RepoLifeLike } from "./groupRepo.js";
 import { effectiveDeadline, writableUnderCommit, type DeadlineStrategyName } from "./projectRuns.js";
 
@@ -15,14 +17,20 @@ export const WORK_MODES = ["free", "online", "online_seb"] as const;
 export type WorkModeName = (typeof WORK_MODES)[number];
 
 /** Why the caller may not set a project's mode: the code of the refusal. */
-export const WORK_MODE_REFUSALS = ["owner_required", "codespace_not_granted", "work_mode_frozen", "work_mode_group"] as const;
+export const WORK_MODE_REFUSALS = [
+  "owner_required",
+  "codespace_not_granted",
+  "work_mode_frozen",
+  "work_mode_group",
+  "kiosk_unavailable",
+] as const;
 export type WorkModeRefusalCode = (typeof WORK_MODE_REFUSALS)[number];
 
 /**
  * Why the start route sends the student back to their project page
  * (`?workspace=<code>`): {@link workspaceStartRefusal}.
  */
-export const WORKSPACE_START_REFUSALS = ["not_online", "seb_required", "not_accepted", "closed"] as const;
+export const WORKSPACE_START_REFUSALS = ["not_online", "seb_required", "kiosk_required", "not_accepted", "closed"] as const;
 export type WorkspaceStartRefusalCode = (typeof WORKSPACE_START_REFUSALS)[number];
 
 /**
@@ -45,6 +53,40 @@ export function collaboratorPermission(mode: WorkModeName): "push" | "pull" | nu
   return mode === "online" ? "pull" : null;
 }
 
+/**
+ * A project's work setting as stored (ADR-089, amendment of 2026-11-15,
+ * point 2): its mode and its device level. `devices` is `any` exactly when
+ * the mode is unsupervised (`free`, `online`); `online_seb` holds one of
+ * the three supervised levels. The body's schema refuses another pair, the
+ * column's check backs it up.
+ */
+export interface WorkSetting {
+  mode: WorkModeName;
+  devices: DeviceLevel;
+}
+
+/**
+ * THE mapping between a project's stored setting and what its screen shows
+ * (ADR-089, amendment point 2, "One column, one mapping"): out of the
+ * workspace, the students' own tools; in it, a device level — `any` is
+ * `online`, the three others `online_seb` with that level.
+ * {@link projectDeviceLevel} is its inverse.
+ */
+export function workSettingFor(online: boolean, level: DeviceLevel): WorkSetting {
+  if (!online) return { mode: "free", devices: "any" };
+  return level === "any" ? { mode: "online", devices: "any" } : { mode: "online_seb", devices: level };
+}
+
+/** The device level a setting is in force at: `any` unless supervised. */
+export function projectDeviceLevel(setting: WorkSetting): DeviceLevel {
+  return setting.mode === "online_seb" ? setting.devices : "any";
+}
+
+/** The trusted clients a project's workspace opens from: none outside `online_seb`. */
+export function projectTrustedClients(setting: WorkSetting): readonly TrustedClient[] {
+  return deviceLevelClients(projectDeviceLevel(setting));
+}
+
 /** The facts {@link workModeRefusal} decides on. */
 export interface WorkModeFacts {
   /** The caller is an owner of the project's course (ADR-068, Super Powers included). */
@@ -55,41 +97,78 @@ export interface WorkModeFacts {
   launched: boolean;
   /** The project is a group project (F-PROJ-06: their own tools only). */
   groupMode: boolean;
+  /**
+   * The platform offers kiosk stations to projects (the API's
+   * `kioskProjectsOn`, ADR-089 amendment point 1).
+   */
+  kioskOffered: boolean;
 }
 
 /**
- * THE rule of the mode's write, in the order a refusal is answered:
+ * THE rule of the setting's write, on (mode, devices) pairs, in the order a
+ * refusal is answered:
  *
  *   1. only an owner of the course sets it (`403 owner_required`);
  *   2. a mode that runs in the portal needs the owner's grant
  *      (`403 codespace_not_granted`); going back to `free` needs none;
- *   3. once a workspace was launched, the mode is frozen for good
- *      (`409 work_mode_frozen`, ADR-047 §3 as amended): a student's
- *      repository was handed out under it;
+ *   3. once a workspace was launched, the pair is frozen for good — the
+ *      mode and the level alike (`409 work_mode_frozen`, ADR-047 §3 as
+ *      amended, ADR-089 amendment point 2): a student's repository was
+ *      handed out under it;
  *   4. a group project stays in the students' own tools (`409
- *      work_mode_group`, F-PROJ-06).
+ *      work_mode_group`, F-PROJ-06);
+ *   5. a change TO a level that accepts a kiosk station while the platform
+ *      does not offer them to projects (`422 kiosk_unavailable`, ADR-089
+ *      amendment point 1): the flag gates new choices; leaving such a level
+ *      passes.
  *
- * `to` equal to `from` is never refused: the form may send the mode it
- * shows. `null` when the change may proceed.
+ * `to` equal to `from` is never refused: the form may send the pair it
+ * shows, and a live project keeps its level whatever the flag. `null` when
+ * the change may proceed.
  */
-export function workModeRefusal(facts: WorkModeFacts, from: WorkModeName, to: WorkModeName): WorkModeRefusalCode | null {
-  if (from === to) return null;
+export function workModeRefusal(facts: WorkModeFacts, from: WorkSetting, to: WorkSetting): WorkModeRefusalCode | null {
+  if (from.mode === to.mode && from.devices === to.devices) return null;
   if (!facts.owner) return "owner_required";
-  if (isOnlineMode(to) && !facts.granted) return "codespace_not_granted";
+  if (isOnlineMode(to.mode) && !facts.granted) return "codespace_not_granted";
   if (facts.launched) return "work_mode_frozen";
-  if (isOnlineMode(to) && facts.groupMode) return "work_mode_group";
+  if (isOnlineMode(to.mode) && facts.groupMode) return "work_mode_group";
+  if (acceptsKiosk(projectDeviceLevel(to)) && !facts.kioskOffered) return "kiosk_unavailable";
   return null;
+}
+
+/**
+ * The modes the caller may set now and the first refusal met — the staff's
+ * view (`ProjectWorkspace`) of {@link workModeRefusal}: each mode judged as
+ * the setting it would be written as, `online_seb` keeping the level in
+ * force, or at SEB from another mode.
+ */
+export function workModeChoices(
+  facts: WorkModeFacts,
+  from: WorkSetting,
+): { allowed: WorkModeName[]; refusal: WorkModeRefusalCode | null } {
+  const judged = WORK_MODES.map((mode) => {
+    const devices: DeviceLevel = mode !== "online_seb" ? "any" : from.mode === "online_seb" ? from.devices : "seb";
+    return { mode, refusal: workModeRefusal(facts, from, { mode, devices }) };
+  });
+  return {
+    allowed: judged.filter((j) => j.refusal === null).map((j) => j.mode),
+    refusal: judged.find((j) => j.refusal !== null)?.refusal ?? null,
+  };
 }
 
 /** The facts {@link workspaceStartRefusal} decides on. */
 export interface WorkspaceStartFacts {
-  project: WorkspaceProject;
+  project: WorkspaceProject & { devices: DeviceLevel };
   /** The student's own repository of the project (online modes are individual); null without one. */
   repo: (RepoLifeLike & WorkspaceRepo) | null;
   /** The project's classroom is archived: it takes no new work. */
   classroomArchived: boolean;
-  /** The request rides on a `seb` session confined to this project (D21, M6-07). */
-  fromSeb: boolean;
+  /**
+   * The trusted client of the session confined to THIS project the request
+   * rides on (the API's `confinedProjectSession`: D21, ADR-089 §4); null
+   * from the student's portal session.
+   */
+  via: TrustedClient | null;
 }
 
 /** What of a project the workspace's deadline rules read. */
@@ -142,8 +221,10 @@ export function portalDeadline(project: Pick<WorkspaceProject, "workMode" | "dea
 /**
  * THE rule of the start route (ADR-047 §6 as amended 2026-10-07), the
  * twin of `acceptRefusal`: in order, a project in the students' own tools
- * (`not_online`), one under Safe Exam Browser asked from outside it — a
- * `seb` session of this project only (`seb_required`, D21) —, no live
+ * (`not_online`), a supervised one asked from a client its level does not
+ * accept — a confined session of this project, of an accepted kind:
+ * `seb_required` where SEB is accepted (D21), `kiosk_required` at Kiosk
+ * only (ADR-089 amendment point 2) —, no live
  * repository of the student's (`not_accepted`, {@link isLiveIndividualRepo}),
  * their EFFECTIVE deadline passed — unless the workspace follows a writable
  * repository ({@link workspaceClosesAt}, #958) — or the classroom archived
@@ -152,10 +233,32 @@ export function portalDeadline(project: Pick<WorkspaceProject, "workMode" | "dea
 export function workspaceStartRefusal(facts: WorkspaceStartFacts, now: Date): WorkspaceStartRefusalCode | null {
   const { project, repo } = facts;
   if (!isOnlineMode(project.workMode)) return "not_online";
-  if (project.workMode === "online_seb" && !facts.fromSeb) return "seb_required";
+  const clients = projectTrustedClients({ mode: project.workMode, devices: project.devices });
+  if (clients.length > 0 && (facts.via === null || !clients.includes(facts.via))) {
+    return clients.includes("seb") ? "seb_required" : "kiosk_required";
+  }
   if (repo === null || !isLiveIndividualRepo(repo)) return "not_accepted";
   if (workspaceClosed(facts, workspaceClosesAt(repo, project, 0), now)) return "closed";
   return null;
+}
+
+/**
+ * Whether a station may be paired for a project (ADR-089 §5): a level that
+ * accepts a kiosk station — "SEB or kiosk" or "Kiosk only", hence
+ * `online_seb` — before the student's effective deadline (ADR-078 §2; the
+ * project's own without a repository yet). The seat, the project open and
+ * the classroom not archived are the query's. The same rule for the phone's
+ * list, the approval and the station's consumption.
+ */
+export function kioskProjectPairable(
+  project: WorkSetting & { deadlineAt: Date },
+  repo: { deadlineAt: Date | null } | null,
+  now: Date,
+): boolean {
+  return (
+    projectTrustedClients(project).includes("kiosk") &&
+    effectiveDeadline(repo ?? { deadlineAt: null }, project).getTime() > now.getTime()
+  );
 }
 
 /**

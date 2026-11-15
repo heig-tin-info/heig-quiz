@@ -1,4 +1,5 @@
 import { kioskOf, safeExamBrowserOf, type EvaluationSettings } from "@quiz/contracts";
+import { DEVICE_LEVELS, acceptsKiosk, deviceLevelClients, deviceLevelOf, type DeviceLevel } from "@quiz/domain";
 import { Shield, ShieldCheck, ShieldHalf, type LucideIcon } from "lucide-react";
 import { useId } from "react";
 
@@ -8,28 +9,24 @@ import { RadioRow } from "../ui";
 type Devices = Pick<EvaluationSettings, "safeExamBrowser" | "kiosk">;
 
 /**
- * The four ways the two trusted-client switches of an exam combine
- * (ADR-051 §2), in the order shown: both on means either client is accepted.
- * The icons are decorative and the same weight for every level: the OR of
- * `either` means the weaker path decides, so it shares SEB's half shield. No
- * colour per level.
+ * The icon of each device level (`DEVICE_LEVELS` of `@quiz/domain`, ADR-089
+ * point 2, in the order shown). The icons are decorative and the same weight
+ * for every level: the OR of `either` means the weaker path decides, so it
+ * shares SEB's half shield. No colour per level.
  */
-const CHOICES = [
-  { id: "any", icon: Shield, settings: { safeExamBrowser: false, kiosk: false } },
-  { id: "seb", icon: ShieldHalf, settings: { safeExamBrowser: true, kiosk: false } },
-  { id: "either", icon: ShieldHalf, settings: { safeExamBrowser: true, kiosk: true } },
-  { id: "kiosk", icon: ShieldCheck, settings: { safeExamBrowser: false, kiosk: true } },
-] as const satisfies readonly { id: string; icon: LucideIcon; settings: Devices }[];
-
-type Choice = (typeof CHOICES)[number];
+const ICONS: Record<DeviceLevel, LucideIcon> = { any: Shield, seb: ShieldHalf, either: ShieldHalf, kiosk: ShieldCheck };
 
 const KEYS = ["safeExamBrowser", "kiosk"] as const satisfies readonly (keyof Devices)[];
 
-/** The choice in force; the table covers every pair of the two booleans. */
-const choiceOf = (settings: EvaluationSettings): Choice => {
-  const now: Devices = { safeExamBrowser: safeExamBrowserOf(settings), kiosk: kioskOf(settings) };
-  return CHOICES.find((c) => KEYS.every((k) => c.settings[k] === now[k]))!;
+/** An exam's two trusted-client switches (ADR-051 §2) at a level: both on means either client is accepted. */
+const devicesOf = (level: DeviceLevel): Devices => {
+  const clients = deviceLevelClients(level);
+  return { safeExamBrowser: clients.includes("seb"), kiosk: clients.includes("kiosk") };
 };
+
+/** The level in force; the table covers every pair of the two booleans. */
+const levelOf = (settings: EvaluationSettings): DeviceLevel =>
+  deviceLevelOf([...(safeExamBrowserOf(settings) ? (["seb"] as const) : []), ...(kioskOf(settings) ? (["kiosk"] as const) : [])]);
 
 /**
  * "Allowed devices" of an exam: one choice over `safeExamBrowser` and `kiosk`,
@@ -51,14 +48,15 @@ export function AllowedDevices({
 }) {
   const t = useT();
   const name = useId();
-  const current = choiceOf(settings);
-  const choices = CHOICES.filter((c) => kioskOffered || !c.settings.kiosk || c === current);
+  const current = levelOf(settings);
+  const choices = DEVICE_LEVELS.filter((l) => kioskOffered || !acceptsKiosk(l.id) || l.id === current).map((l) => ({
+    id: l.id,
+    icon: ICONS[l.id],
+  }));
 
-  const pick = (next: Choice["id"]) => {
-    const to = CHOICES.find((c) => c.id === next)!.settings;
-    const changed: Partial<Devices> = Object.fromEntries(
-      KEYS.filter((k) => to[k] !== current.settings[k]).map((k) => [k, to[k]]),
-    );
+  const pick = (next: DeviceLevel) => {
+    const [from, to] = [devicesOf(current), devicesOf(next)];
+    const changed: Partial<Devices> = Object.fromEntries(KEYS.filter((k) => to[k] !== from[k]).map((k) => [k, to[k]]));
     if (Object.keys(changed).length > 0) onChange(changed);
   };
 
@@ -68,7 +66,7 @@ export function AllowedDevices({
       <p aria-hidden className="text-sm font-medium text-fg">{t("eval.devices")}</p>
       <div className="divide-y divide-line overflow-hidden rounded-field border border-line">
         {choices.map(({ id, icon: Icon }) => (
-          <RadioRow key={id} name={name} value={id} checked={id === current.id} disabled={disabled} onPick={pick}>
+          <RadioRow key={id} name={name} value={id} checked={id === current} disabled={disabled} onPick={pick}>
             <span className="flex items-start gap-2.5">
               <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-muted" />
               <span className="min-w-0">

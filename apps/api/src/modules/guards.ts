@@ -31,6 +31,7 @@ import {
   PROJECT_VISIBLE_STATES,
   trustedClientsOf,
   type ProjectStateName,
+  type TrustedClient,
 } from "@quiz/domain";
 
 import { PORTAL, confined, delegated, type SessionAuth, type SessionState } from "../auth/session.js";
@@ -887,8 +888,9 @@ export interface StudentProjectScope extends ReadableClassroom {
  * course's staff (a teacher in the student view, ADR-018), a claimed seat,
  * an impersonation session through the seat alone (ADR-034); a stranger,
  * and a confined session gets null, the 404 of a missing project — except
- * a `seb` session confined to THIS project (D21, M6-07), which reads it
- * through its own claimed seat, as its portal would: the session only ever
+ * a session confined to THIS project ({@link confinedProjectSession}: a
+ * `seb` one, D21, or a kiosk station's, ADR-089), which reads it through
+ * its own claimed seat, as its portal would: the session only ever
  * narrows. The repository the view shows is the seat's own, read by the
  * `project` module: a staff seat's is its holder's test repository (ADR-077).
  */
@@ -904,18 +906,24 @@ export async function findStudentProjectView(
     .where(and(eq(projects.id, projectId), visibleProject()))
     .limit(1);
   if (!project) return null;
-  const here = sebProjectSession(auth, projectId);
+  const here = confinedProjectSession(auth, projectId) !== null;
   const room = await findReadableClassroom(db, user, here ? PORTAL : auth, project.classroomId, { studentView: true });
   if (room === null || (here && room.seat === null)) return null;
   return { ...room, project };
 }
 
 /**
- * The request rides on a `seb` session confined to `projectId` (D21): the
- * one confined session that reads a project, its own, never another.
+ * The trusted client of the session confined to `projectId` the request
+ * rides on (D21, ADR-089 §4) — a non-delegated `seb` or `kiosk` session of
+ * THIS project, never another's nor an evaluation's —, or null. The one
+ * test of a project's confined session: the start route and the student
+ * view load through it, and the start's refusal reads the kind it returns.
  */
-export function sebProjectSession(auth: Pick<SessionAuth, "kind" | "actorUserId" | "projectId"> | null, projectId: string): boolean {
-  return auth !== null && auth.kind === "seb" && !delegated(auth) && auth.projectId === projectId;
+export function confinedProjectSession(
+  auth: Pick<SessionAuth, "kind" | "actorUserId" | "projectId"> | null,
+  projectId: string,
+): TrustedClient | null {
+  return confined(auth) && !delegated(auth) && auth.projectId === projectId ? auth.kind : null;
 }
 
 /** {@link findStudentProjectView} for the request's own session, answering the 404 (invariant 6). */

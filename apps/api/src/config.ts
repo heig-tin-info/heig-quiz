@@ -191,6 +191,15 @@ const EnvSchema = z.object({
    */
   KIOSK_ATTESTATION: z.enum(["google", "mock", "off"]).default("off"),
   /**
+   * Kiosk stations for supervised projects (ADR-089, amendment of
+   * 2026-11-15, point 1), off by default: read only through
+   * {@link kioskProjectsOn}. It gates NEW choices of a level that accepts a
+   * station; a project that already holds one keeps it, and its stations
+   * keep working. The kill switch stays `KIOSK_ATTESTATION=off`. Turned on
+   * in production only after project proof B and proof K.
+   */
+  KIOSK_PROJECTS: flag(),
+  /**
    * The `google` attestation (ADR-051 §5, N-SEC-19). The key file is the
    * Verified Access service account's JSON key — a secret, kept outside the
    * repository and the database (ADR-010), read only when a token is needed;
@@ -647,6 +656,18 @@ export function mailEnabled(
 /** The Teams channel exists: its Entra application is configured (ADR-030). */
 export function teamsEnabled(config: Pick<AppConfig, "TEAMS_CLIENT_ID" | "TEAMS_CLIENT_SECRET">): boolean {
   return config.TEAMS_CLIENT_ID !== "" && config.TEAMS_CLIENT_SECRET !== "";
+}
+
+/**
+ * THE predicate of `KIOSK_PROJECTS` (ADR-089, amendment of 2026-11-15,
+ * point 1): kiosk stations exist at all, and are offered to projects. Read
+ * in exactly two places — the setting's write (a change TO a level that
+ * accepts a station is `422 kiosk_unavailable` otherwise) and the staff's
+ * work-mode payload (`kioskOffered`). Nothing of a station's path reads it:
+ * the flag gates new choices, it is not a kill switch.
+ */
+export function kioskProjectsOn(config: Pick<AppConfig, "KIOSK_ATTESTATION" | "KIOSK_PROJECTS">): boolean {
+  return config.KIOSK_ATTESTATION !== "off" && config.KIOSK_PROJECTS;
 }
 
 

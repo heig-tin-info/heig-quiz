@@ -41,7 +41,7 @@ import {
   workModeRefusal,
   type ProjectDatesChange,
   type ProjectPatchField,
-  type WorkModeName,
+  type WorkSetting,
 } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
@@ -481,23 +481,28 @@ export async function patchProject(
 export interface WorkModeCaller {
   owner: boolean;
   granted: boolean;
+  /** `kioskProjectsOn` of the configuration (ADR-089 amendment point 1), read by the route. */
+  kioskOffered: boolean;
 }
 
 /**
  * `PUT /app/api/projects/:id/workspace/mode` (ADR-047 as amended
- * 2026-10-07): the project's work mode, on its row read FOR UPDATE, judged
- * by `workModeRefusal` of `@quiz/domain` — an owner (`403 owner_required`)
+ * 2026-10-07, ADR-089 amendment point 2): the project's work mode and its
+ * device level, on its row read FOR UPDATE, judged as a pair by
+ * `workModeRefusal` of `@quiz/domain` — an owner (`403 owner_required`)
  * with the grant to go online (`403 codespace_not_granted`), never once a
  * workspace was launched (`409 work_mode_frozen`, the `codespace` module's
  * `first_launch_at`, read by join), never a group project (`409
- * work_mode_group`). Any state of the project: the mode decides the
- * permission of the invitations still to come; one already sent keeps its
- * own. Audited `codespace.work_mode` when it changes.
+ * work_mode_group`), never a change to a level that accepts a kiosk
+ * station while they are not offered (`422 kiosk_unavailable`). Any state
+ * of the project: the mode decides the permission of the invitations still
+ * to come; one already sent keeps its own. Audited `codespace.work_mode`,
+ * with both levels, when the pair changes.
  */
 export async function setWorkMode(
   db: Db,
   projectId: string,
-  to: WorkModeName,
+  to: WorkSetting,
   caller: WorkModeCaller,
   actor: AuditActor,
 ): Promise<ProjectRow> {
@@ -510,20 +515,21 @@ export async function setWorkMode(
       .for("update", { of: projects });
     if (!row) throw notFoundError("project");
     const { project } = row;
-    const refusal = workModeRefusal(
-      { ...caller, launched: row.launchedAt !== null, groupMode: project.groupMode },
-      project.workMode,
-      to,
-    );
-    if (refusal) throw new ProjectError(refusal, `The work mode cannot become ${to}`);
-    if (project.workMode === to) return project;
-    const [updated] = await tx.update(projects).set({ workMode: to }).where(eq(projects.id, project.id)).returning();
+    const from = { mode: project.workMode, devices: project.devices };
+    const refusal = workModeRefusal({ ...caller, launched: row.launchedAt !== null, groupMode: project.groupMode }, from, to);
+    if (refusal) throw new ProjectError(refusal, `The work mode cannot become ${to.mode} (${to.devices})`);
+    if (from.mode === to.mode && from.devices === to.devices) return project;
+    const [updated] = await tx
+      .update(projects)
+      .set({ workMode: to.mode, devices: to.devices })
+      .where(eq(projects.id, project.id))
+      .returning();
     await audit(tx, {
       ...actor,
       action: "codespace.work_mode",
       subjectType: "project",
       subjectId: project.id,
-      payload: { from: project.workMode, to },
+      payload: { from: from.mode, to: to.mode, devices: { from: from.devices, to: to.devices } },
     });
     return updated!;
   });

@@ -61,7 +61,7 @@ import {
 import { createPresenceRecorder } from "../presence/service.js";
 import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import { purgeRelayJtis, RELAY_JTI_RETENTION_AFTER_EXP_MS } from "./relay.js";
-import { CODESPACE_ENV, PORTAL, PORTAL_SECRET, captureLog, connectedClassroom, fakePortal, scopedMint, type Room } from "./testing.js";
+import { CODESPACE_ENV, PORTAL, PORTAL_SECRET, captureLog, connectedClassroom, fakePortal, scopedMint, workModeBody, type Room } from "./testing.js";
 import {
   call,
   newStudent,
@@ -132,7 +132,7 @@ async function onlineProject(room: Room, name: string, mode: "online" | "online_
   expect(created.statusCode, created.body).toBe(201);
   const summary = ProjectSummary.parse(created.json());
   expect((await call("POST", `/app/api/projects/${summary.id}/publish`, owner.headers)).statusCode).toBe(200);
-  expect((await call("PUT", `/app/api/projects/${summary.id}/workspace/mode`, owner.headers, { mode })).statusCode).toBe(200);
+  expect((await call("PUT", `/app/api/projects/${summary.id}/workspace/mode`, owner.headers, workModeBody(mode))).statusCode).toBe(200);
   return summary;
 }
 

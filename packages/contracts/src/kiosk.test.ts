@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { KioskAssign, KioskAttestVerify, KioskDevicePatch } from "./kiosk.js";
+import { KioskAssign, KioskAttestVerify, KioskDevicePatch, PairApprove } from "./kiosk.js";
 
 describe("KioskAttestVerify", () => {
   it("takes a response, or the extension's failure, never both nor neither", () => {
@@ -36,5 +36,16 @@ describe("KioskAssign", () => {
     expect(KioskAssign.safeParse({ userCode: "", userId }).success).toBe(false);
     expect(KioskAssign.safeParse({ userCode: "BCDF-GHJK", userId: "x" }).success).toBe(false);
     expect(KioskAssign.safeParse({ userCode: "BCDF-GHJK", userId, evaluationId: userId }).success).toBe(false);
+  });
+});
+
+describe("PairApprove", () => {
+  it("approves for one exam or one project, never both nor neither (ADR-089 §5)", () => {
+    const id = "5cd2417b-7d2c-4e58-8a13-9c4b2f7e0007";
+    expect(PairApprove.parse({ code: "BCDF-GHJK", evaluationId: id })).toEqual({ code: "BCDF-GHJK", evaluationId: id });
+    expect(PairApprove.parse({ code: "BCDF-GHJK", projectId: id })).toEqual({ code: "BCDF-GHJK", projectId: id });
+    expect(PairApprove.safeParse({ code: "BCDF-GHJK", evaluationId: id, projectId: id }).success).toBe(false);
+    expect(PairApprove.safeParse({ code: "BCDF-GHJK" }).success).toBe(false);
+    expect(PairApprove.safeParse({ code: "BCDF-GHJK", projectId: "x" }).success).toBe(false);
   });
 });

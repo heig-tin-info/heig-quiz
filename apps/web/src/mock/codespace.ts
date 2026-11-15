@@ -17,35 +17,40 @@
  */
 import {
   ProjectWorkModeBody,
-  WORK_MODES,
+  type DeviceLevel,
   type ProjectWorkspace,
   type ProjectWorkspaceSessions,
   type ProjectWorkspaceSyncAccepted,
   type WorkMode,
 } from "@quiz/contracts";
-import { workModeRefusal } from "@quiz/domain";
+import { workModeChoices, workModeRefusal } from "@quiz/domain";
 
 import { classroomRoster } from "./org";
 import { flags, H, iso, MockError, MockPayload, on, refuse } from "./runtime";
 
 interface MockWorkspace {
   mode: WorkMode;
+  /** The device level (ADR-089): `any` out of `online_seb`. */
+  devices: DeviceLevel;
   launched: boolean;
   syncedAt: string | null;
   syncError: string | null;
 }
 
 const WORKSPACES = new Map<string, MockWorkspace>([
-  ["pj-published", { mode: "online", launched: true, syncedAt: iso(-2 * H), syncError: null }],
+  ["pj-published", { mode: "online", devices: "any", launched: true, syncedAt: iso(-2 * H), syncError: null }],
   // D21 (M6-07): a draft under Safe Exam Browser, synced like an online project.
-  ["pj-draft-manual", { mode: "online_seb", launched: false, syncedAt: iso(-30 * 60_000), syncError: null }],
+  ["pj-draft-manual", { mode: "online_seb", devices: "seb", launched: false, syncedAt: iso(-30 * 60_000), syncError: null }],
 ]);
+
+/** Kiosk stations are not offered to projects here: `KIOSK_PROJECTS` stays off until M6-11d (ADR-089). */
+const KIOSK_OFFERED = false;
 
 function workspaceOr404(id: string): MockWorkspace {
   if (!flags.codespace) throw new MockError(404, "Not found");
   let ws = WORKSPACES.get(id);
   if (!ws) {
-    ws = { mode: "free", launched: false, syncedAt: null, syncError: null };
+    ws = { mode: "free", devices: "any", launched: false, syncedAt: null, syncError: null };
     WORKSPACES.set(id, ws);
   }
   return ws;
@@ -53,12 +58,12 @@ function workspaceOr404(id: string): MockWorkspace {
 
 /** The project's workspace for the persona: an owner with the grant, unless `?assistant=1`. */
 function view(ws: MockWorkspace): ProjectWorkspace {
-  const facts = { owner: !flags.assistant, granted: true, launched: ws.launched, groupMode: false };
-  const judged = WORK_MODES.map((to) => ({ to, refusal: workModeRefusal(facts, ws.mode, to) }));
+  const facts = { owner: !flags.assistant, granted: true, launched: ws.launched, groupMode: false, kioskOffered: KIOSK_OFFERED };
   return {
     mode: ws.mode,
-    allowed: judged.filter((j) => j.refusal === null).map((j) => j.to),
-    refusal: judged.find((j) => j.refusal !== null)?.refusal ?? null,
+    devices: ws.devices,
+    kioskOffered: KIOSK_OFFERED,
+    ...workModeChoices(facts, ws),
     syncedAt: ws.syncedAt,
     syncError: ws.syncError,
     review: true,
@@ -75,9 +80,13 @@ on("PUT", "/app/api/projects/:id/workspace/mode", (m, raw) => {
   const body = ProjectWorkModeBody.safeParse(raw);
   if (flags.assistant) throw refuse(403, "owner_required", "Only an owner of this course may do that");
   if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
-  const refusal = workModeRefusal({ owner: true, granted: true, launched: ws.launched, groupMode: false }, ws.mode, body.data.mode);
-  if (refusal) throw refuse(refusal === "work_mode_frozen" || refusal === "work_mode_group" ? 409 : 403, refusal, refusal);
-  ws.mode = body.data.mode;
+  const to = { mode: body.data.mode, devices: body.data.mode === "online_seb" ? body.data.devices : "any" } as const;
+  const facts = { owner: true, granted: true, launched: ws.launched, groupMode: false, kioskOffered: KIOSK_OFFERED };
+  const refusal = workModeRefusal(facts, ws, to);
+  const status = refusal === "kiosk_unavailable" ? 422 : refusal === "work_mode_frozen" || refusal === "work_mode_group" ? 409 : 403;
+  if (refusal) throw refuse(status, refusal, refusal);
+  ws.mode = to.mode;
+  ws.devices = to.devices;
   // The portal takes an online project at once, under Safe Exam Browser too (M6-07).
   if (ws.mode !== "free") ws.syncedAt = iso(0);
   return view(ws);

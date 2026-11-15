@@ -87,6 +87,13 @@ describe("LaunchTokenClaims", () => {
     expect(LaunchTokenClaims.safeParse({ ...claims, seb: { configKey: "a".repeat(64) } }).success).toBe(true);
   });
 
+  it("accepts a station's kiosk claim, never beside a seb claim (ADR-089 §4)", () => {
+    const kiosk = { deviceId: "6f1c2a3b-0000-4000-8000-000000000001", sitting: "6f1c2a3b-0000-4000-8000-000000000002" };
+    expect(LaunchTokenClaims.safeParse({ ...claims, kiosk }).success).toBe(true);
+    expect(LaunchTokenClaims.safeParse({ ...claims, kiosk, seb: { configKey: "a".repeat(64) } }).success).toBe(false);
+    expect(LaunchTokenClaims.safeParse({ ...claims, kiosk: { ...kiosk, sitting: "not-a-uuid" } }).success).toBe(false);
+  });
+
   it("refuses another issuer, audience, a missing jti, a path-unsafe subject and a bad config key", () => {
     for (const bad of [
       { iss: "evil" },
@@ -170,6 +177,21 @@ describe("Quiz's own workspace routes (M6-06)", () => {
     expect(ProjectWorkModeBody.safeParse({ mode: "free", extra: 1 }).success).toBe(false);
   });
 
+  it("carries a device level with online_seb only, and a supervised one (ADR-089 point 2)", () => {
+    for (const devices of ["seb", "either", "kiosk"]) {
+      expect(ProjectWorkModeBody.safeParse({ mode: "online_seb", devices }).success).toBe(true);
+    }
+    for (const bad of [
+      { mode: "online_seb" },
+      { mode: "online_seb", devices: "any" },
+      { mode: "online", devices: "seb" },
+      { mode: "online", devices: "any" },
+      { mode: "free", devices: "kiosk" },
+    ]) {
+      expect(ProjectWorkModeBody.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
   it("edits a grant by either field, at least one, a quota within bounds", () => {
     expect(TeacherCodespaceGrantPatch.safeParse({ enabled: true }).success).toBe(true);
     expect(TeacherCodespaceGrantPatch.safeParse({ maxActiveSessions: 0 }).success).toBe(true);
@@ -180,7 +202,7 @@ describe("Quiz's own workspace routes (M6-06)", () => {
 
   it("names the start route and its refusals", () => {
     expect(workspaceStartPath("p/1")).toBe("/app/api/projects/p%2F1/workspace/start");
-    expect(WorkspaceStartRefusal.options).toEqual(["not_online", "seb_required", "not_accepted", "closed"]);
+    expect(WorkspaceStartRefusal.options).toEqual(["not_online", "seb_required", "kiosk_required", "not_accepted", "closed"]);
   });
 });
 

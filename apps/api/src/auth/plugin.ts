@@ -117,7 +117,7 @@ declare module "fastify" {
     /**
      * The activities a confined session this route serves may be confined
      * to (D21). Absent means an evaluation only: a `seb` session of a
-     * project reaches only the routes that say `project` (`PROJECT_SEB`).
+     * project reaches only the routes that say `project` (`PROJECT_CONFINED`).
      */
     activities?: readonly Activity[];
     /**

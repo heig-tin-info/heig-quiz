@@ -10,13 +10,15 @@
  * other; that holds because a Drizzle `references(() => …)` is resolved
  * lazily, the same way auth.ts and evaluation.ts already do.
  */
-import { char, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { char, check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 import { KIOSK_DEVICE_STATUSES } from "@quiz/contracts";
 import { KIOSK_ATTESTATIONS, KIOSK_WATCHES, PAIRING_STATES } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { evaluations } from "./evaluation.js";
+import { projects } from "./project.js";
 
 /**
  * The station registry (ADR-051 §5), platform-wide and admin-only: a station
@@ -69,15 +71,30 @@ export const kioskPairings = pgTable(
     /** The student the station will sit as; null until approved. */
     userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
+    /**
+     * The supervised project the station will sit instead (ADR-089 §5); set
+     * on approval, never with `evaluation_id`. A consumed project pairing is
+     * the durable record of that sitting (amendment of 2026-11-15, point 4):
+     * its id is the `sitting` the portal is told. Deleting the project
+     * leaves the row, to be closed by its id alone.
+     */
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     /** Who approved: the student from their phone, or the supervisor (`kiosk-assign`). */
     approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    /**
+     * The portal session a project sitting opened was closed (ADR-089,
+     * amendment point 4): set by the close job (M6-11d); null on an exam's
+     * pairing, which opens none.
+     */
+    closeCompletedAt: timestamp("close_completed_at", { withTimezone: true }),
   },
   (t) => [
     index("kiosk_pairings_user_code_idx").on(t.userCodeHash),
     index("kiosk_pairings_device_state_idx").on(t.deviceId, t.state),
+    check("kiosk_pairings_one_activity", sql`${t.evaluationId} IS NULL OR ${t.projectId} IS NULL`),
   ],
 );

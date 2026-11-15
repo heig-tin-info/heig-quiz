@@ -9,15 +9,36 @@
  */
 import { z } from "zod";
 
-import { GIT_TOKEN_REFUSALS, STAFF_REVIEW_REFUSALS, WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS } from "@quiz/domain";
+import {
+  DEVICE_LEVEL_IDS,
+  GIT_TOKEN_REFUSALS,
+  STAFF_REVIEW_REFUSALS,
+  SUPERVISED_DEVICE_LEVELS,
+  WORK_MODE_REFUSALS,
+  WORK_MODES,
+  WORKSPACE_START_REFUSALS,
+} from "@quiz/domain";
 
 /**
- * Work mode of a project; `online_seb` opens only from Safe Exam Browser.
+ * Work mode of a project; `online_seb` is supervised: it opens only from
+ * the trusted clients of its device level (ADR-089).
  * The lists are `@quiz/domain`'s (`workMode.ts`), re-exported here.
  */
 export { GIT_TOKEN_REFUSALS, STAFF_REVIEW_REFUSALS, WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS };
 export const WorkMode = z.enum(WORK_MODES);
 export type WorkMode = z.infer<typeof WorkMode>;
+
+/**
+ * A device level (ADR-089, amendment of 2026-11-15, point 2): `any`, `seb`,
+ * `either` (SEB or a kiosk station), `kiosk`. `@quiz/domain`'s
+ * `DEVICE_LEVELS` owns the list and the clients of each.
+ */
+export const DeviceLevel = z.enum(DEVICE_LEVEL_IDS);
+export type DeviceLevel = z.infer<typeof DeviceLevel>;
+
+/** A level that requires a trusted client: what an `online_seb` project holds. */
+export const SupervisedDeviceLevel = z.enum(SUPERVISED_DEVICE_LEVELS);
+export type SupervisedDeviceLevel = z.infer<typeof SupervisedDeviceLevel>;
 
 /**
  * The two issuers of a launch token accepted during the transition
@@ -179,13 +200,19 @@ export type LaunchIdentityClaims = Pick<
  * launch comes from a `seb` session (D21, M6-07): the Config Key of this
  * student's own `.seb`, built by the platform. The portal checks SEB's
  * `X-SafeExamBrowser-ConfigKeyHash` against this claim, and refuses an exam
- * launch without it (docs/merge/06 §6.3 point 4).
+ * launch without it (docs/merge/06 §6.3 point 4). `kiosk` is present instead
+ * when the launch comes from a kiosk station's session (ADR-089 §4): the
+ * station, and the `sitting` — the id of the pairing that seated the
+ * student there, never a session's key — whose end closes the portal
+ * session. Never both.
  */
 export const LaunchTokenClaims = launchIdentityClaims(LAUNCH_AUDIENCE)
   .extend({
     assignmentId: z.string().min(1),
     seb: z.object({ configKey: ConfigKey }).optional(),
+    kiosk: z.object({ deviceId: z.uuid(), sitting: z.uuid() }).optional(),
   })
+  .refine((c) => c.seb === undefined || c.kiosk === undefined, "one trusted client per launch")
   .refine(lifetimeWithin(LAUNCH_TOKEN_TTL_SECONDS), "a launch token lives five minutes at most");
 export type LaunchTokenClaims = z.infer<typeof LaunchTokenClaims>;
 
@@ -327,8 +354,10 @@ export type GitTokenError = z.infer<typeof GitTokenError>;
  * answers {@link WorkspaceStart}; its refusals other than the 404 are `409 {
  * error: <code> }`, which the page shows as `?workspace=<code>`:
  *   - `not_online` — the project is worked in the student's own tools;
- *   - `seb_required` — an `online_seb` project opens from its Safe Exam
- *     Browser session only (M6-07);
+ *   - `seb_required` — an `online_seb` project whose level accepts SEB
+ *     opens from the trusted clients of that level only (M6-07, ADR-089);
+ *   - `kiosk_required` — one at Kiosk only opens from a kiosk station only
+ *     (ADR-089, amendment point 2);
  *   - `not_accepted` — no live repository of theirs yet: accept first;
  *   - `closed` — their deadline has passed, or the classroom is archived.
  * The rule is `workspaceStartRefusal` of `@quiz/domain`.
@@ -385,13 +414,24 @@ export const projectSebPath = (projectId: string): string => `/app/api/projects/
  * 2026-10-07; the pure rule is `workModeRefusal` of `@quiz/domain`):
  * `owner_required` (403, an assistant), `codespace_not_granted` (403, an
  * owner without the administrator's grant), `work_mode_frozen` (409, a
- * workspace was launched), `work_mode_group` (409, a group project).
+ * workspace was launched), `work_mode_group` (409, a group project),
+ * `kiosk_unavailable` (422, a change to a level that accepts a kiosk station
+ * while the platform does not offer them to projects, ADR-089).
  */
 export const WorkModeRefusal = z.enum(WORK_MODE_REFUSALS);
 export type WorkModeRefusal = z.infer<typeof WorkModeRefusal>;
 
-/** `PUT /app/api/projects/:id/workspace/mode`: the project's work mode. */
-export const ProjectWorkModeBody = z.strictObject({ mode: WorkMode });
+/**
+ * `PUT /app/api/projects/:id/workspace/mode`: the project's work mode and,
+ * under supervision only, its device level (ADR-089, amendment point 2): a
+ * union discriminated by `mode`, so a mismatched pair is refused here
+ * (invariant 7). Out of `online_seb` the server writes the level `any`.
+ */
+export const ProjectWorkModeBody = z.discriminatedUnion("mode", [
+  z.strictObject({ mode: z.literal("free") }),
+  z.strictObject({ mode: z.literal("online") }),
+  z.strictObject({ mode: z.literal("online_seb"), devices: SupervisedDeviceLevel }),
+]);
 export type ProjectWorkModeBody = z.infer<typeof ProjectWorkModeBody>;
 
 /**
@@ -404,6 +444,14 @@ export type ProjectWorkModeBody = z.infer<typeof ProjectWorkModeBody>;
  */
 export const ProjectWorkspace = z.object({
   mode: WorkMode,
+  /** The device level (ADR-089): `any` out of `online_seb`. */
+  devices: DeviceLevel,
+  /**
+   * The platform offers kiosk stations to projects (`KIOSK_PROJECTS`,
+   * ADR-089 amendment point 1): a change to a level that accepts one is
+   * refused otherwise (`kiosk_unavailable`), the level in force kept.
+   */
+  kioskOffered: z.boolean(),
   /** The modes the caller may set now, the current one included. */
   allowed: z.array(WorkMode),
   /** Why another mode is refused to the caller (the first refusal met); null when every mode is open. */

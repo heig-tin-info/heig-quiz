@@ -26,7 +26,7 @@ import { LOCALES, MCQ_SCORE_POLICIES, TOKEN_SCOPES } from "@quiz/domain";
 
 import { bytea } from "./columns.js";
 import { evaluations } from "./evaluation.js";
-import { kioskDevices } from "./kiosk.js";
+import { kioskDevices, kioskPairings } from "./kiosk.js";
 import { projects } from "./project.js";
 
 /**
@@ -157,6 +157,13 @@ export const sessions = pgTable(
      * check the header of every later request; null on every other kind.
      */
     sebConfigKey: char("seb_config_key", { length: 64 }),
+    /**
+     * The pairing a `kiosk` session was opened by (ADR-089, amendment of
+     * 2026-11-15, point 4): its sitting, set when the station consumes its
+     * approved pairing; null on every other kind. The pairing row is the
+     * sitting's record, never this one, whose key never leaves Quiz.
+     */
+    kioskPairingId: uuid("kiosk_pairing_id").references(() => kioskPairings.id, { onDelete: "set null" }),
   },
   (t) => [
     index("sessions_expires_idx").on(t.expiresAt),
