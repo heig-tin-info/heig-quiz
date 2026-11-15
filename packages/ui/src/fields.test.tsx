@@ -24,10 +24,10 @@ describe("Segmented", () => {
     expect(onChange).toHaveBeenCalledWith("b");
   });
 
-  it("becomes a recessed panel when it wraps, and dims when disabled", () => {
+  it("keeps corners concentric with its pills when it wraps, and dims when disabled", () => {
     render(<Segmented name="k" value="a" options={options} onChange={() => {}} wrap disabled />);
     const group = screen.getByRole("radiogroup");
-    expect(group.className).toContain("rounded-card");
+    expect(group.className).toContain("rounded-[17px]");
     expect(group.className).toContain("opacity-60");
     expect(screen.getByRole("radio", { name: "Beta" })).toBeDisabled();
   });

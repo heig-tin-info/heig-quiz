@@ -173,7 +173,9 @@ export function DateField({
   "aria-describedby"?: string;
   /** What the date means, one line under the input (the project page's deadline). */
   description?: ReactNode;
-  /** A deadline: the "End of week" shortcut on the label line, committed at once. */
+  /** The label read, not shown: the field at the right of a `SettingRow` that titles it. */
+  labelHidden?: boolean;
+  /** A deadline: the "End of week" shortcut beside the input, committed at once. */
   endOfWeek?: boolean;
   value: string | null;
   /** Writes the value; `reset` is for a refusal, to show the stored value again. */
@@ -188,7 +190,7 @@ export function DateField({
   return (
     <Field
       {...field}
-      hint={
+      action={
         endOfWeek ? (
           <EndOfWeek
             disabled={field.disabled}

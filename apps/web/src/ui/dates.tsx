@@ -1,10 +1,10 @@
-import { Timer } from "lucide-react";
+import { CalendarCheck2, Timer } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import type { DateFormat } from "@quiz/contracts";
+import { IconButton as IconButtonBase } from "@quiz/ui";
 
 import { useI18n, useT, type Locale, type TFunction } from "../i18n";
-import { textLink } from "./controls";
 import { cx, Tip, useNow } from "./layers";
 
 // Dates: the account's date format, absolute and relative times.
@@ -73,20 +73,20 @@ export function endOfWeek(now = new Date()): string {
   return at.toISOString();
 }
 
-/** A deadline field's shortcut to {@link endOfWeek}, on its label line (a `Field`'s `hint`). */
+/**
+ * A deadline field's shortcut to {@link endOfWeek}, beside its input (a
+ * `Field`'s `action`): an icon named "End of week", its tooltip the moment
+ * it sets.
+ */
 export function EndOfWeek({ onPick, disabled = false }: { onPick: (iso: string) => void; disabled?: boolean }) {
   const t = useT();
   const at = endOfWeek();
   return (
     <Tip label={disabled ? null : t("time.endOfWeek.tip", { when: isoDateTime(at) })}>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onPick(endOfWeek())}
-        className={cx("text-fg-muted disabled:pointer-events-none disabled:opacity-50", textLink)}
-      >
-        {t("time.endOfWeek")}
-      </button>
+      {/* The base button: the web one would make its label the tooltip, and the tooltip here is the date. */}
+      <IconButtonBase label={t("time.endOfWeek")} disabled={disabled} onClick={() => onPick(endOfWeek())}>
+        <CalendarCheck2 />
+      </IconButtonBase>
     </Tip>
   );
 }

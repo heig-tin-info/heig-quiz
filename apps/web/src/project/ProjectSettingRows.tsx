@@ -63,7 +63,8 @@ export function DeadlineKindRow(props: RowProps<DeadlineKind>) {
     { value: "date" as const, label: t("project.deadlineKind.date") },
     { value: "duration" as const, label: t("project.deadlineKind.duration") },
   ];
-  return <ChoiceRow {...props} name="deadlineKind" title={t("project.deadlineKind")} options={options} />;
+  const desc = t(`project.deadlineKind.desc.${props.value}`);
+  return <ChoiceRow {...props} name="deadlineKind" title={t("project.deadlineKind")} desc={desc} options={options} />;
 }
 
 export function SourceStrategyRow(props: RowProps<SourceStrategy>) {
@@ -100,6 +101,37 @@ export function GradingModeRow<M extends ProjectGradingMode>({ modes, ...props }
 }
 
 /**
+ * A field at the right of its row: the row's title names it (the field's own
+ * label is read, not shown), a refusal under the row.
+ */
+export function FieldRow({
+  id,
+  title,
+  desc,
+  message,
+  children,
+}: {
+  id: string;
+  title: string;
+  desc?: ReactNode;
+  message: string | undefined;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <SettingRow title={title} desc={desc}>
+        {children}
+      </SettingRow>
+      {message ? (
+        <div className="pb-3">
+          <FieldError id={id}>{message}</FieldError>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * The grace, in minutes after the deadline: the row's title names the input,
  * its unit stands after it, a refusal under the row. The input's own props
  * (value, handlers, `disabled`) are the caller's.
@@ -111,31 +143,28 @@ export function GraceMinutesRow({
   const t = useT();
   const id = FIELD_ID.grace;
   return (
-    <div>
-      <SettingRow title={t("project.grace")} desc={t("project.grace.desc")}>
-        <TextInput
-          id={id}
-          type="number"
-          aria-label={t("project.grace")}
-          min={0}
-          max={PROJECT_GRACE_MAX_MINUTES}
-          size="sm"
-          className="w-20 text-right tabular-nums"
-          {...input}
-          {...fieldErrorProps(id, message)}
-        />
-        <span className="text-[13px] text-fg-muted">{t("project.grace.unit")}</span>
-      </SettingRow>
-      {message ? (
-        <div className="pb-3">
-          <FieldError id={id}>{message}</FieldError>
-        </div>
-      ) : null}
-    </div>
+    <FieldRow id={id} title={t("project.grace")} desc={t("project.grace.desc")} message={message}>
+      <TextInput
+        id={id}
+        type="number"
+        aria-label={t("project.grace")}
+        min={0}
+        max={PROJECT_GRACE_MAX_MINUTES}
+        size="sm"
+        className="w-20 text-right tabular-nums"
+        {...input}
+        {...fieldErrorProps(id, message)}
+      />
+      <span className="text-[13px] text-fg-muted">{t("project.grace.unit")}</span>
+    </FieldRow>
   );
 }
 
-/** A manual publication's deadline counted in days: one field, one width, on the creation form and on a draft. */
+/**
+ * A manual publication's deadline counted in days: one input, one width, on
+ * the creation form and on a draft. Its refusal is the caller's to place
+ * (`FieldError` with `FIELD_ID.duration`): under the field, or under the row.
+ */
 export function DurationDaysField({
   message,
   ...input
@@ -144,19 +173,16 @@ export function DurationDaysField({
 }) {
   const t = useT();
   return (
-    <div className="flex flex-col gap-1">
-      <Field
-        id={FIELD_ID.duration}
-        label={t("project.duration")}
-        type="number"
-        min={PROJECT_DURATION_DAYS.min}
-        max={PROJECT_DURATION_DAYS.max}
-        width="w-32"
-        className="text-right tabular-nums"
-        {...input}
-        {...fieldErrorProps(FIELD_ID.duration, message)}
-      />
-      <FieldError id={FIELD_ID.duration}>{message}</FieldError>
-    </div>
+    <Field
+      id={FIELD_ID.duration}
+      label={t("project.duration")}
+      type="number"
+      min={PROJECT_DURATION_DAYS.min}
+      max={PROJECT_DURATION_DAYS.max}
+      width="w-32"
+      className="text-right tabular-nums"
+      {...input}
+      {...fieldErrorProps(FIELD_ID.duration, message)}
+    />
   );
 }

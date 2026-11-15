@@ -81,17 +81,17 @@ export const controlSize = {
   sm: {
     height: "h-7", text: "text-[13px]", px: "px-3", svg: "[&_svg]:size-3.5",
     icon: "size-3.5", iconLeft: "left-3", iconPad: "pl-8", edgeRight: "right-3", padRight: "pr-9",
-    segment: "h-5.5 text-xs",
+    segment: "h-5.5 text-xs", track: "rounded-[14px]",
   },
   md: {
     height: "h-8.5", text: "text-sm", px: "px-4", svg: "[&_svg]:size-4",
     icon: "size-4", iconLeft: "left-4", iconPad: "pl-10", edgeRight: "right-4", padRight: "pr-10",
-    segment: "h-7 text-[13px]",
+    segment: "h-7 text-[13px]", track: "rounded-[17px]",
   },
   lg: {
     height: "h-10", text: "text-sm", px: "px-5", svg: "[&_svg]:size-4",
     icon: "size-4", iconLeft: "left-5", iconPad: "pl-11", edgeRight: "right-5", padRight: "pr-11",
-    segment: "h-8.5 text-[13px]",
+    segment: "h-8.5 text-[13px]", track: "rounded-[20px]",
   },
 } as const;
 
