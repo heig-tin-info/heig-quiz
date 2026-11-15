@@ -1,0 +1,3 @@
+# The one direct requirement of the `baygon` stage (../Containerfile).
+# requirements.txt is compiled from this file; see its header.
+baygon==0.7.0

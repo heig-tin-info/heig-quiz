@@ -1,9 +1,9 @@
 {
   "name": "codespace-statusbar",
   "displayName": "Codespace",
-  "description": "Time left until the assignment deadline and a way back to the portal, in the status bar.",
+  "description": "Time left until the assignment deadline and a way back to the portal, in the status bar; a terminal for the program under gdb.",
   "publisher": "heig",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "SEE LICENSE IN LICENSE.txt",
   "engines": {
     "vscode": "^1.75.0"
@@ -13,7 +13,8 @@
   ],
   "main": "./extension.js",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onDebugResolve:gdb"
   ],
   "extensionKind": [
     "workspace"

@@ -17,8 +17,10 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | `settings.json` | machine settings, installed as `/etc/code-server/settings.json` |
 | `resolv.conf` | empty resolver, installed as `/etc/resolv.conf` |
 | `extension/` | source of `heig.codespace-statusbar`, packaged into a `.vsix` at build time |
+| `baygon/baygon.in`, `baygon/requirements.txt` | Baygon's one requirement, and everything it installs, pinned by hash (§ Baygon) |
 | `run-hardened.sh` | `podman run` with the mandatory hardening |
 | `test.sh` | acceptance test of the image |
+| `test-debug-io.js` | `test.sh` § 12: a debug session through webfreak.debug's real adapter, with the program's terminal |
 | `../../infra/seccomp/codespace.json` | seccomp profile of the project: the runner's plus `ptrace` (M6-05) |
 | `../../infra/apparmor/codespace` | AppArmor profile of the project (what makes gdb work again) |
 
@@ -34,7 +36,9 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | git | 2.47.3 | Debian stable repository |
 | `llvm-vs-code-extensions.vscode-clangd` | 0.6.0 | Open VSX, resolved at build time |
 | `webfreak.debug` | 0.27.0 | Open VSX, resolved at build time |
-| `heig.codespace-statusbar` | 0.1.0 | local source `extension/`, packaged at build time |
+| `heig.codespace-statusbar` | 0.2.0 | local source `extension/`, packaged at build time |
+| Python | 3.13.5 (package `python3`) | Debian stable repository; Baygon's interpreter |
+| Baygon | **0.7.0** (MIT, HEIG-VD) | `baygon/requirements.txt`: it and its 18 dependencies pinned by version and sha256, wheels only |
 | `@vscode/vsce` (packaging only) | 4.0.0 | `ARG VSCE_VERSION`, `npx` in the `vsix` stage |
 | Node of the packaging stage | `node:22-slim` | digest `sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96` |
 
@@ -77,9 +81,10 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 
 - **Add an apt package**: add it to the `apt-get install` list of the `Containerfile` (step 1), add its binary to the presence assertion of `test.sh` § 7 (`test -x /usr/bin/…`), and add a row to the pinned-versions table above.
 - **Add an extension**: one `ARG` for its identifier, one `--install-extension` in the same `RUN`, one `grep -qi "^<id>@"` against `/etc/code-server/extensions.lock` so that the build fails if it is missing, its id in `extensions.allowed` of `settings.json`, the exact expected list asserted in `test.sh` § 3 (three ids, sorted), and a row in the pinned-versions table.
+- **Bump Baygon**: the version in `baygon/baygon.in`, then the `uv pip compile` command in the header of `baygon/requirements.txt` (keep the header), the version asserted by `test.sh` § 11, and the row above. A dependency that ships no wheel for CPython 3.13 on x86_64 fails the build (`--only-binary=:all:`): no compiler is ever brought in for it.
 - **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/history/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`).
 - **Deploy**: classroom's `deploy/push.sh --rebuild-image` rebuilds the image on the VM; without the flag it is only built there when the tag is missing.
-- **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its eleven sections prove, in order:
+- **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its thirteen sections prove, in order:
   - § 0 the container starts under `run-hardened.sh` and answers `/healthz` (prints `MESURE_DEMARRAGE_SECONDES`);
   - § 1 `gdb` runs a program and produces a backtrace, with no "Operation not permitted", and breaks in `main`, steps over a line and into a call;
   - § 2 `personality(ADDR_NO_RANDOMIZE)` passes the project seccomp profile, and the control container on the default profile still varies;
@@ -90,7 +95,9 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
   - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, the colour-scheme settings and their two bundled themes, the return URL's origin trusted (and nothing trusted without one), the port proxy refused (`/proxy/<port>/` and `/absproxy/<port>/` answer 403/404 with a listener on the port), `/vscode-remote-resource` still sent with CSP `sandbox`, no notebook support (`ipynb` and `notebook-renderers` absent, no extension contributing a notebook type), neutralised gallery, no uncaught exception, toolchain binaries and man pages present;
   - § 8 `/etc/resolv.conf` comes from the image, with no nameserver, and resolution fails in under two seconds;
   - § 9 the container carries the seven portal variables and nothing else, the git identity works without a configuration file, and the VS Code server inherits the environment.
-  - § 10 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`.
+  - § 10 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`;
+  - § 11 Baygon 0.7.0 is on `PATH`, passes a trivial test file and reports a failing one without network, `/opt/baygon` is read-only, holds no `pip` and its byte-code was compiled at build time, and the image sets no `PYTHON*` variable;
+  - § 12 a program debugged through webfreak.debug's real adapter, launched with the configuration the status-bar extension makes, prints its prompt in its own terminal, reads the `7` typed there, stops on a breakpoint, and none of its I/O reaches the debug console.
 
 ## Measurements (2026-09-17, WSL2, 24 cores, Podman 5.7 rootful, crun, overlay)
 
@@ -98,7 +105,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 | --- | --- |
 | Full `--no-cache` build | **45 – 51 s** (of which ~25 s downloading the 233 MB `.deb`) |
 | Build with layer cache | 4.0 s |
-| Image size | **1.50 GB** (1,499,111,868 bytes) |
+| Image size | **1.50 GB** (1,499,111,868 bytes); **1.55 GB** (1,547,182,164) with Baygon, 2026-11-15 (§ Baygon) |
 | `podman run` (command returns) | 0.18 s |
 | `podman run` → `/healthz` 200 | **0.61 – 0.76 s** warm, **1.0 s** on the first start after a build (cold page cache). Measurement printed by `test.sh`: `MESURE_DEMARRAGE_SECONDES` |
 | `podman run` → `GET /` (workbench HTML served) | 0.95 – 1.01 s |
@@ -339,7 +346,8 @@ picks dies with the container: the `user-data-dir` is a tmpfs.
 ## Status bar extension `heig.codespace-statusbar`
 
 Feedback 3 of [docs/history/leads.md](../../docs/history/leads.md). Publisher `heig`, name
-`codespace-statusbar`, version `0.1.0`. Source in `extension/`:
+`codespace-statusbar`, version `0.2.0` (0.2.0 adds the debugged program's
+terminal, § Debugging). Source in `extension/`:
 plain JavaScript, two useful files (`package.json`, `extension.js`), **no
 dependency, no bundler, no network access, no telemetry**.
 
@@ -492,6 +500,174 @@ The hardening is intact: `test.sh` § 3 keeps checking that no
   (tmpfs) on activation, with the three variables as they were
   read. It is only there for diagnosis; it contains no secret and disappears
   with the container.
+
+## Baygon (2026-11-15, #1102)
+
+[Baygon](https://github.com/heig-tin-info/baygon) is the functional-test
+runner of the school's C labs: their `make test` runs `baygon -v -t t.yaml`.
+The image installs it at build time, in a stage of its own (`baygon` in the
+`Containerfile`):
+
+- a venv `/opt/baygon` on the same pinned Debian base, filled by
+  `pip install --require-hashes --only-binary=:all: --no-deps --no-cache-dir`
+  from `baygon/requirements.txt`: Baygon 0.7.0 and its 18 dependencies
+  (click, typer, rich, pygments, markdown-it-py, mdurl, pydantic,
+  pydantic-core, annotated-types, annotated-doc, typing-extensions,
+  typing-inspection, pyyaml, eval-type-backport, termynal, markdown,
+  shellingham, tinykernel), each pinned by version and sha256, wheels only,
+  so nothing is compiled and nothing is resolved at build time;
+- `pip` is then removed from the venv, and only the venv crosses into the
+  final image: no `pip`, no `python3-venv`, no wheel cache;
+- the final image installs `python3` (its interpreter, `/usr/bin/python3`,
+  3.13; `libpython3.13` was already there for gdb) and links
+  `/usr/local/bin/baygon`. Everything is root's and on the read-only root;
+  the byte-code was compiled by `pip` at install time, so Python never needs
+  to write it.
+
+Licences: Baygon MIT (HEIG-VD); its dependencies MIT, BSD-2/3-Clause, ISC
+(shellingham), Apache-2.0 (tinykernel) and PSF-2.0 (typing-extensions). None
+of them asks for anything at run time, and the container has no network.
+
+**Cost: +48.0 MB** (1,499,154,788 → 1,547,182,164 bytes, +3.2 %, both built
+`--no-cache` from the same base on 2026-11-15): the venv is 31 MB (11 MB of
+it byte-code, 9.6 MB Pygments, which `rich` requires), the interpreter
+packages about 7 MB, and the standard library's byte-code that `python3`'s
+installation compiles the rest.
+
+A side effect: students now have `python3` in the terminal (the standard
+library only, no `pip`). Baygon 0.7.0 exits 0 even when a test fails; its
+summary (`1 failed, 0 passed`) is what tells, which `test.sh` § 11 asserts.
+
+## Debugging: the program's terminal (2026-11-15, #1103)
+
+### The defect
+
+Under webfreak.debug 0.27.0, a program being debugged printed nothing until
+it ended and could not be given input: `printf("enter a=\n"); scanf("%d",
+&a);` showed no prompt, and `a` held a number nobody typed. Read in the
+extension's source (`out/src/backend/mi2/mi2.js`, `load`): it spawns gdb
+`--interpreter=mi2` with stdin and stdout on **pipes**, and the program gdb
+runs inherits them. So:
+
+- the program's stdout is a pipe, hence block-buffered by the C library: its
+  output reaches gdb's stream, then the debug console, only when the buffer
+  fills or the program ends;
+- the program's stdin **is gdb's command stream**: a `scanf("%d")` reads the
+  numeric token of the next MI command the extension sends (the `a = 7` of
+  the issue's screenshot; `a=6` reproduced here), and the student's keys go
+  to the debug console, which evaluates them as gdb expressions.
+
+The extension's own way out, the `terminal` attribute, runs an
+`x-terminal-emulator` (`out/src/backend/linux/console.js`); none exists in a
+browser, and the launch waits five seconds for it and fails. Reproduced with
+the image of `origin/main` in headless Chromium.
+
+### What the image does
+
+`heig.codespace-statusbar` registers a debug configuration provider for the
+`gdb` type (`extension/debugIo.js`, `extension.js`). For every gdb `launch`
+(not `attach`, not `ssh`, not a configuration whose `autorun` already sets
+`inferior-tty` or `tty`):
+
+1. it opens one integrated terminal, **Program**, reused by every later
+   launch while it lives (one creation at a time: launches that arrive
+   together, a compound configuration, share it). Its process, run by
+   code-server's pty host like any terminal, gives the tty up as its
+   controlling terminal (`TIOCNOTTY`), writes the tty's name to a file of
+   `/tmp`, then waits without ever reading;
+2. it prepends `set inferior-tty /dev/pts/N` to the configuration's
+   `autorun`, which the extension sends before the program starts, and drops
+   any `terminal` attribute;
+3. once the session has started, it shows that terminal and gives it the
+   focus (the debug console otherwise opens over it).
+
+gdb then runs the program on that terminal, as its controlling terminal:
+the prompt appears at once (a terminal is line-buffered), the student types
+there, as in a shell (Ctrl+D and Ctrl+C were not tried).
+The debug console keeps gdb's own messages. The student's own `launch.json`
+needs no change, as long as its `type` is `gdb`.
+
+Verified:
+
+- `test.sh` § 12, at every image test: the real adapter of webfreak.debug
+  (`out/src/gdb.js`) over the Debug Adapter Protocol, the terminal spawned
+  by node-pty (the module code-server's pty host uses) with the extension's
+  own command line, the configuration made by `debugIo.js`: prompt in the
+  terminal, `7` read, breakpoint hit, no program I/O in the debug console,
+  no "Failed to set controlling terminal";
+- by hand on 2026-11-15, in headless Chromium against the image: F5 on a
+  `launch.json` like the one below, with and without `preLaunchTask`, opens
+  **Program** focused, the `7` typed reaches the program, and a second F5
+  reuses the terminal.
+
+Not verified: a real browser on Windows, Safe Exam Browser, Ctrl+C and
+Ctrl+D in the terminal.
+
+Known limits:
+
+- **The terminal is always "Program".** The extension has French strings,
+  but code-server shows its interface, and gives extensions
+  `vscode.env.language`, in English: the image ships no language pack (the
+  comment above `pickStrings` in `extension/extension.js` says how one
+  could be added without touching the extension).
+- **`Invalid debug adapter` in the browser's console** once per session
+  that ends normally. Not ours, and not shown to the student: VS Code
+  (`getDebugAdapter`, `$acceptDAMessage` of the workbench) reports a
+  message for an adapter it has already disposed. That message is
+  webfreak.debug's second `terminated` event: it sends one when the program
+  exits (`exited-normally`), then, after answering VS Code's `disconnect`,
+  another when gdb quits (`mibase.js`, `quitEvent` on `quit`). Observed with
+  the DAP driver of `test-debug-io.js`, with and without `set inferior-tty`
+  alike; a matter of timing whether the second arrives after the disposal
+  (it was not logged once in a run on the image without this change).
+
+### What a lab template should hold
+
+webfreak.debug is the only debugger in the image. A `launch.json` written
+for Microsoft's C/C++ extension (`"type": "cppdbg"`, and a `tasks.json` of
+`"type": "cppbuild"`) does not work here: that extension is not in the image
+and cannot be installed (its debug type and task type are unknown, as the
+student's *Output* panel said). A teacher's template should hold, in
+`.vscode/`:
+
+```json
+// launch.json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug",
+      "type": "gdb",
+      "request": "launch",
+      "target": "./main",
+      "cwd": "${workspaceFolder}",
+      "valuesFormatting": "parseText",
+      "preLaunchTask": "make"
+    }
+  ]
+}
+```
+
+```json
+// tasks.json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "make",
+      "type": "shell",
+      "command": "make",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    }
+  ]
+}
+```
+
+`target` is the lab's executable; the `Makefile` must build it with `-g`.
+No `terminal`, no `autorun` setting `inferior-tty`: the image provides the
+program's terminal. `problemMatcher` stays empty: `$gcc` comes from
+Microsoft's extension too; clangd reports the errors in the editor.
 
 ## Resolver: `/etc/resolv.conf` shipped by the image
 
@@ -720,7 +896,9 @@ listed here.
   session in a browser. To be taken up again at milestone 1.
 - **Settled** (was a `TODO(verify)` for **webfreak.debug 0.27.0**) — no gdb launch
   configuration is shipped in the image, and that is the decision: the
-  `launch.json` lives in the teacher's template repository, not in a machine file.
+  `launch.json` lives in the teacher's template repository, not in a machine file
+  (§ Debugging gives the configuration to use; the image adds the program's
+  terminal to whichever gdb launch it holds).
   It is there in both seed templates
   (`seed/templates/tp-pointeurs/.vscode/launch.json`,
   `seed/templates/exam-c/.vscode/launch.json`), as asked for by
@@ -787,6 +965,6 @@ listed here.
 - `CAP_SYS_PTRACE` stays dropped (docs/history/analyse.md § 3.5): `gdb ./prog`
   works, `gdb -p <pid>` on a process from another terminal will not
   work. That is the decision, not a defect.
-- The image size (1.5 GB) is dominated by code-server (723 MB installed).
+- The image size (1.55 GB) is dominated by code-server (723 MB installed).
   No effort at reduction has been made: the image is local, the `podman run`
   does not transfer it.
