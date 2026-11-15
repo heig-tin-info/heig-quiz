@@ -40,6 +40,7 @@ import {
   CodespaceAssignmentSync,
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
+  type LaunchIdentityClaims,
   QUIZ_CODESPACE_ISSUER,
   REVIEW_AUDIENCE,
   ReviewLaunchTokenClaims,
@@ -133,13 +134,6 @@ function html(reply: FastifyReply, code: number, page: string): FastifyReply {
 }
 
 /**
- * Who opens a portal session, as both launch tokens carry it: the identity
- * claims `@quiz/contracts` defines once for `LaunchTokenClaims` and
- * `ReviewLaunchTokenClaims` (ADR-129 §7).
- */
-export type LaunchIdentity = Pick<LaunchTokenClaims, "sub" | "email" | "displayName" | "githubLogin">;
-
-/**
  * User coming from the platform.
  *
  * `oidcSub` is the **prefixed** subject of the token (the column keeps the name
@@ -147,7 +141,7 @@ export type LaunchIdentity = Pick<LaunchTokenClaims, "sub" | "email" | "displayN
  * `login`, on the other hand, is the bare subject — the one that names the
  * volume directory, hence the `isSafeId` checked upstream by the contract.
  */
-export function upsertLaunchUser(db: Db, claims: LaunchIdentity): UserRow {
+export function upsertLaunchUser(db: Db, claims: LaunchIdentityClaims): UserRow {
   const now = new Date();
   const oidcSub = `${CLASSROOM_SUB_PREFIX}${claims.sub}`;
   const existing =
@@ -546,7 +540,7 @@ async function classroomRoutesImpl(
     request: FastifyRequest,
     reply: FastifyReply,
     opening: {
-      claims: LaunchIdentity & Pick<LaunchTokenClaims, "jti" | "seb">;
+      claims: LaunchIdentityClaims & Pick<LaunchTokenClaims, "jti" | "seb">;
       assignment: AssignmentRow;
       targetRepo: AssignmentRepoRef;
       /** Live sessions this opening replaces: excluded from the quota, closed once it allows. */
