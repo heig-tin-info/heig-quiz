@@ -136,6 +136,12 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
 
   app.decorateRequest("codespaceUpstream", null);
 
+  /** A station whose sitting Quiz closed: the station's words, not the SEB page (ADR-089). */
+  function sittingClosed(request: FastifyRequest, reply: FastifyReply, sessionId: string, sitting: string): FastifyReply {
+    request.log.warn({ sessionId, sitting, clientAddress: request.ip }, "proxy access refused: kiosk sitting closed");
+    return deny(reply, 403, "sessionClosedTitle", "launchSittingClosed");
+  }
+
   async function guard(request: FastifyRequest, reply: FastifyReply) {
     const sessionId = (request.params as { sid?: string }).sid ?? "";
     let session: SessionRow | undefined = findSession(db, sessionId);
@@ -191,10 +197,7 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
         return replyOutsideSeb(reply, { ok: false, reason: "address-mismatch" });
       }
       sitting = verdict.claims.sitting;
-      if (sitting !== undefined && isSittingClosed(db, sitting)) {
-        request.log.warn({ sessionId, sitting, clientAddress: request.ip }, "proxy access refused: kiosk sitting closed");
-        return replyOutsideSeb(reply, { ok: false, reason: "sitting-closed" });
-      }
+      if (sitting !== undefined && isSittingClosed(db, sitting)) return sittingClosed(request, reply, sessionId, sitting);
     }
 
     if (session.state === "closed" || session.state === "failed") {
@@ -233,6 +236,10 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
     // sitting: the close drops it, whoever holds the session by then.
     if (sitting !== undefined && request.headers.upgrade !== undefined) {
       opts.sittingSockets.track(sitting, request.raw.socket);
+      // Checked again once tagged: a close that landed during the awaits
+      // above (`ensureRunning`) either wrote its row before this read, or
+      // ran its `drop` after the tag. Either way the socket does not survive.
+      if (isSittingClosed(db, sitting)) return sittingClosed(request, reply, sessionId, sitting);
     }
     // Heartbeat: it is the proxy that keeps `lastSeen`, so an open tab is
     // enough to keep the session alive, and closing it starts the grace

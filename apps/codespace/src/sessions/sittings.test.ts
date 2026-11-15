@@ -46,11 +46,17 @@ async function startUpstream(): Promise<{ server: Server; port: number; sockets:
   return { server, port: (server.address() as AddressInfo).port, sockets };
 }
 
+/** When set, `inspect` (hence `ensureRunning`) calls it and waits for it: a slow container check. */
+let slowInspect: (() => Promise<void>) | null = null;
+
 const engine: Engine = {
   runArgs: () => [],
   containerName: (sessionId) => `cs-test-${sessionId}`,
   run: async (req) => ({ id: "ctr", name: req.name, sessionId: req.sessionId, state: "running", ip: "127.0.0.1" }),
-  inspect: async (name): Promise<ContainerInfo | null> => ({ id: "ctr", name, sessionId: name, state: "running", ip: "127.0.0.1" }),
+  inspect: async (name): Promise<ContainerInfo | null> => {
+    await slowInspect?.();
+    return { id: "ctr", name, sessionId: name, state: "running", ip: "127.0.0.1" };
+  },
   stop: async () => undefined,
   rm: async () => undefined,
   listSessions: async () => [],
@@ -140,6 +146,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  slowInspect = null;
   for (const socket of clients.splice(0)) socket.destroy();
   for (const socket of upstream.sockets) socket.destroy();
   await portal.close();
@@ -185,12 +192,35 @@ describe("the close of a kiosk sitting (ADR-089)", () => {
     expect(await close(SITTING)).toBe(204);
     const refused = await get("station", station);
     expect(refused.statusCode).toBe(403);
+    // The station's words, not the SEB page.
+    expect(refused.body).toContain("Votre session sur ce poste est terminée");
+    expect(refused.body).not.toContain("Safe Exam Browser");
 
     await portal.close();
     await startPortal();
     expect((await get("station", station)).statusCode).toBe(403);
     await expect(upgrade("station", station)).rejects.toThrow();
     expect((await get("seb", seb)).statusCode).toBe(200);
+  });
+});
+
+describe("a close during an upgrade (ADR-089)", () => {
+  it("leaves no socket of the sitting when it lands while the proxy awaits the container", async () => {
+    const station = seat("station", SITTING);
+    let closeRan!: () => void;
+    const closed = new Promise<void>((resolve) => (closeRan = resolve));
+    // The first check of the guard passed; the close lands during `ensureRunning`.
+    slowInspect = async () => {
+      slowInspect = null;
+      expect(await close(SITTING)).toBe(204);
+      closeRan();
+    };
+    const upgraded = upgrade("station", station).then(
+      (socket) => closesWithin(socket, 2000),
+      () => true,
+    );
+    await closed;
+    expect(await upgraded).toBe(true);
   });
 });
 

@@ -44,9 +44,7 @@ export type ExamCookieRefusal =
   | "bad-signature"
   | "expired"
   | "address-mismatch"
-  | "assignment-mismatch"
-  /** Its kiosk sitting was closed (ADR-089): read by the proxy, never by `verifyExamCookie`. */
-  | "sitting-closed";
+  | "assignment-mismatch";
 
 export type ExamCookieVerdict =
   | { readonly ok: true; readonly claims: ExamClaims }

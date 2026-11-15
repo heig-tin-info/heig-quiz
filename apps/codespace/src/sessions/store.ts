@@ -2,6 +2,7 @@
  * Database access to assignments and sessions. No hidden ORM: functions that
  * take the Drizzle handle, as everywhere else in the portal.
  */
+import { HS256_SKEW_SECONDS } from "@quiz/domain";
 import { and, desc, eq, inArray, isNotNull, isNull, notInArray, type SQL } from "drizzle-orm";
 
 import type { Db } from "../db/client.js";
@@ -25,6 +26,14 @@ import { lastRejectedPush, type RejectedPush, type RepoRef } from "../git/index.
  * back to it rather than open a second one.
  */
 export const LIVE_STATES = ["starting", "running", "stopped"] as const;
+
+/**
+ * How long a consumed `jti` outlives its token's `exp`: `verifyHs256`
+ * accepts a token until `exp + HS256_SKEW_SECONDS`, so a row purged at `exp`
+ * made a used link valid again for those seconds (audit M11). A minute more
+ * covers a clock step between the check and the purge.
+ */
+export const JTI_RETENTION_AFTER_EXP_MS = (HS256_SKEW_SECONDS + 60) * 1000;
 
 /** The portal's id of a review assignment is this prefix and Quiz's `project_repos.id` (ADR-129 §10). */
 export const REVIEW_ASSIGNMENT_PREFIX = "review-";

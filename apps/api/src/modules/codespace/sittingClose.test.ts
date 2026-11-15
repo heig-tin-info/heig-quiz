@@ -8,9 +8,11 @@ import { SITTING_CLOSE_AUDIENCE, SittingCloseClaims } from "@quiz/contracts";
 import { verifyHs256 } from "@quiz/domain";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { AppConfig } from "../../config.js";
+
 import { sendSittingClose } from "./service.js";
 
-const CONFIG = { CODESPACE_URL: "https://code.test", CODESPACE_LAUNCH_SECRET: "a-test-launch-secret-0123456789" };
+const CONFIG = { CODESPACE_URL: "https://code.test", CODESPACE_LAUNCH_SECRET: "a-test-launch-secret-0123456789" } as AppConfig;
 const CLOSE = { sitting: "6f1c2a3b-0000-4000-8000-0000000000a1", projectId: "6f1c2a3b-0000-4000-8000-0000000000b1" };
 
 afterEach(() => {
@@ -29,7 +31,7 @@ function portal(status: number): Array<{ url: string; init: RequestInit }> {
 describe("sendSittingClose", () => {
   it("posts the close as its own bearer token, which the portal's schema reads", async () => {
     const calls = portal(204);
-    await sendSittingClose(CONFIG, CLOSE, new Date());
+    expect(await sendSittingClose(CONFIG, CLOSE, new Date())).toBe("sent");
     expect(calls).toHaveLength(1);
     const [call] = calls;
     expect(call?.url).toBe("https://code.test/api/sittings/close");
@@ -43,6 +45,12 @@ describe("sendSittingClose", () => {
     });
     expect(verdict.ok).toBe(true);
     if (verdict.ok) expect(SittingCloseClaims.parse(verdict.claims)).toMatchObject(CLOSE);
+  });
+
+  it("calls nothing while the workspace portal is off", async () => {
+    const calls = portal(204);
+    expect(await sendSittingClose({ ...CONFIG, CODESPACE_URL: "" }, CLOSE, new Date())).toBe("off");
+    expect(calls).toEqual([]);
   });
 
   it("throws on any other answer, so the job retries", async () => {

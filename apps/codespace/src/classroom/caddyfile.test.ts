@@ -135,13 +135,13 @@ describe("the Caddy allow-list of the service API", () => {
       'Strict-Transport-Security "max-age=31536000; includeSubDomains"',
       'X-Content-Type-Options "nosniff"',
       'Referrer-Policy "strict-origin-when-cross-origin"',
-      `+Content-Security-Policy "frame-ancestors 'self' @PLATFORM@"`,
+      `+Content-Security-Policy "frame-ancestors 'self' @PLATFORM_URL@"`,
       "-Server",
     ]);
     expect(CADDYFILE).not.toMatch(/^\s*[^#\s].*X-Frame-Options/m);
-    // `@PLATFORM@` is each instance's Quiz origin, filled by lib.sh from
+    // `@PLATFORM_URL@` is each instance's Quiz origin, filled by lib.sh from
     // CS_PLATFORM: an https origin, no wildcard, no path.
-    expect(LIB).toContain('-e "s|@PLATFORM@|$CS_PLATFORM|g"');
+    expect(LIB).toContain('-e "s|@PLATFORM_URL@|$CS_PLATFORM|g"');
     const platforms = [...LIB.matchAll(/^\t+CS_PLATFORM=(\S+)$/gm)].map((m) => m[1]);
     expect(platforms).toEqual(["https://quiz.chevallier.io", "https://quiz.dev.chevallier.io"]);
     for (const origin of platforms) expect(new URL(origin ?? "").origin).toBe(origin);

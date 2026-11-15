@@ -217,14 +217,17 @@ export function launchToken(
  * the `sitting` (the approving pairing's id) and its project while it
  * exists. The portal answers 204 to a close it applied and to a replay or an
  * unknown sitting alike, so a retry is always safe; any other answer, or no
- * answer, throws, for the caller's job to retry. Only with the portal wired
- * up (`codespaceOn`); the token is never logged.
+ * answer, throws, for the caller's job to retry. Returns `"sent"` once the
+ * portal answered 204, `"off"` without calling anything when the workspace
+ * portal is off (`codespaceOn` false: no portal, so no session to close).
+ * The token is never logged.
  */
 export async function sendSittingClose(
-  config: Pick<AppConfig, "CODESPACE_URL" | "CODESPACE_LAUNCH_SECRET">,
+  config: AppConfig,
   close: { sitting: string; projectId: string | null },
   now: Date,
-): Promise<void> {
+): Promise<"sent" | "off"> {
+  if (!codespaceOn(config)) return "off";
   const iat = Math.floor(now.getTime() / 1000);
   const claims: SittingCloseClaims = {
     iss: QUIZ_CODESPACE_ISSUER,
@@ -242,6 +245,7 @@ export async function sendSittingClose(
     signal: AbortSignal.timeout(PORTAL_TIMEOUT_MS),
   });
   if (reply.status !== 204) throw new Error(`the portal answered ${reply.status} to the close of a sitting`);
+  return "sent";
 }
 
 /**

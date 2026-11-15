@@ -20,23 +20,23 @@
 import type { Socket } from "node:net";
 
 import { LAUNCH_TOKEN_TTL_SECONDS } from "@quiz/contracts";
-import { HS256_SKEW_SECONDS } from "@quiz/domain";
 import { eq, lt } from "drizzle-orm";
 
 import type { Db } from "../db/client.js";
-import { closedSittings, sessions } from "../db/schema.js";
+import { closedSittings } from "../db/schema.js";
 
-import { newCookieToken } from "./manager.js";
+import { rotateSittingOpener } from "./manager.js";
+import { JTI_RETENTION_AFTER_EXP_MS } from "./store.js";
 
 /**
  * How long a closed sitting is remembered: past it, every cookie of the
  * sitting has expired (issued before the close, since `/launch` refuses a
  * closed sitting, and valid `examCookieMaxAgeMs` at most) and every launch
- * token naming it too (minted before the close, five minutes plus the
- * skew, plus a minute as `JTI_RETENTION_AFTER_EXP_MS` allows).
+ * token naming it too (minted before the close, alive five minutes and
+ * refused no later than `JTI_RETENTION_AFTER_EXP_MS` after).
  */
 export function sittingRetentionMs(examCookieMaxAgeMs: number): number {
-  return Math.max(examCookieMaxAgeMs, (LAUNCH_TOKEN_TTL_SECONDS + HS256_SKEW_SECONDS + 60) * 1000);
+  return Math.max(examCookieMaxAgeMs, LAUNCH_TOKEN_TTL_SECONDS * 1000 + JTI_RETENTION_AFTER_EXP_MS);
 }
 
 export function isSittingClosed(db: Db, sitting: string): boolean {
@@ -102,11 +102,7 @@ export function closeSitting(
       .where(lt(closedSittings.closedAt, new Date(now.getTime() - sittingRetentionMs(opts.examCookieMaxAgeMs))))
       .run();
     const first = tx.insert(closedSittings).values({ sitting, closedAt: now }).onConflictDoNothing().run().changes === 1;
-    const opened = tx.select({ id: sessions.id }).from(sessions).where(eq(sessions.openedBySitting, sitting)).all();
-    for (const { id } of opened) {
-      tx.update(sessions).set({ cookieToken: newCookieToken(), openedBySitting: null }).where(eq(sessions.id, id)).run();
-    }
-    return { first, rotated: opened.length };
+    return { first, rotated: rotateSittingOpener(tx, sitting) };
   });
   return { ...result, dropped: sockets.drop(sitting) };
 }

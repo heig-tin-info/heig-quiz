@@ -103,7 +103,7 @@ const fr: Record<MessageKey, string> = {
   launchUnknownAssignment:
     "Activité non synchronisée depuis la plateforme. Prévenez votre enseignant : l'activité doit être enregistrée sur la plateforme avant d'être lancée.",
   launchClosed: "La fenêtre d'ouverture de cette activité est close.",
-  launchSittingClosed: "Votre session sur ce poste est terminée. Appelez le surveillant.",
+  launchSittingClosed: "Votre session sur ce poste est terminée. Appelez la surveillance.",
   launchRepoMissing:
     "Votre dépôt n'est pas encore prêt pour cette activité. Réessayez dans quelques instants.",
   launchBadAssignmentId: "Cette activité porte un identifiant inutilisable par le portail.",

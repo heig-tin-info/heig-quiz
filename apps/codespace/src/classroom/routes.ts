@@ -57,7 +57,6 @@ import {
   type CodespaceSessionSummary,
 } from "@quiz/contracts";
 import {
-  HS256_SKEW_SECONDS,
   bindingMismatch,
   requestBinding,
   verifyHs256,
@@ -89,6 +88,7 @@ import {
 import { WorkspaceBootstrapError, type SessionManager } from "../sessions/manager.js";
 import { closeSitting, isSittingClosed, type SittingSockets } from "../sessions/sittings.js";
 import {
+  JTI_RETENTION_AFTER_EXP_MS,
   REVIEW_ASSIGNMENT_PREFIX,
   REVIEW_SESSIONS_PER_HOLDER,
   assignmentSessionRows,
@@ -182,13 +182,7 @@ export function upsertLaunchUser(db: Db, claims: LaunchIdentityClaims): UserRow 
   return row;
 }
 
-/**
- * How long a consumed `jti` outlives its token's `exp`: `verifyHs256`
- * accepts a token until `exp + HS256_SKEW_SECONDS`, so a row purged at `exp`
- * made a used link valid again for those seconds (audit M11). A minute more
- * covers a clock step between the check and the purge.
- */
-export const JTI_RETENTION_AFTER_EXP_MS = (HS256_SKEW_SECONDS + 60) * 1000;
+export { JTI_RETENTION_AFTER_EXP_MS } from "../sessions/store.js";
 
 /**
  * Consumes a `jti`, of a launch or a service token. Returns false if it had
@@ -247,6 +241,12 @@ export function serializer(): <T>(key: string, fn: () => Promise<T>) => Promise<
   };
 }
 
+/** The token of `Authorization: Bearer <token>`, or "" when there is none. */
+export function bearerToken(request: FastifyRequest): string {
+  const header = request.headers.authorization ?? "";
+  return header.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
+}
+
 // --- the plugin -------------------------------------------------------------
 
 async function classroomRoutesImpl(
@@ -269,8 +269,7 @@ async function classroomRoutesImpl(
    * 401; the log names the reason, never the token.
    */
   async function serviceToken(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
-    const header = request.headers.authorization ?? "";
-    const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
+    const token = bearerToken(request);
     const refusal = token === "" ? "missing-token" : await serviceTokenRefusal(request, token);
     if (refusal === null) return true;
     if (refusal !== "missing-token") request.log.warn({ reason: refusal }, "service token refused");
@@ -417,8 +416,7 @@ async function classroomRoutesImpl(
     // portal never saw, answers 204 too and changes nothing a close has not
     // already changed. Every other refusal is the service routes' 401.
     api.post(SITTING_CLOSE_PATH, async (request, reply) => {
-      const header = request.headers.authorization ?? "";
-      const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
+      const token = bearerToken(request);
       const read =
         token === ""
           ? { reason: "missing-token" }
@@ -499,10 +497,14 @@ async function classroomRoutesImpl(
         "bad-assignment-id",
       );
     }
-    // A station's launch token minted just before its sitting closed: the
-    // close already revoked that sitting, nothing opens under it (ADR-089).
-    if (claims.kiosk && isSittingClosed(db, claims.kiosk.sitting)) {
-      return refuse("launchSittingClosed", "sitting-closed");
+    if (claims.kiosk) {
+      // A station serves an `online_seb` project only (ADR-089 §1, §4): its
+      // claim on any other assignment is refused, so a station's session is
+      // always an exam one, whose cookie and sockets carry the sitting.
+      if (assignment.mode !== "exam") return refuse("launchInvalid", "kiosk-outside-exam");
+      // A station's launch token minted just before its sitting closed: the
+      // close already revoked that sitting, nothing opens under it (ADR-089).
+      if (isSittingClosed(db, claims.kiosk.sitting)) return refuse("launchSittingClosed", "sitting-closed");
     }
     return openSession(request, reply, { claims, assignment, targetRepo: claims.repo, replaces: [], quotaDetail: "quotaDetail" });
   });
@@ -702,6 +704,17 @@ async function classroomRoutesImpl(
         "launch refused: the workspace could not be prepared",
       );
       return html(reply, 503, workspaceErrorPage(lang, err.shortCause));
+    }
+
+    // The close may have landed while `manager.start` awaited: it then
+    // found nothing to rotate, or rotated a token this opening has since
+    // replaced. Refused here, before any `Set-Cookie`, the token
+    // `manager.start` just wrote reaches no browser, and no exam cookie of
+    // the sitting is issued after its close: nobody holds a way in. The
+    // container is left running, as a close leaves it (ADR-089 point 4).
+    if (claims.kiosk && isSittingClosed(db, claims.kiosk.sitting)) {
+      request.log.warn({ launch: { reason: "sitting-closed", jti: claims.jti, clientAddress: request.ip } }, "launch refused");
+      return html(reply, 403, errorPage(lang, t(lang, "launchRefused"), t(lang, "launchSittingClosed")));
     }
 
     if (assignment.mode === "exam") {

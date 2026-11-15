@@ -133,6 +133,9 @@ interface Harness {
   closes: string[];
 }
 
+/** Runs inside the fake `start`, before its row is written: what lands while the real one awaits. */
+let duringStart: (() => void) | null = null;
+
 function fakeManager(db: Db, starts: Harness["starts"], closes: string[] = []): SessionManager {
   return {
     async close(sessionId: string): Promise<void> {
@@ -147,6 +150,7 @@ function fakeManager(db: Db, starts: Harness["starts"], closes: string[] = []): 
       opts: StartOptions = {},
     ): Promise<StartResult> {
       starts.push({ login: user.login, assignmentId: assignment.id, opts });
+      duringStart?.();
       const id = `sess-${user.login}-${assignment.id}`;
       const at = new Date();
       const row = {
@@ -207,6 +211,7 @@ beforeEach(async () => {
   h = await harness();
 });
 afterEach(async () => {
+  duringStart = null;
   await h.app.close();
   h.handle.close();
 });
@@ -797,6 +802,24 @@ describe("GET /launch", () => {
         expect(replay.statusCode).toBe(403);
         expect(replay.body).toContain("already been used");
         expect(h.starts).toHaveLength(1);
+      });
+
+      it("refuses a `kiosk` claim outside an exam, before any side effect (ADR-089 §1)", async () => {
+        await syncedAssignment();
+        const reply = await h.app.inject({ url: `/launch?token=${await launchToken(KIOSK)}` });
+        expect(reply.statusCode).toBe(403);
+        expect(reply.headers["set-cookie"]).toBeUndefined();
+        expect(h.starts).toHaveLength(0);
+      });
+
+      it("refuses, with no cookie, a launch whose sitting closed while the session started", async () => {
+        await syncedExam();
+        duringStart = () => void h.db.insert(closedSittings).values({ sitting: KIOSK.kiosk.sitting, closedAt: new Date() }).run();
+        const reply = await h.app.inject({ url: `/launch?token=${await launchToken(KIOSK)}`, headers: { "accept-language": "en" } });
+        expect(h.starts).toHaveLength(1);
+        expect(reply.statusCode).toBe(403);
+        expect(reply.body).toContain("Your session on this station has ended");
+        expect(reply.headers["set-cookie"]).toBeUndefined();
       });
 
       it("refuses a token of a sitting already closed, before any side effect", async () => {

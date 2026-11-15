@@ -393,8 +393,23 @@ export function forgeOwnerOf(
  * working at the next launch, and the proxy answers its "Session non
  * autorisée" page.
  */
-export function newCookieToken(): string {
+function newCookieToken(): string {
   return randomBytes(32).toString("base64url");
+}
+
+/**
+ * The close of a kiosk sitting (ADR-089, `sessions/sittings.ts`): every
+ * session that sitting opened LAST gets a fresh cookie token nobody holds,
+ * which retires the station's `cs_session`, and forgets its opener. A
+ * session another browser resumed since names no sitting: untouched.
+ * Returns how many sessions were rotated.
+ */
+export function rotateSittingOpener(db: Pick<Db, "select" | "update">, sitting: string): number {
+  const opened = db.select({ id: sessions.id }).from(sessions).where(eq(sessions.openedBySitting, sitting)).all();
+  for (const { id } of opened) {
+    db.update(sessions).set({ cookieToken: newCookieToken(), openedBySitting: null }).where(eq(sessions.id, id)).run();
+  }
+  return opened.length;
 }
 
 export function createSessionManager(opts: ManagerDeps): SessionManager {

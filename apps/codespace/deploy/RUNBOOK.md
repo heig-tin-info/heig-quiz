@@ -377,9 +377,9 @@ podman --remote --url unix:///run/podman/podman.sock system df
 ### The service API's door (audit L25)
 
 `PUT /api/assignments/:id`, `GET /api/assignments/:id/sessions` and
-`POST /api/sittings/close` (ADR-089) are on the public site; a service token
-is single use and bound to its request (ADR-078, amendment of 2026-10-11),
-and a close's token is single use on its own audience. Only Quiz's application VM calls them:
+`POST /api/sittings/close` are on the public site, each behind a signed,
+single-use token (ADR-078, amendment of 2026-10-11; ADR-089). Only Quiz's
+application VM calls them:
 
 - [x] A Caddy allow-list on `/api/*` for the application VM's addresses
   (#744): the `@service_elsewhere` matcher of `deploy/Caddyfile` answers
@@ -393,11 +393,8 @@ and a close's token is single use on its own audience. Only Quiz's application V
 
 ### Framing (ADR-089 §10)
 
-The site sends `Content-Security-Policy: frame-ancestors 'self' <its Quiz>`
-instead of `X-Frame-Options: SAMEORIGIN`: `@PLATFORM@` of the template is
-`CS_PLATFORM` of `lib.sh` (production Quiz for prod, staging Quiz for
-staging), and `cs_install_instance` refuses a fragment left with a
-placeholder before `caddy validate`. No manual step: the prod deploy
+`frame-ancestors 'self' <CS_PLATFORM>` replaces `X-Frame-Options` in
+`deploy/Caddyfile` (why: ADR-089 §10). No manual step: the prod deploy
 rewrites both instances' sites (`install.sh`). The staging dispatcher writes
 no site, so **staging gets the header at the next production deploy**, not
 at its own; until then it keeps `SAMEORIGIN` and no station can frame it
