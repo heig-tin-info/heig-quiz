@@ -18,6 +18,11 @@
  * `ExtensionHostConnection#buildUserEnvironment` builds `{...process.env, ...}`
  * (checked in the bundled package, see ../README.md).
  *
+ * Beside the status bar, every gdb launch gets the debugged program's own
+ * terminal (#1103, ./debugIo.js): webfreak.debug otherwise leaves the
+ * program's stdin and stdout on gdb's pipes, where the student can neither
+ * see what it prints nor type what it reads.
+ *
  * Item 3 reads `GET <origin>/push-status` on the portal's git channel, the
  * `origin` remote the portal wrote in the workspace
  * (`http://portal.internal:9418/git/<session>`): the one surface the
@@ -32,6 +37,7 @@ const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 const vscode = require("vscode");
+const { holderArgs, programTerminalConfig, TTY_RE, wantsProgramTerminal } = require("./debugIo");
 
 /** Refresh period of the countdown. */
 const TICK_MS = 30_000;
@@ -44,6 +50,8 @@ const WARN_MS = 10 * 60 * 1000;
  * contains no secret: only the three variables.
  */
 const WITNESS = path.join(os.tmpdir(), "codespace-statusbar.json");
+/** How long the program's terminal may take to report its tty name. */
+const TTY_WAIT_MS = 5_000;
 
 const STRINGS = {
   fr: {
@@ -58,6 +66,9 @@ const STRINGS = {
     pushRejectedTooltip: (branch, reason) =>
       `Votre dernier push sur ${branch} n'a pas été transmis à GitHub (${reason}). ` +
       "Votre commit est toujours dans votre espace : faites un pull, corrigez si nécessaire, puis poussez à nouveau.",
+    programTerminal: "Programme",
+    programTerminalFailed:
+      "Le terminal du programme n'a pas démarré : ce que le programme affiche et lit passe par la console de débogage.",
     remaining: (h, m) =>
       h > 0
         ? `${h} h ${m} min restantes`
@@ -77,6 +88,9 @@ const STRINGS = {
     pushRejectedTooltip: (branch, reason) =>
       `Your last push of ${branch} was not relayed to GitHub (${reason}). ` +
       "Your commit is still in your workspace: pull, fix if needed, then push again.",
+    programTerminal: "Program",
+    programTerminalFailed:
+      "The program's terminal did not start: what the program prints and reads goes through the debug console.",
     remaining: (h, m) => (h > 0 ? `${h} h ${m} min left` : `${m} min left`),
   },
 };
@@ -155,6 +169,72 @@ function writeWitness(payload) {
   }
 }
 
+/** The tty name the terminal's process wrote to `file`, or undefined after `timeoutMs`. */
+async function waitForTty(file, timeoutMs) {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    try {
+      const name = fs.readFileSync(file, "utf8").trim();
+      if (TTY_RE.test(name)) return name;
+    } catch {
+      // Not written yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return undefined;
+}
+
+/**
+ * One "Program" terminal per window, reused by every gdb launch while it
+ * lives, created again once the student closes it (#1103, ./debugIo.js).
+ */
+function registerProgramTerminal(context, t) {
+  const ttyFile = path.join(os.tmpdir(), `codespace-program-tty-${process.pid}`);
+  let terminal;
+  let tty;
+
+  const ensure = async () => {
+    if (terminal && terminal.exitStatus === undefined && tty) return tty;
+    if (terminal) terminal.dispose();
+    fs.rmSync(ttyFile, { force: true });
+    terminal = vscode.window.createTerminal({
+      name: t.programTerminal,
+      shellPath: "/bin/sh",
+      shellArgs: holderArgs(ttyFile),
+      iconPath: new vscode.ThemeIcon("debug-console"),
+      isTransient: true,
+    });
+    tty = await waitForTty(ttyFile, TTY_WAIT_MS);
+    return tty;
+  };
+
+  context.subscriptions.push(
+    vscode.window.onDidCloseTerminal((closed) => {
+      if (closed === terminal) {
+        terminal = undefined;
+        tty = undefined;
+      }
+    }),
+    vscode.debug.registerDebugConfigurationProvider("gdb", {
+      async resolveDebugConfiguration(_folder, config) {
+        if (!wantsProgramTerminal(config)) return config;
+        const name = await ensure();
+        if (!name) {
+          void vscode.window.showWarningMessage(t.programTerminalFailed);
+          return config;
+        }
+        return programTerminalConfig(config, name);
+      },
+    }),
+    // Shown, and focused for typing, once the session has started: the debug
+    // console opens at session start and would cover it.
+    vscode.debug.onDidStartDebugSession((session) => {
+      if (terminal && tty && session.configuration.autorun?.[0] === `set inferior-tty ${tty}`) terminal.show(false);
+    }),
+    { dispose: () => terminal && terminal.dispose() },
+  );
+}
+
 function activate(context) {
   const fr = String(vscode.env.language || "en").toLowerCase().startsWith("fr");
   const t = pickStrings(vscode.env.language);
@@ -220,6 +300,9 @@ function activate(context) {
     close.show();
     context.subscriptions.push(close);
   }
+
+  // --- the debugged program's terminal (#1103) ------------------------------
+  registerProgramTerminal(context, t);
 
   // --- 3. a push GitHub refused (ADR-078 §6) --------------------------------
   const remote = portalRemote();

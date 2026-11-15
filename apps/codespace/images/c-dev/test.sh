@@ -22,6 +22,10 @@ IMAGE="${IMAGE:-codespace/c-dev:4.137.0}"
 PODMAN_URL="${PODMAN_URL:-unix:///run/podman/podman.sock}"
 SECCOMP_DEFAULT="${SECCOMP_DEFAULT:-/usr/share/containers/seccomp.json}"
 
+# The status-bar extension's version, as the Containerfile's EXT_STATUSBAR_VERSION.
+STATUSBAR_VERSION=0.2.0
+STATUSBAR_DIR="/opt/code-server/extensions/heig.codespace-statusbar-${STATUSBAR_VERSION}"
+
 CTR_A=cdev-p1-a
 CTR_B=cdev-p1-b
 CTR_BOMB=cdev-p1-bomb
@@ -98,6 +102,34 @@ int main(void) {
   return 0;
 }
 EOF
+
+# § 11: two Baygon test files, one passing and one failing, on /bin/cat.
+cat > "${VOL_BASE}/a/work/baygon-ok.yaml" <<'EOF'
+version: 1
+executable: /bin/cat
+tests:
+  - name: Echoes its input
+    stdin: "hello\n"
+    stdout:
+      - equals: "hello\n"
+    exit: 0
+EOF
+sed 's/equals: "hello/equals: "bye/' "${VOL_BASE}/a/work/baygon-ok.yaml" > "${VOL_BASE}/a/work/baygon-ko.yaml"
+
+# § 12: the student's program of #1103, and the debug session's driver. The
+# breakpoint of test-debug-io.js is line 7.
+cat > "${VOL_BASE}/a/work/io.c" <<'EOF'
+#include <stdio.h>
+int main(void) {
+  int a = 0;
+  printf("enter a=\n");
+  if (scanf("%d", &a) != 1) return 2;
+  int b = a * 2;
+  printf("a*2=%d\n", b);
+  return 0;
+}
+EOF
+cp "${HERE}/test-debug-io.js" "${VOL_BASE}/a/work/test-debug-io.js"
 
 echo "P1: hardened student image, working gdb"
 echo "image   : ${IMAGE}"
@@ -258,16 +290,16 @@ ok "the server knows only the three preinstalled extensions: $LIST"
 # up in `--list-extensions` and in the extensions manifest.
 VERS=$(cexec 'XDG_CONFIG_HOME=/tmp/cfg code-server --extensions-dir /opt/code-server/extensions --user-data-dir /tmp/ud --list-extensions --show-versions' 2>/dev/null | tr -d '\r')
 case "$VERS" in
-  *"heig.codespace-statusbar@0.1.0"*) : ;;
-  *) fail "heig.codespace-statusbar@0.1.0 missing from --list-extensions --show-versions" "$VERS" ;;
+  *"heig.codespace-statusbar@${STATUSBAR_VERSION}"*) : ;;
+  *) fail "heig.codespace-statusbar@${STATUSBAR_VERSION} missing from --list-extensions --show-versions" "$VERS" ;;
 esac
-ok "heig.codespace-statusbar@0.1.0 installed and listed by code-server"
+ok "heig.codespace-statusbar@${STATUSBAR_VERSION} installed and listed by code-server"
 
 cexec 'grep -qF "heig.codespace-statusbar" /etc/code-server/extensions.lock' >/dev/null 2>&1 \
   || fail "heig.codespace-statusbar missing from /etc/code-server/extensions.lock"
-cexec 'test -f /opt/code-server/extensions/heig.codespace-statusbar-0.1.0/extension.js' >/dev/null 2>&1 \
+cexec "test -f ${STATUSBAR_DIR}/extension.js" >/dev/null 2>&1 \
   || fail "the status-bar extension code is not in the extensions directory"
-if cexec 'touch /opt/code-server/extensions/heig.codespace-statusbar-0.1.0/extension.js' >/dev/null 2>&1; then
+if cexec "touch ${STATUSBAR_DIR}/extension.js" >/dev/null 2>&1; then
   fail "the status-bar extension can be modified at run time"
 fi
 ok "status-bar extension recorded in extensions.lock and read-only"
@@ -277,10 +309,10 @@ head2 "4. read-only root, no capability"
 # --------------------------------------------------------------------------
 if cexec 'touch /usr/bin/x' >/dev/null 2>&1; then fail "touch /usr/bin/x succeeded"; fi
 ok "touch /usr/bin/x fails"
-for p in /etc/passwd /opt/code-server/extensions/x /usr/lib/code-server/x; do
+for p in /etc/passwd /opt/code-server/extensions/x /usr/lib/code-server/x /opt/baygon/x /opt/baygon/lib/python3.13/site-packages/baygon/__init__.py; do
   if cexec "touch $p" >/dev/null 2>&1; then fail "touch $p succeeded"; fi
 done
-ok "/etc, /opt/code-server/extensions and /usr/lib/code-server are read-only"
+ok "/etc, /opt/code-server/extensions, /usr/lib/code-server and /opt/baygon are read-only"
 
 CAP=$(cexec 'grep CapEff /proc/self/status' | awk '{print $2}')
 [ "$CAP" = "0000000000000000" ] || fail "CapEff is $CAP instead of 0000000000000000"
@@ -553,9 +585,9 @@ ERRS=$(printf '%s\n' "$LOGS_A" | grep -c 'Uncaught exception')
 [ "$ERRS" = "0" ] || fail "code-server logged $ERRS uncaught exception(s)" "$(printf '%s\n' "$LOGS_A" | tail -20)"
 ok "no uncaught exception at code-server start-up"
 
-cexec 'test -x /usr/bin/clangd && test -x /usr/bin/gdb && test -x /usr/bin/gcc && test -x /usr/bin/make && test -x /usr/bin/git' >/dev/null 2>&1 \
-  || fail "one of the expected binaries is missing (clangd, gdb, gcc, make, git)"
-ok "gcc, gdb, make, git, clangd present"
+cexec 'test -x /usr/bin/clangd && test -x /usr/bin/gdb && test -x /usr/bin/gcc && test -x /usr/bin/make && test -x /usr/bin/git && test -x /usr/bin/python3 && test -x /usr/local/bin/baygon' >/dev/null 2>&1 \
+  || fail "one of the expected binaries is missing (clangd, gdb, gcc, make, git, python3, baygon)"
+ok "gcc, gdb, make, git, clangd, python3, baygon present"
 
 cexec 'test -r /home/student/.config/clangd/config.yaml && test -r /run/code-server/xdg-config/clangd/config.yaml' >/dev/null 2>&1 \
   || fail "the clangd configuration is not at both expected paths"
@@ -699,6 +731,72 @@ case "$OUT" in
   "unshare=38 mount=38 ENOSYS=38") ok "raw unshare(CLONE_NEWUSER) and mount(2) answer ENOSYS: $OUT" ;;
   *) fail "unshare(2) or mount(2) did not answer ENOSYS" "$OUT" ;;
 esac
+
+# --------------------------------------------------------------------------
+head2 "11. baygon: pinned, offline, read-only (#1102)"
+# --------------------------------------------------------------------------
+# The labs' `make test` runs `baygon -v -t t.yaml`. Installed at build time
+# from baygon/requirements.txt (every package pinned by hash); the container
+# has no network, so this run proves nothing is fetched at run time.
+OUT=$(cexec 'baygon --version' 2>&1)
+case "$OUT" in
+  *"Baygon version 0.7.0"*) ok "baygon on PATH: $OUT" ;;
+  *) fail "baygon --version is not 0.7.0" "$OUT" ;;
+esac
+
+OUT=$(cexec 'cd /work && baygon -v -t baygon-ok.yaml' 2>&1) \
+  || fail "baygon failed on a passing test file" "$OUT"
+case "$OUT" in
+  *"PASSED"*"ok."*) ok "baygon -v -t on a passing test file: PASSED, offline" ;;
+  *) fail "baygon did not pass a trivial test file" "$OUT" ;;
+esac
+# Baygon 0.7.0 exits 0 even when a test fails: its summary is what is judged.
+OUT=$(cexec 'cd /work && baygon -t baygon-ko.yaml' 2>&1)
+case "$OUT" in
+  *"FAILED"*"1 failed"*) ok "baygon reports a failing test as FAILED" ;;
+  *) fail "baygon did not report a failing test" "$OUT" ;;
+esac
+
+# Nothing to install with, nothing to write: no pip in the venv, and its
+# byte-code compiled at build time (Python cannot write it on the read-only
+# root, and would compile every module again on every run).
+cexec 'test ! -e /opt/baygon/bin/pip && ! /opt/baygon/bin/python -m pip --version' >/dev/null 2>&1 \
+  || fail "pip is present in /opt/baygon"
+cexec 'ls /opt/baygon/lib/python3.13/site-packages/baygon/__pycache__/*.pyc' >/dev/null 2>&1 \
+  || fail "baygon's byte-code was not compiled at build time"
+ok "no pip in /opt/baygon, byte-code compiled at build time"
+PYENV=$(podman_remote exec "$CTR_A" env | grep -c '^PYTHON')
+[ "$PYENV" = "0" ] || fail "the image sets PYTHON* variables" "$(podman_remote exec "$CTR_A" env | grep '^PYTHON')"
+ok "no PYTHON* variable in the container's environment (the closed list of § 9 is unchanged)"
+
+# --------------------------------------------------------------------------
+head2 "12. debugging: the program reads and writes its own terminal (#1103)"
+# --------------------------------------------------------------------------
+# webfreak.debug leaves the program on gdb's pipes: its output is
+# block-buffered into gdb's stream, its stdin is gdb's command stream. The
+# status-bar extension gives every gdb launch a terminal of its own
+# (extension/debugIo.js). test-debug-io.js plays that terminal with
+# node-pty, the module of code-server's pty host, and the debug session with
+# webfreak.debug's real adapter: a breakpoint on line 7, then "7" typed.
+cexec 'cd /work && gcc -g -O0 -o io io.c' >/dev/null 2>&1 || fail "gcc io.c failed"
+DBG=$(cexec "cd /work && /usr/lib/code-server/lib/node test-debug-io.js ${STATUSBAR_DIR} /opt/code-server/extensions/webfreak.debug-*-universal io" 2>&1)
+dbg() { printf '%s' "$DBG" | python3 -c "import json, sys; d = json.load(sys.stdin); print(eval(sys.argv[1]))" "$1" 2>/dev/null; }
+[ "$(dbg 'd["error"]')" = "None" ] || fail "the debug session failed" "$DBG"
+case "$(dbg 'd["autorun"][0]')" in
+  "set inferior-tty /dev/pts/"[0-9]*) : ;;
+  *) fail "the launch configuration does not start with set inferior-tty" "$DBG" ;;
+esac
+[ "$(dbg 'd["stoppedLine"]')" = "7" ] || fail "the breakpoint on line 7 was not hit" "$DBG"
+[ "$(dbg '"terminated" in d["events"]')" = "True" ] || fail "the debug session did not end" "$DBG"
+ok "webfreak.debug: launched with set inferior-tty, stopped on line 7, then ended"
+[ "$(dbg '"enter a=" in d["screen"] and "a*2=14" in d["screen"]')" = "True" ] \
+  || fail "the program's terminal did not show the prompt and the answer to the 7 typed" "$DBG"
+ok "the terminal showed the prompt, took the 7 typed and showed a*2=14"
+[ "$(dbg '"enter a=" in d["console"] or "a*2=14" in d["console"]')" = "False" ] \
+  || fail "the program's output reached the debug console" "$DBG"
+[ "$(dbg '"controlling terminal" in d["screen"]')" = "False" ] \
+  || fail "gdb could not make the terminal the program's controlling terminal" "$DBG"
+ok "the program's I/O stays out of gdb's stream; the terminal is its controlling terminal"
 
 printf '\n%d assertions, all green.\n' "$NTEST"
 printf 'MESURE_DEMARRAGE_SECONDES=%s\n' "$BOOT"

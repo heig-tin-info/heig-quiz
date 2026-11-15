@@ -10,7 +10,7 @@
 FROM docker.io/library/node:22-slim@sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96 AS vsix
 ARG VSCE_VERSION=4.0.0
 ARG EXT_STATUSBAR_ID=heig.codespace-statusbar
-ARG EXT_STATUSBAR_VERSION=0.1.0
+ARG EXT_STATUSBAR_VERSION=0.2.0
 WORKDIR /ext
 COPY extension/ /ext/
 # `--allow-missing-repository`: the extension is not published, it has no
@@ -20,7 +20,28 @@ RUN npx --yes "@vscode/vsce@${VSCE_VERSION}" package \
         --out "/${EXT_STATUSBAR_ID}-${EXT_STATUSBAR_VERSION}.vsix" && \
     test -s "/${EXT_STATUSBAR_ID}-${EXT_STATUSBAR_VERSION}.vsix"
 
-# --- Stage 2: the student image ---------------------------------------------
+# --- Stage 2: Baygon, the functional-test runner of the C labs (#1102) ------
+# A venv under /opt/baygon, built on the same pinned base as the student image
+# so that its interpreter path (/usr/bin/python3, Python 3.13) is the one the
+# final stage installs. Every package is pinned by version AND hash in
+# baygon/requirements.txt; wheels only (no compiler), no dependency resolution
+# (--no-deps: the file is complete), no pip cache. pip itself is removed from
+# the venv: only the venv crosses into the final image, never pip, the
+# python3-venv package or the apt lists of this stage.
+FROM docker.io/library/debian:trixie-slim@sha256:abc9cb88a5587630d7f915f47b23b0668fe250fbfc6457aa4d52b534c1bbf73f AS baygon
+COPY baygon/requirements.txt /opt/baygon-requirements.txt
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 python3-venv && \
+    rm -rf /var/lib/apt/lists/* && \
+    python3 -m venv /opt/baygon && \
+    /opt/baygon/bin/pip install --no-cache-dir --disable-pip-version-check \
+        --require-hashes --only-binary=:all: --no-deps \
+        -r /opt/baygon-requirements.txt && \
+    /opt/baygon/bin/pip uninstall -y --disable-pip-version-check pip && \
+    mv /opt/baygon-requirements.txt /opt/baygon/requirements.txt && \
+    /opt/baygon/bin/baygon --version
+
+# --- Stage 3: the student image ---------------------------------------------
 # Debian 13 "trixie", stable as of 2026-09-17, pinned by digest.
 FROM docker.io/library/debian:trixie-slim@sha256:abc9cb88a5587630d7f915f47b23b0668fe250fbfc6457aa4d52b534c1bbf73f
 
@@ -35,7 +56,7 @@ ARG EXT_DEBUG=webfreak.debug
 # (deadline countdown, return button). It is not published, so it is installed
 # from the .vsix and not from Open VSX.
 ARG EXT_STATUSBAR=heig.codespace-statusbar
-ARG EXT_STATUSBAR_VERSION=0.1.0
+ARG EXT_STATUSBAR_VERSION=0.2.0
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -48,7 +69,8 @@ RUN printf 'path-include /usr/share/man/*\n' > /etc/dpkg/dpkg.cfg.d/heig-man-pag
 
 # 1. C toolchain, gdb, git, manual pages, clangd.
 #    curl and ca-certificates serve the .deb download and the /healthz
-#    acceptance test; procps and less the comfort of the terminal.
+#    acceptance test; procps and less the comfort of the terminal; python3
+#    is Baygon's interpreter (step 4b; gdb already pulls libpython3.13).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         gcc \
@@ -63,7 +85,8 @@ RUN apt-get update && \
         curl \
         ca-certificates \
         procps \
-        less && \
+        less \
+        python3 && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. code-server from the GitHub release, pinned version.
@@ -99,7 +122,7 @@ RUN useradd --uid 1000 --create-home --shell /bin/bash student && \
 #    gallery). The directory is on the root, hence read-only at run time: it is
 #    the only barrier that holds against a .vsix brought in by the student
 #    (docs/history/analyse.md 3.2).
-COPY --from=vsix /heig.codespace-statusbar-0.1.0.vsix /tmp/codespace-statusbar.vsix
+COPY --from=vsix /heig.codespace-statusbar-${EXT_STATUSBAR_VERSION}.vsix /tmp/codespace-statusbar.vsix
 RUN mkdir -p /opt/code-server/extensions /tmp/cs-build /etc/code-server && \
     code-server \
         --extensions-dir /opt/code-server/extensions \
@@ -119,6 +142,13 @@ RUN mkdir -p /opt/code-server/extensions /tmp/cs-build /etc/code-server && \
     rm -rf /tmp/cs-build /root/.config/code-server /root/.local && \
     chown -R root:root /opt/code-server && \
     chmod -R a-w /opt/code-server
+
+# 4b. Baygon (#1102), from the `baygon` stage: root-owned and on the read-only
+#     root like everything else, on PATH through /usr/local/bin. The venv's
+#     .pyc files were compiled at install time, so Python never needs to write.
+COPY --from=baygon /opt/baygon /opt/baygon
+RUN ln -s /opt/baygon/bin/baygon /usr/local/bin/baygon && \
+    baygon --version
 
 # 5. Machine settings. Copied into the tmpfs user-data-dir by the entrypoint.
 COPY settings.json /etc/code-server/settings.json
