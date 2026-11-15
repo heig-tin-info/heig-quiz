@@ -3,13 +3,21 @@
  * `active` under `label`, and the station cookie that names it (named by
  * the instance's `cookieName`: `__Host-quiz_kiosk` in production mode) — made
  * through the registry's own service, the way an accepted attestation and an
- * admin's naming make one.
+ * admin's naming make one. And what the station's page does with it: its
+ * POSTs, its pairing code, the headers of the session a pairing opens.
  */
 import { randomUUID } from "node:crypto";
 
+import type { FastifyInstance, LightMyRequestResponse } from "fastify";
+import { expect } from "vitest";
+
+import { KioskDeviceAuthorization } from "@quiz/contracts";
+
+import { sessionCookies } from "../auth/testing.js";
 import type { Clock } from "../clock.js";
 import type { Db } from "../db/client.js";
 import { KIOSK_COOKIE, recordAttested, updateDevice } from "../modules/kiosk/service.js";
+import type { Payload } from "./http.js";
 
 export interface TestStation {
   deviceId: string;
@@ -33,3 +41,38 @@ export async function kioskStation(
   if (opts.status === "retired") await updateDevice(db, device.id, { status: "retired" });
   return { deviceId: device.id, googleDeviceId, credential, cookie: `${app.cookieName(KIOSK_COOKIE)}=${credential}` };
 }
+
+/** Each station call from its own address: the attestation limiter is not under test. */
+let host = 0;
+
+/** A station's POST (its routes serve no session): its cookie alone, from a fresh address. */
+export const stationPost = (
+  app: Pick<FastifyInstance, "inject">,
+  url: string,
+  station: TestStation | null,
+  payload?: Payload,
+): Promise<LightMyRequestResponse> =>
+  app.inject({
+    method: "POST",
+    url,
+    remoteAddress: `10.9.${Math.floor(++host / 250)}.${host % 250}`,
+    headers: station ? { cookie: station.cookie } : {},
+    ...(payload ? { payload } : {}),
+  });
+
+/** The station's pairing screen: a code (RFC 8628 §3.1–3.2). */
+export async function authorize(app: Pick<FastifyInstance, "inject">, station: TestStation): Promise<KioskDeviceAuthorization> {
+  const res = await stationPost(app, "/app/api/kiosk/device_authorization", station);
+  expect(res.statusCode, res.body).toBe(200);
+  return KioskDeviceAuthorization.parse(res.json());
+}
+
+/**
+ * The headers of the session a response opened (`sessionCookies`), beside
+ * `station`'s cookie when given: what the station's browser then sends.
+ */
+export function stationHeaders(res: LightMyRequestResponse, station: TestStation | null = null): Record<string, string> {
+  const headers = sessionCookies(res);
+  return station ? { ...headers, cookie: `${headers.cookie}; ${station.cookie}` } : headers;
+}
+

@@ -1,5 +1,13 @@
 import { kioskOf, safeExamBrowserOf, type EvaluationSettings } from "@quiz/contracts";
-import { DEVICE_LEVELS, acceptsKiosk, deviceLevelClients, deviceLevelOf, type DeviceLevel } from "@quiz/domain";
+import {
+  DEVICE_LEVELS,
+  TRUSTED_CLIENTS,
+  TRUSTED_CLIENT_SWITCH,
+  acceptsKiosk,
+  deviceLevelClients,
+  deviceLevelOf,
+  type DeviceLevel,
+} from "@quiz/domain";
 import { Shield, ShieldCheck, ShieldHalf, type LucideIcon } from "lucide-react";
 import { useId } from "react";
 
@@ -16,17 +24,17 @@ type Devices = Pick<EvaluationSettings, "safeExamBrowser" | "kiosk">;
  */
 const ICONS: Record<DeviceLevel, LucideIcon> = { any: Shield, seb: ShieldHalf, either: ShieldHalf, kiosk: ShieldCheck };
 
-const KEYS = ["safeExamBrowser", "kiosk"] as const satisfies readonly (keyof Devices)[];
+const KEYS = TRUSTED_CLIENTS.map((c) => TRUSTED_CLIENT_SWITCH[c]);
 
 /** An exam's two trusted-client switches (ADR-051 §2) at a level: both on means either client is accepted. */
-const devicesOf = (level: DeviceLevel): Devices => {
-  const clients = deviceLevelClients(level);
-  return { safeExamBrowser: clients.includes("seb"), kiosk: clients.includes("kiosk") };
-};
+const devicesOf = (level: DeviceLevel): Devices =>
+  Object.fromEntries(TRUSTED_CLIENTS.map((c) => [TRUSTED_CLIENT_SWITCH[c], deviceLevelClients(level).includes(c)])) as Devices;
 
 /** The level in force; the table covers every pair of the two booleans. */
-const levelOf = (settings: EvaluationSettings): DeviceLevel =>
-  deviceLevelOf([...(safeExamBrowserOf(settings) ? (["seb"] as const) : []), ...(kioskOf(settings) ? (["kiosk"] as const) : [])]);
+const levelOf = (settings: EvaluationSettings): DeviceLevel => {
+  const now: Devices = { safeExamBrowser: safeExamBrowserOf(settings), kiosk: kioskOf(settings) };
+  return deviceLevelOf(TRUSTED_CLIENTS.filter((c) => now[TRUSTED_CLIENT_SWITCH[c]]));
+};
 
 /**
  * "Allowed devices" of an exam: one choice over `safeExamBrowser` and `kiosk`,

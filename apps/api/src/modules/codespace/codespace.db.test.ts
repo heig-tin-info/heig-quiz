@@ -596,7 +596,7 @@ describe("POST /app/api/projects/:id/workspace/start", () => {
       expect(body).not.toContain(signature);
     }
     const view = (await call("GET", `/app/api/student/projects/${lab.id}`, student.headers)).json();
-    expect(view.workspace).toEqual({ mode: "online" });
+    expect(view.workspace).toEqual({ mode: "online", devices: "any" });
     const [state] = await server.app.db.select().from(codespaceProjects).where(eq(codespaceProjects.projectId, lab.id));
     expect(state!.firstLaunchAt?.toISOString()).toBe(NOW);
 

@@ -382,7 +382,7 @@ describe("the online workspace (ADR-047, M6-06)", () => {
 
   it("opens the workspace through the start route: a POST, then the portal's address (audit L7)", async () => {
     const launch = "https://code.example/launch?token=abc";
-    const { calls } = mockFetch({ [URL]: ok(project({ workspace: { mode: "online" } })), [START]: ok({ url: launch }) });
+    const { calls } = mockFetch({ [URL]: ok(project({ workspace: { mode: "online", devices: "any" } })), [START]: ok({ url: launch }) });
     render();
     const open = await screen.findByRole("button", { name: "Open workspace" });
     expect(screen.queryByRole("link", { name: "Open workspace" })).toBeNull();
@@ -395,7 +395,7 @@ describe("the online workspace (ADR-047, M6-06)", () => {
 
   it("words the start route's refusal in place", async () => {
     mockFetch({
-      [URL]: ok(project({ workspace: { mode: "online" } })),
+      [URL]: ok(project({ workspace: { mode: "online", devices: "any" } })),
       [START]: fail(409, { error: "closed", message: "closed" }),
     });
     render();
@@ -405,7 +405,7 @@ describe("the online workspace (ADR-047, M6-06)", () => {
   });
 
   it("hands a Safe Exam Browser workspace over to SEB: the project's `.seb`, through its steps (D21)", async () => {
-    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb" } })) });
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb", devices: "seb" } })) });
     render();
     expect(await screen.findByText("This workspace opens only in Safe Exam Browser.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open workspace" })).toBeNull();
@@ -422,7 +422,7 @@ describe("the online workspace (ADR-047, M6-06)", () => {
       role: "student",
       session: { kind: "seb", evaluationId: null, projectId: "p1", readOnly: false, superPowersUntil: null, superPowersAvailable: false },
     });
-    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb" } })) });
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb", devices: "seb" } })) });
     render({ me });
     const open = await screen.findByRole("button", { name: "Open workspace" });
     expect(open.className).toMatch(/bg-accent/);
@@ -439,7 +439,7 @@ describe("the online workspace (ADR-047, M6-06)", () => {
   });
 
   it("offers no invitation under Safe Exam Browser, outside SEB either (ADR-047 §2)", async () => {
-    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb" }, repo: { ...project().repo!, invitation: null } })) });
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online_seb", devices: "seb" }, repo: { ...project().repo!, invitation: null } })) });
     render();
     expect(await screen.findByRole("button", { name: "Open in Safe Exam Browser" })).toHaveClass("bg-accent");
     expect(screen.queryByRole("link", { name: "Quit Safe Exam Browser" })).toBeNull();
@@ -457,7 +457,7 @@ describe("the online workspace (ADR-047, M6-06)", () => {
   });
 
   it("words the start route's refusal it was sent back with, and ignores any other value", async () => {
-    mockFetch({ [URL]: ok(project({ workspace: { mode: "online" } })) });
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "online", devices: "any" } })) });
     const navigate = vi.fn();
     const queryClient = makeQueryClient();
     queryClient.setQueryData(meKey, student);

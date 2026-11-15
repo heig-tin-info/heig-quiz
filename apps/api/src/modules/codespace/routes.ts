@@ -43,11 +43,11 @@ import {
   type WorkspaceReview,
   type WorkspaceStart,
 } from "@quiz/contracts";
-import { isOnlineMode, projectIsLive, type TrustedClient } from "@quiz/domain";
+import { isOnlineMode, projectIsLive, workSettingOf } from "@quiz/domain";
 
 import { actorOf, audit } from "../../audit.js";
 import { sendLaunchFile } from "../../auth/seb.js";
-import { PROJECT_CONFINED, type SessionState } from "../../auth/session.js";
+import { PROJECT_CONFINED } from "../../auth/session.js";
 import { kioskProjectsOn, type AppConfig } from "../../config.js";
 import {
   accessibleProject,
@@ -103,8 +103,7 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     session,
     teacher({ ...onOwnedProject, body: ProjectWorkModeBody }, async ({ req, body, scope }) => {
       const granted = (await grantOf(app.db, callerOf(req).id))?.enabled === true;
-      // Out of supervision the level is `any` (ADR-089 point 2): the schema carries none there.
-      const to = { mode: body.mode, devices: body.mode === "online_seb" ? body.devices : "any" } as const;
+      const to = workSettingOf(body);
       const caller = { owner: true, granted, kioskOffered: kioskProjectsOn(config) };
       const row = await project.setWorkMode(app.db, scope.project.id, to, caller, actorOf(req));
       await requestCodespaceSync(app, config, row.id);
@@ -215,9 +214,14 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     if (!params.success) return notFound(reply);
     const kind = confinedProjectSession(req.auth, params.data.id);
     if (!ownPortalSession(req.auth) && kind === null) return notFound(reply);
-    const via = kind === null ? null : launchVia(req.auth!, kind);
-    // A station's session always names its sitting; one that does not is no sitting at all.
-    if (kind === "kiosk" && via === null) return notFound(reply);
+    // The trusted client's claim (D21 point 4, ADR-089 §4); a `seb` session with no stored Config Key carries none.
+    const auth = req.auth!;
+    let via: LaunchVia = kind === "seb" && auth.sebConfigKey !== null ? { kind, configKey: auth.sebConfigKey } : null;
+    if (kind === "kiosk") {
+      // A type guard: a station's session always names its station and its sitting, which the claim needs.
+      if (auth.deviceId === null || auth.kioskPairingId === null) return notFound(reply);
+      via = { kind, deviceId: auth.deviceId, sitting: auth.kioskPairingId };
+    }
     const scope = await findStudentProjectView(app.db, callerOf(req), req.auth, params.data.id);
     // A project not open yet (scheduled, ADR-127) is a 404 before any test of its mode (N-SEC-20).
     if (scope === null || scope.seat === null || !projectIsLive(scope.project.state)) return notFound(reply);
@@ -263,19 +267,4 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     if (refusal) return reply.code(refusal.status).send({ error: refusal.error });
     return reply.code(204).send();
   });
-}
-
-/**
- * What a launch from a session confined to the project carries to the
- * portal (D21 point 4, ADR-089 §4): a `seb` session's Config Key — none
- * stored, none carried: the session counts as the portal's and the start
- * refuses it at a level that wants SEB —, or a station's device and its
- * sitting, the pairing that opened the session (never the session's own
- * key). Null for a station's session that names no sitting.
- */
-function launchVia(auth: SessionState, kind: TrustedClient): LaunchVia {
-  if (kind === "seb") return auth.sebConfigKey === null ? null : { kind, configKey: auth.sebConfigKey };
-  return auth.deviceId === null || auth.kioskPairingId === null
-    ? null
-    : { kind, deviceId: auth.deviceId, sitting: auth.kioskPairingId };
 }

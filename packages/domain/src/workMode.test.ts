@@ -5,14 +5,13 @@ import {
   gitTokenRefusal,
   isOnlineMode,
   kioskProjectPairable,
-  projectDeviceLevel,
-  projectTrustedClients,
   quotaHolder,
   portalDeadline,
   staffReviewRefusal,
   workModeChoices,
   workModeRefusal,
   workSettingFor,
+  workSettingOf,
   workspaceClosed,
   workspaceStartRefusal,
   type GitTokenFacts,
@@ -109,10 +108,10 @@ describe("the mapping between the setting and the screen (ADR-089 point 2)", () 
     for (const level of ["seb", "either", "kiosk"] as const) expect(workSettingFor(true, level)).toEqual(S("online_seb", level));
   });
 
-  it("reads back the level in force, and the trusted clients it accepts", () => {
-    for (const level of DEVICE_LEVEL_IDS) expect(projectDeviceLevel(workSettingFor(true, level))).toBe(level);
-    expect(projectDeviceLevel(FREE)).toBe("any");
-    expect([FREE, ONLINE, SEB, EITHER, KIOSK].map(projectTrustedClients)).toEqual([[], [], ["seb"], ["seb", "kiosk"], ["kiosk"]]);
+  it("reads back the level from the stored devices, and turns the write's body into the setting", () => {
+    for (const level of DEVICE_LEVEL_IDS) expect(workSettingFor(true, level).devices).toBe(level);
+    expect([workSettingOf({ mode: "free" }), workSettingOf({ mode: "online" })]).toEqual([FREE, ONLINE]);
+    for (const level of ["seb", "either", "kiosk"] as const) expect(workSettingOf({ mode: "online_seb", devices: level })).toEqual(S("online_seb", level));
   });
 });
 

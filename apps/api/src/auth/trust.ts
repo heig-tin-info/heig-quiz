@@ -14,7 +14,7 @@ import type { AppConfig } from "../config.js";
 import type { Db } from "../db/client.js";
 import { deviceByCredential, stationCredential, type KioskDeviceRow } from "../modules/kiosk/service.js";
 import { configKeyHashMatches } from "./seb.js";
-import { activityOf, type SessionAuth } from "./session.js";
+import { activityOf, type SessionState } from "./session.js";
 
 /**
  * Why a confined session's request is not trusted: SEB's Config Key does not
@@ -33,9 +33,7 @@ export type TrustRefusal =
 
 /** What the session hook knows of a confined session: its kind, and what it was opened with. */
 export interface TrustedSession {
-  auth: SessionAuth & { kind: TrustedClient };
-  sebConfigKey: string | null;
-  deviceId: string | null;
+  auth: SessionState & { kind: TrustedClient };
 }
 
 /** The request as SEB (or the station) sent it. */
@@ -73,8 +71,8 @@ export function trustRefusal(session: TrustedSession, request: TrustRequest): Tr
       // ADR-051 §3: `sha256(absolute URL + Config Key)`, the key stored at
       // launch. A session with no stored key (opened before this check
       // existed) matches nothing.
-      return session.sebConfigKey !== null &&
-        configKeyHashMatches(request.url, session.sebConfigKey, request.headers[CONFIG_KEY_HEADER])
+      return session.auth.sebConfigKey !== null &&
+        configKeyHashMatches(request.url, session.auth.sebConfigKey, request.headers[CONFIG_KEY_HEADER])
         ? null
         : "seb_config_key";
     case "kiosk": {
@@ -84,7 +82,7 @@ export function trustRefusal(session: TrustedSession, request: TrustRequest): Tr
       // machine — still `active`. Fails closed on a missing or rotated
       // cookie, and on another station's.
       const station = request.station;
-      if (station === null || station.id !== session.deviceId) return "kiosk_station";
+      if (station === null || station.id !== session.auth.deviceId) return "kiosk_station";
       if (station.status !== "active") return "kiosk_inactive";
       return kioskAttestationRefusal(station, request.fresh, request.now);
     }

@@ -56,7 +56,7 @@ import {
   isOnlineMode,
   portalDeadline,
   projectIsLive,
-  projectTrustedClients,
+  deviceLevelClients,
   quotaHolder,
   requestBinding,
   signHs256,
@@ -434,7 +434,7 @@ export async function sebProjectSeat(db: Db, caller: Caller, projectId: string):
     scope !== null &&
     scope.seat !== null &&
     projectIsLive(scope.project.state) &&
-    projectTrustedClients({ mode: scope.project.workMode, devices: scope.project.devices }).includes("seb") &&
+    deviceLevelClients(scope.project.devices).includes("seb") &&
     scope.room.archivedAt === null;
   return ok ? { id: scope.project.id } : null;
 }

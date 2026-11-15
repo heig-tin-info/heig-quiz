@@ -969,9 +969,9 @@ const studentProjectView = (card: CardFacts): StudentProject => {
     workspace: !flags.codespace
       ? null
       : card.id === STUDENT_PROJECT_OPEN
-        ? { mode: "online" }
+        ? { mode: "online", devices: "any" }
         : card.id === STUDENT_PROJECT_INVITED
-          ? { mode: "online_seb" }
+          ? { mode: "online_seb", devices: "seb" }
           : null,
     serverNow: new Date().toISOString(),
   };

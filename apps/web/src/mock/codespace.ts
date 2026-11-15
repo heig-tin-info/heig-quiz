@@ -23,7 +23,7 @@ import {
   type ProjectWorkspaceSyncAccepted,
   type WorkMode,
 } from "@quiz/contracts";
-import { workModeChoices, workModeRefusal } from "@quiz/domain";
+import { workModeChoices, workModeRefusal, workSettingOf } from "@quiz/domain";
 
 import { classroomRoster } from "./org";
 import { flags, H, iso, MockError, MockPayload, on, refuse } from "./runtime";
@@ -80,7 +80,7 @@ on("PUT", "/app/api/projects/:id/workspace/mode", (m, raw) => {
   const body = ProjectWorkModeBody.safeParse(raw);
   if (flags.assistant) throw refuse(403, "owner_required", "Only an owner of this course may do that");
   if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
-  const to = { mode: body.data.mode, devices: body.data.mode === "online_seb" ? body.data.devices : "any" } as const;
+  const to = workSettingOf(body.data);
   const facts = { owner: true, granted: true, launched: ws.launched, groupMode: false, kioskOffered: KIOSK_OFFERED };
   const refusal = workModeRefusal(facts, ws, to);
   const status = refusal === "kiosk_unavailable" ? 422 : refusal === "work_mode_frozen" || refusal === "work_mode_group" ? 409 : 403;

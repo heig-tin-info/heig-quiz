@@ -513,8 +513,9 @@ export type TeacherCodespaceGrantPatch = z.infer<typeof TeacherCodespaceGrantPat
 
 /**
  * The project's workspace as its STUDENT reads it (`StudentProject.workspace`):
- * its mode, when it runs in the portal and the feature is on; null
+ * its mode and device level (ADR-089: Kiosk only offers no `.seb`), when it
+ * runs in the portal and the feature is on; null
  * otherwise. Nothing of the portal's state, the quota or another student.
  */
-export const StudentProjectWorkspace = z.object({ mode: WorkMode.exclude(["free"]) });
+export const StudentProjectWorkspace = z.object({ mode: WorkMode.exclude(["free"]), devices: DeviceLevel });
 export type StudentProjectWorkspace = z.infer<typeof StudentProjectWorkspace>;

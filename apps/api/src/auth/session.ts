@@ -348,7 +348,6 @@ export async function findSessionUser(
         deviceId: sessions.deviceId,
         kioskPairingId: sessions.kioskPairingId,
       },
-      deviceId: sessions.deviceId,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
@@ -408,8 +407,6 @@ export async function findSessionUser(
     renewedTo,
     /** The session's id as the server knows it: how its streams are found (`bus.sessionsEnded`). */
     sidHash: row.sidHash,
-    sebConfigKey: row.auth.sebConfigKey,
-    deviceId: row.deviceId,
   };
 }
 

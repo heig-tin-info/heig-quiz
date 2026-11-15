@@ -27,9 +27,7 @@ import { and, eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
-  CSRF_COOKIE,
   DEVICE_CODE_GRANT,
-  KioskDeviceAuthorization,
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
   PairPreview,
@@ -44,7 +42,7 @@ import { SESSION_COOKIE } from "../../auth/session.js";
 import { auditLog, enrollments, kioskDevices, kioskPairings, projects, sessions } from "../../db/schema.js";
 import { orgsRoute } from "../../github/testing.js";
 import { routesOf, sessionOf } from "../../test/http.js";
-import { kioskStation, type TestStation } from "../../test/kiosk.js";
+import { authorize as authorizeStation, kioskStation, stationHeaders, stationPost as postAsStation, type TestStation } from "../../test/kiosk.js";
 import { call, newStudent, server, useProjectWorld, usersRoute, world, type Headers } from "../../test/projectWorld.js";
 import { recordAttempt } from "../kiosk/watch.js";
 import { CODESPACE_ENV, PORTAL_SECRET, connectedClassroom, fakePortal, grantedTeacher, workModeBody, type Room } from "./testing.js";
@@ -110,34 +108,12 @@ const accept = async (projectId: string, who: Person) => {
 const start = (projectId: string, headers: Headers) => call("POST", workspaceStartPath(projectId), headers);
 const view = (projectId: string, headers: Headers) => call("GET", `/app/api/student/projects/${projectId}`, headers);
 
-/** Each station call from its own address: the attestation limiter is not under test. */
-let host = 0;
-const stationPost = (url: string, station: TestStation, payload?: object) =>
-  server.app.inject({
-    method: "POST",
-    url,
-    remoteAddress: `10.11.${Math.floor(++host / 250)}.${host % 250}`,
-    headers: { cookie: station.cookie },
-    ...(payload ? { payload } : {}),
-  });
-
-async function authorize(station: TestStation) {
-  const res = await stationPost("/app/api/kiosk/device_authorization", station);
-  expect(res.statusCode, res.body).toBe(200);
-  return KioskDeviceAuthorization.parse(res.json());
-}
+const stationPost = (url: string, station: TestStation, payload?: object) => postAsStation(server.app, url, station, payload);
+const authorize = (station: TestStation) => authorizeStation(server.app, station);
 
 const preview = (who: Person, code: string) => call("GET", `/app/api/pair/${encodeURIComponent(code)}`, who.headers);
 const approve = (who: Person, code: string, activity: { projectId: string } | { evaluationId: string }) =>
   call("POST", "/app/api/pair", who.headers, { code, ...activity });
-
-/** The headers of a session a response set, beside the station's cookie: what the station's browser sends. */
-function stationHeaders(res: { headers: Record<string, unknown> }, station: TestStation): Headers {
-  const all = [res.headers["set-cookie"]].flat().filter((c): c is string => typeof c === "string");
-  const pick = (name: string) => all.find((c) => c.startsWith(`${name}=`))!.split(";")[0]!;
-  const csrf = pick(CSRF_COOKIE);
-  return { cookie: `${pick(SESSION_COOKIE)}; ${csrf}; ${station.cookie}`, "x-csrf-token": csrf.slice(CSRF_COOKIE.length + 1) };
-}
 
 /** A station paired for `student` on `projectId` through the real flow: its headers, and the sitting (the pairing's id). */
 async function seated(station: TestStation, student: Person, projectId: string) {
@@ -434,6 +410,23 @@ describe("a project's kiosk session reaches its project only (invariant 6)", () 
     const theirs = await kioskSession(stranger.id, lab.id, { actorUserId: admin.id });
     expect((await view(lab.id, theirs.headers)).statusCode).toBe(404);
     expect(await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.launch_issued"), eq(auditLog.subjectId, lab.id)))).toEqual([]);
+  });
+
+  it("supersedes the student's seb session of the same project, and is superseded by it (ADR-089 §5)", async () => {
+    const student = await newStudent();
+    const room = await connectedClassroom(owner, [student], { prefix: "korg" });
+    const lab = await project(room, "Superseded lab", "either");
+    const me = (headers: Headers) => call("GET", "/app/api/me", headers);
+
+    const seb = await sebSession(student.id, lab.id);
+    expect((await me(seb)).statusCode).toBe(200);
+    const station = await seated(await kioskStation(server.app), student, lab.id);
+    expect((await me(seb)).statusCode).toBe(401);
+    expect((await me(station.headers)).statusCode).toBe(200);
+
+    const again = await sebSession(student.id, lab.id);
+    expect((await me(station.headers)).statusCode).toBe(401);
+    expect((await me(again)).statusCode).toBe(200);
   });
 
   it("is no session at all on every route that does not declare it", async () => {

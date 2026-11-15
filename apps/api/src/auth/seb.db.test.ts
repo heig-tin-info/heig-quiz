@@ -517,7 +517,7 @@ describe("the seb session of a project (D21)", () => {
     expect((await call("GET", "/app/api/me", seb)).json().session).toMatchObject({ kind: "seb", evaluationId: null, projectId: lab });
     const page = await call("GET", `/app/api/student/projects/${lab}`, seb);
     expect(page.statusCode, page.body).toBe(200);
-    expect(page.json().workspace).toEqual({ mode: "online_seb" });
+    expect(page.json().workspace).toEqual({ mode: "online_seb", devices: "seb" });
     for (const other of [otherLab, online]) {
       expect((await call("GET", `/app/api/student/projects/${other}`, seb)).statusCode).toBe(404);
     }

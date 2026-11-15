@@ -346,8 +346,8 @@ export async function studentProject(
             comment: repo?.releasedComment ?? null,
           },
     criteria,
-    // ADR-047 (M6-06): the mode alone, when the project runs in the portal and the feature is on — once it is open (ADR-127).
-    workspace: codespace && projectIsLive(project.state) && project.workMode !== "free" ? { mode: project.workMode } : null,
+    // ADR-047 (M6-06): the mode and its device level (ADR-089), when the project runs in the portal and the feature is on — once it is open (ADR-127).
+    workspace: codespace && projectIsLive(project.state) && project.workMode !== "free" ? { mode: project.workMode, devices: project.devices } : null,
     serverNow: iso(now),
   };
 }

@@ -7,7 +7,7 @@
  * The closed lists live HERE, `as const`; `@quiz/contracts` re-exports them
  * and builds its zod enums from them, so the two never drift.
  */
-import { acceptsKiosk, deviceLevelClients, type DeviceLevel } from "./deviceLevels.js";
+import { acceptsKiosk, deviceLevelClients, type DeviceLevel, type SupervisedDeviceLevel } from "./deviceLevels.js";
 import type { TrustedClient } from "./evaluationConfig.js";
 import { isLiveIndividualRepo, isLiveRepo, type RepoLifeLike } from "./groupRepo.js";
 import { effectiveDeadline, writableUnderCommit, type DeadlineStrategyName } from "./projectRuns.js";
@@ -69,22 +69,19 @@ export interface WorkSetting {
  * THE mapping between a project's stored setting and what its screen shows
  * (ADR-089, amendment point 2, "One column, one mapping"): out of the
  * workspace, the students' own tools; in it, a device level — `any` is
- * `online`, the three others `online_seb` with that level.
- * {@link projectDeviceLevel} is its inverse.
+ * `online`, the three others `online_seb` with that level. Back, the
+ * stored `devices` is the level: it is `any` outside `online_seb`.
  */
 export function workSettingFor(online: boolean, level: DeviceLevel): WorkSetting {
   if (!online) return { mode: "free", devices: "any" };
   return level === "any" ? { mode: "online", devices: "any" } : { mode: "online_seb", devices: level };
 }
 
-/** The device level a setting is in force at: `any` unless supervised. */
-export function projectDeviceLevel(setting: WorkSetting): DeviceLevel {
-  return setting.mode === "online_seb" ? setting.devices : "any";
-}
-
-/** The trusted clients a project's workspace opens from: none outside `online_seb`. */
-export function projectTrustedClients(setting: WorkSetting): readonly TrustedClient[] {
-  return deviceLevelClients(projectDeviceLevel(setting));
+/** The setting a body of the mode's write stands for (`ProjectWorkModeBody`): the level is `any` unless supervised. */
+export function workSettingOf(
+  body: { mode: Exclude<WorkModeName, "online_seb"> } | { mode: "online_seb"; devices: SupervisedDeviceLevel },
+): WorkSetting {
+  return body.mode === "online_seb" ? { mode: body.mode, devices: body.devices } : { mode: body.mode, devices: "any" };
 }
 
 /** The facts {@link workModeRefusal} decides on. */
@@ -132,7 +129,7 @@ export function workModeRefusal(facts: WorkModeFacts, from: WorkSetting, to: Wor
   if (isOnlineMode(to.mode) && !facts.granted) return "codespace_not_granted";
   if (facts.launched) return "work_mode_frozen";
   if (isOnlineMode(to.mode) && facts.groupMode) return "work_mode_group";
-  if (acceptsKiosk(projectDeviceLevel(to)) && !facts.kioskOffered) return "kiosk_unavailable";
+  if (acceptsKiosk(to.devices) && !facts.kioskOffered) return "kiosk_unavailable";
   return null;
 }
 
@@ -233,7 +230,7 @@ export function portalDeadline(project: Pick<WorkspaceProject, "workMode" | "dea
 export function workspaceStartRefusal(facts: WorkspaceStartFacts, now: Date): WorkspaceStartRefusalCode | null {
   const { project, repo } = facts;
   if (!isOnlineMode(project.workMode)) return "not_online";
-  const clients = projectTrustedClients({ mode: project.workMode, devices: project.devices });
+  const clients = deviceLevelClients(project.devices);
   if (clients.length > 0 && (facts.via === null || !clients.includes(facts.via))) {
     return clients.includes("seb") ? "seb_required" : "kiosk_required";
   }
@@ -251,12 +248,12 @@ export function workspaceStartRefusal(facts: WorkspaceStartFacts, now: Date): Wo
  * list, the approval and the station's consumption.
  */
 export function kioskProjectPairable(
-  project: WorkSetting & { deadlineAt: Date },
+  project: { devices: DeviceLevel; deadlineAt: Date },
   repo: { deadlineAt: Date | null } | null,
   now: Date,
 ): boolean {
   return (
-    projectTrustedClients(project).includes("kiosk") &&
+    acceptsKiosk(project.devices) &&
     effectiveDeadline(repo ?? { deadlineAt: null }, project).getTime() > now.getTime()
   );
 }

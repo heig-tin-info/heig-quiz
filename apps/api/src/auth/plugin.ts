@@ -291,9 +291,9 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // ADR-051 §1: a confined session is worth something only from the client
     // it was opened in, checked on every request; refused, it is not there —
     // except a suspended station's write and a stale submit, a `423` (§6).
-    const { auth, sidHash, sebConfigKey, deviceId } = found;
+    const { auth, sidHash } = found;
     if (confined(auth)) {
-      const session = { auth, sidHash, sebConfigKey, deviceId, userId: found.user.id };
+      const session = { auth, sidHash, userId: found.user.id };
       const refused = await trustRefused(app.db, config, session, req, app.clock.now());
       if (refused === "anonymous") return;
       if (refused !== null) return reply.code(423).send({ error: refused });
