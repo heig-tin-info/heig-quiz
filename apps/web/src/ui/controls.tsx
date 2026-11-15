@@ -222,9 +222,11 @@ export function Field({
         {label}
       </FieldLabel>
       {action ? (
+        // At the right of a row the action comes first, so the inputs of two rows end on one edge.
         <div className="flex items-center gap-1">
+          {labelHidden ? action : null}
           <div className={box}>{input}</div>
-          {action}
+          {labelHidden ? null : action}
         </div>
       ) : (
         input
