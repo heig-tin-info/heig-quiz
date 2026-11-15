@@ -141,16 +141,21 @@ describe.each([
     expect((await me(bare)).statusCode).toBe(401);
   });
 
-  it(`name the kiosk station's cookie ${kiosk}, on Path=/, without a Domain, Secure exactly in production (ADR-089, point 3)`, async () => {
+  it(`name the kiosk station's cookie ${kiosk}, on Path=/, HttpOnly, SameSite=Strict, without a Domain, Secure exactly in production (ADR-089, point 3)`, async () => {
     const res = await server.app.inject({
       method: "POST",
       url: "/app/api/kiosk/attest/verify",
       payload: { response: `mock:station-${production ? "prod" : "dev"}` },
     });
     expect(res.statusCode).toBe(200);
-    const line = setCookies(res)[kiosk]!;
+    const cookies = setCookies(res);
+    const line = cookies[kiosk]!;
     expect(line).toMatch(/; Path=\/(;|$)/);
+    expect(line).toMatch(/; HttpOnly/);
+    expect(line).toMatch(/; SameSite=Strict/);
     expect(line).not.toMatch(/Domain=/i);
     expect(/; Secure/.test(line)).toBe(production);
+    // A station that held no bare cookie is sent no expiry of one.
+    if (production) expect(cookies.quiz_kiosk).toBeUndefined();
   });
 });

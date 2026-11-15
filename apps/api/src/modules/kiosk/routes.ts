@@ -166,9 +166,10 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       if (!registered) await recordAttempt(app.db, device.id, "ok", now);
       // The bare cookie of before the prefix, expired exactly where Quiz set
       // it (host-only, `Path=/app/api`): the station then holds the
-      // credential under its new name only (ADR-089, point 3). Sent before
-      // the new cookie, which in development bears the same name on `Path=/`.
-      // M6-11d removes this with the fallback of `stationCredential`.
+      // credential under its new name only (ADR-089, point 3). In development
+      // the new cookie bears the bare name, so the expiry fires at every
+      // `verify` until M6-11d removes it with the fallback of
+      // `stationCredential`.
       if (req.cookies[KIOSK_COOKIE] !== undefined) {
         reply.clearCookie(KIOSK_COOKIE, { path: BARE_KIOSK_COOKIE_PATH, httpOnly: true, secure, sameSite: "strict" });
       }

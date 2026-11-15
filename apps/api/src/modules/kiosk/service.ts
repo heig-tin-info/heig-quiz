@@ -30,7 +30,7 @@ export const KIOSK_COOKIE = "quiz_kiosk";
 export const KIOSK_COOKIE_HOURS = 12;
 /**
  * The path the bare `quiz_kiosk` was set on before the prefix: `verify`
- * expires it there, host-only, as Quiz set it.
+ * expires it there, host-only, as Quiz set it. M6-11d removes it.
  */
 export const BARE_KIOSK_COOKIE_PATH = "/app/api";
 
