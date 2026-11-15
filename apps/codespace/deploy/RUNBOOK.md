@@ -335,15 +335,151 @@ a named refusal; nothing is lost.
 
 ### Capacity
 
-2 vCPU and 3.8 GB, not resized (owner, 2026-10-08). The two portals, their
-sessions, the shadow snapshots and the backup export share `codespace.slice`,
-below `quiz-runner.slice` (values: `infra/engine/*.slice`; deployment.md §3,
-The slices). Staging and prod draw on the same slice: with
-`CODESPACE_MEMORY=1536m` it holds **one session** at a time, with **768m**
-(the template's value while test-only; an existing env file keeps its own) two. A second
-1536m session pushes the slice to its ceiling: the kernel kills a session's
-process, never a grading run. A real class needs the resize first (§6.2 of
-`docs/merge/06-codespace-seb-infra.md`).
+The two portals, their sessions, the shadow snapshots and the backup export
+share `codespace.slice`, below `quiz-runner.slice` (deployment.md §3, The
+slices). Staging and prod draw on the same slice.
+
+**The slice follows the VM's RAM.** `install_slices` (`infra/engine/lib.sh`)
+writes `codespace.slice`'s memory lines into the drop-in
+`/etc/systemd/system/codespace.slice.d/50-memory.conf`, and the caller's
+`daemon-reload` applies them to the running slice (nothing restarts):
+
+```text
+MemoryMax  = MemTotal − quiz-runner.slice's MemoryLow (1536 MiB) − 256 MiB for the host,
+             rounded to the nearest 256 MiB, at least 1024 MiB
+MemoryHigh = 7/8 of MemoryMax
+```
+
+| MemTotal (RAM) | MemoryHigh | MemoryMax |
+| --- | --- | --- |
+| 3.7 to 3.87 GiB (the 2026-10-08 VM) | 1792M | 2048M |
+| 16 GiB | 12768M | 14592M |
+| 32 GiB | 27104M | 30976M |
+| 64 GiB | 55776M | 63744M |
+| under ~2.75 GiB | 896M | 1024M (the floor, inside the runner's MemoryLow; the deploy warns) |
+
+A VM reports a little less than its nominal size (a "16 GB" one about
+15.6 GiB, hence about 14 GiB of slice). Swap is not counted: it is a cushion
+beyond `MemoryMax`, not capacity. The runner's slice does not move: the
+workspace slice gets what it leaves.
+
+**How many sessions fit.** Each session is capped at `CODESPACE_MEMORY`
+(768m) and `CODESPACE_CPUS` (1), but uses far less; what fits is what they
+use together:
+
+```text
+sessions(RAM)  ≈ (MemoryMax − 2 × 150 MiB of portals) / per-session p95
+sessions(vCPU) ≈ (vCPU − 1 for the runner and the host) / per-session CPU at a busy moment
+```
+
+The per-session p95 and CPU are the load test's measures (below), corrected
+by real tabs. First estimate, to be replaced: 400 MiB and 0.25 vCPU per
+session, so 50 sessions want about 20 GiB of slice and 13 vCPU at the busy
+moments (the start of the class, when everyone's clangd parses at once).
+
+**Other limits on the way to 50 sessions**, checked 2026-11-15:
+
+| Limit | Value | 50 sessions |
+| --- | --- | --- |
+| Session addresses (`/24` per instance, gateway and anchor taken) | 252 | fits |
+| `--userns=auto` pool (`containers:2147483647:2147483648`, 65536 uids each) | 32768 containers | fits |
+| inotify (`fs.inotify.max_user_instances`): every container's instances count against root's, shared with the host (`deploy/sysctl.conf` says why) | 128 → 4096 | **raised** by the prod deploy (`/etc/sysctl.d/60-quiz-codespace.conf`) |
+| The teacher's quota (`maxActiveSessions`, default 2, at most 200 in the admin console) | per teacher | **raise it** (admin console), then *Resync* the project: the quota travels with the sync |
+| Session start (`SESSION_HEALTH_TIMEOUT_MS`, 30 s from `podman run` to code-server's `/healthz`) | 30 s | a burst of launches on a starved CPU can exceed it: the session fails, the student relaunches; raise it in the env file if the load test at `--ramp 0` shows `5xx` |
+| Disk, `/` and `/srv` (82 % used, 6.8 GB free on 2026-11-15) | per session: the repository, its builds, `shadow.git` every 3 min | a C lab is tens of MB a session; keep 3 GB free (`df -h / /srv`, `podman system df`) |
+| Shadow timer (all volumes of an instance, one after another, every 3 min) | serial | seconds for 50 small repositories |
+| `kernel.pid_max` (each session at most 256 pids) | `cat /proc/sys/kernel/pid_max` | 50 × 256 = 12800 |
+| The portal's descriptors (a few websockets per tab, proxied twice) | `grep 'open files' /proc/$(podman --remote --url unix:///run/podman/podman.sock inspect -f '{{.State.Pid}}' quiz-codespace-prod)/limits` | hundreds needed |
+
+#### Resizing the VM
+
+On Hetzner (the owner, in the Cloud Console): **power off** the server,
+*Rescale*, choose **CPU and RAM only** (the disk stays 40 GB, so the server
+can be scaled back down later), **power on**. Then, as root on the VM:
+
+```bash
+cd /opt/quiz-runner && bash -c '. infra/engine/lib.sh && install_slices' && systemctl daemon-reload
+systemctl show codespace.slice quiz-runner.slice -p MemoryHigh,MemoryMax,MemoryLow
+cat /sys/fs/cgroup/codespace.slice/memory.max
+nproc; free -m; sysctl fs.inotify.max_user_instances
+curl -fsS http://127.0.0.1:3110/healthz; curl -fsS http://127.0.0.1:3120/healthz
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3200/health   # 401: the runner answers (its token is the API's)
+```
+
+`install_slices` needs the checkout at a commit that has it (2026-11-15 or
+later; the next prod deploy does it too, as does a runner deploy). Scaling
+back down is the same, and the same command: the slice shrinks with the RAM.
+
+#### Load test
+
+`deploy/loadtest.mjs`, as root on the VM, against staging first (prod needs
+`--yes-prod`, and its sessions hold the prod deploy's live-session guard
+until they close):
+
+```bash
+cd /opt/quiz-runner
+node apps/codespace/deploy/loadtest.mjs staging --port 3120 --dry-run           # secret, health, sync
+node apps/codespace/deploy/loadtest.mjs staging --port 3120 --sessions 50 --ramp 60s --hold 10m --work
+```
+
+It syncs the `lab` assignment `loadtest` on `octocat/Hello-World`, whose
+quota holder is the synthetic `loadtest-teacher` with a quota of exactly
+`--sessions` (no real teacher's grant is touched), launches students
+`load-001`… over the ramp, times each launch to its 303 and code-server's
+`/healthz` through the portal's proxy, and keeps them alive for the hold.
+`--work` runs in each container what a student costs: clangd kept open on a C
+file, a gcc build and a run every 20 to 40 s, `gdb -batch` one build in four.
+It refuses an instance with running sessions (`--beside-live` to go on), and
+Ctrl-C stops it cleanly. It prints a line every 10 s, then a table, and
+writes `/root/loadtest-<instance>-<time>.json`.
+
+**What it does not load**: code-server's workbench (the browser's
+websocket). Without a browser connected code-server starts no extension
+host, the second-largest process of a real session. So, during the run,
+open two or three real workspaces from Quiz staging in a browser, edit and
+build in them, and compare their memory to the synthetic ones
+(`systemd-cgtop -m codespace.slice`): the difference is what to add to the
+per-session p95 before using the formula above.
+
+**Too small** when, during the hold:
+
+- `memory.events` of `codespace.slice` shows `oom_kill` > 0 (a student's
+  process was killed), or `high` growing fast (the slice is being
+  throttled);
+- PSI `memory some avg10` stays above ~5 % (tasks wait for memory), or
+  `cpu some avg10` above ~50 % (half the time something waits for a CPU);
+- launch → 303 p95 above ~20 s, or any `5xx` or timeout among the launches.
+
+The sessions close by themselves `SESSION_GRACE_MS` (10 min) after the run
+(the portal has no API to close one); the script then prints the command
+that removes the `load-*` volumes.
+
+#### During a class
+
+No monitoring screen exists: record the class with the sampler, which
+launches nothing and writes aggregates only (never a container name, a
+student, a teacher or a course), one JSON line every 10 s:
+
+```bash
+systemd-run --unit=quiz-load-watch --property=Nice=10 \
+  "$(command -v node)" /opt/quiz-runner/apps/codespace/deploy/loadtest.mjs watch --every 10s \
+  --out /var/log/quiz-engine/load-$(date +%Y%m%d).jsonl
+journalctl -u quiz-load-watch -f                    # one readable line per sample
+systemctl stop quiz-load-watch                      # after the class
+node /opt/quiz-runner/apps/codespace/deploy/loadtest.mjs report /var/log/quiz-engine/load-$(date +%Y%m%d).jsonl
+```
+
+The report gives the most sessions at once, the slice's peak memory and the
+per-session mean there, the OOM kills and the worst PSI. Live, with what is
+already on the VM:
+
+```bash
+sar -r 1                                            # memory (sysstat records it anyway: sar -r -f /var/log/sysstat/sa16)
+sar -u 1                                            # CPU, %steal included
+systemd-cgtop -m codespace.slice                    # the slice and each session's scope
+cat /sys/fs/cgroup/codespace.slice/memory.events    # oom_kill must stay 0
+cat /proc/pressure/memory /proc/pressure/cpu
+```
 
 ### Host firewall
 
