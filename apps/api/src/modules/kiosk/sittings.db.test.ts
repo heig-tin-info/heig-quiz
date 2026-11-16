@@ -14,7 +14,9 @@
  *   `close_completed_at`; the station's own payload says it;
  * - the kill switch never stops a close: the sweep with both flags off;
  * - Leave this station ends the caller's own sitting only, and no other
- *   session kind reaches it.
+ *   session kind reaches it;
+ * - a code requested by the freshly attested station ends its live project
+ *   sitting (`restarted`, amendment of 2026-11-16), the hold unchanged.
  */
 import { createHash, randomUUID } from "node:crypto";
 
@@ -22,6 +24,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEVICE_CODE_GRANT, KioskStation } from "@quiz/contracts";
+import { KIOSK_FRESH_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import { SYSTEM_ACTOR } from "../../audit.js";
@@ -438,6 +441,80 @@ describe("the hold (amendment point 4)", () => {
     await db().update(kioskPairings).set({ closeCompletedAt: server.clock.now() }).where(eq(kioskPairings.id, held.sitting));
     server.clock.advance(5_000);
     expect((await poll(station, auth.device_code)).json()).toEqual({ redirect: `/take/${evaluationId}` });
+  });
+});
+
+describe("a station restarted during a project sitting (amendment of 2026-11-16)", () => {
+  const codeRequest = (station: TestStation) => postAsStation(server.app, "/app/api/kiosk/device_authorization", station);
+  const expectHeld = async (station: TestStation) => {
+    const res = await codeRequest(station);
+    expect(res.statusCode, res.body).toBe(409);
+    expect(res.json()).toEqual({ error: "station_held" });
+  };
+
+  it("ends the live sitting on a code request from the freshly attested station; the hold lifts once closed", async () => {
+    const { student, projectId } = await world();
+    const s = await sitting(student.id, { projectId });
+    await expectHeld(s.station);
+    expect(await sessionsOf(s.sitting)).toEqual([]);
+    expect(jobs).toEqual([{ sitting: s.sitting, projectId, cause: "restarted" }]);
+    // Still held until the close completes, and nothing asked twice.
+    await expectHeld(s.station);
+    expect(jobs).toHaveLength(1);
+    expect(await run(jobs.pop()!)).toBe("closed");
+    expect((await audits("codespace.session_closed", s.sitting)).map((a) => a.payload)).toEqual([{ projectId, cause: "restarted" }]);
+    expect((await authorizeStation(server.app, s.station)).user_code).toBeTruthy();
+  });
+
+  it("an ended sitting not closed yet: the plain 409, nothing new ended", async () => {
+    const { student, projectId } = await world();
+    const s = await sitting(student.id, { projectId });
+    expect((await leave(s.headers)).statusCode).toBe(204);
+    jobs.length = 0;
+    await expectHeld(s.station);
+    expect(jobs).toEqual([]);
+  });
+
+  it("a stale attestation: the plain 409, the sitting stays", async () => {
+    const { student, projectId } = await world();
+    const s = await sitting(student.id, { projectId });
+    const stale = new Date(server.clock.now().getTime() - KIOSK_FRESH_MS);
+    await db().update(kioskDevices).set({ checkedAt: stale }).where(eq(kioskDevices.id, s.station.deviceId));
+    await expectHeld(s.station);
+    expect(await sessionsOf(s.sitting)).toHaveLength(1);
+    expect(jobs).toEqual([]);
+  });
+
+  it("a station not active or not named is refused as before and ends nothing", async () => {
+    for (const change of [{ status: "retired" as const }, { label: null }]) {
+      const { student, projectId } = await world();
+      const s = await sitting(student.id, { projectId });
+      await db().update(kioskDevices).set(change).where(eq(kioskDevices.id, s.station.deviceId));
+      const res = await codeRequest(s.station);
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ error: "not_recognised" });
+      expect(await sessionsOf(s.sitting)).toHaveLength(1);
+    }
+    expect(jobs).toEqual([]);
+  });
+
+  it("leaves a live exam session on the station untouched", async () => {
+    const { student, projectId, evaluationId } = await world();
+    const exam = await sitting(student.id, { evaluationId });
+    // Not held: a code, the exam session still there.
+    expect((await authorizeStation(server.app, exam.station)).user_code).toBeTruthy();
+    expect(await sessionsOf(exam.sitting)).toHaveLength(1);
+    // Held by an earlier project sitting left unclosed (a station holds one
+    // session: the exam's comes after it): the freshly attested station's
+    // request ends nothing, the exam session stays.
+    const station = await kioskStation(server.app);
+    const project = await sitting(student.id, { projectId }, station);
+    expect((await leave(project.headers)).statusCode).toBe(204);
+    jobs.length = 0;
+    const held = await sitting(student.id, { evaluationId }, station);
+    await expectHeld(station);
+    expect(await sessionsOf(held.sitting)).toHaveLength(1);
+    expect(jobs).toEqual([]);
   });
 });
 
