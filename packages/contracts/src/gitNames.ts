@@ -1,28 +1,28 @@
 /**
- * The names that reach git or GitHub, one schema per notion: a commit id, a
- * repository's name and full name, a path inside a repository. `project.ts`
- * and `codespace.ts` both read them from here (the second is imported by the
- * first, so neither can own them).
+ * The names both `project.ts` and `codespace.ts` need — a commit id, a
+ * repository's name and full name, a path inside a repository — one schema
+ * each, here because the second is imported by the first, so neither can
+ * own them.
  */
 import { z } from "zod";
 
 /** A full SHA-1 object id, as GitHub names a commit or a tree: 40 lowercase hex digits. */
 export const Sha1 = z.string().regex(/^[0-9a-f]{40}$/, "a full SHA-1 expected");
 
-const REPO_NAME = /^[A-Za-z0-9._-]{1,100}$/;
-const notDots = (name: string) => name !== "." && name !== "..";
-
 /** A repository's name in the organization: a name, never a path nor an owner. */
-export const RepoName = z.string().regex(REPO_NAME).refine(notDots, "not a repository name");
-
-/**
- * `owner/name` as GitHub names a repository: an organization's login (letters,
- * digits, inner hyphens, 39 at most), then a {@link RepoName}.
- */
-export const RepositoryFullName = z
+export const RepoName = z
   .string()
-  .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/, "repository expected in the form owner/name")
-  .refine((full) => notDots(full.slice(full.indexOf("/") + 1)), "not a repository name");
+  .regex(/^[A-Za-z0-9._-]{1,100}$/)
+  .refine((name) => name !== "." && name !== "..", "not a repository name");
+
+/** An organization's login on GitHub: letters, digits and inner hyphens, 39 at most. */
+const GITHUB_OWNER = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
+
+/** `owner/name` as GitHub names a repository: an organization's login, then a {@link RepoName}. */
+export const RepositoryFullName = z.string().refine((full) => {
+  const [owner, name, ...rest] = full.split("/");
+  return rest.length === 0 && owner !== undefined && GITHUB_OWNER.test(owner) && RepoName.safeParse(name).success;
+}, "repository expected in the form owner/name");
 
 /**
  * A path inside a repository, never out of it and never read as an option:

@@ -225,9 +225,12 @@ describe("collectWorkspace", () => {
     const before = await refsOf(w.github);
     const slow = (volumeDir: string) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`slow ${volumeDir}`)), 400));
     expect(await collectWorkspace(w.order, deps(w, { snapshot: slow, budgetMs: 100 }))).toEqual({ outcome: "failed", reason: "timeout" });
-    const late = vi.fn(async () => new Promise<string>((r) => setTimeout(() => r("basic dGVzdA=="), 400)));
-    expect(await collectWorkspace(w.order, deps(w, { budgetMs: 300, forge: { pushUrl: () => w.github, authorization: late } }))).toEqual({ outcome: "failed", reason: "timeout" });
+    const late = vi.fn(async () => new Promise<string>((r) => setTimeout(() => r("basic bGF0ZQ=="), 400)));
+    const settle = vi.fn();
+    expect(await collectWorkspace(w.order, deps(w, { budgetMs: 300, forge: { pushUrl: () => w.github, authorization: late, settle } }))).toEqual({ outcome: "failed", reason: "timeout" });
     expect(await refsOf(w.github)).toBe(before);
+    // The token that landed after the budget is released, not left to its expiry.
+    await vi.waitFor(() => expect(settle).toHaveBeenCalledWith("basic bGF0ZQ=="));
   });
 
   it("removes its temporary repository, alternates and index on every exit", async () => {

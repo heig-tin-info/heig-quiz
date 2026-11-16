@@ -394,9 +394,11 @@ export const CollectionRef = z.string().regex(/^refs\/quiz\/collect\/[A-Za-z0-9]
  * `sub`, which names the volume), the repository, the head on GitHub of the
  * branch it is collected to (`base`), the commit that would otherwise be
  * graded (`target`, null when the student never pushed in time: the base is
- * then compared), the paths taken from the base (`keep`,
- * `collectionKeptPaths`), and the temporary ref Quiz names. The portal parses
- * it with this schema before anything runs: no other check.
+ * then compared), the paths taken from the base (`keep`: the project's
+ * protected files as stored — Quiz sends them as they are, and the portal
+ * alone applies `collectionKeptPaths`, which adds the workflows; Quiz never
+ * applies it before sending), and the temporary ref Quiz names. The portal
+ * parses it with this schema before anything runs: no other check.
  */
 export const CodespaceCollectionRequest = z
   .object({

@@ -163,13 +163,17 @@ repository (ADR-077) is treated like any other.
    `tree` the portal reported and its parent the base, and (b) every entry
    under the kept paths — `collectionKeptPaths` of the project's protected
    files — equals the base's, none added, none removed; otherwise `failed`,
-   nothing signed, the temporary ref deleted. Then `signedCommit` of that tree on the base, message
+   nothing signed. Then `signedCommit` of that tree on the base, message
    `Collected from the online workspace at the deadline (<local time>)`;
    the receipt (§6) and the collection row written; then the branch moved,
    `force: false`. A 422 (the head moved: a student's push relayed in the
    meantime, received late) gets a new signed commit of the same tree on the
-   new head, three times at most, then `failed`. The temporary ref is deleted,
-   best effort, as the sync's (`github/sync.ts`).
+   new head, three times at most, then `failed`. **After every order, whatever
+   its outcome** — collected, a failed check, `unchanged`, a timeout, a
+   failure of any kind — Quiz deletes the temporary ref it named, best
+   effort, as the sync's (`github/sync.ts`): a push the portal's budget cut
+   may still have landed on GitHub, and the ref's name is Quiz's, so no
+   answer is needed to find it.
 4. **Then the deadline**: the lock, or under `commit` the deadline commit,
    in the same job, whatever the collection's outcome.
 

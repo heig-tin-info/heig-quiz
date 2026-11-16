@@ -38,7 +38,7 @@ import { lstat, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import type { CodespaceCollectionRequest, CodespaceCollectionResult, CollectionFailure } from "@quiz/contracts";
+import { Sha1, type CodespaceCollectionRequest, type CodespaceCollectionResult, type CollectionFailure } from "@quiz/contracts";
 import { collectionKeptPaths, composeCollectionTree, staleSnapshot, type CollectionTreeEntry } from "@quiz/domain";
 
 import { snapshot as takeSnapshot, type ShadowResult } from "../sessions/shadow.js";
@@ -128,7 +128,7 @@ async function freshSnapshot(volumeDir: string, deps: CollectDeps, left: () => n
   const shadow = join(volumeDir, "shadow.git");
   if (!(await isDirectory(shadow))) return null;
   const head = (await git(["--git-dir", shadow, "rev-parse", "--verify", "--quiet", "HEAD^{commit}"]).catch(() => "")).trim();
-  if (!/^[0-9a-f]{40}$/.test(head)) return null;
+  if (!Sha1.safeParse(head).success) return null;
   if (taken !== null) return { head, at: new Date(), unreadable: taken.unreadable.length, fresh: true };
   const seconds = Number((await git(["--git-dir", shadow, "log", "-1", "--format=%ct", head])).trim());
   return { head, at: new Date(seconds * 1000), unreadable: null, fresh: false };
@@ -225,7 +225,14 @@ export async function collectWorkspace(order: CollectionOrder, deps: CollectDeps
     await writeFile(join(repoDir, "objects", "info", "alternates"), `${stores.join("\n")}\n`, "utf8");
 
     try {
-      authorization = await withinBudget(deps.forge.authorization(repo, forgeOwner, url), left());
+      const asked = deps.forge.authorization(repo, forgeOwner, url);
+      // Out of time, the token may still land: settled then, as every token handed out is.
+      // The `quiz` forge's cache would revoke it at its `useUntil`, except one that landed
+      // after `forget` (an orphan, `quizForge.ts` `request`), which only `settle` revokes.
+      authorization = await withinBudget(asked, left()).catch((err: unknown) => {
+        if (err instanceof OutOfTime) void asked.then((late) => deps.forge.settle?.(late), () => undefined);
+        throw err;
+      });
       const env = gitAuthEnv(authorization, url);
       for (const sha of new Set([order.base, ...(order.target === null ? [] : [order.target])])) {
         const has = await local(["cat-file", "-e", `${sha}^{commit}`]).then(() => true, () => false);
