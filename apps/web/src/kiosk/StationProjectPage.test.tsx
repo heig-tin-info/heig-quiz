@@ -143,22 +143,25 @@ describe("the station page of a project", () => {
   });
 
   it("opens by itself once the student accepted the project elsewhere, the refusal up meanwhile", async () => {
-    let asked = 0;
+    let accepted = false;
     const { calls } = mockFetch({
       ...STATION,
-      [START]: () => (++asked <= 2 ? fail(409, { error: "not_accepted" }) : ok({ url: PORTAL })),
+      "GET /app/api/student/projects/p1": () =>
+        // The server's clock moves at each read; the repository appears once accepted.
+        ok({ ...project, serverNow: new Date().toISOString(), repo: accepted ? { fullName: "prg1/lab-alice" } : null }),
+      [START]: () => (accepted ? ok({ url: PORTAL }) : fail(409, { error: "not_accepted" })),
     });
     renderWithProviders(<StationProjectPage id="p1" />);
     const refusal = "Accept the project first: the workspace opens on your repository.";
     expect(await screen.findByText(refusal)).toBeInTheDocument();
+    // The project is read again, unchanged: no new launch, the notice stays.
+    await advance(3 * LAUNCH_RETRY_MS);
     expect(starts(calls)).toBe(1);
-    // Refused again: the notice stays, no spinner in between.
-    await advance(LAUNCH_RETRY_MS);
-    await waitFor(() => expect(starts(calls)).toBe(2));
     expect(screen.getByText(refusal)).toBeInTheDocument();
+    accepted = true;
     await advance(LAUNCH_RETRY_MS);
     await waitFor(() => expect(frame()).toHaveAttribute("src", PORTAL));
-    expect(starts(calls)).toBe(3);
+    expect(starts(calls)).toBe(2);
   });
 
   it("tries a failed launch again by itself", async () => {

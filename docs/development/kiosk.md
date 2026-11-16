@@ -6,9 +6,9 @@ stations of [ADR-051](../adr/ADR-051-postes-kiosque-attestes.md): Chromebooks
 locked on `https://quiz.chevallier.io/kiosk`, where a student sits an exam
 without Safe Exam Browser, unlocked by scanning a code with their phone.
 A project worked in the online workspace is sat the same way
-([ADR-089](../adr/ADR-089-kiosque-pour-l-espace-de-travail.md), in production
-since 2026-11-15): the station stays on Quiz and frames the workspace
-portal, which the URL allowlist below must therefore name.
+([ADR-089](../adr/ADR-089-kiosque-pour-l-espace-de-travail.md), whose Status
+says where it is switched on): the station stays on Quiz and frames the
+workspace portal, which the URL allowlist below must therefore name.
 
 !!! warning "Google moves its menus"
     The Admin console paths below come from Google's help pages as of
@@ -301,8 +301,8 @@ exam comes back as soon as one attestation is accepted.
 | Every station is refused, and the API logs `kiosk attestation: refused` with `customerMatches: false` | `KIOSK_GOOGLE_CUSTOMER_ID` is not the Workspace Google answers for | the same log line carries the `customerId` Google returned: copy it into `.env.prod`. A leading `C` does not matter, it is ignored on both sides. With `customerMatches: true`, look at `keyTrustLevel` instead: anything but `CHROME_OS_VERIFIED_MODE` is a station in developer mode |
 | **The station cannot start** — "The station keeps trying by itself." | the server cannot get a challenge from Google (network, quota, the service account not in **Services with full access**, a revoked key) or the platform is unreachable | the API's log (`attestation` failures are logged by kind and HTTP status, never with a token); the station retries every 30 seconds |
 | **Google unreachable** in the Last check column | the last attempt could not reach Google | as above; a station at rest shows **The station cannot start** until Google answers again |
-| A project's station shows its bar over an empty frame with a circled "i" | the URL allowlist does not name the workspace portal (first seen 2026-11-16) | the kiosk's **URL blocking** above: add `code.chevallier.io`, then restart the station so that it takes the policy |
-| A project's station says **The workspace did not open** — "Accept the project first" | the student paired the station before accepting the project | the student accepts it on their own device; the station tries again every 10 seconds and opens by itself |
+| A project's station shows its bar over an empty frame with a circled "i" | the URL allowlist does not name the workspace portal | the kiosk's **URL blocking** above: add `code.chevallier.io`, then restart the station so that it takes the policy |
+| A project's station says **The workspace did not open** — "Accept the project first" | the student paired the station before accepting the project | the student accepts it on their own device; the station reads the project every 10 seconds and opens by itself |
 | The phone says **This code does not work** | the code expired (5 minutes), was already used, or was mistyped | type the code the station shows now. After 10 wrong codes in 10 minutes the phone says **Too many wrong codes** and must wait |
 | The phone says **No exam to start on a station** | the exam is not open yet, does not accept kiosk stations, or the student has no seat in the classroom | the exam's state and its **Allowed devices** |
 | Several stations of a room fail together with 429 | a room behind one NAT address: attestation and code requests are limited to 240 calls per client address per minute (one attestation is two calls: about 120 stations attesting in the same minute) | stagger the boot of a very large room; the stations' polls while waiting for a phone are not counted |
