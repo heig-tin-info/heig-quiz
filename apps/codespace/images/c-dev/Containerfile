@@ -72,7 +72,8 @@ RUN printf 'path-include /usr/share/man/*\n' > /etc/dpkg/dpkg.cfg.d/heig-man-pag
 #    libstdc++6 already ships the gdb pretty-printers of the standard library).
 #    curl and ca-certificates serve the .deb download and the /healthz
 #    acceptance test; procps and less the comfort of the terminal; python3
-#    is Baygon's interpreter (step 4b; gdb already pulls libpython3.13).
+#    is the interpreter of Baygon (step 4b; gdb already pulls libpython3.13)
+#    and of pytest.
 #    python3-pytest serves the labs whose `make test` runs pytest: Debian's
 #    package, so both `pytest` and `python3 -m pytest` work for /usr/bin/python3,
 #    its byte-code compiled by the package's postinst. From the Debian mirror

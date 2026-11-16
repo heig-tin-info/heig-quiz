@@ -39,7 +39,7 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | `llvm-vs-code-extensions.vscode-clangd` | 0.6.0 | Open VSX, resolved at build time |
 | `webfreak.debug` | 0.27.0 | Open VSX, resolved at build time |
 | `heig.codespace-statusbar` | 0.2.0 | local source `extension/`, packaged at build time |
-| Python | 3.13.5 (package `python3`) | Debian stable repository; Baygon's interpreter |
+| Python | 3.13.5 (package `python3`) | Debian stable repository; the interpreter of Baygon and pytest |
 | Baygon | **0.7.0** (MIT, HEIG-VD) | `baygon/requirements.txt`: it and its 18 dependencies pinned by version and sha256, wheels only |
 | pytest | 8.3.5 (Debian 8.3.5-2), with pluggy 1.5.0, iniconfig 1.1.1, packaging 25.0 | Debian stable repository (package `python3-pytest`, § pytest) |
 | `@vscode/vsce` (packaging only) | 4.0.0 | `ARG VSCE_VERSION`, `npx` in the `vsix` stage |
@@ -100,10 +100,10 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
   - § 8 `/etc/resolv.conf` comes from the image, with no nameserver, and resolution fails in under two seconds;
   - § 9 the container carries the seven portal variables and nothing else, the git identity works without a configuration file, and the VS Code server inherits the environment.
   - § 10 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`;
-  - § 11 Baygon 0.7.0 is on `PATH`, passes a trivial test file and reports a failing one without network, `/opt/baygon` is read-only, holds no `pip` and its byte-code was compiled at build time, and the image sets no `PYTHON*` variable;
+  - § 11 Baygon 0.7.0 is on `PATH`, passes a trivial test file and reports a failing one without network, `/opt/baygon` is read-only, holds no `pip` (nor has `/usr/bin/python3` one) and its byte-code was compiled at build time, and the image sets no `PYTHON*` variable;
   - § 12 a program debugged through webfreak.debug's real adapter, launched with the configuration the status-bar extension makes, prints its prompt in its own terminal, reads the `7` typed there, stops on a breakpoint, and none of its I/O reaches the debug console;
   - § 13 C++: `g++` has the major version of `gcc`; a C++20 program on `<vector>`, `<ranges>` and `<format>` compiles with `-std=c++20 -Wall -Wextra -pedantic` and runs; gdb breaks in it and prints a `std::vector` through libstdc++'s auto-loaded pretty-printers; § 12's debug session, on a C++ program, keeps its I/O in the Program terminal; `clangd --check` parses the `.cpp` with `-std=c++20` and no error, and a `.c` still with `-std=c17`;
-  - § 14 pytest: `pytest --version` and `/usr/bin/python3 -m pytest --version` succeed, `python3 -m pip` still fails, pytest's byte-code was compiled at build time; a miniature lab's `make test` (`pytest -vv --junitxml=report.xml`) runs a compiled C program through `subprocess` and passes, with a `conftest.py` importing `_pytest.junitxml.xml_key`; `python3 -m pytest -q --junitxml=report.xml` writes a one-test report in `/work`; both under `-W error`, and `.pytest_cache` and the rewritten test's byte-code land in `/work`.
+  - § 14 pytest: `/usr/bin/python3 -m pytest --version` succeeds and pytest's byte-code was compiled at build time; a miniature lab's `make test` (`pytest -vv --junitxml=report.xml`) runs a compiled C program through `subprocess` and checks that `tmp_path` is under `/tmp`, 2 passed; `python3 -m pytest -q --junitxml=report.xml` writes a two-test report in `/work`, and its `conftest.py`, which imports `_pytest.junitxml.xml_key`, finds the key the junitxml plugin stored and leaves a marker; both under `-W error`, and `.pytest_cache` and the rewritten test's byte-code land in `/work`.
 
 ## Measurements (2026-09-17, WSL2, 24 cores, Podman 5.7 rootful, crun, overlay)
 
@@ -541,7 +541,7 @@ packages about 7 MB, and the standard library's byte-code that `python3`'s
 installation compiles the rest.
 
 A side effect: students now have `python3` in the terminal (the standard
-library only, no `pip`). Baygon 0.7.0 exits 0 even when a test fails; its
+library, and pytest since 2026-11-16; no `pip`). Baygon 0.7.0 exits 0 even when a test fails; its
 summary (`1 failed, 0 passed`) is what tells, which `test.sh` § 11 asserts.
 
 ## pytest (2026-11-16)
@@ -559,16 +559,18 @@ and `make points` never reaches its `pip install`. It comes from the Debian
 mirror like every other package of step 1, its byte-code compiled by the
 package's postinst. Baygon has a hashed venv (§ Baygon) only because Debian
 does not package it; pytest is packaged, so it takes the ordinary apt path
-and needs no pinning beyond the base's digest. It pulls `python3-pluggy`,
+and is pinned like every other package of step 1, by the Debian stable
+release only: the base's digest pins the base layer, not the apt index, so a
+rebuild after a Debian point release may bring another pytest or pluggy. It pulls `python3-pluggy`,
 `python3-iniconfig` and `python3-packaging`; `--no-install-recommends` leaves
 out `python3-pygments`. Still no `pip`.
 
 At run time pytest writes `.pytest_cache`, the assertion-rewritten byte-code
 of the test files (`tests/__pycache__`) and the `--junitxml` report beside
 the project, in `/work`; its `tmp_path` fixtures go under `/tmp`, a tmpfs.
-Nothing goes to the read-only root, which `test.sh` § 14 checks by running
-under `-W error` (a cache it could not write would be a
-`PytestCacheWarning`).
+`test.sh` § 14 runs it under `-W error`, so a cache it could not write (a
+`PytestCacheWarning`) would fail, checks that the cache and the byte-code
+are in `/work`, and has a test of its own on `tmp_path`.
 
 **Cost: +3.5 MB** (1,607,441,416 → 1,610,959,391 bytes, +0.2 %, 2026-11-16,
 from the layer cache of the same base).
