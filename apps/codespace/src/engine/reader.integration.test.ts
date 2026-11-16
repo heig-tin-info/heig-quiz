@@ -22,6 +22,7 @@
  * mounts fails), and the reader reads one exactly as any file of the volume.
  */
 import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { closeSync, constants, existsSync, openSync } from "node:fs";
 import { chmod, link, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -185,6 +186,44 @@ describe.skipIf(!engineReady)("the confined reader on a real engine", () => {
     const { opened } = await watch(fifos, () => host.read(work, 20_000, async (_, archive) => archive.resume()));
     expect(opened).toBeGreaterThan(0);
   }, 60_000);
+
+  it("a directory swapped for a link INSIDE the reader publishes at most the reader's own image: something the student reads already", async () => {
+    const imagePasswd = (await podman("run", "--rm", "--network", "none", "--entrypoint", "/usr/bin/cat", IMAGE, "/etc/passwd")).stdout;
+    await mkdir(join(work, "e"));
+    await writeFile(join(work, "e", "passwd"), "mine\n");
+    await run("chmod", ["-R", "a+rX", join(work, "e")]);
+    racers.push(spawn("sh", ["-c", `cd '${work}' && while :; do rm -rf e; ln -s /etc e; rm -f e; mkdir e && printf 'mine\\n' > e/passwd && chmod 755 e && chmod 644 e/passwd; done`]));
+    const order: CollectionOrder = { assignment: PROJECT, userId: USER, repository: "heig-tin-info/lab3-alice", base, target: null, keep: [], ref: REF };
+    const seen = new Set<string>();
+    for (let i = 0; i < 6; i += 1) {
+      await git(["--git-dir", github, "update-ref", "-d", REF]).catch(() => "");
+      const result = await collectWorkspace(order, { volumesRoot, forge: { pushUrl: () => github, authorization: async () => "basic dGVzdA==" }, reader });
+      expect(await secretPublished()).toBe(false);
+      if (result.outcome !== "pushed") continue;
+      const passwd = await git(["--git-dir", github, "cat-file", "blob", `${REF}:e/passwd`]).catch(() => null);
+      if (passwd !== null) seen.add(passwd);
+    }
+    for (const r of racers.splice(0)) r.kill("SIGKILL");
+    await rm(join(work, "e"), { recursive: true, force: true });
+    // The student's own file, or the image's /etc/passwd the student's container shows anyway: never the host's.
+    for (const content of seen) expect(["mine\n", imagePasswd]).toContain(content);
+  }, 180_000);
+
+  it("reads a 95 MiB tree within its 64 MiB memory limit", async () => {
+    const big = join(work, "big");
+    await mkdir(big);
+    for (let i = 0; i < 19; i += 1) await writeFile(join(big, `blob${i}.bin`), randomBytes(5 * 1024 * 1024));
+    await run("chmod", ["-R", "a+rX", big]);
+    try {
+      const order: CollectionOrder = { assignment: PROJECT, userId: USER, repository: "heig-tin-info/lab3-alice", base, target: null, keep: [], ref: REF };
+      await git(["--git-dir", github, "update-ref", "-d", REF]).catch(() => "");
+      const result = await collectWorkspace(order, { volumesRoot, forge: { pushUrl: () => github, authorization: async () => "basic dGVzdA==" }, reader });
+      expect(result.outcome).toBe("pushed");
+      expect(await git(["--git-dir", github, "ls-tree", "-r", "--name-only", REF, "big/"])).toContain("big/blob18.bin");
+    } finally {
+      await rm(big, { recursive: true, force: true });
+    }
+  }, 180_000);
 
   it("is removed when its time runs out, its consumer stuck", async () => {
     await expect(reader.read(work, 2_000, () => new Promise<never>(() => undefined))).rejects.toBeInstanceOf(ReaderTimeout);

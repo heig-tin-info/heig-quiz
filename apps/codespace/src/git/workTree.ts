@@ -1,24 +1,18 @@
 /**
- * The workspace's tree as the collection's confined reader sees it (ADR-130
- * §4.2, correction of 2026-11-16): the reader's listing and archive
- * (`engine/reader.ts`), judged by `workArchive.ts`, written as blobs into the
- * collection's own temporary repository by one `git fast-import` — bytes on
- * its stdin, never a path. The host opens nothing under `work/`.
- *
- * What it answers: the entries (a file `100644` or `100755` by its owner's
- * execute bit, a symbolic link `120000` whose blob is its target), and what
- * the reader could not read — a listed file the archive does not hold (a
- * `chmod 600` by the student, read as "other" by the reader's own user, or
- * one removed or swapped meanwhile), a directory git could not open, a name
- * that is not UTF-8 — which the collection takes from the commit that would
- * otherwise be graded (`withUnreadableKept`).
+ * The workspace's tree from the confined reader's listing and archive (the
+ * portal's invariant 15): bytes written as blobs into the collection's own
+ * repository by one `git fast-import`, never a path of `work/` opened on the
+ * host. Entries are `100644`/`100755` (the owner's execute bit) or `120000`
+ * (a link, its target as the blob). What the reader could not read — a
+ * listed file the archive lacks, a directory git could not open, a name
+ * left out — is returned for `withUnreadableKept`.
  */
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Writable } from "node:stream";
 
-import type { CollectionTreeEntry } from "@quiz/domain";
+import { COLLECTION_ENTRIES_MAX, type CollectionTreeEntry } from "@quiz/domain";
 
 import type { WorkspaceReader } from "../engine/reader.js";
 import { GitError, gitEnv } from "./gitRunner.js";
@@ -28,8 +22,8 @@ export interface WorkTree {
   entries: CollectionTreeEntry[];
   /** Files and directories not read (`""`: the work tree itself). */
   unreadable: string[];
-  /** Names that are not UTF-8: neither read nor kept. */
-  undecodable: number;
+  /** Names left out of the listing (not UTF-8, a control character, too long): neither read nor kept. */
+  skipped: number;
 }
 
 /** `buf` on `stream`, waiting when it is full; a stream that broke rejects. */
@@ -108,6 +102,8 @@ async function* once(buf: Buffer): AsyncIterable<Buffer> {
  */
 export async function readWorkTree(reader: WorkspaceReader, workDir: string, repoDir: string, timeoutMs: number, maxBytes: number): Promise<WorkTree> {
   return reader.read(workDir, timeoutMs, async (listing, archive) => {
+    // Bounded before any work: the portal's own work on a listing cannot be interrupted once it runs.
+    if (listing.paths.length > COLLECTION_ENTRIES_MAX) throw new ArchiveTooLarge(listing.closed.length + listing.skipped);
     const blobs = blobImport(repoDir, join(repoDir, "..", "marks"));
     try {
       const marked: { mode: string; path: string; mark: number }[] = [];
@@ -127,11 +123,11 @@ export async function readWorkTree(reader: WorkspaceReader, workDir: string, rep
           return { mode, path, sha };
         }),
         unreadable: [...listing.closed, ...listing.paths.filter((p) => !kept.has(p))],
-        undecodable: listing.undecodable,
+        skipped: listing.skipped,
       };
     } catch (err) {
       blobs.abort();
-      if (err instanceof ArchiveTooLarge) throw new ArchiveTooLarge(listing.closed.length + listing.undecodable);
+      if (err instanceof ArchiveTooLarge) throw new ArchiveTooLarge(listing.closed.length + listing.skipped);
       throw err;
     }
   });

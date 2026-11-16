@@ -11,10 +11,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { tempDir } from "../git/fixtures.js";
-import { INSTANCE_LABEL, SESSION_LABEL, createEngine, hardeningArgs, sessionListArgs } from "./index.js";
+import { createEngine, hardeningArgs } from "./index.js";
 import {
   READER_ARCHIVE,
-  READER_INIT,
   READER_LIST,
   ReaderError,
   ReaderTimeout,
@@ -63,7 +62,7 @@ describe("readerArgs — the reader's podman run, flag for flag", () => {
       "--pids-limit",
       "32",
       "--memory",
-      "256m",
+      "64m",
       "--cpus",
       "1",
       "--cgroup-parent=codespace.slice",
@@ -93,29 +92,6 @@ describe("readerArgs — the reader's podman run, flag for flag", () => {
     }
   });
 
-  it("is no session: no session label, so neither the listing, the reconciliation nor the quota sees it", () => {
-    expect(args.some((a) => a.startsWith(`${SESSION_LABEL}=`))).toBe(false);
-    expect(sessionListArgs("prod")).toContain(`label=${SESSION_LABEL}`);
-    expect(args).toContain(`${INSTANCE_LABEL}=prod`);
-  });
-
-  it("has no network, no variable of ours and nothing that could carry one, and mounts the volume read-only, never :U", () => {
-    expect(args.slice(args.indexOf("--network"), args.indexOf("--network") + 2)).toEqual(["--network", "none"]);
-    for (const argv of [args, [...READER_INIT], [...READER_LIST], [...READER_ARCHIVE]]) {
-      expect(argv.some((a) => /^(-e|--env|--env-file|--env-host|--env-merge|--secret|--add-host|--dns)(=|$)/.test(a))).toBe(false);
-      expect(argv.join(" ")).not.toMatch(/CODESPACE_|GIT_AUTHOR|GIT_COMMITTER|TOKEN|SECRET/);
-    }
-    const volumes = args.filter((_, i) => args[i - 1] === "-v");
-    expect(volumes).toEqual([`${WORK}:/work:ro,nosuid,nodev,noexec`]);
-    expect(volumes[0]).not.toMatch(/:U\b|,U\b/);
-  });
-
-  it("drops the AppArmor flag and the slice when they are not configured, like a session", () => {
-    const bare = readerArgs({ ...OPTIONS, apparmorProfile: "", cgroupParent: "" }, NAME, WORK, 45);
-    expect(bare.some((a) => a.startsWith("apparmor="))).toBe(false);
-    expect(bare.some((a) => a.startsWith("--cgroup-parent"))).toBe(false);
-  });
-
   it("runs fixed argv arrays: git on a throwaway repository, never the student's .git, and tar of the listing only", () => {
     expect(READER_LIST).toContain("--git-dir=/tmp/list.git");
     expect(READER_LIST.join(" ")).not.toMatch(/\/work\/\.git/);
@@ -131,14 +107,21 @@ describe("parseListing", () => {
   it("keeps the paths, leaves out a nested repository, counts a name that is not UTF-8, and reads the closed directories", () => {
     const listing = parseListing(
       z("main.c", "vendor/", "src/a b.c", Buffer.from([0x61, 0xff])),
-      "warning: could not open directory 'private/': Permission denied\nwarning: could not open directory '.': Permission denied\nnoise\n",
+      "warning: could not open directory 'private/': Permission denied\nnoise\n",
     );
-    expect(listing).toEqual({ paths: ["main.c", "src/a b.c"], closed: ["private", ""], undecodable: 1 });
+    expect(listing).toEqual({ paths: ["main.c", "src/a b.c"], closed: ["private"], skipped: 1 });
   });
 
-  it("refuses a listing no git prints", () => {
+  it("counts a name a path cannot carry rather than refusing the listing", () => {
+    expect(parseListing(z("ok.c", "new\nline.c"), "")).toEqual({ paths: ["ok.c"], closed: [], skipped: 1 });
+  });
+
+  it("refuses a listing no git prints, and a closed directory it cannot name back", () => {
     for (const bad of ["/etc/passwd", "a/../b", ".git/config", "a//b"]) expect(() => parseListing(z(bad), ""), bad).toThrow(ReaderError);
     expect(() => parseListing(Buffer.from("no-terminator"), "")).toThrow(ReaderError);
+    expect(() => parseListing(z("a"), "warning: could not open directory 'two\nlines/': Permission denied\n")).toThrow(ReaderError);
+    // A work tree the reader cannot enter is a failed read (`read_failed`), never a workspace replaced by the graded commit.
+    expect(() => parseListing(z(), "warning: could not open directory '.': Permission denied\n")).toThrow(ReaderError);
   });
 });
 

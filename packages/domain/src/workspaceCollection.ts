@@ -54,7 +54,7 @@ export function composeCollectionTree(
  * (ADR-130 §3, correction of 2026-11-16) taken from `reference` — the commit
  * that would otherwise be graded: the student's last push in time, else the
  * base. `unreadable` names files and directories; a directory stands for
- * everything under it, and `""` for the whole work tree. A path the
+ * everything under it. A path the
  * reference does not hold is left out: the reader never saw its content, so
  * nothing of it is handed in.
  */
@@ -64,9 +64,29 @@ export function withUnreadableKept(
   unreadable: readonly string[],
 ): CollectionTreeEntry[] {
   if (unreadable.length === 0) return [...workspace];
-  const covered = (path: string) => unreadable.some((u) => u === "" || pathWithin(path, u));
+  const set = new Set(unreadable);
+  // The path or one of its ancestors: linear in the entries times their depth.
+  const covered = (path: string) => {
+    if (set.has(path)) return true;
+    for (let at = path.indexOf("/"); at !== -1; at = path.indexOf("/", at + 1)) if (set.has(path.slice(0, at))) return true;
+    return false;
+  };
   return [...workspace.filter((e) => !covered(e.path)), ...reference.filter((e) => covered(e.path))];
 }
+
+/**
+ * Past this many paths the reader could not read, the collection is
+ * `failed` (`read_failed`) rather than a workspace mostly replaced by the
+ * graded commit: no student's work is that, and it bounds the portal's work.
+ */
+export const COLLECTION_UNREADABLE_MAX = 2_000;
+
+/**
+ * Past this many paths in the reader's listing (what `git add -A` would add,
+ * ignored files excluded), the collection is `too_large`: it bounds the work
+ * the portal does, which no time budget can interrupt once it runs.
+ */
+export const COLLECTION_ENTRIES_MAX = 20_000;
 
 /** Every entry under a kept path is the base's, none added, none removed (ADR-130 §4.3: what Quiz checks before signing). */
 export function keptEntriesMatch(
@@ -140,6 +160,23 @@ export const COLLECTION_PORTAL_FAILURES = ["forge_refused", "forge_unavailable",
  */
 export const COLLECTION_FAILURE_REASONS = [...COLLECTION_PORTAL_FAILURES, "portal_unavailable", "check_refused", "github_failed", "interrupted"] as const;
 export type CollectionFailureReason = (typeof COLLECTION_FAILURE_REASONS)[number];
+
+/**
+ * A stored collection's outcome and reason as the current lists know them:
+ * a value no list holds any more (a row written before an outcome was
+ * removed, as `stale_snapshot` on 2026-11-16) reads as `failed` with no
+ * reason, so no reader past the database ever meets it. Null (ordered,
+ * never settled) stays null.
+ */
+export function storedCollection(
+  outcome: string | null,
+  reason: string | null,
+): { outcome: CollectionOutcomeName | null; reason: CollectionFailureReason | null } {
+  const known = (outcome === null || (COLLECTION_OUTCOMES as readonly string[]).includes(outcome)) &&
+    (reason === null || (COLLECTION_FAILURE_REASONS as readonly string[]).includes(reason));
+  if (!known) return { outcome: "failed", reason: null };
+  return { outcome: outcome as CollectionOutcomeName | null, reason: reason as CollectionFailureReason | null };
+}
 
 /**
  * The largest one student push may carry (the portal's `receive.maxInputSize`),

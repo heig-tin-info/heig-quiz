@@ -171,7 +171,6 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
     volumesRoot: config.volumesRoot,
     graceMs: config.SESSION_GRACE_MS,
     gcIntervalMs: config.SESSION_GC_INTERVAL_MS,
-    shadowIntervalMs: config.SHADOW_INTERVAL_MS,
     healthTimeoutMs: config.SESSION_HEALTH_TIMEOUT_MS,
     // `portal.internal` is the name `--add-host` gives to the gateway inside
     // the container; the remote written into the workspace uses it.

@@ -1,31 +1,26 @@
 /**
- * The archive the collection's confined reader streams out of a workspace
- * (`engine/reader.ts`, ADR-130 §3 as corrected on 2026-11-16), read as data
- * and nothing else: no path of it is ever resolved on the host.
+ * Reads the archive the confined reader (`engine/reader.ts`) streams out of
+ * a workspace, as data only — the portal's invariant 15; nothing of it is
+ * resolved on the host. GNU tar of exactly the listed paths, judged entry by
+ * entry with the runner's `project` rules (root invariant 12), the header
+ * helpers and the path rule shared with `@quiz/core/tar`:
  *
- * It is GNU tar's `--format=gnu` output of exactly the paths the reader
- * listed, and every entry is judged before anything of it is kept, with the
- * rules of the runner's `project` archive (root invariant 12):
+ *  - a regular file or a symbolic link is kept (a link as its target's
+ *    bytes, never followed); a directory or a FIFO (a listed path swapped
+ *    while the reader ran) is skipped and counts as not read; any other type
+ *    (hard link, device, extended or sparse header) refuses the archive;
+ *  - a name is UTF-8, a `projectPathProblem`-clean relative path without a
+ *    `.git` segment, one of the listed paths, once; GNU `L`/`K` long names
+ *    at most {@link LONG_NAME_MAX} bytes;
+ *  - checksums hold, sizes are octal, the files total at most the cap
+ *    ({@link ArchiveTooLarge}), and the stream reaches tar's end marker, so
+ *    a size that lies or a cut stream refuses the archive.
  *
- *  - a regular file or a symbolic link is kept — the link as a link, its
- *    target as bytes, never followed; a directory or a FIFO (a listed file
- *    swapped for one while the reader ran) is skipped, so that path counts
- *    as not read; any other type — a hard link (the reader dereferences
- *    them), a device, an extended or sparse header — refuses the archive;
- *  - a name is UTF-8, relative, without an empty, `.`, `..` or `.git`
- *    segment, one of the listed paths, and appears once; a long name or
- *    link travels in GNU's `L`/`K` records, at most {@link LONG_NAME_MAX}
- *    bytes;
- *  - every header's checksum holds, sizes are octal (GNU's base-256 form
- *    means over 8 GiB), the regular files total at most the cap
- *    ({@link ArchiveTooLarge} past it, read no further), and the stream
- *    reaches tar's end marker: an entry announced smaller than it is lands
- *    the next header inside data, whose checksum fails; a truncated stream
- *    never reaches the marker. Both refuse the archive.
- *
- * Streaming: a header at a time, a file's bytes handed on as they come. The
- * host holds no more than a chunk, whatever the workspace weighs.
+ * Streaming: a header at a time, a file's bytes handed on as they come.
  */
+import { checksumOk, decodeName, field, octal, TarError } from "@quiz/core/tar";
+import { projectPathProblem } from "@quiz/core/runner";
+
 const BLOCK = 512;
 /** Linux's `PATH_MAX`: a longer name is no name a work tree holds. */
 export const LONG_NAME_MAX = 4096;
@@ -54,18 +49,9 @@ export interface ArchiveSink {
   symlink(path: string, target: Buffer): Promise<void>;
 }
 
-const strict = new TextDecoder("utf-8", { fatal: true });
-
-/** `path` as a work tree's relative path, or why not. Shared by the listing's check. */
+/** `path` as a work tree's relative path, or why not: `projectPathProblem`, and never `.git`. */
 export function workPathProblem(path: string): string | null {
-  if (path === "") return "an empty name";
-  if (path.includes("\0")) return "a NUL in a name";
-  if (path.startsWith("/")) return "an absolute path";
-  for (const segment of path.split("/")) {
-    if (segment === "" || segment === "." || segment === "..") return "an empty, . or .. segment";
-    if (segment === ".git") return "a .git segment";
-  }
-  return null;
+  return projectPathProblem(path.endsWith("/") ? `${path}x` : path) ?? (path.split("/").includes(".git") ? "git_segment" : null);
 }
 
 /** A stream read by exact counts; running out before a count is a truncated archive. */
@@ -124,34 +110,16 @@ class Bytes {
 
 const isZero = (block: Buffer) => block.every((b) => b === 0);
 
-/** A NUL-terminated field. */
-function field(block: Buffer, start: number, length: number): Buffer {
-  const slice = block.subarray(start, start + length);
-  const end = slice.indexOf(0);
-  return end === -1 ? slice : slice.subarray(0, end);
-}
-
-function octal(block: Buffer, start: number, length: number): number {
-  if ((block[start]! & 0x80) !== 0) throw new ArchiveRefused("a base-256 number (over 8 GiB)");
-  const text = field(block, start, length).toString("latin1").trim();
-  if (text === "") return 0;
-  if (!/^[0-7]+$/.test(text)) throw new ArchiveRefused("a numeric field is not octal");
-  return Number.parseInt(text, 8);
-}
-
 function checkHeader(header: Buffer): void {
-  let sum = 0;
-  for (let i = 0; i < BLOCK; i += 1) sum += i >= 148 && i < 156 ? 0x20 : header[i]!;
-  if (octal(header, 148, 8) !== sum) throw new ArchiveRefused("a header's checksum does not hold");
+  if (!checksumOk(header)) throw new ArchiveRefused("a header's checksum does not hold");
   if (!header.subarray(257, 265).equals(GNU_MAGIC)) throw new ArchiveRefused("a header is not GNU tar's");
 }
 
-function decodeName(bytes: Buffer): string {
-  try {
-    return strict.decode(bytes);
-  } catch {
-    throw new ArchiveRefused("a name is not UTF-8");
-  }
+/** The name's bytes as text; a name that is not UTF-8 refuses the archive. */
+function nameOf(bytes: Uint8Array): string {
+  const { path, utf8 } = decodeName(bytes);
+  if (!utf8) throw new ArchiveRefused("a name is not UTF-8");
+  return path;
 }
 
 /**
@@ -165,6 +133,15 @@ export async function readWorkArchive(
   maxBytes: number,
   sink: ArchiveSink,
 ): Promise<Set<string>> {
+  try {
+    return await readEntries(stream, expected, maxBytes, sink);
+  } catch (err) {
+    // The shared helpers' refusal (a field that is not octal) is this archive's.
+    throw err instanceof TarError ? new ArchiveRefused(err.message) : err;
+  }
+}
+
+async function readEntries(stream: AsyncIterable<Buffer>, expected: ReadonlySet<string>, maxBytes: number, sink: ArchiveSink): Promise<Set<string>> {
   const bytes = new Bytes(stream);
   const kept = new Set<string>();
   const seen = new Set<string>();
@@ -197,7 +174,7 @@ export async function readWorkArchive(
     if (longLink !== null && type !== "2") throw new ArchiveRefused("a long link name on an entry that is no link");
     if (type !== "0" && type !== "\0" && size !== 0) throw new ArchiveRefused("a link, directory or FIFO with data");
 
-    let path = decodeName(longName ?? field(header, 0, 100));
+    let path = nameOf(longName ?? field(header, 0, 100));
     longName = null;
     // GNU names a directory `dir/`.
     if (type === "5" && path.endsWith("/")) path = path.slice(0, -1);

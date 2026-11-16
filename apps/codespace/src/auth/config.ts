@@ -120,8 +120,6 @@ const EnvSchema = z.object({
   SESSION_MAX_HELD_MS: z.coerce.number().int().min(60_000).default(12 * 60 * 60 * 1000),
   /** Period of the garbage collector. */
   SESSION_GC_INTERVAL_MS: z.coerce.number().int().min(1000).default(60 * 1000),
-  /** Period of the shadow repository snapshots (analyse.md 3.3). */
-  SHADOW_INTERVAL_MS: z.coerce.number().int().min(1000).default(3 * 60 * 1000),
   /** Maximum wait for the container's `/healthz` when a session starts. */
   SESSION_HEALTH_TIMEOUT_MS: z.coerce.number().int().min(1000).default(30_000),
 

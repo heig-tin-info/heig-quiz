@@ -129,6 +129,9 @@ importers:
       '@quiz/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@quiz/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@quiz/domain':
         specifier: workspace:*
         version: link:../../packages/domain

@@ -4,7 +4,8 @@
 rootful Podman containers, one per (student, assignment), with an SEB exam
 mode. A separate deployable on the engine VM, beside `apps/runner`: it
 imports only `packages/*` (`@quiz/domain` for HS256, `@quiz/seb` for the SEB hashes, `@quiz/contracts` for
-the codespace schemas) and talks to the platform through two HS256-signed
+the codespace schemas, `@quiz/core/tar` and `@quiz/core/runner` for the tar header helpers and the
+path rule it shares with the runner) and talks to the platform through two HS256-signed
 HTTP messages (ADR-047). Imported from heig-classroom's `apps/codespace` at
 classroom `a676c8c` (merge task M6-03).
 
@@ -82,8 +83,8 @@ them on exactly two points, and on nothing else:
 
 1. **A persistent work volume.** `-v <workDir>:/work:U`, one directory per
    (student, assignment) under `VOLUMES_ROOT`, kept across container
-   restarts and after the session closes (with its `shadow.git`
-   snapshots). The runner's `/work` is a tmpfs and nothing from the host is
+   restarts and after the session closes (with the root timer's
+   `shadow.git` snapshots). The runner's `/work` is a tmpfs and nothing from the host is
    mounted; here the student's work must survive the container. A staff
    member's **review session** ([ADR-129](../../docs/adr/ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md),
    accepted 2026-11-14) has one directory per (staff member, repository),
@@ -195,21 +196,15 @@ channel divergence for its containers.
     `/vscode-remote-resource` with `CSP: default-src 'none'; sandbox` and
     `nosniff`; the student image ships no notebook support. Gaps and the full fix: [ADR-047, amendment of 2026-10-11](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
 15. **Nothing published comes from a host-side read of `work/`**
-    ([ADR-130, correction of 2026-11-16](../../docs/adr/ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md#correction-2026-11-16-the-collection-reads-through-a-confined-reader)).
-    The student's container writes `work/` while the host would read it, so
-    a host-side read resolves paths the student controls and a race can
-    make it follow a link out of the volume. Whatever leaves the engine VM
-    (the deadline collection today, anything tomorrow) reads `work/` through
-    the confined reader (`engine/reader.ts`): a throwaway container holding
-    that volume only, read-only, with the sessions' hardening and
-    `--network none`, whose listing and archive the host treats as data
-    (`git/workArchive.ts`: regular files and links only, a link never
-    followed, relative paths of its own listing, size-capped). Of `work/`
-    the host itself asks only whether it exists. `shadow.git` (the session
-    close's snapshot and the root timer's) is a host-side read: a safety net
-    for the staff, never published, its content untrusted (deploy/RUNBOOK.md).
-    The reader is the platform's, not a session: no session label, not
-    counted by the quota, removed on every exit path and swept at startup.
+    ([ADR-130, correction of 2026-11-16](../../docs/adr/ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md#correction-2026-11-16-the-collection-reads-through-a-confined-reader),
+    which gives the reason). Whatever leaves the engine VM reads `work/`
+    through the confined reader (`engine/reader.ts`) and treats its output
+    as data (`git/workArchive.ts`); what it publishes is something the
+    student can read already. The host itself only asks whether `work/`
+    exists (`git/hostReads.test.ts`). The portal takes no snapshot:
+    `shadow.git` is the sandboxed root timer's, untrusted, exported with the
+    daily backup (deploy/RUNBOOK.md). The reader is the platform's, not a
+    session: not in the quota, removed on every exit path, swept at startup.
 
 ## Commands
 

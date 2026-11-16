@@ -7,6 +7,7 @@ import {
   collectionTooLate,
   composeCollectionTree,
   keptEntriesMatch,
+  storedCollection,
   withUnreadableKept,
   type CollectionTreeEntry,
 } from "./workspaceCollection.js";
@@ -123,7 +124,26 @@ describe("withUnreadableKept", () => {
     expect(withUnreadableKept(workspace, reference, [])).toEqual(workspace);
   });
 
-  it("takes the whole reference when the work tree itself could not be read", () => {
-    expect(withUnreadableKept([], reference, [""])).toEqual(reference);
+  it("stays linear in the entries: 100 000 paths, half of them unreadable, well under a second", () => {
+    const many = Array.from({ length: 100_000 }, (_, i) => blob(`d${i % 100}/s${i % 7}/f${i}.c`, "1"));
+    const unreadable = many.filter((_, i) => i % 2 === 0).map((e) => e.path);
+    const started = performance.now();
+    const out = withUnreadableKept(many, many, unreadable);
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(out).toHaveLength(100_000);
+  });
+
+});
+
+describe("storedCollection", () => {
+  it("passes the current values through, null included", () => {
+    expect(storedCollection("collected", null)).toEqual({ outcome: "collected", reason: null });
+    expect(storedCollection("failed", "read_failed")).toEqual({ outcome: "failed", reason: "read_failed" });
+    expect(storedCollection(null, null)).toEqual({ outcome: null, reason: null });
+  });
+
+  it("reads a value no list holds any more as failed, with no reason", () => {
+    expect(storedCollection("stale_snapshot", null)).toEqual({ outcome: "failed", reason: null });
+    expect(storedCollection("failed", "gone_reason")).toEqual({ outcome: "failed", reason: null });
   });
 });

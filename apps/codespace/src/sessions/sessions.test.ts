@@ -1,6 +1,6 @@
 /**
  * Session life cycle with a fake engine: what is checked here is the portal's
- * logic (resumption, reconciliation, garbage collection, snapshots), not
+ * logic (resumption, reconciliation, garbage collection), not
  * Podman. Podman is checked for real by an end-to-end run (heig-classroom's `scripts/e2e.ts`, not imported: M6-04) and by
  * `git/channel.integration.test.ts`.
  */
@@ -20,7 +20,6 @@ import {
   stagingSourceFor,
   type ManagerDeps,
 } from "./manager.js";
-import { snapshot } from "./shadow.js";
 import { findAnySession, isOpen, targetRepoFor } from "./store.js";
 import { remoteUrl } from "./workspace.js";
 
@@ -91,7 +90,6 @@ function makeManager(graceMs = 60_000, extra: Partial<ManagerDeps> = {}) {
     volumesRoot: root,
     graceMs,
     gcIntervalMs: 60_000,
-    shadowIntervalMs: 60_000,
     healthTimeoutMs: 1000,
     gitRemoteHost: "portal.internal",
     gitRemotePort: 9418,
@@ -389,45 +387,6 @@ describe("reconciliation at portal start-up", () => {
     const manager = makeManager();
     expect(await manager.reconcile()).toMatchObject({ orphans: 0 });
     expect((await engine.listSessions()).every((c) => c.sessionId !== null)).toBe(true);
-  });
-});
-
-describe("shadow repository (analyse.md 3.3)", () => {
-  it("captures the working tree and excludes the student's repository", async () => {
-    const volume = join(root, "student", "tp");
-    await mkdir(join(volume, "work", ".git"), { recursive: true });
-    await writeFile(join(volume, "work", "hello.c"), "int main(void){return 0;}\n", "utf8");
-    await writeFile(join(volume, "work", ".git", "HEAD"), "ref: refs/heads/main\n", "utf8");
-
-    const first = await snapshot(volume);
-    expect(first.sha).toBeTruthy();
-    const files = await gitBare(join(volume, "shadow.git"), [
-      "ls-tree",
-      "-r",
-      "--name-only",
-      "HEAD",
-    ]);
-    expect(files).toContain("hello.c");
-    expect(files).not.toContain(".git/");
-  });
-
-  it("commits nothing when nothing has changed", async () => {
-    const volume = join(root, "student", "tp2");
-    await mkdir(join(volume, "work"), { recursive: true });
-    await writeFile(join(volume, "work", "a.txt"), "a\n", "utf8");
-    expect((await snapshot(volume)).sha).toBeTruthy();
-    expect((await snapshot(volume)).sha).toBeNull();
-  });
-
-  it("captures a later modification", async () => {
-    const volume = join(root, "student", "tp3");
-    await mkdir(join(volume, "work"), { recursive: true });
-    await writeFile(join(volume, "work", "a.txt"), "a\n", "utf8");
-    await snapshot(volume);
-    await writeFile(join(volume, "work", "a.txt"), "b\n", "utf8");
-    expect((await snapshot(volume)).sha).toBeTruthy();
-    const log = await gitBare(join(volume, "shadow.git"), ["log", "--oneline"]);
-    expect(log.trim().split("\n")).toHaveLength(2);
   });
 });
 

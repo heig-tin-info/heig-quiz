@@ -6,31 +6,21 @@
 # CODESPACE_VOLUMES=/srv/quiz-codespace/<instance>/volumes. Adapted from
 # heig-classroom's deploy/shadow-snapshot.sh (M6-04).
 #
-# Why the host's root. The volume is mounted `:U`: Podman hands its ownership
-# to the UID range `--userns=auto` drew for the container. The portal runs as
-# root in its container but with EVERY capability dropped, so it reads the
-# work tree only thanks to the container's umask 022: a `chmod 600` by the
-# student leaves it a file it cannot read, and its snapshot is partial (the
-# limit named in sessions/shadow.ts). This script has the capabilities, so the
-# snapshot is complete.
+# The only writer of shadow.git, for open and closed sessions alike: the
+# portal takes no snapshot of its own. Why the host's root: the volume is
+# mounted `:U`, so its files belong to the UID range `--userns=auto` drew for
+# the container, and only a reader with the file-mode capabilities sees a
+# file the student made `chmod 600`.
 #
-# It does exactly what `snapshot()` in sessions/shadow.ts does:
 #   git --git-dir=<vol>/shadow.git --work-tree=<vol>/work add -A --ignore-errors
 #   then commit if anything is staged,
-# with the same two details: `info/exclude` holds `.git` (otherwise `add -A`
-# records the student's repository as a submodule link and captures nothing),
-# and the author is the portal, not the student. shadow.git stays root's, the
-# owner the portal (root in its container) has too.
+# `info/exclude` holding `.git` (otherwise `add -A` records the student's
+# repository as a submodule link and captures nothing), the author the
+# portal, never the student.
 #
-# Never published (ADR-130, correction of 2026-11-16). This is a host-side
-# read of a tree the student writes while it runs: an entry swapped for a
-# symbolic link between git's check and its open is followed, as root. So
-# shadow.git is a safety net for the staff only, its content untrusted
-# (RUNBOOK.md), and nothing of it leaves the engine VM: the deadline
-# collection reads `work/` through a confined reader instead. The race is not
-# closed here; its reach is made small by the unit's sandbox
-# (quiz-codespace-shadow@.service: only this instance's volumes, no secret,
-# no device, no other process).
+# A host-side read of work/, so shadow.git is never published and its content
+# is untrusted (apps/codespace/CLAUDE.md, invariant 15); its reach is bounded
+# by the unit's sandbox (quiz-codespace-shadow@.service).
 set -uo pipefail
 
 VOLUMES="${CODESPACE_VOLUMES:?CODESPACE_VOLUMES is not set}"

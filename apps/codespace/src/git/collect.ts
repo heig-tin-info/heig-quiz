@@ -1,49 +1,28 @@
 /**
- * The workspace collected at the deadline (ADR-130 §3, §4): Quiz orders,
- * the portal reads `work/` through its confined reader, composes the
- * collected tree — the workspace, with the kept paths taken from the
- * branch's head on GitHub (the *base*) — and, when it differs from the
- * commit that would otherwise be graded, carries it to GitHub on the
- * temporary ref Quiz named, with one throwaway commit on the base. `pushed`
- * means only that: Quiz checks the pushed tree, makes the GitHub-signed
- * commit and moves the branch; the portal never touches a branch, and only
- * Quiz knows whether the collection succeeded.
+ * The workspace collected at the deadline (ADR-130 §3, §4): the portal reads
+ * `work/` through its confined reader (`engine/reader.ts`, the portal's
+ * invariant 15 — of `work/` this file only asks whether it exists), composes
+ * the collected tree — the workspace, what the reader could not read taken
+ * from the commit that would otherwise be graded, the kept paths from the
+ * branch's head on GitHub (the *base*) — and, when it differs from that
+ * commit, pushes one throwaway commit of it on the base to the temporary ref
+ * Quiz named. `pushed` means only that: Quiz checks, signs and moves the
+ * branch.
  *
- * What it reads and writes:
- *
- *  - **nothing published comes from a host-side read of `work/`** (the
- *    portal's invariant 15; ADR-130, correction of 2026-11-16): the
- *    workspace is read by a throwaway container that holds that volume
- *    only, read-only (`engine/reader.ts`), and its listing and archive are
- *    data (`workTree.ts`, `workArchive.ts`). Of `work/` the host itself only
- *    asks whether it exists. `shadow.git` is not read at all: it is the
- *    host's own safety net and is never published;
- *  - the collection writes only a temporary bare repository under
- *    `<VOLUMES_ROOT>/.collect/` (on disk: the portal's `/tmp` is a tmpfs in
- *    its memory), whose object store borrows `staging.git`'s as an
- *    alternate: the workspace's blobs, the base and target fetched from
- *    GitHub, the composed tree and the throwaway commit land there, and it
- *    is removed on every exit path ({@link sweepCollectionDirs} at startup
- *    for a crash's). Nothing is written into `staging.git`;
- *  - what the reader could not read is taken from the commit that would
- *    otherwise be graded (`withUnreadableKept`), and counted;
- *  - the quota is not consulted and no session is involved: a closed
- *    session collects the same way;
- *  - the token is in no argv, URL, file or log line, and never near the
- *    reader: `gitAuthEnv` carries it, `redactSecrets` scrubs what git says;
- *  - nothing is forced: the push is `<sha>:<ref>` onto the ref Quiz named
- *    under `refs/quiz/collect/`, never a branch, with no relay declaration
- *    and no `PushEvent`.
- *
- * The order reaches here parsed by its contract (`CodespaceCollectionRequest`)
- * in the portal's own process: every value is checked before this runs.
- * The whole collection fits one time budget, under the minute Quiz waits.
+ * It writes only a temporary bare repository under `<VOLUMES_ROOT>/.collect/`
+ * (the portal's `/tmp` is a tmpfs in its memory), borrowing `staging.git`'s
+ * objects, removed on every exit and swept at startup. It never reads
+ * `shadow.git`. The token is in no argv, URL, file or log line, and never
+ * near the reader. Nothing is forced: `<sha>:<ref>` under
+ * `refs/quiz/collect/`, never a branch, no relay declaration, no
+ * `PushEvent`. The order is parsed by its contract before this runs; the
+ * whole collection fits one time budget, under the minute Quiz waits.
  */
 import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { type CodespaceCollectionRequest, type CodespaceCollectionResult, type CollectionFailure } from "@quiz/contracts";
-import { collectionKeptPaths, composeCollectionTree, withUnreadableKept, type CollectionTreeEntry } from "@quiz/domain";
+import { COLLECTION_UNREADABLE_MAX, collectionKeptPaths, composeCollectionTree, withUnreadableKept, type CollectionTreeEntry } from "@quiz/domain";
 
 import { ReaderError, ReaderTimeout, type WorkspaceReader } from "../engine/reader.js";
 import { ForgeUnconfiguredError, type Forge, type ForgeOwner } from "./forge.js";
@@ -80,7 +59,7 @@ export async function sweepCollectionDirs(volumesRoot: string): Promise<void> {
   await rm(collectionDirsRoot(volumesRoot), { recursive: true, force: true });
 }
 
-/** The throwaway commit's author: the portal, never the student (`shadow.ts`'s identity). */
+/** The throwaway commit's author: the portal, never the student (the shadow snapshot's identity). */
 const IDENTITY = {
   GIT_AUTHOR_NAME: "codespace-portal",
   GIT_AUTHOR_EMAIL: "portal@codespace.local",
@@ -202,7 +181,9 @@ export async function collectWorkspace(order: CollectionOrder, deps: CollectDeps
       if (err instanceof ArchiveTooLarge) return { outcome: "too_large", snapshotAt, unreadable: err.unreadable };
       return fail(readFailure(err), err, "the workspace could not be read");
     }
-    const facts = { snapshotAt, unreadable: read.unreadable.length + read.undecodable };
+    const facts = { snapshotAt, unreadable: read.unreadable.length + read.skipped };
+    // A workspace mostly unreadable is no hand-in to patch with the graded commit; it also bounds the portal's work.
+    if (facts.unreadable > COLLECTION_UNREADABLE_MAX) return fail("read_failed", new Error(`${facts.unreadable} paths unreadable`), "the workspace is mostly unreadable");
 
     try {
       const asked = deps.forge.authorization(repo, forgeOwner, url);

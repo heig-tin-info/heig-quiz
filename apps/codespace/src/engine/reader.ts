@@ -1,40 +1,24 @@
 /**
- * The collection's confined reader (ADR-130 §3 and §4.2, correction of
- * 2026-11-16; the portal's invariant 15): the only way the portal reads a
- * student's `work/` for something that leaves the engine VM.
+ * The confined reader of a student's `work/` (the portal's invariant 15;
+ * ADR-130, correction of 2026-11-16, gives the reason): a throwaway
+ * container with the sessions' hardening (`hardeningArgs`), `--network
+ * none`, no variable of ours and the volume read-only, in which two fixed
+ * argv commands list the paths `git add -A` would add (`.gitignore`
+ * honoured, a nested repository as `dir/`) and archive exactly those with
+ * GNU tar. Both outputs go to the host as data (`git/workArchive.ts`).
  *
- * `work/` is written by the student's container while the host would read
- * it, so a host-side read of it resolves paths the student controls: a file
- * swapped for a symbolic link between a check and an open is followed, and
- * whatever the reading identity can reach is read. The reader does not
- * race that, it removes what a race could reach: a throwaway container
- * whose filesystem holds the image and that one volume, mounted read-only,
- * started with the sessions' hardening (`hardeningArgs`, invariant 3),
- * `--network none` and no variable of ours. Whatever a link, a pointer or a
- * swap resolves to in there, it is something the student could read
- * already. Out of it come two streams, used as data only: the list of the
- * paths git would add (`git ls-files --others --exclude-standard` in a
- * throwaway repository, so the student's `.gitignore` is honoured and a
- * nested repository is listed as `dir/`, not entered), then GNU tar of
- * exactly those paths (`git/workArchive.ts` judges it).
+ * A fresh container rather than `podman exec` into the session's: a closed
+ * session has none, and the student's processes do not share its limits.
+ * It is no session (no session label: neither the listing, the
+ * reconciliation nor the quota sees it); its only process sleeps for the
+ * budget left and it runs `--rm`, so it goes on its own if the portal dies;
+ * it is removed on every exit path and swept at startup. The image is
+ * `CODESPACE_IMAGE`, which carries `/usr/bin/git`, GNU `/usr/bin/tar` and
+ * `/usr/bin/sleep`.
  *
- * Why a fresh container, never `podman exec` into the session's: a closed
- * session has none, so one path serves both; the student's processes cannot
- * share its cgroup, memory or pids; and nothing about a session (its state,
- * its quota) is involved. It is the platform's, not a session: no session
- * label, so `listSessions`, the reconciliation and the quota never see it;
- * its name is `cs-<instance>-reader-<uuid>` and its labels
- * `heig-codespace.role=reader` and the instance. It never outlives the
- * collection: its only process is `sleep` for the time left in the budget
- * and it is started `--rm`, so it ends and goes on its own even if the
- * portal dies; the portal removes it (`rm -f -t 0`) on every exit path
- * anyway, and {@link WorkspaceReader.sweep} removes this instance's
- * leftovers at startup.
- *
- * Every command is a fixed argv array, never a shell string, and the paths
- * handed back to tar are the reader's own listing, checked first. The image
- * is `CODESPACE_IMAGE`, the platform's student image (never an assignment's
- * own), which carries `/usr/bin/git`, GNU `/usr/bin/tar` and `/usr/bin/sleep`.
+ * The streaming exec and the label sweep live here rather than on
+ * `Engine`: the session tests' fake engines implement `Engine` whole, and
+ * the reader's injectable spawner is what its own tests drive.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -47,8 +31,12 @@ import { INSTANCE_LABEL, hardeningArgs, type Confinement, type EngineOptions, ty
 export const ROLE_LABEL = "heig-codespace.role";
 export const READER_ROLE = "reader";
 
-/** Enough for git and tar over a tree; one reader per collection, 16 at most at once. */
-export const READER_LIMITS: Limits = { pidsLimit: 32, memory: "256m", cpus: "1" };
+/**
+ * One reader per collection, 16 at most at once: 64 MiB each (1 GiB at a
+ * deadline, page cache included, reclaimed under the limit) reads a 95 MiB
+ * tree on a real engine (`reader.integration.test.ts`).
+ */
+export const READER_LIMITS: Limits = { pidsLimit: 32, memory: "64m", cpus: "1" };
 /** The throwaway repository `ls-files` needs, and nothing else writable. */
 export const READER_TMPFS = "/tmp:rw,nosuid,nodev,noexec,size=8m";
 /** The image's own unprivileged user, said explicitly. */
@@ -122,12 +110,13 @@ export function readerArgs(o: ReaderOptions, name: string, workDir: string, life
   ];
 }
 
-/** What the reader listed: the paths to archive, the directories it could not open, the names that are not UTF-8. */
+/** What the reader listed: the paths to archive, the directories it could not open, the names it leaves out. */
 export interface WorkListing {
   paths: string[];
-  /** Directories git could not open; `""` is the work tree itself. */
+  /** Directories git could not open (never the work tree itself: that is a failed read). */
   closed: string[];
-  undecodable: number;
+  /** Names left out: not UTF-8, a control character, over Linux's limits. */
+  skipped: number;
 }
 
 /** The reader could not run, or answered something it never would. */
@@ -147,15 +136,20 @@ export class ReaderTimeout extends Error {
 }
 
 const strict = new TextDecoder("utf-8", { fatal: true });
+const CLOSED_LINE = "warning: could not open directory '";
 const CLOSED = /^warning: could not open directory '(.*)': /;
+/** What git never prints: a listing holding one is refused, not trimmed. */
+const STRUCTURAL = new Set(["empty", "absolute", "empty_segment", "dot_segment", "git_segment"]);
 
 /**
  * `ls-files -z`'s output and git's warnings, as data. A nested repository
- * (`dir/`) is left out, as the gitlink it was is; a name that is not UTF-8
- * is counted, not kept; a path no git prints refuses the listing.
+ * (`dir/`) is left out, as the gitlink it was is; a name a path here cannot
+ * carry (not UTF-8, a control character, too long) is counted, not kept; a
+ * path no git prints, or a closed directory whose name cannot be read back,
+ * refuses the listing — never a directory silently dropped.
  */
 export function parseListing(stdout: Buffer, stderr: string): WorkListing {
-  const listing: WorkListing = { paths: [], closed: [], undecodable: 0 };
+  const listing: WorkListing = { paths: [], closed: [], skipped: 0 };
   let at = 0;
   while (at < stdout.length) {
     const end = stdout.indexOf(0, at);
@@ -166,19 +160,21 @@ export function parseListing(stdout: Buffer, stderr: string): WorkListing {
     try {
       path = strict.decode(raw);
     } catch {
-      listing.undecodable += 1;
+      listing.skipped += 1;
       continue;
     }
     if (path.endsWith("/")) continue;
     const problem = workPathProblem(path);
-    if (problem !== null) throw new ReaderError(`the listing holds ${problem}`);
-    listing.paths.push(path);
+    if (problem !== null && STRUCTURAL.has(problem)) throw new ReaderError(`the listing holds a path refused: ${problem}`);
+    if (problem !== null) listing.skipped += 1;
+    else listing.paths.push(path);
   }
   for (const line of stderr.split("\n")) {
+    if (!line.startsWith(CLOSED_LINE)) continue;
     const dir = CLOSED.exec(line)?.[1]?.replace(/\/$/, "");
-    if (dir === undefined) continue;
-    if (dir === "" || dir === ".") listing.closed.push("");
-    else if (workPathProblem(dir) === null) listing.closed.push(dir);
+    if (dir === "" || dir === ".") throw new ReaderError("the reader cannot open the work tree itself");
+    if (dir !== undefined && workPathProblem(dir) === null) listing.closed.push(dir);
+    else throw new ReaderError("a directory the reader could not open has a name it cannot name back");
   }
   return listing;
 }
@@ -203,7 +199,12 @@ interface Ran {
   code: number | null;
   stdout: Buffer;
   stderr: string;
+  /** stderr went past what is kept: a list read from it would be incomplete. */
+  stderrCut: boolean;
 }
+
+/** What is kept of a reader's stderr. */
+const STDERR_MAX = 64 * 1024;
 
 /** Waits for `child`, collecting its output, killed past `deadline` (then {@link ReaderTimeout}). */
 function finish(child: ChildProcessWithoutNullStreams, deadline: number, maxStdout: number, collect = true): Promise<Ran> {
@@ -211,6 +212,7 @@ function finish(child: ChildProcessWithoutNullStreams, deadline: number, maxStdo
     const out: Buffer[] = [];
     let size = 0;
     let err = "";
+    let stderrCut = false;
     let failure: Error | null = null;
     let settled = false;
     const settle = (fn: () => void) => {
@@ -235,11 +237,12 @@ function finish(child: ChildProcessWithoutNullStreams, deadline: number, maxStdo
       });
     }
     child.stderr.on("data", (chunk: Buffer) => {
-      if (err.length < 64 * 1024) err += chunk.toString("utf8");
+      if (err.length + chunk.length <= STDERR_MAX) err += chunk.toString("utf8");
+      else stderrCut = true;
     });
     // A podman that cannot even start (no binary): its own error, at once.
     child.on("error", (e) => settle(() => reject(failure ?? new ReaderError(e.message))));
-    child.on("close", (code) => settle(() => (failure ? reject(failure) : resolve({ code, stdout: Buffer.concat(out), stderr: err }))));
+    child.on("close", (code) => settle(() => (failure ? reject(failure) : resolve({ code, stdout: Buffer.concat(out), stderr: err, stderrCut }))));
   });
 }
 
@@ -273,6 +276,8 @@ export function createWorkspaceReader(o: ReaderOptions, spawnPodman?: SpawnPodma
         await ok(readerArgs(o, name, workDir, Math.max(1, Math.ceil(timeoutMs / 1000))), deadline, "starting the reader");
         await ok(["exec", name, ...READER_INIT], deadline, "the listing's repository");
         const list = await ok(["exec", name, ...READER_LIST], deadline, "the listing");
+        // The closed directories are read from git's warnings: all of them, or no collection.
+        if (list.stderrCut) throw new ReaderError("the listing's warnings are over their cap");
         const listing = parseListing(list.stdout, list.stderr);
 
         if (Date.now() >= deadline) throw new ReaderTimeout();

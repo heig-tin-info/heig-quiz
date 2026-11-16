@@ -15,9 +15,10 @@ import { dirname, join } from "node:path";
 
 import { afterAll, describe, expect, it, vi } from "vitest";
 
+import { COLLECTION_UNREADABLE_MAX } from "@quiz/domain";
+
 import { createWorkspaceReader } from "../engine/reader.js";
 import { localPodman, type LocalPodman, type LocalPodmanOptions } from "../engine/readerFixtures.js";
-import { snapshot } from "../sessions/shadow.js";
 import { collectWorkspace, collectionDirsRoot, type CollectDeps, type CollectionOrder } from "./collect.js";
 import { FIXTURE_ENV, tempDir } from "./fixtures.js";
 import { git } from "./gitRunner.js";
@@ -216,9 +217,13 @@ describe("collectWorkspace", () => {
 
   it("never reads shadow.git: the timer's snapshot is not what is handed in", async () => {
     const w = await world();
-    await writeFiles(w.work, { "main.c": "in the snapshot only\n" });
-    await snapshot(dirname(w.work));
-    await writeFiles(w.work, { "main.c": "int main(void) { return 1; }\n" });
+    // A shadow.git the timer could have written, holding other content.
+    const other = join(w.root, "other");
+    await git(["init", "--quiet", "--initial-branch=main", other]);
+    await writeFiles(other, { "main.c": "in the snapshot only\n" });
+    await git(["-C", other, "add", "-A"], { env: FIXTURE_ENV });
+    await git(["-C", other, "commit", "--quiet", "-m", "snapshot"], { env: FIXTURE_ENV });
+    await git(["clone", "--quiet", "--bare", other, join(dirname(w.work), "shadow.git")]);
     expect((await collectWorkspace(w.order, deps(w))).outcome).toBe("unchanged");
   });
 
@@ -266,6 +271,15 @@ describe("collectWorkspace", () => {
       await chmod(join(w.work, "main.c"), 0o644);
       await chmod(join(w.work, "private"), 0o755);
     }
+  });
+
+  it("fails read_failed past the cap on unreadable paths, rather than patching a workspace it mostly never saw", async () => {
+    const w = await world();
+    const files = Object.fromEntries(Array.from({ length: COLLECTION_UNREADABLE_MAX + 1 }, (_, i) => [`locked/f${i}.c`, "x\n"]));
+    await writeFiles(w.work, files);
+    for (const name of Object.keys(files)) await chmod(join(w.work, name), 0o000);
+    expect(await collectWorkspace(w.order, deps(w))).toEqual({ outcome: "failed", reason: "read_failed" });
+    expect(podman.live()).toEqual([]);
   });
 
   it("carries the execute bit, and a hard link as the file it names", async () => {
