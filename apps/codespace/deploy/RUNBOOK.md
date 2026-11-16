@@ -365,7 +365,7 @@ workspace slice gets what it leaves. Below about 3.6 GiB of RAM the floor
 reaches into the runner's MemoryLow, and the deploy warns.
 
 **How many sessions fit.** Each session is capped at `CODESPACE_MEMORY`
-(768m) and `CODESPACE_CPUS` (1), but uses far less; what fits is what they
+(1536m) and `CODESPACE_CPUS` (1), but uses far less; what fits is what they
 use together:
 
 ```text
@@ -374,10 +374,19 @@ sessions(vCPU) ≈ (vCPU − 1 for the runner and the host) / per-session CPU at
 ```
 
 The per-session p95 and CPU are the load test's measures (below), corrected
-by real tabs. First estimate, to be replaced: 400 MiB and 0.25 vCPU per
-session, so 50 sessions want about 20 GiB of slice and 13 vCPU at the busy
-moments (the start of the class, when everyone's clangd parses at once).
-On today's 2048M slice that is **4 sessions**.
+by real tabs. Measured in a class of 44 real sessions (C lab, 2026-11-16, 31
+GiB and 16 vCPU): 383 MiB mean and 531 MiB p95 per session at the slice's
+peak (17.6 GiB), 2 to 6 vCPU busy in all, 4 at the start when everyone's
+clangd parses at once. So 50 sessions want about 27 GiB of slice by the p95,
+20 GiB by the mean. On the 2048M slice of the small VM that is
+**3 sessions**.
+
+**The cap is not the capacity.** That class ran under `CODESPACE_MEMORY=768m`
+and the slice never ran short, yet 81 processes were killed inside sessions
+that reached their own cap: a test runner holding the whole output of a
+looping student program (Baygon 37, pytest 25) and, 19 times, the editor's
+own node process. Hence 1536m. The cap bounds one runaway session; the slice
+bounds them all, so the sum of the caps may exceed it.
 
 **Other limits on the way to 50 sessions**, checked 2026-11-15:
 
@@ -471,9 +480,12 @@ per-session p95 before using the formula above.
 
 **Too small** when, during the hold:
 
-- `memory.events` of `codespace.slice` shows `oom_kill` > 0 (a student's
-  process was killed), or `high` growing fast (the slice is being
-  throttled);
+- `memory.events.local` of `codespace.slice` shows `oom_kill` > 0 (the
+  slice itself ran short), or `high` growing fast (the slice is being
+  throttled). `memory.events` is hierarchical: its `oom_kill` also counts a
+  process killed at its own session's cap, which says the cap is too low
+  for what students run, not the VM (the names:
+  `journalctl -k | grep "Killed process"`);
 - PSI `memory some avg10` stays above ~5 % (tasks wait for memory), or
   `cpu some avg10` above ~50 % (half the time something waits for a CPU);
 - launch → 303 p95 above ~20 s, or any `5xx` or timeout among the launches.
