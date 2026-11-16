@@ -323,9 +323,11 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
         // Its gradebook column's settings follow it (ADR-131 §13), written
         // by the `gradebook` module, which owns them: from here, not from
         // this module's service, which the gradebook reaches through
-        // `activity`. Not in the copy's transaction: should this fail, the
-        // copy stands, valid, and reads its mode's defaults. An archived
-        // classroom's gradebook is read-only: nothing to carry there.
+        // `activity`. Not in the copy's transaction: should this fail (a
+        // component deleted or the classroom archived meanwhile), the request
+        // answers that failure while the copy stands, valid, and reads its
+        // mode's defaults. An archived classroom's gradebook is read-only:
+        // nothing to carry there.
         if (room.archivedAt === null) {
           await gradebook.copyColumnSettings(
             app.db,
