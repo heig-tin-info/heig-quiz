@@ -1,0 +1,538 @@
+/**
+ * The online workspace collected at the deadline (ADR-130), through the
+ * deadline job, against the fake GitHub's bare repositories and a stub
+ * portal that does what the real one does: a throwaway commit of the
+ * workspace's tree on the base, pushed to the temporary ref Quiz named.
+ */
+import { randomUUID } from "node:crypto";
+
+import { and, eq, sql } from "drizzle-orm";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { CSRF_COOKIE, ProjectDetail, ProjectSummary, workspaceStartPath } from "@quiz/contracts";
+import { GRADING_WORKFLOW_PATH, collectionRef } from "@quiz/domain";
+
+import { loadConfig } from "../../config.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { auditLog, codespaceCollections, codespaceLaunches, projectGroups, projectRepos, pushReceipts, teacherGrants, webhookDeliveries } from "../../db/schema.js";
+import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
+import { PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
+import { APP_ENV, call, newStudent, server, useProjectWorld, usersRoute, world, type Headers } from "../../test/projectWorld.js";
+import { CODESPACE_ENV, connectedClassroom, fakePortal, scopedMint, workModeBody } from "../codespace/testing.js";
+import { pushAuthor } from "../github/service.js";
+import { isEligible } from "./grading.js";
+import { projectTick, runDeadlineJob } from "./jobs.js";
+import type { ProjectJob } from "./lease.js";
+import { repoContext } from "./repos.js";
+import { lastStudentPush } from "./review.js";
+
+const HOOK_SECRET = "w".repeat(40);
+const ENV = { GITHUB_WEBHOOK_SECRET: HOOK_SECRET, ...CODESPACE_ENV };
+const config = loadConfig({ NODE_ENV: "test", ...APP_ENV, ...ENV });
+const APP_BOT = "quiz-test[bot]";
+const NOW = "2026-11-10T08:00:00.000Z";
+const DEADLINE = "2026-11-16T13:40:00.000Z";
+const at = (iso: string, plusMs = 0) => new Date(new Date(iso).getTime() + plusMs);
+
+const portal = fakePortal();
+const mint = scopedMint();
+/** A test's hand on GitHub, before the fake answers (a failing move, a truncated tree). */
+let intercept: Route | null = null;
+const interceptRoute: Route = (url, req) => intercept?.(url, req);
+useProjectWorld({ routes: [interceptRoute, mint.route, orgsRoute(() => []), usersRoute, world.route], env: ENV, fetch: portal.fetch, teacher: false });
+
+let owner: { id: string; headers: Headers };
+beforeAll(async () => {
+  const email = `t-${randomUUID().slice(0, 8)}@heig.test`;
+  owner = await server.signIn("teacher", email);
+  await server.app.db.insert(teacherGrants).values({ id: randomUUID(), email, createdBy: owner.id, codespaceEnabled: true, codespaceMaxActiveSessions: 5 });
+});
+beforeEach(() => {
+  server.clock.set(NOW);
+  world.allowPushes();
+  portal.collect = 404;
+  intercept = null;
+  portal.calls.length = 0;
+});
+
+/** A student who accepted and launched the workspace of a fresh `online` project, its handout in `main`. */
+async function launched(strategy: "lock" | "commit" = "lock", others: { id: string }[] = [], body: Record<string, unknown> = {}) {
+  const student = await newStudent();
+  const room = await connectedClassroom(owner, [student, ...others], { prefix: "corg", files: { "README.md": "# Lab", "main.c": "int main(){return 1;}\n", [GRADING_WORKFLOW_PATH]: "grade: v1" } });
+  const created = await call("POST", `/app/api/classrooms/${room.classroomId}/projects`, owner.headers, {
+    name: `Lab ${randomUUID().slice(0, 6)}`,
+    sourceRepo: "starter",
+    deadlineAt: DEADLINE,
+    protectedFiles: [GRADING_WORKFLOW_PATH],
+    deadlineStrategy: strategy,
+    ...body,
+  });
+  expect(created.statusCode, created.body).toBe(201);
+  const project = ProjectSummary.parse(created.json());
+  expect((await call("POST", `/app/api/projects/${project.id}/publish`, owner.headers)).statusCode).toBe(200);
+  expect((await call("PUT", `/app/api/projects/${project.id}/workspace/mode`, owner.headers, workModeBody("online"))).statusCode).toBe(200);
+  expect((await call("POST", `/app/api/student/projects/${project.id}/accept`, student.headers)).statusCode).toBe(200);
+  expect((await call("POST", workspaceStartPath(project.id), student.headers)).statusCode).toBe(200);
+  const [repo] = await server.app.db.select().from(projectRepos).where(and(eq(projectRepos.projectId, project.id), eq(projectRepos.userId, student.id)));
+  return { student, project, repo: repo!, fullName: repo!.fullName!, base: world.git(repo!.fullName!, "rev-parse", "main").trim() };
+}
+type Fixture = Awaited<ReturnType<typeof launched>>;
+
+/** The portal: the workspace's files over the base, pushed as a throwaway commit to the order's ref. */
+function portalPushes(f: Fixture, files: Record<string, string | null>, also?: () => void) {
+  portal.collect = (order) => {
+    const scratch = `scratch-${randomUUID().slice(0, 8)}`;
+    world.git(f.fullName, "branch", scratch, order["base"] as string);
+    const sha = world.commit(f.fullName, scratch, files);
+    world.git(f.fullName, "update-ref", order["ref"] as string, sha);
+    world.git(f.fullName, "branch", "-D", scratch);
+    also?.();
+    return { outcome: "pushed", tree: world.git(f.fullName, "rev-parse", `${sha}^{tree}`).trim(), snapshotAt: DEADLINE, unreadable: 0 };
+  };
+}
+
+/** One tick at `when` with a queue in place, then the deadline jobs it sent. */
+async function deadlineAt(when: Date): Promise<void> {
+  server.clock.set(when);
+  const sent: ProjectJob[] = [];
+  const queue: JobQueue = {
+    createQueue: async () => {},
+    send: async (name, data) => void (name === PROJECT_DEADLINE_QUEUE && sent.push(data as ProjectJob)),
+    work: async () => {},
+    stop: async () => {},
+  };
+  const app = server.app as { boss?: JobQueue };
+  app.boss = queue;
+  try {
+    await projectTick(server.app, config);
+  } finally {
+    delete app.boss;
+  }
+  for (const job of sent) await runDeadlineJob(server.app, config, job);
+}
+
+const rowsOf = async (f: Fixture) => server.app.db.select().from(codespaceCollections).where(eq(codespaceCollections.repoId, f.repo.id));
+const repoRow = async (f: Fixture) => (await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, f.repo.id)))[0]!;
+const refExists = (f: Fixture, ref: string) => {
+  try {
+    world.git(f.fullName, "rev-parse", "--verify", "--quiet", ref);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const collectionOrders = () => portal.calls.filter((c) => c.method === "POST" && c.path.endsWith("/collections"));
+
+describe("the deadline job collects an online workspace (ADR-130)", () => {
+  it("collects, signs on the base, counts it on time, then locks; the temporary ref is gone", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "int main(){return 0;}\n" });
+    await deadlineAt(at(DEADLINE, 20_000));
+
+    const [row] = await rowsOf(f);
+    expect(row).toMatchObject({ outcome: "collected", branch: "main", reason: null, unreadable: 0 });
+    const head = world.git(f.fullName, "rev-parse", "main").trim();
+    expect(row!.sha).toBe(head);
+    expect(world.git(f.fullName, "rev-parse", `${head}^`).trim()).toBe(f.base);
+    expect(world.read(f.fullName, "main", "main.c")).toBe("int main(){return 0;}\n");
+    // No identity given: GitHub signs it for the App (#917).
+    expect(world.apiCommits.at(-1)?.body).not.toHaveProperty("author");
+    const [receipt] = await server.app.db.select().from(pushReceipts).where(eq(pushReceipts.headSha, head));
+    expect(receipt).toMatchObject({ collected: true, isBot: false, branch: "main" });
+    expect(receipt!.receivedAt.toISOString()).toBe(DEADLINE);
+    expect((await lastStudentPush(server.app.db, f.repo.githubRepoId!, ["main"], new Date(DEADLINE)))?.sha).toBe(head);
+    expect((await repoRow(f)).lockedAt).not.toBeNull();
+    expect(refExists(f, collectionRef(f.repo.id, new Date(DEADLINE)))).toBe(false);
+    // The order carried the protected files as stored; the portal adds the workflows itself.
+    expect(collectionOrders()[0]?.body).toMatchObject({ base: f.base, target: null, keep: [GRADING_WORKFLOW_PATH], userId: f.student.id });
+    const audits = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "project_repo.workspace_collected"), eq(auditLog.subjectId, f.repo.id)));
+    expect(audits).toHaveLength(1);
+    const [enforced] = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "project.deadline_enforced"), eq(auditLog.subjectId, f.project.id)));
+    expect(enforced?.payload).toMatchObject({ collected: 1, locked: 1 });
+
+    // The staff's row says so.
+    const detail = ProjectDetail.parse((await call("GET", `/app/api/projects/${f.project.id}`, owner.headers)).json());
+    const shown = detail.rows.map((r) => r.repo).find((r) => r?.id === f.repo.id);
+    expect(shown?.collection).toMatchObject({ outcome: "collected", deadlineAt: DEADLINE, sha: head });
+  });
+
+  it("reads the collection's push as the student's work, eligible, and never lets the intake set `collected`", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "collected\n" });
+    await deadlineAt(at(DEADLINE, 20_000));
+    const head = world.git(f.fullName, "rev-parse", "main").trim();
+    expect(await pushAuthor(server.app.db, config, { senderLogin: APP_BOT, githubRepoId: f.repo.githubRepoId!, after: head })).toBe("collection");
+    const ctx = (await repoContext(server.app.db, f.repo.githubRepoId!))!;
+    expect(await isEligible(server.app.db, ctx, { headBranch: "main", headSha: head, event: "push", path: GRADING_WORKFLOW_PATH })).toBe(true);
+
+    // The webhook of that push, and an App push of another head: neither moves nor sets a receipt's `collected`.
+    const other = world.commit(f.fullName, "main", { "notes.md": "x" });
+    for (const after of [head, other]) {
+      const id = randomUUID();
+      const res = await signedDelivery(
+        server.app,
+        HOOK_SECRET,
+        { ref: "refs/heads/main", before: f.base, after, forced: false, repository: { id: f.repo.githubRepoId, full_name: f.fullName }, sender: { login: APP_BOT }, commits: [] },
+        { event: "push", id },
+      );
+      expect(res.statusCode).toBe(200);
+      await vi.waitFor(async () => {
+        const [d] = await server.app.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.deliveryId, id));
+        expect(d?.processedAt).not.toBeNull();
+      });
+    }
+    const receipts = await server.app.db.select().from(pushReceipts).where(eq(pushReceipts.githubRepoId, f.repo.githubRepoId!));
+    expect(receipts.find((r) => r.headSha === head)).toMatchObject({ collected: true, receivedAt: new Date(DEADLINE) });
+    expect(receipts.find((r) => r.headSha === other)).toMatchObject({ collected: false, isBot: true });
+  });
+
+  it("keeps a student's own late push late, and the collection the target even at the same instant", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "at the deadline\n" });
+    await deadlineAt(at(DEADLINE, 20_000));
+    const head = world.git(f.fullName, "rev-parse", "main").trim();
+    const db = server.app.db;
+    await db.insert(pushReceipts).values([
+      { id: randomUUID(), githubRepoId: f.repo.githubRepoId!, branch: "main", headSha: "a".repeat(40), receivedAt: new Date(DEADLINE), isBot: false },
+      { id: randomUUID(), githubRepoId: f.repo.githubRepoId!, branch: "main", headSha: "b".repeat(40), receivedAt: at(DEADLINE, 5_000), isBot: false },
+    ]);
+    expect((await lastStudentPush(db, f.repo.githubRepoId!, ["main"], new Date(DEADLINE)))?.sha).toBe(head);
+  });
+
+  it("records an unchanged workspace, makes no commit, and locks", async () => {
+    const f = await launched();
+    portal.collect = () => ({ outcome: "unchanged", snapshotAt: DEADLINE, unreadable: null });
+    const commits = world.apiCommits.length;
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "unchanged", reason: null, unreadable: null }]);
+    expect(world.apiCommits.length).toBe(commits);
+    expect(world.git(f.fullName, "rev-parse", "main").trim()).toBe(f.base);
+    expect((await repoRow(f)).lockedAt).not.toBeNull();
+  });
+
+  it("records each failure, the portal's timeout and an unreachable portal, and locks regardless", async () => {
+    for (const [answer, reason] of [
+      [() => ({ outcome: "failed", reason: "timeout" }), "timeout"],
+      [() => ({ outcome: "failed", reason: "push_rejected" }), "push_rejected"],
+      [503, "portal_unavailable"],
+      [() => ({ outcome: "nonsense" }), "portal_unavailable"],
+    ] as const) {
+      server.clock.set(NOW);
+      const f = await launched();
+      portal.collect = answer as typeof portal.collect;
+      await deadlineAt(at(DEADLINE, 20_000));
+      expect(await rowsOf(f), reason).toMatchObject([{ outcome: "failed", reason }]);
+      expect((await repoRow(f)).lockedAt, reason).not.toBeNull();
+      expect(refExists(f, collectionRef(f.repo.id, new Date(DEADLINE)))).toBe(false);
+    }
+  });
+
+  it("deletes the temporary ref after a failed order too, a push the portal's budget cut having landed", async () => {
+    const f = await launched();
+    const ref = collectionRef(f.repo.id, new Date(DEADLINE));
+    portal.collect = (order) => {
+      world.git(f.fullName, "update-ref", order["ref"] as string, f.base);
+      return { outcome: "failed", reason: "timeout" };
+    };
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect(refExists(f, ref)).toBe(false);
+  });
+
+  it("orders nothing past 120 s after the deadline: too_late, then the lock", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "late\n" });
+    await deadlineAt(at(DEADLINE, 121_000));
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "too_late" }]);
+    expect(collectionOrders()).toEqual([]);
+    expect((await repoRow(f)).lockedAt).not.toBeNull();
+  });
+
+  it("refuses to sign a tree whose kept entries are not the base's", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "ok\n", [GRADING_WORKFLOW_PATH]: "grade: tampered" });
+    const commits = world.apiCommits.length;
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "failed", reason: "check_refused" }]);
+    expect(world.apiCommits.length).toBe(commits);
+    expect(world.git(f.fullName, "rev-parse", "main").trim()).toBe(f.base);
+  });
+
+  it("signs the same tree on the new head when a late push moved it (the 422), the late push staying late", async () => {
+    const f = await launched();
+    let late = "";
+    portalPushes(f, { "main.c": "workspace\n" }, () => {
+      late = world.commit(f.fullName, "main", { "late.txt": "pushed late\n" });
+    });
+    await deadlineAt(at(DEADLINE, 20_000));
+    const head = world.git(f.fullName, "rev-parse", "main").trim();
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "collected", sha: head }]);
+    expect(world.git(f.fullName, "rev-parse", `${head}^`).trim()).toBe(late);
+    // Only the commit that reached the branch keeps a collected receipt.
+    const collected = await server.app.db.select().from(pushReceipts).where(and(eq(pushReceipts.githubRepoId, f.repo.githubRepoId!), eq(pushReceipts.collected, true)));
+    expect(collected.map((r) => r.headSha)).toEqual([head]);
+  });
+
+  it("is ordered once per deadline, and again after an extension at the new one", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "first\n" });
+    await deadlineAt(at(DEADLINE, 20_000));
+    // Unlocked by the staff, the repository is open again: its collection stays the one recorded.
+    expect((await call("POST", `/app/api/projects/${f.project.id}/repos/${f.repo.id}/unlock`, owner.headers)).statusCode).toBeLessThan(300);
+    await deadlineAt(at(DEADLINE, 40_000));
+    expect(collectionOrders()).toHaveLength(1);
+
+    const later = at(DEADLINE, 3_600_000).toISOString();
+    expect((await call("PUT", `/app/api/projects/${f.project.id}/repos/${f.repo.id}/deadline`, owner.headers, { deadlineAt: later })).statusCode).toBe(200);
+    portalPushes(f, { "main.c": "second\n" });
+    await deadlineAt(at(later, 20_000));
+    const rows = await rowsOf(f);
+    expect(rows.map((r) => [r.deadlineAt.toISOString(), r.outcome]).sort()).toEqual([
+      [DEADLINE, "collected"],
+      [later, "collected"],
+    ]);
+    expect(world.read(f.fullName, "main", "main.c")).toBe("second\n");
+  });
+
+  it("collects under the `commit` strategy too, before the deadline commit", async () => {
+    const f = await launched("commit");
+    portalPushes(f, { "main.c": "commit strategy\n" });
+    await deadlineAt(at(DEADLINE, 20_000));
+    const [row] = await rowsOf(f);
+    expect(row?.outcome).toBe("collected");
+    const head = world.git(f.fullName, "rev-parse", "main").trim();
+    expect(world.git(f.fullName, "rev-parse", `${head}^`).trim()).toBe(row!.sha);
+  });
+});
+
+const collectedReceipts = async (f: Fixture) =>
+  server.app.db.select().from(pushReceipts).where(and(eq(pushReceipts.githubRepoId, f.repo.githubRepoId!), eq(pushReceipts.collected, true)));
+const isPatchOfMain = (url: URL, req: RequestInit) => req.method === "PATCH" && decodeURIComponent(url.pathname).endsWith("/git/refs/heads/main");
+
+describe("what the collection refuses, and what a crash leaves", () => {
+  it("settles an order a crash interrupted: no collected receipt for a commit off the branch, never ordered again, and the lock", async () => {
+    const f = await launched();
+    const orphan = "c".repeat(40);
+    await server.app.db.insert(codespaceCollections).values({ id: randomUUID(), repoId: f.repo.id, deadlineAt: new Date(DEADLINE), claimedAt: at(DEADLINE, -6 * 60_000), branch: "main", sha: orphan });
+    await server.app.db.insert(pushReceipts).values({ id: randomUUID(), githubRepoId: f.repo.githubRepoId!, branch: "main", headSha: orphan, receivedAt: new Date(DEADLINE), isBot: false, collected: true });
+    world.git(f.fullName, "update-ref", collectionRef(f.repo.id, new Date(DEADLINE)), f.base);
+    portalPushes(f, { "main.c": "never ordered\n" });
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "failed", reason: "interrupted" }]);
+    expect(await collectedReceipts(f)).toEqual([]);
+    expect(collectionOrders()).toEqual([]);
+    expect(refExists(f, collectionRef(f.repo.id, new Date(DEADLINE)))).toBe(false);
+    expect((await repoRow(f)).lockedAt).not.toBeNull();
+  });
+
+  it("keeps the collection when GitHub moved the branch but failed to say so", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "moved\n" });
+    intercept = (url, req) => {
+      if (!isPatchOfMain(url, req)) return undefined;
+      intercept = null;
+      // GitHub moves the branch, then the answer is lost.
+      world.route(url, req);
+      return json({ message: "Server Error" }, 502);
+    };
+    await deadlineAt(at(DEADLINE, 20_000));
+    const head = world.git(f.fullName, "rev-parse", "main").trim();
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "collected", sha: head }]);
+    expect((await collectedReceipts(f)).map((r) => r.headSha)).toEqual([head]);
+  });
+
+  it("ends failed after three refused moves, no receipt left", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "refused\n" });
+    let refused = 0;
+    intercept = (url, req) => (isPatchOfMain(url, req) ? (refused++, json({ message: "Update is not a fast forward" }, 422)) : undefined);
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect(refused).toBe(3);
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "failed", reason: "github_failed", sha: null }]);
+    expect(await collectedReceipts(f)).toEqual([]);
+    expect(world.git(f.fullName, "rev-parse", "main").trim()).toBe(f.base);
+  });
+
+  it("refuses, with nothing signed, a commit on another parent, another tree, a missing ref and a truncated listing", async () => {
+    const cases: [string, (f: Fixture) => void][] = [
+      ["another parent", (f) => {
+        portalPushes(f, { "main.c": "x\n" });
+        const inner = portal.collect as (o: Record<string, unknown>) => Record<string, unknown>;
+        portal.collect = (order) => {
+          const answer = inner(order);
+          // An identity of its own: a CI runner has none configured, and git refuses a commit without one.
+          const ident = ["-c", "user.name=portal", "-c", "user.email=portal@codespace.local"];
+          const onTop = world.git(f.fullName, ...ident, "commit-tree", answer["tree"] as string, "-p", order["ref"] as string, "-m", "x").trim();
+          world.git(f.fullName, "update-ref", order["ref"] as string, onTop);
+          return answer;
+        };
+      }],
+      ["another tree", (f) => {
+        portalPushes(f, { "main.c": "x\n" });
+        const inner = portal.collect as (o: Record<string, unknown>) => Record<string, unknown>;
+        portal.collect = (order) => ({ ...inner(order), tree: world.git(f.fullName, "rev-parse", `${f.base}^{tree}`).trim() });
+      }],
+      ["a missing ref", () => {
+        portal.collect = () => ({ outcome: "pushed", tree: "d".repeat(40), snapshotAt: DEADLINE, unreadable: 0 });
+      }],
+      ["a truncated listing", (f) => {
+        portalPushes(f, { "main.c": "x\n" });
+        intercept = (url, req) =>
+          req.method === "GET" && url.pathname.includes("/git/trees/") ? json({ sha: "x", tree: [], truncated: true }) : undefined;
+      }],
+    ];
+    for (const [name, arrange] of cases) {
+      server.clock.set(NOW);
+      intercept = null;
+      const f = await launched();
+      arrange(f);
+      const signed = world.apiCommits.length;
+      await deadlineAt(at(DEADLINE, 20_000));
+      expect(await rowsOf(f), name).toMatchObject([{ outcome: "failed", reason: "check_refused" }]);
+      expect(world.apiCommits.length, name).toBe(signed);
+    }
+  });
+
+  it("never reverts a protected file the staff changed after the base: refused, nothing signed", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "workspace\n" }, () => {
+      world.commit(f.fullName, "main", { [GRADING_WORKFLOW_PATH]: "grade: v2" });
+    });
+    const signed = world.apiCommits.length;
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "failed", reason: "check_refused" }]);
+    expect(world.apiCommits.length).toBe(signed);
+    expect(world.read(f.fullName, "main", GRADING_WORKFLOW_PATH)).toBe("grade: v2");
+  });
+
+  it("collects nothing when the last push went to a branch not handed out", async () => {
+    const f = await launched();
+    await server.app.db.insert(pushReceipts).values({ id: randomUUID(), githubRepoId: f.repo.githubRepoId!, branch: "feature", headSha: "e".repeat(40), receivedAt: at(DEADLINE, -60_000), isBot: false });
+    portalPushes(f, { "main.c": "x\n" });
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "branch_not_handed_out" }]);
+    expect(collectionOrders()).toEqual([]);
+  });
+
+  it("collects none of: a group's repository, a never-launched one, one locked before, a free project's, an archived one", async () => {
+    const db = server.app.db;
+    const group = await launched();
+    const [g] = await db.insert(projectGroups).values({ id: randomUUID(), projectId: group.project.id, name: "G", slug: "g", position: 0 }).returning();
+    await db.update(projectRepos).set({ groupId: g!.id }).where(eq(projectRepos.id, group.repo.id));
+    const locked = await launched();
+    await db.update(projectRepos).set({ lockedAt: at(DEADLINE, -3_600_000), staffLock: true }).where(eq(projectRepos.id, locked.repo.id));
+    const archived = await launched();
+    await db.update(projectRepos).set({ archivedAt: at(DEADLINE, -3_600_000) }).where(eq(projectRepos.id, archived.repo.id));
+    const launchedNot = await launched();
+    await db.delete(codespaceLaunches).where(eq(codespaceLaunches.projectId, launchedNot.project.id));
+    const free = await launched();
+    await db.execute(sql`UPDATE projects SET work_mode = 'free' WHERE id = ${free.project.id}`);
+    portal.collect = () => ({ outcome: "unchanged", snapshotAt: DEADLINE, unreadable: 0 });
+    await deadlineAt(at(DEADLINE, 20_000));
+    for (const f of [group, locked, archived, launchedNot, free]) expect(await rowsOf(f)).toEqual([]);
+    expect(collectionOrders()).toEqual([]);
+  });
+
+  it("collects more than sixteen repositories in one job", async () => {
+    const extra = await Promise.all(Array.from({ length: 16 }, () => newStudent()));
+    const student = await launched("lock", extra);
+    const db = server.app.db;
+    for (const s of extra) {
+      expect((await call("POST", `/app/api/student/projects/${student.project.id}/accept`, s.headers)).statusCode).toBe(200);
+      await db.insert(codespaceLaunches).values({ projectId: student.project.id, userId: s.id, firstLaunchAt: new Date(NOW), lastLaunchAt: new Date(NOW) });
+    }
+    portal.collect = () => ({ outcome: "unchanged", snapshotAt: DEADLINE, unreadable: 0 });
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect(collectionOrders()).toHaveLength(17);
+    const rows = await db.select().from(codespaceCollections).innerJoin(projectRepos, eq(projectRepos.id, codespaceCollections.repoId)).where(eq(projectRepos.projectId, student.project.id));
+    expect(rows.every((r) => r.codespace_collections.outcome === "unchanged")).toBe(true);
+  }, 300_000);
+
+  it("gives a student and an impersonation no collection in their payload", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "x\n" });
+    await deadlineAt(at(DEADLINE, 20_000));
+    const admin = await server.signIn("admin");
+    const s = await createSession(server.app.db, f.student.id, 8, { kind: "impersonation", actorUserId: admin.id, evaluationId: null, projectId: null });
+    const impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
+    for (const headers of [f.student.headers, impersonation]) {
+      const res = await call("GET", `/app/api/student/projects/${f.project.id}`, headers);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toMatch(/"collection"\s*:/);
+      expect(res.body).not.toContain("check_refused");
+    }
+  });
+});
+
+/** A collection claimed and never settled, with its commit and its receipt, as a crash leaves it. */
+async function unsettled(f: Fixture, sha: string, claimedAt: Date) {
+  const id = randomUUID();
+  await server.app.db.insert(codespaceCollections).values({ id, repoId: f.repo.id, deadlineAt: new Date(DEADLINE), claimedAt, branch: "main", sha });
+  await server.app.db.insert(pushReceipts).values({ id: randomUUID(), githubRepoId: f.repo.githubRepoId!, branch: "main", headSha: sha, receivedAt: new Date(DEADLINE), isBot: false, collected: true });
+  return id;
+}
+
+describe("crashes and concurrent runs (ADR-130 §5, §6)", () => {
+  it("freezes nothing while a collection is unsettled, a live one left alone; once settled, the freeze reads the right target", async () => {
+    const f = await launched("lock", [], { graceMinutes: 0 });
+    const orphan = "c".repeat(40);
+    await unsettled(f, orphan, at(DEADLINE, 10_000));
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect((await repoRow(f)).frozenAt).toBeNull();
+    expect(await rowsOf(f)).toMatchObject([{ outcome: null }]);
+
+    await deadlineAt(at(DEADLINE, 6 * 60_000));
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "failed", reason: "interrupted" }]);
+    await deadlineAt(at(DEADLINE, 7 * 60_000));
+    expect((await repoRow(f)).frozenAt).not.toBeNull();
+    expect(await lastStudentPush(server.app.db, f.repo.githubRepoId!, ["main"], new Date(DEADLINE))).toBeNull();
+  });
+
+  it("lets no stale run overwrite a settled row: no audit, the landed commit keeps its receipt", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "landed\n" });
+    const inner = portal.collect as (o: Record<string, unknown>) => unknown;
+    // Another run settles the row while this one waits for the portal.
+    portal.collect = async (order) => {
+      const answer = inner(order);
+      await server.app.db.execute(sql`UPDATE codespace_collections SET outcome = 'failed', reason = 'interrupted', settled_at = now() WHERE repo_id = ${f.repo.id}`);
+      return answer;
+    };
+    await deadlineAt(at(DEADLINE, 20_000));
+    const head = world.git(f.fullName, "rev-parse", "main").trim();
+    expect(head).not.toBe(f.base);
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "failed", reason: "interrupted" }]);
+    const audits = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "project_repo.workspace_collected"), eq(auditLog.subjectId, f.repo.id)));
+    expect(audits).toEqual([]);
+    expect((await collectedReceipts(f)).map((r) => r.headSha)).toEqual([head]);
+  });
+
+  it("leaves a row unsettled when GitHub cannot be read, and settles it collected by ancestry, a push on top", async () => {
+    const f = await launched();
+    const landed = world.commit(f.fullName, "main", { "main.c": "collected before the crash\n" });
+    world.commit(f.fullName, "main", { "late.txt": "a push on top\n" });
+    await unsettled(f, landed, at(DEADLINE, -6 * 60_000));
+    portal.collect = () => ({ outcome: "unchanged", snapshotAt: DEADLINE, unreadable: 0 });
+    intercept = (url) => (url.pathname.includes("/compare/") ? json({ message: "Server Error" }, 500) : undefined);
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect(await rowsOf(f)).toMatchObject([{ outcome: null }]);
+    expect(await collectedReceipts(f)).toHaveLength(1);
+
+    intercept = null;
+    await deadlineAt(at(DEADLINE, 40_000));
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "collected", sha: landed }]);
+    expect((await collectedReceipts(f)).map((r) => r.headSha)).toEqual([landed]);
+  });
+
+  it("settles a repository without a name on GitHub as interrupted, without reading GitHub", async () => {
+    const other = await newStudent();
+    const f = await launched("lock", [other]);
+    expect((await call("POST", `/app/api/student/projects/${f.project.id}/accept`, other.headers)).statusCode).toBe(200);
+    await server.app.db.insert(codespaceLaunches).values({ projectId: f.project.id, userId: other.id, firstLaunchAt: new Date(NOW), lastLaunchAt: new Date(NOW) });
+    await unsettled(f, "c".repeat(40), at(DEADLINE, -6 * 60_000));
+    await server.app.db.update(projectRepos).set({ fullName: null }).where(eq(projectRepos.id, f.repo.id));
+    portal.collect = () => ({ outcome: "unchanged", snapshotAt: DEADLINE, unreadable: 0 });
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "failed", reason: "interrupted" }]);
+    expect(await collectedReceipts(f)).toEqual([]);
+  });
+});

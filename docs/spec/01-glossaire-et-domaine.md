@@ -283,3 +283,4 @@ by the product owner on 2026-10-20.
 | Pseudonymized account (UI word; its identity replaced, its results kept, ADR-117) | anonymized | anonymisé | supprimé (and *deleted* in English) |
 | Dormant account (no activity for two years, the lifecycle e-mail sent; active again at the next sign-in; not an archived classroom, ADR-117, 2026-11-05) | dormant | en sommeil | archivé |
 | Open a repository in the workspace (staff, read-only, ADR-129) | open in workspace | ouvrir dans l'espace de travail | codespace |
+| The platform hands in the online workspace's state at the deadline (ADR-130) | collection at the deadline; collected, not collected | relevé à l'échéance ; relevé, non relevé | collecte, ramassage, push automatique |

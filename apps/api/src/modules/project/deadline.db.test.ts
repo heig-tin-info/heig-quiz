@@ -284,7 +284,7 @@ describe("the ticker (ADR-006, ADR-064)", () => {
     expect((await repoRow(repo!.id)).lockedAt).not.toBeNull();
     expect((await projectRow(p.id)).deadlineJobAt).toBeNull();
     const [enforced] = await auditOf(p.id, "project.deadline_enforced");
-    expect(enforced!.payload).toEqual({ strategy: "lock", locked: 1, unlocked: 0, committed: 0, deleted: 0, failed: [] });
+    expect(enforced!.payload).toEqual({ strategy: "lock", collected: 0, locked: 1, unlocked: 0, committed: 0, deleted: 0, failed: [] });
 
     // Settled: nothing left to claim.
     server.clock.advance(20_000);

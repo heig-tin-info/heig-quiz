@@ -1055,9 +1055,11 @@ export async function purgeProjectReceipts(tx: Db | Tx, gone: ProjectsGone): Pro
  * `deliveries.ts`; reached through this entry, like the rest of the module.
  */
 export {
+  dropCollectedReceipt,
   onEvent,
   onReceipt,
   pushAuthor,
+  recordCollectedReceipt,
   pushedBy,
   type WebhookHandler,
 } from "./deliveries.js";

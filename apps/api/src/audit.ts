@@ -614,6 +614,8 @@ export type AuditAction =
    * by the deadline job archiving a repository already frozen.
    */
   | "project_repo.deadline_applied"
+  /** The online workspace collected at the repository's deadline, or why not (ADR-130 §7): payload `{ projectId, outcome, reason, branch, sha, deadlineAt }`. */
+  | "project_repo.workspace_collected"
   | "project_repo.frozen"
   | "project_repo.deadline_set"
   | "project_repo.lock"

@@ -59,6 +59,9 @@
  * last renewal (no queue retry: it would carry a stale lease). Without a
  * queue the tick claims nothing: a job never runs in the ticker's process.
  * A 404 is the repository deleted on GitHub: terminal (`markRepoDeleted`).
+ * Before any of it, the job collects the online workspaces due
+ * (`collection.ts`, ADR-130): the lock or the commit follows whatever came
+ * of a collection.
  * The `commit` strategy is best effort (N-PERF-07 binds
  * `lock`): one empty commit of the App per handed-out branch, recorded in
  * `bot_commits(deadline)` BEFORE its ref moves; the score never depends on
@@ -90,10 +93,11 @@ import {
   type JobQueue,
 } from "../../jobs.js";
 import type { TickTask } from "../../ticker.js";
-import { requestCodespaceSync } from "../codespace/service.js";
+import { COLLECTION_UNSETTLED, requestCodespaceSync } from "../codespace/service.js";
 import { DomainError } from "../http.js";
 import { expireCiPasses, runCiDispatch, sendCiPasses, type CiDispatchJob } from "./ci.js";
 import { refreshCriteria } from "./criteria.js";
+import { collectDue } from "./collection.js";
 import { COMMIT_DUE, EFFECTIVE_DEADLINE, LIVE, NEEDS_WORK, ts } from "./deadline.js";
 import { EVIDENCE_CONCURRENCY, EVIDENCE_EXPIRY_SECONDS, type EvidenceJob } from "./evidence.js";
 import { stopGroups, stopProjects } from "./groupCopy.js";
@@ -246,6 +250,8 @@ async function freezeDue(db: Db, now: Date): Promise<{ projectIds: string[]; pas
           isNotNull(projectRepos.deadlineAppliedAt),
           isNull(projectRepos.frozenAt),
           sql`${EFFECTIVE_DEADLINE} + make_interval(mins => ${projects.graceMinutes}) <= ${ts(now)}`,
+          // A collection not settled yet may hold a receipt for a commit on no branch (ADR-130 §6).
+          sql`NOT ${COLLECTION_UNSETTLED}`,
         ),
       )
       .returning({
@@ -448,7 +454,7 @@ async function repoState(db: Db, repoId: string): Promise<RepoState | null> {
 
 type Step = "locked" | "archived" | "unlocked" | "committed";
 /** The counts of `project.deadline_enforced`: an archive is a lock (its own audit says it is degraded). */
-type Tally = Record<"locked" | "unlocked" | "committed" | "deleted", number>;
+type Tally = Record<"collected" | "locked" | "unlocked" | "committed" | "deleted", number>;
 
 /**
  * Locks on GitHub: the deadline's ruleset, or the archive H8 stands for
@@ -590,7 +596,8 @@ export async function runDeadlineJob(app: FastifyInstance, config: AppConfig, jo
       .from(projectRepos)
       .innerJoin(projects, eq(projects.id, projectRepos.projectId))
       .where(and(eq(projectRepos.projectId, project.id), LIVE, NEEDS_WORK));
-    const tally: Tally = { locked: 0, unlocked: 0, committed: 0, deleted: 0 };
+    // The online workspaces first (ADR-130 §5): collected, or not, then locked or committed regardless.
+    const tally: Tally = { collected: await collectDue(app, config, octokit, project.id, each), locked: 0, unlocked: 0, committed: 0, deleted: 0 };
     const failed = await each(repos, async (repo) => {
       try {
         for (const step of await settleRepo(app, octokit, repo.id)) tally[step === "archived" ? "locked" : step] += 1;

@@ -134,15 +134,24 @@ export function pushedBy(config: AppConfig, login: string | undefined): "app" | 
  * none of the App's own commits (`bot_commits`): a restore, a sync or a
  * deadline commit is never the student's, declared or not. Any other push
  * of the App stays the App's. One primary-key lookup (N-SEC-17), reading
- * the `codespace` and `project` modules' tables by join.
+ * the `codespace` and `project` modules' tables by join. A push of the App
+ * whose head the deadline job recorded as a collection (`collected`, ADR-130
+ * §6) is `collection`: the student's work, made by the platform.
  */
 export async function pushAuthor(
   db: Db | Tx,
   config: AppConfig,
   push: { senderLogin: string | undefined; githubRepoId: number; after: string },
-): Promise<"app" | "workflow" | "person"> {
+): Promise<"app" | "workflow" | "person" | "collection"> {
   const by = pushedBy(config, push.senderLogin);
   if (by !== "app") return by;
+  // The deadline job's collection (ADR-130 §6): its receipt, written before the ref moved, says so.
+  const [collection] = await db
+    .select({ id: pushReceipts.id })
+    .from(pushReceipts)
+    .where(and(eq(pushReceipts.githubRepoId, push.githubRepoId), eq(pushReceipts.headSha, push.after), eq(pushReceipts.collected, true)))
+    .limit(1);
+  if (collection) return "collection";
   const ownCommit = db
     .select({ sha: botCommits.sha })
     .from(botCommits)
@@ -166,6 +175,38 @@ function pushedCommits(config: AppConfig, commits: z.infer<typeof PushEvent>["co
   return commits?.filter((c) => c.distinct !== false && pushedBy(config, c.author?.username) === "person").length ?? null;
 }
 
+/**
+ * The collection's receipt (ADR-130 §6), written by the deadline job BEFORE
+ * the branch moves, in the caller's transaction: `collected`, not a bot's,
+ * received at `deadline` — the repository's effective deadline Quiz
+ * computed, never a time from the portal. The only writer of `collected`.
+ */
+export async function recordCollectedReceipt(
+  tx: Db | Tx,
+  receipt: { githubRepoId: number; branch: string; sha: string; deadline: Date },
+): Promise<void> {
+  await tx.insert(pushReceipts).values({
+    id: randomUUID(),
+    githubRepoId: receipt.githubRepoId,
+    branch: receipt.branch,
+    headSha: receipt.sha,
+    receivedAt: receipt.deadline,
+    isBot: false,
+    forced: false,
+    commits: null,
+    collected: true,
+  })
+    // Written again by a run that lost its row's settlement (ADR-130 §5): the first receipt stands.
+    .onConflictDoNothing();
+}
+
+/** A collection's receipt withdrawn: its commit never reached the branch (GitHub refused the move, ADR-130 §4.3). */
+export async function dropCollectedReceipt(tx: Db | Tx, githubRepoId: number, sha: string): Promise<void> {
+  await tx
+    .delete(pushReceipts)
+    .where(and(eq(pushReceipts.githubRepoId, githubRepoId), eq(pushReceipts.headSha, sha), eq(pushReceipts.collected, true)));
+}
+
 async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery): Promise<void> {
   if (trackers.size === 0) return;
   const push = PushEvent.safeParse(delivery.payload);
@@ -182,7 +223,8 @@ async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery
       branch: push.data.ref.replace(/^refs\/heads\//, ""),
       headSha: push.data.after,
       receivedAt: delivery.receivedAt,
-      isBot: (await pushAuthor(tx, config, { senderLogin: push.data.sender?.login, githubRepoId: repoId, after: push.data.after })) !== "person",
+      // A collection's head already holds its receipt (ADR-130 §6): this insert is a no-op for it, and never sets `collected`.
+      isBot: !["person", "collection"].includes(await pushAuthor(tx, config, { senderLogin: push.data.sender?.login, githubRepoId: repoId, after: push.data.after })),
       forced: push.data.forced ?? false,
       commits: pushedCommits(config, push.data.commits),
     })

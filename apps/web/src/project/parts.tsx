@@ -3,15 +3,15 @@
  * points out of their maximum, the final score with its grade and source, a
  * CI status as a tag.
  */
-import type { ProjectRepoView, ProjectStudent, ProjectSyncState } from "@quiz/contracts";
-import { formatScore } from "@quiz/domain";
+import type { ProjectRepoCollection, ProjectRepoView, ProjectStudent, ProjectSyncState } from "@quiz/contracts";
+import { formatScore, WORKSPACE_PUSH_MAX_BYTES } from "@quiz/domain";
 
-import { GitPullRequest, RefreshCw } from "lucide-react";
+import { GitPullRequest, PackageCheck, RefreshCw } from "lucide-react";
 
 import { Grade } from "../Grade";
 import { studentName } from "../group/groupRules";
 import { useT, type Dict } from "../i18n";
-import { Badge, Button, cx, Dash, type Tone } from "../ui";
+import { Badge, Button, cx, Dash, isoDateTime, type Tone } from "../ui";
 import { syncTag } from "./projectPage";
 
 /** A score out of its maximum, to the tenth ("8/10", "7.2/26", "9" without one), or a dash without points. */
@@ -147,5 +147,60 @@ export function SyncButton({
     <Button variant={variant} size={size} data-coach={coach} onClick={onSync} loading={syncing || sync.inProgress}>
       <RefreshCw /> {t(sync.inProgress ? "project.sync.inProgress" : "project.sync")}
     </Button>
+  );
+}
+
+/**
+ * The online workspace's collection at the deadline, as a tag (ADR-130 §7):
+ * `collected`, or `not collected` for any outcome that handed nothing in
+ * while there was something to, an unconfirmed order included (its sentence
+ * says so); nothing for a repository never collected, or whose workspace
+ * matched the last push.
+ */
+function collectionTag(collection: ProjectRepoView["collection"]): { key: keyof Dict; tone: Tone; collected: boolean } | null {
+  if (collection === null || collection.outcome === "unchanged") return null;
+  return collection.outcome === "collected"
+    ? { key: "project.collection.collected", tone: "zinc", collected: true }
+    : { key: "project.collection.notCollected", tone: "amber", collected: false };
+}
+
+export function CollectionBadge({ repo }: { repo: ProjectRepoView }) {
+  const t = useT();
+  const tag = collectionTag(repo.collection);
+  if (!tag) return null;
+  return (
+    <Badge tone={tag.tone} {...(tag.collected ? { icon: PackageCheck } : {})}>
+      {t(tag.key)}
+    </Badge>
+  );
+}
+
+/** The sentence of each outcome; an unconfirmed order (`pending`) and a collection name their time. */
+const COLLECTION_SAID: Record<NonNullable<ProjectRepoCollection["outcome"]> | "pending", keyof Dict> = {
+  pending: "project.collection.pending",
+  collected: "project.collection.at",
+  unchanged: "project.collection.unchanged",
+  no_snapshot: "project.collection.no_snapshot",
+  stale_snapshot: "project.collection.stale_snapshot",
+  branch_not_handed_out: "project.collection.branch_not_handed_out",
+  too_large: "project.collection.too_large",
+  too_late: "project.collection.too_late",
+  failed: "project.collection.failed",
+};
+
+/** What the collection was, in words, for the repository's sheet: when, or why not, and the files it could not read. */
+export function CollectionFacts({ repo }: { repo: ProjectRepoView }) {
+  const t = useT();
+  const c = repo.collection;
+  if (c === null) return null;
+  const said = t(COLLECTION_SAID[c.outcome ?? "pending"], { at: isoDateTime(c.at), mib: WORKSPACE_PUSH_MAX_BYTES / 1024 / 1024 });
+  return (
+    <div className="flex flex-col items-start gap-1 text-[13px]">
+      <CollectionBadge repo={repo} />
+      <p className="text-fg-muted">{said}</p>
+      {c.unreadable ? (
+        <p className="text-fg-muted">{c.unreadable === 1 ? t("project.collection.unreadable.one") : t("project.collection.unreadable", { n: c.unreadable })}</p>
+      ) : null}
+    </div>
   );
 }

@@ -20,7 +20,7 @@ import { useToast } from "../notify";
 import { projectKey, projectRunsKey } from "../queryKeys";
 import { Badge, Button, Dash, Fact, FieldError, fieldErrorProps, isoDateTime, RelativeTime, RepoLink, Sheet } from "../ui";
 import { OpenInWorkspaceButton, useReviewAction } from "./OpenInWorkspace";
-import { CiBadge, MemberList, SyncBadge } from "./parts";
+import { CiBadge, CollectionFacts, MemberList, SyncBadge } from "./parts";
 import { actionable, refusalMessage, repoEntryOf, repoFlags, shortSha } from "./projectPage";
 import { RunHistory } from "./RunHistory";
 import { ScoreSection } from "./TeacherScoreForm";
@@ -150,6 +150,7 @@ export function RepoSheet({
           ) : null}
           {/* ADR-129 §11: a secondary action; the sheet's primary stays the score's Save. */}
           {reviewOf ? <OpenInWorkspaceButton projectId={project.id} repo={repo} action={reviewOf(repo)} /> : null}
+          <CollectionFacts repo={repo} />
           {repo.flags.malformed ? (
             <p className="font-mono text-xs text-fg-muted">{repo.flags.malformed}</p>
           ) : null}

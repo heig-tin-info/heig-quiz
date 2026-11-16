@@ -78,14 +78,12 @@ import { knownEmails, normalizeEmail } from "../../identity.js";
 import { CODESPACE_SYNC_QUEUE } from "../../jobs.js";
 import { PORTAL } from "../../auth/session.js";
 import { findStudentProjectView, type Caller, type Reach } from "../guards.js";
+import { portalCall, PORTAL_TIMEOUT_MS } from "./portal.js";
 
 /** The portal is wired up at all: an empty `CODESPACE_URL` means the feature does not exist (ADR-047 §5). */
 export function codespaceOn(config: Pick<AppConfig, "CODESPACE_URL">): boolean {
   return config.CODESPACE_URL !== "";
 }
-
-/** A portal call never holds a request or a job for long. */
-const PORTAL_TIMEOUT_MS = 10_000;
 
 // ---------------------------------------------------------------- grants (ADR-047 §4)
 
@@ -168,41 +166,6 @@ export async function projectWorkspace(
 }
 
 // ---------------------------------------------------------------- tokens
-
-/**
- * A server-to-server call to the portal. Its bearer is a two-minute
- * service token bound to THIS request — method, path and query, the SHA-256
- * of the exact body sent — with a fresh `jti` the portal consumes once
- * (audit L25, ADR-078 amendment of 2026-10-11): a token seen in transit is
- * worth neither a second call nor another route or body.
- */
-async function portalCall(
-  config: AppConfig,
-  now: Date,
-  method: "GET" | "PUT",
-  path: string,
-  payload?: unknown,
-): Promise<Response> {
-  const url = new URL(`${config.CODESPACE_URL}${path}`);
-  const body = payload === undefined ? undefined : JSON.stringify(payload);
-  const iat = Math.floor(now.getTime() / 1000);
-  const claims: ServiceTokenClaims = {
-    iss: QUIZ_CODESPACE_ISSUER,
-    aud: SERVICE_AUDIENCE,
-    iat,
-    exp: iat + SERVICE_TOKEN_TTL_SECONDS,
-    jti: randomUUID(),
-    ...(await requestBinding(method, url.pathname + url.search, body)),
-    method,
-  };
-  const token = await signHs256({ ...claims }, config.CODESPACE_LAUNCH_SECRET);
-  return fetch(url, {
-    method,
-    headers: { authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "content-type": "application/json" }) },
-    ...(body === undefined ? {} : { body }),
-    signal: AbortSignal.timeout(PORTAL_TIMEOUT_MS),
-  });
-}
 
 /**
  * A student's launch token (ADR-047 §6): five minutes, a random `jti` the
@@ -695,3 +658,17 @@ async function recordLaunch(tx: Tx, projectId: string, userId: string, now: Date
     .values({ projectId, userId, firstLaunchAt: now, lastLaunchAt: now })
     .onConflictDoUpdate({ target: [codespaceLaunches.projectId, codespaceLaunches.userId], set: { lastLaunchAt: now } });
 }
+
+// ---------------------------------------------------------------- the collection at the deadline (ADR-130)
+
+/** The order to the portal and its record, for the deadline job (`project/collection.ts`) and the staff's rows. */
+export {
+  claimCollection,
+  lastCollections,
+  orderCollection,
+  recordCollectionCommit,
+  settleCollection,
+  COLLECTION_UNSETTLED,
+  unsettledCollections,
+  type CollectionSettlement,
+} from "./collect.js";

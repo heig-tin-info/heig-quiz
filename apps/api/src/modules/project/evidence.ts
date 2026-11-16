@@ -497,7 +497,7 @@ export async function collectEvidence(
 ): Promise<EvidenceRow> {
   const db = app.db;
   const now = app.clock.now();
-  const target = repo.githubRepoId === null ? null : await lastStudentPush(db, repo.githubRepoId, project.branches, deadline);
+  const target = repo.githubRepoId === null ? null : ((await lastStudentPush(db, repo.githubRepoId, project.branches, deadline))?.sha ?? null);
   if (target === null) return store(db, project, repo.id, null, null, { status: "no_commit" }, now);
   if (repo.deletedAt !== null || repo.fullName === null) return store(db, project, repo.id, target, null, { status: "repo_missing" }, now);
   let prepared: Prepared;

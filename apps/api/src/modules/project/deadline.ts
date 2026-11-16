@@ -32,6 +32,7 @@ import type { ProjectRepoDeadlineState } from "@quiz/contracts";
 import { checkpointDueAt, deadlineWantsLock, effectiveDeadline, receivedLate, reminderClaimAfterMove, reopens } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
+import { COLLECTION_UNSETTLED } from "../codespace/service.js";
 import { isoOrNull } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
 import { gradeDispatches, projectCheckpoints, projectGradeRuns, projectRepos, projects, pushReceipts } from "../../db/schema.js";
@@ -94,8 +95,11 @@ export const WANTS_LOCK = sql<boolean>`coalesce(${projectRepos.staffLock}, ${pro
 export const COMMIT_DUE = sql<boolean>`(${projects.deadlineStrategy} = 'commit' AND ${projectRepos.deadlineAppliedAt} IS NOT NULL
   AND ${projectRepos.deadlineCommittedAt} IS NULL AND ${projectRepos.archivedAt} IS NULL)`;
 
-/** GitHub work is left on a repository: what it holds is not what it should, or a commit is due. */
-export const NEEDS_WORK = sql`(${WANTS_LOCK} <> (${projectRepos.lockedAt} IS NOT NULL) OR ${COMMIT_DUE})`;
+/**
+ * GitHub work is left on a repository: what it holds is not what it should,
+ * a commit is due, or a collection a crash left unsettled (ADR-130 §4.3).
+ */
+export const NEEDS_WORK = sql`(${WANTS_LOCK} <> (${projectRepos.lockedAt} IS NOT NULL) OR ${COMMIT_DUE} OR ${COLLECTION_UNSETTLED})`;
 
 
 // ---------------------------------------------------------------- a deadline moved

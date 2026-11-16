@@ -10,6 +10,10 @@
 import { z } from "zod";
 
 import {
+  COLLECTION_FAILURE_REASONS,
+  COLLECTION_OUTCOMES,
+  COLLECTION_PORTAL_FAILURES,
+  COLLECTION_REF_PREFIX,
   DEVICE_LEVEL_IDS,
   GIT_TOKEN_REFUSALS,
   STAFF_REVIEW_REFUSALS,
@@ -387,7 +391,9 @@ export const collectionsPath = (assignmentId: string): string => `/api/assignmen
  * one component of letters, digits, `-` and `_` — no dot (so no `..` nor
  * `.lock`), no slash, never a branch.
  */
-export const CollectionRef = z.string().regex(/^refs\/quiz\/collect\/[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/, "a ref under refs/quiz/collect/ expected");
+export const CollectionRef = z
+  .string()
+  .regex(new RegExp(`^${COLLECTION_REF_PREFIX.replaceAll("/", "\\/")}[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`), `a ref under ${COLLECTION_REF_PREFIX} expected`);
 
 /**
  * The order (ADR-130 §4): whose workspace (`userId`, the launch token's
@@ -417,10 +423,10 @@ export type CodespaceCollectionRequest = z.infer<typeof CodespaceCollectionReque
  * credential (`forge_refused`), GitHub or Quiz could not be reached
  * (`forge_unavailable`), GitHub refused the push (`push_rejected`), git
  * failed on the host (`git_error`), or the collection's time budget ran out
- * (`timeout`). Details stay in the portal's log.
+ * (`timeout`). Details stay in the portal's log. `@quiz/domain`'s list.
  */
-export const COLLECTION_FAILURES = ["forge_refused", "forge_unavailable", "push_rejected", "git_error", "timeout"] as const;
-export type CollectionFailure = (typeof COLLECTION_FAILURES)[number];
+export { COLLECTION_PORTAL_FAILURES };
+export type CollectionFailure = (typeof COLLECTION_PORTAL_FAILURES)[number];
 
 /**
  * When the snapshot was taken (the engine's clock), and how many files the
@@ -441,9 +447,27 @@ export const CodespaceCollectionResult = z.discriminatedUnion("outcome", [
   z.object({ outcome: z.literal("too_large"), ...SnapshotFacts }),
   z.object({ outcome: z.literal("stale_snapshot"), snapshotAt: IsoDate }),
   z.object({ outcome: z.literal("no_snapshot") }),
-  z.object({ outcome: z.literal("failed"), reason: z.enum(COLLECTION_FAILURES) }),
+  z.object({ outcome: z.literal("failed"), reason: z.enum(COLLECTION_PORTAL_FAILURES) }),
 ]);
 export type CodespaceCollectionResult = z.infer<typeof CodespaceCollectionResult>;
+
+export { COLLECTION_FAILURE_REASONS, COLLECTION_OUTCOMES };
+
+/**
+ * A repository's last collection, for its staff (ADR-130 §7): the outcome
+ * (null: ordered, never confirmed), why it failed, the deadline it was for,
+ * when it was settled (else ordered), the files the portal could not read
+ * (null when unknown) and the collection's commit. The staff's payload only.
+ */
+export const ProjectRepoCollection = z.object({
+  outcome: z.enum(COLLECTION_OUTCOMES).nullable(),
+  reason: z.enum(COLLECTION_FAILURE_REASONS).nullable(),
+  deadlineAt: z.iso.datetime(),
+  at: z.iso.datetime(),
+  unreadable: z.number().int().min(0).nullable(),
+  sha: z.string().nullable(),
+});
+export type ProjectRepoCollection = z.infer<typeof ProjectRepoCollection>;
 
 // ---------------------------------------------------------- Quiz's own routes (M6-06)
 

@@ -10,7 +10,9 @@
  * never went online has none. Deleted with its project. Nothing here is a
  * secret: the launch token is never stored (its `jti` is in the audit log).
  */
-import { bigint, index, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+
+import { COLLECTION_FAILURE_REASONS, COLLECTION_OUTCOMES } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { projectRepos, projects } from "./project.js";
@@ -95,6 +97,40 @@ export const codespaceRelays = pgTable(
     declaredAt: timestamp("declared_at", { withTimezone: true }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.githubRepoId, t.sha] })],
+);
+
+/**
+ * The workspace collected at a repository's deadline (ADR-130 §2, §7): one
+ * row per (repository, effective deadline), claimed before the portal is
+ * called — the unique key is the at-most-once — and settled with its
+ * outcome. `outcome` null: ordered, never settled (a crash), shown to the
+ * staff as unconfirmed and never ordered again for that deadline. An
+ * extension that reopens the repository gives it a new deadline, so a
+ * second row. Written by the deadline job's collection only. Never a
+ * credential, never file content.
+ */
+export const codespaceCollections = pgTable(
+  "codespace_collections",
+  {
+    id: uuid("id").primaryKey(),
+    repoId: uuid("repo_id")
+      .notNull()
+      .references(() => projectRepos.id, { onDelete: "cascade" }),
+    /** The effective deadline it was collected for. */
+    deadlineAt: timestamp("deadline_at", { withTimezone: true }).notNull(),
+    /** When the collection was claimed, Quiz's clock. */
+    claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull(),
+    outcome: text("outcome", { enum: COLLECTION_OUTCOMES }),
+    reason: text("reason", { enum: COLLECTION_FAILURE_REASONS }),
+    /** The branch committed to: what the next job reads to settle a row a crash left unsettled. */
+    branch: text("branch"),
+    /** The signed commit, written BEFORE the branch moves (with its receipt), cleared if it never reaches it. */
+    sha: text("sha"),
+    /** Files the portal could not read; null when unknown. */
+    unreadable: integer("unreadable"),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("codespace_collections_repo_deadline_uq").on(t.repoId, t.deadlineAt)],
 );
 
 /**

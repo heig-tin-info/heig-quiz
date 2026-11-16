@@ -71,10 +71,11 @@ const push: WebhookHandler = async (app, config, delivery) => {
   const by = await pushAuthor(app.db, config, { senderLogin: sender?.login, githubRepoId: repository.id, after });
   if (by === "workflow") {
     await app.db.insert(botCommits).values({ repoId: ctx.repo.id, sha: after, kind: "grader" }).onConflictDoNothing();
-  } else if (by === "person") {
+  } else if (by === "person" || by === "collection") {
     await moveLastCommit(app.db, ctx.repo.id, after, head_commit?.timestamp, delivery.receivedAt);
   }
-  if (by !== "app") {
+  // A collection kept the protected files from the branch's head, checked before it was signed (ADR-130 §4.3).
+  if (by === "person" || by === "workflow") {
     await protectFiles(app, config, ctx, { branch, before, after, forced: forced ?? false, commits: commits ?? [] });
   }
   await hintRepo(app.db, ctx);

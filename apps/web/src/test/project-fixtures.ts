@@ -79,6 +79,7 @@ export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): Projec
       changedAfterRelease: false,
     },
     accessToRevoke: false,
+    collection: null,
     ...over,
   };
 }

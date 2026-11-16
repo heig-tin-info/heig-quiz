@@ -38,6 +38,7 @@ import {
   type ProjectRepoReview,
   type ProjectRepoScores,
   type ProjectRepoSync,
+  type ProjectRepoCollection,
   type ProjectRepoView,
   type ProjectSlotScore,
   type ProjectStudent,
@@ -54,6 +55,7 @@ import { projectInstallation } from "../github/service.js";
 import { countedReceipts, repoCommitCount } from "./commits.js";
 import { unvalidatedRepos } from "./criterionGrades.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
+import { lastCollections } from "../codespace/service.js";
 import { reposWithAccessToRevoke } from "./groupCopy.js";
 import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
@@ -258,6 +260,7 @@ function repoView(
   read: LiveRead | undefined,
   commits: number,
   toRevoke: ReadonlySet<string>,
+  collection: ProjectRepoCollection | null,
 ): ProjectRepoView {
   const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, scored);
   const runs = scored.runs;
@@ -286,6 +289,7 @@ function repoView(
       changedAfterRelease: changed,
     },
     accessToRevoke: toRevoke.has(repo.id),
+    collection,
   };
 }
 
@@ -365,11 +369,13 @@ export async function projectDetail(
   const shownLive = shownRepos.filter((repo) => isLive(repo, project));
   const { live, complete } = await liveStates(db, config, project, shownLive, opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
   const toRevoke = await reposWithAccessToRevoke(db, project.id);
+  // The online workspace's last collection (ADR-130 §7), the `codespace` module's record.
+  const collections = await lastCollections(db, repoIds);
 
   const views = new Map(
     shownRepos.map((repo) => [
       repo.id,
-      repoView(project, repo, scored, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), repoCommitCount(project, repo, receipts), toRevoke),
+      repoView(project, repo, scored, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), repoCommitCount(project, repo, receipts), toRevoke, collections.get(repo.id) ?? null),
     ]),
   );
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));

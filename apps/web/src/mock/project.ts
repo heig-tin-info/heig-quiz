@@ -947,6 +947,27 @@ function deadlineState(p: MockProject, r: MockRepo): ProjectRepoDeadlineState {
 const githubRepoIdOf = (r: MockRepo): number | null =>
   r.provisionStatus === "ok" ? [...r.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 1_000_000_000, 7) + 1 : null;
 
+/**
+ * The online workspace's collection at the deadline (ADR-130 §7), with
+ * `?collected=1`: for the individual repositories whose deadline was
+ * applied, one state each in turn, so the page shows them all.
+ */
+function mockCollection(p: MockProject, r: MockRepo): ProjectRepoView["collection"] {
+  if (!flags.collected || r.groupId !== null || r.deadlineAppliedAt === null) return null;
+  const deadlineAt = p.summary.deadlineAt;
+  const at = iso(new Date(deadlineAt).getTime() + 25_000);
+  const states: ProjectRepoView["collection"][] = [
+    { outcome: "collected", reason: null, deadlineAt, at, unreadable: 0, sha: sha(7) },
+    { outcome: "unchanged", reason: null, deadlineAt, at, unreadable: 0, sha: null },
+    { outcome: "collected", reason: null, deadlineAt, at, unreadable: 2, sha: sha(8) },
+    { outcome: "failed", reason: "timeout", deadlineAt, at, unreadable: null, sha: null },
+    { outcome: "too_late", reason: null, deadlineAt, at, unreadable: null, sha: null },
+    { outcome: null, reason: null, deadlineAt, at, unreadable: null, sha: null },
+    { outcome: "no_snapshot", reason: null, deadlineAt, at, unreadable: null, sha: null },
+  ];
+  return states[p.repos.indexOf(r) % states.length]!;
+}
+
 function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
   const scale = p.summary.gradingScale;
   const graded = (s: { runId: string; points: number | null; max: number | null } | null) =>
@@ -986,6 +1007,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
       changedAfterRelease: r.released !== null && changedAfterRelease(true, final, r.released),
     },
     accessToRevoke: r.accessToRevoke,
+    collection: mockCollection(p, r),
   };
 }
 
