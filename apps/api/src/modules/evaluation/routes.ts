@@ -143,6 +143,34 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
     return result;
   }
 
+  /**
+   * A copy's gradebook column settings, carried from its source `fromId` of
+   * course `fromCourseId` (ADR-131 §13, §15) — a duplicate's, an instance's,
+   * a template saved — by the `gradebook` module, which owns them: from
+   * here, not from this module's service, which the gradebook reaches
+   * through `activity`. Not in the copy's transaction: should this fail (a
+   * component deleted or the classroom archived meanwhile), the request
+   * answers that failure while the copy stands, valid, and reads its mode's
+   * defaults. `to.room` is the copy's classroom, null for a template; an
+   * archived classroom's gradebook is read-only, so nothing is carried there.
+   */
+  async function carryColumn(
+    req: FastifyRequest,
+    now: Date,
+    fromId: string,
+    fromCourseId: string,
+    to: { room: { id: string; archivedAt: Date | null } | null; courseId: string; activityId: string },
+  ): Promise<void> {
+    if (to.room !== null && to.room.archivedAt !== null) return;
+    await gradebook.copyColumnSettings(
+      app.db,
+      fromId,
+      fromCourseId,
+      { room: to.room, course: { id: to.courseId }, activityId: to.activityId },
+      { actor: actorOf(req), userId: callerOf(req).id, now },
+    );
+  }
+
   /** The audit payload of a patch: the fields sent, and the mode when it changes (ADR-092). */
   const auditPatch = (before: service.EvaluationRecord, body: { mode?: string | undefined }) => ({
     fields: Object.keys(body),
@@ -320,23 +348,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
           createdBy: callerOf(req).id,
         });
         await trace(req, "evaluation.duplicate", "evaluation", row.id, { from: scope.evaluation.id });
-        // Its gradebook column's settings follow it (ADR-131 §13), written
-        // by the `gradebook` module, which owns them: from here, not from
-        // this module's service, which the gradebook reaches through
-        // `activity`. Not in the copy's transaction: should this fail (a
-        // component deleted or the classroom archived meanwhile), the request
-        // answers that failure while the copy stands, valid, and reads its
-        // mode's defaults. An archived classroom's gradebook is read-only:
-        // nothing to carry there.
-        if (room.archivedAt === null) {
-          await gradebook.copyColumnSettings(
-            app.db,
-            scope.evaluation.id,
-            scope.classroom.courseId,
-            { room, course: { id: room.courseId }, activityId: row.id },
-            { actor: actorOf(req), userId: callerOf(req).id, now },
-          );
-        }
+        await carryColumn(req, now, scope.evaluation.id, scope.classroom.courseId, { room, courseId: room.courseId, activityId: row.id });
         evaluationChanged(room.id, row.id);
         return reply.code(201).send(service.toEvaluation(row));
       },
@@ -478,14 +490,8 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
           title: template.title,
           previousOrigin,
         });
-        // The evaluation's gradebook settings, kept for its instances (ADR-131 §15), as a duplicate's are carried.
-        await gradebook.copyColumnSettings(
-          app.db,
-          scope.evaluation.id,
-          courseId,
-          { room: null, course: { id: courseId }, activityId: template.id },
-          { actor: actorOf(req), userId: callerOf(req).id, now },
-        );
+        // The evaluation's gradebook settings, kept for its instances (ADR-131 §15).
+        await carryColumn(req, now, scope.evaluation.id, courseId, { room: null, courseId, activityId: template.id });
         return reply.code(201).send(await templates.templateOf(app.db, template));
       },
     ),
@@ -670,17 +676,8 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
           revision: made.evaluation.originRevision,
           classroomId: room.room.id,
         });
-        // The template's gradebook settings, which the instance inherits (ADR-131 §15): carried as a
-        // duplicate's are, after the copy's own transaction, and not into an archived classroom.
-        if (room.room.archivedAt === null) {
-          await gradebook.copyColumnSettings(
-            app.db,
-            scope.template.id,
-            scope.course.id,
-            { room: room.room, course: scope.course, activityId: made.evaluation.id },
-            { actor: actorOf(req), userId: callerOf(req).id, now },
-          );
-        }
+        // The template's gradebook settings, which the instance inherits (ADR-131 §15).
+        await carryColumn(req, now, scope.template.id, scope.course.id, { room: room.room, courseId: scope.course.id, activityId: made.evaluation.id });
         evaluationChanged(room.room.id, made.evaluation.id);
         const answer: TemplateInstance = {
           evaluation: service.toEvaluation(made.evaluation),

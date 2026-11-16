@@ -1,25 +1,26 @@
 /**
- * An evaluation template's gradebook settings (ADR-131 §15, F-EVAL-24..26,
- * F-GBOOK-06) over the real application and the real migrations.
+ * An evaluation template's gradebook settings (ADR-131 §15, F-EVAL-18,
+ * F-EVAL-24, F-EVAL-25, F-GBOOK-06) over the real application and the real migrations.
  *
  * The world: one course with two classrooms (A, with two claimed students,
- * and B) and a component of the mean, "Labo"; its seeded exam of two
- * questions; another course of the same teacher, with a component of its own.
+ * and B) and a component of the mean, "Labo"; its seeded exam; another
+ * course of the same teacher, with a component of its own.
  *
  * What it pins:
  * - a template's settings are read — its mode's defaults until written —
  *   and written by any member of the course's staff, a component of its
  *   course or the 404 of a missing one, never a position; anyone off the
- *   staff gets the 404 of a missing template; the write is audited on the
+ *   staff gets the 404 of a missing template, and a template's id is no
+ *   classroom's column; the write is audited on the
  *   template, hints nobody and moves no revision;
  * - its row reaches no reader: the staff table, the CSV, the student's
  *   cells, the Grades page, the personal export are byte for byte the same;
- * - an instance inherits the stored settings, nothing without them, nothing
- *   in an archived classroom; "save as template" keeps the source's; a pull
- *   brings none;
- * - a stored flag survives the template's change of mode (ADR-092 §4); the
- *   template holds its component in use, and its deletion takes its
- *   settings along.
+ * - an instance inherits the stored settings, its own from then on, nothing
+ *   without them, nothing in an archived classroom; "save as template" keeps
+ *   the source's;
+ * - the template holds its component in use, and its deletion takes its
+ *   settings along. (A stored flag across a change of mode is the same
+ *   stored row a draft's is, pinned by `drafts.db.test.ts`.)
  */
 import { randomUUID } from "node:crypto";
 
@@ -158,7 +159,7 @@ beforeAll(async () => {
   server.clock.set("2026-11-16T09:00:00.000Z");
   teacher = await server.signIn("teacher");
   students = await Promise.all([0, 1].map(() => server.signIn("student")));
-  seed = await seedLive(db(), { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 2 });
+  seed = await seedLive(db(), { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 1 });
   roomB = randomUUID();
   await db().insert(classrooms).values({ id: roomB, courseId: seed.courseId, name: "B", period: "2026-B" });
   other = await seedLive(db(), { teacherId: teacher.id, studentIds: [], questions: 0 });
@@ -219,8 +220,12 @@ describe("a template's gradebook settings (ADR-131 §15)", () => {
       const res = await call(method, tplUrl(template), stranger.headers, method === "PATCH" ? { weight: 1 } : undefined);
       expect([res.statusCode, res.body], method).toEqual([404, missing.body]);
     }
-    // A classroom's evaluation is no template: the 404 too.
+    // A classroom's evaluation is no template, and a template is no classroom's column: the 404 both ways.
     expect((await call("GET", tplUrl(seed.evaluationId), teacher.headers)).statusCode).toBe(404);
+    for (const method of ["GET", "PATCH"] as const) {
+      const res = await call(method, colUrl(template), teacher.headers, method === "PATCH" ? { weight: 1 } : undefined);
+      expect([res.statusCode, res.json().error], method).toEqual([404, "not_found"]);
+    }
     expect(await templateSettings(template)).toMatchObject({ weight: 70 });
   });
 
@@ -235,11 +240,15 @@ describe("a template's gradebook settings (ADR-131 §15)", () => {
     expect((await columnRows(template))[0]!.classroomId).toBeNull();
   });
 
-  it("gives an instance the template's stored settings, in any classroom of the course but an archived one; nothing without", async () => {
+  it("gives an instance the template's stored settings, its own from then on, in any classroom of the course but an archived one; nothing without", async () => {
     const template = await newTemplate("exam");
     await patchTemplate(template, { weight: 30, counts: false, componentId: labo });
-    expect(await columnSettings(await instantiate(template))).toMatchObject({ weight: 30, counts: false, componentId: labo });
+    const instance = await instantiate(template);
+    expect(await columnSettings(instance)).toMatchObject({ weight: 30, counts: false, componentId: labo });
     expect(await columnSettings(await instantiate(template, roomB), roomB)).toMatchObject({ weight: 30, counts: false, componentId: labo });
+    // The instance's settings are its own from then on: a later change of the template's reaches none.
+    await patchTemplate(template, { weight: 10 });
+    expect(await columnSettings(instance)).toMatchObject({ weight: 30 });
 
     const plain = await newTemplate("exam");
     expect(await columnRows(await instantiate(plain))).toEqual([]);
@@ -258,35 +267,6 @@ describe("a template's gradebook settings (ADR-131 §15)", () => {
 
     const plain = (await evaluationService.createEvaluation(db(), { classroomId: seed.classroomId, title: "Plain", mode: "exam", createdBy: teacher.id })).id;
     expect(await columnRows(await saveAsTemplate(plain))).toEqual([]);
-  });
-
-  it("brings no setting with a pull: the instance keeps its own (F-EVAL-26)", async () => {
-    const template = await saveAsTemplate(seed.evaluationId);
-    await patchTemplate(template, { weight: 20 });
-    const instance = await instantiate(template);
-    await patchColumn(instance, { weight: 80 });
-    await patchTemplate(template, { weight: 10, counts: false });
-    expect(await revisionOf(template)).toBe(1);
-    // A real revision: the points of the template's first item.
-    const detail = TemplateDetail.parse((await call("GET", `/app/api/templates/${template}`, teacher.headers)).json());
-    const first = detail.items[0]!;
-    const moved = await call("PATCH", `/app/api/templates/${template}/items/${first.id}`, teacher.headers, { points: first.points + 1 });
-    expect(moved.statusCode, moved.body).toBe(200);
-    const pulled = await call("POST", `/app/api/evaluations/${instance}/pull-template`, teacher.headers, { revision: 2 });
-    expect(pulled.statusCode, pulled.body).toBe(200);
-    expect(await columnSettings(instance)).toMatchObject({ weight: 80, counts: true });
-  });
-
-  it("keeps a stored flag across the template's change of mode; an untouched one reads its new default (ADR-092 §4)", async () => {
-    const stored = await newTemplate("exam");
-    const untouched = await newTemplate("exam");
-    await patchTemplate(stored, { weight: 50 });
-    for (const id of [stored, untouched]) {
-      const res = await call("PATCH", `/app/api/templates/${id}`, teacher.headers, { mode: "exercise" });
-      expect(res.statusCode, res.body).toBe(200);
-    }
-    expect(await templateSettings(stored)).toMatchObject({ weight: 50, counts: true });
-    expect(await templateSettings(untouched)).toMatchObject({ weight: 100, counts: false });
   });
 
   it("holds its component in use; deleting the template takes its settings along", async () => {

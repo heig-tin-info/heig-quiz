@@ -20,6 +20,7 @@ import { exampleConfig, listPools, typeOf } from "../pool/service.js";
 import {
   type EvaluationRecord,
   type DbOrTx,
+  type EvaluationHome,
   assertItemListEditable,
   EvaluationError,
   questionRefused,
@@ -34,7 +35,7 @@ import { countingCoursePool, type Caller } from "../guards.js";
  * source behind `addItems`, the picker, every copy into a classroom and a
  * template's `poolUnlinked` flag.
  */
-export async function coursePoolIds(db: DbOrTx, home: CopyHome): Promise<Set<string>> {
+export async function coursePoolIds(db: DbOrTx, home: EvaluationHome): Promise<Set<string>> {
   const rows =
     "courseId" in home
       ? await db
@@ -55,7 +56,7 @@ export function inLinkedPool(question: { poolId: string | null }, linked: Set<st
 }
 
 /** Where a row lives: its course for a template, its classroom otherwise. */
-function homeOf(row: EvaluationRecord): CopyHome {
+function homeOf(row: EvaluationRecord): EvaluationHome {
   return row.courseId !== null ? { courseId: row.courseId } : { classroomId: classroomIdOf(row) };
 }
 
@@ -67,7 +68,7 @@ function homeOf(row: EvaluationRecord): CopyHome {
  */
 export async function listCoursePools(
   db: Db,
-  home: CopyHome,
+  home: EvaluationHome,
   viewer: Caller,
 ): Promise<PoolSummary[]> {
   const ids = await coursePoolIds(db, home);
@@ -384,12 +385,6 @@ export async function copyItems(
 }
 
 /**
- * Where a copy lives: a classroom (a duplicate, F-EVAL-14, or an instance of
- * a template) or a course (a template, ADR-031).
- */
-export type CopyHome = { classroomId: string } | { courseId: string };
-
-/**
  * THE copy of an evaluation into a new draft: its settings, grade scale,
  * feedback and MCQ policies, duration, and its items — the SAME frozen
  * versions, points, order, milestones and bonus items (never a neutralization,
@@ -405,7 +400,7 @@ export async function copyEvaluation(
   db: DbOrTx,
   row: EvaluationRecord,
   target: {
-    home: CopyHome;
+    home: EvaluationHome;
     title: string;
     createdBy: string;
     /** An instance records the template and the revision it came from. */

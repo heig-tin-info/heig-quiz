@@ -23,12 +23,13 @@ import { confined, type SessionAuth } from "../../auth/session.js";
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { enrollments } from "../../db/schema.js";
+import type { EvaluationHome } from "../evaluation/service.js";
 import type { Caller, ReadableClassroom } from "../guards.js";
 import { hasStudentGroupSets, studentGroupSetCards } from "../group/service.js";
 import { hasJournal } from "../journal/service.js";
 import { studentClassroomHeader } from "../org/service.js";
 import { evaluationActivity } from "./evaluation.js";
-import type { ColumnHome, GradebookColumnFacts, GradebookEntry, StudentGradebookEntry, StudentScope } from "./kind.js";
+import type { GradebookColumnFacts, GradebookEntry, StudentGradebookEntry, StudentScope } from "./kind.js";
 import { projectActivity } from "./project.js";
 
 const KINDS = [evaluationActivity, projectActivity] as const;
@@ -170,7 +171,7 @@ export async function gradebookEntries(db: Db, classroomId: string): Promise<Gra
  */
 export async function gradebookColumnFacts(
   db: Db,
-  home: ColumnHome,
+  home: EvaluationHome,
   kind: ActivityKindName,
   activityId: string,
 ): Promise<GradebookColumnFacts | null> {

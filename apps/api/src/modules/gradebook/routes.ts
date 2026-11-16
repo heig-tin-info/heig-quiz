@@ -201,22 +201,28 @@ export async function gradebookPlugin(app: FastifyInstance) {
   // --- An evaluation template's settings, which its instances inherit (ADR-131 §15) ---
 
   const onTemplate = { params: IdParam, load: (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => loadTemplate(app, req, reply, p.id) };
-  /** The column write's scope and address for a template: its course, no classroom, the template itself. */
-  const templateColumn = ({ template, course }: { template: { id: string }; course: { id: string } }) =>
-    [{ room: null, course }, { kind: "evaluation", activityId: template.id }] as const;
+  /** A template's column: its course with no classroom, addressed by the template itself. */
+  const templateColumn = ({ template, course }: { template: { id: string }; course: { id: string } }) => ({
+    scope: { room: null, course },
+    params: { kind: "evaluation" as const, activityId: template.id },
+  });
 
   app.get(
     "/app/api/templates/:id/gradebook",
     { preHandler: requireTeacher },
-    teacher(onTemplate, async ({ scope }) => service.columnSettings(app.db, ...templateColumn(scope))),
+    teacher(onTemplate, async ({ scope }) => {
+      const column = templateColumn(scope);
+      return service.columnSettings(app.db, column.scope, column.params);
+    }),
   );
 
   app.patch(
     "/app/api/templates/:id/gradebook",
     { preHandler: requireTeacher },
     teacher({ ...onTemplate, body: GradebookTemplateColumnPatch }, async ({ req, now, body, scope }) => {
-      await service.patchColumn(app.db, ...templateColumn(scope), body, courseCtx(req, now));
-      return service.columnSettings(app.db, ...templateColumn(scope));
+      const column = templateColumn(scope);
+      await service.patchColumn(app.db, column.scope, column.params, body, courseCtx(req, now));
+      return service.columnSettings(app.db, column.scope, column.params);
     }),
   );
 

@@ -15,7 +15,7 @@ import { countsByDefault, WEIGHT_DEFAULT, type GradebookColumnKind, type MarkOut
 import type { AuditActor } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { enrollments, gradebookColumns, gradebookMarks, gradebookSettings, users } from "../../db/schema.js";
-import type { ColumnHome, GradebookColumnFacts, GradebookEntry, GradebookEntryFacts } from "../activity/kind.js";
+import type { GradebookColumnFacts, GradebookEntry, GradebookEntryFacts } from "../activity/kind.js";
 import { gradebookColumnFacts, gradebookEntries } from "../activity/service.js";
 import { notFoundError } from "../http.js";
 
@@ -87,7 +87,7 @@ export interface RoomScope extends ColumnScope {
 }
 
 /** The home of a scope's columns, as the activity kinds resolve it. */
-export const homeOf = (scope: ColumnScope): ColumnHome => (scope.room ? { classroomId: scope.room.id } : { courseId: scope.course.id });
+export const homeOf = (scope: ColumnScope) => (scope.room ? { classroomId: scope.room.id } : { courseId: scope.course.id });
 
 /** The column the classroom's gradebook lists for this activity — a mark's —, or the 404 of a missing one. */
 export async function entryOf(db: Db, classroomId: string, kind: ActivityKindName, activityId: string): Promise<GradebookEntry> {

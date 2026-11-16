@@ -27,6 +27,7 @@ import type {
 import type { CellOutcome, StudentActivityGroup } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
+import type { EvaluationHome } from "../evaluation/service.js";
 import type { Caller } from "../guards.js";
 
 /** The member of the union a kind lists. */
@@ -90,13 +91,6 @@ export interface GradebookEntryFacts {
 export interface GradebookColumnFacts extends GradebookEntryFacts {
   listed: boolean;
 }
-
-/**
- * Where an activity's column's settings are kept (ADR-131): the gradebook of
- * its classroom, or — for an evaluation template, which has no classroom
- * (§15) — its course.
- */
-export type ColumnHome = { classroomId: string } | { courseId: string };
 
 /** What the activity itself gives a seat, under any staff mark: read, never recomputed. */
 export interface GradebookBeneath {
@@ -165,7 +159,7 @@ export interface ActivityKind<K extends ActivityKindName> {
    * course (§15), never listed. The staff payload: the classroom, or the
    * template, is loaded through `staffAccess` first.
    */
-  columnFacts(db: Db, home: ColumnHome, activityId: string): Promise<GradebookColumnFacts | null>;
+  columnFacts(db: Db, home: EvaluationHome, activityId: string): Promise<GradebookColumnFacts | null>;
 
   /**
    * The caller's own columns and cells of this kind in a classroom (M5-03a,

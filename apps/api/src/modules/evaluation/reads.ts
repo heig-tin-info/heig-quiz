@@ -64,7 +64,7 @@ import { first } from "../../db/query.js";
 import { conceptsOf } from "../concept/service.js";
 import { poolRolesOf } from "../pool/service.js";
 import { exportsOf, printRefusal } from "./print.js";
-import type { EvaluationRecord, ItemRecord, DbOrTx } from "./shared.js";
+import type { EvaluationHome, EvaluationRecord, ItemRecord, DbOrTx } from "./shared.js";
 import type { Caller } from "../guards.js";
 
 /**
@@ -433,7 +433,7 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
  * its templates (ADR-131 §15): the rows whose `course_id` is set are exactly
  * those (`evaluations_home_ck`), drafts forever, so never listed.
  */
-const withColumn = (home: { classroomId: string } | { courseId: string }): SQL =>
+const withColumn = (home: EvaluationHome): SQL =>
   and(
     "classroomId" in home ? eq(evaluations.classroomId, home.classroomId) : eq(evaluations.courseId, home.courseId),
     inArray(evaluations.mode, ["exam", "exercise"]),
@@ -464,7 +464,7 @@ export function gradebookEvaluations(db: Db, classroomId: string): Promise<Evalu
  */
 export async function columnEvaluation(
   db: Db,
-  home: { classroomId: string } | { courseId: string },
+  home: EvaluationHome,
   evaluationId: string,
 ): Promise<{ evaluation: EvaluationRecord; listed: boolean } | undefined> {
   const [row] = await db

@@ -232,10 +232,24 @@ export async function patchColumn(
   ctx: CourseWriteContext,
 ): Promise<void> {
   const entry = await columnFactsOf(db, scope, params.kind, params.activityId);
+  const room = scope.room;
+  // A classroom's column: its classroom locked (an archived gradebook is read-only), then the hint — the
+  // students read a listed column's flag, its component and its place always, its weight with the
+  // published mean; a column not listed yet (a draft) reaches none of them, so only the staff re-read.
+  // A template's (ADR-131 §15): no classroom to lock, and no hint, since it reaches no gradebook and its
+  // screens listen to none.
+  const { lock, hint } = room
+    ? {
+        lock: (tx: Tx) => lockClassroom(tx, room.id),
+        hint: async () => gradebookChanged(scope.course.id, entry.listed ? await studentUserIds(db, room.id) : []),
+      }
+    : { lock: async () => {}, hint: async () => {} };
+  // A template's trail is the template's own, beside its `template.*` entries.
+  const subject = room ? { subjectType: "classroom", subjectId: room.id } : { subjectType: "evaluation", subjectId: entry.activityId };
   const changed = await db.transaction(async (tx) => {
-    if (scope.room) await lockClassroom(tx, scope.room.id);
+    await lock(tx);
     if (body.componentId) await componentOfCourse(tx, scope.course.id, body.componentId, "key share");
-    const column = await ensureColumn(tx, scope.room?.id ?? null, entry, ctx);
+    const column = await ensureColumn(tx, room?.id ?? null, entry, ctx);
     const before: ColumnSettings = settingsOf(column, entry.mode);
     const after: ColumnSettings = {
       weight: body.weight ?? before.weight,
@@ -248,16 +262,12 @@ export async function patchColumn(
     await audit(tx, {
       ...ctx.actor,
       action: "gradebook.column_updated",
-      // A template's trail is the template's own, beside its `template.*` entries.
-      ...(scope.room ? { subjectType: "classroom", subjectId: scope.room.id } : { subjectType: "evaluation", subjectId: entry.activityId }),
+      ...subject,
       payload: { activityKind: entry.kind, activityId: entry.activityId, before, after },
     });
     return true;
   });
-  // The students read a listed column's flag, its component and its place always, its weight with the published
-  // mean; a column not listed yet (a draft) reaches none of them, so only the staff re-read. A template's
-  // reaches no gradebook at all, and its screens listen to no hint.
-  if (changed && scope.room) gradebookChanged(scope.course.id, entry.listed ? await studentUserIds(db, scope.room.id) : []);
+  if (changed) await hint();
 }
 
 /**

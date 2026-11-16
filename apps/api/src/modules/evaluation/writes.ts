@@ -51,6 +51,7 @@ import {
   questions,
 } from "../../db/schema.js";
 import {
+  type EvaluationHome,
   type EvaluationRecord,
   type ItemRecord,
   type DbOrTx,
@@ -60,7 +61,7 @@ import {
 } from "./shared.js";
 import { assertStaysScheduled } from "./stateMachine.js";
 import { attemptCount as countAttempts, byId, deletionRole, settingsOf, storedFeedbackOf, preferredMcqPolicy } from "./reads.js";
-import { latestPublished, type CopyHome } from "./items.js";
+import { latestPublished } from "./items.js";
 
 /**
  * The two presets of §4.3. An exam is timed, forward-only-ish and silent
@@ -85,7 +86,7 @@ function presetSettings(preset: EvaluationPreset): {
 
 export async function createEvaluation(
   db: Db,
-  input: CopyHome & {
+  input: EvaluationHome & {
     title: string;
     mode: EvaluationMode;
     preset?: EvaluationPreset | undefined;

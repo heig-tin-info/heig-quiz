@@ -234,6 +234,8 @@ The word "group" was set aside: Groups already names the students' groups
       column on their classroom's evaluations, and a mark's composite key
       carries a classroom that is never null, so no mark hangs on it.
       Deleting the template — or its course — takes it along (cascade).
+      Known limit: a template deleted between its load and a settings write
+      makes that write fail on the foreign key (a 500), as a draft's does.
     - **Which template.** `ActivityKind.columnFacts` takes a home, a
       classroom or a course: with a course, the evaluation kind answers a
       template of that course (a draft forever, so never `listed`), the
@@ -319,9 +321,12 @@ pass mark per component) stay out.
 - **A dedicated table for a template's settings** (`gradebook_template_columns`,
   keyed by the template). Declined (§15): `inUse`, the component deletion's
   check and `copyColumnSettings` would each read two tables, and the write a
-  second audited path — while the nullable classroom costs one check and
-  three branches of the one write (no classroom lock, the audit subject, no
-  hint), and every reader already filters by classroom.
+  second audited path — while the nullable classroom costs one check and a
+  scope whose classroom may be null, read in five places of the `gradebook`
+  module (the home it resolves, the settings read's published mean, the
+  write's lock and hint, its audit subject, the row's classroom) and once per
+  activity kind (`columnFacts`' home), every reader already filtering by
+  classroom.
 - **A column's settings after publication only** (proposed by the spec
   challenger: a draft has no column, so nothing to set). Declined by the
   product owner (§13): the teacher decides the weight when building the

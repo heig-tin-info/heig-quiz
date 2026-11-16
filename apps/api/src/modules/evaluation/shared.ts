@@ -17,6 +17,14 @@ export type ItemRecord = typeof evaluationItems.$inferSelect;
  * half of a withdrawal that must not land alone (`unreleaseResults`).
  */
 export type DbOrTx = Db | Tx;
+
+/**
+ * Where an evaluation lives: a classroom, or a course for a template
+ * (ADR-031). A copy's home (a duplicate, an instance, a template saved), the
+ * pools it may draw from, and the home of a gradebook column's settings
+ * (`ActivityKind.columnFacts`, ADR-131 §15).
+ */
+export type EvaluationHome = { classroomId: string } | { courseId: string };
 // --- Failures -------------------------------------------------------------
 
 /**
