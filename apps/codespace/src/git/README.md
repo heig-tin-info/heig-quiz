@@ -22,6 +22,7 @@ container ──push──▶ portal 10.77.0.254:9418/git/<session>  (auth = sou
 | `relay.ts`        | background job, retry on error, never forced, `rejected` refs, token out of argv and off the disk |
 | `forge.ts`        | the `Forge` interface, the `forgejo` forge and the unconfigured `github` one |
 | `quizForge.ts`    | the `quiz` forge: tokens Quiz grants per repository, cached in memory (ADR-078) |
+| `collect.ts`      | the workspace collected at the deadline: fresh shadow snapshot, kept paths from the base, the tree carried to a `refs/quiz/collect/` ref Quiz names (ADR-130) |
 | `fixtures.ts`     | shared test repositories (not a `*.test.ts`, therefore type-checked) |
 
 The `push_events` table: [`src/db/schema.ts`](../db/schema.ts).

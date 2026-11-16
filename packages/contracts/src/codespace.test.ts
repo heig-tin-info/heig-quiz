@@ -5,6 +5,9 @@ import {
   CODESPACE_ISSUERS,
   CodespaceAssignmentSync,
   CodespaceAssignmentSyncResult,
+  CodespaceCollectionRequest,
+  CodespaceCollectionResult,
+  collectionsPath,
   GIT_TOKEN_AUDIENCE,
   GitTokenGrant,
   GitTokenRequestClaims,
@@ -117,10 +120,11 @@ describe("LaunchTokenClaims", () => {
 describe("ServiceTokenClaims", () => {
   const claims = { iss: "heig-quiz", aud: SERVICE_AUDIENCE, iat: 1, exp: 121, jti: "j", method: "PUT", path: "/api/assignments/a1", bodyHash: "h" };
 
-  it("comes from Quiz only, for the portal's two methods", () => {
+  it("comes from Quiz only, for the portal's three methods", () => {
     expect(ServiceTokenClaims.safeParse({ ...claims, iss: "heig-classroom" }).success).toBe(false);
     expect(ServiceTokenClaims.safeParse({ ...claims, iss: PORTAL_ISSUER }).success).toBe(false);
-    expect(ServiceTokenClaims.safeParse({ ...claims, method: "POST" }).success).toBe(false);
+    expect(ServiceTokenClaims.safeParse({ ...claims, method: "POST" }).success).toBe(true);
+    expect(ServiceTokenClaims.safeParse({ ...claims, method: "DELETE" }).success).toBe(false);
   });
 
   it("is bound to one request, with a jti, for two minutes at most", () => {
@@ -280,5 +284,54 @@ describe("the relay's token and declaration (ADR-078 §2)", () => {
     };
     expect(GitTokenGrant.safeParse(grant).success).toBe(true);
     expect(GitTokenGrant.safeParse({ ...grant, permission: "admin" }).success).toBe(false);
+  });
+});
+
+describe("the collection at the deadline (ADR-130)", () => {
+  const order = {
+    userId: "6f1c2a8e-1b2c-4d5e-8f90-123456789abc",
+    repository: "heig-tin-info/lab3-alice",
+    branch: "main",
+    base: "a".repeat(40),
+    target: null,
+    keep: [".github/workflows", "criteria.yml"],
+    ref: "refs/quiz/collect/r1-1794836400",
+  };
+
+  it("takes a well-formed order on its own path", () => {
+    expect(CodespaceCollectionRequest.safeParse(order).success).toBe(true);
+    expect(CodespaceCollectionRequest.safeParse({ ...order, target: "b".repeat(40) }).success).toBe(true);
+    expect(collectionsPath("p1")).toBe("/api/assignments/p1/collections");
+  });
+
+  it("refuses a hostile ref, branch, sha, path, user or an extra field", () => {
+    for (const bad of [
+      { ref: "refs/heads/main" },
+      { ref: "refs/quiz/collect/../heads/main" },
+      { branch: "-f" },
+      { branch: "a..b" },
+      { base: "HEAD" },
+      { base: "a".repeat(64) },
+      { target: "--upload-pack=x" },
+      { keep: ["../etc"] },
+      { keep: ["/abs"] },
+      { keep: ["-x"] },
+      { keep: [".git/config"] },
+      { userId: "../other" },
+      { repository: "no-owner" },
+      { force: true },
+    ]) {
+      expect(CodespaceCollectionRequest.safeParse({ ...order, ...bad }).success, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it("answers one of the closed outcomes", () => {
+    const facts = { snapshotAt: "2026-11-16T13:40:21Z", unreadable: 0 };
+    expect(CodespaceCollectionResult.safeParse({ outcome: "pushed", tree: "c".repeat(40), commit: "d".repeat(40), ...facts }).success).toBe(true);
+    expect(CodespaceCollectionResult.safeParse({ outcome: "unchanged", tree: "c".repeat(40), ...facts }).success).toBe(true);
+    expect(CodespaceCollectionResult.safeParse({ outcome: "no_snapshot" }).success).toBe(true);
+    expect(CodespaceCollectionResult.safeParse({ outcome: "failed", reason: "push_rejected" }).success).toBe(true);
+    expect(CodespaceCollectionResult.safeParse({ outcome: "failed", reason: "anything" }).success).toBe(false);
+    expect(CodespaceCollectionResult.safeParse({ outcome: "collected" }).success).toBe(false);
   });
 });

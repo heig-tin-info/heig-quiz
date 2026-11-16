@@ -54,6 +54,8 @@ export interface GitRunOptions {
   /** Extra environment; never put a credential in `args`. */
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
+  /** Written to git's standard input, then closed (`update-index --index-info`, `cat-file --batch-check`). */
+  input?: string;
 }
 
 export class GitError extends Error {
@@ -75,7 +77,7 @@ export class GitError extends Error {
  */
 export async function git(args: string[], opts: GitRunOptions = {}): Promise<string> {
   try {
-    const { stdout } = await execFileAsync("git", args, {
+    const run = execFileAsync("git", args, {
       env: {
         PATH: process.env["PATH"] ?? "/usr/bin:/bin",
         HOME: "/nonexistent",
@@ -87,6 +89,12 @@ export async function git(args: string[], opts: GitRunOptions = {}): Promise<str
       maxBuffer: 32 * 1024 * 1024,
       ...(opts.timeoutMs === undefined ? {} : { timeout: opts.timeoutMs }),
     });
+    if (opts.input !== undefined) {
+      // A git that exits early (a refusal) closes its end: its error is git's, reported below.
+      run.child.stdin?.on("error", () => undefined);
+      run.child.stdin?.end(opts.input);
+    }
+    const { stdout } = await run;
     return stdout;
   } catch (err) {
     const e = err as { stderr?: string; stdout?: string; message?: string };

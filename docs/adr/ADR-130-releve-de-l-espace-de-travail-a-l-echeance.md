@@ -96,7 +96,8 @@ repository (ADR-077) is treated like any other.
   tries a second apart, then the last snapshot already there — unless it is
   older than the session's last `PushEvent` (same host clock), which would
   hand in less than was pushed: `stale_snapshot`, nothing collected. No
-  `shadow.git` at all: `no_snapshot`. A file the portal cannot read (a
+  `work/` (no session ever opened), or no snapshot even after asking for
+  one: `no_snapshot`. A file the portal cannot read (a
   `chmod 600`, `unreadable`) keeps its last snapshot's version, at most three
   minutes old; the count is recorded and shown to the staff.
 - **The branch** (pure rule `collectionBranch` of `@quiz/domain`): the host
@@ -110,7 +111,10 @@ repository (ADR-077) is treated like any other.
   files (F-PROJ-08; `criteria.yml` under `criteria`) and `.github/workflows/`
   always (a `contents`-only grant cannot change it, and the restore would
   only put it back). Pure rule `collectionKeptPaths` of `@quiz/domain`, the
-  matching `pathWithin`'s.
+  matching `pathWithin`'s. A symbolic link is carried as a link, never
+  followed; a gitlink (a repository the student cloned inside `work/`) is
+  left out, and so is a workspace file standing where a kept entry needs a
+  directory (`composeCollectionTree`).
 - **The condition** (decision 3): collected when that tree differs from the
   tree of the commit that would otherwise be graded — the last student push
   on that branch received by the deadline (`lastStudentPush`), else the
@@ -131,15 +135,21 @@ repository (ADR-077) is treated like any other.
    `@quiz/contracts` (both sides): the user, the repository, the branch, the
    base sha, the target sha, the kept paths, and the temporary ref Quiz names
    (`refs/quiz/collect/<repository id>-<deadline epoch>`).
-2. **The portal builds and carries the tree.** In `staging.git`, with
-   `shadow.git`'s objects as a temporary alternate (nothing written into the
-   student's repository, nothing read from it): the base and the target
+2. **The portal builds and carries the tree** (`apps/codespace/src/git/collect.ts`).
+   In a temporary bare repository whose object store borrows `shadow.git`'s
+   and `staging.git`'s as alternates (nothing written into either, nothing
+   read from the student's repository; the temporary repository, its
+   alternates and its index removed on every exit): the base and the target
    fetched from GitHub when missing, the tree composed in a temporary index,
    compared, and one throwaway commit of it on the base pushed to the
    temporary ref — a new ref, never a branch, never forced, no head declared,
-   no `PushEvent` — with the write grant it already holds (§5). It answers
-   `CodespaceCollectionResult`: the outcome, the tree, the snapshot's time,
-   the unreadable count.
+   no `PushEvent` — with the write grant it already holds (§5). One
+   collection at a time per (student, assignment); every order is recorded
+   with its outcome in the portal's `collections` table. It answers
+   `CodespaceCollectionResult`: `pushed` (the tree and the throwaway
+   commit), `unchanged`, `too_large`, `stale_snapshot`, `no_snapshot` or
+   `failed` with a closed reason, and the snapshot's time and unreadable
+   count.
 3. **Quiz commits.** `signedCommit` of that tree on the base, message
    `Collected from the online workspace at the deadline (<local time>)`;
    the receipt (§6) and the collection row written; then the branch moved,

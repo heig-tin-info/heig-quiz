@@ -102,7 +102,7 @@ export function parseRejections(porcelain: string): RefRejection[] {
 }
 
 /** GitHub refused the credential itself (an expired or revoked token): the forge forgets it. */
-function credentialRefused(message: string): boolean {
+export function credentialRefused(message: string): boolean {
   // git's own words: a 403 is reported as such; a 401 after the (empty) askpass as "Authentication failed".
   return /The requested URL returned error: 40[13]\b|^fatal: Authentication failed for /m.test(message);
 }

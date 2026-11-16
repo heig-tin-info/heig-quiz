@@ -12,6 +12,10 @@ import { z } from "zod";
 import {
   DEVICE_LEVEL_IDS,
   GIT_TOKEN_REFUSALS,
+  isCollectionRef,
+  isSafeBranchName,
+  isSafeRepoPath,
+  isSha1,
   STAFF_REVIEW_REFUSALS,
   SUPERVISED_DEVICE_LEVELS,
   WORK_MODE_REFUSALS,
@@ -241,7 +245,8 @@ export type ReviewLaunchTokenClaims = z.infer<typeof ReviewLaunchTokenClaims>;
 
 /**
  * Service token (2 min) for Quiz's calls to the portal
- * (`PUT /api/assignments/:id`, `GET /api/assignments/:id/sessions`). It
+ * (`PUT /api/assignments/:id`, `GET /api/assignments/:id/sessions`,
+ * `POST /api/assignments/:id/collections`). It
  * authorizes ONE request, `@quiz/domain`'s `requestBinding` of it, and the
  * portal consumes its `jti` once (audit L25, ADR-078's amendment of
  * 2026-10-11, which owns the rule).
@@ -253,7 +258,7 @@ export const ServiceTokenClaims = z
     iat: z.number(),
     exp: z.number(),
     jti: z.string().min(1).max(200),
-    method: z.enum(["GET", "PUT"]),
+    method: z.enum(["GET", "PUT", "POST"]),
     path: z.string().startsWith("/"),
     bodyHash: z.string().min(1).optional(),
   })
@@ -376,6 +381,74 @@ export type GitTokenGrant = z.infer<typeof GitTokenGrant>;
 export const GIT_TOKEN_ERRORS = [...GIT_TOKEN_REFUSALS, "unauthorized", "github_unavailable"] as const;
 export const GitTokenError = z.object({ error: z.enum(GIT_TOKEN_ERRORS) });
 export type GitTokenError = z.infer<typeof GitTokenError>;
+
+// ---------------------------------------------------------- the collection at the deadline (ADR-130)
+
+/** Quiz → portal: collect one student's workspace (ADR-130 §4), a service token bound to the request. */
+export const collectionsPath = (assignmentId: string): string => `/api/assignments/${assignmentId}/collections`;
+
+const Sha1 = z.string().refine(isSha1, "a full SHA-1 expected");
+
+/**
+ * The order (ADR-130 §4): whose workspace (`userId`, the launch token's
+ * `sub`, which names the volume), the repository and handed-out `branch`
+ * it is collected to, the branch's head on GitHub (`base`), the commit that
+ * would otherwise be graded (`target`, null when the student never pushed
+ * in time: the base is then compared), the paths taken from the base
+ * (`keep`, `collectionKeptPaths`), and the temporary ref Quiz names
+ * (`collectionRef`). Every value is checked here AND again by the portal
+ * before it reaches git.
+ */
+export const CodespaceCollectionRequest = z
+  .object({
+    userId: z.string().refine(isSafeId, "user id unsuitable for a volume path"),
+    repository: RepositoryFullName,
+    branch: z.string().refine(isSafeBranchName, "branch name refused"),
+    base: Sha1,
+    target: Sha1.nullable(),
+    keep: z.array(z.string().refine(isSafeRepoPath, "path refused")).max(200),
+    ref: z.string().refine(isCollectionRef, "a ref under refs/quiz/collect/ expected"),
+  })
+  .strict();
+export type CodespaceCollectionRequest = z.infer<typeof CodespaceCollectionRequest>;
+
+/**
+ * Why a collection failed on the portal's side: Quiz refused the token
+ * (`forge_refused`), GitHub or Quiz could not be reached
+ * (`forge_unavailable`), GitHub refused the push (`push_rejected`), or git
+ * failed on the host (`git_error`). Details stay in the portal's log.
+ */
+export const COLLECTION_FAILURES = ["forge_refused", "forge_unavailable", "push_rejected", "git_error"] as const;
+export type CollectionFailure = (typeof COLLECTION_FAILURES)[number];
+
+/** What the snapshot was: when it was taken, and how many files the portal could not read (their last version is kept). */
+const SnapshotFacts = { snapshotAt: IsoDate, unreadable: z.number().int().min(0) };
+
+/**
+ * The portal's answer: `pushed` (the tree carried on the temporary ref by
+ * the throwaway commit `commit`, for Quiz to commit on the base), or
+ * `unchanged` (the tree is the target's: nothing pushed), or why nothing
+ * was collected (ADR-130 §3), or `failed`.
+ */
+export const CodespaceCollectionResult = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("pushed"), tree: Sha1, commit: Sha1, ...SnapshotFacts }),
+  z.object({ outcome: z.literal("unchanged"), tree: Sha1, ...SnapshotFacts }),
+  z.object({ outcome: z.literal("too_large"), ...SnapshotFacts }),
+  z.object({ outcome: z.literal("stale_snapshot"), snapshotAt: IsoDate }),
+  z.object({ outcome: z.literal("no_snapshot") }),
+  z.object({ outcome: z.literal("failed"), reason: z.enum(COLLECTION_FAILURES) }),
+]);
+export type CodespaceCollectionResult = z.infer<typeof CodespaceCollectionResult>;
+/** The outcomes the portal answers, and records (its `collections` table). */
+export const CODESPACE_COLLECTION_OUTCOMES = [
+  "pushed",
+  "unchanged",
+  "too_large",
+  "stale_snapshot",
+  "no_snapshot",
+  "failed",
+] as const satisfies readonly CodespaceCollectionResult["outcome"][];
+export type CodespaceCollectionOutcome = (typeof CODESPACE_COLLECTION_OUTCOMES)[number];
 
 // ---------------------------------------------------------- Quiz's own routes (M6-06)
 

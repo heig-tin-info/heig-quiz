@@ -34,6 +34,7 @@ const DEPLOYMENT = readFileSync(
 const SERVICE_ROUTES = [
   "GET /api/assignments/:assignmentId/sessions",
   "HEAD /api/assignments/:assignmentId/sessions",
+  "POST /api/assignments/:assignmentId/collections",
   "POST /api/sittings/close",
   "PUT /api/assignments/:assignmentId",
 ];

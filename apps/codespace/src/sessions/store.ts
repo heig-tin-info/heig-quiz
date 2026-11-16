@@ -8,11 +8,13 @@ import { and, desc, eq, inArray, isNotNull, isNull, notInArray, type SQL } from 
 import type { Db } from "../db/client.js";
 import {
   assignments,
+  collections,
   pushEvents,
   sessions,
   users,
   type AssignmentRow,
   type NewAssignmentRow,
+  type NewCollectionRow,
   type PushEventRow,
   type SessionRow,
   type UserRow,
@@ -253,6 +255,23 @@ export function deleteDeadReviews(db: Db): number {
   const gone = reviewIds.filter((id) => !kept.has(id));
   if (gone.length > 0) db.delete(assignments).where(inArray(assignments.id, gone)).run();
   return gone.length;
+}
+
+/** The last push the portal received from `student` on `assignmentId`, any session: what a fallback snapshot must not be older than (ADR-130 §3). */
+export function lastPushAt(db: Db, student: string, assignmentId: string): Date | null {
+  const row = db
+    .select({ at: pushEvents.receivedAt })
+    .from(pushEvents)
+    .where(and(eq(pushEvents.student, student), eq(pushEvents.assignment, assignmentId)))
+    .orderBy(desc(pushEvents.receivedAt))
+    .limit(1)
+    .get();
+  return row?.at ?? null;
+}
+
+/** One collection order and what came of it (ADR-130 §7): the portal's own record. */
+export function recordCollection(db: Db, row: NewCollectionRow): void {
+  db.insert(collections).values(row).run();
 }
 
 /** Sessions of an assignment, with their user: the platform's teacher table. */

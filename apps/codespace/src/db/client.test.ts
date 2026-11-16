@@ -10,7 +10,8 @@
  * of the launch token.
  *
  * Sixth since ADR-089: `closed_sittings`, the durable revocation of a kiosk
- * sitting's exam cookies.
+ * sitting's exam cookies. Seventh since ADR-130: `collections`, the record of
+ * the workspaces Quiz collected at a deadline.
  */
 import { describe, expect, it } from "vitest";
 
@@ -18,7 +19,7 @@ import { openDb } from "./client.js";
 import { assignments, pushEvents, sessions, users } from "./schema.js";
 
 describe("migrations", () => {
-  it("creates exactly the four entities of the framing document, plus the token register and the closed sittings", () => {
+  it("creates exactly the four entities of the framing document, plus the token register, the closed sittings and the collections", () => {
     const handle = openDb(":memory:");
     const rows = handle.db.all<{ name: string }>(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%' ORDER BY name",
@@ -26,6 +27,7 @@ describe("migrations", () => {
     expect(rows.map((r) => r.name)).toEqual([
       "assignments",
       "closed_sittings",
+      "collections",
       "launch_tokens_used",
       "push_events",
       "sessions",
