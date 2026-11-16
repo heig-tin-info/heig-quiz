@@ -252,13 +252,14 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
   });
   const table: ResultsSource = {
     classroomId: "room",
+    components: [],
     columns: [
-      { activityId: "e1", mode: "exam", title: "E1", date: "2026-10-01T08:00:00.000Z", released: true, weight: 100, counts: true },
-      { activityId: "live", mode: "exam", title: "Running", date: "2026-10-08T08:00:00.000Z", released: false, weight: 100, counts: true },
+      { activityId: "e1", mode: "exam", title: "E1", date: "2026-10-01T08:00:00.000Z", released: true, weight: 100, counts: true, componentId: null },
+      { activityId: "live", mode: "exam", title: "Running", date: "2026-10-08T08:00:00.000Z", released: false, weight: 100, counts: true, componentId: null },
     ],
     rows: [
-      { nom: "Doe", prenom: "Ada", cells: { e1: cell(5), live: cell(2.5) }, mean: 5 },
-      { nom: "Roe", prenom: "Bo", cells: { e1: cell(1, "absent"), live: cell(null) }, mean: 1 },
+      { nom: "Doe", prenom: "Ada", cells: { e1: cell(5), live: cell(2.5) }, mean: 5, componentMeans: {} },
+      { nom: "Roe", prenom: "Bo", cells: { e1: cell(1, "absent"), live: cell(null) }, mean: 1, componentMeans: {} },
     ],
   };
 
@@ -266,8 +267,8 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
     const results = assistResults(table);
     expect(results.columns.map((c) => c.title)).toEqual(["E1"]);
     expect(results.students).toEqual([
-      { name: "Ada Doe", grades: [5], mean: 5 },
-      { name: "Bo Roe", grades: ["absent"], mean: 1 },
+      { name: "Ada Doe", grades: [5], mean: 5, componentMeans: [] },
+      { name: "Bo Roe", grades: ["absent"], mean: 1, componentMeans: [] },
     ]);
     expect(results.unreleasedColumns).toBe(1);
     expect(JSON.stringify(results)).not.toContain("2.5");
@@ -275,8 +276,26 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
   });
 
   it("names an excused cell, which counts in no mean (#969)", () => {
-    const excused = { ...table, rows: [{ nom: "Doe", prenom: "Ada", cells: { e1: { kind: "excused" as const, grade: null } }, mean: null }] };
-    expect(assistResults(excused).students).toEqual([{ name: "Ada Doe", grades: ["excused"], mean: null }]);
+    const excused = { ...table, rows: [{ nom: "Doe", prenom: "Ada", cells: { e1: { kind: "excused" as const, grade: null } }, mean: null, componentMeans: {} }] };
+    expect(assistResults(excused).students).toEqual([{ name: "Ada Doe", grades: ["excused"], mean: null, componentMeans: [] }]);
+  });
+
+  it("gives the components of the mean, each column's and each student's means of them (ADR-131)", () => {
+    const parted: ResultsSource = {
+      ...table,
+      components: [{ id: "labo", name: "Labo", weight: 40 }, { id: "cours", name: "Cours", weight: 60 }],
+      columns: [{ ...table.columns[0]!, componentId: "labo" }, { ...table.columns[0]!, activityId: "x", title: "X", componentId: null }],
+      rows: [{ nom: "Doe", prenom: "Ada", cells: { e1: cell(5), x: cell(3) }, mean: 5, componentMeans: { labo: 5, cours: null } }],
+    };
+    const results = assistResults(parted);
+    expect(results.components).toEqual([{ name: "Labo", weight: 40 }, { name: "Cours", weight: 60 }]);
+    expect(results.columns.map((c) => c.component)).toEqual(["Labo", null]);
+    // The column in no component counts in no mean, whatever its stored flag.
+    expect(results.columns.map((c) => c.counts)).toEqual([true, false]);
+    expect(results.students[0]!.componentMeans).toEqual([5, null]);
+    expect(results.scale).toContain("rounded to the tenth");
+    // A row without a component's mean reads none.
+    expect(assistResults({ ...parted, rows: [{ ...parted.rows[0]!, componentMeans: {} }] }).students[0]!.componentMeans).toEqual([null, null]);
   });
 
   it("asks the results reader only for a question about results, in either language", () => {

@@ -46,6 +46,7 @@ import {
   courseStaff,
   enrollments,
   evaluations,
+  gradebookComponents,
   journalPageRevisions,
   paperSheets,
   poolMembers,
@@ -270,6 +271,9 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
   // An entry of the course's catalog of conditions (F-ORG-16): the `:cid`.
   const conditionId = randomUUID();
   await db.insert(courseConditions).values({ id: conditionId, courseId: seed.courseId, kind: "info", text: "Swept", position: 0 });
+  // A component of the course's mean (ADR-131): the `:componentId`.
+  const componentId = randomUUID();
+  await db.insert(gradebookComponents).values({ id: componentId, courseId: seed.courseId, name: "Swept", createdAt: new Date(), updatedAt: new Date() });
   // A report on the pool's question (issue #680): the `:reportId` of its resolution.
   const reportId = randomUUID();
   await db.insert(questionReports).values({ id: reportId, questionId: seed.questionIds[0]!, reporterId: owner.id, message: "Swept" });
@@ -317,6 +321,7 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
       kind: "evaluation",
       activityId: graded.id,
       cid: conditionId,
+      componentId,
       reportId,
       gid,
     },

@@ -384,6 +384,7 @@ describe("GET /app/api/student/results — a project's row (F-PROJ-14, F-ORG-14)
       date: RELEASED_AT.toISOString(),
       status: "released",
       counts: true,
+      component: null,
       score: { points: 9, totalPoints: 10, grade: gradeFromPoints(9, 10, { rounding: "nearest" }) },
     });
     const { release } = (await projectPage(mine.id, "Released"))!;

@@ -6892,6 +6892,8 @@ export const en = {
   "gbook.refusal.gradeExists": "A grade already stands here.",
   "gbook.refusal.aboveMax": "The points are above the maximum.",
   "gbook.refusal.ownerRequired": "Only a teacher of the course may replace a released grade.",
+  "gbook.refusal.componentNameTaken": "Another component of the course has this name.",
+  "gbook.refusal.componentInUse": "Columns are still in this component. Move them out first.",
 
   // The training course (ADR-105): the home's offer, the menu entry, the card.
   "menu.training": "Training course",

@@ -6845,6 +6845,8 @@ export const fr: Record<keyof Dict, string> = {
   "gbook.refusal.gradeExists": "Une note existe déjà ici.",
   "gbook.refusal.aboveMax": "Les points dépassent le maximum.",
   "gbook.refusal.ownerRequired": "Seul un enseignant du cours peut remplacer une note publiée.",
+  "gbook.refusal.componentNameTaken": "Une autre composante du cours porte ce nom.",
+  "gbook.refusal.componentInUse": "Des colonnes sont encore dans cette composante. Retirez-les d'abord.",
 
   // The training course (ADR-105): the home's offer, the menu entry, the card.
   "menu.training": "Cours d'initiation",

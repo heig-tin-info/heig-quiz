@@ -44,12 +44,14 @@ import type { Db } from "../../db/client.js";
 import {
   attempts,
   classrooms,
+  courseHasComponents,
   courses,
   enrollments,
   evaluationItems,
   evaluations,
   excusedMarkOfSeat,
   gradebookColumns,
+  gradebookComponents,
   gradebookMarks,
   isStaffAttempt,
   officialAttempt,
@@ -382,6 +384,9 @@ export async function joinedItem(
  * `gradebook_columns_evaluation_uq`), for the Grades page's groups (#803).
  * `excusedMarkId`: the seat's `excused` gradebook mark on that column, null
  * without one (#969) — its id alone, never its staff-only comment.
+ * `componentId`, `componentName`: the column's component of the mean, null
+ * without one, and `courseHasComponents` whether the course has any — what
+ * `countsInMean` reads (ADR-131); never a component's weight.
  */
 export function studentEvaluationRows(db: Db, userId: string, classroomId?: string) {
   return db
@@ -399,6 +404,9 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
       attempt: attempts,
       storedCounts: gradebookColumns.counts,
       excusedMarkId: gradebookMarks.id,
+      componentId: gradebookColumns.componentId,
+      componentName: gradebookComponents.name,
+      courseHasComponents: courseHasComponents(courses.id),
     })
     .from(enrollments)
     .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
@@ -410,6 +418,7 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
     )
     .leftJoin(gradebookColumns, eq(gradebookColumns.evaluationId, evaluations.id))
     .leftJoin(gradebookMarks, excusedMarkOfSeat())
+    .leftJoin(gradebookComponents, eq(gradebookComponents.id, gradebookColumns.componentId))
     .where(
       and(
         eq(enrollments.userId, userId),

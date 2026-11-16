@@ -51,6 +51,8 @@ const REFUSAL_KEY: Record<GradebookErrorCode, keyof Dict> = {
   grade_exists: "gbook.refusal.gradeExists",
   score_above_max: "gbook.refusal.aboveMax",
   owner_required: "gbook.refusal.ownerRequired",
+  component_name_taken: "gbook.refusal.componentNameTaken",
+  component_in_use: "gbook.refusal.componentInUse",
 };
 
 /** What a failed write says, always in the reader's language; the server's message is English. */

@@ -21,14 +21,26 @@
  * - the student's exit: no unreleased grade, no source, no comment, no mark
  *   of an unreleased column, no other student, the mean only when published
  *   (the key absent otherwise) — for the student, a teacher in the student
- *   view and an impersonation session; staff routes a 404 to a student.
+ *   view and an impersonation session; staff routes a 404 to a student;
+ * - the components of the mean (ADR-131), last: the owner's writes, the
+ *   two-level mean, a counted column in no component out of every mean on
+ *   both student readers, the student exit, the CSV, the course's deletion.
  */
 import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { GradebookStaff, GradebookStudent, ResultsView, StudentGrades, CSRF_COOKIE, type FeedbackPolicy, type GradebookStaffCell } from "@quiz/contracts";
+import {
+  CSRF_COOKIE,
+  GradebookComponents,
+  GradebookStaff,
+  GradebookStudent,
+  ResultsView,
+  StudentGrades,
+  type FeedbackPolicy,
+  type GradebookStaffCell,
+} from "@quiz/contracts";
 import { gradebookMean, gradeFromPoints } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
@@ -38,11 +50,13 @@ import { subscribe } from "../../events.js";
 import {
   auditLog,
   classrooms,
+  courses,
   courseStaff,
   enrollments,
   evaluationItems,
   evaluations,
   gradebookColumns,
+  gradebookComponents,
   gradebookMarks,
   projectRepos,
   projects,
@@ -83,7 +97,7 @@ const base = () => `/app/api/classrooms/${seed.classroomId}/gradebook`;
 const colUrl = (kind: "evaluation" | "project", name: string) => `${base()}/columns/${kind}/${col[name]}`;
 const markUrl = (kind: "evaluation" | "project", name: string, seat: string) => `${colUrl(kind, name)}/marks/${seat}`;
 
-const call = (method: "GET" | "PUT" | "PATCH" | "DELETE", url: string, headers: Headers, payload?: object) =>
+const call = (method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, headers: Headers, payload?: object) =>
   server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
 
 async function staffTable(headers = teacher.headers): Promise<GradebookStaff> {
@@ -116,9 +130,14 @@ async function sessionOf(userId: string, auth: { kind: "impersonation" | "seb" |
   return { cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`, "x-csrf-token": session.csrf };
 }
 
-/** An exam or exercise of the classroom worth 10 points on one item, under the feedback policy `when`. */
-async function makeEvaluation(title: string, mode: "exam" | "exercise", when: FeedbackPolicy["when"] = "on_release"): Promise<string> {
-  const created = await evaluationService.createEvaluation(db(), { classroomId: seed.classroomId, title, mode, createdBy: teacher.id });
+/** An exam or exercise of the classroom (the seeded one by default) worth 10 points on one item, under the feedback policy `when`. */
+async function makeEvaluation(
+  title: string,
+  mode: "exam" | "exercise",
+  when: FeedbackPolicy["when"] = "on_release",
+  classroomId: string = seed.classroomId,
+): Promise<string> {
+  const created = await evaluationService.createEvaluation(db(), { classroomId, title, mode, createdBy: teacher.id });
   const stored = (await evaluationService.byId(db(), created.id))!;
   await evaluationService.addItems(
     db(),
@@ -321,10 +340,10 @@ describe("the mean (F-GBOOK-02)", () => {
     // s0: E1 5.0, E2 4.0, E4 4.5 (released under `none`: the staff read the real grade) and P1 5.5 count;
     // X1 (an exercise) does not; E3 and P2 are not released.
     const expected = gradebookMean([
-      { weight: 100, counts: true, cell: { kind: "grade", grade: 5 } },
-      { weight: 100, counts: true, cell: { kind: "grade", grade: 4 } },
-      { weight: 100, counts: true, cell: { kind: "grade", grade: gradeFromPoints(7, 10, {}) } },
-      { weight: 100, counts: true, cell: { kind: "grade", grade: 5.5 } },
+      { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 5 } },
+      { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 4 } },
+      { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: gradeFromPoints(7, 10, {}) } },
+      { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 5.5 } },
     ]);
     expect(expected).toBe(4.8); // 19 / 4 = 4.75, half up
     expect(rowOf(table, 0).mean).toBe(4.8);
@@ -734,9 +753,9 @@ describe("the student's own cells (F-GBOOK-05, F-RES-04) and what must never rea
       const s0 = (await studentRead(students[0]!.headers)).parsed;
       // s0 sees E1 5.0, E2 4.0, P1 5.5 (counted): E4 is withheld, so it is not in what they read.
       expect(s0.mean).toBe(gradebookMean([
-        { weight: 100, counts: true, cell: { kind: "grade", grade: 5 } },
-        { weight: 100, counts: true, cell: { kind: "grade", grade: 4 } },
-        { weight: 100, counts: true, cell: { kind: "grade", grade: 5.5 } },
+        { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 5 } },
+        { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 4 } },
+        { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 5.5 } },
       ]));
       expect(s0.columns.find((c) => c.activityId === col["E1"])).toMatchObject({ weight: 100, counts: true });
       // The class means are the staff's: never in a student's payload, published mean or not.
@@ -1015,5 +1034,358 @@ describe("an excused student (#969, ADR-074 amendment of 2026-10-29)", () => {
     } finally {
       await call("DELETE", markUrl("evaluation", "E1", seats[0]!), teacher.headers);
     }
+  });
+});
+
+describe("the components of the mean (ADR-131)", () => {
+  const compUrl = (courseId = seed.courseId) => `/app/api/courses/${courseId}/gradebook/components`;
+  /** Component ids by name. */
+  const part: Record<string, string> = {};
+  let assistant: Signed;
+  let roomB: string;
+  let otherCourse: Seeded;
+  let otherPart: string;
+  let csvBefore: string;
+  let tableBefore: GradebookStaff;
+
+  const tableOf = async (classroomId: string) => {
+    const res = await call("GET", `/app/api/classrooms/${classroomId}/gradebook`, teacher.headers);
+    expect(res.statusCode, res.body).toBe(200);
+    return GradebookStaff.parse(res.json());
+  };
+  const assign = (classroomId: string, kind: "evaluation" | "project", name: string, componentId: string | null, headers = teacher.headers) =>
+    call("PATCH", `/app/api/classrooms/${classroomId}/gradebook/columns/${kind}/${col[name]}`, headers, { componentId });
+  /** The owner creates a component (the clock moves on, so the creation order is the calls'). */
+  const create = async (body: { name: string; weight?: number }, courseId = seed.courseId) => {
+    server.clock.advance(1000);
+    const res = await call("POST", compUrl(courseId), teacher.headers, body);
+    expect(res.statusCode, res.body).toBe(201);
+    const list = GradebookComponents.parse(res.json());
+    const made = list.find((c) => c.name === body.name.trim())!;
+    if (courseId === seed.courseId) part[made.name] = made.id;
+    return { list, made };
+  };
+  const audited = async (action: "gradebook.component_created" | "gradebook.component_updated" | "gradebook.component_deleted") =>
+    db().select().from(auditLog).where(and(eq(auditLog.action, action), eq(auditLog.subjectId, seed.courseId))).orderBy(auditLog.id);
+  const csvLines = async () => {
+    const res = await call("GET", `${base()}.csv`, teacher.headers);
+    expect(res.statusCode, res.body).toBe(200);
+    return res.payload.slice(1).trimEnd().split("\r\n");
+  };
+
+  beforeAll(async () => {
+    csvBefore = (await call("GET", `${base()}.csv`, teacher.headers)).payload;
+    tableBefore = await staffTable();
+    assistant = await server.signIn("teacher");
+    await db().insert(courseStaff).values({ courseId: seed.courseId, userId: assistant.id, role: "assistant" });
+    // A second classroom of the course, where s1 sits two released exams: B1 8/10 -> 5.0, B2 4/10 -> 3.0.
+    roomB = randomUUID();
+    await db().insert(classrooms).values({ id: roomB, courseId: seed.courseId, name: "B", period: "2025-A" });
+    await db().insert(enrollments).values({ id: randomUUID(), classroomId: roomB, nom: "Nom1", prenom: "Prenom1", email: "s1-b@heig.test", userId: students[1]!.id, claimedAt: new Date() });
+    col["B1"] = await makeEvaluation("B1", "exam", "on_release", roomB);
+    await play(col["B1"], [{ student: 1, points: 8 }], true);
+    col["B2"] = await makeEvaluation("B2", "exam", "on_release", roomB);
+    await play(col["B2"], [{ student: 1, points: 4 }], true);
+    // Another course of the same teacher.
+    otherCourse = await seedLive(db(), { teacherId: teacher.id, studentIds: [], questions: 0 });
+  });
+
+  afterAll(async () => {
+    await db().delete(courseStaff).where(eq(courseStaff.userId, assistant.id));
+  });
+
+  it("lets every member read the course's components and only an owner write them; anyone off the staff gets the 404 of a missing course", async () => {
+    expect(GradebookComponents.parse((await call("GET", compUrl(), teacher.headers)).json())).toEqual([]);
+    expect((await call("GET", compUrl(), assistant.headers)).statusCode).toBe(200);
+    expect((await call("GET", compUrl(), outsider.headers)).statusCode).toBe(404);
+    expect((await call("GET", compUrl(), students[0]!.headers)).statusCode).toBe(403);
+    // The role is checked before the body: a malformed one is the same 403.
+    for (const body of [{ name: "Labo" }, { name: 42 }]) {
+      const refused = await call("POST", compUrl(), assistant.headers, body);
+      expect([refused.statusCode, refused.json().error]).toEqual([403, "owner_required"]);
+    }
+    expect((await call("POST", compUrl(), outsider.headers, { name: "Labo" })).statusCode).toBe(404);
+    expect((await call("POST", compUrl(randomUUID()), teacher.headers, { name: "Labo" })).statusCode).toBe(404);
+    // The route applies the schema (its boundaries are the contract's test).
+    expect((await call("POST", compUrl(), teacher.headers, { name: "   " })).statusCode).toBe(400);
+
+    // Weights no grade nor point of the world shares, so a search of a student's body for them means something.
+    expect((await create({ name: "Labo", weight: 37 })).list).toEqual([{ id: part["Labo"], name: "Labo", weight: 37, inUse: false }]);
+    const taken = await call("POST", compUrl(), teacher.headers, { name: " LABO " });
+    expect([taken.statusCode, taken.json().error]).toEqual([409, "component_name_taken"]);
+    expect((await create({ name: "  Cours ", weight: 63 })).list.map((c) => c.name)).toEqual(["Labo", "Cours"]);
+    // 100 % by default; it will hold no column.
+    expect((await create({ name: "Oral" })).made.weight).toBe(100);
+    // Another course may use the same name.
+    otherPart = (await create({ name: "Labo" }, otherCourse.courseId)).made.id;
+
+    const created = await audited("gradebook.component_created");
+    expect(created.map((r) => [r.subjectType, r.payload])).toEqual([
+      ["course", { componentId: part["Labo"], name: "Labo", weight: 37 }],
+      ["course", { componentId: part["Cours"], name: "Cours", weight: 63 }],
+      ["course", { componentId: part["Oral"], name: "Oral", weight: 100 }],
+    ]);
+  });
+
+  it("renames and re-weighs a component, the owner only, audited with before and after; nothing changed, nothing audited", async () => {
+    const url = `${compUrl()}/${part["Cours"]}`;
+    const refused = await call("PATCH", url, assistant.headers, { weight: 10 });
+    expect([refused.statusCode, refused.json().error]).toEqual([403, "owner_required"]);
+    expect((await call("PATCH", url, teacher.headers, { name: "labo" })).json().error).toBe("component_name_taken");
+    expect((await call("PATCH", url, teacher.headers, {})).statusCode).toBe(400);
+    // A missing component, and another course's, are the same 404.
+    for (const id of [randomUUID(), otherPart]) {
+      expect((await call("PATCH", `${compUrl()}/${id}`, teacher.headers, { weight: 10 })).statusCode).toBe(404);
+    }
+    const renamed = await call("PATCH", url, teacher.headers, { name: "Cours théorique", weight: 60 });
+    expect(renamed.statusCode, renamed.body).toBe(200);
+    expect(GradebookComponents.parse(renamed.json()).find((c) => c.id === part["Cours"])).toMatchObject({ name: "Cours théorique", weight: 60 });
+    // A case change of its own name is no clash.
+    expect((await call("PATCH", url, teacher.headers, { name: "COURS" })).statusCode).toBe(200);
+    await call("PATCH", url, teacher.headers, { name: "Cours", weight: 63 });
+    await call("PATCH", url, teacher.headers, { weight: 63 });
+    const updated = await audited("gradebook.component_updated");
+    expect(updated.map((r) => r.payload)).toEqual([
+      { componentId: part["Cours"], before: { name: "Cours", weight: 63 }, after: { name: "Cours théorique", weight: 60 } },
+      { componentId: part["Cours"], before: { name: "Cours théorique", weight: 60 }, after: { name: "COURS", weight: 60 } },
+      { componentId: part["Cours"], before: { name: "COURS", weight: 60 }, after: { name: "Cours", weight: 63 } },
+    ]);
+  });
+
+  it("puts a column in a component of the classroom's course, any member, audited; another course's component is a 404", async () => {
+    for (const id of [otherPart, randomUUID()]) {
+      const res = await assign(seed.classroomId, "evaluation", "E1", id);
+      expect([res.statusCode, res.json().error]).toEqual([404, "not_found"]);
+    }
+    expect((await assign(seed.classroomId, "evaluation", "E1", "labo")).statusCode).toBe(400);
+    const res = await assign(seed.classroomId, "evaluation", "E1", part["Cours"]!, assistant.headers);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(GradebookStaff.parse(res.json()).columns.find((c) => c.activityId === col["E1"])).toMatchObject({ componentId: part["Cours"], counts: true });
+    for (const [kind, name, component] of [["project", "P1", "Cours"], ["evaluation", "E2", "Labo"], ["evaluation", "X1", "Labo"], ["evaluation", "E3", "Cours"]] as const) {
+      expect((await assign(seed.classroomId, kind, name, part[component]!)).statusCode).toBe(200);
+    }
+    // The exercise X1 counts, in Labo; the unreleased exam E3 sits in Cours but does not count.
+    expect((await call("PATCH", colUrl("evaluation", "X1"), teacher.headers, { counts: true })).statusCode).toBe(200);
+    expect((await call("PATCH", colUrl("evaluation", "E3"), teacher.headers, { counts: false })).statusCode).toBe(200);
+    const [last] = (await db().select().from(auditLog).where(and(eq(auditLog.action, "gradebook.column_updated"), eq(auditLog.subjectId, seed.classroomId))).orderBy(auditLog.id))
+      .filter((r) => (r.payload as { activityId: string }).activityId === col["E1"])
+      .slice(-1);
+    expect(last!.payload).toMatchObject({ before: { componentId: null }, after: { componentId: part["Cours"], weight: 100, counts: true } });
+  });
+
+  it("makes the mean two-level, each component's rounded first; a counted column in no component counts in no mean", async () => {
+    const table = await staffTable();
+    expect(table.components.map(({ name, weight }) => [name, weight])).toEqual([["Labo", 37], ["Cours", 63], ["Oral", 100]]);
+    // E4 still counts by its flag, but sits in no component: out of every mean.
+    expect(table.columns.find((c) => c.activityId === col["E4"])).toMatchObject({ counts: true, componentId: null });
+    // s0: Labo E2 4.0, X1 5.5 -> 4.75 -> 4.8; Cours E1 5.0, P1 5.5 -> 5.25 -> 5.3; Oral none -> (37·4.8 + 63·5.3) / 100 = 5.115.
+    expect(rowOf(table, 0)).toMatchObject({ componentMeans: { [part["Labo"]!]: 4.8, [part["Cours"]!]: 5.3, [part["Oral"]!]: null }, mean: 5.1 });
+    // s1: Labo E2 absent 1.0 (X1 empty); Cours E1 3.5 (P1 empty) -> (37·1.0 + 63·3.5) / 100 = 2.575.
+    expect(rowOf(table, 1)).toMatchObject({ componentMeans: { [part["Labo"]!]: 1, [part["Cours"]!]: 3.5 }, mean: 2.6 });
+    // s2: Labo E2 6.0; Cours E1 absent 1.0 -> (37·6.0 + 63·1.0) / 100 = 2.85, half up.
+    expect(rowOf(table, 2).mean).toBe(2.9);
+    // The class means of the components, staff only: Labo (4.8 + 1.0 + 6.0) / 3 = 3.93, Cours (5.3 + 3.5 + 1.0) / 3 = 3.27.
+    expect(table.components.map((c) => c.classMean)).toEqual([3.9, 3.3, null]);
+    expect(table.classMean).toBe(3.5);
+  });
+
+  it("keeps a component at 0 % in view and out of the overall mean, and reads a weight live, in an archived classroom too", async () => {
+    const weigh = (name: string, weight: number) => call("PATCH", `${compUrl()}/${part[name]}`, teacher.headers, { weight });
+    await weigh("Labo", 0);
+    expect(rowOf(await staffTable(), 0)).toMatchObject({ componentMeans: { [part["Labo"]!]: 4.8 }, mean: 5.3 });
+    await weigh("Cours", 0);
+    expect(rowOf(await staffTable(), 0).mean).toBeNull();
+    await weigh("Labo", 37);
+    await weigh("Cours", 63);
+
+    // Classroom B: B1 in Cours, B2 counted but in no component yet: out of the mean, as anywhere in the course.
+    expect((await assign(roomB, "evaluation", "B1", part["Cours"]!)).statusCode).toBe(200);
+    expect((await tableOf(roomB)).rows[0]).toMatchObject({ mean: 5, componentMeans: { [part["Cours"]!]: 5, [part["Labo"]!]: null } });
+    expect((await assign(roomB, "evaluation", "B2", part["Labo"]!)).statusCode).toBe(200);
+    await db().update(classrooms).set({ archivedAt: server.clock.now() }).where(eq(classrooms.id, roomB));
+    try {
+      // (37·3.0 + 63·5.0) / 100 = 4.26.
+      expect((await tableOf(roomB)).rows[0]!.mean).toBe(4.3);
+      // No freeze (ADR-131 §6): the course's weight moves the archived classroom's means. (100·3.0 + 63·5.0) / 163 = 3.77.
+      await weigh("Labo", 100);
+      expect((await tableOf(roomB)).rows[0]!.mean).toBe(3.8);
+      // Its own columns stay read-only: none can move to another component there.
+      const refused = await assign(roomB, "evaluation", "B2", null);
+      expect([refused.statusCode, refused.json().error]).toEqual([409, "classroom_archived"]);
+    } finally {
+      await weigh("Labo", 37);
+      await db().update(classrooms).set({ archivedAt: null }).where(eq(classrooms.id, roomB));
+    }
+  });
+
+  /**
+   * The values the mean unpublished keeps from every student response: the components' weights, s0's means of them
+   * and overall, the components' class means and the class's — none of them a grade or points s0 is shown. Anchored as a
+   * JSON number (`":37,` or `":37}`), so neither a UUID nor a time of day can match.
+   */
+  const WITHHELD = [37, 63, 4.8, 5.3, 5.1, 3.9, 3.3, 3.5];
+  const leaks = (body: string) => WITHHELD.filter((value) => new RegExp(`":${String(value).replace(".", "\\.")}[,}]`).test(body));
+
+  it("tells the student the component of each column that counts, never a weight nor a mean unpublished, on the tab and the Grades page alike", async () => {
+    const callers: [string, Headers][] = [
+      ["student", students[0]!.headers],
+      ["impersonation", await sessionOf(students[0]!.id, { kind: "impersonation", actorUserId: admin.id })],
+    ];
+    for (const [who, headers] of callers) {
+      const { parsed, body } = await studentRead(headers);
+      const tab = (name: string) => {
+        const column = parsed.columns.find((c) => c.activityId === col[name])!;
+        return [column.counts, column.componentId];
+      };
+      // Oral holds none of the student's columns: not listed.
+      expect(parsed.components, who).toEqual([{ id: part["Labo"], name: "Labo" }, { id: part["Cours"], name: "Cours" }]);
+      for (const forbidden of ['"weight"', '"mean"', '"classMean"', '"componentMeans"', '"inUse"']) expect(body, `${who}: ${forbidden}`).not.toContain(forbidden);
+      expect(leaks(body), who).toEqual([]);
+
+      const res = await call("GET", "/app/api/student/results", headers);
+      expect(res.statusCode, res.body).toBe(200);
+      expect(res.body, who).not.toContain('"weight"');
+      expect(leaks(res.body), who).toEqual([]);
+      const rows = StudentGrades.parse(res.json()).flatMap((g) => g.rows);
+      const page = (name: string) => {
+        const row = rows.find((r) => (r.kind === "evaluation" ? r.evaluationId : r.projectId) === col[name])!;
+        return [row.counts, row.component];
+      };
+      // The two readers agree: E4 counts by its flag but sits in no component, E3 is in Cours but does not count.
+      expect({ E1: tab("E1"), E3: tab("E3"), E4: tab("E4"), P1: tab("P1"), X1: tab("X1") }, who).toEqual({
+        E1: [true, part["Cours"]],
+        E3: [false, null],
+        E4: [false, null],
+        P1: [true, part["Cours"]],
+        X1: [true, part["Labo"]],
+      });
+      expect({ E1: page("E1"), E3: page("E3"), E4: page("E4"), P1: page("P1"), X1: page("X1") }, who).toEqual({
+        E1: [true, "Cours"],
+        E3: [false, null],
+        E4: [false, null],
+        P1: [true, "Cours"],
+        X1: [true, "Labo"],
+      });
+    }
+    // A teacher in the student view, on a staff seat or none: the same shape, empty, and nothing withheld either.
+    for (const headers of [seated.headers, teacher.headers]) {
+      const { parsed, body } = await studentRead(headers);
+      expect(parsed.components).toEqual([]);
+      for (const forbidden of ['"weight"', '"mean"', '"classMean"', '"componentMeans"']) expect(body).not.toContain(forbidden);
+      expect(leaks(body)).toEqual([]);
+      const page = await call("GET", "/app/api/student/results", headers);
+      expect(page.statusCode, page.body).toBe(200);
+      expect(leaks(page.body)).toEqual([]);
+    }
+  });
+
+  it("gives the components' weights and the student's own means of them with the published mean only, never a class mean", async () => {
+    await call("PATCH", base(), teacher.headers, { meanPublished: true });
+    try {
+      const { parsed, body } = await studentRead(students[0]!.headers);
+      // s0 reads E2 4.0, X1 5.5 (Labo) and E1 5.0, P1 5.5 (Cours); E4 is withheld, and in no component.
+      expect(parsed.components).toEqual([
+        { id: part["Labo"], name: "Labo", weight: 37, mean: 4.8 },
+        { id: part["Cours"], name: "Cours", weight: 63, mean: 5.3 },
+      ]);
+      expect(parsed.mean).toBe(5.1);
+      // The search the unpublished case runs finds them now: it would see a leak.
+      expect(leaks(body)).toEqual([37, 63, 4.8, 5.3, 5.1]);
+      expect(body).not.toContain("classMean");
+    } finally {
+      await call("PATCH", base(), teacher.headers, { meanPublished: false });
+    }
+  });
+
+  it("writes a column per component before the mean, a component line, their weights and their class means in the CSV", async () => {
+    const table = await staffTable();
+    const [header, component, weight, ...rest] = await csvLines();
+    const classMeans = rest.at(-1)!;
+    const field = (line: string, name: string) => line.split(";")[3 + table.columns.findIndex((c) => c.activityId === col[name])];
+    expect(header!.split(";").slice(-4)).toEqual(["Labo", "Cours", "Oral", "mean"]);
+    expect(component!.split(";").slice(0, 3)).toEqual(["component", "", ""]);
+    expect([field(component!, "E1"), field(component!, "E3"), field(component!, "E4"), field(component!, "P1"), field(component!, "X1")]).toEqual([
+      "Cours",
+      "Cours",
+      "",
+      "Cours",
+      "Labo",
+    ]);
+    expect(component!.split(";").slice(-4)).toEqual(["", "", "", ""]);
+    // A counted column in no component, like one that does not count, carries no weight.
+    expect([field(weight!, "E1"), field(weight!, "E3"), field(weight!, "E4"), field(weight!, "X1")]).toEqual(["100", "", "", "100"]);
+    expect(weight!.split(";").slice(-4)).toEqual(["37", "63", "100", ""]);
+    const s0 = rest.find((l) => l.startsWith(`${rowOf(table, 0).email};`))!;
+    expect(s0.split(";").slice(-4)).toEqual(["4.8", "5.3", "", "5.1"]);
+    expect(classMeans.split(";").slice(-4)).toEqual(["3.9", "3.3", "", "3.5"]);
+  });
+
+  it("hints the course's staff and the students of every classroom of the course on a component's write, never a classroom's topic", async () => {
+    const topics: string[] = [];
+    const unsubscribe = subscribe((m) => {
+      if (m.kind === "hint") topics.push(...m.topics);
+    });
+    try {
+      expect((await call("PATCH", `${compUrl()}/${part["Oral"]}`, teacher.headers, { weight: 90 })).statusCode).toBe(200);
+      for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      unsubscribe();
+    }
+    expect(topics).toEqual(expect.arrayContaining([`course:${seed.courseId}`, `user:${students[0]!.id}`, `user:${students[1]!.id}`]));
+    expect(topics.filter((t) => t.startsWith("classroom:"))).toEqual([]);
+  });
+
+  it("deletes a component no column is in, the owner only; refuses one in use (409 component_in_use), audited", async () => {
+    const refused = await call("DELETE", `${compUrl()}/${part["Oral"]}`, assistant.headers);
+    expect([refused.statusCode, refused.json().error]).toEqual([403, "owner_required"]);
+    const inUse = await call("DELETE", `${compUrl()}/${part["Labo"]}`, teacher.headers);
+    expect([inUse.statusCode, inUse.json().error]).toEqual([409, "component_in_use"]);
+    expect(GradebookComponents.parse((await call("GET", compUrl(), assistant.headers)).json()).map((c) => [c.name, c.inUse])).toEqual([
+      ["Labo", true],
+      ["Cours", true],
+      ["Oral", false],
+    ]);
+    const done = await call("DELETE", `${compUrl()}/${part["Oral"]}`, teacher.headers);
+    expect(done.statusCode, done.body).toBe(200);
+    expect(GradebookComponents.parse(done.json()).map((c) => c.name)).toEqual(["Labo", "Cours"]);
+    expect((await call("DELETE", `${compUrl()}/${part["Oral"]}`, teacher.headers)).statusCode).toBe(404);
+    expect((await audited("gradebook.component_deleted")).map((r) => r.payload)).toEqual([{ componentId: part["Oral"], name: "Oral", weight: 90 }]);
+  });
+
+  it("deletes a course whose columns are in its components: the cascade takes both tables", async () => {
+    const columnId = randomUUID();
+    await db().insert(gradebookColumns).values({
+      id: columnId,
+      classroomId: otherCourse.classroomId,
+      evaluationId: otherCourse.evaluationId,
+      counts: true,
+      componentId: otherPart,
+      updatedAt: new Date(),
+    });
+    await db().delete(courses).where(eq(courses.id, otherCourse.courseId));
+    expect(await db().select().from(gradebookComponents).where(eq(gradebookComponents.courseId, otherCourse.courseId))).toEqual([]);
+    expect(await db().select().from(gradebookColumns).where(eq(gradebookColumns.id, columnId))).toEqual([]);
+  });
+
+  it("is the one-level gradebook again once the course has no component: the same table and the same file, byte for byte", async () => {
+    for (const [room, kind, name] of [
+      [seed.classroomId, "evaluation", "E1"],
+      [seed.classroomId, "evaluation", "E2"],
+      [seed.classroomId, "evaluation", "E3"],
+      [seed.classroomId, "project", "P1"],
+      [seed.classroomId, "evaluation", "X1"],
+      [roomB, "evaluation", "B1"],
+      [roomB, "evaluation", "B2"],
+    ] as const) {
+      expect((await assign(room, kind, name, null)).statusCode).toBe(200);
+    }
+    await call("PATCH", colUrl("evaluation", "X1"), teacher.headers, { counts: false });
+    await call("PATCH", colUrl("evaluation", "E3"), teacher.headers, { counts: true });
+    for (const name of ["Labo", "Cours"]) expect((await call("DELETE", `${compUrl()}/${part[name]}`, teacher.headers)).statusCode).toBe(200);
+    expect((await call("GET", `${base()}.csv`, teacher.headers)).payload).toBe(csvBefore);
+    const after = await staffTable();
+    expect(after.components).toEqual([]);
+    expect(after.rows.map((r) => [r.mean, r.componentMeans])).toEqual(tableBefore.rows.map((r) => [r.mean, {}]));
+    expect((await studentRead(students[0]!.headers)).parsed.components).toEqual([]);
   });
 });

@@ -12,6 +12,13 @@
  *   grade, and the mean only when the teacher publishes it — the key is
  *   absent from the JSON otherwise.
  *
+ * A course may name **components of the mean** (ADR-131): with one, a
+ * column counts only inside its component, and the mean has two levels. The
+ * staff read them on the table and edit them on the course
+ * (`GradebookComponents`); a student reads the name of the component of each
+ * of their columns that counts, and its weight and mean only with the
+ * published mean.
+ *
  * A cell is a `grade` (the Swiss grade to the tenth), an `absent` (the
  * school's a1.0: 1.0 marked as an absence, which counts as 1.0), `excused`
  * (a staff mark: named, and in no mean, #969) or `empty`.
@@ -19,7 +26,15 @@
  */
 import { z } from "zod";
 
-import { FINAL_SCORE_SOURCES, GRADEBOOK_COLUMN_KINDS, GRADEBOOK_MARK_KINDS, WEIGHT_MAX, WEIGHT_MIN } from "@quiz/domain";
+import {
+  COMPONENT_NAME_MAX,
+  FINAL_SCORE_SOURCES,
+  GRADEBOOK_COLUMN_KINDS,
+  GRADEBOOK_MARK_KINDS,
+  WEIGHT_DEFAULT,
+  WEIGHT_MAX,
+  WEIGHT_MIN,
+} from "@quiz/domain";
 
 /** What a column is of; a poll never has one. */
 export const GradebookColumnKind = z.enum(GRADEBOOK_COLUMN_KINDS);
@@ -51,12 +66,17 @@ export type GradebookMarkParams = z.infer<typeof GradebookMarkParams>;
 export const GradebookSettingsPatch = z.object({ meanPublished: z.boolean() });
 export type GradebookSettingsPatch = z.infer<typeof GradebookSettingsPatch>;
 
-/** `PATCH …/gradebook/columns/:kind/:activityId` (F-GBOOK-06): at least one field. */
+/**
+ * `PATCH …/gradebook/columns/:kind/:activityId` (F-GBOOK-06): at least one
+ * field. `componentId`: a component of the classroom's course (`404
+ * component` otherwise), or null to take the column out of any (ADR-131).
+ */
 export const GradebookColumnPatch = z
   .object({
     weight: GradebookWeight,
     counts: z.boolean(),
     position: z.number().int().min(0).max(1000).nullable(),
+    componentId: z.uuid().nullable(),
   })
   .partial()
   .refine((patch) => Object.keys(patch).length > 0, "nothing to change");
@@ -85,6 +105,43 @@ export const GradebookMarkPut = z.discriminatedUnion("kind", [
 ]);
 export type GradebookMarkPut = z.infer<typeof GradebookMarkPut>;
 
+// ---------------------------------------------------------------- the course's components (ADR-131)
+
+/** A component's name: trimmed, 1 to 40 characters; unique in its course whatever its case (`409 component_name_taken`). */
+export const GradebookComponentName = z.string().trim().min(1).max(COMPONENT_NAME_MAX);
+
+/** `…/courses/:id/gradebook/components/:componentId`. */
+export const GradebookComponentParams = z.object({ id: z.uuid(), componentId: z.uuid() });
+export type GradebookComponentParams = z.infer<typeof GradebookComponentParams>;
+
+/** `POST /courses/:id/gradebook/components` (the course's owner): a name, and a weight, 100 % by default. */
+export const GradebookComponentCreate = z.object({
+  name: GradebookComponentName,
+  weight: GradebookWeight.default(WEIGHT_DEFAULT),
+});
+export type GradebookComponentCreate = z.infer<typeof GradebookComponentCreate>;
+
+/** `PATCH …/components/:componentId` (the course's owner): a new name, a new weight, or both. */
+export const GradebookComponentPatch = z
+  .object({ name: GradebookComponentName, weight: GradebookWeight })
+  .partial()
+  .refine((patch) => Object.keys(patch).length > 0, "nothing to change");
+export type GradebookComponentPatch = z.infer<typeof GradebookComponentPatch>;
+
+/** One component as the course's staff edit it; `inUse`: a column of some classroom of the course is in it, so it cannot be deleted. */
+export const GradebookCourseComponent = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  /** A whole percentage, 0 to 100, relative to the other components'. */
+  weight: GradebookWeight,
+  inUse: z.boolean(),
+});
+export type GradebookCourseComponent = z.infer<typeof GradebookCourseComponent>;
+
+/** `GET /courses/:id/gradebook/components`, and every write's answer: the course's components in creation order. */
+export const GradebookComponents = z.array(GradebookCourseComponent);
+export type GradebookComponents = z.infer<typeof GradebookComponents>;
+
 /** The gradebook routes' refusals, worded by the web app (invariant 1). */
 export const GRADEBOOK_REFUSALS = [
   /** A write on an archived classroom. */
@@ -95,6 +152,10 @@ export const GRADEBOOK_REFUSALS = [
   "score_above_max",
   /** A mark over a real grade of a released column: an owner's, as the release is (ADR-068). */
   "owner_required",
+  /** Another component of the course has that name, whatever its case (ADR-131). */
+  "component_name_taken",
+  /** A column of some classroom of the course is in the component: it cannot be deleted (ADR-131). */
+  "component_in_use",
 ] as const;
 export const GradebookErrorCode = z.enum(GRADEBOOK_REFUSALS);
 export type GradebookErrorCode = z.infer<typeof GradebookErrorCode>;
@@ -114,8 +175,11 @@ export const GradebookColumn = z.object({
   released: z.boolean(),
   /** A whole percentage, 0 to 100. */
   weight: GradebookWeight,
+  /** The stored flag; whether the column counts toward a mean is `countsInMean` of it and `componentId` (ADR-131). */
   counts: z.boolean(),
   position: z.number().int().nullable(),
+  /** The component of the mean the column is in (ADR-131), null for none. */
+  componentId: z.uuid().nullable(),
   /** The class's mean of the column: its released cells' grades (an absence 1.0, an empty or excused cell left out); null before the release or with none. */
   classMean: z.number().nullable(),
 });
@@ -164,10 +228,22 @@ export const GradebookStaffRow = z.object({
   prenom: z.string(),
   /** By activity id; one cell per column. */
   cells: z.record(z.string(), GradebookStaffCell),
-  /** The weighted mean of the released, counted columns the student has a grade in; null with none. */
+  /** The weighted mean of the released, counted columns the student has a grade in — of the component means once the course has components (ADR-131); null with none. */
   mean: z.number().nullable(),
+  /** Each component's mean for the student, by component id, to the tenth; null with none; empty without a component. */
+  componentMeans: z.record(z.string(), z.number().nullable()),
 });
 export type GradebookStaffRow = z.infer<typeof GradebookStaffRow>;
+
+/** A component of the mean as the staff's table reads it (ADR-131). */
+export const GradebookStaffComponent = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  weight: GradebookWeight,
+  /** The plain mean of the students' means of the component, a student with none left out; null with none. Staff only. */
+  classMean: z.number().nullable(),
+});
+export type GradebookStaffComponent = z.infer<typeof GradebookStaffComponent>;
 
 /** `GET /app/api/classrooms/:id/gradebook`: the staff's table. */
 export const GradebookStaff = z.object({
@@ -175,6 +251,8 @@ export const GradebookStaff = z.object({
   archived: z.boolean(),
   /** Whether students read their own mean (F-GBOOK-05). */
   meanPublished: z.boolean(),
+  /** Every component of the course, in creation order (ADR-131); none: the one-level mean. */
+  components: z.array(GradebookStaffComponent),
   columns: z.array(GradebookColumn),
   /** One row per claimed student seat, by last then first name; never a staff seat (ADR-018 §3). */
   rows: z.array(GradebookStaffRow),
@@ -204,7 +282,10 @@ export type GradebookStudentCell = z.infer<typeof GradebookStudentCell>;
 /**
  * A column as a student reads it: whether it counts toward the mean always
  * (the flag alone, so the tab draws practice apart; ADR-074, amendment of
- * 2026-10-13), its `weight` only once the mean is published.
+ * 2026-10-13) — `countsInMean`, so a column in no component of a course that
+ * has some does not (ADR-131) — and the component it counts in, by id, null
+ * when it does not count or the course has none; its `weight` only once the
+ * mean is published.
  */
 export const GradebookStudentColumn = z.object({
   kind: GradebookActivityKind,
@@ -214,16 +295,32 @@ export const GradebookStudentColumn = z.object({
   date: z.iso.datetime(),
   weight: GradebookWeight.optional(),
   counts: z.boolean(),
+  componentId: z.uuid().nullable(),
 });
 export type GradebookStudentColumn = z.infer<typeof GradebookStudentColumn>;
 
 /**
+ * A component of the mean as a student reads it (ADR-131): its name always;
+ * its `weight` and the student's own `mean` (null: none yet) only once the
+ * mean is published — the keys do not exist otherwise. Never its class mean.
+ */
+export const GradebookStudentComponent = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  weight: GradebookWeight.optional(),
+  mean: z.number().nullable().optional(),
+});
+export type GradebookStudentComponent = z.infer<typeof GradebookStudentComponent>;
+
+/**
  * `GET /app/api/student/classrooms/:id/gradebook`: the caller's own cells
  * of the classroom. `mean` is present only when the teacher publishes it
- * (null: no grade yet); the key does not exist otherwise.
+ * (null: no grade yet); the key does not exist otherwise. `components`: only
+ * those that hold one of the caller's columns that count, in creation order.
  */
 export const GradebookStudent = z.object({
   classroomId: z.uuid(),
+  components: z.array(GradebookStudentComponent),
   columns: z.array(GradebookStudentColumn),
   /** By activity id. */
   cells: z.record(z.string(), GradebookStudentCell),

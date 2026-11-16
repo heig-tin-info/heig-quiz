@@ -14,10 +14,12 @@
  *   teacher publishes it (the key does not exist otherwise).
  *
  * A grade is read from the activity (`ActivityKind.gradebookEntries`), never
- * recomputed here; a staff mark wins over it (`resolveCell`).
+ * recomputed here; a staff mark wins over it (`resolveCell`). Both readers
+ * compute the means with the course's components of the mean, read live
+ * (`gradebookMeans`, ADR-131): none is the one-level mean of ADR-074.
  */
 import type { GradebookStaff, GradebookStaffCell, GradebookStudent, GradebookStudentCell } from "@quiz/contracts";
-import { cellGrade, classMean, gradebookMean, resolveCell, type CellOutcome, type MeanColumn } from "@quiz/domain";
+import { cellGrade, classMean, gradebookMeans, resolveCell, studentCounting, type CellOutcome, type MeanColumn } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -36,6 +38,7 @@ import {
   storedColumns,
   type MarkWithSetter,
 } from "./columns.js";
+import { courseComponents } from "./components.js";
 
 const NOTHING_BENEATH: GradebookBeneath = {
   outcome: { kind: "empty" },
@@ -63,12 +66,13 @@ function staffCell(beneath: GradebookBeneath, mark: MarkWithSetter | undefined, 
 
 /** `GET /app/api/classrooms/:id/gradebook`: the staff's table (F-GBOOK-01, F-GBOOK-02). */
 export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelect): Promise<GradebookStaff> {
-  const [entries, stored, seats, marks, published] = await Promise.all([
+  const [entries, stored, seats, marks, published, components] = await Promise.all([
     gradebookEntries(db, room.id),
     storedColumns(db, room.id),
     claimedSeats(db, room.id),
     marksByCell(db, room.id),
     meanPublished(db, room.id),
+    courseComponents(db, room.courseId),
   ]);
   const columns = inOrder(entries.map((entry) => ({ entry, settings: settingsOf(stored.get(entry.activityId), entry.mode) })));
   // The grades of a column are read once released: before, only the staff's marks stand there.
@@ -85,14 +89,21 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
       const mark = marks.get(cellKey(entry.activityId, seat.enrollmentId));
       const outcome = resolveCell(mark ? markOutcome(mark, entry) : null, under.outcome);
       cells[entry.activityId] = staffCell(under, mark, outcome);
-      if (entry.released) counted.push({ weight: settings.weight, counts: settings.counts, cell: outcome });
+      if (entry.released) counted.push({ weight: settings.weight, counts: settings.counts, componentId: settings.componentId, cell: outcome });
     }
-    return { enrollmentId: seat.enrollmentId, email: seat.email, nom: seat.nom, prenom: seat.prenom, cells, mean: gradebookMean(counted) };
+    const means = gradebookMeans(counted, components);
+    return { enrollmentId: seat.enrollmentId, email: seat.email, nom: seat.nom, prenom: seat.prenom, cells, mean: means.mean, componentMeans: means.components };
   });
   return {
     classroomId: room.id,
     archived: room.archivedAt !== null,
     meanPublished: published,
+    components: components.map(({ id, name, weight }) => ({
+      id,
+      name,
+      weight,
+      classMean: classMean(rows.map((row) => row.componentMeans[id] ?? null)),
+    })),
     columns: columns.map(({ entry, settings }) => ({
       kind: entry.kind,
       activityId: entry.activityId,
@@ -103,6 +114,7 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
       weight: settings.weight,
       counts: settings.counts,
       position: settings.position,
+      componentId: settings.componentId,
       // The released grades only, as the screen shows them: a mark in a column not released is not one yet.
       classMean: entry.released ? classMean(rows.map((row) => row.cells[entry.activityId]!.grade)) : null,
     })),
@@ -123,17 +135,23 @@ function outcomeOf(cell: GradebookStudentCell): CellOutcome {
  * (a teacher in the student view), has no cell and so no column: the same
  * shape, empty. The mean, when published, is computed from the cells AS
  * DISPLAYED — a grade withheld or only indicative is not in it.
+ *
+ * The components of the mean (ADR-131): the name of the component of each
+ * column that counts, always — structure, like the `counts` flag; only the
+ * components that hold one of those columns; their weights and the
+ * student's own means of them only with the published mean, as the mean.
  */
 export async function studentGradebook(db: Db, scope: ReadableClassroom, userId: string, now: Date): Promise<GradebookStudent> {
   const { room, seat } = scope;
   const published = await meanPublished(db, room.id);
   const meanKey = (mean: number | null) => (published ? { mean } : {});
-  if (seat === null || seat.staff) return { classroomId: room.id, columns: [], cells: {}, ...meanKey(null) };
+  if (seat === null || seat.staff) return { classroomId: room.id, components: [], columns: [], cells: {}, ...meanKey(null) };
 
-  const [entries, stored, marks] = await Promise.all([
+  const [entries, stored, marks, components] = await Promise.all([
     studentGradebookEntries(db, userId, room.id, now),
     storedColumns(db, room.id),
     marksByCell(db, room.id, seat.id),
+    courseComponents(db, room.courseId),
   ]);
   const columns = inOrder(entries.map((entry) => ({ entry, settings: settingsOf(stored.get(entry.activityId), entry.mode) })));
   const cells: GradebookStudent["cells"] = {};
@@ -147,22 +165,31 @@ export async function studentGradebook(db: Db, scope: ReadableClassroom, userId:
       ? { kind: outcome.kind, grade: cellGrade(outcome), points: null, max: null }
       : entry.cell;
     cells[entry.activityId] = cell;
-    counted.push({ weight: settings.weight, counts: settings.counts, cell: outcome });
+    counted.push({ weight: settings.weight, counts: settings.counts, componentId: settings.componentId, cell: outcome });
   }
-  return {
-    classroomId: room.id,
-    columns: columns.map(({ entry, settings }) => ({
+  const means = gradebookMeans(counted, components);
+  const studentColumns = columns.map(({ entry, settings }) => {
+    // The flag alone always (the tab draws practice apart); the weight with the mean only (ADR-074, 2026-10-13).
+    // An excused cell counts in no mean: its column is not drawn with what counts (#969), as on the Grades page;
+    // nor is a column in no component of a course that has some (ADR-131).
+    const excused = cells[entry.activityId]!.kind === "excused";
+    return {
       kind: entry.kind,
       activityId: entry.activityId,
       mode: entry.mode,
       title: entry.title,
       date: iso(entry.date),
-      // The flag alone always (the tab draws practice apart); the weight with the mean only (ADR-074, 2026-10-13).
-      // An excused cell counts in no mean: its column is not drawn with what counts (#969), as on the Grades page.
-      counts: settings.counts && cells[entry.activityId]!.kind !== "excused",
+      ...studentCounting(settings.counts && !excused, settings.componentId, components.length > 0),
       ...(published ? { weight: settings.weight } : {}),
-    })),
+    };
+  });
+  return {
+    classroomId: room.id,
+    components: components
+      .filter(({ id }) => studentColumns.some((column) => column.componentId === id))
+      .map(({ id, name, weight }) => ({ id, name, ...(published ? { weight, mean: means.components[id] ?? null } : {}) })),
+    columns: studentColumns,
     cells,
-    ...meanKey(gradebookMean(counted)),
+    ...meanKey(means.mean),
   };
 }

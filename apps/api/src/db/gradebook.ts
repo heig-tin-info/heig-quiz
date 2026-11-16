@@ -19,11 +19,18 @@
  *     never accepted a project). One mark per (column, student); leaving
  *     the roster takes the marks along;
  *   - `gradebook_settings`: one row per classroom, once the teacher chose
- *     to publish the mean (off by default; no row = off).
+ *     to publish the mean (off by default; no row = off);
+ *   - `gradebook_components`: the components of the mean of a COURSE
+ *     (ADR-131) — a name unique in the course whatever its case, a relative
+ *     weight — which a column joins by `gradebook_columns.component_id`. Its
+ *     foreign key is the default NO ACTION, checked at the end of the
+ *     statement: deleting a course cascades to both tables in one statement
+ *     and passes, while deleting a component a column is still in fails
+ *     (the service refuses it first, `409 component_in_use`).
  *
- * `updated_at`, `set_at` are the server's clock, written by the service.
+ * `created_at`, `updated_at`, `set_at` are the server's clock, written by the service.
  */
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { and, eq, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -43,8 +50,31 @@ import { GRADEBOOK_MARK_KINDS, WEIGHT_DEFAULT } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { evaluations } from "./evaluation.js";
-import { classrooms, enrollments } from "./org.js";
+import { classrooms, courses, enrollments } from "./org.js";
 import { projects } from "./project.js";
+import { qualified } from "./qualified.js";
+
+export const gradebookComponents = pgTable(
+  "gradebook_components",
+  {
+    id: uuid("id").primaryKey(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    /** Trimmed, 1 to 40 characters (`GradebookComponentName`). */
+    name: text("name").notNull(),
+    /** A whole percentage, 0 to 100, relative to the course's other components (`GradebookWeight`). */
+    weight: integer("weight").notNull().default(WEIGHT_DEFAULT),
+    /** With the id, the order of the components: no position, no reorder (ADR-131 §1). */
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    check("gradebook_components_weight_range", sql`${t.weight} >= 0 AND ${t.weight} <= 100`),
+    uniqueIndex("gradebook_components_course_name_uq").on(t.courseId, sql`lower(${t.name})`),
+  ],
+);
 
 export const gradebookColumns = pgTable(
   "gradebook_columns",
@@ -61,12 +91,19 @@ export const gradebookColumns = pgTable(
     counts: boolean("counts").notNull(),
     /** The teacher's order; null keeps the activity's own date order. */
     position: integer("position"),
+    /**
+     * The component of the mean the column is in (ADR-131), one of its
+     * classroom's course (checked by the service); null for none. NO ACTION:
+     * see the header.
+     */
+    componentId: uuid("component_id").references(() => gradebookComponents.id),
     updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   },
   (t) => [
     check("gradebook_columns_one_activity", sql`(${t.evaluationId} IS NULL) <> (${t.projectId} IS NULL)`),
     check("gradebook_columns_weight_range", sql`${t.weight} >= 0 AND ${t.weight} <= 100`),
+    index("gradebook_columns_component_idx").on(t.componentId),
     uniqueIndex("gradebook_columns_evaluation_uq").on(t.evaluationId).where(sql`${t.evaluationId} IS NOT NULL`),
     uniqueIndex("gradebook_columns_project_uq").on(t.projectId).where(sql`${t.projectId} IS NOT NULL`),
     index("gradebook_columns_classroom_idx").on(t.classroomId),
@@ -132,3 +169,12 @@ export const excusedMarkOfSeat = (): SQL =>
     eq(gradebookMarks.enrollmentId, enrollments.id),
     eq(gradebookMarks.kind, "excused"),
   )!;
+
+/**
+ * Whether the course has a component of the mean (ADR-131): a select-list
+ * expression correlated on `courseId`, a course id column of the outer
+ * query (`courses.id`) — what `countsInMean` reads for the student's Grades
+ * page. Qualified by hand, the subquery being on another table (`qualified`).
+ */
+export const courseHasComponents = (courseId: AnyColumn): SQL<boolean> =>
+  sql<boolean>`exists (select 1 from ${gradebookComponents} where ${qualified(gradebookComponents.courseId)} = ${qualified(courseId)})`;

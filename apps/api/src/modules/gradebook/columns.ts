@@ -16,16 +16,17 @@ import type { GradebookEntryFacts } from "../activity/kind.js";
 export type ColumnRow = typeof gradebookColumns.$inferSelect;
 export type MarkRow = typeof gradebookMarks.$inferSelect;
 
-/** A column's settings, stored or default. */
+/** A column's settings, stored or default; `componentId`: the component of the mean it is in (ADR-131). */
 export interface ColumnSettings {
   weight: number;
   counts: boolean;
   position: number | null;
+  componentId: string | null;
 }
 
-/** The settings of an activity without a stored column: weight 100 %, exams and projects count, exercises do not (D06). */
+/** The settings of an activity without a stored column: weight 100 %, exams and projects count, exercises do not (D06), in no component. */
 export function defaultSettings(mode: GradebookColumnKind): ColumnSettings {
-  return { weight: WEIGHT_DEFAULT, counts: countsByDefault(mode), position: null };
+  return { weight: WEIGHT_DEFAULT, counts: countsByDefault(mode), position: null, componentId: null };
 }
 
 /** The activity a stored column belongs to. */
@@ -49,7 +50,7 @@ export async function storedColumns(db: Db | Tx, classroomId: string): Promise<M
 }
 
 export const settingsOf = (row: ColumnRow | undefined, mode: GradebookColumnKind): ColumnSettings =>
-  row ? { weight: row.weight, counts: row.counts, position: row.position } : defaultSettings(mode);
+  row ? { weight: row.weight, counts: row.counts, position: row.position, componentId: row.componentId } : defaultSettings(mode);
 
 /** The teacher's order first, then the activity's own date. */
 export function inOrder<T extends { entry: Pick<GradebookEntryFacts, "date" | "title">; settings: Pick<ColumnSettings, "position"> }>(

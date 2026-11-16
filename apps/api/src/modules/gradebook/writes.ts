@@ -40,6 +40,7 @@ import {
   type ColumnRow,
   type ColumnSettings,
 } from "./columns.js";
+import { componentOfCourse } from "./components.js";
 import { GradebookError } from "./errors.js";
 import { gradebookChanged } from "./events.js";
 
@@ -222,7 +223,11 @@ export async function clearMark(db: Db, scope: RoomScope, params: GradebookMarkP
   if (cleared) gradebookChanged(scope.course.id, seat.userId === null ? [] : [seat.userId]);
 }
 
-/** `PATCH …/gradebook/columns/:kind/:activityId`: the weight, whether it counts, its position (F-GBOOK-06). */
+/**
+ * `PATCH …/gradebook/columns/:kind/:activityId`: the weight, whether it
+ * counts, its position, its component of the mean (F-GBOOK-06, ADR-131) — a
+ * component of the classroom's course, else the 404 of a missing one.
+ */
 export async function patchColumn(
   db: Db,
   scope: RoomScope,
@@ -231,12 +236,18 @@ export async function patchColumn(
   ctx: WriteContext,
 ): Promise<void> {
   const entry = await entryOf(db, scope.room.id, params.kind, params.activityId);
-  const readers = await db.transaction(async (tx) => {
+  const changed = await db.transaction(async (tx) => {
     await lockClassroom(tx, scope.room.id);
+    if (body.componentId) await componentOfCourse(tx, scope.course.id, body.componentId, "key share");
     const column = await ensureColumn(tx, scope.room.id, entry, ctx);
     const before: ColumnSettings = settingsOf(column, entry.mode);
-    const after: ColumnSettings = { weight: body.weight ?? before.weight, counts: body.counts ?? before.counts, position: body.position === undefined ? before.position : body.position };
-    if (after.weight === before.weight && after.counts === before.counts && after.position === before.position) return null;
+    const after: ColumnSettings = {
+      weight: body.weight ?? before.weight,
+      counts: body.counts ?? before.counts,
+      position: body.position === undefined ? before.position : body.position,
+      componentId: body.componentId === undefined ? before.componentId : body.componentId,
+    };
+    if ((Object.keys(after) as (keyof ColumnSettings)[]).every((field) => after[field] === before[field])) return false;
     await tx.update(gradebookColumns).set({ ...after, updatedBy: ctx.userId, updatedAt: ctx.now }).where(eq(gradebookColumns.id, column.id));
     await audit(tx, {
       ...ctx.actor,
@@ -245,10 +256,10 @@ export async function patchColumn(
       subjectId: scope.room.id,
       payload: { activityKind: entry.kind, activityId: entry.activityId, before, after },
     });
-    // The students read a weight only with the published mean.
-    return (await meanPublished(tx, scope.room.id)) ? await studentUserIds(tx, scope.room.id) : [];
+    return true;
   });
-  if (readers !== null) gradebookChanged(scope.course.id, readers);
+  // The students read a column's flag, its component and its place always, its weight with the published mean.
+  if (changed) gradebookChanged(scope.course.id, await studentUserIds(db, scope.room.id));
 }
 
 /** `PATCH …/gradebook`: publish the mean to the students, or stop (F-GBOOK-05, F-GBOOK-06). */

@@ -66,7 +66,8 @@ const resultsReader: Tool = {
   title: "Get the final results of a classroom",
   description:
     "The FINAL results of one of the user's classrooms: its released evaluations and projects only, each " +
-    "student by name with a Swiss grade per column (`absent`: a1.0; null: none) and the gradebook's mean. " +
+    "student by name with a Swiss grade per column (`absent`: a1.0; null: none) and the gradebook's mean, " +
+    "and, when the course has components of the mean, each column's component and each student's mean of each. " +
     "Never a running or unreleased evaluation's scores: those are not final. Needs a staff seat on the course.",
   input: z.object({ classroomId: z.uuid() }),
   annotations: { readOnlyHint: true, openWorldHint: false },

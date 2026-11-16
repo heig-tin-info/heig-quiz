@@ -111,6 +111,7 @@ describe("the student's Grades: a project row (F-PROJ-14, product owner 2026-10-
     date: DEADLINE,
     status: "released",
     counts: true,
+    component: null,
     score: { points: 4.5, totalPoints: 6, grade: 4.5 },
   } as const;
 
@@ -124,6 +125,7 @@ describe("the student's Grades: a project row (F-PROJ-14, product owner 2026-10-
       status: "released",
       feedbackAttemptId: null,
       counts: true,
+      component: "Cours",
       score: { points: 12, totalPoints: 18, grade: 4.3, pendingCount: 0 },
     } as const;
     const grades = [
@@ -141,15 +143,16 @@ describe("the student's Grades: a project row (F-PROJ-14, product owner 2026-10-
     expect(GradeRow.safeParse({ ...row, score: { points: 4.5, totalPoints: 6, grade: null } }).success).toBe(false);
     expect(GradeRow.safeParse({ ...row, score: null }).success).toBe(false);
     expect(GradeRow.safeParse({ ...row, status: "excused", counts: false, score: null }).success).toBe(true);
-    // Excused: no score, and counting nowhere.
+    // Excused: no score, and counting nowhere, in no component (ADR-131).
     expect(GradeRow.safeParse({ ...row, status: "excused", counts: false }).success).toBe(false);
     expect(GradeRow.safeParse({ ...row, status: "excused", counts: true, score: null }).success).toBe(false);
+    expect(GradeRow.safeParse({ ...row, status: "excused", counts: false, component: "Labo", score: null }).success).toBe(false);
   });
 
   it("carries neither the score's source, the teacher's comment nor the repository (N-SEC-20)", () => {
     const [released, excused] = ProjectGradeRow.options;
     for (const shape of [released.shape, excused.shape]) {
-      expect(Object.keys(shape).sort()).toEqual(["counts", "date", "kind", "projectId", "score", "status", "title"]);
+      expect(Object.keys(shape).sort()).toEqual(["component", "counts", "date", "kind", "projectId", "score", "status", "title"]);
     }
     expect(Object.keys(released.shape.score.shape).sort()).toEqual(["grade", "points", "totalPoints"]);
     const leaky = {

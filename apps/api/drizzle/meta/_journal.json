@@ -960,6 +960,13 @@
       "when": 1794748197431,
       "tag": "0136_kiosk_close_requested",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1794854756604,
+      "tag": "0137_gradebook_components",
+      "breakpoints": true
     }
   ]
 }

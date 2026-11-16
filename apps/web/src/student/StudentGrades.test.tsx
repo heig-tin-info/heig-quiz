@@ -22,6 +22,7 @@ const row = (over: Partial<EvaluationGradeRow> & Pick<EvaluationGradeRow, "evalu
   status: "released",
   feedbackAttemptId: null,
   counts: (over.mode ?? "exam") === "exam",
+  component: null,
   score: null,
   ...over,
 });
@@ -157,6 +158,7 @@ describe("the student's Grades", () => {
           date: "2026-09-25T10:00:00.000Z",
           status: "released",
           counts: true,
+          component: null,
           score: { points: 15, totalPoints: 20, grade: 4.8 },
         },
       ],
@@ -177,7 +179,7 @@ describe("the student's Grades", () => {
       ...groups[0]!,
       rows: [
         row({ evaluationId: "e2", title: "Quiz 2", score: { points: 8.5, totalPoints: 12, grade: 4.5, pendingCount: 0 } }),
-        { kind: "project", projectId: "p2", title: "Lab 3", date: "2026-09-26T10:00:00.000Z", status: "excused", counts: false, score: null },
+        { kind: "project", projectId: "p2", title: "Lab 3", date: "2026-09-26T10:00:00.000Z", status: "excused", counts: false, component: null, score: null },
       ],
     };
     mockFetch({ [URL]: ok([project]) });

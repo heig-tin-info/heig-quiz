@@ -337,13 +337,14 @@ describe("the model's tools", () => {
     expect((await ask(teacher, "Les notes ?", { classroom: seed.classroomId })).statusCode).toBe(200);
     const read = JSON.parse(lastToolResult!.content) as {
       columns: { title: string }[];
-      students: { name: string; grades: unknown[]; mean: number | null }[];
+      students: { name: string; grades: unknown[]; mean: number | null; componentMeans: unknown[] }[];
       unreleasedColumns: number;
     };
     expect(read.columns.map((c) => c.title)).toEqual(["Test évaluation"]);
+    // No component of the mean on this course (ADR-131): none to read.
     expect(read.students).toEqual([
-      { name: "Prenom0 Nom0", grades: [5], mean: 5 },
-      { name: "Prenom1 Nom1", grades: [3.5], mean: 3.5 },
+      { name: "Prenom0 Nom0", grades: [5], mean: 5, componentMeans: [] },
+      { name: "Prenom1 Nom1", grades: [3.5], mean: 3.5, componentMeans: [] },
     ]);
     expect(read.unreleasedColumns).toBe(1);
     expect(lastToolResult!.content).not.toContain("Examen en cours");
