@@ -5,7 +5,12 @@
 Accepted (2026-11-15): the product owner's four decisions and the model and rules settled at review
 the same day, in the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag),
 which overrides §1, §2, §4, §6, §9 and §12 where it says so. Proposed 2026-10-09 (points 1, 7 and 9 the
-owner's then). Built behind `KIOSK_PROJECTS`; production waits for project proof B and proof K.
+owner's then). Built behind `KIOSK_PROJECTS`. The owner turned it on in production on 2026-11-15
+without waiting for the proofs (the owner's decision), for a class on 2026-11-16; on 2026-11-16 a
+real station framed the portal and the editor opened once the Admin console's URL allowlist named
+the portal's host (`code.chevallier.io`). The rest of proof K (sockets, clipboard, shortcuts,
+cookies across the 303) and project proof B are not recorded. Amended 2026-11-16 (owner): a
+restarted station frees itself, [amendment of 2026-11-16](#amendment-2026-11-16-a-restarted-station-frees-itself).
 Delivery: [merge progress](../merge/PROGRESS.md), M6-11a–f.
 
 - 2026-10-11, audit L7: the student's start route is `POST /app/api/projects/:id/workspace/start` (ADR-047), formerly a GET.
@@ -204,7 +209,8 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
 13. **Audit.** `codespace.launch_issued` gains `kiosk: true` for a station's
     launch; `kiosk.paired` and `kiosk.suspended` may name a project; the
     union gains `codespace.session_closed` (the cause: `left`,
-    `superseded`, `deadline`, `expired`; since 2026-11-15 also `retired` and `swept`, amendment point 4) and `codespace.session_close_failed`
+    `superseded`, `deadline`, `expired`; since 2026-11-15 also `retired` and `swept`, amendment point 4;
+    since 2026-11-16 also `restarted`, [amendment of 2026-11-16](#amendment-2026-11-16-a-restarted-station-frees-itself)) and `codespace.session_close_failed`
     for the portal close of point 6; the setting is audited as point 2
     says. No token or cookie is written.
 
@@ -282,6 +288,9 @@ reviewer in charge), marked *review*: it is not the owner's.
    allowlist gains the portal's host; it stands on ADR-051's own station
    checks, `docs/development/kiosk.md` §7). This waives §9's
    "implementation waits", **not the proofs**.
+   *Amended 2026-11-16 (owner): turned on in production on 2026-11-15
+   without the proofs, for a class on 2026-11-16; what has been observed and
+   what is still owed is in the Status.*
    *The flag's rule* (*review*). One predicate,
    `kioskProjectsOn(config) = KIOSK_ATTESTATION !== "off" && KIOSK_PROJECTS`,
    read in exactly two places: the mode write refuses a change TO a station
@@ -405,6 +414,9 @@ reviewer in charge), marked *review*: it is not the owner's.
      deadline and past their `expires_at` (expiry is otherwise lazy, at
      the next request). One `endKioskSessions`, keyed by activity
      (`{ evaluationId } | { projectId }`), serves them all.
+     *Amended 2026-11-16 (owner): one more end, a code requested by the
+     freshly attested station while its sitting is live (`restarted`) —
+     the [amendment of 2026-11-16](#amendment-2026-11-16-a-restarted-station-frees-itself).*
    - **Every disappearance closes.** Session rows also vanish by lazy
      expiry, by `purgeExpiredSessions`, by the account module
      (`modules/account/service.ts`, through `quiz_pseudonymize_account`)
@@ -444,6 +456,10 @@ reviewer in charge), marked *review*: it is not the owner's.
      after a launch therefore leaves that portal session unclosed. A close
      request is marked before it is enqueued, so a crash between the two
      leaves the station held until that Retire then Reactivate.
+     *Amended 2026-11-16 (owner): the hold's rule is unchanged, but `/kiosk`
+     learns it from the code request's `409` only (the station's payload no
+     longer carries it), and a restarted station no longer waits for the 6 h
+     or an administrator — the [amendment of 2026-11-16](#amendment-2026-11-16-a-restarted-station-frees-itself).*
 5. **Accepted residual risks** (*owner*):
    - (a) **Suspension** (§7): a suspended station only covers the frame;
      the portal's writes continue — weaker than an exam's `423` (N-SEC-10).
@@ -469,3 +485,69 @@ reviewer in charge), marked *review*: it is not the owner's.
    `/me` every 60 s and covers its frame when its own attestation is refused or silent; the
    ends are enforced by the portal close of point 4. Proof K (§9) also checks: focus the editor,
    trigger a refused attestation, then type — do keystrokes still reach the editor under `inert`?
+
+## Amendment 2026-11-16: a restarted station frees itself
+
+Scope: point 4 of the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag)
+("The ends"; "The hold" keeps its rule, now told by the code request's
+`409` only) and §13's causes. The product owner
+decided on 2026-11-16, after a spec challenge, following a production
+incident the same day.
+
+- **What happened.** A station was rebooted during a project sitting. It
+  came back on `/kiosk`, whose page never looks at a session, while the
+  server still held the sitting's session row (6 h). The station was held
+  (point 4, "The hold") and nothing ended the sitting: Leave needs the lost
+  page, a replacement pairing needs a code. It showed "Closing the previous
+  workspace" until the 6 h expiry or an administrator's Retire then
+  Reactivate. Any reboot, power loss, crash or ChromeOS update restart
+  during a project sitting did this.
+- **The new end.** When a station asks for a pairing code
+  (`POST /app/api/kiosk/device_authorization`) while a project sitting of it
+  is still live (a session points to its pairing), and its attestation is
+  fresh (`kioskCheckFresh`, the rule of the start route's
+  `freshAttestation`, §4: a last check under two minutes old that is `ok`
+  or `unavailable`, so a Google outage counts as fresh), the server ends
+  that sitting's station session through `dropSessions`, cause
+  **`restarted`**; the portal close follows as for every end. Only `/kiosk`
+  asks for a code, so such a request from a freshly attested station means
+  its browser is back on `/kiosk`: a restart, a lost session or station
+  cookie, or the app sending the station back there (`toKiosk`, from
+  `StationOrLanding` and `ConfinedElsewhere` in `apps/web/src/App.tsx`). It
+  proves nothing about the student. Without a fresh attestation, or from a
+  station that is not active and named, nothing ends. An exam's station
+  session is never touched.
+- **The station asks while held.** Before this amendment `/kiosk` read the
+  hold from its attestation (`KioskStation.held`) and asked for no code
+  while held, so the request above was never sent. The hold is now the code
+  request's `409 station_held` alone: `/kiosk` attests, asks for a code and,
+  held, shows the same screen and tries again every 30 s. The field is
+  removed from the station's payload.
+- **The hold is unchanged.** The same request still answers
+  `409 station_held`: a code is issued only once `close_completed_at` is
+  set, and the poll keeps its own check. The station's browser still holds
+  the previous student's portal cookies; pairing before the portal confirmed
+  the close would let the next student's workspace content read them on the
+  shared portal origin. The first turn of `/kiosk` after the restart ends
+  the sitting and is refused; a later turn — attest, ask for a code, `409`
+  until the close completes — gets a code, usually the next one, about 30 s
+  later.
+- **Unlike an exam** ([ADR-051](ADR-051-postes-kiosque-attestes.md) §7):
+  an exam's previous session dies when the new pairing is consumed; a
+  project's when the code is requested, because its close must finish
+  before any code is shown.
+- **Audit.** `codespace.session_closed` and `codespace.session_close_failed`
+  carry `cause: "restarted"`; no new action, no alert in the workspace list.
+- **Residual risks** (*owner*):
+  - (a) Repository content opened in the workspace, after pushing Quiz's
+    cookies out of the browser's store, can send this simple POST and end
+    the student's own sitting. That is what Leave does; the same eviction
+    used to lock the station for hours.
+  - (b) A student without a phone cannot pair again on a Kiosk only
+    project: projects have no **Assign a station** (§5). The supervisor's
+    answer is SEB when the level allows it.
+  - (c) A restart near the deadline costs the minutes of a new pairing.
+  - (d) A room-wide power cut closes every sitting at once.
+  - (e) A station sent back to `/kiosk` without a restart (a lost cookie,
+    `toKiosk`) ends its sitting the same way: the audit's cause still reads
+    `restarted`, and only that student's own sitting on that station ends.

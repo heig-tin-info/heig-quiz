@@ -21,7 +21,8 @@ import { readStored, writeStored } from "../ui/state";
 /**
  * Why a station cannot show a code: not in the registry (or not named), the
  * platform out of reach, or held — its last project sitting's workspace is
- * not closed yet (ADR-089, amendment of 2026-11-15, point 4).
+ * not closed yet (ADR-089, amendment of 2026-11-15, point 4), which only the
+ * code request's `409 station_held` tells.
  */
 export type StationTrouble = "not_recognised" | "unavailable" | "held";
 
@@ -127,15 +128,17 @@ export async function attestOnce(kiosk: PublicConfig["kiosk"]): Promise<AttestOu
 }
 
 /**
- * One attestation, for the station's screen: null when attested, `active`
- * and not held; otherwise what to show. The hold is read here only, before a
- * code: during its own sitting a station is held too, and that is no trouble.
+ * One attestation, for the station's screen: null when attested and
+ * `active`; otherwise what to show. The hold is not read here: the code
+ * request that follows answers it (`authorize`, `409 station_held`), and
+ * that request is what lets the server end a sitting the station lost to a
+ * restart (ADR-089, amendment of 2026-11-16).
  */
 export async function attest(kiosk: PublicConfig["kiosk"]): Promise<StationTrouble | null> {
   const station = await attestStation(kiosk);
   if (typeof station === "string") return station === "refused" ? "not_recognised" : "unavailable";
   if (station.status !== "active") return "not_recognised";
-  return station.held ? "held" : null;
+  return null;
 }
 
 // --- A project sitting (ADR-089) ---------------------------------------------------

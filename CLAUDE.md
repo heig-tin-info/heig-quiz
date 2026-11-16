@@ -123,7 +123,8 @@ Never work around these, not even "temporarily".
    its station's cookie beside it (`trustRefusal`, `auth/trust.ts`), and it
    ends with the attempt or, for a project, at the first of Leave,
    replacement, the effective deadline, its 6 h, the station's
-   retirement — each closing the portal session.
+   retirement, its restart (a code requested once freshly attested) —
+   each closing the portal session.
 7. **Every HTTP input is validated by a schema from `packages/contracts`,**
    and the client uses the same schema. A route change breaks both sides at
    compile time.

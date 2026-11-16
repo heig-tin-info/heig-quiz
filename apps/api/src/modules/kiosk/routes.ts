@@ -40,10 +40,11 @@ import {
   type PairApproved,
   type PairPreview,
 } from "@quiz/contracts";
+import { kioskCheckFresh } from "@quiz/domain";
 
 import { audit, tracer, type AuditAction } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { STATION_PROJECT, delegated, endStationSessions, leaveStation } from "../../auth/session.js";
+import { STATION_PROJECT, delegated, endRestartedSitting, endStationSessions, leaveStation } from "../../auth/session.js";
 import { users } from "../../db/schema.js";
 import { adminGuard, callerOf, loadEvaluation, teacherGuard } from "../guards.js";
 import { emptyBody, invalid, notFound, rateLimited, sendFailure, teacherRoute } from "../http.js";
@@ -183,7 +184,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
         sameSite: "strict",
         maxAge: KIOSK_COOKIE_HOURS * 3600,
       });
-      return { station: await stationView(app.db, device) } satisfies KioskAttested;
+      return { station: stationView(device) } satisfies KioskAttested;
     }
 
     // A failure is audited for a known station only: an unknown caller is
@@ -225,10 +226,18 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
     if (refused) return refused;
     const station = await pairableStation(req, reply);
     if (!station) return reply;
-    const issued = await issuePairing(app.db, station.id, app.clock.now());
-    // Held (ADR-089, amendment point 4): a project sitting's portal session
-    // is not closed yet; the station's page says to call the supervisor.
-    if (!issued) return reply.code(409).send({ error: "station_held" });
+    const now = app.clock.now();
+    const issued = await issuePairing(app.db, station.id, now);
+    if (!issued) {
+      // Held (ADR-089, amendment point 4): a project sitting's portal session
+      // is not closed yet; the station's page says to call the supervisor.
+      // Only `/kiosk` asks for a code: from a freshly attested station, the
+      // request says its browser is back there — a restart, a lost cookie,
+      // or the app sending it back — and a sitting still live there ends
+      // (amendment of 2026-11-16). The hold stays until its close completes.
+      if (kioskCheckFresh(station, now)) await endRestartedSitting(app.db, station.id, now);
+      return reply.code(409).send({ error: "station_held" });
+    }
     const verification = new URL("/pair", opts.config.PUBLIC_URL);
     const complete = new URL(verification);
     complete.searchParams.set("code", issued.userCode);

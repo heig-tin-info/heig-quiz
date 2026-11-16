@@ -427,7 +427,8 @@ export async function findSessionUser(
 
 /**
  * Why sessions go. `left`, `deadline`, `retired` and `swept` are a kiosk
- * station's project sitting's ends (ADR-089, amendment point 4); `ended` an
+ * station's project sitting's ends (ADR-089, amendment point 4), and
+ * `restarted` (its amendment of 2026-11-16); `ended` an
  * exam's attempt over (ADR-051 §7); `revoked` an actor's right lost
  * (ADR-034) or an account pseudonymized (ADR-117).
  */
@@ -440,6 +441,7 @@ export type DropReason =
   | "left"
   | "deadline"
   | "retired"
+  | "restarted"
   | "swept";
 
 /** The cause a sitting's close records for a drop's reason: the ends of the record by name, any other `swept`. */
@@ -449,6 +451,7 @@ const CLOSE_CAUSE: Record<DropReason, SittingCloseCause> = {
   deadline: "deadline",
   expired: "expired",
   retired: "retired",
+  restarted: "restarted",
   swept: "swept",
   logout: "swept",
   revoked: "swept",
@@ -626,6 +629,15 @@ const stationProjectSession = (): SQL => and(eq(sessions.kind, "kiosk"), isNotNu
  */
 export async function leaveStation(db: Db, sidHash: string, now: Date): Promise<boolean> {
   return (await endSessions(db, and(eq(sessions.sidHash, sidHash), stationProjectSession())!, "left", now)) > 0;
+}
+
+/**
+ * A station restarted during a project sitting (ADR-089, amendment of
+ * 2026-11-16): its session of a project ended (`restarted`), its portal
+ * close asked for. An exam's station session stays.
+ */
+export async function endRestartedSitting(db: Db, deviceId: string, now: Date): Promise<void> {
+  await endSessions(db, and(eq(sessions.deviceId, deviceId), stationProjectSession())!, "restarted", now);
 }
 
 /**

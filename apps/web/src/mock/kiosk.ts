@@ -88,7 +88,7 @@ on("GET", "/app/api/kiosk/station", () => station());
 function station(): KioskStation {
   const d = devices.find((x) => x.status === "active");
   if (!d) throw new MockError(404, "Not found");
-  return { label: d.label, status: d.status, held: flags.stationheld };
+  return { label: d.label, status: d.status };
 }
 
 // Leave this station (ADR-089, amendment point 4): the sitting ends; the

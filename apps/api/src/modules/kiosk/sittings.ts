@@ -27,9 +27,11 @@ import type { JobQueue } from "../../jobs.js";
  * records it (ADR-089 §13 and its amendment of 2026-11-15, point 4): Leave
  * this station, a newer confined session of the pair, the student's
  * effective deadline, the 6 h lifetime, the station's retirement, or any
- * other disappearance the sweep or a deletion caught.
+ * other disappearance the sweep or a deletion caught — and, by the
+ * amendment of 2026-11-16, a code requested by the freshly attested station
+ * while the sitting was live: the station was restarted.
  */
-export type SittingCloseCause = "left" | "superseded" | "deadline" | "expired" | "retired" | "swept";
+export type SittingCloseCause = "left" | "superseded" | "deadline" | "expired" | "retired" | "swept" | "restarted";
 
 /**
  * How long a consumed pairing waits before the sweep may take it for a

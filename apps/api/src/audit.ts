@@ -158,7 +158,9 @@ export type AuditAction =
    * Retire then Reactivate gets a close through). Subject the sitting, the
    * approving pairing (`kiosk_pairing`); `payload.projectId` (null once the
    * project is deleted), `payload.cause` (`SittingCloseCause`,
-   * `modules/kiosk/sittings.ts`) and, on a failure, `payload.error`, the
+   * `modules/kiosk/sittings.ts`: `left`, `superseded`, `deadline`,
+   * `expired`, `retired`, `swept`, and `restarted`, the station's code
+   * request after a restart, amendment of 2026-11-16) and, on a failure, `payload.error`, the
    * portal's status — never a token.
    */
   | "codespace.session_closed"
