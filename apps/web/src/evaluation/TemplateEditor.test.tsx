@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { TemplateDetail, TemplateItemRow } from "@quiz/contracts";
+import type { GradebookColumnSettings, TemplateDetail, TemplateItemRow } from "@quiz/contracts";
 
 import { makeCourseSummary } from "../test/fixtures";
 import { makeEvaluationDetail, makeItemRow } from "../test/live-fixtures";
@@ -18,6 +18,22 @@ import { TemplateEditor } from "./TemplateEditor";
 
 const T = "11111111-1111-4111-8111-000000000001";
 const BASE = `/app/api/templates/${T}`;
+/** The column its instances start with (ADR-131 §15), on a course with two components. */
+const COLUMN = `${BASE}/gradebook`;
+const COURS = "11111111-1111-4111-8111-0000000000d1";
+const LABO = "11111111-1111-4111-8111-0000000000d2";
+const column = (over: Partial<GradebookColumnSettings> = {}): GradebookColumnSettings => ({
+  weight: 100,
+  counts: true,
+  componentId: COURS,
+  released: false,
+  meanPublished: false,
+  components: [
+    { id: COURS, name: "Cours", weight: 50, inUse: true },
+    { id: LABO, name: "Labo", weight: 50, inUse: false },
+  ],
+  ...over,
+});
 
 const row = (index: number, over: Partial<TemplateItemRow> = {}): TemplateItemRow => ({
   ...makeItemRow(index),
@@ -60,6 +76,7 @@ function world(d: TemplateDetail = detail()) {
   return {
     "GET /app/api/courses": ok([makeCourseSummary()]),
     [`GET ${BASE}`]: ok(d),
+    [`GET ${COLUMN}`]: ok(column()),
   };
 }
 
@@ -167,6 +184,44 @@ describe("TemplateEditor", () => {
     const body = calls.find((c) => c.method === "PATCH")!.body as Record<string, unknown>;
     expect(body).toHaveProperty("settings.lobby", "skip");
     for (const key of ["opensAt", "closesAt", "ipAllowlist"]) expect(body).not.toHaveProperty(key);
+  });
+
+  /* ADR-131 §15: the row itself is `GradebookSettingRow`'s; here, the template's address and write. */
+  it("sets the column its instances start with, through the template's route, with nothing to confirm", async () => {
+    let stored = column();
+    const { calls } = mockFetch({
+      ...world(),
+      [`GET ${COLUMN}`]: () => ok(stored),
+      [`PATCH ${COLUMN}`]: () => {
+        stored = column({ componentId: LABO });
+        return ok(stored);
+      },
+    });
+    renderWithProviders(<TemplateEditor id={T} navigate={vi.fn()} />, { route: "/?tab=settings" });
+
+    expect(await screen.findByText("Cours · weight 100 %")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog", { name: "Settings of Final exam" });
+    await userEvent.selectOptions(within(dialog).getByLabelText("Component"), "Labo");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Labo · weight 100 %")).toBeVisible();
+    expect(calls.filter((c) => c.method === "PATCH").map((c) => [c.url, c.body])).toEqual([
+      [COLUMN, { counts: true, componentId: LABO }],
+    ]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("reads the column again once the mode changed, whose defaults it shows", async () => {
+    const { calls } = mockFetch({
+      ...world(),
+      [`PATCH ${BASE}`]: ok(detail({ template: { ...detail().template, mode: "exercise" } })),
+    });
+    renderWithProviders(<TemplateEditor id={T} navigate={vi.fn()} />, { route: "/?tab=settings" });
+
+    await screen.findByText("Cours · weight 100 %");
+    await userEvent.click(screen.getByRole("radio", { name: "Exercise" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "GET" && c.url === COLUMN)).toHaveLength(2));
   });
 
   it("renames the template in place, with the title alone", async () => {

@@ -56,7 +56,7 @@ import { evaluationKey, resultsKey, resultsViewKey } from "../queryKeys";
 import { useEvaluation, useResultsByQuestion } from "../evaluation/api";
 import { ExcuseDialog } from "../gradebook/dialogs";
 import { PaperEntryDialog } from "../paper/PaperEntryDialog";
-import { useMarkWrites } from "../gradebook/useMarkWrites";
+import { useStaffWrites } from "../gradebook/useStaffWrites";
 
 type Tab = (typeof RESULTS_TABS)[number];
 
@@ -179,7 +179,7 @@ export function ResultsView({
    * once the classroom is known, on a student's row (never a teacher's own
    * walk). The server decides who may: over a released grade, an owner.
    */
-  const marks = useMarkWrites(classroomId ?? "");
+  const marks = useStaffWrites(classroomId ?? "");
   const [excusing, setExcusing] = useState<ResultRow | null>(null);
   const markColumn = { kind: "evaluation" as const, activityId: evaluationId, title };
   const markStudent = (row: ResultRow) => ({ enrollmentId: row.enrollmentId, name: row.displayName });

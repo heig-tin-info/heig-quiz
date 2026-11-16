@@ -216,7 +216,10 @@ The word "group" was set aside: Groups already names the students' groups
     (product owner, 2026-11-16): changing the weight, the component or the
     counted flag of a RELEASED column while the mean is published asks
     "Change the students' means?" first, on every course, with or without
-    components; nothing else about the write changes.
+    components; nothing else about the write changes. The same dialog sits
+    behind one Gradebook row in an activity's own settings (an evaluation's
+    Format step, a project's draft form and Settings tab, §13) and in a
+    template's editor (§15), which says that its instances start with it.
 
 15. **A template's settings** (product owner, 2026-11-16): an evaluation
     template ([ADR-031](ADR-031-modeles-d-evaluation.md)) carries a
@@ -272,9 +275,7 @@ The word "group" was set aside: Groups already names the students' groups
     - **Promote stays open** (06 no. 25): nothing here pushes an instance's
       settings back into its template.
 
-**Planned, not built** (the product owner's later parts): the activities'
-settings rows over §13 and a template's over §15. Rules per component (a
-pass mark per component) stay out.
+**Out of scope**: rules per component (a pass mark per component).
 
 ## Consequences
 

@@ -243,6 +243,16 @@ const scenes = [
       await p.getByRole("tab", { name: /^(settings|réglages)$/i }).click();
       await p.getByRole("button", { name: /^(advanced options|options avancées)$/i }).click();
     } },
+  // ADR-131 §15: the template's Gradebook row, on a course with components, and its dialog.
+  { name: "template-editor-gradebook", role: "teacher", path: "/courses/c1/templates?components=1", act: async (p) => {
+      await openTemplate(p);
+      await p.getByRole("tab", { name: /^(settings|réglages)$/i }).click();
+    } },
+  { name: "template-editor-gradebook-edit", role: "teacher", path: "/courses/c1/templates?components=1", fold: true, act: async (p) => {
+      await openTemplate(p);
+      await p.getByRole("tab", { name: /^(settings|réglages)$/i }).click();
+      await p.getByRole("button", { name: /^(edit|modifier)$/i }).first().click();
+    } },
   { name: "template-editor-picker", role: "teacher", path: "/courses/c1/templates", fold: true, act: async (p) => {
       await openTemplate(p);
       await p.getByRole("button", { name: /^(add questions|ajouter des questions)$/i }).first().click();
@@ -403,6 +413,8 @@ const scenes = [
   },
   // ADR-127: the draft holds a date to come, so its one button is Schedule.
   { name: "project-draft", role: "teacher", path: "/projects/pj-draft?projects=1" },
+  // ADR-131 §13: the draft's Gradebook row on a course with components, and its dialog.
+  { name: "project-draft-gradebook-edit", role: "teacher", path: "/projects/pj-draft?projects=1&components=1", fold: true, act: (p) => p.getByRole("button", { name: /^(edit|modifier)$/i }).first().click() },
   // ADR-127: the scheduled project, its form kept, no primary, Publish now and Cancel schedule beside the title.
   { name: "project-scheduled", role: "teacher", path: "/projects/pj-scheduled?projects=1" },
   // ADR-106 §8: the grading screen of a project graded by criteria
@@ -811,6 +823,20 @@ const scenes = [
   { name: "eval-config-advanced", role: "teacher", path: "/evaluations/draft?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
   // Issue #86: running, the configuration is locked in the editor but for the title and the feedback.
   { name: "eval-config-timing-running", role: "teacher", path: "/evaluations/running?step=timing" },
+  // ADR-131 §13: the Gradebook row under the timing, from the draft on — on a
+  // course with components of the mean, and its dialog (the matrix's own).
+  { name: "eval-config-gradebook-components", role: "teacher", path: "/evaluations/draft?step=timing&components=1" },
+  { name: "eval-config-gradebook-edit", role: "teacher", path: "/evaluations/draft?step=timing&components=1", fold: true, act: (p) => p.getByRole("button", { name: /^(edit|modifier)$/i }).first().click() },
+  {
+    name: "eval-config-gradebook-filed",
+    role: "teacher",
+    path: "/evaluations/draft?step=timing&components=1",
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(edit|modifier)$/i }).first().click();
+      await p.getByLabel(/^(component|composante)$/i).selectOption({ label: "Cours" });
+      await p.getByRole("button", { name: /^(save|enregistrer)$/i }).click();
+    },
+  },
   // F-EVAL-15: the retake rule of an exercise, editable (a draft) and frozen
   // (the paused exercise, which students are sitting).
   { name: "eval-config-retakes", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=timing" },

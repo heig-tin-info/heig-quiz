@@ -6,6 +6,8 @@ import { modeChangeable, TEMPLATE_TABS, type CourseTab } from "@quiz/domain";
 
 import { isNotFound } from "../api";
 import { useCourses } from "../course/parts";
+import { useColumnSettingsRefresh } from "../gradebook/api";
+import { GradebookSettingRow } from "../gradebook/GradebookSettingRow";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
@@ -45,8 +47,8 @@ import { useTemplate } from "./api";
  * template's own routes.
  *
  * It is a thin page over the evaluation editor's own blocks — `ItemsStep`
- * with its picker and preview, `ConfigSettings` with its clock mode, retakes
- * and advanced options — handed a `templateTarget` instead of an
+ * with its picker and preview, `ConfigSettings` with its clock mode, retakes,
+ * Gradebook row (ADR-131 §15) and advanced options — handed a `templateTarget` instead of an
  * evaluation's. What a run has and a template does not is simply not passed:
  * no dates (a sentence stands in their place), no IP list, no launch step,
  * no dashboard, no roster, no duplicate, no staff attempt. The mode is a
@@ -113,6 +115,8 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
   const classrooms = course?.classrooms ?? [];
   const target = templateTarget(template.id, template.courseId);
   const patch = useConfigPatch(target);
+  const column = { templateId: template.id };
+  const refreshColumn = useColumnSettingsRefresh(column);
   const actions = useTemplateActions(template.courseId, classrooms, {
     onDeleted: () => navigate({ view: "course", id: template.courseId, tab: "templates" }),
   });
@@ -217,7 +221,14 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
               icon={Settings2}
               title={t("templates.settings")}
               description={t("templates.settings.desc")}
-              actions={<ModeControl config={template} changeable={modeChangeable(template.mode, "draft", 0)} patch={patch} />}
+              actions={
+                <ModeControl
+                  config={template}
+                  changeable={modeChangeable(template.mode, "draft", 0)}
+                  patch={patch}
+                  onChanged={refreshColumn}
+                />
+              }
             />
             <FormError error={patch.error} title={t("eval.saveFailed")} />
             <ConfigSettings
@@ -229,6 +240,8 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
               dates={() => (
                 <p className="self-center text-[13px] text-fg-muted">{t("templates.datesLater")}</p>
               )}
+              /* ADR-131 §15: the column its instances start with; a poll is never a template. */
+              gradebook={<GradebookSettingRow home={column} title={template.title} />}
             />
           </div>
         )}

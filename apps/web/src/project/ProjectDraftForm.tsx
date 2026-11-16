@@ -19,7 +19,7 @@ import { GroupSetBody } from "./ProjectGroupSet";
 import { CriteriaErrors, CriteriaRows, useGradingModeWrite } from "./ProjectCriteria";
 import { ProjectRail } from "./ProjectRail";
 import { DeadlineStrategyRow, GraceMinutesRow, GradingModeRow } from "./ProjectSettingRows";
-import { ProtectedFilesRow, useHandoutTree } from "./ProjectSettings";
+import { projectGradebookRow, ProtectedFilesRow, useHandoutTree } from "./ProjectSettings";
 import { WorkModeSetting, useWorkspace } from "./ProjectWorkspace";
 import { advancedCount, type WriteProject } from "./projectPage";
 import { DistributionRepo } from "./DistributionRepo";
@@ -62,8 +62,8 @@ function GroupModeSwitch({ project, disabled, write }: { project: ProjectDetail;
  * A DRAFT's page, and a SCHEDULED project's (ADR-127) (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2): before publication
  * one configures, after it one watches. A form in the order a teacher
  * decides: the work handed out (facts, fixed at creation), the publication
- * and the deadline (the three things a novice reads), the groups, then
- * everything else folded under "Advanced options"; the lifecycle rail stays
+ * and the deadline (the three things a novice reads), the groups, a graded
+ * project's Gradebook row, then everything else folded under "Advanced options"; the lifecycle rail stays
  * under them, so the checkpoints are set before Publish (F-PROJ-01). No
  * tiles, no table of repositories and no live workspace: nobody can accept a
  * draft, not even a staff seat (ADR-077 §1).
@@ -93,6 +93,7 @@ export function ProjectDraftForm({
   const changed = advancedCount(project);
   const grading = useGradingModeWrite(write);
   const can = (field: "gradingMode" | "graceMinutes" | "deadlineStrategy") => project.editable.includes(field);
+  const gradebook = projectGradebookRow(project);
 
   return (
     <div className="max-w-3xl space-y-8" data-testid="project-draft-form">
@@ -153,6 +154,9 @@ export function ProjectDraftForm({
           ) : null}
         </Card>
       </section>
+
+      {/* ADR-131 §13: the column's weight is decided here, before the students see the project; never folded with the advanced options. */}
+      {gradebook ? <Card className="px-4">{gradebook}</Card> : null}
 
       <Disclosure
         title={t("eval.advanced")}

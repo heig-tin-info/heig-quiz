@@ -1,0 +1,127 @@
+/*
+ * The staff's gradebook writes as a screen runs them (F-GBOOK-06, ADR-074):
+ * a refusal becomes a toast in words; a mark over a real grade, which the
+ * server refuses with `409 grade_exists`, asks the teacher before it is sent
+ * again with `override: true`; a column's setting that moves the means
+ * students read now asks first (ADR-131 §14). The gradebook's matrix, the
+ * results page's excuse (#969) and the Gradebook row (`GradebookSettingRow`,
+ * an activity's or a template's) share it, so all ask the same questions.
+ */
+import type { GradebookColumnPatch, GradebookColumnSettings, GradebookMarkPut } from "@quiz/contracts";
+import { countsInMean } from "@quiz/domain";
+
+import { refusedWith } from "../api";
+import { useConfirm } from "../confirm";
+import { useT } from "../i18n";
+import { useToast } from "../notify";
+import { gradebookRefusalMessage, useColumnSettingsPatch, useGradebookWrites, type ColumnHome, type ColumnRef } from "./api";
+import type { ColumnSettings } from "./ColumnSettingsFields";
+
+/** A column as a mark names it: its address, and its title for the question. */
+export type MarkColumn = ColumnRef & { title: string };
+
+/** A column as the question before a published mean moves weighs it: its title, where it counts now, whether it is released. */
+type LiveColumn = Pick<ColumnSettings, "counts" | "componentId"> & { title: string; released: boolean };
+
+/** A column of the matrix as its settings' write names it: its address, and what the question weighs. */
+type SettingsColumn = ColumnRef & LiveColumn;
+
+/** What a column's write weighs of its classroom: whether students see their mean, whether the course has components. */
+interface MeanFacts {
+  meanPublished: boolean;
+  hasComponents: boolean;
+}
+
+/** A roster line as a mark names it: its id, and the student's name for the question. */
+export interface MarkStudent {
+  enrollmentId: string;
+  name: string;
+}
+
+/** Runs one write; a refusal is a toast, in words. True when it went through. `onExists` takes over a `409 grade_exists` instead (the override's question). */
+function useAttempt() {
+  const t = useT();
+  const toast = useToast();
+  return async (write: () => Promise<unknown>, onExists?: () => Promise<boolean>): Promise<boolean> => {
+    try {
+      await write();
+      return true;
+    } catch (error) {
+      if (onExists && refusedWith(error, "grade_exists")) return onExists();
+      toast(gradebookRefusalMessage(error, t), "error");
+      return false;
+    }
+  };
+}
+
+/**
+ * Whether a column's settings may be written: one that moves the means
+ * students read now — a released column that counts before or after it, the
+ * mean published — asks first; nothing else does (ADR-131 §14).
+ */
+function useMeanQuestion() {
+  const t = useT();
+  const confirm = useConfirm();
+  return async (column: LiveColumn, patch: GradebookColumnPatch, book: MeanFacts): Promise<boolean> => {
+    const after = { counts: patch.counts ?? column.counts, componentId: patch.componentId === undefined ? column.componentId : patch.componentId };
+    const live =
+      column.released &&
+      book.meanPublished &&
+      (countsInMean(column.counts, column.componentId, book.hasComponents) ||
+        countsInMean(after.counts, after.componentId, book.hasComponents));
+    return (
+      !live ||
+      confirm({
+        title: t("gbook.liveMean.title"),
+        message: t("gbook.liveMean.body", { column: column.title }),
+        confirmLabel: t("gbook.liveMean.confirm"),
+      })
+    );
+  };
+}
+
+export function useStaffWrites(classroomId: string) {
+  const t = useT();
+  const confirm = useConfirm();
+  const attempt = useAttempt();
+  const ask = useMeanQuestion();
+  const writes = useGradebookWrites(classroomId);
+
+  /** A mark; over a real grade the server asks for `override`, and so do we. */
+  const putMark = (column: MarkColumn, student: MarkStudent, mark: GradebookMarkPut): Promise<boolean> =>
+    attempt(
+      () => writes.setMark(column, student.enrollmentId, mark),
+      async () =>
+        (await confirm({
+          title: t("gbook.override.title"),
+          message: t("gbook.override.body", { student: student.name, column: column.title }),
+          confirmLabel: t("gbook.override.confirm"),
+          danger: true,
+        })) && attempt(() => writes.setMark(column, student.enrollmentId, { ...mark, override: true })),
+    );
+
+  /** A column's settings from the matrix, asked first when they move a published mean. False when declined or refused. */
+  const patchColumn = async (column: SettingsColumn, patch: GradebookColumnPatch, book: MeanFacts): Promise<boolean> =>
+    (await ask(column, patch, book)) && attempt(() => writes.patchColumn(column, patch));
+
+  return { writes, attempt, putMark, patchColumn };
+}
+
+/**
+ * The Gradebook row's write (`GradebookSettingRow`), an activity's or a
+ * template's (`ColumnHome`): the matrix's question before a published mean
+ * moves — never for a template, which is not released —, then the write,
+ * its refusal in words. False when declined or refused.
+ */
+export function useColumnSettingsWrite(home: ColumnHome) {
+  const attempt = useAttempt();
+  const ask = useMeanQuestion();
+  const send = useColumnSettingsPatch(home);
+  const write = async (settings: GradebookColumnSettings, title: string, patch: GradebookColumnPatch): Promise<boolean> =>
+    (await ask(
+      { title, released: settings.released, counts: settings.counts, componentId: settings.componentId },
+      patch,
+      { meanPublished: settings.meanPublished, hasComponents: settings.components.length > 0 },
+    )) && attempt(() => send.patch(patch));
+  return { pending: send.pending, write };
+}

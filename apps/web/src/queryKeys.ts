@@ -14,6 +14,7 @@
  * factory against the literal it replaced, so a reshaped key fails there and
  * not as a stale screen.
  */
+import type { ColumnHome } from "./gradebook/api";
 
 // --- Session and application -------------------------------------------------
 
@@ -183,6 +184,11 @@ export const classroomGradebookKey = (classroomId: string) => [...gradebookRootK
 export const studentGradebookKey = (classroomId: string) => [...gradebookRootKey, "student", classroomId] as const;
 /** A course's components of the mean (ADR-131): under the same root, so a component's `gradebook` hint refreshes the list too. */
 export const courseComponentsKey = (courseId: string) => [...gradebookRootKey, "components", courseId] as const;
+/** One column's settings as a settings screen reads them: an activity's, a draft's included (ADR-131 §13), or a template's (§15). */
+export const columnSettingsKey = (home: ColumnHome) =>
+  "templateId" in home
+    ? ([...gradebookRootKey, "column", "template", home.templateId] as const)
+    : ([...gradebookRootKey, "column", home.classroomId, home.kind, home.activityId] as const);
 /** The caller's GitHub account link (F-GH-05): under `meKey`, refreshed with the session. */
 export const meGithubKey = ["me", "github"] as const;
 /** Both payloads of a classroom's journal: what a create, a use or a removal invalidates. */

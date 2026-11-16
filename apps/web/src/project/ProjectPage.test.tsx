@@ -15,6 +15,7 @@ import {
   makeRepo,
   makeRunList,
   PAST,
+  PROJECT_ID,
   row,
 } from "../test/project-fixtures";
 import { fail, makeQueryClient, mockFetch, noContent, ok, renderWithProviders, type RouteHandler } from "../test/render";
@@ -32,6 +33,9 @@ import { ProjectPage } from "./ProjectPage";
  */
 
 const ROOM = `/app/api/classrooms/${CLASSROOM_ID}`;
+/** The project's gradebook column, from the draft on (ADR-131 §13). */
+const COLUMN = `${ROOM}/gradebook/columns/project/${PROJECT_ID}`;
+const columnSettings = ok({ weight: 40, counts: true, componentId: null, released: false, meanPublished: false, components: [] });
 /** A group set of the classroom (ADR-070), a uuid as `ProjectPatch` takes one. */
 const SET = "0190d3c4-0000-7000-8000-00000000f001";
 
@@ -41,7 +45,7 @@ function routes(project: ProjectDetail | RouteHandler, extra: Record<string, Rou
     typeof project === "function" ? project : "status" in project ? project : ok(project);
   return mockFetch({
     [`GET ${BASE}`]: detail,
-    [`GET ${ROOM}`]: ok({ id: CLASSROOM_ID, name: "PRG1-2026", course: { id: "c1", code: "PRG1", name: "C" }, roster: [] }),
+    [`GET ${ROOM}`]: ok({ id: CLASSROOM_ID, name: "PRG1-2026", archivedAt: null, course: { id: "c1", code: "PRG1", name: "C" }, roster: [] }),
     // What the students receive from the project's first branch (ADR-119 §9).
     [`GET ${ROOM}/projects/sources/prg1-labo-02-pointeurs?branch=main`]: ok({
       name: "prg1-labo-02-pointeurs",
@@ -58,6 +62,7 @@ function routes(project: ProjectDetail | RouteHandler, extra: Record<string, Rou
       criteria: null,
     }),
     [`GET ${BASE}/checkpoints`]: ok([]),
+    [`GET ${COLUMN}`]: columnSettings,
     ...extra,
   });
 }
@@ -1566,6 +1571,44 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     expect(await within(rail).findByText("will not be sent")).toBeInTheDocument();
     expect(within(rail).queryByRole("button", { name: "Add" })).toBeNull();
     expect(within(rail).getByRole("button", { name: "Delete checkpoint late" })).toBeInTheDocument();
+  });
+});
+
+/*
+ * ADR-131 §13: a graded project's column, set from its draft's form and its
+ * Settings tab; the row itself is `GradebookSettingRow`'s.
+ */
+describe("the Gradebook row", () => {
+  it("draws a graded draft's column on its form, outside the advanced options", async () => {
+    routes(makeDraft());
+    renderPage();
+    const form = await screen.findByTestId("project-draft-form");
+    expect(await within(form).findByText("In the mean · weight 40 %")).toBeInTheDocument();
+    expect(within(form).getByRole("button", { name: /Advanced options/ })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("draws it on a published project's Settings tab", async () => {
+    routes(makeProject());
+    renderPage("en", "settings");
+    const settings = await screen.findByTestId("project-settings");
+    expect(await within(settings).findByText("In the mean · weight 40 %")).toBeInTheDocument();
+    expect(await within(settings).findByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+
+  it("draws none for a project not graded, nor reads its column", async () => {
+    const { calls } = routes(makeDraft({ gradingMode: "none" }));
+    renderPage();
+    await screen.findByTestId("project-draft-form");
+    expect(screen.queryByText("Gradebook")).toBeNull();
+    expect(calls.some((c) => c.url === COLUMN)).toBe(false);
+  });
+
+  it("draws none for an archived graded project, nor reads its column", async () => {
+    const { calls } = routes(makeProject({ archivedAt: PAST }));
+    renderPage("en", "settings");
+    await screen.findByTestId("project-settings");
+    expect(screen.queryByText("Gradebook")).toBeNull();
+    expect(calls.some((c) => c.url === COLUMN)).toBe(false);
   });
 });
 

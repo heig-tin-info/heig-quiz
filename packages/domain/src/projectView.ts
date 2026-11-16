@@ -60,6 +60,15 @@ export function projectGraded(mode: ProjectGradingModeName): boolean {
   return mode !== "none";
 }
 
+/**
+ * Whether a project has a gradebook column whatever its state, a draft
+ * included (ADR-131 §13): graded and not archived. The server's SQL
+ * (`columnable`, `project/gradebook.ts`) says the same.
+ */
+export function projectHasColumn(project: { gradingMode: ProjectGradingModeName; archivedAt: unknown }): boolean {
+  return projectGraded(project.gradingMode) && project.archivedAt === null;
+}
+
 /** F-PROJ-03: publish by hand (now), or by the ticker at the start. */
 export const PUBLISH_MODES = ["manual", "scheduled"] as const;
 export type PublishModeName = (typeof PUBLISH_MODES)[number];

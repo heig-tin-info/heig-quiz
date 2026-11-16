@@ -4177,7 +4177,7 @@ export const en = {
   "eval.saveFailed": "Could not save this setting.",
   "eval.locked": "A student has already started: the structure is frozen.",
   "eval.lockedRunning": "The evaluation is running: its configuration is locked until it closes.",
-  "eval.lockedRunning.body": "Only the title and the feedback policy can still change. To give more time, use the live dashboard.",
+  "eval.lockedRunning.body": "What is not greyed out can still change. To give more time, use the live dashboard.",
   "eval.questions.frozen": "This evaluation has been opened to students: its questions are frozen.",
   "eval.questions.frozen.body": "Questions can no longer be added, removed, reordered or re-weighted.",
   "eval.step.questions": "Questions",
@@ -6942,6 +6942,9 @@ export const en = {
   "gbook.liveMean.confirm": "Change now",
   "gbook.componentMean.studentHelp": "Weighted mean of this component's grades.",
   "gbook.mean.componentsStudentHelp": "Weighted mean of the components' means.",
+  "gbook.row": "Gradebook",
+  "gbook.row.summary": "{place} · weight {weight} %",
+  "gbook.row.loadError": "Could not load the gradebook settings.",
 
   // The training course (ADR-105): the home's offer, the menu entry, the card.
   "menu.training": "Training course",

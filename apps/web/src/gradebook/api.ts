@@ -13,7 +13,9 @@ import {
   GradebookComponentPatch,
   GradebookMarkPut,
   GradebookSettingsPatch,
+  GradebookTemplateColumnPatch,
   type GradebookColumn,
+  type GradebookColumnSettings,
   type GradebookComponents,
   type GradebookErrorCode,
   type GradebookStaff,
@@ -22,7 +24,7 @@ import {
 
 import { api, wordedRefusal } from "../api";
 import type { Dict, TFunction } from "../i18n";
-import { classroomGradebookKey, courseComponentsKey, gradebookRootKey, studentGradebookKey } from "../queryKeys";
+import { classroomGradebookKey, columnSettingsKey, courseComponentsKey, gradebookRootKey, studentGradebookKey } from "../queryKeys";
 
 /** `GET /classrooms/:id/gradebook`: the staff's table. */
 export function useStaffGradebook(classroomId: string) {
@@ -38,6 +40,60 @@ export function useStudentGradebook(classroomId: string) {
     queryKey: studentGradebookKey(classroomId),
     queryFn: () => api(`/app/api/student/classrooms/${classroomId}/gradebook`),
   });
+}
+
+/**
+ * Where a column's settings live (ADR-131 §13, §15): an activity of a
+ * classroom, a draft's included, or an evaluation template of a course,
+ * whose settings its instances start with.
+ */
+export type ColumnHome = ({ classroomId: string } & ColumnRef) | { templateId: string };
+
+/** The read and the write of a column's settings: `…/gradebook/columns/:kind/:activityId`, or `/templates/:id/gradebook`. */
+const settingsPath = (home: ColumnHome) =>
+  "templateId" in home
+    ? `/app/api/templates/${home.templateId}/gradebook`
+    : `/app/api/classrooms/${home.classroomId}/gradebook${columnPath(home)}`;
+
+/**
+ * One column's settings as a settings screen edits them, from the draft on,
+ * with the course's components and whether a change moves what the students
+ * read (never, for a template: `released` is false). Under the gradebook's
+ * root: its hint refreshes it.
+ */
+export function useColumnSettings(home: ColumnHome) {
+  return useQuery<GradebookColumnSettings>({
+    queryKey: columnSettingsKey(home),
+    queryFn: () => api(settingsPath(home)),
+  });
+}
+
+/** Reads a column's settings again: after a change of mode, whose defaults a column nobody set reads (ADR-131 §13, §15). */
+export function useColumnSettingsRefresh(home: ColumnHome) {
+  const qc = useQueryClient();
+  return () => void qc.invalidateQueries({ queryKey: columnSettingsKey(home) });
+}
+
+/**
+ * The write of a column's settings from a settings screen, on the read's own
+ * address: an activity's column `PATCH` (it answers the classroom's table),
+ * or a template's (`GradebookTemplateColumnPatch`, the narrow patch: no
+ * position, ADR-131 §15). Either way the settings are read again, and an
+ * activity's table too. The matrix writes through `useGradebookWrites`.
+ */
+export function useColumnSettingsPatch(home: ColumnHome) {
+  const qc = useQueryClient();
+  const schema = "templateId" in home ? GradebookTemplateColumnPatch : GradebookColumnPatch;
+  const send = useMutation({
+    mutationFn: (patch: GradebookTemplateColumnPatch) =>
+      api<unknown>(settingsPath(home), { method: "PATCH", body: JSON.stringify(schema.parse(patch)) }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: columnSettingsKey(home) }),
+        "classroomId" in home ? qc.invalidateQueries({ queryKey: classroomGradebookKey(home.classroomId) }) : null,
+      ]),
+  });
+  return { pending: send.isPending, patch: send.mutateAsync };
 }
 
 /** The CSV of the table (F-GBOOK-04): a plain download link, like the results'. */
@@ -82,8 +138,12 @@ export function useGradebookWrites(classroomId: string) {
     setMark: (column: ColumnRef, enrollmentId: string, mark: GradebookMarkPut) =>
       run(`${columnPath(column)}/marks/${enrollmentId}`, "PUT", GradebookMarkPut.parse(mark)),
     clearMark: (column: ColumnRef, enrollmentId: string) => run(`${columnPath(column)}/marks/${enrollmentId}`, "DELETE"),
-    patchColumn: (column: ColumnRef, patch: GradebookColumnPatch) =>
-      run(columnPath(column), "PATCH", GradebookColumnPatch.parse(patch)),
+    /** The table answered lists no draft: the column's own read is asked again (`useColumnSettings`). */
+    patchColumn: async (column: ColumnRef, patch: GradebookColumnPatch) => {
+      const table = await run(columnPath(column), "PATCH", GradebookColumnPatch.parse(patch));
+      await qc.invalidateQueries({ queryKey: columnSettingsKey({ classroomId, ...column }) });
+      return table;
+    },
     publishMean: (meanPublished: boolean) =>
       run("", "PATCH", GradebookSettingsPatch.parse({ meanPublished })),
   };

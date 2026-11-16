@@ -4146,7 +4146,7 @@ export const fr: Record<keyof Dict, string> = {
   "eval.saveFailed": "Ce réglage n'a pas pu être enregistré.",
   "eval.locked": "Un étudiant a déjà commencé : la structure est figée.",
   "eval.lockedRunning": "L'évaluation est en cours : sa configuration est verrouillée jusqu'à sa clôture.",
-  "eval.lockedRunning.body": "Seuls le titre et le réglage « Correction visible par les étudiants » peuvent encore changer. Pour donner du temps supplémentaire, passez par le tableau de bord.",
+  "eval.lockedRunning.body": "Les réglages non grisés restent modifiables. Pour donner du temps supplémentaire, passez par le tableau de bord.",
   "eval.questions.frozen": "Cette évaluation a été ouverte aux étudiants : ses questions sont figées.",
   "eval.questions.frozen.body": "Plus aucune question ne peut être ajoutée, retirée, déplacée ou repondérée.",
   "eval.step.questions": "Questions",
@@ -6895,6 +6895,9 @@ export const fr: Record<keyof Dict, string> = {
   "gbook.liveMean.confirm": "Modifier maintenant",
   "gbook.componentMean.studentHelp": "Moyenne pondérée des notes de cette composante.",
   "gbook.mean.componentsStudentHelp": "Moyenne pondérée des moyennes des composantes.",
+  "gbook.row": "Carnet de notes",
+  "gbook.row.summary": "{place} · pondération {weight} %",
+  "gbook.row.loadError": "Impossible de charger les réglages du carnet de notes.",
 
   // The training course (ADR-105): the home's offer, the menu entry, the card.
   "menu.training": "Cours d'initiation",

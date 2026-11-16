@@ -4,6 +4,7 @@ import {
   changedAfterRelease,
   draftStartsLater,
   projectBeforePublication,
+  projectHasColumn,
   projectIsLive,
   projectListDates,
   projectPhase,
@@ -238,5 +239,14 @@ describe("the project states' predicates (ADR-127)", () => {
     expect(draftStartsLater({ publishMode: "scheduled", startAt: ahead }, now)).toBe(true);
     expect(draftStartsLater({ publishMode: "scheduled", startAt: now }, now)).toBe(false);
     expect(draftStartsLater({ publishMode: "manual", startAt: ahead }, now)).toBe(false);
+  });
+});
+
+describe("projectHasColumn (ADR-131 §13)", () => {
+  it("is a graded project not archived, whatever its state", () => {
+    expect(projectHasColumn({ gradingMode: "auto", archivedAt: null })).toBe(true);
+    expect(projectHasColumn({ gradingMode: "criteria", archivedAt: null })).toBe(true);
+    expect(projectHasColumn({ gradingMode: "none", archivedAt: null })).toBe(false);
+    expect(projectHasColumn({ gradingMode: "auto", archivedAt: "2026-11-01T00:00:00.000Z" })).toBe(false);
   });
 });

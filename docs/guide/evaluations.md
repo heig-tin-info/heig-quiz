@@ -108,6 +108,10 @@ An **exercise** shows a **Several attempts** switch under the timing; an exam ne
 
 Every attempt is graded by the usual pass as soon as it ends; an answer that needs you (an open answer) waits in the grading panel, where each attempt of a student who retook the exercise is listed with its number (`· #2`). The live dashboard shows each student's latest attempt with an **attempt n** badge, and offers no **Reopen** there: the student tries again instead. Like the other rules of the evaluation, the setting is frozen once somebody has started.
 
+### Gradebook
+
+An exam or an exercise shows a **Gradebook** row under the timing card (an exercise's under **Several attempts**): whether it counts in the classroom's mean, in which component of the mean when the course has some, and its weight. **Edit** sets them from the draft on, with the same dialog as the classroom's **Grades** tab; an exam counts by default, an exercise does not. The row is not frozen with the rest: once the results are released and students see their mean, a change asks first. A template's **Settings** tab holds the same row: every evaluation made from the template starts with its settings, and **Save as template** keeps the evaluation's.
+
 ### Advanced options
 
 Everything else lives behind **Advanced options**, folded by default. A novice never has to open it to run a first quiz; the settings are, in order:

@@ -2,6 +2,8 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { GradebookColumnSettings } from "@quiz/contracts";
+
 import { PAGE_SIZE } from "../pool/filters";
 import { makeClassroomDetail } from "../test/fixtures";
 import {
@@ -31,6 +33,17 @@ import { EvaluationConfig } from "./EvaluationConfig";
 
 const CLASSROOM = id("classroom", 1);
 const QUESTION = id("question", 7);
+/** The evaluation's gradebook column, from the draft on (ADR-131 §13). */
+const URL_COLUMN = `/app/api/classrooms/${CLASSROOM}/gradebook/columns/evaluation/${EVALUATION_ID}`;
+const columnSettings = (over: Partial<GradebookColumnSettings> = {}): GradebookColumnSettings => ({
+  weight: 100,
+  counts: true,
+  componentId: null,
+  released: false,
+  meanPublished: false,
+  components: [],
+  ...over,
+});
 
 function routes(
   detail = makeEvaluationDetail(),
@@ -39,6 +52,7 @@ function routes(
   return {
     [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(detail),
     [`GET /app/api/classrooms/${CLASSROOM}`]: ok(makeClassroomDetail({ id: CLASSROOM })),
+    [`GET ${URL_COLUMN}`]: ok(columnSettings()),
     [`GET /app/api/evaluations/${EVALUATION_ID}/pools`]: ok([
       { id: id("pool", 1), name: "PRG1", visibility: "private", ownerId: "u", isPersonal: false, createdAt: detail.evaluation.createdAt, questionCount: 1 },
     ]),
@@ -643,7 +657,7 @@ describe("EvaluationConfig", () => {
       expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeEnabled();
       expect(screen.getByRole("switch", { name: /show the expected answer/i })).toBeEnabled();
       expect(screen.getByRole("switch", { name: /shuffle the questions/i })).toBeDisabled();
-      expect(screen.getByText(/feedback policy can still change/i)).toBeInTheDocument();
+      expect(screen.getByText(/what is not greyed out can still change/i)).toBeInTheDocument();
       // No access code any more (ADR-053).
       expect(screen.queryByRole("textbox", { name: /access code/i })).toBeNull();
 
@@ -840,6 +854,53 @@ describe("EvaluationConfig", () => {
       await screen.findByRole("button", { name: /^back to format$/i }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^go to /i })).toBeNull();
+  });
+
+  /*
+   * ADR-131 §13: the column's settings, in the Format step from the draft on,
+   * outside the configuration's lock; the row itself is `GradebookSettingRow`'s.
+   */
+  describe("the Gradebook row", () => {
+    const withMode = (mode: "exam" | "exercise" | "poll", over: Partial<ReturnType<typeof makeEvaluationDetail>> = {}) => {
+      const base = makeEvaluationDetail();
+      return makeEvaluationDetail({ ...over, evaluation: { ...base.evaluation, ...over.evaluation, mode } });
+    };
+    const timing = () =>
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, { route: "/evaluations/x?step=timing" });
+
+    it("draws a draft exam's column, in the mean by default", async () => {
+      mockFetch(routes(withMode("exam")));
+      timing();
+      expect(await screen.findByText("In the mean · weight 100 %")).toBeInTheDocument();
+      expect(screen.getByText("Gradebook")).toBeInTheDocument();
+    });
+
+    it("draws none for a poll, and reads nothing", async () => {
+      const { calls } = mockFetch(routes(withMode("poll")));
+      timing();
+      expect(await screen.findByRole("button", { name: /^advanced options$/i })).toBeInTheDocument();
+      expect(screen.queryByText("Gradebook")).toBeNull();
+      expect(calls.some((c) => c.url === URL_COLUMN)).toBe(false);
+    });
+
+    it("reads the column again once the mode changed, whose defaults it shows", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(
+        routes(withMode("exam"), { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(withMode("exercise")) }),
+      );
+      timing();
+      expect(await screen.findByText("In the mean · weight 100 %")).toBeInTheDocument();
+      await user.click(screen.getByRole("radio", { name: "Exercise" }));
+      await waitFor(() => expect(calls.filter((c) => c.method === "GET" && c.url === URL_COLUMN)).toHaveLength(2));
+    });
+
+    it("stays editable while the configuration is locked", async () => {
+      const released = withMode("exam", { editable: false, attemptCount: 12, evaluation: { ...makeEvaluationDetail().evaluation, state: "released" } });
+      mockFetch(routes(released));
+      timing();
+      expect(await screen.findByText(/the structure is frozen/i)).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "Edit" })).toBeEnabled();
+    });
   });
 });
 
