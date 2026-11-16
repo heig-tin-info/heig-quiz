@@ -33,7 +33,7 @@ Amended 2026-10-14 (product owner): an archived project has no column, for the s
 
 Amended 2026-10-29 (product owner, #969): a third stored mark, `excused`, which takes a cell out of every mean; the results page reads it and sets it. See *Amendment of 2026-10-29* at the end of the Decision.
 
-Amended 2026-11-16 by [ADR-131](ADR-131-composantes-de-la-moyenne.md) (product owner): §6, §7, §9 and the amendments of 2026-10-08 and 2026-10-13 — a course's components of the mean make the mean two-level; once the course has one, a counted column in no component counts in no mean, in every classroom; a student reads the name of each counting column's component always, its weight and means with the published mean only; the CSV gains the components; an archived gradebook's read-only covers the classroom's own writes, not the course's components.
+Amended 2026-11-16 by [ADR-131](ADR-131-composantes-de-la-moyenne.md) (product owner): §6, §7, §9 and the amendments of 2026-10-08 and 2026-10-13 — a course's components of the mean make the mean two-level; once the course has one, a counted column in no component counts in no mean, in every classroom; a student reads the name of each counting column's component always, its weight and means with the published mean only; the CSV gains the components; an archived gradebook's read-only covers the classroom's own writes, not the course's components. §6 too (ADR-131 §13): a column's settings are read and written from the activity's draft on, stored and inert until the column appears; a duplicate carries them.
 
 ## Context
 

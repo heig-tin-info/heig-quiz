@@ -5,10 +5,13 @@
  * classroom_archived`, re-read under a share lock in the write's own
  * transaction), and followed by a refresh hint.
  *
- * A column is addressed by its activity (`kind` + `activityId`), which must
- * be one the classroom's gradebook has (`gradebookEntries`): anything else
- * is the 404 of a missing column. A stored column row is materialized by the
- * first write that names it, with the defaults of its kind.
+ * A column is addressed by its activity (`kind` + `activityId`). A mark's
+ * must be one the classroom's gradebook has (`gradebookEntries`); a column's
+ * settings, any activity that may have them, from the draft on
+ * (`columnFactsOf`, ADR-131); anything else is the 404 of a missing column.
+ * A stored column row is materialized by the first write that names it, with
+ * the defaults of its kind; a draft's stays inert, every reader going
+ * through `gradebookEntries`, until it leaves the draft.
  *
  * A mark wins over what the activity gives the student, so putting one over
  * a REAL grade is deliberate: the request says `override: true`, or it is
@@ -24,40 +27,29 @@ import { and, eq, isNotNull } from "drizzle-orm";
 
 import type { GradebookColumnPatch, GradebookMarkParams, GradebookMarkPut, GradebookSettingsPatch } from "@quiz/contracts";
 
-import { audit, type AuditActor } from "../../audit.js";
+import { audit } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { classrooms, enrollments, gradebookColumns, gradebookMarks, gradebookSettings } from "../../db/schema.js";
-import type { GradebookEntry } from "../activity/kind.js";
-import { gradebookEntries } from "../activity/service.js";
+import type { GradebookEntry, GradebookEntryFacts } from "../activity/kind.js";
 import { notFoundError } from "../http.js";
 import {
   activityRef,
   claimedSeats,
+  columnFactsOf,
   columnOf,
   defaultSettings,
+  entryOf,
   meanPublished,
   settingsOf,
   type ColumnRow,
   type ColumnSettings,
+  type CourseWriteContext,
+  type RoomScope,
+  type WriteContext,
 } from "./columns.js";
 import { componentOfCourse } from "./components.js";
 import { GradebookError } from "./errors.js";
 import { gradebookChanged } from "./events.js";
-
-export interface WriteContext {
-  actor: AuditActor;
-  userId: string;
-  /** The caller is an owner of the course (ADR-068): `isCourseOwner`. */
-  owner: boolean;
-  now: Date;
-}
-
-/** The classroom and the course it is of, as the route's loader gives them. */
-export interface RoomScope {
-  room: { id: string };
-  course: { id: string };
-}
-
 
 /** The classroom read FOR SHARE: an archived one's gradebook is read-only. */
 async function lockClassroom(tx: Tx, classroomId: string): Promise<void> {
@@ -66,15 +58,8 @@ async function lockClassroom(tx: Tx, classroomId: string): Promise<void> {
   if (room.archivedAt !== null) throw new GradebookError("classroom_archived", "The classroom is archived: its gradebook is read-only");
 }
 
-/** The column the classroom's gradebook has for this activity, or the 404 of a missing one. */
-async function entryOf(db: Db, classroomId: string, kind: GradebookEntry["kind"], activityId: string): Promise<GradebookEntry> {
-  const entry = (await gradebookEntries(db, classroomId)).find((e) => e.kind === kind && e.activityId === activityId);
-  if (!entry) throw notFoundError("column");
-  return entry;
-}
-
-/** The stored column of an entry, made with its kind's defaults when it is the first write to name it. */
-async function ensureColumn(tx: Tx, classroomId: string, entry: GradebookEntry, ctx: WriteContext): Promise<ColumnRow> {
+/** The stored column of an activity, made with its kind's defaults when it is the first write to name it. */
+async function ensureColumn(tx: Tx, classroomId: string, entry: GradebookEntryFacts, ctx: CourseWriteContext): Promise<ColumnRow> {
   await tx
     .insert(gradebookColumns)
     .values({ id: randomUUID(), classroomId, ...activityRef(entry), ...defaultSettings(entry.mode), updatedBy: ctx.userId, updatedAt: ctx.now })
@@ -226,16 +211,18 @@ export async function clearMark(db: Db, scope: RoomScope, params: GradebookMarkP
 /**
  * `PATCH …/gradebook/columns/:kind/:activityId`: the weight, whether it
  * counts, its position, its component of the mean (F-GBOOK-06, ADR-131) — a
- * component of the classroom's course, else the 404 of a missing one.
+ * component of the classroom's course, else the 404 of a missing one. From
+ * the draft on: a draft's settings are stored, kept across a change of mode
+ * (ADR-092 §4), and its column takes them when it appears (ADR-131).
  */
 export async function patchColumn(
   db: Db,
   scope: RoomScope,
   params: Pick<GradebookMarkParams, "kind" | "activityId">,
   body: GradebookColumnPatch,
-  ctx: WriteContext,
+  ctx: CourseWriteContext,
 ): Promise<void> {
-  const entry = await entryOf(db, scope.room.id, params.kind, params.activityId);
+  const entry = await columnFactsOf(db, scope.room.id, params.kind, params.activityId);
   const changed = await db.transaction(async (tx) => {
     await lockClassroom(tx, scope.room.id);
     if (body.componentId) await componentOfCourse(tx, scope.course.id, body.componentId, "key share");
@@ -258,8 +245,33 @@ export async function patchColumn(
     });
     return true;
   });
-  // The students read a column's flag, its component and its place always, its weight with the published mean.
-  if (changed) gradebookChanged(scope.course.id, await studentUserIds(db, scope.room.id));
+  // The students read a listed column's flag, its component and its place always, its weight with the published
+  // mean; a column not listed yet (a draft) reaches none of them, so only the staff re-read.
+  if (changed) gradebookChanged(scope.course.id, entry.listed ? await studentUserIds(db, scope.room.id) : []);
+}
+
+/**
+ * A duplicated evaluation's column settings (ADR-131 §13): the copy
+ * `to.activityId`, just made in the classroom `to.room`, takes the weight
+ * and flag its source `fromId` has stored, and the component too when both
+ * are of the same course — another course has not got it; never the
+ * position, which orders the source's classroom. It is `patchColumn`, so
+ * the copy's row is stored even when it holds its mode's defaults (a stored
+ * flag survives a change of mode, ADR-092 §4), audited only when it differs
+ * from them. Nothing stored, nothing copied. The caller skips an archived
+ * target, whose gradebook is read-only.
+ */
+export async function copyColumnSettings(
+  db: Db,
+  fromId: string,
+  sourceCourseId: string,
+  to: RoomScope & { activityId: string },
+  ctx: CourseWriteContext,
+): Promise<void> {
+  const [source] = await db.select().from(gradebookColumns).where(eq(gradebookColumns.evaluationId, fromId));
+  if (!source) return;
+  const componentId = to.course.id === sourceCourseId ? source.componentId : null;
+  await patchColumn(db, to, { kind: "evaluation", activityId: to.activityId }, { weight: source.weight, counts: source.counts, componentId }, ctx);
 }
 
 /** `PATCH …/gradebook`: publish the mean to the students, or stop (F-GBOOK-05, F-GBOOK-06). */

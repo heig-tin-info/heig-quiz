@@ -16,10 +16,13 @@
  *   release's snapshot of their own seat alone, and no column of a project
  *   not released yet (F-GBOOK-05). A seat that never accepted has no score:
  *   an empty cell, which a staff mark fills (spec 06 no. 48).
+ * - `columnFacts` (ADR-131): the same rule in any state, a draft included,
+ *   for the column's settings.
  */
 import { projectGrade } from "@quiz/domain";
 
 import {
+  columnProject,
   gradebookProjects,
   projectLiveScores,
   studentProjectCards,
@@ -82,6 +85,10 @@ export const projectActivity: ActivityKind<"project"> = {
         );
       },
     }));
+  },
+  async columnFacts(db, classroomId, activityId) {
+    const found = await columnProject(db, classroomId, activityId);
+    return found === undefined ? null : { ...facts(found.project), listed: found.listed };
   },
   /** The Grades page's rule (`studentProjectGrades`); a released project without a repository is an empty cell a mark fills. */
   async studentGradebookEntries(db, userId, classroomId) {

@@ -76,6 +76,7 @@ export {
   parameterizedItems,
   studentEvaluationRows,
   gradebookEvaluations,
+  columnEvaluation,
   totalPointsByEvaluation,
   handoutPrints,
   countedItemsByEvaluation,

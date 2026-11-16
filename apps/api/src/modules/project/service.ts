@@ -69,6 +69,7 @@ export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";
 export {
+  columnProject,
   gradebookProjects,
   projectLiveScores,
   studentProjectGrades,

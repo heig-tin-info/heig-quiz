@@ -6,10 +6,12 @@
  * (weights, what counts, the published mean) and marks (an absence, a score)
  * stored here and nowhere else.
  *
- * - `table.ts`: the staff's table and the student's own cells (the student
- *   exit of the gradebook, spec 05 §5.7);
+ * - `table.ts`: the staff's table, one column's settings (from the draft on,
+ *   ADR-131 §13) and the student's own cells (the student exit of the
+ *   gradebook, spec 05 §5.7);
  * - `writes.ts`: the audited staff writes;
- * - `columns.ts`: what is stored beside the activities;
+ * - `columns.ts`: what is stored beside the activities, the writes'
+ *   contexts, and the lookups of a column by its activity;
  * - `components.ts`: the components of the mean of a course (ADR-131), the
  *   course owner's to write;
  * - the activities' columns and cells come through the `ActivityKind`
@@ -19,6 +21,7 @@
  * The CSV export (F-GBOOK-04, M5-03b) is `csv.ts`, served by `routes.ts` from
  * the staff's table.
  */
-export { staffGradebook, studentGradebook } from "./table.js";
-export { clearMark, patchColumn, patchSettings, setMark, type WriteContext } from "./writes.js";
-export { createComponent, deleteComponent, listComponents, updateComponent, type CourseWriteContext } from "./components.js";
+export { columnSettings, staffGradebook, studentGradebook } from "./table.js";
+export { clearMark, copyColumnSettings, patchColumn, patchSettings, setMark } from "./writes.js";
+export type { CourseWriteContext, RoomScope, WriteContext } from "./columns.js";
+export { createComponent, deleteComponent, listComponents, updateComponent } from "./components.js";

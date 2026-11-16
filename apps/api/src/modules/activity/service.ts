@@ -9,6 +9,7 @@
 import { and, countDistinct, eq, inArray } from "drizzle-orm";
 
 import type {
+  ActivityKindName,
   PracticeCard,
   ActivityStats,
   ActivitySummary,
@@ -27,7 +28,7 @@ import { hasStudentGroupSets, studentGroupSetCards } from "../group/service.js";
 import { hasJournal } from "../journal/service.js";
 import { studentClassroomHeader } from "../org/service.js";
 import { evaluationActivity } from "./evaluation.js";
-import type { GradebookEntry, StudentGradebookEntry, StudentScope } from "./kind.js";
+import type { GradebookColumnFacts, GradebookEntry, StudentGradebookEntry, StudentScope } from "./kind.js";
 import { projectActivity } from "./project.js";
 
 const KINDS = [evaluationActivity, projectActivity] as const;
@@ -158,6 +159,22 @@ export async function studentClassroomPage(
  */
 export async function gradebookEntries(db: Db, classroomId: string): Promise<GradebookEntry[]> {
   return (await Promise.all(KINDS.map((k) => k.gradebookEntries(db, classroomId)))).flat();
+}
+
+/**
+ * The facts of the activity `kind`/`activityId` of a classroom whose
+ * gradebook column's settings may be written and read, draft included
+ * (ADR-131), or null: the kind's own rule. The staff payload: the classroom
+ * is loaded through `staffAccess` first.
+ */
+export async function gradebookColumnFacts(
+  db: Db,
+  classroomId: string,
+  kind: ActivityKindName,
+  activityId: string,
+): Promise<GradebookColumnFacts | null> {
+  const owner = KINDS.find((k) => k.kind === kind);
+  return owner === undefined ? null : owner.columnFacts(db, classroomId, activityId);
 }
 
 /**
