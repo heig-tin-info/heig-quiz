@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -80,6 +80,18 @@ describe("the station page of a project", () => {
     // The server's deadline, two hours away.
     expect(screen.getByRole("timer")).toHaveAccessibleName(/^(1\sh\s59|2\sh\s00)\smin\s\d\d\ss\sremaining$/);
     expect(screen.getByRole("button", { name: "Leave this station" })).toBeInTheDocument();
+  });
+
+  it("says the workspace is opening until the frame's page has loaded", async () => {
+    mockFetch({ ...STATION, [START]: ok({ url: PORTAL }) });
+    renderWithProviders(<StationProjectPage id="p1" />);
+    // Before the launch answers, and over the frame while the portal starts the workspace.
+    expect(await screen.findByText("Opening your workspace…")).toBeInTheDocument();
+    await waitFor(() => expect(frame()).not.toBeNull());
+    expect(screen.getByText("Opening your workspace…")).toBeInTheDocument();
+    fireEvent.load(frame()!);
+    expect(screen.queryByText("Opening your workspace…")).toBeNull();
+    expect(frame()).toHaveAttribute("src", PORTAL);
   });
 
   it("re-attests and launches again when the server finds the station's check stale", async () => {
