@@ -195,8 +195,8 @@ const EnvSchema = z.object({
    * 2026-11-15, point 1), off by default: read only through
    * {@link kioskProjectsOn}. It gates NEW choices of a level that accepts a
    * station; a project that already holds one keeps it, and its stations
-   * keep working. The kill switch stays `KIOSK_ATTESTATION=off`. Turned on
-   * in production only after project proof B and proof K.
+   * keep working. The kill switch stays `KIOSK_ATTESTATION=off`. On in
+   * production since 2026-11-15, the owner's decision (ADR-089, Status).
    */
   KIOSK_PROJECTS: flag(),
   /**
