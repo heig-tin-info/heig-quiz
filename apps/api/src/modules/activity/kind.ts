@@ -27,6 +27,7 @@ import type {
 import type { CellOutcome, StudentActivityGroup } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
+import type { EvaluationHome } from "../evaluation/service.js";
 import type { Caller } from "../guards.js";
 
 /** The member of the union a kind lists. */
@@ -154,10 +155,11 @@ export interface ActivityKind<K extends ActivityKindName> {
    * facts, or null — the rule of `gradebookEntries` without its state
    * exclusion. The settings exist from the draft on; the column, its cells
    * and its place in the mean wait for `gradebookEntries`, which `listed`
-   * says it is in. The staff payload: the classroom is loaded through
-   * `staffAccess` first.
+   * says it is in. With a course for home, a template of this kind of the
+   * course (§15), never listed. The staff payload: the classroom, or the
+   * template, is loaded through `staffAccess` first.
    */
-  columnFacts(db: Db, classroomId: string, activityId: string): Promise<GradebookColumnFacts | null>;
+  columnFacts(db: Db, home: EvaluationHome, activityId: string): Promise<GradebookColumnFacts | null>;
 
   /**
    * The caller's own columns and cells of this kind in a classroom (M5-03a,

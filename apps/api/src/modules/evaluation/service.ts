@@ -35,7 +35,7 @@
  *     but for the title, the access control and the feedback policy (#86,
  *     `configLock`).
  */
-export type { EvaluationRecord, DbOrTx } from "./shared.js";
+export type { EvaluationHome, EvaluationRecord, DbOrTx } from "./shared.js";
 export {
   isLegalTransition,
   guardTransition,

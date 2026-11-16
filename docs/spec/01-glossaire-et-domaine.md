@@ -150,7 +150,7 @@ erDiagram
     USER ||--o{ PROJECT_REPO : accepts
     PROJECT_GROUP |o--o| PROJECT_REPO : works_in
     PROJECT_REPO ||--o{ GRADE_RUN : runs
-    CLASSROOM ||--o{ GRADEBOOK_COLUMN : grades
+    CLASSROOM |o--o{ GRADEBOOK_COLUMN : grades
     COURSE ||--o{ GRADEBOOK_COMPONENT : weighs
     GRADEBOOK_COMPONENT |o--o{ GRADEBOOK_COLUMN : holds
 ```
@@ -177,7 +177,7 @@ erDiagram
 - **PROJECT**: `id`, `classroom_id`, `name`, `slug`, `state` `draft` / `published` / `locked`, `start_at`, `deadline_at`, `grace_minutes`, the source and distribution repositories, `source_strategy` `whole` / `squash`, `deadline_strategy` `lock` / `commit`, `grading_mode` `auto` / `none`, `publish_mode`, `branches`, `protected_files`, `group_mode`, `group_set_id`, `grading_scale`, `deadline_applied_at`, `released_at`, `archived_at`.
 - **PROJECT_REPO**: `project_id`, `user_id` (who accepted), `group_id` for a group repository, `github_repo_id`, `full_name`, `provision_status`, `invitation_status`, its own `deadline_at` (null: the project's), `deadline_applied_at`, `frozen_at`, `locked_at` (and `archived_at` when the lock fell back to archiving), the staff's hand on the lock (`staff_lock`), `ci_status`, the current, frozen and review grade runs, the teacher's points and comment, `deleted_at`.
 - **GRADE_RUN**: `repo_id`, `workflow_run_id`, `run_attempt`, `head_sha`, `conclusion`, `points`, `max`, `parse_status`, `after_deadline`, `completed_at`.
-- **GRADEBOOK_COLUMN**: `classroom_id`, the activity, `counts`, `weight`, `component_id` (none: null); the classroom's `mean_published`.
+- **GRADEBOOK_COLUMN**: `classroom_id`, the activity, `counts`, `weight`, `component_id` (none: null); the classroom's `mean_published`. No classroom for an evaluation template's settings, which its instances inherit (ADR-131 §15).
 - **GRADEBOOK_COMPONENT**: `course_id`, `name` (unique in the course whatever its case), `weight`, `created_at` (the order) (ADR-131).
 - **DRILL_CARD**: `user_id`, `question_id`, FSRS parameters `stability`, `difficulty`, `due_at`, `reps`, `lapses`, `last_review_at`; one per student and question, created at the release of an exam or the hand-in of an exercise (ADR-041). Its reviews record the rating, the active time and the device class.
 

@@ -25,6 +25,11 @@
  * missing course); reading them is any member's, writing them the owner's
  * (`403 owner_required` from the loader, before the body; ADR-068 §3). Each
  * write answers the list.
+ *
+ * An evaluation TEMPLATE's settings (ADR-131 §15) load the template through
+ * its course's `staffAccess` (`loadTemplate`, as its editor: anyone off the
+ * staff gets the 404 of a missing template); any member reads and writes
+ * them (F-EVAL-25). The write answers the settings.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -37,6 +42,7 @@ import {
   GradebookMarkParams,
   GradebookMarkPut,
   GradebookSettingsPatch,
+  GradebookTemplateColumnPatch,
   IdParam,
 } from "@quiz/contracts";
 
@@ -47,6 +53,7 @@ import {
   accessibleCourse,
   callerOf,
   isCourseOwner,
+  loadTemplate,
   readableClassroom,
   teacherGuard,
   withCourseRole,
@@ -188,6 +195,34 @@ export async function gradebookPlugin(app: FastifyInstance) {
     teacher({ params: GradebookComponentParams, load: ownedCourse }, async ({ req, now, params, scope: course }) => {
       await service.deleteComponent(app.db, course.id, params.componentId, courseCtx(req, now));
       return service.listComponents(app.db, course.id);
+    }),
+  );
+
+  // --- An evaluation template's settings, which its instances inherit (ADR-131 §15) ---
+
+  const onTemplate = { params: IdParam, load: (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => loadTemplate(app, req, reply, p.id) };
+  /** A template's column: its course with no classroom, addressed by the template itself. */
+  const templateColumn = ({ template, course }: { template: { id: string }; course: { id: string } }) => ({
+    scope: { room: null, course },
+    params: { kind: "evaluation" as const, activityId: template.id },
+  });
+
+  app.get(
+    "/app/api/templates/:id/gradebook",
+    { preHandler: requireTeacher },
+    teacher(onTemplate, async ({ scope }) => {
+      const column = templateColumn(scope);
+      return service.columnSettings(app.db, column.scope, column.params);
+    }),
+  );
+
+  app.patch(
+    "/app/api/templates/:id/gradebook",
+    { preHandler: requireTeacher },
+    teacher({ ...onTemplate, body: GradebookTemplateColumnPatch }, async ({ req, now, body, scope }) => {
+      const column = templateColumn(scope);
+      await service.patchColumn(app.db, column.scope, column.params, body, courseCtx(req, now));
+      return service.columnSettings(app.db, column.scope, column.params);
     }),
   );
 

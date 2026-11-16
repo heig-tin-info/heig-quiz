@@ -64,7 +64,7 @@ import { first } from "../../db/query.js";
 import { conceptsOf } from "../concept/service.js";
 import { poolRolesOf } from "../pool/service.js";
 import { exportsOf, printRefusal } from "./print.js";
-import type { EvaluationRecord, ItemRecord, DbOrTx } from "./shared.js";
+import type { EvaluationHome, EvaluationRecord, ItemRecord, DbOrTx } from "./shared.js";
 import type { Caller } from "../guards.js";
 
 /**
@@ -427,9 +427,17 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
     );
 }
 
-/** The exams and exercises of a classroom, whatever their state: those that may have a gradebook column — a poll never has one. */
-const withColumn = (classroomId: string): SQL =>
-  and(eq(evaluations.classroomId, classroomId), inArray(evaluations.mode, ["exam", "exercise"]))!;
+/**
+ * The exams and exercises of a classroom, whatever their state: those that
+ * may have a gradebook column — a poll never has one. With a course instead,
+ * its templates (ADR-131 §15): the rows whose `course_id` is set are exactly
+ * those (`evaluations_home_ck`), drafts forever, so never listed.
+ */
+const withColumn = (home: EvaluationHome): SQL =>
+  and(
+    "classroomId" in home ? eq(evaluations.classroomId, home.classroomId) : eq(evaluations.courseId, home.courseId),
+    inArray(evaluations.mode, ["exam", "exercise"]),
+  )!;
 
 /** Whether the gradebook lists such an evaluation's column ({@link gradebookEvaluations}): no draft. */
 const listedColumn = (): SQL => ne(evaluations.state, "draft");
@@ -443,25 +451,26 @@ export function gradebookEvaluations(db: Db, classroomId: string): Promise<Evalu
   return db
     .select()
     .from(evaluations)
-    .where(and(withColumn(classroomId), listedColumn()));
+    .where(and(withColumn({ classroomId }), listedColumn()));
 }
 
 /**
- * An exam or exercise of the classroom, whatever its state, draft included:
- * one whose gradebook column's settings may be written and read (ADR-131
- * §13), and whether {@link gradebookEvaluations} lists its column yet.
- * Undefined for a poll, another classroom's, a missing one. The caller has
- * loaded the classroom through `staffAccess`.
+ * An exam or exercise of the classroom, whatever its state, draft included —
+ * or a template of the course (ADR-131 §15): one whose gradebook column's
+ * settings may be written and read (ADR-131 §13), and whether
+ * {@link gradebookEvaluations} lists its column yet (never a template's).
+ * Undefined for a poll, another classroom's or course's, a missing one. The
+ * caller has loaded the classroom or the template through `staffAccess`.
  */
 export async function columnEvaluation(
   db: Db,
-  classroomId: string,
+  home: EvaluationHome,
   evaluationId: string,
 ): Promise<{ evaluation: EvaluationRecord; listed: boolean } | undefined> {
   const [row] = await db
     .select({ evaluation: evaluations, listed: sql<boolean>`(${listedColumn()})` })
     .from(evaluations)
-    .where(and(withColumn(classroomId), eq(evaluations.id, evaluationId)));
+    .where(and(withColumn(home), eq(evaluations.id, evaluationId)));
   return row;
 }
 

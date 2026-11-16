@@ -11,7 +11,10 @@
  * (`columnFactsOf`, ADR-131); anything else is the 404 of a missing column.
  * A stored column row is materialized by the first write that names it, with
  * the defaults of its kind; a draft's stays inert, every reader going
- * through `gradebookEntries`, until it leaves the draft.
+ * through `gradebookEntries`, until it leaves the draft. A template's has no
+ * classroom and stays inert for good (ADR-131 §15): the same write, with no
+ * classroom to lock, audited on the template, hinting nobody — a template
+ * has no SSE topic.
  *
  * A mark wins over what the activity gives the student, so putting one over
  * a REAL grade is deliberate: the request says `override: true`, or it is
@@ -42,6 +45,7 @@ import {
   meanPublished,
   settingsOf,
   type ColumnRow,
+  type ColumnScope,
   type ColumnSettings,
   type CourseWriteContext,
   type RoomScope,
@@ -58,8 +62,8 @@ async function lockClassroom(tx: Tx, classroomId: string): Promise<void> {
   if (room.archivedAt !== null) throw new GradebookError("classroom_archived", "The classroom is archived: its gradebook is read-only");
 }
 
-/** The stored column of an activity, made with its kind's defaults when it is the first write to name it. */
-async function ensureColumn(tx: Tx, classroomId: string, entry: GradebookEntryFacts, ctx: CourseWriteContext): Promise<ColumnRow> {
+/** The stored column of an activity, made with its kind's defaults when it is the first write to name it; no classroom for a template's. */
+async function ensureColumn(tx: Tx, classroomId: string | null, entry: GradebookEntryFacts, ctx: CourseWriteContext): Promise<ColumnRow> {
   await tx
     .insert(gradebookColumns)
     .values({ id: randomUUID(), classroomId, ...activityRef(entry), ...defaultSettings(entry.mode), updatedBy: ctx.userId, updatedAt: ctx.now })
@@ -214,19 +218,38 @@ export async function clearMark(db: Db, scope: RoomScope, params: GradebookMarkP
  * component of the classroom's course, else the 404 of a missing one. From
  * the draft on: a draft's settings are stored, kept across a change of mode
  * (ADR-092 §4), and its column takes them when it appears (ADR-131).
+ *
+ * `PATCH /templates/:id/gradebook` too, `scope.room` null: a template's
+ * settings (ADR-131 §15), kept across its change of mode the same way, and
+ * no part of its revision — the template's own writes compare its content,
+ * which these are not.
  */
 export async function patchColumn(
   db: Db,
-  scope: RoomScope,
+  scope: ColumnScope,
   params: Pick<GradebookMarkParams, "kind" | "activityId">,
   body: GradebookColumnPatch,
   ctx: CourseWriteContext,
 ): Promise<void> {
-  const entry = await columnFactsOf(db, scope.room.id, params.kind, params.activityId);
+  const entry = await columnFactsOf(db, scope, params.kind, params.activityId);
+  const room = scope.room;
+  // A classroom's column: its classroom locked (an archived gradebook is read-only), then the hint — the
+  // students read a listed column's flag, its component and its place always, its weight with the
+  // published mean; a column not listed yet (a draft) reaches none of them, so only the staff re-read.
+  // A template's (ADR-131 §15): no classroom to lock, and no hint, since it reaches no gradebook and its
+  // screens listen to none.
+  const { lock, hint } = room
+    ? {
+        lock: (tx: Tx) => lockClassroom(tx, room.id),
+        hint: async () => gradebookChanged(scope.course.id, entry.listed ? await studentUserIds(db, room.id) : []),
+      }
+    : { lock: async () => {}, hint: async () => {} };
+  // A template's trail is the template's own, beside its `template.*` entries.
+  const subject = room ? { subjectType: "classroom", subjectId: room.id } : { subjectType: "evaluation", subjectId: entry.activityId };
   const changed = await db.transaction(async (tx) => {
-    await lockClassroom(tx, scope.room.id);
+    await lock(tx);
     if (body.componentId) await componentOfCourse(tx, scope.course.id, body.componentId, "key share");
-    const column = await ensureColumn(tx, scope.room.id, entry, ctx);
+    const column = await ensureColumn(tx, room?.id ?? null, entry, ctx);
     const before: ColumnSettings = settingsOf(column, entry.mode);
     const after: ColumnSettings = {
       weight: body.weight ?? before.weight,
@@ -239,33 +262,32 @@ export async function patchColumn(
     await audit(tx, {
       ...ctx.actor,
       action: "gradebook.column_updated",
-      subjectType: "classroom",
-      subjectId: scope.room.id,
+      ...subject,
       payload: { activityKind: entry.kind, activityId: entry.activityId, before, after },
     });
     return true;
   });
-  // The students read a listed column's flag, its component and its place always, its weight with the published
-  // mean; a column not listed yet (a draft) reaches none of them, so only the staff re-read.
-  if (changed) gradebookChanged(scope.course.id, entry.listed ? await studentUserIds(db, scope.room.id) : []);
+  if (changed) await hint();
 }
 
 /**
- * A duplicated evaluation's column settings (ADR-131 §13): the copy
- * `to.activityId`, just made in the classroom `to.room`, takes the weight
- * and flag its source `fromId` has stored, and the component too when both
- * are of the same course — another course has not got it; never the
- * position, which orders the source's classroom. It is `patchColumn`, so
- * the copy's row is stored even when it holds its mode's defaults (a stored
- * flag survives a change of mode, ADR-092 §4), audited only when it differs
- * from them. Nothing stored, nothing copied. The caller skips an archived
- * target, whose gradebook is read-only.
+ * An evaluation's column settings carried to its copy (ADR-131 §13, §15): a
+ * duplicate, an instance of a template, a template saved from an
+ * evaluation. The copy `to.activityId`, just made in `to.room` — or in the
+ * course, `to.room` null, for a template — takes the weight and flag its
+ * source `fromId` (an evaluation or a template alike) has stored, and the
+ * component too when both are of the same course — another course has not
+ * got it; never the position, which orders the source's classroom. It is
+ * `patchColumn`, so the copy's row is stored even when it holds its mode's
+ * defaults (a stored flag survives a change of mode, ADR-092 §4), audited
+ * only when it differs from them. Nothing stored, nothing copied. The caller
+ * skips an archived target, whose gradebook is read-only.
  */
 export async function copyColumnSettings(
   db: Db,
   fromId: string,
   sourceCourseId: string,
-  to: RoomScope & { activityId: string },
+  to: ColumnScope & { activityId: string },
   ctx: CourseWriteContext,
 ): Promise<void> {
   const [source] = await db.select().from(gradebookColumns).where(eq(gradebookColumns.evaluationId, fromId));

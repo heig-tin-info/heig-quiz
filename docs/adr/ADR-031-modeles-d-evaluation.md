@@ -20,7 +20,11 @@ shows in a pull's summary. The `threshold` grade scale a template could hold is 
 place (`mode` joins `TemplatePatch`) and moves the revision; an instance keeps its own mode, a pull never
 carrying it. **Amended 2026-10-27 (product owner):** the `presentation` and `showProgressBar` settings are
 withdrawn (F-EVAL-08): the player is always one question per screen, so §3's "settings in full" no longer
-holds a presentation; a stored row's old keys are dropped when its settings are read.
+holds a presentation; a stored row's old keys are dropped when its settings are read. **Amended by
+[ADR-131](ADR-131-composantes-de-la-moyenne.md) §15 (2026-11-16):** a template also holds its gradebook
+settings — weight, counted flag, component of the mean —, stored by the `gradebook` module and outside its
+content: they do not move the revision (§4), an instance inherits them when it is made, a pull never
+carries them, and *Save as template* keeps the source's.
 
 ## Context
 
@@ -126,7 +130,8 @@ Everything except `opens_at`, `closes_at`, `access_code` (a poll's only, since
 ADR-053) and `ip_allowlist`: the items (frozen versions, points, order,
 milestones), `settings` in full — timing kind, lobby, navigation, presentation,
 shuffling, Safe Exam Browser, fullscreen, visibility log, retakes, negative
-marking — `grading_scale`, `feedback_policy`, `mcq_policy` and `duration_s`. An
+marking — `grading_scale`, `feedback_policy`, `mcq_policy` and `duration_s`
+(and, outside that content, its gradebook settings: ADR-131 §15). An
 instance whose timing is `deadline` is born without dates, and the existing
 `timing_incomplete` guard (F-EVAL-04, #76) keeps it closed until the teacher
 fills them.

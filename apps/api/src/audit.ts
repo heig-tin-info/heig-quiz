@@ -257,7 +257,10 @@ export type AuditAction =
    * and `after` (`{ weight, counts, position, componentId }`, the weight in
    * whole percent since #545, the component since ADR-131), a draft's
    * included, and a duplicate's settings copied from its source (`before`
-   * its mode's defaults; ADR-131). `mean_published` /
+   * its mode's defaults; ADR-131). An evaluation template's settings
+   * (ADR-131 §15) are the one `column_updated` whose subject is not the
+   * classroom: subject the template (`evaluation`), as its `template.*`
+   * entries, written or carried by "save as template". `mean_published` /
    * `mean_unpublished`: no payload. Never a grade of another student.
    */
   | "gradebook.mark_set"
