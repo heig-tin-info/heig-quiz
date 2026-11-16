@@ -1,0 +1,2 @@
+ALTER TABLE "gradebook_columns" ALTER COLUMN "classroom_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "gradebook_columns" ADD CONSTRAINT "gradebook_columns_home" CHECK ("gradebook_columns"."classroom_id" IS NOT NULL OR "gradebook_columns"."evaluation_id" IS NOT NULL);

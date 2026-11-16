@@ -7,8 +7,10 @@ Accepted (2026-11-16, product owner).
 Scope: the components of the mean of a course (fr « composantes »), which
 column of a classroom's gradebook counts toward a mean, the two-level mean,
 what a student reads of them, the CSV, and who writes them; a column's
-settings from the activity's draft on (§13). F-GBOOK-07 (new); F-GBOOK-01,
--02, -04, -05, -06, F-ORG-12, F-ORG-14, F-EVAL-14 amended.
+settings from the activity's draft on (§13); an evaluation template's
+settings, which its instances inherit (§15). F-GBOOK-07 (new); F-GBOOK-01,
+-02, -04, -05, -06, F-ORG-12, F-ORG-14, F-EVAL-14, -18, -24, -25, -26
+amended.
 
 Relations: amends [ADR-074](ADR-074-carnet-de-notes-marques-stockees.md) §6
 (which columns count), §7 (the mean), §9 (what an archived gradebook's
@@ -17,8 +19,10 @@ means, the CSV) and its amendment of 2026-10-13 (what the student reads
 before the mean is published); amends
 [ADR-068](ADR-068-roles-de-l-equipe-du-cours.md) §3 (three owner-only
 routes); amends ADR-074 §6 (a column's settings exist from the draft on,
-§13). Depends on ADR-068 §2 (reach, then role) and ADR-074 §8 (the
-gradebook reads, it never grades); follows
+§13); amends [ADR-031](ADR-031-modeles-d-evaluation.md) §3 (what a template
+holds: its gradebook settings too, outside its revision, §15). Depends on
+ADR-068 §2 (reach, then role) and ADR-074 §8 (the gradebook reads, it never
+grades); follows
 [ADR-092](ADR-092-changer-le-mode-d-une-evaluation.md) §4 (a stored flag
 across a change of mode).
 
@@ -214,10 +218,61 @@ The word "group" was set aside: Groups already names the students' groups
     "Change the students' means?" first, on every course, with or without
     components; nothing else about the write changes.
 
+15. **A template's settings** (product owner, 2026-11-16): an evaluation
+    template ([ADR-031](ADR-031-modeles-d-evaluation.md)) carries a
+    column's weight, counted flag and component, so that the evaluations a
+    course makes from its templates each year arrive in the mean — without
+    it, a course with components would see every new instance left out of
+    every mean (§4) until someone filed it.
+    - **Storage.** A `gradebook_columns` row with no classroom
+      (`classroom_id` nullable since migration 0139;
+      `gradebook_columns_home`: only an evaluation's row may lack one, a
+      project having no template). The component's foreign key, `inUse` and
+      `copyColumnSettings` hold unchanged: a component a template holds is
+      **in use** (`409 component_in_use`). No reader lists the row: the
+      tables read `storedColumns` by classroom, the student's rows join a
+      column on their classroom's evaluations, and a mark's composite key
+      carries a classroom that is never null, so no mark hangs on it.
+      Deleting the template — or its course — takes it along (cascade).
+    - **Which template.** `ActivityKind.columnFacts` takes a home, a
+      classroom or a course: with a course, the evaluation kind answers a
+      template of that course (a draft forever, so never `listed`), the
+      project kind nothing.
+    - **Routes**, in the `gradebook` module, the template loaded by
+      `loadTemplate` (its course's `staffAccess`: anyone else gets the 404
+      of a missing template), any member's (F-EVAL-25): `GET
+      /app/api/templates/:id/gradebook` answers `GradebookColumnSettings` —
+      the effective settings, the course's components, `released` and
+      `meanPublished` false, which a template is: one payload for every
+      settings screen, whose warnings stay quiet; `PATCH` takes
+      `GradebookTemplateColumnPatch` — weight, counts, componentId, strict:
+      no position, which orders a classroom's gradebook —, a component of
+      the template's course or the 404 of a missing one, and answers the
+      settings. The write is `patchColumn` itself with no classroom to lock:
+      audited as `gradebook.column_updated`, subject the template
+      (`evaluation`, beside its `template.*` entries); no hint, since a
+      template has no topic (ADR-031) and no student reads it.
+    - **Not the template's content.** These settings are the gradebook's: a
+      write does not move the revision (ADR-031 §4), and a pull (F-EVAL-26),
+      which replaces the questions only, never carries them. An instance's
+      settings are its own from its instantiation; there is nothing to pull.
+    - **Inheritance**, by `copyColumnSettings` exactly as a duplicate's
+      (§13), called by the route handler after the copy's own transaction:
+      *Instantiate* gives the new draft the template's stored settings
+      (none in an archived classroom); *Save as template* gives the
+      template the source's stored weight, flag and component (one course
+      by construction); never a position; nothing stored, nothing carried.
+      There is no copy of a template today; one into another course would
+      carry the weight and the flag only, as a duplicate does.
+    - **Mode change.** A template's stored flag survives its change of mode
+      ([ADR-092](ADR-092-changer-le-mode-d-une-evaluation.md) §4); an
+      untouched one reads its new mode's default.
+    - **Promote stays open** (06 no. 25): nothing here pushes an instance's
+      settings back into its template.
+
 **Planned, not built** (the product owner's later parts): the activities'
-settings rows over §13, and templates carrying a column's weight, counted
-flag and component. Rules per component (a pass mark per component) stay
-out.
+settings rows over §13 and a template's over §15. Rules per component (a
+pass mark per component) stay out.
 
 ## Consequences
 
@@ -238,6 +293,10 @@ out.
   the draft: a reader that listed columns without `gradebookEntries` would
   read them early. A component a draft's column is in cannot be deleted,
   though no table shows that column yet.
+- A template's settings (§15) are a row no reader lists, kept so by the
+  readers' classroom filter alone; a component a template holds cannot be
+  deleted, though no gradebook shows it. A change of a template's settings
+  reaches next year's instances, never this year's.
 
 ## Alternatives considered
 
@@ -257,6 +316,12 @@ out.
   copy the components per classroom for a case the product owner judged
   rare; the live reading is stated instead.
 - **"Group" as the name.** Rejected: Groups are the students' (ADR-070).
+- **A dedicated table for a template's settings** (`gradebook_template_columns`,
+  keyed by the template). Declined (§15): `inUse`, the component deletion's
+  check and `copyColumnSettings` would each read two tables, and the write a
+  second audited path — while the nullable classroom costs one check and
+  three branches of the one write (no classroom lock, the audit subject, no
+  hint), and every reader already filters by classroom.
 - **A column's settings after publication only** (proposed by the spec
   challenger: a draft has no column, so nothing to set). Declined by the
   product owner (§13): the teacher decides the weight when building the

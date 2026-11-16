@@ -15,7 +15,7 @@ import { countsByDefault, WEIGHT_DEFAULT, type GradebookColumnKind, type MarkOut
 import type { AuditActor } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { enrollments, gradebookColumns, gradebookMarks, gradebookSettings, users } from "../../db/schema.js";
-import type { GradebookColumnFacts, GradebookEntry, GradebookEntryFacts } from "../activity/kind.js";
+import type { ColumnHome, GradebookColumnFacts, GradebookEntry, GradebookEntryFacts } from "../activity/kind.js";
 import { gradebookColumnFacts, gradebookEntries } from "../activity/service.js";
 import { notFoundError } from "../http.js";
 
@@ -49,7 +49,7 @@ export const activityRef = (entry: Pick<GradebookEntryFacts, "kind" | "activityI
 /** The key of a cell in the maps of marks: an activity and a roster line. */
 export const cellKey = (activityId: string, enrollmentId: string): string => `${activityId}:${enrollmentId}`;
 
-/** The stored columns of a classroom, by activity id. */
+/** The stored columns of a classroom, by activity id: never a template's, which has no classroom (ADR-131 §15). */
 export async function storedColumns(db: Db | Tx, classroomId: string): Promise<Map<string, ColumnRow>> {
   const rows = await db.select().from(gradebookColumns).where(eq(gradebookColumns.classroomId, classroomId));
   return new Map(rows.map((row) => [activityOf(row), row]));
@@ -70,11 +70,24 @@ export interface WriteContext extends CourseWriteContext {
   owner: boolean;
 }
 
-/** The classroom and the course it is of, as the route's loader gives them. */
-export interface RoomScope {
-  room: { id: string };
+/**
+ * Where a column's settings are kept: a classroom's gradebook, with the
+ * course it is of, as the route's loader gives them; or, `room` null, the
+ * course itself, for one of its evaluation templates (ADR-131 §15) — the
+ * settings its instances inherit, in no classroom's gradebook.
+ */
+export interface ColumnScope {
+  room: { id: string } | null;
   course: { id: string };
 }
+
+/** A classroom's gradebook and the course it is of. */
+export interface RoomScope extends ColumnScope {
+  room: { id: string };
+}
+
+/** The home of a scope's columns, as the activity kinds resolve it. */
+export const homeOf = (scope: ColumnScope): ColumnHome => (scope.room ? { classroomId: scope.room.id } : { courseId: scope.course.id });
 
 /** The column the classroom's gradebook lists for this activity — a mark's —, or the 404 of a missing one. */
 export async function entryOf(db: Db, classroomId: string, kind: ActivityKindName, activityId: string): Promise<GradebookEntry> {
@@ -87,10 +100,11 @@ export async function entryOf(db: Db, classroomId: string, kind: ActivityKindNam
  * The activity whose column's settings may be written and read, from the
  * draft on — each kind's rule (`columnFacts`, ADR-131 §13) — or the 404 of
  * a missing column: a poll, another classroom's activity, an archived or
- * ungraded project.
+ * ungraded project; with a course for home, anything but its own template
+ * (§15).
  */
-export async function columnFactsOf(db: Db, classroomId: string, kind: ActivityKindName, activityId: string): Promise<GradebookColumnFacts> {
-  const facts = await gradebookColumnFacts(db, classroomId, kind, activityId);
+export async function columnFactsOf(db: Db, scope: ColumnScope, kind: ActivityKindName, activityId: string): Promise<GradebookColumnFacts> {
+  const facts = await gradebookColumnFacts(db, homeOf(scope), kind, activityId);
   if (facts === null) throw notFoundError("column");
   return facts;
 }

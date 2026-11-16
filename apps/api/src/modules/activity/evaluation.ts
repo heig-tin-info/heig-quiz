@@ -12,7 +12,8 @@
  * (`studentEvaluationGrades`: F-RES-04's policy, the counted attempt of F-EVAL-15).
  * A released exam not taken is an absence (a1.0), an exercise not taken an
  * empty cell (`notTakenCell`); a poll never has a column. A draft has none
- * yet, but its column's settings already (`columnFacts`, ADR-131).
+ * yet, but its column's settings already (`columnFacts`, ADR-131), and so
+ * has a template of the course, which its instances inherit (§15).
  */
 import type { EvaluationCard, EvaluationGradeRow, GradebookStudentCell } from "@quiz/contracts";
 import { ABSENT_GRADE, evaluationColumnKind, gradeFromPoints, isFinishedAttempt, notTakenCell } from "@quiz/domain";
@@ -149,8 +150,8 @@ export const evaluationActivity: ActivityKind<"evaluation"> = {
       staffCells: (cellsDb, seats) => staffCells(cellsDb, ev, seats),
     }));
   },
-  async columnFacts(db, classroomId, activityId) {
-    const found = await columnEvaluation(db, classroomId, activityId);
+  async columnFacts(db, home, activityId) {
+    const found = await columnEvaluation(db, home, activityId);
     return found === undefined ? null : { ...facts(found.evaluation), listed: found.listed };
   },
   /** An evaluation the student has no Grades row for (open, or not theirs yet) has no column for them. */

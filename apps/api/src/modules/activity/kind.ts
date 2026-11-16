@@ -91,6 +91,13 @@ export interface GradebookColumnFacts extends GradebookEntryFacts {
   listed: boolean;
 }
 
+/**
+ * Where an activity's column's settings are kept (ADR-131): the gradebook of
+ * its classroom, or — for an evaluation template, which has no classroom
+ * (§15) — its course.
+ */
+export type ColumnHome = { classroomId: string } | { courseId: string };
+
 /** What the activity itself gives a seat, under any staff mark: read, never recomputed. */
 export interface GradebookBeneath {
   outcome: CellOutcome;
@@ -154,10 +161,11 @@ export interface ActivityKind<K extends ActivityKindName> {
    * facts, or null — the rule of `gradebookEntries` without its state
    * exclusion. The settings exist from the draft on; the column, its cells
    * and its place in the mean wait for `gradebookEntries`, which `listed`
-   * says it is in. The staff payload: the classroom is loaded through
-   * `staffAccess` first.
+   * says it is in. With a course for home, a template of this kind of the
+   * course (§15), never listed. The staff payload: the classroom, or the
+   * template, is loaded through `staffAccess` first.
    */
-  columnFacts(db: Db, classroomId: string, activityId: string): Promise<GradebookColumnFacts | null>;
+  columnFacts(db: Db, home: ColumnHome, activityId: string): Promise<GradebookColumnFacts | null>;
 
   /**
    * The caller's own columns and cells of this kind in a classroom (M5-03a,

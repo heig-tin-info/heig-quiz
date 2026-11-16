@@ -12,7 +12,11 @@
  *     materialized by the first write that names it; an activity without a
  *     row has the defaults (`@quiz/domain`: weight 100 %, exams and projects
  *     count, exercises do not). Exactly one of `evaluation_id` /
- *     `project_id`;
+ *     `project_id`. An evaluation TEMPLATE's row (ADR-131 §15) has no
+ *     classroom (`gradebook_columns_home`: only an evaluation's may lack
+ *     one): the settings its instances inherit. No reader lists it — they
+ *     all go through a classroom's activities — and no mark can hang on it,
+ *     a mark's classroom being never null;
  *   - `gradebook_marks`: a staff mark on one student of one column, which
  *     wins over whatever the activity gives them (`absent`: a1.0; `score`:
  *     the teacher's own points out of a maximum, also for a student who
@@ -80,9 +84,8 @@ export const gradebookColumns = pgTable(
   "gradebook_columns",
   {
     id: uuid("id").primaryKey(),
-    classroomId: uuid("classroom_id")
-      .notNull()
-      .references(() => classrooms.id, { onDelete: "cascade" }),
+    /** Null for an evaluation template's settings (ADR-131 §15), which belong to no classroom. */
+    classroomId: uuid("classroom_id").references(() => classrooms.id, { onDelete: "cascade" }),
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
     /** A whole percentage, 0 to 100, relative to the classroom's other columns (#545, `GradebookWeight`). */
@@ -102,6 +105,8 @@ export const gradebookColumns = pgTable(
   },
   (t) => [
     check("gradebook_columns_one_activity", sql`(${t.evaluationId} IS NULL) <> (${t.projectId} IS NULL)`),
+    // A row without a classroom is an evaluation template's: a project has no template.
+    check("gradebook_columns_home", sql`${t.classroomId} IS NOT NULL OR ${t.evaluationId} IS NOT NULL`),
     check("gradebook_columns_weight_range", sql`${t.weight} >= 0 AND ${t.weight} <= 100`),
     index("gradebook_columns_component_idx").on(t.componentId),
     uniqueIndex("gradebook_columns_evaluation_uq").on(t.evaluationId).where(sql`${t.evaluationId} IS NOT NULL`),

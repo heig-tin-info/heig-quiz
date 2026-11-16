@@ -66,6 +66,15 @@ export type GradebookMarkParams = z.infer<typeof GradebookMarkParams>;
 export const GradebookSettingsPatch = z.object({ meanPublished: z.boolean() });
 export type GradebookSettingsPatch = z.infer<typeof GradebookSettingsPatch>;
 
+const ColumnSettingsFields = z.object({
+  weight: GradebookWeight,
+  counts: z.boolean(),
+  position: z.number().int().min(0).max(1000).nullable(),
+  componentId: z.uuid().nullable(),
+});
+/** A patch names at least one field. */
+const notEmpty = (patch: object) => Object.keys(patch).length > 0;
+
 /**
  * `PATCH …/gradebook/columns/:kind/:activityId` (F-GBOOK-06): at least one
  * field. `componentId`: a component of the classroom's course (`404
@@ -73,16 +82,21 @@ export type GradebookSettingsPatch = z.infer<typeof GradebookSettingsPatch>;
  * Open from the draft on: the settings of an activity not listed yet are
  * stored, and its column takes them when it appears (ADR-131).
  */
-export const GradebookColumnPatch = z
-  .object({
-    weight: GradebookWeight,
-    counts: z.boolean(),
-    position: z.number().int().min(0).max(1000).nullable(),
-    componentId: z.uuid().nullable(),
-  })
-  .partial()
-  .refine((patch) => Object.keys(patch).length > 0, "nothing to change");
+export const GradebookColumnPatch = ColumnSettingsFields.partial().refine(notEmpty, "nothing to change");
 export type GradebookColumnPatch = z.infer<typeof GradebookColumnPatch>;
+
+/**
+ * `PATCH /templates/:id/gradebook` (ADR-131 §15): the settings an evaluation
+ * template's instances inherit — a column's without its position, which
+ * orders a classroom's gradebook and a template has none (strict: a
+ * position is refused, not dropped). `componentId`: a
+ * component of the template's course (`404 component` otherwise).
+ */
+export const GradebookTemplateColumnPatch = ColumnSettingsFields.omit({ position: true })
+  .partial()
+  .strict()
+  .refine(notEmpty, "nothing to change");
+export type GradebookTemplateColumnPatch = z.infer<typeof GradebookTemplateColumnPatch>;
 
 /**
  * `PUT …/gradebook/columns/:kind/:activityId/marks/:eid`: an absence, an
@@ -150,6 +164,8 @@ export type GradebookComponents = z.infer<typeof GradebookComponents>;
  * stored, or its mode's defaults — with the components of the course to put
  * it in, whether the column is released, and whether the classroom's mean is
  * published: together, whether a change moves what the students read.
+ * `GET /templates/:id/gradebook` answers the same for an evaluation template
+ * (ADR-131 §15), `released` and `meanPublished` false: no student reads it.
  */
 export const GradebookColumnSettings = z.object({
   weight: GradebookWeight,

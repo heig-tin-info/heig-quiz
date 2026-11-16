@@ -465,18 +465,27 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
     { preHandler: requireTeacher },
     teacher(
       { params: IdParam, body: TemplateCreate, load: staffEvaluation },
-      async ({ req, reply, body, scope }) => {
+      async ({ req, reply, now, body, scope }) => {
+        const courseId = scope.classroom.courseId;
         const { template, previousOrigin } = await templates.saveAsTemplate(app.db, scope.evaluation, {
-          courseId: scope.classroom.courseId,
+          courseId,
           title: body.title,
           createdBy: callerOf(req).id,
         });
         await trace(req, "template.create", "evaluation", template.id, {
           from: scope.evaluation.id,
-          courseId: scope.classroom.courseId,
+          courseId,
           title: template.title,
           previousOrigin,
         });
+        // The evaluation's gradebook settings, kept for its instances (ADR-131 §15), as a duplicate's are carried.
+        await gradebook.copyColumnSettings(
+          app.db,
+          scope.evaluation.id,
+          courseId,
+          { room: null, course: { id: courseId }, activityId: template.id },
+          { actor: actorOf(req), userId: callerOf(req).id, now },
+        );
         return reply.code(201).send(await templates.templateOf(app.db, template));
       },
     ),
@@ -647,7 +656,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
     { preHandler: requireTeacher },
     teacher(
       { params: IdParam, body: TemplateInstantiate, load: staffTemplate },
-      async ({ req, reply, body, scope }) => {
+      async ({ req, reply, now, body, scope }) => {
         const room = await findAccessibleClassroom(app.db, callerOf(req), body.classroomId);
         if (!room || room.room.courseId !== scope.course.id) return notFound(reply);
         const made = await templates.instantiateTemplate(app.db, scope.template, {
@@ -661,6 +670,17 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
           revision: made.evaluation.originRevision,
           classroomId: room.room.id,
         });
+        // The template's gradebook settings, which the instance inherits (ADR-131 §15): carried as a
+        // duplicate's are, after the copy's own transaction, and not into an archived classroom.
+        if (room.room.archivedAt === null) {
+          await gradebook.copyColumnSettings(
+            app.db,
+            scope.template.id,
+            scope.course.id,
+            { room: room.room, course: scope.course, activityId: made.evaluation.id },
+            { actor: actorOf(req), userId: callerOf(req).id, now },
+          );
+        }
         evaluationChanged(room.room.id, made.evaluation.id);
         const answer: TemplateInstance = {
           evaluation: service.toEvaluation(made.evaluation),

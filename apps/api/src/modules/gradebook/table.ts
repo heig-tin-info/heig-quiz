@@ -1,6 +1,7 @@
 /**
  * The two readers of the gradebook (F-GBOOK-01..05, ADR-074), and one
- * column's settings for an activity's own settings ({@link columnSettings}).
+ * column's settings for an activity's own settings, or a template's
+ * ({@link columnSettings}).
  *
  * - {@link staffGradebook}: the staff's table of a classroom loaded through
  *   `staffAccess` — every column (released or not), every claimed student
@@ -46,8 +47,8 @@ import {
   meanPublished,
   settingsOf,
   storedColumns,
+  type ColumnScope,
   type MarkWithSetter,
-  type RoomScope,
 } from "./columns.js";
 import { courseComponents, listComponents } from "./components.js";
 
@@ -80,17 +81,20 @@ function staffCell(beneath: GradebookBeneath, mark: MarkWithSetter | undefined, 
  * settings, from the draft on — stored, or its mode's defaults — with what
  * an activity's settings need beside them: the course's components, whether
  * the column is released, whether the mean is published. A staff read.
+ * `GET /templates/:id/gradebook` too, `scope.room` null (§15): a template is
+ * never released and publishes no mean, both false — true of it, and what
+ * keeps a settings screen's warnings quiet.
  */
 export async function columnSettings(
   db: Db,
-  scope: RoomScope,
+  scope: ColumnScope,
   params: Pick<GradebookColumnParams, "kind" | "activityId">,
 ): Promise<GradebookColumnSettings> {
-  const facts = await columnFactsOf(db, scope.room.id, params.kind, params.activityId);
+  const facts = await columnFactsOf(db, scope, params.kind, params.activityId);
   const [[row], components, published] = await Promise.all([
     db.select().from(gradebookColumns).where(columnOf(facts)),
     listComponents(db, scope.course.id),
-    meanPublished(db, scope.room.id),
+    scope.room ? meanPublished(db, scope.room.id) : false,
   ]);
   const { weight, counts, componentId } = settingsOf(row, facts.mode);
   return { weight, counts, componentId, released: facts.released, meanPublished: published, components };

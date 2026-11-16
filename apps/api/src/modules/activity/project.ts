@@ -17,7 +17,8 @@
  *   not released yet (F-GBOOK-05). A seat that never accepted has no score:
  *   an empty cell, which a staff mark fills (spec 06 no. 48).
  * - `columnFacts` (ADR-131): the same rule in any state, a draft included,
- *   for the column's settings.
+ *   for the column's settings; never of a course, a project having no
+ *   template (§15).
  */
 import { projectGrade } from "@quiz/domain";
 
@@ -86,8 +87,9 @@ export const projectActivity: ActivityKind<"project"> = {
       },
     }));
   },
-  async columnFacts(db, classroomId, activityId) {
-    const found = await columnProject(db, classroomId, activityId);
+  /** A project has no template: a course is no home of a project's column. */
+  async columnFacts(db, home, activityId) {
+    const found = "classroomId" in home ? await columnProject(db, home.classroomId, activityId) : undefined;
     return found === undefined ? null : { ...facts(found.project), listed: found.listed };
   },
   /** The Grades page's rule (`studentProjectGrades`); a released project without a repository is an empty cell a mark fills. */

@@ -7,8 +7,8 @@
  * stored here and nowhere else.
  *
  * - `table.ts`: the staff's table, one column's settings (from the draft on,
- *   ADR-131 §13) and the student's own cells (the student exit of the
- *   gradebook, spec 05 §5.7);
+ *   ADR-131 §13; an evaluation template's too, §15) and the student's own
+ *   cells (the student exit of the gradebook, spec 05 §5.7);
  * - `writes.ts`: the audited staff writes;
  * - `columns.ts`: what is stored beside the activities, the writes'
  *   contexts, and the lookups of a column by its activity;

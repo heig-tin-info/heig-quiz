@@ -9,6 +9,7 @@ import {
   GradebookSettingsPatch,
   GradebookStudent,
   GradebookStudentComponent,
+  GradebookTemplateColumnPatch,
 } from "./gradebook.js";
 
 const uuid = "11111111-1111-4111-8111-111111111111";
@@ -34,6 +35,14 @@ describe("gradebook inputs", () => {
     expect(GradebookColumnPatch.safeParse({ componentId: uuid }).success).toBe(true);
     expect(GradebookColumnPatch.parse({ componentId: null })).toEqual({ componentId: null });
     expect(GradebookColumnPatch.safeParse({ componentId: "labo" }).success).toBe(false);
+  });
+
+  it("takes a template's weight, flag and component, never a position — and at least one (ADR-131 §15)", () => {
+    expect(GradebookTemplateColumnPatch.parse({ weight: 40, counts: true, componentId: uuid })).toEqual({ weight: 40, counts: true, componentId: uuid });
+    expect(GradebookTemplateColumnPatch.safeParse({ componentId: null }).success).toBe(true);
+    for (const bad of [{}, { position: 2 }, { weight: 40, position: null }, { weight: 101 }]) {
+      expect(GradebookTemplateColumnPatch.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
   });
 
   it("takes a component's name trimmed, 1 to 40 characters, and its weight 100 % by default (ADR-131)", () => {
