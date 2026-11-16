@@ -135,6 +135,18 @@ describe("withUnreadableKept", () => {
 
 });
 
+describe("the collection's rules stay linear", () => {
+  it("composes 300 000 entries against 10 000 kept paths well under a second", () => {
+    const snapshot = Array.from({ length: 300_000 }, (_, i) => blob(`src/d${i % 300}/f${i}.c`, "1"));
+    const kept = Array.from({ length: 10_000 }, (_, i) => `tests/t${i}`);
+    const base = kept.map((k) => blob(`${k}/in.txt`, "2"));
+    const started = performance.now();
+    const out = composeCollectionTree(snapshot, base, kept);
+    expect(performance.now() - started).toBeLessThan(1500);
+    expect(out).toHaveLength(310_000);
+  });
+});
+
 describe("storedCollection", () => {
   it("passes the current values through, null included", () => {
     expect(storedCollection("collected", null)).toEqual({ outcome: "collected", reason: null });

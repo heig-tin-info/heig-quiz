@@ -17,8 +17,9 @@ const UNIT = readFileSync(new URL("../../deploy/quiz-codespace-shadow@.service",
 const values = (key: string) => [...UNIT.matchAll(new RegExp(`^${key}=(.*)$`, "gm"))].map((m) => m[1]!.trim());
 
 describe("quiz-codespace-shadow@.service — the root timer's sandbox", () => {
-  it("still runs the snapshot script on the instance's volumes", () => {
+  it("still runs the snapshot script on the instance's volumes, a run bounded in time", () => {
     expect(values("ExecStart")).toEqual(["/usr/local/lib/quiz-codespace/shadow-snapshot.sh"]);
+    expect(values("TimeoutStartSec")).toEqual(["10min"]);
     expect(values("Environment")).toEqual(["CODESPACE_VOLUMES=/srv/quiz-codespace/%i/volumes"]);
   });
 

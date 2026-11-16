@@ -204,6 +204,9 @@ export type ProjectImage = z.infer<typeof ProjectImage>;
 
 /** One path segment's ceiling, in UTF-8 bytes (Linux's NAME_MAX). */
 const SEGMENT_MAX_BYTES = 255;
+/** Why `projectPathProblem` refuses a path: a closed list, so a caller that sorts the reasons breaks at compile time when one is renamed. */
+export type ProjectPathProblem = "empty" | "too_long" | "control_character" | "absolute" | "empty_segment" | "dot_segment" | "segment_too_long";
+
 /** A whole path's ceiling, in UTF-8 bytes (Linux's PATH_MAX). */
 const PATH_MAX_BYTES = 4096;
 
@@ -216,7 +219,7 @@ const encoder = new TextEncoder();
  * over 255 bytes. One trailing `/` is allowed: it names a directory. The
  * runner's sanitizer and the API share this rule; it never rewrites a path.
  */
-export function projectPathProblem(path: string): string | null {
+export function projectPathProblem(path: string): ProjectPathProblem | null {
   const body = path.endsWith("/") ? path.slice(0, -1) : path;
   if (body === "") return "empty";
   if (encoder.encode(path).length > PATH_MAX_BYTES) return "too_long";

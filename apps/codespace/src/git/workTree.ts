@@ -12,11 +12,29 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Writable } from "node:stream";
 
-import { COLLECTION_ENTRIES_MAX, type CollectionTreeEntry } from "@quiz/domain";
+import type { CollectionTreeEntry } from "@quiz/domain";
 
 import type { WorkspaceReader } from "../engine/reader.js";
 import { GitError, gitEnv } from "./gitRunner.js";
 import { ArchiveTooLarge, readWorkArchive } from "./workArchive.js";
+
+/**
+ * The most paths a collection handles: the reader's listing, skipped names
+ * included, and again the workspace once what could not be read is taken
+ * from the graded commit (`collect.ts`). Past it, `too_large`. It bounds the
+ * portal's own synchronous work, which no time budget can interrupt once it
+ * runs; no student's hand-in comes near it (ignored files are not listed).
+ */
+export const COLLECTION_ENTRIES_MAX = 20_000;
+
+/** The listing's byte cap: the entries' cap at a generous 512 bytes a path, so it never cuts a listing the cap allows in practice. */
+export const LISTING_MAX_BYTES = COLLECTION_ENTRIES_MAX * 512;
+
+/** The collection's caps: the workspace's bytes and its entries (lowered by the tests). */
+export interface Caps {
+  maxBytes: number;
+  maxEntries: number;
+}
 
 export interface WorkTree {
   entries: CollectionTreeEntry[];
@@ -100,14 +118,12 @@ async function* once(buf: Buffer): AsyncIterable<Buffer> {
  * parent directory is the collection's own). Throws what the reader throws,
  * `ArchiveRefused` or `ArchiveTooLarge` from the archive, `GitError` from git.
  */
-export async function readWorkTree(reader: WorkspaceReader, workDir: string, repoDir: string, timeoutMs: number, maxBytes: number): Promise<WorkTree> {
+export async function readWorkTree(reader: WorkspaceReader, workDir: string, repoDir: string, timeoutMs: number, caps: Caps): Promise<WorkTree> {
   return reader.read(workDir, timeoutMs, async (listing, archive) => {
-    // Bounded before any work: the portal's own work on a listing cannot be interrupted once it runs.
-    if (listing.paths.length > COLLECTION_ENTRIES_MAX) throw new ArchiveTooLarge(listing.closed.length + listing.skipped);
     const blobs = blobImport(repoDir, join(repoDir, "..", "marks"));
     try {
       const marked: { mode: string; path: string; mark: number }[] = [];
-      const kept = await readWorkArchive(archive, new Set(listing.paths), maxBytes, {
+      const kept = await readWorkArchive(archive, new Set(listing.paths), caps.maxBytes, {
         async file(path, executable, size, data) {
           marked.push({ mode: executable ? "100755" : "100644", path, mark: await blobs.blob(size, data) });
         },
@@ -130,5 +146,5 @@ export async function readWorkTree(reader: WorkspaceReader, workDir: string, rep
       if (err instanceof ArchiveTooLarge) throw new ArchiveTooLarge(listing.closed.length + listing.skipped);
       throw err;
     }
-  });
+  }, caps.maxEntries);
 }

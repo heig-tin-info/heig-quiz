@@ -4,8 +4,7 @@
  * for a file the confined reader could not read. The values of Quiz's order
  * are checked by its contract (`@quiz/contracts`), not here.
  */
-import { WORKFLOWS_DIR, isProtected } from "./protectedFiles.js";
-import { pathWithin } from "./studentIgnore.js";
+import { WORKFLOWS_DIR } from "./protectedFiles.js";
 
 /**
  * The paths a collection takes from the branch's head instead of the
@@ -29,6 +28,19 @@ export interface CollectionTreeEntry {
 /** A gitlink's mode: a submodule's commit, never content. */
 export const GITLINK_MODE = "160000";
 
+/** The proper ancestors of `path` (`a/b/c` → `a`, `a/b`). */
+function ancestors(path: string): string[] {
+  const out: string[] = [];
+  for (let at = path.indexOf("/"); at !== -1; at = path.indexOf("/", at + 1)) out.push(path.slice(0, at));
+  return out;
+}
+
+/** "`path` is one of `roots` or lies under one", linear in the path's depth, not in the roots. */
+function underAny(roots: Iterable<string>): (path: string) => boolean {
+  const set = new Set(roots);
+  return (path) => set.has(path) || ancestors(path).some((a) => set.has(a));
+}
+
 /**
  * The collected tree (ADR-130 §3), as a flat sorted list: the snapshot's
  * entries, except those under a kept path — whatever the snapshot did to
@@ -42,10 +54,12 @@ export function composeCollectionTree(
   base: readonly CollectionTreeEntry[],
   kept: readonly string[],
 ): CollectionTreeEntry[] {
-  const keptBase = base.filter((e) => isProtected(e.path, kept));
-  const fromSnapshot = snapshot.filter(
-    (e) => e.mode !== GITLINK_MODE && !isProtected(e.path, kept) && !keptBase.some((k) => pathWithin(k.path, e.path)),
-  );
+  // Linear in the entries times their depth: a student controls how many there are.
+  const isKept = underAny(kept);
+  const keptBase = base.filter((e) => isKept(e.path));
+  // A kept entry's path, or a directory it needs: no snapshot entry may stand there.
+  const needed = new Set(keptBase.flatMap((k) => [k.path, ...ancestors(k.path)]));
+  const fromSnapshot = snapshot.filter((e) => e.mode !== GITLINK_MODE && !isKept(e.path) && !needed.has(e.path));
   return [...fromSnapshot, ...keptBase].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
@@ -64,29 +78,9 @@ export function withUnreadableKept(
   unreadable: readonly string[],
 ): CollectionTreeEntry[] {
   if (unreadable.length === 0) return [...workspace];
-  const set = new Set(unreadable);
-  // The path or one of its ancestors: linear in the entries times their depth.
-  const covered = (path: string) => {
-    if (set.has(path)) return true;
-    for (let at = path.indexOf("/"); at !== -1; at = path.indexOf("/", at + 1)) if (set.has(path.slice(0, at))) return true;
-    return false;
-  };
+  const covered = underAny(unreadable);
   return [...workspace.filter((e) => !covered(e.path)), ...reference.filter((e) => covered(e.path))];
 }
-
-/**
- * Past this many paths the reader could not read, the collection is
- * `failed` (`read_failed`) rather than a workspace mostly replaced by the
- * graded commit: no student's work is that, and it bounds the portal's work.
- */
-export const COLLECTION_UNREADABLE_MAX = 2_000;
-
-/**
- * Past this many paths in the reader's listing (what `git add -A` would add,
- * ignored files excluded), the collection is `too_large`: it bounds the work
- * the portal does, which no time budget can interrupt once it runs.
- */
-export const COLLECTION_ENTRIES_MAX = 20_000;
 
 /** Every entry under a kept path is the base's, none added, none removed (ADR-130 §4.3: what Quiz checks before signing). */
 export function keptEntriesMatch(
@@ -94,9 +88,10 @@ export function keptEntriesMatch(
   base: readonly CollectionTreeEntry[],
   kept: readonly string[],
 ): boolean {
+  const isKept = underAny(kept);
   const under = (entries: readonly CollectionTreeEntry[]) =>
     entries
-      .filter((e) => isProtected(e.path, kept))
+      .filter((e) => isKept(e.path))
       .map((e) => `${e.mode} ${e.sha} ${e.path}`)
       .sort();
   const [a, b] = [under(collected), under(base)];
@@ -166,7 +161,9 @@ export type CollectionFailureReason = (typeof COLLECTION_FAILURE_REASONS)[number
  * a value no list holds any more (a row written before an outcome was
  * removed, as `stale_snapshot` on 2026-11-16) reads as `failed` with no
  * reason, so no reader past the database ever meets it. Null (ordered,
- * never settled) stays null.
+ * never settled) stays null. Kept on purpose rather than a data migration:
+ * no migration number to race, and a value removed later cannot break the
+ * staff's sheet again.
  */
 export function storedCollection(
   outcome: string | null,

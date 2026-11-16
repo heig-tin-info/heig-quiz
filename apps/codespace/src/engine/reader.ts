@@ -24,7 +24,8 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 
-import { workPathProblem } from "../git/workArchive.js";
+import { ArchiveTooLarge, workPathProblem, type WorkPathProblem } from "../git/workArchive.js";
+import { COLLECTION_ENTRIES_MAX, LISTING_MAX_BYTES } from "../git/workTree.js";
 import { INSTANCE_LABEL, hardeningArgs, type Confinement, type EngineOptions, type Limits } from "./index.js";
 
 /** The role label of the portal's helpers: never `SESSION_LABEL`. */
@@ -76,8 +77,8 @@ export const READER_ARCHIVE = [
   "--files-from=-",
 ] as const;
 
-/** The listing is a few bytes a path; past this the workspace is no student's. */
-const LISTING_MAX_BYTES = 16 * 1024 * 1024;
+/** What a command other than the listing may print (a container id, a name). */
+const OUTPUT_MAX_BYTES = 64 * 1024;
 /** Removal runs whatever the budget says. */
 const REMOVE_TIMEOUT_MS = 15_000;
 
@@ -127,6 +128,13 @@ export class ReaderError extends Error {
   }
 }
 
+/** A command printed more than its cap. */
+class OutputOverCap extends ReaderError {
+  constructor() {
+    super("the reader's output is over its cap");
+  }
+}
+
 /** The time given ran out. */
 export class ReaderTimeout extends Error {
   constructor() {
@@ -138,20 +146,23 @@ export class ReaderTimeout extends Error {
 const strict = new TextDecoder("utf-8", { fatal: true });
 const CLOSED_LINE = "warning: could not open directory '";
 const CLOSED = /^warning: could not open directory '(.*)': /;
-/** What git never prints: a listing holding one is refused, not trimmed. */
-const STRUCTURAL = new Set(["empty", "absolute", "empty_segment", "dot_segment", "git_segment"]);
+/** What git never prints: a listing holding one is refused, not trimmed. Typed: a renamed reason is a compile error. */
+const STRUCTURAL: ReadonlySet<WorkPathProblem> = new Set<WorkPathProblem>(["empty", "absolute", "empty_segment", "dot_segment", "git_segment"]);
 
 /**
  * `ls-files -z`'s output and git's warnings, as data. A nested repository
  * (`dir/`) is left out, as the gitlink it was is; a name a path here cannot
  * carry (not UTF-8, a control character, too long) is counted, not kept; a
  * path no git prints, or a closed directory whose name cannot be read back,
- * refuses the listing — never a directory silently dropped.
+ * refuses the listing — never a directory silently dropped. Past
+ * `maxEntries` names (skipped ones included) it stops at once with
+ * {@link ArchiveTooLarge}: the rest is never decoded.
  */
-export function parseListing(stdout: Buffer, stderr: string): WorkListing {
+export function parseListing(stdout: Buffer, stderr: string, maxEntries = COLLECTION_ENTRIES_MAX): WorkListing {
   const listing: WorkListing = { paths: [], closed: [], skipped: 0 };
   let at = 0;
   while (at < stdout.length) {
+    if (listing.paths.length + listing.skipped >= maxEntries) throw new ArchiveTooLarge(listing.skipped);
     const end = stdout.indexOf(0, at);
     if (end === -1) throw new ReaderError("the listing does not end with a NUL");
     const raw = stdout.subarray(at, end);
@@ -187,9 +198,9 @@ export interface WorkspaceReader {
    * Lists and archives `workDir` in a fresh reader, hands both to `consume`,
    * and removes the reader whatever happens. Throws {@link ReaderTimeout}
    * past `timeoutMs`, {@link ReaderError} when the reader fails, or what
-   * `consume` throws.
+   * `consume` throws, or {@link ArchiveTooLarge} past `maxEntries` listed names.
    */
-  read<T>(workDir: string, timeoutMs: number, consume: (listing: WorkListing, archive: Readable) => Promise<T>): Promise<T>;
+  read<T>(workDir: string, timeoutMs: number, consume: (listing: WorkListing, archive: Readable) => Promise<T>, maxEntries?: number): Promise<T>;
   /** Removes this instance's readers a crash left behind (startup only: none is in use then). */
   sweep(): Promise<number>;
   readerName(): string;
@@ -232,7 +243,7 @@ function finish(child: ChildProcessWithoutNullStreams, deadline: number, maxStdo
     if (collect) {
       child.stdout.on("data", (chunk: Buffer) => {
         size += chunk.length;
-        if (size > maxStdout) stop(new ReaderError("the reader's output is over its cap"));
+        if (size > maxStdout) stop(new OutputOverCap());
         else out.push(chunk);
       });
     }
@@ -250,16 +261,16 @@ export function createWorkspaceReader(o: ReaderOptions, spawnPodman?: SpawnPodma
   const start: SpawnPodman =
     spawnPodman ?? ((args) => spawn("podman", ["--remote", "--url", o.podmanUrl, ...args], { stdio: "pipe" }));
 
-  async function podman(args: string[], deadline: number): Promise<Ran> {
+  async function podman(args: string[], deadline: number, maxStdout = OUTPUT_MAX_BYTES): Promise<Ran> {
     if (Date.now() >= deadline) throw new ReaderTimeout();
     const child = start(args);
     child.stdin.on("error", () => undefined);
     child.stdin.end();
-    return finish(child, deadline, LISTING_MAX_BYTES);
+    return finish(child, deadline, maxStdout);
   }
 
-  async function ok(args: string[], deadline: number, what: string): Promise<Ran> {
-    const ran = await podman(args, deadline);
+  async function ok(args: string[], deadline: number, what: string, maxStdout?: number): Promise<Ran> {
+    const ran = await podman(args, deadline, maxStdout);
     if (ran.code !== 0) throw new ReaderError(`${what} failed (${ran.code}): ${ran.stderr.slice(0, 400)}`);
     return ran;
   }
@@ -269,16 +280,24 @@ export function createWorkspaceReader(o: ReaderOptions, spawnPodman?: SpawnPodma
   return {
     readerName,
 
-    async read<T>(workDir: string, timeoutMs: number, consume: (listing: WorkListing, archive: Readable) => Promise<T>): Promise<T> {
+    async read<T>(
+      workDir: string,
+      timeoutMs: number,
+      consume: (listing: WorkListing, archive: Readable) => Promise<T>,
+      maxEntries = COLLECTION_ENTRIES_MAX,
+    ): Promise<T> {
       const deadline = Date.now() + timeoutMs;
       const name = readerName();
       try {
         await ok(readerArgs(o, name, workDir, Math.max(1, Math.ceil(timeoutMs / 1000))), deadline, "starting the reader");
         await ok(["exec", name, ...READER_INIT], deadline, "the listing's repository");
-        const list = await ok(["exec", name, ...READER_LIST], deadline, "the listing");
+        // A listing past its byte cap holds more than the entries' cap allows: too large, not a failure.
+        const list = await ok(["exec", name, ...READER_LIST], deadline, "the listing", LISTING_MAX_BYTES).catch((err: unknown) => {
+          throw err instanceof OutputOverCap ? new ArchiveTooLarge() : err;
+        });
         // The closed directories are read from git's warnings: all of them, or no collection.
         if (list.stderrCut) throw new ReaderError("the listing's warnings are over their cap");
-        const listing = parseListing(list.stdout, list.stderr);
+        const listing = parseListing(list.stdout, list.stderr, maxEntries);
 
         if (Date.now() >= deadline) throw new ReaderTimeout();
         const tar = start(["exec", "-i", name, ...READER_ARCHIVE]);

@@ -15,8 +15,6 @@ import { dirname, join } from "node:path";
 
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-import { COLLECTION_UNREADABLE_MAX } from "@quiz/domain";
-
 import { createWorkspaceReader } from "../engine/reader.js";
 import { localPodman, type LocalPodman, type LocalPodmanOptions } from "../engine/readerFixtures.js";
 import { collectWorkspace, collectionDirsRoot, type CollectDeps, type CollectionOrder } from "./collect.js";
@@ -273,13 +271,29 @@ describe("collectWorkspace", () => {
     }
   });
 
-  it("fails read_failed past the cap on unreadable paths, rather than patching a workspace it mostly never saw", async () => {
+  it("is too_large past the cap on entries: a listing over it, or an unreadable directory the graded commit fills over it", async () => {
     const w = await world();
-    const files = Object.fromEntries(Array.from({ length: COLLECTION_UNREADABLE_MAX + 1 }, (_, i) => [`locked/f${i}.c`, "x\n"]));
-    await writeFiles(w.work, files);
-    for (const name of Object.keys(files)) await chmod(join(w.work, name), 0o000);
-    expect(await collectWorkspace(w.order, deps(w))).toEqual({ outcome: "failed", reason: "read_failed" });
+    await writeFiles(w.work, Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`many/f${i}.c`, "x\n"])));
+    expect(await collectWorkspace(w.order, deps(w, { maxEntries: 5 }))).toMatchObject({ outcome: "too_large" });
     expect(podman.live()).toEqual([]);
+
+    // The handout holds six files under data/; the student made data/ unreadable: the listing is small,
+    // the workspace once data/ is taken from the graded commit is not.
+    const big = await world();
+    const seed = join(big.root, "seed2");
+    await git(["clone", "--quiet", big.github, seed]);
+    await writeFiles(seed, Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`data/d${i}.txt`, `${i}\n`])));
+    await git(["-C", seed, "add", "-A"], { env: FIXTURE_ENV });
+    await git(["-C", seed, "commit", "--quiet", "-m", "data"], { env: FIXTURE_ENV });
+    await git(["-C", seed, "push", "--quiet", "origin", "main"]);
+    const head = (await git(["--git-dir", big.github, "rev-parse", "refs/heads/main"])).trim();
+    await writeFiles(big.work, { "data/d0.txt": "mine\n" });
+    await chmod(join(big.work, "data"), 0o000);
+    try {
+      expect(await collectWorkspace({ ...big.order, base: head }, deps(big, { maxEntries: 8 }))).toMatchObject({ outcome: "too_large", unreadable: 1 });
+    } finally {
+      await chmod(join(big.work, "data"), 0o755);
+    }
   });
 
   it("carries the execute bit, and a hard link as the file it names", async () => {

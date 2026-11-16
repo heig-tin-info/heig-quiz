@@ -108,8 +108,7 @@ repository (ADR-077) is treated like any other.
   read. No `work/` (no session ever opened): `no_snapshot`. A work tree the
   reader cannot enter: `failed`, `read_failed`. A file or directory it
   cannot read keeps its version in the commit that would otherwise be
-  graded, or is left out; the count is shown to the staff; past
-  `COLLECTION_UNREADABLE_MAX` (2 000) the collection is `read_failed`.
+  graded, or is left out; the count is shown to the staff.
 - **The branch** (pure rule `collectionBranch` of `@quiz/domain`, Quiz's): the host
   cannot know which branch `work/` has checked out, so it is the branch of
   the student's last push received (a non-bot receipt) when it is handed
@@ -139,8 +138,9 @@ repository (ADR-077) is treated like any other.
   nothing pushed. *Corrected 2026-11-16: the cap counted the blobs the base
   did not hold; it now bounds the archive the reader streams, so a
   workspace whose handed-out files and own files together pass 100 MiB is
-  `too_large` too, and so is a listing over `COLLECTION_ENTRIES_MAX`
-  (20 000) paths.*
+  `too_large` too, and so is a workspace over `COLLECTION_ENTRIES_MAX`
+  (20 000) paths, counted in the listing and again once unreadable
+  directories are filled from the graded commit.*
 
 ### 4. Who does what
 
@@ -446,11 +446,14 @@ held); staging had.
    path under `work/`; it asks only whether `work/` exists.
 3. **What the reader could not read** (§3) keeps its version in the commit
    that would otherwise be graded (`withUnreadableKept`), or is left out;
-   counted. A work tree it cannot enter, a list of closed directories it
-   could not read whole, or more than `COLLECTION_UNREADABLE_MAX` unreadable
-   paths: `read_failed`. More than `COLLECTION_ENTRIES_MAX` listed paths:
-   `too_large`. Both bound the portal's own work, which no budget can
-   interrupt once it runs.
+   counted. A work tree it cannot enter, or a list of closed directories it
+   could not read whole: `read_failed`. More than `COLLECTION_ENTRIES_MAX`
+   paths (`apps/codespace/src/git/workTree.ts`) — the listing's names,
+   skipped ones included, the listing stopped as soon as it passes; then
+   the workspace once unreadable directories are filled from the graded
+   commit — `too_large`. That one cap bounds the portal's own synchronous
+   work, which no budget can interrupt once it runs; the rules that run
+   over the entries are linear in their number times their depth.
 4. **Outcomes**: `stale_snapshot` is removed with the fallback it
    described; `read_failed` joins the portal's failure reasons. A stored
    value no list holds any more reads as `failed` with no reason

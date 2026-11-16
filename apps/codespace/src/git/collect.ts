@@ -22,7 +22,7 @@ import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { type CodespaceCollectionRequest, type CodespaceCollectionResult, type CollectionFailure } from "@quiz/contracts";
-import { COLLECTION_UNREADABLE_MAX, collectionKeptPaths, composeCollectionTree, withUnreadableKept, type CollectionTreeEntry } from "@quiz/domain";
+import { collectionKeptPaths, composeCollectionTree, withUnreadableKept, type CollectionTreeEntry } from "@quiz/domain";
 
 import { ReaderError, ReaderTimeout, type WorkspaceReader } from "../engine/reader.js";
 import { ForgeUnconfiguredError, type Forge, type ForgeOwner } from "./forge.js";
@@ -30,7 +30,7 @@ import { git, gitAuthEnv, GitError, redactSecrets, type GitRunOptions } from "./
 import { credentialRefused, parseRejections } from "./relay.js";
 import { RECEIVE_MAX_INPUT_BYTES, stagingPaths } from "./staging.js";
 import { ArchiveRefused, ArchiveTooLarge } from "./workArchive.js";
-import { readWorkTree, type WorkTree } from "./workTree.js";
+import { COLLECTION_ENTRIES_MAX, readWorkTree, type WorkTree } from "./workTree.js";
 
 /** The order as the route hands it: the parsed body and the assignment of its path. */
 export type CollectionOrder = CodespaceCollectionRequest & { assignment: string };
@@ -45,6 +45,8 @@ export interface CollectDeps {
   budgetMs?: number;
   /** The cap on the workspace's files; the tests lower it. */
   maxBytes?: number;
+  /** The cap on the workspace's entries; the tests lower it. */
+  maxEntries?: number;
   log?: { warn: (o: object, m: string) => void };
 }
 
@@ -109,12 +111,15 @@ async function withinBudget<T>(work: Promise<T>, ms: number): Promise<T> {
  * the workspace's entries, what the reader could not read taken from the
  * commit that would otherwise be graded, and the kept paths — Quiz's list,
  * the workflows added whatever it says (`collectionKeptPaths`) — taken from
- * the base, built in a temporary index beside it.
+ * the base, built in a temporary index beside it. Null past
+ * `maxEntries` (`COLLECTION_ENTRIES_MAX`).
  */
-async function composeTree(repoDir: string, read: WorkTree, order: CollectionOrder): Promise<string> {
+async function composeTree(repoDir: string, read: WorkTree, order: CollectionOrder, maxEntries: number): Promise<string | null> {
   const base = await listTree(repoDir, order.base);
   const reference = order.target === null ? base : await listTree(repoDir, order.target);
   const workspace = withUnreadableKept(read.entries, reference, read.unreadable);
+  // An unreadable directory brings in everything the graded commit holds under it: the cap again, after.
+  if (workspace.length + read.skipped > maxEntries) return null;
   const entries = composeCollectionTree(workspace, base, collectionKeptPaths(order.keep));
   const index = { GIT_INDEX_FILE: join(repoDir, "..", "index") };
   await git(["--git-dir", repoDir, "update-index", "-z", "--index-info"], {
@@ -156,6 +161,7 @@ export async function collectWorkspace(order: CollectionOrder, deps: CollectDeps
     return err instanceof ReaderError || err instanceof ArchiveRefused ? "read_failed" : "git_error";
   };
 
+  const caps = { maxBytes: deps.maxBytes ?? RECEIVE_MAX_INPUT_BYTES, maxEntries: deps.maxEntries ?? COLLECTION_ENTRIES_MAX };
   const paths = stagingPaths(deps.volumesRoot, order.userId, order.assignment);
   // A workspace never opened has nothing to collect. The one thing the host asks of `work/`.
   if (!(await isDirectory(paths.workDir))) return { outcome: "no_snapshot" };
@@ -176,14 +182,12 @@ export async function collectWorkspace(order: CollectionOrder, deps: CollectDeps
     const snapshotAt = new Date().toISOString();
     let read: WorkTree;
     try {
-      read = await readWorkTree(deps.reader, paths.workDir, repoDir, left(), deps.maxBytes ?? RECEIVE_MAX_INPUT_BYTES);
+      read = await readWorkTree(deps.reader, paths.workDir, repoDir, left(), caps);
     } catch (err) {
       if (err instanceof ArchiveTooLarge) return { outcome: "too_large", snapshotAt, unreadable: err.unreadable };
       return fail(readFailure(err), err, "the workspace could not be read");
     }
     const facts = { snapshotAt, unreadable: read.unreadable.length + read.skipped };
-    // A workspace mostly unreadable is no hand-in to patch with the graded commit; it also bounds the portal's work.
-    if (facts.unreadable > COLLECTION_UNREADABLE_MAX) return fail("read_failed", new Error(`${facts.unreadable} paths unreadable`), "the workspace is mostly unreadable");
 
     try {
       const asked = deps.forge.authorization(repo, forgeOwner, url);
@@ -203,7 +207,8 @@ export async function collectWorkspace(order: CollectionOrder, deps: CollectDeps
       return fail(forgeFailure(err), err, "the base could not be read from GitHub");
     }
 
-    const tree = await composeTree(repoDir, read, order);
+    const tree = await composeTree(repoDir, read, order, caps.maxEntries);
+    if (tree === null) return { outcome: "too_large", ...facts };
     if (tree === (await local(["rev-parse", `${order.target ?? order.base}^{tree}`])).trim()) return { outcome: "unchanged", ...facts };
 
     const commit = (await local(["commit-tree", tree, "-p", order.base, "-m", "Workspace collected at the deadline"], { env: IDENTITY })).trim();

@@ -15,6 +15,9 @@ Environment=CODESPACE_VOLUMES=/srv/quiz-codespace/%i/volumes
 ExecStart=/usr/local/lib/quiz-codespace/shadow-snapshot.sh
 Nice=10
 IOSchedulingClass=idle
+# Each volume is bounded by shadow-snapshot.sh (60 s); this bounds the walk,
+# so a run never blocks the timer's next one for long.
+TimeoutStartSec=10min
 
 # Root reads what the student made unreadable to others (a chmod 600):
 # the file-mode capabilities, nothing else.

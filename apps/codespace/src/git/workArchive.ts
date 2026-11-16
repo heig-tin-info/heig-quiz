@@ -19,7 +19,7 @@
  * Streaming: a header at a time, a file's bytes handed on as they come.
  */
 import { checksumOk, decodeName, field, octal, TarError } from "@quiz/core/tar";
-import { projectPathProblem } from "@quiz/core/runner";
+import { projectPathProblem, type ProjectPathProblem } from "@quiz/core/runner";
 
 const BLOCK = 512;
 /** Linux's `PATH_MAX`: a longer name is no name a work tree holds. */
@@ -50,9 +50,11 @@ export interface ArchiveSink {
 }
 
 /** `path` as a work tree's relative path, or why not: `projectPathProblem`, and never `.git`. */
-export function workPathProblem(path: string): string | null {
-  return projectPathProblem(path.endsWith("/") ? `${path}x` : path) ?? (path.split("/").includes(".git") ? "git_segment" : null);
+export function workPathProblem(path: string): WorkPathProblem | null {
+  return projectPathProblem(path) ?? (path.split("/").includes(".git") ? "git_segment" : null);
 }
+
+export type WorkPathProblem = ProjectPathProblem | "git_segment";
 
 /** A stream read by exact counts; running out before a count is a truncated archive. */
 class Bytes {
