@@ -165,6 +165,42 @@ cat > "${VOL_BASE}/a/work/clangd-c.c" <<'EOF'
 int main(void) { printf("%ld\n", __STDC_VERSION__); return 0; }
 EOF
 
+# § 14: a pytest lab in miniature, as the C labs ship it: a Makefile whose
+# `test` runs `pytest -vv --junitxml=report.xml`, a test that runs the
+# compiled program through subprocess, and a conftest.py that imports
+# `_pytest.junitxml.xml_key` (the labs' points script reads the report through
+# it) and checks the junitxml plugin really stored its key.
+mkdir -p "${VOL_BASE}/a/work/pylab/tests"
+cat > "${VOL_BASE}/a/work/pylab/add.c" <<'EOF'
+#include <stdio.h>
+int main(void) {
+  int a, b;
+  if (scanf("%d %d", &a, &b) != 2) return 2;
+  printf("%d\n", a + b);
+  return 0;
+}
+EOF
+printf 'add: add.c\n\tgcc -Wall -o add add.c\ntest: add\n\tpytest -vv --junitxml=report.xml\n' \
+  > "${VOL_BASE}/a/work/pylab/Makefile"
+cat > "${VOL_BASE}/a/work/pylab/tests/conftest.py" <<'EOF'
+from _pytest.junitxml import xml_key
+
+
+def pytest_sessionstart(session):
+    assert session.config.stash.get(xml_key, None) is not None
+EOF
+cat > "${VOL_BASE}/a/work/pylab/tests/test_x.py" <<'EOF'
+import pathlib
+import subprocess
+
+EXE = pathlib.Path(__file__).resolve().parent.parent / "add"
+
+
+def test_adds():
+    out = subprocess.run([str(EXE)], input="2 3\n", capture_output=True, text=True, check=True)
+    assert out.stdout == "5\n"
+EOF
+
 echo "P1: hardened student image, working gdb"
 echo "image   : ${IMAGE}"
 echo "seccomp : ${REPO_ROOT}/infra/seccomp/codespace.json"
@@ -619,9 +655,9 @@ ERRS=$(printf '%s\n' "$LOGS_A" | grep -c 'Uncaught exception')
 [ "$ERRS" = "0" ] || fail "code-server logged $ERRS uncaught exception(s)" "$(printf '%s\n' "$LOGS_A" | tail -20)"
 ok "no uncaught exception at code-server start-up"
 
-cexec 'test -x /usr/bin/clangd && test -x /usr/bin/gdb && test -x /usr/bin/gcc && test -x /usr/bin/g++ && test -x /usr/bin/make && test -x /usr/bin/git && test -x /usr/bin/python3 && test -x /usr/local/bin/baygon' >/dev/null 2>&1 \
-  || fail "one of the expected binaries is missing (clangd, gdb, gcc, g++, make, git, python3, baygon)"
-ok "gcc, g++, gdb, make, git, clangd, python3, baygon present"
+cexec 'test -x /usr/bin/clangd && test -x /usr/bin/gdb && test -x /usr/bin/gcc && test -x /usr/bin/g++ && test -x /usr/bin/make && test -x /usr/bin/git && test -x /usr/bin/python3 && test -x /usr/local/bin/baygon && test -x /usr/bin/pytest' >/dev/null 2>&1 \
+  || fail "one of the expected binaries is missing (clangd, gdb, gcc, g++, make, git, python3, baygon, pytest)"
+ok "gcc, g++, gdb, make, git, clangd, python3, baygon, pytest present"
 
 cexec 'cmp /etc/clangd/config.yaml /home/student/.config/clangd/config.yaml && cmp /etc/clangd/config.yaml /run/code-server/xdg-config/clangd/config.yaml' >/dev/null 2>&1 \
   || fail "the clangd configuration is not at both expected paths"
@@ -886,6 +922,44 @@ case "$OUT" in
   *) fail "clangd did not parse the C file with -std=c17 and no error" "$OUT" ;;
 esac
 ok "clangd on a .c: still -std=c17, 0 errors"
+
+# --------------------------------------------------------------------------
+head2 "14. pytest: both forms, offline, nothing written outside /work"
+# --------------------------------------------------------------------------
+# The C labs whose `make test` runs `pytest`, and whose `make points` runs
+# `python3 -m pytest`, falling back on `python3 -m pip install pytest`
+# (2026-11-16). Debian's python3-pytest serves both forms for
+# /usr/bin/python3; pip stays out, and the container has no network anyway.
+OUT=$(cexec 'pytest --version' 2>&1) || fail "pytest --version failed" "$OUT"
+case "$OUT" in
+  "pytest "[0-9]*) ok "pytest on PATH: $OUT" ;;
+  *) fail "pytest --version printed something unexpected" "$OUT" ;;
+esac
+OUT=$(cexec '/usr/bin/python3 -m pytest --version' 2>&1) || fail "python3 -m pytest --version failed" "$OUT"
+ok "/usr/bin/python3 -m pytest: $OUT"
+if OUT=$(cexec 'python3 -m pip --version' 2>&1); then fail "python3 -m pip works: pip is in the image" "$OUT"; fi
+ok "python3 -m pip still fails: no pip in the image"
+cexec 'ls /usr/lib/python3/dist-packages/_pytest/__pycache__/*.cpython-313.pyc' >/dev/null 2>&1 \
+  || fail "pytest's byte-code was not compiled at build time"
+ok "pytest's byte-code compiled at build time (Python never writes on the root)"
+
+# `make test` as the labs write it, then the `python3 -m pytest` form of their
+# `make points`. -W error turns any warning into a failure, a cache that could
+# not be written (PytestCacheWarning) included.
+OUT=$(cexec 'cd /work/pylab && PYTEST_ADDOPTS="-W error" make test' 2>&1) \
+  || fail "make test (pytest -vv --junitxml) failed" "$OUT"
+case "$OUT" in
+  *"tests/test_x.py::test_adds PASSED"*"1 passed"*) ok "make test: pytest ran the compiled program through subprocess, 1 passed" ;;
+  *) fail "make test did not report test_adds as passed" "$OUT" ;;
+esac
+cexec 'cd /work/pylab && rm -f report.xml && /usr/bin/python3 -m pytest -q -W error --junitxml=report.xml' >/dev/null 2>&1 \
+  || fail "python3 -m pytest -q --junitxml failed" "$(cexec 'cd /work/pylab && /usr/bin/python3 -m pytest -q --junitxml=report.xml' 2>&1)"
+OUT=$(cexec "cd /work/pylab && python3 -c 'import xml.etree.ElementTree as E; s = E.parse(\"report.xml\").getroot().find(\"testsuite\"); print(s.get(\"tests\"), s.get(\"failures\"), s.get(\"errors\"))'" 2>&1)
+[ "$OUT" = "1 0 0" ] || fail "report.xml does not hold one passed test" "$OUT"
+ok "python3 -m pytest -q --junitxml=report.xml: report.xml in /work, 1 test, 0 failure (conftest imported xml_key)"
+cexec 'cd /work/pylab && test -d .pytest_cache && ls tests/__pycache__/test_x.cpython-313-pytest-*.pyc' >/dev/null 2>&1 \
+  || fail ".pytest_cache or the rewritten test's byte-code is missing in /work"
+ok ".pytest_cache and the assertion-rewritten byte-code land in /work"
 
 printf '\n%d assertions, all green.\n' "$NTEST"
 printf 'MESURE_DEMARRAGE_SECONDES=%s\n' "$BOOT"

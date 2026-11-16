@@ -73,6 +73,11 @@ RUN printf 'path-include /usr/share/man/*\n' > /etc/dpkg/dpkg.cfg.d/heig-man-pag
 #    curl and ca-certificates serve the .deb download and the /healthz
 #    acceptance test; procps and less the comfort of the terminal; python3
 #    is Baygon's interpreter (step 4b; gdb already pulls libpython3.13).
+#    python3-pytest serves the labs whose `make test` runs pytest: Debian's
+#    package, so both `pytest` and `python3 -m pytest` work for /usr/bin/python3,
+#    its byte-code compiled by the package's postinst. From the Debian mirror
+#    like every package of this list: the hashed venv of stage 2 exists only
+#    because Baygon is not packaged by Debian. Still no pip in the image.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         gcc \
@@ -89,7 +94,8 @@ RUN apt-get update && \
         ca-certificates \
         procps \
         less \
-        python3 && \
+        python3 \
+        python3-pytest && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. code-server from the GitHub release, pinned version.
