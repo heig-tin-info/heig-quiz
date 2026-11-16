@@ -11,10 +11,11 @@ import { Grade } from "../../Grade";
 import { useT } from "../../i18n";
 import { projectGradingKey } from "../../queryKeys";
 import { GradeStats } from "../../charts/GradeStats";
-import { GRADE_BAND_BAR, Histogram } from "../../charts/Histogram";
+import { bucketLabel, bucketTone, GRADE_BAND_BAR, Histogram } from "../../charts/Histogram";
 import { Summary } from "../../charts/Summary";
 import type { Navigate } from "../../router";
 import {
+  BAR_TONES,
   buttonClass,
   Card,
   cx,
@@ -39,6 +40,7 @@ import {
   rowsById,
   validatedRepos,
   visibleColumns,
+  type BinMember,
   type CellValue,
   type MatrixColumn,
   type MatrixGroup,
@@ -117,7 +119,7 @@ export function GradingTab({ project, navigate }: { project: ProjectDetail; navi
             </EmptyState>
           </Card>
         ) : (
-          <GradingStats project={project} repos={repos} columns={columns} />
+          <GradingStats project={project} repos={repos} columns={columns} navigate={navigate} />
         )}
       </section>
 
@@ -308,25 +310,86 @@ function MatrixCell({ cell, frozen }: { cell: CellValue; frozen: boolean }) {
   );
 }
 
+/**
+ * The card a bar of the marks' histogram opens: its range and count, then
+ * who is under it, the best mark first. A row opens that repository's
+ * grading, as the matrix's row does.
+ */
+function BinCard({
+  project,
+  bucket,
+  members,
+  navigate,
+}: {
+  project: ProjectDetail;
+  bucket: number;
+  members: readonly BinMember[];
+  navigate: Navigate;
+}) {
+  const t = useT();
+  const n = members.length;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-4 border-b border-line pb-2">
+        <span className="inline-flex items-center gap-2 text-sm font-semibold tabular-nums text-fg">
+          <span aria-hidden className={cx("size-2.5 shrink-0 rounded-[3px]", BAR_TONES[bucketTone(bucket)])} />
+          {bucketLabel(bucket)}
+        </span>
+        <span className="text-xs tabular-nums text-fg-muted">
+          {t(n === 1 ? "project.matrix.repos.one" : "project.matrix.repos", { n })}
+        </span>
+      </div>
+      {/* Nine rows and a half (`DETAIL_HEIGHT` of `Bars` counts on it): from the tenth the list scrolls, and the cut row says so. */}
+      <ul className="-mx-1.5 max-h-[16.5rem] overflow-y-auto overscroll-contain">
+        {members.map(({ repo, mark }) => (
+          <li
+            key={repo.id}
+            className="relative flex items-center justify-between gap-4 rounded-md px-1.5 py-1 text-[13px] transition-colors duration-150 hover:bg-surface-2"
+          >
+            {/* The whole row is the link; its name says where it goes, as the matrix's row. */}
+            <AppLink
+              route={{ view: "projectGrading", id: project.id }}
+              query={{ repo: repo.id }}
+              navigate={navigate}
+              className="min-w-0 truncate text-fg after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-accent"
+            >
+              <span className="sr-only">{t("project.matrix.open", { name: repo.label })}</span>
+              <span aria-hidden>{repo.label}</span>
+            </AppLink>
+            <span className="shrink-0 font-semibold tabular-nums">
+              <Grade value={mark} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** The marks, then each criterion's mean share; over the validated repositories only. */
 function GradingStats({
   project,
   repos,
   columns,
+  navigate,
 }: {
   project: ProjectDetail;
   repos: readonly ProjectGradingRepo[];
   columns: readonly MatrixColumn[];
+  navigate: Navigate;
 }) {
   const t = useT();
   const marks = markStats(repos, project.gradingScale);
   const criteria = criteriaStats(columns, repos);
   const { count } = marks.description;
+  const detail = (bucket: number) => (
+    <BinCard project={project} bucket={bucket} members={marks.members.get(bucket) ?? []} navigate={navigate} />
+  );
   return (
     <div className="space-y-3">
       <Summary
         title={t("results.histogram.title")}
-        chart={<Histogram buckets={marks.histogram} className="h-40 lg:h-48" />}
+        chart={<Histogram buckets={marks.histogram} detail={detail} className="h-40 lg:h-48" />}
         stats={
           <GradeStats
             description={marks.description}

@@ -68,6 +68,25 @@ describe("Popover — click", () => {
 });
 
 describe("Popover — hover", () => {
+  it("opens on the keyboard's focus, and Enter takes the reader into the card instead of closing it", async () => {
+    renderWithProviders(
+      <Popover label={CARD} open="hover" trigger={<button type="button">Open the card</button>}>
+        <a href="/people/marie">marie.dupont@heig-vd.ch</a>
+      </Popover>,
+    );
+    const trigger = screen.getByRole("button", { name: "Open the card" });
+    act(() => trigger.focus());
+    const panel = screen.getByRole("dialog", { name: CARD });
+    // Opened by the focus: it stays on the trigger.
+    expect(trigger).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByRole("dialog", { name: CARD })).toBe(panel);
+    expect(screen.getByRole("link")).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
   it("opens after the delay and closes when the pointer leaves", () => {
     vi.useFakeTimers();
     const trigger = renderPopover("hover");

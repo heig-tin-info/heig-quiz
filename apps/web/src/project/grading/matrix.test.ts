@@ -162,6 +162,45 @@ describe("statistics over the validated repositories", () => {
     expect(stats.passing).toBe(2);
   });
 
+  describe("who is under each bar", () => {
+    const linear = { kind: "linear", rounding: "nearest" } as const;
+    const named = (id: string, label: string, points: number | null): ProjectGradingRepo => ({
+      ...repo(id, table(), points === null ? null : { points, max: 20 }),
+      label,
+    });
+    const class_ = [
+      named("r1", "Zoé Martin", 14),
+      named("r2", "Ana Bovet", 14),
+      named("r3", "Luc Rochat", 15),
+      named("r4", "Eva Muller", 20),
+      named("r5", "Noé Perret", 4),
+      named("r6", "Tom Favre", 11),
+      named("r7", "Léa Morel", 9),
+      // Not validated: on no bar, in no list.
+      { ...named("r8", "Max Robert", 18), validation: { validated: false, missing: ["rendu.tests"], proposed: [] } },
+      named("r9", "Ines Blanc", null),
+    ];
+
+    it("lists under each bar exactly the repositories its count says, and none under an empty one", () => {
+      const stats = markStats(class_, linear);
+      for (const { bucket, count } of stats.histogram) {
+        expect(stats.members.get(bucket)?.length ?? 0).toBe(count);
+      }
+      const listed = [...stats.members.values()].flat().map((m) => m.repo.id);
+      expect(listed.sort()).toEqual(["r1", "r2", "r3", "r4", "r5", "r6", "r7"]);
+      expect([...stats.members.values()].every((list) => list.length > 0)).toBe(true);
+    });
+
+    it("orders a bar's list by mark, the best first, then by name", () => {
+      const stats = markStats(class_, linear);
+      // 15/20 and 14/20 both fall in [4.5, 5.0); the two 14/20 share their mark.
+      expect(stats.members.get(4.5)!.map((m) => m.repo.label)).toEqual(["Luc Rochat", "Ana Bovet", "Zoé Martin"]);
+      const marks = stats.members.get(4.5)!.map((m) => m.mark);
+      expect(marks[0]).toBeGreaterThan(marks[1]!);
+      expect(marks[1]).toBe(marks[2]);
+    });
+  });
+
   it("ranks the columns of the fold worst first, and counts the penalties and bonuses", () => {
     const stats = criteriaStats(visibleColumns(criteriaTree(table()), new Set()), repos);
     expect(stats.criteria.map((c) => [names([c.column])[0], c.ratio])).toEqual([

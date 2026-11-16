@@ -1,5 +1,8 @@
+import type { ReactNode } from "react";
+
 import { useT } from "../i18n";
 import { cx, Tip } from "./layers";
+import { Popover } from "./popover";
 
 // Bar: one horizontal bar cut into parts, for counts that add up to a whole;
 // Bars: a row of vertical bars, one count each (a distribution, a series).
@@ -105,7 +108,20 @@ export interface BarDatum {
   title?: string;
   /** A semantic fill instead of the neutral ink (a grade range's band). */
   tone?: BarTone | undefined;
+  /**
+   * What the bar counts, in full: a card (`Popover`, on hover or focus) for
+   * a staff chart that names who is under it. Without `onSelect` only; a
+   * bar with a value only, an empty one stays inert.
+   */
+  detail?: ReactNode;
 }
+
+/**
+ * Above this, the bar's card opens upward (`Popover`'s `height`): its
+ * padding, a header and nine rows and a half, the most the grading tab's
+ * card shows (16.5 rem, `BinCard`) before its list scrolls.
+ */
+const DETAIL_HEIGHT = 360;
 
 /**
  * Under a chart of `Bars` or `StackedBars`: the ticks of its axis, and the
@@ -180,6 +196,10 @@ function ChartAxis({
  * count, as `StackedBars` does. `selected` marks one bar pressed and ringed
  * (a shape, never a colour alone, N-A11Y-03) and fades the others; pressed,
  * it stays a button even when empty, so a choice can always be undone.
+ *
+ * A bar's `detail` (without `onSelect`) hangs a card on it instead: each
+ * non-empty bar that has one becomes a button named by its label and count,
+ * opening the card on hover, focus or a tap. The other bars stay hidden.
  */
 export function Bars({
   bars,
@@ -207,10 +227,13 @@ export function Bars({
   const t = useT();
   const top = Math.max(1, ...bars.map((b) => b.value));
   const column = "flex h-full min-w-0 flex-1 flex-col justify-end gap-1";
+  const hasDetail = (b: BarDatum) => !onSelect && b.detail != null && b.value > 0;
+  // A bar with a card is a control: the row is no longer decoration, its plain bars are.
+  const interactive = Boolean(onSelect) || bars.some(hasDetail);
   return (
     <div>
-      <div className={cx("flex items-end gap-0.5 sm:gap-1", className)} aria-hidden={onSelect ? undefined : true}>
-        {bars.map((b) => {
+      <div className={cx("flex items-end gap-0.5 sm:gap-1", className)} aria-hidden={interactive ? undefined : true}>
+        {bars.map((b, index) => {
           const shape = (
             <>
               {showValues ? (
@@ -222,9 +245,34 @@ export function Bars({
               />
             </>
           );
+          if (hasDetail(b)) {
+            const name = t("bar.part", { word: b.label, n: b.value });
+            return (
+              <Popover
+                key={b.key}
+                open="hover"
+                label={name}
+                // Toward the middle of the chart, so the card never leaves it on the far side.
+                align={index < bars.length / 2 ? "start" : "end"}
+                height={DETAIL_HEIGHT}
+                anchorClassName="flex h-full min-w-0 flex-1"
+                trigger={
+                  <button
+                    type="button"
+                    aria-label={name}
+                    className={cx(column, BAR_BUTTON, "aria-expanded:opacity-80")}
+                  >
+                    {shape}
+                  </button>
+                }
+              >
+                {b.detail}
+              </Popover>
+            );
+          }
           if (!onSelect) {
             return (
-              <div key={b.key} title={b.title} className={column}>
+              <div key={b.key} title={b.title} className={column} aria-hidden={interactive ? true : undefined}>
                 {shape}
               </div>
             );

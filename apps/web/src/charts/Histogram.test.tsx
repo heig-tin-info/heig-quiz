@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -54,6 +54,17 @@ describe("Histogram", () => {
     expect(fill("6.0: 1")).toHaveClass("bg-success");
     // An empty bar keeps the neutral stub, whatever its band.
     expect(fill("5.5–6.0: 0")).toHaveClass("bg-surface-3");
+  });
+
+  it("hangs a card on each non-empty bar given a detail; an empty bar stays inert", () => {
+    const buckets = histogram([1, 4, 4.2]);
+    renderWithProviders(<Histogram buckets={buckets} detail={(bucket) => <p>who is in {bucket}</p>} />);
+    // Two non-empty bars, two triggers; the nine empty ones are no control.
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["1.0–1.5: 1", "4.0–4.5: 2"]);
+    const bar = screen.getByRole("button", { name: "4.0–4.5: 2" });
+    expect(bar).toHaveAttribute("aria-haspopup", "dialog");
+    act(() => bar.focus());
+    expect(screen.getByRole("dialog", { name: "4.0–4.5: 2" })).toHaveTextContent("who is in 4");
   });
 
   it("names the top bucket by its exact grade, not by a range", () => {

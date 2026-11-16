@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -1959,6 +1959,53 @@ describe("the Grading tab", () => {
     const chloe = within(await matrix()).getAllByTestId("matrix-row")[2]!;
     expect(within(chloe).getAllByRole("cell")[0]!.className).toMatch(/italic/);
     expect(within(chloe).getAllByRole("cell").at(-1)!.textContent).toBe("—");
+  });
+
+  it("names who is under a bar of the marks, in a card its focus opens, each a way to their grading", async () => {
+    const repos = [
+      gradingRepo(1, "Alice", [8, 2, 2, 0]), // 12/12: 6.0
+      gradingRepo(2, "Dan", [8, 1, 2, 0]), // 11/12: 5.6
+      gradingRepo(3, "Bob", [8, 2, 1, 0]), // 11/12: 5.6
+      gradingRepo(4, "Eve", [8, 2, 1.5, 0]), // 11.5/12: 5.8
+      // Not validated: under no bar.
+      gradingRepo(5, "Chloé", [8, 2, 2, 0], { validation: { validated: false, missing: [], proposed: ["rendu.tests"] } }),
+    ];
+    routes(criteria(), { [`GET ${BASE}/grading`]: ok(gradingView(repos)) });
+    const { navigate } = renderPage("en", "grading");
+    const bar = await screen.findByRole("button", { name: "5.5–6.0: 3" });
+    // An empty bar has no card and takes no focus.
+    expect(screen.queryByRole("button", { name: "1.0–1.5: 0" })).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    act(() => bar.focus());
+    const card = screen.getByRole("dialog", { name: "5.5–6.0: 3" });
+    expect(bar).toHaveAttribute("aria-expanded", "true");
+    expect(within(card).getByText("3 repositories")).toBeInTheDocument();
+    // The best mark first, then by name; the count above the bar, the rows below it.
+    const rows = within(card).getAllByRole("listitem");
+    expect(rows).toHaveLength(3);
+    [
+      ["Grade Eve", "5.8"],
+      ["Grade Bob", "5.6"],
+      ["Grade Dan", "5.6"],
+    ].forEach(([name, grade], i) => {
+      expect(within(rows[i]!).getByRole("link", { name })).toBeInTheDocument();
+      expect(within(rows[i]!).getByText(grade!)).toBeInTheDocument();
+    });
+    expect(within(card).getByRole("link", { name: "Grade Eve" })).toHaveAttribute("href", expect.stringContaining(`repo=${repos[3]!.id}`));
+
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(bar).toHaveFocus();
+
+    // Enter takes the keyboard into the card, where a row opens its repository's grading.
+    act(() => bar.blur());
+    act(() => bar.focus());
+    await userEvent.keyboard("{Enter}");
+    const first = within(screen.getByRole("dialog", { name: "5.5–6.0: 3" })).getByRole("link", { name: "Grade Eve" });
+    expect(first).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(navigate).toHaveBeenLastCalledWith({ view: "projectGrading", id: makeProject().id }, { query: { repo: repos[3]!.id } });
   });
 
   it("says when no repository is validated yet, and names a group project's rows by group", async () => {

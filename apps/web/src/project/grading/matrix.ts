@@ -1,7 +1,17 @@
 import type { CriteriaTableRow, ProjectGradingRepo, ProjectGradingScale } from "@quiz/contracts";
-import { describe, histogram, isPassing, projectGrade, type Description, type GradeBand, type HistogramBucket } from "@quiz/domain";
+import {
+  describe,
+  histogram,
+  histogramBucket,
+  isPassing,
+  projectGrade,
+  type Description,
+  type GradeBand,
+  type HistogramBucket,
+} from "@quiz/domain";
 
 import { pointsKind, type PointsKind } from "../../ui/PointsInput";
+import { caseInsensitiveCompare } from "../../ui/table";
 
 /**
  * The pure rules of the Grading tab's matrix (ADR-106 §8 as amended
@@ -215,17 +225,39 @@ export const validatedRepos = (repos: readonly ProjectGradingRepo[]): ProjectGra
 export const repoMark = (repo: Pick<ProjectGradingRepo, "total">, scale: ProjectGradingScale): number | null =>
   repo.total === null ? null : projectGrade(repo.total.points, repo.total.max, scale).grade;
 
+/** A validated repository counted under a bar of the histogram, with its mark. */
+export interface BinMember {
+  repo: ProjectGradingRepo;
+  mark: number;
+}
+
 export interface MarkStats {
   description: Description;
   histogram: HistogramBucket[];
+  /**
+   * The repositories under each bar, by its bucket: the same marks through
+   * the same rule (`histogramBucket`), so a bar's list is as long as its
+   * count. The best mark first, then by name; an empty bar has no entry.
+   */
+  members: ReadonlyMap<number, readonly BinMember[]>;
   /** At or above the pass mark. */
   passing: number;
 }
 
-/** The marks of the validated repositories: their description and their histogram. */
+/** The marks of the validated repositories: their description, their histogram and who is under each bar. */
 export function markStats(repos: readonly ProjectGradingRepo[], scale: ProjectGradingScale): MarkStats {
-  const marks = validatedRepos(repos).map((r) => repoMark(r, scale)!);
-  return { description: describe(marks), histogram: histogram(marks), passing: marks.filter(isPassing).length };
+  const counted = validatedRepos(repos).map((repo) => ({ repo, mark: repoMark(repo, scale)! }));
+  const marks = counted.map((m) => m.mark);
+  const members = new Map<number, BinMember[]>();
+  for (const member of counted) {
+    const bucket = histogramBucket(member.mark);
+    const list = members.get(bucket);
+    if (list) list.push(member);
+    else members.set(bucket, [member]);
+  }
+  // Names as a table of people sorts them: regardless of case and accents.
+  for (const list of members.values()) list.sort((a, b) => b.mark - a.mark || caseInsensitiveCompare(a.repo.label, b.repo.label));
+  return { description: describe(marks), histogram: histogram(marks), members, passing: marks.filter(isPassing).length };
 }
 
 export interface CriterionStat {

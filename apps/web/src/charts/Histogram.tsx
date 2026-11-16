@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { formatGrade, gradeBand, MAX_GRADE, type GradeBand } from "@quiz/domain";
 import type { ResultsStats } from "@quiz/contracts";
 
@@ -16,6 +18,12 @@ export const GRADE_BAND_BAR = {
   pass: "success",
 } as const satisfies Record<GradeBand, BarTone>;
 
+/**
+ * A bucket's fill. The buckets are half grades, so 4.0 and 4.5 fall on their
+ * edges: a bucket's band is its lower bound's (the letters would not be).
+ */
+export const bucketTone = (bucket: number): BarTone => GRADE_BAND_BAR[gradeBand(bucket)];
+
 /** How the buckets of `@quiz/domain#histogram` are named on screen. */
 export function bucketLabel(bucket: number, step = 0.5): string {
   if (bucket >= MAX_GRADE) return formatGrade(bucket);
@@ -32,10 +40,13 @@ export function Histogram({
   step = 0.5,
   onSelect,
   selected,
+  detail,
   className,
 }: {
   buckets: ResultsStats["histogram"];
   step?: number;
+  /** Who a non-empty bucket counts, as the card its bar opens on hover or focus (`Bars`' `detail`). */
+  detail?: ((bucket: number) => ReactNode) | undefined;
   /** A bar pressed, by its bucket: the filter of a grade table. */
   onSelect?: ((bucket: number) => void) | undefined;
   /** The bucket chosen, marked on its bar. */
@@ -58,9 +69,8 @@ export function Histogram({
         value: b.count,
         label: bucketLabel(b.bucket, step),
         tick: Number.isInteger(b.bucket) ? b.bucket.toFixed(0) : "",
-        // The buckets are half grades, so 4.0 and 4.5 fall on their edges:
-        // a bucket's band is its lower bound's (the letters would not be).
-        tone: GRADE_BAND_BAR[gradeBand(b.bucket)],
+        tone: bucketTone(b.bucket),
+        ...(detail && b.count > 0 ? { detail: detail(b.bucket) } : {}),
       }))}
     />
   );
