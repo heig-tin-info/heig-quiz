@@ -5,10 +5,13 @@
  * classroom_archived`, re-read under a share lock in the write's own
  * transaction), and followed by a refresh hint.
  *
- * A column is addressed by its activity (`kind` + `activityId`), which must
- * be one the classroom's gradebook has (`gradebookEntries`): anything else
- * is the 404 of a missing column. A stored column row is materialized by the
- * first write that names it, with the defaults of its kind.
+ * A column is addressed by its activity (`kind` + `activityId`). A mark's
+ * must be one the classroom's gradebook has (`gradebookEntries`); a column's
+ * settings, any activity that may have them, from the draft on
+ * (`columnFactsOf`, ADR-131); anything else is the 404 of a missing column.
+ * A stored column row is materialized by the first write that names it, with
+ * the defaults of its kind; a draft's stays inert, every reader going
+ * through `gradebookEntries`, until it leaves the draft.
  *
  * A mark wins over what the activity gives the student, so putting one over
  * a REAL grade is deliberate: the request says `override: true`, or it is
@@ -26,13 +29,14 @@ import type { GradebookColumnPatch, GradebookMarkParams, GradebookMarkPut, Grade
 
 import { audit, type AuditActor } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
-import { classrooms, enrollments, gradebookColumns, gradebookMarks, gradebookSettings } from "../../db/schema.js";
-import type { GradebookEntry } from "../activity/kind.js";
-import { gradebookEntries } from "../activity/service.js";
+import { classrooms, enrollments, gradebookColumns, gradebookComponents, gradebookMarks, gradebookSettings } from "../../db/schema.js";
+import type { GradebookEntry, GradebookEntryFacts } from "../activity/kind.js";
+import { gradebookColumnFacts, gradebookEntries } from "../activity/service.js";
 import { notFoundError } from "../http.js";
 import {
   activityRef,
   claimedSeats,
+  columnFactsOf,
   columnOf,
   defaultSettings,
   meanPublished,
@@ -59,11 +63,22 @@ export interface RoomScope {
 }
 
 
-/** The classroom read FOR SHARE: an archived one's gradebook is read-only. */
-async function lockClassroom(tx: Tx, classroomId: string): Promise<void> {
-  const [room] = await tx.select({ archivedAt: classrooms.archivedAt }).from(classrooms).where(eq(classrooms.id, classroomId)).for("share");
+/** The classroom read FOR SHARE, with its course: whether it is archived holds until the write commits. */
+async function lockedRoom(tx: Tx, classroomId: string): Promise<{ courseId: string; archived: boolean }> {
+  const [room] = await tx
+    .select({ courseId: classrooms.courseId, archivedAt: classrooms.archivedAt })
+    .from(classrooms)
+    .where(eq(classrooms.id, classroomId))
+    .for("share");
   if (!room) throw notFoundError("classroom");
-  if (room.archivedAt !== null) throw new GradebookError("classroom_archived", "The classroom is archived: its gradebook is read-only");
+  return { courseId: room.courseId, archived: room.archivedAt !== null };
+}
+
+/** An archived classroom's gradebook is read-only. */
+async function lockClassroom(tx: Tx, classroomId: string): Promise<void> {
+  if ((await lockedRoom(tx, classroomId)).archived) {
+    throw new GradebookError("classroom_archived", "The classroom is archived: its gradebook is read-only");
+  }
 }
 
 /** The column the classroom's gradebook has for this activity, or the 404 of a missing one. */
@@ -73,8 +88,8 @@ async function entryOf(db: Db, classroomId: string, kind: GradebookEntry["kind"]
   return entry;
 }
 
-/** The stored column of an entry, made with its kind's defaults when it is the first write to name it. */
-async function ensureColumn(tx: Tx, classroomId: string, entry: GradebookEntry, ctx: WriteContext): Promise<ColumnRow> {
+/** The stored column of an activity, made with its kind's defaults when it is the first write to name it. */
+async function ensureColumn(tx: Tx, classroomId: string, entry: GradebookEntryFacts, ctx: WriteContext): Promise<ColumnRow> {
   await tx
     .insert(gradebookColumns)
     .values({ id: randomUUID(), classroomId, ...activityRef(entry), ...defaultSettings(entry.mode), updatedBy: ctx.userId, updatedAt: ctx.now })
@@ -226,7 +241,9 @@ export async function clearMark(db: Db, scope: RoomScope, params: GradebookMarkP
 /**
  * `PATCH …/gradebook/columns/:kind/:activityId`: the weight, whether it
  * counts, its position, its component of the mean (F-GBOOK-06, ADR-131) — a
- * component of the classroom's course, else the 404 of a missing one.
+ * component of the classroom's course, else the 404 of a missing one. From
+ * the draft on: a draft's settings are stored, kept across a change of mode
+ * (ADR-092 §4), and its column takes them when it appears (ADR-131).
  */
 export async function patchColumn(
   db: Db,
@@ -235,7 +252,7 @@ export async function patchColumn(
   body: GradebookColumnPatch,
   ctx: WriteContext,
 ): Promise<void> {
-  const entry = await entryOf(db, scope.room.id, params.kind, params.activityId);
+  const entry = await columnFactsOf(db, scope.room.id, params.kind, params.activityId);
   const changed = await db.transaction(async (tx) => {
     await lockClassroom(tx, scope.room.id);
     if (body.componentId) await componentOfCourse(tx, scope.course.id, body.componentId, "key share");
@@ -260,6 +277,56 @@ export async function patchColumn(
   });
   // The students read a column's flag, its component and its place always, its weight with the published mean.
   if (changed) gradebookChanged(scope.course.id, await studentUserIds(db, scope.room.id));
+}
+
+/**
+ * A duplicate's column settings (ADR-131): the copy `to.activityId`, just
+ * made in the classroom `to.classroomId`, takes the stored weight and flag
+ * of its source's column, and its component when the component is of the
+ * copy's course — a copy into another course has none of it. Never the
+ * position, which orders the source's own classroom. The row is stored even
+ * when it holds the defaults, so a stored flag survives a change of mode as
+ * the source's does (ADR-092 §4). Nothing stored, nothing copied: the copy
+ * reads its mode's defaults. Nothing either for an activity that may have no
+ * settings (a poll), nor into an archived classroom, whose gradebook is
+ * read-only. Audited as the target classroom's `gradebook.column_updated`,
+ * from its mode's defaults; no hint, a copy being a draft no table lists.
+ */
+export async function copyColumnSettings(
+  db: Db,
+  kind: GradebookEntry["kind"],
+  fromId: string,
+  to: { classroomId: string; activityId: string },
+  ctx: Omit<WriteContext, "owner">,
+): Promise<void> {
+  const copy = await gradebookColumnFacts(db, to.classroomId, kind, to.activityId);
+  if (copy === null) return;
+  await db.transaction(async (tx) => {
+    const [source] = await tx.select().from(gradebookColumns).where(columnOf({ kind, activityId: fromId }));
+    if (!source) return;
+    const room = await lockedRoom(tx, to.classroomId);
+    if (room.archived) return;
+    // Locked as an assignment locks it (`componentOfCourse`): a deletion of it waits, or has happened.
+    const [component] =
+      source.componentId === null
+        ? []
+        : await tx
+            .select({ id: gradebookComponents.id })
+            .from(gradebookComponents)
+            .where(and(eq(gradebookComponents.id, source.componentId), eq(gradebookComponents.courseId, room.courseId)))
+            .for("key share");
+    const after: ColumnSettings = { weight: source.weight, counts: source.counts, position: null, componentId: component?.id ?? null };
+    await tx
+      .insert(gradebookColumns)
+      .values({ id: randomUUID(), classroomId: to.classroomId, ...activityRef(copy), ...after, updatedBy: ctx.userId, updatedAt: ctx.now });
+    await audit(tx, {
+      ...ctx.actor,
+      action: "gradebook.column_updated",
+      subjectType: "classroom",
+      subjectId: to.classroomId,
+      payload: { activityKind: kind, activityId: to.activityId, before: defaultSettings(copy.mode), after },
+    });
+  });
 }
 
 /** `PATCH …/gradebook`: publish the mean to the students, or stop (F-GBOOK-05, F-GBOOK-06). */

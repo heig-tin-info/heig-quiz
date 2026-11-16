@@ -4,6 +4,11 @@
 
 Accepted (2026-10-09, product owner). No migration: `mode` is a text column.
 
+Amended 2026-11-16 by [ADR-131](ADR-131-composantes-de-la-moyenne.md) §13
+(product owner): §4 only — a draft may now have a stored column (its
+settings are written from the draft on), whose `counts` a change of mode
+keeps like any stored column's.
+
 Scope: the `mode` of an evaluation and of a template (`exam` or `exercise`),
 the cutoff after which it freezes, what a change writes besides the mode, and
 the controls that offer it.

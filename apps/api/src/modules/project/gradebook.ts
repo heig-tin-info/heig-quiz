@@ -16,7 +16,7 @@
  * A student who never accepted has no repository: no score here — the
  * teacher's own mark (`gradebook_marks`) fills the cell (spec 06 no. 48).
  */
-import { and, eq, isNotNull, ne, type SQL } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, type SQL } from "drizzle-orm";
 
 import type { FinalScoreSource } from "@quiz/domain";
 
@@ -49,8 +49,26 @@ export function gradebookProjects(db: Db, classroomId: string): Promise<ProjectR
   return db.select().from(projects).where(and(eq(projects.classroomId, classroomId), inGradebook()));
 }
 
+/** A graded project: one that may have a column. On a query that has `projects` in scope. */
+const graded = (): SQL => ne(projects.gradingMode, "none");
+
 /** {@link gradebookProjects}' rule, on a query that has `projects` in scope. */
-const inGradebook = (): SQL => and(liveProject(), ne(projects.gradingMode, "none"))!;
+const inGradebook = (): SQL => and(liveProject(), graded())!;
+
+/**
+ * A project of the classroom whose gradebook column's settings may be
+ * written and read (ADR-131): {@link gradebookProjects}' rule whatever the
+ * state, a draft or a scheduled one included — graded, not archived — while
+ * its column waits for the publication. Undefined otherwise. The caller has
+ * loaded the classroom through `staffAccess`.
+ */
+export async function columnProject(db: Db, classroomId: string, projectId: string): Promise<ProjectRow | undefined> {
+  const [row] = await db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.classroomId, classroomId), eq(projects.id, projectId), isNull(projects.archivedAt), graded()));
+  return row;
+}
 
 /** A seat's grade as the staff read it. */
 export interface ProjectGradeCell {

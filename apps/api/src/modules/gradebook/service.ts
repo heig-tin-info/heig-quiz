@@ -9,7 +9,8 @@
  * - `table.ts`: the staff's table and the student's own cells (the student
  *   exit of the gradebook, spec 05 §5.7);
  * - `writes.ts`: the audited staff writes;
- * - `columns.ts`: what is stored beside the activities;
+ * - `columns.ts`: what is stored beside the activities, and one column's
+ *   settings, readable and writable from the draft on (ADR-131);
  * - `components.ts`: the components of the mean of a course (ADR-131), the
  *   course owner's to write;
  * - the activities' columns and cells come through the `ActivityKind`
@@ -20,5 +21,6 @@
  * the staff's table.
  */
 export { staffGradebook, studentGradebook } from "./table.js";
-export { clearMark, patchColumn, patchSettings, setMark, type WriteContext } from "./writes.js";
+export { clearMark, copyColumnSettings, patchColumn, patchSettings, setMark, type WriteContext } from "./writes.js";
+export { columnSettings } from "./columns.js";
 export { createComponent, deleteComponent, listComponents, updateComponent, type CourseWriteContext } from "./components.js";

@@ -11,13 +11,14 @@
  * of the results page), the student's the rows of their Grades page
  * (`studentEvaluationGrades`: F-RES-04's policy, the counted attempt of F-EVAL-15).
  * A released exam not taken is an absence (a1.0), an exercise not taken an
- * empty cell (`notTakenCell`); a poll never has a column.
+ * empty cell (`notTakenCell`); a poll never has a column. A draft has none
+ * yet, but its column's settings already (`columnFacts`, ADR-131).
  */
 import type { EvaluationCard, EvaluationGradeRow, GradebookStudentCell } from "@quiz/contracts";
 import { ABSENT_GRADE, evaluationColumnKind, gradeFromPoints, isFinishedAttempt, notTakenCell } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { gradebookEvaluations, listActivities, scaleOf, type EvaluationRecord } from "../evaluation/service.js";
+import { columnEvaluation, gradebookEvaluations, listActivities, scaleOf, type EvaluationRecord } from "../evaluation/service.js";
 import { ownEvaluationAccess } from "../guards.js";
 import { studentEvaluationGrades, studentHome } from "../live/service.js";
 import { resultsView } from "../results/service.js";
@@ -147,6 +148,10 @@ export const evaluationActivity: ActivityKind<"evaluation"> = {
       ...facts(ev),
       staffCells: (cellsDb, seats) => staffCells(cellsDb, ev, seats),
     }));
+  },
+  async columnFacts(db, classroomId, activityId) {
+    const ev = await columnEvaluation(db, classroomId, activityId);
+    return ev === undefined ? null : facts(ev);
   },
   /** An evaluation the student has no Grades row for (open, or not theirs yet) has no column for them. */
   async studentGradebookEntries(db, userId, classroomId, now) {

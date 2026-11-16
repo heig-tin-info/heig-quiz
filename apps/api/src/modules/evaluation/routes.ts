@@ -39,7 +39,7 @@ import {
 import type { Locale } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
-import { tracer, type AuditAction } from "../../audit.js";
+import { actorOf, tracer, type AuditAction } from "../../audit.js";
 import { EXPORT_FORMATS, sendExport, type ExportFormat } from "../../documents/files.js";
 import { hasKey } from "../pool/config.js";
 import { exampleConfig } from "../pool/service.js";
@@ -52,6 +52,7 @@ import {
   requireCourseRole,
   teacherGuard,
 } from "../guards.js";
+import * as gradebook from "../gradebook/service.js";
 import { notFound, readerLang, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
 import { evaluationDocument, evaluationDocumentTree, handout, handoutTree } from "./document.js";
@@ -304,7 +305,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
     { preHandler: requireTeacher },
     teacher(
       { params: IdParam, body: EvaluationDuplicate, load: staffEvaluation },
-      async ({ req, reply, body, scope }) => {
+      async ({ req, reply, now, body, scope }) => {
         // A copy into another classroom is a write there: it goes through the
         // same predicate, so a teacher cannot seed a room they cannot reach.
         let target = scope.classroom.id;
@@ -319,6 +320,14 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
           createdBy: callerOf(req).id,
         });
         await trace(req, "evaluation.duplicate", "evaluation", row.id, { from: scope.evaluation.id });
+        // Its gradebook column's settings follow it (ADR-131), written by
+        // the `gradebook` module, which owns them: from here, not from this
+        // module's service, which the gradebook reaches through `activity`.
+        await gradebook.copyColumnSettings(app.db, "evaluation", scope.evaluation.id, { classroomId: target, activityId: row.id }, {
+          actor: actorOf(req),
+          userId: callerOf(req).id,
+          now,
+        });
         evaluationChanged(target, row.id);
         return reply.code(201).send(service.toEvaluation(row));
       },

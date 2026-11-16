@@ -70,6 +70,8 @@ export type GradebookSettingsPatch = z.infer<typeof GradebookSettingsPatch>;
  * `PATCH …/gradebook/columns/:kind/:activityId` (F-GBOOK-06): at least one
  * field. `componentId`: a component of the classroom's course (`404
  * component` otherwise), or null to take the column out of any (ADR-131).
+ * Open from the draft on: the settings of an activity not listed yet are
+ * stored, and its column takes them when it appears (ADR-131).
  */
 export const GradebookColumnPatch = z
   .object({
@@ -128,7 +130,7 @@ export const GradebookComponentPatch = z
   .refine((patch) => Object.keys(patch).length > 0, "nothing to change");
 export type GradebookComponentPatch = z.infer<typeof GradebookComponentPatch>;
 
-/** One component as the course's staff edit it; `inUse`: a column of some classroom of the course is in it, so it cannot be deleted. */
+/** One component as the course's staff edit it; `inUse`: a column of some classroom of the course is in it, a draft's included, so it cannot be deleted. */
 export const GradebookCourseComponent = z.object({
   id: z.uuid(),
   name: z.string(),
@@ -141,6 +143,25 @@ export type GradebookCourseComponent = z.infer<typeof GradebookCourseComponent>;
 /** `GET /courses/:id/gradebook/components`, and every write's answer: the course's components in creation order. */
 export const GradebookComponents = z.array(GradebookCourseComponent);
 export type GradebookComponents = z.infer<typeof GradebookComponents>;
+
+/**
+ * `GET …/gradebook/columns/:kind/:activityId` (F-GBOOK-06, ADR-131): one
+ * column's settings as an activity's settings edit them, from the draft on —
+ * stored, or its mode's defaults — with the components of the course to put
+ * it in, whether the column is released, and whether the classroom's mean is
+ * published: together, whether a change moves what the students read.
+ */
+export const GradebookColumnSettings = z.object({
+  weight: GradebookWeight,
+  counts: z.boolean(),
+  componentId: z.uuid().nullable(),
+  /** False for a draft. */
+  released: z.boolean(),
+  meanPublished: z.boolean(),
+  /** The course's components, in creation order. */
+  components: z.array(z.object({ id: z.uuid(), name: z.string(), weight: GradebookWeight })),
+});
+export type GradebookColumnSettings = z.infer<typeof GradebookColumnSettings>;
 
 /** The gradebook routes' refusals, worded by the web app (invariant 1). */
 export const GRADEBOOK_REFUSALS = [

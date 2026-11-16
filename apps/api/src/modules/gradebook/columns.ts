@@ -7,11 +7,15 @@
  */
 import { and, asc, eq, isNotNull, type SQL } from "drizzle-orm";
 
+import type { GradebookActivityKind, GradebookColumnSettings } from "@quiz/contracts";
 import { countsByDefault, WEIGHT_DEFAULT, type GradebookColumnKind, type MarkOutcome } from "@quiz/domain";
 
 import type { Db, Tx } from "../../db/client.js";
 import { enrollments, gradebookColumns, gradebookMarks, gradebookSettings, users } from "../../db/schema.js";
 import type { GradebookEntryFacts } from "../activity/kind.js";
+import { gradebookColumnFacts } from "../activity/service.js";
+import { notFoundError } from "../http.js";
+import { courseComponents } from "./components.js";
 
 export type ColumnRow = typeof gradebookColumns.$inferSelect;
 export type MarkRow = typeof gradebookMarks.$inferSelect;
@@ -51,6 +55,46 @@ export async function storedColumns(db: Db | Tx, classroomId: string): Promise<M
 
 export const settingsOf = (row: ColumnRow | undefined, mode: GradebookColumnKind): ColumnSettings =>
   row ? { weight: row.weight, counts: row.counts, position: row.position, componentId: row.componentId } : defaultSettings(mode);
+
+/**
+ * The activity whose column's settings may be written and read, from the
+ * draft on — each kind's rule (`columnFacts`, ADR-131) — or the 404 of a
+ * missing column: a poll, another classroom's activity, an archived or
+ * ungraded project.
+ */
+export async function columnFactsOf(db: Db, classroomId: string, kind: GradebookActivityKind, activityId: string): Promise<GradebookEntryFacts> {
+  const facts = await gradebookColumnFacts(db, classroomId, kind, activityId);
+  if (facts === null) throw notFoundError("column");
+  return facts;
+}
+
+/**
+ * `GET …/gradebook/columns/:kind/:activityId` (ADR-131): one column's
+ * settings, stored or its mode's defaults, from the draft on, with what an
+ * activity's settings need beside them — the course's components, whether
+ * the column is released, whether the mean is published.
+ */
+export async function columnSettings(
+  db: Db,
+  scope: { room: { id: string }; course: { id: string } },
+  params: { kind: GradebookActivityKind; activityId: string },
+): Promise<GradebookColumnSettings> {
+  const facts = await columnFactsOf(db, scope.room.id, params.kind, params.activityId);
+  const [[row], components, published] = await Promise.all([
+    db.select().from(gradebookColumns).where(columnOf(facts)),
+    courseComponents(db, scope.course.id),
+    meanPublished(db, scope.room.id),
+  ]);
+  const { weight, counts, componentId } = settingsOf(row, facts.mode);
+  return {
+    weight,
+    counts,
+    componentId,
+    released: facts.released,
+    meanPublished: published,
+    components: components.map(({ id, name, weight: share }) => ({ id, name, weight: share })),
+  };
+}
 
 /** The teacher's order first, then the activity's own date. */
 export function inOrder<T extends { entry: Pick<GradebookEntryFacts, "date" | "title">; settings: Pick<ColumnSettings, "position"> }>(

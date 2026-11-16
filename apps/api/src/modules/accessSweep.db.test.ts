@@ -265,7 +265,7 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
     .select({ id: journalPageRevisions.id })
     .from(journalPageRevisions)
     .where(eq(journalPageRevisions.classroomId, seed.classroomId));
-  // A closed exam of the classroom: the gradebook's column (`kind`, `activityId`), which a draft has none of.
+  // A closed exam of the classroom: the gradebook's column (`kind`, `activityId`) — a draft has its settings (ADR-131), not its marks.
   const graded = await evaluationService.createEvaluation(db, { classroomId: seed.classroomId, title: "Graded", mode: "exam", createdBy: owner.id });
   await db.update(evaluations).set({ state: "closed" }).where(eq(evaluations.id, graded.id));
   // An entry of the course's catalog of conditions (F-ORG-16): the `:cid`.

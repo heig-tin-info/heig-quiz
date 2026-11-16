@@ -9,6 +9,8 @@
  * now stands (`GradebookStaff`). The settings and the marks are open to
  * every member of the staff, an assistant included (ADR-068: a classroom's
  * settings), but a mark replacing a released grade is an owner's (`403 owner_required`); what makes a grade final is the activity's own release.
+ * A column's settings are read and written from the activity's draft on
+ * (ADR-131); its marks wait for its column.
  *
  * The STUDENT's route loads the classroom through `readableClassroom` with
  * the student payload forced: a student, a teacher in the student view and
@@ -98,7 +100,21 @@ export async function gradebookPlugin(app: FastifyInstance) {
     }),
   );
 
-  /** F-GBOOK-06: a column's weight, whether it counts, its position, its component of the mean (ADR-131). */
+  /** ADR-131: one column's settings, from the draft on, for an activity's own settings; a staff read like the table. */
+  app.get(
+    "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: GradebookColumnParams, load: (req, reply, p) => accessibleClassroom(app, req, reply, p) },
+      async ({ params, scope }) => service.columnSettings(app.db, scope, params),
+    ),
+  );
+
+  /**
+   * F-GBOOK-06: a column's weight, whether it counts, its position, its
+   * component of the mean (ADR-131), from the draft on; answers the table,
+   * which lists no draft — a settings screen re-reads the GET above.
+   */
   app.patch(
     "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId",
     { preHandler: requireTeacher },

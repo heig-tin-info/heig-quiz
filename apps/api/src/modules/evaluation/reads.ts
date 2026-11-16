@@ -427,6 +427,10 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
     );
 }
 
+/** The exams and exercises of a classroom, whatever their state: those that may have a gradebook column — a poll never has one. */
+const withColumn = (classroomId: string): SQL =>
+  and(eq(evaluations.classroomId, classroomId), inArray(evaluations.mode, ["exam", "exercise"]))!;
+
 /**
  * The evaluations of a classroom the gradebook has a column for (F-GBOOK-01,
  * D06): exams and exercises that are no draft — a poll never has one. The
@@ -436,13 +440,22 @@ export function gradebookEvaluations(db: Db, classroomId: string): Promise<Evalu
   return db
     .select()
     .from(evaluations)
-    .where(
-      and(
-        eq(evaluations.classroomId, classroomId),
-        inArray(evaluations.mode, ["exam", "exercise"]),
-        ne(evaluations.state, "draft"),
-      ),
-    );
+    .where(and(withColumn(classroomId), ne(evaluations.state, "draft")));
+}
+
+/**
+ * An exam or exercise of the classroom, whatever its state, draft included:
+ * one whose gradebook column's settings may be written and read (ADR-131),
+ * while its column waits for it to leave the draft
+ * ({@link gradebookEvaluations}). Undefined for a poll, another classroom's,
+ * a missing one. The caller has loaded the classroom through `staffAccess`.
+ */
+export async function columnEvaluation(db: Db, classroomId: string, evaluationId: string): Promise<EvaluationRecord | undefined> {
+  const [row] = await db
+    .select()
+    .from(evaluations)
+    .where(and(withColumn(classroomId), eq(evaluations.id, evaluationId)));
+  return row;
 }
 
 /**

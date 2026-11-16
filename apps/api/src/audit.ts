@@ -255,7 +255,9 @@ export type AuditAction =
    * for none), `override` (a real grade lay beneath); `mark_cleared`: the
    * same, `after` null. `column_updated`: `kind`, `activityId`, `before`
    * and `after` (`{ weight, counts, position, componentId }`, the weight in
-   * whole percent since #545, the component since ADR-131). `mean_published` /
+   * whole percent since #545, the component since ADR-131), a draft's
+   * included, and a duplicate's settings copied from its source (`before`
+   * its mode's defaults; ADR-131). `mean_published` /
    * `mean_unpublished`: no payload. Never a grade of another student.
    */
   | "gradebook.mark_set"

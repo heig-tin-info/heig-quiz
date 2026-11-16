@@ -140,6 +140,16 @@ export interface ActivityKind<K extends ActivityKindName> {
   gradebookEntries(db: Db, classroomId: string): Promise<GradebookEntry[]>;
 
   /**
+   * One activity of this kind in a classroom whose gradebook column's
+   * settings may be written and read, DRAFT INCLUDED (ADR-131): its facts,
+   * or null — the rule of `gradebookEntries` without the draft exclusion. The
+   * settings exist from the draft on; the column, its cells and its place in
+   * the mean wait for `gradebookEntries`. The staff payload: the classroom is
+   * loaded through `staffAccess` first.
+   */
+  columnFacts(db: Db, classroomId: string, activityId: string): Promise<GradebookEntryFacts | null>;
+
+  /**
    * The caller's own columns and cells of this kind in a classroom (M5-03a,
    * F-GBOOK-05): only what the kind's student view lets a student read. The
    * classroom is loaded through `readableClassroom` first, on the caller's

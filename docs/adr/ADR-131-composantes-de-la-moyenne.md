@@ -6,8 +6,9 @@ Accepted (2026-11-16, product owner).
 
 Scope: the components of the mean of a course (fr « composantes »), which
 column of a classroom's gradebook counts toward a mean, the two-level mean,
-what a student reads of them, the CSV, and who writes them. F-GBOOK-07
-(new); F-GBOOK-01, -02, -04, -05, -06, F-ORG-12, F-ORG-14 amended.
+what a student reads of them, the CSV, and who writes them; a column's
+settings from the activity's draft on (§13). F-GBOOK-07 (new); F-GBOOK-01,
+-02, -04, -05, -06, F-ORG-12, F-ORG-14, F-EVAL-14 amended.
 
 Relations: amends [ADR-074](ADR-074-carnet-de-notes-marques-stockees.md) §6
 (which columns count), §7 (the mean), §9 (what an archived gradebook's
@@ -15,8 +16,11 @@ read-only covers), its amendment of 2026-10-08 (the weights and the class
 means, the CSV) and its amendment of 2026-10-13 (what the student reads
 before the mean is published); amends
 [ADR-068](ADR-068-roles-de-l-equipe-du-cours.md) §3 (three owner-only
-routes). Depends on ADR-068 §2 (reach, then role) and ADR-074 §8 (the
-gradebook reads, it never grades).
+routes); amends ADR-074 §6 (a column's settings exist from the draft on,
+§13). Depends on ADR-068 §2 (reach, then role) and ADR-074 §8 (the
+gradebook reads, it never grades); follows
+[ADR-092](ADR-092-changer-le-mode-d-une-evaluation.md) §4 (a stored flag
+across a change of mode).
 
 ## Context
 
@@ -141,9 +145,55 @@ The word "group" was set aside: Groups already names the students' groups
     how the two-level mean is computed, and its result carries the
     components, each column's component and each student's means of them.
 
+13. **A column's settings from the draft on** (product owner, 2026-11-16):
+    a teacher sets an activity's weight, whether it counts and its
+    component while creating it, in its settings, so the weight is not
+    changed after publication.
+    - **Which activity.** Each kind answers one rule,
+      `ActivityKind.columnFacts`: any exam or exercise of the classroom
+      whatever its state, never a poll; any graded project of the classroom
+      not archived, whatever its state — `gradebookEntries`' rule without
+      its draft exclusion. `PATCH …/gradebook/columns/:kind/:activityId`
+      resolves through it (the rest of the write unchanged: archived
+      classroom `409`, component of the course or `404`, audited, hints) and
+      so does a new staff read, `GET` on the same address
+      (`GradebookColumnSettings`): the effective `weight`, `counts`,
+      `componentId` — stored or the mode's defaults —, the course's
+      components (id, name, weight), `released` (false for a draft) and
+      `meanPublished`, what a settings screen needs to warn that a change
+      moves what the students read. The marks keep `gradebookEntries`: a
+      mark on a draft is a 404.
+    - **Inert until published.** The draft's row is materialized by the
+      first write, as any column's. Every reader — the staff's table, the
+      CSV, the student's cells, the Grades page, the mean, the assistant —
+      goes through `gradebookEntries` / `studentGradebookEntries`, which
+      list no draft, so the row reaches nobody until the activity leaves
+      the draft; then its column appears with the stored settings. It holds
+      its component **in use** (`409 component_in_use` on a deletion), and
+      deleting the draft takes it along (the foreign key's cascade).
+    - **Mode change.** A draft's stored `counts` is kept when the
+      evaluation's mode changes, as
+      [ADR-092](ADR-092-changer-le-mode-d-une-evaluation.md) §4 keeps any
+      stored column's; a draft nobody touched reads its new mode's default.
+    - **Duplication** (F-EVAL-14). A copy carries its source's stored weight
+      and counted flag, and its component when the copy's classroom is of
+      the same course — another course has not got it; never the position,
+      which orders the source's classroom. A source with no stored row
+      copies nothing; neither does a copy into an archived classroom, whose
+      gradebook is read-only. The `gradebook` module writes it
+      (`copyColumnSettings`), called by the duplicate's route handler — the
+      evaluation's service, which the gradebook reaches through `activity`,
+      does not import it — and audits it as the target classroom's
+      `gradebook.column_updated`, `before` the mode's defaults. A project
+      has no duplication.
+    - **No configuration lock.** These settings are the gradebook's, not
+      the evaluation's: [ADR-079](ADR-079-conditions-de-l-evaluation.md)
+      §4's `configLock` does not cover them, and they stay writable after
+      the release.
+
 **Planned, not built** (the product owner's later parts): the screens (the
-course's Settings section, the gradebook's), a column's settings from the
-draft on, and templates carrying a column's weight, counted flag and
+course's Settings section, the gradebook's, the activities' settings rows
+over §13), and templates carrying a column's weight, counted flag and
 component. Rules per component (a pass mark per component) stay out.
 
 ## Consequences
@@ -161,6 +211,10 @@ component. Rules per component (a pass mark per component) stay out.
 - Each reader of the mean (staff table, student's tab, Grades page, CSV,
   assistant) goes through `countsInMean` and `gradebookMeans`; a new reader
   must too.
+- A draft's settings (§13) are stored where no reader looks until it leaves
+  the draft: a reader that listed columns without `gradebookEntries` would
+  read them early. A component a draft's column is in cannot be deleted,
+  though no table shows that column yet.
 
 ## Alternatives considered
 
@@ -180,3 +234,8 @@ component. Rules per component (a pass mark per component) stay out.
   copy the components per classroom for a case the product owner judged
   rare; the live reading is stated instead.
 - **"Group" as the name.** Rejected: Groups are the students' (ADR-070).
+- **A column's settings after publication only** (proposed by the spec
+  challenger: a draft has no column, so nothing to set). Declined by the
+  product owner (§13): the teacher decides the weight when building the
+  activity, and should not have to come back after it is published — when
+  changing it may already move what the students read.
