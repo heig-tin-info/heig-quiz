@@ -288,6 +288,9 @@ reviewer in charge), marked *review*: it is not the owner's.
    allowlist gains the portal's host; it stands on ADR-051's own station
    checks, `docs/development/kiosk.md` §7). This waives §9's
    "implementation waits", **not the proofs**.
+   *Amended 2026-11-16 (owner): turned on in production on 2026-11-15
+   without the proofs, for a class on 2026-11-16; what has been observed and
+   what is still owed is in the Status.*
    *The flag's rule* (*review*). One predicate,
    `kioskProjectsOn(config) = KIOSK_ATTESTATION !== "off" && KIOSK_PROJECTS`,
    read in exactly two places: the mode write refuses a change TO a station
@@ -453,9 +456,10 @@ reviewer in charge), marked *review*: it is not the owner's.
      after a launch therefore leaves that portal session unclosed. A close
      request is marked before it is enqueued, so a crash between the two
      leaves the station held until that Retire then Reactivate.
-     *Amended 2026-11-16 (owner): the hold is unchanged, but a restarted
-     station no longer waits for the 6 h or an administrator — the
-     [amendment of 2026-11-16](#amendment-2026-11-16-a-restarted-station-frees-itself).*
+     *Amended 2026-11-16 (owner): the hold's rule is unchanged, but `/kiosk`
+     learns it from the code request's `409` only (the station's payload no
+     longer carries it), and a restarted station no longer waits for the 6 h
+     or an administrator — the [amendment of 2026-11-16](#amendment-2026-11-16-a-restarted-station-frees-itself).*
 5. **Accepted residual risks** (*owner*):
    - (a) **Suspension** (§7): a suspended station only covers the frame;
      the portal's writes continue — weaker than an exam's `423` (N-SEC-10).
@@ -485,7 +489,8 @@ reviewer in charge), marked *review*: it is not the owner's.
 ## Amendment 2026-11-16: a restarted station frees itself
 
 Scope: point 4 of the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag)
-("The ends"; "The hold" is unchanged) and §13's causes. The product owner
+("The ends"; "The hold" keeps its rule, now told by the code request's
+`409` only) and §13's causes. The product owner
 decided on 2026-11-16, after a spec challenge, following a production
 incident the same day.
 
@@ -500,21 +505,33 @@ incident the same day.
 - **The new end.** When a station asks for a pairing code
   (`POST /app/api/kiosk/device_authorization`) while a project sitting of it
   is still live (a session points to its pairing), and its attestation is
-  fresh (`kioskCheckFresh`, under two minutes: the rule of the start route's
-  `freshAttestation`, §4), the server ends that sitting's station session
-  through `dropSessions`, cause **`restarted`**; the portal close follows as
-  for every end. The station's page never asks for a code during a sitting,
-  so such a request from a freshly attested station proves its browser is
-  back on `/kiosk`. It proves nothing about the student. Without a fresh
-  attestation, or from a station that is not active and named, nothing
-  ends. An exam's station session is never touched.
+  fresh (`kioskCheckFresh`, the rule of the start route's
+  `freshAttestation`, §4: a last check under two minutes old that is `ok`
+  or `unavailable`, so a Google outage counts as fresh), the server ends
+  that sitting's station session through `dropSessions`, cause
+  **`restarted`**; the portal close follows as for every end. Only `/kiosk`
+  asks for a code, so such a request from a freshly attested station means
+  its browser is back on `/kiosk`: a restart, a lost session or station
+  cookie, or the app sending the station back there (`toKiosk`, from
+  `StationOrLanding` and `ConfinedElsewhere` in `apps/web/src/App.tsx`). It
+  proves nothing about the student. Without a fresh attestation, or from a
+  station that is not active and named, nothing ends. An exam's station
+  session is never touched.
+- **The station asks while held.** Before this amendment `/kiosk` read the
+  hold from its attestation (`KioskStation.held`) and asked for no code
+  while held, so the request above was never sent. The hold is now the code
+  request's `409 station_held` alone: `/kiosk` attests, asks for a code and,
+  held, shows the same screen and tries again every 30 s. The field is
+  removed from the station's payload.
 - **The hold is unchanged.** The same request still answers
   `409 station_held`: a code is issued only once `close_completed_at` is
   set, and the poll keeps its own check. The station's browser still holds
   the previous student's portal cookies; pairing before the portal confirmed
   the close would let the next student's workspace content read them on the
-  shared portal origin. The station's next turn of `/kiosk` gets a code once
-  the close completed, within about a minute.
+  shared portal origin. The first turn of `/kiosk` after the restart ends
+  the sitting and is refused; a later turn — attest, ask for a code, `409`
+  until the close completes — gets a code, usually the next one, about 30 s
+  later.
 - **Unlike an exam** ([ADR-051](ADR-051-postes-kiosque-attestes.md) §7):
   an exam's previous session dies when the new pairing is consumed; a
   project's when the code is requested, because its close must finish
@@ -531,3 +548,6 @@ incident the same day.
     answer is SEB when the level allows it.
   - (c) A restart near the deadline costs the minutes of a new pairing.
   - (d) A room-wide power cut closes every sitting at once.
+  - (e) A station sent back to `/kiosk` without a restart (a lost cookie,
+    `toKiosk`) ends its sitting the same way: the audit's cause still reads
+    `restarted`, and only that student's own sitting on that station ends.

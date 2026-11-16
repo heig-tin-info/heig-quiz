@@ -19,7 +19,6 @@ import type { KioskAttestation } from "@quiz/domain";
 import type { Db } from "../../db/client.js";
 import { kioskDevices } from "../../db/schema.js";
 import { DomainError } from "../http.js";
-import { stationHeld } from "./sittings.js";
 
 /**
  * The station's own cookie, its identity, never a user's: the base name,
@@ -72,12 +71,12 @@ export async function deviceByCredential(
 /** What a station's page shows of itself; null when the cookie names no station. */
 export async function stationOf(db: Db, cookie: string | undefined): Promise<KioskStation | null> {
   const device = await deviceByCredential(db, cookie);
-  return device ? stationView(db, device) : null;
+  return device ? stationView(device) : null;
 }
 
-/** A known station as its own page sees it, the hold included (ADR-089, amendment point 4). */
-export async function stationView(db: Db, device: KioskDeviceRow): Promise<KioskStation> {
-  return { label: device.label, status: device.status, held: await stationHeld(db, device.id) };
+/** A known station as its own page sees it; its hold is the `409` of a code request (ADR-089, amendment of 2026-11-16). */
+export function stationView(device: KioskDeviceRow): KioskStation {
+  return { label: device.label, status: device.status };
 }
 
 /**

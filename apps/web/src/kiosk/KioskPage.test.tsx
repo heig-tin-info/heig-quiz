@@ -186,35 +186,32 @@ describe("the station's loop (ADR-051 §7)", () => {
     expect(calls.find((c) => c.url === "/app/api/kiosk/attest/verify")!.body).toEqual({ response: "UkVTUA==" });
   });
 
-  // ADR-089, amendment of 2026-11-15, point 4: the hold, read from the attestation's station.
-  it("shows no code while the station is held, and asks for one once the hold lifts", async () => {
-    let verified = 0;
-    const { calls } = station({
-      "POST /app/api/kiosk/attest/verify": () =>
-        ok({ station: { label: "Poste de secours n° 7", status: "active", held: ++verified === 1 } }),
-      "POST /app/api/kiosk/token": fail(400, { error: "authorization_pending" }),
-    });
-    const { result } = renderHook(() => useKioskStation(MOCK, true, vi.fn()), { wrapper });
-    await advance();
-    expect(result.current.kind).toBe("held");
-    expect(count(calls, "/app/api/kiosk/device_authorization")).toBe(0);
-    await advance(KIOSK_RETRY_MS);
-    expect(result.current.kind).toBe("code");
-  });
-
-  it("says the station is held when the code is refused 409 station_held, and tries again", async () => {
+  // ADR-089, amendment of 2026-11-15, point 4, and of 2026-11-16: the hold is
+  // the code request's 409, so a held station keeps asking — the request that
+  // lets the server end a sitting the station lost to a restart.
+  it("asks a held station for a code each turn, after its attestation, and shows the code once the hold lifts", async () => {
     let asked = 0;
     const { calls } = station({
       "POST /app/api/kiosk/device_authorization": () =>
-        ++asked === 1 ? fail(409, { error: "station_held" }) : ok(auth()),
+        ++asked <= 2 ? fail(409, { error: "station_held" }) : ok(auth()),
       "POST /app/api/kiosk/token": fail(400, { error: "authorization_pending" }),
     });
     const { result } = renderHook(() => useKioskStation(MOCK, true, vi.fn()), { wrapper });
     await advance();
     expect(result.current.kind).toBe("held");
+    expect(calls.map((c) => c.url)).toEqual([
+      "/app/api/kiosk/attest/challenge",
+      "/app/api/kiosk/attest/verify",
+      "/app/api/kiosk/device_authorization",
+    ]);
     await advance(KIOSK_RETRY_MS);
-    expect(result.current.kind).toBe("code");
+    expect(result.current.kind).toBe("held");
+    expect(count(calls, "/app/api/kiosk/attest/verify")).toBe(2);
     expect(count(calls, "/app/api/kiosk/device_authorization")).toBe(2);
+    await advance(KIOSK_RETRY_MS);
+    expect(result.current).toMatchObject({ kind: "code", auth: { user_code: "BCDF-GHJK" } });
+    expect(count(calls, "/app/api/kiosk/attest/verify")).toBe(3);
+    expect(count(calls, "/app/api/kiosk/device_authorization")).toBe(3);
   });
 
   it("waits for the configuration, and says the platform is out of reach without the kiosk path", async () => {

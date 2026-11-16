@@ -11,7 +11,7 @@
  *   exhaustion audited and the station held until an administrator's
  *   Retire then Reactivate gets a close through;
  * - the hold: no pairing code, no consumption, for an exam too, until
- *   `close_completed_at`; the station's own payload says it;
+ *   `close_completed_at`, told by the code request's `409 station_held`;
  * - the kill switch never stops a close: the sweep with both flags off;
  * - Leave this station ends the caller's own sitting only, and no other
  *   session kind reaches it;
@@ -23,7 +23,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEVICE_CODE_GRANT, KioskStation } from "@quiz/contracts";
+import { DEVICE_CODE_GRANT } from "@quiz/contracts";
 import { KIOSK_FRESH_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
@@ -403,23 +403,18 @@ describe("the hold (amendment point 4)", () => {
   const stationPost = (url: string, station: TestStation, payload?: Payload) => postAsStation(server.app, url, station, payload);
   const poll = (station: TestStation, deviceCode: string) =>
     stationPost("/app/api/kiosk/token", station, { grant_type: DEVICE_CODE_GRANT, device_code: deviceCode });
-  const stationView = async (station: TestStation) =>
-    KioskStation.parse((await server.app.inject({ method: "GET", url: "/app/api/kiosk/station", headers: { cookie: station.cookie } })).json());
 
   it("refuses a pairing code, for an exam too, until the close completes, then lifts", async () => {
     const { student, projectId, evaluationId, teacher } = await world();
     await inject("POST", `/app/api/evaluations/${evaluationId}/start`, teacher.headers, { confirm: true });
     const s = await sitting(student.id, { projectId });
-    // Held while the sitting runs, and once it has ended until its close completes.
-    expect(await stationView(s.station)).toMatchObject({ held: true });
+    // Held once the sitting has ended, until its close completes.
     expect((await leave(s.headers)).statusCode).toBe(204);
     const refused = await stationPost("/app/api/kiosk/device_authorization", s.station);
     expect(refused.statusCode).toBe(409);
     expect(refused.json()).toEqual({ error: "station_held" });
-    expect(await stationView(s.station)).toMatchObject({ held: true });
 
     expect(await run(jobs.pop()!)).toBe("closed");
-    expect(await stationView(s.station)).toMatchObject({ held: false });
     const auth = await authorizeStation(server.app, s.station);
     const approved = await inject("POST", "/app/api/pair", student.headers, { code: auth.user_code, evaluationId });
     expect(approved.statusCode, approved.body).toBe(200);
