@@ -98,9 +98,9 @@ export function useCourseComponents(courseId: string) {
 }
 
 /**
- * The owner's writes of a course's components. Each answers the list, which
- * replaces the cache; every gradebook of the course may have moved with it
- * (a weight, a component gone), so the tables are read again.
+ * The owner's writes of a course's components. Every gradebook of the course
+ * may have moved with them (a weight, a component gone), so everything under
+ * the gradebook's root is read again, the list included.
  */
 export function useComponentWrites(courseId: string) {
   const qc = useQueryClient();
@@ -108,10 +108,7 @@ export function useComponentWrites(courseId: string) {
   const send = useMutation({
     mutationFn: ({ path, method, body }: { path: string; method: "POST" | "PATCH" | "DELETE"; body?: unknown }) =>
       api<GradebookComponents>(`${base}${path}`, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }),
-    onSuccess: (list) => {
-      qc.setQueryData(courseComponentsKey(courseId), list);
-      void qc.invalidateQueries({ queryKey: gradebookRootKey, predicate: (q) => q.queryKey[1] !== "components" });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: gradebookRootKey }),
   });
   return {
     pending: send.isPending,

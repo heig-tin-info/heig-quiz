@@ -191,11 +191,11 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
   const placement = (column: GradebookColumn): Placement | undefined => {
     if (!hasComponents) return undefined;
     if (!column.counts) return { kind: "out" };
-    const component = components.find((c) => c.id === column.componentId);
-    return component ? { kind: "in", name: component.name } : { kind: "none" };
+    // Counted, in no component: in no mean (ADR-131 §4).
+    if (!countsInMean(column.counts, column.componentId, hasComponents)) return { kind: "none" };
+    return { kind: "in", name: components.find((c) => c.id === column.componentId)?.name ?? "" };
   };
-  /** Counted, in no component: in no mean (ADR-131 §4). */
-  const inNoMean = data.columns.filter((column) => column.counts && !countsInMean(column.counts, column.componentId, hasComponents));
+  const inNoMean = data.columns.filter((column) => placement(column)?.kind === "none");
 
   /**
    * A column's write. One that moves the means students read now — a

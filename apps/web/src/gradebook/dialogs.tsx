@@ -12,14 +12,15 @@ import {
   type GradebookColumn,
   type GradebookColumnPatch,
   type GradebookMarkPut,
+  type GradebookStaff,
   type GradebookStaffCell,
   type GradebookStaffRow,
 } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { Field, FormDialog, Textarea } from "../ui";
+import { Field, FormDialog, numberOf, Textarea } from "../ui";
 import { fullName } from "./cells";
-import { ColumnSettingsFields, numberOf, settingsPatch, type ColumnSettings, type ComponentChoice } from "./ColumnSettingsFields";
+import { ColumnSettingsFields, settingsPatch, type ColumnSettings } from "./ColumnSettingsFields";
 
 /** The teacher's own score for one student of one column: points out of a maximum, and a staff-only comment. */
 export function ScoreDialog({
@@ -122,11 +123,10 @@ export function ExcuseDialog({
 }
 
 /**
- * A column's settings in the mean (`ColumnSettingsFields`): its weight, a
- * whole percentage 0 to 100 checked by the route's own schema (invariant 7),
- * and, on a course with components of the mean, where it counts (ADR-131).
- * Without components it is the column's weight dialog, as it always was.
- * `onSubmit` gets the write, null when nothing changed.
+ * A column's settings in the mean (`ColumnSettingsFields`): where it counts
+ * — in a component of the mean (ADR-131), in the mean, or out of it — and
+ * its weight, a whole percentage 0 to 100 checked by the route's own schema
+ * (invariant 7). `onSubmit` gets the write, null when nothing changed.
  */
 export function ColumnDialog({
   column,
@@ -136,7 +136,7 @@ export function ColumnDialog({
   onSubmit,
 }: {
   column: GradebookColumn;
-  components: readonly ComponentChoice[];
+  components: GradebookStaff["components"];
   submitting: boolean;
   onClose: () => void;
   onSubmit: (patch: GradebookColumnPatch | null) => void;
@@ -146,7 +146,7 @@ export function ColumnDialog({
   const [settings, setSettings] = useState(before);
   return (
     <FormDialog
-      title={t(components.length > 0 ? "gbook.column.menu" : "gbook.weight.title", { column: column.title })}
+      title={t("gbook.column.menu", { column: column.title })}
       onClose={onClose}
       submitLabel={t("common.save")}
       submitting={submitting}

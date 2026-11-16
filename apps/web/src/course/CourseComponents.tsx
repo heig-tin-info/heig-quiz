@@ -26,7 +26,7 @@ import { COMPONENT_NAME_MAX, WEIGHT_DEFAULT } from "@quiz/domain";
 
 import { useConfirm } from "../confirm";
 import { gradebookRefusalMessage, useComponentWrites, useCourseComponents } from "../gradebook/api";
-import { numberOf } from "../gradebook/ColumnSettingsFields";
+import { WeightField } from "../gradebook/ColumnSettingsFields";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { FormError } from "../queryError";
@@ -165,7 +165,7 @@ export function CourseComponents({ courseId, canManage }: { courseId: string; ca
 
 /**
  * A component's name and weight, two fields, so a `Modal`. The rule of the
- * weights stands above the weight, as in a column's weight dialog. The
+ * weights stands under the weight, as in a column's settings dialog. The
  * write and its questions are the section's; a refusal (a name taken) is
  * said under the fields and the dialog stays open on it.
  */
@@ -186,9 +186,8 @@ function ComponentDialog({
 }) {
   const t = useT();
   const [name, setName] = useState(component?.name ?? "");
-  const [weightText, setWeightText] = useState(String(component?.weight ?? WEIGHT_DEFAULT));
+  const [weight, setWeight] = useState(component?.weight ?? WEIGHT_DEFAULT);
   const named = GradebookComponentName.safeParse(name);
-  const weight = numberOf(weightText);
   const valid = named.success && GradebookWeight.safeParse(weight).success;
   return (
     <FormDialog
@@ -210,13 +209,10 @@ function ComponentDialog({
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
-      <p className="text-sm text-fg-muted">{t("courses.components.weightHint")}</p>
-      <Field
-        label={t("gbook.weight.label")}
-        inputMode="numeric"
-        value={weightText}
-        onChange={(e) => setWeightText(e.target.value)}
-        width="w-28"
+      <WeightField
+        hint={t("courses.components.weightHint")}
+        defaultValue={component?.weight ?? WEIGHT_DEFAULT}
+        onChange={setWeight}
       />
     </FormDialog>
   );

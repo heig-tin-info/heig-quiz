@@ -441,8 +441,10 @@ on("GET", "/app/api/student/classrooms/:id/gradebook", (m) => {
   }
   const components = componentsOf(room.courseId);
   const means = meansOf(columns, outcomes, components);
-  // What the student reads of each column: whether it counts, and where (ADR-131 §7).
-  const counting = new Map(columns.map((c) => [c.activityId, studentCounting(c.counts, c.componentId, components.length > 0)]));
+  // What the student reads of each column: whether it counts, and where (ADR-131 §7); an excused cell counts in no mean (#969), as on the server.
+  const counting = new Map(
+    columns.map((c) => [c.activityId, studentCounting(c.counts && cells[c.activityId]?.kind !== "excused", c.componentId, components.length > 0)]),
+  );
   return {
     classroomId: room.id,
     // Only the components that hold one of the student's columns that count; their weight and mean with the published mean only.

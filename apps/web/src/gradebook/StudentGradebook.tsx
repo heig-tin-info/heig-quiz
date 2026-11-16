@@ -76,48 +76,70 @@ export function StudentGradebook({ classroomId }: { classroomId: string }) {
         </div>
       </li>
     ));
+  const withComponents = data.components.length > 0;
+  /**
+   * The cards of a group: one per component of the mean in the group that
+   * counts (ADR-131), each closed by its mean; otherwise one card without a
+   * heading, closed by the mean when the group counts.
+   */
+  const parts = (columns: GradebookStudentColumn[], counts: boolean): Part[] =>
+    counts && withComponents
+      ? data.components.map((component) => ({
+          key: component.id,
+          component,
+          columns: columns.filter((column) => column.componentId === component.id),
+          mean: component.mean,
+          help: t("gbook.componentMean.studentHelp"),
+        }))
+      : [{ key: "all", component: null, columns, mean: counts ? data.mean : undefined, help: t("gbook.mean.studentHelp") }];
   return (
     <CountsGroups rows={data.columns}>
-      {(columns, counts) =>
-        counts && data.components.length > 0 ? (
-          // With components (ADR-131): a card per component, closed by its mean; the mean of the means last, alone.
-          <div className="space-y-4">
-            {data.components.map((component) => (
-              <ComponentGroup key={component.id} component={component}>
-                {rows(columns.filter((column) => column.componentId === component.id), true)}
-                <MeanRow mean={component.mean} help={t("gbook.componentMean.studentHelp")} />
-              </ComponentGroup>
-            ))}
-            {data.mean === undefined ? null : (
-              <Card>
-                <ul>
-                  <MeanRow mean={data.mean} help={t("gbook.mean.componentsStudentHelp")} />
-                </ul>
-              </Card>
-            )}
-          </div>
-        ) : (
-          <Card>
-            <ul className="divide-y divide-line">
-              {rows(columns, counts)}
-              {/* The mean is of the columns that count: it closes their group. */}
-              {counts ? <MeanRow mean={data.mean} help={t("gbook.mean.studentHelp")} /> : null}
-            </ul>
-          </Card>
-        )
-      }
+      {(columns, counts) => (
+        <div className="space-y-4">
+          {parts(columns, counts).map((part) => (
+            <ComponentGroup key={part.key} component={part.component}>
+              {rows(part.columns, counts)}
+              <MeanRow mean={part.mean} help={part.help} />
+            </ComponentGroup>
+          ))}
+          {/* The mean of the components' means, last and alone. */}
+          {counts && withComponents && data.mean !== undefined ? (
+            <Card>
+              <ul>
+                <MeanRow mean={data.mean} help={t("gbook.mean.componentsStudentHelp")} />
+              </ul>
+            </Card>
+          ) : null}
+        </div>
+      )}
     </CountsGroups>
   );
 }
 
+/** A card of a group: a component's columns and its mean, or the whole group's. */
+interface Part {
+  key: string;
+  component: GradebookStudentComponent | null;
+  columns: GradebookStudentColumn[];
+  /** Absent while the teacher has not published the mean. */
+  mean: number | null | undefined;
+  help: string;
+}
+
 /**
- * One component of the mean inside "Count toward your average": its name as
- * a sub-heading, with its weight once the mean is published (the payload
- * carries it only then), over a card of its columns.
+ * A card of hairline rows, under the component's name as a sub-heading when
+ * it is one — with its weight once the mean is published (the payload
+ * carries it only then).
  */
-function ComponentGroup({ component, children }: { component: GradebookStudentComponent; children: ReactNode }) {
+function ComponentGroup({ component, children }: { component: GradebookStudentComponent | null; children: ReactNode }) {
   const t = useT();
   const id = useId();
+  const card = (
+    <Card>
+      <ul className="divide-y divide-line">{children}</ul>
+    </Card>
+  );
+  if (!component) return card;
   return (
     <section className="space-y-1.5" aria-labelledby={id}>
       <h4 id={id} className="text-[13px] font-semibold text-fg-muted">
@@ -126,9 +148,7 @@ function ComponentGroup({ component, children }: { component: GradebookStudentCo
           <span className="font-normal"> · {t("gbook.weight", { weight: String(component.weight) })}</span>
         )}
       </h4>
-      <Card>
-        <ul className="divide-y divide-line">{children}</ul>
-      </Card>
+      {card}
     </section>
   );
 }

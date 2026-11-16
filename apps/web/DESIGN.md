@@ -1997,12 +1997,24 @@ What replaces them:
   component — so in no mean — shows the `warning` triangle there instead,
   named in words, and one 13 px muted line with the same triangle above the
   matrix counts such columns. The head opens the column's settings dialog
-  directly (no menu): "Counts in", a select of the components then "Does
-  not count", over the weight. One mean column per component (96 px, `w-24`)
+  directly (no menu). One mean column per component (96 px, `w-24`)
   stands after the spacer, before the mean: its name over its weight in the
   head, each student's mean of it right-aligned and semibold as the mean
   is, its class mean in the footer; it scrolls, only the mean is pinned. No
   colour of its own: the components are told apart by their names.
+- **A column's settings dialog** ("Set the weight…" in the column's menu,
+  or the head itself on a course with components): one select for where
+  it counts, then the weight with its rule under the field. The select is
+  "Component" (each component, then "Out of the mean") on a course with
+  components, "Mean" ("In the mean", "Out of the mean") without; a column
+  counted in no component reads "No component", the warning line under it.
+  The quick "Count in the mean" / "Leave out of the mean" item stays in the
+  menu of a course without components.
+- **The students' means move now.** Changing a released column's weight,
+  component or whether it counts while students see their mean asks first
+  ("Change the students' means?"), on every course, the quick menu item
+  included; nothing is asked when no mean moves (a column that counts in
+  no mean before nor after).
 - **Primary.** Export CSV, in the page header (`variant="primary"`), a plain
   download link. The switch "Students see their mean" is a `SettingRow`
   above the matrix, never an accent; every other action is a menu or a

@@ -23,8 +23,21 @@ const URL_LIST = `/app/api/courses/${COURSE}/gradebook/components`;
 const cours = { id: COURS, name: "Cours", weight: 50, inUse: true };
 const labo = { id: LABO, name: "Labo", weight: 50, inUse: false };
 
-function renderSection(list: unknown[], canManage = true, extra: Parameters<typeof mockFetch>[0] = {}) {
-  const fetched = mockFetch({ [`GET ${URL_LIST}`]: ok(list), ...extra });
+type Reply = ReturnType<typeof ok>;
+
+/** The section on `list`; a write that succeeds answers the list the next GET reads, as the server's does. */
+function renderSection(list: unknown[], canManage = true, extra: Record<string, Reply> = {}) {
+  let current = list;
+  const answered = Object.fromEntries(
+    Object.entries(extra).map(([route, reply]) => [
+      route,
+      () => {
+        if (reply.status === 200) current = reply.body as unknown[];
+        return reply;
+      },
+    ]),
+  );
+  const fetched = mockFetch({ [`GET ${URL_LIST}`]: () => ok(current), ...answered });
   renderWithProviders(<CourseComponents courseId={COURSE} canManage={canManage} />);
   return fetched;
 }
@@ -133,19 +146,6 @@ describe("the course's components of the mean", () => {
     await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(writes(calls)).toEqual([]);
-  });
-
-  it("refuses a weight out of 0 to 100 before sending it", async () => {
-    renderSection([cours]);
-    await userEvent.click(within(await screen.findByRole("group", { name: "Actions on Cours" })).getByRole("button", { name: "Edit" }));
-    const dialog = await screen.findByRole("dialog");
-    const weight = within(dialog).getByLabelText("Weight (%)");
-    const save = within(dialog).getByRole("button", { name: "Save" });
-    for (const bad of ["101", "2.5", "-1", ""]) {
-      await userEvent.clear(weight);
-      if (bad) await userEvent.type(weight, bad);
-      expect(save, bad).toBeDisabled();
-    }
   });
 
   it("asks before deleting, and says when it is the last one", async () => {

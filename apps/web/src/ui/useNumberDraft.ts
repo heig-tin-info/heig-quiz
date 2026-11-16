@@ -1,5 +1,8 @@
 import { useState, type ChangeEvent, type KeyboardEvent } from "react";
 
+/** Parses what a person typed in a number field: a comma is a decimal point; empty or anything else is NaN. */
+export const numberOf = (text: string): number => (text.trim() === "" ? Number.NaN : Number(text.trim().replace(",", ".")));
+
 /**
  * The props of a number input that writes when the teacher leaves it — Enter
  * leaves it —, not at every keystroke (a count typed digit by digit is a run

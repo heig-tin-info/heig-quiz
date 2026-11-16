@@ -322,7 +322,7 @@ describe("the settings of a column and of the mean", () => {
     expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({ counts: true });
 
     await choose(screen.getByRole("button", { name: /^Test 1/ }), "Set the weight…");
-    const dialog = await screen.findByRole("dialog", { name: "Weight of Test 1" });
+    const dialog = await screen.findByRole("dialog", { name: "Settings of Test 1" });
     const save = within(dialog).getByRole("button", { name: "Save" });
     const field = within(dialog).getByLabelText("Weight (%)");
     for (const bad of ["101", "2.5", "-1"]) {
@@ -335,6 +335,20 @@ describe("the settings of a column and of the mean", () => {
     await userEvent.click(save);
     await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(2));
     expect(calls.filter((c) => c.method === "PATCH")[1]!.body).toEqual({ weight: 40 });
+  });
+
+  it("sets in its dialog whether a column counts, in the mean or out of it, with no component sent", async () => {
+    const { calls } = renderTab(makeTable(), { [`PATCH ${URL_COLUMN(TEST)}`]: ok(makeTable()) });
+    await choose(await screen.findByRole("button", { name: /^Test 1/ }), "Set the weight…");
+    const dialog = await screen.findByRole("dialog", { name: "Settings of Test 1" });
+    const mean = within(dialog).getByLabelText("Mean");
+    expect(mean).toHaveDisplayValue("In the mean");
+    expect(within(mean).getAllByRole("option").map((o) => o.textContent)).toEqual(["In the mean", "Out of the mean"]);
+    // The weight's rule follows its field, read with it.
+    expect(within(dialog).getByLabelText("Weight (%)")).toHaveAccessibleDescription(/relative to the other columns/);
+    await userEvent.selectOptions(mean, "Out of the mean");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ counts: false }));
   });
 
   it("publishes the mean to the students, and stops", async () => {
@@ -360,7 +374,7 @@ describe("the settings of a column and of the mean", () => {
  * A course with components of the mean (ADR-131): the head names a column's
  * component, or warns that a counted column in none counts in no mean (and a
  * line above the matrix counts them); a mean per component stands before the
- * mean; the head opens the column's settings, where "Counts in" is the one
+ * mean; the head opens the column's settings, where "Component" is the one
  * control of whether and where it counts.
  */
 const COURS = "0190d3c4-0000-7000-8000-0000000000d1";
@@ -386,13 +400,13 @@ const head = (title: string) => screen.findByRole("button", { name: (name) => na
 describe("components of the mean", () => {
   it("names a column's component in its head, warns on a counted column in none, and counts those above the matrix", async () => {
     renderTab(componentTable());
-    expect(await head("Test 1")).toHaveAccessibleName(/Counts in Cours/);
+    expect(await head("Test 1")).toHaveAccessibleName(/Component: Cours/);
     expect(within(await head("Test 1")).getByText("Cours")).toBeInTheDocument();
     expect(await head("Test 2")).toHaveAccessibleName(/In no component: counts in no mean\./);
     expect(screen.getByText("1 activity that counts is in no component, so in no mean.")).toBeInTheDocument();
     await showExercises();
     // Not counted: neither a component nor a warning.
-    expect(await head("Exercises")).not.toHaveAccessibleName(/component|Counts in/);
+    expect(await head("Exercises")).not.toHaveAccessibleName(/omponent/);
   });
 
   it("draws a mean per component between the grades and the mean, and their class means in the footer", async () => {
@@ -406,7 +420,7 @@ describe("components of the mean", () => {
     expect(footer.slice(-3).map((c) => c.textContent!.split(" ")[0])).toEqual(["3.3", "—", "3.3"]);
   });
 
-  it("opens the column's settings from its head, with no menu: a component writes counts and the component, Does not count the flag alone", async () => {
+  it("opens the column's settings from its head, with no menu: a component writes counts and the component, Out of the mean the flag alone", async () => {
     const { calls } = renderTab(componentTable(), {
       [`PATCH ${URL_COLUMN(LATER)}`]: ok(componentTable()),
       [`PATCH ${URL_COLUMN(TEST)}`]: ok(componentTable()),
@@ -414,8 +428,8 @@ describe("components of the mean", () => {
     await userEvent.click(await head("Test 2"));
     expect(screen.queryByRole("menu")).toBeNull();
     let dialog = await screen.findByRole("dialog", { name: "Settings of Test 2" });
-    const countsIn = within(dialog).getByLabelText("Counts in");
-    expect(countsIn).toHaveDisplayValue("Choose a component");
+    const countsIn = within(dialog).getByLabelText("Component");
+    expect(countsIn).toHaveDisplayValue("No component");
     expect(within(dialog).getByText("In no component: counts in no mean.")).toBeInTheDocument();
     await userEvent.selectOptions(countsIn, "Labo");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
@@ -425,8 +439,8 @@ describe("components of the mean", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await userEvent.click(await head("Test 1"));
     dialog = await screen.findByRole("dialog", { name: "Settings of Test 1" });
-    expect(within(dialog).getByLabelText("Counts in")).toHaveDisplayValue("Cours");
-    await userEvent.selectOptions(within(dialog).getByLabelText("Counts in"), "Does not count");
+    expect(within(dialog).getByLabelText("Component")).toHaveDisplayValue("Cours");
+    await userEvent.selectOptions(within(dialog).getByLabelText("Component"), "Out of the mean");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(2));
     expect(calls.filter((c) => c.method === "PATCH")[1]!.body).toEqual({ counts: false });
@@ -481,7 +495,7 @@ describe("a setting that moves the means students read now", () => {
       [`PATCH ${URL_COLUMN(LATER)}`]: ok(componentTable({ meanPublished: true })),
     });
     await userEvent.click(await head("Test 2"));
-    await userEvent.selectOptions(within(await screen.findByRole("dialog")).getByLabelText("Counts in"), "Cours");
+    await userEvent.selectOptions(within(await screen.findByRole("dialog")).getByLabelText("Component"), "Cours");
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1));
     expect(screen.queryByRole("dialog", { name: "Change the students' means?" })).toBeNull();

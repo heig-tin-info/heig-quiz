@@ -12,7 +12,7 @@ import { aiOf, breakdownOf } from "@quiz/contracts";
 import { breakdownTotal, criteriaMaxima, formatPoints, type DeclaredCriterion } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { FieldError, fieldErrorProps, PointsPill } from "../ui";
+import { FieldError, fieldErrorProps, numberOf, PointsPill } from "../ui";
 
 /** What the form starts from, per criterion id: the validated breakdown, else the proposal, else 0. */
 export function initialCriteriaPoints(criteria: readonly DeclaredCriterion[], details: unknown): Record<string, string> {
@@ -21,9 +21,6 @@ export function initialCriteriaPoints(criteria: readonly DeclaredCriterion[], de
   for (const line of breakdownOf(details) ?? []) given.set(line.id, line.points);
   return Object.fromEntries(criteria.map((c) => [c.id, formatPoints(given.get(c.id) ?? 0)]));
 }
-
-/** A typed value as a number: a comma is a decimal point; anything else is NaN. */
-const parsed = (text: string): number => (text.trim() === "" ? Number.NaN : Number(text.replace(",", ".")));
 
 /** The criteria whose typed points lie outside `[0, max]`, by id. */
 export function invalidCriteria(
@@ -35,7 +32,7 @@ export function invalidCriteria(
   return new Set(
     criteria
       .filter((c, i) => {
-        const value = parsed(values[c.id] ?? "");
+        const value = numberOf(values[c.id] ?? "");
         return !Number.isFinite(value) || value < 0 || value > maxima[i]!;
       })
       .map((c) => c.id),
@@ -44,7 +41,7 @@ export function invalidCriteria(
 
 /** The body's `criteria`: every criterion, in order, its typed points. */
 export const criteriaBody = (criteria: readonly DeclaredCriterion[], values: Readonly<Record<string, string>>) =>
-  criteria.map((c) => ({ id: c.id, points: parsed(values[c.id] ?? "") }));
+  criteria.map((c) => ({ id: c.id, points: numberOf(values[c.id] ?? "") }));
 
 /**
  * One row per criterion: its title and weight, the model's sentence when it
@@ -74,7 +71,7 @@ export function CriteriaFields({
   const sentences = new Map((aiOf(details)?.criteria ?? []).map((c) => [c.id, c.comment]));
   const total = breakdownTotal(
     criteria.map((c) => {
-      const value = parsed(values[c.id] ?? "");
+      const value = numberOf(values[c.id] ?? "");
       return Number.isFinite(value) ? value : 0;
     }),
     itemPoints,
