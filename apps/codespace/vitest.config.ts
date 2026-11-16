@@ -9,6 +9,7 @@ import { coverage, nodeTests } from "../../vitest.shared.js";
  */
 const integration = [
   "src/engine/index.test.ts",
+  "src/engine/reader.integration.test.ts",
   "src/git/channel.integration.test.ts",
   "src/git/relay.test.ts",
   "src/sessions/sessions.test.ts",
@@ -18,8 +19,8 @@ export default defineConfig({
   test: {
     ...nodeTests.test,
     exclude: process.env["CODESPACE_INTEGRATION"] ? [] : integration,
-    // The git fixtures build the tests' repositories: a helper, not a source.
-    coverage: { ...coverage, exclude: [...coverage.exclude, "src/git/fixtures.ts"] },
+    // The git fixtures build the tests' repositories, the reader fixture runs its commands on the host: helpers, not sources.
+    coverage: { ...coverage, exclude: [...coverage.exclude, "src/git/fixtures.ts", "src/engine/readerFixtures.ts"] },
     testTimeout: 60_000,
     hookTimeout: 120_000,
   },

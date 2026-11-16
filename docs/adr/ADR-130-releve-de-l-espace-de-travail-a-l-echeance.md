@@ -1,10 +1,13 @@
-# ADR-130 — The online workspace is collected at the deadline: the host's copy, committed by the platform, counted on time
+# ADR-130 — The online workspace is collected at the deadline: read confined, committed by the platform, counted on time
 
 ## Status
 
 Accepted (2026-11-16, the product owner's four decisions below, taken
 through explicit questions after two students of a supervised lab handed
-in nothing). Delivery progress lives in `changes/`.
+in nothing). Corrected the same day (Correction 2026-11-16, at the end): the collection reads the
+workspace through a confined reader, never `shadow.git`; §1 decision 2, §3,
+§4.2, §5 and §8 are amended in place, each change marked. Delivery progress
+lives in `changes/`.
 
 Amended 2026-11-16 (below, "Amendment 2026-11-16"), scope: §7, the
 student's surface — the workspace's status bar is not built.
@@ -66,10 +69,14 @@ here (§9), and no bypass is added.
    workspace's state, commits and pushes it, then the deadline applies (the
    lock, or the deadline commit under `commit`). The collection commit counts
    as handed in on time; a student's own late push stays late.
-2. **The source is the host's copy** (`shadow.git`), never a commit made
-   inside the session; it works for a session already closed. The commit is
-   the platform's (GitHub-signed for the App, #917), labelled as a
-   collection, and visible to the staff.
+2. **The source is the workspace as the platform reads it**, never a
+   commit made inside the session; it works for a session already closed.
+   The commit is the platform's (GitHub-signed for the App, #917), labelled
+   as a collection, and visible to the staff. *Corrected 2026-11-16 (the correction at the end):
+   the decision said "the host's copy (`shadow.git`)"; a host-side read of
+   `work/` can be made to follow a link out of the volume, so the platform
+   reads it through a confined reader instead. The intent — not a commit
+   inside the session, and a closed session collected too — is kept.*
 3. **Whenever the workspace differs from what would be handed in**: the
    latest state wins, even over an earlier deliberate push. Nothing to
    collect, no commit — never an empty one.
@@ -92,18 +99,20 @@ repository (ADR-077) is treated like any other.
 
 ### 3. What is collected
 
-- **A fresh snapshot.** When Quiz's order reaches it, the portal snapshots
-  `work/` into `shadow.git` itself (`snapshot()`, the host's own repository;
-  no container is started, the quota is not consulted, a closed session
-  works). The root timer may hold `shadow.git`'s index for a moment: three
-  tries a second apart, then the last snapshot already there — unless it is
-  older than the session's last `PushEvent` (same host clock), which would
-  hand in less than was pushed: `stale_snapshot`, nothing collected. No
-  `work/` (no session ever opened), or no snapshot even after asking for
-  one: `no_snapshot`. A file the portal cannot read (a
-  `chmod 600`, `unreadable`) keeps its last snapshot's version, at most three
-  minutes old; the count is recorded and shown to the staff (unknown, null,
-  when the last snapshot stood in for a fresh one).
+- **The workspace, read confined** (corrected 2026-11-16, see the correction at the end). When
+  Quiz's order reaches it, the portal reads `work/` through its confined
+  reader: a throwaway platform container holding that volume only,
+  read-only (no session involved, the quota not consulted, a closed session
+  works). It lists what `git add -A` would add to an empty index — the
+  student's `.gitignore` files honoured, `.git` never entered, a nested
+  repository left out — and streams those files as an archive the host
+  judges as data. `shadow.git` is not read: no fallback snapshot exists, and
+  `stale_snapshot` is gone. No `work/` (no session ever opened):
+  `no_snapshot`. A file or directory the reader cannot read (a `chmod 600`
+  read as "other", a file removed or swapped as it was read, a name that is
+  not UTF-8) keeps its version in the commit that would otherwise be graded
+  (`withUnreadableKept`), or is left out when that commit has none; the
+  count is recorded and shown to the staff.
 - **The branch** (pure rule `collectionBranch` of `@quiz/domain`, Quiz's): the host
   cannot know which branch `work/` has checked out, so it is the branch of
   the student's last push received (a non-bot receipt) when it is handed
@@ -127,9 +136,13 @@ repository (ADR-077) is treated like any other.
   push that already carries the same tree, the collection commit repeats its
   parent's tree: it is no empty collection, it hands in on time what only a
   late push held.
-- **Size**: the blobs the base does not hold over `RECEIVE_MAX_INPUT_BYTES`
-  in all (100 MiB, the cap of one student push, which no file over GitHub's
-  100 MiB limit fits under): `too_large`, nothing pushed.
+- **Size**: the workspace's files (those the listing names) over
+  `WORKSPACE_PUSH_MAX_BYTES` in all (100 MiB, the cap of one student push,
+  which no file over GitHub's 100 MiB limit fits under): `too_large`,
+  nothing pushed. *Corrected 2026-11-16: the cap counted the blobs the base
+  did not hold; it now bounds the archive the reader streams, so a
+  workspace whose handed-out files and own files together pass 100 MiB is
+  `too_large` too.*
 
 ### 4. Who does what
 
@@ -142,25 +155,25 @@ repository (ADR-077) is treated like any other.
    head of the branch §3 chose), the target sha, the kept paths, and the
    temporary ref Quiz names (`refs/quiz/collect/<repository id>-<deadline epoch>`).
 2. **The portal builds and carries the tree** (`apps/codespace/src/git/collect.ts`),
-   within one time budget of 45 s. The collection itself reads only
-   `shadow.git` and `staging.git`, the host's own repositories, and writes
-   only a temporary bare repository whose object store borrows theirs as
-   alternates — removed, with its alternates and its index, on every exit:
-   the base and the target fetched from GitHub when missing, the tree
-   composed in a temporary index, compared, and one throwaway commit of it
-   on the base pushed to the temporary ref — a new ref, never a branch,
-   never forced, no head declared, no `PushEvent` — with the write grant it
-   already holds (§5). The snapshot it triggers is the existing one
-   (`sessions/shadow.ts`, `git add -A` with `.git` excluded), with that
-   module's known limit: a nested repository's gitfile under `work/` is
-   followed to record a gitlink, which the collection then leaves out (§3);
-   that limit is handled apart from this record. One collection at a time
-   per (student, assignment); the portal's record is one log line per order
-   with its outcome. It answers `CodespaceCollectionResult`: `pushed` (the
-   tree), `unchanged`, `too_large`, `stale_snapshot`, `no_snapshot` or
-   `failed` with a closed reason (`timeout` among them), and the snapshot's
-   time and unreadable count. **`pushed` means only that a throwaway commit
-   sits on a temporary ref**: only Quiz knows whether a collection followed.
+   within one time budget of 45 s. *Corrected 2026-11-16 (the correction at the end):* the
+   workspace is read by the confined reader (`engine/reader.ts`), whose
+   listing and archive the host turns into blobs (`git/workTree.ts`,
+   `git/workArchive.ts`) without resolving any path of `work/`. The
+   collection writes only a temporary bare repository on the volumes' disk
+   (`<VOLUMES_ROOT>/.collect/`), whose object store borrows `staging.git`'s
+   as an alternate — removed, with its index, on every exit, and swept at
+   startup: the workspace's blobs, the base and the target fetched from
+   GitHub when missing, the tree composed in a temporary index, compared,
+   and one throwaway commit of it on the base pushed to the temporary ref —
+   a new ref, never a branch, never forced, no head declared, no
+   `PushEvent` — with the write grant it already holds (§5). One collection
+   at a time per (student, assignment); the portal's record is one log line
+   per order with its outcome. It answers `CodespaceCollectionResult`:
+   `pushed` (the tree), `unchanged`, `too_large`, `no_snapshot` or `failed`
+   with a closed reason (`timeout` and `read_failed` among them), and the
+   time it read the workspace and its unreadable count. **`pushed` means
+   only that a throwaway commit sits on a temporary ref**: only Quiz knows
+   whether a collection followed.
 3. **Quiz checks, then commits.** Before signing anything, Quiz reads the
    pushed commit on the temporary ref and verifies that (a) its tree is the
    `tree` the portal reported and its parent the base, and (b) every entry
@@ -218,6 +231,14 @@ repository (ADR-077) is treated like any other.
   more; Quiz's call times out at 60 s; any failure or timeout records
   `failed` with its cause and the repository is locked regardless. Never a
   forced push of a branch, never a branch deleted.
+- **The reader** (corrected 2026-11-16, see the correction at the end): one throwaway container per
+  collection, so at most 16 at once, each 256 MiB, 32 pids and one CPU in
+  `codespace.slice`; its only process sleeps for the time left in the
+  budget and it is started `--rm`, so it ends on its own within the 45 s
+  even if the portal dies; the portal removes it on every exit path, a
+  timeout included. Its failure is `failed` with reason `read_failed` (it
+  could not start, or its listing or archive was refused); its timeout,
+  `timeout`.
 - **The write grant, unchanged (ADR-078 §13).** The portal asks Quiz for its
   token as for a relay (`POST /app/codespace/git-token`); check 5 already
   grants it until the effective deadline plus the grace, and a collection is
@@ -226,7 +247,8 @@ repository (ADR-077) is treated like any other.
   for the token, the audit `codespace.git_token_issued` as for any grant.
 - **GitHub or the portal down at the deadline**: `failed`, locked anyway.
   Nothing waits in `staging.git` for a relay (the throwaway commit is no
-  `PushEvent`). The state stays in `shadow.git`; the staff extend the
+  `PushEvent`). The state stays in the workspace (and `shadow.git` keeps
+  the staff's safety net, never published: the correction at the end); the staff extend the
   repository's deadline (F-PROJ-09 (1)) to have it collected at the new one.
 - **25 to 50 repositories at the same second**: one git push each from the
   engine VM, five REST calls each from Quiz (read the base, the signed
@@ -265,8 +287,8 @@ the row is settled.
 
 - **The staff**: the repository's row on the project page says "Collected
   at the deadline" with the time, or why not (`unchanged` says nothing;
-  `stale_snapshot`, `no_snapshot`, `branch_not_handed_out`, `too_large`,
-  `too_late`, `failed` are flagged), and the unreadable count; the commit on
+  `no_snapshot`, `branch_not_handed_out`, `too_large`, `too_late`, `failed`
+  are flagged), and the unreadable count; the commit on
   GitHub is the App's, signed, its message naming the collection. Audited
   `project_repo.workspace_collected` (outcome, sha, reason); the
   `project.deadline_enforced` tally gains `collected`.
@@ -289,7 +311,10 @@ the row is settled.
 No per-project switch. No collection of a group project, of a `free`
 project, of a repository whose student never launched a workspace, of a
 review session (ADR-129). No commit, tag or branch in the student's `work/`.
-No container started to collect.
+No session container started, entered or counted to collect. *Corrected
+2026-11-16 (the correction at the end): this said "no container started to collect"; the
+collection now starts one platform reader per order — never a session,
+never in the quota, never on the session network.*
 
 ### 9. Corrections: the lock binds the App
 
@@ -319,9 +344,11 @@ the lock. The header comment of `github/lock.ts` is corrected with the code.
 - The deadline's lock comes a few seconds later than today for online
   projects (the snapshots, then one more GitHub write per collected
   repository).
-- Files the portal cannot read are collected at most three minutes old;
-  the count says so. The snapshot may include edits from the seconds
-  between the deadline and Quiz's order.
+- Files the reader cannot read are taken from the commit that would
+  otherwise be graded, which may be much older than the workspace (the
+  handout, for a student who never pushed); the count says so. The read
+  may include edits from the seconds between the deadline and Quiz's
+  order.
 - Code: a pure rule pair in `@quiz/domain`, contracts for one portal route,
   one migration of Quiz's (`codespace_collections`, `push_receipts.collected`;
   the portal keeps no table for it), the
@@ -345,7 +372,15 @@ the lock. The header comment of `github/lock.ts` is corrected with the code.
   API**: one REST call per changed file, up to 100 MiB through Quiz; the
   temporary-ref pattern already exists (`github/sync.ts`).
 - **The root timer's last snapshot only**: up to three minutes stale — the
-  very edit of the second student lost.
+  very edit of the second student lost; and a host-side read (the correction at the end).
+- **`podman exec` into the session's container to read** (the correction at the end): no container
+  for a closed session, so two paths; the student's processes share its
+  cgroup and limits; the session's state would matter to a collection. One
+  fresh reader serves every case.
+- **Reading `work/` on the host with care** (`O_NOFOLLOW`, `openat` walks,
+  excluding nested `.git` beforehand, as PR #1128 does for the snapshot):
+  narrows the window, cannot close it on a tree the student writes while it
+  is read, and git's own `add` re-resolves paths after its walk.
 - **Comparing with GitHub's head rather than with the graded target**: a
   student who pushed a few seconds late would hand in less than one who
   never pushed.
@@ -372,3 +407,80 @@ refuses the commit or GitHub refuses the move.
 The smallest future design, left to the owner: the assignment sync
 (`PUT /api/assignments/:id`) carries the collected-at instant per student,
 and `push-status` reads it from there.
+
+## Correction 2026-11-16: the collection reads through a confined reader
+
+The first build (#1121, #1124) collected from `shadow.git`, refreshed by a
+host-side `git --git-dir=shadow.git --work-tree=work add -A` and, when its
+index was busy, the root timer's last snapshot. That is a host-side read of
+a tree the student's container writes at the same time: `git add` checks an
+entry's type and then opens it by path, so an entry swapped for a symbolic
+link in between is followed, and a file outside the volume — whatever the
+reading identity can read: the root timer reads as root — can be stored as
+an ordinary blob; a nested gitfile makes git open a repository at a path
+the student chose. Before this ADR a snapshot never left the engine VM; the
+collection published it. No production collection had run (the deploy was
+held); staging had.
+
+The correction, a rule of the portal (its invariant 15): **nothing
+published comes from a host-side read of `work/`.**
+
+1. **The source** (§1 decision 2, §3): the confined reader
+   (`apps/codespace/src/engine/reader.ts`), a throwaway container started
+   with the sessions' hardening (`hardeningArgs`: user namespace, no
+   capability, `no-new-privileges`, the seccomp and AppArmor profiles,
+   read-only root), `--network none`, no variable of ours, the image's
+   unprivileged user, and the volume mounted read-only (never `:U`, which
+   would take its ownership from a live session). Its filesystem holds the
+   image and that volume only, so whatever a link, a gitfile or a race
+   resolves to in there is something the student could already read. Two
+   fixed commands run in it: `git ls-files -z --others --exclude-standard`
+   in a throwaway repository (the student's `.gitignore` files honoured as
+   `git add -A` honours them on an empty index; `.git` never entered; a
+   nested repository listed as `dir/`, then left out as its gitlink was),
+   and GNU tar of exactly the listed paths (`--no-recursion`, links stored
+   as links, hard links as the file they name).
+2. **The host treats both as data** (§4.2): the listing must be relative
+   paths without an empty, `.`, `..` or `.git` segment; the archive is read
+   as a stream (`git/workArchive.ts`) — regular files and symbolic links
+   only, a link's target kept as bytes and never followed, a directory or
+   FIFO skipped, any other entry (hard link, device, extended header)
+   refusing it, each name one of the listed paths and once, every checksum
+   holding, the files' total within the cap, the stream reaching tar's end
+   marker — and turned into blobs of the collection's own temporary
+   repository by one `git fast-import` (`git/workTree.ts`). The host opens
+   no path under `work/`; it asks only whether `work/` exists.
+3. **What the reader could not read** (§3): files and directories it was
+   refused (it reads as "other", like the portal did), files removed or
+   swapped as it read, names that are not UTF-8. They keep their version in
+   the commit that would otherwise be graded (`withUnreadableKept` of
+   `@quiz/domain`), or are left out; the count (`unreadable`, now always
+   known) is shown to the staff.
+4. **Outcomes** (`CodespaceCollectionResult`, `@quiz/domain`'s lists):
+   `stale_snapshot` is removed with the fallback it described;
+   `read_failed` joins the portal's failure reasons (the reader could not
+   start, or its listing or archive was refused); a timeout of the reader
+   is `timeout`.
+5. **The reader is no session** (§5, §8): name `cs-<instance>-reader-<uuid>`,
+   labels `heig-codespace.role=reader` and the instance, no session label
+   (so the reconciliation, the session listing and the quota never see it);
+   its only process sleeps for the time left in the budget and it runs
+   `--rm`, so it disappears within the budget even if the portal dies; the
+   portal removes it on every exit path and sweeps this instance's readers
+   at startup.
+6. **`shadow.git` stays the host's safety net, never published.** The
+   session close's snapshot and the root timer keep writing it; nothing
+   reads it to publish, relay or restore. Its content is untrusted, and a
+   staff member recovering work from it by hand treats it so
+   (`apps/codespace/deploy/RUNBOOK.md`). The root timer is not made
+   race-free; its reach is made small: its unit runs in a systemd sandbox
+   (only the instance's volumes visible under `/srv` and writable, the
+   engine VM's secret directories inaccessible, no home, device, network or
+   other process, only the file-mode capabilities).
+
+What this does not cover: a hard link the host itself made from inside the
+volume to a file outside it (the student cannot make one: the reader's and
+the session's containers see no outside inode, and `link(2)` across mounts
+fails); a compromise of the engine (Podman, the kernel) that breaks the
+container's confinement; and the unpublished `shadow.git`, whose race only
+the sandbox above bounds.

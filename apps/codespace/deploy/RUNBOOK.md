@@ -23,7 +23,8 @@ The values (names, ports, platform URLs) are in `deploy/lib.sh`
 | Seccomp profile (host path) | `/etc/quiz-codespace/<i>/seccomp.json`, from `infra/seccomp/codespace.json` (the runner's plus `ptrace`, M6-05) |
 | SQLite, volumes | `/srv/quiz-codespace/<i>/var`, `/srv/quiz-codespace/<i>/volumes` |
 | Network, anchor, nftables | `quiz-codespace-net@<i>.service` |
-| Shadow snapshots | `quiz-codespace-shadow@<i>.timer` |
+| Shadow snapshots | `quiz-codespace-shadow@<i>.timer`, as root inside a sandbox (its unit: only the instance's volumes writable, no secret, device, network or other process): a safety net for the staff, never published, its content untrusted (Recovering work from `shadow.git` below) |
+| Collection readers | `cs-<i>-reader-<uuid>`, label `heig-codespace.role=reader`: one throwaway container per deadline collection, the volume read-only, `--network none`, gone within the collection's 45 s (ADR-130, correction of 2026-11-16); never a session, never counted |
 | Slice (both instances, sessions, snapshots, backup) | `codespace.slice`, from `infra/engine/codespace.slice` (M6-05) |
 | Backup export (both instances) | `/usr/local/lib/quiz-codespace/backup-export.sh`, pulled daily by the application VM |
 | Caddy site, access log | `/etc/caddy/conf.d/quiz-codespace-<i>.caddy`, `/var/log/caddy/quiz-codespace-<i>.log` |
@@ -324,7 +325,29 @@ journalctl -u quiz-codespace-prod -n 50 --no-pager
 tail -n 20 /var/log/caddy/quiz-codespace-prod.log
 journalctl -u quiz-codespace-shadow@prod -n 5 --no-pager
 podman ps --filter label=heig-codespace.instance=prod
+podman ps -a --filter label=heig-codespace.role=reader   # empty but during a deadline collection
 ```
+
+### Recovering work from `shadow.git`
+
+`<volumes>/<student>/<project>/shadow.git` holds a snapshot of `work/` every
+three minutes. It is the staff's safety net and nothing else: no collection,
+relay or restore reads it, and it never leaves this VM. Its content is
+**untrusted**: it is a host-side read of a tree the student wrote while it
+was read, so a file in it may hold the content of something outside the
+volume (a link the student swapped in at the right moment), and a gitlink in
+it may name a repository elsewhere on the host. Recovering a student's work
+from it by hand:
+
+- read it with git only (`git --git-dir=<…>/shadow.git log`, `show`,
+  `archive`), never check it out over a path that matters, and never as root
+  into a shared directory;
+- look at what you hand back before handing it: a file that is not the
+  student's own work (a configuration, a key, another student's file) is
+  dropped, and the incident reported;
+- never push it to a student's repository as it is: a collection at a new
+  deadline (F-PROJ-09 (1)) is the way work reaches GitHub, through the
+  confined reader.
 
 ### Rotating a launch secret
 

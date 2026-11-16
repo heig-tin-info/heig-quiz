@@ -27,6 +27,8 @@ vi.mock("node:child_process", async (importOriginal) => {
 });
 
 const { collectWorkspace } = await import("./collect.js");
+const { createWorkspaceReader } = await import("../engine/reader.js");
+const { localPodman } = await import("../engine/readerFixtures.js");
 const { basicAuthorization } = await import("./quizForge.js");
 const { FIXTURE_ENV, tempDir } = await import("./fixtures.js");
 const { git } = await import("./gitRunner.js");
@@ -71,6 +73,8 @@ describe("the collection's token", () => {
     it(`stays out of argv and logs when the ${path} fails`, async () => {
       const { volumesRoot, base } = await volume();
       const lines: string[] = [];
+      const podmanCalls: string[][] = [];
+      const local = localPodman();
       spawned.length = 0;
       const result = await collectWorkspace(
         {
@@ -86,7 +90,13 @@ describe("the collection's token", () => {
         {
           volumesRoot,
           forge: { pushUrl: () => URL, authorization: async () => AUTHORIZATION },
-          lastPushAt: null,
+          reader: createWorkspaceReader(
+            { podmanUrl: "unix:///run/podman/podman.sock", instance: "test", seccompProfile: "/seccomp.json", image: "codespace/c-dev:4.137.0" },
+            (args) => {
+              podmanCalls.push(args);
+              return local.spawn(args);
+            },
+          ),
           log: { warn: (o, m) => void lines.push(JSON.stringify(o), m) },
         },
       );
@@ -94,6 +104,9 @@ describe("the collection's token", () => {
       // The failing command did run, with the URL and without the token.
       expect(spawned.some((argv) => argv.includes(path) && argv.includes(URL))).toBe(true);
       expect(secretsIn(spawned.flat().join("\n"))).toEqual([]);
+      // Nor anywhere near the reader: no argv of podman carries it.
+      expect(podmanCalls.length).toBeGreaterThan(0);
+      expect(secretsIn(podmanCalls.flat().join("\n"))).toEqual([]);
       expect(lines.length).toBeGreaterThan(0);
       expect(secretsIn(lines.join("\n"))).toEqual([]);
     });

@@ -422,30 +422,33 @@ export type CodespaceCollectionRequest = z.infer<typeof CodespaceCollectionReque
  * Why a collection failed on the portal's side: Quiz or GitHub refused the
  * credential (`forge_refused`), GitHub or Quiz could not be reached
  * (`forge_unavailable`), GitHub refused the push (`push_rejected`), git
- * failed on the host (`git_error`), or the collection's time budget ran out
- * (`timeout`). Details stay in the portal's log. `@quiz/domain`'s list.
+ * failed on the host (`git_error`), the confined reader of the workspace
+ * failed or its archive was refused (`read_failed`), or the collection's
+ * time budget ran out (`timeout`). Details stay in the portal's log.
+ * `@quiz/domain`'s list.
  */
 export { COLLECTION_PORTAL_FAILURES };
 export type CollectionFailure = (typeof COLLECTION_PORTAL_FAILURES)[number];
 
 /**
- * When the snapshot was taken (the engine's clock), and how many files the
- * portal could not read (their last version is kept); null when the last
- * snapshot was used instead of a fresh one, whose count is not known.
+ * When the workspace was read (the engine's clock), and how many files or
+ * directories the confined reader could not read (their version in the
+ * commit that would otherwise be graded is kept; ADR-130 §3, correction of
+ * 2026-11-16).
  */
-const SnapshotFacts = { snapshotAt: IsoDate, unreadable: z.number().int().min(0).nullable() };
+const SnapshotFacts = { snapshotAt: IsoDate, unreadable: z.number().int().min(0) };
 
 /**
  * The portal's answer: `pushed` — a throwaway commit of `tree` on the base,
  * on the temporary ref; only Quiz decides whether that becomes a collection
- * (ADR-130 §4) —, `unchanged` (the tree is the target's: nothing pushed), why
- * nothing was collected (ADR-130 §3), or `failed`.
+ * (ADR-130 §4) —, `unchanged` (the tree is the target's: nothing pushed),
+ * `too_large`, `no_snapshot` (no workspace on the engine: none was ever
+ * opened), or `failed`.
  */
 export const CodespaceCollectionResult = z.discriminatedUnion("outcome", [
   z.object({ outcome: z.literal("pushed"), tree: Sha1, ...SnapshotFacts }),
   z.object({ outcome: z.literal("unchanged"), ...SnapshotFacts }),
   z.object({ outcome: z.literal("too_large"), ...SnapshotFacts }),
-  z.object({ outcome: z.literal("stale_snapshot"), snapshotAt: IsoDate }),
   z.object({ outcome: z.literal("no_snapshot") }),
   z.object({ outcome: z.literal("failed"), reason: z.enum(COLLECTION_PORTAL_FAILURES) }),
 ]);

@@ -93,7 +93,9 @@ them on exactly two points, and on nothing else:
    `400 reserved_id`), and the sweep never removes a `review-*` directory
    whose assignment row exists with `reviewOf` null; one with no row at all
    is swept (rows go before directories, so a crash leaves exactly those;
-   ADR-129 §10, correction of 2026-11-15).
+   ADR-129 §10, correction of 2026-11-15). The deadline collection's reader
+   (invariant 15) mounts a volume read-only, never `:U`, with `--network
+   none`: narrower than both divergences, not a third one.
 2. **A git channel on an internal bridge.** Containers run on the Podman
    network `codespace` (`--internal --disable-dns`, subnet `10.77.0.0/24`,
    gateway `10.77.0.254`), started with `--dns=none --add-host
@@ -124,7 +126,8 @@ channel divergence for its containers.
 2. **The network is closed by construction** (divergence 2 above): the
    `codespace-anchor` container (label `heig-codespace.role=anchor`) keeps
    the bridge alive; never delete it, never count it as a session. No
-   per-session firewall rule.
+   per-session firewall rule. The collection's readers
+   (`heig-codespace.role=reader`, invariant 15) run `--network none`.
 3. **Hardening from the very first `podman run`**: the exact options are in
    `images/c-dev/run-hardened.sh` and `src/engine/` reuses them as they
    are. A test that needs an option relaxed says so in the docs, not in a
@@ -191,6 +194,22 @@ channel divergence for its containers.
     `Service-Worker-Allowed` from every upstream answer, and serves
     `/vscode-remote-resource` with `CSP: default-src 'none'; sandbox` and
     `nosniff`; the student image ships no notebook support. Gaps and the full fix: [ADR-047, amendment of 2026-10-11](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
+15. **Nothing published comes from a host-side read of `work/`**
+    ([ADR-130, correction of 2026-11-16](../../docs/adr/ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md#correction-2026-11-16-the-collection-reads-through-a-confined-reader)).
+    The student's container writes `work/` while the host would read it, so
+    a host-side read resolves paths the student controls and a race can
+    make it follow a link out of the volume. Whatever leaves the engine VM
+    (the deadline collection today, anything tomorrow) reads `work/` through
+    the confined reader (`engine/reader.ts`): a throwaway container holding
+    that volume only, read-only, with the sessions' hardening and
+    `--network none`, whose listing and archive the host treats as data
+    (`git/workArchive.ts`: regular files and links only, a link never
+    followed, relative paths of its own listing, size-capped). Of `work/`
+    the host itself asks only whether it exists. `shadow.git` (the session
+    close's snapshot and the root timer's) is a host-side read: a safety net
+    for the staff, never published, its content untrusted (deploy/RUNBOOK.md).
+    The reader is the platform's, not a session: no session label, not
+    counted by the quota, removed on every exit path and swept at startup.
 
 ## Commands
 

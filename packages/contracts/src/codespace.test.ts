@@ -333,8 +333,12 @@ describe("the collection at the deadline (ADR-130)", () => {
   it("answers one of the closed outcomes", () => {
     const facts = { snapshotAt: "2026-11-16T13:40:21Z", unreadable: 0 };
     expect(CodespaceCollectionResult.safeParse({ outcome: "pushed", tree: "c".repeat(40), ...facts }).success).toBe(true);
-    expect(CodespaceCollectionResult.safeParse({ outcome: "unchanged", ...facts, unreadable: null }).success).toBe(true);
+    expect(CodespaceCollectionResult.safeParse({ outcome: "unchanged", ...facts }).success).toBe(true);
+    // The portal always knows what its reader could not read; there is no stale fallback any more.
+    expect(CodespaceCollectionResult.safeParse({ outcome: "unchanged", ...facts, unreadable: null }).success).toBe(false);
+    expect(CodespaceCollectionResult.safeParse({ outcome: "stale_snapshot", snapshotAt: facts.snapshotAt }).success).toBe(false);
     expect(CodespaceCollectionResult.safeParse({ outcome: "failed", reason: "timeout" }).success).toBe(true);
+    expect(CodespaceCollectionResult.safeParse({ outcome: "failed", reason: "read_failed" }).success).toBe(true);
     expect(CodespaceCollectionResult.safeParse({ outcome: "no_snapshot" }).success).toBe(true);
     expect(CodespaceCollectionResult.safeParse({ outcome: "failed", reason: "push_rejected" }).success).toBe(true);
     expect(CodespaceCollectionResult.safeParse({ outcome: "failed", reason: "anything" }).success).toBe(false);

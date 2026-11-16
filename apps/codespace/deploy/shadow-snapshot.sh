@@ -21,6 +21,16 @@
 # records the student's repository as a submodule link and captures nothing),
 # and the author is the portal, not the student. shadow.git stays root's, the
 # owner the portal (root in its container) has too.
+#
+# Never published (ADR-130, correction of 2026-11-16). This is a host-side
+# read of a tree the student writes while it runs: an entry swapped for a
+# symbolic link between git's check and its open is followed, as root. So
+# shadow.git is a safety net for the staff only, its content untrusted
+# (RUNBOOK.md), and nothing of it leaves the engine VM: the deadline
+# collection reads `work/` through a confined reader instead. The race is not
+# closed here; its reach is made small by the unit's sandbox
+# (quiz-codespace-shadow@.service: only this instance's volumes, no secret,
+# no device, no other process).
 set -uo pipefail
 
 VOLUMES="${CODESPACE_VOLUMES:?CODESPACE_VOLUMES is not set}"

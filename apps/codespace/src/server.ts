@@ -22,7 +22,8 @@ import { loadConfig, type AppConfig } from "./auth/config.js";
 import { classroomRoutes } from "./classroom/routes.js";
 import { openDb, type Db, type DbHandle } from "./db/client.js";
 import { createEngine, type Engine } from "./engine/index.js";
-import { collectWorkspace } from "./git/collect.js";
+import { createWorkspaceReader, type WorkspaceReader } from "./engine/reader.js";
+import { collectWorkspace, sweepCollectionDirs } from "./git/collect.js";
 import {
   createForgejoForge,
   createQuizForge,
@@ -101,6 +102,8 @@ export interface BuildOptions {
   dbHandle?: DbHandle;
   /** Engine already built (tests); otherwise a real Podman client. */
   engine?: Engine;
+  /** The collection's confined reader (tests); otherwise one on the same Podman socket. */
+  reader?: WorkspaceReader;
   /** Bind the Git server to the gateway. True by default. */
   withGitServer?: boolean;
   /** Reconcile and start the timers. True by default. */
@@ -145,6 +148,19 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
       pidsLimit: config.CODESPACE_PIDS_LIMIT,
       cgroupParent: config.CODESPACE_CGROUP_PARENT,
       log: app.log,
+    });
+
+  // The collection's confined reader (ADR-130, correction of 2026-11-16): the
+  // sessions' hardening, image and slice, its own name and labels.
+  const reader =
+    options.reader ??
+    createWorkspaceReader({
+      podmanUrl: config.PODMAN_URL,
+      instance: config.CODESPACE_INSTANCE,
+      seccompProfile: config.seccompProfile,
+      apparmorProfile: config.CODESPACE_APPARMOR_PROFILE,
+      image: config.CODESPACE_IMAGE,
+      cgroupParent: config.CODESPACE_CGROUP_PARENT,
     });
 
   const forge = createForge(config, app.log);
@@ -226,8 +242,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
         ? {
             repoUrl: (repo) => forge.pushUrl(repo),
             // The collection at the deadline (ADR-130): the relay's forge and its write grant (ADR-078 §13).
-            collect: (order, lastPushAt) =>
-              collectWorkspace(order, { volumesRoot: config.volumesRoot, forge, lastPushAt, log: app.log }),
+            collect: (order) => collectWorkspace(order, { volumesRoot: config.volumesRoot, forge, reader, log: app.log }),
           }
         : {}),
     });
@@ -276,6 +291,9 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
     // After the reconciliation, which settles which sessions are live: a
     // review directory or row without one goes (ADR-129 §10).
     await manager.sweepReviews();
+    // No collection runs yet: what a crash left of one goes, its reader and its directory.
+    await reader.sweep().catch((err: unknown) => app.log.warn({ err: String((err as Error).message ?? err) }, "reader sweep failed"));
+    await sweepCollectionDirs(config.volumesRoot);
     manager.startTimers();
     relay?.start();
   }

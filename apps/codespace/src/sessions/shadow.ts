@@ -10,6 +10,22 @@
  * see the student's repository in `work/.git` and record it as a submodule
  * link, which captures nothing.
  *
+ * ## Never published (ADR-130, correction of 2026-11-16)
+ *
+ * `shadow.git` is the host's own safety net, and nothing of it ever leaves
+ * the engine VM: no collection, relay or restore reads it. This snapshot is
+ * a host-side read of `work/`, which the student's container writes while
+ * it runs, so it resolves paths the student controls: `git add` checks an
+ * entry's type, then opens it by path, and an entry swapped for a symbolic
+ * link in between is followed — the content of a file outside the volume,
+ * anything this process (or the root timer, `deploy/shadow-snapshot.sh`)
+ * can read, may land in it as an ordinary blob; a nested gitfile makes git
+ * open a repository at a path the student chose. That is why its content is
+ * untrusted, why the deadline collection reads `work/` through a confined
+ * reader instead (`engine/reader.ts`, the portal's invariant 15), and why a
+ * staff member recovering work from it by hand treats it as untrusted
+ * (deploy/RUNBOOK.md).
+ *
  * ## The permissions question, and what is done about it here
  *
  * The volume is mounted `:U` (analyse.md D6): Podman rechowns `work/` to the

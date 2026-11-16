@@ -7,7 +7,7 @@ import {
   collectionTooLate,
   composeCollectionTree,
   keptEntriesMatch,
-  staleSnapshot,
+  withUnreadableKept,
   type CollectionTreeEntry,
 } from "./workspaceCollection.js";
 
@@ -104,11 +104,26 @@ describe("composeCollectionTree", () => {
   });
 });
 
-describe("staleSnapshot", () => {
-  const at = new Date("2026-11-16T13:40:00Z");
-  it("is stale when older than the last push, never without one", () => {
-    expect(staleSnapshot(at, new Date("2026-11-16T13:40:01Z"))).toBe(true);
-    expect(staleSnapshot(at, at)).toBe(false);
-    expect(staleSnapshot(at, null)).toBe(false);
+describe("withUnreadableKept", () => {
+  const reference = [blob("main.c", "1"), blob("secret/key.c", "2"), blob("secret/deep/x.c", "3"), blob("secretive.c", "4")];
+  it("takes an unreadable file, or everything under an unreadable directory, from the reference", () => {
+    const workspace = [blob("main.c", "5"), blob("notes.md", "6")];
+    expect(withUnreadableKept(workspace, reference, ["secret"])).toEqual([
+      blob("main.c", "5"),
+      blob("notes.md", "6"),
+      blob("secret/key.c", "2"),
+      blob("secret/deep/x.c", "3"),
+    ]);
+    expect(withUnreadableKept(workspace, reference, ["main.c"])).toEqual([blob("notes.md", "6"), blob("main.c", "1")]);
+  });
+
+  it("leaves out an unreadable path the reference does not hold, and changes nothing without one", () => {
+    const workspace = [blob("main.c", "5")];
+    expect(withUnreadableKept(workspace, reference, ["new.c"])).toEqual(workspace);
+    expect(withUnreadableKept(workspace, reference, [])).toEqual(workspace);
+  });
+
+  it("takes the whole reference when the work tree itself could not be read", () => {
+    expect(withUnreadableKept([], reference, [""])).toEqual(reference);
   });
 });

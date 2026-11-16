@@ -1,6 +1,14 @@
 # One shadow repository snapshot of every volume of instance %i, as the
 # host's root (shadow-snapshot.sh says why root). Started by
 # quiz-codespace-shadow@%i.timer.
+#
+# shadow.git is the host's own safety net and is never published (ADR-130,
+# correction of 2026-11-16): the snapshot reads `work/`, which the student
+# writes while it runs, so a race can make it follow a link. It is not made
+# race-free; what a race can reach is made small. The sandbox below leaves
+# this unit one writable tree, the instance's volumes, under an empty /srv,
+# no device, no network, no home, no other process, and none of the engine
+# VM's secrets. The directives are asserted by src/sessions/shadowUnit.test.ts.
 [Unit]
 Description=quiz — shadow repository snapshot of codespace instance %i
 
@@ -11,3 +19,38 @@ Environment=CODESPACE_VOLUMES=/srv/quiz-codespace/%i/volumes
 ExecStart=/usr/local/lib/quiz-codespace/shadow-snapshot.sh
 Nice=10
 IOSchedulingClass=idle
+
+# Root reads what the student made unreadable to others (a chmod 600), and
+# nothing more: no capability but reading and writing past the file modes.
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH
+NoNewPrivileges=yes
+# The filesystem: read-only everywhere, /srv emptied but for this instance's
+# volumes, the only writable path.
+ProtectSystem=strict
+TemporaryFileSystem=/srv:ro
+BindPaths=/srv/quiz-codespace/%i/volumes
+ReadWritePaths=/srv/quiz-codespace/%i/volumes
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+# The engine VM's secrets and other workloads, gone from its view: the
+# portals' and the runner's configuration, a legacy App key directory,
+# Caddy's keys, the containers' storage and the Podman sockets.
+InaccessiblePaths=-/etc/quiz-codespace -/etc/quiz-runner -/etc/codespace -/etc/caddy -/var/lib/caddy -/etc/ssh -/etc/shadow -/etc/gshadow -/var/lib/containers -/run/containers -/run/podman -/opt
+# No other process (a portal's environment holds its secrets).
+PrivatePIDs=yes
+ProtectProc=invisible
+ProcSubset=pid
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native

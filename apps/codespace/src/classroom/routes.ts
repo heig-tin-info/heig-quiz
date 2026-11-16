@@ -102,7 +102,6 @@ import {
   findLiveSession,
   isOpen,
   isReview,
-  lastPushAt,
   liveReviewSessionIds,
   splitRepoRef,
   upsertAssignment,
@@ -143,7 +142,7 @@ export interface ClassroomRoutesOptions {
    * The collection at the deadline (ADR-130 §4), `collectWorkspace` bound to
    * the forge and the volumes. Absent without a forge: the route answers 503.
    */
-  collect?: (order: CollectionOrder, lastPushAt: Date | null) => Promise<CodespaceCollectionResult>;
+  collect?: (order: CollectionOrder) => Promise<CodespaceCollectionResult>;
 }
 
 // --- helpers ----------------------------------------------------------------
@@ -444,7 +443,7 @@ async function classroomRoutesImpl(
         const collect = opts.collect;
         if (!collect) return reply.code(503).send({ error: "collection_unavailable" });
         const result = await oneCollectionAtATime(`${body.userId}\u0000${assignment.id}`, () =>
-          collect({ ...body, assignment: assignment.id }, lastPushAt(db, body.userId, assignment.id)),
+          collect({ ...body, assignment: assignment.id }),
         );
         request.log.info(
           { assignmentId: assignment.id, student: body.userId, ref: body.ref, outcome: result.outcome, ...("reason" in result ? { reason: result.reason } : {}) },
