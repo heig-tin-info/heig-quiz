@@ -3,20 +3,24 @@
  * deadline job, against the fake GitHub's bare repositories and a stub
  * portal that does what the real one does: a throwaway commit of the
  * workspace's tree on the base, pushed to the temporary ref Quiz named.
+ * Then what the student reads of it (§7, invariant 4): the instant alone,
+ * through the student view, for each of its readers, searched for in every
+ * response; null for any other outcome and for an earlier deadline's.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CSRF_COOKIE, ProjectDetail, ProjectSummary, workspaceStartPath } from "@quiz/contracts";
+import { CSRF_COOKIE, ProjectDetail, ProjectSummary, StudentClassroomPage, StudentHome, StudentProject, workspaceStartPath } from "@quiz/contracts";
 import { GRADING_WORKFLOW_PATH, collectionRef } from "@quiz/domain";
 
 import { loadConfig } from "../../config.js";
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
-import { auditLog, codespaceCollections, codespaceLaunches, projectGroups, projectRepos, pushReceipts, teacherGrants, webhookDeliveries } from "../../db/schema.js";
+import { auditLog, codespaceCollections, codespaceLaunches, kioskPairings, projectGroups, projectRepos, pushReceipts, teacherGrants, webhookDeliveries } from "../../db/schema.js";
 import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import { PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
+import { kioskStation } from "../../test/kiosk.js";
 import { APP_ENV, call, newStudent, server, useProjectWorld, usersRoute, world, type Headers } from "../../test/projectWorld.js";
 import { CODESPACE_ENV, connectedClassroom, fakePortal, scopedMint, workModeBody } from "../codespace/testing.js";
 import { pushAuthor } from "../github/service.js";
@@ -27,7 +31,8 @@ import { repoContext } from "./repos.js";
 import { lastStudentPush } from "./review.js";
 
 const HOOK_SECRET = "w".repeat(40);
-const ENV = { GITHUB_WEBHOOK_SECRET: HOOK_SECRET, ...CODESPACE_ENV };
+// The mock attestor and projects at stations: a station's `kiosk` session reads the student view (ADR-089).
+const ENV = { GITHUB_WEBHOOK_SECRET: HOOK_SECRET, ...CODESPACE_ENV, KIOSK_ATTESTATION: "mock", KIOSK_PROJECTS: "1" };
 const config = loadConfig({ NODE_ENV: "test", ...APP_ENV, ...ENV });
 const APP_BOT = "quiz-test[bot]";
 const NOW = "2026-11-10T08:00:00.000Z";
@@ -447,19 +452,164 @@ describe("what the collection refuses, and what a crash leaves", () => {
     expect(rows.every((r) => r.codespace_collections.outcome === "unchanged")).toBe(true);
   }, 300_000);
 
-  it("gives a student and an impersonation no collection in their payload", async () => {
+});
+
+// ---------------------------------------------------------------- what the student reads (ADR-130 §7, invariant 4)
+
+/** A session of `kind` for `userId`, as the auth layer opens it. */
+async function sessionHeaders(userId: string, auth: { kind: "impersonation" | "seb"; actorUserId?: string; projectId?: string; sebConfigKey?: string }): Promise<Headers> {
+  const s = await createSession(server.app.db, userId, 8, {
+    kind: auth.kind,
+    actorUserId: auth.actorUserId ?? null,
+    evaluationId: null,
+    projectId: auth.projectId ?? null,
+    sebConfigKey: auth.sebConfigKey ?? null,
+  });
+  return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
+}
+
+/** A station's `kiosk` session of `projectId` for `userId`, its pairing consumed (ADR-089), the station's cookie beside it. */
+async function kioskHeaders(userId: string, projectId: string): Promise<Headers> {
+  const station = await kioskStation(server.app);
+  const pairingId = randomUUID();
+  const now = server.clock.now();
+  await server.app.db.insert(kioskPairings).values({
+    id: pairingId,
+    deviceId: station.deviceId,
+    deviceCodeHash: createHash("sha256").update(randomUUID()).digest("hex"),
+    userCodeHash: createHash("sha256").update(randomUUID()).digest("hex"),
+    state: "consumed",
+    userId,
+    projectId,
+    expiresAt: new Date(now.getTime() + 300_000),
+    consumedAt: now,
+  });
+  const s = await createSession(server.app.db, userId, 8, { kind: "kiosk", actorUserId: null, evaluationId: null, projectId, deviceId: station.deviceId, kioskPairingId: pairingId });
+  return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}; ${station.cookie}`, "x-csrf-token": s.csrf };
+}
+
+const studentView = async (f: Fixture, headers: Headers, who = "student") => {
+  const res = await call("GET", `/app/api/student/projects/${f.project.id}`, headers);
+  expect(res.statusCode, `${who} ${res.body}`).toBe(200);
+  return { body: res.body, view: StudentProject.parse(res.json()) };
+};
+
+/** A collection row as the job settles it, written directly: the outcomes that hand nothing in. */
+const settledRow = (f: Fixture, row: Partial<typeof codespaceCollections.$inferInsert>) =>
+  server.app.db.insert(codespaceCollections).values({ id: randomUUID(), repoId: f.repo.id, deadlineAt: new Date(DEADLINE), claimedAt: at(DEADLINE, 5_000), settledAt: at(DEADLINE, 9_000), ...row });
+
+describe("what the student reads of a collection (ADR-130 §7, invariant 4)", () => {
+  it("says the instant it was collected, through the student view only, to each of its readers, and nothing else of it", async () => {
     const f = await launched();
-    portalPushes(f, { "main.c": "x\n" });
+    // The student's own push by the deadline: two commits, the count the collection must not change.
+    await server.app.db.insert(pushReceipts).values({ id: randomUUID(), githubRepoId: f.repo.githubRepoId!, branch: "main", headSha: "1".repeat(40), receivedAt: at(DEADLINE, -60_000), isBot: false, commits: 2 });
+    portalPushes(f, { "main.c": "collected\n" });
+    const pushes = portal.collect as (order: Record<string, unknown>) => Record<string, unknown>;
+    // Seven files the portal could not read, and its own snapshot time: the staff's facts.
+    portal.collect = (order) => ({ ...pushes(order), unreadable: 7, snapshotAt: "2026-11-16T13:40:03.000Z" });
     await deadlineAt(at(DEADLINE, 20_000));
+    const [row] = await rowsOf(f);
+    expect(row).toMatchObject({ outcome: "collected", unreadable: 7 });
+    server.clock.set(at(DEADLINE, 3_600_000));
+    // The invitation accepted: the card says the state of the work (M3-14i).
+    await server.app.db.update(projectRepos).set({ invitationStatus: "accepted" }).where(eq(projectRepos.id, f.repo.id));
+
     const admin = await server.signIn("admin");
-    const s = await createSession(server.app.db, f.student.id, 8, { kind: "impersonation", actorUserId: admin.id, evaluationId: null, projectId: null });
-    const impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
-    for (const headers of [f.student.headers, impersonation]) {
-      const res = await call("GET", `/app/api/student/projects/${f.project.id}`, headers);
-      expect(res.statusCode).toBe(200);
-      expect(res.body).not.toMatch(/"collection"\s*:/);
-      expect(res.body).not.toContain("check_refused");
+    // Each confined session opened right before its read: a project's new one supersedes the last (ADR-089).
+    const readers: [string, () => Promise<Headers>][] = [
+      ["student", async () => f.student.headers],
+      ["impersonation", () => sessionHeaders(f.student.id, { kind: "impersonation", actorUserId: admin.id })],
+      ["seb", () => sessionHeaders(f.student.id, { kind: "seb", projectId: f.project.id, sebConfigKey: "c".repeat(64) })],
+      ["kiosk", () => kioskHeaders(f.student.id, f.project.id)],
+    ];
+    const bodies: string[] = [];
+    for (const [who, open] of readers) {
+      const { body, view } = await studentView(f, await open(), who);
+      bodies.push(body);
+      expect(view.repo?.collectedAt, who).toBe(DEADLINE);
+      // The collection commit is the platform's, not a push of the student's: the count stays theirs.
+      expect(view.repo?.commits, who).toBe(2);
     }
+    // The cards: the home and the classroom page, for the readers the portal serves (a confined session gets neither).
+    for (const [who, open] of readers.slice(0, 2)) {
+      const headers = await open();
+      const home = await call("GET", "/app/api/student/home", headers);
+      const page = await call("GET", `/app/api/student/classrooms/${f.project.classroomId}`, headers);
+      for (const res of [home, page]) {
+        expect(res.statusCode, `${who} ${res.body}`).toBe(200);
+        bodies.push(res.body);
+      }
+      const card = [...StudentHome.parse(home.json()).open, ...StudentHome.parse(home.json()).past].find((c) => c.id === f.project.id);
+      expect(card?.kind === "project" ? card.work?.collectedAt : undefined, who).toBe(DEADLINE);
+      const roomCard = StudentClassroomPage.parse(page.json());
+      expect(JSON.stringify(roomCard), who).toContain(`"collectedAt":"${DEADLINE}"`);
+    }
+    // A teacher in the student view holds no seat here: no repository, so nothing of its collection.
+    const teacherView = await studentView(f, owner.headers);
+    bodies.push(teacherView.body);
+    expect(teacherView.view.repo).toBeNull();
+
+    const settled = row!.settledAt!.toISOString();
+    const forbidden = [
+      '"collection"', // the staff's field
+      '"outcome"',
+      '"reason"',
+      '"unreadable"',
+      '"snapshotAt"',
+      '"settledAt"',
+      "2026-11-16T13:40:03", // the portal's snapshot time
+      settled, // when it was settled
+      "refs/quiz/collect", // the temporary ref
+      "Collected from the online workspace", // the commit's message
+    ];
+    for (const body of bodies) {
+      for (const secret of forbidden) expect(body, secret).not.toContain(secret);
+      // The only trace of it: the instant, under its one key.
+      expect(body.replaceAll('"collectedAt"', "")).not.toMatch(/collect/i);
+    }
+
+    // The staff count the student's own commits too, never the platform's.
+    const detail = ProjectDetail.parse((await call("GET", `/app/api/projects/${f.project.id}`, owner.headers)).json());
+    expect(detail.rows.map((r) => r.repo).find((r) => r?.id === f.repo.id)).toMatchObject({ commits: 2, collection: { outcome: "collected", unreadable: 7 } });
+  });
+
+  it("gives null for a collection that handed nothing in, and keeps out its reason, its branch and its sha", async () => {
+    for (const [outcome, reason] of [
+      ["failed", "timeout"],
+      ["failed", "check_refused"],
+      ["unchanged", null],
+      ["too_late", null],
+      ["no_snapshot", null],
+      [null, null], // claimed, never settled
+    ] as const) {
+      server.clock.set(NOW);
+      const f = await launched();
+      await settledRow(f, { outcome, reason, branch: "hidden-branch-x", sha: "fa11ed00".repeat(5), unreadable: 864201357, ...(outcome === null ? { settledAt: null } : {}) });
+      server.clock.set(at(DEADLINE, 3_600_000));
+      const admin = await server.signIn("admin");
+      for (const headers of [f.student.headers, await sessionHeaders(f.student.id, { kind: "impersonation", actorUserId: admin.id })]) {
+        const { body, view } = await studentView(f, headers);
+        expect(view.repo?.collectedAt, String(outcome)).toBeNull();
+        for (const secret of ["hidden-branch-x", "fa11ed00".repeat(5), "864201357", '"outcome"', '"reason"', "timeout", "check_refused", "too_late", "no_snapshot", "unchanged"]) {
+          expect(body, `${outcome} ${secret}`).not.toContain(secret);
+        }
+      }
+    }
+  });
+
+  it("forgets an earlier deadline's collection once the repository's deadline was extended, and says the new one's", async () => {
+    const f = await launched();
+    portalPushes(f, { "main.c": "first\n" });
+    await deadlineAt(at(DEADLINE, 20_000));
+    expect((await studentView(f, f.student.headers)).view.repo?.collectedAt).toBe(DEADLINE);
+
+    const later = at(DEADLINE, 3_600_000).toISOString();
+    expect((await call("PUT", `/app/api/projects/${f.project.id}/repos/${f.repo.id}/deadline`, owner.headers, { deadlineAt: later })).statusCode).toBe(200);
+    expect((await studentView(f, f.student.headers)).view.repo?.collectedAt).toBeNull();
+
+    portalPushes(f, { "main.c": "second\n" });
+    await deadlineAt(at(later, 20_000));
+    expect((await studentView(f, f.student.headers)).view.repo?.collectedAt).toBe(later);
   });
 });
 

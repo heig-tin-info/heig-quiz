@@ -6,6 +6,9 @@ Accepted (2026-11-16, the product owner's four decisions below, taken
 through explicit questions after two students of a supervised lab handed
 in nothing). Delivery progress lives in `changes/`.
 
+Amended 2026-11-16 (below, "Amendment 2026-11-16"), scope: §7, the
+student's surface — the workspace's status bar is not built.
+
 Scope: what happens, at a repository's effective deadline (F-PROJ-09), to
 the work of an `online` or `online_seb` project (F-PROJ-19) that sits in the
 online workspace but was never pushed; the grading target that results
@@ -272,6 +275,7 @@ the row is settled.
   workspace's status bar says the same (`push-status` gains `collected`,
   from what Quiz recorded — the portal's `pushed` is no collection by
   itself). The Quiz project page does not depend on the workspace's image.
+  *(Amended 2026-11-16: the status bar is not built; see the amendment.)*
 - **Resuming later** (an extension, a reopen): nothing is rewritten in
   `work/`. The student's next push is refused as a non-fast-forward, the
   relay fetches GitHub's head into `staging.git` (ADR-078 §6, as for a
@@ -347,3 +351,31 @@ the lock. The header comment of `github/lock.ts` is corrected with the code.
   never pushed.
 - **A receipt kind read by every rule** instead of a receipt dated at the
   deadline: the same rule in four readers, each a place to forget it.
+
+## Amendment 2026-11-16: the student's surface is Quiz's
+
+§7's student bullet, amended. The workspace's status bar does not say the
+collection: it is not built. The student's surfaces are Quiz's, the project
+page and the activity card, through the project's student view (the one
+exit, invariant 4), which gains only `collectedAt`: the effective deadline
+the repository was collected at, when its last collection is `collected`
+for its current effective deadline; null otherwise. A failed, late,
+skipped or unchanged collection tells the student nothing new (the staff
+are flagged), and an earlier deadline's collection says nothing once an
+extension gave the repository a new one. The page says the workspace was
+collected at the deadline and that changes made after it are not handed
+in; the card says it in a few words beside the commit. The commit the
+student sees may then be the App's: it is named "Evaluated commit", never
+a push, and the student's commit count (and the staff's) leaves the
+collection's receipt out, a commit the platform made (`countedReceipts`).
+
+Why: no channel carries Quiz's record to the portal. The portal keeps no
+table for collections (§4.2), and its `push-status` reads only the relay's
+own record of the session's pushes; its `pushed` answer to an order means
+a throwaway commit on a temporary ref, not a collection (§4.2), so the
+status bar cannot read it without saying something false when Quiz's check
+refuses the commit or GitHub refuses the move.
+
+The smallest future design, left to the owner: the assignment sync
+(`PUT /api/assignments/:id`) carries the collected-at instant per student,
+and `push-status` reads it from there.

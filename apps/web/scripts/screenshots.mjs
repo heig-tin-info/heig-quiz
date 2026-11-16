@@ -1057,6 +1057,9 @@ const scenes = [
   { name: "student-project-deleted", role: "student", path: `/projects/${SPROJ.deleted}?projects=1` },
   { name: "student-project-released", role: "student", path: `/projects/${SPROJ.past}?projects=1` },
   { name: "student-project-frozen", role: "student", path: `/projects/${SPROJ.frozen}?projects=1` },
+  // ADR-130 §7 (`?collected=1`): the frozen project's online workspace collected at its deadline, on its page and its card.
+  { name: "student-collected-project", role: "student", path: `/projects/${SPROJ.frozen}?projects=1&collected=1` },
+  { name: "student-collected-card", role: "student", path: "/classrooms/r1?projects=1&collected=1" },
   // ADR-106 §9 (L-02f, `?pjcriteria=1`): the criteria table after the definitive freeze (the provisional
   // rationales, one unfolded) and released (final); the open project keeps the state before the freeze.
   {

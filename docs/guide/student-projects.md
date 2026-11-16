@@ -86,6 +86,8 @@ After the deadline, a **Rationale** under a criterion explains its points, provi
 
 The deadline is the server's, like for an evaluation, and the page shows a countdown. If your teacher locked the project, your repository becomes **read-only** at the deadline: pushes are refused and the page reads **Read-only since the deadline**. Otherwise it stays open, in the online workspace too, which you can still open, but pushes made after the deadline do not count (pull first: the deadline adds a commit to your branch). Either way, what you pushed before the deadline counts, whatever the date written in your commit, and a grading run started in time may still finish a few minutes later. The score is then **frozen**, and the page shows **Evaluated commit**: the one that counts.
 
+In the online workspace, work you saved but did not push is handed in for you: at the deadline the platform commits the workspace as it stands to your repository, and that commit counts as on time, even if it replaces a version you pushed earlier. The page then says your workspace was collected at the deadline; changes you make after it are not handed in.
+
 A day before, you get a reminder. Your teacher can give one repository more time; if that is you, you hear it from them.
 
 ## 7. The release

@@ -1410,6 +1410,13 @@ export const StudentProjectWork = z.object({
   commits: z.number().int().nonnegative(),
   ciStatus: CiStatus,
   score: StudentProjectScore.nullable(),
+  /**
+   * The effective deadline at which the platform collected the online
+   * workspace into the repository (ADR-130 §7), when it did for the
+   * repository's current deadline; null otherwise. Only that instant:
+   * nothing of a failed or skipped collection, nothing of how it went.
+   */
+  collectedAt: z.iso.datetime().nullable(),
 });
 export type StudentProjectWork = z.infer<typeof StudentProjectWork>;
 

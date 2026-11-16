@@ -3591,9 +3591,13 @@ export const en = {
   "sproj.readOnly.noSeat": "Read-only: you hold no seat in this classroom. To test this project, use “Join as student” on the classroom page.",
   "sproj.invitation.pending": "Invitation pending on GitHub",
   "sproj.locked": "Read-only since the deadline",
+  // ADR-130 §7: the online workspace collected at the deadline, said on the page and on the card.
+  "sproj.collected": "Your workspace was collected at the deadline: changes made after it are not handed in.",
+  "sproj.collected.short": "Workspace collected at the deadline",
   // F-PROJ-21 (M3-09c): the page's notices, from the re-read of the student's own repository.
   "sproj.notice.accepted": "Invitation accepted: the repository is yours.",
   "sproj.notice.locked": "The deadline has passed: your repository is now read-only.",
+  "sproj.notice.collected": "Your workspace was collected at the deadline.",
   "sproj.notice.pushed": "Your push has been received.",
   "sproj.notice.scored": "A new indicative score is in.",
   "sproj.refusal.notStarted": "This project has not started yet.",

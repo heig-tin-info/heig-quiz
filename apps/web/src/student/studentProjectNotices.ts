@@ -7,11 +7,14 @@
  * so it can say nothing the page does not show: never a score before the
  * release, never a review dispatch, never a run after the deadline.
  *
- * Four kinds, each from its own difference:
+ * Five kinds, each from its own difference:
  *   - `accepted`  their invitation went from pending to accepted: the
  *                 repository is theirs (F-PROJ-07);
  *   - `locked`    their repository went from open to locked: the deadline
  *                 was applied (F-PROJ-09);
+ *   - `collected` their online workspace was collected at the deadline
+ *                 (ADR-130 §7): the view's `collectedAt` appeared or moved
+ *                 to a later deadline;
  *   - `pushed`    the last commit changed, while the project is open;
  *   - `scored`    an indicative score appeared or changed, while the project
  *                 is open — the current score becoming the frozen one at the
@@ -29,7 +32,7 @@ import type { Dict, TFunction } from "../i18n";
 import { pushed, type Notice } from "../notifications/notices";
 import type { ToastTone } from "../notify";
 
-export type StudentProjectNoticeKind = "accepted" | "locked" | "pushed" | "scored";
+export type StudentProjectNoticeKind = "accepted" | "locked" | "collected" | "pushed" | "scored";
 
 /** The notices of the read `next` after the read `prev`, in the order they are said; none when nothing moved. */
 export function studentProjectNotices(prev: StudentProject, next: StudentProject): StudentProjectNoticeKind[] {
@@ -41,6 +44,7 @@ export function studentProjectNotices(prev: StudentProject, next: StudentProject
   const out: StudentProjectNoticeKind[] = [];
   if (was.invitation === "pending" && repo.invitation === "accepted") out.push("accepted");
   if (!was.locked && repo.locked) out.push("locked");
+  if (repo.collectedAt !== null && repo.collectedAt !== was.collectedAt) out.push("collected");
   const open = !repo.locked && Date.parse(next.deadlineAt) > Date.parse(next.serverNow);
   if (!open) return out;
   if (pushed(was.lastCommit, repo.lastCommit)) out.push("pushed");
@@ -54,6 +58,8 @@ const KEY: Record<StudentProjectNoticeKind, { key: keyof Dict; tone: ToastTone }
   accepted: { key: "sproj.notice.accepted", tone: "success" },
   // The amber of a fact that refuses the next push: nothing went wrong.
   locked: { key: "sproj.notice.locked", tone: "warning" },
+  // A fact, not a success of theirs: the platform handed the workspace in.
+  collected: { key: "sproj.notice.collected", tone: "info" },
   pushed: { key: "sproj.notice.pushed", tone: "success" },
   scored: { key: "sproj.notice.scored", tone: "success" },
 };

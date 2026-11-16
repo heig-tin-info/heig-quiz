@@ -324,7 +324,9 @@ function OpenWorkspaceButton({ projectId, variant }: { projectId: string; varian
 
 /**
  * The student's live repository: its name on GitHub, their invitation while
- * it waits (with the Resend) and its lock. The commit it stands on is the
+ * it waits (with the Resend), its lock, and that the online workspace was
+ * collected at the deadline (ADR-130 §7): the evaluated commit may then be
+ * the platform's, which nothing calls a push. The commit it stands on is the
  * header's; the run and the score have their own sections. No invitation
  * at all under Safe Exam Browser, where nobody is invited (ADR-047 §2).
  */
@@ -357,6 +359,7 @@ function RepoCard({
         </p>
       ) : null}
       {repo.locked ? <p className="text-fg-muted">{t("sproj.locked")}</p> : null}
+      {repo.collectedAt !== null ? <p className="text-fg-muted">{t("sproj.collected")}</p> : null}
     </Card>
   );
 }

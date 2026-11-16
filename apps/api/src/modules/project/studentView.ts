@@ -56,6 +56,7 @@ import type {
   StudentProjectScore,
   StudentProjectWork,
   StudentProjectWorkspace,
+  ProjectRepoCollection,
 } from "@quiz/contracts";
 import {
   criteriaTable,
@@ -82,6 +83,7 @@ import type { StudentProjectScope } from "../guards.js";
 import { countedReceipts, repoCommitCount } from "./commits.js";
 import { criteriaStandings } from "./criterionGrades.js";
 import { isLive } from "./deadline.js";
+import { lastCollections } from "../codespace/service.js";
 import { slotRuns } from "./scores.js";
 import { ProjectError } from "./errors.js";
 import { seatRepo, seatRepos } from "./groupRepos.js";
@@ -109,17 +111,24 @@ async function githubLinked(db: Db, userId: string): Promise<boolean> {
 interface Readings {
   runs: Map<string, RunRow>;
   receipts: Map<number, CountedReceipt[]>;
+  /** Each repository's last collection at a deadline (ADR-130), the `codespace` module's record. */
+  collections: Map<string, ProjectRepoCollection>;
 }
 
 /**
  * The runs and the push receipts of `repos` (M3-14i): the receipts no bot
  * pushed (`is_bot` false), by GitHub repository id — the student's own
- * pushes, never the App's nor a workflow's. Two reads, whatever the count.
+ * pushes, never the App's nor a workflow's nor a collection's (ADR-130 §6) —
+ * and each repository's last collection. Three reads, whatever the count.
  */
 async function readings(db: Db, repos: readonly ProvisionedRepo[]): Promise<Readings> {
   const ids = repos.flatMap((r) => (r.githubRepoId === null ? [] : [r.githubRepoId]));
-  const [runs, receipts] = await Promise.all([slotRuns(db, repos), countedReceipts(db, ids)]);
-  return { runs, receipts };
+  const [runs, receipts, collections] = await Promise.all([
+    slotRuns(db, repos),
+    countedReceipts(db, ids),
+    lastCollections(db, repos.map((r) => r.id)),
+  ]);
+  return { runs, receipts, collections };
 }
 
 interface CardRow {
@@ -192,8 +201,8 @@ function card(
   const live = liveRepo(row.repo, row.project);
   let work: StudentProjectWork | null = null;
   if (live?.invitationStatus === "accepted") {
-    const { lastCommit, commits, ciStatus, score } = reading(row.project, live, read, now);
-    work = { lastCommit, commits, ciStatus, score: row.project.releasedAt === null ? score : null };
+    const { lastCommit, commits, ciStatus, score, collectedAt } = reading(row.project, live, read, now);
+    work = { lastCommit, commits, ciStatus, score: row.project.releasedAt === null ? score : null, collectedAt };
   }
   return {
     group,
@@ -260,7 +269,7 @@ export async function studentProjectCards(
 }
 
 /** What the view shows of a repository's commits and runs: the commit it stands on, its CI state, the commit count, the selected run and its score. */
-type RepoReading = Pick<StudentProjectRepo, "lastCommit" | "commits" | "ciStatus" | "run" | "score">;
+type RepoReading = Pick<StudentProjectRepo, "lastCommit" | "commits" | "ciStatus" | "run" | "score" | "collectedAt">;
 
 /**
  * The repository as the student reads it (F-PROJ-15, N-SEC-20): the run
@@ -270,7 +279,7 @@ type RepoReading = Pick<StudentProjectRepo, "lastCommit" | "commits" | "ciStatus
  * grading `none`), and the commits of the student's pushes received by
  * their effective deadline (`studentCommitCount`, M3-14i).
  */
-function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts }: Readings, now: Date): RepoReading {
+function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts, collections }: Readings, now: Date): RepoReading {
   const slot = (id: string | null) => (id === null ? null : (runs.get(id) ?? null));
   const chosen = studentScoreRun({
     deadlineAppliedAt: repo.deadlineAppliedAt,
@@ -279,10 +288,14 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts }:
   });
   const deadlineAt = effectiveDeadline(repo, project);
   const ci = studentCiReading(repo, chosen?.run ?? null, deadlineAt, now);
-  const stored: Pick<RepoReading, "lastCommit" | "commits" | "ciStatus"> = {
+  // Collected for the deadline that applies now (ADR-130 §7): an earlier deadline's, once extended, says nothing.
+  const collection = collections.get(repo.id);
+  const collectedAt = collection?.outcome === "collected" && collection.deadlineAt === deadlineAt.toISOString() ? collection.deadlineAt : null;
+  const stored: Pick<RepoReading, "lastCommit" | "commits" | "ciStatus" | "collectedAt"> = {
     lastCommit: ci.lastCommit === null ? null : { sha: ci.lastCommit.sha, at: isoOrNull(ci.lastCommit.at) },
     commits: repoCommitCount(project, repo, receipts),
     ciStatus: ci.ciStatus,
+    collectedAt,
   };
   if (chosen === null) return { ...stored, run: null, score: null };
   const { run, frozen } = chosen;
@@ -354,7 +367,7 @@ export async function studentProject(
             deleted: repo.deletedAt !== null,
             locked: repo.lockedAt !== null,
             ...(live === null
-              ? { lastCommit: null, commits: 0, ciStatus: "none" as const, run: null, score: null }
+              ? { lastCommit: null, commits: 0, ciStatus: "none" as const, run: null, score: null, collectedAt: null }
               : reading(project, live, read, now)),
           },
     release:

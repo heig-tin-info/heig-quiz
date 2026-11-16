@@ -49,6 +49,7 @@ const project = (over: Partial<StudentProject> = {}): StudentProject => ({
     locked: false,
     lastCommit: { sha: SHA, at: at(-0.1) },
     commits: 3,
+    collectedAt: null,
     ciStatus: "pass",
     run: { sha: SHA, url: "https://github.com/heig/labo-1-lea/actions/runs/42", conclusion: "success", completedAt: at(-0.1) },
     score: { points: 34, max: 40, grade: { grade: 5.3 }, frozen: false },
@@ -173,6 +174,25 @@ describe("a project in progress", () => {
     // A passed deadline is said once, with no countdown.
     expect(screen.getByText(/^Closed /)).toBeInTheDocument();
     expect(screen.queryByText("Grade")).toBeNull();
+    expect(screen.queryByText(/collected/)).toBeNull();
+  });
+
+  it("says the workspace was collected at the deadline and what is not handed in, never a push (ADR-130 §7)", async () => {
+    const p = project({
+      status: "locked",
+      deadlineAt: at(-1),
+      workspace: { mode: "online", devices: "any" },
+      repo: { ...project().repo!, locked: true, collectedAt: at(-1), lastCommit: { sha: SHA, at: null }, score: { points: 30, max: 40, grade: null, frozen: true } },
+    });
+    mockFetch({ [URL]: ok(p) });
+    const { unmount } = render();
+    expect(await screen.findByText("Your workspace was collected at the deadline: changes made after it are not handed in.")).toBeInTheDocument();
+    // The commit beside it is the evaluated one, which may be the platform's: never "your push".
+    expect(screen.getByText("Evaluated commit")).toBeInTheDocument();
+    expect(screen.queryByText(/push/i)).toBeNull();
+    unmount();
+    render({ locale: "fr" });
+    expect(await screen.findByText("Votre espace de travail a été relevé à l'échéance : les modifications faites ensuite ne sont pas rendues.")).toBeInTheDocument();
   });
 
   it("judges the deadline on the server's clock, not the browser's (invariant 5)", async () => {
