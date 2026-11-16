@@ -92,14 +92,9 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
     queryFn: () => api("/app/api/kiosk/station"),
     retry: false,
   });
-  const frame = usePortalFrame(id, guardSubmit, suspended, relaunchMs);
-  const { retry } = frame;
-  const refused = frame.state.kind === "refused";
   const project = useQuery<StudentProject>({
     queryKey: studentProjectKey(id),
     queryFn: () => api(`/app/api/student/projects/${id}`),
-    // A refusal lifts by what the student does elsewhere (accepting the project): the page watches for it.
-    refetchInterval: refused ? LAUNCH_RETRY_MS : false,
   });
   const clock = useServerClock();
   const { sample } = clock;
@@ -114,15 +109,19 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
     return () => clearInterval(timer);
   }, [qc]);
 
-  // A refused launch is tried again when the project the student sees has changed, not on a
-  // timer: the start route wants an attestation under two minutes old, this read wants none.
+  // The project as the student sees it, the server's clock aside; null until read. The launch waits
+  // for the first read, so that it knows which project it was refused on.
   const facts = project.data ? JSON.stringify({ ...project.data, serverNow: null }) : null;
-  const seen = useRef(facts);
+  const frame = usePortalFrame(id, guardSubmit, suspended || project.isPending, relaunchMs, facts);
+
+  // A refusal lifts by what the student does elsewhere (accepting the project): the page reads
+  // the project again meanwhile. That read wants no attestation; the start route wants a fresh one.
+  const refused = frame.state.kind === "refused";
   useEffect(() => {
-    // A change only: the project's first load launches nothing, nor does the refusal itself.
-    if (refused && seen.current !== null && facts !== seen.current) retry();
-    seen.current = facts;
-  }, [refused, facts, retry]);
+    if (!refused) return;
+    const timer = setInterval(() => void qc.invalidateQueries({ queryKey: studentProjectKey(id) }), LAUNCH_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [refused, qc, id]);
 
   const leave = async () => {
     const ok = await confirm({
@@ -200,23 +199,32 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
 /**
  * The frame's launch: the start route's POST (CSRF, the station's `423`s,
  * a fresh attestation, which `guardSubmit` renews once when stale), its
- * `{ url }` in the frame, again `relaunchMs` after each launch. A suspended
- * station launches nothing; the launch waits for the suspension to lift. A
- * refusal the student can read stays on screen until the page calls `retry`;
- * anything else offers a retry, and is launched again `LAUNCH_RETRY_MS` later.
+ * `{ url }` in the frame, again `relaunchMs` after each launch. A `held`
+ * page launches nothing (a suspended station, the project not read yet);
+ * the launch waits for the hold to lift.
+ *
+ * A refusal the student can read stays on screen, and is launched again
+ * once `facts` (the project they see) differs from what it was when the
+ * refused launch started: never on a timer, which would cost the station an
+ * attestation every two minutes. Anything else offers a retry, and is
+ * launched again `LAUNCH_RETRY_MS` later, for as long as it fails.
  */
 function usePortalFrame(
   projectId: string,
   guardSubmit: <T>(submit: () => Promise<T>) => Promise<T>,
-  suspended: boolean,
+  held: boolean,
   relaunchMs: number,
+  facts: string | null,
 ) {
   const [state, setState] = useState<Frame>({ kind: "launching", url: null });
   const launching = state.kind === "launching";
+  /** `facts` when the last launch started. */
+  const launchedOn = useRef(facts);
 
   useEffect(() => {
-    if (!launching || suspended) return;
+    if (!launching || held) return;
     let alive = true;
+    launchedOn.current = facts;
     guardSubmit(() => api<WorkspaceStart>(workspaceStartPath(projectId), { method: "POST" })).then(
       ({ url }) => {
         if (alive) setState({ kind: "open", url, at: Date.now() });
@@ -231,7 +239,8 @@ function usePortalFrame(
     return () => {
       alive = false;
     };
-  }, [launching, suspended, projectId, guardSubmit]);
+    // `facts` is read when a launch starts and never starts one here: the effect below does.
+  }, [launching, held, projectId, guardSubmit]);
 
   const openAt = state.kind === "open" ? state.at : null;
   useEffect(() => {
@@ -250,5 +259,9 @@ function usePortalFrame(
     const timer = setTimeout(retry, LAUNCH_RETRY_MS);
     return () => clearTimeout(timer);
   }, [failed, retry]);
+  const refused = state.kind === "refused";
+  useEffect(() => {
+    if (refused && facts !== launchedOn.current) retry();
+  }, [refused, facts, retry]);
   return { state, retry };
 }
