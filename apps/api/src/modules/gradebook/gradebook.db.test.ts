@@ -340,10 +340,10 @@ describe("the mean (F-GBOOK-02)", () => {
     // s0: E1 5.0, E2 4.0, E4 4.5 (released under `none`: the staff read the real grade) and P1 5.5 count;
     // X1 (an exercise) does not; E3 and P2 are not released.
     const expected = gradebookMean([
-      { weight: 100, counts: true, cell: { kind: "grade", grade: 5 } },
-      { weight: 100, counts: true, cell: { kind: "grade", grade: 4 } },
-      { weight: 100, counts: true, cell: { kind: "grade", grade: gradeFromPoints(7, 10, {}) } },
-      { weight: 100, counts: true, cell: { kind: "grade", grade: 5.5 } },
+      { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 5 } },
+      { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 4 } },
+      { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: gradeFromPoints(7, 10, {}) } },
+      { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 5.5 } },
     ]);
     expect(expected).toBe(4.8); // 19 / 4 = 4.75, half up
     expect(rowOf(table, 0).mean).toBe(4.8);
@@ -753,9 +753,9 @@ describe("the student's own cells (F-GBOOK-05, F-RES-04) and what must never rea
       const s0 = (await studentRead(students[0]!.headers)).parsed;
       // s0 sees E1 5.0, E2 4.0, P1 5.5 (counted): E4 is withheld, so it is not in what they read.
       expect(s0.mean).toBe(gradebookMean([
-        { weight: 100, counts: true, cell: { kind: "grade", grade: 5 } },
-        { weight: 100, counts: true, cell: { kind: "grade", grade: 4 } },
-        { weight: 100, counts: true, cell: { kind: "grade", grade: 5.5 } },
+        { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 5 } },
+        { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 4 } },
+        { weight: 100, counts: true, componentId: null, cell: { kind: "grade", grade: 5.5 } },
       ]));
       expect(s0.columns.find((c) => c.activityId === col["E1"])).toMatchObject({ weight: 100, counts: true });
       // The class means are the staff's: never in a student's payload, published mean or not.
@@ -1106,14 +1106,14 @@ describe("the components of the mean (ADR-131)", () => {
     }
     expect((await call("POST", compUrl(), outsider.headers, { name: "Labo" })).statusCode).toBe(404);
     expect((await call("POST", compUrl(randomUUID()), teacher.headers, { name: "Labo" })).statusCode).toBe(404);
-    for (const body of [{ name: "   " }, { name: "x".repeat(41) }, { name: "Labo", weight: 101 }]) {
-      expect((await call("POST", compUrl(), teacher.headers, body)).statusCode, JSON.stringify(body)).toBe(400);
-    }
+    // The route applies the schema (its boundaries are the contract's test).
+    expect((await call("POST", compUrl(), teacher.headers, { name: "   " })).statusCode).toBe(400);
 
-    expect((await create({ name: "Labo", weight: 50 })).list).toEqual([{ id: part["Labo"], name: "Labo", weight: 50, inUse: false }]);
+    // Weights no grade nor point of the world shares, so a search of a student's body for them means something.
+    expect((await create({ name: "Labo", weight: 37 })).list).toEqual([{ id: part["Labo"], name: "Labo", weight: 37, inUse: false }]);
     const taken = await call("POST", compUrl(), teacher.headers, { name: " LABO " });
     expect([taken.statusCode, taken.json().error]).toEqual([409, "component_name_taken"]);
-    expect((await create({ name: "  Cours ", weight: 50 })).list.map((c) => c.name)).toEqual(["Labo", "Cours"]);
+    expect((await create({ name: "  Cours ", weight: 63 })).list.map((c) => c.name)).toEqual(["Labo", "Cours"]);
     // 100 % by default; it will hold no column.
     expect((await create({ name: "Oral" })).made.weight).toBe(100);
     // Another course may use the same name.
@@ -1121,8 +1121,8 @@ describe("the components of the mean (ADR-131)", () => {
 
     const created = await audited("gradebook.component_created");
     expect(created.map((r) => [r.subjectType, r.payload])).toEqual([
-      ["course", { componentId: part["Labo"], name: "Labo", weight: 50 }],
-      ["course", { componentId: part["Cours"], name: "Cours", weight: 50 }],
+      ["course", { componentId: part["Labo"], name: "Labo", weight: 37 }],
+      ["course", { componentId: part["Cours"], name: "Cours", weight: 63 }],
       ["course", { componentId: part["Oral"], name: "Oral", weight: 100 }],
     ]);
   });
@@ -1142,13 +1142,13 @@ describe("the components of the mean (ADR-131)", () => {
     expect(GradebookComponents.parse(renamed.json()).find((c) => c.id === part["Cours"])).toMatchObject({ name: "Cours théorique", weight: 60 });
     // A case change of its own name is no clash.
     expect((await call("PATCH", url, teacher.headers, { name: "COURS" })).statusCode).toBe(200);
-    await call("PATCH", url, teacher.headers, { name: "Cours", weight: 50 });
-    await call("PATCH", url, teacher.headers, { weight: 50 });
+    await call("PATCH", url, teacher.headers, { name: "Cours", weight: 63 });
+    await call("PATCH", url, teacher.headers, { weight: 63 });
     const updated = await audited("gradebook.component_updated");
     expect(updated.map((r) => r.payload)).toEqual([
-      { componentId: part["Cours"], before: { name: "Cours", weight: 50 }, after: { name: "Cours théorique", weight: 60 } },
+      { componentId: part["Cours"], before: { name: "Cours", weight: 63 }, after: { name: "Cours théorique", weight: 60 } },
       { componentId: part["Cours"], before: { name: "Cours théorique", weight: 60 }, after: { name: "COURS", weight: 60 } },
-      { componentId: part["Cours"], before: { name: "COURS", weight: 60 }, after: { name: "Cours", weight: 50 } },
+      { componentId: part["Cours"], before: { name: "COURS", weight: 60 }, after: { name: "Cours", weight: 63 } },
     ]);
   });
 
@@ -1161,9 +1161,12 @@ describe("the components of the mean (ADR-131)", () => {
     const res = await assign(seed.classroomId, "evaluation", "E1", part["Cours"]!, assistant.headers);
     expect(res.statusCode, res.body).toBe(200);
     expect(GradebookStaff.parse(res.json()).columns.find((c) => c.activityId === col["E1"])).toMatchObject({ componentId: part["Cours"], counts: true });
-    for (const [kind, name, component] of [["evaluation", "E2", "Cours"], ["project", "P1", "Labo"], ["evaluation", "X1", "Labo"]] as const) {
+    for (const [kind, name, component] of [["project", "P1", "Cours"], ["evaluation", "E2", "Labo"], ["evaluation", "X1", "Labo"], ["evaluation", "E3", "Cours"]] as const) {
       expect((await assign(seed.classroomId, kind, name, part[component]!)).statusCode).toBe(200);
     }
+    // The exercise X1 counts, in Labo; the unreleased exam E3 sits in Cours but does not count.
+    expect((await call("PATCH", colUrl("evaluation", "X1"), teacher.headers, { counts: true })).statusCode).toBe(200);
+    expect((await call("PATCH", colUrl("evaluation", "E3"), teacher.headers, { counts: false })).statusCode).toBe(200);
     const [last] = (await db().select().from(auditLog).where(and(eq(auditLog.action, "gradebook.column_updated"), eq(auditLog.subjectId, seed.classroomId))).orderBy(auditLog.id))
       .filter((r) => (r.payload as { activityId: string }).activityId === col["E1"])
       .slice(-1);
@@ -1172,28 +1175,28 @@ describe("the components of the mean (ADR-131)", () => {
 
   it("makes the mean two-level, each component's rounded first; a counted column in no component counts in no mean", async () => {
     const table = await staffTable();
-    expect(table.components.map(({ name, weight }) => [name, weight])).toEqual([["Labo", 50], ["Cours", 50], ["Oral", 100]]);
+    expect(table.components.map(({ name, weight }) => [name, weight])).toEqual([["Labo", 37], ["Cours", 63], ["Oral", 100]]);
     // E4 still counts by its flag, but sits in no component: out of every mean.
     expect(table.columns.find((c) => c.activityId === col["E4"])).toMatchObject({ counts: true, componentId: null });
-    // s0: Cours E1 5.0, E2 4.0 -> 4.5; Labo P1 5.5 (X1 does not count); Oral none -> (50·4.5 + 50·5.5) / 100.
-    expect(rowOf(table, 0)).toMatchObject({ componentMeans: { [part["Labo"]!]: 5.5, [part["Cours"]!]: 4.5, [part["Oral"]!]: null }, mean: 5 });
-    // s1: Cours E1 3.5, E2 absent 1.0 -> 2.25 -> 2.3; no Labo grade: Cours alone.
-    expect(rowOf(table, 1)).toMatchObject({ componentMeans: { [part["Labo"]!]: null, [part["Cours"]!]: 2.3 }, mean: 2.3 });
-    // s2: Cours E1 absent 1.0, E2 6.0 -> 3.5.
-    expect(rowOf(table, 2).mean).toBe(3.5);
-    // The class means of the components, staff only: Cours (4.5 + 2.3 + 3.5) / 3 = 3.43.
-    expect(table.components.map((c) => c.classMean)).toEqual([5.5, 3.4, null]);
-    expect(table.classMean).toBe(3.6);
+    // s0: Labo E2 4.0, X1 5.5 -> 4.75 -> 4.8; Cours E1 5.0, P1 5.5 -> 5.25 -> 5.3; Oral none -> (37·4.8 + 63·5.3) / 100 = 5.115.
+    expect(rowOf(table, 0)).toMatchObject({ componentMeans: { [part["Labo"]!]: 4.8, [part["Cours"]!]: 5.3, [part["Oral"]!]: null }, mean: 5.1 });
+    // s1: Labo E2 absent 1.0 (X1 empty); Cours E1 3.5 (P1 empty) -> (37·1.0 + 63·3.5) / 100 = 2.575.
+    expect(rowOf(table, 1)).toMatchObject({ componentMeans: { [part["Labo"]!]: 1, [part["Cours"]!]: 3.5 }, mean: 2.6 });
+    // s2: Labo E2 6.0; Cours E1 absent 1.0 -> (37·6.0 + 63·1.0) / 100 = 2.85, half up.
+    expect(rowOf(table, 2).mean).toBe(2.9);
+    // The class means of the components, staff only: Labo (4.8 + 1.0 + 6.0) / 3 = 3.93, Cours (5.3 + 3.5 + 1.0) / 3 = 3.27.
+    expect(table.components.map((c) => c.classMean)).toEqual([3.9, 3.3, null]);
+    expect(table.classMean).toBe(3.5);
   });
 
   it("keeps a component at 0 % in view and out of the overall mean, and reads a weight live, in an archived classroom too", async () => {
     const weigh = (name: string, weight: number) => call("PATCH", `${compUrl()}/${part[name]}`, teacher.headers, { weight });
     await weigh("Labo", 0);
-    expect(rowOf(await staffTable(), 0)).toMatchObject({ componentMeans: { [part["Labo"]!]: 5.5 }, mean: 4.5 });
+    expect(rowOf(await staffTable(), 0)).toMatchObject({ componentMeans: { [part["Labo"]!]: 4.8 }, mean: 5.3 });
     await weigh("Cours", 0);
     expect(rowOf(await staffTable(), 0).mean).toBeNull();
-    await weigh("Labo", 50);
-    await weigh("Cours", 50);
+    await weigh("Labo", 37);
+    await weigh("Cours", 63);
 
     // Classroom B: B1 in Cours, B2 counted but in no component yet: out of the mean, as anywhere in the course.
     expect((await assign(roomB, "evaluation", "B1", part["Cours"]!)).statusCode).toBe(200);
@@ -1201,18 +1204,27 @@ describe("the components of the mean (ADR-131)", () => {
     expect((await assign(roomB, "evaluation", "B2", part["Labo"]!)).statusCode).toBe(200);
     await db().update(classrooms).set({ archivedAt: server.clock.now() }).where(eq(classrooms.id, roomB));
     try {
-      expect((await tableOf(roomB)).rows[0]!.mean).toBe(4);
-      // No freeze (ADR-131 §6): the course's weight moves the archived classroom's means. (50·5.0 + 100·3.0) / 150 = 3.67.
+      // (37·3.0 + 63·5.0) / 100 = 4.26.
+      expect((await tableOf(roomB)).rows[0]!.mean).toBe(4.3);
+      // No freeze (ADR-131 §6): the course's weight moves the archived classroom's means. (100·3.0 + 63·5.0) / 163 = 3.77.
       await weigh("Labo", 100);
-      expect((await tableOf(roomB)).rows[0]!.mean).toBe(3.7);
+      expect((await tableOf(roomB)).rows[0]!.mean).toBe(3.8);
       // Its own columns stay read-only: none can move to another component there.
       const refused = await assign(roomB, "evaluation", "B2", null);
       expect([refused.statusCode, refused.json().error]).toEqual([409, "classroom_archived"]);
     } finally {
-      await weigh("Labo", 50);
+      await weigh("Labo", 37);
       await db().update(classrooms).set({ archivedAt: null }).where(eq(classrooms.id, roomB));
     }
   });
+
+  /**
+   * The values the mean unpublished keeps from every student response: the components' weights, s0's means of them
+   * and overall, the components' class means and the class's — none of them a grade or points s0 is shown. Anchored as a
+   * JSON number (`":37,` or `":37}`), so neither a UUID nor a time of day can match.
+   */
+  const WITHHELD = [37, 63, 4.8, 5.3, 5.1, 3.9, 3.3, 3.5];
+  const leaks = (body: string) => WITHHELD.filter((value) => new RegExp(`":${String(value).replace(".", "\\.")}[,}]`).test(body));
 
   it("tells the student the component of each column that counts, never a weight nor a mean unpublished, on the tab and the Grades page alike", async () => {
     const callers: [string, Headers][] = [
@@ -1228,43 +1240,57 @@ describe("the components of the mean (ADR-131)", () => {
       // Oral holds none of the student's columns: not listed.
       expect(parsed.components, who).toEqual([{ id: part["Labo"], name: "Labo" }, { id: part["Cours"], name: "Cours" }]);
       for (const forbidden of ['"weight"', '"mean"', '"classMean"', '"componentMeans"', '"inUse"']) expect(body, `${who}: ${forbidden}`).not.toContain(forbidden);
+      expect(leaks(body), who).toEqual([]);
 
       const res = await call("GET", "/app/api/student/results", headers);
       expect(res.statusCode, res.body).toBe(200);
       expect(res.body, who).not.toContain('"weight"');
+      expect(leaks(res.body), who).toEqual([]);
       const rows = StudentGrades.parse(res.json()).flatMap((g) => g.rows);
       const page = (name: string) => {
         const row = rows.find((r) => (r.kind === "evaluation" ? r.evaluationId : r.projectId) === col[name])!;
         return [row.counts, row.component];
       };
-      // The two readers agree: E4 counts by its flag but sits in no component, X1 is in Labo but does not count.
-      expect({ E1: tab("E1"), E4: tab("E4"), P1: tab("P1"), X1: tab("X1") }, who).toEqual({
+      // The two readers agree: E4 counts by its flag but sits in no component, E3 is in Cours but does not count.
+      expect({ E1: tab("E1"), E3: tab("E3"), E4: tab("E4"), P1: tab("P1"), X1: tab("X1") }, who).toEqual({
         E1: [true, part["Cours"]],
+        E3: [false, null],
         E4: [false, null],
-        P1: [true, part["Labo"]],
-        X1: [false, null],
+        P1: [true, part["Cours"]],
+        X1: [true, part["Labo"]],
       });
-      expect({ E1: page("E1"), E4: page("E4"), P1: page("P1"), X1: page("X1") }, who).toEqual({
+      expect({ E1: page("E1"), E3: page("E3"), E4: page("E4"), P1: page("P1"), X1: page("X1") }, who).toEqual({
         E1: [true, "Cours"],
+        E3: [false, null],
         E4: [false, null],
-        P1: [true, "Labo"],
-        X1: [false, null],
+        P1: [true, "Cours"],
+        X1: [true, "Labo"],
       });
     }
-    // A teacher in the student view, on a staff seat or none: the same shape, empty.
-    for (const headers of [seated.headers, teacher.headers]) expect((await studentRead(headers)).parsed.components).toEqual([]);
+    // A teacher in the student view, on a staff seat or none: the same shape, empty, and nothing withheld either.
+    for (const headers of [seated.headers, teacher.headers]) {
+      const { parsed, body } = await studentRead(headers);
+      expect(parsed.components).toEqual([]);
+      for (const forbidden of ['"weight"', '"mean"', '"classMean"', '"componentMeans"']) expect(body).not.toContain(forbidden);
+      expect(leaks(body)).toEqual([]);
+      const page = await call("GET", "/app/api/student/results", headers);
+      expect(page.statusCode, page.body).toBe(200);
+      expect(leaks(page.body)).toEqual([]);
+    }
   });
 
   it("gives the components' weights and the student's own means of them with the published mean only, never a class mean", async () => {
     await call("PATCH", base(), teacher.headers, { meanPublished: true });
     try {
       const { parsed, body } = await studentRead(students[0]!.headers);
-      // s0 reads E1 5.0, E2 4.0 (Cours) and P1 5.5 (Labo); E4 is withheld, and in no component.
+      // s0 reads E2 4.0, X1 5.5 (Labo) and E1 5.0, P1 5.5 (Cours); E4 is withheld, and in no component.
       expect(parsed.components).toEqual([
-        { id: part["Labo"], name: "Labo", weight: 50, mean: 5.5 },
-        { id: part["Cours"], name: "Cours", weight: 50, mean: 4.5 },
+        { id: part["Labo"], name: "Labo", weight: 37, mean: 4.8 },
+        { id: part["Cours"], name: "Cours", weight: 63, mean: 5.3 },
       ]);
-      expect(parsed.mean).toBe(5);
+      expect(parsed.mean).toBe(5.1);
+      // The search the unpublished case runs finds them now: it would see a leak.
+      expect(leaks(body)).toEqual([37, 63, 4.8, 5.3, 5.1]);
       expect(body).not.toContain("classMean");
     } finally {
       await call("PATCH", base(), teacher.headers, { meanPublished: false });
@@ -1278,14 +1304,20 @@ describe("the components of the mean (ADR-131)", () => {
     const field = (line: string, name: string) => line.split(";")[3 + table.columns.findIndex((c) => c.activityId === col[name])];
     expect(header!.split(";").slice(-4)).toEqual(["Labo", "Cours", "Oral", "mean"]);
     expect(component!.split(";").slice(0, 3)).toEqual(["component", "", ""]);
-    expect([field(component!, "E1"), field(component!, "E4"), field(component!, "P1"), field(component!, "X1")]).toEqual(["Cours", "", "Labo", "Labo"]);
+    expect([field(component!, "E1"), field(component!, "E3"), field(component!, "E4"), field(component!, "P1"), field(component!, "X1")]).toEqual([
+      "Cours",
+      "Cours",
+      "",
+      "Cours",
+      "Labo",
+    ]);
     expect(component!.split(";").slice(-4)).toEqual(["", "", "", ""]);
     // A counted column in no component, like one that does not count, carries no weight.
-    expect([field(weight!, "E1"), field(weight!, "E4"), field(weight!, "X1")]).toEqual(["100", "", ""]);
-    expect(weight!.split(";").slice(-4)).toEqual(["50", "50", "100", ""]);
+    expect([field(weight!, "E1"), field(weight!, "E3"), field(weight!, "E4"), field(weight!, "X1")]).toEqual(["100", "", "", "100"]);
+    expect(weight!.split(";").slice(-4)).toEqual(["37", "63", "100", ""]);
     const s0 = rest.find((l) => l.startsWith(`${rowOf(table, 0).email};`))!;
-    expect(s0.split(";").slice(-4)).toEqual(["5.5", "4.5", "", "5.0"]);
-    expect(classMeans.split(";").slice(-4)).toEqual(["5.5", "3.4", "", "3.6"]);
+    expect(s0.split(";").slice(-4)).toEqual(["4.8", "5.3", "", "5.1"]);
+    expect(classMeans.split(";").slice(-4)).toEqual(["3.9", "3.3", "", "3.5"]);
   });
 
   it("hints the course's staff and the students of every classroom of the course on a component's write, never a classroom's topic", async () => {
@@ -1339,6 +1371,7 @@ describe("the components of the mean (ADR-131)", () => {
     for (const [room, kind, name] of [
       [seed.classroomId, "evaluation", "E1"],
       [seed.classroomId, "evaluation", "E2"],
+      [seed.classroomId, "evaluation", "E3"],
       [seed.classroomId, "project", "P1"],
       [seed.classroomId, "evaluation", "X1"],
       [roomB, "evaluation", "B1"],
@@ -1346,6 +1379,8 @@ describe("the components of the mean (ADR-131)", () => {
     ] as const) {
       expect((await assign(room, kind, name, null)).statusCode).toBe(200);
     }
+    await call("PATCH", colUrl("evaluation", "X1"), teacher.headers, { counts: false });
+    await call("PATCH", colUrl("evaluation", "E3"), teacher.headers, { counts: true });
     for (const name of ["Labo", "Cours"]) expect((await call("DELETE", `${compUrl()}/${part[name]}`, teacher.headers)).statusCode).toBe(200);
     expect((await call("GET", `${base()}.csv`, teacher.headers)).payload).toBe(csvBefore);
     const after = await staffTable();

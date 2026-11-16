@@ -6,7 +6,7 @@
  * service (`studentProjectGrades`) only; its rows carry the gradebook
  * column's `counts` (ADR-074 §6, amendment of 2026-10-13).
  */
-import { countsByDefault, countsInMean, evaluationColumnKind, isFinishedAttempt } from "@quiz/domain";
+import { countsByDefault, evaluationColumnKind, isFinishedAttempt, studentCounting } from "@quiz/domain";
 import type {
   CardResults,
   EvaluationGradeRow,
@@ -121,7 +121,7 @@ interface ColumnComponent {
 
 /**
  * Whether a row counts toward the mean, and the name of the component it
- * counts in: `countsInMean` of the teacher's flag on its stored gradebook
+ * counts in: `studentCounting` of the teacher's flag on its stored gradebook
  * column (`storedCounts`, joined by `studentEvaluationRows` and
  * `studentProjectGrades`), else its kind's default, and of its component once
  * the course has some (ADR-131). The flag and the name alone ever reach the
@@ -131,8 +131,8 @@ interface ColumnComponent {
  * counts…", and the components' cases) guards that the two agree.
  */
 function counting(flag: boolean, column: ColumnComponent): { counts: boolean; component: string | null } {
-  const counts = countsInMean(flag, column.componentId, column.courseHasComponents);
-  return { counts, component: counts ? column.componentName : null };
+  const { counts, componentId } = studentCounting(flag, column.componentId, column.courseHasComponents);
+  return { counts, component: componentId === null ? null : column.componentName };
 }
 
 const countsOf = ({ row }: PastEntry): boolean => row.storedCounts ?? countsByDefault(evaluationColumnKind(row.evaluation.mode));

@@ -7,7 +7,7 @@
  * mean — and the student's own cells. All checked by `contract.test.ts`.
  *
  * It decides what the server decides, with the same pure rules (`resolveCell`,
- * `gradebookMean`, `classMean` of `@quiz/domain`): a column not released shows no grade of
+ * `gradebookMeans`, `classMean` of `@quiz/domain`): a column not released shows no grade of
  * its activity (a staff mark stands there) and stays out of the mean; an
  * exam released and not taken is a derived absence; the student's cells are
  * the narrowed ones — `withheld` under the feedback policy `none`,
@@ -37,7 +37,7 @@ import {
   cellGrade,
   classMean,
   countsByDefault,
-  gradebookMean,
+  gradebookMeans,
   gradeFromPoints,
   resolveCell,
   type CellOutcome,
@@ -221,12 +221,14 @@ const displayed = (cell: { kind: string; grade: number | null }): CellOutcome =>
       ? { kind: cell.kind }
       : { kind: "empty" };
 
+/** The mock's courses have no component of the mean (ADR-131): the means of one implicit component, as the server's. */
 const meanOf = (columns: MockColumn[], outcomes: Map<string, CellOutcome>): number | null =>
-  gradebookMean(
+  gradebookMeans(
     columns
       .filter((c) => c.released)
-      .map((c): MeanColumn => ({ weight: c.weight, counts: c.counts, cell: outcomes.get(c.activityId) ?? { kind: "empty" } })),
-  );
+      .map((c): MeanColumn => ({ weight: c.weight, counts: c.counts, componentId: c.componentId, cell: outcomes.get(c.activityId) ?? { kind: "empty" } })),
+    [],
+  ).mean;
 
 function staffTable(room: (typeof rooms)[number], book: MockBook): GradebookStaff {
   const students = seatsOf(room.id);

@@ -101,6 +101,12 @@ const OWN = {
 } as const;
 /** A component of the mean of classroom A's course (ADR-131): its structure, read by every student of the classroom, not Alice's own. */
 const COMPONENT = "COMPONENT-61d2";
+/**
+ * Its weight, Alice's mean of it (and overall) and its class mean: the staff's while the mean is unpublished. Anchored
+ * as a JSON number (`":37,` or `":37}`), so neither a UUID nor a time of day can match.
+ */
+const WITHHELD = [37, 4.5, 2.1];
+const leaks = (body: string) => WITHHELD.filter((value) => new RegExp(`":${String(value).replace(".", "\\.")}[,}]`).test(body));
 /** The answer keys of the seeded questions (`publishQuestion`), never shown: no policy here shows the key. */
 const KEYS = ["answer-q0"];
 
@@ -309,17 +315,26 @@ beforeAll(async () => {
     payload: { kind: "score", points: 1, max: 10, comment: NEVER.markComment, override: true },
   });
   expect(mark.statusCode, mark.body).toBe(200);
-  // A component of the mean (ADR-131) holding the shown exam; the mean is not published, so its weight and means stay the staff's.
+  // A component of the mean (ADR-131) holding the shown and the hidden exams; the mean is not published, so its weight
+  // and means stay the staff's (`WITHHELD`).
   const component = await server.app.inject({ method: "POST", url: `/app/api/courses/${seed.courseId}/gradebook/components`, headers: teacher.headers, payload: { name: COMPONENT, weight: 37 } });
   expect(component.statusCode, component.body).toBe(201);
   const componentId = (component.json() as { id: string }[])[0]!.id;
-  const assigned = await server.app.inject({
-    method: "PATCH",
-    url: `/app/api/classrooms/${seed.classroomId}/gradebook/columns/evaluation/${ids["shown"]}`,
-    headers: teacher.headers,
-    payload: { componentId },
-  });
-  expect(assigned.statusCode, assigned.body).toBe(200);
+  for (const exam of ["shown", "hidden"]) {
+    const assigned = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/classrooms/${seed.classroomId}/gradebook/columns/evaluation/${ids[exam]}`,
+      headers: teacher.headers,
+      payload: { componentId },
+    });
+    expect(assigned.statusCode, assigned.body).toBe(200);
+  }
+  // What the staff read and no student file may hold: the weight, Alice's mean of the component and overall (5.0 and
+  // 4.0 -> 4.5, a grade none of her cells shows), the component's class mean (4.5, Bob 2.0, Carol 1.0, the admin's
+  // seat 1.0 -> 2.1).
+  const table = await server.app.inject({ method: "GET", url: `/app/api/classrooms/${seed.classroomId}/gradebook`, headers: teacher.headers });
+  expect(table.json()).toMatchObject({ components: [{ weight: 37, classMean: 2.1 }] });
+  expect((table.json() as { rows: { mean: number | null }[] }).rows.map((r) => r.mean)).toContain(4.5);
 
   // The archived classroom B, with a released exam of Alice's.
   archived = await seedLive(db(), { teacherId: teacher.id, studentIds: [alice.id], questions: 1 });
@@ -463,7 +478,7 @@ describe("GET /app/api/me/export — what the file holds (ADR-112 §3)", () => {
     expect(room.gradebook.components.map((k) => k.name)).toEqual([COMPONENT]);
     expect(room.gradebook.columns.find((c) => c.activityId === ids["shown"])).toMatchObject({ counts: true, componentId: room.gradebook.components[0]!.id });
     // The course has a component now: an exam in none counts in no mean.
-    expect(room.gradebook.columns.find((c) => c.activityId === ids["hidden"])).toMatchObject({ counts: false, componentId: null });
+    expect(room.gradebook.columns.find((c) => c.activityId === ids["none"])).toMatchObject({ counts: false, componentId: null });
     const rows = file.grades.flatMap((g) => g.rows);
     expect(rows.find((r) => r.kind === "evaluation" && r.evaluationId === ids["shown"])).toMatchObject({ counts: true, component: COMPONENT });
   });
@@ -529,10 +544,12 @@ describe("the leak test of 05 §5.7, for every caller", () => {
       for (const [name, marker] of Object.entries(NEVER)) expect(body, `${who}: ${name}`).not.toContain(marker);
       // The unreleased exam: 3/10 (grade 2.5), then the mark 1/10 (grade 1.5).
       for (const grade of ['"grade":2.5', '"grade":1.5']) expect(body, `${who}: ${grade}`).not.toContain(grade);
-      // The mean is not published: no weight, no mean, no class mean of a column or a component of the mean (ADR-131).
+      // The mean is not published: no weight, no mean, no class mean of a column or a component of the mean (ADR-131),
+      // by key in the gradebooks and by value in the whole file.
       for (const { gradebook } of file.classrooms) {
         for (const key of ['"weight"', '"mean"', '"classMean"', '"componentMeans"']) expect(JSON.stringify(gradebook), `${who}: ${key}`).not.toContain(key);
       }
+      expect(leaks(body), who).toEqual([]);
       // Bob's address, as the roster and the account hold it.
       const [bobRow] = await db().select().from(users).where(eq(users.id, bob.id));
       expect(body, who).not.toContain(bobRow!.email);

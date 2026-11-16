@@ -30,7 +30,7 @@
  *
  * `created_at`, `updated_at`, `set_at` are the server's clock, written by the service.
  */
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { and, eq, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -52,6 +52,7 @@ import { users } from "./auth.js";
 import { evaluations } from "./evaluation.js";
 import { classrooms, courses, enrollments } from "./org.js";
 import { projects } from "./project.js";
+import { qualified } from "./qualified.js";
 
 export const gradebookComponents = pgTable(
   "gradebook_components",
@@ -171,10 +172,9 @@ export const excusedMarkOfSeat = (): SQL =>
 
 /**
  * Whether the course has a component of the mean (ADR-131): a select-list
- * expression on a query that has `courses` in scope, beside a left join of
- * `gradebook_components` on the column's `component_id` — what `countsInMean`
- * reads for the student's Grades page. Qualified by hand, the subquery being
- * on another table (`qualified`, `db/client.ts`).
+ * expression correlated on `courseId`, a course id column of the outer
+ * query (`courses.id`) — what `countsInMean` reads for the student's Grades
+ * page. Qualified by hand, the subquery being on another table (`qualified`).
  */
-export const courseHasComponents = (): SQL<boolean> =>
-  sql<boolean>`exists (select 1 from "gradebook_components" where "gradebook_components"."course_id" = "courses"."id")`;
+export const courseHasComponents = (courseId: AnyColumn): SQL<boolean> =>
+  sql<boolean>`exists (select 1 from ${gradebookComponents} where ${qualified(gradebookComponents.courseId)} = ${qualified(courseId)})`;

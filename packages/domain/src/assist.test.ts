@@ -290,6 +290,8 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
     const results = assistResults(parted);
     expect(results.components).toEqual([{ name: "Labo", weight: 40 }, { name: "Cours", weight: 60 }]);
     expect(results.columns.map((c) => c.component)).toEqual(["Labo", null]);
+    // The column in no component counts in no mean, whatever its stored flag.
+    expect(results.columns.map((c) => c.counts)).toEqual([true, false]);
     expect(results.students[0]!.componentMeans).toEqual([5, null]);
     expect(results.scale).toContain("rounded to the tenth");
     // A row without a component's mean reads none.

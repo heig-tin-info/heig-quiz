@@ -33,13 +33,20 @@ export type ComponentRow = typeof gradebookComponents.$inferSelect;
 /** A course write's context: the owner's role was checked by the route's loader. */
 export type CourseWriteContext = Omit<WriteContext, "owner">;
 
-/** The course's components, in creation order (ADR-131 §1: no position, no reorder). */
-export function courseComponents(db: Db | Tx, courseId: string): Promise<ComponentRow[]> {
-  return db
-    .select()
+/** The order of a course's components: their creation (ADR-131 §1: no position, no reorder). */
+const CREATION_ORDER = [asc(gradebookComponents.createdAt), asc(gradebookComponents.id)];
+
+/** Whether a column of any classroom is in the component of the row. */
+const inUse = sql<boolean>`exists (select 1 from ${gradebookColumns} where ${qualified(gradebookColumns.componentId)} = ${qualified(gradebookComponents.id)})`;
+
+/** The course's components in creation order, each with whether a column of any classroom is in it: what the tables and the list read. */
+export async function courseComponents(db: Db | Tx, courseId: string): Promise<(ComponentRow & { inUse: boolean })[]> {
+  const rows = await db
+    .select({ component: gradebookComponents, inUse })
     .from(gradebookComponents)
     .where(eq(gradebookComponents.courseId, courseId))
-    .orderBy(asc(gradebookComponents.createdAt), asc(gradebookComponents.id));
+    .orderBy(...CREATION_ORDER);
+  return rows.map(({ component, inUse: used }) => ({ ...component, inUse: used }));
 }
 
 /**
@@ -58,17 +65,9 @@ export async function componentOfCourse(tx: Tx, courseId: string, componentId: s
   return row;
 }
 
-/** `GET /courses/:id/gradebook/components`, and every write's answer: each with whether a column is in it. */
+/** `GET /courses/:id/gradebook/components`, and every write's answer. */
 export async function listComponents(db: Db, courseId: string): Promise<GradebookComponents> {
-  const rows = await db
-    .select({
-      component: gradebookComponents,
-      inUse: sql<boolean>`exists (select 1 from ${gradebookColumns} where ${qualified(gradebookColumns.componentId)} = ${qualified(gradebookComponents.id)})`,
-    })
-    .from(gradebookComponents)
-    .where(eq(gradebookComponents.courseId, courseId))
-    .orderBy(asc(gradebookComponents.createdAt), asc(gradebookComponents.id));
-  return rows.map(({ component, inUse }) => ({ id: component.id, name: component.name, weight: component.weight, inUse }));
+  return (await courseComponents(db, courseId)).map(({ id, name, weight, inUse: used }) => ({ id, name, weight, inUse: used }));
 }
 
 /** The accounts of the claimed students of every classroom of the course, archived ones included: whom a component's change reaches. */

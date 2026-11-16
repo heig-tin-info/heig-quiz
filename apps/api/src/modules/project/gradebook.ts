@@ -135,7 +135,7 @@ export async function studentProjectGrades(db: Db, userId: string, classroomId?:
       excusedMarkId: gradebookMarks.id,
       componentId: gradebookColumns.componentId,
       componentName: gradebookComponents.name,
-      courseHasComponents: courseHasComponents(),
+      courseHasComponents: courseHasComponents(courses.id),
     })
     .from(enrollments)
     .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))

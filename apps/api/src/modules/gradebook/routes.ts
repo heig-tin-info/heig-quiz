@@ -61,11 +61,15 @@ export async function gradebookPlugin(app: FastifyInstance) {
   const teacher = teacherRoute(app);
   const student = studentRoute(app);
   const onClassroom = { params: IdParam, load: accessibleClassroom.bind(null, app) };
-  const ctx = async (req: Parameters<typeof actorOf>[0], now: Date, courseId: string): Promise<service.WriteContext> => ({
+  /** A course write's context; a classroom write's adds whether the caller owns the course (ADR-068). */
+  const courseCtx = (req: Parameters<typeof actorOf>[0], now: Date): service.CourseWriteContext => ({
     actor: actorOf(req),
     userId: callerOf(req).id,
-    owner: await isCourseOwner(app.db, courseId, callerOf(req)),
     now,
+  });
+  const ctx = async (req: Parameters<typeof actorOf>[0], now: Date, courseId: string): Promise<service.WriteContext> => ({
+    ...courseCtx(req, now),
+    owner: await isCourseOwner(app.db, courseId, callerOf(req)),
   });
 
   app.get(
@@ -137,11 +141,6 @@ export async function gradebookPlugin(app: FastifyInstance) {
 
   const loadCourse = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => accessibleCourse(app, req, reply, p);
   const ownedCourse = withCourseRole(app, loadCourse, (course) => course.id, "owner");
-  const courseCtx = (req: Parameters<typeof actorOf>[0], now: Date): service.CourseWriteContext => ({
-    actor: actorOf(req),
-    userId: callerOf(req).id,
-    now,
-  });
 
   app.get(
     "/app/api/courses/:id/gradebook/components",

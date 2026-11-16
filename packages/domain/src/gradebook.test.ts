@@ -12,10 +12,11 @@ import {
   hasGrade,
   notTakenCell,
   resolveCell,
+  studentCounting,
   type MeanColumn,
 } from "./gradebook.js";
 
-const grade = (g: number, weight = 100, counts = true): MeanColumn => ({ weight, counts, cell: { kind: "grade", grade: g } });
+const grade = (g: number, weight = 100, counts = true): MeanColumn => ({ weight, counts, cell: { kind: "grade", grade: g }, componentId: null });
 
 describe("what counts by default (D06)", () => {
   it("counts exams and projects, not exercises", () => {
@@ -83,15 +84,15 @@ describe("the mean", () => {
   });
 
   it("counts an absence as 1.0 and skips a column with no grade, renormalising the others", () => {
-    expect(gradebookMean([grade(5), { weight: 100, counts: true, cell: { kind: "absent" } }])).toBe(3);
-    expect(gradebookMean([grade(5), { weight: 100, counts: true, cell: { kind: "empty" } }])).toBe(5);
+    expect(gradebookMean([grade(5), { weight: 100, counts: true, cell: { kind: "absent" }, componentId: null }])).toBe(3);
+    expect(gradebookMean([grade(5), { weight: 100, counts: true, cell: { kind: "empty" }, componentId: null }])).toBe(5);
     // The exam not graded yet for this student: the two quizzes alone, at their own ratio.
-    expect(gradebookMean([grade(4, 10), grade(5, 30), { weight: 100, counts: true, cell: { kind: "empty" } }])).toBe(4.8);
+    expect(gradebookMean([grade(4, 10), grade(5, 30), { weight: 100, counts: true, cell: { kind: "empty" }, componentId: null }])).toBe(4.8);
   });
 
   it("leaves out an excused column like an empty one, renormalising the others (#969)", () => {
-    expect(gradebookMean([grade(5), { weight: 100, counts: true, cell: { kind: "excused" } }])).toBe(5);
-    expect(gradebookMean([{ weight: 100, counts: true, cell: { kind: "excused" } }])).toBeNull();
+    expect(gradebookMean([grade(5), { weight: 100, counts: true, cell: { kind: "excused" }, componentId: null }])).toBe(5);
+    expect(gradebookMean([{ weight: 100, counts: true, cell: { kind: "excused" }, componentId: null }])).toBeNull();
   });
 
   it("leaves out a column that does not count, and a 0 % weight", () => {
@@ -101,7 +102,7 @@ describe("the mean", () => {
 
   it("is null with no grade at all, or every weight at 0 %", () => {
     expect(gradebookMean([])).toBeNull();
-    expect(gradebookMean([{ weight: 100, counts: true, cell: { kind: "empty" } }])).toBeNull();
+    expect(gradebookMean([{ weight: 100, counts: true, cell: { kind: "empty" }, componentId: null }])).toBeNull();
     expect(gradebookMean([grade(5, 0), grade(3, 0)])).toBeNull();
   });
 });
@@ -115,13 +116,19 @@ describe("the components of the mean (ADR-131)", () => {
     expect(countsInMean(true, null, false)).toBe(true);
     expect(countsInMean(true, "labo", true)).toBe(true);
     expect(countsInMean(true, null, true)).toBe(false);
-    expect(countsInMean(true, undefined, true)).toBe(false);
     expect(countsInMean(false, "labo", true)).toBe(false);
     expect(countsInMean(false, null, false)).toBe(false);
   });
 
+  it("names to the student the component of a column only when it counts", () => {
+    expect(studentCounting(true, "labo", true)).toEqual({ counts: true, componentId: "labo" });
+    expect(studentCounting(false, "labo", true)).toEqual({ counts: false, componentId: null });
+    expect(studentCounting(true, null, true)).toEqual({ counts: false, componentId: null });
+    expect(studentCounting(true, null, false)).toEqual({ counts: true, componentId: null });
+  });
+
   it("is exactly the one-level mean without a component: one implicit component", () => {
-    const columns = [grade(4.1, 10), grade(5.6, 100), grade(3.3, 40), { weight: 100, counts: true, cell: { kind: "absent" } } as const, grade(2, 100, false)];
+    const columns = [grade(4.1, 10), grade(5.6, 100), grade(3.3, 40), { weight: 100, counts: true, cell: { kind: "absent" }, componentId: null } as const, grade(2, 100, false)];
     expect(gradebookMeans(columns, [])).toEqual({ mean: gradebookMean(columns), components: {} });
     expect(gradebookMeans([], [])).toEqual({ mean: null, components: {} });
   });

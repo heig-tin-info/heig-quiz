@@ -19,7 +19,7 @@
  * (`gradebookMeans`, ADR-131): none is the one-level mean of ADR-074.
  */
 import type { GradebookStaff, GradebookStaffCell, GradebookStudent, GradebookStudentCell } from "@quiz/contracts";
-import { cellGrade, classMean, countsInMean, gradebookMeans, resolveCell, type CellOutcome, type MeanColumn } from "@quiz/domain";
+import { cellGrade, classMean, gradebookMeans, resolveCell, studentCounting, type CellOutcome, type MeanColumn } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -172,15 +172,14 @@ export async function studentGradebook(db: Db, scope: ReadableClassroom, userId:
     // The flag alone always (the tab draws practice apart); the weight with the mean only (ADR-074, 2026-10-13).
     // An excused cell counts in no mean: its column is not drawn with what counts (#969), as on the Grades page;
     // nor is a column in no component of a course that has some (ADR-131).
-    const counts = countsInMean(settings.counts, settings.componentId, components.length > 0) && cells[entry.activityId]!.kind !== "excused";
+    const excused = cells[entry.activityId]!.kind === "excused";
     return {
       kind: entry.kind,
       activityId: entry.activityId,
       mode: entry.mode,
       title: entry.title,
       date: iso(entry.date),
-      counts,
-      componentId: counts ? settings.componentId : null,
+      ...studentCounting(settings.counts && !excused, settings.componentId, components.length > 0),
       ...(published ? { weight: settings.weight } : {}),
     };
   });

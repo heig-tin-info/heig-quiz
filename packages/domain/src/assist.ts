@@ -7,6 +7,7 @@
  * gateway; this decides what is said.
  */
 import { assistCommandList, assistScreenCatalogue, type AssistAction, type AssistScreenCommand } from "./assistScreens.js";
+import { countsInMean } from "./gradebook.js";
 import { LOCALES, type Locale } from "./locales.js";
 
 /** The UI languages, and so the help topics' variants and the reply's fallback language. */
@@ -494,7 +495,7 @@ export interface AssistResults {
 }
 
 const RESULTS_SCALE =
-  "Swiss grades from 1.0 to 6.0, 4.0 passes; `absent` counts as 1.0, `excused` counts in no mean. Final (released) columns only; the mean is the gradebook's weighted mean of the released columns that count, each weight a relative whole percentage (0 to 100). When the course has components of the mean (`components`, each with its own relative weight), a column counts only inside its component, and one in no component counts in no mean: each component's mean is that weighted mean over its own columns, rounded to the tenth, and the overall mean is the weighted mean of the component means by the components' weights, rounded to the tenth.";
+  "Swiss grades from 1.0 to 6.0, 4.0 passes; `absent` counts as 1.0, `excused` counts in no mean. Final (released) columns only; the mean is the gradebook's weighted mean of the released columns that count, each weight a relative whole percentage (0 to 100). When the course has components of the mean (`components`, each with its own relative weight), a column counts only inside its component: each component's mean is that weighted mean over its own columns, rounded to the tenth, and the overall mean is the weighted mean of the component means by the components' weights, rounded to the tenth.";
 
 /** The final results of a classroom from its staff gradebook (pure: the route did the access check). */
 export function assistResults(table: ResultsSource): AssistResults {
@@ -509,7 +510,8 @@ export function assistResults(table: ResultsSource): AssistResults {
       mode,
       date,
       weight,
-      counts,
+      // Whether it counts toward a mean, not the stored flag: a column in no component of a course that has some does not (ADR-131).
+      counts: countsInMean(counts, componentId, table.components.length > 0),
       component: componentId === null ? null : (names.get(componentId) ?? null),
     })),
     students: table.rows.map((row) => ({

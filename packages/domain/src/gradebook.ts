@@ -108,12 +108,12 @@ export function notTakenCell(mode: "exam" | "exercise"): CellOutcome {
   return mode === "exam" ? { kind: "absent" } : { kind: "empty" };
 }
 
-/** One column as the mean reads it. `componentId`: the component of the mean it is in (ADR-131), none by default. */
+/** One column as the mean reads it. `componentId`: the component of the mean it is in (ADR-131), null for none — required, so no reader forgets it. */
 export interface MeanColumn {
   weight: number;
   counts: boolean;
   cell: CellOutcome;
-  componentId?: string | null;
+  componentId: string | null;
 }
 
 /** A component's name: trimmed, 1 to 40 characters, unique in its course whatever its case (ADR-131). */
@@ -132,8 +132,22 @@ export interface MeanComponent {
  * classroom of the course. The staff's mean, the student's `counts` flag and
  * the rows of the student's Grades page all read it.
  */
-export function countsInMean(counts: boolean, componentId: string | null | undefined, courseHasComponents: boolean): boolean {
-  return counts && (!courseHasComponents || componentId != null);
+export function countsInMean(counts: boolean, componentId: string | null, courseHasComponents: boolean): boolean {
+  return counts && (!courseHasComponents || componentId !== null);
+}
+
+/**
+ * What a student reads of a column (ADR-131 §7): whether it counts
+ * ({@link countsInMean}) and the component it counts in — none when it does
+ * not count. The classroom's Grades tab and the Grades page both read it.
+ */
+export function studentCounting(
+  counts: boolean,
+  componentId: string | null,
+  courseHasComponents: boolean,
+): { counts: boolean; componentId: string | null } {
+  const counted = countsInMean(counts, componentId, courseHasComponents);
+  return { counts: counted, componentId: counted ? componentId : null };
 }
 
 /** A student's means: the overall one, and each component's by id (empty without a component). */
@@ -162,7 +176,7 @@ export function gradebookMeans(columns: readonly MeanColumn[], components: reado
   const mean = gradebookMean(
     parts.map((part, i): MeanColumn => {
       const partMean = means[i] ?? null;
-      return { weight: part.weight, counts: true, cell: partMean === null ? { kind: "empty" } : { kind: "grade", grade: partMean } };
+      return { weight: part.weight, counts: true, componentId: part.id, cell: partMean === null ? { kind: "empty" } : { kind: "grade", grade: partMean } };
     }),
   );
   return { mean, components: explicit ? Object.fromEntries(parts.map((part, i) => [part.id, means[i] ?? null])) : {} };

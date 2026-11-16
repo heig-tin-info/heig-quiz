@@ -406,7 +406,7 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
       excusedMarkId: gradebookMarks.id,
       componentId: gradebookColumns.componentId,
       componentName: gradebookComponents.name,
-      courseHasComponents: courseHasComponents(),
+      courseHasComponents: courseHasComponents(courses.id),
     })
     .from(enrollments)
     .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
