@@ -6,6 +6,9 @@ Accepted (2026-11-16, the product owner's four decisions below, taken
 through explicit questions after two students of a supervised lab handed
 in nothing). Delivery progress lives in `changes/`.
 
+Amended 2026-11-16 (below, "Amendment 2026-11-16"), scope: §7, the
+student's surface — the workspace's status bar is not built.
+
 Scope: what happens, at a repository's effective deadline (F-PROJ-09), to
 the work of an `online` or `online_seb` project (F-PROJ-19) that sits in the
 online workspace but was never pushed; the grading target that results
@@ -272,6 +275,7 @@ the row is settled.
   workspace's status bar says the same (`push-status` gains `collected`,
   from what Quiz recorded — the portal's `pushed` is no collection by
   itself). The Quiz project page does not depend on the workspace's image.
+  *(Amended 2026-11-16: the status bar is not built; see the amendment.)*
 - **Resuming later** (an extension, a reopen): nothing is rewritten in
   `work/`. The student's next push is refused as a non-fast-forward, the
   relay fetches GitHub's head into `staging.git` (ADR-078 §6, as for a
@@ -347,3 +351,24 @@ the lock. The header comment of `github/lock.ts` is corrected with the code.
   never pushed.
 - **A receipt kind read by every rule** instead of a receipt dated at the
   deadline: the same rule in four readers, each a place to forget it.
+
+## Amendment 2026-11-16: the student's surface is Quiz's
+
+§7's student bullet, amended. The workspace's status bar does not say the
+collection: it is not built. The student is told on Quiz's project page and
+activity card, through the project's student view (the one exit,
+invariant 4), which says only whether the repository was collected at its
+current effective deadline. A collection commit is not counted among the
+student's commits, and a collected repository counts as handed in for the
+staff's figures.
+
+Why: no channel carries Quiz's record to the portal. The portal keeps no
+table for collections (§4.2), and its `push-status` reads only the relay's
+own record of the session's pushes; its `pushed` answer to an order means
+a throwaway commit on a temporary ref, not a collection (§4.2), so the
+status bar cannot read it without saying something false when Quiz's check
+refuses the commit or GitHub refuses the move.
+
+The smallest future design, left to the owner: the assignment sync
+(`PUT /api/assignments/:id`) carries the collected-at instant per student,
+and `push-status` reads it from there.

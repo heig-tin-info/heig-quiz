@@ -228,7 +228,8 @@ function ProjectStateMeta({ facts, now, readOnly }: { facts: ProjectFacts; now: 
 }
 
 /**
- * The card's second line, the work on a ready repository: the commit, the CI
+ * The card's second line, the work on a ready repository: the commit, that
+ * the online workspace was collected at the deadline (ADR-130 §7), the CI
  * badge ONLY when a run exists, and the indicative score (a lock once frozen
  * at the deadline; none once released, N-SEC-21). The page has its own
  * sections for the last two.
@@ -239,6 +240,8 @@ function ProjectWorkMeta({ work, deadlineAt, now }: { work: StudentProjectWork; 
   return (
     <>
       <ProjectCommitMeta work={work} evaluated={Date.parse(deadlineAt) <= now || frozen} />
+      {/* ADR-130 §7: the commit handed in may be the platform's; the page says what that means. */}
+      {work.collected ? <MetaItem icon={Laptop}>{t("sproj.collected.short")}</MetaItem> : null}
       {work.ciStatus !== "none" ? <CiBadge status={work.ciStatus} /> : null}
       {work.score ? (
         <MetaItem icon={frozen ? Lock : Gauge}>

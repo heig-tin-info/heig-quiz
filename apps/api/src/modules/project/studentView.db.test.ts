@@ -422,6 +422,7 @@ describe("the student's project (F-PROJ-15)", () => {
       ciStatus: "none",
       run: null,
       score: null,
+      collected: false,
     });
 
     // The student pushed and their CI scored: the current run, indicative.

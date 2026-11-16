@@ -86,6 +86,7 @@ describe("the title", () => {
 
 describe("the state of the work (M3-14i)", () => {
   const work = {
+    collected: false,
     lastCommit: { sha: "9a3f1c7e2b4d6f8a0c1e3b5d7f9a1c3e5b7d9f1a", at: at(-0.1) },
     commits: 12,
     ciStatus: "fail" as const,
@@ -127,6 +128,27 @@ describe("the state of the work (M3-14i)", () => {
     expect(await screen.findByText("4 / 6")).toBeInTheDocument();
     expect(screen.getByText(/indicative · at the deadline/)).toBeInTheDocument();
     expect(screen.getByText(/^Closed /)).toBeInTheDocument();
+  });
+
+  it("says the workspace was collected at the deadline, in both languages, and only then (ADR-130 §7)", async () => {
+    mockFetch({});
+    const collected = { ...work, collected: true, score: { points: 4, max: 6, grade: null, frozen: true } };
+    const { unmount } = render(card({ status: "locked", invitation: "accepted", ...REPO, work: collected, deadlineAt: at(-1) }), { group: "past" });
+    expect(await screen.findByText("Workspace collected at the deadline")).toBeInTheDocument();
+    // The commit handed in may be the platform's: the card shows it unnamed, never as the student's push.
+    expect(screen.getByText("9a3f1c7")).toBeInTheDocument();
+    expect(screen.queryByText("Last commit")).toBeNull();
+    expect(screen.queryByText("Your push has been received.")).toBeNull();
+    unmount();
+    render(card({ status: "locked", invitation: "accepted", ...REPO, work: collected, deadlineAt: at(-1) }), { group: "past", locale: "fr" });
+    expect(await screen.findByText("Espace de travail relevé à l'échéance")).toBeInTheDocument();
+  });
+
+  it("says nothing of a collection when none was made", async () => {
+    mockFetch({});
+    render(card({ status: "locked", invitation: "accepted", ...REPO, work, deadlineAt: at(-1) }), { group: "past" });
+    expect(await screen.findByText("9a3f1c7")).toBeInTheDocument();
+    expect(screen.queryByText(/collected/i)).toBeNull();
   });
 
   it("says no commit yet before the first push", async () => {

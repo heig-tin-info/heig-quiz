@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { StudentProject, StudentProjectRepo } from "@quiz/contracts";
 
-import { studentProjectNotices } from "./studentProjectNotices";
+import { studentProjectNotices, studentProjectNoticeToast } from "./studentProjectNotices";
 
 /*
  * F-PROJ-21, N-SEC-20 (M3-09c): the student's notices, computed from two
  * reads of their project — each kind from its own difference in THEIR
  * repository's fields; nothing from an unchanged read, nothing after the
- * deadline but the lock itself, and the frozen flag alone is not a score.
+ * deadline but the lock and the collection (ADR-130), and the frozen flag
+ * alone is not a score.
  */
 
 const NOW = Date.parse("2026-10-05T10:00:00.000Z");
@@ -25,6 +26,7 @@ const repo = (over: Partial<StudentProjectRepo> = {}): StudentProjectRepo => ({
   locked: false,
   lastCommit: { sha: SHA, at: at(-0.1) },
   commits: 3,
+  collected: false,
   ciStatus: "pass",
   run: { sha: SHA, url: "https://github.com/heig/labo-1-lea/actions/runs/42", conclusion: "success", completedAt: at(-0.1) },
   score: { points: 34, max: 40, grade: { grade: 5.3 }, frozen: false },
@@ -84,6 +86,30 @@ describe("studentProjectNotices", () => {
     // Locked already: no push, no score, whatever the view's commit becomes.
     const later = project({ ...locked, repo: repo({ ...locked.repo!, lastCommit: { sha: SHA, at: at(-2) }, score: null }) });
     expect(studentProjectNotices(locked, later)).toEqual([]);
+  });
+
+  it("notices the workspace collected at the deadline (ADR-130 §7), once per deadline: the collection commit is no push", () => {
+    const passed = { deadlineAt: at(-0.01), serverNow: at(0) };
+    const before = project({ ...passed, repo: repo({ lastCommit: { sha: SHA, at: null } }) });
+    // The collection lands with the lock and a new evaluated commit: the platform's, never said as a push.
+    const collected = project({
+      ...passed,
+      status: "locked",
+      repo: repo({ locked: true, collected: true, lastCommit: { sha: SHA2, at: null } }),
+    });
+    expect(studentProjectNotices(before, collected)).toEqual(["locked", "collected"]);
+    expect(studentProjectNotices(collected, collected)).toEqual([]);
+    // Under the `commit` strategy nothing locks: the collection alone is said.
+    const unlocked = project({ ...passed, repo: repo({ collected: true, lastCommit: { sha: SHA2, at: null } }) });
+    expect(studentProjectNotices(before, unlocked)).toEqual(["collected"]);
+    // An extension reopens the repository (false), its new deadline's collection is said again.
+    const reopened = project({ deadlineAt: at(1), serverNow: at(0), repo: repo() });
+    const again = project({ ...collected, deadlineAt: at(1), repo: repo({ ...collected.repo!, collected: true }) });
+    expect(studentProjectNotices(reopened, again)).toEqual(["locked", "collected"]);
+  });
+
+  it("words the collection's toast with the card's label", () => {
+    expect(studentProjectNoticeToast("collected", ((key: string) => key) as never)).toMatchObject({ message: "sproj.collected.short", tone: "info" });
   });
 
   it("compares no push nor score once the deadline has passed on the server's clock, even unlocked yet", () => {

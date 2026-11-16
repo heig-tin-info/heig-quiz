@@ -3566,6 +3566,8 @@ export const fr: Record<keyof Dict, string> = {
   "sproj.readOnly.noSeat": "Lecture seule : vous n'avez pas de place dans cette classe. Pour tester ce projet, utilisez « S'inscrire comme étudiant » sur la page de la classe.",
   "sproj.invitation.pending": "Invitation en attente sur GitHub",
   "sproj.locked": "Lecture seule depuis l'échéance",
+  "sproj.collected": "Votre espace de travail a été relevé à l'échéance : les modifications faites ensuite ne sont pas rendues.",
+  "sproj.collected.short": "Espace de travail relevé à l'échéance",
   "sproj.notice.accepted": "Invitation acceptée : le dépôt est à vous.",
   "sproj.notice.locked": "Échéance passée : votre dépôt est en lecture seule.",
   "sproj.notice.pushed": "Votre push a été reçu.",

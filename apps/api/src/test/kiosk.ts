@@ -6,7 +6,7 @@
  * admin's naming make one. And what the station's page does with it: its
  * POSTs, its pairing code, the headers of the session a pairing opens.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import type { FastifyInstance, LightMyRequestResponse } from "fastify";
 import { expect } from "vitest";
@@ -16,8 +16,9 @@ import { KioskDeviceAuthorization } from "@quiz/contracts";
 import { sessionCookies } from "../auth/testing.js";
 import type { Clock } from "../clock.js";
 import type { Db } from "../db/client.js";
+import { kioskPairings } from "../db/schema.js";
 import { KIOSK_COOKIE, recordAttested, updateDevice } from "../modules/kiosk/service.js";
-import type { Payload } from "./http.js";
+import { sessionOf, type Payload } from "./http.js";
 
 export interface TestStation {
   deviceId: string;
@@ -76,3 +77,41 @@ export function stationHeaders(res: LightMyRequestResponse, station: TestStation
   return station ? { ...headers, cookie: `${headers.cookie}; ${station.cookie}` } : headers;
 }
 
+
+/**
+ * A station's session of `projectId` for `userId`, as a consumed pairing
+ * opens one — the pairing row written here, for the cells of the matrix the
+ * pairing list would never offer (a station on a SEB-only project) and for
+ * the readers of a project's student view (ADR-089). With `evaluationId`,
+ * the station sits that evaluation instead.
+ */
+export async function kioskSession(
+  app: { db: Db; clock: Clock; cookieName: (base: string) => string },
+  userId: string,
+  projectId: string,
+  opts: { actorUserId?: string; evaluationId?: string } = {},
+): Promise<{ headers: Record<string, string>; station: TestStation; sitting: string }> {
+  const station = await kioskStation(app);
+  const pairingId = randomUUID();
+  const now = app.clock.now();
+  const activity = opts.evaluationId ? { evaluationId: opts.evaluationId } : { projectId };
+  await app.db.insert(kioskPairings).values({
+    id: pairingId,
+    deviceId: station.deviceId,
+    deviceCodeHash: createHash("sha256").update(randomUUID()).digest("hex"),
+    userCodeHash: createHash("sha256").update(randomUUID()).digest("hex"),
+    state: "consumed",
+    userId,
+    ...activity,
+    expiresAt: new Date(now.getTime() + 300_000),
+    consumedAt: now,
+  });
+  const headers = await sessionOf(app.db, userId, {
+    kind: "kiosk",
+    deviceId: station.deviceId,
+    kioskPairingId: pairingId,
+    ...activity,
+    ...(opts.actorUserId ? { actorUserId: opts.actorUserId } : {}),
+  });
+  return { headers: { ...headers, cookie: `${headers.cookie}; ${station.cookie}` }, station, sitting: pairingId };
+}

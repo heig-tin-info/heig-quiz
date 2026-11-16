@@ -49,6 +49,7 @@ const project = (over: Partial<StudentProject> = {}): StudentProject => ({
     locked: false,
     lastCommit: { sha: SHA, at: at(-0.1) },
     commits: 3,
+    collected: false,
     ciStatus: "pass",
     run: { sha: SHA, url: "https://github.com/heig/labo-1-lea/actions/runs/42", conclusion: "success", completedAt: at(-0.1) },
     score: { points: 34, max: 40, grade: { grade: 5.3 }, frozen: false },
@@ -173,6 +174,28 @@ describe("a project in progress", () => {
     // A passed deadline is said once, with no countdown.
     expect(screen.getByText(/^Closed /)).toBeInTheDocument();
     expect(screen.queryByText("Grade")).toBeNull();
+    expect(screen.queryByText(/collected/)).toBeNull();
+  });
+
+  it("says the workspace was collected at the deadline and what is not handed in, never a push (ADR-130 §7)", async () => {
+    const p = project({
+      status: "locked",
+      deadlineAt: at(-1),
+      workspace: { mode: "online", devices: "any" },
+      repo: { ...project().repo!, locked: true, collected: true, lastCommit: { sha: SHA, at: null }, score: { points: 30, max: 40, grade: null, frozen: true } },
+    });
+    mockFetch({ [URL]: ok(p) });
+    const { unmount } = render();
+    expect(await screen.findByText("Your workspace was collected at the deadline: changes made after it are not handed in.")).toBeInTheDocument();
+    // Said once, in the repository card, outside SEB: not again beside Open workspace.
+    expect(within(screen.getByTestId("sproj-workspace")).queryByText(/collected/)).toBeNull();
+    // The commit beside it is the evaluated one, which may be the platform's: never "your push".
+    expect(screen.getByText("Evaluated commit")).toBeInTheDocument();
+    expect(screen.queryByText("Last commit")).toBeNull();
+    expect(screen.queryByText("Your push has been received.")).toBeNull();
+    unmount();
+    render({ locale: "fr" });
+    expect(await screen.findByText("Votre espace de travail a été relevé à l'échéance : les modifications faites ensuite ne sont pas rendues.")).toBeInTheDocument();
   });
 
   it("judges the deadline on the server's clock, not the browser's (invariant 5)", async () => {
@@ -452,6 +475,34 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     expect(screen.queryByText("My repository")).toBeNull();
     expect(screen.queryByText("heig/labo-1-lea")).toBeNull();
     expect(screen.queryByRole("link", { name: /See the run on GitHub/ })).toBeNull();
+  });
+
+  it("inside SEB or at a station, says the collection beside Open workspace, the repository card being hidden (ADR-130 §7)", async () => {
+    const collected = project({
+      status: "locked",
+      deadlineAt: at(-1),
+      workspace: { mode: "online_seb", devices: "either" },
+      repo: { ...project().repo!, invitation: null, locked: true, collected: true, lastCommit: { sha: SHA, at: null } },
+    });
+    for (const kind of ["seb", "kiosk"] as const) {
+      const me = makeMe({
+        role: "student",
+        session: { kind, evaluationId: null, projectId: "p1", readOnly: false, superPowersUntil: null, superPowersAvailable: false },
+      });
+      mockFetch({ [URL]: ok(collected) });
+      const { unmount } = render({ me });
+      const section = await screen.findByTestId("sproj-workspace");
+      expect(within(section).getByText("Your workspace was collected at the deadline: changes made after it are not handed in."), kind).toBeInTheDocument();
+      expect(screen.queryByText("My repository"), kind).toBeNull();
+      expect(screen.getAllByText(/was collected at the deadline/), kind).toHaveLength(1);
+      unmount();
+    }
+    // Not collected: nothing said.
+    const me = makeMe({ role: "student", session: { kind: "seb", evaluationId: null, projectId: "p1", readOnly: false, superPowersUntil: null, superPowersAvailable: false } });
+    mockFetch({ [URL]: ok(project({ ...collected, repo: { ...collected.repo!, collected: false } })) });
+    render({ me });
+    expect(await screen.findByTestId("sproj-workspace")).toBeInTheDocument();
+    expect(screen.queryByText(/was collected at the deadline/)).toBeNull();
   });
 
   it("offers no invitation under Safe Exam Browser, outside SEB either (ADR-047 §2)", async () => {
