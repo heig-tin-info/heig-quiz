@@ -22,6 +22,7 @@ import { loadConfig, type AppConfig } from "./auth/config.js";
 import { classroomRoutes } from "./classroom/routes.js";
 import { openDb, type Db, type DbHandle } from "./db/client.js";
 import { createEngine, type Engine } from "./engine/index.js";
+import { collectWorkspace } from "./git/collect.js";
 import {
   createForgejoForge,
   createQuizForge,
@@ -221,7 +222,14 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
       manager,
       verifier,
       sittingSockets,
-      ...(forge ? { repoUrl: (repo) => forge.pushUrl(repo) } : {}),
+      ...(forge
+        ? {
+            repoUrl: (repo) => forge.pushUrl(repo),
+            // The collection at the deadline (ADR-130): the relay's forge and its write grant (ADR-078 §13).
+            collect: (order, lastPushAt) =>
+              collectWorkspace(order, { volumesRoot: config.volumesRoot, forge, lastPushAt, log: app.log }),
+          }
+        : {}),
     });
   } else {
     app.log.info(

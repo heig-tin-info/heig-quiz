@@ -255,6 +255,18 @@ export function deleteDeadReviews(db: Db): number {
   return gone.length;
 }
 
+/** The last push the portal received from `student` on `assignmentId`, any session: what a fallback snapshot must not be older than (ADR-130 §3). */
+export function lastPushAt(db: Db, student: string, assignmentId: string): Date | null {
+  const row = db
+    .select({ at: pushEvents.receivedAt })
+    .from(pushEvents)
+    .where(and(eq(pushEvents.student, student), eq(pushEvents.assignment, assignmentId)))
+    .orderBy(desc(pushEvents.receivedAt))
+    .limit(1)
+    .get();
+  return row?.at ?? null;
+}
+
 /** Sessions of an assignment, with their user: the platform's teacher table. */
 export function assignmentSessionRows(
   db: Db,

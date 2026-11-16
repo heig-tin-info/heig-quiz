@@ -1,10 +1,11 @@
 /**
  * HTTP boundary with the platform (`@quiz/contracts`, `codespace.ts`; ADR-047).
  *
- * Five routes, and nothing else knows them:
+ * Six routes, and nothing else knows them:
  *
  *   PUT  /api/assignments/:id            the platform pushes an assignment (service token)
  *   GET  /api/assignments/:id/sessions   the platform's teacher view (service token)
+ *   POST /api/assignments/:id/collections  the platform collects a workspace at its deadline (service token, ADR-130)
  *   POST /api/sittings/close             the platform closes a kiosk sitting (its own token, ADR-089)
  *   GET  /launch?token=…                 the student arrives, launch token
  *   GET  /review?token=…                 a staff member opens a repository, review launch token (ADR-129)
@@ -41,6 +42,7 @@ import { randomUUID } from "node:crypto";
 import {
   CODESPACE_ISSUERS,
   CodespaceAssignmentSync,
+  CodespaceCollectionRequest,
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
   type LaunchIdentityClaims,
@@ -54,6 +56,7 @@ import {
   SittingCloseClaims,
   isSafeId,
   type CodespaceAssignmentSyncResult,
+  type CodespaceCollectionResult,
   type CodespaceSessionSummary,
 } from "@quiz/contracts";
 import {
@@ -76,6 +79,7 @@ import {
   type AssignmentRow,
   type UserRow,
 } from "../db/schema.js";
+import type { CollectionOrder } from "../git/collect.js";
 import type { RepoRef } from "../git/index.js";
 import { SESSION_COOKIE, cookieValue } from "../proxy/index.js";
 import {
@@ -98,6 +102,7 @@ import {
   findLiveSession,
   isOpen,
   isReview,
+  lastPushAt,
   liveReviewSessionIds,
   splitRepoRef,
   upsertAssignment,
@@ -134,6 +139,11 @@ export interface ClassroomRoutesOptions {
   repoUrl?: (repo: RepoRef) => string;
   /** The sockets the proxy upgraded under a kiosk sitting, which its close drops (ADR-089). */
   sittingSockets: SittingSockets;
+  /**
+   * The collection at the deadline (ADR-130 §4), `collectWorkspace` bound to
+   * the forge and the volumes. Absent without a forge: the route answers 503.
+   */
+  collect?: (order: CollectionOrder, lastPushAt: Date | null) => Promise<CodespaceCollectionResult>;
 }
 
 // --- helpers ----------------------------------------------------------------
@@ -291,6 +301,7 @@ async function classroomRoutesImpl(
   }
 
   const oneReviewAtATime = serializer();
+  const oneCollectionAtATime = serializer();
 
   // The service routes in a context of their own, whose only body parser is
   // JSON kept as bytes: the body hash is computed over what was received,
@@ -406,6 +417,40 @@ async function classroomRoutesImpl(
             : null,
         }));
         return reply.code(200).send(summaries);
+      },
+    );
+
+    // --- POST /api/assignments/:id/collections --------------------------------
+    // Quiz collects one student's workspace at a deadline (ADR-130 §4): the
+    // order parsed by its contract before anything runs, one collection at a
+    // time per (student, assignment), and this log line as the portal's
+    // record — only Quiz knows whether a `pushed` became a collection.
+    api.post<{ Params: { assignmentId: string } }>(
+      "/api/assignments/:assignmentId/collections",
+      async (request, reply) => {
+        if (!(await serviceToken(request, reply))) return reply;
+        const parsed = CodespaceCollectionRequest.safeParse(request.body);
+        if (!parsed.success) {
+          return reply.code(400).send({
+            error: "invalid_body",
+            issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+          });
+        }
+        const body = parsed.data;
+        const assignment = findAssignment(db, request.params.assignmentId);
+        if (!assignment) return reply.code(404).send({ error: "unknown_assignment" });
+        // A review session keeps nothing and never pushes (ADR-129 §10).
+        if (isReview(assignment)) return reply.code(400).send({ error: "reserved_id" });
+        const collect = opts.collect;
+        if (!collect) return reply.code(503).send({ error: "collection_unavailable" });
+        const result = await oneCollectionAtATime(`${body.userId}\u0000${assignment.id}`, () =>
+          collect({ ...body, assignment: assignment.id }, lastPushAt(db, body.userId, assignment.id)),
+        );
+        request.log.info(
+          { assignmentId: assignment.id, student: body.userId, ref: body.ref, outcome: result.outcome, ...("reason" in result ? { reason: result.reason } : {}) },
+          "workspace collection",
+        );
+        return reply.code(200).send(result);
       },
     );
 

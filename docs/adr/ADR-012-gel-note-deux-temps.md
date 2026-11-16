@@ -29,6 +29,14 @@ one by itself.
 
 Amended 2026-10-09: decision 2 names `bot_commits.repo_id` and decision 3.3 sets `project_repos.frozen_at` only; `student_repo_id` and `frozen_final` do not exist in Quiz.
 
+Amended 2026-11-16 by [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
+§6 (product owner), for one case: the commit with which the platform
+collects an online workspace at a repository's deadline gets its receipt
+written by Quiz before the branch moves, flagged `collected`, dated at that
+effective deadline. Decisions 3.2 and 4 then count it on time, and it is no
+bot commit (decision 2). Every other push keeps the webhook's receipt time,
+and a student's own push received after the deadline stays late.
+
 ## Context
 
 The grade frozen at the deadline is the most disputable piece of data in the system. The
