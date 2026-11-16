@@ -159,8 +159,15 @@ describe("GradebookSettingRow", () => {
   });
 
   it("is text only on an archived classroom", async () => {
-    renderRow(settings({ weight: 40 }), {}, true);
+    const { calls } = renderRow(settings({ weight: 40 }), {}, true);
     expect(await screen.findByText("In the mean · weight 40 %")).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Edit" })).toBeNull());
+    await waitFor(() => expect(calls.some((c) => c.url === `/app/api/classrooms/${ROOM}`)).toBe(true));
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+  });
+
+  it("offers no Edit while the classroom cannot be read", async () => {
+    renderRow(settings({ weight: 40 }), { [`GET /app/api/classrooms/${ROOM}`]: fail(500, { message: "boom" }) });
+    expect(await screen.findByText("In the mean · weight 40 %")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 });

@@ -55,8 +55,9 @@ plein écran, appareils autorisés), **Aides** (calculatrice, bloc-notes) et
 **Autoriser l'entraînement**, modifiable jusqu'à la publication des résultats).
 
 Pendant que l'évaluation est en cours ou en pause, cette étape est
-verrouillée jusqu'à la clôture : seuls le titre et le retour à l'étudiant
-changent encore — le retour, pour masquer tout de suite un corrigé oublié.
+verrouillée jusqu'à la clôture : le titre, le retour à l'étudiant,
+**Autoriser l'entraînement** et la ligne **Carnet de notes** changent encore
+— le retour, pour masquer tout de suite un corrigé oublié.
 Une évaluation avec salle d'attente ne peut toujours pas passer au retour
 immédiat. Du temps supplémentaire pour tous se donne depuis le tableau de
 bord. Le retour à l'étudiant reste modifiable après la clôture, jusqu'à la

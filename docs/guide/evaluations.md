@@ -110,7 +110,7 @@ Every attempt is graded by the usual pass as soon as it ends; an answer that nee
 
 ### Gradebook
 
-An exam or an exercise shows a **Gradebook** row under the timing: whether it counts in the classroom's mean, in which component of the mean when the course has some, and its weight. **Edit** sets them while the evaluation is still a draft, with the same dialog as the classroom's **Grades** tab; an exam counts by default, an exercise does not. The row is not frozen with the rest: once the results are released and students see their mean, a change asks first.
+An exam or an exercise shows a **Gradebook** row under the timing card (an exercise's under **Several attempts**): whether it counts in the classroom's mean, in which component of the mean when the course has some, and its weight. **Edit** sets them from the draft on, with the same dialog as the classroom's **Grades** tab; an exam counts by default, an exercise does not. The row is not frozen with the rest: once the results are released and students see their mean, a change asks first.
 
 ### Advanced options
 

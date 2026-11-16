@@ -49,7 +49,7 @@ export function gradebookProjects(db: Db, classroomId: string): Promise<ProjectR
   return db.select().from(projects).where(and(eq(projects.classroomId, classroomId), inGradebook()));
 }
 
-/** A project that may have a column, whatever its state: graded and not archived. On a query that has `projects` in scope. */
+/** A project that may have a column, whatever its state: graded and not archived (`projectHasColumn` of `@quiz/domain`, in SQL). On a query that has `projects` in scope. */
 const columnable = (): SQL => and(isNull(projects.archivedAt), ne(projects.gradingMode, "none"))!;
 
 /** {@link gradebookProjects}' rule, on a query that has `projects` in scope. */

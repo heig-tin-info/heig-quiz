@@ -14,7 +14,7 @@
  * (`useStaffWrites`): the same refusals in words, the same question before
  * a change that moves a published mean. Not under the evaluation's
  * configuration lock (ADR-131 §13): the row stays live after the release.
- * On an archived classroom it is text only. A settings row: no accent.
+ * On an archived classroom, or before the classroom is read, it is text only. A settings row: no accent.
  */
 import { TriangleAlert } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -59,7 +59,9 @@ export function GradebookSettingRow({
 }) {
   const t = useT();
   const read = useColumnSettings(classroomId, { kind, activityId });
-  const archived = useClassroom(classroomId).data?.archivedAt != null;
+  // Edit only once the classroom is known and live: never a flash on an archived one, nor a button its read failed to clear.
+  const room = useClassroom(classroomId);
+  const editable = room.data !== undefined && room.data.archivedAt === null;
   const { writes, patchColumn } = useStaffWrites(classroomId);
   const [editing, setEditing] = useState(false);
   const label = t("gbook.row");
@@ -86,11 +88,11 @@ export function GradebookSettingRow({
   const settings = read.data;
   return (
     <SettingRow title={label} desc={summary(settings, t)}>
-      {archived ? null : (
+      {editable ? (
         <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
           {t("common.edit")}
         </Button>
-      )}
+      ) : null}
       {editing ? (
         <ColumnDialog
           title={title}
@@ -101,10 +103,14 @@ export function GradebookSettingRow({
           onSubmit={async (patch) => {
             const done =
               patch === null ||
-              (await patchColumn({ kind, activityId, title, ...settings }, patch, {
-                meanPublished: settings.meanPublished,
-                hasComponents: settings.components.length > 0,
-              }));
+              (await patchColumn(
+                { kind, activityId, title, released: settings.released, counts: settings.counts, componentId: settings.componentId },
+                patch,
+                {
+                  meanPublished: settings.meanPublished,
+                  hasComponents: settings.components.length > 0,
+                },
+              ));
             if (done) setEditing(false);
           }}
         />

@@ -45,7 +45,7 @@ function routes(project: ProjectDetail | RouteHandler, extra: Record<string, Rou
     typeof project === "function" ? project : "status" in project ? project : ok(project);
   return mockFetch({
     [`GET ${BASE}`]: detail,
-    [`GET ${ROOM}`]: ok({ id: CLASSROOM_ID, name: "PRG1-2026", course: { id: "c1", code: "PRG1", name: "C" }, roster: [] }),
+    [`GET ${ROOM}`]: ok({ id: CLASSROOM_ID, name: "PRG1-2026", archivedAt: null, course: { id: "c1", code: "PRG1", name: "C" }, roster: [] }),
     // What the students receive from the project's first branch (ADR-119 §9).
     [`GET ${ROOM}/projects/sources/prg1-labo-02-pointeurs?branch=main`]: ok({
       name: "prg1-labo-02-pointeurs",
@@ -1592,7 +1592,7 @@ describe("the Gradebook row", () => {
     renderPage("en", "settings");
     const settings = await screen.findByTestId("project-settings");
     expect(await within(settings).findByText("In the mean · weight 40 %")).toBeInTheDocument();
-    expect(within(settings).getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(await within(settings).findByRole("button", { name: "Edit" })).toBeInTheDocument();
   });
 
   it("draws none for a project not graded, nor reads its column", async () => {
@@ -1603,8 +1603,8 @@ describe("the Gradebook row", () => {
     expect(calls.some((c) => c.url === COLUMN)).toBe(false);
   });
 
-  it("draws none on a not graded project's Settings tab", async () => {
-    const { calls } = routes(makeProject({ gradingMode: "none" }));
+  it("draws none for an archived graded project, nor reads its column", async () => {
+    const { calls } = routes(makeProject({ archivedAt: PAST }));
     renderPage("en", "settings");
     await screen.findByTestId("project-settings");
     expect(screen.queryByText("Gradebook")).toBeNull();

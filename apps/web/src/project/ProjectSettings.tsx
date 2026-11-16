@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import type { ProjectDetail } from "@quiz/contracts";
 
-import { forcedProtected, PROJECT_GRADING_MODES, projectGraded } from "@quiz/domain";
+import { forcedProtected, PROJECT_GRADING_MODES, projectHasColumn } from "@quiz/domain";
 
 import { GradebookSettingRow } from "../gradebook/GradebookSettingRow";
 import { useT } from "../i18n";
@@ -83,7 +83,7 @@ export function ProtectedFilesRow({
  * which has no column.
  */
 export function projectGradebookRow(project: ProjectDetail): ReactNode {
-  if (!projectGraded(project.gradingMode) || project.archivedAt !== null) return null;
+  if (!projectHasColumn(project)) return null;
   return <GradebookSettingRow classroomId={project.classroomId} kind="project" activityId={project.id} title={project.name} />;
 }
 

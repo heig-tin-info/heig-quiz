@@ -139,6 +139,7 @@ import {
   TemplateDetail,
   TemplatePullPreview,
 } from "@quiz/contracts";
+import { projectHasColumn } from "@quiz/domain";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { bootMock, get, issuesOf, type Schema } from "./testHarness";
@@ -226,9 +227,9 @@ const projectRepos: [string, string][] = [];
 /** Those graded and not archived: each has a gradebook column from the draft on (ADR-131 §13). */
 const columnProjectIds: string[] = [];
 for (const id of projectIds) {
-  const detail = (await get(`/app/api/projects/${id}`)) as { rows: { repo: Ref | null }[]; gradingMode: string; archivedAt: string | null };
+  const detail = (await get(`/app/api/projects/${id}`)) as { rows: { repo: Ref | null }[] } & Parameters<typeof projectHasColumn>[0];
   for (const row of detail.rows) if (row.repo) projectRepos.push([id, row.repo.id]);
-  if (detail.gradingMode !== "none" && detail.archivedAt === null) columnProjectIds.push(id);
+  if (projectHasColumn(detail)) columnProjectIds.push(id);
 }
 /** Every classroom's group sets (M3-16a, `?groups=1`): each one is read in detail. */
 const groupSetIds: string[] = [];

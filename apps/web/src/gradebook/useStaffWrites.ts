@@ -21,10 +21,10 @@ import type { ColumnSettings } from "./ColumnSettingsFields";
 export type MarkColumn = ColumnRef & { title: string };
 
 /** A column as its settings' write weighs it: where it counts now, and whether it is released. */
-export type SettingsColumn = MarkColumn & Pick<ColumnSettings, "counts" | "componentId"> & { released: boolean };
+type SettingsColumn = MarkColumn & Pick<ColumnSettings, "counts" | "componentId"> & { released: boolean };
 
 /** What a column's write weighs of its classroom: whether students see their mean, whether the course has components. */
-export interface MeanFacts {
+interface MeanFacts {
   meanPublished: boolean;
   hasComponents: boolean;
 }

@@ -657,7 +657,7 @@ describe("EvaluationConfig", () => {
       expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeEnabled();
       expect(screen.getByRole("switch", { name: /show the expected answer/i })).toBeEnabled();
       expect(screen.getByRole("switch", { name: /shuffle the questions/i })).toBeDisabled();
-      expect(screen.getByText(/feedback policy can still change/i)).toBeInTheDocument();
+      expect(screen.getByText(/what is not greyed out can still change/i)).toBeInTheDocument();
       // No access code any more (ADR-053).
       expect(screen.queryByRole("textbox", { name: /access code/i })).toBeNull();
 
@@ -875,12 +875,6 @@ describe("EvaluationConfig", () => {
       expect(screen.getByText("Gradebook")).toBeInTheDocument();
     });
 
-    it("reads an exercise out of the mean, its mode's default", async () => {
-      mockFetch(routes(withMode("exercise"), { [`GET ${URL_COLUMN}`]: ok(columnSettings({ counts: false })) }));
-      timing();
-      expect(await screen.findByText("Out of the mean")).toBeInTheDocument();
-    });
-
     it("draws none for a poll, and reads nothing", async () => {
       const { calls } = mockFetch(routes(withMode("poll")));
       timing();
@@ -889,34 +883,23 @@ describe("EvaluationConfig", () => {
       expect(calls.some((c) => c.url === URL_COLUMN)).toBe(false);
     });
 
-    it("stays live once released and locked, and asks before it moves the published mean", async () => {
+    it("reads the column again once the mode changed, whose defaults it shows", async () => {
       const user = userEvent.setup();
-      const released = withMode("exam", { editable: false, attemptCount: 12, evaluation: { ...makeEvaluationDetail().evaluation, state: "released" } });
       const { calls } = mockFetch(
-        routes(released, {
-          [`GET ${URL_COLUMN}`]: ok(columnSettings({ released: true, meanPublished: true })),
-          [`PATCH ${URL_COLUMN}`]: ok({ classroomId: CLASSROOM, archived: false, meanPublished: true, components: [], columns: [], rows: [], classMean: null }),
-        }),
-      );
-      timing();
-      expect(await screen.findByText(/the structure is frozen/i)).toBeInTheDocument();
-      await user.click(await screen.findByRole("button", { name: "Edit" }));
-      const dialog = await screen.findByRole("dialog", { name: "Settings of Quiz 3 — pointers" });
-      await user.selectOptions(within(dialog).getByLabelText("Mean"), "Out of the mean");
-      await user.click(within(dialog).getByRole("button", { name: "Save" }));
-      await user.click(within(await screen.findByRole("dialog", { name: "Change the students' means?" })).getByRole("button", { name: "Change now" }));
-      await waitFor(() => expect(calls.find((c) => c.method === "PATCH" && c.url === URL_COLUMN)?.body).toEqual({ counts: false }));
-    });
-
-    it("is text only in an archived classroom", async () => {
-      mockFetch(
-        routes(withMode("exam"), {
-          [`GET /app/api/classrooms/${CLASSROOM}`]: ok(makeClassroomDetail({ id: CLASSROOM, archivedAt: "2026-01-01T00:00:00.000Z" })),
-        }),
+        routes(withMode("exam"), { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(withMode("exercise")) }),
       );
       timing();
       expect(await screen.findByText("In the mean · weight 100 %")).toBeInTheDocument();
-      await waitFor(() => expect(screen.queryByRole("button", { name: "Edit" })).toBeNull());
+      await user.click(screen.getByRole("radio", { name: "Exercise" }));
+      await waitFor(() => expect(calls.filter((c) => c.method === "GET" && c.url === URL_COLUMN)).toHaveLength(2));
+    });
+
+    it("stays editable while the configuration is locked", async () => {
+      const released = withMode("exam", { editable: false, attemptCount: 12, evaluation: { ...makeEvaluationDetail().evaluation, state: "released" } });
+      mockFetch(routes(released));
+      timing();
+      expect(await screen.findByText(/the structure is frozen/i)).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "Edit" })).toBeEnabled();
     });
   });
 });

@@ -51,8 +51,9 @@ notepad) and **Feedback and scoring** (feedback to students, scoring policies,
 and **Allow drill**, which stays editable until the results are released).
 
 While the evaluation is running or paused, this step is locked until it
-closes: only the title and the feedback still change — the feedback so that
-an answer key you forgot to hide can be hidden at once. An evaluation with a
+closes: the title, the feedback, **Allow drill** and the **Gradebook** row
+still change — the feedback so that an answer key you forgot to hide can be
+hidden at once. An evaluation with a
 waiting room still cannot switch to immediate feedback. Extra time for
 everybody is given from the live dashboard. The feedback can still change
 after the close, until the results are released.

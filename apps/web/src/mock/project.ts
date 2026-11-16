@@ -100,7 +100,7 @@ import {
   projectIsLive,
   patchedDraftDates,
   projectFieldRefusal,
-  projectGraded,
+  projectHasColumn,
   projectListDates,
   projectPhase,
   projectPrimaryAction,
@@ -934,7 +934,7 @@ function projectOr404(id: string): MockProject {
 export function projectColumnOf(id: string): { classroomId: string; released: boolean } | null {
   seeded();
   const p = PROJECTS.get(id);
-  if (!p || !projectGraded(p.summary.gradingMode) || p.summary.archivedAt !== null) return null;
+  if (!p || !projectHasColumn(p.summary)) return null;
   return { classroomId: p.summary.classroomId, released: p.releasedAt !== null };
 }
 
