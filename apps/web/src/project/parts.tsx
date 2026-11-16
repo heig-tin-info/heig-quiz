@@ -4,6 +4,7 @@
  * CI status as a tag.
  */
 import type { ProjectRepoView, ProjectStudent, ProjectSyncState } from "@quiz/contracts";
+import { formatScore } from "@quiz/domain";
 
 import { GitPullRequest, RefreshCw } from "lucide-react";
 
@@ -13,13 +14,13 @@ import { useT, type Dict } from "../i18n";
 import { Badge, Button, cx, Dash, type Tone } from "../ui";
 import { syncTag } from "./projectPage";
 
-/** Points out of their maximum ("8/10", "9" without one), or a dash without points. */
+/** A score out of its maximum, to the tenth ("8/10", "7.2/26", "9" without one), or a dash without points. */
 export function Points({ points, max }: { points: number | null; max: number | null }) {
   if (points === null) return <Dash />;
   return (
     <span className="tabular-nums">
-      {points}
-      {max !== null ? `/${max}` : ""}
+      {formatScore(points)}
+      {max !== null ? `/${formatScore(max)}` : ""}
     </span>
   );
 }

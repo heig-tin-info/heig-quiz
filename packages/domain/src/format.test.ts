@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayedRate, displayName, formatGrade, formatPoints } from "./format.js";
+import { displayedRate, displayName, formatGrade, formatPoints, formatScore } from "./format.js";
 
 describe("displayName", () => {
   it("is the full name, or the e-mail while there is none", () => {
@@ -61,5 +61,21 @@ describe("displayedRate (ADR-026)", () => {
     expect(displayedRate(-0.25)).toBe(0);
     expect(displayedRate(0.42)).toBe(0.42);
     expect(displayedRate(1.2)).toBe(1);
+  });
+});
+
+describe("formatScore", () => {
+  it("writes a total to the tenth, without a trailing zero", () => {
+    const cases: [number, string][] = [
+      [26, "26"],
+      [7.24, "7.2"],
+      [7.74, "7.7"],
+      [8.95, "9"],
+      [0.5, "0.5"],
+      // A sum of criteria as floating point leaves it (0.5 + 2.24 + 3.45).
+      [6.1899999999999995, "6.2"],
+      [-0, "0"],
+    ];
+    for (const [input, expected] of cases) expect(formatScore(input)).toBe(expected);
   });
 });
