@@ -198,10 +198,26 @@ The word "group" was set aside: Groups already names the students' groups
       §4's `configLock` does not cover them, and they stay writable after
       the release.
 
-**Planned, not built** (the product owner's later parts): the screens (the
-course's Settings section, the gradebook's, the activities' settings rows
-over §13), and templates carrying a column's weight, counted flag and
-component. Rules per component (a pass mark per component) stay out.
+14. **The screens** (`apps/web`; `DESIGN.md`, gradebook). The course's
+    Settings tab holds the components (the owner writes, an assistant
+    reads); it confirms the first component (§4), a re-weighting (§6) and a
+    deletion. In the classroom's Grades tab a column's dialog has ONE
+    control for where the column counts — each component, then "Out of the
+    mean"; on a course without components "In the mean" or "Out of the
+    mean" — beside its weight; a counted column in no component wears a
+    warning, and a line above the table counts them; each component has its
+    mean column before the overall mean. The student's tab draws one group
+    per component, closed by its mean when the mean is published.
+    **A change that moves a published mean is confirmed, not locked**
+    (product owner, 2026-11-16): changing the weight, the component or the
+    counted flag of a RELEASED column while the mean is published asks
+    "Change the students' means?" first, on every course, with or without
+    components; nothing else about the write changes.
+
+**Planned, not built** (the product owner's later parts): the activities'
+settings rows over §13, and templates carrying a column's weight, counted
+flag and component. Rules per component (a pass mark per component) stay
+out.
 
 ## Consequences
 

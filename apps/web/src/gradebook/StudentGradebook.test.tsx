@@ -133,3 +133,56 @@ describe("the student's own cells", () => {
     expect(await screen.findByText("Could not load the grades.")).toBeInTheDocument();
   });
 });
+
+/*
+ * On a course with components of the mean (ADR-131), what counts is drawn by
+ * component, in the payload's order, each under its name; its weight and its
+ * mean, and the mean of the means, only once the payload carries them.
+ */
+describe("by component of the mean", () => {
+  const COURS = "0190d3c4-0000-7000-8000-0000000000d1";
+  const LABO = "0190d3c4-0000-7000-8000-0000000000d2";
+
+  function componentBook(published: boolean): GradebookStudent {
+    const base = book(published ? { mean: 4.1 } : {}, published);
+    const filed: Record<string, string> = { [IDS[0]!]: LABO, [IDS[1]!]: COURS, [IDS[3]!]: COURS, [IDS[4]!]: COURS };
+    return GradebookStudent.parse({
+      ...base,
+      // The payload's order, not the alphabet's.
+      components: [
+        { id: LABO, name: "Labo", ...(published ? { weight: 40, mean: 5.5 } : {}) },
+        { id: COURS, name: "Cours", ...(published ? { weight: 60, mean: null } : {}) },
+      ],
+      columns: base.columns.map((c) => ({ ...c, componentId: c.counts ? (filed[c.activityId] ?? null) : null })),
+    });
+  }
+
+  it("draws a card per component, in order, each closed by its mean, then the mean of the means", async () => {
+    renderTab(componentBook(true));
+    const counting = await screen.findByRole("region", { name: "In the average" });
+    const groups = within(counting).getAllByRole("region");
+    expect(groups.map((g) => within(g).getByRole("heading").textContent)).toEqual([
+      "Labo · Weight 40 %",
+      "Cours · Weight 60 %",
+    ]);
+    const labo = within(groups[0]!).getAllByRole("listitem");
+    expect(labo.map((li) => li.textContent?.split(/Exam|Weighted/)[0])).toEqual(["Test 1", "Mean"]);
+    expect(within(labo[1]!).getByText("5.5")).toBeInTheDocument();
+    const cours = within(groups[1]!).getAllByRole("listitem");
+    expect(cours.map((li) => li.textContent?.split(/Exam|Weighted/)[0])).toEqual(["Test 2", "Test 3", "Quick quiz", "Mean"]);
+    expect(within(cours.at(-1)!).getByText("—")).toBeInTheDocument();
+    const overall = within(counting).getAllByRole("listitem").at(-1)!;
+    expect(overall).toHaveTextContent(/Weighted mean of the components' means/);
+    expect(within(overall).getByText("4.1")).toBeInTheDocument();
+    // What does not count stays apart, as without components.
+    expect(within(screen.getByRole("region", { name: "Indicative" })).getByText("Series 1")).toBeInTheDocument();
+  });
+
+  it("names each component without weight or mean while the mean is not published", async () => {
+    renderTab(componentBook(false));
+    const counting = await screen.findByRole("region", { name: "In the average" });
+    expect(within(counting).getAllByRole("heading", { level: 4 }).map((h) => h.textContent)).toEqual(["Labo", "Cours"]);
+    expect(screen.queryByText("Mean")).toBeNull();
+    expect(screen.queryByText(/Weight/)).toBeNull();
+  });
+});

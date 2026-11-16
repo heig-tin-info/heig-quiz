@@ -129,6 +129,7 @@ import {
   StudentHome,
   StudentProject,
   GradeGroup,
+  GradebookCourseComponent,
   GradebookStaff,
   GradebookStudent,
   GroupSetDetail,
@@ -576,6 +577,10 @@ const CHECKED: Case[] = [
   ...courses
     .flatMap((c) => c.classrooms)
     .map((r) => one("/app/api/student/classrooms/:id/gradebook", `/app/api/student/classrooms/${r.id}/gradebook`, GradebookStudent)),
+  // The course's components of the mean (ADR-131).
+  ...courses.map((c) =>
+    each("/app/api/courses/:id/gradebook/components", `/app/api/courses/${c.id}/gradebook/components`, GradebookCourseComponent),
+  ),
   // The drill (ADR-041, #317): the student's tab and the teacher's switch.
   one("/app/api/drill/session", "/app/api/drill/session", DrillSession),
   each("/app/api/drill/classrooms", "/app/api/drill/classrooms", DrillClassroom),

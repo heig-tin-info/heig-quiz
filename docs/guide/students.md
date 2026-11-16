@@ -45,6 +45,8 @@ On a computer, the sidebar on the left takes you to **Activities** (this home), 
 
 A row you can open has an arrow: it leads to your results page. On a phone, the rows become small cards, the grade on the right.
 
+When a course splits its mean into components, such as labs and tests, a row that counts names its component under its title. The classroom's own **Grades** tab then groups what counts by component, with each component's weight and your mean of it once your teacher publishes the mean.
+
 <figure markdown="span">
   ![The Grades page: the classroom PRG1-2026 with Test 0, a graded quiz, 7 of 15 points, grade 3.3, released](../assets/screenshots/student-grades-light.png#only-light)
   ![The Grades page: the classroom PRG1-2026 with Test 0, a graded quiz, 7 of 15 points, grade 3.3, released](../assets/screenshots/student-grades-dark.png#only-dark)

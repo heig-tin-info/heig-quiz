@@ -52,6 +52,13 @@ const SUBTEXT = ["desc", "hint", "help"];
 
 /** The keys that speak of an account's identity and its end (ADR-117): the glossary's anonymized and dormant hold there. */
 const ACCOUNT_KEY = /^(account|admin\.inactive)\./;
+/**
+ * The keys that speak of the components of the mean (ADR-131): the
+ * glossary's component holds there. By prefix: a circuit's electrical
+ * components are not these, and the rest of `gbook.` may speak of a group
+ * project.
+ */
+const COMPONENT_KEY = /^(courses\.(settings\.)?components|gbook\.(settings|head|noComponent|componentMean|mean\.components|refusal\.component))/;
 
 const BOTH: Lang[] = ["fr", "en"];
 const FR: Lang[] = ["fr"];
@@ -94,6 +101,9 @@ const RULES: Rule[] = [
   { name: "word-gele", langs: FR, fix: "figé", test: has(/\bgelée?s?\b/i) },
   { name: "word-soumettre", langs: FR, fix: "rendre", test: has(/\bsoum(ettre|is|ise|ission)/i) },
   { name: "word-codespace", langs: BOTH, fix: "workspace, espace de travail; codespace is an internal word", test: has(/\bcodespaces?\b/i) },
+  // A component of the mean (ADR-131): never a group, which is the students' (ADR-070), nor a category, which is a pool's.
+  { name: "word-component", langs: FR, fix: "composante", test: (t, k) => COMPONENT_KEY.test(k) && has(/\b(groupes?|catégories?)\b/i)(t) },
+  { name: "word-component", langs: EN, fix: "component", test: (t, k) => COMPONENT_KEY.test(k) && has(/\b(groups?|categor(y|ies))\b/i)(t) },
   // An account's end (ADR-117): anonymized, never deleted; dormant, never archived (a classroom's state).
   { name: "word-account-deleted", langs: FR, fix: "anonymisé: the results stay, only the identity leaves", test: (t, k) => ACCOUNT_KEY.test(k) && has(/supprim/i)(t) },
   { name: "word-account-deleted", langs: EN, fix: "anonymized: the results stay, only the identity leaves", test: (t, k) => ACCOUNT_KEY.test(k) && has(/\bdelet/i)(t) },
@@ -145,6 +155,12 @@ describe("copy lint (N-I18N-04)", () => {
       expect(stale, `keys fixed: remove them from copy.exceptions.json (or COPY_LINT_WRITE=1)`).toEqual([]);
     });
   }
+
+  it("scopes word-component to the keys of the components of the mean, and to no circuit's", () => {
+    const scoped = Object.keys(en).filter((key) => COMPONENT_KEY.test(key));
+    expect(scoped).toEqual(expect.arrayContaining(["courses.components.add", "gbook.settings.component", "gbook.head.in", "gbook.noComponent.help"]));
+    expect(scoped.filter((key) => !/^(courses|gbook)\./.test(key))).toEqual([]);
+  });
 
   it("lists exceptions under existing rules only", () => {
     const names = new Set(checks.map((c) => c.name));

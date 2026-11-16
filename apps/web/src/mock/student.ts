@@ -1155,18 +1155,22 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
     archived: false,
     ...over,
   });
-  const row = (over: Partial<EvaluationGradeRow> & Pick<EvaluationGradeRow, "title" | "status">): EvaluationGradeRow => ({
-    kind: "evaluation",
-    evaluationId: `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`,
-    mode: "exam",
-    date: iso(-D),
-    feedbackAttemptId: null,
+  const row = (over: Partial<EvaluationGradeRow> & Pick<EvaluationGradeRow, "title" | "status">): EvaluationGradeRow => {
     // The mode's default (ADR-074 §6): an exam counts, an exercise does not.
-    counts: (over.mode ?? "exam") === "exam",
-    component: null,
-    score: null,
-    ...over,
-  });
+    const counts = over.counts ?? (over.mode ?? "exam") === "exam";
+    return {
+      kind: "evaluation",
+      evaluationId: `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`,
+      mode: "exam",
+      date: iso(-D),
+      feedbackAttemptId: null,
+      counts,
+      // `?components=1` (ADR-131): PRG1's evaluations that count are in its "Cours" (`mock/gradebook.ts`).
+      component: flags.components && counts ? "Cours" : null,
+      score: null,
+      ...over,
+    };
+  };
   const score = (points: number, totalPoints: number) => ({
     points,
     totalPoints,
@@ -1198,7 +1202,7 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
           date: iso(-5 * D),
           status: "released",
           counts: true,
-          component: null,
+          component: flags.components ? "Labo" : null,
           score: { points: 18, totalPoints: 20, grade: 5.5 },
         },
         {

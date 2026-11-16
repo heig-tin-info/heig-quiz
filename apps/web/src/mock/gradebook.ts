@@ -20,13 +20,23 @@
  * The student persona is the claimed student of `ME_LINE`: a grade, a
  * derived absence, an indicative cell, a withheld one.
  *
+ * The components of the mean of a course (ADR-131), with their routes: none
+ * by default; `?components=1` gives PRG1 "Cours" and "Labo" at 50 % each,
+ * the exams in Cours, the project in Labo, and the quick test, which counts,
+ * in none — so it counts in no mean, the state the matrix warns about. EMB
+ * never has any. The means are `gradebookMeans`', never the mock's own.
+ * PRG1-2026's mean starts published; `?unpublished=1` starts it withheld.
+ *
  * Below `groups.ts`, whose `ME_LINE` it reads.
  */
 import {
   GradebookColumnPatch,
+  GradebookComponentCreate,
+  GradebookComponentPatch,
   GradebookMarkPut,
   GradebookSettingsPatch,
   type GradebookColumn,
+  type GradebookComponents,
   type GradebookMark,
   type GradebookStaff,
   type GradebookStaffCell,
@@ -40,15 +50,18 @@ import {
   gradebookMeans,
   gradeFromPoints,
   resolveCell,
+  studentCounting,
   type CellOutcome,
   type GradebookMarkKind,
+  type GradebookMeans,
   type MarkOutcome,
   type MeanColumn,
+  type MeanComponent,
 } from "@quiz/domain";
 
 import { ME_LINE } from "./groups";
-import { classroomRoster, rooms } from "./org";
-import { D, iso, MockPayload, on, refuse, role } from "./runtime";
+import { classroomRoster, courseOr404, rooms } from "./org";
+import { D, flags, iso, MockPayload, on, refuse, role } from "./runtime";
 
 /** What lies beneath a cell of an activity: the activity's own result for one student. */
 type Beneath =
@@ -89,6 +102,30 @@ const noise = (a: number, b: number): number => {
 
 const colId = (n: number) => `9b000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
+/** A component of the mean as the mock keeps it: its order is the array's. */
+type MockComponent = MeanComponent & { name: string };
+
+/** PRG1's two components under `?components=1`. */
+const COURS = "9c000000-0000-4000-8000-000000000001";
+const LABO = "9c000000-0000-4000-8000-000000000002";
+
+/** By course id. */
+const COMPONENTS = new Map<string, MockComponent[]>();
+const componentsOf = (courseId: string): MockComponent[] => {
+  if (!COMPONENTS.has(courseId)) {
+    COMPONENTS.set(
+      courseId,
+      flags.components && courseId === "c1"
+        ? [
+            { id: COURS, name: "Cours", weight: 50 },
+            { id: LABO, name: "Labo", weight: 50 },
+          ]
+        : [],
+    );
+  }
+  return COMPONENTS.get(courseId)!;
+};
+
 interface Spec {
   n: number;
   title: string;
@@ -98,14 +135,17 @@ interface Spec {
   released: boolean;
   weight: number;
   withheld?: boolean;
+  /** Its component under `?components=1`; none by default. */
+  component?: string;
 }
 
 const SPECS: Spec[] = [
-  { n: 1, title: "Examen 1 : numération, types et outils", mode: "exam", kind: "evaluation", daysAgo: 42, released: true, weight: 50 },
-  { n: 2, title: "Test 2 — Pointeurs", mode: "exam", kind: "evaluation", daysAgo: 28, released: true, weight: 100 },
+  { n: 1, title: "Examen 1 : numération, types et outils", mode: "exam", kind: "evaluation", daysAgo: 42, released: true, weight: 50, component: COURS },
+  { n: 2, title: "Test 2 — Pointeurs", mode: "exam", kind: "evaluation", daysAgo: 28, released: true, weight: 100, component: COURS },
   { n: 3, title: "Exercices — Boucles", mode: "exercise", kind: "evaluation", daysAgo: 21, released: true, weight: 100 },
-  { n: 4, title: "Labo 1 — Calculatrice", mode: "project", kind: "project", daysAgo: 14, released: true, weight: 40 },
-  { n: 5, title: "Test 3 — Tableaux", mode: "exam", kind: "evaluation", daysAgo: 3, released: false, weight: 100 },
+  { n: 4, title: "Labo 1 — Calculatrice", mode: "project", kind: "project", daysAgo: 14, released: true, weight: 40, component: LABO },
+  { n: 5, title: "Test 3 — Tableaux", mode: "exam", kind: "evaluation", daysAgo: 3, released: false, weight: 100, component: COURS },
+  // Counted, and left in no component: in no mean once the course has components.
   { n: 6, title: "Test éclair — Révision", mode: "exam", kind: "evaluation", daysAgo: 35, released: true, weight: 10, withheld: true },
 ];
 
@@ -147,12 +187,11 @@ function buildBook(roomId: string): MockBook | null {
     weight: spec.weight,
     counts: countsByDefault(spec.mode),
     position: null,
-    // No component of the mean in the mock yet: its screens come later (ADR-131).
-    componentId: null,
+    componentId: flags.components ? (spec.component ?? null) : null,
     withheld: spec.withheld ?? false,
     beneath: new Map(students.map((s, i) => [s.id, beneathOf(spec, i, me)])),
   }));
-  const book: MockBook = { meanPublished: roomId === "r1", columns, marks: new Map() };
+  const book: MockBook = { meanPublished: roomId === "r1" && !flags.unpublished, columns, marks: new Map() };
   const mark = (col: number, student: number, m: Omit<MockMark, "setAt" | "comment">) => {
     const line = students[student]?.id;
     if (line) book.marks.set(`${columns[col]!.activityId}|${line}`, { comment: null, setAt: iso(-D), ...m });
@@ -221,17 +260,18 @@ const displayed = (cell: { kind: string; grade: number | null }): CellOutcome =>
       ? { kind: cell.kind }
       : { kind: "empty" };
 
-/** The mock's courses have no component of the mean (ADR-131): the means of one implicit component, as the server's. */
-const meanOf = (columns: MockColumn[], outcomes: Map<string, CellOutcome>): number | null =>
+/** A student's means over the released columns, with the course's components (ADR-131), as the server's. */
+const meansOf = (columns: MockColumn[], outcomes: Map<string, CellOutcome>, components: readonly MeanComponent[]): GradebookMeans =>
   gradebookMeans(
     columns
       .filter((c) => c.released)
       .map((c): MeanColumn => ({ weight: c.weight, counts: c.counts, componentId: c.componentId, cell: outcomes.get(c.activityId) ?? { kind: "empty" } })),
-    [],
-  ).mean;
+    components,
+  );
 
 function staffTable(room: (typeof rooms)[number], book: MockBook): GradebookStaff {
   const students = seatsOf(room.id);
+  const components = componentsOf(room.courseId);
   const rows = students
       .slice()
       .sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`))
@@ -246,13 +286,14 @@ function staffTable(room: (typeof rooms)[number], book: MockBook): GradebookStaf
             displayed(cell),
           );
         }
-        return { enrollmentId: s.id, email: s.email, nom: s.nom, prenom: s.prenom, cells, mean: meanOf(book.columns, outcomes), componentMeans: {} };
+        const means = meansOf(book.columns, outcomes, components);
+        return { enrollmentId: s.id, email: s.email, nom: s.nom, prenom: s.prenom, cells, mean: means.mean, componentMeans: means.components };
       });
   return {
     classroomId: room.id,
     archived: room.archivedAt !== null,
     meanPublished: book.meanPublished,
-    components: [],
+    components: components.map((c) => ({ ...c, classMean: classMean(rows.map((row) => row.componentMeans[c.id] ?? null)) })),
     columns: book.columns.map(({ withheld: _w, beneath: _b, ...column }) => ({
       ...column,
       classMean: column.released ? classMean(rows.map((row) => row.cells[column.activityId]!.grade)) : null,
@@ -316,8 +357,13 @@ on("PATCH", "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId", (m, r
   writable(room);
   const column = columnOr404(book, m.groups!.activityId!);
   const patch = parsed(GradebookColumnPatch, raw);
+  // Another course's component is the 404 of a missing one (ADR-131 §2).
+  if (patch.componentId && !componentsOf(room.courseId).some((c) => c.id === patch.componentId)) {
+    throw new MockPayload(404, { error: "not_found", message: "Component not found" });
+  }
   if (patch.weight !== undefined) column.weight = patch.weight;
   if (patch.counts !== undefined) column.counts = patch.counts;
+  if (patch.componentId !== undefined) column.componentId = patch.componentId;
   return staffTable(room, book);
 });
 
@@ -393,20 +439,95 @@ on("GET", "/app/api/student/classrooms/:id/gradebook", (m) => {
       displayed(cell),
     );
   }
+  const components = componentsOf(room.courseId);
+  const means = meansOf(columns, outcomes, components);
+  // What the student reads of each column: whether it counts, and where (ADR-131 §7); an excused cell counts in no mean (#969), as on the server.
+  const counting = new Map(
+    columns.map((c) => [c.activityId, studentCounting(c.counts && cells[c.activityId]?.kind !== "excused", c.componentId, components.length > 0)]),
+  );
   return {
     classroomId: room.id,
-    components: [],
+    // Only the components that hold one of the student's columns that count; their weight and mean with the published mean only.
+    components: components
+      .filter((component) => [...counting.values()].some((it) => it.componentId === component.id))
+      .map((component) => ({
+        id: component.id,
+        name: component.name,
+        ...(published ? { weight: component.weight, mean: means.components[component.id] ?? null } : {}),
+      })),
     columns: columns.map((c) => ({
       kind: c.kind,
       activityId: c.activityId,
       mode: c.mode,
       title: c.title,
       date: c.date,
-      counts: c.counts,
-      componentId: null,
+      ...counting.get(c.activityId)!,
       ...(published ? { weight: c.weight } : {}),
     })),
     cells,
-    ...(published ? { mean: meanOf(columns, outcomes) } : {}),
+    ...(published ? { mean: means.mean } : {}),
   } satisfies GradebookStudent;
+});
+
+// ---------------------------------------------------------------- the course's components (ADR-131)
+
+/** The components as their routes answer them: each with whether a column of a classroom of the course is in it. */
+const componentList = (courseId: string): GradebookComponents =>
+  componentsOf(courseId).map((component) => ({
+    ...component,
+    inUse: rooms.filter((r) => r.courseId === courseId).some((r) => bookOf(r.id)?.columns.some((c) => c.componentId === component.id)),
+  }));
+
+/** The course of a components route: the 404 of a missing course for a student; a write is its owners' (`?assistant=1`: refused). */
+const componentCourse = (id: string, write = false): string => {
+  if (role === "student") throw new MockPayload(404, { error: "not_found", message: "Not found" });
+  const course = courseOr404(id);
+  if (write && flags.assistant) throw refuse(403, "owner_required", "Only an owner of this course may do that");
+  return course.id;
+};
+
+const componentOr404 = (courseId: string, componentId: string) => {
+  const component = componentsOf(courseId).find((c) => c.id === componentId);
+  if (!component) throw new MockPayload(404, { error: "not_found", message: "Component not found" });
+  return component;
+};
+
+/** Another component of the course already has the name, whatever its case. */
+const nameTaken = (courseId: string, name: string, except?: string) => {
+  if (componentsOf(courseId).some((c) => c.id !== except && c.name.toLowerCase() === name.toLowerCase())) {
+    throw refuse(409, "component_name_taken", "Another component of the course has this name");
+  }
+};
+
+on("GET", "/app/api/courses/:id/gradebook/components", (m) => componentList(componentCourse(m.groups!.id!)));
+
+on("POST", "/app/api/courses/:id/gradebook/components", (m, raw) => {
+  const courseId = componentCourse(m.groups!.id!, true);
+  const body = parsed(GradebookComponentCreate, raw);
+  nameTaken(courseId, body.name);
+  componentsOf(courseId).push({ id: crypto.randomUUID(), name: body.name, weight: body.weight });
+  return componentList(courseId);
+});
+
+on("PATCH", "/app/api/courses/:id/gradebook/components/:componentId", (m, raw) => {
+  const courseId = componentCourse(m.groups!.id!, true);
+  const component = componentOr404(courseId, m.groups!.componentId!);
+  const body = parsed(GradebookComponentPatch, raw);
+  if (body.name !== undefined) {
+    nameTaken(courseId, body.name, component.id);
+    component.name = body.name;
+  }
+  if (body.weight !== undefined) component.weight = body.weight;
+  return componentList(courseId);
+});
+
+on("DELETE", "/app/api/courses/:id/gradebook/components/:componentId", (m) => {
+  const courseId = componentCourse(m.groups!.id!, true);
+  const component = componentOr404(courseId, m.groups!.componentId!);
+  if (componentList(courseId).find((c) => c.id === component.id)!.inUse) {
+    throw refuse(409, "component_in_use", "A column of the course is in this component");
+  }
+  const all = componentsOf(courseId);
+  all.splice(all.indexOf(component), 1);
+  return componentList(courseId);
 });

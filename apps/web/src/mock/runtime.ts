@@ -162,6 +162,10 @@ export const FLAG_NAMES = [
   "trainingdone",
   // ADR-122: the results page counts the students who practised after the due date.
   "practised",
+  // ADR-131: PRG1 starts with two components of the mean, its gradebook columns filed in them.
+  "components",
+  // F-GBOOK-05: PRG1-2026's gradebook starts with its mean not published (the student's tab without means).
+  "unpublished",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;

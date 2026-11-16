@@ -3,8 +3,9 @@
  * "Settings row"), the classroom's Settings tab's twin (F-ORG-13): what the
  * header's menu held — hiding (F-ORG-11), deletion (F-ORG-09) — the name
  * and the code, which the header shows and no longer edits, and the
- * course's concepts (ADR-081 §8, `CourseConcepts`) and its catalog of
- * conditions (F-ORG-16, `CourseConditions`).
+ * course's concepts (ADR-081 §8, `CourseConcepts`), its catalog of
+ * conditions (F-ORG-16, `CourseConditions`) and its components of the mean
+ * (F-GBOOK-07, `CourseComponents`).
  *
  * Nothing here is accented: a settings tab has no primary. Delete is a
  * `danger-quiet` button whose confirmation is the `danger` one, as the
@@ -14,7 +15,8 @@
  * The name, the code, the icon and the deletion are an owner's (ADR-068): an assistant
  * sees only their own navigation's row, and one line saying why the rest is
  * not there — no disabled buttons, as a pool's read-only screens; the
- * catalog of conditions, likewise, they read without controls.
+ * catalog of conditions and the components, likewise, they read without
+ * controls.
  */
 import { Eye, EyeOff, Library, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -23,6 +25,7 @@ import type { CourseSummary } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Button, Card, SectionHeading, SettingRow } from "../ui";
+import { CourseComponents } from "./CourseComponents";
 import { CourseConcepts } from "./CourseConcepts";
 import { CourseConditions } from "./CourseConditions";
 import { CourseIcon } from "./CourseIcon";
@@ -87,6 +90,8 @@ export function CourseSettings({
       <CourseConcepts courseId={course.id} canManage={isOwner} />
 
       <CourseConditions courseId={course.id} canManage={isOwner} />
+
+      <CourseComponents courseId={course.id} canManage={isOwner} />
 
       {isOwner ? (
         <section className="space-y-3">

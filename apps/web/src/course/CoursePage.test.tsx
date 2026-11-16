@@ -81,6 +81,8 @@ function world(templates: unknown[] = [TEMPLATE]) {
     "GET /app/api/courses/c1/templates": ok(templates),
     "GET /app/api/pools": ok([]),
     "GET /app/api/courses/c1/conditions": ok(CONDITIONS),
+    // Its components of the mean (ADR-131): none; `CourseComponents.test.tsx` holds their cases.
+    "GET /app/api/courses/c1/gradebook/components": ok([]),
     "GET /app/api/concepts": ok({ concepts: [POINTER, ARRAY] }),
   };
 }

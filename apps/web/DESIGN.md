@@ -1990,6 +1990,31 @@ What replaces them:
   what it is: each column's class mean, centred and semibold like a grade,
   a dash for a column not released, and the overall class mean under the
   mean, pinned with it from `@2xl`. Staff only.
+- **Components of the mean (ADR-131).** Only on a course that has some;
+  without, nothing below is drawn. A column's head names its component on a
+  line of its own above the weight, 11 px muted, cut to the column (whole
+  in the tooltip and the accessible name); a column that counts in no
+  component — so in no mean — shows the `warning` triangle there instead,
+  named in words, and one 13 px muted line with the same triangle above the
+  matrix counts such columns. The head opens the column's settings dialog
+  directly (no menu). One mean column per component (96 px, `w-24`)
+  stands after the spacer, before the mean: its name over its weight in the
+  head, each student's mean of it right-aligned and semibold as the mean
+  is, its class mean in the footer; it scrolls, only the mean is pinned. No
+  colour of its own: the components are told apart by their names.
+- **A column's settings dialog** ("Set the weight…" in the column's menu,
+  or the head itself on a course with components): one select for where
+  it counts, then the weight with its rule under the field. The select is
+  "Component" (each component, then "Out of the mean") on a course with
+  components, "Mean" ("In the mean", "Out of the mean") without; a column
+  counted in no component reads "No component", the warning line under it.
+  The quick "Count in the mean" / "Leave out of the mean" item stays in the
+  menu of a course without components.
+- **The students' means move now.** Changing a released column's weight,
+  component or whether it counts while students see their mean asks first
+  ("Change the students' means?"), on every course, the quick menu item
+  included; nothing is asked when no mean moves (a column that counts in
+  no mean before nor after).
 - **Primary.** Export CSV, in the page header (`variant="primary"`), a plain
   download link. The switch "Students see their mean" is a `SettingRow`
   above the matrix, never an accent; every other action is a menu or a
@@ -2010,6 +2035,13 @@ What replaces them:
   indicative group says once, in a 13 px `fg-muted` line under its heading,
   that its grades do not count unless the teacher includes them; its grades are in the ink (`Grade`'s `neutral`: no red
   under 4, no orange), with no badge on the row — the line says it, once.
+  On a course with components of the mean, the group that counts holds one
+  card per component on the classroom's tab, under an `h4` (13 px semibold
+  muted: the name, then its weight in the regular weight once published),
+  6 px to its card and 16 between components, each card closed by the
+  component's mean row; the mean of the means follows in a card of its own.
+  The global Grades page draws no sub-group: the component is a caption
+  under the row's title.
 
 ## Poll outcome donut (launcher, "Recent polls")
 

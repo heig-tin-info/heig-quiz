@@ -217,6 +217,26 @@ describe("the student's Grades", () => {
     expect(within(aside).queryByText("indicative")).toBeNull();
   });
 
+  it("names the component of the mean a row counts in, in its caption, and nothing where there is none (ADR-131 §11)", async () => {
+    const room: GradeGroup = {
+      ...groups[0]!,
+      rows: [
+        row({ evaluationId: "c1", title: "Quiz 2", component: "Cours", score: { points: 8.5, totalPoints: 12, grade: 4.5, pendingCount: 0 } }),
+        row({ evaluationId: "c2", title: "Quiz 4" }),
+      ],
+    };
+    mockFetch({ [URL]: ok([room]) });
+    render();
+    const quiz = await tableRow("Quiz 2");
+    // Under the title at every width: beside kind and date where their columns have left, alone where they show.
+    expect(quiz.getByText("Exam · 2026-09-20 · Cours")).toBeInTheDocument();
+    expect(quiz.getByText("Cours")).toBeInTheDocument();
+    expect((await tableRow("Quiz 4")).queryByText(/Cours/)).toBeNull();
+    // The phone's card says it too; no sub-group, no mean.
+    expect(screen.getAllByText("Exam · 2026-09-20 · Cours")).toHaveLength(2);
+    expect(screen.queryByText("Mean")).toBeNull();
+  });
+
   it("draws no empty group", async () => {
     mockFetch({ [URL]: ok([groups[1]!]) });
     render();

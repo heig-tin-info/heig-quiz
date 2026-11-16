@@ -494,7 +494,7 @@ describe("ClassroomView — the Journal tab", () => {
 
 describe("the Grades tab (F-GBOOK-01, F-GBOOK-04, M5-04)", () => {
   const BOOK = `${ROOM}/gradebook`;
-  const table = { classroomId: "r1", archived: false, meanPublished: false, columns: [], rows: [], classMean: null };
+  const table = { classroomId: "r1", archived: false, meanPublished: false, components: [], columns: [], rows: [], classMean: null };
 
   it("is a route of its own whose one primary is Export CSV, a plain download of the table", async () => {
     mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${BOOK}`]: ok(table) });
