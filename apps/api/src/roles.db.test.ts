@@ -7,7 +7,7 @@ import type { AppConfig } from "./config.js";
 import type { Db } from "./db/client.js";
 import { subscribe, type BusMessage } from "./events.js";
 import { teacherGrants, userEmails, users } from "./db/schema.js";
-import { roleForIdentity, syncUserRole, type Identity } from "./roles.js";
+import { isSuperAdminEmail, roleForIdentity, syncUserRole, type Identity } from "./roles.js";
 import { testDb } from "./test/db.js";
 
 const config = {
@@ -50,6 +50,12 @@ describe("roleForIdentity (GH-11)", () => {
     expect(
       await roleOf({ emails: ["private@gmail.test", "boss@heig.test"] }),
     ).toBe("admin");
+  });
+
+  it("names the administrator's address alone, whatever its case, and nothing without one", () => {
+    expect(isSuperAdminEmail(config, "Boss@HEIG.test")).toBe(true);
+    expect(isSuperAdminEmail(config, "private@gmail.test")).toBe(false);
+    expect(isSuperAdminEmail({ SUPER_ADMIN_EMAIL: "" }, "")).toBe(false);
   });
 
   it("makes a staff affiliation of one of our institutions a teacher", async () => {

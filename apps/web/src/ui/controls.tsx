@@ -13,7 +13,7 @@ import {
   Button as ButtonBase,
   Segmented,
   Select as SelectBase,
-  Switch,
+  Switch as SwitchBase,
   TextInput,
   textareaClass,
   type ButtonSize,
@@ -22,7 +22,7 @@ import {
 } from "@quiz/ui";
 
 import { useT } from "../i18n";
-import { HelpIcon, type IconType } from "./layers";
+import { HelpIcon, Tip, type IconType } from "./layers";
 
 // --- Buttons ---
 
@@ -529,9 +529,26 @@ export function RadioRow<V extends string | number>({
 /*
  * The segmented control (`Segmented`) and the on/off `Switch` are written
  * once, in `@quiz/ui`: the question editors use the very same ones, their
- * `wrap` and `labelledBy` beside the app's `size` and `label`.
+ * `wrap` and `labelledBy` beside the app's `size` and `label`. The app's
+ * `Switch` adds a `disabledReason`: the switch is held, disabled, and its
+ * tooltip says why; a wrapper takes the hover and the focus a disabled
+ * control cannot, as `HeldButton` and `IconButton` do.
  */
-export { Segmented, Switch };
+export { Segmented };
+
+export function Switch({
+  disabledReason,
+  ...props
+}: React.ComponentProps<typeof SwitchBase> & { disabledReason?: string | null }) {
+  if (!disabledReason) return <SwitchBase {...props} />;
+  return (
+    <Tip label={disabledReason}>
+      <span tabIndex={0} className="inline-flex rounded-full">
+        <SwitchBase {...props} disabled />
+      </span>
+    </Tip>
+  );
+}
 
 /**
  * One option of a `Segmented` that switches between pictures of the same

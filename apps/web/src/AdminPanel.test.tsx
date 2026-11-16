@@ -1,4 +1,4 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -40,21 +40,45 @@ describe("TeachersSection — the administrator's workspace row", () => {
     });
     renderWithProviders(<TeachersSection />);
 
-    const always = await screen.findByRole("switch", { name: "Always on for an administrator" });
+    const always = await screen.findByRole("switch", { name: "Online workspace for boss@heig-vd.ch" });
     expect(always).toBeChecked();
     expect(always).toBeDisabled();
     const theirs = screen.getByRole("switch", { name: "Online workspace for t@heig-vd.ch" });
     expect(theirs).not.toBeChecked();
     expect(theirs).toBeEnabled();
 
-    const quota = screen.getByRole("spinbutton", { name: "Simultaneous workspaces for boss@heig-vd.ch" });
+    // The reason reaches a keyboard: the held switch's wrapper takes the focus.
     const u = userEvent.setup();
+    act(() => always.parentElement!.focus());
+    expect(await screen.findByText("Always on for an administrator")).toBeInTheDocument();
+
+    const quota = screen.getByRole("spinbutton", { name: "Simultaneous workspaces for boss@heig-vd.ch" });
     await u.clear(quota);
     await u.type(quota, "30");
     fireEvent.blur(quota);
-    await screen.findByRole("switch", { name: "Always on for an administrator" });
+    await screen.findByRole("switch", { name: "Online workspace for boss@heig-vd.ch" });
     expect(calls.filter((c) => c.method === "PATCH")).toEqual([
       { method: "PATCH", url: "/app/api/admin/teachers/boss/codespace", body: { maxActiveSessions: 30 } },
     ]);
+  });
+
+  it("asks to remove the administrator's quota, not their teacher role", async () => {
+    mockFetch({
+      "GET /app/api/admin/teachers": ok([
+        row("teacher", "t@heig-vd.ch"),
+        row("boss", "boss@heig-vd.ch", { admin: true, codespace: { enabled: true, maxActiveSessions: 30 } }),
+      ]),
+    });
+    renderWithProviders(<TeachersSection />);
+    const u = userEvent.setup();
+    const bins = await screen.findAllByRole("button", { name: "Revoke" });
+    // Sorted by name: "Test boss" before "Test teacher".
+    await u.click(bins[0]!);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Remove the workspace quota of boss@heig-vd.ch? It goes back to the default.")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/teacher role/)).not.toBeInTheDocument();
+    await u.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await u.click(bins[1]!);
+    expect(await screen.findByText("Revoke the teacher role of t@heig-vd.ch?")).toBeInTheDocument();
   });
 });

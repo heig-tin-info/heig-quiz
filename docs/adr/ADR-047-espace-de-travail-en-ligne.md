@@ -294,15 +294,17 @@ them.
    lower: `grantOf` already takes the most permissive of the
    administrator's default and the rows of their verified addresses.
 3. The switch has no effect for them: their workspace is always on. The
-   teachers list marks a row as the administrator's (`AdminTeacher.admin`:
-   `SUPER_ADMIN_EMAIL`, or a verified address of an account whose role is
-   `admin`) and reports it enabled; the screen shows that switch on and
+   teachers list marks the row of `SUPER_ADMIN_EMAIL` as the
+   administrator's (`AdminTeacher.admin`, `isSuperAdminEmail` of the role
+   rule) and reports it enabled; the screen shows that switch on and
    disabled, saying why, and `PATCH …/codespace` refuses an `enabled` on
    such a row (`409 is_admin`), so the server never stores nor answers a
    state the screen does not show. The quota field works as for anyone.
 
 No migration, table nor setting. There is one administrator
-(`SUPER_ADMIN_EMAIL`), so no administrator edits another's row.
+(`SUPER_ADMIN_EMAIL`), so no administrator edits another's row. A row
+outlives a change of `SUPER_ADMIN_EMAIL`: it then becomes an ordinary
+teacher grant, visible and revocable in the list.
 
 ### 2026-10-11: the start route is a POST
 

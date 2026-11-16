@@ -63,9 +63,18 @@ interface RoleFacts {
   hasSeat: boolean;
 }
 
+/**
+ * Whether `email` is the administrator's address (`SUPER_ADMIN_EMAIL`): the
+ * role rule's first branch, and the teachers list's mark on a grant row
+ * (ADR-047, amendment 2026-11-16).
+ */
+export function isSuperAdminEmail(config: Pick<AppConfig, "SUPER_ADMIN_EMAIL">, email: string): boolean {
+  return !!config.SUPER_ADMIN_EMAIL && normalizeEmail(email) === normalizeEmail(config.SUPER_ADMIN_EMAIL);
+}
+
 /** THE rule. Pure: every caller loads the facts, none re-derives the rule. */
 function decideRole(config: AppConfig, facts: RoleFacts): RoleDecision {
-  if (config.SUPER_ADMIN_EMAIL && facts.emails.includes(normalizeEmail(config.SUPER_ADMIN_EMAIL))) {
+  if (facts.emails.some((e) => isSuperAdminEmail(config, e))) {
     return { role: "admin", reason: "super_admin" };
   }
   if (facts.hasGrant) return { role: "teacher", reason: "grant" };

@@ -6241,6 +6241,7 @@ export const en = {
   "admin.workspace.quota": "Simultaneous workspaces for {email}",
   "admin.workspace.quotaHint": "At once",
   "admin.workspace.alwaysOn": "Always on for an administrator",
+  "admin.revokeQuotaConfirm": "Remove the workspace quota of {email}? It goes back to the default.",
   "project.deadline.byDuration": "Set at publication: {days} days after it.",
   "project.deadline.reopenDesc": "Moving it later reopens the project.",
   "project.reopen.title": "Reopen the project?",

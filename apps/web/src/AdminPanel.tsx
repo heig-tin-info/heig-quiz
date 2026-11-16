@@ -38,7 +38,6 @@ import {
   useSortableTable,
   type Column,
   TextInput,
-  Tip,
 } from "./ui";
 import { ActivitySection } from "./AdminActivity";
 import { SystemSection } from "./AdminSystem";
@@ -251,7 +250,8 @@ export function TeachersSection() {
                         onClick={async () => {
                           if (
                             await confirm({
-                              title: t("admin.revokeConfirm", { email: r.email }),
+                              // The administrator keeps their role: only the quota goes back to the default.
+                              title: t(r.admin ? "admin.revokeQuotaConfirm" : "admin.revokeConfirm", { email: r.email }),
                               confirmLabel: t("admin.revoke"),
                               danger: true,
                             })
@@ -277,7 +277,7 @@ export function TeachersSection() {
  * A teacher's online workspace grant (ADR-047 §4, amended 2026-10-07): the
  * switch, and how many of the workspaces they carry may run at once —
  * written on change, the number when the field is left. The
- * administrator's switch is on and inert, its `Tip` saying why: their
+ * administrator's switch is held on, its reason saying why: their
  * workspace is always on, only the quota is theirs to set (ADR-047,
  * amendment 2026-11-16).
  */
@@ -311,14 +311,13 @@ function WorkspaceGrant({
   };
   return (
     <span className="flex items-center gap-3">
-      <Tip label={admin ? t("admin.workspace.alwaysOn") : null}>
-        <Switch
-          checked={grant.enabled}
-          disabled={admin || save.isPending}
-          label={admin ? t("admin.workspace.alwaysOn") : t("admin.workspace.enable", { email })}
-          onChange={(enabled) => save.mutate({ enabled })}
-        />
-      </Tip>
+      <Switch
+        checked={grant.enabled}
+        disabled={save.isPending}
+        disabledReason={admin ? t("admin.workspace.alwaysOn") : null}
+        label={t("admin.workspace.enable", { email })}
+        onChange={(enabled) => save.mutate({ enabled })}
+      />
       <TextInput
         type="number"
         min={0}

@@ -18,7 +18,7 @@ import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import type { AppConfig } from "../../config.js";
 import { avatars, courseStaff, teacherGrants, users } from "../../db/schema.js";
 import { publish } from "../../events.js";
-import { syncUserRole } from "../../roles.js";
+import { isSuperAdminEmail, syncUserRole } from "../../roles.js";
 import { shownAvatar } from "../avatar.js";
 import { codespaceOn } from "../codespace/service.js";
 import { adminGuard, callerOf, userOf } from "../guards.js";
@@ -34,7 +34,7 @@ import {
   systemStatus,
 } from "../system/service.js";
 import { activityOverview } from "../presence/service.js";
-import { createTeacherGrant, isAdminGrant, listUsers } from "./service.js";
+import { createTeacherGrant, listUsers, shownCodespaceGrant } from "./service.js";
 
 /**
  * Administration: the super admin (email in the environment) manages
@@ -74,7 +74,6 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
         signedUp: sql<boolean>`${users.id} IS NOT NULL`,
         codespaceEnabled: teacherGrants.codespaceEnabled,
         codespaceMaxActiveSessions: teacherGrants.codespaceMaxActiveSessions,
-        admin: isAdminGrant(config),
         courses: sql<number>`coalesce((SELECT count(*) FROM ${courseStaff} cs WHERE cs.user_id = ${users.id}), 0)::int`,
       })
       .from(teacherGrants)
@@ -84,10 +83,10 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     const workspace = codespaceOn(config);
     return rows.map(({ userId, pictureUrl, avatarAt, codespaceEnabled, codespaceMaxActiveSessions, ...r }) => ({
       ...r,
+      admin: isSuperAdminEmail(config, r.email),
       avatarUrl: shownAvatar(userId, avatarAt, pictureUrl),
-      // ADR-047 §5: without the portal, no grant column at all. The
-      // administrator's workspace is always on (`grantOf`, amendment 2026-11-16).
-      codespace: workspace ? { enabled: codespaceEnabled || r.admin, maxActiveSessions: codespaceMaxActiveSessions } : null,
+      // ADR-047 §5: without the portal, no grant column at all.
+      codespace: workspace ? shownCodespaceGrant(config, { email: r.email, codespaceEnabled, codespaceMaxActiveSessions }) : null,
       grantedAt: r.grantedAt.toISOString(),
       lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
     }));
@@ -162,11 +161,11 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
       const body = TeacherCodespaceGrantPatch.safeParse(req.body);
       if (!body.success) return invalid(reply, body.error);
       const [row] = await app.db
-        .select({ admin: isAdminGrant(config) })
+        .select({ email: teacherGrants.email })
         .from(teacherGrants)
         .where(eq(teacherGrants.id, params.data.gid));
       if (!row) return reply.code(404).send({ error: "not_found" });
-      if (row.admin && body.data.enabled !== undefined) {
+      if (isSuperAdminEmail(config, row.email) && body.data.enabled !== undefined) {
         return reply
           .code(409)
           .send({ error: "is_admin", message: "The administrator's online workspace is always on" });
@@ -183,7 +182,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
       await trace(req, "teacher.codespace_grant", "teacher_grant", grant.id, { email: grant.email, ...body.data });
       publish("admin", ["admin"]);
       // The quota travels with each project's sync: the next one carries it (ADR-047 §6).
-      return { enabled: grant.codespaceEnabled || row.admin, maxActiveSessions: grant.codespaceMaxActiveSessions };
+      return shownCodespaceGrant(config, grant);
     });
   }
 
