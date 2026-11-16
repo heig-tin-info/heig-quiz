@@ -11,7 +11,11 @@ Implemented by merge task M3-05a: `apps/api/src/modules/project/deadline.ts`
 job); migration `0059_project_deadline`. Tested by
 `modules/project/deadline.db.test.ts`. Completes ADR-006 (as its merge
 addendum carries it to projects), ADR-012 and D13 (amended the same day,
-`docs/merge/08-decisions.md`).
+`docs/merge/08-decisions.md`). Amended 2026-11-16 by
+[ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md) §2, §5:
+the job collects an online workspace due for collection before it locks
+or commits a repository, a collection failing or timing out never holding
+the lock back.
 
 ## Context
 

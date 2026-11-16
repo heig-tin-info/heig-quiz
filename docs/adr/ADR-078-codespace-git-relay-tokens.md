@@ -23,6 +23,9 @@ summary is under [Consequences](#consequences). Amended 2026-11-14 by
 [ADR-129](ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md)
 (the staff's review session: a read grant on a reviewed repository, §2,
 §6, §9): [§12](#12-amendment-2026-11-14-the-staffs-review-session-adr-129).
+Amended 2026-11-16 by [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
+(the workspace collected at the deadline): context fact 1 and §7 corrected
+(the lock binds the App), [§13](#13-amendment-2026-11-16-the-collection-at-the-deadline-adr-130).
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -83,6 +86,10 @@ must check:
    token is a push by the App: GitHub's lock never refuses it. The `commit`
    strategy leaves the repository open anyway, and the lock is applied
    within 60 s to 5 min of the deadline, not at it.
+   *Corrected 2026-11-16 ([ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
+   §9): wrong. The lock ruleset (`github/lock.ts`) has no bypass actors;
+   once applied it refuses every push, a relay's included. The other two
+   facts of this item hold.*
 2. **Quiz classifies a push by its sender** (`pushedBy`,
    `modules/github/deliveries.ts`). A relayed push has Quiz's App as its
    sender, so without §6 it would be read as the App's own push: not the
@@ -383,6 +390,15 @@ receipt time like any other push. A token minted before that limit is
 bounded by `useUntil` (§2). For an `online` project under `commit`, the
 bound is the repository's writability (§11).
 
+*Corrected 2026-11-16 ([ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
+§9): the lock does bind the App's tokens. Under `lock`, a relay that reaches
+GitHub after the deadline job applied the lock — seconds after the deadline —
+is refused (`[remote rejected]`) and takes the terminal `rejected` state; it
+is not received late within the grace. Quiz's own check stays needed for the
+seconds before the lock, under `commit`, and for a repository's own later
+deadline. Work saved but not pushed at the deadline is collected by the
+platform (§13).*
+
 What remains: GitHub keeps a token valid until its `expiresAt`, up to an
 hour past `useUntil`, and only the portal's discipline (`useUntil`, then
 revocation) stops its use. A push made with it then is **received late**
@@ -587,6 +603,29 @@ names what changes here.
   window and while that member's access holds, whatever its mode — `free`
   repositories and frozen exams included —; contents only, never a write.
   ADR-129, Consequences.
+
+<a id="amendment-2026-11-16-the-collection-at-the-deadline"></a>
+
+### 13. Amendment 2026-11-16: the collection at the deadline (ADR-130)
+
+Scope: what the write grant of §2 may be used for, and §9. [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
+owns the rule (product owner, 2026-11-16); this section names what changes
+here.
+
+- **The condition is unchanged.** When Quiz orders a repository's collection
+  (ADR-130 §4), the portal obtains its token exactly as for a relay: the
+  same request, checks 2 to 6, a `contents: write` grant on the student's own
+  repository. The collection is attempted only within the effective deadline
+  plus the grace (under §11, while the repository is writable), so check 5
+  needs no exception, and Quiz orders it before the lock.
+- **One more use of it.** With that grant the portal pushes one throwaway
+  commit to the temporary ref Quiz names in the order
+  (`refs/quiz/collect/…`): a new ref, never a branch, never forced, with no
+  relay declaration and no `PushEvent`. The branch moves by Quiz's own
+  GitHub-signed commit, never by the portal.
+- **Blast radius (§9).** Unchanged: the same repositories, the same window,
+  the same permission. A compromised portal could already push to those
+  repositories; a temporary ref adds nothing it could not do on a branch.
 
 ## Consequences
 

@@ -178,6 +178,11 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
    before that, the station page relaunches (point 4); resuming a workspace
    consumes no quota. *Accepted as a residual risk, 2026-11-15 (owner):
    point 5 (b) of the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag).*
+   *Corrected 2026-11-16 ([ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
+   §9): under `lock`, a push relayed after the deadline job applied the lock
+   (seconds after the deadline) is refused by GitHub, not received within the
+   grace; what the workspace holds at the deadline is collected by the
+   platform instead (ADR-130), a station left early included.*
 9. **Sequencing** (owner). This ADR is written now. Implementation waits
    until SEB projects are open to students (proof B recorded, M6-07).
    Offering the setting in production further requires **proof K** on
