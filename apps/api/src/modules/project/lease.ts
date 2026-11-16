@@ -130,12 +130,12 @@ export interface LeasedRun {
   token: string;
   lost: () => boolean;
   /**
-   * `repos` through `settle`, four at a time, the lease renewed after each,
+   * `repos` through `settle`, four at a time (or `limit`), the lease renewed after each,
    * until it is lost. A repository whose `settle` throws is logged and
    * counted failed: its full name is in the list returned, and the job
    * fails once its body is done.
    */
-  each: <R extends { fullName: string | null }>(repos: readonly R[], settle: (repo: R) => Promise<void>) => Promise<string[]>;
+  each: <R extends { fullName: string | null }>(repos: readonly R[], settle: (repo: R) => Promise<void>, limit?: number) => Promise<string[]>;
 }
 
 /**
@@ -165,11 +165,11 @@ export async function runLeased(
   const { octokit, token } = await installationClient(config, org.installationId);
   const lease = heldLease(app, key, project.id, project[key]);
   const failed: string[] = [];
-  const each: LeasedRun["each"] = async (repos, settle) => {
+  const each: LeasedRun["each"] = async (repos, settle, limit = REPO_CONCURRENCY) => {
     const mine: string[] = [];
     await forEachLimit(
       repos,
-      REPO_CONCURRENCY,
+      limit,
       async (repo) => {
         try {
           await settle(repo);

@@ -14,6 +14,8 @@
 import { mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
+import { WORKSPACE_PUSH_MAX_BYTES } from "@quiz/domain";
+
 import { gitBare, git, gitAuthEnv } from "./gitRunner.js";
 
 /**
@@ -57,7 +59,7 @@ export interface StagingOptions {
 }
 
 /** The largest pack one push may send, `receive.maxInputSize` (audit M11; the rest of the disk: deploy/RUNBOOK.md, Disk). */
-export const RECEIVE_MAX_INPUT_BYTES = 100 * 1024 * 1024;
+export const RECEIVE_MAX_INPUT_BYTES = WORKSPACE_PUSH_MAX_BYTES;
 
 export interface StagingPaths {
   /** `<VOLUMES_ROOT>/<student>/<assignment>` */

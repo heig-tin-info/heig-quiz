@@ -536,8 +536,29 @@ export function repoWorld(): RepoWorld {
         if (!branches.includes(m[1]!)) return undefined;
         return json({ ref: `refs/heads/${m[1]}`, object: { sha: world.git(fullName, "rev-parse", m[1]!).trim() } });
       }
+      // Any other ref (`quiz/collect/…`, ADR-130): GitHub's 404 when it does not exist.
+      if ((m = /^\/git\/ref\/((?!heads\/).+)$/.exec(rest))) {
+        try {
+          return json({ ref: `refs/${m[1]}`, object: { sha: world.git(fullName, "rev-parse", "--verify", "--quiet", `refs/${m[1]}`).trim() } });
+        } catch {
+          return json({ message: "Not Found" }, 404);
+        }
+      }
       if ((m = /^\/git\/commits\/([0-9a-f]+)$/.exec(rest))) {
-        return json({ sha: m[1], tree: { sha: world.git(fullName, "rev-parse", `${m[1]}^{tree}`).trim() } });
+        const parents = world.git(fullName, "rev-list", "--parents", "-n", "1", m[1]!).trim().split(" ").slice(1);
+        return json({ sha: m[1], tree: { sha: world.git(fullName, "rev-parse", `${m[1]}^{tree}`).trim() }, parents: parents.map((sha) => ({ sha })) });
+      }
+      if ((m = /^\/git\/trees\/([0-9a-f]+)$/.exec(rest)) && url.searchParams.get("recursive")) {
+        const tree = world
+          .git(fullName, "ls-tree", "-r", "-z", m[1]!)
+          .split("\0")
+          .filter(Boolean)
+          .map((line) => {
+            const [meta, path] = line.split("\t") as [string, string];
+            const [mode, type, sha] = meta.split(" ") as [string, string, string];
+            return { path, mode, type, sha };
+          });
+        return json({ sha: m[1], tree, truncated: false });
       }
       if ((m = /^\/compare\/(.+)\.\.\.(.+)$/.exec(rest))) {
         // Shas or refs (`main...sync/main`); one git does not know is GitHub's 404.

@@ -49,7 +49,7 @@ import {
 } from "@quiz/domain";
 
 
-import { StudentProjectWorkspace } from "./codespace.js";
+import { ProjectRepoCollection, StudentProjectWorkspace } from "./codespace.js";
 import { ProtectedPath, RepoName } from "./gitNames.js";
 import { Rounding } from "./evaluation.js";
 import { GroupConfirm } from "./group.js";
@@ -1018,6 +1018,8 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
    * not take back.
    */
   accessToRevoke: z.boolean(),
+  /** The online workspace's last collection at a deadline (ADR-130 §7); null when none was ordered. */
+  collection: ProjectRepoCollection.nullable(),
 });
 export type ProjectRepoView = z.infer<typeof ProjectRepoView>;
 

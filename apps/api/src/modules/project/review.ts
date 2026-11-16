@@ -254,22 +254,32 @@ async function dispatchFinal(app: FastifyInstance, octokit: Octokit, projectId: 
  * (ADR-106 §3): the last push received on a handed-out
  * branch at or before its date that no bot made (`is_bot` false: neither
  * the App's nor a workflow's) — the server's receipt, as for the freeze.
+ * Without `branches`, on any branch: the branch the workspace's
+ * collection commits to (`collectionBranch`, ADR-130 §3). At the same
+ * instant a collected receipt is the later (ADR-130 §6): a collection counts
+ * at exactly the deadline, on time, and stands for the workspace's state
+ * then, which a push received at that instant cannot be newer than.
  */
-export async function lastStudentPush(db: Db | Tx, githubRepoId: number, branches: string[], before: Date): Promise<string | null> {
+export async function lastStudentPush(
+  db: Db | Tx,
+  githubRepoId: number,
+  branches: string[] | null,
+  before: Date,
+): Promise<{ sha: string; branch: string } | null> {
   const [row] = await db
-    .select({ sha: pushReceipts.headSha })
+    .select({ sha: pushReceipts.headSha, branch: pushReceipts.branch })
     .from(pushReceipts)
     .where(
       and(
         eq(pushReceipts.githubRepoId, githubRepoId),
         eq(pushReceipts.isBot, false),
-        inArray(pushReceipts.branch, branches),
+        branches === null ? undefined : inArray(pushReceipts.branch, branches),
         lte(pushReceipts.receivedAt, before),
       ),
     )
-    .orderBy(desc(pushReceipts.receivedAt))
+    .orderBy(desc(pushReceipts.receivedAt), desc(pushReceipts.collected))
     .limit(1);
-  return row?.sha ?? null;
+  return row ?? null;
 }
 
 /**
@@ -279,7 +289,7 @@ export async function lastStudentPush(db: Db | Tx, githubRepoId: number, branche
  */
 export async function passTarget(db: Db | Tx, repo: RepoRow, project: ProjectRow, scope: { dueAt: Date | null }): Promise<string | null> {
   if (repo.githubRepoId === null) return null;
-  return lastStudentPush(db, repo.githubRepoId, project.branches, scope.dueAt ?? effectiveDeadline(repo, project));
+  return (await lastStudentPush(db, repo.githubRepoId, project.branches, scope.dueAt ?? effectiveDeadline(repo, project)))?.sha ?? null;
 }
 
 /**
@@ -305,7 +315,7 @@ async function dispatchCheckpoint(
       .where(and(eq(projectCheckpoints.id, checkpointId), eq(projectCheckpoints.projectId, projectId)))
       .for("share");
     if (!checkpoint || checkpointPass(checkpoint, project, now) !== "dispatch") return null;
-    const sha = await lastStudentPush(tx, repo.githubRepoId!, project.branches, checkpoint.dueAt);
+    const sha = (await lastStudentPush(tx, repo.githubRepoId!, project.branches, checkpoint.dueAt))?.sha ?? null;
     const plan = planCheckpointReviewDispatch(project.id, checkpoint, sha);
     if (!plan) return null;
     const dispatchId = await claimDispatch(tx, repo.id, plan, checkpointId, now);

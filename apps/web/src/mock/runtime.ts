@@ -85,6 +85,8 @@ export const STUDENT_PROJECT_INVITED = "77777777-7777-4777-8777-777777777705";
  * `pjkiosk`: with `codespace`, the projects hold station levels: the staff's
  *   SEB draft is at Kiosk only, the student's invited project at Kiosk only
  *   and its open one at SEB or kiosk (`mock/codespace.ts`, `mock/student.ts`).
+ * `collected`: the repositories whose deadline was applied show the online
+ *   workspace's collection at the deadline (ADR-130), one state each in turn.
  * `stationproject`: the student persona sits on a kiosk station, on the
  *   `kiosk` session of its invited project (ADR-089 §3, `mock/session.ts`):
  *   `/projects/<id>/station`, the portal framed by a stand-in.
@@ -151,6 +153,7 @@ export const FLAG_NAMES = [
   "pjkiosk",
   "stationproject",
   "stationheld",
+  "collected",
   "nollm",
   "showkey",
   "unstated",

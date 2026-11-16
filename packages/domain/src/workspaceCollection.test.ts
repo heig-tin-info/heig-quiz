@@ -1,9 +1,63 @@
 import { describe, expect, it } from "vitest";
 
-import { collectionKeptPaths, composeCollectionTree, staleSnapshot, type CollectionTreeEntry } from "./workspaceCollection.js";
+import {
+  collectionBranch,
+  collectionKeptPaths,
+  collectionRef,
+  collectionTooLate,
+  composeCollectionTree,
+  keptEntriesMatch,
+  staleSnapshot,
+  type CollectionTreeEntry,
+} from "./workspaceCollection.js";
 
 const sha = (c: string) => c.repeat(40);
 const blob = (path: string, c: string, mode = "100644"): CollectionTreeEntry => ({ mode, sha: sha(c), path });
+
+describe("collectionRef", () => {
+  it("names one ref per repository and effective deadline, under refs/quiz/collect/", () => {
+    expect(collectionRef("0b8e2f0a-6c1e-4c55-9a43-2f1e0c9d8a11", new Date("2026-11-16T13:40:00Z"))).toBe(
+      "refs/quiz/collect/0b8e2f0a-6c1e-4c55-9a43-2f1e0c9d8a11-1794836400",
+    );
+  });
+});
+
+describe("collectionBranch", () => {
+  it("is the last push's branch when handed out, the first handed-out one without a push, none otherwise", () => {
+    expect(collectionBranch(["main", "part-2"], "part-2")).toBe("part-2");
+    expect(collectionBranch(["main", "part-2"], null)).toBe("main");
+    expect(collectionBranch(["main"], "feature")).toBeNull();
+    expect(collectionBranch([], null)).toBeNull();
+  });
+});
+
+describe("collectionTooLate", () => {
+  const deadline = new Date("2026-11-16T13:40:00Z");
+  it("allows an order up to 120 s after the deadline, on Quiz's clock", () => {
+    expect(collectionTooLate(deadline, new Date("2026-11-16T13:42:00Z"))).toBe(false);
+    expect(collectionTooLate(deadline, new Date("2026-11-16T13:42:00.001Z"))).toBe(true);
+  });
+});
+
+describe("keptEntriesMatch", () => {
+  const kept = collectionKeptPaths(["tests"]);
+  const base = [blob("main.c", "1"), blob("tests/t.c", "2")];
+  it("holds when every kept entry is the base's, and fails on a change, an addition or a removal", () => {
+    expect(keptEntriesMatch([blob("main.c", "9"), blob("tests/t.c", "2")], base, kept)).toBe(true);
+    expect(keptEntriesMatch([blob("main.c", "1"), blob("tests/t.c", "3")], base, kept)).toBe(false);
+    expect(keptEntriesMatch([...base, blob(".github/workflows/x.yml", "4")], base, kept)).toBe(false);
+    expect(keptEntriesMatch([blob("main.c", "1")], base, kept)).toBe(false);
+    expect(keptEntriesMatch([blob("main.c", "1"), blob("tests/t.c", "2", "100755")], base, kept)).toBe(false);
+  });
+
+  it("fails on a kept file turned into a symbolic link, a file and a directory swapped, a kept file deleted", () => {
+    expect(keptEntriesMatch([blob("main.c", "1"), blob("tests/t.c", "2", "120000")], base, kept)).toBe(false);
+    // `tests` a file where the base has a directory, and a kept file where it had one.
+    expect(keptEntriesMatch([blob("main.c", "1"), blob("tests", "2")], base, kept)).toBe(false);
+    expect(keptEntriesMatch([blob("main.c", "1"), blob("tests/t.c/inner", "2")], base, kept)).toBe(false);
+    expect(keptEntriesMatch([blob("main.c", "1")], [...base, blob(".github/workflows/ci.yml", "5")], kept)).toBe(false);
+  });
+});
 
 describe("collectionKeptPaths", () => {
   it("adds the workflows to the protected files, once", () => {

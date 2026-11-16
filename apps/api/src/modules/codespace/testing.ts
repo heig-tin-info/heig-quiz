@@ -50,6 +50,8 @@ export function fakePortal() {
     putStatus: 200,
     /** What `GET /api/assignments/:id/sessions` answers: a body, or a status. */
     sessions: [] as unknown[] | number,
+    /** What `POST /api/assignments/:id/collections` answers (ADR-130): a body from the order, or a status. */
+    collect: 404 as ((order: Record<string, unknown>) => unknown) | number,
     down: false,
     fetch: (input: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
       const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
@@ -68,6 +70,9 @@ export function fakePortal() {
     }
     if (/^\/api\/assignments\/[^/]+\/sessions$/.test(url.pathname)) {
       return typeof portal.sessions === "number" ? json({ error: "x" }, portal.sessions) : json(portal.sessions);
+    }
+    if (init.method === "POST" && /^\/api\/assignments\/[^/]+\/collections$/.test(url.pathname)) {
+      return typeof portal.collect === "number" ? json({ error: "x" }, portal.collect) : json(await portal.collect(body as Record<string, unknown>));
     }
     return json({ error: "not_found" }, 404);
   }

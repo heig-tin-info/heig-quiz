@@ -23,7 +23,7 @@ import {
   type Column,
 } from "../ui";
 import { OpenInWorkspaceIcon, useReviewAction } from "./OpenInWorkspace";
-import { CiBadge, MemberList, Score, StudentAccount, SyncBadge } from "./parts";
+import { CiBadge, CollectionBadge, MemberList, Score, StudentAccount, SyncBadge } from "./parts";
 import {
   commitTone,
   filterEntries,
@@ -183,6 +183,7 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
       ) : null}
       {repo.deadlineAt !== null ? <OwnDeadlineBadge at={repo.deadlineAt} /> : null}
       {review ? <Badge tone={review.tone}>{t(review.key)}</Badge> : null}
+      <CollectionBadge repo={repo} />
       <SyncBadge repo={repo} />
       {/* Wrappers, not classes on the badges: a badge's own `inline-flex` would win over `hidden`. */}
       <span className="hidden @2xl:contents">

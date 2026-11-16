@@ -217,6 +217,14 @@ export const pushReceipts = pgTable(
      * student's commit count sums. Null on a receipt written before.
      */
     commits: integer("commits"),
+    /**
+     * The commit with which the deadline job collected the online workspace
+     * (ADR-130 §6): written by that job only, before the branch moves, its
+     * `received_at` the effective deadline Quiz computed — the instant it
+     * stands for, not an observation (the observed times are the collection
+     * row's and the webhook delivery's). The intake never sets it.
+     */
+    collected: boolean("collected").notNull().default(false),
   },
   (t) => [uniqueIndex("push_receipts_repo_sha_uq").on(t.githubRepoId, t.headSha)],
 );

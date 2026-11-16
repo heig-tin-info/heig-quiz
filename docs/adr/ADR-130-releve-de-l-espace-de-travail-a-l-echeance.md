@@ -163,12 +163,17 @@ repository (ADR-077) is treated like any other.
    `tree` the portal reported and its parent the base, and (b) every entry
    under the kept paths — `collectionKeptPaths` of the project's protected
    files — equals the base's, none added, none removed; otherwise `failed`,
-   nothing signed. Then `signedCommit` of that tree on the base, message
+   nothing signed. Then `signedCommit` of that tree on the branch's current
+   head, read before every try, the first included — after the kept entries
+   are checked against that head. A student's late push relayed between the
+   order and the commit is that head: its changes are not in the collected
+   tip, it keeps its own later receipt and stays late (decision 3). Message
    `Collected from the online workspace at the deadline (<local time>)`;
    the receipt (§6) and the collection row written; then the branch moved,
    `force: false`. A 422 (the head moved: a student's push relayed in the
-   meantime, received late) gets a new signed commit of the same tree on the
-   new head, three times at most, then `failed`. **After every order, whatever
+   meantime, received late) withdraws that commit's receipt — a commit that
+   never reached the branch is never a target — and gets a new signed commit
+   of the same tree on the new head, three times at most, then `failed`. **After every order, whatever
    its outcome** — collected, a failed check, `unchanged`, a timeout, a
    failure of any kind — Quiz deletes the temporary ref it named, best
    effort, as the sync's (`github/sync.ts`): a push the portal's budget cut
@@ -179,18 +184,33 @@ repository (ADR-077) is treated like any other.
 
 ### 5. Bounds: the lock is never held hostage
 
-- **Timing.** The job first orders the collections of all its due
-  repositories at once (at most 16 portal calls in flight), so the snapshot
-  is taken seconds after the deadline whatever the repository's place in the
-  class; then it settles each repository as before, four at a time
-  (ADR-064). Edits made between the deadline and the snapshot are included;
-  edits after the snapshot are not handed in (§7).
+- **Timing.** The job first settles the collections a crash left unsettled
+  (§4.3), then collects its due repositories in waves of at most 16 in
+  flight — a wave starts its next repository as soon as one finishes — and
+  only then settles each repository as before, four at a time (ADR-064).
+  With a portal answering in seconds, a class of 25 to 50 is ordered within
+  the first minute after the deadline. A slow portal pushes the tail of the
+  class past the 120 s bound below: those repositories are `too_late`, not
+  collected, and flagged. The worst case to the first lock, whatever the
+  class: no order leaves after 120 s and the last ones are waited for at
+  most 60 s, so about three minutes after the deadline (the job claims
+  within 20 s of it), then the locks four at a time. Edits made
+  between the deadline and a snapshot are included; edits after it are not
+  handed in (§7).
 - **How late the content may be.** Quiz sends an order only within 120 s
   of the repository's effective deadline, judged on Quiz's clock when the
   order is sent — never on the portal's `snapshotAt`, the engine VM's clock.
   Later than that (Quiz down at the deadline, a job that waited) the outcome
   is `too_late`, flagged for the staff, whose remedy is the repository's own
   deadline (F-PROJ-09 (1)): a collection at the new one.
+- **The lease and live collections.** The collection phase runs through
+  the job's `each`, which renews the job's lease after every repository. A
+  row claimed less than five minutes ago (`COLLECTION_ALIVE_MS`: past the
+  120 s order bound, the 60 s wait for the portal and the GitHub calls
+  after it) is presumed alive and never settled as interrupted; a row is
+  settled once, by the run that settles it first, and only that run
+  audits. A run that loses the settlement after its commit landed keeps the
+  commit's receipt: what is on the branch decides.
 - **Per repository**: the portal stops at its 45 s budget and pushes nothing
   more; Quiz's call times out at 60 s; any failure or timeout records
   `failed` with its cause and the repository is locked regardless. Never a
@@ -233,7 +253,10 @@ the check of §4.3, its `received_at` computed by Quiz from the repository's
 effective deadline — never taken from the portal's answer (`snapshotAt` is
 the engine VM's clock and only informs the staff). No other route, job or
 webhook can set `collected`: the intake writes it false, and a redelivery
-never changes a receipt.
+never changes a receipt. No repository is frozen while a collection of it
+is claimed and not settled (`freezeDue`): its receipt may still name a
+commit on no branch; the deadline job keeps the project's work open until
+the row is settled.
 
 ### 7. What the student and the staff see
 
