@@ -148,10 +148,13 @@ repository (ADR-077) is treated like any other.
    on the base pushed to the temporary ref — a new ref, never a branch,
    never forced, no head declared, no `PushEvent` — with the write grant it
    already holds (§5). The snapshot it triggers is the existing one
-   (`sessions/shadow.ts`, `git add -A` with `.git` excluded), with that
-   module's known limit: a nested repository's gitfile under `work/` is
-   followed to record a gitlink, which the collection then leaves out (§3);
-   that limit is handled apart from this record. One collection at a time
+   (`sessions/shadow.ts`, `git add -A` with `.git` excluded, and every
+   directory under `work/` that holds a `.git` entry of any kind excluded
+   whole, found by a walk that never follows a link: no nested repository
+   is opened, and the files under one are not collected). A `.git` created
+   while the snapshot runs can still be probed once and staged as a gitlink,
+   which the collection leaves out (§3); `shadow.ts`'s header states that
+   limit (correction of 2026-11-16, audit L23). One collection at a time
    per (student, assignment); the portal's record is one log line per order
    with its outcome. It answers `CodespaceCollectionResult`: `pushed` (the
    tree), `unchanged`, `too_large`, `stale_snapshot`, `no_snapshot` or

@@ -18,10 +18,12 @@
  *    throwaway commit land there, and it is removed — its alternates file and
  *    its index with it — on every exit path. Nothing is written into
  *    `shadow.git` but the snapshot, nor into `staging.git` at all;
- *  - the snapshot it triggers is `shadow.ts`'s (`git add -A` with `.git`
- *    excluded), with that module's known limit: a nested repository's
- *    gitfile is followed to record a gitlink, which the collection then
- *    leaves out (`composeCollectionTree`);
+ *  - the snapshot it triggers is `shadow.ts`'s (`git add -A` with `.git` and
+ *    every directory holding a nested `.git` excluded, so no nested
+ *    repository is opened; files under one are not collected). A `.git`
+ *    created during the snapshot can still be probed once and staged as a
+ *    gitlink (that module's header says why no check closes it), which the
+ *    collection leaves out (`composeCollectionTree`);
  *  - no container is started and the quota is not consulted: a closed
  *    session collects the same way;
  *  - the token is in no argv, URL, file or log line: `gitAuthEnv` carries

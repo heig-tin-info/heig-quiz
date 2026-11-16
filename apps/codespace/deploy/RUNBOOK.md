@@ -23,7 +23,7 @@ The values (names, ports, platform URLs) are in `deploy/lib.sh`
 | Seccomp profile (host path) | `/etc/quiz-codespace/<i>/seccomp.json`, from `infra/seccomp/codespace.json` (the runner's plus `ptrace`, M6-05) |
 | SQLite, volumes | `/srv/quiz-codespace/<i>/var`, `/srv/quiz-codespace/<i>/volumes` |
 | Network, anchor, nftables | `quiz-codespace-net@<i>.service` |
-| Shadow snapshots | `quiz-codespace-shadow@<i>.timer` |
+| Shadow snapshots | `quiz-codespace-shadow@<i>.timer`, as root: `/usr/local/lib/quiz-codespace/shadow-snapshot.sh` commits each `work/` into its `shadow.git`, without the student's `.git` and without any directory that holds a nested `.git`, which is never opened (audit L23; the script's header says what that does not cover) |
 | Slice (both instances, sessions, snapshots, backup) | `codespace.slice`, from `infra/engine/codespace.slice` (M6-05) |
 | Backup export (both instances) | `/usr/local/lib/quiz-codespace/backup-export.sh`, pulled daily by the application VM |
 | Caddy site, access log | `/etc/caddy/conf.d/quiz-codespace-<i>.caddy`, `/var/log/caddy/quiz-codespace-<i>.log` |

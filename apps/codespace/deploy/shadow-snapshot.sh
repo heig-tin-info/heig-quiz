@@ -17,13 +17,38 @@
 # It does exactly what `snapshot()` in sessions/shadow.ts does:
 #   git --git-dir=<vol>/shadow.git --work-tree=<vol>/work add -A --ignore-errors
 #   then commit if anything is staged,
-# with the same two details: `info/exclude` holds `.git` (otherwise `add -A`
-# records the student's repository as a submodule link and captures nothing),
-# and the author is the portal, not the student. shadow.git stays root's, the
-# owner the portal (root in its container) has too.
+# with the same details: the author is the portal, not the student, and
+# `info/exclude` is written afresh before each `add` — `.git`, then every
+# directory under `work/` that holds a `.git` entry of any kind, at any depth
+# (nested_excludes below). The host never reads nor runs git on a `.git` it did
+# not create (apps/codespace/CLAUDE.md, invariant 13): without that exclusion
+# `add -A` takes such a directory for an embedded repository, follows its
+# `.git` (a directory, a gitfile `gitdir: <any path>`, a symbolic link) and
+# reads the HEAD it points at, as root. Files under a nested repository are
+# not captured (a gitlink captured none of them either). A `.git` created
+# between the walk and the `add` is still probed once: shadow.ts's header
+# says what the exclusion guarantees and what it does not. shadow.git stays
+# root's, the owner the portal (root in its container) has too.
 set -uo pipefail
+# Bytes, not characters: names are matched as they are on disk.
+export LC_ALL=C
 
 VOLUMES="${CODESPACE_VOLUMES:?CODESPACE_VOLUMES is not set}"
+
+# The exclusion lines of the directories under the work tree $1 that hold a
+# `.git` entry: anchored, directory-only, the special characters escaped, a
+# control character (a newline in a name: no line can hold it) as `?`, the
+# same lines as excludeLine in src/sessions/shadow.ts. `find` never follows a
+# link (-P, its default) and never descends into a `.git`; it only lists
+# names. The first tr turns a name's newline into \001 and the -print0
+# separator into the line end; the last turns every control character but
+# the line end into `?`.
+nested_excludes() {
+	(cd "$1" && find . -path ./.git -prune -o -name .git -prune -print0 2>/dev/null) \
+		| tr '\n\000' '\001\n' \
+		| sed -e 's|^\./||' -e 's|/\.git$||' -e 's/[][\\*?!# ]/\\&/g' -e 's|.*|/&/|' \
+		| tr '\001-\011\013-\037\177' '[?*]'
+}
 
 export GIT_AUTHOR_NAME=codespace-portal
 export GIT_AUTHOR_EMAIL=portal@codespace.local
@@ -52,7 +77,7 @@ for work in "$VOLUMES"/*/*/work; do
 		"${GIT[@]}" init --bare --quiet --initial-branch=main "$gitdir" || { failed=$((failed+1)); continue; }
 	fi
 	mkdir -p "$gitdir/info"
-	printf '.git\n' > "$gitdir/info/exclude"
+	{ printf '.git\n'; nested_excludes "$work"; } > "$gitdir/info/exclude"
 
 	# `--ignore-errors` stages what it can then exits non-zero; as root there is
 	# normally nothing to ignore, and it stays as a safety net.

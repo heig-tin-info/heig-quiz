@@ -183,7 +183,11 @@ channel divergence for its containers.
     portal's uid owns and no group nor other may write. Everything else —
     an existing `.git` of any kind, or a `work/` already the container's —
     is completed and configured inside the container (`completionScript`,
-    `identityScript`, through `engine.exec`), as the student.
+    `identityScript`, through `engine.exec`), as the student. The shadow
+    snapshot, the portal's and the root timer's alike, excludes every
+    directory under `work/` that holds a `.git` entry of any kind, so `git
+    add` never opens a nested repository (`sessions/shadow.ts` header, and
+    the race it does not close).
 14. **The port proxy is closed and code-server's answers are filtered** on
     the origin every session shares (audit L24). code-server runs with
     `--disable-proxy`; the proxy refuses `/proxy/<port>/` and
