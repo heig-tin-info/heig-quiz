@@ -3,7 +3,7 @@ import { BarChart3, CheckCheck, ChevronDown, ChevronRight, ClipboardCheck, Clock
 import { useMemo, useState } from "react";
 
 import type { ProjectDetail, ProjectGradingRepo, ProjectGradingView } from "@quiz/contracts";
-import { formatPoints, type GradeBand } from "@quiz/domain";
+import { formatPoints, formatScore, type GradeBand } from "@quiz/domain";
 
 import { api } from "../../api";
 import { AppLink } from "../../AppLink";
@@ -223,7 +223,7 @@ function Matrix({
                 <td className={cx(T.td, "text-right tabular-nums", PIN_TOTAL, "@2xl:group-hover:bg-surface-2")}>
                   {repo.total ? (
                     <span className="font-semibold">
-                      {formatPoints(repo.total.points)}/{formatPoints(repo.total.max)}
+                      {formatScore(repo.total.points)}/{formatScore(repo.total.max)}
                     </span>
                   ) : (
                     <Dash />

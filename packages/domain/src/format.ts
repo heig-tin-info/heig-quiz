@@ -1,19 +1,22 @@
 /**
- * The two written forms of a score (FF-21, invariant 8).
+ * The written forms of a score (FF-21, invariant 8).
  *
- * The platform shows numbers of exactly two kinds and they are not written
- * the same way:
+ * The platform shows numbers of these kinds and they are not written the
+ * same way:
  *
  *  - points, the currency of a grading (`numeric(6,2)`): at most two
  *    decimals and no trailing zeroes, because `3 / 5` reads better than
  *    `3.00 / 5.00` on a cell a teacher scans;
+ *  - a project's score, a total of such points out of its maximum: one
+ *    decimal at most, because a sum of criteria is read as a result, not
+ *    audited to the hundredth (the criteria beside it keep their two);
  *  - a grade, the Swiss 1.0 … 6.0 scale: always one decimal, because a `4`
  *    without its tenth is not how a grade is written here.
  *
  * Both live in the domain so that a list, a detail, a table, a histogram and
  * a student's feedback cannot drift apart — they were seven one-liners.
  */
-import { clamp, round2 } from "./round.js";
+import { clamp, round2, roundToTenth } from "./round.js";
 
 /**
  * Points: at most two decimals, no trailing zeroes (`3` , `2.5`, `2.33`).
@@ -25,6 +28,14 @@ import { clamp, round2 } from "./round.js";
 export function formatPoints(n: number): string {
   // `String(-0)` is "0", which is what a cell should show for a zero score.
   return String(round2(n));
+}
+
+/**
+ * A project's score, or its maximum: at most one decimal, no trailing zero
+ * (`26`, `7.2`, `6.2` for a sum that came out as 6.1899999999999995).
+ */
+export function formatScore(n: number): string {
+  return String(roundToTenth(n));
 }
 
 /**
