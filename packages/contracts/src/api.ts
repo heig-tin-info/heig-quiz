@@ -348,6 +348,12 @@ export interface AdminTeacher {
   avatarUrl: string | null;
   signedUp: boolean;
   courses: number;
+  /**
+   * The address is the administrator's (ADR-047, amendment 2026-11-16): the
+   * row sets their workspace quota, their workspace is always on
+   * (`codespace.enabled` is true) and `PATCH …/codespace` refuses `enabled`.
+   */
+  admin: boolean;
   /** The online workspace grant (ADR-047 §4); null when the feature is off (`CODESPACE_URL` empty). */
   codespace: TeacherCodespaceGrant | null;
 }

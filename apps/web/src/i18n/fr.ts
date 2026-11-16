@@ -6200,6 +6200,7 @@ export const fr: Record<keyof Dict, string> = {
   "admin.workspace.enable": "Espace de travail en ligne pour {email}",
   "admin.workspace.quota": "Espaces de travail simultanés pour {email}",
   "admin.workspace.quotaHint": "Simultanés",
+  "admin.workspace.alwaysOn": "Toujours actif pour l'administration",
   "project.deadline.byDuration": "Fixée à la publication : {days} jours après celle-ci.",
   "project.deadline.reopenDesc": "La repousser réouvre le projet.",
   "project.reopen.title": "Réouvrir le projet ?",

@@ -20,13 +20,13 @@ The table lists each grant with the person's name once known, their address, the
 
 A grant is not the only way to be a teacher. A colleague added to the staff of a course is a teacher for as long as they hold that seat, and edu-ID reports employees as staff, which is enough on its own. Grants are for the cases those two rules miss: an assistant without a staff affiliation, or a teacher who should create their first course before anyone has added them anywhere.
 
-Where the platform has the online workspace, each grant also has a **Workspace** column: its switch lets that teacher put the projects of the courses they own in the workspace, and the number beside it is how many of their students' workspaces may run at once (2 by default). An administrator needs no grant: they may always use the workspace, with the default number.
+Where the platform has the online workspace, each grant also has a **Workspace** column: its switch lets that teacher put the projects of the courses they own in the workspace, and the number beside it is how many of their students' workspaces may run at once (2 by default). An administrator needs no grant: they may always use the workspace, with the default number. To give them more, for a class larger than that, grant the administrator's own address: their row's switch stays on and cannot be turned off, and the number beside it is theirs to set like anyone's. A number below the default leaves them the default.
 
 ## Removing a grant
 
 The bin at the end of a row revokes the grant, after a confirmation naming the address. The role is recomputed, not forced: someone who still sits on the staff of a course, or whom edu-ID reports as staff, stays a teacher. Someone with neither goes back to student at once.
 
-The administrator's own address cannot be granted; it is already above the teacher role.
+The administrator's own address can be granted, for the workspace's number only: the grant neither adds to nor takes from their role, which stays administrator whether the row exists or is revoked.
 
 ## Kiosk stations
 

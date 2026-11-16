@@ -34,7 +34,7 @@ import {
   systemStatus,
 } from "../system/service.js";
 import { activityOverview } from "../presence/service.js";
-import { createTeacherGrant, listUsers } from "./service.js";
+import { createTeacherGrant, isAdminGrant, listUsers } from "./service.js";
 
 /**
  * Administration: the super admin (email in the environment) manages
@@ -74,6 +74,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
         signedUp: sql<boolean>`${users.id} IS NOT NULL`,
         codespaceEnabled: teacherGrants.codespaceEnabled,
         codespaceMaxActiveSessions: teacherGrants.codespaceMaxActiveSessions,
+        admin: isAdminGrant(config),
         courses: sql<number>`coalesce((SELECT count(*) FROM ${courseStaff} cs WHERE cs.user_id = ${users.id}), 0)::int`,
       })
       .from(teacherGrants)
@@ -84,8 +85,9 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     return rows.map(({ userId, pictureUrl, avatarAt, codespaceEnabled, codespaceMaxActiveSessions, ...r }) => ({
       ...r,
       avatarUrl: shownAvatar(userId, avatarAt, pictureUrl),
-      // ADR-047 §5: without the portal, no grant column at all.
-      codespace: workspace ? { enabled: codespaceEnabled, maxActiveSessions: codespaceMaxActiveSessions } : null,
+      // ADR-047 §5: without the portal, no grant column at all. The
+      // administrator's workspace is always on (`grantOf`, amendment 2026-11-16).
+      codespace: workspace ? { enabled: codespaceEnabled || r.admin, maxActiveSessions: codespaceMaxActiveSessions } : null,
       grantedAt: r.grantedAt.toISOString(),
       lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
     }));
@@ -96,12 +98,10 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     if (!body.success) {
       return reply.code(400).send({ error: "validation", message: "A valid e-mail is required" });
     }
+    // The administrator's address may hold a row too, for its workspace
+    // quota (ADR-047, amendment 2026-11-16): the role rule puts `admin`
+    // first, so the row neither adds to nor takes from the role.
     const email = body.data.email.trim().toLowerCase();
-    if (email === config.SUPER_ADMIN_EMAIL) {
-      return reply
-        .code(409)
-        .send({ error: "is_admin", message: "This e-mail is the administrator" });
-    }
     const created = await createTeacherGrant(app.db, { email, createdBy: callerOf(req).id });
     if (!created) {
       return reply
@@ -152,12 +152,25 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
   // --- The online workspace grant (ADR-047 §4, amended 2026-10-07): may a
   // teacher put a project in the portal, and their quota of live workspaces.
   // Only with a portal (`CODESPACE_URL`): otherwise the route does not exist.
+  // The administrator's row takes a quota but no switch: their workspace is
+  // always on (`grantOf`), so an `enabled` would store what has no effect
+  // and answer what is not true (ADR-047, amendment 2026-11-16).
   if (codespaceOn(config)) {
     app.patch("/app/api/admin/teachers/:gid/codespace", { preHandler: requireAdmin }, async (req, reply) => {
       const params = TeacherGrantParams.safeParse(req.params);
       if (!params.success) return reply.code(404).send({ error: "not_found" });
       const body = TeacherCodespaceGrantPatch.safeParse(req.body);
       if (!body.success) return invalid(reply, body.error);
+      const [row] = await app.db
+        .select({ admin: isAdminGrant(config) })
+        .from(teacherGrants)
+        .where(eq(teacherGrants.id, params.data.gid));
+      if (!row) return reply.code(404).send({ error: "not_found" });
+      if (row.admin && body.data.enabled !== undefined) {
+        return reply
+          .code(409)
+          .send({ error: "is_admin", message: "The administrator's online workspace is always on" });
+      }
       const [grant] = await app.db
         .update(teacherGrants)
         .set({
@@ -170,7 +183,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
       await trace(req, "teacher.codespace_grant", "teacher_grant", grant.id, { email: grant.email, ...body.data });
       publish("admin", ["admin"]);
       // The quota travels with each project's sync: the next one carries it (ADR-047 §6).
-      return { enabled: grant.codespaceEnabled, maxActiveSessions: grant.codespaceMaxActiveSessions };
+      return { enabled: grant.codespaceEnabled || row.admin, maxActiveSessions: grant.codespaceMaxActiveSessions };
     });
   }
 

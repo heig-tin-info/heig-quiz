@@ -270,7 +270,7 @@ export const rooms: Room[] = [
   },
 ];
 
-export const teachers: Omit<AdminTeacher, "codespace">[] = [
+export const teachers: Omit<AdminTeacher, "codespace" | "admin">[] = [
   {
     id: "t1",
     email: "ada.lovelace@heig-vd.ch",
@@ -943,20 +943,50 @@ on("GET", "/app/api/student/classrooms", () => studentRooms());
 
 /**
  * The online workspace grants (ADR-047 §4, `?codespace=1`): Ada has it, for
- * three workspaces at once; every other grant is off, the default quota.
+ * three workspaces at once, the administrator for thirty; every other grant
+ * is off, the default quota.
  * Without the flag the platform has no portal, and no row carries a grant.
  */
-const codespaceGrants = new Map<string, TeacherCodespaceGrant>([["t1", { enabled: true, maxActiveSessions: 3 }]]);
+const codespaceGrants = new Map<string, TeacherCodespaceGrant>([
+  ["t1", { enabled: true, maxActiveSessions: 3 }],
+  ["t-admin", { enabled: true, maxActiveSessions: 30 }],
+]);
+/**
+ * The administrator's own row (ADR-047, amendment 2026-11-16): a quota of 30
+ * for a class larger than the default. Their workspace is always on, so the
+ * row takes no `enabled`. Not among `teachers`: no colleague picker offers it.
+ */
+const adminRow: Omit<AdminTeacher, "codespace"> = {
+  id: "t-admin",
+  email: "admin@heig-vd.ch",
+  givenName: "Admin",
+  familyName: "Démo",
+  avatarUrl: null,
+  signedUp: true,
+  courses: 1,
+  lastLoginAt: iso(-3 * H),
+  grantedAt: iso(-1 * D),
+  admin: true,
+};
+let adminGranted = !flags.empty;
+const grantRows = (): Omit<AdminTeacher, "codespace">[] => [
+  ...teachers.map((x) => ({ ...x, admin: false })),
+  ...(adminGranted ? [adminRow] : []),
+];
 on("GET", "/app/api/admin/teachers", (): AdminTeacher[] =>
-  teachers.map((x) => ({
+  grantRows().map((x) => ({
     ...x,
     codespace: flags.codespace ? (codespaceGrants.get(x.id) ?? { enabled: false, maxActiveSessions: DEFAULT_MAX_ACTIVE_SESSIONS }) : null,
   })),
 );
 on("PATCH", "/app/api/admin/teachers/:gid/codespace", (m, raw) => {
   const body = TeacherCodespaceGrantPatch.safeParse(raw);
-  if (!flags.codespace || !teachers.some((x) => x.id === m.groups!.gid)) throw new MockError(404, "Not found");
+  const row = grantRows().find((x) => x.id === m.groups!.gid);
+  if (!flags.codespace || !row) throw new MockError(404, "Not found");
   if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
+  if (row.admin && body.data.enabled !== undefined) {
+    throw new MockPayload(409, { error: "is_admin", message: "The administrator's online workspace is always on" });
+  }
   const grant = { ...(codespaceGrants.get(m.groups!.gid!) ?? { enabled: false, maxActiveSessions: DEFAULT_MAX_ACTIVE_SESSIONS }), ...body.data };
   codespaceGrants.set(m.groups!.gid!, grant);
   return grant;
@@ -1032,6 +1062,7 @@ on("POST", "/app/api/admin/users/:id/pseudonymize", (m) => {
 });
 
 on("DELETE", "/app/api/admin/teachers/:gid", (m) => {
+  if (m.groups!.gid === adminRow.id) adminGranted = false;
   const i = teachers.findIndex((x) => x.id === m.groups!.gid);
   if (i >= 0) teachers.splice(i, 1);
   return undefined;

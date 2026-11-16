@@ -6240,6 +6240,7 @@ export const en = {
   "admin.workspace.enable": "Online workspace for {email}",
   "admin.workspace.quota": "Simultaneous workspaces for {email}",
   "admin.workspace.quotaHint": "At once",
+  "admin.workspace.alwaysOn": "Always on for an administrator",
   "project.deadline.byDuration": "Set at publication: {days} days after it.",
   "project.deadline.reopenDesc": "Moving it later reopens the project.",
   "project.reopen.title": "Reopen the project?",
