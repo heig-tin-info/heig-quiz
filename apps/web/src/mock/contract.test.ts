@@ -298,6 +298,8 @@ const CHECKED: Case[] = [
   // F-EVAL-25: every template's editor, its picker's pools, and each item's preview.
   ...templateIds.flatMap((id) => [
     one("/app/api/templates/:id", `/app/api/templates/${id}`, TemplateDetail),
+    // ADR-131 §15: the column its instances start with.
+    one("/app/api/templates/:id/gradebook", `/app/api/templates/${id}/gradebook`, GradebookColumnSettings),
     each("/app/api/templates/:id/pools", `/app/api/templates/${id}/pools`, PoolSummary),
   ]),
   ...templateItems.map((itemId) =>

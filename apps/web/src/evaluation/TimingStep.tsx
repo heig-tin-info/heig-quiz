@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Check, Lock, MonitorPlay, Radio, Timer } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -26,10 +25,10 @@ import {
 
 import { ApiError } from "../api";
 import { EvaluationDrillSetting } from "../drill/EvaluationDrillSetting";
+import { useColumnSettingsRefresh } from "../gradebook/api";
 import { GradebookSettingRow } from "../gradebook/GradebookSettingRow";
 import { AfterDueSetting } from "./AfterDueSetting";
 import { useT } from "../i18n";
-import { columnSettingsKey } from "../queryKeys";
 import {
   Alert,
   Button,
@@ -410,16 +409,8 @@ export function TimingStep({
   ).success
     ? transitionErrorMessage(patch.error, t, settings.timing)
     : null;
-  // A change of mode changes the defaults of a column nobody set (ADR-131 §13): the Gradebook row reads them again.
-  const qc = useQueryClient();
-  const modePatch: ConfigPatch = {
-    error: patch.error,
-    mutate: (body) =>
-      patch.mutate(body, {
-        onSuccess: () =>
-          void qc.invalidateQueries({ queryKey: columnSettingsKey(detail.evaluation.classroomId, "evaluation", detail.evaluation.id) }),
-      }),
-  };
+  const column = { classroomId: detail.evaluation.classroomId, kind: "evaluation" as const, activityId: detail.evaluation.id };
+  const refreshColumn = useColumnSettingsRefresh(column);
 
   /*
    * The dates of the mode in force (ADR-086 §1). Scheduled: the window the
@@ -503,7 +494,8 @@ export function TimingStep({
             config={detail.evaluation}
             changeable={modeChangeable(mode, state, detail.attemptCount)}
             scheduled={state === "scheduled"}
-            patch={modePatch}
+            patch={patch}
+            onChanged={refreshColumn}
           />
         }
       />
@@ -561,12 +553,7 @@ export function TimingStep({
            a poll has none. */
         gradebook={
           mode === "poll" ? undefined : (
-            <GradebookSettingRow
-              classroomId={detail.evaluation.classroomId}
-              kind="evaluation"
-              activityId={detail.evaluation.id}
-              title={detail.evaluation.title}
-            />
+            <GradebookSettingRow home={column} title={detail.evaluation.title} />
           )
         }
       />

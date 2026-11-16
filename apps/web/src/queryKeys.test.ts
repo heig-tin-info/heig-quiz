@@ -65,6 +65,12 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["classroomGradebookKey", keys.classroomGradebookKey("r1"), ["gradebook", "staff", "r1"]],
     ["studentGradebookKey", keys.studentGradebookKey("r1"), ["gradebook", "student", "r1"]],
     ["courseComponentsKey", keys.courseComponentsKey("c1"), ["gradebook", "components", "c1"]],
+    [
+      "columnSettingsKey",
+      keys.columnSettingsKey({ classroomId: "r1", kind: "evaluation", activityId: "e1" }),
+      ["gradebook", "column", "r1", "evaluation", "e1"],
+    ],
+    ["columnSettingsKey (a template)", keys.columnSettingsKey({ templateId: "t1" }), ["gradebook", "column", "template", "t1"]],
     ["projectRunsKey", keys.projectRunsKey("p1", "x1"), ["project", "p1", "repos", "x1", "runs"]],
     ["projectCheckpointsKey", keys.projectCheckpointsKey("p1"), ["project", "p1", "checkpoints"]],
     ["projectCriteriaKey", keys.projectCriteriaKey("p1"), ["project", "p1", "criteria"]],

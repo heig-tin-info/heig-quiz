@@ -517,6 +517,20 @@ describe("the mock's gradebook (M5-04)", () => {
     const poll = list.find((e) => e.mode === "poll");
     if (poll) expect((await send(`/app/api/classrooms/${classroomId}/gradebook/columns/evaluation/${poll.id}`, "GET")).status).toBe(404);
   });
+
+  it("keeps a template's column settings (ADR-131 §15): the narrow patch, never released, carried to an instance", async () => {
+    const [template] = (await get(`/app/api/courses/${courses[0]!.id}/templates`)) as { id: string }[];
+    const path = `/app/api/templates/${template!.id}/gradebook`;
+    expect(GradebookColumnSettings.parse(await get(path))).toMatchObject({ released: false, meanPublished: false });
+    expect((await send(path, "PATCH", { position: 1 })).status).toBe(400);
+    const written = GradebookColumnSettings.parse((await send(path, "PATCH", { counts: true, weight: 25 })).body);
+    expect(written).toMatchObject({ weight: 25, counts: true });
+    const made = (await send(`/app/api/templates/${template!.id}/instances`, "POST", { classroomId, title: "Instance" })).body as {
+      evaluation: { id: string };
+    };
+    const inherited = await get(`/app/api/classrooms/${classroomId}/gradebook/columns/evaluation/${made.evaluation.id}`);
+    expect(GradebookColumnSettings.parse(inherited)).toMatchObject({ weight: 25, counts: true });
+  });
 });
 
 describe("the mock's assistant drives the interface (ADR-080 P2b)", () => {

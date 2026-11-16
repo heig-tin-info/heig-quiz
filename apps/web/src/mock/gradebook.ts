@@ -31,7 +31,8 @@
  * evaluations and projects are not the book's columns, so their settings
  * are kept apart (`STORED`), read and written by the same routes — the
  * `draft` exam reads its defaults, the `released` one asks before it moves
- * PRG1's published mean.
+ * PRG1's published mean. A template's (§15) are kept there too, and carried
+ * to its instances.
  *
  * Below `groups.ts`, whose `ME_LINE` it reads; it reads `evaluation.ts`'s
  * evaluations and `project.ts`'s projects, which its import evaluates first.
@@ -42,6 +43,7 @@ import {
   GradebookComponentPatch,
   GradebookMarkPut,
   GradebookSettingsPatch,
+  GradebookTemplateColumnPatch,
   type GradebookColumn,
   type GradebookColumnSettings,
   type GradebookComponents,
@@ -69,7 +71,7 @@ import {
   WEIGHT_DEFAULT,
 } from "@quiz/domain";
 
-import { findEvaluation } from "./evaluation";
+import { columnSettingsCopy, findEvaluation, templateOr404 } from "./evaluation";
 import { ME_LINE } from "./groups";
 import { classroomRoster, courseOr404, rooms } from "./org";
 import { projectColumnOf } from "./project";
@@ -368,9 +370,10 @@ on("PATCH", "/app/api/classrooms/:id/gradebook", (m, raw) => {
 type SettingsRow = Pick<GradebookColumn, "weight" | "counts" | "componentId">;
 
 /**
- * The settings of the activities the book draws no column of — the mock's
- * own evaluations and projects, drafts included (ADR-131 §13) — by activity
- * id, from their first write; their mode's defaults before it.
+ * The settings of the columns the book does not draw — the mock's own
+ * evaluations and projects, drafts included (ADR-131 §13), and its
+ * templates (§15) — by activity or template id, from their first write;
+ * their mode's defaults before it.
  */
 const STORED = new Map<string, SettingsRow>();
 
@@ -390,49 +393,88 @@ function columnFacts(roomId: string, kind: string, activityId: string): { mode: 
   throw new MockPayload(404, { error: "not_found", message: "Not found" });
 }
 
-/** An activity's column settings, from the draft on: the book's column itself, else the stored row or its mode's defaults; `stored` once written. */
+/** A column the book does not draw: its stored row, or its mode's defaults (`stored` false) until the first write. */
+function storedOr(id: string, mode: GradebookColumn["mode"]): { row: SettingsRow; stored: boolean } {
+  const row = STORED.get(id);
+  return { row: row ?? { weight: WEIGHT_DEFAULT, counts: countsByDefault(mode), componentId: null }, stored: row !== undefined };
+}
+
+/** An activity's column settings, from the draft on: the book's column itself, else `storedOr`. */
 function settingsOf(roomId: string, book: MockBook, kind: string, activityId: string): { row: SettingsRow; released: boolean; stored: boolean } {
   const column = book.columns.find((c) => c.activityId === activityId);
   if (column) return { row: column, released: column.released, stored: true };
   const facts = columnFacts(roomId, kind, activityId);
-  const row = STORED.get(activityId);
-  return {
-    row: row ?? { weight: WEIGHT_DEFAULT, counts: countsByDefault(facts.mode), componentId: null },
-    released: facts.released,
-    stored: row !== undefined,
-  };
+  return { ...storedOr(activityId, facts.mode), released: facts.released };
+}
+
+/** The read every settings screen takes (`GradebookColumnSettings`). */
+const settingsView = (row: SettingsRow, courseId: string, released: boolean, meanPublished: boolean): GradebookColumnSettings => ({
+  weight: row.weight,
+  counts: row.counts,
+  componentId: row.componentId,
+  released,
+  meanPublished,
+  components: componentList(courseId),
+});
+
+/** One column's write: a component of the course or the 404 of a missing one (ADR-131 §2); the first write materializes the row, as the server's does. */
+function writeColumn(id: string, { row, stored }: { row: SettingsRow; stored: boolean }, patch: Partial<SettingsRow>, courseId: string) {
+  if (patch.componentId && !componentsOf(courseId).some((c) => c.id === patch.componentId)) {
+    throw new MockPayload(404, { error: "not_found", message: "Component not found" });
+  }
+  if (patch.weight !== undefined) row.weight = patch.weight;
+  if (patch.counts !== undefined) row.counts = patch.counts;
+  if (patch.componentId !== undefined) row.componentId = patch.componentId;
+  if (!stored) STORED.set(id, row);
 }
 
 on("GET", "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId", (m) => {
   const { room, book } = staffBook(m.groups!.id!);
   const { row, released } = settingsOf(room.id, book, m.groups!.kind!, m.groups!.activityId!);
-  return {
-    weight: row.weight,
-    counts: row.counts,
-    componentId: row.componentId,
-    released,
-    meanPublished: book.meanPublished,
-    components: componentList(room.courseId),
-  } satisfies GradebookColumnSettings;
+  return settingsView(row, room.courseId, released, book.meanPublished);
 });
 
 on("PATCH", "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId", (m, raw) => {
   const { room, book } = staffBook(m.groups!.id!);
   writable(room);
   const activityId = m.groups!.activityId!;
-  const { row, stored } = settingsOf(room.id, book, m.groups!.kind!, activityId);
-  const patch = parsed(GradebookColumnPatch, raw);
-  // Another course's component is the 404 of a missing one (ADR-131 §2).
-  if (patch.componentId && !componentsOf(room.courseId).some((c) => c.id === patch.componentId)) {
-    throw new MockPayload(404, { error: "not_found", message: "Component not found" });
-  }
-  if (patch.weight !== undefined) row.weight = patch.weight;
-  if (patch.counts !== undefined) row.counts = patch.counts;
-  if (patch.componentId !== undefined) row.componentId = patch.componentId;
-  // The first write materializes the row, as the server's does.
-  if (!stored) STORED.set(activityId, row);
+  const settings = settingsOf(room.id, book, m.groups!.kind!, activityId);
+  writeColumn(activityId, settings, parsed(GradebookColumnPatch, raw), room.courseId);
   return staffTable(room, book);
 });
+
+/** A template's column (ADR-131 §15): its course and its mode; a student, or a template not found, is a 404. */
+function templateColumn(id: string) {
+  if (role === "student") throw new MockPayload(404, { error: "not_found", message: "Not found" });
+  const template = templateOr404(id);
+  return { courseId: template.courseId, ...storedOr(id, evaluationColumnKind(template.shell.mode)) };
+}
+
+// A template is never released and has no mean: the screens' questions stay quiet.
+on("GET", "/app/api/templates/:id/gradebook", (m) => {
+  const { courseId, row } = templateColumn(m.groups!.id!);
+  return settingsView(row, courseId, false, false);
+});
+
+on("PATCH", "/app/api/templates/:id/gradebook", (m, raw) => {
+  const id = m.groups!.id!;
+  const { courseId, ...settings } = templateColumn(id);
+  writeColumn(id, settings, parsed(GradebookTemplateColumnPatch, raw), courseId);
+  return settingsView(settings.row, courseId, false, false);
+});
+
+/*
+ * What a copy carries (ADR-131 §13, §15): an instance its template's
+ * settings, a template saved from an evaluation the evaluation's, a
+ * duplicate its source's; nothing into an archived classroom. Called by
+ * `evaluation.ts`, which cannot import this file.
+ */
+columnSettingsCopy.of = (from, to) => {
+  const row = STORED.get(from);
+  const target = findEvaluation(to);
+  if (!row || rooms.find((r) => r.id === target?.classroomId)?.archivedAt) return;
+  STORED.set(to, { ...row });
+};
 
 on("PUT", "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId/marks/:eid", (m, raw) => {
   const { room, book } = staffBook(m.groups!.id!);

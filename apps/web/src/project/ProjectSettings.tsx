@@ -84,7 +84,7 @@ export function ProtectedFilesRow({
  */
 export function projectGradebookRow(project: ProjectDetail): ReactNode {
   if (!projectHasColumn(project)) return null;
-  return <GradebookSettingRow classroomId={project.classroomId} kind="project" activityId={project.id} title={project.name} />;
+  return <GradebookSettingRow home={{ classroomId: project.classroomId, kind: "project", activityId: project.id }} title={project.name} />;
 }
 
 /**

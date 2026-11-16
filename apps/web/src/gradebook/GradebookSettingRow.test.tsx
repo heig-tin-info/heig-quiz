@@ -59,7 +59,7 @@ function renderRow(read: GradebookColumnSettings | RouteHandler, extra: Record<s
     [`GET /app/api/classrooms/${ROOM}`]: ok(makeClassroomDetail({ id: ROOM, archivedAt: archived ? "2026-01-01T00:00:00.000Z" : null })),
     ...extra,
   });
-  renderWithProviders(<GradebookSettingRow classroomId={ROOM} kind="evaluation" activityId={ACTIVITY} title="Test 1" />, {
+  renderWithProviders(<GradebookSettingRow home={{ classroomId: ROOM, kind: "evaluation", activityId: ACTIVITY }} title="Test 1" />, {
     queryClient: makeQueryClient(),
   });
   return fetched;

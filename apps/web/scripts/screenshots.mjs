@@ -243,6 +243,16 @@ const scenes = [
       await p.getByRole("tab", { name: /^(settings|réglages)$/i }).click();
       await p.getByRole("button", { name: /^(advanced options|options avancées)$/i }).click();
     } },
+  // ADR-131 §15: the template's Gradebook row, on a course with components, and its dialog.
+  { name: "template-editor-gradebook", role: "teacher", path: "/courses/c1/templates?components=1", act: async (p) => {
+      await openTemplate(p);
+      await p.getByRole("tab", { name: /^(settings|réglages)$/i }).click();
+    } },
+  { name: "template-editor-gradebook-edit", role: "teacher", path: "/courses/c1/templates?components=1", fold: true, act: async (p) => {
+      await openTemplate(p);
+      await p.getByRole("tab", { name: /^(settings|réglages)$/i }).click();
+      await p.getByRole("button", { name: /^(edit|modifier)$/i }).first().click();
+    } },
   { name: "template-editor-picker", role: "teacher", path: "/courses/c1/templates", fold: true, act: async (p) => {
       await openTemplate(p);
       await p.getByRole("button", { name: /^(add questions|ajouter des questions)$/i }).first().click();

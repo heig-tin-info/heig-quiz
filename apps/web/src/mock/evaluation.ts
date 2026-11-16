@@ -1447,6 +1447,7 @@ on("POST", "/app/api/evaluations/:id/duplicate", (m, body) => {
     mode: e.mode,
   });
   evaluations.push(copy);
+  columnSettingsCopy.of(e.id, copy.id);
   return toEvaluation(copy);
 });
 
@@ -1464,6 +1465,13 @@ interface MockTemplate {
 }
 
 const templates: MockTemplate[] = [];
+
+/**
+ * A column's settings carried from one evaluation or template to its copy
+ * (ADR-131 §13, §15), by id: `gradebook.ts` keeps them and sets this, since
+ * it imports this file and not the other way round.
+ */
+export const columnSettingsCopy = { of: (_from: string, _to: string): void => undefined };
 templateCount.of = (courseId) => templates.filter((x) => x.courseId === courseId).length;
 
 function makeTemplate(courseId: string, source: MockEvaluation): MockTemplate {
@@ -1576,6 +1584,7 @@ on("POST", "/app/api/evaluations/:id/template", (m, body) => {
   const created = makeTemplate(roomOr404(e.classroomId).courseId, { ...e, title: String(body.title) });
   created.shell.createdAt = iso(0);
   templates.unshift(created);
+  columnSettingsCopy.of(e.id, created.id);
   return templateSummary(created);
 });
 on("DELETE", "/app/api/templates/:id", (m) => {
@@ -1614,6 +1623,7 @@ on("POST", "/app/api/templates/:id/instances", (m, body) => {
   const room = roomOr404(String(body.classroomId));
   if (room.courseId !== template.courseId) throw new MockError(404, "Classroom not found");
   const made = instantiate(template, room.id, String(body.title ?? template.shell.title));
+  columnSettingsCopy.of(template.id, made.id);
   return { evaluation: toEvaluation(made), deprecatedItems: [] };
 });
 

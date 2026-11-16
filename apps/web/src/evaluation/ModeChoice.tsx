@@ -61,12 +61,15 @@ export function ModeControl({
   changeable,
   scheduled = false,
   patch,
+  onChanged,
 }: {
   config: ConfigView;
   changeable: boolean;
   /** Students already see this evaluation with its mode: ask before changing it. */
   scheduled?: boolean;
   patch: ConfigPatch;
+  /** Once the new mode is saved: the Gradebook row reads its column again, whose defaults are the mode's (ADR-131 §13, §15). */
+  onChanged?: () => void;
 }) {
   const t = useT();
   const confirm = useConfirm();
@@ -96,7 +99,7 @@ export function ModeControl({
     ) {
       return;
     }
-    patch.mutate({ mode: next });
+    patch.mutate({ mode: next }, onChanged ? { onSuccess: onChanged } : undefined);
   };
 
   return (
