@@ -42,6 +42,7 @@ import {
   ProjectRepoScores,
   ProjectSummary,
   StudentProject,
+  GradebookComponents,
   GradebookErrorCode,
   GradebookStaff,
   GroupConsequences,
@@ -478,6 +479,29 @@ describe("the mock's gradebook (M5-04)", () => {
     expect(t.archived).toBe(true);
     const refused = await send(`/app/api/classrooms/${ARCHIVED_ROOM}/gradebook`, "PATCH", { meanPublished: true });
     expect([refused.status, refusal(refused.body)]).toEqual([409, "classroom_archived"]);
+  });
+
+  it("keeps the course's components of the mean (ADR-131): a name taken refused, a column filed, one in use kept, the mean of the component", async () => {
+    const base = `/app/api/courses/${courses[0]!.id}/gradebook/components`;
+    const created = await send(base, "POST", { name: "Cours", weight: 60 });
+    const [cours] = GradebookComponents.parse(created.body);
+    expect(cours).toMatchObject({ name: "Cours", weight: 60, inUse: false });
+    const taken = await send(base, "POST", { name: "cours" });
+    expect([taken.status, refusal(taken.body)]).toEqual([409, "component_name_taken"]);
+
+    const t = await table();
+    const column = t.columns.find((c) => c.released && c.mode === "exam" && c.counts)!;
+    const path = `/app/api/classrooms/${t.classroomId}/gradebook/columns/${column.kind}/${column.activityId}`;
+    const filed = (await send(path, "PATCH", { counts: true, componentId: cours!.id })).body as GradebookStaff;
+    expect(issuesOf(GradebookStaff, filed)).toEqual([]);
+    expect(filed.components.map((c) => c.id)).toEqual([cours!.id]);
+    // The filed column alone counts now: each student's mean is their mean of its component.
+    for (const row of filed.rows) expect(row.mean).toBe(row.componentMeans[cours!.id] ?? null);
+
+    const busy = await send(`${base}/${cours!.id}`, "DELETE");
+    expect([busy.status, refusal(busy.body)]).toEqual([409, "component_in_use"]);
+    await send(path, "PATCH", { componentId: null });
+    expect(GradebookComponents.parse((await send(`${base}/${cours!.id}`, "DELETE")).body)).toEqual([]);
   });
 });
 

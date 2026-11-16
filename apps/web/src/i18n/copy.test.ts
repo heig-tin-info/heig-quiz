@@ -52,6 +52,8 @@ const SUBTEXT = ["desc", "hint", "help"];
 
 /** The keys that speak of an account's identity and its end (ADR-117): the glossary's anonymized and dormant hold there. */
 const ACCOUNT_KEY = /^(account|admin\.inactive)\./;
+/** The keys that speak of the components of the mean (ADR-131): the glossary's component holds there. */
+const COMPONENT_KEY = /[Cc]omponent/;
 
 const BOTH: Lang[] = ["fr", "en"];
 const FR: Lang[] = ["fr"];
@@ -94,6 +96,9 @@ const RULES: Rule[] = [
   { name: "word-gele", langs: FR, fix: "figé", test: has(/\bgelée?s?\b/i) },
   { name: "word-soumettre", langs: FR, fix: "rendre", test: has(/\bsoum(ettre|is|ise|ission)/i) },
   { name: "word-codespace", langs: BOTH, fix: "workspace, espace de travail; codespace is an internal word", test: has(/\bcodespaces?\b/i) },
+  // A component of the mean (ADR-131): never a group, which is the students' (ADR-070), nor a category, which is a pool's.
+  { name: "word-component", langs: FR, fix: "composante", test: (t, k) => COMPONENT_KEY.test(k) && has(/\b(groupes?|catégories?)\b/i)(t) },
+  { name: "word-component", langs: EN, fix: "component", test: (t, k) => COMPONENT_KEY.test(k) && has(/\b(groups?|categor(y|ies))\b/i)(t) },
   // An account's end (ADR-117): anonymized, never deleted; dormant, never archived (a classroom's state).
   { name: "word-account-deleted", langs: FR, fix: "anonymisé: the results stay, only the identity leaves", test: (t, k) => ACCOUNT_KEY.test(k) && has(/supprim/i)(t) },
   { name: "word-account-deleted", langs: EN, fix: "anonymized: the results stay, only the identity leaves", test: (t, k) => ACCOUNT_KEY.test(k) && has(/\bdelet/i)(t) },

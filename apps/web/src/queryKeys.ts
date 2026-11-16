@@ -181,6 +181,8 @@ export const groupSetKey = (id: string) => [...groupSetsKey, "set", id] as const
 export const gradebookRootKey = ["gradebook"] as const;
 export const classroomGradebookKey = (classroomId: string) => [...gradebookRootKey, "staff", classroomId] as const;
 export const studentGradebookKey = (classroomId: string) => [...gradebookRootKey, "student", classroomId] as const;
+/** A course's components of the mean (ADR-131): under the same root, so a component's `gradebook` hint refreshes the list too. */
+export const courseComponentsKey = (courseId: string) => [...gradebookRootKey, "components", courseId] as const;
 /** The caller's GitHub account link (F-GH-05): under `meKey`, refreshed with the session. */
 export const meGithubKey = ["me", "github"] as const;
 /** Both payloads of a classroom's journal: what a create, a use or a removal invalidates. */

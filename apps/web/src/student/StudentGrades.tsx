@@ -12,6 +12,8 @@
  * Inside a classroom, the rows that count toward the mean ("Count toward
  * your average") come before the others ("Indicative"), whose grades are
  * indicative (`CountsGroups`, #803): the server's effective `counts` decides.
+ * A row that counts in a component of the mean names it in its caption
+ * (ADR-131 §11); no sub-group and no mean here.
  *
  * The four decisions:
  *   - Type: the classroom's name is the 16 px title of its section, each
@@ -164,8 +166,9 @@ function GradeTable({ rows, open }: { rows: GradeRow[]; open: Opener }) {
               <td className={T.td}>
                 <span className="font-semibold">{row.title}</span>
                 {/* Where the kind and the date columns have left, they ride
-                    under the title. */}
+                    under the title; the component it counts in always does. */}
                 <span className="mt-0.5 block text-fg-muted @2xl:hidden">{caption(row, t)}</span>
+                {row.component === null ? null : <span className="mt-0.5 hidden text-fg-muted @2xl:block">{row.component}</span>}
               </td>
               <td className={cx(T.td, T.colMid, "text-fg-muted")}>{kindOf(row, t)}</td>
               <td className={cx(T.td, T.colHigh, "tabular-nums text-fg-muted")}>{dateOf(row)}</td>
@@ -246,8 +249,9 @@ const keyOf = (row: GradeRow) => (row.kind === "evaluation" ? row.evaluationId :
 const kindOf = (row: GradeRow, t: TFunction) =>
   t(row.kind === "evaluation" ? MODE_KEY[row.mode] : "sgrades.kind.project");
 
-/** Kind and date, the line under the title where their columns are gone. */
-const caption = (row: GradeRow, t: TFunction) => `${kindOf(row, t)} · ${dateOf(row)}`;
+/** Kind and date, the line under the title where their columns are gone, and the component of the mean the row counts in (ADR-131 §11). */
+const caption = (row: GradeRow, t: TFunction) =>
+  [kindOf(row, t), dateOf(row), row.component].filter((part) => part !== null).join(" · ");
 
 function Points({ row }: { row: GradeRow }) {
   return row.score ? (

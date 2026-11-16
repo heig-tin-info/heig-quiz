@@ -27,7 +27,18 @@
  * The secondary actions are menus: one per cell (absent, excused, a score, clear) and
  * one per column (weight, counts in the mean). A mark over a real grade
  * answers `409 grade_exists`; the tab then asks, and sends it again with
- * `override: true`.
+ * `override: true`. A column's setting that moves the means students read
+ * now — a released column, the mean published — asks first.
+ *
+ * Components of the mean (ADR-131), when the course has some: a column's
+ * head names its component under the title, and its one control, "Counts
+ * in", lives in the column's settings dialog, which the head opens directly
+ * (no menu: there would be nothing else in it). A column that counts in no
+ * component counts in no mean: its head wears the warning sign, and one line
+ * above the matrix counts such columns. One mean column per component stands
+ * between the grades and the mean, each student's mean of it, its weight in
+ * its head and its class mean in the footer. Without components, none of it
+ * is drawn: the same code, an empty list.
  */
 import {
   ChevronDown,
@@ -44,8 +55,17 @@ import {
 } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-import type { GradebookColumn, GradebookMarkPut, GradebookStaff, GradebookStaffCell, GradebookStaffRow } from "@quiz/contracts";
+import type {
+  GradebookColumn,
+  GradebookColumnPatch,
+  GradebookMarkPut,
+  GradebookStaff,
+  GradebookStaffCell,
+  GradebookStaffRow,
+} from "@quiz/contracts";
+import { countsInMean } from "@quiz/domain";
 
+import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import {
   Card,
@@ -62,7 +82,7 @@ import {
   Tip,
 } from "../ui";
 import { useStaffGradebook } from "./api";
-import { ScoreDialog, WeightDialog } from "./dialogs";
+import { ColumnDialog, ScoreDialog } from "./dialogs";
 import { AbsentSigil, ExcusedSigil, fullName, GradeOrDash, MODE_LABEL } from "./cells";
 import { useMarkWrites } from "./useMarkWrites";
 
@@ -88,17 +108,19 @@ const MEAN_PIN = `${MEAN_STICK} @2xl:border-l @2xl:border-line`;
  */
 const HEAD_HEIGHT = "h-[246px]";
 const BAND = "absolute inset-x-0 top-0 bottom-14 origin-bottom-left -skew-x-30";
-/** A grade column's width (`w-14`) and the mean's (`w-30`), in px, for `studentWidth`. */
+/** A grade column's width (`w-14`), a component's mean's (`w-24`) and the mean's (`w-30`), in px, for `studentWidth`. */
 const GRADE_PX = 56;
+const COMPONENT_PX = 96;
 const MEAN_PX = 120;
 
 /**
  * The student column: a third of the card, so the grades do not start flush
- * against the mean; less when the grade columns need the room, down to the
- * width of the names (a cell is never narrower than its content).
+ * against the mean; less when the grade and component columns need the
+ * room, down to the width of the names (a cell is never narrower than its
+ * content).
  */
-const studentWidth = (columns: number): string =>
-  `max(0px, min(33cqw, calc(100cqw - ${columns * GRADE_PX + MEAN_PX}px)))`;
+const studentWidth = (columns: number, components: number): string =>
+  `max(0px, min(33cqw, calc(100cqw - ${columns * GRADE_PX + components * COMPONENT_PX + MEAN_PX}px)))`;
 
 /** Centred on the band's axis: 18 px up the band (10 + half the line) is 10.4 px to the right at 60°. */
 const SLANT_LABEL =
@@ -107,8 +129,17 @@ const SLANT_LABEL =
 /** A grade cell: `T.td` with the side padding cut to 4 px, so a column is no wider than its grade; a hairline on its left. */
 const GRADE_TD = cx(T.td, "!px-1 border-l border-line text-center");
 
-/** The empty cell between the last grade and the mean: it takes what the card has left. */
+/** The empty cell between the last grade and the means: it takes what the card has left. */
 const SPACER_TD = "border-l border-line p-0";
+
+/** A component's mean, as the mean is written but not pinned: it scrolls with the grades. */
+const MEAN_TD = cx(T.td, "text-right font-semibold tabular-nums");
+
+/** A column head's trigger: its menu's, or the settings dialog's on a course with components. */
+const HEAD_TRIGGER = "flex rounded-field px-1 py-0.5 transition-colors hover:bg-surface-3";
+
+/** What a column's head opens: the menu of its settings, the settings dialog itself, or nothing (an archived classroom). */
+type HeadControl = { items: MenuItem[] } | { open: () => void } | null;
 
 /** Where a column's unreleased state tints its cells. */
 const UNRELEASED_FILL = "bg-surface-2/50";
@@ -141,15 +172,54 @@ export function StaffGradebook({ classroomId }: { classroomId: string }) {
   return <Matrix classroomId={classroomId} data={table.data} />;
 }
 
-/** What a cell is being asked: a score over `row` in `column`, or a column's weight. */
-type Dialog = { kind: "score"; row: GradebookStaffRow; column: GradebookColumn } | { kind: "weight"; column: GradebookColumn };
+/** What a cell is being asked: a score over `row` in `column`, or a column's settings. */
+type Dialog = { kind: "score"; row: GradebookStaffRow; column: GradebookColumn } | { kind: "column"; column: GradebookColumn };
+
+/** Where a column counts, as its head says it on a course with components: its component's name, nowhere (the warning), or not at all. */
+type Placement = { kind: "in"; name: string } | { kind: "none" } | { kind: "out" };
 
 function Matrix({ classroomId, data }: { classroomId: string; data: GradebookStaff }) {
   const t = useT();
+  const confirm = useConfirm();
   const marks = useMarkWrites(classroomId);
   const { writes, attempt } = marks;
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const readOnly = data.archived;
+  const components = data.components;
+  const hasComponents = components.length > 0;
+  /** The column's head's word on where it counts; undefined on a course without components. */
+  const placement = (column: GradebookColumn): Placement | undefined => {
+    if (!hasComponents) return undefined;
+    if (!column.counts) return { kind: "out" };
+    const component = components.find((c) => c.id === column.componentId);
+    return component ? { kind: "in", name: component.name } : { kind: "none" };
+  };
+  /** Counted, in no component: in no mean (ADR-131 §4). */
+  const inNoMean = data.columns.filter((column) => column.counts && !countsInMean(column.counts, column.componentId, hasComponents));
+
+  /**
+   * A column's write. One that moves the means students read now — a
+   * released column that counts before or after it, the mean published —
+   * asks first; nothing else does.
+   */
+  const patchColumn = async (column: GradebookColumn, patch: GradebookColumnPatch): Promise<boolean> => {
+    const after = { counts: patch.counts ?? column.counts, componentId: patch.componentId === undefined ? column.componentId : patch.componentId };
+    const live =
+      column.released &&
+      data.meanPublished &&
+      (countsInMean(column.counts, column.componentId, hasComponents) || countsInMean(after.counts, after.componentId, hasComponents));
+    if (
+      live &&
+      !(await confirm({
+        title: t("gbook.liveMean.title"),
+        message: t("gbook.liveMean.body", { column: column.title }),
+        confirmLabel: t("gbook.liveMean.confirm"),
+      }))
+    ) {
+      return false;
+    }
+    return attempt(() => writes.patchColumn(column, patch));
+  };
   /*
    * The exercises left out of the mean are practice, and a classroom has
    * many: folded away by default, a switch away, never persisted. Exercises
@@ -188,10 +258,13 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
     {
       label: t(column.counts ? "gbook.column.uncount" : "gbook.column.count"),
       icon: column.counts ? CircleMinus : CirclePlus,
-      onSelect: () => void attempt(() => writes.patchColumn(column, { counts: !column.counts })),
+      onSelect: () => void patchColumn(column, { counts: !column.counts }),
     },
-    { label: t("gbook.column.weight"), icon: Scale, onSelect: () => setDialog({ kind: "weight", column }) },
+    { label: t("gbook.column.weight"), icon: Scale, onSelect: () => setDialog({ kind: "column", column }) },
   ];
+  /** What a head opens: its menu, or — on a course with components, where "Counts in" is the dialog's — the dialog itself. */
+  const columnControl = (column: GradebookColumn): HeadControl =>
+    readOnly ? null : hasComponents ? { open: () => setDialog({ kind: "column", column }) } : { items: columnItems(column) };
 
   if (data.columns.length === 0 || data.rows.length === 0) {
     return (
@@ -222,6 +295,12 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
           <Switch checked={showExercises} label={t("gbook.exercises.show")} onChange={setShowExercises} />
         </SettingRow>
       ) : null}
+      {inNoMean.length > 0 ? (
+        <p className="flex items-start gap-1.5 text-[13px] text-fg-muted">
+          <TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0 text-warning" />
+          {inNoMean.length === 1 ? t("gbook.noComponent.count.one") : t("gbook.noComponent.count", { n: inNoMean.length })}
+        </p>
+      ) : null}
 
       {/* `relative`: the sr-only spans of the cells are absolute, and would otherwise lay out past the scroller, on the page. */}
       <Card className={cx(T.container, "relative overflow-x-auto")}>
@@ -231,7 +310,7 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
               <th
                 scope="col"
                 className={cx(T.th, HEAD_HEIGHT, "sticky left-0 z-10 min-w-36 bg-surface align-bottom")}
-                style={{ width: studentWidth(columns.length) }}
+                style={{ width: studentWidth(columns.length, components.length) }}
               >
                 {/* Its slanted edge covers the heads that scroll under it, tops included. */}
                 <span aria-hidden className={cx(BAND, "bg-surface")} />
@@ -252,7 +331,7 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                     onBlur={dim}
                   >
                     <span aria-hidden className={cx(BAND, "pointer-events-auto border-l border-line", fill)} />
-                    <ColumnHead column={column} items={readOnly ? null : columnItems(column)} fill={fill} />
+                    <ColumnHead column={column} control={columnControl(column)} placement={placement(column)} fill={fill} />
                   </th>
                 );
               })}
@@ -261,22 +340,21 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                 <span className={cx(BAND, "border-l border-line")} />
                 <span className="absolute inset-x-0 bottom-0 h-14 border-l border-line" />
               </td>
-              {/*
-               * No straight left border nor flat fill above the weights: either
-               * would cut the last title where it leans over this column. Its
-               * own band and a foot carry the fill once it is pinned; the
-               * cell clips the band, which would otherwise widen the scroller.
-               */}
-              <th
-                scope="col"
-                className={cx(T.th, HEAD_HEIGHT, "relative w-30 min-w-30 overflow-hidden text-right align-bottom", MEAN_STICK)}
-              >
-                <span aria-hidden className={cx(BAND, "border-l border-line @2xl:bg-surface")} />
-                <span aria-hidden className="absolute inset-x-0 bottom-0 h-14 border-l border-line @2xl:bg-surface" />
-                <Tip label={t("gbook.mean.help")} className="relative inline-flex">
-                  <span>{t("gbook.col.mean")}</span>
-                </Tip>
-              </th>
+              {components.map((component) => (
+                <MeanHead
+                  key={component.id}
+                  label={component.name}
+                  weight={t("gbook.weightShort", { weight: String(component.weight) })}
+                  help={t("gbook.componentMean.help", { name: component.name, weight: String(component.weight) })}
+                  className="w-24 min-w-24"
+                />
+              ))}
+              <MeanHead
+                label={t("gbook.col.mean")}
+                help={t(hasComponents ? "gbook.mean.componentsHelp" : "gbook.mean.help")}
+                className="w-30 min-w-30"
+                pinned
+              />
             </tr>
           </thead>
           <tbody>
@@ -308,6 +386,11 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                   );
                 })}
                 <td aria-hidden className={SPACER_TD} />
+                {components.map((component) => (
+                  <td key={component.id} className={MEAN_TD}>
+                    <GradeOrDash value={row.componentMeans[component.id] ?? null} />
+                  </td>
+                ))}
                 <td
                   className={cx(T.td, "text-right font-semibold tabular-nums", MEAN_PIN, "@2xl:bg-surface @2xl:group-hover:bg-surface-2")}
                 >
@@ -329,6 +412,11 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                 </td>
               ))}
               <td aria-hidden className={SPACER_TD} />
+              {components.map((component) => (
+                <td key={component.id} className={MEAN_TD}>
+                  <GradeOrDash value={component.classMean} />
+                </td>
+              ))}
               <td className={cx(T.td, "text-right font-semibold tabular-nums", MEAN_PIN, "@2xl:bg-surface-2")}>
                 <GradeOrDash value={data.classMean} />
               </td>
@@ -350,13 +438,14 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
           }}
         />
       ) : null}
-      {dialog?.kind === "weight" ? (
-        <WeightDialog
+      {dialog?.kind === "column" ? (
+        <ColumnDialog
           column={dialog.column}
+          components={components}
           submitting={writes.pending}
           onClose={() => setDialog(null)}
-          onSubmit={async (weight) => {
-            if (await attempt(() => writes.patchColumn(dialog.column, { weight }))) setDialog(null);
+          onSubmit={async (patch) => {
+            if (patch === null || (await patchColumn(dialog.column, patch))) setDialog(null);
           }}
         />
       ) : null}
@@ -376,21 +465,63 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
  * column, so the weights stand on one line — then the weight, the one figure
  * a teacher compares across columns. The title is inside the menu's trigger:
  * pointing at it or clicking it is the same as on the weight.
+ *
+ * On a course with components (`placement`), a line above the weight says
+ * where the column counts: its component's name, cut to the column's width
+ * (whole in the tooltip and the accessible name), or the warning sign of a
+ * column counted in no component; empty for one that does not count, so the
+ * eye-offs stay on one line.
  */
-function ColumnHead({ column, items, fill }: { column: GradebookColumn; items: MenuItem[] | null; fill: string }) {
+function ColumnHead({
+  column,
+  control,
+  placement,
+  fill,
+}: {
+  column: GradebookColumn;
+  control: HeadControl;
+  placement: Placement | undefined;
+  fill: string;
+}) {
   const t = useT();
   const kind = t(MODE_LABEL[column.mode]);
-  // The tooltip is inside the menu's trigger: `Tip` stays shut while the
-  // panel of a trigger around it is open.
-  const head = (
-    <Tip label={`${column.title} · ${kind}`} className="flex items-center gap-0.5 text-[11px] font-normal text-fg-muted">
-      <ScrollingTitle key={column.title} className={cx(SLANT_LABEL, column.released ? "font-semibold text-fg" : "font-medium italic text-fg-muted")}>
-        {column.title} <span className="sr-only">({kind})</span>
-      </ScrollingTitle>
+  const where =
+    placement?.kind === "in" ? t("gbook.head.in", { name: placement.name }) : placement?.kind === "none" ? t("gbook.noComponent.help") : null;
+  const weight = (
+    <>
       <span className="text-center leading-tight">
         {t(column.counts ? "gbook.weightShort" : "gbook.notCounted", { weight: String(column.weight) })}
       </span>
-      {items ? <ChevronDown aria-hidden className="size-3 shrink-0 text-fg-faint" /> : null}
+      {control ? <ChevronDown aria-hidden className="size-3 shrink-0 text-fg-faint" /> : null}
+    </>
+  );
+  // The tooltip is inside the menu's trigger: `Tip` stays shut while the
+  // panel of a trigger around it is open.
+  const head = (
+    <Tip
+      label={[column.title, kind, where].filter(Boolean).join(" · ")}
+      className={cx("flex items-center gap-0.5 text-[11px] font-normal text-fg-muted", placement && "flex-col")}
+    >
+      <ScrollingTitle key={column.title} className={cx(SLANT_LABEL, column.released ? "font-semibold text-fg" : "font-medium italic text-fg-muted")}>
+        {column.title} <span className="sr-only">({kind})</span>
+      </ScrollingTitle>
+      {placement ? (
+        <>
+          <span className="flex h-3.5 max-w-12 items-center">
+            {placement.kind === "in" ? (
+              <span aria-hidden className="truncate leading-tight">
+                {placement.name}
+              </span>
+            ) : placement.kind === "none" ? (
+              <TriangleAlert aria-hidden className="size-3 text-warning" />
+            ) : null}
+            {where ? <span className="sr-only">{where}</span> : null}
+          </span>
+          <span className="flex items-center gap-0.5">{weight}</span>
+        </>
+      ) : (
+        weight
+      )}
     </Tip>
   );
   return (
@@ -403,21 +534,61 @@ function ColumnHead({ column, items, fill }: { column: GradebookColumn; items: M
           <span className="sr-only">{t("gbook.unreleased")}</span>
         </Tip>
       )}
-      {items ? (
+      {control === null ? (
+        head
+      ) : "items" in control ? (
         <Menu
           align="start"
           label={t("gbook.column.menu", { column: column.title })}
-          items={items}
+          items={control.items}
           trigger={
-            <button type="button" className="flex rounded-field px-1 py-0.5 transition-colors hover:bg-surface-3">
+            <button type="button" className={HEAD_TRIGGER}>
               {head}
             </button>
           }
         />
       ) : (
-        head
+        <button type="button" aria-haspopup="dialog" className={HEAD_TRIGGER} onClick={control.open}>
+          {head}
+        </button>
       )}
     </div>
+  );
+}
+
+/**
+ * The head of a mean's column: a component's (its name, its weight under it)
+ * or the overall mean's, which is pinned from `@2xl`. No straight left
+ * border nor flat fill above the weights: either would cut the last title
+ * where it leans over this column. Its own band and a foot carry the fill
+ * once it is pinned; the cell clips the band, which would otherwise widen
+ * the scroller.
+ */
+function MeanHead({
+  label,
+  weight,
+  help,
+  className,
+  pinned = false,
+}: {
+  label: string;
+  /** A component's weight, under its name. */
+  weight?: string;
+  help: string;
+  /** Its width. */
+  className: string;
+  pinned?: boolean;
+}) {
+  const fill = pinned ? "@2xl:bg-surface" : undefined;
+  return (
+    <th scope="col" className={cx(T.th, HEAD_HEIGHT, "relative overflow-hidden text-right align-bottom", className, pinned && MEAN_STICK)}>
+      <span aria-hidden className={cx(BAND, "border-l border-line", fill)} />
+      <span aria-hidden className={cx("absolute inset-x-0 bottom-0 h-14 border-l border-line", fill)} />
+      <Tip label={help} className={cx("relative inline-flex", weight !== undefined && "max-w-full flex-col items-end")}>
+        <span className={weight === undefined ? undefined : "max-w-full truncate"}>{label}</span>
+        {weight === undefined ? null : <span className="text-[11px] font-normal">{weight}</span>}
+      </Tip>
+    </th>
   );
 }
 

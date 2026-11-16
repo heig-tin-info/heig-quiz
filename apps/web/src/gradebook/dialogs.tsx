@@ -1,19 +1,25 @@
 /*
- * The two dialogs of the staff's matrix (F-GBOOK-02, F-GBOOK-06, M5-04): the
- * teacher's own score for one cell, and a column's weight. Each validates what
- * it can before sending (the server decides, with `score_above_max` and its
- * weight range), and hands the body to the matrix, which owns the write.
+ * The dialogs of the staff's matrix (F-GBOOK-02, F-GBOOK-06, M5-04): the
+ * teacher's own score for one cell, and a column's settings in the mean. Each
+ * validates what it can before sending (the server decides, with
+ * `score_above_max` and its weight range), and hands the body to the matrix,
+ * which owns the write.
  */
 import { useState } from "react";
 
-import { GradebookWeight, type GradebookColumn, type GradebookMarkPut, type GradebookStaffCell, type GradebookStaffRow } from "@quiz/contracts";
+import {
+  GradebookWeight,
+  type GradebookColumn,
+  type GradebookColumnPatch,
+  type GradebookMarkPut,
+  type GradebookStaffCell,
+  type GradebookStaffRow,
+} from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Field, FormDialog, Textarea } from "../ui";
 import { fullName } from "./cells";
-
-/** Parses what a person typed in a number field: a comma is a decimal point; anything else is NaN. */
-const numberOf = (text: string): number => (text.trim() === "" ? Number.NaN : Number(text.trim().replace(",", ".")));
+import { ColumnSettingsFields, numberOf, settingsPatch, type ColumnSettings, type ComponentChoice } from "./ColumnSettingsFields";
 
 /** The teacher's own score for one student of one column: points out of a maximum, and a staff-only comment. */
 export function ScoreDialog({
@@ -115,41 +121,40 @@ export function ExcuseDialog({
   );
 }
 
-/** A column's weight in the mean: a whole percentage, 0 to 100, checked by the route's own schema (invariant 7). */
-export function WeightDialog({
+/**
+ * A column's settings in the mean (`ColumnSettingsFields`): its weight, a
+ * whole percentage 0 to 100 checked by the route's own schema (invariant 7),
+ * and, on a course with components of the mean, where it counts (ADR-131).
+ * Without components it is the column's weight dialog, as it always was.
+ * `onSubmit` gets the write, null when nothing changed.
+ */
+export function ColumnDialog({
   column,
+  components,
   submitting,
   onClose,
   onSubmit,
 }: {
   column: GradebookColumn;
+  components: readonly ComponentChoice[];
   submitting: boolean;
   onClose: () => void;
-  onSubmit: (weight: number) => void;
+  onSubmit: (patch: GradebookColumnPatch | null) => void;
 }) {
   const t = useT();
-  const [text, setText] = useState(String(column.weight));
-  const weight = numberOf(text);
+  const before: ColumnSettings = { counts: column.counts, componentId: column.componentId, weight: column.weight };
+  const [settings, setSettings] = useState(before);
   return (
     <FormDialog
-      title={t("gbook.weight.title", { column: column.title })}
+      title={t(components.length > 0 ? "gbook.column.menu" : "gbook.weight.title", { column: column.title })}
       onClose={onClose}
       submitLabel={t("common.save")}
       submitting={submitting}
-      canSubmit={GradebookWeight.safeParse(weight).success}
+      canSubmit={GradebookWeight.safeParse(settings.weight).success}
       dense
-      onSubmit={() => onSubmit(weight)}
+      onSubmit={() => onSubmit(settingsPatch(before, settings))}
     >
-      {/* The rule above the field, not under it: the field is three digits wide, and the sentence would wrap word by word. */}
-      <p className="text-sm text-fg-muted">{t("gbook.weight.hint")}</p>
-      <Field
-        label={t("gbook.weight.label")}
-        inputMode="numeric"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        autoFocus
-        width="w-28"
-      />
+      <ColumnSettingsFields value={settings} components={components} onChange={setSettings} />
     </FormDialog>
   );
 }

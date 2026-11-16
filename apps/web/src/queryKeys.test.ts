@@ -64,6 +64,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["gradebookRootKey", keys.gradebookRootKey, ["gradebook"]],
     ["classroomGradebookKey", keys.classroomGradebookKey("r1"), ["gradebook", "staff", "r1"]],
     ["studentGradebookKey", keys.studentGradebookKey("r1"), ["gradebook", "student", "r1"]],
+    ["courseComponentsKey", keys.courseComponentsKey("c1"), ["gradebook", "components", "c1"]],
     ["projectRunsKey", keys.projectRunsKey("p1", "x1"), ["project", "p1", "repos", "x1", "runs"]],
     ["projectCheckpointsKey", keys.projectCheckpointsKey("p1"), ["project", "p1", "checkpoints"]],
     ["projectCriteriaKey", keys.projectCriteriaKey("p1"), ["project", "p1", "criteria"]],

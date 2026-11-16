@@ -193,6 +193,18 @@ const scenes = [
   { name: "course-settings-no-conditions", role: "teacher", path: "/courses/c2/settings" },
   // An assistant reads the catalog without its controls (owner-only writes).
   { name: "course-settings-assistant", role: "teacher", path: "/courses/c1/settings?assistant=1" },
+  // ADR-131: the components of the mean, a section of the settings — PRG1's
+  // two (`?components=1`), their Add dialog, the first one's question, and
+  // an assistant's reading; PRG1 without any is `course-page-settings`.
+  { name: "course-settings-components", role: "teacher", path: "/courses/c1/settings?components=1" },
+  { name: "course-settings-add-component", role: "teacher", path: "/courses/c1/settings?components=1", fold: true, act: (p) => p.getByRole("button", { name: /^(add component|ajouter une composante)$/i }).first().click() },
+  { name: "course-settings-first-component", role: "teacher", path: "/courses/c1/settings", fold: true, act: async (p) => {
+    await p.getByRole("button", { name: /^(add component|ajouter une composante)$/i }).first().click();
+    await p.getByRole("dialog").getByRole("textbox").first().fill("Labo");
+    await p.getByRole("dialog").getByRole("button", { name: /^(create|créer)$/i }).click();
+    await p.getByRole("dialog", { name: /components of the mean|des composantes/i }).waitFor();
+  } },
+  { name: "course-settings-components-assistant", role: "teacher", path: "/courses/c1/settings?components=1&assistant=1" },
   { name: "course-page-settings", role: "teacher", path: "/courses/c1/settings" },
   { name: "course-page-edit", role: "teacher", path: "/courses/c1/settings", act: (p) => p.getByRole("button", { name: /^(edit|modifier)$/i }).first().click() },
   { name: "course-page-not-found", role: "teacher", path: "/courses/nope" },
@@ -574,6 +586,34 @@ const scenes = [
   },
   { name: "classroom-grades-empty", role: "teacher", path: "/classrooms/r2/grades" },
   { name: "classroom-grades-student", role: "student", path: "/classrooms/r1/grades" },
+  // ADR-131: the same tab on a course with components of the mean
+  // (`?components=1`): each head names its component, a counted column in
+  // none wears the warning (and the line above counts it), a mean per
+  // component before the mean; a column's settings, "Counts in" and the
+  // weight; the student's tab by component, the mean published and not.
+  { name: "classroom-grades-components", role: "teacher", path: "/classrooms/r1/grades?components=1" },
+  {
+    name: "classroom-grades-column-settings",
+    role: "teacher",
+    path: "/classrooms/r1/grades?components=1",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("columnheader").nth(1).getByRole("button").click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    name: "classroom-grades-column-no-component",
+    role: "teacher",
+    path: "/classrooms/r1/grades?components=1",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^Test éclair/ }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
+  { name: "classroom-grades-student-components", role: "student", path: "/classrooms/r1/grades?components=1" },
+  { name: "classroom-grades-student-components-unpublished", role: "student", path: "/classrooms/r1/grades?components=1&unpublished=1" },
   { name: "group-set", role: "teacher", path: `${SET_FINAL}?groups=1&projects=1` },
   { name: "group-set-placed", role: "teacher", path: `${SET_PAIRS}?groups=1&projects=1` },
   { name: "group-set-empty", role: "teacher", path: `${SET_EMPTY}?groups=1` },
@@ -1038,6 +1078,8 @@ const scenes = [
   { name: "student-grades", role: "student", path: "/grades" },
   // A released project's row and an excused one (`?projects=1`), each opening the project's page.
   { name: "student-grades-projects", role: "student", path: "/grades?projects=1" },
+  // ADR-131: a row that counts names its component of the mean (`?components=1`).
+  { name: "student-grades-components", role: "student", path: "/grades?projects=1&components=1" },
   { name: "student-grades-empty", role: "student", path: "/grades?empty=1" },
   { name: "student-grades-error", role: "student", path: "/grades?fail=1", settle: 2500 },
   { name: "student-grades-many", role: "student", path: "/grades?many=1" },

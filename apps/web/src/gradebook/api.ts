@@ -9,9 +9,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   GradebookColumnPatch,
+  GradebookComponentCreate,
+  GradebookComponentPatch,
   GradebookMarkPut,
   GradebookSettingsPatch,
   type GradebookColumn,
+  type GradebookComponents,
   type GradebookErrorCode,
   type GradebookStaff,
   type GradebookStudent,
@@ -19,7 +22,7 @@ import {
 
 import { api, wordedRefusal } from "../api";
 import type { Dict, TFunction } from "../i18n";
-import { classroomGradebookKey, studentGradebookKey } from "../queryKeys";
+import { classroomGradebookKey, courseComponentsKey, gradebookRootKey, studentGradebookKey } from "../queryKeys";
 
 /** `GET /classrooms/:id/gradebook`: the staff's table. */
 export function useStaffGradebook(classroomId: string) {
@@ -83,5 +86,38 @@ export function useGradebookWrites(classroomId: string) {
       run(columnPath(column), "PATCH", GradebookColumnPatch.parse(patch)),
     publishMean: (meanPublished: boolean) =>
       run("", "PATCH", GradebookSettingsPatch.parse({ meanPublished })),
+  };
+}
+
+/** `GET /courses/:id/gradebook/components`: the course's components of the mean, in creation order (ADR-131). */
+export function useCourseComponents(courseId: string) {
+  return useQuery<GradebookComponents>({
+    queryKey: courseComponentsKey(courseId),
+    queryFn: () => api(`/app/api/courses/${courseId}/gradebook/components`),
+  });
+}
+
+/**
+ * The owner's writes of a course's components. Each answers the list, which
+ * replaces the cache; every gradebook of the course may have moved with it
+ * (a weight, a component gone), so the tables are read again.
+ */
+export function useComponentWrites(courseId: string) {
+  const qc = useQueryClient();
+  const base = `/app/api/courses/${courseId}/gradebook/components`;
+  const send = useMutation({
+    mutationFn: ({ path, method, body }: { path: string; method: "POST" | "PATCH" | "DELETE"; body?: unknown }) =>
+      api<GradebookComponents>(`${base}${path}`, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }),
+    onSuccess: (list) => {
+      qc.setQueryData(courseComponentsKey(courseId), list);
+      void qc.invalidateQueries({ queryKey: gradebookRootKey, predicate: (q) => q.queryKey[1] !== "components" });
+    },
+  });
+  return {
+    pending: send.isPending,
+    create: (body: GradebookComponentCreate) => send.mutateAsync({ path: "", method: "POST", body: GradebookComponentCreate.parse(body) }),
+    patch: (id: string, body: GradebookComponentPatch) =>
+      send.mutateAsync({ path: `/${id}`, method: "PATCH", body: GradebookComponentPatch.parse(body) }),
+    remove: (id: string) => send.mutateAsync({ path: `/${id}`, method: "DELETE" }),
   };
 }
