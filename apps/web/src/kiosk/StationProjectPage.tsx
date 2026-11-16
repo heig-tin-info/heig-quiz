@@ -63,6 +63,12 @@ export const PORTAL_RELAUNCH_MS = 4 * 3_600_000 - 10 * 60_000;
 /** How often the page asks whether its session still stands. */
 export const SESSION_CHECK_MS = 60_000;
 
+/**
+ * How long a launch that did not open waits before it is tried again: the
+ * student accepts the project on their own device, and the station opens.
+ */
+export const LAUNCH_RETRY_MS = 10_000;
+
 /** The sandbox of the portal's frame: no top navigation, no popups (§3). */
 export const FRAME_SANDBOX = "allow-scripts allow-same-origin allow-forms allow-modals";
 
@@ -183,7 +189,9 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
  * a fresh attestation, which `guardSubmit` renews once when stale), its
  * `{ url }` in the frame, again `relaunchMs` after each launch. A suspended
  * station launches nothing; the launch waits for the suspension to lift. A
- * refusal the student can read stays on screen; anything else offers a retry.
+ * refusal the student can read stays on screen, anything else offers a
+ * retry; either is tried again every `LAUNCH_RETRY_MS`, its notice up
+ * meanwhile, so a project accepted elsewhere opens by itself.
  */
 function usePortalFrame(
   projectId: string,
@@ -192,26 +200,30 @@ function usePortalFrame(
   relaunchMs: number,
 ) {
   const [state, setState] = useState<Frame>({ kind: "launching", url: null });
-  const launching = state.kind === "launching";
+  // Null on an open frame; a new state (the same refusal again, too) arms the next try.
+  const wait = state.kind === "open" ? null : state.kind === "launching" ? 0 : LAUNCH_RETRY_MS;
 
   useEffect(() => {
-    if (!launching || suspended) return;
+    if (wait === null || suspended) return;
     let alive = true;
-    guardSubmit(() => api<WorkspaceStart>(workspaceStartPath(projectId), { method: "POST" })).then(
-      ({ url }) => {
-        if (alive) setState({ kind: "open", url, at: Date.now() });
-      },
-      (error: unknown) => {
-        // A suspended station: the notice is up, and the launch is tried again once it lifts.
-        if (!alive || refusedWith(error, "kiosk_suspended")) return;
-        const refusal = WorkspaceStartRefusal.safeParse(refusalCodeOf(error));
-        setState(refusal.success ? { kind: "refused", code: refusal.data } : { kind: "failed" });
-      },
-    );
+    const launch = () =>
+      guardSubmit(() => api<WorkspaceStart>(workspaceStartPath(projectId), { method: "POST" })).then(
+        ({ url }) => {
+          if (alive) setState({ kind: "open", url, at: Date.now() });
+        },
+        (error: unknown) => {
+          // A suspended station: the notice is up, and the launch is tried again once it lifts.
+          if (!alive || refusedWith(error, "kiosk_suspended")) return;
+          const refusal = WorkspaceStartRefusal.safeParse(refusalCodeOf(error));
+          setState(refusal.success ? { kind: "refused", code: refusal.data } : { kind: "failed" });
+        },
+      );
+    const timer = setTimeout(() => void launch(), wait);
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
-  }, [launching, suspended, projectId, guardSubmit]);
+  }, [state, wait, suspended, projectId, guardSubmit]);
 
   const openAt = state.kind === "open" ? state.at : null;
   useEffect(() => {

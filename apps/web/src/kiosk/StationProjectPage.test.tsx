@@ -6,7 +6,7 @@ import type { StudentProject } from "@quiz/contracts";
 
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { KIOSK_RETRY_MS } from "./useKioskStation";
-import { StationProjectPage } from "./StationProjectPage";
+import { LAUNCH_RETRY_MS, StationProjectPage } from "./StationProjectPage";
 
 /*
  * ADR-089 §3, §4, §7, §8: a station's project sitting. The bar (the
@@ -140,6 +140,35 @@ describe("the station page of a project", () => {
     renderWithProviders(<StationProjectPage id="p1" />);
     expect(await screen.findByText("The deadline has passed: the workspace no longer opens.")).toBeInTheDocument();
     expect(frame()).toBeNull();
+  });
+
+  it("opens by itself once the student accepted the project elsewhere, the refusal up meanwhile", async () => {
+    let asked = 0;
+    const { calls } = mockFetch({
+      ...STATION,
+      [START]: () => (++asked <= 2 ? fail(409, { error: "not_accepted" }) : ok({ url: PORTAL })),
+    });
+    renderWithProviders(<StationProjectPage id="p1" />);
+    const refusal = "Accept the project first: the workspace opens on your repository.";
+    expect(await screen.findByText(refusal)).toBeInTheDocument();
+    expect(starts(calls)).toBe(1);
+    // Refused again: the notice stays, no spinner in between.
+    await advance(LAUNCH_RETRY_MS);
+    await waitFor(() => expect(starts(calls)).toBe(2));
+    expect(screen.getByText(refusal)).toBeInTheDocument();
+    await advance(LAUNCH_RETRY_MS);
+    await waitFor(() => expect(frame()).toHaveAttribute("src", PORTAL));
+    expect(starts(calls)).toBe(3);
+  });
+
+  it("tries a failed launch again by itself", async () => {
+    let asked = 0;
+    const { calls } = mockFetch({ ...STATION, [START]: () => (++asked === 1 ? fail(502) : ok({ url: PORTAL })) });
+    renderWithProviders(<StationProjectPage id="p1" />);
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+    await advance(LAUNCH_RETRY_MS);
+    await waitFor(() => expect(frame()).toHaveAttribute("src", PORTAL));
+    expect(starts(calls)).toBe(2);
   });
 
   it("offers a retry when the launch failed otherwise", async () => {
