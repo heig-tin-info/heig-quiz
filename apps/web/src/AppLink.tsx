@@ -31,6 +31,7 @@ export function AppLink({
         if (!isPlainClick(e)) return;
         e.preventDefault();
         if (query) navigate(route, { query });
+        // One argument, not `undefined` as a second: callers and tests read the call as `navigate(route)`.
         else navigate(route);
       }}
       className={className}

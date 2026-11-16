@@ -1983,8 +1983,15 @@ describe("the Grading tab", () => {
     expect(within(card).getByText("3 repositories")).toBeInTheDocument();
     // The best mark first, then by name; the count above the bar, the rows below it.
     const rows = within(card).getAllByRole("listitem");
-    expect(rows.map((li) => within(li).getByRole("link").textContent)).toEqual(["Grade EveEve", "Grade BobBob", "Grade DanDan"]);
-    expect(rows.map((li) => li.textContent!.match(/\d\.\d/)![0])).toEqual(["5.8", "5.6", "5.6"]);
+    expect(rows).toHaveLength(3);
+    [
+      ["Grade Eve", "5.8"],
+      ["Grade Bob", "5.6"],
+      ["Grade Dan", "5.6"],
+    ].forEach(([name, grade], i) => {
+      expect(within(rows[i]!).getByRole("link", { name })).toBeInTheDocument();
+      expect(within(rows[i]!).getByText(grade!)).toBeInTheDocument();
+    });
     expect(within(card).getByRole("link", { name: "Grade Eve" })).toHaveAttribute("href", expect.stringContaining(`repo=${repos[3]!.id}`));
 
     await userEvent.keyboard("{Escape}");

@@ -116,7 +116,11 @@ export interface BarDatum {
   detail?: ReactNode;
 }
 
-/** Above this, the bar's card opens upward (`Popover`'s `height`): its header and ten rows. */
+/**
+ * Above this, the bar's card opens upward (`Popover`'s `height`): its
+ * padding, a header and nine rows and a half, the most the grading tab's
+ * card shows (16.5 rem, `BinCard`) before its list scrolls.
+ */
 const DETAIL_HEIGHT = 360;
 
 /**

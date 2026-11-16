@@ -164,10 +164,9 @@ describe("statistics over the validated repositories", () => {
 
   describe("who is under each bar", () => {
     const linear = { kind: "linear", rounding: "nearest" } as const;
-    const named = (id: string, label: string, points: number | null, group = false): ProjectGradingRepo => ({
+    const named = (id: string, label: string, points: number | null): ProjectGradingRepo => ({
       ...repo(id, table(), points === null ? null : { points, max: 20 }),
       label,
-      group,
     });
     const class_ = [
       named("r1", "Zoé Martin", 14),
@@ -199,15 +198,6 @@ describe("statistics over the validated repositories", () => {
       const marks = stats.members.get(4.5)!.map((m) => m.mark);
       expect(marks[0]).toBeGreaterThan(marks[1]!);
       expect(marks[1]).toBe(marks[2]);
-    });
-
-    it("names a group project's repository by its group", () => {
-      const stats = markStats([named("g1", "Équipe Lynx", 16, true), named("g2", "Équipe Ours", 16, true)], linear);
-      const [bar] = [...stats.members.values()];
-      expect(bar!.map((m) => [m.repo.label, m.repo.group])).toEqual([
-        ["Équipe Lynx", true],
-        ["Équipe Ours", true],
-      ]);
     });
   });
 

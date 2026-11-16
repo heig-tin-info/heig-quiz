@@ -216,8 +216,8 @@ export function Popover({
         onKeyDown={(e) => {
           if (e.key !== "Enter" && e.key !== " ") return;
           if (open) {
-            // A hover card the focus opened: the key takes the reader INTO
-            // it, to what it holds, instead of closing it.
+            // An open hover card, however it opened: the key moves the focus
+            // INTO it, to what it holds, instead of closing it; Escape closes.
             if (mode !== "hover" || trap) return;
             e.preventDefault();
             clearTimer();

@@ -11,6 +11,7 @@ import {
 } from "@quiz/domain";
 
 import { pointsKind, type PointsKind } from "../../ui/PointsInput";
+import { caseInsensitiveCompare } from "../../ui/table";
 
 /**
  * The pure rules of the Grading tab's matrix (ADR-106 §8 as amended
@@ -250,9 +251,12 @@ export function markStats(repos: readonly ProjectGradingRepo[], scale: ProjectGr
   const members = new Map<number, BinMember[]>();
   for (const member of counted) {
     const bucket = histogramBucket(member.mark);
-    members.set(bucket, [...(members.get(bucket) ?? []), member]);
+    const list = members.get(bucket);
+    if (list) list.push(member);
+    else members.set(bucket, [member]);
   }
-  for (const list of members.values()) list.sort((a, b) => b.mark - a.mark || a.repo.label.localeCompare(b.repo.label));
+  // Names as a table of people sorts them: regardless of case and accents.
+  for (const list of members.values()) list.sort((a, b) => b.mark - a.mark || caseInsensitiveCompare(a.repo.label, b.repo.label));
   return { description: describe(marks), histogram: histogram(marks), members, passing: marks.filter(isPassing).length };
 }
 

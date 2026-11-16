@@ -3,7 +3,7 @@ import { BarChart3, CheckCheck, ChevronDown, ChevronRight, ClipboardCheck, Clock
 import { useMemo, useState } from "react";
 
 import type { ProjectDetail, ProjectGradingRepo, ProjectGradingView } from "@quiz/contracts";
-import { formatPoints, formatScore, gradeBand, type GradeBand } from "@quiz/domain";
+import { formatPoints, formatScore, type GradeBand } from "@quiz/domain";
 
 import { api } from "../../api";
 import { AppLink } from "../../AppLink";
@@ -11,7 +11,7 @@ import { Grade } from "../../Grade";
 import { useT } from "../../i18n";
 import { projectGradingKey } from "../../queryKeys";
 import { GradeStats } from "../../charts/GradeStats";
-import { bucketLabel, GRADE_BAND_BAR, Histogram } from "../../charts/Histogram";
+import { bucketLabel, bucketTone, GRADE_BAND_BAR, Histogram } from "../../charts/Histogram";
 import { Summary } from "../../charts/Summary";
 import type { Navigate } from "../../router";
 import {
@@ -329,17 +329,17 @@ function BinCard({
   const t = useT();
   const n = members.length;
   return (
-    <div className="space-y-2" data-testid="bin-card">
+    <div className="space-y-2">
       <div className="flex items-center justify-between gap-4 border-b border-line pb-2">
         <span className="inline-flex items-center gap-2 text-sm font-semibold tabular-nums text-fg">
-          <span aria-hidden className={cx("size-2.5 shrink-0 rounded-[3px]", BAR_TONES[GRADE_BAND_BAR[gradeBand(bucket)]])} />
+          <span aria-hidden className={cx("size-2.5 shrink-0 rounded-[3px]", BAR_TONES[bucketTone(bucket)])} />
           {bucketLabel(bucket)}
         </span>
         <span className="text-xs tabular-nums text-fg-muted">
           {t(n === 1 ? "project.matrix.repos.one" : "project.matrix.repos", { n })}
         </span>
       </div>
-      {/* Nine rows and a half: from the tenth the list scrolls inside the card, and the cut row says so. */}
+      {/* Nine rows and a half (`DETAIL_HEIGHT` of `Bars` counts on it): from the tenth the list scrolls, and the cut row says so. */}
       <ul className="-mx-1.5 max-h-[16.5rem] overflow-y-auto overscroll-contain">
         {members.map(({ repo, mark }) => (
           <li
