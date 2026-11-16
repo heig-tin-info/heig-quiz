@@ -25,6 +25,7 @@ import {
 
 import { ApiError } from "../api";
 import { EvaluationDrillSetting } from "../drill/EvaluationDrillSetting";
+import { GradebookSettingRow } from "../gradebook/GradebookSettingRow";
 import { AfterDueSetting } from "./AfterDueSetting";
 import { useT } from "../i18n";
 import {
@@ -229,6 +230,7 @@ export function ConfigSettings({
   closesAt = null,
   holdsCategorize = false,
   feedbackExtra,
+  gradebook,
 }: {
   config: ConfigView;
   /** The course of the evaluation or the template: its catalog of conditions (F-ORG-16). */
@@ -247,6 +249,12 @@ export function ConfigSettings({
   holdsCategorize?: boolean;
   /** Passed to the advanced options' feedback group (an evaluation's "Allow drill"). */
   feedbackExtra?: ReactNode;
+  /**
+   * The Gradebook row (ADR-131 §13): in a card of its own under the time and
+   * the retakes, in sight while the teacher configures, never folded with
+   * the advanced options. Its own writer, live whatever `disabled` says.
+   */
+  gradebook?: ReactNode;
 }) {
   const t = useT();
   const { settings, durationS, mode } = config;
@@ -348,6 +356,8 @@ export function ConfigSettings({
       {retakesAllowedFor(mode) ? (
         <RetakesSetting mode={mode} settings={settings} patch={patch} disabled={disabled} />
       ) : null}
+
+      {gradebook ? <Card className="px-4">{gradebook}</Card> : null}
 
       {/* ADR-079: an exam or an exercise announces its conditions; a poll has none. */}
       {conditionsAllowedFor(mode) ? (
@@ -534,6 +544,19 @@ export function TimingStep({
               <EvaluationDrillSetting evaluation={detail.evaluation} />
             </>
           ) : undefined
+        }
+        /* ADR-131 §13: an exam's or an exercise's column, from the draft on;
+           a poll has none. Keyed on the mode, whose defaults it reads. */
+        gradebook={
+          mode === "poll" ? undefined : (
+            <GradebookSettingRow
+              key={mode}
+              classroomId={detail.evaluation.classroomId}
+              kind="evaluation"
+              activityId={detail.evaluation.id}
+              title={detail.evaluation.title}
+            />
+          )
         }
       />
     </div>

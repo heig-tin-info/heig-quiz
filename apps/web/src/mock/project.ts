@@ -100,6 +100,7 @@ import {
   projectIsLive,
   patchedDraftDates,
   projectFieldRefusal,
+  projectGraded,
   projectListDates,
   projectPhase,
   projectPrimaryAction,
@@ -923,6 +924,18 @@ function projectOr404(id: string): MockProject {
   const p = PROJECTS.get(id);
   if (role === "student" || !p) throw new MockError(404, "Not found");
   return p;
+}
+
+/**
+ * A project's column as the gradebook's settings read it (`columnFacts`,
+ * ADR-131 §13): graded and not archived, in any state, a draft's included;
+ * null otherwise (`gradebook.ts`).
+ */
+export function projectColumnOf(id: string): { classroomId: string; released: boolean } | null {
+  seeded();
+  const p = PROJECTS.get(id);
+  if (!p || !projectGraded(p.summary.gradingMode) || p.summary.archivedAt !== null) return null;
+  return { classroomId: p.summary.classroomId, released: p.releasedAt !== null };
 }
 
 /** A live repository: provisioned, not deleted, its project not archived (`LIVE` of `deadline.ts`). */

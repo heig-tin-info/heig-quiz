@@ -65,7 +65,6 @@ import type {
 } from "@quiz/contracts";
 import { countsInMean } from "@quiz/domain";
 
-import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import {
   Card,
@@ -84,7 +83,7 @@ import {
 import { useStaffGradebook } from "./api";
 import { ColumnDialog, ScoreDialog } from "./dialogs";
 import { AbsentSigil, ExcusedSigil, fullName, GradeOrDash, MODE_LABEL } from "./cells";
-import { useMarkWrites } from "./useMarkWrites";
+import { useStaffWrites } from "./useStaffWrites";
 
 /**
  * The mean stays in view while the grades scroll under it, once the card has
@@ -180,8 +179,7 @@ type Placement = { kind: "in"; name: string } | { kind: "none" } | { kind: "out"
 
 function Matrix({ classroomId, data }: { classroomId: string; data: GradebookStaff }) {
   const t = useT();
-  const confirm = useConfirm();
-  const marks = useMarkWrites(classroomId);
+  const marks = useStaffWrites(classroomId);
   const { writes, attempt } = marks;
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const readOnly = data.archived;
@@ -197,29 +195,9 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
   };
   const inNoMean = data.columns.filter((column) => placement(column)?.kind === "none");
 
-  /**
-   * A column's write. One that moves the means students read now — a
-   * released column that counts before or after it, the mean published —
-   * asks first; nothing else does.
-   */
-  const patchColumn = async (column: GradebookColumn, patch: GradebookColumnPatch): Promise<boolean> => {
-    const after = { counts: patch.counts ?? column.counts, componentId: patch.componentId === undefined ? column.componentId : patch.componentId };
-    const live =
-      column.released &&
-      data.meanPublished &&
-      (countsInMean(column.counts, column.componentId, hasComponents) || countsInMean(after.counts, after.componentId, hasComponents));
-    if (
-      live &&
-      !(await confirm({
-        title: t("gbook.liveMean.title"),
-        message: t("gbook.liveMean.body", { column: column.title }),
-        confirmLabel: t("gbook.liveMean.confirm"),
-      }))
-    ) {
-      return false;
-    }
-    return attempt(() => writes.patchColumn(column, patch));
-  };
+  /** A column's write, which asks first when it moves the means students read now. */
+  const patchColumn = (column: GradebookColumn, patch: GradebookColumnPatch): Promise<boolean> =>
+    marks.patchColumn(column, patch, { meanPublished: data.meanPublished, hasComponents });
   /*
    * The exercises left out of the mean are practice, and a classroom has
    * many: folded away by default, a switch away, never persisted. Exercises
@@ -440,7 +418,8 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
       ) : null}
       {dialog?.kind === "column" ? (
         <ColumnDialog
-          column={dialog.column}
+          title={dialog.column.title}
+          value={dialog.column}
           components={components}
           submitting={writes.pending}
           onClose={() => setDialog(null)}

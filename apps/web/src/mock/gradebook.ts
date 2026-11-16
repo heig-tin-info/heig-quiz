@@ -27,7 +27,14 @@
  * never has any. The means are `gradebookMeans`', never the mock's own.
  * PRG1-2026's mean starts published; `?unpublished=1` starts it withheld.
  *
- * Below `groups.ts`, whose `ME_LINE` it reads.
+ * A column's settings from the draft on (ADR-131 §13): the mock's own
+ * evaluations and projects are not the book's columns, so their settings
+ * are kept apart (`STORED`), read and written by the same routes — the
+ * `draft` exam reads its defaults, the `released` one asks before it moves
+ * PRG1's published mean.
+ *
+ * Below `groups.ts`, whose `ME_LINE` it reads; it reads `evaluation.ts`'s
+ * evaluations and `project.ts`'s projects, which its import evaluates first.
  */
 import {
   GradebookColumnPatch,
@@ -36,6 +43,7 @@ import {
   GradebookMarkPut,
   GradebookSettingsPatch,
   type GradebookColumn,
+  type GradebookColumnSettings,
   type GradebookComponents,
   type GradebookMark,
   type GradebookStaff,
@@ -47,6 +55,7 @@ import {
   cellGrade,
   classMean,
   countsByDefault,
+  evaluationColumnKind,
   gradebookMeans,
   gradeFromPoints,
   resolveCell,
@@ -57,10 +66,13 @@ import {
   type MarkOutcome,
   type MeanColumn,
   type MeanComponent,
+  WEIGHT_DEFAULT,
 } from "@quiz/domain";
 
+import { findEvaluation } from "./evaluation";
 import { ME_LINE } from "./groups";
 import { classroomRoster, courseOr404, rooms } from "./org";
+import { projectColumnOf } from "./project";
 import { D, flags, iso, MockPayload, on, refuse, role } from "./runtime";
 
 /** What lies beneath a cell of an activity: the activity's own result for one student. */
@@ -352,18 +364,73 @@ on("PATCH", "/app/api/classrooms/:id/gradebook", (m, raw) => {
   return staffTable(room, book);
 });
 
+/** A column's stored settings. */
+type SettingsRow = Pick<GradebookColumn, "weight" | "counts" | "componentId">;
+
+/**
+ * The settings of the activities the book draws no column of — the mock's
+ * own evaluations and projects, drafts included (ADR-131 §13) — by activity
+ * id, from their first write; their mode's defaults before it.
+ */
+const STORED = new Map<string, SettingsRow>();
+
+/**
+ * `columnFacts` of the server: an exam or an exercise of the classroom in
+ * any state, a graded project of it not archived; anything else, a poll
+ * included, is the 404 of a missing column.
+ */
+function columnFacts(roomId: string, kind: string, activityId: string): { mode: GradebookColumn["mode"]; released: boolean } {
+  if (kind === "evaluation") {
+    const e = findEvaluation(activityId);
+    if (e && e.classroomId === roomId && e.mode !== "poll") return { mode: evaluationColumnKind(e.mode), released: e.releasedAt !== null };
+  } else {
+    const p = projectColumnOf(activityId);
+    if (p && p.classroomId === roomId) return { mode: "project", released: p.released };
+  }
+  throw new MockPayload(404, { error: "not_found", message: "Not found" });
+}
+
+/** An activity's column settings, from the draft on: the book's column itself, else the stored row or its mode's defaults; `stored` once written. */
+function settingsOf(roomId: string, book: MockBook, kind: string, activityId: string): { row: SettingsRow; released: boolean; stored: boolean } {
+  const column = book.columns.find((c) => c.activityId === activityId);
+  if (column) return { row: column, released: column.released, stored: true };
+  const facts = columnFacts(roomId, kind, activityId);
+  const row = STORED.get(activityId);
+  return {
+    row: row ?? { weight: WEIGHT_DEFAULT, counts: countsByDefault(facts.mode), componentId: null },
+    released: facts.released,
+    stored: row !== undefined,
+  };
+}
+
+on("GET", "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId", (m) => {
+  const { room, book } = staffBook(m.groups!.id!);
+  const { row, released } = settingsOf(room.id, book, m.groups!.kind!, m.groups!.activityId!);
+  return {
+    weight: row.weight,
+    counts: row.counts,
+    componentId: row.componentId,
+    released,
+    meanPublished: book.meanPublished,
+    components: componentList(room.courseId),
+  } satisfies GradebookColumnSettings;
+});
+
 on("PATCH", "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId", (m, raw) => {
   const { room, book } = staffBook(m.groups!.id!);
   writable(room);
-  const column = columnOr404(book, m.groups!.activityId!);
+  const activityId = m.groups!.activityId!;
+  const { row, stored } = settingsOf(room.id, book, m.groups!.kind!, activityId);
   const patch = parsed(GradebookColumnPatch, raw);
   // Another course's component is the 404 of a missing one (ADR-131 §2).
   if (patch.componentId && !componentsOf(room.courseId).some((c) => c.id === patch.componentId)) {
     throw new MockPayload(404, { error: "not_found", message: "Component not found" });
   }
-  if (patch.weight !== undefined) column.weight = patch.weight;
-  if (patch.counts !== undefined) column.counts = patch.counts;
-  if (patch.componentId !== undefined) column.componentId = patch.componentId;
+  if (patch.weight !== undefined) row.weight = patch.weight;
+  if (patch.counts !== undefined) row.counts = patch.counts;
+  if (patch.componentId !== undefined) row.componentId = patch.componentId;
+  // The first write materializes the row, as the server's does.
+  if (!stored) STORED.set(activityId, row);
   return staffTable(room, book);
 });
 
@@ -472,11 +539,15 @@ on("GET", "/app/api/student/classrooms/:id/gradebook", (m) => {
 // ---------------------------------------------------------------- the course's components (ADR-131)
 
 /** The components as their routes answer them: each with whether a column of a classroom of the course is in it. */
-const componentList = (courseId: string): GradebookComponents =>
-  componentsOf(courseId).map((component) => ({
+function componentList(courseId: string): GradebookComponents {
+  return componentsOf(courseId).map((component) => ({
     ...component,
-    inUse: rooms.filter((r) => r.courseId === courseId).some((r) => bookOf(r.id)?.columns.some((c) => c.componentId === component.id)),
+    // A draft's stored row holds its component too (ADR-131 §13).
+    inUse:
+      rooms.filter((r) => r.courseId === courseId).some((r) => bookOf(r.id)?.columns.some((c) => c.componentId === component.id)) ||
+      [...STORED.values()].some((row) => row.componentId === component.id),
   }));
+}
 
 /** The course of a components route: the 404 of a missing course for a student; a write is its owners' (`?assistant=1`: refused). */
 const componentCourse = (id: string, write = false): string => {

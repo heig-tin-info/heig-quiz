@@ -2015,6 +2015,20 @@ What replaces them:
   ("Change the students' means?"), on every course, the quick menu item
   included; nothing is asked when no mean moves (a column that counts in
   no mean before nor after).
+- **An activity's Gradebook row** (ADR-131 §13, `GradebookSettingRow`): the
+  same settings from the activity's own screens, from the draft on: an exam's
+  or an exercise's Format step (a card of its own under the timing and the
+  retakes, never folded with the advanced options), a graded project's
+  draft form (a card under Groups) and Settings tab (a row among the
+  others). A `SettingRow` "Gradebook": the settings in words as its `desc`
+  ("In the mean · weight 40 %", a component's name in place of "In the
+  mean", "Out of the mean", or the warning triangle and its words), and a
+  secondary `sm` "Edit" that opens the column's settings dialog above, the
+  matrix's own, with its question before a published mean moves. No
+  accent. Not under the evaluation's configuration lock: it stays live
+  after the release. Loading, a skeleton where the button goes; failed, a
+  sentence and Retry; on an archived classroom, the words without the
+  button.
 - **Primary.** Export CSV, in the page header (`variant="primary"`), a plain
   download link. The switch "Students see their mean" is a `SettingRow`
   above the matrix, never an accent; every other action is a menu or a

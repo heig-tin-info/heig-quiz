@@ -6895,6 +6895,9 @@ export const fr: Record<keyof Dict, string> = {
   "gbook.liveMean.confirm": "Modifier maintenant",
   "gbook.componentMean.studentHelp": "Moyenne pondérée des notes de cette composante.",
   "gbook.mean.componentsStudentHelp": "Moyenne pondérée des moyennes des composantes.",
+  "gbook.row": "Carnet de notes",
+  "gbook.row.summary": "{place} · pondération {weight} %",
+  "gbook.row.loadError": "Impossible de charger les réglages du carnet de notes.",
 
   // The training course (ADR-105): the home's offer, the menu entry, the card.
   "menu.training": "Cours d'initiation",

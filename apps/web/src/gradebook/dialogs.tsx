@@ -11,8 +11,8 @@ import {
   GradebookWeight,
   type GradebookColumn,
   type GradebookColumnPatch,
+  type GradebookCourseComponent,
   type GradebookMarkPut,
-  type GradebookStaff,
   type GradebookStaffCell,
   type GradebookStaffRow,
 } from "@quiz/contracts";
@@ -126,27 +126,31 @@ export function ExcuseDialog({
  * A column's settings in the mean (`ColumnSettingsFields`): where it counts
  * — in a component of the mean (ADR-131), in the mean, or out of it — and
  * its weight, a whole percentage 0 to 100 checked by the route's own schema
- * (invariant 7). `onSubmit` gets the write, null when nothing changed.
+ * (invariant 7). `onSubmit` gets the write, null when nothing changed. The
+ * matrix opens it on a column, an activity's Gradebook row on its own.
  */
 export function ColumnDialog({
-  column,
+  title,
+  value,
   components,
   submitting,
   onClose,
   onSubmit,
 }: {
-  column: GradebookColumn;
-  components: GradebookStaff["components"];
+  /** The activity's title. */
+  title: string;
+  value: ColumnSettings;
+  components: readonly Pick<GradebookCourseComponent, "id" | "name">[];
   submitting: boolean;
   onClose: () => void;
   onSubmit: (patch: GradebookColumnPatch | null) => void;
 }) {
   const t = useT();
-  const before: ColumnSettings = { counts: column.counts, componentId: column.componentId, weight: column.weight };
+  const before: ColumnSettings = { counts: value.counts, componentId: value.componentId, weight: value.weight };
   const [settings, setSettings] = useState(before);
   return (
     <FormDialog
-      title={t("gbook.column.menu", { column: column.title })}
+      title={t("gbook.column.menu", { column: title })}
       onClose={onClose}
       submitLabel={t("common.save")}
       submitting={submitting}

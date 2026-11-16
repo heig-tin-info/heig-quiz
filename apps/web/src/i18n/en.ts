@@ -6942,6 +6942,9 @@ export const en = {
   "gbook.liveMean.confirm": "Change now",
   "gbook.componentMean.studentHelp": "Weighted mean of this component's grades.",
   "gbook.mean.componentsStudentHelp": "Weighted mean of the components' means.",
+  "gbook.row": "Gradebook",
+  "gbook.row.summary": "{place} · weight {weight} %",
+  "gbook.row.loadError": "Could not load the gradebook settings.",
 
   // The training course (ADR-105): the home's offer, the menu entry, the card.
   "menu.training": "Training course",

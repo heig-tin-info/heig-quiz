@@ -42,6 +42,7 @@ import {
   ProjectRepoScores,
   ProjectSummary,
   StudentProject,
+  GradebookColumnSettings,
   GradebookComponents,
   GradebookErrorCode,
   GradebookStaff,
@@ -502,6 +503,19 @@ describe("the mock's gradebook (M5-04)", () => {
     expect([busy.status, refusal(busy.body)]).toEqual([409, "component_in_use"]);
     await send(path, "PATCH", { componentId: null });
     expect(GradebookComponents.parse((await send(`${base}/${cours!.id}`, "DELETE")).body)).toEqual([]);
+  });
+
+  it("reads and writes a draft's column settings (ADR-131 §13): its mode's defaults, then what was written, out of the table; a poll has none", async () => {
+    const list = (await get(`/app/api/classrooms/${classroomId}/evaluations`)) as { id: string; state: string; mode: string }[];
+    const draft = list.find((e) => e.state === "draft" && e.mode === "exercise")!;
+    const path = `/app/api/classrooms/${classroomId}/gradebook/columns/evaluation/${draft.id}`;
+    const before = GradebookColumnSettings.parse(await get(path));
+    expect(before).toMatchObject({ weight: 100, counts: false, componentId: null, released: false });
+    const written = await send(path, "PATCH", { counts: true, weight: 30 });
+    expect((written.body as GradebookStaff).columns.some((c) => c.activityId === draft.id)).toBe(false);
+    expect(GradebookColumnSettings.parse(await get(path))).toMatchObject({ weight: 30, counts: true });
+    const poll = list.find((e) => e.mode === "poll");
+    if (poll) expect((await send(`/app/api/classrooms/${classroomId}/gradebook/columns/evaluation/${poll.id}`, "GET")).status).toBe(404);
   });
 });
 

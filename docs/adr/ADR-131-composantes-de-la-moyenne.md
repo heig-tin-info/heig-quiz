@@ -272,9 +272,9 @@ The word "group" was set aside: Groups already names the students' groups
     - **Promote stays open** (06 no. 25): nothing here pushes an instance's
       settings back into its template.
 
-**Planned, not built** (the product owner's later parts): the activities'
-settings rows over §13 and a template's over §15. Rules per component (a
-pass mark per component) stay out.
+**Planned, not built** (the product owner's later parts): a template's
+settings row over §15. Rules per component (a pass mark per component)
+stay out.
 
 ## Consequences
 

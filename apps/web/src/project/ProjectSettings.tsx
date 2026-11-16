@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import type { ProjectDetail } from "@quiz/contracts";
 
-import { forcedProtected, PROJECT_GRADING_MODES } from "@quiz/domain";
+import { forcedProtected, PROJECT_GRADING_MODES, projectGraded } from "@quiz/domain";
 
+import { GradebookSettingRow } from "../gradebook/GradebookSettingRow";
 import { useT } from "../i18n";
 import { Card, repoShortName, SettingRow, Skeleton } from "../ui";
 import { sourceDetailQuery } from "./newProject";
@@ -76,9 +78,19 @@ export function ProtectedFilesRow({
 }
 
 /**
+ * The Gradebook row of a graded project (ADR-131 §13), on its draft's form
+ * and its Settings tab alike; null for a project not graded or archived,
+ * which has no column.
+ */
+export function projectGradebookRow(project: ProjectDetail): ReactNode {
+  if (!projectGraded(project.gradingMode) || project.archivedAt !== null) return null;
+  return <GradebookSettingRow classroomId={project.classroomId} kind="project" activityId={project.id} title={project.name} />;
+}
+
+/**
  * The settings of a PUBLISHED project (F-PROJ-03) that it rarely changes:
- * what happens at the deadline, the protected files and where the students
- * work — the page's Settings tab (F-PROJ-13 as amended 2026-10-13). They stay
+ * what happens at the deadline, the protected files, where the students
+ * work and, graded, its column of the gradebook — the page's Settings tab (F-PROJ-13 as amended 2026-10-13). They stay
  * editable, each written as soon as the teacher sets it, through the page's
  * one `PATCH`; what `editable` does not name is drawn disabled: the server
  * decides, the screen follows (`projectFieldRefusal`). The deadline itself is
@@ -114,6 +126,7 @@ export function ProjectSettings({
         onChange={(protectedFiles) => write({ protectedFiles })}
       />
       <WorkModeSetting projectId={project.id} archived={project.archivedAt !== null} />
+      {projectGradebookRow(project)}
       {project.gradingMode === "criteria" ? (
         <>
           {/* Out of `criteria` while the project is locked and unreleased (ADR-106 §1). */}

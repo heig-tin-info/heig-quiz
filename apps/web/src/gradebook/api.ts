@@ -14,6 +14,7 @@ import {
   GradebookMarkPut,
   GradebookSettingsPatch,
   type GradebookColumn,
+  type GradebookColumnSettings,
   type GradebookComponents,
   type GradebookErrorCode,
   type GradebookStaff,
@@ -22,7 +23,7 @@ import {
 
 import { api, wordedRefusal } from "../api";
 import type { Dict, TFunction } from "../i18n";
-import { classroomGradebookKey, courseComponentsKey, gradebookRootKey, studentGradebookKey } from "../queryKeys";
+import { classroomGradebookKey, columnSettingsKey, courseComponentsKey, gradebookRootKey, studentGradebookKey } from "../queryKeys";
 
 /** `GET /classrooms/:id/gradebook`: the staff's table. */
 export function useStaffGradebook(classroomId: string) {
@@ -37,6 +38,19 @@ export function useStudentGradebook(classroomId: string) {
   return useQuery<GradebookStudent>({
     queryKey: studentGradebookKey(classroomId),
     queryFn: () => api(`/app/api/student/classrooms/${classroomId}/gradebook`),
+  });
+}
+
+/**
+ * `GET /classrooms/:id/gradebook/columns/:kind/:activityId` (ADR-131 §13):
+ * one column's settings as the activity's own settings edit them, from the
+ * draft on, with the course's components and whether a change moves what
+ * the students read. Under the gradebook's root: its hint refreshes it.
+ */
+export function useColumnSettings(classroomId: string, column: ColumnRef) {
+  return useQuery<GradebookColumnSettings>({
+    queryKey: columnSettingsKey(classroomId, column.kind, column.activityId),
+    queryFn: () => api(`/app/api/classrooms/${classroomId}/gradebook${columnPath(column)}`),
   });
 }
 
@@ -82,8 +96,12 @@ export function useGradebookWrites(classroomId: string) {
     setMark: (column: ColumnRef, enrollmentId: string, mark: GradebookMarkPut) =>
       run(`${columnPath(column)}/marks/${enrollmentId}`, "PUT", GradebookMarkPut.parse(mark)),
     clearMark: (column: ColumnRef, enrollmentId: string) => run(`${columnPath(column)}/marks/${enrollmentId}`, "DELETE"),
-    patchColumn: (column: ColumnRef, patch: GradebookColumnPatch) =>
-      run(columnPath(column), "PATCH", GradebookColumnPatch.parse(patch)),
+    /** The table answered lists no draft: the column's own read is asked again (`useColumnSettings`). */
+    patchColumn: async (column: ColumnRef, patch: GradebookColumnPatch) => {
+      const table = await run(columnPath(column), "PATCH", GradebookColumnPatch.parse(patch));
+      await qc.invalidateQueries({ queryKey: columnSettingsKey(classroomId, column.kind, column.activityId) });
+      return table;
+    },
     publishMean: (meanPublished: boolean) =>
       run("", "PATCH", GradebookSettingsPatch.parse({ meanPublished })),
   };

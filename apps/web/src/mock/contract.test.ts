@@ -129,6 +129,7 @@ import {
   StudentHome,
   StudentProject,
   GradeGroup,
+  GradebookColumnSettings,
   GradebookCourseComponent,
   GradebookStaff,
   GradebookStudent,
@@ -176,6 +177,7 @@ const classroomId = courses[0]!.classrooms[0]!.id;
 const evaluations = (await get(`/app/api/classrooms/${classroomId}/evaluations`)) as {
   id: string;
   state: string;
+  mode: string;
   templateRevision: number | null;
 }[];
 const byState = (state: string): string => {
@@ -221,9 +223,12 @@ const sourceNames = ((await get(`/app/api/classrooms/${classroomId}/projects/sou
 /** PRG1-2026's projects (M3-12, `?projects=1`), and every repository of their pages. */
 const projectIds = ((await get(`/app/api/classrooms/${classroomId}/projects`)) as Ref[]).map((p) => p.id);
 const projectRepos: [string, string][] = [];
+/** Those graded and not archived: each has a gradebook column from the draft on (ADR-131 §13). */
+const columnProjectIds: string[] = [];
 for (const id of projectIds) {
-  const detail = (await get(`/app/api/projects/${id}`)) as { rows: { repo: Ref | null }[] };
+  const detail = (await get(`/app/api/projects/${id}`)) as { rows: { repo: Ref | null }[]; gradingMode: string; archivedAt: string | null };
   for (const row of detail.rows) if (row.repo) projectRepos.push([id, row.repo.id]);
+  if (detail.gradingMode !== "none" && detail.archivedAt === null) columnProjectIds.push(id);
 }
 /** Every classroom's group sets (M3-16a, `?groups=1`): each one is read in detail. */
 const groupSetIds: string[] = [];
@@ -577,6 +582,17 @@ const CHECKED: Case[] = [
   ...courses
     .flatMap((c) => c.classrooms)
     .map((r) => one("/app/api/student/classrooms/:id/gradebook", `/app/api/student/classrooms/${r.id}/gradebook`, GradebookStudent)),
+  // A column's settings from the draft on (ADR-131 §13): every exam and exercise of the classroom, every graded project.
+  ...[
+    ...evaluations.filter((e) => e.mode !== "poll").map((e) => `evaluation/${e.id}`),
+    ...columnProjectIds.map((id) => `project/${id}`),
+  ].map((column) =>
+    one(
+      "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId",
+      `/app/api/classrooms/${classroomId}/gradebook/columns/${column}`,
+      GradebookColumnSettings,
+    ),
+  ),
   // The course's components of the mean (ADR-131).
   ...courses.map((c) =>
     each("/app/api/courses/:id/gradebook/components", `/app/api/courses/${c.id}/gradebook/components`, GradebookCourseComponent),

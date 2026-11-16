@@ -2,6 +2,8 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { GradebookColumnSettings } from "@quiz/contracts";
+
 import { PAGE_SIZE } from "../pool/filters";
 import { makeClassroomDetail } from "../test/fixtures";
 import {
@@ -31,6 +33,17 @@ import { EvaluationConfig } from "./EvaluationConfig";
 
 const CLASSROOM = id("classroom", 1);
 const QUESTION = id("question", 7);
+/** The evaluation's gradebook column, from the draft on (ADR-131 §13). */
+const URL_COLUMN = `/app/api/classrooms/${CLASSROOM}/gradebook/columns/evaluation/${EVALUATION_ID}`;
+const columnSettings = (over: Partial<GradebookColumnSettings> = {}): GradebookColumnSettings => ({
+  weight: 100,
+  counts: true,
+  componentId: null,
+  released: false,
+  meanPublished: false,
+  components: [],
+  ...over,
+});
 
 function routes(
   detail = makeEvaluationDetail(),
@@ -39,6 +52,7 @@ function routes(
   return {
     [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(detail),
     [`GET /app/api/classrooms/${CLASSROOM}`]: ok(makeClassroomDetail({ id: CLASSROOM })),
+    [`GET ${URL_COLUMN}`]: ok(columnSettings()),
     [`GET /app/api/evaluations/${EVALUATION_ID}/pools`]: ok([
       { id: id("pool", 1), name: "PRG1", visibility: "private", ownerId: "u", isPersonal: false, createdAt: detail.evaluation.createdAt, questionCount: 1 },
     ]),
@@ -840,6 +854,70 @@ describe("EvaluationConfig", () => {
       await screen.findByRole("button", { name: /^back to format$/i }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^go to /i })).toBeNull();
+  });
+
+  /*
+   * ADR-131 §13: the column's settings, in the Format step from the draft on,
+   * outside the configuration's lock; the row itself is `GradebookSettingRow`'s.
+   */
+  describe("the Gradebook row", () => {
+    const withMode = (mode: "exam" | "exercise" | "poll", over: Partial<ReturnType<typeof makeEvaluationDetail>> = {}) => {
+      const base = makeEvaluationDetail();
+      return makeEvaluationDetail({ ...over, evaluation: { ...base.evaluation, ...over.evaluation, mode } });
+    };
+    const timing = () =>
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, { route: "/evaluations/x?step=timing" });
+
+    it("draws a draft exam's column, in the mean by default", async () => {
+      mockFetch(routes(withMode("exam")));
+      timing();
+      expect(await screen.findByText("In the mean · weight 100 %")).toBeInTheDocument();
+      expect(screen.getByText("Gradebook")).toBeInTheDocument();
+    });
+
+    it("reads an exercise out of the mean, its mode's default", async () => {
+      mockFetch(routes(withMode("exercise"), { [`GET ${URL_COLUMN}`]: ok(columnSettings({ counts: false })) }));
+      timing();
+      expect(await screen.findByText("Out of the mean")).toBeInTheDocument();
+    });
+
+    it("draws none for a poll, and reads nothing", async () => {
+      const { calls } = mockFetch(routes(withMode("poll")));
+      timing();
+      expect(await screen.findByRole("button", { name: /^advanced options$/i })).toBeInTheDocument();
+      expect(screen.queryByText("Gradebook")).toBeNull();
+      expect(calls.some((c) => c.url === URL_COLUMN)).toBe(false);
+    });
+
+    it("stays live once released and locked, and asks before it moves the published mean", async () => {
+      const user = userEvent.setup();
+      const released = withMode("exam", { editable: false, attemptCount: 12, evaluation: { ...makeEvaluationDetail().evaluation, state: "released" } });
+      const { calls } = mockFetch(
+        routes(released, {
+          [`GET ${URL_COLUMN}`]: ok(columnSettings({ released: true, meanPublished: true })),
+          [`PATCH ${URL_COLUMN}`]: ok({ classroomId: CLASSROOM, archived: false, meanPublished: true, components: [], columns: [], rows: [], classMean: null }),
+        }),
+      );
+      timing();
+      expect(await screen.findByText(/the structure is frozen/i)).toBeInTheDocument();
+      await user.click(await screen.findByRole("button", { name: "Edit" }));
+      const dialog = await screen.findByRole("dialog", { name: "Settings of Quiz 3 — pointers" });
+      await user.selectOptions(within(dialog).getByLabelText("Mean"), "Out of the mean");
+      await user.click(within(dialog).getByRole("button", { name: "Save" }));
+      await user.click(within(await screen.findByRole("dialog", { name: "Change the students' means?" })).getByRole("button", { name: "Change now" }));
+      await waitFor(() => expect(calls.find((c) => c.method === "PATCH" && c.url === URL_COLUMN)?.body).toEqual({ counts: false }));
+    });
+
+    it("is text only in an archived classroom", async () => {
+      mockFetch(
+        routes(withMode("exam"), {
+          [`GET /app/api/classrooms/${CLASSROOM}`]: ok(makeClassroomDetail({ id: CLASSROOM, archivedAt: "2026-01-01T00:00:00.000Z" })),
+        }),
+      );
+      timing();
+      expect(await screen.findByText("In the mean · weight 100 %")).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Edit" })).toBeNull());
+    });
   });
 });
 
