@@ -25,7 +25,7 @@
  *   - Space: a 44 px bar, hairline under it, the frame to the edges.
  *   - Finish: surface bar on the canvas, no shadow.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, LogOut, Monitor, ShieldAlert } from "lucide-react";
 
@@ -62,6 +62,12 @@ export const PORTAL_RELAUNCH_MS = 4 * 3_600_000 - 10 * 60_000;
 
 /** How often the page asks whether its session still stands. */
 export const SESSION_CHECK_MS = 60_000;
+
+/**
+ * How often a launch that did not open is looked at again: a failure is
+ * launched again, a refusal has the project read again (below).
+ */
+export const LAUNCH_RETRY_MS = 10_000;
 
 /** The sandbox of the portal's frame: no top navigation, no popups (§3). */
 export const FRAME_SANDBOX = "allow-scripts allow-same-origin allow-forms allow-modals";
@@ -103,7 +109,19 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
     return () => clearInterval(timer);
   }, [qc]);
 
-  const frame = usePortalFrame(id, guardSubmit, suspended, relaunchMs);
+  // The project as the student sees it, the server's clock aside; null until read. The launch waits
+  // for the first read, so that it knows which project it was refused on.
+  const facts = project.data ? JSON.stringify({ ...project.data, serverNow: null }) : null;
+  const frame = usePortalFrame(id, guardSubmit, suspended || project.isPending, relaunchMs, facts);
+
+  // A refusal lifts by what the student does elsewhere (accepting the project): the page reads
+  // the project again meanwhile. That read wants no attestation; the start route wants a fresh one.
+  const refused = frame.state.kind === "refused";
+  useEffect(() => {
+    if (!refused) return;
+    const timer = setInterval(() => void qc.invalidateQueries({ queryKey: studentProjectKey(id) }), LAUNCH_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [refused, qc, id]);
 
   const leave = async () => {
     const ok = await confirm({
@@ -181,22 +199,32 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
 /**
  * The frame's launch: the start route's POST (CSRF, the station's `423`s,
  * a fresh attestation, which `guardSubmit` renews once when stale), its
- * `{ url }` in the frame, again `relaunchMs` after each launch. A suspended
- * station launches nothing; the launch waits for the suspension to lift. A
- * refusal the student can read stays on screen; anything else offers a retry.
+ * `{ url }` in the frame, again `relaunchMs` after each launch. A `held`
+ * page launches nothing (a suspended station, the project not read yet);
+ * the launch waits for the hold to lift.
+ *
+ * A refusal the student can read stays on screen, and is launched again
+ * once `facts` (the project they see) differs from what it was when the
+ * refused launch started: never on a timer, which would cost the station an
+ * attestation every two minutes. Anything else offers a retry, and is
+ * launched again `LAUNCH_RETRY_MS` later, for as long as it fails.
  */
 function usePortalFrame(
   projectId: string,
   guardSubmit: <T>(submit: () => Promise<T>) => Promise<T>,
-  suspended: boolean,
+  held: boolean,
   relaunchMs: number,
+  facts: string | null,
 ) {
   const [state, setState] = useState<Frame>({ kind: "launching", url: null });
   const launching = state.kind === "launching";
+  /** `facts` when the last launch started. */
+  const launchedOn = useRef(facts);
 
   useEffect(() => {
-    if (!launching || suspended) return;
+    if (!launching || held) return;
     let alive = true;
+    launchedOn.current = facts;
     guardSubmit(() => api<WorkspaceStart>(workspaceStartPath(projectId), { method: "POST" })).then(
       ({ url }) => {
         if (alive) setState({ kind: "open", url, at: Date.now() });
@@ -211,7 +239,8 @@ function usePortalFrame(
     return () => {
       alive = false;
     };
-  }, [launching, suspended, projectId, guardSubmit]);
+    // `facts` is read when a launch starts and never starts one here: the effect below does.
+  }, [launching, held, projectId, guardSubmit]);
 
   const openAt = state.kind === "open" ? state.at : null;
   useEffect(() => {
@@ -224,5 +253,15 @@ function usePortalFrame(
   }, [openAt, relaunchMs]);
 
   const retry = useCallback(() => setState({ kind: "launching", url: null }), []);
+  const failed = state.kind === "failed";
+  useEffect(() => {
+    if (!failed) return;
+    const timer = setTimeout(retry, LAUNCH_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [failed, retry]);
+  const refused = state.kind === "refused";
+  useEffect(() => {
+    if (refused && facts !== launchedOn.current) retry();
+  }, [refused, facts, retry]);
   return { state, retry };
 }
