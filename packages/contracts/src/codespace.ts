@@ -12,16 +12,14 @@ import { z } from "zod";
 import {
   DEVICE_LEVEL_IDS,
   GIT_TOKEN_REFUSALS,
-  isCollectionRef,
-  isSafeBranchName,
-  isSafeRepoPath,
-  isSha1,
   STAFF_REVIEW_REFUSALS,
   SUPERVISED_DEVICE_LEVELS,
   WORK_MODE_REFUSALS,
   WORK_MODES,
   WORKSPACE_START_REFUSALS,
 } from "@quiz/domain";
+
+import { ProtectedPath, RepositoryFullName, Sha1 } from "./gitNames.js";
 
 /**
  * Work mode of a project; `online_seb` is supervised: it opens only from
@@ -92,7 +90,7 @@ const ConfigKey = z.string().regex(/^[0-9a-f]{64}$/);
 /** A student's target repository. */
 export const CodespaceRepoRef = z.object({
   /** `<owner>/<name>` on the forge. */
-  fullName: z.string().regex(/^[^/\s]+\/[^/\s]+$/, "repository expected in the form owner/name"),
+  fullName: RepositoryFullName,
   defaultBranch: z.string().min(1),
 });
 export type CodespaceRepoRef = z.infer<typeof CodespaceRepoRef>;
@@ -311,9 +309,6 @@ export const GIT_REQUEST_TTL_SECONDS = 60;
 /** At most this many heads per declaration. */
 export const RELAY_HEADS_MAX = 50;
 
-/** `owner/name`, as GitHub names a repository. */
-const RepositoryFullName = z.string().regex(/^[^/\s]+\/[^/\s]+$/, "repository expected in the form owner/name");
-
 /**
  * The claims both routes share (ADR-078 §2): the request IS the signed
  * token, so a token seen in transit cannot be re-aimed at another
@@ -344,10 +339,10 @@ export const GitTokenRequestClaims = gitRequestClaims(GIT_TOKEN_AUDIENCE)
   .refine(lifetimeWithin(GIT_REQUEST_TTL_SECONDS), "a request lives one minute at most");
 export type GitTokenRequestClaims = z.infer<typeof GitTokenRequestClaims>;
 
-/** A head the portal is about to push: a ref and a full sha (SHA-1 or SHA-256). */
+/** A head the portal is about to push: a ref and a full SHA-1 (GitHub serves SHA-1 repositories only; ADR-130, 2026-11-16). */
 export const RelayHead = z.object({
   ref: z.string().regex(/^refs\/[^\s\0]+$/).max(255),
-  sha: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+  sha: Sha1,
 });
 export type RelayHead = z.infer<typeof RelayHead>;
 
@@ -387,68 +382,66 @@ export type GitTokenError = z.infer<typeof GitTokenError>;
 /** Quiz → portal: collect one student's workspace (ADR-130 §4), a service token bound to the request. */
 export const collectionsPath = (assignmentId: string): string => `/api/assignments/${assignmentId}/collections`;
 
-const Sha1 = z.string().refine(isSha1, "a full SHA-1 expected");
+/**
+ * The temporary ref Quiz names for one collection: under `refs/quiz/collect/`,
+ * one component of letters, digits, `-` and `_` — no dot (so no `..` nor
+ * `.lock`), no slash, never a branch.
+ */
+export const CollectionRef = z.string().regex(/^refs\/quiz\/collect\/[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/, "a ref under refs/quiz/collect/ expected");
 
 /**
  * The order (ADR-130 §4): whose workspace (`userId`, the launch token's
- * `sub`, which names the volume), the repository and handed-out `branch`
- * it is collected to, the branch's head on GitHub (`base`), the commit that
- * would otherwise be graded (`target`, null when the student never pushed
- * in time: the base is then compared), the paths taken from the base
- * (`keep`, `collectionKeptPaths`), and the temporary ref Quiz names
- * (`collectionRef`). Every value is checked here AND again by the portal
- * before it reaches git.
+ * `sub`, which names the volume), the repository, the head on GitHub of the
+ * branch it is collected to (`base`), the commit that would otherwise be
+ * graded (`target`, null when the student never pushed in time: the base is
+ * then compared), the paths taken from the base (`keep`,
+ * `collectionKeptPaths`), and the temporary ref Quiz names. The portal parses
+ * it with this schema before anything runs: no other check.
  */
 export const CodespaceCollectionRequest = z
   .object({
     userId: z.string().refine(isSafeId, "user id unsuitable for a volume path"),
     repository: RepositoryFullName,
-    branch: z.string().refine(isSafeBranchName, "branch name refused"),
     base: Sha1,
     target: Sha1.nullable(),
-    keep: z.array(z.string().refine(isSafeRepoPath, "path refused")).max(200),
-    ref: z.string().refine(isCollectionRef, "a ref under refs/quiz/collect/ expected"),
+    keep: z.array(ProtectedPath).max(200),
+    ref: CollectionRef,
   })
   .strict();
 export type CodespaceCollectionRequest = z.infer<typeof CodespaceCollectionRequest>;
 
 /**
- * Why a collection failed on the portal's side: Quiz refused the token
- * (`forge_refused`), GitHub or Quiz could not be reached
- * (`forge_unavailable`), GitHub refused the push (`push_rejected`), or git
- * failed on the host (`git_error`). Details stay in the portal's log.
+ * Why a collection failed on the portal's side: Quiz or GitHub refused the
+ * credential (`forge_refused`), GitHub or Quiz could not be reached
+ * (`forge_unavailable`), GitHub refused the push (`push_rejected`), git
+ * failed on the host (`git_error`), or the collection's time budget ran out
+ * (`timeout`). Details stay in the portal's log.
  */
-export const COLLECTION_FAILURES = ["forge_refused", "forge_unavailable", "push_rejected", "git_error"] as const;
+export const COLLECTION_FAILURES = ["forge_refused", "forge_unavailable", "push_rejected", "git_error", "timeout"] as const;
 export type CollectionFailure = (typeof COLLECTION_FAILURES)[number];
 
-/** What the snapshot was: when it was taken, and how many files the portal could not read (their last version is kept). */
-const SnapshotFacts = { snapshotAt: IsoDate, unreadable: z.number().int().min(0) };
+/**
+ * When the snapshot was taken (the engine's clock), and how many files the
+ * portal could not read (their last version is kept); null when the last
+ * snapshot was used instead of a fresh one, whose count is not known.
+ */
+const SnapshotFacts = { snapshotAt: IsoDate, unreadable: z.number().int().min(0).nullable() };
 
 /**
- * The portal's answer: `pushed` (the tree carried on the temporary ref by
- * the throwaway commit `commit`, for Quiz to commit on the base), or
- * `unchanged` (the tree is the target's: nothing pushed), or why nothing
- * was collected (ADR-130 §3), or `failed`.
+ * The portal's answer: `pushed` — a throwaway commit of `tree` on the base,
+ * on the temporary ref; only Quiz decides whether that becomes a collection
+ * (ADR-130 §4) —, `unchanged` (the tree is the target's: nothing pushed), why
+ * nothing was collected (ADR-130 §3), or `failed`.
  */
 export const CodespaceCollectionResult = z.discriminatedUnion("outcome", [
-  z.object({ outcome: z.literal("pushed"), tree: Sha1, commit: Sha1, ...SnapshotFacts }),
-  z.object({ outcome: z.literal("unchanged"), tree: Sha1, ...SnapshotFacts }),
+  z.object({ outcome: z.literal("pushed"), tree: Sha1, ...SnapshotFacts }),
+  z.object({ outcome: z.literal("unchanged"), ...SnapshotFacts }),
   z.object({ outcome: z.literal("too_large"), ...SnapshotFacts }),
   z.object({ outcome: z.literal("stale_snapshot"), snapshotAt: IsoDate }),
   z.object({ outcome: z.literal("no_snapshot") }),
   z.object({ outcome: z.literal("failed"), reason: z.enum(COLLECTION_FAILURES) }),
 ]);
 export type CodespaceCollectionResult = z.infer<typeof CodespaceCollectionResult>;
-/** The outcomes the portal answers, and records (its `collections` table). */
-export const CODESPACE_COLLECTION_OUTCOMES = [
-  "pushed",
-  "unchanged",
-  "too_large",
-  "stale_snapshot",
-  "no_snapshot",
-  "failed",
-] as const satisfies readonly CodespaceCollectionResult["outcome"][];
-export type CodespaceCollectionOutcome = (typeof CODESPACE_COLLECTION_OUTCOMES)[number];
 
 // ---------------------------------------------------------- Quiz's own routes (M6-06)
 

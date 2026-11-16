@@ -6,11 +6,11 @@ import {
   ProjectCreate,
   ProjectGradingScale,
   ProjectPatch,
-  ProtectedPath,
   StudentProject,
   StudentProjectCard,
   defaultProjectGradingScale,
 } from "./project.js";
+import { ProtectedPath } from "./gitNames.js";
 import { GradeRow, ProjectGradeRow, StudentGrades } from "./results.js";
 import { StudentActivityCard } from "./student.js";
 
@@ -219,7 +219,7 @@ describe("ProjectCreate and ProjectPatch (F-PROJ-01, F-PROJ-03, M3-02)", () => {
       expect(BranchName.safeParse(branch).success, branch).toBe(false);
     }
     expect(BranchName.safeParse("feature/lab-2.1").success).toBe(true);
-    for (const path of ["/etc/passwd", "../x", "a/../b", "a\\b", "a//b", "./a"]) {
+    for (const path of ["/etc/passwd", "../x", "a/../b", "a\\b", "a//b", "./a", "-n", ".git/config", "x/.GIT/HEAD", "a\nb", "a\u0000b"]) {
       expect(ProtectedPath.safeParse(path).success, path).toBe(false);
     }
     expect(ProtectedPath.safeParse(".github/workflows/grading.yml").success).toBe(true);

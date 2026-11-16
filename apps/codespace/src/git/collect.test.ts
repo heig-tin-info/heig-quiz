@@ -3,7 +3,8 @@
  * temporary directory: a bare repository stands for GitHub (a local path,
  * which `gitAuthEnv` gives no header), the volume holds `work/` (the
  * student's clone, its own `.git` included), `staging.git` and the
- * `shadow.git` the collection snapshots into.
+ * `shadow.git` the collection snapshots into. The orders are well formed:
+ * the hostile ones are refused by the route's contract (`collections.test.ts`).
  */
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
@@ -12,10 +13,8 @@ import { dirname, join } from "node:path";
 
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-import { collectionKeptPaths } from "@quiz/domain";
-
 import { snapshot } from "../sessions/shadow.js";
-import { CollectionRefused, collectWorkspace, type CollectDeps, type CollectionOrder } from "./collect.js";
+import { collectWorkspace, type CollectDeps, type CollectionOrder } from "./collect.js";
 import { FIXTURE_ENV, tempDir } from "./fixtures.js";
 import { git } from "./gitRunner.js";
 import { stagingPaths } from "./staging.js";
@@ -60,7 +59,8 @@ interface World {
 /**
  * GitHub's repository with the handed-out branch `main`, the student's
  * clone in `work/` and the mirror in `staging.git`, as a session leaves
- * them.
+ * them. Quiz's kept paths name `tests` only: the portal keeps the workflows
+ * on its own.
  */
 async function world(): Promise<World> {
   const root = await tempDir("collect-test-");
@@ -90,16 +90,7 @@ async function world(): Promise<World> {
     volumesRoot,
     work: paths.workDir,
     staging: paths.gitDir,
-    order: {
-      assignment: PROJECT,
-      userId: USER,
-      repository: "heig-tin-info/lab3-alice",
-      branch: "main",
-      base,
-      target: null,
-      keep: collectionKeptPaths(["tests"]),
-      ref: REF,
-    },
+    order: { assignment: PROJECT, userId: USER, repository: "heig-tin-info/lab3-alice", base, target: null, keep: ["tests"], ref: REF },
   };
 }
 
@@ -141,11 +132,9 @@ describe("collectWorkspace", () => {
 
     expect(result.outcome).toBe("pushed");
     if (result.outcome !== "pushed") return;
-    expect((await git(["--git-dir", w.github, "rev-parse", REF])).trim()).toBe(result.commit);
     expect((await git(["--git-dir", w.github, "rev-parse", `${REF}^`])).trim()).toBe(w.base);
     expect((await git(["--git-dir", w.github, "rev-parse", `${REF}^{tree}`])).trim()).toBe(result.tree);
-    const tree = await treeOf(w, REF);
-    expect(Object.fromEntries(tree)).toEqual({
+    expect(Object.fromEntries(await treeOf(w, REF))).toEqual({
       ".github/workflows/ci.yml": ["100644", "on: push\n"],
       "link": ["120000", "/etc/passwd"],
       "main.c": ["100644", "int main(void) { return 0; }\n"],
@@ -169,7 +158,7 @@ describe("collectWorkspace", () => {
     expect(settle).toHaveBeenCalledOnce();
   });
 
-  it("counts a change to a kept path only as no change", async () => {
+  it("counts a change to a kept path only as no change, the workflows kept though Quiz's list omits them", async () => {
     const w = await world();
     await writeFiles(w.work, { "tests/t.c": "assert(0);\n", ".github/workflows/evil.yml": "on: push\n" });
     expect((await collectWorkspace(w.order, deps(w))).outcome).toBe("unchanged");
@@ -216,8 +205,7 @@ describe("collectWorkspace", () => {
   it("falls back on the last snapshot when the index stays busy, unless it is older than the last push", async () => {
     const w = await world();
     await writeFiles(w.work, { "main.c": "saved before\n" });
-    const volume = dirname(w.work);
-    await snapshot(volume);
+    await snapshot(dirname(w.work));
     const busy = vi.fn(async () => {
       throw new Error("Unable to create 'shadow.git/index.lock': File exists.");
     });
@@ -227,36 +215,19 @@ describe("collectWorkspace", () => {
     expect(busy).toHaveBeenCalledTimes(3);
 
     const last = await collectWorkspace(w.order, deps(w, { snapshot: busy, lastPushAt: new Date(0) }));
-    expect(last.outcome).toBe("pushed");
+    expect(last).toMatchObject({ outcome: "pushed", unreadable: null });
     expect((await treeOf(w, REF)).get("main.c")).toEqual(["100644", "saved before\n"]);
   });
 
-  it("refuses a hostile order before any git process, and touches nothing", async () => {
+  it("stops at its time budget and pushes nothing", async () => {
     const w = await world();
-    const snap = vi.fn(snapshot);
-    const authorization = vi.fn(async () => "basic dGVzdA==");
+    await writeFiles(w.work, { "main.c": "changed\n" });
     const before = await refsOf(w.github);
-    for (const bad of [
-      { ref: "refs/heads/main" },
-      { ref: "refs/quiz/collect/../../heads/main" },
-      { branch: "--force" },
-      { base: "HEAD" },
-      { target: "--upload-pack=touch /tmp/x" },
-      { keep: ["../../etc/passwd"] },
-      { keep: ["/etc/passwd"] },
-      { keep: ["-n"] },
-      { userId: ".." },
-      { assignment: "../other" },
-      { repository: "owner/name/extra" },
-    ] as Partial<CollectionOrder>[]) {
-      await expect(collectWorkspace({ ...w.order, ...bad }, deps(w, { snapshot: snap, forge: { pushUrl: () => w.github, authorization } })), JSON.stringify(bad)).rejects.toBeInstanceOf(
-        CollectionRefused,
-      );
-    }
-    expect(snap).not.toHaveBeenCalled();
-    expect(authorization).not.toHaveBeenCalled();
+    const slow = (volumeDir: string) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`slow ${volumeDir}`)), 400));
+    expect(await collectWorkspace(w.order, deps(w, { snapshot: slow, budgetMs: 100 }))).toEqual({ outcome: "failed", reason: "timeout" });
+    const late = vi.fn(async () => new Promise<string>((r) => setTimeout(() => r("basic dGVzdA=="), 400)));
+    expect(await collectWorkspace(w.order, deps(w, { budgetMs: 300, forge: { pushUrl: () => w.github, authorization: late } }))).toEqual({ outcome: "failed", reason: "timeout" });
     expect(await refsOf(w.github)).toBe(before);
-    await expect(readdir(join(dirname(w.work), "shadow.git"))).rejects.toThrow();
   });
 
   it("removes its temporary repository, alternates and index on every exit", async () => {

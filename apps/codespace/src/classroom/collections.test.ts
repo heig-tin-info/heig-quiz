@@ -1,7 +1,8 @@
 /**
  * `POST /api/assignments/:id/collections` (ADR-130 §4): the service token,
- * the order's checks, one collection at a time per (student, assignment),
- * and the portal's record. The git work itself is `git/collect.test.ts`'s.
+ * the order parsed by its contract before anything runs, and one collection
+ * at a time per (student, assignment). The git work itself is
+ * `git/collect.test.ts`'s.
  */
 import cookie from "@fastify/cookie";
 import type { CodespaceCollectionResult } from "@quiz/contracts";
@@ -11,8 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadConfig } from "../auth/config.js";
 import { openDb, type DbHandle } from "../db/client.js";
-import { collections, sessions, users } from "../db/schema.js";
-import { CollectionRefused, type CollectionOrder } from "../git/collect.js";
+import type { CollectionOrder } from "../git/collect.js";
 import { createSebVerifier } from "../seb/index.js";
 import type { SessionManager } from "../sessions/manager.js";
 import { createSittingSockets } from "../sessions/sittings.js";
@@ -45,10 +45,9 @@ async function serviceToken(method: string, url: string, body?: unknown): Promis
 const order = (over: Record<string, unknown> = {}) => ({
   userId: USER,
   repository: "heig-tin-info/lab3-alice",
-  branch: "main",
   base: "a".repeat(40),
   target: null,
-  keep: [".github/workflows"],
+  keep: ["tests"],
   ref: "refs/quiz/collect/r1-1794836400",
   ...over,
 });
@@ -85,26 +84,6 @@ async function harness(collect?: Collect): Promise<void> {
   await app.ready();
 }
 
-function openSession(fullName = "heig-tin-info/lab3-alice"): void {
-  const at = new Date();
-  handle.db.insert(users).values({ id: "u1", oidcSub: `classroom:${USER}`, login: USER, email: "a@heig-vd.ch", createdAt: at }).run();
-  handle.db
-    .insert(sessions)
-    .values({
-      id: "s1",
-      userId: "u1",
-      student: USER,
-      assignmentId: PROJECT,
-      volumeDir: "/srv/v",
-      state: "closed",
-      createdAt: at,
-      lastSeen: at,
-      cookieToken: "c",
-      targetRepo: { fullName, defaultBranch: "main" },
-    })
-    .run();
-}
-
 async function post(body: unknown, url = URL, token?: string) {
   return app.inject({
     method: "POST",
@@ -114,13 +93,7 @@ async function post(body: unknown, url = URL, token?: string) {
   });
 }
 
-const pushed: CodespaceCollectionResult = {
-  outcome: "pushed",
-  tree: "c".repeat(40),
-  commit: "d".repeat(40),
-  snapshotAt: "2026-11-16T13:40:21.000Z",
-  unreadable: 1,
-};
+const pushed: CodespaceCollectionResult = { outcome: "pushed", tree: "c".repeat(40), snapshotAt: "2026-11-16T13:40:21.000Z", unreadable: 1 };
 
 afterEach(async () => {
   await app.close();
@@ -136,53 +109,45 @@ describe("POST /api/assignments/:id/collections", () => {
 
   it("401 without a service token, or with one bound to another request", async () => {
     expect((await app.inject({ method: "POST", url: URL, payload: order() })).statusCode).toBe(401);
-    expect((await post(order(), URL, await serviceToken("POST", URL, order({ branch: "other" })))).statusCode).toBe(401);
+    expect((await post(order(), URL, await serviceToken("POST", URL, order({ target: "b".repeat(40) })))).statusCode).toBe(401);
     expect((await post(order(), URL, await serviceToken("PUT", URL, order()))).statusCode).toBe(401);
     expect(collect).not.toHaveBeenCalled();
   });
 
-  it("400 for a hostile order, before anything runs", async () => {
-    openSession();
-    for (const bad of [{ ref: "refs/heads/main" }, { keep: ["../x"] }, { base: "HEAD" }, { branch: "--force" }, { force: true }]) {
+  it("400 for a hostile order: refused before any snapshot, token request or git process", async () => {
+    for (const bad of [
+      { ref: "refs/heads/main" },
+      { ref: "refs/quiz/collect/../../heads/main" },
+      { base: "HEAD" },
+      { target: "--upload-pack=touch /tmp/x" },
+      { keep: ["../../etc/passwd"] },
+      { keep: ["/etc/passwd"] },
+      { keep: ["-n"] },
+      { keep: [".git/config"] },
+      { userId: ".." },
+      { repository: "owner/name/extra" },
+      { force: true },
+    ]) {
       expect((await post(order(bad))).statusCode, JSON.stringify(bad)).toBe(400);
     }
+    // `collect` is the only way to a snapshot, a token or a git process.
     expect(collect).not.toHaveBeenCalled();
-    expect(handle.db.select().from(collections).all()).toEqual([]);
   });
 
-  it("404 for an unknown assignment, 400 for a review, 409 for another repository than the session's", async () => {
-    openSession("heig-tin-info/lab3-bob");
+  it("404 for an unknown assignment, 400 for a review", async () => {
     expect((await post(order(), "/api/assignments/nope/collections")).statusCode).toBe(404);
     expect((await post(order(), "/api/assignments/review-r1/collections")).statusCode).toBe(400);
-    expect((await post(order())).statusCode).toBe(409);
     expect(collect).not.toHaveBeenCalled();
   });
 
-  it("collects the session's workspace and records the order with its outcome", async () => {
-    openSession();
+  it("collects the workspace with the order as parsed and the student's last push", async () => {
     const res = await post(order());
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual(pushed);
     expect(collect).toHaveBeenCalledWith({ ...order(), assignment: PROJECT }, null);
-    const [row] = handle.db.select().from(collections).all();
-    expect(row).toMatchObject({ student: USER, assignment: PROJECT, outcome: "pushed", tree: pushed.tree, commit: "d".repeat(40), base: "a".repeat(40) });
-  });
-
-  it("answers no_snapshot for a student who never opened a session, without touching a volume", async () => {
-    const res = await post(order());
-    expect(res.json()).toEqual({ outcome: "no_snapshot" });
-    expect(collect).not.toHaveBeenCalled();
-    expect(handle.db.select().from(collections).all()).toHaveLength(1);
-  });
-
-  it("400 when the portal's own check refuses a value", async () => {
-    openSession();
-    collect.mockRejectedValueOnce(new CollectionRefused("keep"));
-    expect((await post(order())).statusCode).toBe(400);
   });
 
   it("runs one collection at a time for a (student, assignment)", async () => {
-    openSession();
     const events: string[] = [];
     let release: () => void = () => undefined;
     collect.mockImplementationOnce(async () => {
@@ -193,7 +158,7 @@ describe("POST /api/assignments/:id/collections", () => {
     });
     collect.mockImplementationOnce(async () => {
       events.push("second started");
-      return { outcome: "unchanged", tree: "c".repeat(40), snapshotAt: pushed.snapshotAt, unreadable: 0 };
+      return { outcome: "unchanged", snapshotAt: pushed.snapshotAt, unreadable: 0 };
     });
     const first = post(order());
     const second = post(order({ ref: "refs/quiz/collect/r1-1794836401" }));
@@ -209,7 +174,6 @@ describe("POST /api/assignments/:id/collections", () => {
 describe("without a forge", () => {
   it("503: nothing can be carried to GitHub", async () => {
     await harness();
-    openSession();
     expect((await post(order())).statusCode).toBe(503);
   });
 });

@@ -50,6 +50,7 @@ import {
 
 
 import { StudentProjectWorkspace } from "./codespace.js";
+import { ProtectedPath, RepoName } from "./gitNames.js";
 import { Rounding } from "./evaluation.js";
 import { GroupConfirm } from "./group.js";
 
@@ -212,12 +213,6 @@ export type ProjectSeatKind = z.infer<typeof ProjectSeatKind>;
  */
 export const PROTECTED_FILE_SUGGESTIONS = [CRITERIA_FILE, "README.md", GRADING_WORKFLOW] as const;
 
-/** A repository's name in the organization: a name, never a path nor an owner. */
-export const RepoName = z
-  .string()
-  .regex(/^[A-Za-z0-9._-]{1,100}$/)
-  .refine((name) => name !== "." && name !== "..", "not a repository name");
-
 /**
  * A branch to hand out: what `git check-ref-format --branch` accepts, minus
  * what could read as an option (a leading `-`).
@@ -234,19 +229,6 @@ export const BranchName = z
       !b.includes("..") &&
       b.split("/").every((part) => part !== "" && !part.startsWith(".") && !part.endsWith(".")),
     "not a branch name",
-  );
-
-/** A protected file: a path relative to the repository's root, never out of it. */
-export const ProtectedPath = z
-  .string()
-  .min(1)
-  .max(300)
-  .refine(
-    (p) =>
-      !p.includes("\\") &&
-      !p.includes("\0") &&
-      p.split("/").every((part) => part !== "" && part !== "." && part !== ".."),
-    "not a relative path",
   );
 
 // ---------------------------------------------------------- grading by criteria (ADR-106 §2)

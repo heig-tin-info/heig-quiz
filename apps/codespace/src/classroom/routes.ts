@@ -79,7 +79,7 @@ import {
   type AssignmentRow,
   type UserRow,
 } from "../db/schema.js";
-import { CollectionRefused, type CollectionOrder } from "../git/collect.js";
+import type { CollectionOrder } from "../git/collect.js";
 import type { RepoRef } from "../git/index.js";
 import { SESSION_COOKIE, cookieValue } from "../proxy/index.js";
 import {
@@ -98,14 +98,12 @@ import {
   assignmentSessionRows,
   countLiveReviewSessions,
   countLiveSessionsForTeacher,
-  findAnySession,
   findAssignment,
   findLiveSession,
   isOpen,
   isReview,
   lastPushAt,
   liveReviewSessionIds,
-  recordCollection,
   splitRepoRef,
   upsertAssignment,
 } from "../sessions/store.js";
@@ -424,9 +422,9 @@ async function classroomRoutesImpl(
 
     // --- POST /api/assignments/:id/collections --------------------------------
     // Quiz collects one student's workspace at a deadline (ADR-130 §4): the
-    // order is checked by the contract here and again by `collectWorkspace`
-    // before any git process; one collection at a time per (student,
-    // assignment); every order recorded with its outcome.
+    // order parsed by its contract before anything runs, one collection at a
+    // time per (student, assignment), and this log line as the portal's
+    // record — only Quiz knows whether a `pushed` became a collection.
     api.post<{ Params: { assignmentId: string } }>(
       "/api/assignments/:assignmentId/collections",
       async (request, reply) => {
@@ -445,36 +443,14 @@ async function classroomRoutesImpl(
         if (isReview(assignment)) return reply.code(400).send({ error: "reserved_id" });
         const collect = opts.collect;
         if (!collect) return reply.code(503).send({ error: "collection_unavailable" });
-        const session = findAnySession(db, body.userId, assignment.id);
-        if (session?.targetRepo && session.targetRepo.fullName.toLowerCase() !== body.repository.toLowerCase()) {
-          return reply.code(409).send({ error: "repository_mismatch" });
-        }
-        const order: CollectionOrder = { ...body, assignment: assignment.id };
-        try {
-          const result = await oneCollectionAtATime(`${body.userId}\u0000${assignment.id}`, async () => {
-            // No session ever opened: no volume to read.
-            const outcome: CodespaceCollectionResult = session
-              ? await collect(order, lastPushAt(db, body.userId, assignment.id))
-              : { outcome: "no_snapshot" };
-            recordCollection(db, {
-              id: randomUUID(),
-              student: body.userId,
-              assignment: assignment.id,
-              ref: body.ref,
-              base: body.base,
-              outcome: outcome.outcome,
-              tree: "tree" in outcome ? outcome.tree : null,
-              commit: "commit" in outcome ? outcome.commit : null,
-              at: new Date(),
-            });
-            return outcome;
-          });
-          request.log.info({ assignmentId: assignment.id, student: body.userId, outcome: result.outcome }, "workspace collection");
-          return reply.code(200).send(result);
-        } catch (err) {
-          if (!(err instanceof CollectionRefused)) throw err;
-          return reply.code(400).send({ error: "invalid_body", issues: [{ path: err.field, message: "refused" }] });
-        }
+        const result = await oneCollectionAtATime(`${body.userId}\u0000${assignment.id}`, () =>
+          collect({ ...body, assignment: assignment.id }, lastPushAt(db, body.userId, assignment.id)),
+        );
+        request.log.info(
+          { assignmentId: assignment.id, student: body.userId, ref: body.ref, outcome: result.outcome, ...("reason" in result ? { reason: result.reason } : {}) },
+          "workspace collection",
+        );
+        return reply.code(200).send(result);
       },
     );
 

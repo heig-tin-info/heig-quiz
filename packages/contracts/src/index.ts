@@ -27,6 +27,7 @@ export * from "./drill.js";
 export * from "./journal.js";
 export * from "./kiosk.js";
 export * from "./github.js";
+export * from "./gitNames.js";
 export * from "./project.js";
 export * from "./checkResults.js";
 export * from "./group.js";

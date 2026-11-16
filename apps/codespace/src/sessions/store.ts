@@ -8,13 +8,11 @@ import { and, desc, eq, inArray, isNotNull, isNull, notInArray, type SQL } from 
 import type { Db } from "../db/client.js";
 import {
   assignments,
-  collections,
   pushEvents,
   sessions,
   users,
   type AssignmentRow,
   type NewAssignmentRow,
-  type NewCollectionRow,
   type PushEventRow,
   type SessionRow,
   type UserRow,
@@ -267,11 +265,6 @@ export function lastPushAt(db: Db, student: string, assignmentId: string): Date 
     .limit(1)
     .get();
   return row?.at ?? null;
-}
-
-/** One collection order and what came of it (ADR-130 §7): the portal's own record. */
-export function recordCollection(db: Db, row: NewCollectionRow): void {
-  db.insert(collections).values(row).run();
 }
 
 /** Sessions of an assignment, with their user: the platform's teacher table. */

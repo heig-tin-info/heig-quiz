@@ -99,8 +99,9 @@ repository (ADR-077) is treated like any other.
   `work/` (no session ever opened), or no snapshot even after asking for
   one: `no_snapshot`. A file the portal cannot read (a
   `chmod 600`, `unreadable`) keeps its last snapshot's version, at most three
-  minutes old; the count is recorded and shown to the staff.
-- **The branch** (pure rule `collectionBranch` of `@quiz/domain`): the host
+  minutes old; the count is recorded and shown to the staff (unknown, null,
+  when the last snapshot stood in for a fresh one).
+- **The branch** (pure rule `collectionBranch` of `@quiz/domain`, Quiz's): the host
   cannot know which branch `work/` has checked out, so it is the branch of
   the student's last push received (a non-bot receipt) when it is handed
   out (`project.branches`), the first handed-out branch when the student
@@ -111,7 +112,8 @@ repository (ADR-077) is treated like any other.
   files (F-PROJ-08; `criteria.yml` under `criteria`) and `.github/workflows/`
   always (a `contents`-only grant cannot change it, and the restore would
   only put it back). Pure rule `collectionKeptPaths` of `@quiz/domain`, the
-  matching `pathWithin`'s. A symbolic link is carried as a link, never
+  matching `pathWithin`'s; the portal applies it to Quiz's list again, so the
+  workflows stay kept whatever the list says. A symbolic link is carried as a link, never
   followed; a gitlink (a repository the student cloned inside `work/`) is
   left out, and so is a workspace file standing where a kept entry needs a
   directory (`composeCollectionTree`).
@@ -122,9 +124,9 @@ repository (ADR-077) is treated like any other.
   push that already carries the same tree, the collection commit repeats its
   parent's tree: it is no empty collection, it hands in on time what only a
   late push held.
-- **Size**: a file over 100 MiB (GitHub's limit) or new objects over
-  `RECEIVE_MAX_INPUT_BYTES` (100 MiB, the cap of one student push):
-  `too_large`, nothing pushed.
+- **Size**: the blobs the base does not hold over `RECEIVE_MAX_INPUT_BYTES`
+  in all (100 MiB, the cap of one student push, which no file over GitHub's
+  100 MiB limit fits under): `too_large`, nothing pushed.
 
 ### 4. Who does what
 
@@ -132,25 +134,36 @@ repository (ADR-077) is treated like any other.
    `POST /api/assignments/:projectId/collections`, a service token bound to
    the request and single use (ADR-078 §10; `ServiceTokenClaims.method`
    gains `POST`), whose body is `CodespaceCollectionRequest` of
-   `@quiz/contracts` (both sides): the user, the repository, the branch, the
-   base sha, the target sha, the kept paths, and the temporary ref Quiz names
-   (`refs/quiz/collect/<repository id>-<deadline epoch>`).
-2. **The portal builds and carries the tree** (`apps/codespace/src/git/collect.ts`).
-   In a temporary bare repository whose object store borrows `shadow.git`'s
-   and `staging.git`'s as alternates (nothing written into either, nothing
-   read from the student's repository; the temporary repository, its
-   alternates and its index removed on every exit): the base and the target
-   fetched from GitHub when missing, the tree composed in a temporary index,
-   compared, and one throwaway commit of it on the base pushed to the
-   temporary ref — a new ref, never a branch, never forced, no head declared,
-   no `PushEvent` — with the write grant it already holds (§5). One
-   collection at a time per (student, assignment); every order is recorded
-   with its outcome in the portal's `collections` table. It answers
-   `CodespaceCollectionResult`: `pushed` (the tree and the throwaway
-   commit), `unchanged`, `too_large`, `stale_snapshot`, `no_snapshot` or
-   `failed` with a closed reason, and the snapshot's time and unreadable
-   count.
-3. **Quiz commits.** `signedCommit` of that tree on the base, message
+   `@quiz/contracts` (both sides; the portal parses it with that schema
+   before anything runs): the user, the repository, the base sha (the
+   head of the branch §3 chose), the target sha, the kept paths, and the
+   temporary ref Quiz names (`refs/quiz/collect/<repository id>-<deadline epoch>`).
+2. **The portal builds and carries the tree** (`apps/codespace/src/git/collect.ts`),
+   within one time budget of 45 s. The collection itself reads only
+   `shadow.git` and `staging.git`, the host's own repositories, and writes
+   only a temporary bare repository whose object store borrows theirs as
+   alternates — removed, with its alternates and its index, on every exit:
+   the base and the target fetched from GitHub when missing, the tree
+   composed in a temporary index, compared, and one throwaway commit of it
+   on the base pushed to the temporary ref — a new ref, never a branch,
+   never forced, no head declared, no `PushEvent` — with the write grant it
+   already holds (§5). The snapshot it triggers is the existing one
+   (`sessions/shadow.ts`, `git add -A` with `.git` excluded), with that
+   module's known limit: a nested repository's gitfile under `work/` is
+   followed to record a gitlink, which the collection then leaves out (§3);
+   that limit is handled apart from this record. One collection at a time
+   per (student, assignment); the portal's record is one log line per order
+   with its outcome. It answers `CodespaceCollectionResult`: `pushed` (the
+   tree), `unchanged`, `too_large`, `stale_snapshot`, `no_snapshot` or
+   `failed` with a closed reason (`timeout` among them), and the snapshot's
+   time and unreadable count. **`pushed` means only that a throwaway commit
+   sits on a temporary ref**: only Quiz knows whether a collection followed.
+3. **Quiz checks, then commits.** Before signing anything, Quiz reads the
+   pushed commit on the temporary ref and verifies that (a) its tree is the
+   `tree` the portal reported and its parent the base, and (b) every entry
+   under the kept paths — `collectionKeptPaths` of the project's protected
+   files — equals the base's, none added, none removed; otherwise `failed`,
+   nothing signed, the temporary ref deleted. Then `signedCommit` of that tree on the base, message
    `Collected from the online workspace at the deadline (<local time>)`;
    the receipt (§6) and the collection row written; then the branch moved,
    `force: false`. A 422 (the head moved: a student's push relayed in the
@@ -168,13 +181,20 @@ repository (ADR-077) is treated like any other.
   class; then it settles each repository as before, four at a time
   (ADR-064). Edits made between the deadline and the snapshot are included;
   edits after the snapshot are not handed in (§7).
-- **Per repository**: the portal call times out at 60 s; any failure or
-  timeout records `failed` with its cause and the repository is locked
-  regardless. Never a forced push of a branch, never a branch deleted.
+- **How late the content may be.** Quiz sends an order only within 120 s
+  of the repository's effective deadline, judged on Quiz's clock when the
+  order is sent — never on the portal's `snapshotAt`, the engine VM's clock.
+  Later than that (Quiz down at the deadline, a job that waited) the outcome
+  is `too_late`, flagged for the staff, whose remedy is the repository's own
+  deadline (F-PROJ-09 (1)): a collection at the new one.
+- **Per repository**: the portal stops at its 45 s budget and pushes nothing
+  more; Quiz's call times out at 60 s; any failure or timeout records
+  `failed` with its cause and the repository is locked regardless. Never a
+  forced push of a branch, never a branch deleted.
 - **The write grant, unchanged (ADR-078 §13).** The portal asks Quiz for its
   token as for a relay (`POST /app/codespace/git-token`); check 5 already
   grants it until the effective deadline plus the grace, and a collection is
-  only attempted within that window (past it: `too_late`). Under `commit`,
+  only ordered well within that window (the 120 s above). Under `commit`,
   ADR-078 §11's bound applies as it stands. No new permission, no new route
   for the token, the audit `codespace.git_token_issued` as for any grant.
 - **GitHub or the portal down at the deadline**: `failed`, locked anyway.
@@ -204,6 +224,13 @@ target (ADR-106 §3, ADR-119 §6) — then needs no case of its own; on equal
 times the collected receipt is the later. A student's own push received
 after the deadline stays late (F-PROJ-11).
 
+Only the deadline job's collection path writes a `collected` receipt, after
+the check of §4.3, its `received_at` computed by Quiz from the repository's
+effective deadline — never taken from the portal's answer (`snapshotAt` is
+the engine VM's clock and only informs the staff). No other route, job or
+webhook can set `collected`: the intake writes it false, and a redelivery
+never changes a receipt.
+
 ### 7. What the student and the staff see
 
 - **The staff**: the repository's row on the project page says "Collected
@@ -216,7 +243,8 @@ after the deadline stays late (F-PROJ-11).
 - **The student**: the project page in Quiz says the work was collected at
   the deadline and that changes made after it are not handed in; the
   workspace's status bar says the same (`push-status` gains `collected`,
-  from the portal's own record of the push it made).
+  from what Quiz recorded — the portal's `pushed` is no collection by
+  itself). The Quiz project page does not depend on the workspace's image.
 - **Resuming later** (an extension, a reopen): nothing is rewritten in
   `work/`. The student's next push is refused as a non-fast-forward, the
   relay fetches GitHub's head into `staging.git` (ADR-078 §6, as for a
@@ -264,7 +292,8 @@ the lock. The header comment of `github/lock.ts` is corrected with the code.
   the count says so. The snapshot may include edits from the seconds
   between the deadline and Quiz's order.
 - Code: a pure rule pair in `@quiz/domain`, contracts for one portal route,
-  one migration (the collection table, `push_receipts.collected`), the
+  one migration of Quiz's (`codespace_collections`, `push_receipts.collected`;
+  the portal keeps no table for it), the
   portal's route and git plumbing, a step in the deadline job, two surfaces
   and their strings in `en` and `fr`.
 

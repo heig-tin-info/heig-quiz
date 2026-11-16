@@ -261,11 +261,11 @@ describe("the relay's token and declaration (ADR-078 §2)", () => {
     expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, userId: "u-1" }).success).toBe(false);
   });
 
-  it("declares 1 to 50 heads, each a ref and a full sha", () => {
+  it("declares 1 to 50 heads, each a ref and a full SHA-1", () => {
     const heads = (n: number) => Array.from({ length: n }, () => ({ ref: "refs/heads/main", sha }));
     const declared = (h: unknown) => RelayHeadsClaims.safeParse({ ...base, aud: RELAY_HEADS_AUDIENCE, heads: h }).success;
     expect(declared(heads(1))).toBe(true);
-    expect(declared([{ ref: "refs/heads/main", sha: "b".repeat(64) }])).toBe(true);
+    expect(declared([{ ref: "refs/heads/main", sha: "b".repeat(64) }])).toBe(false);
     expect(declared(heads(50))).toBe(true);
     expect(declared(heads(51))).toBe(false);
     expect(declared([])).toBe(false);
@@ -291,7 +291,6 @@ describe("the collection at the deadline (ADR-130)", () => {
   const order = {
     userId: "6f1c2a8e-1b2c-4d5e-8f90-123456789abc",
     repository: "heig-tin-info/lab3-alice",
-    branch: "main",
     base: "a".repeat(40),
     target: null,
     keep: [".github/workflows", "criteria.yml"],
@@ -304,12 +303,12 @@ describe("the collection at the deadline (ADR-130)", () => {
     expect(collectionsPath("p1")).toBe("/api/assignments/p1/collections");
   });
 
-  it("refuses a hostile ref, branch, sha, path, user or an extra field", () => {
+  it("refuses a hostile ref, sha, path, user, repository or an extra field", () => {
     for (const bad of [
       { ref: "refs/heads/main" },
       { ref: "refs/quiz/collect/../heads/main" },
-      { branch: "-f" },
-      { branch: "a..b" },
+      { ref: "refs/quiz/collect/x.lock" },
+      { ref: "+refs/quiz/collect/x" },
       { base: "HEAD" },
       { base: "a".repeat(64) },
       { target: "--upload-pack=x" },
@@ -317,8 +316,14 @@ describe("the collection at the deadline (ADR-130)", () => {
       { keep: ["/abs"] },
       { keep: ["-x"] },
       { keep: [".git/config"] },
+      { keep: ["a\\b"] },
       { userId: "../other" },
       { repository: "no-owner" },
+      { repository: "owner/.." },
+      { repository: "-owner/x" },
+      { repository: "owner/x/y" },
+      { repository: "own er/x" },
+      { branch: "main" },
       { force: true },
     ]) {
       expect(CodespaceCollectionRequest.safeParse({ ...order, ...bad }).success, JSON.stringify(bad)).toBe(false);
@@ -327,8 +332,9 @@ describe("the collection at the deadline (ADR-130)", () => {
 
   it("answers one of the closed outcomes", () => {
     const facts = { snapshotAt: "2026-11-16T13:40:21Z", unreadable: 0 };
-    expect(CodespaceCollectionResult.safeParse({ outcome: "pushed", tree: "c".repeat(40), commit: "d".repeat(40), ...facts }).success).toBe(true);
-    expect(CodespaceCollectionResult.safeParse({ outcome: "unchanged", tree: "c".repeat(40), ...facts }).success).toBe(true);
+    expect(CodespaceCollectionResult.safeParse({ outcome: "pushed", tree: "c".repeat(40), ...facts }).success).toBe(true);
+    expect(CodespaceCollectionResult.safeParse({ outcome: "unchanged", ...facts, unreadable: null }).success).toBe(true);
+    expect(CodespaceCollectionResult.safeParse({ outcome: "failed", reason: "timeout" }).success).toBe(true);
     expect(CodespaceCollectionResult.safeParse({ outcome: "no_snapshot" }).success).toBe(true);
     expect(CodespaceCollectionResult.safeParse({ outcome: "failed", reason: "push_rejected" }).success).toBe(true);
     expect(CodespaceCollectionResult.safeParse({ outcome: "failed", reason: "anything" }).success).toBe(false);

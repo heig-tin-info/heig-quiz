@@ -15,7 +15,7 @@
  * heig-classroom stores `timestamptz`. SQLite has no timestamp type and a
  * text date would sort badly across time zones.
  */
-import { CODESPACE_COLLECTION_OUTCOMES, CODESPACE_SESSION_STATES } from "@quiz/contracts";
+import { CODESPACE_SESSION_STATES } from "@quiz/contracts";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
@@ -317,30 +317,3 @@ export const closedSittings = sqliteTable(
 );
 
 export type ClosedSittingRow = typeof closedSittings.$inferSelect;
-
-/**
- * The collections Quiz ordered at a deadline (ADR-130 §4, §7): one row per
- * order, whatever its outcome. The portal's own record of what it carried to
- * GitHub (`commit`, the throwaway commit on the temporary `ref`; `tree`, the
- * collected tree), which the workspace's status bar will read to say the
- * work was collected. No token, no file content.
- */
-export const collections = sqliteTable(
-  "collections",
-  {
-    id: text("id").primaryKey(),
-    student: text("student").notNull(),
-    assignment: text("assignment").notNull(),
-    ref: text("ref").notNull(),
-    base: text("base").notNull(),
-    outcome: text("outcome", { enum: CODESPACE_COLLECTION_OUTCOMES }).notNull(),
-    tree: text("tree"),
-    commit: text("commit"),
-    /** When the portal answered, the engine's clock. */
-    at: integer("at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (t) => [index("collections_pair_idx").on(t.student, t.assignment, t.at)],
-);
-
-export type CollectionRow = typeof collections.$inferSelect;
-export type NewCollectionRow = typeof collections.$inferInsert;
