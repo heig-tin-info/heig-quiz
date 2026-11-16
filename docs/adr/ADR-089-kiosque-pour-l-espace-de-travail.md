@@ -8,8 +8,11 @@ which overrides §1, §2, §4, §6, §9 and §12 where it says so. Proposed 2026
 owner's then). Built behind `KIOSK_PROJECTS`. The owner turned it on in production on 2026-11-15
 without waiting for the proofs (the owner's decision), for a class on 2026-11-16; on 2026-11-16 a
 real station framed the portal and the editor opened once the Admin console's URL allowlist named
-the portal's host (`code.chevallier.io`). The rest of proof K (sockets, clipboard, shortcuts,
-cookies across the 303) and project proof B are not recorded. Amended 2026-11-16 (owner): a
+the portal's host (`code.chevallier.io`). The same day a class used it in production: three
+station sittings on a supervised project (two ended by Leave, one by the deadline, none
+suspended), beside 22 Safe Exam Browser sessions of the same project, each carrying a Config Key.
+The points of proof K (sockets, clipboard, shortcuts, cookies across the 303) and of project
+proof B were not checked one by one and are not recorded. Amended 2026-11-16 (owner): a
 restarted station frees itself, [amendment of 2026-11-16](#amendment-2026-11-16-a-restarted-station-frees-itself).
 Delivery: [merge progress](../merge/PROGRESS.md), M6-11a–f.
 
