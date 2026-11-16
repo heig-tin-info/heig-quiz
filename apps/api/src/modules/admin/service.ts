@@ -2,14 +2,14 @@ import { randomUUID } from "node:crypto";
 
 import { eq, isNull, sql } from "drizzle-orm";
 
-import type { AdminUser } from "@quiz/contracts";
+import type { AdminUser, TeacherCodespaceGrant } from "@quiz/contracts";
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { avatars, classrooms, courseStaff, pools, presenceLastSeen, questions, teacherGrants, users } from "../../db/schema.js";
 import { normalizeEmail } from "../../identity.js";
 import { shownAvatar } from "../avatar.js";
-import { roleDecisionsOfAll } from "../../roles.js";
+import { isSuperAdminEmail, roleDecisionsOfAll } from "../../roles.js";
 import { dueForReview, lastActivity } from "../account/service.js";
 
 /**
@@ -87,6 +87,21 @@ export async function listUsers(db: Db, config: AppConfig): Promise<AdminUser[]>
       dormantSince: r.dormantSince?.toISOString() ?? null,
     };
   });
+}
+
+/**
+ * A grant row's workspace grant as the administration shows it (ADR-047,
+ * amendment 2026-11-16): on the administrator's address (`isSuperAdminEmail`)
+ * the workspace is always on, whatever the stored switch; the quota is the row's.
+ */
+export function shownCodespaceGrant(
+  config: Pick<AppConfig, "SUPER_ADMIN_EMAIL">,
+  row: { email: string; codespaceEnabled: boolean; codespaceMaxActiveSessions: number },
+): TeacherCodespaceGrant {
+  return {
+    enabled: row.codespaceEnabled || isSuperAdminEmail(config, row.email),
+    maxActiveSessions: row.codespaceMaxActiveSessions,
+  };
 }
 
 /**

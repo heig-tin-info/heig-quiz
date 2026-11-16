@@ -99,7 +99,8 @@ const PORTAL_TIMEOUT_MS = 10_000;
  * quota. An administrator (`users.role = 'admin'`, the account role the role
  * rule gives `SUPER_ADMIN_EMAIL`, with or without active Super Powers)
  * ALWAYS holds the grant, with at least the default quota (ADR-047,
- * amendment of 2026-10-08): their address cannot hold a row.
+ * amendment of 2026-10-08), and a row of theirs raises the quota, never
+ * lowers it nor turns the workspace off (amendment of 2026-11-16).
  */
 export async function grantOf(db: Db | Tx, userId: string): Promise<TeacherCodespaceGrant | null> {
   const [user] = await db.select({ email: users.email, verified: users.emailVerified, role: users.role }).from(users).where(eq(users.id, userId));

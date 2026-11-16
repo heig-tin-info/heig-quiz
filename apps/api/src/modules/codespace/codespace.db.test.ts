@@ -55,10 +55,12 @@ import {
   githubAccounts,
   projectRepos,
   projects,
+  userEmails,
+  users,
 } from "../../db/schema.js";
 import { orgsRoute } from "../../github/testing.js";
 import { sessionOf } from "../../test/http.js";
-import { runCodespaceSync } from "./service.js";
+import { grantOf, runCodespaceSync } from "./service.js";
 import {
   CODESPACE_ENV,
   PORTAL,
@@ -161,7 +163,10 @@ const repoOf = async (projectId: string, userId: string) =>
 /** Every line pino writes, from `beforeAll` on. */
 let logLines: string[] = [];
 
-useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, world.route], env: CODESPACE_ENV, fetch: portal.fetch, teacher: false });
+/** The role rule's administrator, for the grant row of their own address (ADR-047, amendment 2026-11-16). */
+const SUPER_ADMIN_EMAIL = "boss@heig.test";
+
+useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, world.route], env: { ...CODESPACE_ENV, SUPER_ADMIN_EMAIL }, fetch: portal.fetch, teacher: false });
 
 beforeAll(async () => {
   logLines = captureLog(server.app);
@@ -713,5 +718,43 @@ describe("the workspace grant (admin)", () => {
     expect((await call("PATCH", `/app/api/admin/teachers/${gid}/codespace`, owner.headers, { enabled: false })).statusCode).toBe(403);
     const [audit] = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "teacher.codespace_grant"), eq(auditLog.subjectId, gid)));
     expect(audit?.payload).toEqual({ email, enabled: true, maxActiveSessions: 4 });
+  });
+
+  it("sets an administrator's quota on a row of their address, never their switch (amendment 2026-11-16)", async () => {
+    const email = SUPER_ADMIN_EMAIL;
+    const admin = await server.signIn("admin", email);
+    // A verified address in the set: the grant and the revoke recompute the role.
+    await server.app.db.insert(userEmails).values({ userId: admin.id, email, source: "login", verified: true });
+    const created = await call("POST", "/app/api/admin/teachers", admin.headers, { email });
+    expect(created.statusCode, created.body).toBe(201);
+    const gid = created.json().id as string;
+    const listed = async () => {
+      const res = await call("GET", "/app/api/admin/teachers", admin.headers);
+      expect(res.statusCode, res.body).toBe(200);
+      return res.json<AdminTeacher[]>().find((t) => t.id === gid);
+    };
+    const path = `/app/api/admin/teachers/${gid}/codespace`;
+
+    // The row is stored off, but the administrator's workspace is always on.
+    expect(await listed()).toMatchObject({ admin: true, codespace: { enabled: true, maxActiveSessions: DEFAULT_MAX_ACTIVE_SESSIONS } });
+    for (const enabled of [false, true]) {
+      const refused = await call("PATCH", path, admin.headers, { enabled, maxActiveSessions: 30 });
+      expect([refused.statusCode, refused.json().error]).toEqual([409, "is_admin"]);
+    }
+    expect(await grantOf(server.app.db, admin.id)).toEqual({ enabled: true, maxActiveSessions: DEFAULT_MAX_ACTIVE_SESSIONS });
+
+    // Above the default, the row's quota; below it, the default still.
+    const raised = await call("PATCH", path, admin.headers, { maxActiveSessions: 30 });
+    expect([raised.statusCode, raised.json()]).toEqual([200, { enabled: true, maxActiveSessions: 30 }]);
+    expect(await grantOf(server.app.db, admin.id)).toEqual({ enabled: true, maxActiveSessions: 30 });
+    expect((await listed())?.codespace).toEqual({ enabled: true, maxActiveSessions: 30 });
+    expect((await call("PATCH", path, admin.headers, { maxActiveSessions: 0 })).statusCode).toBe(200);
+    expect(await grantOf(server.app.db, admin.id)).toEqual({ enabled: true, maxActiveSessions: DEFAULT_MAX_ACTIVE_SESSIONS });
+
+    // Revoked: the default grant again, and the role untouched.
+    expect((await call("DELETE", `/app/api/admin/teachers/${gid}`, admin.headers)).statusCode).toBe(204);
+    expect(await grantOf(server.app.db, admin.id)).toEqual({ enabled: true, maxActiveSessions: DEFAULT_MAX_ACTIVE_SESSIONS });
+    const [stored] = await server.app.db.select({ role: users.role }).from(users).where(eq(users.id, admin.id));
+    expect(stored?.role).toBe("admin");
   });
 });

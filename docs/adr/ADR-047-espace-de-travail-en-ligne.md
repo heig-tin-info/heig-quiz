@@ -4,7 +4,7 @@
 
 Accepted in heig-classroom (2026-09-17, portal milestone 2, its ADR-013);
 imported 2026-09-30 (merge task M0-03, ADR-035) and amended for Quiz on
-2026-10-07, 2026-10-08, 2026-10-11 and 2026-10-29. The body is
+2026-10-07, 2026-10-08, 2026-10-11, 2026-10-29 and 2026-11-16. The body is
 classroom's, read with [the merge's renames](#reading-the-imported-body);
 Quiz's rules in force are under [Quiz's amendments](#quizs-amendments).
 Delivery: [merge progress](../merge/PROGRESS.md). The dated text of every
@@ -15,6 +15,7 @@ amendment is in the [historical record](history/ADR-047-espace-de-travail-en-lig
 - 2026-10-07, M6-07: Safe Exam Browser for a project ([amendment](#m6-07-2026-10-07-safe-exam-browser-for-a-project)); no SEB project opens to students before proof B is recorded.
 - 2026-10-07, [ADR-078](ADR-078-codespace-git-relay-tokens.md): no App key on the engine VM; the portal seeds and relays with installation tokens Quiz issues for one repository.
 - 2026-10-08: an administrator always holds the workspace grant ([amendment](#2026-10-08-an-administrator-always-holds-the-grant)).
+- 2026-11-16: the administrator's address may hold a grant row, for its quota ([amendment](#2026-11-16-the-administrators-quota-on-a-grant-row)).
 - 2026-10-09, [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md) (accepted 2026-11-15): an `online_seb` project may accept kiosk stations; it amends M6-06 (A) and M6-07 here ([its amendment](ADR-089-kiosque-pour-l-espace-de-travail.md#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag)).
 - 2026-10-11, audit M11 and L25: the service token is single use and bound to its request, every token's lifetime capped ([ADR-078's amendment](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use)).
 - 2026-10-11, audit L7: the start route is a POST ([amendment](#2026-10-11-the-start-route-is-a-post)).
@@ -204,7 +205,7 @@ needs no grant). The grant is two columns on `teacher_grants`,
 edited by an administrator (`PATCH /app/api/admin/teachers/:gid/codespace`).
 An account's grant is read on its VERIFIED addresses only (its verified
 ones, and its sign-in address when the identity provider verified it), the
-most permissive row winning, as the role rule does; the administrator, whose address cannot hold a grant, is not
+most permissive row winning, as the role rule does; the administrator, whose address cannot hold a grant (*it may since [2026-11-16](#2026-11-16-the-administrators-quota-on-a-grant-row)*), is not
 granted (an administrator acts as an owner under Super Powers, ADR-054,
 never past the grant) — superseded 2026-10-08: an administrator is always
 granted (amendment below).
@@ -272,6 +273,38 @@ oldest owner) give one answer. The owner check is unchanged: an
 administrator sets a mode on a course where they hold an owner seat, or
 under Super Powers (ADR-054). The administration lists no grant row for
 them and needs no switch.
+*Note 2026-11-16: this last sentence is overridden by the
+[amendment of 2026-11-16](#2026-11-16-the-administrators-quota-on-a-grant-row):
+the administrator's address may hold a row, for its quota.*
+
+### 2026-11-16: the administrator's quota on a grant row
+
+*Product owner.* Scope: the last sentence of the 2026-10-08 amendment
+above, and the `is_admin` refusal of `POST /app/api/admin/teachers`.
+The administrator was the quota holder of an online project with 27
+students, at the default quota of 2, and nothing in the product could
+raise it: the administration refused their address and listed no row for
+them.
+
+1. The administrator's address may hold a `teacher_grants` row, created
+   by the same *Grant* form (*Autoriser*). The role rule puts `admin` first, so the
+   row neither raises nor lowers the role, and revoking it leaves the
+   account `admin`.
+2. The quota is the row's when it is higher than the default, never
+   lower: `grantOf` already takes the most permissive of the
+   administrator's default and the rows of their verified addresses.
+3. The switch has no effect for them: their workspace is always on. The
+   teachers list marks the row of `SUPER_ADMIN_EMAIL` as the
+   administrator's (`AdminTeacher.admin`, `isSuperAdminEmail` of the role
+   rule) and reports it enabled; the screen shows that switch on and
+   disabled, saying why, and `PATCH …/codespace` refuses an `enabled` on
+   such a row (`409 is_admin`), so the server never stores nor answers a
+   state the screen does not show. The quota field works as for anyone.
+
+No migration, table nor setting. There is one administrator
+(`SUPER_ADMIN_EMAIL`), so no administrator edits another's row. A row
+outlives a change of `SUPER_ADMIN_EMAIL`: it then becomes an ordinary
+teacher grant, visible and revocable in the list.
 
 ### 2026-10-11: the start route is a POST
 

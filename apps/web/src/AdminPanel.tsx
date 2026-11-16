@@ -114,7 +114,7 @@ export function AdminPage() {
  * signs in — the role is recomputed server-side at every login, so this
  * screen never has to know whether the account exists.
  */
-function TeachersSection() {
+export function TeachersSection() {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
@@ -239,7 +239,7 @@ function TeachersSection() {
                     </td>
                     {workspace ? (
                       <td className={T.td}>
-                        {r.codespace ? <WorkspaceGrant id={r.id} email={r.email} grant={r.codespace} /> : "—"}
+                        {r.codespace ? <WorkspaceGrant id={r.id} email={r.email} admin={r.admin} grant={r.codespace} /> : "—"}
                       </td>
                     ) : null}
                     <td className={`${T.td} text-right`}>
@@ -250,7 +250,8 @@ function TeachersSection() {
                         onClick={async () => {
                           if (
                             await confirm({
-                              title: t("admin.revokeConfirm", { email: r.email }),
+                              // The administrator keeps their role: only the quota goes back to the default.
+                              title: t(r.admin ? "admin.revokeQuotaConfirm" : "admin.revokeConfirm", { email: r.email }),
                               confirmLabel: t("admin.revoke"),
                               danger: true,
                             })
@@ -275,9 +276,22 @@ function TeachersSection() {
 /**
  * A teacher's online workspace grant (ADR-047 §4, amended 2026-10-07): the
  * switch, and how many of the workspaces they carry may run at once —
- * written on change, the number when the field is left.
+ * written on change, the number when the field is left. The
+ * administrator's switch is held on, its reason saying why: their
+ * workspace is always on, only the quota is theirs to set (ADR-047,
+ * amendment 2026-11-16).
  */
-function WorkspaceGrant({ id, email, grant }: { id: string; email: string; grant: TeacherCodespaceGrant }) {
+function WorkspaceGrant({
+  id,
+  email,
+  admin,
+  grant,
+}: {
+  id: string;
+  email: string;
+  admin: boolean;
+  grant: TeacherCodespaceGrant;
+}) {
   const t = useT();
   const qc = useQueryClient();
   const [quota, setQuota] = useState(String(grant.maxActiveSessions));
@@ -300,6 +314,7 @@ function WorkspaceGrant({ id, email, grant }: { id: string; email: string; grant
       <Switch
         checked={grant.enabled}
         disabled={save.isPending}
+        disabledReason={admin ? t("admin.workspace.alwaysOn") : null}
         label={t("admin.workspace.enable", { email })}
         onChange={(enabled) => save.mutate({ enabled })}
       />

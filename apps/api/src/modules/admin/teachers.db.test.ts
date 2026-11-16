@@ -122,10 +122,19 @@ describe("POST /app/api/admin/teachers", () => {
     expect(await auditsOf("teacher.grant", rows[0]!.id)).toHaveLength(1);
   });
 
-  it("refuses the administrator's own e-mail (409)", async () => {
+  it("grants the administrator's own e-mail, marked as theirs, and the role stays admin, revoked too (ADR-047, 2026-11-16)", async () => {
+    // A verified address in the set, so the grant and the revoke do recompute the role.
+    await server.app.db.insert(userEmails).values({ userId: admin.id, email: "boss@heig.test", source: "login", verified: true });
     const res = await grant("Boss@heig.test");
-    expect(res.statusCode).toBe(409);
-    expect(res.json()).toMatchObject({ error: "is_admin" });
+    expect(res.statusCode).toBe(201);
+    const created = res.json<{ id: string }>();
+    expect(await roleOf(admin.id)).toBe("admin");
+
+    const rows = (await call(admin, "GET", "/app/api/admin/teachers")).json<{ id: string; email: string; admin: boolean }[]>();
+    expect(rows.find((r) => r.id === created.id)).toMatchObject({ email: "boss@heig.test", admin: true });
+    expect(rows.filter((r) => r.id !== created.id).every((r) => !r.admin)).toBe(true);
+
+    expect((await call(admin, "DELETE", `/app/api/admin/teachers/${created.id}`)).statusCode).toBe(204);
     expect(await roleOf(admin.id)).toBe("admin");
   });
 
