@@ -494,6 +494,15 @@ const leftRoster = (e: RepoEntry): boolean => e.kind === "student" && e.student.
 const existingRepo = (e: RepoEntry): ProjectRepoView | null =>
   e.repo !== null && exists(e.repo) ? e.repo : null;
 
+/**
+ * Whether the work reached `repo`: a commit of the student's own, or the
+ * online workspace collected at a deadline (ADR-130 §7), which is handed in
+ * although the count, the student's own, stays 0. The one rule of the "no
+ * commit" tile and filter, the "pushed" progress and the count's tone.
+ */
+export const handedIn = (repo: Pick<ProjectRepoView, "commits" | "collection">): boolean =>
+  repo.commits > 0 || repo.collection?.outcome === "collected";
+
 /** Whether `repo` is ready: provisioned, its invitation accepted or none (in group mode: provisioned). */
 const isReady = (repo: ProjectRepoView, groupMode: boolean): boolean =>
   repo.provisionStatus === "ok" && (groupMode || repo.invitationStatus !== "pending");
@@ -515,8 +524,10 @@ function matches(e: RepoEntry, filter: RepoFilter, p: Pick<ProjectDetail, "group
       return repo !== null && isPending(repo, groupMode);
     case "notAccepted":
       return repo === null && !noGroup(e, groupMode);
-    case "noCommit":
-      return existingRepo(e)?.commits === 0;
+    case "noCommit": {
+      const r = existingRepo(e);
+      return r !== null && !handedIn(r);
+    }
     case "ciFail":
       return existingRepo(e)?.ciStatus === "fail";
     case "toVerify":
@@ -579,7 +590,7 @@ export function projectTally(p: Pick<ProjectDetail, "groupMode" | "rows" | "dead
       leftRoster: entries.filter(leftRoster).length,
     },
     progress: {
-      pushed: existing.filter((r) => r.commits > 0).length,
+      pushed: existing.filter(handedIn).length,
       noCommit: n("noCommit"),
       ciFail: n("ciFail"),
       toVerify: n("toVerify"),
@@ -601,10 +612,11 @@ export type CommitTone = "plain" | "warning" | "danger";
  * repository's deadline was applied with no commit and no last commit
  * received: after the freeze there is nothing left to wait for. A zero with
  * a last commit (a push the count does not hold, e.g. the App's) stays
- * amber, and its tooltip says why.
+ * amber, and its tooltip says why. A collected repository is handed in:
+ * its zero is plain.
  */
-export function commitTone(repo: Pick<ProjectRepoView, "commits" | "lastCommit" | "deadlineAppliedAt">): CommitTone {
-  if (repo.commits > 0) return "plain";
+export function commitTone(repo: Pick<ProjectRepoView, "commits" | "collection" | "lastCommit" | "deadlineAppliedAt">): CommitTone {
+  if (handedIn(repo)) return "plain";
   return repo.deadlineAppliedAt !== null && repo.lastCommit === null ? "danger" : "warning";
 }
 

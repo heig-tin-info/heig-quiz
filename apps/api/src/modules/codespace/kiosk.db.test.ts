@@ -21,7 +21,7 @@
  * The flag's other side (off: the write's `422`, the payload's
  * `kioskOffered`, a live project keeping its level) is `codespace.db.test.ts`.
  */
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -43,7 +43,14 @@ import { PROJECT_CONFINED_ROUTES } from "../../auth/testing.js";
 import { auditLog, enrollments, kioskDevices, kioskPairings, projects, sessions } from "../../db/schema.js";
 import { orgsRoute } from "../../github/testing.js";
 import { routesOf, sessionOf } from "../../test/http.js";
-import { authorize as authorizeStation, kioskStation, stationHeaders, stationPost as postAsStation, type TestStation } from "../../test/kiosk.js";
+import {
+  authorize as authorizeStation,
+  kioskSession as kioskSessionOf,
+  kioskStation,
+  stationHeaders,
+  stationPost as postAsStation,
+  type TestStation,
+} from "../../test/kiosk.js";
 import { call, newStudent, server, useProjectWorld, usersRoute, world, type Headers } from "../../test/projectWorld.js";
 import { recordAttempt } from "../kiosk/watch.js";
 import { CODESPACE_ENV, PORTAL_SECRET, connectedClassroom, fakePortal, grantedTeacher, workModeBody, type Room } from "./testing.js";
@@ -128,35 +135,9 @@ async function seated(station: TestStation, student: Person, projectId: string) 
   return { headers: stationHeaders(polled, station), sitting: pairing!.id };
 }
 
-/**
- * A station's session of `projectId` for `userId`, as a consumed pairing
- * opens one — the pairing row written here, for the cells of the matrix the
- * pairing list would never offer (a station on a SEB-only project).
- */
-async function kioskSession(userId: string, projectId: string, opts: { actorUserId?: string; evaluationId?: string } = {}) {
-  const station = await kioskStation(server.app);
-  const pairingId = randomUUID();
-  const now = server.clock.now();
-  await server.app.db.insert(kioskPairings).values({
-    id: pairingId,
-    deviceId: station.deviceId,
-    deviceCodeHash: createHash("sha256").update(randomUUID()).digest("hex"),
-    userCodeHash: createHash("sha256").update(randomUUID()).digest("hex"),
-    state: "consumed",
-    userId,
-    ...(opts.evaluationId ? { evaluationId: opts.evaluationId } : { projectId }),
-    expiresAt: new Date(now.getTime() + 300_000),
-    consumedAt: now,
-  });
-  const headers = await sessionOf(server.app.db, userId, {
-    kind: "kiosk",
-    deviceId: station.deviceId,
-    kioskPairingId: pairingId,
-    ...(opts.evaluationId ? { evaluationId: opts.evaluationId } : { projectId }),
-    ...(opts.actorUserId ? { actorUserId: opts.actorUserId } : {}),
-  });
-  return { headers: { ...headers, cookie: `${headers.cookie}; ${station.cookie}` }, station, sitting: pairingId };
-}
+/** A station's session of `projectId` for `userId` (`test/kiosk.ts`). */
+const kioskSession = (userId: string, projectId: string, opts: { actorUserId?: string; evaluationId?: string } = {}) =>
+  kioskSessionOf(server.app, userId, projectId, opts);
 
 const sebSession = (userId: string, projectId: string) =>
   sessionOf(server.app.db, userId, { kind: "seb", projectId, sebConfigKey: "c".repeat(64) });

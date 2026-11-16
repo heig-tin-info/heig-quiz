@@ -935,7 +935,11 @@ const studentProjectView = (card: CardFacts): StudentProject => {
   const deleted = card.id === STUDENT_PROJECT_DELETED;
   const url = repoUrl ?? `https://github.com/${studentRepoName(card.title)}`;
   const graded = invitation === "accepted" && !deleted;
-  const collected = flags.collected && card.id === STUDENT_PROJECT_FROZEN;
+  // `?collected=1` (ADR-130): the frozen project, worked online, was collected at its deadline; with
+  // `?sebproject=1` or `?stationproject=1`, the confined session's project too, to show the page inside SEB.
+  const collectedHere = flags.collected && card.id === STUDENT_PROJECT_FROZEN;
+  const collected =
+    collectedHere || (flags.collected && (flags.sebproject || flags.stationproject) && card.id === STUDENT_PROJECT_INVITED);
   const repo: StudentProject["repo"] =
     repoFullName === null && !deleted
       ? null
@@ -949,8 +953,7 @@ const studentProjectView = (card: CardFacts): StudentProject => {
           lastCommit: graded || deleted ? { sha: sha(`${card.id.slice(-2)}${pushes}`), at } : null,
           commits: graded ? (released ? 23 : 11 + pushes) : 0,
           ciStatus: graded ? "pass" : "none",
-          // `?collected=1`: the frozen project was worked online and its workspace collected at its deadline (ADR-130).
-          collectedAt: collected ? card.deadlineAt : null,
+          collected,
           run: graded
             ? { sha: sha(`${card.id.slice(-2)}${pushes}`), url: `${url}/actions/runs/${card.id.slice(-4)}`, conclusion: "success", completedAt: at }
             : null,
@@ -972,7 +975,7 @@ const studentProjectView = (card: CardFacts): StudentProject => {
     // `?codespace=1` (ADR-047, M6-06): the open project runs in the workspace, the invited one under Safe Exam Browser;
     // `?pjkiosk=1` (ADR-089): the open one at SEB or kiosk, the invited one at Kiosk only.
     // `?collected=1` (ADR-130): the frozen one was worked online.
-    workspace: collected
+    workspace: collectedHere
       ? { mode: "online", devices: "any" }
       : !flags.codespace
         ? null
@@ -998,8 +1001,8 @@ const studentProjectCards = (): StudentProjectCard[] =>
     const repo = card.invitation === "accepted" ? view.repo : null;
     const workspace = view.workspace;
     if (repo === null) return { ...card, work: null, workspace };
-    const { lastCommit, commits, ciStatus, score, collectedAt } = repo;
-    return { ...card, work: { lastCommit, commits, ciStatus, score: card.status === "released" ? null : score, collectedAt }, workspace };
+    const { lastCommit, commits, ciStatus, score, collected } = repo;
+    return { ...card, work: { lastCommit, commits, ciStatus, score: card.status === "released" ? null : score, collected }, workspace };
   });
 
 /** The home as the `activity` module serves it: every kind, tagged, the projects grouped by the domain's rule (M3-09a). */

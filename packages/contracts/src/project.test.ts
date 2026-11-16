@@ -45,7 +45,7 @@ describe("the student's project card (F-PROJ-04)", () => {
     repoFullName: "heig-prg1/lab2-alice",
     repoUrl: "https://github.com/heig-prg1/lab2-alice",
     // M3-14i: the state of the work, as the view reads it.
-    work: { lastCommit: { sha: "a".repeat(40), at: START }, commits: 4, ciStatus: "pass", score: null, collectedAt: null },
+    work: { lastCommit: { sha: "a".repeat(40), at: START }, commits: 4, ciStatus: "pass", score: null, collected: false },
     workspace: null,
   } as const;
 
@@ -86,7 +86,7 @@ describe("the student's project card (F-PROJ-04)", () => {
         lastCommit: { sha: "a".repeat(40), at: START },
         commits: 4,
         ciStatus: "pass",
-        collectedAt: null,
+        collected: false,
         run: { sha: "a".repeat(40), url: `${repoUrl}/actions/runs/7`, conclusion: "success", completedAt: START },
         score: { points: 7, max: 10, grade: { grade: 4.5 }, frozen: false },
       },

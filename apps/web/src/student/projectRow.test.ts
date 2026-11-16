@@ -121,7 +121,7 @@ describe("projectActionKind", () => {
         locked: false,
         lastCommit: null,
         commits: 3,
-        collectedAt: null,
+        collected: false,
         ciStatus: "none",
         run: null,
         score: null,

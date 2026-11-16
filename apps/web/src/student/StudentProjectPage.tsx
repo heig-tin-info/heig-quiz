@@ -285,11 +285,16 @@ function WorkspaceSection({
     </Button>
   );
   const where = inSeb ? "sproj.workspace.inSeb" : (`sproj.workspace.${devices}` as const);
+  // ADR-130 §7: inside SEB or at a station the repository card is not shown, so the collection is said here.
+  const collected = inSeb && project.repo?.collected === true;
   return (
     <section className="space-y-3" data-testid="sproj-workspace">
       <SectionHeading title={t("sproj.workspace")} />
       <Card className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm">
-        <p className="text-fg-muted">{t(where)}</p>
+        <div className="space-y-2">
+          <p className="text-fg-muted">{t(where)}</p>
+          {collected ? <p className="text-fg-muted">{t("sproj.collected")}</p> : null}
+        </div>
         {action}
       </Card>
       {launching ? (
@@ -359,7 +364,7 @@ function RepoCard({
         </p>
       ) : null}
       {repo.locked ? <p className="text-fg-muted">{t("sproj.locked")}</p> : null}
-      {repo.collectedAt !== null ? <p className="text-fg-muted">{t("sproj.collected")}</p> : null}
+      {repo.collected ? <p className="text-fg-muted">{t("sproj.collected")}</p> : null}
     </Card>
   );
 }

@@ -355,19 +355,12 @@ the lock. The header comment of `github/lock.ts` is corrected with the code.
 ## Amendment 2026-11-16: the student's surface is Quiz's
 
 §7's student bullet, amended. The workspace's status bar does not say the
-collection: it is not built. The student's surfaces are Quiz's, the project
-page and the activity card, through the project's student view (the one
-exit, invariant 4), which gains only `collectedAt`: the effective deadline
-the repository was collected at, when its last collection is `collected`
-for its current effective deadline; null otherwise. A failed, late,
-skipped or unchanged collection tells the student nothing new (the staff
-are flagged), and an earlier deadline's collection says nothing once an
-extension gave the repository a new one. The page says the workspace was
-collected at the deadline and that changes made after it are not handed
-in; the card says it in a few words beside the commit. The commit the
-student sees may then be the App's: it is named "Evaluated commit", never
-a push, and the student's commit count (and the staff's) leaves the
-collection's receipt out, a commit the platform made (`countedReceipts`).
+collection: it is not built. The student is told on Quiz's project page and
+activity card, through the project's student view (the one exit,
+invariant 4), which says only whether the repository was collected at its
+current effective deadline. A collection commit is not counted among the
+student's commits, and a collected repository counts as handed in for the
+staff's figures.
 
 Why: no channel carries Quiz's record to the portal. The portal keeps no
 table for collections (§4.2), and its `push-status` reads only the relay's

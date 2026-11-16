@@ -517,6 +517,21 @@ describe("the tiles' figures", () => {
     }
   });
 
+  it("counts a repository collected at the deadline as handed in, its count of the student's own commits 0 (ADR-130 §7)", () => {
+    const collection = { outcome: "collected" as const, reason: null, deadlineAt: PAST, at: PAST, unreadable: 0, sha: "c".repeat(40) };
+    const failed = { ...collection, outcome: "failed" as const, reason: "timeout" as const, sha: null };
+    const withCollection = makeProject({
+      rows: [
+        row(1, makeRepo(1, { commits: 0, collection })),
+        row(2, makeRepo(2, { commits: 0, collection: failed })),
+        row(3, makeRepo(3)),
+      ],
+    });
+    expect(projectTally(withCollection).progress).toMatchObject({ pushed: 2, noCommit: 1 });
+    const kept = filterEntries(repoEntries(withCollection), "noCommit", withCollection);
+    expect(kept.map((e) => e.repo?.id)).toEqual([makeRepo(2).id]);
+  });
+
   it("keeps the staff's row under All only, and every row without a filter", () => {
     const entries = repoEntries(project);
     expect(filterEntries(entries, null, project)).toHaveLength(10);
@@ -569,13 +584,19 @@ describe("the tiles' figures", () => {
 describe("the commit count's tone", () => {
   const lastCommit = { sha: "abc", at: PAST };
   it("is plain with commits, amber for none while the work may come, red once the deadline was applied and nothing was received", () => {
-    expect(commitTone({ commits: 3, lastCommit, deadlineAppliedAt: PAST })).toBe("plain");
-    expect(commitTone({ commits: 0, lastCommit: null, deadlineAppliedAt: null })).toBe("warning");
-    expect(commitTone({ commits: 0, lastCommit: null, deadlineAppliedAt: PAST })).toBe("danger");
+    expect(commitTone({ collection: null, commits: 3, lastCommit, deadlineAppliedAt: PAST })).toBe("plain");
+    expect(commitTone({ collection: null, commits: 0, lastCommit: null, deadlineAppliedAt: null })).toBe("warning");
+    expect(commitTone({ collection: null, commits: 0, lastCommit: null, deadlineAppliedAt: PAST })).toBe("danger");
+  });
+
+  it("is plain for a zero the collection handed in, never a warning", () => {
+    const collection = { outcome: "collected" as const, reason: null, deadlineAt: PAST, at: PAST, unreadable: 0, sha: "c".repeat(40) };
+    expect(commitTone({ collection, commits: 0, lastCommit: null, deadlineAppliedAt: PAST })).toBe("plain");
+    expect(commitTone({ collection: { ...collection, outcome: "unchanged" }, commits: 0, lastCommit: null, deadlineAppliedAt: PAST })).toBe("danger");
   });
 
   it("stays amber for a zero with a last commit, even after the deadline", () => {
-    expect(commitTone({ commits: 0, lastCommit, deadlineAppliedAt: PAST })).toBe("warning");
+    expect(commitTone({ collection: null, commits: 0, lastCommit, deadlineAppliedAt: PAST })).toBe("warning");
   });
 });
 

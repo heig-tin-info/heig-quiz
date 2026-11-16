@@ -1406,6 +1406,16 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     expect(rows[3]!.textContent).toMatch(/9a3f1c7.*11 commits/);
   });
 
+  it("leaves a collected repository's '0 commits' plain: it is handed in (ADR-130 §7)", async () => {
+    const collection = { outcome: "collected" as const, reason: null, deadlineAt: PAST, at: PAST, unreadable: 0, sha: "c".repeat(40) };
+    routes(makeProject({ rows: [row(1, makeRepo(1, { commits: 0, lastCommit: null, deadlineAppliedAt: PAST, collection }))] }));
+    renderPage("en", "repositories");
+    const [first] = bodyRows(await repoTable());
+    const count = within(first!).getByText("0 commits");
+    expect(count.className).not.toMatch(/text-warning|text-danger/);
+    expect(count.className).toMatch(/text-fg-faint/);
+  });
+
   it("keeps the Score column off a project graded none", async () => {
     routes(makeProject({ gradingMode: "none" }));
     renderPage("en", "repositories");

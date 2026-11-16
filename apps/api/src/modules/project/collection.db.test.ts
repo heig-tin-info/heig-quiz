@@ -7,21 +7,22 @@
  * through the student view, for each of its readers, searched for in every
  * response; null for any other outcome and for an earlier deadline's.
  */
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CSRF_COOKIE, ProjectDetail, ProjectSummary, StudentClassroomPage, StudentHome, StudentProject, workspaceStartPath } from "@quiz/contracts";
+import { ProjectDetail, ProjectSummary, StudentClassroomPage, StudentHome, StudentProject, workspaceStartPath } from "@quiz/contracts";
 import { GRADING_WORKFLOW_PATH, collectionRef } from "@quiz/domain";
 
 import { loadConfig } from "../../config.js";
-import { SESSION_COOKIE, createSession } from "../../auth/session.js";
-import { auditLog, codespaceCollections, codespaceLaunches, kioskPairings, projectGroups, projectRepos, pushReceipts, teacherGrants, webhookDeliveries } from "../../db/schema.js";
+import { auditLog, codespaceCollections, codespaceLaunches, enrollments, projectGroups, projectRepos, pushReceipts, teacherGrants, webhookDeliveries } from "../../db/schema.js";
 import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import { PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
-import { kioskStation } from "../../test/kiosk.js";
+import { sessionOf } from "../../test/http.js";
+import { kioskSession } from "../../test/kiosk.js";
 import { APP_ENV, call, newStudent, server, useProjectWorld, usersRoute, world, type Headers } from "../../test/projectWorld.js";
+import { studentHome as activityHome } from "../activity/service.js";
 import { CODESPACE_ENV, connectedClassroom, fakePortal, scopedMint, workModeBody } from "../codespace/testing.js";
 import { pushAuthor } from "../github/service.js";
 import { isEligible } from "./grading.js";
@@ -451,42 +452,9 @@ describe("what the collection refuses, and what a crash leaves", () => {
     const rows = await db.select().from(codespaceCollections).innerJoin(projectRepos, eq(projectRepos.id, codespaceCollections.repoId)).where(eq(projectRepos.projectId, student.project.id));
     expect(rows.every((r) => r.codespace_collections.outcome === "unchanged")).toBe(true);
   }, 300_000);
-
 });
 
 // ---------------------------------------------------------------- what the student reads (ADR-130 §7, invariant 4)
-
-/** A session of `kind` for `userId`, as the auth layer opens it. */
-async function sessionHeaders(userId: string, auth: { kind: "impersonation" | "seb"; actorUserId?: string; projectId?: string; sebConfigKey?: string }): Promise<Headers> {
-  const s = await createSession(server.app.db, userId, 8, {
-    kind: auth.kind,
-    actorUserId: auth.actorUserId ?? null,
-    evaluationId: null,
-    projectId: auth.projectId ?? null,
-    sebConfigKey: auth.sebConfigKey ?? null,
-  });
-  return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
-}
-
-/** A station's `kiosk` session of `projectId` for `userId`, its pairing consumed (ADR-089), the station's cookie beside it. */
-async function kioskHeaders(userId: string, projectId: string): Promise<Headers> {
-  const station = await kioskStation(server.app);
-  const pairingId = randomUUID();
-  const now = server.clock.now();
-  await server.app.db.insert(kioskPairings).values({
-    id: pairingId,
-    deviceId: station.deviceId,
-    deviceCodeHash: createHash("sha256").update(randomUUID()).digest("hex"),
-    userCodeHash: createHash("sha256").update(randomUUID()).digest("hex"),
-    state: "consumed",
-    userId,
-    projectId,
-    expiresAt: new Date(now.getTime() + 300_000),
-    consumedAt: now,
-  });
-  const s = await createSession(server.app.db, userId, 8, { kind: "kiosk", actorUserId: null, evaluationId: null, projectId, deviceId: station.deviceId, kioskPairingId: pairingId });
-  return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}; ${station.cookie}`, "x-csrf-token": s.csrf };
-}
 
 const studentView = async (f: Fixture, headers: Headers, who = "student") => {
   const res = await call("GET", `/app/api/student/projects/${f.project.id}`, headers);
@@ -494,12 +462,47 @@ const studentView = async (f: Fixture, headers: Headers, who = "student") => {
   return { body: res.body, view: StudentProject.parse(res.json()) };
 };
 
-/** A collection row as the job settles it, written directly: the outcomes that hand nothing in. */
-const settledRow = (f: Fixture, row: Partial<typeof codespaceCollections.$inferInsert>) =>
-  server.app.db.insert(codespaceCollections).values({ id: randomUUID(), repoId: f.repo.id, deadlineAt: new Date(DEADLINE), claimedAt: at(DEADLINE, 5_000), settledAt: at(DEADLINE, 9_000), ...row });
+/** The one trace a student response may hold of a collection: the flag, under its one key. */
+const noOtherTrace = (body: string, who: string) => {
+  for (const secret of ['"collection"', '"outcome"', '"reason"', '"unreadable"', '"snapshotAt"', '"settledAt"', "2026-11-16T13:40:03"]) {
+    expect(body, `${who} ${secret}`).not.toContain(secret);
+  }
+  // The ref, the commit's message, an outcome's name: none survives without the word.
+  expect(body.replaceAll('"collected"', ""), who).not.toMatch(/collect/i);
+};
+
+/** The owner's own STAFF seat in `f`'s classroom (ADR-077), with a test repository collected at the deadline. */
+async function ownerTestSeat(f: Fixture): Promise<string> {
+  const db = server.app.db;
+  await db.insert(enrollments).values({
+    id: randomUUID(),
+    classroomId: f.project.classroomId,
+    nom: "Test",
+    prenom: "Owner",
+    email: `o-${randomUUID().slice(0, 6)}@heig.test`,
+    userId: owner.id,
+    claimedAt: at(NOW),
+    staff: true,
+  });
+  const repoId = randomUUID();
+  const fullName = `${f.fullName.split("/")[0]}/lab-owner-test`;
+  await db.insert(projectRepos).values({
+    id: repoId,
+    projectId: f.project.id,
+    userId: owner.id,
+    githubRepoId: 900_000_000 + Math.floor(Math.random() * 1e6),
+    fullName,
+    defaultBranch: "main",
+    provisionStatus: "ok",
+    acceptedAt: at(NOW),
+    invitationStatus: "accepted",
+  });
+  await db.insert(codespaceCollections).values({ id: randomUUID(), repoId, deadlineAt: new Date(DEADLINE), claimedAt: at(DEADLINE, 5_000), settledAt: at(DEADLINE, 9_000), outcome: "collected", branch: "main", sha: "0".repeat(40), unreadable: 3 });
+  return fullName;
+}
 
 describe("what the student reads of a collection (ADR-130 §7, invariant 4)", () => {
-  it("says the instant it was collected, through the student view only, to each of its readers, and nothing else of it", async () => {
+  it("says it was collected, through the student view only, to each of its readers, and nothing else of it", async () => {
     const f = await launched();
     // The student's own push by the deadline: two commits, the count the collection must not change.
     await server.app.db.insert(pushReceipts).values({ id: randomUUID(), githubRepoId: f.repo.githubRepoId!, branch: "main", headSha: "1".repeat(40), receivedAt: at(DEADLINE, -60_000), isBot: false, commits: 2 });
@@ -518,62 +521,58 @@ describe("what the student reads of a collection (ADR-130 §7, invariant 4)", ()
     // Each confined session opened right before its read: a project's new one supersedes the last (ADR-089).
     const readers: [string, () => Promise<Headers>][] = [
       ["student", async () => f.student.headers],
-      ["impersonation", () => sessionHeaders(f.student.id, { kind: "impersonation", actorUserId: admin.id })],
-      ["seb", () => sessionHeaders(f.student.id, { kind: "seb", projectId: f.project.id, sebConfigKey: "c".repeat(64) })],
-      ["kiosk", () => kioskHeaders(f.student.id, f.project.id)],
+      ["impersonation", () => sessionOf(server.app.db, f.student.id, { kind: "impersonation", actorUserId: admin.id })],
+      ["seb", () => sessionOf(server.app.db, f.student.id, { kind: "seb", projectId: f.project.id, sebConfigKey: "c".repeat(64) })],
+      ["kiosk", async () => (await kioskSession(server.app, f.student.id, f.project.id)).headers],
     ];
-    const bodies: string[] = [];
     for (const [who, open] of readers) {
-      const { body, view } = await studentView(f, await open(), who);
-      bodies.push(body);
-      expect(view.repo?.collectedAt, who).toBe(DEADLINE);
+      const headers = await open();
+      const { body, view } = await studentView(f, headers, who);
+      noOtherTrace(body, who);
+      expect(view.repo?.collected, who).toBe(true);
       // The collection commit is the platform's, not a push of the student's: the count stays theirs.
       expect(view.repo?.commits, who).toBe(2);
-    }
-    // The cards: the home and the classroom page, for the readers the portal serves (a confined session gets neither).
-    for (const [who, open] of readers.slice(0, 2)) {
-      const headers = await open();
+      // The cards: the home and the classroom page, for the readers the portal serves.
       const home = await call("GET", "/app/api/student/home", headers);
       const page = await call("GET", `/app/api/student/classrooms/${f.project.classroomId}`, headers);
+      if (who === "seb" || who === "kiosk") {
+        // A confined session reads neither (ADR-027): it is no session there at all.
+        expect([home.statusCode, page.statusCode], who).toEqual([401, 401]);
+        continue;
+      }
       for (const res of [home, page]) {
         expect(res.statusCode, `${who} ${res.body}`).toBe(200);
-        bodies.push(res.body);
+        noOtherTrace(res.body, who);
       }
-      const card = [...StudentHome.parse(home.json()).open, ...StudentHome.parse(home.json()).past].find((c) => c.id === f.project.id);
-      expect(card?.kind === "project" ? card.work?.collectedAt : undefined, who).toBe(DEADLINE);
-      const roomCard = StudentClassroomPage.parse(page.json());
-      expect(JSON.stringify(roomCard), who).toContain(`"collectedAt":"${DEADLINE}"`);
+      const card = StudentHome.parse(home.json()).past.find((c) => c.id === f.project.id);
+      expect(card?.kind === "project" ? card.work?.collected : undefined, who).toBe(true);
+      const roomCard = StudentClassroomPage.parse(page.json()).activities.past.find((c) => c.id === f.project.id);
+      expect(roomCard?.kind === "project" ? roomCard.work?.collected : undefined, who).toBe(true);
     }
-    // A teacher in the student view holds no seat here: no repository, so nothing of its collection.
-    const teacherView = await studentView(f, owner.headers);
-    bodies.push(teacherView.body);
-    expect(teacherView.view.repo).toBeNull();
+    // Should a confined session ever reach the home's service, it lists no project at all (`StudentScope.confined`).
+    const caller = { id: f.student.id, role: "student" as const, reach: "seats" as const };
+    for (const kind of ["seb", "kiosk"] as const) {
+      const confinedHome = await activityHome(server.app.db, caller, { kind, actorUserId: null, projectId: f.project.id, evaluationId: null }, server.clock.now(), { codespace: true });
+      expect([...confinedHome.open, ...confinedHome.upcoming, ...confinedHome.past], kind).toEqual([]);
+    }
 
-    const settled = row!.settledAt!.toISOString();
-    const forbidden = [
-      '"collection"', // the staff's field
-      '"outcome"',
-      '"reason"',
-      '"unreadable"',
-      '"snapshotAt"',
-      '"settledAt"',
-      "2026-11-16T13:40:03", // the portal's snapshot time
-      settled, // when it was settled
-      "refs/quiz/collect", // the temporary ref
-      "Collected from the online workspace", // the commit's message
-    ];
-    for (const body of bodies) {
-      for (const secret of forbidden) expect(body, secret).not.toContain(secret);
-      // The only trace of it: the instant, under its one key.
-      expect(body.replaceAll('"collectedAt"', "")).not.toMatch(/collect/i);
-    }
+    // A teacher in the student view on a staff seat (ADR-077): their own test repository, its flag, nothing of the student's.
+    const testRepo = await ownerTestSeat(f);
+    const asTeacher = await studentView(f, owner.headers, "teacher");
+    expect(asTeacher.view).toMatchObject({ seat: "staff", repo: { fullName: testRepo, collected: true } });
+    noOtherTrace(asTeacher.body, "teacher");
+    expect(asTeacher.body).not.toContain(f.fullName);
 
     // The staff count the student's own commits too, never the platform's.
     const detail = ProjectDetail.parse((await call("GET", `/app/api/projects/${f.project.id}`, owner.headers)).json());
     expect(detail.rows.map((r) => r.repo).find((r) => r?.id === f.repo.id)).toMatchObject({ commits: 2, collection: { outcome: "collected", unreadable: 7 } });
   });
 
-  it("gives null for a collection that handed nothing in, and keeps out its reason, its branch and its sha", async () => {
+  it("says nothing of a collection that handed nothing in, nor of its reason, branch or sha", async () => {
+    const f = await launched();
+    const admin = await server.signIn("admin");
+    const impersonation = await sessionOf(server.app.db, f.student.id, { kind: "impersonation", actorUserId: admin.id });
+    server.clock.set(at(DEADLINE, 3_600_000));
     for (const [outcome, reason] of [
       ["failed", "timeout"],
       ["failed", "check_refused"],
@@ -582,17 +581,25 @@ describe("what the student reads of a collection (ADR-130 §7, invariant 4)", ()
       ["no_snapshot", null],
       [null, null], // claimed, never settled
     ] as const) {
-      server.clock.set(NOW);
-      const f = await launched();
-      await settledRow(f, { outcome, reason, branch: "hidden-branch-x", sha: "fa11ed00".repeat(5), unreadable: 864201357, ...(outcome === null ? { settledAt: null } : {}) });
-      server.clock.set(at(DEADLINE, 3_600_000));
-      const admin = await server.signIn("admin");
-      for (const headers of [f.student.headers, await sessionHeaders(f.student.id, { kind: "impersonation", actorUserId: admin.id })]) {
+      // One row per (repository, deadline): each pass replaces it.
+      await server.app.db.delete(codespaceCollections).where(eq(codespaceCollections.repoId, f.repo.id));
+      await server.app.db.insert(codespaceCollections).values({
+        id: randomUUID(),
+        repoId: f.repo.id,
+        deadlineAt: new Date(DEADLINE),
+        claimedAt: at(DEADLINE, 5_000),
+        settledAt: outcome === null ? null : at(DEADLINE, 9_000),
+        outcome,
+        reason,
+        branch: "hidden-branch-x",
+        sha: "fa11ed00".repeat(5),
+        unreadable: 5,
+      });
+      for (const headers of [f.student.headers, impersonation]) {
         const { body, view } = await studentView(f, headers);
-        expect(view.repo?.collectedAt, String(outcome)).toBeNull();
-        for (const secret of ["hidden-branch-x", "fa11ed00".repeat(5), "864201357", '"outcome"', '"reason"', "timeout", "check_refused", "too_late", "no_snapshot", "unchanged"]) {
-          expect(body, `${outcome} ${secret}`).not.toContain(secret);
-        }
+        expect(view.repo?.collected, String(outcome)).toBe(false);
+        for (const secret of ["hidden-branch-x", "fa11ed00".repeat(5), "timeout", "too_late", "unchanged"]) expect(body, `${outcome} ${secret}`).not.toContain(secret);
+        noOtherTrace(body, String(outcome));
       }
     }
   });
@@ -601,15 +608,15 @@ describe("what the student reads of a collection (ADR-130 §7, invariant 4)", ()
     const f = await launched();
     portalPushes(f, { "main.c": "first\n" });
     await deadlineAt(at(DEADLINE, 20_000));
-    expect((await studentView(f, f.student.headers)).view.repo?.collectedAt).toBe(DEADLINE);
+    expect((await studentView(f, f.student.headers)).view.repo?.collected).toBe(true);
 
     const later = at(DEADLINE, 3_600_000).toISOString();
     expect((await call("PUT", `/app/api/projects/${f.project.id}/repos/${f.repo.id}/deadline`, owner.headers, { deadlineAt: later })).statusCode).toBe(200);
-    expect((await studentView(f, f.student.headers)).view.repo?.collectedAt).toBeNull();
+    expect((await studentView(f, f.student.headers)).view.repo?.collected).toBe(false);
 
     portalPushes(f, { "main.c": "second\n" });
     await deadlineAt(at(later, 20_000));
-    expect((await studentView(f, f.student.headers)).view.repo?.collectedAt).toBe(later);
+    expect((await studentView(f, f.student.headers)).view.repo?.collected).toBe(true);
   });
 });
 

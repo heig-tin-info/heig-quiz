@@ -3597,7 +3597,6 @@ export const en = {
   // F-PROJ-21 (M3-09c): the page's notices, from the re-read of the student's own repository.
   "sproj.notice.accepted": "Invitation accepted: the repository is yours.",
   "sproj.notice.locked": "The deadline has passed: your repository is now read-only.",
-  "sproj.notice.collected": "Your workspace was collected at the deadline.",
   "sproj.notice.pushed": "Your push has been received.",
   "sproj.notice.scored": "A new indicative score is in.",
   "sproj.refusal.notStarted": "This project has not started yet.",

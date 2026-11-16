@@ -3570,7 +3570,6 @@ export const fr: Record<keyof Dict, string> = {
   "sproj.collected.short": "Espace de travail relevé à l'échéance",
   "sproj.notice.accepted": "Invitation acceptée : le dépôt est à vous.",
   "sproj.notice.locked": "Échéance passée : votre dépôt est en lecture seule.",
-  "sproj.notice.collected": "Votre espace de travail a été relevé à l'échéance.",
   "sproj.notice.pushed": "Votre push a été reçu.",
   "sproj.notice.scored": "Un nouveau score indicatif est disponible.",
   "sproj.refusal.notStarted": "Ce projet n'a pas encore commencé.",

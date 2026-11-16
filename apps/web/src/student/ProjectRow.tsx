@@ -241,7 +241,7 @@ function ProjectWorkMeta({ work, deadlineAt, now }: { work: StudentProjectWork; 
     <>
       <ProjectCommitMeta work={work} evaluated={Date.parse(deadlineAt) <= now || frozen} />
       {/* ADR-130 §7: the commit handed in may be the platform's; the page says what that means. */}
-      {work.collectedAt !== null ? <MetaItem icon={Laptop}>{t("sproj.collected.short")}</MetaItem> : null}
+      {work.collected ? <MetaItem icon={Laptop}>{t("sproj.collected.short")}</MetaItem> : null}
       {work.ciStatus !== "none" ? <CiBadge status={work.ciStatus} /> : null}
       {work.score ? (
         <MetaItem icon={frozen ? Lock : Gauge}>

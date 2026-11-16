@@ -201,8 +201,8 @@ function card(
   const live = liveRepo(row.repo, row.project);
   let work: StudentProjectWork | null = null;
   if (live?.invitationStatus === "accepted") {
-    const { lastCommit, commits, ciStatus, score, collectedAt } = reading(row.project, live, read, now);
-    work = { lastCommit, commits, ciStatus, score: row.project.releasedAt === null ? score : null, collectedAt };
+    const { lastCommit, commits, ciStatus, score, collected } = reading(row.project, live, read, now);
+    work = { lastCommit, commits, ciStatus, score: row.project.releasedAt === null ? score : null, collected };
   }
   return {
     group,
@@ -269,7 +269,7 @@ export async function studentProjectCards(
 }
 
 /** What the view shows of a repository's commits and runs: the commit it stands on, its CI state, the commit count, the selected run and its score. */
-type RepoReading = Pick<StudentProjectRepo, "lastCommit" | "commits" | "ciStatus" | "run" | "score" | "collectedAt">;
+type RepoReading = Pick<StudentProjectRepo, "lastCommit" | "commits" | "ciStatus" | "run" | "score" | "collected">;
 
 /**
  * The repository as the student reads it (F-PROJ-15, N-SEC-20): the run
@@ -290,12 +290,12 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts, c
   const ci = studentCiReading(repo, chosen?.run ?? null, deadlineAt, now);
   // Collected for the deadline that applies now (ADR-130 §7): an earlier deadline's, once extended, says nothing.
   const collection = collections.get(repo.id);
-  const collectedAt = collection?.outcome === "collected" && collection.deadlineAt === deadlineAt.toISOString() ? collection.deadlineAt : null;
-  const stored: Pick<RepoReading, "lastCommit" | "commits" | "ciStatus" | "collectedAt"> = {
+  const collected = collection?.outcome === "collected" && collection.deadlineAt === deadlineAt.toISOString();
+  const stored: Pick<RepoReading, "lastCommit" | "commits" | "ciStatus" | "collected"> = {
     lastCommit: ci.lastCommit === null ? null : { sha: ci.lastCommit.sha, at: isoOrNull(ci.lastCommit.at) },
     commits: repoCommitCount(project, repo, receipts),
     ciStatus: ci.ciStatus,
-    collectedAt,
+    collected,
   };
   if (chosen === null) return { ...stored, run: null, score: null };
   const { run, frozen } = chosen;
@@ -367,7 +367,7 @@ export async function studentProject(
             deleted: repo.deletedAt !== null,
             locked: repo.lockedAt !== null,
             ...(live === null
-              ? { lastCommit: null, commits: 0, ciStatus: "none" as const, run: null, score: null, collectedAt: null }
+              ? { lastCommit: null, commits: 0, ciStatus: "none" as const, run: null, score: null, collected: false }
               : reading(project, live, read, now)),
           },
     release:
