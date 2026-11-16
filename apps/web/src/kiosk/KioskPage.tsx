@@ -12,6 +12,9 @@ import { formatRemaining, Spinner, useNow } from "../ui";
 import type { StationTrouble } from "./station";
 import { useKioskStation } from "./useKioskStation";
 
+/** A station's spinner, read from the chair: the size of `/kiosk`, and of the station page that follows it. */
+export const STATION_SPINNER = "[&_p]:text-[clamp(18px,1.6vw,24px)] [&_svg]:size-8";
+
 /**
  * `/kiosk` — a school Chromebook locked in a web kiosk (ADR-051, F-EVAL-28).
  * Nobody signs in here and nothing is clicked: the station attests itself,
@@ -42,7 +45,7 @@ export function KioskPage() {
         ) : (
           <Spinner
             label={t(phase.kind !== "opening" ? "kiosk.starting" : phase.project ? "kiosk.opening.workspace" : "kiosk.opening")}
-            className="py-24 [&_p]:text-[clamp(18px,1.6vw,24px)] [&_svg]:size-8"
+            className={`py-24 ${STATION_SPINNER}`}
           />
         )}
       </div>

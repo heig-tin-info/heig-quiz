@@ -20,7 +20,8 @@
  *
  * The four decisions (DESIGN.md, "The kiosk station"):
  *   - Type: the station's label at 14 px medium, the project's title muted,
- *     the countdown at its own 15 px; the frame is the page.
+ *     the countdown at its own 15 px; the frame is the page. Until the
+ *     frame's page has loaded, the opening notice of `/kiosk`, at its size.
  *   - Color: no accent; Leave is secondary, the one way out.
  *   - Space: a 44 px bar, hairline under it, the frame to the edges.
  *   - Finish: surface bar on the canvas, no shadow.
@@ -45,6 +46,7 @@ import { kioskStationKey, meKey, studentProjectKey } from "../queryKeys";
 import { useServerClock } from "../realtime/useServerClock";
 import { ScreenOverlay } from "../student/PausedOverlay";
 import { Button, ClockCountdown, EmptyState, Spinner } from "../ui";
+import { STATION_SPINNER } from "./KioskPage";
 import { toKiosk } from "./navigation";
 import { endProjectSitting } from "./station";
 import { useStationAttestation } from "./useStationAttestation";
@@ -140,6 +142,14 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
   };
 
   const url = frame.state.kind === "open" || frame.state.kind === "launching" ? frame.state.url : null;
+  // The portal starts the workspace before it serves the editor: the frame is blank meanwhile.
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  // Where `/kiosk` left its own "Opening your workspace…", at its size: one notice from the scan to the editor.
+  const opening = (
+    <div className="absolute inset-0 grid place-items-center bg-canvas">
+      <Spinner label={t("kiosk.opening.workspace")} className={STATION_SPINNER} />
+    </div>
+  );
   return (
     <div className="flex h-dvh flex-col bg-canvas">
       <header className="flex h-11 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 text-sm">
@@ -158,16 +168,21 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
       </header>
       <main className="relative min-h-0 flex-1">
         {url ? (
-          <iframe
-            key={url}
-            src={url}
-            title={t("sproj.workspace")}
-            allow="clipboard-read; clipboard-write"
-            sandbox={FRAME_SANDBOX}
-            // A suspended station's frame takes no focus and no keystroke under the notice (§7).
-            inert={suspended}
-            className="absolute inset-0 size-full border-0"
-          />
+          <>
+            <iframe
+              key={url}
+              src={url}
+              title={t("sproj.workspace")}
+              allow="clipboard-read; clipboard-write"
+              sandbox={FRAME_SANDBOX}
+              // Under a notice (the suspension, §7, or the opening) the frame takes no focus and no keystroke.
+              inert={suspended || loadedUrl !== url}
+              onLoad={() => setLoadedUrl(url)}
+              className="absolute inset-0 size-full border-0"
+            />
+            {/* The same words as the launch, over the frame until its page has loaded. */}
+            {loadedUrl !== url ? opening : null}
+          </>
         ) : frame.state.kind === "refused" ? (
           <EmptyState icon={AlertTriangle} titleAs="h1" title={t("sproj.workspace.refused")} className="pt-24">
             {t(`sproj.workspace.refusal.${frame.state.code}`)}
@@ -187,7 +202,7 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
             {t("kiosk.station.failed.body")}
           </EmptyState>
         ) : (
-          <Spinner label={t("kiosk.opening.workspace")} className="py-24" />
+          opening
         )}
       </main>
       {/* ADR-051 §6, ADR-089 §7: the notice covers the frame; it lifts by itself. */}
