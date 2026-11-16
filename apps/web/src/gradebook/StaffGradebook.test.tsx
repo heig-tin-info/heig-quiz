@@ -33,10 +33,11 @@ function makeTable(over: Partial<GradebookStaff> = {}): GradebookStaff {
     classroomId: ROOM,
     archived: false,
     meanPublished: false,
+    components: [],
     columns: [
-      { kind: "evaluation", activityId: TEST, mode: "exam", title: "Test 1", date: "2026-09-10T08:00:00.000Z", released: true, weight: 100, counts: true, position: null, classMean: 3.3 },
-      { kind: "evaluation", activityId: EXERCISE, mode: "exercise", title: "Exercises", date: "2026-09-20T08:00:00.000Z", released: true, weight: 100, counts: false, position: null, classMean: null },
-      { kind: "evaluation", activityId: LATER, mode: "exam", title: "Test 2", date: "2026-10-01T08:00:00.000Z", released: false, weight: 40, counts: true, position: null, classMean: null },
+      { kind: "evaluation", activityId: TEST, mode: "exam", title: "Test 1", date: "2026-09-10T08:00:00.000Z", released: true, weight: 100, counts: true, position: null, componentId: null, classMean: 3.3 },
+      { kind: "evaluation", activityId: EXERCISE, mode: "exercise", title: "Exercises", date: "2026-09-20T08:00:00.000Z", released: true, weight: 100, counts: false, position: null, componentId: null, classMean: null },
+      { kind: "evaluation", activityId: LATER, mode: "exam", title: "Test 2", date: "2026-10-01T08:00:00.000Z", released: false, weight: 40, counts: true, position: null, componentId: null, classMean: null },
     ],
     rows: [
       {
@@ -45,6 +46,7 @@ function makeTable(over: Partial<GradebookStaff> = {}): GradebookStaff {
         nom: "Dupont",
         prenom: "Alice",
         mean: 5.5,
+        componentMeans: {},
         cells: {
           [TEST]: { ...empty, kind: "grade", grade: 5.5, points: 18, max: 20, source: "results", hasGrade: true },
           [EXERCISE]: empty,
@@ -57,6 +59,7 @@ function makeTable(over: Partial<GradebookStaff> = {}): GradebookStaff {
         nom: "Favre",
         prenom: "Bob",
         mean: 1,
+        componentMeans: {},
         cells: {
           [TEST]: { ...empty, kind: "absent", grade: 1, source: "derived" },
           [EXERCISE]: empty,

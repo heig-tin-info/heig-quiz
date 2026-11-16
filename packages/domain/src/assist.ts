@@ -440,6 +440,7 @@ export function stubAnswer(corpus: AssistCorpus, role: AssistRole, question: str
  */
 export interface ResultsSource {
   classroomId: string;
+  components: readonly { id: string; name: string; weight: number }[];
   columns: readonly {
     activityId: string;
     mode: string;
@@ -448,25 +449,28 @@ export interface ResultsSource {
     released: boolean;
     weight: number;
     counts: boolean;
+    componentId: string | null;
   }[];
   rows: readonly {
     nom: string;
     prenom: string;
     cells: Readonly<Record<string, { kind: "grade" | "absent" | "excused" | "empty"; grade: number | null }>>;
     mean: number | null;
+    componentMeans: Readonly<Record<string, number | null>>;
   }[];
 }
 
 /** A student's cell as the reader says it: a grade, an absence (a1.0), an excuse (in no mean), or none. */
 export type AssistGrade = number | "absent" | "excused" | null;
 
-/** One column of the final results: a released evaluation or project. */
+/** One column of the final results: a released evaluation or project; `component`: the name of its component of the mean, null for none (ADR-131). */
 export interface AssistResultsColumn {
   title: string;
   mode: string;
   date: string;
   weight: number;
   counts: boolean;
+  component: string | null;
 }
 
 /**
@@ -475,27 +479,39 @@ export interface AssistResultsColumn {
  * nor an unreleased one's scores, nor a staff mark standing in such a column
  * — each student by name with a grade per column (`"absent"`: a1.0,
  * `"excused"`: let off, in no mean, null:
- * none) and the gradebook's mean over those released columns.
+ * none) and the gradebook's mean over those released columns; with the
+ * course's components of the mean (ADR-131), each student's mean of each,
+ * in the order of `components`.
  */
 export interface AssistResults {
   classroomId: string;
   scale: string;
+  components: { name: string; weight: number }[];
   columns: AssistResultsColumn[];
-  students: { name: string; grades: AssistGrade[]; mean: number | null }[];
+  students: { name: string; grades: AssistGrade[]; mean: number | null; componentMeans: (number | null)[] }[];
   /** How many columns were left out because they are not released. */
   unreleasedColumns: number;
 }
 
 const RESULTS_SCALE =
-  "Swiss grades from 1.0 to 6.0, 4.0 passes; `absent` counts as 1.0, `excused` counts in no mean. Final (released) columns only; the mean is the gradebook's weighted mean of the released columns that count, each weight a relative whole percentage (0 to 100).";
+  "Swiss grades from 1.0 to 6.0, 4.0 passes; `absent` counts as 1.0, `excused` counts in no mean. Final (released) columns only; the mean is the gradebook's weighted mean of the released columns that count, each weight a relative whole percentage (0 to 100). When the course has components of the mean (`components`, each with its own relative weight), a column counts only inside its component, and one in no component counts in no mean: each component's mean is that weighted mean over its own columns, rounded to the tenth, and the overall mean is the weighted mean of the component means by the components' weights, rounded to the tenth.";
 
 /** The final results of a classroom from its staff gradebook (pure: the route did the access check). */
 export function assistResults(table: ResultsSource): AssistResults {
   const released = table.columns.filter((c) => c.released);
+  const names = new Map(table.components.map((k) => [k.id, k.name]));
   return {
     classroomId: table.classroomId,
     scale: RESULTS_SCALE,
-    columns: released.map(({ title, mode, date, weight, counts }) => ({ title, mode, date, weight, counts })),
+    components: table.components.map(({ name, weight }) => ({ name, weight })),
+    columns: released.map(({ title, mode, date, weight, counts, componentId }) => ({
+      title,
+      mode,
+      date,
+      weight,
+      counts,
+      component: componentId === null ? null : (names.get(componentId) ?? null),
+    })),
     students: table.rows.map((row) => ({
       name: `${row.prenom} ${row.nom}`.trim(),
       grades: released.map((c) => {
@@ -504,6 +520,7 @@ export function assistResults(table: ResultsSource): AssistResults {
         return cell.kind === "absent" || cell.kind === "excused" ? cell.kind : cell.grade;
       }),
       mean: row.mean,
+      componentMeans: table.components.map((k) => row.componentMeans[k.id] ?? null),
     })),
     unreleasedColumns: table.columns.length - released.length,
   };

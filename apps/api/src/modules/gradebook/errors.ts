@@ -12,6 +12,8 @@ const STATUS: Record<GradebookErrorCode, number> = {
   grade_exists: 409,
   score_above_max: 422,
   owner_required: 403,
+  component_name_taken: 409,
+  component_in_use: 409,
 };
 
 /** A refusal: `{ error: code, message, ...details }`. */

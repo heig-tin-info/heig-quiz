@@ -1163,6 +1163,7 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
     feedbackAttemptId: null,
     // The mode's default (ADR-074 §6): an exam counts, an exercise does not.
     counts: (over.mode ?? "exam") === "exam",
+    component: null,
     score: null,
     ...over,
   });
@@ -1197,6 +1198,7 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
           date: iso(-5 * D),
           status: "released",
           counts: true,
+          component: null,
           score: { points: 18, totalPoints: 20, grade: 5.5 },
         },
         {
@@ -1206,6 +1208,7 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
           date: iso(-13 * D),
           status: "excused",
           counts: false,
+          component: null,
           score: null,
         },
       ]

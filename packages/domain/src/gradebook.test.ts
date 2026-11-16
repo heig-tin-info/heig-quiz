@@ -5,8 +5,10 @@ import {
   cellGrade,
   classMean,
   countsByDefault,
+  countsInMean,
   evaluationColumnKind,
   gradebookMean,
+  gradebookMeans,
   hasGrade,
   notTakenCell,
   resolveCell,
@@ -101,6 +103,61 @@ describe("the mean", () => {
     expect(gradebookMean([])).toBeNull();
     expect(gradebookMean([{ weight: 100, counts: true, cell: { kind: "empty" } }])).toBeNull();
     expect(gradebookMean([grade(5, 0), grade(3, 0)])).toBeNull();
+  });
+});
+
+describe("the components of the mean (ADR-131)", () => {
+  const LABO = { id: "labo", weight: 50 };
+  const COURS = { id: "cours", weight: 50 };
+  const inPart = (componentId: string | null, g: number, weight = 100, counts = true): MeanColumn => ({ ...grade(g, weight, counts), componentId });
+
+  it("counts a column only when it counts and, once the course has a component, sits in one", () => {
+    expect(countsInMean(true, null, false)).toBe(true);
+    expect(countsInMean(true, "labo", true)).toBe(true);
+    expect(countsInMean(true, null, true)).toBe(false);
+    expect(countsInMean(true, undefined, true)).toBe(false);
+    expect(countsInMean(false, "labo", true)).toBe(false);
+    expect(countsInMean(false, null, false)).toBe(false);
+  });
+
+  it("is exactly the one-level mean without a component: one implicit component", () => {
+    const columns = [grade(4.1, 10), grade(5.6, 100), grade(3.3, 40), { weight: 100, counts: true, cell: { kind: "absent" } } as const, grade(2, 100, false)];
+    expect(gradebookMeans(columns, [])).toEqual({ mean: gradebookMean(columns), components: {} });
+    expect(gradebookMeans([], [])).toEqual({ mean: null, components: {} });
+  });
+
+  it("takes the owner's example: labs L1 10 % and L2 100 % in Labo 50 %, TE1 and TE2 in Cours 50 %, each component rounded first", () => {
+    const columns = [inPart("labo", 4, 10), inPart("labo", 5.5, 100), inPart("cours", 3.7), inPart("cours", 4.4)];
+    const means = gradebookMeans(columns, [LABO, COURS]);
+    // Labo: (10·4.0 + 100·5.5) / 110 = 5.36 -> 5.4; Cours: (3.7 + 4.4) / 2 = 4.05 -> 4.1 (half up, exact).
+    expect(means.components).toEqual({ labo: 5.4, cours: 4.1 });
+    // 0.5·5.4 + 0.5·4.1 = 4.75 -> 4.8; the unrounded means would have given 4.71 -> 4.7.
+    expect(means.mean).toBe(4.8);
+  });
+
+  it("weighs the components relatively, as the columns are weighed", () => {
+    const columns = [inPart("labo", 6), inPart("cours", 3)];
+    expect(gradebookMeans(columns, [{ id: "labo", weight: 20 }, { id: "cours", weight: 80 }]).mean).toBe(3.6);
+    expect(gradebookMeans(columns, [{ id: "labo", weight: 25 }, { id: "cours", weight: 100 }]).mean).toBe(3.6);
+  });
+
+  it("leaves a counted column in no component out of every mean", () => {
+    const means = gradebookMeans([inPart("labo", 5), inPart(null, 1)], [LABO, COURS]);
+    expect(means).toEqual({ mean: 5, components: { labo: 5, cours: null } });
+  });
+
+  it("skips a component with no mean for the student and renormalises the others", () => {
+    const excused = { weight: 100, counts: true, cell: { kind: "excused" }, componentId: "cours" } as const;
+    expect(gradebookMeans([inPart("labo", 4.5), excused, inPart("cours", 6, 100, false)], [LABO, COURS])).toEqual({
+      mean: 4.5,
+      components: { labo: 4.5, cours: null },
+    });
+  });
+
+  it("shows a component at 0 % with its own mean and leaves it out of the overall one; all at 0 % give none", () => {
+    const columns = [inPart("labo", 6), inPart("cours", 3)];
+    expect(gradebookMeans(columns, [{ id: "labo", weight: 0 }, COURS])).toEqual({ mean: 3, components: { labo: 6, cours: 3 } });
+    expect(gradebookMeans(columns, [{ id: "labo", weight: 0 }, { id: "cours", weight: 0 }]).mean).toBeNull();
   });
 });
 

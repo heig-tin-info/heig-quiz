@@ -99,6 +99,8 @@ const OWN = {
   githubLogin: "alice-gh-marker",
   archivedExam: "ARCHIVED-EXAM-4f2b",
 } as const;
+/** A component of the mean of classroom A's course (ADR-131): its structure, read by every student of the classroom, not Alice's own. */
+const COMPONENT = "COMPONENT-61d2";
 /** The answer keys of the seeded questions (`publishQuestion`), never shown: no policy here shows the key. */
 const KEYS = ["answer-q0"];
 
@@ -307,6 +309,17 @@ beforeAll(async () => {
     payload: { kind: "score", points: 1, max: 10, comment: NEVER.markComment, override: true },
   });
   expect(mark.statusCode, mark.body).toBe(200);
+  // A component of the mean (ADR-131) holding the shown exam; the mean is not published, so its weight and means stay the staff's.
+  const component = await server.app.inject({ method: "POST", url: `/app/api/courses/${seed.courseId}/gradebook/components`, headers: teacher.headers, payload: { name: COMPONENT, weight: 37 } });
+  expect(component.statusCode, component.body).toBe(201);
+  const componentId = (component.json() as { id: string }[])[0]!.id;
+  const assigned = await server.app.inject({
+    method: "PATCH",
+    url: `/app/api/classrooms/${seed.classroomId}/gradebook/columns/evaluation/${ids["shown"]}`,
+    headers: teacher.headers,
+    payload: { componentId },
+  });
+  expect(assigned.statusCode, assigned.body).toBe(200);
 
   // The archived classroom B, with a released exam of Alice's.
   archived = await seedLive(db(), { teacherId: teacher.id, studentIds: [alice.id], questions: 1 });
@@ -444,6 +457,17 @@ describe("GET /app/api/me/export — what the file holds (ADR-112 §3)", () => {
     expect(byEvaluation.has(ids["unreleased"]!)).toBe(false);
   });
 
+  it("names the component of the mean of each column of hers that counts, on the gradebook and the Grades rows alike (ADR-131)", () => {
+    const { file } = aliceFile;
+    const room = file.classrooms.find((c) => c.classroom.id === seed.classroomId)!;
+    expect(room.gradebook.components.map((k) => k.name)).toEqual([COMPONENT]);
+    expect(room.gradebook.columns.find((c) => c.activityId === ids["shown"])).toMatchObject({ counts: true, componentId: room.gradebook.components[0]!.id });
+    // The course has a component now: an exam in none counts in no mean.
+    expect(room.gradebook.columns.find((c) => c.activityId === ids["hidden"])).toMatchObject({ counts: false, componentId: null });
+    const rows = file.grades.flatMap((g) => g.rows);
+    expect(rows.find((r) => r.kind === "evaluation" && r.evaluationId === ids["shown"])).toMatchObject({ counts: true, component: COMPONENT });
+  });
+
   it("holds her own group of an open set, never another group nor the students in none (§6)", () => {
     const { file, body } = aliceFile;
     const room = file.classrooms.find((c) => c.classroom.id === seed.classroomId)!;
@@ -505,6 +529,10 @@ describe("the leak test of 05 §5.7, for every caller", () => {
       for (const [name, marker] of Object.entries(NEVER)) expect(body, `${who}: ${name}`).not.toContain(marker);
       // The unreleased exam: 3/10 (grade 2.5), then the mark 1/10 (grade 1.5).
       for (const grade of ['"grade":2.5', '"grade":1.5']) expect(body, `${who}: ${grade}`).not.toContain(grade);
+      // The mean is not published: no weight, no mean, no class mean of a column or a component of the mean (ADR-131).
+      for (const { gradebook } of file.classrooms) {
+        for (const key of ['"weight"', '"mean"', '"classMean"', '"componentMeans"']) expect(JSON.stringify(gradebook), `${who}: ${key}`).not.toContain(key);
+      }
       // Bob's address, as the roster and the account hold it.
       const [bobRow] = await db().select().from(users).where(eq(users.id, bob.id));
       expect(body, who).not.toContain(bobRow!.email);

@@ -467,9 +467,12 @@ export const EvaluationGradeRow = z.object({
    * column's flag, or the mode's default (an exam counts, an exercise does
    * not). The flag alone, before the mean is published too — never the
    * weight (ADR-074, amendment of 2026-10-13): the page draws a row that
-   * does not count as practice, its grade indicative (#803).
+   * does not count as practice, its grade indicative (#803). Once the course
+   * has components of the mean, a column in none does not count (ADR-131).
    */
   counts: z.boolean(),
+  /** The name of the component of the mean it counts in (ADR-131); null when it does not count or the course has none. */
+  component: z.string().nullable(),
   /**
    * The points and the Swiss grade, ONLY once the results are released and
    * the feedback policy lets the student read them — never under `none`
@@ -506,11 +509,12 @@ export const ProjectGradeRow = z.discriminatedUnion("status", [
   z.object({
     ...projectGradeFacts,
     status: z.literal("released"),
-    /** Whether it counts toward the mean, as an evaluation's row says (a project does by default). */
+    /** Whether it counts toward the mean, and in which component, as an evaluation's row says (a project counts by default). */
     counts: z.boolean(),
+    component: z.string().nullable(),
     score: z.object({ points: z.number(), totalPoints: z.number(), grade: z.number() }),
   }),
-  z.object({ ...projectGradeFacts, status: z.literal("excused"), counts: z.literal(false), score: z.null() }),
+  z.object({ ...projectGradeFacts, status: z.literal("excused"), counts: z.literal(false), component: z.null(), score: z.null() }),
 ]);
 export type ProjectGradeRow = z.infer<typeof ProjectGradeRow>;
 

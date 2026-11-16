@@ -147,6 +147,8 @@ function buildBook(roomId: string): MockBook | null {
     weight: spec.weight,
     counts: countsByDefault(spec.mode),
     position: null,
+    // No component of the mean in the mock yet: its screens come later (ADR-131).
+    componentId: null,
     withheld: spec.withheld ?? false,
     beneath: new Map(students.map((s, i) => [s.id, beneathOf(spec, i, me)])),
   }));
@@ -242,12 +244,13 @@ function staffTable(room: (typeof rooms)[number], book: MockBook): GradebookStaf
             displayed(cell),
           );
         }
-        return { enrollmentId: s.id, email: s.email, nom: s.nom, prenom: s.prenom, cells, mean: meanOf(book.columns, outcomes) };
+        return { enrollmentId: s.id, email: s.email, nom: s.nom, prenom: s.prenom, cells, mean: meanOf(book.columns, outcomes), componentMeans: {} };
       });
   return {
     classroomId: room.id,
     archived: room.archivedAt !== null,
     meanPublished: book.meanPublished,
+    components: [],
     columns: book.columns.map(({ withheld: _w, beneath: _b, ...column }) => ({
       ...column,
       classMean: column.released ? classMean(rows.map((row) => row.cells[column.activityId]!.grade)) : null,
@@ -375,7 +378,7 @@ on("GET", "/app/api/student/classrooms/:id/gradebook", (m) => {
   const published = book?.meanPublished ?? false;
   // A teacher in the student view holds no seat to read: the same shape, empty.
   if (!book || role !== "student") {
-    return { classroomId: room.id, columns: [], cells: {}, ...(published ? { mean: null } : {}) } satisfies GradebookStudent;
+    return { classroomId: room.id, components: [], columns: [], cells: {}, ...(published ? { mean: null } : {}) } satisfies GradebookStudent;
   }
   const cells: GradebookStudent["cells"] = {};
   const outcomes = new Map<string, CellOutcome>();
@@ -390,6 +393,7 @@ on("GET", "/app/api/student/classrooms/:id/gradebook", (m) => {
   }
   return {
     classroomId: room.id,
+    components: [],
     columns: columns.map((c) => ({
       kind: c.kind,
       activityId: c.activityId,
@@ -397,6 +401,7 @@ on("GET", "/app/api/student/classrooms/:id/gradebook", (m) => {
       title: c.title,
       date: c.date,
       counts: c.counts,
+      componentId: null,
       ...(published ? { weight: c.weight } : {}),
     })),
     cells,

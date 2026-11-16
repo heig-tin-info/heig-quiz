@@ -30,6 +30,10 @@ only — reopening a finished attempt whose student the feedback policy has alre
 the answer key (an exercise in `immediate` with `showKey`) joins the owner's acts, as an
 audited derogation; any other reopening stays every member's.
 
+Amended 2026-11-16 by [ADR-131](ADR-131-composantes-de-la-moyenne.md) (product owner): §3
+only — the writes to a course's components of the mean join the owner-only routes; reading
+them, and putting a column in one, stay every member's.
+
 Scope: what a member of a course's staff may do on the course, its classrooms and
 its evaluations; who reaches them is unchanged (`staffAccess`, invariant 6).
 
@@ -86,6 +90,7 @@ entity (404 when it fails, invariant 6), and a role that says what the caller ma
    | `POST /courses/:id/classrooms`, `DELETE /classrooms/:id` | the course's classrooms |
    | `POST /evaluations/:id/release`, `/unrelease`, `/publish-correction`; `POST /projects/:id/release` (F-PROJ-14) | what reaches the students as final |
    | `POST /courses/:id/conditions`, `PATCH /courses/:id/conditions/:cid`, `PUT /courses/:id/conditions/order`, `POST /courses/:id/conditions/:cid/archive\|unarchive` (amended 2026-10-09) | the course's catalog of conditions, a course setting (F-ORG-16, ADR-079 §5); its list stays every member's |
+   | `POST /courses/:id/gradebook/components`, `PATCH`, `DELETE /courses/:id/gradebook/components/:componentId` (amended 2026-11-16, ADR-131) | the course's components of the mean, which move every classroom's means; its list stays every member's, and so does putting a column in a component |
    | `PUT /courses/:id/concepts` (amended 2026-10-10) | the concepts the course declares, a course setting (F-ORG-12, ADR-081 sixth addendum); reading it (in `GET /courses/:id`) stays every member's, and no student route returns it |
    | `DELETE /evaluations/:id` once the evaluation is released, its correction published, or one attempt of a student seat exists — a poll's attempts (votes) do not count, only its release (amended 2026-10-10; the poll exemption pending the product owner's confirmation) | the deletion cascades to attempts, answers, gradings, released grades, gradebook columns and marks, and drill cards: what students did, or were shown as final. A staff rehearsal (ADR-018) is not a student's attempt |
    | `POST /evaluations/:id/attempts/:attemptId/reopen` once the policy has shown the student the answer key (`keyShownTo` of the `results` module: an exercise in `immediate` with `showKey`) (amended 2026-10-11, audit L9; *amended 2026-11-02 by ADR-124: never for an exercise, whose reopening stays every member's*) | the student would rewrite their answers with the key in hand. The role depends on the attempt (`reopenRole`), decided in the loader like the two rows below: an assistant gets **`403 owner_required`**, and the live grid offers Reopen only to an owner (`reopenable`); the owner's reopening is audited `attempt.reopen` with `derogation: "key_shown"`. Retakes on and a published correction (ADR-050) stay refused to everybody |

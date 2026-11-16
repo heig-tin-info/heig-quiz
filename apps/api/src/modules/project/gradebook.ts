@@ -21,7 +21,17 @@ import { and, eq, isNotNull, ne, type SQL } from "drizzle-orm";
 import type { FinalScoreSource } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { classrooms, courses, enrollments, excusedMarkOfSeat, gradebookColumns, gradebookMarks, projects } from "../../db/schema.js";
+import {
+  classrooms,
+  courseHasComponents,
+  courses,
+  enrollments,
+  excusedMarkOfSeat,
+  gradebookColumns,
+  gradebookComponents,
+  gradebookMarks,
+  projects,
+} from "../../db/schema.js";
 import { liveProject } from "../guards.js";
 import { repoScores, releasableScore } from "./detail.js";
 import { scoreFacts } from "./scores.js";
@@ -94,6 +104,10 @@ export interface StudentProjectGrade {
   archivedAt: Date | null;
   /** The teacher's `counts` of the project's stored gradebook column, null without one. */
   storedCounts: boolean | null;
+  /** That column's component of the mean, null without one; whether the course has any (ADR-131, `countsInMean`). */
+  componentId: string | null;
+  componentName: string | null;
+  courseHasComponents: boolean;
   /** The seat holds an `excused` mark on that column (#969), never its comment. */
   excused: boolean;
   /** The release's snapshot of the seat's own or group's repository; null without one or a score. */
@@ -119,6 +133,9 @@ export async function studentProjectGrades(db: Db, userId: string, classroomId?:
       courseName: courses.name,
       storedCounts: gradebookColumns.counts,
       excusedMarkId: gradebookMarks.id,
+      componentId: gradebookColumns.componentId,
+      componentName: gradebookComponents.name,
+      courseHasComponents: courseHasComponents(),
     })
     .from(enrollments)
     .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
@@ -126,6 +143,7 @@ export async function studentProjectGrades(db: Db, userId: string, classroomId?:
     .innerJoin(projects, eq(projects.classroomId, classrooms.id))
     .leftJoin(gradebookColumns, eq(gradebookColumns.projectId, projects.id))
     .leftJoin(gradebookMarks, excusedMarkOfSeat())
+    .leftJoin(gradebookComponents, eq(gradebookComponents.id, gradebookColumns.componentId))
     .where(
       and(
         eq(enrollments.userId, userId),

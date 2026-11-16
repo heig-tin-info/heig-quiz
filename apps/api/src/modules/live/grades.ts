@@ -6,7 +6,7 @@
  * service (`studentProjectGrades`) only; its rows carry the gradebook
  * column's `counts` (ADR-074 §6, amendment of 2026-10-13).
  */
-import { countsByDefault, evaluationColumnKind, isFinishedAttempt } from "@quiz/domain";
+import { countsByDefault, countsInMean, evaluationColumnKind, isFinishedAttempt } from "@quiz/domain";
 import type {
   CardResults,
   EvaluationGradeRow,
@@ -99,29 +99,43 @@ function grouped(placed: Placed[]): StudentGrades {
  * counts: the stored column's flag, else a project's default, as the
  * classroom's Grades tab reads it (`gradebook.db.test.ts`).
  */
-function projectRow({ project, storedCounts, excused, score }: StudentProjectGrade): ProjectGradeRow | null {
+function projectRow(grade: StudentProjectGrade): ProjectGradeRow | null {
+  const { project, excused, score } = grade;
   const facts = { kind: "project", projectId: project.id, title: project.name, date: iso(project.releasedAt!) } as const;
-  if (excused) return { ...facts, status: "excused", counts: false, score: null };
+  if (excused) return { ...facts, status: "excused", counts: false, component: null, score: null };
   if (score === null) return null;
   return {
     ...facts,
     status: "released",
-    counts: storedCounts ?? countsByDefault("project"),
+    ...counting(grade.storedCounts ?? countsByDefault("project"), grade),
     score: { points: score.points, totalPoints: score.max, grade: score.grade },
   };
 }
 
+/** A row's gradebook column as {@link counting} reads it, joined by its reader (ADR-131). */
+interface ColumnComponent {
+  componentId: string | null;
+  componentName: string | null;
+  courseHasComponents: boolean;
+}
+
 /**
- * Whether the evaluation counts toward the mean: the teacher's flag on its
- * stored gradebook column (`storedCounts`, joined by `studentEvaluationRows`),
- * else its mode's default. The flag alone ever reaches the student, never the
- * weight (ADR-074, amendment of 2026-10-13). The classroom's Grades tab takes
- * the same flag from the gradebook's own `settingsOf` instead;
- * `gradebook.db.test.ts` ("tells the student whether each column counts…")
- * guards that the two agree.
+ * Whether a row counts toward the mean, and the name of the component it
+ * counts in: `countsInMean` of the teacher's flag on its stored gradebook
+ * column (`storedCounts`, joined by `studentEvaluationRows` and
+ * `studentProjectGrades`), else its kind's default, and of its component once
+ * the course has some (ADR-131). The flag and the name alone ever reach the
+ * student, never a weight (ADR-074, amendment of 2026-10-13). The classroom's
+ * Grades tab takes the same settings from the gradebook's own `settingsOf`
+ * instead; `gradebook.db.test.ts` ("tells the student whether each column
+ * counts…", and the components' cases) guards that the two agree.
  */
-const countsOf = ({ row }: PastEntry): boolean =>
-  row.storedCounts ?? countsByDefault(evaluationColumnKind(row.evaluation.mode));
+function counting(flag: boolean, column: ColumnComponent): { counts: boolean; component: string | null } {
+  const counts = countsInMean(flag, column.componentId, column.courseHasComponents);
+  return { counts, component: counts ? column.componentName : null };
+}
+
+const countsOf = ({ row }: PastEntry): boolean => row.storedCounts ?? countsByDefault(evaluationColumnKind(row.evaluation.mode));
 
 /**
  * Where a finished evaluation stands for the student; see `GradeStatus`. A
@@ -191,7 +205,7 @@ function gradeRow(entry: PastEntry, counts: boolean): EvaluationGradeRow {
     // `results` is the counted attempt's own (`resultsState`).
     feedbackAttemptId: card.results === "available" ? (counted?.id ?? null) : null,
     // An excused row counts in no mean: never drawn with what counts (#969).
-    counts: counts && status !== "excused",
+    ...counting(counts && status !== "excused", row),
     score: scoreOf(entry, status),
   };
 }

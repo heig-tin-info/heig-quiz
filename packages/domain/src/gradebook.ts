@@ -27,6 +27,17 @@
  * and the others renormalised; 0 % keeps a column in view and out of the
  * mean. No ranking anywhere.
  *
+ * **Components of the mean** (ADR-131): a course may name components
+ * ("Labo", "Cours"), each with its own relative weight, and put each column
+ * in one. As soon as the course has one, the mean has two levels: a
+ * component's mean is the formula above over ITS columns, rounded to the
+ * tenth, and the overall mean is the same formula over the component means,
+ * weighted by the components' weights — a component without a mean for the
+ * student skipped and the others renormalised; and a counted column in no
+ * component counts in no mean ({@link countsInMean}). A course without a
+ * component is the same computation over one implicit component that holds
+ * every column, which gives exactly the one-level mean.
+ *
  * The **class means** are the staff's alone: a column's is the plain mean
  * of the grades its cells count as (an absence a 1.0, as in a student's
  * mean; an empty or excused cell left out), the class's overall one the plain mean of
@@ -97,11 +108,64 @@ export function notTakenCell(mode: "exam" | "exercise"): CellOutcome {
   return mode === "exam" ? { kind: "absent" } : { kind: "empty" };
 }
 
-/** One column as the mean reads it. */
+/** One column as the mean reads it. `componentId`: the component of the mean it is in (ADR-131), none by default. */
 export interface MeanColumn {
   weight: number;
   counts: boolean;
   cell: CellOutcome;
+  componentId?: string | null;
+}
+
+/** A component's name: trimmed, 1 to 40 characters, unique in its course whatever its case (ADR-131). */
+export const COMPONENT_NAME_MAX = 40;
+
+/** A component of the mean as the mean reads it: its id and its weight, a whole percentage relative to the others'. */
+export interface MeanComponent {
+  id: string;
+  weight: number;
+}
+
+/**
+ * THE rule of what counts toward a mean (ADR-131 §4): the column's own
+ * `counts` flag and, once the course has a component of the mean, a
+ * component — a counted column left in none counts in no mean, in every
+ * classroom of the course. The staff's mean, the student's `counts` flag and
+ * the rows of the student's Grades page all read it.
+ */
+export function countsInMean(counts: boolean, componentId: string | null | undefined, courseHasComponents: boolean): boolean {
+  return counts && (!courseHasComponents || componentId != null);
+}
+
+/** A student's means: the overall one, and each component's by id (empty without a component). */
+export interface GradebookMeans {
+  mean: number | null;
+  components: Record<string, number | null>;
+}
+
+/** The one component a course without any holds: every column, at any weight (it is alone). */
+const IMPLICIT_COMPONENT: MeanComponent = { id: "", weight: WEIGHT_DEFAULT };
+
+/**
+ * A student's means over their columns (ADR-131 §3). Each component's mean is
+ * {@link gradebookMean} over its counted columns, to the tenth; the overall
+ * mean is the same formula over those rounded means, weighted by the
+ * components' weights: a component with no mean is skipped, one at 0 % keeps
+ * its own mean and is out of the overall one, all at 0 % give none. Without a
+ * component, one implicit component holds every column, whose rounded mean is
+ * the overall mean exactly: the one-level mean of ADR-074 §7.
+ */
+export function gradebookMeans(columns: readonly MeanColumn[], components: readonly MeanComponent[]): GradebookMeans {
+  const explicit = components.length > 0;
+  const parts = explicit ? components : [IMPLICIT_COMPONENT];
+  const counted = columns.filter((c) => countsInMean(c.counts, c.componentId, explicit));
+  const means = parts.map((part) => gradebookMean(counted.filter((c) => (explicit ? c.componentId === part.id : true))));
+  const mean = gradebookMean(
+    parts.map((part, i): MeanColumn => {
+      const partMean = means[i] ?? null;
+      return { weight: part.weight, counts: true, cell: partMean === null ? { kind: "empty" } : { kind: "grade", grade: partMean } };
+    }),
+  );
+  return { mean, components: explicit ? Object.fromEntries(parts.map((part, i) => [part.id, means[i] ?? null])) : {} };
 }
 
 /**

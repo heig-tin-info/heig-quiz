@@ -24,6 +24,7 @@ const column = (n: number, title: string, mode: "exam" | "exercise" | "project",
   mode,
   title,
   date: "2026-09-10T08:00:00.000Z",
+  componentId: null,
   ...extra,
 });
 const cell = (kind: string, grade: number | null = null, points: number | null = null, max: number | null = null) => ({
@@ -37,6 +38,7 @@ function book(over: Record<string, unknown> = {}, weights = false): GradebookStu
   const w = (weight: number, counts = true) => ({ counts, ...(weights ? { weight } : {}) });
   return GradebookStudent.parse({
     classroomId: ROOM,
+    components: [],
     columns: [
       column(0, "Test 1", "exam", w(50)),
       column(1, "Test 2", "exam", w(100)),

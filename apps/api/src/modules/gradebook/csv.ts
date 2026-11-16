@@ -17,8 +17,17 @@
  * that does not count, and under `mean`); last, `class_mean` with each
  * column's class mean and the class's overall mean under `mean`. Both put
  * their label in the `email` field and leave the names empty.
+ *
+ * Once the course has components of the mean (ADR-131), one more column per
+ * component, named after it, stands just before `mean` (still last), with
+ * each student's mean of the component; a `component` line, right under the
+ * header, names each column's component; the `weight` line carries the
+ * components' weights under their columns, `class_mean` their class means,
+ * and a column in no component carries no weight, since it counts in no
+ * mean. Without a component the file is unchanged.
  */
 import type { GradebookStaff, GradebookStaffCell } from "@quiz/contracts";
+import { countsInMean } from "@quiz/domain";
 
 import { csvFile, grade, HEADER_MAX, line, type NumericField } from "../../csv.js";
 
@@ -35,23 +44,45 @@ function cellField(cell: GradebookStaffCell | undefined): string | NumericField 
 }
 
 export function gradebookCsv(table: GradebookStaff): string {
+  const { components } = table;
   const header = [
     "email",
     "last_name",
     "first_name",
     ...table.columns.map((c) => `${c.title.slice(0, HEADER_MAX)}${c.released ? "" : UNRELEASED_SUFFIX}`),
+    ...components.map((k) => k.name.slice(0, HEADER_MAX)),
     "mean",
   ];
-  const weights = line(["weight", "", "", ...table.columns.map((c) => (c.counts ? { numeric: String(c.weight) } : "")), ""]);
+  const names = new Map(components.map((k) => [k.id, k.name]));
+  const componentLine =
+    components.length === 0
+      ? []
+      : [line(["component", "", "", ...table.columns.map((c) => (c.componentId === null ? "" : (names.get(c.componentId) ?? ""))), ...components.map(() => ""), ""])];
+  const weights = line([
+    "weight",
+    "",
+    "",
+    ...table.columns.map((c) => (countsInMean(c.counts, c.componentId, components.length > 0) ? { numeric: String(c.weight) } : "")),
+    ...components.map((k) => ({ numeric: String(k.weight) })),
+    "",
+  ]);
   const rows = table.rows.map((row) =>
     line([
       row.email,
       row.nom,
       row.prenom,
       ...table.columns.map((c) => cellField(row.cells[c.activityId])),
+      ...components.map((k) => optionalGrade(row.componentMeans[k.id] ?? null)),
       optionalGrade(row.mean),
     ]),
   );
-  const classMeans = line(["class_mean", "", "", ...table.columns.map((c) => optionalGrade(c.classMean)), optionalGrade(table.classMean)]);
-  return csvFile([line(header), weights, ...rows, classMeans]);
+  const classMeans = line([
+    "class_mean",
+    "",
+    "",
+    ...table.columns.map((c) => optionalGrade(c.classMean)),
+    ...components.map((k) => optionalGrade(k.classMean)),
+    optionalGrade(table.classMean),
+  ]);
+  return csvFile([line(header), ...componentLine, weights, ...rows, classMeans]);
 }

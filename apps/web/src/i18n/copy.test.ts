@@ -94,6 +94,9 @@ const RULES: Rule[] = [
   { name: "word-gele", langs: FR, fix: "figé", test: has(/\bgelée?s?\b/i) },
   { name: "word-soumettre", langs: FR, fix: "rendre", test: has(/\bsoum(ettre|is|ise|ission)/i) },
   { name: "word-codespace", langs: BOTH, fix: "workspace, espace de travail; codespace is an internal word", test: has(/\bcodespaces?\b/i) },
+  // The gradebook's share of the mean (ADR-131): a component, never a group, which names the students' groups.
+  { name: "word-component", langs: FR, fix: "composante; a groupe is a group of students", test: (t, k) => k.startsWith("gbook.") && has(/\bgroupes?\b/i)(t) },
+  { name: "word-component", langs: EN, fix: "component; a group is a group of students", test: (t, k) => k.startsWith("gbook.") && has(/\bgroups?\b/i)(t) },
   // An account's end (ADR-117): anonymized, never deleted; dormant, never archived (a classroom's state).
   { name: "word-account-deleted", langs: FR, fix: "anonymisé: the results stay, only the identity leaves", test: (t, k) => ACCOUNT_KEY.test(k) && has(/supprim/i)(t) },
   { name: "word-account-deleted", langs: EN, fix: "anonymized: the results stay, only the identity leaves", test: (t, k) => ACCOUNT_KEY.test(k) && has(/\bdelet/i)(t) },

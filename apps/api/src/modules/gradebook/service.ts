@@ -10,6 +10,8 @@
  *   exit of the gradebook, spec 05 §5.7);
  * - `writes.ts`: the audited staff writes;
  * - `columns.ts`: what is stored beside the activities;
+ * - `components.ts`: the components of the mean of a course (ADR-131), the
+ *   course owner's to write;
  * - the activities' columns and cells come through the `ActivityKind`
  *   registry (`modules/activity/`), so this module imports neither
  *   `results` nor `project` directly.
@@ -19,3 +21,4 @@
  */
 export { staffGradebook, studentGradebook } from "./table.js";
 export { clearMark, patchColumn, patchSettings, setMark, type WriteContext } from "./writes.js";
+export { createComponent, deleteComponent, listComponents, updateComponent, type CourseWriteContext } from "./components.js";

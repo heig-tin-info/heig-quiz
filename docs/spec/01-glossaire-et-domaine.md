@@ -38,7 +38,8 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | CI runner | The self-hosted GitHub Actions runners that run a project's CI (ADR-007). Never "runner" alone, which is `apps/runner`. |
 | Release | The one verb for making results the students': an evaluation's results (F-GRADE-09), a project's final scores (F-PROJ-14). heig-classroom's "validate the grades" is a release. |
 | Gradebook | A classroom's grades in one table: a column per released activity that counts, a row per student, a weighted mean (F-GBOOK). |
-| Gradebook column | One activity of a classroom in its gradebook, with whether it counts and its weight; its cells are read from the activity's released results, never stored. |
+| Gradebook column | One activity of a classroom in its gradebook, with whether it counts and its weight; its cells are read from the activity's released results, never stored. *Amended 2026-11-16 (ADR-131): and the component of the mean it is in, if any.* |
+| Component of the mean | A course's named, weighted share of the gradebook's mean ("Labo", "Cours"; fr « composante »), which the columns of its classrooms join (F-GBOOK-07, [ADR-131](../adr/ADR-131-composantes-de-la-moyenne.md)). Once a course has one, the mean is the weighted mean of the components' means, and a counted column in no component counts in no mean. Never a "group", which is a group of students (F-PROJ-22). |
 | Online workspace | The browser-based workspace a project may be worked in (heig-classroom's codespace, ADR-047); phase M6 of the merge. Never a "session", which an evaluation never has either. *Amended 2026-10-05 (product owner, ADR-075)*: a **supervised** evaluation (SEB or kiosk) may also send a student into it through a `workspace` question, one workspace per attempt, collected and destroyed by the server at the deadline; an exercise never does. An evaluation still has no session: the workspace belongs to the attempt. |
 | Review session (staff) | A staff member's read-only session of the online workspace on one repository of a project, whatever its work mode ([ADR-129](../adr/ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md), F-PROJ-27): build, run, browse the history, never push. Not the project's **final review** (the CI's run after the freeze, F-PROJ-11) nor a **review checkpoint**: in the interface it is never called a review, only *Open in workspace*. In code, `staffReview` / `review` within the `codespace` module. |
 | Evaluation template | An evaluation kept at the course level rather than in a classroom: its questions, points, order, milestones and settings, without dates nor IP list. Never opened, never answered; each classroom's evaluation is made from it by *Instantiate* and records the template and its revision. `exam` and `exercise` only, never `poll` (ADR-031). |
@@ -86,6 +87,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Create, publish, sync, lock, grade and release a project; form its groups and group sets | No | On own classrooms | With Super Powers, else as a teacher |
 | Accept a project, see own repository and score | Own classrooms, own repository or own group's | No | No |
 | See and export a classroom's gradebook, choose its columns and weights | Own cells, the mean once published | On own classrooms | With Super Powers, else as a teacher |
+| Create, rename, re-weigh and delete a course's components of the mean (ADR-131); put a column in one | The name of each counting column's component; its weight and their mean of it once the mean is published | Read on own courses; write by an owner of the course; put a column in one, any member | With Super Powers, else as a teacher |
 | Delete a classroom or an evaluation and its data | No | On own classrooms; a classroom, or an evaluation released, with its correction published or a student attempt (a poll: released), by an owner of the course (ADR-068, amended 2026-10-10) | With Super Powers, else as a teacher |
 | Act as a student (a one-time link, ADR-034) | No | No | With Super Powers |
 
@@ -149,6 +151,8 @@ erDiagram
     PROJECT_GROUP |o--o| PROJECT_REPO : works_in
     PROJECT_REPO ||--o{ GRADE_RUN : runs
     CLASSROOM ||--o{ GRADEBOOK_COLUMN : grades
+    COURSE ||--o{ GRADEBOOK_COMPONENT : weighs
+    GRADEBOOK_COMPONENT |o--o{ GRADEBOOK_COLUMN : holds
 ```
 
 ### Key attributes
@@ -173,7 +177,8 @@ erDiagram
 - **PROJECT**: `id`, `classroom_id`, `name`, `slug`, `state` `draft` / `published` / `locked`, `start_at`, `deadline_at`, `grace_minutes`, the source and distribution repositories, `source_strategy` `whole` / `squash`, `deadline_strategy` `lock` / `commit`, `grading_mode` `auto` / `none`, `publish_mode`, `branches`, `protected_files`, `group_mode`, `group_set_id`, `grading_scale`, `deadline_applied_at`, `released_at`, `archived_at`.
 - **PROJECT_REPO**: `project_id`, `user_id` (who accepted), `group_id` for a group repository, `github_repo_id`, `full_name`, `provision_status`, `invitation_status`, its own `deadline_at` (null: the project's), `deadline_applied_at`, `frozen_at`, `locked_at` (and `archived_at` when the lock fell back to archiving), the staff's hand on the lock (`staff_lock`), `ci_status`, the current, frozen and review grade runs, the teacher's points and comment, `deleted_at`.
 - **GRADE_RUN**: `repo_id`, `workflow_run_id`, `run_attempt`, `head_sha`, `conclusion`, `points`, `max`, `parse_status`, `after_deadline`, `completed_at`.
-- **GRADEBOOK_COLUMN**: `classroom_id`, the activity, `counts`, `weight`; the classroom's `mean_published`.
+- **GRADEBOOK_COLUMN**: `classroom_id`, the activity, `counts`, `weight`, `component_id` (none: null); the classroom's `mean_published`.
+- **GRADEBOOK_COMPONENT**: `course_id`, `name` (unique in the course whatever its case), `weight`, `created_at` (the order) (ADR-131).
 - **DRILL_CARD**: `user_id`, `question_id`, FSRS parameters `stability`, `difficulty`, `due_at`, `reps`, `lapses`, `last_review_at`; one per student and question, created at the release of an exam or the hand-in of an exercise (ADR-041). Its reviews record the rating, the active time and the device class.
 
 ### Invariants
@@ -271,6 +276,7 @@ by the product owner on 2026-10-20.
 | Group set | group set | répartition | — |
 | Journal | journal | journal | carnet |
 | Gradebook | gradebook | carnet de notes | — |
+| Component of the mean (a course's weighted share of the gradebook's mean, ADR-131) | component | composante | groupe, group, catégorie |
 | Correct / wrong (a verdict) | correct / wrong | juste / faux | correct, bon |
 | Not answered | unanswered | sans réponse | pas répondu, non répondue |
 | Default | default | par défaut | défaut |

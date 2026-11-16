@@ -17,12 +17,21 @@
  *
  * The CSV export (F-GBOOK-04, M5-03b) is a staff read like the table, in the
  * format of F-RES-02; like the results export it audits nothing.
+ *
+ * The COURSE's components of the mean (ADR-131) load the course through
+ * `staffAccess` (`accessibleCourse`: anyone off its staff gets the 404 of a
+ * missing course); reading them is any member's, writing them the owner's
+ * (`403 owner_required` from the loader, before the body; ADR-068 §3). Each
+ * write answers the list.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
   GradebookColumnParams,
   GradebookColumnPatch,
+  GradebookComponentCreate,
+  GradebookComponentParams,
+  GradebookComponentPatch,
   GradebookMarkParams,
   GradebookMarkPut,
   GradebookSettingsPatch,
@@ -31,7 +40,15 @@ import {
 
 import { csvFilename } from "../../csv.js";
 import { actorOf } from "../../audit.js";
-import { accessibleClassroom, callerOf, isCourseOwner, readableClassroom, teacherGuard } from "../guards.js";
+import {
+  accessibleClassroom,
+  accessibleCourse,
+  callerOf,
+  isCourseOwner,
+  readableClassroom,
+  teacherGuard,
+  withCourseRole,
+} from "../guards.js";
 import { sendCsv, studentRoute, teacherRoute } from "../http.js";
 import { ownHints } from "../realtime/bus.js";
 import { gradebookCsv } from "./csv.js";
@@ -77,7 +94,7 @@ export async function gradebookPlugin(app: FastifyInstance) {
     }),
   );
 
-  /** F-GBOOK-06: a column's weight, whether it counts, its position. */
+  /** F-GBOOK-06: a column's weight, whether it counts, its position, its component of the mean (ADR-131). */
   app.patch(
     "/app/api/classrooms/:id/gradebook/columns/:kind/:activityId",
     { preHandler: requireTeacher },
@@ -114,6 +131,49 @@ export async function gradebookPlugin(app: FastifyInstance) {
         return service.staffGradebook(app.db, scope.room);
       },
     ),
+  );
+
+  // --- The course's components of the mean (ADR-131) ---
+
+  const loadCourse = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => accessibleCourse(app, req, reply, p);
+  const ownedCourse = withCourseRole(app, loadCourse, (course) => course.id, "owner");
+  const courseCtx = (req: Parameters<typeof actorOf>[0], now: Date): service.CourseWriteContext => ({
+    actor: actorOf(req),
+    userId: callerOf(req).id,
+    now,
+  });
+
+  app.get(
+    "/app/api/courses/:id/gradebook/components",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: loadCourse }, async ({ scope: course }) => service.listComponents(app.db, course.id)),
+  );
+
+  app.post(
+    "/app/api/courses/:id/gradebook/components",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: ownedCourse, body: GradebookComponentCreate }, async ({ req, reply, now, body, scope: course }) => {
+      await service.createComponent(app.db, course.id, body, courseCtx(req, now));
+      return reply.code(201).send(await service.listComponents(app.db, course.id));
+    }),
+  );
+
+  app.patch(
+    "/app/api/courses/:id/gradebook/components/:componentId",
+    { preHandler: requireTeacher },
+    teacher({ params: GradebookComponentParams, load: ownedCourse, body: GradebookComponentPatch }, async ({ req, now, params, body, scope: course }) => {
+      await service.updateComponent(app.db, course.id, params.componentId, body, courseCtx(req, now));
+      return service.listComponents(app.db, course.id);
+    }),
+  );
+
+  app.delete(
+    "/app/api/courses/:id/gradebook/components/:componentId",
+    { preHandler: requireTeacher },
+    teacher({ params: GradebookComponentParams, load: ownedCourse }, async ({ req, now, params, scope: course }) => {
+      await service.deleteComponent(app.db, course.id, params.componentId, courseCtx(req, now));
+      return service.listComponents(app.db, course.id);
+    }),
   );
 
   /**

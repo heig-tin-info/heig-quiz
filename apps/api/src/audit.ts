@@ -254,8 +254,8 @@ export type AuditAction =
    * `before` and `after` (the mark: `{ kind, points, max, comment }`, null
    * for none), `override` (a real grade lay beneath); `mark_cleared`: the
    * same, `after` null. `column_updated`: `kind`, `activityId`, `before`
-   * and `after` (`{ weight, counts, position }`, the weight in whole
-   * percent since #545). `mean_published` /
+   * and `after` (`{ weight, counts, position, componentId }`, the weight in
+   * whole percent since #545, the component since ADR-131). `mean_published` /
    * `mean_unpublished`: no payload. Never a grade of another student.
    */
   | "gradebook.mark_set"
@@ -263,6 +263,15 @@ export type AuditAction =
   | "gradebook.column_updated"
   | "gradebook.mean_published"
   | "gradebook.mean_unpublished"
+  /**
+   * ADR-131: the course owner's writes to the components of the mean,
+   * subject the COURSE. `component_created` and `component_deleted`:
+   * `payload.componentId`, `name`, `weight`; `component_updated`:
+   * `componentId`, `before` and `after` (`{ name, weight }`).
+   */
+  | "gradebook.component_created"
+  | "gradebook.component_updated"
+  | "gradebook.component_deleted"
   /**
    * A classroom's group sets (ADR-070, merge task M3-15a), subject the set,
    * by its staff. `group_set.create`: `payload.name`, `maxSize`; `update`:
