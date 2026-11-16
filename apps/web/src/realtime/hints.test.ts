@@ -6,12 +6,15 @@ import { HintEvent } from "@quiz/contracts";
 import * as keys from "../queryKeys";
 import { HINT_ROOTS, hintRoots, invalidateHint } from "./hints";
 
+/** A dummy argument: a boxed string, so a factory that reads its argument as an object (`"templateId" in home`) is callable too. */
+const X = Object("x") as string;
+
 /** The head of every key `queryKeys.ts` can build, factories called with dummies. */
 const KEY_ROOTS = new Set(
   Object.values(keys).map((k) => {
     const key =
       typeof k === "function"
-        ? (k as unknown as (...a: string[]) => readonly unknown[])("x", "x", "x", "x")
+        ? (k as unknown as (...a: string[]) => readonly unknown[])(X, X, X, X)
         : k;
     return String((key as readonly unknown[])[0]);
   }),
