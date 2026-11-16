@@ -6120,6 +6120,7 @@ export const en = {
   "project.matrix.noValidated.title": "No repository validated yet",
   "project.matrix.noValidated.body": "The statistics count validated repositories only. Validate them on the grading screen.",
   "project.matrix.repos": "{n} repositories",
+  "project.matrix.repos.one": "1 repository",
   "project.matrix.byCriterion": "By criterion",
   "project.matrix.byCriterion.desc": "The mean share of each criterion's maximum, the weakest first.",
   "project.matrix.bar": "{percent}% of the maximum on average",

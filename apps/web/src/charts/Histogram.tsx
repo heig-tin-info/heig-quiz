@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { formatGrade, gradeBand, MAX_GRADE, type GradeBand } from "@quiz/domain";
 import type { ResultsStats } from "@quiz/contracts";
 
@@ -32,10 +34,13 @@ export function Histogram({
   step = 0.5,
   onSelect,
   selected,
+  detail,
   className,
 }: {
   buckets: ResultsStats["histogram"];
   step?: number;
+  /** Who a non-empty bucket counts, as the card its bar opens on hover or focus (`Bars`' `detail`). */
+  detail?: ((bucket: number) => ReactNode) | undefined;
   /** A bar pressed, by its bucket: the filter of a grade table. */
   onSelect?: ((bucket: number) => void) | undefined;
   /** The bucket chosen, marked on its bar. */
@@ -61,6 +66,7 @@ export function Histogram({
         // The buckets are half grades, so 4.0 and 4.5 fall on their edges:
         // a bucket's band is its lower bound's (the letters would not be).
         tone: GRADE_BAND_BAR[gradeBand(b.bucket)],
+        ...(detail && b.count > 0 ? { detail: detail(b.bucket) } : {}),
       }))}
     />
   );

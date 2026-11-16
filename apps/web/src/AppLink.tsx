@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { routeToPath, type Navigate, type Route } from "./router";
+import { routeToPath, withQuery, type Navigate, type Route } from "./router";
 import { isPlainClick } from "./ui";
 
 /**
@@ -12,22 +12,26 @@ import { isPlainClick } from "./ui";
 export function AppLink({
   route,
   navigate,
+  query,
   className,
   children,
 }: {
   route: Route;
+  /** Parameters the route does not carry (`?repo=`), as `navigate`'s `query`. */
+  query?: Readonly<Record<string, string>>;
   navigate: Navigate;
   className?: string;
   children: ReactNode;
 }) {
   return (
     <a
-      href={routeToPath(route)}
+      href={withQuery(routeToPath(route), query)}
       onClick={(e) => {
         e.stopPropagation();
         if (!isPlainClick(e)) return;
         e.preventDefault();
-        navigate(route);
+        if (query) navigate(route, { query });
+        else navigate(route);
       }}
       className={className}
     >

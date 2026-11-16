@@ -40,6 +40,7 @@ export function Popover({
   height = PANEL_MAX_HEIGHT,
   onOpenChange,
   disabled = false,
+  anchorClassName = "inline-flex",
 }: {
   /** The element the card hangs from; it receives the ARIA state. */
   trigger: ReactElement;
@@ -56,6 +57,8 @@ export function Popover({
   onOpenChange?: (open: boolean) => void;
   /** The card cannot be opened: a locked form's trigger, whatever part of it is clicked. */
   disabled?: boolean;
+  /** The box the trigger sits in, for a trigger that must fill a layout slot (a bar of a chart). */
+  anchorClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const notify = useRef(onOpenChange);
@@ -193,7 +196,7 @@ export function Popover({
     <>
       <span
         ref={anchor}
-        className="inline-flex"
+        className={anchorClassName}
         onMouseEnter={hoverIn}
         onMouseLeave={hoverOut}
         onMouseDown={() => {
@@ -211,7 +214,16 @@ export function Popover({
           hoverOut();
         }}
         onKeyDown={(e) => {
-          if (open || (e.key !== "Enter" && e.key !== " ")) return;
+          if (e.key !== "Enter" && e.key !== " ") return;
+          if (open) {
+            // A hover card the focus opened: the key takes the reader INTO
+            // it, to what it holds, instead of closing it.
+            if (mode !== "hover" || trap) return;
+            e.preventDefault();
+            clearTimer();
+            setTrap(true);
+            return;
+          }
           // preventDefault also swallows the click the browser would
           // synthesize, so the toggle below does not close it again.
           e.preventDefault();

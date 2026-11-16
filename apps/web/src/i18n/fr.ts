@@ -6080,6 +6080,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.matrix.noValidated.title": "Aucun dépôt validé pour l'instant",
   "project.matrix.noValidated.body": "Les statistiques ne comptent que les dépôts validés. Validez-les sur l'écran de correction.",
   "project.matrix.repos": "{n} dépôts",
+  "project.matrix.repos.one": "1 dépôt",
   "project.matrix.byCriterion": "Par critère",
   "project.matrix.byCriterion.desc": "La part moyenne du maximum de chaque critère, le plus faible en premier.",
   "project.matrix.bar": "{percent} % du maximum en moyenne",
