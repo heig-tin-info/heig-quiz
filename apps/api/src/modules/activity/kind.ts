@@ -82,6 +82,15 @@ export interface GradebookEntryFacts {
   markGrade(points: number, max: number): number;
 }
 
+/**
+ * An activity that may have a column's settings (ADR-131 §13): its facts,
+ * and whether `gradebookEntries` lists its column yet — false for a draft,
+ * whose settings reach no table, no student and no mean.
+ */
+export interface GradebookColumnFacts extends GradebookEntryFacts {
+  listed: boolean;
+}
+
 /** What the activity itself gives a seat, under any staff mark: read, never recomputed. */
 export interface GradebookBeneath {
   outcome: CellOutcome;
@@ -141,13 +150,14 @@ export interface ActivityKind<K extends ActivityKindName> {
 
   /**
    * One activity of this kind in a classroom whose gradebook column's
-   * settings may be written and read, DRAFT INCLUDED (ADR-131): its facts,
-   * or null — the rule of `gradebookEntries` without the draft exclusion. The
-   * settings exist from the draft on; the column, its cells and its place in
-   * the mean wait for `gradebookEntries`. The staff payload: the classroom is
-   * loaded through `staffAccess` first.
+   * settings may be written and read, DRAFT INCLUDED (ADR-131 §13): its
+   * facts, or null — the rule of `gradebookEntries` without its state
+   * exclusion. The settings exist from the draft on; the column, its cells
+   * and its place in the mean wait for `gradebookEntries`, which `listed`
+   * says it is in. The staff payload: the classroom is loaded through
+   * `staffAccess` first.
    */
-  columnFacts(db: Db, classroomId: string, activityId: string): Promise<GradebookEntryFacts | null>;
+  columnFacts(db: Db, classroomId: string, activityId: string): Promise<GradebookColumnFacts | null>;
 
   /**
    * The caller's own columns and cells of this kind in a classroom (M5-03a,

@@ -1,5 +1,6 @@
 /**
- * The two readers of the gradebook (F-GBOOK-01..05, ADR-074).
+ * The two readers of the gradebook (F-GBOOK-01..05, ADR-074), and one
+ * column's settings for an activity's own settings ({@link columnSettings}).
  *
  * - {@link staffGradebook}: the staff's table of a classroom loaded through
  *   `staffAccess` — every column (released or not), every claimed student
@@ -18,18 +19,27 @@
  * compute the means with the course's components of the mean, read live
  * (`gradebookMeans`, ADR-131): none is the one-level mean of ADR-074.
  */
-import type { GradebookStaff, GradebookStaffCell, GradebookStudent, GradebookStudentCell } from "@quiz/contracts";
+import type {
+  GradebookColumnParams,
+  GradebookColumnSettings,
+  GradebookStaff,
+  GradebookStaffCell,
+  GradebookStudent,
+  GradebookStudentCell,
+} from "@quiz/contracts";
 import { cellGrade, classMean, gradebookMeans, resolveCell, studentCounting, type CellOutcome, type MeanColumn } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import type { classrooms } from "../../db/schema.js";
+import { gradebookColumns, type classrooms } from "../../db/schema.js";
 import { gradebookEntries, studentGradebookEntries } from "../activity/service.js";
 import type { GradebookBeneath } from "../activity/kind.js";
 import type { ReadableClassroom } from "../guards.js";
 import {
   cellKey,
   claimedSeats,
+  columnFactsOf,
+  columnOf,
   inOrder,
   marksByCell,
   markOutcome,
@@ -37,8 +47,9 @@ import {
   settingsOf,
   storedColumns,
   type MarkWithSetter,
+  type RoomScope,
 } from "./columns.js";
-import { courseComponents } from "./components.js";
+import { courseComponents, listComponents } from "./components.js";
 
 const NOTHING_BENEATH: GradebookBeneath = {
   outcome: { kind: "empty" },
@@ -62,6 +73,27 @@ function staffCell(beneath: GradebookBeneath, mark: MarkWithSetter | undefined, 
       ? { kind: mark.kind, points: mark.points, max: mark.max, comment: mark.comment, setBy: mark.setByName, setAt: iso(mark.setAt) }
       : null,
   };
+}
+
+/**
+ * `GET …/gradebook/columns/:kind/:activityId` (ADR-131 §13): one column's
+ * settings, from the draft on — stored, or its mode's defaults — with what
+ * an activity's settings need beside them: the course's components, whether
+ * the column is released, whether the mean is published. A staff read.
+ */
+export async function columnSettings(
+  db: Db,
+  scope: RoomScope,
+  params: Pick<GradebookColumnParams, "kind" | "activityId">,
+): Promise<GradebookColumnSettings> {
+  const facts = await columnFactsOf(db, scope.room.id, params.kind, params.activityId);
+  const [[row], components, published] = await Promise.all([
+    db.select().from(gradebookColumns).where(columnOf(facts)),
+    listComponents(db, scope.course.id),
+    meanPublished(db, scope.room.id),
+  ]);
+  const { weight, counts, componentId } = settingsOf(row, facts.mode);
+  return { weight, counts, componentId, released: facts.released, meanPublished: published, components };
 }
 
 /** `GET /app/api/classrooms/:id/gradebook`: the staff's table (F-GBOOK-01, F-GBOOK-02). */

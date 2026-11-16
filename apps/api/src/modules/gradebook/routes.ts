@@ -121,7 +121,7 @@ export async function gradebookPlugin(app: FastifyInstance) {
     teacher(
       { params: GradebookColumnParams, load: (req, reply, p) => accessibleClassroom(app, req, reply, p), body: GradebookColumnPatch },
       async ({ req, now, params, body, scope }) => {
-        await service.patchColumn(app.db, scope, params, body, await ctx(req, now, scope.course.id));
+        await service.patchColumn(app.db, scope, params, body, courseCtx(req, now));
         return service.staffGradebook(app.db, scope.room);
       },
     ),

@@ -150,8 +150,8 @@ export const evaluationActivity: ActivityKind<"evaluation"> = {
     }));
   },
   async columnFacts(db, classroomId, activityId) {
-    const ev = await columnEvaluation(db, classroomId, activityId);
-    return ev === undefined ? null : facts(ev);
+    const found = await columnEvaluation(db, classroomId, activityId);
+    return found === undefined ? null : { ...facts(found.evaluation), listed: found.listed };
   },
   /** An evaluation the student has no Grades row for (open, or not theirs yet) has no column for them. */
   async studentGradebookEntries(db, userId, classroomId, now) {

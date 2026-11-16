@@ -431,6 +431,9 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
 const withColumn = (classroomId: string): SQL =>
   and(eq(evaluations.classroomId, classroomId), inArray(evaluations.mode, ["exam", "exercise"]))!;
 
+/** Whether the gradebook lists such an evaluation's column ({@link gradebookEvaluations}): no draft. */
+const listedColumn = (): SQL => ne(evaluations.state, "draft");
+
 /**
  * The evaluations of a classroom the gradebook has a column for (F-GBOOK-01,
  * D06): exams and exercises that are no draft — a poll never has one. The
@@ -440,19 +443,23 @@ export function gradebookEvaluations(db: Db, classroomId: string): Promise<Evalu
   return db
     .select()
     .from(evaluations)
-    .where(and(withColumn(classroomId), ne(evaluations.state, "draft")));
+    .where(and(withColumn(classroomId), listedColumn()));
 }
 
 /**
  * An exam or exercise of the classroom, whatever its state, draft included:
- * one whose gradebook column's settings may be written and read (ADR-131),
- * while its column waits for it to leave the draft
- * ({@link gradebookEvaluations}). Undefined for a poll, another classroom's,
- * a missing one. The caller has loaded the classroom through `staffAccess`.
+ * one whose gradebook column's settings may be written and read (ADR-131
+ * §13), and whether {@link gradebookEvaluations} lists its column yet.
+ * Undefined for a poll, another classroom's, a missing one. The caller has
+ * loaded the classroom through `staffAccess`.
  */
-export async function columnEvaluation(db: Db, classroomId: string, evaluationId: string): Promise<EvaluationRecord | undefined> {
+export async function columnEvaluation(
+  db: Db,
+  classroomId: string,
+  evaluationId: string,
+): Promise<{ evaluation: EvaluationRecord; listed: boolean } | undefined> {
   const [row] = await db
-    .select()
+    .select({ evaluation: evaluations, listed: sql<boolean>`(${listedColumn()})` })
     .from(evaluations)
     .where(and(withColumn(classroomId), eq(evaluations.id, evaluationId)));
   return row;

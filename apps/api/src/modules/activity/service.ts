@@ -28,7 +28,7 @@ import { hasStudentGroupSets, studentGroupSetCards } from "../group/service.js";
 import { hasJournal } from "../journal/service.js";
 import { studentClassroomHeader } from "../org/service.js";
 import { evaluationActivity } from "./evaluation.js";
-import type { GradebookEntry, GradebookEntryFacts, StudentGradebookEntry, StudentScope } from "./kind.js";
+import type { GradebookColumnFacts, GradebookEntry, StudentGradebookEntry, StudentScope } from "./kind.js";
 import { projectActivity } from "./project.js";
 
 const KINDS = [evaluationActivity, projectActivity] as const;
@@ -172,7 +172,7 @@ export async function gradebookColumnFacts(
   classroomId: string,
   kind: ActivityKindName,
   activityId: string,
-): Promise<GradebookEntryFacts | null> {
+): Promise<GradebookColumnFacts | null> {
   const owner = KINDS.find((k) => k.kind === kind);
   return owner === undefined ? null : owner.columnFacts(db, classroomId, activityId);
 }

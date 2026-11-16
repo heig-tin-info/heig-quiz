@@ -308,27 +308,34 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
       async ({ req, reply, now, body, scope }) => {
         // A copy into another classroom is a write there: it goes through the
         // same predicate, so a teacher cannot seed a room they cannot reach.
-        let target = scope.classroom.id;
-        if (body.classroomId !== undefined && body.classroomId !== target) {
+        let room = scope.classroom;
+        if (body.classroomId !== undefined && body.classroomId !== room.id) {
           const other = await findAccessibleClassroom(app.db, callerOf(req), body.classroomId);
           if (!other) return notFound(reply);
-          target = other.room.id;
+          room = other.room;
         }
         const row = await service.copyEvaluation(app.db, scope.evaluation, {
-          home: { classroomId: target },
+          home: { classroomId: room.id },
           title: body.title,
           createdBy: callerOf(req).id,
         });
         await trace(req, "evaluation.duplicate", "evaluation", row.id, { from: scope.evaluation.id });
-        // Its gradebook column's settings follow it (ADR-131), written by
-        // the `gradebook` module, which owns them: from here, not from this
-        // module's service, which the gradebook reaches through `activity`.
-        await gradebook.copyColumnSettings(app.db, "evaluation", scope.evaluation.id, { classroomId: target, activityId: row.id }, {
-          actor: actorOf(req),
-          userId: callerOf(req).id,
-          now,
-        });
-        evaluationChanged(target, row.id);
+        // Its gradebook column's settings follow it (ADR-131 §13), written
+        // by the `gradebook` module, which owns them: from here, not from
+        // this module's service, which the gradebook reaches through
+        // `activity`. Not in the copy's transaction: should this fail, the
+        // copy stands, valid, and reads its mode's defaults. An archived
+        // classroom's gradebook is read-only: nothing to carry there.
+        if (room.archivedAt === null) {
+          await gradebook.copyColumnSettings(
+            app.db,
+            scope.evaluation.id,
+            scope.classroom.courseId,
+            { room, course: { id: room.courseId }, activityId: row.id },
+            { actor: actorOf(req), userId: callerOf(req).id, now },
+          );
+        }
+        evaluationChanged(room.id, row.id);
         return reply.code(201).send(service.toEvaluation(row));
       },
     ),

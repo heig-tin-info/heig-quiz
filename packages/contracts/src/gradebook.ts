@@ -158,8 +158,8 @@ export const GradebookColumnSettings = z.object({
   /** False for a draft. */
   released: z.boolean(),
   meanPublished: z.boolean(),
-  /** The course's components, in creation order. */
-  components: z.array(z.object({ id: z.uuid(), name: z.string(), weight: GradebookWeight })),
+  /** The course's components, as their list reads them (staff data). */
+  components: GradebookComponents,
 });
 export type GradebookColumnSettings = z.infer<typeof GradebookColumnSettings>;
 

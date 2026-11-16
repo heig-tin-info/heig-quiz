@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   GradebookColumnParams,
   GradebookColumnPatch,
-  GradebookColumnSettings,
   GradebookComponentCreate,
   GradebookComponentPatch,
   GradebookMarkPut,
@@ -53,21 +52,6 @@ describe("gradebook inputs", () => {
     expect(GradebookColumnParams.safeParse({ id: uuid, kind: "poll", activityId: uuid }).success).toBe(false);
     expect(GradebookSettingsPatch.safeParse({ meanPublished: true }).success).toBe(true);
     expect(GradebookSettingsPatch.safeParse({}).success).toBe(false);
-  });
-});
-
-describe("a column's settings (ADR-131)", () => {
-  it("carries the effective settings and the course's components, nothing of a component's use or class mean", () => {
-    const settings = GradebookColumnSettings.parse({
-      weight: 40,
-      counts: false,
-      componentId: null,
-      released: false,
-      meanPublished: true,
-      components: [{ id: uuid, name: "Labo", weight: 50, inUse: true, classMean: 4.5 }],
-    });
-    expect(settings.components).toEqual([{ id: uuid, name: "Labo", weight: 50 }]);
-    expect(GradebookColumnSettings.safeParse({ ...settings, weight: 101 }).success).toBe(false);
   });
 });
 

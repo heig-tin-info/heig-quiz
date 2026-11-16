@@ -175,17 +175,24 @@ The word "group" was set aside: Groups already names the students' groups
       evaluation's mode changes, as
       [ADR-092](ADR-092-changer-le-mode-d-une-evaluation.md) §4 keeps any
       stored column's; a draft nobody touched reads its new mode's default.
+    - **Hints.** A write to a column not listed yet (`columnFacts`'
+      `listed`, false for a draft) tells the course's staff only: no
+      student reads anything of it.
     - **Duplication** (F-EVAL-14). A copy carries its source's stored weight
       and counted flag, and its component when the copy's classroom is of
       the same course — another course has not got it; never the position,
-      which orders the source's classroom. A source with no stored row
-      copies nothing; neither does a copy into an archived classroom, whose
-      gradebook is read-only. The `gradebook` module writes it
-      (`copyColumnSettings`), called by the duplicate's route handler — the
-      evaluation's service, which the gradebook reaches through `activity`,
-      does not import it — and audits it as the target classroom's
-      `gradebook.column_updated`, `before` the mode's defaults. A project
-      has no duplication.
+      which orders the source's classroom. The `gradebook` module writes it
+      (`copyColumnSettings`) as the column write itself, `patchColumn`, on
+      the copy: a stored source makes a stored copy, even one holding its
+      mode's defaults (so its flag survives a change of mode, as the
+      source's), audited as the target classroom's
+      `gradebook.column_updated` only when it differs from those defaults. A
+      source with no stored row copies nothing; neither does a copy into an
+      archived classroom, whose gradebook is read-only. The duplicate's
+      route handler calls it — the evaluation's service, which the
+      gradebook reaches through `activity`, does not import it — after the
+      copy's own transaction: should it fail, the copy stands and reads its
+      mode's defaults. A project has no duplication.
     - **No configuration lock.** These settings are the gradebook's, not
       the evaluation's: [ADR-079](ADR-079-conditions-de-l-evaluation.md)
       §4's `configLock` does not cover them, and they stay writable after

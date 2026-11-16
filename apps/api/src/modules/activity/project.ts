@@ -87,8 +87,8 @@ export const projectActivity: ActivityKind<"project"> = {
     }));
   },
   async columnFacts(db, classroomId, activityId) {
-    const project = await columnProject(db, classroomId, activityId);
-    return project === undefined ? null : facts(project);
+    const found = await columnProject(db, classroomId, activityId);
+    return found === undefined ? null : { ...facts(found.project), listed: found.listed };
   },
   /** The Grades page's rule (`studentProjectGrades`); a released project without a repository is an empty cell a mark fills. */
   async studentGradebookEntries(db, userId, classroomId) {

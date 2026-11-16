@@ -1,21 +1,23 @@
 /**
  * What the gradebook stores and reads beside the activities (ADR-074): the
  * settings of a column, the claimed seats that make the rows, the staff
- * marks, the classroom's published-mean switch. The activities' own facts
- * and grades come through the `ActivityKind` registry (`GradebookEntry`),
- * never from here.
+ * marks, the classroom's published-mean switch; the writes' contexts, and
+ * the two lookups of a column by its activity (a listed one for a mark, one
+ * that may have settings, from the draft on). The activities' own facts and
+ * grades come through the `ActivityKind` registry (`GradebookEntry`), never
+ * from here.
  */
 import { and, asc, eq, isNotNull, type SQL } from "drizzle-orm";
 
-import type { GradebookActivityKind, GradebookColumnSettings } from "@quiz/contracts";
+import type { ActivityKindName } from "@quiz/contracts";
 import { countsByDefault, WEIGHT_DEFAULT, type GradebookColumnKind, type MarkOutcome } from "@quiz/domain";
 
+import type { AuditActor } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { enrollments, gradebookColumns, gradebookMarks, gradebookSettings, users } from "../../db/schema.js";
-import type { GradebookEntryFacts } from "../activity/kind.js";
-import { gradebookColumnFacts } from "../activity/service.js";
+import type { GradebookColumnFacts, GradebookEntry, GradebookEntryFacts } from "../activity/kind.js";
+import { gradebookColumnFacts, gradebookEntries } from "../activity/service.js";
 import { notFoundError } from "../http.js";
-import { courseComponents } from "./components.js";
 
 export type ColumnRow = typeof gradebookColumns.$inferSelect;
 export type MarkRow = typeof gradebookMarks.$inferSelect;
@@ -56,44 +58,41 @@ export async function storedColumns(db: Db | Tx, classroomId: string): Promise<M
 export const settingsOf = (row: ColumnRow | undefined, mode: GradebookColumnKind): ColumnSettings =>
   row ? { weight: row.weight, counts: row.counts, position: row.position, componentId: row.componentId } : defaultSettings(mode);
 
-/**
- * The activity whose column's settings may be written and read, from the
- * draft on — each kind's rule (`columnFacts`, ADR-131) — or the 404 of a
- * missing column: a poll, another classroom's activity, an archived or
- * ungraded project.
- */
-export async function columnFactsOf(db: Db, classroomId: string, kind: GradebookActivityKind, activityId: string): Promise<GradebookEntryFacts> {
-  const facts = await gradebookColumnFacts(db, classroomId, kind, activityId);
-  if (facts === null) throw notFoundError("column");
-  return facts;
+/** A staff write's context: who, and the server's clock. */
+export interface CourseWriteContext {
+  actor: AuditActor;
+  userId: string;
+  now: Date;
+}
+
+/** A classroom write's context; `owner`: the caller is an owner of the course (ADR-068, `isCourseOwner`), which the marks ask. */
+export interface WriteContext extends CourseWriteContext {
+  owner: boolean;
+}
+
+/** The classroom and the course it is of, as the route's loader gives them. */
+export interface RoomScope {
+  room: { id: string };
+  course: { id: string };
+}
+
+/** The column the classroom's gradebook lists for this activity — a mark's —, or the 404 of a missing one. */
+export async function entryOf(db: Db, classroomId: string, kind: ActivityKindName, activityId: string): Promise<GradebookEntry> {
+  const entry = (await gradebookEntries(db, classroomId)).find((e) => e.kind === kind && e.activityId === activityId);
+  if (!entry) throw notFoundError("column");
+  return entry;
 }
 
 /**
- * `GET …/gradebook/columns/:kind/:activityId` (ADR-131): one column's
- * settings, stored or its mode's defaults, from the draft on, with what an
- * activity's settings need beside them — the course's components, whether
- * the column is released, whether the mean is published.
+ * The activity whose column's settings may be written and read, from the
+ * draft on — each kind's rule (`columnFacts`, ADR-131 §13) — or the 404 of
+ * a missing column: a poll, another classroom's activity, an archived or
+ * ungraded project.
  */
-export async function columnSettings(
-  db: Db,
-  scope: { room: { id: string }; course: { id: string } },
-  params: { kind: GradebookActivityKind; activityId: string },
-): Promise<GradebookColumnSettings> {
-  const facts = await columnFactsOf(db, scope.room.id, params.kind, params.activityId);
-  const [[row], components, published] = await Promise.all([
-    db.select().from(gradebookColumns).where(columnOf(facts)),
-    courseComponents(db, scope.course.id),
-    meanPublished(db, scope.room.id),
-  ]);
-  const { weight, counts, componentId } = settingsOf(row, facts.mode);
-  return {
-    weight,
-    counts,
-    componentId,
-    released: facts.released,
-    meanPublished: published,
-    components: components.map(({ id, name, weight: share }) => ({ id, name, weight: share })),
-  };
+export async function columnFactsOf(db: Db, classroomId: string, kind: ActivityKindName, activityId: string): Promise<GradebookColumnFacts> {
+  const facts = await gradebookColumnFacts(db, classroomId, kind, activityId);
+  if (facts === null) throw notFoundError("column");
+  return facts;
 }
 
 /** The teacher's order first, then the activity's own date. */

@@ -26,12 +26,9 @@ import { classrooms, enrollments, gradebookColumns, gradebookComponents } from "
 import { notFoundError } from "../http.js";
 import { GradebookError } from "./errors.js";
 import { gradebookChanged } from "./events.js";
-import type { WriteContext } from "./writes.js";
+import type { CourseWriteContext } from "./columns.js";
 
 export type ComponentRow = typeof gradebookComponents.$inferSelect;
-
-/** A course write's context: the owner's role was checked by the route's loader. */
-export type CourseWriteContext = Omit<WriteContext, "owner">;
 
 /** The order of a course's components: their creation (ADR-131 §1: no position, no reorder). */
 const CREATION_ORDER = [asc(gradebookComponents.createdAt), asc(gradebookComponents.id)];

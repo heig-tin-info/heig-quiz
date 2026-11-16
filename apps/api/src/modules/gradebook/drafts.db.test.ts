@@ -13,21 +13,23 @@
  * - a draft's stored row reaches no reader — the staff table, the CSV, the
  *   student's cells, the Grades page — until the draft leaves the draft,
  *   when its column appears with them; it holds its component in use, and
- *   goes with the draft;
+ *   goes with the draft; a write to it hints the staff only;
  * - a stored flag survives a change of mode (ADR-092 §4), an untouched draft
  *   reads its new mode's default;
  * - a duplicate carries weight, flag and component within the course, weight
- *   and flag into another, nothing without a stored column.
+ *   and flag into another, nothing without a stored column; a stored source
+ *   makes a stored copy, its defaults included.
  */
 import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { Evaluation, GradebookColumnSettings, GradebookComponents, GradebookStaff } from "@quiz/contracts";
+import { Evaluation, GradebookColumnSettings, GradebookComponents, GradebookStaff, PERSONAL_DATA_EXPORT_PATH } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
+import { subscribe } from "../../events.js";
 import { auditLog, classrooms, enrollments, evaluations, gradebookColumns, projects } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
@@ -83,10 +85,27 @@ async function readers() {
     call("GET", `/app/api/classrooms/${seed.classroomId}/gradebook.csv`, teacher.headers),
     call("GET", `/app/api/student/classrooms/${seed.classroomId}/gradebook`, students[0]!.headers),
     call("GET", "/app/api/student/results", students[0]!.headers),
+    call("GET", PERSONAL_DATA_EXPORT_PATH, students[0]!.headers),
   ]);
   for (const res of bodies) expect(res.statusCode, res.body).toBe(200);
-  const [table, csv, tab, grades] = bodies.map((res) => res.body);
-  return { table: table!, csv: csv!, tab: tab!, grades: grades! };
+  const [table, csv, tab, grades, personal] = bodies.map((res) => res.body);
+  return { table: table!, csv: csv!, tab: tab!, grades: grades!, personal: personal! };
+}
+
+/** The hint topics a request publishes (the gradebook's own, never the generic one). */
+async function hinted(request: () => Promise<{ statusCode: number; body: string }>): Promise<string[]> {
+  const topics: string[] = [];
+  const unsubscribe = subscribe((m) => {
+    if (m.kind === "hint") topics.push(...m.topics);
+  });
+  try {
+    const res = await request();
+    expect(res.statusCode, res.body).toBe(200);
+    for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    unsubscribe();
+  }
+  return topics;
 }
 
 const columnRow = async (activity: { evaluationId: string } | { projectId: string }) =>
@@ -118,17 +137,21 @@ afterAll(async () => {
 });
 
 describe("a column's settings from the draft on (ADR-131)", () => {
-  it("keeps a draft's stored settings out of the staff table, the CSV, the student's cells and the Grades page", async () => {
-    const before = await readers();
+  it("keeps a draft's stored settings out of the staff table, the CSV, the student's cells, the Grades page and the personal export", async () => {
     const exam = await draft("Draft exam", "exam");
     const lab = await project("Draft project", "draft");
+    // A scheduled project is announced to its students (ADR-127), not listed in the gradebook.
+    const announced = await project("Scheduled project", "scheduled");
+    const before = await readers();
     await patch("evaluation", exam, { weight: 61, componentId: labo });
     await patch("project", lab, { weight: 59, counts: false, componentId: labo });
+    await patch("project", announced, { weight: 57, componentId: labo });
     const after = await readers();
     expect(after).toEqual(before);
     for (const body of Object.values(after)) for (const id of [exam, lab]) expect(body).not.toContain(id);
+    for (const body of [after.table, after.csv, after.tab, after.grades]) expect(body).not.toContain(announced);
     // The staff's table lists every component of the course; a student, only one holding a column of theirs that counts.
-    for (const body of [after.tab, after.grades]) for (const leak of [labo, "Labo", '"weight"']) expect(body).not.toContain(leak);
+    for (const body of [after.tab, after.grades, after.personal]) for (const leak of [labo, "Labo", '"weight"']) expect(body).not.toContain(leak);
   });
 
   it("reads and writes a draft exam's, exercise's and graded project's settings, the stored ones or the mode's defaults", async () => {
@@ -141,7 +164,7 @@ describe("a column's settings from the draft on (ADR-131)", () => {
       componentId: null,
       released: false,
       meanPublished: false,
-      components: [{ id: labo, name: "Labo", weight: 37 }],
+      components: [expect.objectContaining({ id: labo, name: "Labo", weight: 37 })],
     });
     expect(await settings("evaluation", exercise)).toMatchObject({ weight: 100, counts: false, componentId: null });
     expect(await settings("project", scheduled)).toMatchObject({ counts: true, released: false });
@@ -180,10 +203,28 @@ describe("a column's settings from the draft on (ADR-131)", () => {
   });
 
   it("holds a component in use while a draft's column is in it", async () => {
-    const list = GradebookComponents.parse((await call("GET", `/app/api/courses/${seed.courseId}/gradebook/components`, teacher.headers)).json());
-    expect(list).toEqual([{ id: labo, name: "Labo", weight: 37, inUse: true }]);
-    const refused = await call("DELETE", `/app/api/courses/${seed.courseId}/gradebook/components/${labo}`, teacher.headers);
+    // A course of its own, so no other test's column holds the component.
+    const course = await seedLive(db(), { teacherId: teacher.id, studentIds: [], questions: 0 });
+    const made = await call("POST", `/app/api/courses/${course.courseId}/gradebook/components`, teacher.headers, { name: "Oral" });
+    const oral = GradebookComponents.parse(made.json())[0]!.id;
+    const exam = await draft("Holder", "exam", course.classroomId);
+    const components = async () =>
+      GradebookComponents.parse((await call("GET", `/app/api/courses/${course.courseId}/gradebook/components`, teacher.headers)).json());
+    expect((await components())[0]!.inUse).toBe(false);
+    await patch("evaluation", exam, { componentId: oral }, course.classroomId);
+    expect(await components()).toEqual([{ id: oral, name: "Oral", weight: 100, inUse: true }]);
+    const refused = await call("DELETE", `/app/api/courses/${course.courseId}/gradebook/components/${oral}`, teacher.headers);
     expect([refused.statusCode, refused.json().error]).toEqual([409, "component_in_use"]);
+  });
+
+  it("tells only the staff of a draft's settings; a listed column's students too", async () => {
+    const exam = await draft("Quiet", "exam");
+    const quiet = await hinted(() => call("PATCH", colUrl("evaluation", exam), teacher.headers, { weight: 33 }));
+    expect(quiet).toContain(`course:${seed.courseId}`);
+    expect(quiet.filter((t) => t.startsWith("user:") || t.startsWith("classroom:"))).toEqual([]);
+    const heard = await hinted(() => call("PATCH", colUrl("evaluation", seed.evaluationId), teacher.headers, { weight: 34 }));
+    expect(heard).toEqual(expect.arrayContaining([`course:${seed.courseId}`, ...students.map((s) => `user:${s.id}`)]));
+    await patch("evaluation", seed.evaluationId, { weight: 100 });
   });
 
   it("gives the column the draft's stored settings when the draft leaves the draft", async () => {
@@ -245,6 +286,17 @@ describe("a column's settings from the draft on (ADR-131)", () => {
 
     const plain = await draft("Plain", "exam");
     expect(await columnRow({ evaluationId: await duplicate(plain) })).toEqual([]);
+    // A stored row holding the defaults is copied as a stored row, unaudited: its flag survives a change of mode, as the source's.
+    const kept = await draft("Kept", "exam");
+    await patch("evaluation", kept, { counts: true });
+    const keptCopy = await duplicate(kept);
+    expect(await columnRow({ evaluationId: keptCopy })).toHaveLength(1);
+    const auditedCopy = (await db().select().from(auditLog).where(eq(auditLog.action, "gradebook.column_updated"))).filter(
+      (row) => (row.payload as { activityId: string }).activityId === keptCopy,
+    );
+    expect(auditedCopy).toEqual([]);
+    expect((await call("PATCH", `/app/api/evaluations/${keptCopy}`, teacher.headers, { mode: "exercise" })).statusCode).toBe(200);
+    expect(await settings("evaluation", keptCopy)).toMatchObject({ counts: true });
     // An archived classroom's gradebook is read-only: the copy lands there without settings.
     const archived = randomUUID();
     await db().insert(classrooms).values({ id: archived, courseId: seed.courseId, name: "Old", period: "2025-A", archivedAt: new Date() });
