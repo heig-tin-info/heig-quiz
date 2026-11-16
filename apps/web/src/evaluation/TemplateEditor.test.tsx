@@ -188,9 +188,14 @@ describe("TemplateEditor", () => {
 
   /* ADR-131 §15: the row itself is `GradebookSettingRow`'s; here, the template's address and write. */
   it("sets the column its instances start with, through the template's route, with nothing to confirm", async () => {
+    let stored = column();
     const { calls } = mockFetch({
       ...world(),
-      [`PATCH ${COLUMN}`]: ok(column({ componentId: LABO })),
+      [`GET ${COLUMN}`]: () => ok(stored),
+      [`PATCH ${COLUMN}`]: () => {
+        stored = column({ componentId: LABO });
+        return ok(stored);
+      },
     });
     renderWithProviders(<TemplateEditor id={T} navigate={vi.fn()} />, { route: "/?tab=settings" });
 

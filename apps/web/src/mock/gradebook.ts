@@ -470,7 +470,9 @@ on("PATCH", "/app/api/templates/:id/gradebook", (m, raw) => {
  * `evaluation.ts`, which cannot import this file.
  */
 columnSettingsCopy.of = (from, to) => {
-  const row = STORED.get(from);
+  // A stored row, else a seeded column of a book's, as the server's stored row.
+  const seeded = rooms.flatMap((r) => bookOf(r.id)?.columns ?? []).find((c) => c.activityId === from);
+  const row = STORED.get(from) ?? (seeded && { weight: seeded.weight, counts: seeded.counts, componentId: seeded.componentId });
   const target = findEvaluation(to);
   if (!row || rooms.find((r) => r.id === target?.classroomId)?.archivedAt) return;
   STORED.set(to, { ...row });

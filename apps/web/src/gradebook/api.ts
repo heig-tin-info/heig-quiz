@@ -75,20 +75,23 @@ export function useColumnSettingsRefresh(home: ColumnHome) {
 }
 
 /**
- * A template's column write (`PATCH /templates/:id/gradebook`, ADR-131
- * §15): the narrow patch, no position; it answers the settings, which
- * replace the cache. An activity's goes through `useGradebookWrites`.
+ * The write of a column's settings from a settings screen, on the read's own
+ * address: an activity's column `PATCH` (it answers the classroom's table),
+ * or a template's (`GradebookTemplateColumnPatch`, the narrow patch: no
+ * position, ADR-131 §15). Either way the settings are read again, and an
+ * activity's table too. The matrix writes through `useGradebookWrites`.
  */
-export function useTemplateColumnWrite(templateId: string) {
+export function useColumnSettingsPatch(home: ColumnHome) {
   const qc = useQueryClient();
-  const home = { templateId };
+  const schema = "templateId" in home ? GradebookTemplateColumnPatch : GradebookColumnPatch;
   const send = useMutation({
     mutationFn: (patch: GradebookTemplateColumnPatch) =>
-      api<GradebookColumnSettings>(settingsPath(home), {
-        method: "PATCH",
-        body: JSON.stringify(GradebookTemplateColumnPatch.parse(patch)),
-      }),
-    onSuccess: (settings) => qc.setQueryData(columnSettingsKey(home), settings),
+      api<unknown>(settingsPath(home), { method: "PATCH", body: JSON.stringify(schema.parse(patch)) }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: columnSettingsKey(home) }),
+        "classroomId" in home ? qc.invalidateQueries({ queryKey: classroomGradebookKey(home.classroomId) }) : null,
+      ]),
   });
   return { pending: send.isPending, patch: send.mutateAsync };
 }

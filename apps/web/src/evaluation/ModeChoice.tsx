@@ -99,7 +99,7 @@ export function ModeControl({
     ) {
       return;
     }
-    patch.mutate({ mode: next }, onChanged ? { onSuccess: onChanged } : undefined);
+    patch.mutate({ mode: next }, { onSuccess: onChanged });
   };
 
   return (

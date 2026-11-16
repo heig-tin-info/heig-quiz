@@ -14,6 +14,7 @@
  * factory against the literal it replaced, so a reshaped key fails there and
  * not as a stale screen.
  */
+import type { ColumnHome } from "./gradebook/api";
 
 // --- Session and application -------------------------------------------------
 
@@ -184,7 +185,7 @@ export const studentGradebookKey = (classroomId: string) => [...gradebookRootKey
 /** A course's components of the mean (ADR-131): under the same root, so a component's `gradebook` hint refreshes the list too. */
 export const courseComponentsKey = (courseId: string) => [...gradebookRootKey, "components", courseId] as const;
 /** One column's settings as a settings screen reads them: an activity's, a draft's included (ADR-131 §13), or a template's (§15). */
-export const columnSettingsKey = (home: { classroomId: string; kind: string; activityId: string } | { templateId: string }) =>
+export const columnSettingsKey = (home: ColumnHome) =>
   "templateId" in home
     ? ([...gradebookRootKey, "column", "template", home.templateId] as const)
     : ([...gradebookRootKey, "column", home.classroomId, home.kind, home.activityId] as const);
