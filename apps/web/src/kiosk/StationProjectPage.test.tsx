@@ -73,6 +73,9 @@ describe("the station page of a project", () => {
     expect(sandbox).toEqual(expect.arrayContaining(["allow-scripts", "allow-same-origin"]));
     // Nothing the portal serves takes the station off the page.
     for (const token of sandbox) expect(token).not.toMatch(/top-navigation|popups/);
+    // Out of reach under the opening notice, in reach once its page has loaded.
+    expect(iframe).toHaveAttribute("inert");
+    fireEvent.load(iframe);
     expect(iframe).not.toHaveAttribute("inert");
     expect(starts(calls)).toBe(1);
     expect(await screen.findByTestId("station-label")).toHaveTextContent("Poste n° 7");
@@ -136,14 +139,32 @@ describe("the station page of a project", () => {
   });
 
   it("relaunches before the portal's cookie runs out, from the same route", async () => {
+    const notice = () => screen.queryByText("Opening your workspace…");
     let asked = 0;
-    const { calls } = mockFetch({ ...STATION, [START]: () => ok({ url: `${PORTAL}${++asked}` }) });
+    let noticeWhileAsking: boolean | null = null;
+    const { calls } = mockFetch({
+      ...STATION,
+      [START]: () => {
+        // What the page shows when it asks for the second address.
+        if (asked === 1) noticeWhileAsking = notice() !== null;
+        return ok({ url: `${PORTAL}${++asked}` });
+      },
+    });
     renderWithProviders(<StationProjectPage id="p1" relaunchMs={60_000} />);
     await waitFor(() => expect(frame()).toHaveAttribute("src", `${PORTAL}1`));
+    fireEvent.load(frame()!);
+    expect(notice()).toBeNull();
     await advance(59_000);
     expect(starts(calls)).toBe(1);
     await advance(1_000);
     await waitFor(() => expect(frame()).toHaveAttribute("src", `${PORTAL}2`));
+    // The editor stayed in view while the new address was asked for; the notice covers the new frame only.
+    expect(noticeWhileAsking).toBe(false);
+    expect(notice()).not.toBeNull();
+    expect(frame()).toHaveAttribute("inert");
+    fireEvent.load(frame()!);
+    expect(notice()).toBeNull();
+    expect(frame()).not.toHaveAttribute("inert");
     expect(starts(calls)).toBe(2);
   });
 

@@ -46,6 +46,7 @@ import { kioskStationKey, meKey, studentProjectKey } from "../queryKeys";
 import { useServerClock } from "../realtime/useServerClock";
 import { ScreenOverlay } from "../student/PausedOverlay";
 import { Button, ClockCountdown, EmptyState, Spinner } from "../ui";
+import { STATION_SPINNER } from "./KioskPage";
 import { toKiosk } from "./navigation";
 import { endProjectSitting } from "./station";
 import { useStationAttestation } from "./useStationAttestation";
@@ -146,7 +147,7 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
   // Where `/kiosk` left its own "Opening your workspace…", at its size: one notice from the scan to the editor.
   const opening = (
     <div className="absolute inset-0 grid place-items-center bg-canvas">
-      <Spinner label={t("kiosk.opening.workspace")} className="[&_p]:text-[clamp(18px,1.6vw,24px)] [&_svg]:size-8" />
+      <Spinner label={t("kiosk.opening.workspace")} className={STATION_SPINNER} />
     </div>
   );
   return (
@@ -174,8 +175,8 @@ export function StationProjectPage({ id, relaunchMs = PORTAL_RELAUNCH_MS }: { id
               title={t("sproj.workspace")}
               allow="clipboard-read; clipboard-write"
               sandbox={FRAME_SANDBOX}
-              // A suspended station's frame takes no focus and no keystroke under the notice (§7).
-              inert={suspended}
+              // Under a notice (the suspension, §7, or the opening) the frame takes no focus and no keystroke.
+              inert={suspended || loadedUrl !== url}
               onLoad={() => setLoadedUrl(url)}
               className="absolute inset-0 size-full border-0"
             />
