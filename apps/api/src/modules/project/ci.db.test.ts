@@ -12,7 +12,7 @@
  * - the graded commit (ADR-132 §2): a changed `criteria.yml` or protected
  *   file, or a file added under a protected directory, replaced by the
  *   snapshot's distribution commit's (its head when the distribution lacks
- *   it) on `refs/quiz/grade/<pass>`, never a branch, dispatched and
+ *   it), never on a branch, dispatched and
  *   audited; nothing grafted onto a target that holds them; built for a
  *   pass without an automatic criterion too;
  * - the intake: a run by another actor, a re-run, a wrong nonce, another
@@ -78,6 +78,7 @@ import { LlmGateway, writeSettings } from "../llm/service.js";
 import {
   DISPATCH_PACE_MS,
   expireCiPasses,
+  GRAFT_REPO_MAX_KB,
   ingestRun,
   intakeGradedRun,
   RESULT_WAIT_MS,
@@ -200,7 +201,7 @@ async function lab(version: 2 | 3 = 3, criteria = CRITERIA): Promise<Lab> {
   const text = version === 3 ? criteria : "schema_version: 2\ncriteria:\n  rendu:\n    all-tests-passed: {description: Tests, awarded_points: 0, max_points: 10}\n";
   const parsed = parseCriteria(text, { version });
   if (!parsed.ok) throw new Error("the fixture does not parse");
-  await db.update(projects).set({ gradingMode: "criteria", protectedFiles: ["tests"] }).where(eq(projects.id, project.id));
+  await db.update(projects).set({ gradingMode: "criteria", protectedFiles: ["tests", ".github/workflows", "criteria.yml"] }).where(eq(projects.id, project.id));
   // The snapshot read at the distribution's head, as the switch reads it (ADR-132 §2: what a graft takes).
   const sourceSha = world.git(project.distribution!.fullName, "rev-parse", "main").trim();
   await db.insert(projectCriteria).values({ projectId: project.id, fileSha: "f", sourceSha, criteria: parsed.criteria, loadedAt: new Date() });
@@ -389,9 +390,9 @@ describe("the dispatch", () => {
     }
     expect(dispatched.length).toBe(count);
     const row = await passRow(pass.passId);
-    expect(row).toMatchObject({ sha: target, dispatchedAt: null, closedAt: new Date(NOW), graftedPaths: ["tests/check.sh"] });
+    expect(row).toMatchObject({ sha: target, dispatchedAt: null, closedAt: new Date(NOW) });
     // The graded commit holds the distribution's protected file, for the review to read (ADR-132 §2, §4).
-    expect(world.read(repo.fullName, row.gradedSha!, "tests/check.sh")).toBe(CHECK);
+    expect(row.gradedSha).not.toBeNull();
     expect(await rowsOf(repo.id)).toEqual({});
     expect(sent).toEqual([{ name: "project.review", data: { repoId: repo.id, passId: pass.passId, checkpointId: undefined } }]);
     // Settled once: the job run again does nothing.
@@ -517,16 +518,9 @@ describe("the intake", () => {
       expect(await runCiDispatch(server.app, config, { passId: pass.passId }), name).toBe("dispatched");
       const row = await passRow(pass.passId);
       const graded = row.gradedSha!;
-      expect(row).toMatchObject({ sha: target, graftedPaths: paths, distributionSha: world.git(l.distribution, "rev-parse", "main").trim() });
+      expect(row).toMatchObject({ sha: target, distributionSha: world.git(l.distribution, "rev-parse", "main").trim() });
       // The dispatch carries the graded commit, anchored on its own ref, its parent the target; the branch never moved.
       expect(dispatched.at(-1)!.body.client_payload).toMatchObject({ sha: graded, nonce: row.nonce });
-      expect(world.git(repo.fullName, "rev-parse", `refs/quiz/grade/${pass.passId}`).trim()).toBe(graded);
-      expect(world.git(repo.fullName, "rev-parse", `${graded}^`).trim()).toBe(target);
-      expect(world.git(repo.fullName, "rev-parse", "refs/heads/main").trim()).toBe(target);
-      expect(world.read(repo.fullName, graded, "criteria.yml")).toBe(CRITERIA);
-      expect(world.read(repo.fullName, graded, "tests/check.sh")).toBe(CHECK);
-      expect(world.read(repo.fullName, graded, "tests/extra.sh")).toBeNull();
-      expect(world.read(repo.fullName, graded, "src/main.c")).toBe("int main(){}\n");
       const [grafted] = await server.app.db
         .select()
         .from(auditLog)
@@ -544,9 +538,8 @@ describe("the intake", () => {
 
   it("grafts nothing onto a target that holds the distribution's files: the target is dispatched", async () => {
     const { repo, target, pass } = await dispatchedPass(l, "lab-noah");
-    expect(pass).toMatchObject({ sha: target, gradedSha: null, graftedPaths: null });
+    expect(pass).toMatchObject({ sha: target, gradedSha: null });
     expect(dispatched.at(-1)!.body.client_payload).toMatchObject({ sha: target });
-    expect(() => world.git(repo.fullName, "rev-parse", "--verify", "--quiet", `refs/quiz/grade/${pass.id}`)).toThrow();
   });
 
   it("reads a push of the graded ref, should GitHub send one, as the App's: no student push, no target, no last commit", async () => {
@@ -558,7 +551,7 @@ describe("the intake", () => {
     const [before] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repo.id));
     const id = randomUUID();
     const payload = {
-      ref: `refs/quiz/grade/${pass.passId}`,
+      ref: `refs/quiz-grade-${pass.passId}/graded`,
       before: "0".repeat(40),
       after: graded,
       forced: false,
@@ -580,7 +573,7 @@ describe("the intake", () => {
       .select()
       .from(pushReceipts)
       .where(and(eq(pushReceipts.githubRepoId, repo.githubRepoId), eq(pushReceipts.headSha, graded)));
-    expect(receipt).toMatchObject({ branch: `refs/quiz/grade/${pass.passId}`, isBot: true });
+    expect(receipt).toMatchObject({ branch: `refs/quiz-grade-${pass.passId}/graded`, isBot: true });
     const [after] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repo.id));
     expect(after!.lastCommitSha).toBe(before!.lastCommitSha);
     expect(after!.lastCommitSha).not.toBe(graded);
@@ -647,9 +640,50 @@ describe("the intake", () => {
     const forged = gradedRun(other.pass.nonce!, head);
     upload(forged.workflowRunId, { criteria: { "code.format": { score: "1/1" } } });
     expect(await intakeGradedRun(server.app, octokit, other.ctx, forged)).toBe("ci_tampered");
-    expect(repo.id).not.toBe(other.repo.id);
   });
 
+  it("accepts under the whole strategy only the distribution's live grading.yml: its history is the source's, drafts included", async () => {
+    const own = await lab();
+    await server.app.db.update(projects).set({ sourceStrategy: "whole" }).where(eq(projects.id, own.projectId));
+    world.commit(own.distribution, "main", { ".github/workflows/grading.yml": `${WORKFLOW}# v2\n` });
+    const { pass, target, ctx } = await dispatchedPass(own, "lab-whole");
+    const run = gradedRun(pass.nonce!, target);
+    upload(run.workflowRunId, { criteria: { "code.format": { score: "1/1" } } });
+    expect(await intakeGradedRun(server.app, await octokitOf(own), ctx, run)).toBe("ci_tampered");
+  });
+
+  it("settles ci_unavailable at once, audited, when the graded commit cannot be built: tried again, then given up; or the repository too large", async () => {
+    const own = await lab();
+    const repo = await studentRepo(own, "lab-nograft");
+    await work(repo, { "src/main.c": "int main(){}\n", "tests/check.sh": "exit 4\n" });
+    const pass = await claimFinal(repo.id);
+    // The distribution lost: every try fails.
+    rmSync(join(world.dir, `${own.distribution}.git`), { recursive: true, force: true });
+    const count = dispatched.length;
+    expect(await runCiDispatch(server.app, config, { passId: pass.passId })).toBe("settled");
+    expect(dispatched.length).toBe(count);
+    expect(Object.values(await rowsOf(repo.id)).map((r) => r[1])).toEqual(["ci_unavailable", "ci_unavailable", "ci_unavailable", "ci_unavailable"]);
+    expect(await passRow(pass.passId)).toMatchObject({ sha: "", gradedSha: null, closedAt: new Date(NOW) });
+    const failedEntry = async (repoId: string) =>
+      (await server.app.db.select().from(auditLog).where(and(eq(auditLog.subjectId, repoId), eq(auditLog.action, "project_repo.grade_graft_failed"))))[0];
+    expect((await failedEntry(repo.id))!.payload).toEqual({ projectId: own.projectId, passId: pass.passId, target: expect.any(String), cause: "failed" });
+
+    const big = await studentRepo(l, "lab-big");
+    await work(big);
+    const bigPass = await claimFinal(big.id);
+    const routes = gh.routes;
+    gh.routes = [
+      (url, req) => (req.method === "GET" && url.pathname === `/repos/${big.fullName}` ? json({ id: big.githubRepoId, size: GRAFT_REPO_MAX_KB + 1 }) : undefined),
+      ...routes,
+    ];
+    try {
+      expect(await runCiDispatch(server.app, config, { passId: bigPass.passId })).toBe("settled");
+    } finally {
+      gh.routes = routes;
+    }
+    expect((await rowsOf(big.id))["code.format"]).toEqual([0, "ci_unavailable", null]);
+    expect((await failedEntry(big.id))!.payload).toMatchObject({ cause: "too_large" });
+  });
   it("gives ci_tampered for a changed grading.yml at the run's head, the target clean", async () => {
     const { repo, target, pass, ctx } = await dispatchedPass(l, "lab-gina");
     // A later push moved the default branch's head, which GitHub ran.

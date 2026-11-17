@@ -77,13 +77,13 @@ export async function updateSquashedRepo(opts: {
       await git(work, "clone", "--quiet", "--bare", repoUrl(org, sourceRepo), "src.git");
       const src = join(work, "src.git");
       for (const b of branches) {
-        sourceHeads[b] = (await gitBare(src, "rev-parse", `refs/heads/${b}`)).trim();
+        sourceHeads[b] = (await gitBare(src, ["rev-parse", `refs/heads/${b}`])).trim();
       }
       // Fast-forward only: the distribution repository is never rewritten.
       const before = await squashedBranchHeads(runner, repoUrl(org, squashedRepo), branches, work);
       const refspecs = branches.map((b) => `refs/heads/${b}:refs/heads/${b}`);
       try {
-        await pushWithRetry(() => gitBare(src, "push", "--quiet", repoUrl(org, squashedRepo), ...refspecs));
+        await pushWithRetry(() => gitBare(src, ["push", "--quiet", repoUrl(org, squashedRepo), ...refspecs]));
       } catch (err) {
         if (NON_FAST_FORWARD.test(String(err))) throw new SourceRewritten(branches.filter((b) => before[b] !== sourceHeads[b]));
         throw err;
@@ -186,11 +186,11 @@ export async function openSyncWorkspace(opts: { token: string; org: string; squa
   const sq = join(work, "sq.git");
   return {
     async headOf(branch) {
-      return (await gitBare(sq, "rev-parse", `refs/heads/${branch}`)).trim();
+      return (await gitBare(sq, ["rev-parse", `refs/heads/${branch}`])).trim();
     },
     async pushSyncRef(studentRepo, branch) {
       await pushWithRetry(() =>
-        gitBare(sq, "push", "--quiet", "--force", repoUrl(org, studentRepo), `refs/heads/${branch}:refs/heads/sync/${branch}`),
+        gitBare(sq, ["push", "--quiet", "--force", repoUrl(org, studentRepo), `refs/heads/${branch}:refs/heads/sync/${branch}`]),
       );
     },
     dispose() {

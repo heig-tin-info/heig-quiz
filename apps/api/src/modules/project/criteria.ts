@@ -217,6 +217,11 @@ export async function snapshotVersion(db: Db | Tx, projectId: string): Promise<S
   return row ? row.criteria.schemaVersion : null;
 }
 
+/** Whether the project is graded by its CI (ADR-119 §6): `criteria` mode on a schema-3 snapshot, so a pass grafts (ADR-132 §2). */
+export async function ciGraded(db: Db | Tx, project: Pick<ProjectRow, "id" | "gradingMode">): Promise<boolean> {
+  return project.gradingMode === "criteria" && (await snapshotVersion(db, project.id)) === 3;
+}
+
 /** A refusal that is only the file's schema version: one error on `schema_version`. */
 const versionOnly = (read: { errors: readonly CriteriaError[] }): boolean =>
   read.errors.length === 1 && (read.errors[0]!.code === "schema_version" || read.errors[0]!.code === "schema_v1");

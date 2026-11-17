@@ -819,8 +819,6 @@ export const gradeDispatches = pgTable(
     gradedSha: text("graded_sha"),
     /** The distribution commit a v3 pass grafted from and is accepted against; null on a pass claimed before ADR-132. */
     distributionSha: text("distribution_sha"),
-    /** The paths whose entry the graded commit changed; null without one. */
-    graftedPaths: text("grafted_paths").array(),
   },
   (t) => [
     uniqueIndex("grade_dispatches_repo_trigger_uq")

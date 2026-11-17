@@ -3,7 +3,7 @@
  * `identity: true` sets the throwaway committer, needed wherever git builds
  * a commit to carry a tree; plain clone/push runners skip it.
  *
- * Asynchronous (`execFile`, never `execFileSync`): a clone or a push of a
+ * Asynchronous (`spawn`, never `execFileSync`): a clone or a push of a
  * project's sources takes seconds, and a request that builds a distribution
  * repository must not stop the event loop — the live clock, the SSE and every
  * other request run on it (merge task M3-02).
@@ -21,7 +21,7 @@
  * (its database URL, its secrets), and no configuration but the call's own —
  * no system file, no global file, no home.
  */
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 
 import { redactTokens } from "../redact.js";
 
@@ -78,45 +78,70 @@ export function gitEnv(extra: Record<string, string> = {}): Record<string, strin
 /** What one call adds to git's environment, by name only: a temporary index, a commit's fixed dates. */
 export type GitCallEnv = { [K in "GIT_INDEX_FILE" | "GIT_AUTHOR_DATE" | "GIT_COMMITTER_DATE"]?: string };
 
-/** A call's standard input, its own variables, and the instant past which it is killed. */
-interface RunOptions {
+/**
+ * One call's own options: its standard input, its variables, and `latin1`
+ * to read and write bytes as they are (a path git lists need not be
+ * UTF-8: one character per byte, round-tripped exactly).
+ */
+export interface GitCallOptions {
   input?: string | undefined;
   env?: GitCallEnv | undefined;
-  deadline?: number | undefined;
+  latin1?: boolean | undefined;
 }
 
-function run(args: string[], env: Record<string, string>, opts: RunOptions = {}): Promise<string> {
-  const timeout = opts.deadline === undefined ? 0 : opts.deadline - Date.now();
-  if (opts.deadline !== undefined && timeout <= 0) return Promise.reject(new Error("git: out of time"));
+function run(args: string[], env: Record<string, string>, opts: GitCallOptions & { deadline?: number | undefined } = {}): Promise<string> {
+  const left = opts.deadline === undefined ? null : opts.deadline - Date.now();
+  if (left !== null && left <= 0) return Promise.reject(new Error("git: out of time"));
+  const encoding: BufferEncoding = opts.latin1 ? "latin1" : "utf8";
   return new Promise((resolve, reject) => {
-    const child = execFile(
-      "git",
-      args,
-      { env: gitEnv({ ...env, ...opts.env }), maxBuffer: MAX_OUTPUT_BYTES, timeout, killSignal: "SIGKILL" },
-      (err, stdout) => {
-        // execFile's message carries the command and its stderr: redact the
-        // whole thing as a safety net and drop the original error, whose
-        // fields (`stderr`, `cmd`) are not redacted.
-        if (err) reject(new Error(redactTokens(String(err.message ?? err))));
-        else resolve(String(stdout));
-      },
-    );
-    if (opts.input !== undefined) child.stdin?.end(opts.input);
+    // Its own process group (`detached`), so that the deadline kills git's helpers too (`git-remote-https`, `index-pack`).
+    const child = spawn("git", args, { env: gitEnv({ ...env, ...opts.env }), detached: left !== null, stdio: "pipe" });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    let size = 0;
+    let failure: string | null = null;
+    const kill = (why: string) => {
+      failure ??= why;
+      try {
+        process.kill(left !== null ? -child.pid! : child.pid!, "SIGKILL");
+      } catch {
+        // Already gone.
+      }
+    };
+    const timer = left === null ? undefined : setTimeout(() => kill("out of time"), left);
+    child.stdout.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_OUTPUT_BYTES) kill("output too large");
+      else out.push(chunk);
+    });
+    child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      reject(new Error(redactTokens(String(e.message))));
+    });
+    child.on("close", (code, signal) => {
+      clearTimeout(timer);
+      // The command and its stderr may quote a token: the message is redacted as a safety net.
+      if (failure !== null || code !== 0) {
+        const why = failure ?? `exit ${code ?? signal}`;
+        reject(new Error(redactTokens(`Command failed (${why}): git ${args.join(" ")}\n${Buffer.concat(err).toString("utf8")}`)));
+      } else resolve(Buffer.concat(out).toString(encoding));
+    });
+    child.stdin.on("error", () => undefined);
+    child.stdin.end(opts.input === undefined ? undefined : Buffer.from(opts.input, encoding));
   });
 }
 
 export interface GitRunner {
   git: (cwd: string, ...args: string[]) => Promise<string>;
-  /** Bare repository: explicit `--git-dir` (compatible with `safe.bareRepository=explicit`). */
-  gitBare: (gitDir: string, ...args: string[]) => Promise<string>;
-  /** A plumbing call on a bare repository, with its standard input and its own variables (`GitCallEnv`). */
-  plumbing: (gitDir: string, args: string[], opts?: { input?: string; env?: GitCallEnv }) => Promise<string>;
+  /** Bare repository: explicit `--git-dir` (compatible with `safe.bareRepository=explicit`), with the call's own options. */
+  gitBare: (gitDir: string, args: string[], opts?: GitCallOptions) => Promise<string>;
 }
 
 /**
  * A runner; with `token`, every call is authenticated on github.com; with
- * `deadline` (an epoch in ms), a call still running then is killed, and one
- * started after it fails at once.
+ * `deadline` (an epoch in ms), a call still running then is killed with its
+ * process group, and one started after it fails at once.
  */
 export function gitRunner(opts: { identity?: boolean; token?: string; deadline?: number } = {}): GitRunner {
   const extra = opts.identity ? BOT_IDENTITY : [];
@@ -124,8 +149,7 @@ export function gitRunner(opts: { identity?: boolean; token?: string; deadline?:
   const deadline = opts.deadline;
   return {
     git: (cwd, ...args) => run(["-C", cwd, ...extra, ...args], env, { deadline }),
-    gitBare: (gitDir, ...args) => run(["--git-dir", gitDir, ...extra, ...args], env, { deadline }),
-    plumbing: (gitDir, args, call = {}) => run(["--git-dir", gitDir, ...extra, ...args], env, { ...call, deadline }),
+    gitBare: (gitDir, args, call = {}) => run(["--git-dir", gitDir, ...extra, ...args], env, { ...call, deadline }),
   };
 }
 

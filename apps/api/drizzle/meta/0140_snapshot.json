@@ -1,5 +1,5 @@
 {
-  "id": "271459e2-fd37-4c44-8013-7f01b4471dd4",
+  "id": "3a68e3a8-50e5-42a9-98a9-f64d011af014",
   "prevId": "a469e35d-fa71-4498-a60e-927ac0cc27d4",
   "version": "7",
   "dialect": "postgresql",
@@ -8952,12 +8952,6 @@
         "distribution_sha": {
           "name": "distribution_sha",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "grafted_paths": {
-          "name": "grafted_paths",
-          "type": "text[]",
           "primaryKey": false,
           "notNull": false
         }

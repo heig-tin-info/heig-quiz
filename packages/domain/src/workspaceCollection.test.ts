@@ -6,7 +6,6 @@ import {
   collectionRef,
   collectionTooLate,
   composeCollectionTree,
-  gradeRef,
   indexInfo,
   keptEntriesMatch,
   overlayTree,
@@ -216,11 +215,5 @@ describe("parseLsTree and indexInfo", () => {
     const entries = parseLsTree(out);
     expect(entries).toEqual([blob("src/a b.c", "a"), blob("link", "b", "120000"), blob("sub\tx", "c", "160000")]);
     expect(indexInfo(entries)).toBe(`100644 ${sha("a")}\tsrc/a b.c\u0000120000 ${sha("b")}\tlink\u0000160000 ${sha("c")}\tsub\tx\u0000`);
-  });
-});
-
-describe("gradeRef", () => {
-  it("names one ref per pass, never a branch", () => {
-    expect(gradeRef("p1")).toBe("refs/quiz/grade/p1");
   });
 });

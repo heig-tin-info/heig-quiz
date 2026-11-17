@@ -103,12 +103,6 @@ export function parseLsTree(out: string): CollectionTreeEntry[] {
 /** Entries as `git update-index -z --index-info` reads them. */
 export const indexInfo = (entries: readonly CollectionTreeEntry[]): string => entries.map((e) => `${e.mode} ${e.sha}\t${e.path}\0`).join("");
 
-/** Where a graded commit is anchored (ADR-132 §2): never a branch, one ref per pass. */
-export const GRADE_REF_PREFIX = "refs/quiz/grade/";
-
-/** The ref of the pass `passId`'s graded commit. */
-export const gradeRef = (passId: string): string => `${GRADE_REF_PREFIX}${passId}`;
-
 /**
  * The workspace's entries with what the confined reader could not read
  * (ADR-130 §3, correction of 2026-11-16) taken from `reference` — the commit

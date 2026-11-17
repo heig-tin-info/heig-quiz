@@ -49,11 +49,12 @@ each the smallest option where the owner's decisions left a detail open:
 **Amended by [ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md)
 (2026-11-17, product owner), scope §6 and §7:** the dispatch carries a
 graded commit — the target with the protected files and `criteria.yml` of
-the criteria snapshot's distribution commit, on a `refs/quiz/grade/` ref —;
+the criteria snapshot's distribution commit, on a non-branch ref —;
 choice (c) compares at that commit against that distribution commit, and
-accepts at the run's head any `grading.yml` the distribution's history
-holds; the LLM reads the graded commit; a Regrade replaces the machine's
-rows, validated ones included, once its run is accepted.
+accepts at the run's head a `grading.yml` the distribution handed out (any
+version of its history under `squash`, its live head's under `whole`); the
+LLM reads the graded commit; a Regrade replaces the machine's rows,
+validated ones included, on an actual new result (A2, to be delivered).
 
 Scope: how a project in the `criteria` grading mode whose snapshot is
 schema version 3 gets its automatic evidence (the repository's CI,
