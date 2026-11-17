@@ -4928,7 +4928,7 @@ export const fr: Record<keyof Dict, string> = {
   "preview.status.grader_error": "Erreur",
   "preview.status.no_key": "Sans réponse attendue",
   "feedback.title": "Vos résultats",
-  "feedback.classResults": "Résultats de la classe",
+  "feedback.classResults": "Voir les résultats",
   "feedback.loadFailed": "Vos résultats n'ont pas pu être chargés.",
   "feedback.pending.results_pending.title": "Résultats pas encore publiés",
   "feedback.pending.results_pending.body": "Les notes de « {title} » ne sont pas encore publiées.",
