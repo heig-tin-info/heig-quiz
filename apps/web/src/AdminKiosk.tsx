@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, Monitor, Pencil, RotateCcw } from "lucide-react";
 import { useState } from "react";
 
-import { KIOSK_LABEL_MAX, KioskDevicePatch, type KioskDevice } from "@quiz/contracts";
+import { KIOSK_DEVICE_STATUSES, KIOSK_LABEL_MAX, KioskDevicePatch, type KioskDevice } from "@quiz/contracts";
 import type { KioskAttestation } from "@quiz/domain";
 
 import { api, apiErrorMessage, usePublicConfig } from "./api";
@@ -15,6 +15,7 @@ import {
   Badge,
   Button,
   Card,
+  caseInsensitiveCompare,
   cx,
   EmptyState,
   QueryError,
@@ -23,8 +24,10 @@ import {
   Skeleton,
   T,
   TableHead,
+  type Column,
   type Tone,
   TextInput,
+  useSortableTable,
 } from "./ui";
 
 const STATUS_TONE: Record<KioskDevice["status"], Tone> = {
@@ -32,6 +35,26 @@ const STATUS_TONE: Record<KioskDevice["status"], Tone> = {
   active: "green",
   retired: "zinc",
 };
+
+type SortKey = "station" | "status" | "checked" | "attested";
+
+/**
+ * What a column sorts by. A station with no name has nothing to sort by on
+ * its name and goes last; the status keeps the server's rank (waiting,
+ * active, retired); the last check sorts by its time, not by its verdict.
+ */
+function rankOf(d: KioskDevice, key: SortKey): string | number | null {
+  switch (key) {
+    case "station":
+      return d.label;
+    case "status":
+      return KIOSK_DEVICE_STATUSES.indexOf(d.status);
+    case "checked":
+      return d.attestation && d.checkedAt ? Date.parse(d.checkedAt) : null;
+    case "attested":
+      return d.attestedAt ? Date.parse(d.attestedAt) : null;
+  }
+}
 
 const ATTESTATION_TONE: Record<KioskAttestation, Tone> = {
   ok: "green",
@@ -45,8 +68,10 @@ const ATTESTATION_TONE: Record<KioskAttestation, Tone> = {
  * a station students can pair with), or retire it.
  *
  * A station that attested for the first time comes first, with its name
- * field open: naming it is the section's primary action. Shown only where
- * the platform has the kiosk path (`KIOSK_ATTESTATION` not `off`).
+ * field open: naming it is the section's primary action. The table stands
+ * in the server's order until a header is clicked, and a row keeps its open
+ * name field through a sort. Shown only where the platform has the kiosk
+ * path (`KIOSK_ATTESTATION` not `off`), as the Administration's own tab.
  */
 export function KioskSection() {
   const t = useT();
@@ -56,10 +81,19 @@ export function KioskSection() {
     queryFn: () => api("/app/api/admin/kiosk-devices"),
     enabled: kiosk != null,
   });
+  const rows = devices.data ?? [];
+  // `null`: the server's order (waiting first, then active, retired, by name) until a click.
+  const { sorted, sort, toggle } = useSortableTable<KioskDevice, SortKey>(rows, rankOf, null, caseInsensitiveCompare);
   if (kiosk == null) return null;
 
-  const rows = devices.data ?? [];
   const waiting = rows.filter((d) => d.status === "unnamed").length;
+  const columns: Column<SortKey>[] = [
+    { key: "station", label: t("admin.kiosk.col.station") },
+    { key: "status", label: t("admin.kiosk.col.status") },
+    { key: "checked", label: t("admin.kiosk.col.checked"), className: T.colHigh },
+    { key: "attested", label: t("admin.kiosk.col.attested"), className: T.colMid },
+    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true },
+  ];
 
   return (
     <section className="space-y-3">
@@ -86,17 +120,9 @@ export function KioskSection() {
           ) : null}
           <Card className={cx("overflow-x-auto", T.container)}>
             <table className={T.table}>
-              <TableHead
-                columns={[
-                  { key: "station", label: t("admin.kiosk.col.station") },
-                  { key: "status", label: t("admin.kiosk.col.status") },
-                  { key: "checked", label: t("admin.kiosk.col.checked"), className: T.colHigh },
-                  { key: "attested", label: t("admin.kiosk.col.attested"), className: T.colMid },
-                  { key: "actions", label: t("common.actions"), srOnly: true },
-                ]}
-              />
+              <TableHead columns={columns} sort={sort} onToggle={toggle} />
               <tbody>
-                {rows.map((d) => (
+                {sorted.map((d) => (
                   <StationRow key={d.id} device={d} />
                 ))}
               </tbody>
