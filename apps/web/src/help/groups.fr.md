@@ -27,11 +27,11 @@ quand les groupes sont ouverts aux étudiants : elle les lie alors.
 
 ## Une fois les dépôts créés
 
-Un groupe qui a un dépôt ne peut pas être supprimé, ni des groupes qu'un
-projet suit. Sortir un étudiant d'un tel groupe change qui accède au dépôt :
+Un groupe qui a un dépôt ne peut pas être supprimé, et **Supprimer ces
+groupes** est refusé tant qu'un projet les suit. Sortir un étudiant d'un tel groupe change qui accède au dépôt :
 Quiz liste qui perd et qui gagne l'accès, et vous demande de **Confirmer le
 déplacement**. GitHub suit en arrière-plan ; une révocation refusée par
 GitHub est retentée, et le dépôt affiche *accès à retirer*.
 
-Sur la page d'un projet, **Resynchroniser** remet en phase un projet qui a
-cessé de suivre ses groupes à l'échéance.
+Sur la page d'un projet, **Réappliquer les groupes** remet en phase un
+projet qui a cessé de suivre ses groupes à l'échéance.

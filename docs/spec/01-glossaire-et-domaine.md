@@ -273,7 +273,7 @@ by the product owner on 2026-10-20.
 | Dashboard (live) | dashboard | tableau de bord | — |
 | Drill, practice | practice | entraînement | drill, révisions |
 | Targeted revision | targeted revision | révision ciblée | — |
-| Group set (a named list of groups, ADR-070; 2026-11-17) | group set | groupes, shown by the set's name (« Groupes Labo », « ces groupes »); one of its groups is *un groupe*; the Groups tab's button is *Nouveau groupe* | répartition (*répartition des notes*, a distribution, stays), série, jeu, ensemble |
+| Group set (a named list of groups, ADR-070; 2026-11-17) | group set | groupes, shown by the set's name (« Groupes Labo », « ces groupes »); one of its groups is *un groupe*; the Groups tab's button is *Nouveau groupe* | répartition (*répartition des notes / des réponses / par question*, a distribution, stays), série, jeu, ensemble |
 | A teacher takes a staff seat in a classroom (ADR-018; 2026-11-17) | join as student | s'inscrire à la classe | rejoindre comme étudiant (*rejoindre* stays a group's) |
 | Journal | journal | journal | carnet |
 | Gradebook | gradebook | carnet de notes | — |

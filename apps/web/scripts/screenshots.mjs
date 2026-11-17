@@ -720,7 +720,7 @@ const scenes = [
     path: `/projects/${PJ_GROUP_STOPPED}?projects=1&groups=1`,
     fold: true,
     act: async (p) => {
-      await p.getByRole("button", { name: /^(resync with the set|resynchroniser)$/i }).click();
+      await p.getByRole("button", { name: /^(resync with the set|réappliquer les groupes)$/i }).click();
       await p.getByRole("dialog").waitFor();
     },
   },
