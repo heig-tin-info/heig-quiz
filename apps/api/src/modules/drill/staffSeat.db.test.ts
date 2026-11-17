@@ -2,8 +2,8 @@
  * A teacher's staff seat drills its own cards (ADR-018, amended 2026-11-17;
  * ADR-041), over HTTP and the real migrations.
  *
- * What is lifted: the seat's cards come at a hand-in and at a release —
- * never from a backfill of the past — and the student reads open to their
+ * What is lifted: the seat's cards come at a hand-in, at a release and when
+ * the drill is turned on for the classroom, as a student's; the student reads open to their
  * owner: the session and a review, the classrooms and the opt-out, the
  * calibration, the concept mastery, targeted revision.
  *
