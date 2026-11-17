@@ -166,8 +166,9 @@ already do.
    staff-seat cards by the current flag: the population rule of the shared
    mastery loader is split between the class read and the self read, never
    relaxed for the class, and the revision times of ADR-039 §6b exclude staff
-   seats explicitly. No backfill: a past staff attempt makes cards only at a
-   future hand-in or release.
+   seats explicitly, and so does the pool-wide reference time of ADR-041 §4.
+   No data migration: a past staff attempt makes cards at a future hand-in or
+   release, or when the drill is turned on for its classroom, as a student's.
 5. **The teacher's side**: a "Staff attempts: show / hide" toggle changes ROWS
    only, never a figure; it is kept in the browser per screen, never on the
    server, and has no effect on any export. Hidden by default in the results

@@ -114,7 +114,8 @@ sections keep their numbers and the two folded ones are not reused; the
   exam's results**, never before, and at the **hand-in of an exercise**.
   *Amended 2026-11-17 ([ADR-018](ADR-018-vue-etudiant-reelle.md#a-staff-seat-lives-the-student-flow)):
   a teacher's staff seat gets its own cards on the same two paths, never counted
-  in a class read; no backfill of past staff attempts.*
+  in a class read nor in the reference time of §4; turning the drill on for a
+  classroom covers its staff seat as a student's.*
 - A card enters as **new**: the evaluation's answer is not its first review (its
   time was an exam's pace), and a later attempt of an exercise creates nothing.
   A **poll creates no card**. *(Second round.)*
