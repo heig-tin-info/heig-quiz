@@ -29,4 +29,4 @@ avez saisi un. La liste omet les dépôts que Quiz a créés pour un projet
 - **Score** : **Automatique**, ou **Aucun** (ni score, ni revue).
 - **Fichiers protégés** : restaurés par Quiz si un étudiant les modifie.
   Retirer `grading.yml` permet à un étudiant de fausser l'évaluation.
-- **Groupes** : un dépôt par groupe d'une répartition.
+- **Groupes** : un dépôt par groupe, parmi les groupes de la classe.

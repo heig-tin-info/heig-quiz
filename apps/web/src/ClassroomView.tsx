@@ -5,7 +5,6 @@ import {
   Dumbbell,
   Download,
   GraduationCap,
-  Plus,
   UsersRound,
   Settings as SettingsIcon,
   Sheet as GradesIcon,
@@ -346,7 +345,7 @@ export function ClassroomView({
               />
             ) : tab === "groups" && !data.archivedAt ? (
               <Button loading={newSet.isPending} onClick={createSet}>
-                <Plus /> {t("groups.new")}
+                <UsersRound /> {t("groups.new")}
               </Button>
             ) : tab === "grades" ? (
               // A plain link: the CSV is a GET the browser does on its own (F-GBOOK-04).

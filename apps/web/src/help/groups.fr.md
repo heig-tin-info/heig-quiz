@@ -1,15 +1,16 @@
-# Répartitions en groupes
+# Groupes
 
 ## Ce qu'est cet écran
 
-Une répartition découpe les étudiants d'une classe en groupes. Elle
-appartient à la classe, pas à un projet : plusieurs projets peuvent suivre
-la même répartition, et vous ne formez les groupes qu'une fois. **Nouvelle
-répartition** en crée une.
+Chaque ligne de cet écran découpe les étudiants de la classe en groupes,
+sous son propre nom : p. ex. « Labo » en binômes, « Projet » par quatre.
+Ces groupes appartiennent à la classe, pas à un projet : plusieurs projets
+peuvent suivre les mêmes groupes, et vous ne les formez qu'une fois.
+**Nouveau groupe** ajoute une ligne.
 
 ## Former les groupes
 
-- **À la main** : **Nouveau groupe**, puis glissez un étudiant de *Sans
+- **À la main** : **Ajouter un groupe**, puis glissez un étudiant de *Sans
   groupe* dans un groupe. Au clavier : Espace pour saisir, les flèches pour
   se déplacer, Espace pour déposer. **Annuler** reprend un déplacement.
 - **Au hasard** : **Répartir au hasard** découpe les étudiants sans groupe
@@ -22,15 +23,15 @@ répartition** en crée une.
   tout seul : c'est à vous de placer ceux qui restent.
 
 La **Taille maximale** ne fait que signaler un groupe qui la dépasse, sauf
-quand la répartition est ouverte aux étudiants : elle les lie alors.
+quand les groupes sont ouverts aux étudiants : elle les lie alors.
 
 ## Une fois les dépôts créés
 
-Un groupe qui a un dépôt ne peut pas être supprimé, ni une répartition
-qu'un projet utilise. Sortir un étudiant d'un tel groupe change qui accède
-au dépôt : Quiz liste qui perd et qui gagne l'accès, et vous demande de
-**Confirmer le déplacement**. GitHub suit en arrière-plan ; une révocation
-refusée par GitHub est retentée, et le dépôt affiche *accès à retirer*.
+Un groupe qui a un dépôt ne peut pas être supprimé, ni des groupes qu'un
+projet suit. Sortir un étudiant d'un tel groupe change qui accède au dépôt :
+Quiz liste qui perd et qui gagne l'accès, et vous demande de **Confirmer le
+déplacement**. GitHub suit en arrière-plan ; une révocation refusée par
+GitHub est retentée, et le dépôt affiche *accès à retirer*.
 
-Sur la page d'un projet, **Resynchroniser avec la répartition** remet en
-phase une copie qui a cessé de suivre la répartition à l'échéance.
+Sur la page d'un projet, **Resynchroniser** remet en phase un projet qui a
+cessé de suivre ses groupes à l'échéance.

@@ -102,6 +102,8 @@ const RULES: Rule[] = [
   { name: "word-soumettre", langs: FR, fix: "rendre", test: has(/\bsoum(ettre|is|ise|ission)/i) },
   // A teacher's seat in a classroom (ADR-018): s'inscrire; rejoindre stays a group's (F-PROJ-22).
   { name: "word-join-classroom", langs: FR, fix: "s'inscrire comme étudiant; rejoindre is a group's word", test: has(/\brejoindre (comme|la classe|cette classe|une classe)\b/i) },
+  // A group set (ADR-070, 2026-11-17): « groupes », shown by its name; « répartition des notes » is a distribution, and stays.
+  { name: "word-repartition", langs: FR, fix: "groupes: a group set is « groupes », shown by its own name", test: has(/\brépartitions?\b(?! (des|par)\b)/i) },
   { name: "word-codespace", langs: BOTH, fix: "workspace, espace de travail; codespace is an internal word", test: has(/\bcodespaces?\b/i) },
   // A component of the mean (ADR-131): never a group, which is the students' (ADR-070), nor a category, which is a pool's.
   { name: "word-component", langs: FR, fix: "composante", test: (t, k) => COMPONENT_KEY.test(k) && has(/\b(groupes?|catégories?)\b/i)(t) },
