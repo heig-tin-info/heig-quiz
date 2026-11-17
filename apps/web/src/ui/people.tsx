@@ -96,7 +96,9 @@ export function PersonPill({
       label={name}
       align="start"
       trigger={
-        <button type="button" aria-label={name} className={cx("rounded-full", className)}>
+        // `inline-flex`: an inline button sits its child on the text
+        // baseline, which drops an initials disc below a picture beside it.
+        <button type="button" aria-label={name} className={cx("inline-flex rounded-full", className)}>
           <PersonAvatar
             name={[person.givenName, person.familyName]}
             src={person.avatarUrl}

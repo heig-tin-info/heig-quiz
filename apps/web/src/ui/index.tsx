@@ -57,7 +57,7 @@
 //             on controls.
 //   PointsInput the points of a grade as one pill, the value over its
 //             maximum (PointsPill, PointsInput), on controls and layers.
-//   icons     the app's own glyphs on lucide's grid (ClassroomIcon).
+//   icons     the app's named glyphs (ClassroomIcon).
 //             Imports no sibling.
 //
 // `QueryError`, `PageError` and `FormError` come from the app side (they read an
