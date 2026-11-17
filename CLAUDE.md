@@ -177,7 +177,8 @@ volume, a git channel on an internal bridge).
 14. **The source sent to the runner is rebuilt server-side** from the
     template and the student's editable regions — never taken as-is. A
     project's source is fetched by the server at a commit the server chose
-    from its push receipts (ADR-106 §3), never uploaded by a client.
+    from its push receipts (ADR-106 §3), or at the graded commit the
+    server built on it (ADR-132 §2), never uploaded by a client.
     The graded run of a v3 project checks out the sha the server
     dispatches, bound by its nonce and the protected workflow (ADR-119 §6).
 

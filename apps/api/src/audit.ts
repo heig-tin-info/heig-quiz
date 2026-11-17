@@ -640,6 +640,15 @@ export type AuditAction =
    */
   | "project_repo.ci_tampered"
   /**
+   * A v3 pass's graded commit (ADR-132 §2), by the system, subject the
+   * `project_repos` row: the target with the protected files and
+   * `criteria.yml` of the distribution commit, pushed to
+   * `refs/quiz/grade/<pass>`; `payload.projectId`, `passId`, `target`,
+   * `gradedSha`, `distributionSha`, `count` and `paths` (the paths it
+   * changed, the first 100). Never a token.
+   */
+  | "project_repo.grade_grafted"
+  /**
    * The staff's writes on a repository (F-PROJ-07, F-PROJ-08, F-PROJ-14;
    * merge task M3-08b), subject the `project_repos` row. `grade_override`:
    * the teacher's score, `payload.before` and `after` (`points`, `max`,

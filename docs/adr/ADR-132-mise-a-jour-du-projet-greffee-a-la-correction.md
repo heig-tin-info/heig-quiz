@@ -5,7 +5,8 @@
 Accepted (2026-11-17). The principles, the graft (A), the Regrade's
 semantics and its use after the release, C and B are the **product
 owner's** decisions; choices (a) to (j) are the **orchestrator's**, after
-the spec challenge and the code. A is delivered first, then C, then B.
+the spec challenge and the code. Delivered in this order, tracked in
+`changes/`: A1 (§2–§4, §7), A2 (§5, §6), C, B.
 
 Scope: a project graded by criteria whose snapshot is schema version 3
 (ADR-119): which commit its graded run reads, which distribution files that
@@ -27,7 +28,7 @@ body) and, with C, §3; F-PROJ-11, -12, -23, -25 (docs/spec/02). Builds on
 freezes, unchanged), [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
 §3, §4 and §9 (the collection's tree rule and mechanism, reused; the lock
 binds the App). Leaves open question 61 open. Proposes the wording of
-`CLAUDE.md` invariant 14 (§9).
+`CLAUDE.md` invariant 14 (§9, applied).
 
 ## Context
 
@@ -53,7 +54,13 @@ A spike on a real repository under that ruleset (user token, 2026-11-17)
 showed: updating or creating a branch is refused (422); creating blobs,
 trees, commits and a `refs/quiz/grade/t1` ref is accepted;
 `actions/checkout` of that commit works, even without a ref; the ref fires
-no workflow.
+no workflow. A second spike (user token, 2026-11-17) showed: a `git push
+<sha>:refs/quiz/grade/t2` to a repository under the lock is accepted; a git
+push of the same commit to a new branch is refused ("Cannot create ref due
+to creations being restricted"); neither ref fired a workflow, though the
+repository had an unfiltered `on: push` workflow. Still owed on staging:
+the same with the App's installation token, and whether GitHub sends a
+`push` webhook for a non-branch ref (§2 is safe either way).
 
 ## Decision
 
@@ -69,8 +76,13 @@ no workflow.
 
 ### 2. The graded commit (A; owner, with choices (a) to (e))
 
-At each v3 pass that is dispatched — final, milestone, Regrade — the
-platform builds in the student repository a **graded commit**:
+At each v3 pass — final, milestone, Regrade — the platform builds in the
+student repository a **graded commit**. It does not depend on a dispatch:
+a pass whose scope holds no automatic criterion (ADR-119 §6, amendment of
+2026-11-02) is never dispatched, but still gets its graded commit, which
+its LLM review reads (§4). Only a repository that cannot be written — gone,
+archived as its lock, or without an installation — gets none, and its
+review reads the target as before.
 
 - **Its tree** is the target's (the pass's target commit, ADR-106 §3 and
   ADR-119 §6, chosen exactly as today) with every entry under the
@@ -108,14 +120,22 @@ platform builds in the student repository a **graded commit**:
   what was graded. Its content is what the sync's pull request would show
   the student anyway.
 - **How** (choice d): with git on the API host, as the collection does on
-  the portal (ADR-130 §4): a shallow fetch of the target from the student
-  repository and of the distribution commit from the distribution, their
-  `ls-tree`, the composition, a temporary index, `write-tree`,
-  `commit-tree`, and a push of the commit to its ref. The token reaches git
-  through the environment only (`gitRunner`, invariant 15); the work
-  directory is removed. Its author, committer and dates are fixed (the
-  App's identity, the pass's claim time) and its message is English (D12),
-  so a retry builds the same sha. The Git Data API (`revert.ts`'s way) was
+  the portal (ADR-130 §4), plumbing only, in a bare repository of its own
+  under the system's temporary directory, removed on every exit: a fetch
+  of the target from the student repository and of the distribution
+  commit from the distribution, their `ls-tree`, the composition, a
+  temporary index (`update-index --index-info`), `write-tree`,
+  `commit-tree`, and a push of the commit to its ref (negotiated, so only
+  what the repository lacks travels). Nothing is checked out; the bare
+  repository has no hook (an empty template) and the push runs none. The
+  token reaches git through the environment only (`gitRunner`, invariant
+  15). One budget of 120 s bounds every git call of a graft, killed past
+  it; one graft at a time per repository (the `project.ci` jobs run in one
+  process). Its author, committer and dates are fixed (the App's
+  throwaway identity, the pass's claim time) and its message is English
+  (D12), so a retry builds the same sha; the push forces the pass's own
+  ref, which only that pass's job writes, so a retry that read a newer
+  snapshot is not stuck. The Git Data API (`revert.ts`'s way) was
   rejected: one content-creating REST call per missing blob, tree, commit
   and ref and repository counts against GitHub's secondary limits (80 a
   minute, 500 an hour) for a class of 100 with a replaced test directory,
@@ -128,8 +148,10 @@ platform builds in the student repository a **graded commit**:
   grafted), `distribution_sha` and `grafted_paths`; then
   `client_payload.sha` is the graded commit. A graft that fails (GitHub or
   git) throws before the claim: the job is retried, and the pass's 24 h
-  settle it `no_result` otherwise. A repository archived as its lock is
-  never grafted: it stays `ci_unavailable` (ADR-119 §6).
+  settle it `no_result` otherwise; a repository GitHub no longer has is
+  settled `repo_missing` at once, as a dispatch's 404. A repository
+  archived as its lock is never grafted: it stays `ci_unavailable`
+  (ADR-119 §6).
 - **A push webhook for the ref**, if GitHub sends one, is never a student's
   push (choice e): the push handler reads branches only (`BRANCH_REF`), so
   neither the last commit nor `protectFiles` sees it; the receipt
@@ -151,7 +173,8 @@ like any other.
 - **At the run's `head_sha`**, `.github/workflows/grading.yml` must equal
   **a version the distribution's history holds** on the repository's
   default branch — any commit of it, read through GitHub's list of the
-  commits that changed that path —, no longer only the live head: a
+  commits that changed that path, its latest 100 —, no longer only the
+  live head; a link in the file's place never is one: a
   student who never merged a sync runs the workflow they were handed. Under
   `squash` that history is the build and each sync; under `whole` it is the
   source's history, every version of it the teacher's own.
@@ -161,10 +184,11 @@ like any other.
 ### 4. What the LLM pass reads (amends ADR-119 §7, ADR-106 §3; choice g)
 
 The sources come from the tarball at the **graded commit** when the pass
-built one, so the model reads the teacher's current files beside the
-student's. A pass settled before any dispatch (archived, no installation)
-reads the target as today. The tarball's `token=` redaction, cap and
-top-level stripping are unchanged (invariant 15).
+built one — a pass without an automatic criterion included —, so the
+model reads the teacher's current files beside the student's. A pass
+whose repository could not be written (archived, no installation) reads
+the target as today. The tarball's `token=` redaction, cap and top-level
+stripping are unchanged (invariant 15).
 
 ### 5. A Regrade redoes the machine's correction (owner; amends ADR-106 §4 and ADR-119 §6 for a v3 snapshot)
 
@@ -172,12 +196,14 @@ top-level stripping are unchanged (invariant 15).
   `auto` and `llm` rows, validated ones included. A teacher's `manual` row
   and a milestone's locked row stay — the rows `supersedeProposals` already
   leaves on a reopen. No per-criterion difference is computed.
-- **Only an accepted run replaces** (choice h): a Regrade's `auto` rows,
-  validated included, are superseded when an accepted run of that
-  Regrade's pass settles for the repository, never at the claim. An
-  Actions outage, `no_result`, `ci_tampered` or the 24 h leave the previous
-  rows as they were, the failure shown to the staff. That pass's review
-  replaces the `llm` rows, validated included, with the model's reply only;
+- **Only an actual new result replaces** (choice h): a validated row is
+  superseded by a new result for that criterion, never at the claim. An
+  `auto` row by its criterion's entry in an accepted run of that Regrade's
+  pass; a criterion the accepted run's `results.json` lacks or answers
+  malformed (`no_result`) keeps its validated row, the failure shown to the
+  staff. An Actions outage, `no_result`, `ci_tampered` or the 24 h leave
+  the previous rows as they were, the failure shown. That pass's review
+  replaces an `llm` row, validated included, with the model's reply only;
   a review that fails (`llm_budget`, `grader_error`, sources unavailable)
   leaves a validated row as it was.
 - **After the release** (owner): Regrade stays allowed, behind an explicit
@@ -209,12 +235,14 @@ top-level stripping are unchanged (invariant 15).
 
 ### 7. The sync's pull request (amends ADR-073 §4; choice j)
 
-Its body no longer says "your score never depends on this pull request
-until you merge it", false now for the protected files and `criteria.yml`.
-It says, in English: merging brings the update into the student's copy; the
-protected files and `criteria.yml` are graded in the teacher's version
-whether or not it is merged; every other file is graded as the student
-pushed it. A pull request already open keeps its body.
+In a project graded by a schema-3 snapshot, its body no longer says "your
+score never depends on this pull request until you merge it", false there
+now for the protected files and `criteria.yml`. It says, in English:
+merging brings the update into the student's copy; the protected files and
+`criteria.yml` are graded in the teacher's version whether or not it is
+merged; every other file is graded as the student pushed it. Any other
+project keeps the old sentence, still true there. A pull request already
+open keeps its body.
 
 ### 8. What does not change
 
@@ -223,17 +251,12 @@ untouched); the restore of protected files on a branch (F-PROJ-08, the
 distribution's current version); Sync's skips; the lock; a v2 snapshot's
 runner path; the push runs and the `GRADE` badge.
 
-### 9. Invariant 14 (proposed wording, applied with A)
+### 9. Invariant 14 (applied with A1)
 
-"The source sent to the runner is rebuilt server-side from the template and
-the student's editable regions — never taken as-is. A project's source is
-fetched by the server at a commit the server chose from its push receipts
-(ADR-106 §3), or at the graded commit it built on it — that commit's tree
-with the protected files and `criteria.yml` of the criteria snapshot's
-distribution commit, on a `refs/quiz/grade/` ref, never a branch
-(ADR-132 §2) — never uploaded by a client. The graded run of a v3 project
-checks out the sha the server dispatches, bound by its nonce and the
-protected workflow (ADR-119 §6)."
+`CLAUDE.md`'s invariant 14 gains one clause: "…at a commit the server
+chose from its push receipts (ADR-106 §3), or at the graded commit the
+server built on it (ADR-132 §2), never uploaded by a client." The detail is
+§2's.
 
 ### 10. C — the sync, previewed and explained (owner; to be delivered)
 

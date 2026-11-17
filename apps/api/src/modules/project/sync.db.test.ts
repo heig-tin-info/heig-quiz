@@ -35,12 +35,14 @@ import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProjectDetail, ProjectErrorCode, ProjectSummary, ProjectSyncAccepted } from "@quiz/contracts";
+import { parseCriteria } from "@quiz/domain/criteriaParse";
 
 import { loadConfig } from "../../config.js";
 import {
   auditLog,
   botCommits,
   githubOrganizations,
+  projectCriteria,
   projectRepos,
   projects,
   projectSyncPrs,
@@ -258,6 +260,20 @@ describe("the source ahead (F-PROJ-12)", () => {
 // ---------------------------------------------------------------- the request and the pass
 
 describe("the request and the pass (F-PROJ-12)", () => {
+  it("says in the pull request what grading takes from the update: nothing until merged, or, graded by a v3 snapshot, the protected files and criteria.yml either way (ADR-132 §7)", async () => {
+    const p = await project();
+    const parsed = parseCriteria("schema_version: 3\ncriteria:\n  code:\n    format: {description: Format, max_points: 1, command: [make]}\n", { version: 3 });
+    if (!parsed.ok) throw new Error("the fixture does not parse");
+    await server.app.db.update(projects).set({ gradingMode: "criteria" }).where(eq(projects.id, p.id));
+    await server.app.db
+      .insert(projectCriteria)
+      .values({ projectId: p.id, fileSha: "f", sourceSha: head(p.distribution), criteria: parsed.criteria, loadedAt: new Date(NOW) });
+    await sourcePush(p, { "src/util.c": "int util;" });
+    await synced(p.id);
+    const [pr] = pulls(p.repos[0]!.fullName!);
+    expect(pr!.body).toContain("Merged or not, your work is graded with your teacher's version of the protected files and of `criteria.yml`");
+    expect(pr!.body).not.toContain("never depends");
+  });
   it("updates the distribution, pushes sync/<branch>, records the bot commit, opens ONE pull request per repository naming the distribution's sha, stores it; the source is no longer ahead; nothing of it reaches a student", async () => {
     const p = await project({ students: 2 });
     const [r1, r2] = p.repos as [Repo, Repo];
@@ -295,6 +311,7 @@ describe("the request and the pass (F-PROJ-12)", () => {
       expect(pulls(repo.fullName!)).toHaveLength(1);
       expect(pr).toMatchObject({ title: `Project update (${short(distHead)})`, head: { ref: "sync/main" }, base: { ref: "main" }, state: "open" });
       expect(pr!.body).toContain("`src/util.c`");
+      expect(pr!.body).toContain("Your score never depends on this pull request until you merge it.");
       expect(`${pr!.title}\n${pr!.body}`).not.toContain(short(sourceSha));
       expect(await prRows(repo.id)).toMatchObject([{ branch: "main", prNumber: pr!.number, state: "open" }]);
       expect(await repoRow(repo.id)).toMatchObject({ syncOutcome: "opened", syncOutcomeAt: at(NOW, HOUR) });

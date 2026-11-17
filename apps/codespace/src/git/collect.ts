@@ -22,7 +22,7 @@ import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { type CodespaceCollectionRequest, type CodespaceCollectionResult, type CollectionFailure } from "@quiz/contracts";
-import { collectionKeptPaths, composeCollectionTree, withUnreadableKept, type CollectionTreeEntry } from "@quiz/domain";
+import { collectionKeptPaths, composeCollectionTree, indexInfo, parseLsTree, withUnreadableKept, type CollectionTreeEntry } from "@quiz/domain";
 
 import { ReaderError, ReaderTimeout, type WorkspaceReader } from "../engine/reader.js";
 import { ForgeUnconfiguredError, type Forge, type ForgeOwner } from "./forge.js";
@@ -81,15 +81,7 @@ async function isDirectory(path: string): Promise<boolean> {
 
 /** `git ls-tree -r -z` of `treeish`: blobs, symbolic links and gitlinks, never followed. */
 async function listTree(gitDir: string, treeish: string): Promise<CollectionTreeEntry[]> {
-  const out = await git(["--git-dir", gitDir, "ls-tree", "-r", "-z", "--full-tree", treeish]);
-  return out
-    .split("\0")
-    .filter(Boolean)
-    .map((line) => {
-      const tab = line.indexOf("\t");
-      const [mode, , sha] = line.slice(0, tab).split(" ") as [string, string, string];
-      return { mode, sha, path: line.slice(tab + 1) };
-    });
+  return parseLsTree(await git(["--git-dir", gitDir, "ls-tree", "-r", "-z", "--full-tree", treeish]));
 }
 
 /** `work`, or {@link OutOfTime} once `ms` have passed; the work left running writes only what it would have. */
@@ -124,7 +116,7 @@ async function composeTree(repoDir: string, read: WorkTree, order: CollectionOrd
   const index = { GIT_INDEX_FILE: join(repoDir, "..", "index") };
   await git(["--git-dir", repoDir, "update-index", "-z", "--index-info"], {
     env: index,
-    input: entries.map((e) => `${e.mode} ${e.sha}\t${e.path}\0`).join(""),
+    input: indexInfo(entries),
   });
   return (await git(["--git-dir", repoDir, "write-tree"], { env: index })).trim();
 }

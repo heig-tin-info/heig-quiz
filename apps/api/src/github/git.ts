@@ -75,12 +75,24 @@ export function gitEnv(extra: Record<string, string> = {}): Record<string, strin
   };
 }
 
-function run(args: string[], env: Record<string, string>): Promise<string> {
+/** What one call adds to git's environment, by name only: a temporary index, a commit's fixed dates. */
+export type GitCallEnv = { [K in "GIT_INDEX_FILE" | "GIT_AUTHOR_DATE" | "GIT_COMMITTER_DATE"]?: string };
+
+/** A call's standard input, its own variables, and the instant past which it is killed. */
+interface RunOptions {
+  input?: string | undefined;
+  env?: GitCallEnv | undefined;
+  deadline?: number | undefined;
+}
+
+function run(args: string[], env: Record<string, string>, opts: RunOptions = {}): Promise<string> {
+  const timeout = opts.deadline === undefined ? 0 : opts.deadline - Date.now();
+  if (opts.deadline !== undefined && timeout <= 0) return Promise.reject(new Error("git: out of time"));
   return new Promise((resolve, reject) => {
-    execFile(
+    const child = execFile(
       "git",
       args,
-      { env: gitEnv(env), maxBuffer: MAX_OUTPUT_BYTES },
+      { env: gitEnv({ ...env, ...opts.env }), maxBuffer: MAX_OUTPUT_BYTES, timeout, killSignal: "SIGKILL" },
       (err, stdout) => {
         // execFile's message carries the command and its stderr: redact the
         // whole thing as a safety net and drop the original error, whose
@@ -89,6 +101,7 @@ function run(args: string[], env: Record<string, string>): Promise<string> {
         else resolve(String(stdout));
       },
     );
+    if (opts.input !== undefined) child.stdin?.end(opts.input);
   });
 }
 
@@ -96,15 +109,23 @@ export interface GitRunner {
   git: (cwd: string, ...args: string[]) => Promise<string>;
   /** Bare repository: explicit `--git-dir` (compatible with `safe.bareRepository=explicit`). */
   gitBare: (gitDir: string, ...args: string[]) => Promise<string>;
+  /** A plumbing call on a bare repository, with its standard input and its own variables (`GitCallEnv`). */
+  plumbing: (gitDir: string, args: string[], opts?: { input?: string; env?: GitCallEnv }) => Promise<string>;
 }
 
-/** A runner; with `token`, every call is authenticated on github.com. */
-export function gitRunner(opts: { identity?: boolean; token?: string } = {}): GitRunner {
+/**
+ * A runner; with `token`, every call is authenticated on github.com; with
+ * `deadline` (an epoch in ms), a call still running then is killed, and one
+ * started after it fails at once.
+ */
+export function gitRunner(opts: { identity?: boolean; token?: string; deadline?: number } = {}): GitRunner {
   const extra = opts.identity ? BOT_IDENTITY : [];
   const env = opts.token ? credentialEnv(opts.token) : {};
+  const deadline = opts.deadline;
   return {
-    git: (cwd, ...args) => run(["-C", cwd, ...extra, ...args], env),
-    gitBare: (gitDir, ...args) => run(["--git-dir", gitDir, ...extra, ...args], env),
+    git: (cwd, ...args) => run(["-C", cwd, ...extra, ...args], env, { deadline }),
+    gitBare: (gitDir, ...args) => run(["--git-dir", gitDir, ...extra, ...args], env, { deadline }),
+    plumbing: (gitDir, args, call = {}) => run(["--git-dir", gitDir, ...extra, ...args], env, { ...call, deadline }),
   };
 }
 

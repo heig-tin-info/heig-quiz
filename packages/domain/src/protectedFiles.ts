@@ -32,5 +32,11 @@ export function withForcedProtected(files: readonly string[], gradingMode: Proje
   return [...files, ...forcedProtected(gradingMode).filter((path) => !files.includes(path))];
 }
 
+/**
+ * What a v3 graded pass takes from the distribution (ADR-132 §2) and what
+ * its acceptance compares (ADR-119 §6): the protected list and the criteria.
+ */
+export const gradedPaths = (protectedFiles: readonly string[]): string[] => [...new Set([CRITERIA_FILE, ...protectedFiles])];
+
 /** Whether `path` is protected by `entries`: listed, or under a listed directory. */
 export const isProtected = (path: string, entries: readonly string[]): boolean => entries.some((entry) => pathWithin(path, entry));

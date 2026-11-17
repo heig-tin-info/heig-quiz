@@ -810,6 +810,17 @@ export const gradeDispatches = pgTable(
     nonce: text("nonce"),
     /** The CI pass accepts no run any more: settled (its automatic rows written), or retired by a newer dispatch. */
     closedAt: timestamp("closed_at", { withTimezone: true }),
+    /**
+     * A v3 pass's graded commit (ADR-132 §2), on `refs/quiz/grade/<id>`:
+     * `sha` (the target) with the graded paths of `distribution_sha`; what
+     * the dispatch sends and the LLM reads. Null: nothing was grafted (the
+     * target already held them, or a pass claimed before ADR-132).
+     */
+    gradedSha: text("graded_sha"),
+    /** The distribution commit a v3 pass grafted from and is accepted against; null on a pass claimed before ADR-132. */
+    distributionSha: text("distribution_sha"),
+    /** The paths whose entry the graded commit changed; null without one. */
+    graftedPaths: text("grafted_paths").array(),
   },
   (t) => [
     uniqueIndex("grade_dispatches_repo_trigger_uq")

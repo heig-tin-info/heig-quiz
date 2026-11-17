@@ -42,14 +42,14 @@ function underAny(roots: Iterable<string>): (path: string) => boolean {
 }
 
 /**
- * The collected tree (ADR-130 §3), as a flat sorted list: the snapshot's
- * entries, except those under a kept path — whatever the snapshot did to
- * them, changed, deleted or replaced — and its gitlinks (a nested
- * repository the student cloned: a commit id the repository cannot
- * resolve); plus the base's entries under a kept path. A snapshot entry
- * that would be a file where a kept entry needs a directory goes too.
+ * A tree with its kept paths taken from another, as a flat sorted list:
+ * `snapshot`'s entries, except those under a kept path — whatever the
+ * snapshot did to them, changed, deleted or replaced —, plus `base`'s
+ * entries under a kept path. A snapshot entry that would be a file where a
+ * kept entry needs a directory goes too. The one rule of the collection
+ * (ADR-130 §3) and of the graded commit (ADR-132 §2).
  */
-export function composeCollectionTree(
+export function overlayTree(
   snapshot: readonly CollectionTreeEntry[],
   base: readonly CollectionTreeEntry[],
   kept: readonly string[],
@@ -59,9 +59,55 @@ export function composeCollectionTree(
   const keptBase = base.filter((e) => isKept(e.path));
   // A kept entry's path, or a directory it needs: no snapshot entry may stand there.
   const needed = new Set(keptBase.flatMap((k) => [k.path, ...ancestors(k.path)]));
-  const fromSnapshot = snapshot.filter((e) => e.mode !== GITLINK_MODE && !isKept(e.path) && !needed.has(e.path));
+  const fromSnapshot = snapshot.filter((e) => !isKept(e.path) && !needed.has(e.path));
   return [...fromSnapshot, ...keptBase].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
+
+/**
+ * The collected tree (ADR-130 §3): {@link overlayTree} of the snapshot
+ * without its gitlinks (a nested repository the student cloned: a commit id
+ * the repository cannot resolve).
+ */
+export function composeCollectionTree(
+  snapshot: readonly CollectionTreeEntry[],
+  base: readonly CollectionTreeEntry[],
+  kept: readonly string[],
+): CollectionTreeEntry[] {
+  return overlayTree(
+    snapshot.filter((e) => e.mode !== GITLINK_MODE),
+    base,
+    kept,
+  );
+}
+
+/** The paths whose entry (mode and object) differs between two trees, one present in either: sorted. */
+export function treeDifference(a: readonly CollectionTreeEntry[], b: readonly CollectionTreeEntry[]): string[] {
+  const key = (e: CollectionTreeEntry) => `${e.mode} ${e.sha}`;
+  const left = new Map(a.map((e) => [e.path, key(e)]));
+  const right = new Map(b.map((e) => [e.path, key(e)]));
+  return [...new Set([...left.keys(), ...right.keys()])].filter((path) => left.get(path) !== right.get(path)).sort();
+}
+
+/** `git ls-tree -r -z --full-tree`'s output read as entries: blobs, symbolic links and gitlinks, never followed. */
+export function parseLsTree(out: string): CollectionTreeEntry[] {
+  return out
+    .split("\0")
+    .filter(Boolean)
+    .map((line) => {
+      const tab = line.indexOf("\t");
+      const [mode, , sha] = line.slice(0, tab).split(" ") as [string, string, string];
+      return { mode, sha, path: line.slice(tab + 1) };
+    });
+}
+
+/** Entries as `git update-index -z --index-info` reads them. */
+export const indexInfo = (entries: readonly CollectionTreeEntry[]): string => entries.map((e) => `${e.mode} ${e.sha}\t${e.path}\0`).join("");
+
+/** Where a graded commit is anchored (ADR-132 §2): never a branch, one ref per pass. */
+export const GRADE_REF_PREFIX = "refs/quiz/grade/";
+
+/** The ref of the pass `passId`'s graded commit. */
+export const gradeRef = (passId: string): string => `${GRADE_REF_PREFIX}${passId}`;
 
 /**
  * The workspace's entries with what the confined reader could not read

@@ -63,7 +63,7 @@ import { branchHead, githubStatus, installationClient, isZeroSha, ownerRepo, unl
 import { openSyncWorkspace, SourceRewritten, updateSquashedRepo, type SyncWorkspace } from "../../github/sync.js";
 import { PROJECT_SYNC_QUEUE } from "../../jobs.js";
 import { projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
-import { refreshCriteria } from "./criteria.js";
+import { refreshCriteria, snapshotVersion } from "./criteria.js";
 import { isLive } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { claimLeases, LEASE_MS, releaseLease, runLeased, type LeasedRun, type ProjectJob } from "./lease.js";
@@ -280,12 +280,15 @@ async function storePr(
  * one. An open one is commented on when the update `moved` its head (a
  * retry says nothing again). Titles, bodies and comments name the
  * DISTRIBUTION's commit (`head`), never the source (N-SEC-20), in English
- * (D12).
+ * (D12). The body says what grading takes from the update: in a project
+ * graded by a schema-3 snapshot the protected files and `criteria.yml`
+ * are graded in the teacher's version, merged or not (ADR-132 §7);
+ * otherwise nothing until it is merged.
  */
 async function upsertSyncPr(
   db: Db,
   octokit: Octokit,
-  repo: RepoRow,
+  { repo, project }: { repo: RepoRow; project: ProjectRow },
   branch: string,
   head: string,
   moved: boolean,
@@ -333,8 +336,11 @@ async function upsertSyncPr(
     base: branch,
     body:
       `Your teacher updated the project. Merge this pull request to receive the update:\n\n${list}\n\n` +
-      `If GitHub reports conflicts, resolve them keeping your own work where it matters. ` +
-      `Your score never depends on this pull request until you merge it.`,
+      `If GitHub reports conflicts, resolve them keeping your own work where it matters.\n\n` +
+      (project.gradingMode === "criteria" && (await snapshotVersion(db, project.id)) === 3
+        ? `Merged or not, your work is graded with your teacher's version of the protected files and of \`criteria.yml\`; ` +
+          `every other file is graded as you pushed it.`
+        : `Your score never depends on this pull request until you merge it.`),
   });
   await storePr(db, repo.id, branch, created.number, "open", now);
   return "opened";
@@ -393,7 +399,7 @@ async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspac
       });
       const files = (cmp.files ?? []).map((f) => ({ filename: f.filename, status: f.status }));
       // No file differs: the student has everything already, no pull request (F-PROJ-12).
-      outcomes.push(files.length === 0 ? "up_to_date" : await upsertSyncPr(db, octokit, repo, branch, head, moved, files, now));
+      outcomes.push(files.length === 0 ? "up_to_date" : await upsertSyncPr(db, octokit, row, branch, head, moved, files, now));
     }
   } catch (err) {
     if (await gone(octokit, owner, name)) {

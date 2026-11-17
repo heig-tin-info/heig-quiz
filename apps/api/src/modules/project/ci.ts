@@ -16,19 +16,25 @@
  *
  * **The dispatch** ({@link runCiDispatch}, the `project.ci` job): the
  * target commit — the last student push received by the effective deadline
- * (by the checkpoint's date for a milestone, `passTarget`) — recorded
- * on the row before GitHub is called (at most once: a row whose `sha` is
- * set is never sent again), then `repository_dispatch` `quiz-grade` with
- * `{ sha, nonce, pass, milestone? }` (`postDispatch`). No commit, a
- * repository gone, or one that cannot run Actions (archived as its lock,
- * GitHub's refusal) settles the pass at once with its reason (`no_commit`,
+ * (by the checkpoint's date for a milestone, `passTarget`) —, then its
+ * **graded commit** (ADR-132 §2, `github/graft.ts`): the target with the
+ * protected files and `criteria.yml` of the distribution commit the
+ * criteria snapshot was read at, pushed to `refs/quiz/grade/<pass>`, never
+ * a branch — none when the target already holds them. Both are recorded on
+ * the row before GitHub is called (at most once: a row whose `sha` is set
+ * is never sent again; a graft that fails throws before, and the job is
+ * retried), then `repository_dispatch` `quiz-grade` with
+ * `{ sha, nonce, pass, milestone? }`, `sha` the graded commit
+ * (`postDispatch`). No commit, a repository gone, or one that cannot be
+ * written or run Actions (archived as its lock, no installation, GitHub's
+ * refusal) settles the pass at once with its reason (`no_commit`,
  * `repo_missing`, `ci_unavailable`); a call whose answer never came is
  * left unconfirmed, its 24 h then settle it. A pass whose scope holds no
- * automatic criterion (no leaf with a `command`) is never dispatched:
- * nothing from a run would be read, so it is settled at once — no row
- * written, its `sha` left empty — and its LLM review queued, which takes
- * its target from `passTarget` itself (`reviewPass.ts`), as for any pass
- * settled before its dispatch.
+ * automatic criterion (no leaf with a `command`) gets its graded commit but
+ * is never dispatched: nothing from a run would be read, so it is settled
+ * at once — no row written — and its LLM review queued, which reads the
+ * graded commit (`reviewPass.ts`); one settled before its claim takes its
+ * target from `passTarget` itself.
  *
  * **The intake** ({@link ingestRun}: the ONE entry of a completed run, from
  * the `workflow_run` webhook and the reconciliation's listing of a quiet
@@ -39,10 +45,11 @@
  * `.github/workflows/grading.yml`, its event `repository_dispatch`, its
  * triggering actor the App's bot, its attempt the first, and its name
  * carries the nonce of an open pass of the repository; anything else is
- * ignored. Accepted, its protected files are compared with the
- * distribution's at one sha the distribution handed out (its head, choice
- * c) — `criteria.yml` and the project's protected list at the target
- * commit, the grading workflow at the run's head — and a difference settles
+ * ignored. Accepted, its protected files are compared with what the pass
+ * handed out (choice c as amended by ADR-132 §3) — `criteria.yml` and the
+ * project's protected list at the graded commit against the distribution
+ * commit it grafted from, the grading workflow at the run's head against
+ * every version the distribution's history holds — and a difference settles
  * the pass `ci_tampered` (audited `project_repo.ci_tampered`). Otherwise
  * its `results` artifact is read (`github/artifact.ts`: the signed blob URL
  * never leaves it), validated (`readResults`), stored
@@ -70,6 +77,7 @@ import { decodeUtf8 } from "@quiz/core/tar";
 import {
   checkOutcomes,
   classifyCriterion,
+  gradedPaths,
   GRADING_WORKFLOW_PATH,
   runKind,
   type CheckResults,
@@ -82,12 +90,14 @@ import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { githubOrganizations, gradeDispatches, projectCiResults, projectCriteria, projectRepos, projects } from "../../db/schema.js";
-import { branchHead, ownerRepo } from "../../github/app.js";
+import { branchHead, ownerRepo, unless404 } from "../../github/app.js";
 import { fetchResultsArtifact } from "../../github/artifact.js";
+import { buildGradedCommit, type Graft } from "../../github/graft.js";
+import { referenceBlob } from "../../github/revert.js";
 import { PROJECT_CI_QUEUE, PROJECT_REVIEW_QUEUE } from "../../jobs.js";
-import { CRITERIA_FILE, snapshotVersion } from "./criteria.js";
+import { snapshotVersion } from "./criteria.js";
 import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
-import { projectOctokit } from "./evidence.js";
+import { projectClient } from "./evidence.js";
 import { ingestCompletedRun, type CompletedRun } from "./grading.js";
 import { CI_SNAPSHOT, ciNonce, passScope, type PassScope } from "./milestone.js";
 import { hintProjectStaff, markRepoDeleted, releasedBefore, type RepoContext, type RepoRow } from "./repos.js";
@@ -115,6 +125,8 @@ interface LoadedPass {
   repo: RepoRow;
   project: ProjectRow;
   snapshot: ParsedCriteria;
+  /** The distribution commit the snapshot was read at (`project_criteria.source_sha`): what a graft takes (ADR-132 §2). */
+  sourceSha: string;
   scope: PassScope<CriteriaLeaf>;
 }
 
@@ -124,7 +136,7 @@ const OPEN = and(isNotNull(gradeDispatches.nonce), isNull(gradeDispatches.closed
 /** A CI pass of a project still graded by criteria on a schema-3 snapshot (`CI_SNAPSHOT`), with its scope; null otherwise. */
 async function loadPass(db: Db | Tx, passId: string): Promise<LoadedPass | null> {
   const [row] = await db
-    .select({ pass: gradeDispatches, repo: projectRepos, project: projects, snapshot: projectCriteria.criteria })
+    .select({ pass: gradeDispatches, repo: projectRepos, project: projects, snapshot: projectCriteria.criteria, sourceSha: projectCriteria.sourceSha })
     .from(gradeDispatches)
     .innerJoin(projectRepos, eq(projectRepos.id, gradeDispatches.repoId))
     .innerJoin(projects, eq(projects.id, projectRepos.projectId))
@@ -257,37 +269,123 @@ async function settle(app: FastifyInstance, loaded: LoadedPass, settlement: Sett
 export type CiDispatchOutcome = "dispatched" | "unconfirmed" | "settled" | "none";
 
 /**
- * The `project.ci` job: one pass's `quiz-grade` dispatch. Nothing for a
- * pass gone, closed, already claimed (its `sha` set), or whose project left
- * `criteria` or schema 3. Audited per dispatch sent, the one entry of a CI
- * pass's dispatch: `project.review_dispatched` (the final pass, a Regrade)
- * or `project.checkpoint_dispatched` (a milestone).
+ * The distribution commit a pass grafts from (ADR-132 §2): the snapshot's
+ * (`source_sha`), or — a snapshot read from the source while no
+ * distribution existed, a sha the distribution lacks — the distribution's
+ * head of its first branch.
+ */
+async function distributionCommit(octokit: Octokit, { project, sourceSha }: LoadedPass): Promise<string> {
+  const { owner, repo } = ownerRepo(project.distributionFullName!);
+  const known = await unless404(
+    async () => (await octokit.request("GET /repos/{owner}/{repo}/git/commits/{commit_sha}", { owner, repo, commit_sha: sourceSha })).data.sha,
+  );
+  if (known !== null) return known;
+  const head = await branchHead(octokit, owner, repo, project.branches[0]!);
+  if (head === null) throw new Error("the distribution repository has no handed-out branch");
+  return head;
+}
+
+/**
+ * The pass's graded commit (ADR-132 §2), built before its claim (a failure
+ * throws: the job is retried, nothing recorded): the target with the graded
+ * paths of the distribution commit, or null when it already holds them.
+ */
+async function graftPass(
+  client: { octokit: Octokit; token: string },
+  loaded: LoadedPass,
+  target: string,
+): Promise<{ graft: Graft | null; distributionSha: string | null }> {
+  const { pass, repo, project } = loaded;
+  if (project.distributionFullName === null) return { graft: null, distributionSha: null };
+  const distributionSha = await distributionCommit(client.octokit, loaded);
+  const graft = await buildGradedCommit({
+    token: client.token,
+    studentRepo: repo.fullName!,
+    distributionRepo: project.distributionFullName,
+    target,
+    distributionSha,
+    paths: gradedPaths(project.protectedFiles),
+    passId: pass.id,
+    at: pass.createdAt,
+  });
+  return { graft, distributionSha };
+}
+
+/** Whether GitHub still has the repository: a failed graft probed, so that a deleted one is terminal. */
+async function repoExists(octokit: Octokit, fullName: string): Promise<boolean> {
+  const { owner, repo } = ownerRepo(fullName);
+  return (await unless404(async () => (await octokit.request("GET /repos/{owner}/{repo}", { owner, repo })).data.id)) !== null;
+}
+
+/** A graded commit's paths kept in its audit entry, at most. */
+const GRAFT_AUDIT_PATHS = 100;
+
+/**
+ * The `project.ci` job: one pass's graded commit (ADR-132 §2) and its
+ * `quiz-grade` dispatch. Nothing for a pass gone, closed, already claimed
+ * (its `sha` set), or whose project left `criteria` or schema 3. A pass
+ * whose scope holds no automatic criterion gets its graded commit, for its
+ * review, but no dispatch. Audited per graft
+ * (`project_repo.grade_grafted`) and per dispatch sent, the one entry of a
+ * CI pass's dispatch: `project.review_dispatched` (the final pass, a
+ * Regrade) or `project.checkpoint_dispatched` (a milestone).
  */
 export async function runCiDispatch(app: FastifyInstance, config: AppConfig, job: CiDispatchJob): Promise<CiDispatchOutcome> {
   const db = app.db;
   const loaded = await loadPass(db, job.passId);
   if (!loaded || loaded.pass.sha !== "" || loaded.pass.closedAt !== null) return "none";
   const settled = async (reason: CriterionReason) => ((await settle(app, loaded, { reason })) ? "settled" : "none");
-  // No automatic criterion in scope: a run would be read for nothing; settled now (its reason writes no row), the review follows.
-  if (automaticLeaves(loaded).length === 0) return settled("no_result");
   const { pass, repo, project, scope } = loaded;
+  // Without an automatic criterion in scope a reason writes no row: whatever settles such a pass, its review follows.
   const target = await passTarget(db, repo, project, scope);
   if (target === null) return settled("no_commit");
   if (repo.deletedAt !== null || repo.fullName === null) return settled("repo_missing");
-  // Archived (as its lock, H8): Actions cannot run there, nothing is dispatched; the teacher grades.
+  // Archived (as its lock, H8): Actions cannot run there, nothing is written nor dispatched; the teacher grades.
   if (repo.archivedAt !== null) return settled("ci_unavailable");
-  // No installation, or its client cannot be made: nothing is dispatched, the teacher grades.
-  const octokit = await projectOctokit(db, config, project, app.log);
-  if (!octokit) return settled("ci_unavailable");
-  // The claim: the target recorded before GitHub is called, so a pass is never sent twice.
+  // No installation, or its client cannot be made: nothing is written nor dispatched, the teacher grades.
+  const client = await projectClient(db, config, project, app.log);
+  if (!client) return settled("ci_unavailable");
+  let grafted: Awaited<ReturnType<typeof graftPass>>;
+  try {
+    grafted = await graftPass(client, loaded, target);
+  } catch (err) {
+    // The repository gone is terminal, as a dispatch's 404; any other failure is retried (the job's), its 24 h end it.
+    if (!(await repoExists(client.octokit, repo.fullName))) {
+      await markRepoDeleted(db, repo.id, app.clock.now(), "dispatch");
+      return settled("repo_missing");
+    }
+    throw err;
+  }
+  const { graft, distributionSha } = grafted;
+  // The claim: the target and its graded commit recorded before GitHub is called, so a pass is never sent twice.
   const [claimed] = await db
     .update(gradeDispatches)
-    .set({ sha: target })
+    .set({ sha: target, gradedSha: graft?.sha ?? null, distributionSha, graftedPaths: graft?.paths ?? null })
     .where(and(eq(gradeDispatches.id, pass.id), eq(gradeDispatches.sha, ""), OPEN))
     .returning({ id: gradeDispatches.id });
   if (!claimed) return "none";
+  if (graft) {
+    await audit(db, {
+      ...SYSTEM_ACTOR,
+      action: "project_repo.grade_grafted",
+      subjectType: "project_repo",
+      subjectId: repo.id,
+      payload: {
+        projectId: project.id,
+        passId: pass.id,
+        target,
+        gradedSha: graft.sha,
+        distributionSha,
+        count: graft.paths.length,
+        paths: graft.paths.slice(0, GRAFT_AUDIT_PATHS),
+      },
+    });
+  }
+  // No automatic criterion in scope: a run would be read for nothing; settled now, the review reads the graded commit.
+  if (automaticLeaves(loaded).length === 0) return settled("no_result");
+  const { octokit } = client;
   const payload = {
-    sha: target,
+    sha: graft?.sha ?? target,
     nonce: pass.nonce!,
     pass: scope.milestone === null ? "final" : "milestone",
     ...(scope.milestone === null ? {} : { milestone: scope.milestone }),
@@ -402,24 +500,65 @@ function differing(tree: Map<string, string> | null, reference: Map<string, stri
   return [...all].filter((path) => tree.get(path) !== reference.get(path)).sort();
 }
 
+/** The distribution's commits that changed the grading workflow, read at most: a longer history is not read further. */
+const WORKFLOW_HISTORY_MAX = 100;
+
 /**
- * What differs from the distribution's head (the one sha it last handed
- * out, choice c): at the pass's target commit, `criteria.yml` and the
- * project's protected list — the commands and the code the tool read —;
- * at the run's head (the default branch's, which GitHub ran), the grading
- * workflow itself.
+ * Whether the run's head holds a grading workflow the distribution handed
+ * out (ADR-132 §3): the reference's, else one of the versions its history
+ * on `branch` holds (GitHub's list of the commits that changed the file).
+ * A link in the file's place never is one; a truncated listing knows
+ * nothing of it.
+ */
+async function handedOutWorkflow(
+  octokit: Octokit,
+  distribution: string,
+  branch: string,
+  atHead: Map<string, string> | null,
+  reference: Map<string, string> | null,
+): Promise<boolean> {
+  if (atHead === null) return false;
+  const entry = atHead.get(GRADING_WORKFLOW_PATH);
+  if (reference !== null && differing(atHead, reference, [GRADING_WORKFLOW_PATH]).length === 0) return true;
+  if (entry === undefined || !/^100(644|755):/.test(entry)) return false;
+  const blob = entry.slice(entry.indexOf(":") + 1);
+  const { owner, repo } = ownerRepo(distribution);
+  const { data: commits } = await octokit.request("GET /repos/{owner}/{repo}/commits", {
+    owner,
+    repo,
+    sha: branch,
+    path: GRADING_WORKFLOW_PATH,
+    per_page: WORKFLOW_HISTORY_MAX,
+  });
+  for (const commit of commits) {
+    if ((await referenceBlob(octokit, owner, repo, GRADING_WORKFLOW_PATH, commit.sha))?.sha === blob) return true;
+  }
+  return false;
+}
+
+/**
+ * What differs from what the pass handed out (ADR-119 choice c as amended
+ * by ADR-132 §3): at the pass's graded commit (its target when nothing was
+ * grafted), `criteria.yml` and the project's protected list against the
+ * distribution commit it grafted from — a sanity check of the graft —; at
+ * the run's head (the default branch's, which GitHub ran), the grading
+ * workflow, which must be a version the distribution's history holds. A
+ * pass claimed before ADR-132 has no recorded distribution commit: the
+ * distribution's head stands for it.
  */
 async function tamperedPaths(octokit: Octokit, { pass, repo, project }: LoadedPass, headSha: string): Promise<{ target: string[]; head: string[] }> {
   const distribution = project.distributionFullName!;
   const { owner, repo: name } = ownerRepo(distribution);
-  const reference = await branchHead(octokit, owner, name, project.branches[0]!);
+  const reference = pass.distributionSha ?? (await branchHead(octokit, owner, name, project.branches[0]!));
   if (reference === null) throw new Error("the distribution repository has no handed-out branch");
   const distributionTree = await treeOf(octokit, distribution, reference);
-  const atTarget = await treeOf(octokit, repo.fullName!, pass.sha);
-  const atHead = headSha === pass.sha ? atTarget : await treeOf(octokit, repo.fullName!, headSha);
+  const graded = pass.gradedSha ?? pass.sha;
+  const atGraded = await treeOf(octokit, repo.fullName!, graded);
+  const atHead = headSha === graded ? atGraded : await treeOf(octokit, repo.fullName!, headSha);
+  const branch = repo.defaultBranch ?? project.branches[0]!;
   return {
-    target: differing(atTarget, distributionTree, [...new Set([CRITERIA_FILE, ...project.protectedFiles])]),
-    head: differing(atHead, distributionTree, [GRADING_WORKFLOW_PATH]),
+    target: differing(atGraded, distributionTree, gradedPaths(project.protectedFiles)),
+    head: (await handedOutWorkflow(octokit, distribution, branch, atHead, distributionTree)) ? [] : [GRADING_WORKFLOW_PATH],
   };
 }
 

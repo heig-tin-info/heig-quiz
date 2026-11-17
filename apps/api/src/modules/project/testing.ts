@@ -202,9 +202,9 @@ export function repoWorld(): RepoWorld {
    * message, and the account GitHub matched — by its private address
    * (`123+login@users.noreply.github.com`) only.
    */
-  const commitsOf = (fullName: string, sha: string, perPage: number) =>
+  const commitsOf = (fullName: string, sha: string, perPage: number, path: string | null = null) =>
     world
-      .git(fullName, "log", `--max-count=${perPage}`, "--format=%H%x1f%an%x1f%ae%x1f%B%x1e", sha)
+      .git(fullName, "log", `--max-count=${perPage}`, "--format=%H%x1f%an%x1f%ae%x1f%B%x1e", sha, ...(path === null ? [] : ["--", path]))
       .split("\x1e")
       .map((record) => record.trim())
       .filter(Boolean)
@@ -506,7 +506,7 @@ export function repoWorld(): RepoWorld {
         if (branches.length === 0) return json({ message: "Git Repository is empty." }, 409);
         const from = url.searchParams.get("sha");
         if (from === null) return json([{ sha: world.git(fullName, "rev-parse", branches[0]!).trim() }]);
-        return json(commitsOf(fullName, from, Number(url.searchParams.get("per_page") ?? 30)));
+        return json(commitsOf(fullName, from, Number(url.searchParams.get("per_page") ?? 30), url.searchParams.get("path")));
       }
       if (rest === "/branches") return json(pageOf(url, branches).map((b) => ({ name: b, protected: false })));
       if ((m = /^\/git\/matching-refs\/heads\/(.+)$/.exec(rest))) {
@@ -544,7 +544,13 @@ export function repoWorld(): RepoWorld {
           return json({ message: "Not Found" }, 404);
         }
       }
-      if ((m = /^\/git\/commits\/([0-9a-f]+)$/.exec(rest))) {
+      if ((m = /^\/git\/commits\/([^/]+)$/.exec(rest))) {
+        // A commit git does not know is GitHub's 404.
+        try {
+          world.git(fullName, "cat-file", "-e", `${m[1]}^{commit}`);
+        } catch {
+          return json({ message: "Not Found" }, 404);
+        }
         const parents = world.git(fullName, "rev-list", "--parents", "-n", "1", m[1]!).trim().split(" ").slice(1);
         return json({ sha: m[1], tree: { sha: world.git(fullName, "rev-parse", `${m[1]}^{tree}`).trim() }, parents: parents.map((sha) => ({ sha })) });
       }
