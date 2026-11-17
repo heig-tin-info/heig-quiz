@@ -134,6 +134,8 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
             <ToggleChip
               icon={EyeOff}
               tone="neutral"
+              // The height of the view switch beside it (md): one row, one height.
+              size="md"
               label={t("courses.showHidden", { n: hiddenCount })}
               pressed={showHidden}
               onToggle={() => setShowHidden((v) => !v)}
