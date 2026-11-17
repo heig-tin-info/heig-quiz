@@ -88,7 +88,7 @@ yet, so start it — or open it — before walking it.
 
 Your test attempt is a real attempt: it shows up on the live dashboard and
 in the grading panel, each time with a *staff* badge, and in the results
-table when you show the staff attempts. You read its feedback, your grade
+table when you show the test attempts. You read its feedback, your grade
 and your practice cards as a student would. It counts in no class figure —
 not in the class average, not in the success rate of a question, not in the
 exported file.

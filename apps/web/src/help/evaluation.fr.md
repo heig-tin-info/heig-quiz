@@ -96,9 +96,9 @@ parcourir.
 
 Votre tentative de test est une vraie tentative : elle apparaît sur le
 tableau de bord et dans la correction, chaque fois avec un badge *équipe*,
-et dans les résultats quand vous affichez les tentatives de l'équipe. Vous
-en lisez la correction, la note et les cartes d'entraînement comme un
-étudiant. Elle ne compte dans aucun chiffre de la classe — ni dans la
+et dans les résultats quand vous affichez les tentatives de test. Vous
+en lisez la correction, la note et les cartes d'entraînement exactement
+comme côté étudiant. Elle ne compte dans aucun chiffre de la classe — ni dans la
 moyenne, ni dans le taux de réussite d'une question, ni dans le fichier
 exporté.
 
