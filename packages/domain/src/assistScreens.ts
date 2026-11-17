@@ -19,8 +19,8 @@ import { ASSIST_MAX_WRITES, type AssistPendingWrite } from "./assistWrites.js";
 /** A course page's tabs, each a path of its own (`/courses/:id/<tab>`); the classrooms are the bare path. */
 export const COURSE_TABS = ["classrooms", "templates", "pools", "members", "settings"] as const;
 export type CourseTab = (typeof COURSE_TABS)[number];
-/** The Administration page's tabs (`?tab=`). */
-export const ADMIN_TABS = ["people", "activity", "system", "tasks", "llm", "concepts"] as const;
+/** The Administration page's tabs (`?tab=`); `kiosk` where the platform has kiosk stations (ADR-051). */
+export const ADMIN_TABS = ["people", "kiosk", "activity", "system", "tasks", "llm", "concepts"] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 /** The classroom's sections that live in `?tab=`; the others are routes of their own. */
 export const CLASSROOM_QUERY_TABS = ["evaluations", "roster", "drill"] as const;

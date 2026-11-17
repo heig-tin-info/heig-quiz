@@ -4,8 +4,9 @@ import { describe, expect, it } from "vitest";
 
 import type { AdminTeacher } from "@quiz/contracts";
 
-import { TeachersSection } from "./AdminPanel";
-import { mockFetch, ok, renderWithProviders } from "./test/render";
+import { AdminPage, TeachersSection } from "./AdminPanel";
+import { configKey } from "./queryKeys";
+import { makeQueryClient, mockFetch, ok, renderWithProviders } from "./test/render";
 
 function row(id: string, email: string, rest: Partial<AdminTeacher> = {}): AdminTeacher {
   return {
@@ -80,5 +81,49 @@ describe("TeachersSection — the administrator's workspace row", () => {
     await u.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await u.click(bins[1]!);
     expect(await screen.findByText("Revoke the teacher role of t@heig-vd.ch?")).toBeInTheDocument();
+  });
+});
+
+/*
+ * The kiosk stations have their own tab, second, where the platform has the
+ * kiosk path (ADR-051 §5); People keeps the grants and the accounts.
+ * Elsewhere the tab does not exist, and `?tab=kiosk` opens People.
+ */
+describe("AdminPage — the kiosk stations' tab", () => {
+  const render = (kiosk: boolean, route = "/admin") => {
+    mockFetch({
+      "GET /app/api/admin/teachers": ok([]),
+      "GET /app/api/admin/users": ok([]),
+      "GET /app/api/admin/kiosk-devices": ok([]),
+    });
+    const queryClient = makeQueryClient();
+    queryClient.setQueryData(configKey, { devLogin: false, kiosk: kiosk ? { extensionId: null, mock: true } : null });
+    return renderWithProviders(<AdminPage />, { queryClient, route });
+  };
+  const tabNames = () => screen.getAllByRole("tab").map((tab) => tab.textContent);
+
+  it("lists the stations in a tab of their own, right after People", async () => {
+    render(true);
+    expect(tabNames().slice(0, 2)).toEqual(["People", "Kiosk stations"]);
+    // People: the grants and the accounts, no station.
+    expect(await screen.findByRole("heading", { name: /teachers/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /kiosk stations/i })).toBeNull();
+
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Kiosk stations" }));
+    expect(await screen.findByText(/no station yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /teachers/i })).toBeNull();
+  });
+
+  it("has no such tab without the kiosk path, and ?tab=kiosk opens People", async () => {
+    render(false, "/admin?tab=kiosk");
+    expect(tabNames()).not.toContain("Kiosk stations");
+    expect(screen.getByRole("tab", { name: "People" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("heading", { name: /teachers/i })).toBeInTheDocument();
+  });
+
+  it("opens the stations from the address where the platform has them", async () => {
+    render(true, "/admin?tab=kiosk");
+    expect(screen.getByRole("tab", { name: "Kiosk stations" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByText(/no station yet/i)).toBeInTheDocument();
   });
 });

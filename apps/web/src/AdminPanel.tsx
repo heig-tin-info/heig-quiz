@@ -1,5 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, BookMarked, CalendarClock, ChartColumn, Library, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from "lucide-react";
+import {
+  Activity,
+  BookMarked,
+  CalendarClock,
+  ChartColumn,
+  Library,
+  Monitor,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -11,7 +23,7 @@ import {
 } from "@quiz/contracts";
 import { ADMIN_TABS, type AdminTab } from "@quiz/domain";
 
-import { api, apiErrorMessage } from "./api";
+import { api, apiErrorMessage, usePublicConfig } from "./api";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
 import {
@@ -56,18 +68,24 @@ const nameOf = (r: AdminTeacher): [string, string] => [r.givenName ?? "", r.fami
 
 /**
  * Administration, one tab per concern, the open one in `?tab=`: the people
- * (the teacher grants, the kiosk stations where the platform has them —
- * `KioskSection`, ADR-051 — then every account), the platform's activity
+ * (the teacher grants, then every account), the kiosk stations where the
+ * platform has them (`KioskSection`, ADR-051), the platform's activity
  * (F-ADMIN-09, ADR-107, aggregates only), the system status
  * (F-ADMIN-07, next to the tasks it points to) and the scheduled tasks
  * (F-ADMIN-06), the LLM gateway (ADR-058) and the concepts' curation queue (ADR-081). The people stay first and the
  * default: the page's one primary action, "Grant", is there. A tab is one entry of `ADMIN_TABS`
- * (`router.ts`) and one panel below.
+ * (`@quiz/domain`) and one panel below. The kiosk tab exists only where the
+ * platform has the kiosk path: elsewhere `?tab=kiosk` opens the people, never
+ * an empty panel.
  */
 export function AdminPage() {
   const t = useT();
+  const kioskTab = usePublicConfig().data?.kiosk != null;
   const [tabParam, setTab] = useSearchParam("tab", "people");
-  const tab: AdminTab = (ADMIN_TABS as readonly string[]).includes(tabParam) ? (tabParam as AdminTab) : "people";
+  const tab: AdminTab =
+    (ADMIN_TABS as readonly string[]).includes(tabParam) && (tabParam !== "kiosk" || kioskTab)
+      ? (tabParam as AdminTab)
+      : "people";
   return (
     <div className="space-y-6">
       <PageHeader title={t("admin.title")} />
@@ -77,6 +95,7 @@ export function AdminPage() {
         idPrefix="admin"
         items={[
           { value: "people", label: t("admin.tab.people"), icon: Users },
+          ...(kioskTab ? [{ value: "kiosk" as const, label: t("admin.kiosk"), icon: Monitor }] : []),
           { value: "activity", label: t("admin.tab.activity"), icon: ChartColumn },
           { value: "system", label: t("admin.tab.system"), icon: Activity },
           { value: "tasks", label: t("admin.tab.tasks"), icon: CalendarClock },
@@ -88,9 +107,10 @@ export function AdminPage() {
         {tab === "people" ? (
           <>
             <TeachersSection />
-            <KioskSection />
             <UsersSection />
           </>
+        ) : tab === "kiosk" ? (
+          <KioskSection />
         ) : tab === "activity" ? (
           <ActivitySection />
         ) : tab === "system" ? (
