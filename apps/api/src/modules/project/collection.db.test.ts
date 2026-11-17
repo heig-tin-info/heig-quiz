@@ -207,10 +207,10 @@ describe("the deadline job collects an online workspace (ADR-130)", () => {
 
   it("records an unchanged workspace, makes no commit, and locks", async () => {
     const f = await launched();
-    portal.collect = () => ({ outcome: "unchanged", snapshotAt: DEADLINE, unreadable: null });
+    portal.collect = () => ({ outcome: "unchanged", snapshotAt: DEADLINE, unreadable: 3 });
     const commits = world.apiCommits.length;
     await deadlineAt(at(DEADLINE, 20_000));
-    expect(await rowsOf(f)).toMatchObject([{ outcome: "unchanged", reason: null, unreadable: null }]);
+    expect(await rowsOf(f)).toMatchObject([{ outcome: "unchanged", reason: null, unreadable: 3 }]);
     expect(world.apiCommits.length).toBe(commits);
     expect(world.git(f.fullName, "rev-parse", "main").trim()).toBe(f.base);
     expect((await repoRow(f)).lockedAt).not.toBeNull();

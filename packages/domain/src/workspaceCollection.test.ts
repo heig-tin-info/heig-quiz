@@ -7,7 +7,8 @@ import {
   collectionTooLate,
   composeCollectionTree,
   keptEntriesMatch,
-  staleSnapshot,
+  storedCollection,
+  withUnreadableKept,
   type CollectionTreeEntry,
 } from "./workspaceCollection.js";
 
@@ -104,11 +105,58 @@ describe("composeCollectionTree", () => {
   });
 });
 
-describe("staleSnapshot", () => {
-  const at = new Date("2026-11-16T13:40:00Z");
-  it("is stale when older than the last push, never without one", () => {
-    expect(staleSnapshot(at, new Date("2026-11-16T13:40:01Z"))).toBe(true);
-    expect(staleSnapshot(at, at)).toBe(false);
-    expect(staleSnapshot(at, null)).toBe(false);
+describe("withUnreadableKept", () => {
+  const reference = [blob("main.c", "1"), blob("secret/key.c", "2"), blob("secret/deep/x.c", "3"), blob("secretive.c", "4")];
+  it("takes an unreadable file, or everything under an unreadable directory, from the reference", () => {
+    const workspace = [blob("main.c", "5"), blob("notes.md", "6")];
+    expect(withUnreadableKept(workspace, reference, ["secret"])).toEqual([
+      blob("main.c", "5"),
+      blob("notes.md", "6"),
+      blob("secret/key.c", "2"),
+      blob("secret/deep/x.c", "3"),
+    ]);
+    expect(withUnreadableKept(workspace, reference, ["main.c"])).toEqual([blob("notes.md", "6"), blob("main.c", "1")]);
+  });
+
+  it("leaves out an unreadable path the reference does not hold, and changes nothing without one", () => {
+    const workspace = [blob("main.c", "5")];
+    expect(withUnreadableKept(workspace, reference, ["new.c"])).toEqual(workspace);
+    expect(withUnreadableKept(workspace, reference, [])).toEqual(workspace);
+  });
+
+  // The bounds below are loose on purpose (a slow runner under coverage): the quadratic form took over a minute.
+  it("stays linear in the entries: 100 000 paths, half of them unreadable", () => {
+    const many = Array.from({ length: 100_000 }, (_, i) => blob(`d${i % 100}/s${i % 7}/f${i}.c`, "1"));
+    const unreadable = many.filter((_, i) => i % 2 === 0).map((e) => e.path);
+    const started = performance.now();
+    const out = withUnreadableKept(many, many, unreadable);
+    expect(performance.now() - started).toBeLessThan(10_000);
+    expect(out).toHaveLength(100_000);
+  });
+
+});
+
+describe("the collection's rules stay linear", () => {
+  it("composes 300 000 entries against 10 000 kept paths in linear time", () => {
+    const snapshot = Array.from({ length: 300_000 }, (_, i) => blob(`src/d${i % 300}/f${i}.c`, "1"));
+    const kept = Array.from({ length: 10_000 }, (_, i) => `tests/t${i}`);
+    const base = kept.map((k) => blob(`${k}/in.txt`, "2"));
+    const started = performance.now();
+    const out = composeCollectionTree(snapshot, base, kept);
+    expect(performance.now() - started).toBeLessThan(10_000);
+    expect(out).toHaveLength(310_000);
+  });
+});
+
+describe("storedCollection", () => {
+  it("passes the current values through, null included", () => {
+    expect(storedCollection("collected", null)).toEqual({ outcome: "collected", reason: null });
+    expect(storedCollection("failed", "read_failed")).toEqual({ outcome: "failed", reason: "read_failed" });
+    expect(storedCollection(null, null)).toEqual({ outcome: null, reason: null });
+  });
+
+  it("reads a value no list holds any more as failed, with no reason", () => {
+    expect(storedCollection("stale_snapshot", null)).toEqual({ outcome: "failed", reason: null });
+    expect(storedCollection("failed", "gone_reason")).toEqual({ outcome: "failed", reason: null });
   });
 });

@@ -181,7 +181,6 @@ const COLLECTION_SAID: Record<NonNullable<ProjectRepoCollection["outcome"]> | "p
   collected: "project.collection.at",
   unchanged: "project.collection.unchanged",
   no_snapshot: "project.collection.no_snapshot",
-  stale_snapshot: "project.collection.stale_snapshot",
   branch_not_handed_out: "project.collection.branch_not_handed_out",
   too_large: "project.collection.too_large",
   too_late: "project.collection.too_late",

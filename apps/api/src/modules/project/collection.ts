@@ -89,7 +89,6 @@ function portalSettlement(answer: Exclude<CodespaceCollectionResult, { outcome: 
   switch (answer.outcome) {
     case "failed":
       return { outcome: "failed", reason: answer.reason };
-    case "stale_snapshot":
     case "no_snapshot":
       return { outcome: answer.outcome };
     case "unchanged":

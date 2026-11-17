@@ -2,19 +2,22 @@
  * The collection at the deadline (ADR-130), against real repositories in a
  * temporary directory: a bare repository stands for GitHub (a local path,
  * which `gitAuthEnv` gives no header), the volume holds `work/` (the
- * student's clone, its own `.git` included), `staging.git` and the
- * `shadow.git` the collection snapshots into. The orders are well formed:
- * the hostile ones are refused by the route's contract (`collections.test.ts`).
+ * student's clone, its own `.git` included) and `staging.git`. The reader is
+ * the real one driven through `localPodman`, which runs its commands on the
+ * host: these are the collection's behaviours; its confinement is proved on
+ * a real engine (`engine/reader.integration.test.ts`). The orders are well
+ * formed: the hostile ones are refused by the route's contract
+ * (`collections.test.ts`).
  */
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { chmod, link, mkdir, readdir, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-import { snapshot } from "../sessions/shadow.js";
-import { collectWorkspace, type CollectDeps, type CollectionOrder } from "./collect.js";
+import { createWorkspaceReader } from "../engine/reader.js";
+import { localPodman, type LocalPodman, type LocalPodmanOptions } from "../engine/readerFixtures.js";
+import { collectWorkspace, collectionDirsRoot, type CollectDeps, type CollectionOrder } from "./collect.js";
 import { FIXTURE_ENV, tempDir } from "./fixtures.js";
 import { git } from "./gitRunner.js";
 import { stagingPaths } from "./staging.js";
@@ -94,12 +97,16 @@ async function world(): Promise<World> {
   };
 }
 
-function deps(w: World, over: Partial<CollectDeps> = {}): CollectDeps {
+const READER = { podmanUrl: "unix:///run/podman/podman.sock", instance: "test", seccompProfile: "/seccomp.json", image: "codespace/c-dev:4.137.0" };
+
+let podman: LocalPodman = localPodman();
+
+function deps(w: World, over: Partial<CollectDeps> = {}, engine: LocalPodmanOptions = {}): CollectDeps {
+  podman = localPodman(engine);
   return {
     volumesRoot: w.volumesRoot,
     forge: { pushUrl: () => w.github, authorization: async () => "basic dGVzdA==" },
-    lastPushAt: null,
-    snapshotWaitMs: 1,
+    reader: createWorkspaceReader(READER, podman.spawn),
     ...over,
   };
 }
@@ -142,6 +149,9 @@ describe("collectWorkspace", () => {
       "tests/t.c": ["100644", "assert(1);\n"],
     });
     expect(result.unreadable).toBe(0);
+    // The reader was removed, and no shadow.git was made or read.
+    expect(podman.live()).toEqual([]);
+    await expect(readdir(join(dirname(w.work), "shadow.git"))).rejects.toThrow();
     // Nothing of the student's repository, the staging repository or GitHub's branches moved.
     expect(await picture(join(w.work, ".git"))).toEqual(studentGit);
     expect(await picture(w.staging)).toEqual(staging);
@@ -199,32 +209,131 @@ describe("collectWorkspace", () => {
     const w = await world();
     await rm(w.work, { recursive: true, force: true });
     expect(await collectWorkspace(w.order, deps(w))).toEqual({ outcome: "no_snapshot" });
-    await expect(readdir(join(dirname(w.work), "shadow.git"))).rejects.toThrow();
+    // No reader was started for it.
+    expect(podman.calls).toEqual([]);
   });
 
-  it("falls back on the last snapshot when the index stays busy, unless it is older than the last push", async () => {
+  it("never reads shadow.git: the timer's snapshot is not what is handed in", async () => {
     const w = await world();
-    await writeFiles(w.work, { "main.c": "saved before\n" });
-    await snapshot(dirname(w.work));
-    const busy = vi.fn(async () => {
-      throw new Error("Unable to create 'shadow.git/index.lock': File exists.");
+    // A shadow.git the timer could have written, holding other content.
+    const other = join(w.root, "other");
+    await git(["init", "--quiet", "--initial-branch=main", other]);
+    await writeFiles(other, { "main.c": "in the snapshot only\n" });
+    await git(["-C", other, "add", "-A"], { env: FIXTURE_ENV });
+    await git(["-C", other, "commit", "--quiet", "-m", "snapshot"], { env: FIXTURE_ENV });
+    await git(["clone", "--quiet", "--bare", other, join(dirname(w.work), "shadow.git")]);
+    expect((await collectWorkspace(w.order, deps(w))).outcome).toBe("unchanged");
+  });
+
+  it("honours the student's .gitignore, its negations and nested ones, and leaves out a nested repository", async () => {
+    const w = await world();
+    await writeFiles(w.work, {
+      ".gitignore": "build/\n*.o\n!keep.o\n",
+      "build/out.txt": "built\n",
+      "a.o": "object\n",
+      "keep.o": "kept\n",
+      "lib/.gitignore": "secret.txt\n",
+      "lib/secret.txt": "ignored here\n",
+      "lib/code.c": "code\n",
     });
+    await git(["clone", "--quiet", w.github, join(w.work, "vendor")]);
 
-    const stale = await collectWorkspace(w.order, deps(w, { snapshot: busy, lastPushAt: new Date(Date.now() + 60_000) }));
-    expect(stale.outcome).toBe("stale_snapshot");
-    expect(busy).toHaveBeenCalledTimes(3);
+    const result = await collectWorkspace(w.order, deps(w));
+    expect(result.outcome).toBe("pushed");
+    expect([...(await treeOf(w, REF)).keys()].sort()).toEqual([
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "keep.o",
+      "lib/.gitignore",
+      "lib/code.c",
+      "main.c",
+      "tests/t.c",
+    ]);
+  });
 
-    const last = await collectWorkspace(w.order, deps(w, { snapshot: busy, lastPushAt: new Date(0) }));
-    expect(last).toMatchObject({ outcome: "pushed", unreadable: null });
-    expect((await treeOf(w, REF)).get("main.c")).toEqual(["100644", "saved before\n"]);
+  it("keeps a file or a directory the reader cannot read as the commit that would be graded has it, and counts it", async () => {
+    const w = await world();
+    await writeFiles(w.work, { "main.c": "edited but unreadable\n", "private/new.c": "never seen\n", "notes.md": "readable\n" });
+    await chmod(join(w.work, "main.c"), 0o000);
+    await chmod(join(w.work, "private"), 0o000);
+    try {
+      const result = await collectWorkspace(w.order, deps(w));
+      expect(result).toMatchObject({ outcome: "pushed", unreadable: 2 });
+      expect(Object.fromEntries(await treeOf(w, REF))).toEqual({
+        ".github/workflows/ci.yml": ["100644", "on: push\n"],
+        "main.c": ["100644", "int main(void) { return 1; }\n"],
+        "notes.md": ["100644", "readable\n"],
+        "tests/t.c": ["100644", "assert(1);\n"],
+      });
+    } finally {
+      await chmod(join(w.work, "main.c"), 0o644);
+      await chmod(join(w.work, "private"), 0o755);
+    }
+  });
+
+  it("is too_large past the cap on entries: a listing over it, or an unreadable directory the graded commit fills over it", async () => {
+    const w = await world();
+    await writeFiles(w.work, Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`many/f${i}.c`, "x\n"])));
+    expect(await collectWorkspace(w.order, deps(w, { maxEntries: 5 }))).toMatchObject({ outcome: "too_large" });
+    expect(podman.live()).toEqual([]);
+
+    // The handout holds six files under data/; the student made data/ unreadable: the listing is small,
+    // the workspace once data/ is taken from the graded commit is not.
+    const big = await world();
+    const seed = join(big.root, "seed2");
+    await git(["clone", "--quiet", big.github, seed]);
+    await writeFiles(seed, Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`data/d${i}.txt`, `${i}\n`])));
+    await git(["-C", seed, "add", "-A"], { env: FIXTURE_ENV });
+    await git(["-C", seed, "commit", "--quiet", "-m", "data"], { env: FIXTURE_ENV });
+    await git(["-C", seed, "push", "--quiet", "origin", "main"]);
+    const head = (await git(["--git-dir", big.github, "rev-parse", "refs/heads/main"])).trim();
+    await writeFiles(big.work, { "data/d0.txt": "mine\n" });
+    await chmod(join(big.work, "data"), 0o000);
+    try {
+      expect(await collectWorkspace({ ...big.order, base: head }, deps(big, { maxEntries: 8 }))).toMatchObject({ outcome: "too_large", unreadable: 1 });
+    } finally {
+      await chmod(join(big.work, "data"), 0o755);
+    }
+  });
+
+  it("carries the execute bit, and a hard link as the file it names", async () => {
+    const w = await world();
+    await writeFiles(w.work, { "run.sh": "#!/bin/sh\n" });
+    await chmod(join(w.work, "run.sh"), 0o755);
+    await link(join(w.work, "run.sh"), join(w.work, "again.sh"));
+    expect((await collectWorkspace(w.order, deps(w))).outcome).toBe("pushed");
+    const tree = await treeOf(w, REF);
+    expect(tree.get("run.sh")).toEqual(["100755", "#!/bin/sh\n"]);
+    expect(tree.get("again.sh")).toEqual(["100755", "#!/bin/sh\n"]);
+  });
+
+  it("is too_large past the cap on the workspace's files, and pushes nothing", async () => {
+    const w = await world();
+    const before = await refsOf(w.github);
+    await writeFiles(w.work, { "big.bin": "x".repeat(4096) });
+    expect(await collectWorkspace(w.order, deps(w, { maxBytes: 1024 }))).toMatchObject({ outcome: "too_large", unreadable: 0 });
+    expect(await refsOf(w.github)).toBe(before);
+    expect(podman.live()).toEqual([]);
+  });
+
+  it("fails read_failed when the reader cannot start or its archive is refused, and removes it", async () => {
+    const w = await world();
+    await writeFiles(w.work, { "main.c": "changed\n" });
+    expect(await collectWorkspace(w.order, deps(w, {}, { failRun: true }))).toEqual({ outcome: "failed", reason: "read_failed" });
+    expect(podman.calls.some((c) => c[0] === "rm")).toBe(true);
+    const junk = join(w.root, "junk.tar");
+    await writeFile(junk, Buffer.alloc(2048, 0x41));
+    expect(await collectWorkspace(w.order, deps(w, {}, { archiveFile: junk }))).toEqual({ outcome: "failed", reason: "read_failed" });
+    expect(podman.live()).toEqual([]);
   });
 
   it("stops at its time budget and pushes nothing", async () => {
     const w = await world();
     await writeFiles(w.work, { "main.c": "changed\n" });
     const before = await refsOf(w.github);
-    const slow = (volumeDir: string) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`slow ${volumeDir}`)), 400));
-    expect(await collectWorkspace(w.order, deps(w, { snapshot: slow, budgetMs: 100 }))).toEqual({ outcome: "failed", reason: "timeout" });
+    expect(await collectWorkspace(w.order, deps(w, { budgetMs: 1500 }, { hangArchive: true }))).toEqual({ outcome: "failed", reason: "timeout" });
+    // The stuck reader is removed all the same.
+    expect(podman.live()).toEqual([]);
     const late = vi.fn(async () => new Promise<string>((r) => setTimeout(() => r("basic bGF0ZQ=="), 400)));
     const settle = vi.fn();
     expect(await collectWorkspace(w.order, deps(w, { budgetMs: 300, forge: { pushUrl: () => w.github, authorization: late, settle } }))).toEqual({ outcome: "failed", reason: "timeout" });
@@ -235,12 +344,12 @@ describe("collectWorkspace", () => {
 
   it("removes its temporary repository, alternates and index on every exit", async () => {
     const w = await world();
-    const leftovers = async () => (await readdir(tmpdir())).filter((n) => n.startsWith("collect-") && !n.startsWith("collect-test-"));
-    const before = await leftovers();
+    const leftovers = async () => readdir(collectionDirsRoot(w.volumesRoot)).catch(() => []);
     await writeFiles(w.work, { "main.c": "changed\n" });
     await collectWorkspace(w.order, deps(w));
     await collectWorkspace(w.order, deps(w, { forge: { pushUrl: () => join(w.root, "missing.git"), authorization: async () => "x" } }));
     await collectWorkspace(w.order, deps(w, { forge: { pushUrl: () => w.github, authorization: async () => Promise.reject(new Error("down")) } }));
-    expect(await leftovers()).toEqual(before);
+    expect(await leftovers()).toEqual([]);
+    expect(podman.live()).toEqual([]);
   });
 });

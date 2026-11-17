@@ -167,6 +167,40 @@ export function containerNameFor(instance: string, sessionId: string): string {
   return `cs-${instance}-${sessionId}`;
 }
 
+/** What confines every container the portal starts, a session's or a platform helper's. */
+export type Confinement = Pick<EngineOptions, "seccompProfile" | "apparmorProfile" | "cgroupParent">;
+/** A container's resource bounds. */
+export type Limits = Pick<EngineOptions, "pidsLimit" | "memory" | "cpus">;
+
+/**
+ * The hardening of `images/c-dev/run-hardened.sh` (invariant 3), the same for
+ * every container the portal starts: a session's (`runArgs`) and the
+ * collection's confined reader (`engine/reader.ts`). Only the tmpfs list and
+ * the limits differ; nothing here can be relaxed by one caller alone.
+ */
+export function hardeningArgs(c: Confinement, tmpfs: readonly string[], limits: Limits): string[] {
+  return [
+    "--userns=auto",
+    "--cap-drop=ALL",
+    "--security-opt",
+    "no-new-privileges",
+    "--security-opt",
+    `seccomp=${c.seccompProfile}`,
+    // Empty or absent: no flag, for a host without AppArmor. Same rule and
+    // same default (`codespace`) as run-hardened.sh.
+    ...(c.apparmorProfile ? ["--security-opt", `apparmor=${c.apparmorProfile}`] : []),
+    "--read-only",
+    ...tmpfs.flatMap((t) => ["--tmpfs", t]),
+    "--pids-limit",
+    String(limits.pidsLimit),
+    "--memory",
+    limits.memory,
+    "--cpus",
+    limits.cpus,
+    ...(c.cgroupParent ? [`--cgroup-parent=${c.cgroupParent}`] : []),
+  ];
+}
+
 /** Minimal shape of what `podman inspect --format json` gives us back. */
 interface PodmanInspect {
   Id?: string;
@@ -229,31 +263,11 @@ export function createEngine(opts: EngineOptions): Engine {
       "--label",
       "codespace.role=student",
       // --- hardening, copied from images/c-dev/run-hardened.sh -------------
-      "--userns=auto",
-      "--cap-drop=ALL",
-      "--security-opt",
-      "no-new-privileges",
-      "--security-opt",
-      `seccomp=${opts.seccompProfile}`,
-      // Empty or absent: no flag, for a host without AppArmor. Same rule and
-      // same default (`codespace`) as run-hardened.sh.
-      ...(opts.apparmorProfile
-        ? ["--security-opt", `apparmor=${opts.apparmorProfile}`]
-        : []),
-      "--read-only",
-      "--tmpfs",
-      "/tmp",
-      "--tmpfs",
-      "/run:rw,nosuid,nodev,mode=1777",
-      "--tmpfs",
-      "/home/student/.cache:rw,nosuid,nodev,mode=1777",
-      "--pids-limit",
-      String(opts.pidsLimit),
-      "--memory",
-      opts.memory,
-      "--cpus",
-      opts.cpus,
-      ...(opts.cgroupParent ? [`--cgroup-parent=${opts.cgroupParent}`] : []),
+      ...hardeningArgs(
+        opts,
+        ["/tmp", "/run:rw,nosuid,nodev,mode=1777", "/home/student/.cache:rw,nosuid,nodev,mode=1777"],
+        opts,
+      ),
       // --- closed network, invariant 2 -------------------------------------
       "--network",
       opts.network,

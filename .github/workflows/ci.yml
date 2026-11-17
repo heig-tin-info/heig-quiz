@@ -153,6 +153,8 @@ jobs:
       - run: bash infra/engine/staging-dispatch.test.sh
       - run: bash infra/engine/lib.test.sh
       - run: bash infra/engine/slices.test.sh
+      # The root timer's snapshot: one blocked volume never stops the walk.
+      - run: bash apps/codespace/deploy/shadow-snapshot.test.sh
       - env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && 'HEAD^1' || '' }}
         run: node scripts/check-changes.mjs ${BASE:+--base "$BASE"}

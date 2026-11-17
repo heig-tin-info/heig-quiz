@@ -1,6 +1,8 @@
 /**
  * Life cycle of a session: creation or resumption, heartbeat, garbage
- * collection, reconciliation with Podman, shadow repository snapshots.
+ * collection, reconciliation with Podman. `shadow.git` is written by the
+ * sandboxed root timer only (`deploy/shadow-snapshot.sh`), never by the
+ * portal: a host-side read of `work/` (the portal's invariant 15).
  *
  * Invariants held here:
  *  - a single live session per (student, assignment) pair — analyse.md D5;
@@ -10,7 +12,7 @@
  *  - the anchor container is never seen: the engine only returns the
  *    containers carrying the session label;
  *  - a staff member's review session (ADR-129 §10) is read-only and
- *    ephemeral: no snapshot, its directory removed when it closes and swept
+ *    ephemeral: its directory removed when it closes and swept
  *    at startup.
  */
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
@@ -46,7 +48,6 @@ import {
   type EnsureWorkspaceResult,
   type GitIdentity,
 } from "./workspace.js";
-import { snapshot } from "./shadow.js";
 import {
   REVIEW_ASSIGNMENT_PREFIX,
   deleteDeadReviews,
@@ -68,7 +69,6 @@ export interface ManagerOptions {
   /** Grace period after the last heartbeat before the container is destroyed. */
   graceMs: number;
   gcIntervalMs: number;
-  shadowIntervalMs: number;
   healthTimeoutMs: number;
   /** Host of the `origin` remote written into the workspace: `portal.internal`. */
   gitRemoteHost: string;
@@ -131,7 +131,6 @@ export interface SessionManager {
   checkCookie(session: SessionRow, token: string | undefined): boolean;
   reconcile(): Promise<{ resumed: number; stopped: number; orphans: number }>;
   collect(now?: Date): Promise<{ closed: number }>;
-  snapshotAll(): Promise<{ committed: number; skipped: number }>;
   /**
    * At startup, after `reconcile`: removes every review directory and every
    * review assignment row without a live session (ADR-129 §10).
@@ -415,7 +414,6 @@ export function rotateSittingOpener(db: Pick<Db, "select" | "update">, sitting: 
 export function createSessionManager(opts: ManagerDeps): SessionManager {
   const { db, engine, log } = opts;
   let gcTimer: NodeJS.Timeout | null = null;
-  let shadowTimer: NodeJS.Timeout | null = null;
   /** One session at a time: two concurrent `start` calls launch only one container. */
   const inFlight = new Map<string, Promise<SessionRow>>();
 
@@ -874,20 +872,10 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       const review = assignment !== undefined && isReview(assignment);
       const name = session.containerName ?? engine.containerName(session.id);
       if (review) {
-        // No snapshot, no persistent volume (ADR-129 §10): the work tree is
-        // emptied by its own container while it still runs. A container
-        // already gone fails here; `removeReviewDir` then takes over.
+        // No persistent volume (ADR-129 §10): the work tree is emptied by
+        // its own container while it still runs. A container already gone
+        // fails here; `removeReviewDir` then takes over.
         await engine.exec(name, [...REVIEW_WIPE_ARGV]).catch(() => "");
-      } else {
-        // Last snapshot before losing the container: without it, a session closed
-        // right after a keystroke would have nothing in shadow.git.
-        await snapshot(session.volumeDir).catch((err: unknown) => {
-          log.warn(
-            { sessionId, err: String((err as Error).message ?? err) },
-            "closing snapshot impossible",
-          );
-          return null;
-        });
       }
       await engine.stop(name);
       await engine.rm(name);
@@ -970,32 +958,6 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       return { closed };
     },
 
-    async snapshotAll() {
-      let committed = 0;
-      let skipped = 0;
-      // A review session keeps no history of what it opened (ADR-129 §10).
-      for (const session of listLiveSessions(db, { reviews: false })) {
-        try {
-          const result = await snapshot(session.volumeDir);
-          if (result.sha) committed += 1;
-          else skipped += 1;
-          if (result.unreadable.length > 0) {
-            log.warn(
-              { sessionId: session.id, unreadable: result.unreadable },
-              "partial snapshot: paths unreadable by the portal (see sessions/shadow.ts)",
-            );
-          }
-        } catch (err) {
-          skipped += 1;
-          log.warn(
-            { sessionId: session.id, err: String((err as Error).message ?? err) },
-            "snapshot impossible",
-          );
-        }
-      }
-      return { committed, skipped };
-    },
-
     async sweepReviews() {
       const started = Date.now();
       const removedAssignments = deleteDeadReviews(db);
@@ -1037,21 +999,11 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         }, opts.gcIntervalMs);
         gcTimer.unref();
       }
-      if (!shadowTimer) {
-        shadowTimer = setInterval(() => {
-          void manager
-            .snapshotAll()
-            .catch((err: unknown) => log.error({ err }, "snapshots failed"));
-        }, opts.shadowIntervalMs);
-        shadowTimer.unref();
-      }
     },
 
     async stopTimers() {
       if (gcTimer) clearInterval(gcTimer);
-      if (shadowTimer) clearInterval(shadowTimer);
       gcTimer = null;
-      shadowTimer = null;
     },
 
     lookup: {

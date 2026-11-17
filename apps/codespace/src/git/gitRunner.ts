@@ -71,21 +71,24 @@ export class GitError extends Error {
 }
 
 /**
- * Runs `git <args>` and returns stdout. `HOME` is cleared so a developer's
+ * Every spawned git's environment. `HOME` is cleared so a developer's
  * `~/.gitconfig` (aliases, `insteadOf`, a credential helper) cannot change
  * what the portal does on a student's repository.
  */
+export const gitEnv = (extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
+  PATH: process.env["PATH"] ?? "/usr/bin:/bin",
+  HOME: "/nonexistent",
+  GIT_TERMINAL_PROMPT: "0",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_ASKPASS: "/bin/true",
+  ...extra,
+});
+
+/** Runs `git <args>` and returns stdout, in {@link gitEnv}. */
 export async function git(args: string[], opts: GitRunOptions = {}): Promise<string> {
   try {
     const run = execFileAsync("git", args, {
-      env: {
-        PATH: process.env["PATH"] ?? "/usr/bin:/bin",
-        HOME: "/nonexistent",
-        GIT_TERMINAL_PROMPT: "0",
-        GIT_CONFIG_NOSYSTEM: "1",
-        GIT_ASKPASS: "/bin/true",
-        ...opts.env,
-      },
+      env: gitEnv(opts.env),
       maxBuffer: 32 * 1024 * 1024,
       ...(opts.timeoutMs === undefined ? {} : { timeout: opts.timeoutMs }),
     });

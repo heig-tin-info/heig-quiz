@@ -22,8 +22,10 @@ container ──push──▶ portal 10.77.0.254:9418/git/<session>  (auth = sou
 | `relay.ts`        | background job, retry on error, never forced, `rejected` refs, token out of argv and off the disk |
 | `forge.ts`        | the `Forge` interface, the `forgejo` forge and the unconfigured `github` one |
 | `quizForge.ts`    | the `quiz` forge: tokens Quiz grants per repository, cached in memory (ADR-078) |
-| `collect.ts`      | the workspace collected at the deadline: fresh shadow snapshot, kept paths from the base, the tree carried to a `refs/quiz/collect/` ref Quiz names (ADR-130) |
-| `fixtures.ts`     | shared test repositories (not a `*.test.ts`, therefore type-checked) |
+| `collect.ts`      | the workspace collected at the deadline: read through the confined reader (`../engine/reader.ts`, never `shadow.git`), kept paths from the base, the tree carried to a `refs/quiz/collect/` ref Quiz names (ADR-130) |
+| `workTree.ts`     | the reader's listing and archive turned into blobs of the collection's own repository (`git fast-import`, bytes only) |
+| `workArchive.ts`  | the reader's GNU tar judged as data: regular files and links only, a link never followed, listed relative paths, size-capped |
+| `fixtures.ts`     | shared test repositories (not a `*.test.ts`, therefore type-checked); `../engine/readerFixtures.ts` runs the reader's commands on the host for the unit suite |
 
 The `push_events` table: [`src/db/schema.ts`](../db/schema.ts).
 

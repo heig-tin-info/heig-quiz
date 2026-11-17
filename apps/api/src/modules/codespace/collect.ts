@@ -13,7 +13,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import { CodespaceCollectionRequest, CodespaceCollectionResult, collectionsPath, type ProjectRepoCollection } from "@quiz/contracts";
-import type { CollectionFailureReason, CollectionOutcomeName } from "@quiz/domain";
+import { storedCollection, type CollectionFailureReason, type CollectionOutcomeName } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
@@ -121,8 +121,8 @@ export async function lastCollections(db: Db, repoIds: readonly string[]): Promi
   for (const row of rows) {
     if (out.has(row.repoId)) continue;
     out.set(row.repoId, {
-      outcome: row.outcome,
-      reason: row.reason,
+      // A value the current lists no longer hold (an old row) reads as `failed`.
+      ...storedCollection(row.outcome, row.reason),
       deadlineAt: row.deadlineAt.toISOString(),
       at: (row.settledAt ?? row.claimedAt).toISOString(),
       unreadable: row.unreadable,

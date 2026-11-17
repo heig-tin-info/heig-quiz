@@ -67,29 +67,29 @@ function concat(parts: readonly Uint8Array[]): Uint8Array {
   return out;
 }
 
-/** A NUL-terminated field's bytes. */
-function field(block: Uint8Array, start: number, length: number): Uint8Array {
+/** A NUL-terminated field's bytes. Shared with the portal's workspace archive (`apps/codespace/src/git/workArchive.ts`). */
+export function field(block: Uint8Array, start: number, length: number): Uint8Array {
   const slice = block.subarray(start, start + length);
   const end = slice.indexOf(0);
   return end === -1 ? slice : slice.subarray(0, end);
 }
 
 /** An octal field. GNU's base-256 form (sizes over 8 GB) is refused: no archive here is that large. */
-function octal(block: Uint8Array, start: number, length: number): number {
+export function octal(block: Uint8Array, start: number, length: number): number {
   const text = latin1(field(block, start, length)).trim();
   if (text === "") return 0;
   if (!/^[0-7]+$/.test(text)) throw new TarError("a numeric field is not octal");
   return Number.parseInt(text, 8);
 }
 
-function checksumOk(block: Uint8Array): boolean {
+export function checksumOk(block: Uint8Array): boolean {
   const stored = octal(block, 148, 8);
   let sum = 0;
   for (let i = 0; i < BLOCK; i += 1) sum += i >= 148 && i < 156 ? 0x20 : block[i]!;
   return sum === stored;
 }
 
-function decodeName(bytes: Uint8Array): { path: string; utf8: boolean } {
+export function decodeName(bytes: Uint8Array): { path: string; utf8: boolean } {
   try {
     return { path: strict.decode(bytes), utf8: true };
   } catch {

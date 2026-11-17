@@ -1,6 +1,10 @@
 # One shadow repository snapshot of every volume of instance %i, as the
 # host's root (shadow-snapshot.sh says why root). Started by
 # quiz-codespace-shadow@%i.timer.
+#
+# A host-side read of work/, so a raced link can make it read outside the
+# volume (apps/codespace/CLAUDE.md, invariant 15): the sandbox below bounds
+# what such a read can reach. Asserted by src/sessions/shadowUnit.test.ts.
 [Unit]
 Description=quiz — shadow repository snapshot of codespace instance %i
 
@@ -11,3 +15,34 @@ Environment=CODESPACE_VOLUMES=/srv/quiz-codespace/%i/volumes
 ExecStart=/usr/local/lib/quiz-codespace/shadow-snapshot.sh
 Nice=10
 IOSchedulingClass=idle
+# Each volume is bounded by shadow-snapshot.sh (60 s); this bounds the walk,
+# so a run never blocks the timer's next one for long.
+TimeoutStartSec=10min
+
+# Root reads what the student made unreadable to others (a chmod 600):
+# the file-mode capabilities, nothing else.
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH
+NoNewPrivileges=yes
+# The allow-list: /srv is emptied but for this instance's volumes, the only
+# writable path; the rest of the filesystem is read-only.
+ProtectSystem=strict
+TemporaryFileSystem=/srv:ro
+BindPaths=/srv/quiz-codespace/%i/volumes
+ReadWritePaths=/srv/quiz-codespace/%i/volumes
+# The homes (an operator's keys), /tmp, the devices (a raw disk read
+# through a raced link) and the kernel log.
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelLogs=yes
+# A deny-list, unlike /srv above: the engine VM's known secret locations.
+# Whatever is added to the VM later stays readable to a raced root read
+# unless it is added here too.
+InaccessiblePaths=-/etc/quiz-codespace -/etc/quiz-runner -/etc/codespace -/etc/caddy -/var/lib/caddy -/etc/ssh -/etc/shadow -/etc/gshadow -/var/lib/containers -/run/containers -/run/podman -/opt
+# No other process: a portal's /proc/<pid>/environ holds its secrets.
+PrivatePIDs=yes
+ProtectProc=invisible
+ProcSubset=pid
+# Nothing read can be sent anywhere.
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX

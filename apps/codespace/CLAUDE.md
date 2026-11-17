@@ -4,7 +4,8 @@
 rootful Podman containers, one per (student, assignment), with an SEB exam
 mode. A separate deployable on the engine VM, beside `apps/runner`: it
 imports only `packages/*` (`@quiz/domain` for HS256, `@quiz/seb` for the SEB hashes, `@quiz/contracts` for
-the codespace schemas) and talks to the platform through two HS256-signed
+the codespace schemas, `@quiz/core/tar` and `@quiz/core/runner` for the tar header helpers and the
+path rule it shares with the runner) and talks to the platform through two HS256-signed
 HTTP messages (ADR-047). Imported from heig-classroom's `apps/codespace` at
 classroom `a676c8c` (merge task M6-03).
 
@@ -82,8 +83,8 @@ them on exactly two points, and on nothing else:
 
 1. **A persistent work volume.** `-v <workDir>:/work:U`, one directory per
    (student, assignment) under `VOLUMES_ROOT`, kept across container
-   restarts and after the session closes (with its `shadow.git`
-   snapshots). The runner's `/work` is a tmpfs and nothing from the host is
+   restarts and after the session closes (with the root timer's
+   `shadow.git` snapshots). The runner's `/work` is a tmpfs and nothing from the host is
    mounted; here the student's work must survive the container. A staff
    member's **review session** ([ADR-129](../../docs/adr/ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md),
    accepted 2026-11-14) has one directory per (staff member, repository),
@@ -93,7 +94,9 @@ them on exactly two points, and on nothing else:
    `400 reserved_id`), and the sweep never removes a `review-*` directory
    whose assignment row exists with `reviewOf` null; one with no row at all
    is swept (rows go before directories, so a crash leaves exactly those;
-   ADR-129 §10, correction of 2026-11-15).
+   ADR-129 §10, correction of 2026-11-15). The deadline collection's reader
+   (invariant 15) mounts a volume read-only, never `:U`, with `--network
+   none`: narrower than both divergences, not a third one.
 2. **A git channel on an internal bridge.** Containers run on the Podman
    network `codespace` (`--internal --disable-dns`, subnet `10.77.0.0/24`,
    gateway `10.77.0.254`), started with `--dns=none --add-host
@@ -124,7 +127,8 @@ channel divergence for its containers.
 2. **The network is closed by construction** (divergence 2 above): the
    `codespace-anchor` container (label `heig-codespace.role=anchor`) keeps
    the bridge alive; never delete it, never count it as a session. No
-   per-session firewall rule.
+   per-session firewall rule. The collection's readers
+   (`heig-codespace.role=reader`, invariant 15) run `--network none`.
 3. **Hardening from the very first `podman run`**: the exact options are in
    `images/c-dev/run-hardened.sh` and `src/engine/` reuses them as they
    are. A test that needs an option relaxed says so in the docs, not in a
@@ -191,6 +195,16 @@ channel divergence for its containers.
     `Service-Worker-Allowed` from every upstream answer, and serves
     `/vscode-remote-resource` with `CSP: default-src 'none'; sandbox` and
     `nosniff`; the student image ships no notebook support. Gaps and the full fix: [ADR-047, amendment of 2026-10-11](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
+15. **Nothing published comes from a host-side read of `work/`**
+    ([ADR-130, correction of 2026-11-16](../../docs/adr/ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md#correction-2026-11-16-the-collection-reads-through-a-confined-reader),
+    which gives the reason). Whatever leaves the engine VM reads `work/`
+    through the confined reader (`engine/reader.ts`) and treats its output
+    as data (`git/workArchive.ts`); what it publishes is something the
+    student can read already. The host itself only asks whether `work/`
+    exists (`git/hostReads.test.ts`). The portal takes no snapshot:
+    `shadow.git` is the sandboxed root timer's, untrusted, exported with the
+    daily backup (deploy/RUNBOOK.md). The reader is the platform's, not a
+    session: not in the quota, removed on every exit path, swept at startup.
 
 ## Commands
 

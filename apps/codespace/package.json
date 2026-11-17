@@ -17,6 +17,7 @@
     "@fastify/cookie": "^11.0.2",
     "@fastify/http-proxy": "^11.3.0",
     "@quiz/contracts": "workspace:*",
+    "@quiz/core": "workspace:*",
     "@quiz/domain": "workspace:*",
     "@quiz/seb": "workspace:*",
     "better-sqlite3": "^12.4.1",

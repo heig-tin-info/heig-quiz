@@ -5,8 +5,8 @@
  * **Timing matters.** This function runs *before* the `podman run`: after it,
  * the `:U` option has given `work/` to the UID range that `--userns=auto` drew
  * for the container, and the portal (uid `codespace`) can no longer create or
- * modify a file there. This is the same constraint as the one described in
- * `shadow.ts`, seen from the write side.
+ * modify a file there (the same ownership is why the shadow snapshot runs
+ * as the host's root, `deploy/shadow-snapshot.sh`).
  *
  * Consequence carried by `manager.ts`: the session id is **stable for the
  * lifetime of the volume**, because the `origin` remote written here contains

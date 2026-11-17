@@ -52,7 +52,7 @@ const order = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-type Collect = (o: CollectionOrder, lastPushAt: Date | null) => Promise<CodespaceCollectionResult>;
+type Collect = (o: CollectionOrder) => Promise<CodespaceCollectionResult>;
 
 let handle: DbHandle;
 let app: FastifyInstance;
@@ -144,7 +144,7 @@ describe("POST /api/assignments/:id/collections", () => {
     const res = await post(order());
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual(pushed);
-    expect(collect).toHaveBeenCalledWith({ ...order(), assignment: PROJECT }, null);
+    expect(collect).toHaveBeenCalledWith({ ...order(), assignment: PROJECT });
   });
 
   it("runs one collection at a time for a (student, assignment)", async () => {

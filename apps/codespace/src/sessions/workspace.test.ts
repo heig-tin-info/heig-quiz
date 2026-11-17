@@ -121,7 +121,6 @@ function makeManager(extra: Partial<ManagerDeps> = {}) {
     volumesRoot: root,
     graceMs: 60_000,
     gcIntervalMs: 60_000,
-    shadowIntervalMs: 60_000,
     healthTimeoutMs: 1000,
     gitRemoteHost: "portal.internal",
     gitRemotePort: 9418,
@@ -507,7 +506,7 @@ describe("default branch", () => {
 });
 
 /**
- * A staff member's review session (ADR-129 §10): read-only, no snapshot, its
+ * A staff member's review session (ADR-129 §10): read-only, no shadow.git, its
  * directory removed when it closes and swept at startup.
  */
 describe("review session (ADR-129 §10)", () => {
@@ -555,7 +554,7 @@ describe("review session (ADR-129 §10)", () => {
     expect(owners).toEqual([{ assignment: "review-r-1", student: "student", review: REVIEW_OF }]);
   });
 
-  it("closing takes no snapshot, empties the work tree in its container and removes the directory", async () => {
+  it("closing empties the work tree in its container and removes the directory", async () => {
     const review = await reviewAssignment();
     const manager = makeManager();
     const { session } = await manager.start(user, review);
@@ -615,15 +614,6 @@ describe("review session (ADR-129 §10)", () => {
     // The throwaway container is gone, and so is the directory.
     expect(engine.containers.has(wipes[0] as string)).toBe(false);
     expect(await exists(session.volumeDir)).toBe(false);
-  });
-
-  it("snapshots skip review sessions", async () => {
-    const review = await reviewAssignment();
-    const manager = makeManager();
-    const { session } = await manager.start(user, review);
-    await writeFile(join(session.volumeDir, "work", "notes.txt"), "read", "utf8");
-    await manager.snapshotAll();
-    expect(await exists(join(session.volumeDir, "shadow.git"))).toBe(false);
   });
 
   it("the startup sweep removes review directories and rows without a live session, and nothing else", async () => {

@@ -1,11 +1,10 @@
 /**
  * The online workspace collected at the deadline (ADR-130 §3): which paths
- * stay the repository's, how the collected tree is composed, and when the
- * last snapshot is too old to stand for the workspace. The values of Quiz's
- * order are checked by its contract (`@quiz/contracts`), not here.
+ * stay the repository's, how the collected tree is composed, and what stands
+ * for a file the confined reader could not read. The values of Quiz's order
+ * are checked by its contract (`@quiz/contracts`), not here.
  */
-import { WORKFLOWS_DIR, isProtected } from "./protectedFiles.js";
-import { pathWithin } from "./studentIgnore.js";
+import { WORKFLOWS_DIR } from "./protectedFiles.js";
 
 /**
  * The paths a collection takes from the branch's head instead of the
@@ -29,6 +28,19 @@ export interface CollectionTreeEntry {
 /** A gitlink's mode: a submodule's commit, never content. */
 export const GITLINK_MODE = "160000";
 
+/** The proper ancestors of `path` (`a/b/c` → `a`, `a/b`). */
+function ancestors(path: string): string[] {
+  const out: string[] = [];
+  for (let at = path.indexOf("/"); at !== -1; at = path.indexOf("/", at + 1)) out.push(path.slice(0, at));
+  return out;
+}
+
+/** "`path` is one of `roots` or lies under one", linear in the path's depth, not in the roots. */
+function underAny(roots: Iterable<string>): (path: string) => boolean {
+  const set = new Set(roots);
+  return (path) => set.has(path) || ancestors(path).some((a) => set.has(a));
+}
+
 /**
  * The collected tree (ADR-130 §3), as a flat sorted list: the snapshot's
  * entries, except those under a kept path — whatever the snapshot did to
@@ -42,11 +54,32 @@ export function composeCollectionTree(
   base: readonly CollectionTreeEntry[],
   kept: readonly string[],
 ): CollectionTreeEntry[] {
-  const keptBase = base.filter((e) => isProtected(e.path, kept));
-  const fromSnapshot = snapshot.filter(
-    (e) => e.mode !== GITLINK_MODE && !isProtected(e.path, kept) && !keptBase.some((k) => pathWithin(k.path, e.path)),
-  );
+  // Linear in the entries times their depth: a student controls how many there are.
+  const isKept = underAny(kept);
+  const keptBase = base.filter((e) => isKept(e.path));
+  // A kept entry's path, or a directory it needs: no snapshot entry may stand there.
+  const needed = new Set(keptBase.flatMap((k) => [k.path, ...ancestors(k.path)]));
+  const fromSnapshot = snapshot.filter((e) => e.mode !== GITLINK_MODE && !isKept(e.path) && !needed.has(e.path));
   return [...fromSnapshot, ...keptBase].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/**
+ * The workspace's entries with what the confined reader could not read
+ * (ADR-130 §3, correction of 2026-11-16) taken from `reference` — the commit
+ * that would otherwise be graded: the student's last push in time, else the
+ * base. `unreadable` names files and directories; a directory stands for
+ * everything under it. A path the
+ * reference does not hold is left out: the reader never saw its content, so
+ * nothing of it is handed in.
+ */
+export function withUnreadableKept(
+  workspace: readonly CollectionTreeEntry[],
+  reference: readonly CollectionTreeEntry[],
+  unreadable: readonly string[],
+): CollectionTreeEntry[] {
+  if (unreadable.length === 0) return [...workspace];
+  const covered = underAny(unreadable);
+  return [...workspace.filter((e) => !covered(e.path)), ...reference.filter((e) => covered(e.path))];
 }
 
 /** Every entry under a kept path is the base's, none added, none removed (ADR-130 §4.3: what Quiz checks before signing). */
@@ -55,9 +88,10 @@ export function keptEntriesMatch(
   base: readonly CollectionTreeEntry[],
   kept: readonly string[],
 ): boolean {
+  const isKept = underAny(kept);
   const under = (entries: readonly CollectionTreeEntry[]) =>
     entries
-      .filter((e) => isProtected(e.path, kept))
+      .filter((e) => isKept(e.path))
       .map((e) => `${e.mode} ${e.sha} ${e.path}`)
       .sort();
   const [a, b] = [under(collected), under(base)];
@@ -97,7 +131,6 @@ export const COLLECTION_OUTCOMES = [
   "collected",
   "unchanged",
   "no_snapshot",
-  "stale_snapshot",
   "branch_not_handed_out",
   "too_large",
   "too_late",
@@ -108,9 +141,11 @@ export type CollectionOutcomeName = (typeof COLLECTION_OUTCOMES)[number];
 /**
  * Why the portal failed a collection: Quiz or GitHub refused the
  * credential, GitHub or Quiz could not be reached, GitHub refused the push,
- * git failed on the host, or its time budget ran out. The contract's list.
+ * git failed on the host, the confined reader of the workspace failed or
+ * its archive was refused (`read_failed`), or its time budget ran out. The
+ * contract's list.
  */
-export const COLLECTION_PORTAL_FAILURES = ["forge_refused", "forge_unavailable", "push_rejected", "git_error", "timeout"] as const;
+export const COLLECTION_PORTAL_FAILURES = ["forge_refused", "forge_unavailable", "push_rejected", "git_error", "read_failed", "timeout"] as const;
 
 /**
  * Why a collection failed, the portal's reasons and Quiz's: the portal
@@ -121,13 +156,28 @@ export const COLLECTION_PORTAL_FAILURES = ["forge_refused", "forge_unavailable",
 export const COLLECTION_FAILURE_REASONS = [...COLLECTION_PORTAL_FAILURES, "portal_unavailable", "check_refused", "github_failed", "interrupted"] as const;
 export type CollectionFailureReason = (typeof COLLECTION_FAILURE_REASONS)[number];
 
-/** The largest a collection or one student push may carry (the portal's `receive.maxInputSize`), within GitHub's per-file limit. */
-export const WORKSPACE_PUSH_MAX_BYTES = 100 * 1024 * 1024;
+/**
+ * A stored collection's outcome and reason as the current lists know them:
+ * a value no list holds any more (a row written before an outcome was
+ * removed, as `stale_snapshot` on 2026-11-16) reads as `failed` with no
+ * reason, so no reader past the database ever meets it. Null (ordered,
+ * never settled) stays null. Kept on purpose rather than a data migration:
+ * no migration number to race, and a value removed later cannot break the
+ * staff's sheet again.
+ */
+export function storedCollection(
+  outcome: string | null,
+  reason: string | null,
+): { outcome: CollectionOutcomeName | null; reason: CollectionFailureReason | null } {
+  const known = (outcome === null || (COLLECTION_OUTCOMES as readonly string[]).includes(outcome)) &&
+    (reason === null || (COLLECTION_FAILURE_REASONS as readonly string[]).includes(reason));
+  if (!known) return { outcome: "failed", reason: null };
+  return { outcome: outcome as CollectionOutcomeName | null, reason: reason as CollectionFailureReason | null };
+}
 
 /**
- * A snapshot older than the session's last push would hand in less than
- * was pushed (ADR-130 §3): `stale_snapshot`, nothing collected. Both
- * instants are the engine VM's clock.
+ * The largest one student push may carry (the portal's `receive.maxInputSize`),
+ * within GitHub's per-file limit, and the largest the files a collection
+ * reads from the workspace may be in all.
  */
-export const staleSnapshot = (snapshotAt: Date, lastPushAt: Date | null): boolean =>
-  lastPushAt !== null && snapshotAt.getTime() < lastPushAt.getTime();
+export const WORKSPACE_PUSH_MAX_BYTES = 100 * 1024 * 1024;
