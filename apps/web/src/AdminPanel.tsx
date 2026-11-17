@@ -80,10 +80,13 @@ const nameOf = (r: AdminTeacher): [string, string] => [r.givenName ?? "", r.fami
  */
 export function AdminPage() {
   const t = useT();
-  const kioskTab = usePublicConfig().data?.kiosk != null;
+  const config = usePublicConfig();
+  const kioskTab = config.data?.kiosk != null;
   const [tabParam, setTab] = useSearchParam("tab", "people");
+  // While the configuration is on its way, `?tab=kiosk` holds: People would
+  // flash, and fetch its lists, only to be replaced.
   const tab: AdminTab =
-    (ADMIN_TABS as readonly string[]).includes(tabParam) && (tabParam !== "kiosk" || kioskTab)
+    (ADMIN_TABS as readonly string[]).includes(tabParam) && (tabParam !== "kiosk" || kioskTab || config.isPending)
       ? (tabParam as AdminTab)
       : "people";
   return (

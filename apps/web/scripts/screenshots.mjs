@@ -2046,9 +2046,8 @@ const scenes = [
   { name: "admin-loading", role: "admin", path: "/admin?slow=1", settle: 300 },
   // ADR-117 §6: the inactive accounts, Super Powers on, each row with its "Anonymize…".
   { name: "admin-inactive-superpowers", role: "admin", path: "/admin?superpowers=1&lastminutes=0", act: (p) => p.locator("label").filter({ hasText: /^(Inactive|Sans activité)$/ }).click() },
-  // ADR-051 §5: the kiosk stations' own tab, a station waiting for its name first; sorted by a header; none yet.
+  // ADR-051 §5: the kiosk stations' own tab, a station waiting for its name first; none yet.
   { name: "admin-kiosk", role: "admin", path: "/admin?tab=kiosk" },
-  { name: "admin-kiosk-sorted", role: "admin", path: "/admin?tab=kiosk", act: (p) => p.getByRole("button", { name: /^(Station|Poste)$/ }).click() },
   { name: "admin-kiosk-empty", role: "admin", path: "/admin?tab=kiosk&empty=1" },
   // F-ADMIN-09 (ADR-107): the platform's activity, and its states.
   { name: "admin-activity", role: "admin", path: "/admin?tab=activity" },

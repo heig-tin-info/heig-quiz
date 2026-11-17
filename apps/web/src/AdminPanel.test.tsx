@@ -102,14 +102,10 @@ describe("AdminPage — the kiosk stations' tab", () => {
   };
   const tabNames = () => screen.getAllByRole("tab").map((tab) => tab.textContent);
 
-  it("lists the stations in a tab of their own, right after People", async () => {
-    render(true);
+  it("lists the stations in a tab of their own, right after People, and opens it from the address", async () => {
+    render(true, "/admin?tab=kiosk");
     expect(tabNames().slice(0, 2)).toEqual(["People", "Kiosk stations"]);
-    // People: the grants and the accounts, no station.
-    expect(await screen.findByRole("heading", { name: /teachers/i })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /kiosk stations/i })).toBeNull();
-
-    await userEvent.setup().click(screen.getByRole("tab", { name: "Kiosk stations" }));
+    expect(screen.getByRole("tab", { name: "Kiosk stations" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByText(/no station yet/i)).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /teachers/i })).toBeNull();
   });
@@ -119,11 +115,17 @@ describe("AdminPage — the kiosk stations' tab", () => {
     expect(tabNames()).not.toContain("Kiosk stations");
     expect(screen.getByRole("tab", { name: "People" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByRole("heading", { name: /teachers/i })).toBeInTheDocument();
+    // People keeps the grants and the accounts, no station.
+    expect(screen.queryByRole("heading", { name: /kiosk stations/i })).toBeNull();
   });
 
-  it("opens the stations from the address where the platform has them", async () => {
-    render(true, "/admin?tab=kiosk");
-    expect(screen.getByRole("tab", { name: "Kiosk stations" })).toHaveAttribute("aria-selected", "true");
+  it("holds ?tab=kiosk while the configuration loads: People never fetches", async () => {
+    const { calls } = mockFetch({
+      "GET /app/api/config": ok({ devLogin: false, kiosk: { extensionId: null, mock: true } }),
+      "GET /app/api/admin/kiosk-devices": ok([]),
+    });
+    renderWithProviders(<AdminPage />, { route: "/admin?tab=kiosk" });
     expect(await screen.findByText(/no station yet/i)).toBeInTheDocument();
+    expect(calls.map((c) => c.url)).not.toContain("/app/api/admin/teachers");
   });
 });

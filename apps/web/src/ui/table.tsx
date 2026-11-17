@@ -16,11 +16,15 @@ export interface SortState<K extends string> {
 const defaultCompare = (x: string | number, y: string | number) =>
   typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
 
-/** The comparator of a table of people: numbers as numbers, names regardless of case and accents. */
+/**
+ * The comparator of a table of people or of named things: numbers as numbers,
+ * names regardless of case and accents, and the numbers inside a name as
+ * numbers too ("Poste n° 9" before "Poste n° 10").
+ */
 export const caseInsensitiveCompare = (x: string | number, y: string | number) =>
   typeof x === "number" && typeof y === "number"
     ? x - y
-    : String(x).localeCompare(String(y), undefined, { sensitivity: "base" });
+    : String(x).localeCompare(String(y), undefined, { sensitivity: "base", numeric: true });
 
 /**
  * Sort state + sorted rows for a client-side table: clicking the active

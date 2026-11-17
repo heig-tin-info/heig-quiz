@@ -15,6 +15,7 @@ import {
   Badge,
   Button,
   Card,
+  caseInsensitiveCompare,
   cx,
   EmptyState,
   QueryError,
@@ -55,12 +56,6 @@ function rankOf(d: KioskDevice, key: SortKey): string | number | null {
   }
 }
 
-/** Names regardless of case, their numbers as numbers: "Poste n° 9" before "Poste n° 10". */
-const stationCompare = (x: string | number, y: string | number) =>
-  typeof x === "number" && typeof y === "number"
-    ? x - y
-    : String(x).localeCompare(String(y), undefined, { sensitivity: "base", numeric: true });
-
 const ATTESTATION_TONE: Record<KioskAttestation, Tone> = {
   ok: "green",
   unavailable: "amber",
@@ -88,7 +83,7 @@ export function KioskSection() {
   });
   const rows = devices.data ?? [];
   // `null`: the server's order (waiting first, then active, retired, by name) until a click.
-  const { sorted, sort, toggle } = useSortableTable<KioskDevice, SortKey>(rows, rankOf, null, stationCompare);
+  const { sorted, sort, toggle } = useSortableTable<KioskDevice, SortKey>(rows, rankOf, null, caseInsensitiveCompare);
   if (kiosk == null) return null;
 
   const waiting = rows.filter((d) => d.status === "unnamed").length;
