@@ -30,7 +30,9 @@ import {
   CoursePoolsPut,
   EnrollmentPatch,
   IdParam,
+  RosterCandidateQuery,
   RosterEntryParams,
+  RosterLineAdd,
   SelfEnrollQuery,
   StaffAdd,
   StaffParam,
@@ -54,6 +56,7 @@ import {
   accessWhere,
   adminGuard,
   callerOf,
+  ownPortalSession,
   poolAccess,
   staffAccess,
   superPowersGuard,
@@ -65,8 +68,9 @@ import { courseConceptsOf, setCourseConcepts } from "../concept/service.js";
 import { invalid, notFound, readerLang, teacherRoute } from "../http.js";
 import { journalRemovalRefused } from "../journal/service.js";
 import { poolsOfCourse, setCoursePools } from "../pool/service.js";
-import { importRoster, rosterView } from "./roster.js";
+import { addRosterLine, importRoster, rosterView } from "./roster.js";
 import * as service from "./service.js";
+import { findStudentByAddress, findStudents, searchTenant, type SearchScope } from "./studentSearch.js";
 
 const RowsBody = z.object({
   rows: z
@@ -570,6 +574,57 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       // claimed by its holder's own next request (ADR-053, addendum of 2026-10-11).
       await trace(req, "roster.import", "classroom", scope.room.id, { rows: parse.rows.length });
       return reply.code(200).send({ rows: parse.rows.length, ...summary });
+    }),
+  );
+
+  /**
+   * Where the caller may look for a student to add (ADR-133): this roster,
+   * this course, and the caller's own school — or `403
+   * student_search_unavailable` for a caller who may not search, after the
+   * classroom's own 404 (invariant 6).
+   */
+  const searchScope = async (req: FastifyRequest, reply: FastifyReply, scope: { room: { id: string }; course: { id: string } }): Promise<SearchScope | null> => {
+    const tenant = await searchTenant(app.db, config, callerOf(req).id, ownPortalSession(req.auth));
+    if (tenant !== null) return { classroomId: scope.room.id, courseId: scope.course.id, tenant };
+    await reply.code(403).send({ error: "student_search_unavailable", message: "Searching for students is not available to this caller" });
+    return null;
+  };
+
+  /** The people of the caller's school this roster does not hold yet, by name or school address. */
+  app.get(
+    "/app/api/classrooms/:id/roster/candidates",
+    { preHandler: requireTeacher },
+    teacher({ ...onClassroom(), query: RosterCandidateQuery }, async ({ req, reply, query, scope }) => {
+      const where = await searchScope(req, reply, scope);
+      if (where === null) return reply;
+      return findStudents(app.db, where, query.q);
+    }),
+  );
+
+  /**
+   * One student by hand (ADR-133): a search result (`picked`), checked again
+   * against the search's own filter and named from the account, or a typed
+   * address, nameless until its holder's claim. The line stays pending
+   * either way, and the answer is the same: a typed address says nothing of
+   * any account.
+   */
+  app.post(
+    "/app/api/classrooms/:id/roster/line",
+    { preHandler: requireTeacher },
+    teacher({ ...onClassroom(), body: RosterLineAdd }, async ({ req, reply, body, scope }) => {
+      let name = { nom: "", prenom: "" };
+      if (body.picked) {
+        const where = await searchScope(req, reply, scope);
+        if (where === null) return reply;
+        const found = await findStudentByAddress(app.db, where, body.email);
+        if (found === null) {
+          return reply.code(404).send({ error: "student_not_found", message: "No such student to add" });
+        }
+        name = { nom: found.familyName, prenom: found.givenName };
+      }
+      const id = await addRosterLine(app.db, scope.room.id, { email: body.email, ...name, timeBonusPercent: body.timeBonusPercent });
+      await trace(req, "roster.add", "enrollment", id, { email: body.email, picked: body.picked });
+      return reply.code(201).send({ ok: true });
     }),
   );
 

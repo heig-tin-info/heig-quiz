@@ -114,6 +114,12 @@ export const courseStaffCandidatesKey = (id: string) => ["course", id, "staff-ca
 /** `null` while the id is not known yet: the query is disabled, the key still well-formed. */
 export const classroomKey = (id: string | null) => ["classroom", id] as const;
 /**
+ * The prefix of `GET /classrooms/:id/roster/candidates?q=` (ADR-133; the
+ * picker appends the typed text): under the classroom, so a roster change
+ * refreshes it.
+ */
+export const rosterCandidatesKey = (id: string) => ["classroom", id, "roster-candidates"] as const;
+/**
  * The teacher's reads of a classroom's drill (ADR-041 §8): under the
  * classroom, so turning its drill on or off (which invalidates the
  * classroom) refreshes them too. `part` is `activity`, `mastery`, or one

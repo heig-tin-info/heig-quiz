@@ -32,9 +32,12 @@ import {
   datesEndingOn,
   isClassHour,
   localDate,
+  matchesEveryWord,
   offHoursShare,
   SCHOOL_TIME_ZONE,
+  searchWords,
   semesterMonths,
+  STUDENT_SEARCH_LIMIT,
   zoneOffset,
 } from "@quiz/domain";
 import {
@@ -936,6 +939,46 @@ on("POST", "/app/api/classrooms/:id/roster", (m, body) => {
     r.roster.push(...makeStudents(3, 0, nextId("s")));
   }
   return { rows: Math.max(rowsIn.length - 1, 3), inserted: Math.max(rowsIn.length - 1, 3), updated: 0 };
+});
+/**
+ * The student search (ADR-133): the school is every first name with every
+ * last name of the mock, at HEIG-VD, less who the roster holds already.
+ */
+const school = FIRST.flatMap((givenName) =>
+  LAST.map((familyName) => ({ givenName, familyName, email: `${slug(givenName)}.${slug(familyName)}@heig-vd.ch` })),
+);
+on("GET", "/app/api/classrooms/:id/roster/candidates", (m, _body, url) => {
+  const r = roomOr404(m.groups!.id!);
+  const words = searchWords(url.searchParams.get("q") ?? "");
+  return school
+    .filter((p) => !r.roster.some((s) => s.email === p.email))
+    .filter((p) => matchesEveryWord(words, [p.givenName, p.familyName, p.email]))
+    .sort((a, b) => a.familyName.localeCompare(b.familyName) || a.givenName.localeCompare(b.givenName))
+    .slice(0, STUDENT_SEARCH_LIMIT);
+});
+on("POST", "/app/api/classrooms/:id/roster/line", (m, body) => {
+  const r = roomOr404(m.groups!.id!);
+  const email = String(body.email).trim().toLowerCase();
+  const picked = body.picked === true ? school.find((p) => p.email === email) : undefined;
+  if (body.picked === true && !picked) throw new MockPayload(404, { error: "student_not_found", message: "No such student to add" });
+  if (!r.roster.some((s) => s.email === email)) {
+    r.roster.push({
+      id: nextId("s"),
+      nom: picked?.familyName ?? "",
+      prenom: picked?.givenName ?? "",
+      email,
+      status: "pending",
+      conflictFlag: false,
+      staff: false,
+      timeBonusPercent: Number(body.timeBonusPercent ?? 0) || 0,
+      note: null,
+      lastLoginAt: null,
+      avatarUrl: null,
+      userId: null,
+      githubLogin: null,
+    });
+  }
+  return { ok: true };
 });
 on("PATCH", "/app/api/classrooms/:id/roster/:eid", (m, body) => {
   const r = roomOr404(m.groups!.id!);

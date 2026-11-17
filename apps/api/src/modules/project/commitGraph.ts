@@ -22,7 +22,7 @@ import { commitReceiptTimes, reachableCommits } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { botCommits, enrollments, githubAccounts, projectGroupMembers, pushReceipts, users } from "../../db/schema.js";
+import { botCommits, enrollments, githubAccounts, projectGroupMembers, pushReceipts, users, shownNom } from "../../db/schema.js";
 import { installationClient } from "../../github/app.js";
 import { readCommitListing } from "../../github/commitGraph.js";
 import { isRateLimited } from "../../github/metrics.js";
@@ -42,7 +42,7 @@ async function membersOf(db: Db, repo: RepoRow): Promise<Member[]> {
   const rows =
     repo.groupId !== null
       ? await db
-          .select({ family: enrollments.nom, given: enrollments.prenom, ...account })
+          .select({ family: shownNom, given: enrollments.prenom, ...account })
           .from(projectGroupMembers)
           .innerJoin(enrollments, eq(enrollments.id, projectGroupMembers.enrollmentId))
           .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))

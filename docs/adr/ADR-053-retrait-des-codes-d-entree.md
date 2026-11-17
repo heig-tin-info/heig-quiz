@@ -9,7 +9,10 @@ goes in a second one, with the CHECK of decision 3. Amends ADR-014, ADR-025,
 ADR-030, ADR-031 and ADR-032 (the last section lists what changes in each).
 Amended by the [addendum of 2026-10-11](#addendum-2026-10-11-a-line-is-attached-only-when-the-person-acts)
 (audit L4): a roster write attaches nobody; the claim runs at the person's
-sign-in or their next own request.
+sign-in or their next own request. Its point 1 is amended by
+[ADR-133](ADR-133-trouver-un-etudiant-deja-sur-la-plateforme.md) (2026-11-18):
+a line picked from the student search carries the account's name and
+school address, and still attaches nobody.
 
 ## Context
 

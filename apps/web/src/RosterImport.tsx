@@ -1,12 +1,16 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, Upload, UserPlus } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { api, ApiError } from "./api";
+import type { RosterCandidate, RosterLineAdd } from "@quiz/contracts";
+import { STUDENT_SEARCH_MIN_LENGTH } from "@quiz/domain";
+
+import { api, ApiError, refusalCodeOf, wordedRefusal } from "./api";
 import { HelpIcon } from "./help";
 import { useT } from "./i18n";
+import { nameOf, PersonPicker, usePersonPick } from "./PersonPicker";
 import { Button, cx, ErrorText, Field, Sheet, Textarea } from "./ui";
-import { classroomKey } from "./queryKeys";
+import { classroomKey, rosterCandidatesKey } from "./queryKeys";
 
 type Cell = string | number | null;
 
@@ -47,6 +51,109 @@ async function fileToPayload(
   return { csv: await file.text() };
 }
 
+/**
+ * One student by hand (ADR-133): found by name among the people of the
+ * teacher's school, or named by an address. A pick only fills the field,
+ * with the address on its label line, so homonyms are told apart; the line
+ * is added by the button, never by Enter on the first match. A caller who
+ * may not search (`403 student_search_unavailable`: no school address, a
+ * course seat only) types an address.
+ */
+function OneStudent({ classroomId }: { classroomId: string }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const who = usePersonPick<RosterCandidate>();
+  const [bonus, setBonus] = useState("");
+  // Who the last line added was: the field is empty by the time it is said.
+  const [added, setAdded] = useState<string | null>(null);
+  const url = `/app/api/classrooms/${classroomId}/roster/candidates`;
+  // The empty search says whether the caller may search at all.
+  const probe = useQuery({
+    queryKey: [...rosterCandidatesKey(classroomId), ""],
+    queryFn: () => api<RosterCandidate[]>(`${url}?q=`),
+    retry: false,
+  });
+  const searchable = refusalCodeOf(probe.error) !== "student_search_unavailable";
+  const timeBonusPercent = Number(bonus) || 0;
+  const line: RosterLineAdd | null = who.selected
+    ? { email: who.selected.email, picked: true, timeBonusPercent }
+    : who.typedEmail !== null
+      ? { email: who.typedEmail, picked: false, timeBonusPercent }
+      : null;
+
+  const add = useMutation({
+    mutationFn: (body: RosterLineAdd) =>
+      api(`/app/api/classrooms/${classroomId}/roster/line`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      who.reset();
+      setBonus("");
+      // The roster, and the search that no longer offers the person.
+      return qc.invalidateQueries({ queryKey: classroomKey(classroomId) });
+    },
+  });
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-end gap-3">
+        {searchable ? (
+          <PersonPicker<RosterCandidate>
+            candidatesKey={rosterCandidatesKey(classroomId)}
+            candidatesUrl={url}
+            label={t("import.findLabel")}
+            idle={t("import.findIdle")}
+            minLength={STUDENT_SEARCH_MIN_LENGTH}
+            words={{
+              placeholder: t("import.findPlaceholder"),
+              list: t("import.findList"),
+              failed: t("import.findFailed"),
+              none: (q) => t("import.findNone", { q }),
+            }}
+            disabled={add.isPending}
+            {...who.picker}
+          />
+        ) : (
+          <Field
+            label={t("roster.col.email")}
+            type="email"
+            fullWidth
+            className="min-w-0 flex-1 basis-56"
+            value={who.picker.text}
+            onChange={(e) => who.picker.onText(e.target.value)}
+          />
+        )}
+        <Field
+          label={t("import.bonus")}
+          type="number"
+          min={0}
+          max={300}
+          className="w-28"
+          value={bonus}
+          onChange={(e) => setBonus(e.target.value)}
+        />
+        <Button
+          variant="secondary"
+          disabled={line === null}
+          loading={add.isPending}
+          onClick={() => {
+            if (line === null) return;
+            setAdded(who.selected ? nameOf(who.selected) : line.email);
+            add.mutate(line);
+          }}
+        >
+          <UserPlus /> {t("import.add")}
+        </Button>
+      </div>
+      {add.isError ? (
+        <ErrorText small>{wordedRefusal(add.error, { student_not_found: "import.findGone" }, t)}</ErrorText>
+      ) : add.isSuccess && added !== null ? (
+        <p className="inline-flex items-center gap-1.5 text-sm text-success">
+          <CheckCircle2 className="size-4" /> {t("import.lineAdded", { name: added })}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** "Add students" sheet: a file drop, one student by hand, or pasted CSV. */
 export function RosterImport({ classroomId, onClose }: { classroomId: string; onClose: () => void }) {
   const t = useT();
@@ -54,7 +161,6 @@ export function RosterImport({ classroomId, onClose }: { classroomId: string; on
   const [csv, setCsv] = useState("");
   const [dragging, setDragging] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [manual, setManual] = useState({ nom: "", prenom: "", email: "", bonus: "" });
   const fileInput = useRef<HTMLInputElement>(null);
 
   const importRoster = useMutation({
@@ -180,60 +286,7 @@ export function RosterImport({ classroomId, onClose }: { classroomId: string; on
 
         <section className="space-y-3">
           <p className={eyebrow}>{t("import.oneStudent")}</p>
-          <form
-            className="grid grid-cols-2 gap-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              // The header row names the columns the parser looks for, extra
-              // time included: one code path for a pasted sheet and for the
-              // single student typed here.
-              importRoster.mutate({
-                rows: [
-                  ["lastname", "firstname", "email", "bonus"],
-                  [manual.nom, manual.prenom, manual.email, manual.bonus || "0"],
-                ],
-              });
-              setManual({ nom: "", prenom: "", email: "", bonus: "" });
-            }}
-          >
-            <Field
-              label={t("roster.col.lastName")}
-              required
-              fullWidth
-              value={manual.nom}
-              onChange={(e) => setManual({ ...manual, nom: e.target.value })}
-            />
-            <Field
-              label={t("roster.col.firstName")}
-              required
-              fullWidth
-              value={manual.prenom}
-              onChange={(e) => setManual({ ...manual, prenom: e.target.value })}
-            />
-            <div className="col-span-2 flex items-end gap-3">
-              <Field
-                label={t("roster.col.email")}
-                required
-                type="email"
-                fullWidth
-                placeholder="prenom.nom@heig-vd.ch"
-                value={manual.email}
-                onChange={(e) => setManual({ ...manual, email: e.target.value })}
-              />
-              <Field
-                label={t("import.bonus")}
-                type="number"
-                min={0}
-                max={300}
-                className="w-28"
-                value={manual.bonus}
-                onChange={(e) => setManual({ ...manual, bonus: e.target.value })}
-              />
-              <Button type="submit" variant="secondary" loading={importRoster.isPending}>
-                <UserPlus /> {t("import.add")}
-              </Button>
-            </div>
-          </form>
+          <OneStudent classroomId={classroomId} />
         </section>
 
         <section className="space-y-3">

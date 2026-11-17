@@ -75,6 +75,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-111 — Login admission: an account is created only for a member of a listed institution or an invited person](ADR-111-admission-a-la-connexion.md)
 - [ADR-112 — A person's data export: their own student views gathered in one file, plus three account rows](ADR-112-export-des-donnees-personnelles.md)
 - [ADR-117 — Account pseudonymization and the inactivity lifecycle](ADR-117-pseudonymisation-d-un-compte-sur-demande.md)
+- [ADR-133 — Finding a student already on the platform: a search within the teacher's school](ADR-133-trouver-un-etudiant-deja-sur-la-plateforme.md)
 
 ### Question authoring and types
 

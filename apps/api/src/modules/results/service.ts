@@ -80,6 +80,7 @@ import {
   gradings,
   isStaffAttempt,
   practiceAttempt,
+  shownNom,
 } from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
 import {
@@ -199,13 +200,13 @@ async function computeResults(
     .select({
       seatId: enrollments.id,
       userId: enrollments.userId,
-      nom: enrollments.nom,
+      nom: shownNom,
       prenom: enrollments.prenom,
       email: enrollments.email,
     })
     .from(enrollments)
     .where(and(seatsOf(evaluation), eq(enrollments.staff, false)))
-    .orderBy(asc(enrollments.nom), asc(enrollments.prenom));
+    .orderBy(asc(shownNom), asc(enrollments.prenom));
   /*
    * The teacher's own test walk, appended after the class and flagged
    * (ADR-018). It is a ROW because the teacher wants to read the grade their

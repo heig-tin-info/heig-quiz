@@ -17,7 +17,7 @@ import { api, ApiError, apiErrorMessage, isNotFound, refusedWith } from "../api"
 import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useErrorToast } from "../notify";
-import { TeacherPicker, useTeacherPick } from "../TeacherPicker";
+import { PersonPicker, useTeacherPick } from "../PersonPicker";
 import {
   Button,
   Card,
@@ -52,7 +52,7 @@ import { poolCandidatesKey, poolKey, poolMembersKey, poolsKey } from "../queryKe
  * "Invite" is the one button that sends anything, and it stays `secondary`:
  * a settings tab has no primary.
  *
- * The invitee is picked by name among the colleagues (`TeacherPicker`). An
+ * The invitee is picked by name among the colleagues (`PersonPicker`). An
  * address the picker does not list may still be typed and sent as such: the
  * API resolves it over every address of an account (GH-11), which is how an
  * alias reaches a teacher the list shows under another spelling.
@@ -330,11 +330,11 @@ export function PoolSharing({ pool }: { pool: Pool }) {
               if (canInvite) invite.mutate();
             }}
           >
-            <TeacherPicker
+            <PersonPicker
               candidatesKey={poolCandidatesKey(pool.id)}
               candidatesUrl={`/app/api/pools/${pool.id}/candidates`}
               label={t("share.teacher")}
-              everyoneSeated={t("share.everyoneSeated")}
+              idle={t("share.everyoneSeated")}
               disabled={invite.isPending}
               {...who.picker}
             />

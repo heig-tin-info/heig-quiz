@@ -18,7 +18,7 @@ import { invalidateHint } from "../realtime/hints";
 import { IconField } from "../pool/IconField";
 import { PoolIconPicker } from "../pool/PoolIconPicker";
 import { DEFAULT_COURSE_ICON } from "../pool/poolIcons";
-import { TeacherPicker, useTeacherPick } from "../TeacherPicker";
+import { PersonPicker, useTeacherPick } from "../PersonPicker";
 import { Field, FieldLabel, FormDialog, FormError, Segmented } from "../ui";
 import { courseStaffCandidatesKey, coursesKey } from "../queryKeys";
 import { CourseIcon } from "./CourseIcon";
@@ -229,7 +229,7 @@ const STAFF_REFUSALS = {
 
 /**
  * A colleague picked by name among the teachers not on the staff yet
- * (`TeacherPicker`), and their role (ADR-068): an assistant unless the
+ * (`PersonPicker`), and their role (ADR-068): an assistant unless the
  * owner says otherwise — the weaker role is the one a slip of the hand can
  * give. An address nobody was picked from may still be typed and sent as
  * such, as in a pool's share sheet: the API resolves it over every address
@@ -268,11 +268,11 @@ export function AddStaffModal({ course, onClose }: { course: CourseSummary; onCl
       dense
       error={<FormError error={add.error} describe={(error) => wordedRefusal(error, STAFF_REFUSALS, t)} />}
     >
-      <TeacherPicker
+      <PersonPicker
         candidatesKey={courseStaffCandidatesKey(course.id)}
         candidatesUrl={`/app/api/courses/${course.id}/staff/candidates`}
         label={t("courses.staffPerson")}
-        everyoneSeated={t("courses.staffEveryoneSeated")}
+        idle={t("courses.staffEveryoneSeated")}
         disabled={add.isPending}
         autoFocus
         {...who.picker}

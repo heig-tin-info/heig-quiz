@@ -28,7 +28,7 @@ import {
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attemptEvents, attempts, classrooms, enrollments, kioskDevices, officialAttempt, sessions } from "../../db/schema.js";
+import { answers, attemptEvents, attempts, classrooms, enrollments, kioskDevices, officialAttempt, sessions, shownNom } from "../../db/schema.js";
 import { isCourseOwner, type Caller } from "../guards.js";
 import {
   gradeDefaults,
@@ -75,7 +75,7 @@ export async function dashboardView(
     .select({
       seatId: enrollments.id,
       userId: enrollments.userId,
-      nom: enrollments.nom,
+      nom: shownNom,
       prenom: enrollments.prenom,
       email: enrollments.email,
       timeBonusPercent: enrollments.timeBonusPercent,
@@ -84,7 +84,7 @@ export async function dashboardView(
     .where(
       and(seatsOf(evaluation), eq(enrollments.staff, false)),
     )
-    .orderBy(asc(enrollments.nom), asc(enrollments.prenom));
+    .orderBy(asc(shownNom), asc(enrollments.prenom));
   /*
    * The teacher's own test walk, under the class and never among it
    * (ADR-018). It is here because a teacher who is testing wants to watch

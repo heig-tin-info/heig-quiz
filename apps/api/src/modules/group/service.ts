@@ -65,7 +65,7 @@ import { copyFollows, defaultGroupName, defaultSetName, duplicateSetName, formRa
 import { audit, type AuditAction, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
-import { classrooms, courses, enrollments, groupSets, projects, studentGroupMembers, studentGroups } from "../../db/schema.js";
+import { classrooms, courses, enrollments, groupSets, projects, studentGroupMembers, studentGroups, shownNom } from "../../db/schema.js";
 import { openSet, studentVisibleSet } from "../guards.js";
 import { notFoundError } from "../http.js";
 import { ConfirmationNeeded, copiesBefore, followingCopies, projectsChanged, RepoGroupTouched, setFrozen, stepCopies } from "../project/service.js";
@@ -194,11 +194,11 @@ export async function groupSetDetail(db: Db, setId: string, now: Date): Promise<
   const { set } = row;
   const groups = await db.select().from(studentGroups).where(eq(studentGroups.setId, set.id)).orderBy(asc(studentGroups.position));
   const students = await db
-    .select({ enrollmentId: enrollments.id, nom: enrollments.nom, prenom: enrollments.prenom, userId: enrollments.userId, groupId: studentGroupMembers.groupId })
+    .select({ enrollmentId: enrollments.id, nom: shownNom, prenom: enrollments.prenom, userId: enrollments.userId, groupId: studentGroupMembers.groupId })
     .from(enrollments)
     .leftJoin(studentGroupMembers, and(eq(studentGroupMembers.enrollmentId, enrollments.id), eq(studentGroupMembers.setId, set.id)))
     .where(isStudentOf(set.classroomId))
-    .orderBy(asc(enrollments.nom), asc(enrollments.prenom), asc(enrollments.id));
+    .orderBy(asc(shownNom), asc(enrollments.prenom), asc(enrollments.id));
   const view = (s: (typeof students)[number]) => ({ enrollmentId: s.enrollmentId, nom: s.nom, prenom: s.prenom, claimed: s.userId !== null });
   return {
     set: {
@@ -633,10 +633,10 @@ export async function studentGroupSets(db: Db, classroomId: string, reader: Stud
     .where(inArray(studentGroups.setId, ids))
     .orderBy(asc(studentGroups.position));
   const students = await db
-    .select({ id: enrollments.id, nom: enrollments.nom, prenom: enrollments.prenom })
+    .select({ id: enrollments.id, nom: shownNom, prenom: enrollments.prenom })
     .from(enrollments)
     .where(isStudentOf(classroomId))
-    .orderBy(asc(enrollments.nom), asc(enrollments.prenom), asc(enrollments.id));
+    .orderBy(asc(shownNom), asc(enrollments.prenom), asc(enrollments.id));
   const places = await db
     .select({ setId: studentGroupMembers.setId, groupId: studentGroupMembers.groupId, enrollmentId: studentGroupMembers.enrollmentId })
     .from(studentGroupMembers)

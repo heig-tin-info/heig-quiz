@@ -710,6 +710,12 @@ export type AuditAction =
   | "results.release"
   | "results.rerelease"
   | "results.unrelease"
+  /**
+   * One line added by hand (ADR-133), subject the line: `payload.email`, and
+   * `picked` — the address of a search result, named from its account, or
+   * an address typed.
+   */
+  | "roster.add"
   | "roster.claim"
   | "roster.claim_conflict"
   | "roster.import"

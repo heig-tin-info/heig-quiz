@@ -21,6 +21,7 @@ import { POOL_COLORS } from "@quiz/contracts";
 import { CONDITION_KINDS, COURSE_ROLES } from "@quiz/domain";
 
 import { users } from "./auth.js";
+import { qualified } from "./qualified.js";
 
 /**
  * A course (`Programmation C`, code `PRG1`): the unit a question pool and a
@@ -170,6 +171,17 @@ export const enrollments = pgTable(
     index("enrollments_email_idx").on(sql`lower(${t.email})`),
   ],
 );
+
+/**
+ * A roster line's `nom` as the staff's readers show and sort it (ADR-133
+ * §5): the line's address while it has no name at all — an address-only
+ * line, until its holder's claim fills the name in — else its `nom`. With
+ * the `prenom`, empty then, every "prenom nom" a reader builds is the
+ * address. `displayName` (`@quiz/domain`) in SQL, for the readers that hand
+ * `nom` and `prenom` on separately; the roster's own view reads the raw
+ * columns, being where a name is typed, and names a line by `displayName`.
+ */
+export const shownNom = sql<string>`(CASE WHEN btrim(${qualified(enrollments.nom)}) = '' AND btrim(${qualified(enrollments.prenom)}) = '' THEN ${qualified(enrollments.email)} ELSE ${qualified(enrollments.nom)} END)`;
 
 /**
  * One user's own display state for one course (#155, ADR-032). Today it

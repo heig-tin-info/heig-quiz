@@ -15,7 +15,10 @@
  * expensive to diagnose after the fact and this snapshot is the cheap
  * insurance. In exchange the data stays confined here: `user_idp_claims`
  * is never joined into a user-facing view, never displayed, never exposed
- * by the API.
+ * by the API — save two derived reads: whether an address the account
+ * already sees is institutional (`notifications/address.ts`), and the school
+ * address a teacher of the same school finds a student by (ADR-133,
+ * `org/studentSearch.ts`). Neither shows a raw claim.
  */
 import { sql } from "drizzle-orm";
 
@@ -72,7 +75,7 @@ export function affiliationsOf(claims: Record<string, unknown>): string[] {
  * own mailbox), as opposed to those the person chose: what login adoption
  * accepts without asking the address to be unique (ADR-061).
  */
-const INSTITUTIONAL_MAIL_CLAIMS = [
+export const INSTITUTIONAL_MAIL_CLAIMS = [
   "swissEduIDLinkedAffiliationMail",
   "swissEduPersonOrganizationalMail",
 ] as const;
