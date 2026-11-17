@@ -88,15 +88,18 @@ tableau de bord, où vous êtes une fois le quiz lancé. Il ne vaut que pour
 cet onglet : vous pouvez garder le tableau de bord dans l'un et passer le
 quiz dans l'autre.
 
-Il demande une place dans la classe : **S'inscrire comme étudiant**, sur la
-page de la classe, vous en donne une. Une évaluation encore en préparation
+Il demande une place dans la classe : **S'inscrire à la classe**, sur la
+page de la classe ou sur l'écran de l'évaluation en vue étudiant, vous en
+donne une. Une évaluation encore en préparation
 n'a pas de salle d'attente ouverte : démarrez-la, ou ouvrez-la, avant de la
 parcourir.
 
 Votre tentative de test est une vraie tentative : elle apparaît sur le
-tableau de bord, dans la correction et dans les résultats, chaque fois avec
-un badge *équipe*. Elle ne compte nulle part — ni dans la moyenne de la
-classe, ni dans le taux de réussite d'une question, ni dans le fichier
+tableau de bord et dans la correction, chaque fois avec un badge *équipe*,
+et dans les résultats quand vous affichez les tentatives de l'équipe. Vous
+en lisez la correction, la note et les cartes d'entraînement comme un
+étudiant. Elle ne compte dans aucun chiffre de la classe — ni dans la
+moyenne, ni dans le taux de réussite d'une question, ni dans le fichier
 exporté.
 
 Comme une évaluation ne se passe qu'une fois, la refaire signifie jeter la

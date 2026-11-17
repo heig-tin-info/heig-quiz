@@ -444,7 +444,11 @@ describe("leaving the roster, or an account, revokes the recorded accounts first
     // Ben's line holds the teacher's address (a teacher placed under their own address).
     const [me] = await server.app.db.select().from(users).where(eq(users.id, teacher.id));
     await server.app.db.update(enrollments).set({ email: me!.email }).where(eq(enrollments.id, room.lines.get(ben!.id)!));
-    const res = await staff("POST", `/app/api/classrooms/${room.id}/self-enroll`);
+    // Unconfirmed, the conversion is refused and takes nothing away (ADR-018).
+    const asked = await staff("POST", `/app/api/classrooms/${room.id}/self-enroll`);
+    expect(rosterRefusal(asked)).toEqual([409, "student_line"]);
+    expect(seats(fullName)[ben!.login]).toBe("push");
+    const res = await staff("POST", `/app/api/classrooms/${room.id}/self-enroll?convert=1`);
     expect(res.statusCode, res.body).toBe(201);
     expect(seats(fullName)[ben!.login]).toBeUndefined();
     // The staff seat leaves the copy with the next write, which reaches no student of the repository.
@@ -573,7 +577,7 @@ describe("the races of an invitation and a departure (R1–R3)", () => {
     const [me] = await server.app.db.select().from(users).where(eq(users.id, teacher.id));
     await recordedMeanwhile(async (room, line) => {
       await server.app.db.update(enrollments).set({ email: me!.email }).where(eq(enrollments.id, line));
-      return staff("POST", `/app/api/classrooms/${room.id}/self-enroll`);
+      return staff("POST", `/app/api/classrooms/${room.id}/self-enroll?convert=1`);
     });
   });
 

@@ -43,6 +43,7 @@ import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
 import { studentClassroomsKey } from "../queryKeys";
 import { routeToPath, type Navigate, type Route } from "../router";
+import { useStudentView } from "../studentView";
 import {
   Badge,
   Card,
@@ -559,6 +560,8 @@ export function ClassroomList({ navigate }: { navigate: (r: Route) => void }) {
     queryKey: studentClassroomsKey,
     queryFn: () => api("/app/api/student/classrooms"),
   });
+  // ADR-018: a teacher in the student view lists the classrooms where they took a seat.
+  const teacherView = useStudentView();
   return (
     <>
       {rooms.isLoading ? (
@@ -568,7 +571,7 @@ export function ClassroomList({ navigate }: { navigate: (r: Route) => void }) {
       ) : (rooms.data ?? []).length === 0 ? (
         <Card>
           <EmptyState icon={GraduationCap} title={t("shome.rooms.empty.title")}>
-            {t("shome.rooms.empty.body")}
+            {t(teacherView ? "shome.rooms.empty.bodyStaff" : "shome.rooms.empty.body")}
           </EmptyState>
         </Card>
       ) : (

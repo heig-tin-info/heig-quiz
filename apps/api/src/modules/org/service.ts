@@ -618,7 +618,9 @@ export async function revokeAccountAccess(db: Db, userId: string, ctx: Revocatio
 /**
  * A teacher takes a (staff) seat in their own classroom, claimed at once and
  * flagged `staff` so it stays out of the headcount. A student line holding
- * their e-mail becomes that seat, behind `afterRevocation`. `409
+ * their e-mail becomes that seat, behind `afterRevocation`, only once the
+ * teacher confirmed it (`convert`; otherwise `409 student_line`, ADR-018): it
+ * stops counting as a student's and loses its GitHub access. `409
  * already_enrolled` when they hold another line (UNIQUE(classroom_id,
  * user_id)), checked before anything is revoked.
  */
@@ -627,6 +629,7 @@ export async function selfEnroll(
   classroomId: string,
   me: { id: string; email: string; givenName: string; familyName: string },
   ctx: Revocation,
+  { convert }: { convert: boolean } = { convert: false },
 ): Promise<void> {
   const email = me.email.trim().toLowerCase();
   const lines = await db
@@ -653,6 +656,7 @@ export async function selfEnroll(
       });
   };
   const taken = lines.find((l) => !l.staff);
+  if (taken && !convert) throw rosterRefusal("student_line");
   try {
     await (taken ? afterRevocation(db, taken.id, ctx, "roster.self_enroll", seat) : seat(db));
   } catch (err) {

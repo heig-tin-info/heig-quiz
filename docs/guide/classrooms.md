@@ -103,6 +103,8 @@ The menu at the end of a row offers **Edit**, **Revoke claim** and **Remove from
 
 **Join as student**, the button beside the primary action, gives you a seat in your own classroom, flagged *staff*, which stays out of the headcount and the results. With it, **Switch to student view** in the account menu shows you this classroom the way a student gets it, and you can take an evaluation from start to finish as one. It is the right way to check an evaluation before opening it to the class.
 
+In the student view, a classroom where you hold no seat offers **Join as student** too, as the page's main button, and so does an evaluation's screen, in one click. The classroom's page then shows a *staff* badge. You read your feedback, your grades, your notifications and your practice cards as a student would; your attempts count in no class figure. If the roster already holds a student line with your address, Quiz asks before turning it into your staff seat: that line stops counting as a student's and loses its GitHub access.
+
 ## Settings: rename, drill, GitHub, archive, delete
 
 The period is changed where it is written: click it beside the name, or **Set period** when there is none; the dialog sets its months and its label. Everything else of the classroom's life is in its **Settings** tab.

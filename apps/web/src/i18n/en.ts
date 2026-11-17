@@ -552,6 +552,9 @@ export const en = {
   "roster.revokeFailed": "Could not revoke this claim.",
   "roster.updateFailed": "Update failed",
   "roster.join": "Join as student",
+  "roster.convert.title": "Your address is on the roster",
+  "roster.convert.body": "This student line becomes your teacher seat. It leaves the headcount and loses its GitHub access.",
+  "roster.convert.confirm": "Use this line",
 
   "import.title": "Add students",
   "import.subtitle": "Last name, first name and e-mail. Each student is attached at their first sign-in.",
@@ -3640,6 +3643,7 @@ export const en = {
   "sproj.criteria.locked": "Graded at a checkpoint and locked: the final grading leaves it as it is.",
   "shome.empty.title": "Nothing to do right now",
   "shome.empty.body": "An evaluation appears here as soon as it is open for your classroom.",
+  "shome.empty.bodyStaff": "The activities of the classrooms where you took a seat appear here.",
   "shome.retake": "Try again",
   "shome.retakeLast.title": "Your last attempt counts",
   "shome.retakeLast.body": "The result kept will be this new attempt's, even if it is lower. Start a new attempt?",
@@ -3704,6 +3708,7 @@ export const en = {
   "shome.day.later": "Later",
   "shome.rooms.empty.title": "No classroom yet",
   "shome.rooms.empty.body": "Your teacher adds you to the classroom. It appears here once you sign in with the address they used.",
+  "shome.rooms.empty.bodyStaff": "Open one of your classrooms and use “Join as student” to see it here.",
   "shome.teachers": "Taught by {names}",
   "shome.bonus": "Extra time: +{n}%",
   // M5-02 (F-ORG-14, F-ORG-15): the student's Courses and classroom page.
@@ -3762,6 +3767,8 @@ export const en = {
   "sgroups.row.choose": "Choose a group",
   "sgroups.row.see": "See the groups",
   "sroom.empty.title": "Nothing to do in this classroom right now",
+  "sroom.noSeat.title": "You hold no seat in this classroom",
+  "sroom.seat.notCounted": "Your attempts here count in no class result.",
 
   "lobby.title": "Lobby",
   "lobby.present": "present",
@@ -4034,6 +4041,7 @@ export const en = {
   // Shown to a teacher only: a student has nothing to do about a seat, and
   // the 404 above is deliberately the same one a stranger gets.
   "player.noSeatHint": "Join the classroom from the teacher view (“Join as student”), then come back here.",
+  "player.noSeat.join": "You hold no seat in this evaluation's classroom.",
   "player.ipBlocked": "This evaluation cannot be taken from this network.",
 
   // WP8: evaluation + dashboard

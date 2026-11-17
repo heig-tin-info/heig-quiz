@@ -218,7 +218,9 @@ export type Scene =
   | "forward"
   | "exercise"
   | "intro"
-  | "partial";
+  | "partial"
+  /** ADR-018: the staff persona holds no seat in the evaluation's classroom until Join as student. */
+  | "noseat";
 const SCENE_KEY = "quiz-mock-scene";
 const sceneParam = params.get("scene");
 if (sceneParam !== null) {

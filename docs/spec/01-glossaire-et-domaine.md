@@ -274,6 +274,7 @@ by the product owner on 2026-10-20.
 | Drill, practice | practice | entraînement | drill, révisions |
 | Targeted revision | targeted revision | révision ciblée | — |
 | Group set | group set | répartition | — |
+| A teacher takes a staff seat in a classroom (ADR-018; 2026-11-17) | join as student | s'inscrire à la classe | rejoindre comme étudiant (*rejoindre* stays a group's) |
 | Journal | journal | journal | carnet |
 | Gradebook | gradebook | carnet de notes | — |
 | Component of the mean (a course's weighted share of the gradebook's mean, ADR-131) | component | composante | groupe, group, catégorie |

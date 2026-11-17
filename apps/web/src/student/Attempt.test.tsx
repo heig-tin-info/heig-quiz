@@ -308,3 +308,92 @@ describe("/take/:id on a running evaluation not yet started", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "home" });
   });
 });
+
+/*
+ * ADR-018 (amended 2026-11-17): a teacher on the course's staff who holds no
+ * seat joins from the no-seat screen in one click, then the entry is asked
+ * again. Which classroom comes from their own staff read of the evaluation;
+ * the entry's 404 stays a stranger's.
+ */
+describe("/take/:id without a seat", () => {
+  const ROOM = "33333333-3333-4333-8333-333333333333";
+  /** The teacher's own staff read of the evaluation, as far as this screen reads it. */
+  const staffRead = (seat: boolean) => ({
+    evaluation: { id: EVAL, classroomId: ROOM },
+    self: { seat, staffSeat: seat, attemptId: null },
+  });
+  const teacher = (session?: "impersonation") => ({
+    "GET /app/api/me": ok(
+      makeMe({
+        role: "teacher",
+        ...(session
+          ? {
+              session: {
+                kind: session,
+                evaluationId: null,
+                projectId: null,
+                readOnly: true,
+                superPowersUntil: null,
+                superPowersAvailable: false,
+              },
+            }
+          : {}),
+      }),
+    ),
+  });
+
+  it("joins the classroom the staff read names, then enters", async () => {
+    let seated = false;
+    const { calls } = render({
+      ...teacher(),
+      [`POST /app/api/evaluations/${EVAL}/attempt`]: () =>
+        seated ? ok({ kind: "lobby", view: lobbyView } satisfies AttemptOrLobby) : fail(404, { error: "not_found" }),
+      [`GET /app/api/evaluations/${EVAL}`]: ok(staffRead(false)),
+      [`POST /app/api/classrooms/${ROOM}/self-enroll`]: () => {
+        seated = true;
+        return ok({ ok: true });
+      },
+    });
+    const join = await screen.findByRole("button", { name: "S'inscrire à la classe" });
+    expect(screen.getByText(/Vos tentatives ici ne comptent dans aucun résultat/)).toBeInTheDocument();
+    await act(async () => join.click());
+    expect(await screen.findByText("Salle d'attente")).toBeInTheDocument();
+    expect(calls.filter((c) => c.url.endsWith("/self-enroll"))).toHaveLength(1);
+  });
+
+  it("offers no Join, and no hint, to a teacher who already holds a seat (a draft, a confined exam)", async () => {
+    const { calls } = render({
+      ...teacher(),
+      [`POST /app/api/evaluations/${EVAL}/attempt`]: fail(404, { error: "not_found" }),
+      [`GET /app/api/evaluations/${EVAL}`]: ok(staffRead(true)),
+    });
+    expect(await screen.findByText("Cette évaluation ne vous est pas accessible.")).toBeInTheDocument();
+    await waitFor(() => expect(calls.some((c) => c.url === `/app/api/evaluations/${EVAL}`)).toBe(true));
+    await act(async () => {});
+    expect(screen.queryByRole("button", { name: "S'inscrire à la classe" })).toBeNull();
+    expect(screen.queryByText(/Inscrivez-vous dans la classe en vue enseignant/)).toBeNull();
+    expect(calls.some((c) => c.url.endsWith("/self-enroll"))).toBe(false);
+  });
+
+  it("offers no Join when the staff read refuses (not on this course's staff)", async () => {
+    render({
+      ...teacher(),
+      [`POST /app/api/evaluations/${EVAL}/attempt`]: fail(404, { error: "not_found" }),
+      [`GET /app/api/evaluations/${EVAL}`]: fail(404, { error: "not_found" }),
+    });
+    expect(await screen.findByText("Cette évaluation ne vous est pas accessible.")).toBeInTheDocument();
+    // Once the staff read has refused, the older hint: join from the teacher view.
+    expect(await screen.findByText(/Inscrivez-vous dans la classe en vue enseignant/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "S'inscrire à la classe" })).toBeNull();
+  });
+
+  it("never asks the staff read in an impersonation session", async () => {
+    const { calls } = render({
+      ...teacher("impersonation"),
+      [`POST /app/api/evaluations/${EVAL}/attempt`]: fail(404, { error: "not_found" }),
+    });
+    expect(await screen.findByText("Cette évaluation ne vous est pas accessible.")).toBeInTheDocument();
+    expect(calls.some((c) => c.url === `/app/api/evaluations/${EVAL}`)).toBe(false);
+    expect(screen.queryByRole("button", { name: "S'inscrire à la classe" })).toBeNull();
+  });
+});

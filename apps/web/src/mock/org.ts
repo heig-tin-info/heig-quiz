@@ -876,9 +876,18 @@ on("POST", "/app/api/classrooms/:id/unarchive", (m) => {
   roomOr404(m.groups!.id!).archivedAt = null;
   return undefined;
 });
-on("POST", "/app/api/classrooms/:id/self-enroll", (m) => {
+on("POST", "/app/api/classrooms/:id/self-enroll", (m, _body, url) => {
   const r = roomOr404(m.groups!.id!);
-  if (me && !r.roster.some((s) => s.email === me!.email)) {
+  // ADR-018: a student line holding the address becomes the staff seat only once confirmed.
+  const line = r.roster.find((s) => s.email === me?.email);
+  if (line && !line.staff) {
+    if (url.searchParams.get("convert") !== "1") {
+      throw new MockPayload(409, { error: "student_line", message: "A student line holds your address" });
+    }
+    line.staff = true;
+    line.status = "claimed";
+  }
+  if (me && !line) {
     r.roster.push({
       id: nextId("s"),
       nom: me.familyName,

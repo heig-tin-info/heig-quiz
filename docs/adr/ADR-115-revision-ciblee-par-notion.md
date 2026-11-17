@@ -11,6 +11,8 @@ question 60, option (b), product owner: `time_ms` feeds a separate series of the
 statistics, [ADR-039](ADR-039-temps-passe-par-question.md) §6b (§6, §9).*
 *Amended 2026-10-27 by [ADR-041](ADR-041-entrainement-espace.md) §6 (product owner): the
 daily session's empty day, with no new card held back, leads here (§13).*
+*Amended 2026-11-17 by [ADR-018](ADR-018-vue-etudiant-reelle.md#a-staff-seat-lives-the-student-flow)
+(product owner): a teacher's staff seat revises its own cards (§10).*
 
 Scope: a student's targeted revision of one concept of their course — what a round holds,
 how it is served and answered, what it records, what it feeds, and who sees it.
@@ -203,7 +205,10 @@ writes nothing outside development (ADR-034 §4):
 - `GET /app/api/student/classrooms/:id/revision/concepts` and `GET …/revision/rounds`,
   loaded through `readableClassroom` with the student payload forced (a teacher in the
   student view reads their staff seat: nothing on offer; an impersonation reads the
-  student's);
+  student's); *amended 2026-11-17 ([ADR-018](ADR-018-vue-etudiant-reelle.md#a-staff-seat-lives-the-student-flow),
+  product owner): a teacher in the student view reads their staff seat's own cards and
+  concepts, and revises them like a student; the staff's read of who revised still
+  leaves staff seats out (§9);*
 - `POST /app/api/student/classrooms/:id/revision/rounds` `{ conceptId }` (strict), the
   same loader, then the open-revision check;
 - `POST /app/api/student/revision/rounds/:id/serve/:cardId`,

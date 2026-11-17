@@ -12,6 +12,7 @@ import {
   classroomPayload,
   mayHoldSuperPowers,
   reachOf,
+  studentSeat,
   type ClassroomReadFacts,
 } from "./guards.js";
 
@@ -67,6 +68,23 @@ describe("classroomPayload", () => {
 
   it("refuses every confined session (seb, kiosk)", () => {
     for (const f of every.filter((f) => f.confined)) expect(classroomPayload(f)).toBeNull();
+  });
+});
+
+/** ADR-018, "A staff seat lives the student flow": the seat the student pages name. */
+describe("studentSeat", () => {
+  it.each([
+    ["a student's line", { delegated: false, seat: { staff: false } }, "student"],
+    ["a teacher's staff seat", { delegated: false, seat: { staff: true } }, "staff"],
+    ["the staff without a seat", { delegated: false, seat: null }, "none"],
+  ] as const)("%s", (_name, facts, expected) => {
+    expect(studentSeat(facts)).toBe(expected);
+  });
+
+  it("names an impersonation session's seat `student`, whatever the line", () => {
+    for (const seat of [null, { staff: false }, { staff: true }]) {
+      expect(studentSeat({ delegated: true, seat })).toBe("student");
+    }
   });
 });
 

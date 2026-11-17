@@ -70,6 +70,18 @@ export const StudentHome = StudentActivities.extend({
 export type StudentHome = z.infer<typeof StudentHome>;
 
 /**
+ * The caller's own seat in a classroom, as the student classroom page reads
+ * it (ADR-018, "A staff seat lives the student flow"): `student`, a roster
+ * line of the class; `staff`, a teacher's staff seat (`enrollments.staff`,
+ * their attempts counted in no class figure); `none`, a member of the
+ * course's staff in the student view who holds no seat, offered Join as
+ * student. Derived only from the seat `readableClassroom` loaded: a student
+ * and an impersonation session only ever read `student`.
+ */
+export const StudentSeat = z.enum(["none", "staff", "student"]);
+export type StudentSeat = z.infer<typeof StudentSeat>;
+
+/**
  * `GET /app/api/student/classrooms/:id`: the header, the activities, and
  * which tabs exist. A project is listed in Activities like an evaluation
  * (F-ORG-15): there is no Projects tab.
@@ -88,6 +100,8 @@ export const StudentClassroomPage = z.object({
   hasJournal: z.boolean(),
   /** The Groups tab (F-PROJ-22): a group set of the classroom reaches its students (`StudentGroupSet`). */
   hasGroups: z.boolean(),
+  /** The caller's own seat ({@link StudentSeat}). */
+  seat: StudentSeat,
   serverNow: z.iso.datetime(),
 });
 export type StudentClassroomPage = z.infer<typeof StudentClassroomPage>;

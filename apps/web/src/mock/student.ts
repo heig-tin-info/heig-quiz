@@ -17,6 +17,7 @@ import type {
   ProjectAcceptance,
   ProjectInvitationResent,
   StudentClassroomPage,
+  StudentSeat,
   StudentGrades,
   StudentHome as StudentHomeData,
   StudentProject,
@@ -36,6 +37,7 @@ import {
   now,
   on,
   refuse,
+  role,
   scene,
   STUDENT_PROJECT_INVITED,
 } from "./runtime";
@@ -63,7 +65,9 @@ import { mcqServer } from "@quiz/qt-mcq/server";
 import { pollOfTeacher, teacherPolls } from "./poll";
 import { hasMockJournal } from "./journal";
 import { hasStudentGroups, studentGroupSetCards } from "./groups";
-import { studentRooms } from "./org";
+import { findEvaluation } from "./evaluation";
+import { roomOr404, studentRooms } from "./org";
+import { me } from "./session";
 
 // --- 4. The student: home, lobby and player (WP9) --------------------------
 //
@@ -1283,13 +1287,29 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
 // M5-01: the student's classroom page — the home narrowed to the classroom,
 // under the Courses card as its header. `?journal=1` gives PRG1-2026 (`r1`,
 // `JOURNAL_ROOM` of `mock/journal.ts`) its Journal tab.
+/**
+ * The caller's own seat (ADR-018): a student's line for the student persona;
+ * for the staff in the student view, the roster line holding their address
+ * (staff once Join as student wrote it). Without one the persona walks as if
+ * seated (`staff`), as every student-view scene expects, except under the
+ * `noseat` scene: `none`, until Join as student.
+ */
+function mockSeat(classroomId: string): StudentSeat {
+  if (role === "student") return "student";
+  const line = roomOr404(classroomId).roster.find((s) => s.email === me?.email);
+  if (line === undefined) return scene === "noseat" ? "none" : "staff";
+  return line.staff ? "staff" : "student";
+}
+
 on("GET", "/app/api/student/classrooms/:id", (m): StudentClassroomPage => {
   const id = m.groups!.id!;
   const header = studentRooms().find((r) => r.id === id);
   if (!header) throw new MockError(404, "Not found");
   const home = studentHome();
+  const seat = mockSeat(id);
+  // The staff without a seat read the header and no card, as on the server.
   const inRoom = <T extends { classroomId: string }>(cards: T[]) =>
-    cards.filter((c) => c.classroomId === id);
+    seat === "none" ? [] : cards.filter((c) => c.classroomId === id);
   return {
     classroom: { ...header, archived: false },
     activities: {
@@ -1302,6 +1322,7 @@ on("GET", "/app/api/student/classrooms/:id", (m): StudentClassroomPage => {
     practice: inRoom(home.practice ?? []),
     hasJournal: hasMockJournal(id),
     hasGroups: hasStudentGroups(id),
+    seat,
     serverNow: home.serverNow,
   };
 });
@@ -1331,13 +1352,18 @@ export const studentReadyView = (): ReadyView => ({
   conditions: studentConditions(),
 });
 
-on("POST", "/app/api/evaluations/:id/attempt", () =>
-  scene === "lobby"
+on("POST", "/app/api/evaluations/:id/attempt", (m) => {
+  // ADR-018: the staff without a seat get the stranger's 404 until they join.
+  const classroomId = findEvaluation(m.groups!.id!)?.classroomId;
+  if (scene === "noseat" && role !== "student" && classroomId !== undefined && mockSeat(classroomId) === "none") {
+    throw new MockPayload(404, { error: "not_found", message: "Not found" });
+  }
+  return scene === "lobby"
     ? { kind: "lobby", view: studentLobbyView() }
     : scene === "ready" && !readyStarted
       ? { kind: "ready", view: studentReadyView() }
-      : { kind: "attempt", view: studentAttemptView() },
-);
+      : { kind: "attempt", view: studentAttemptView() };
+});
 
 on("POST", "/app/api/evaluations/:id/attempt/start", () => {
   readyStarted = true;

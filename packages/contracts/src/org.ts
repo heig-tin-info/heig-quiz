@@ -119,15 +119,27 @@ export type EnrollmentPatch = z.infer<typeof EnrollmentPatch>;
  *   - `duplicate_email` (409) — a PATCH to an address another line holds;
  *   - `already_enrolled` (409) — a self-enroll by a user enrolled under
  *     another address;
+ *   - `student_line` (409) — a self-enroll that would turn the student
+ *     line holding the caller's e-mail into their staff seat, and take its
+ *     GitHub access away (ADR-018, ADR-077 §3): nothing was changed; sent
+ *     again with `?convert=1` once the teacher confirmed;
  *   - `revoke_failed` (502) — GitHub refused to take the student's access
  *     to a project repository away before a removal, an unclaim, an e-mail
  *     change or a self-enroll that detaches their account (F-PROJ-17,
  *     ADR-070 §5): nothing was changed, retry. GitHub out of reach (the App
  *     gone, the repository deleted) is no refusal: there is nothing to take.
  */
-export const ROSTER_REFUSALS = ["duplicate_email", "already_enrolled", "revoke_failed"] as const;
+export const ROSTER_REFUSALS = ["duplicate_email", "already_enrolled", "student_line", "revoke_failed"] as const;
 export const RosterErrorCode = z.enum(ROSTER_REFUSALS);
 export type RosterErrorCode = z.infer<typeof RosterErrorCode>;
+
+/**
+ * `POST /classrooms/:id/self-enroll`: `convert=1` confirms that the student
+ * line holding the caller's e-mail becomes their staff seat (`409
+ * student_line` without it).
+ */
+export const SelfEnrollQuery = z.strictObject({ convert: z.literal("1").optional() });
+export type SelfEnrollQuery = z.infer<typeof SelfEnrollQuery>;
 
 /**
  * `PUT /courses/:id/pools` — the whole set of pools the course draws from,

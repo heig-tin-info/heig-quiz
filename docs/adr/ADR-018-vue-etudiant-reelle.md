@@ -10,6 +10,16 @@ This consolidation changes no decision. The [historical record](history/ADR-018-
 retains the original decision numbers and seven UI amendments.
 Amended 2026-10-13: what a list's Participants count includes
 ([Participants in the lists](#participants-in-the-lists)).
+Amended 2026-11-17 (product owner): a staff seat lives the whole student flow
+for everything about the teacher themself and stays out of every class or pool
+aggregate ([A staff seat lives the student flow](#a-staff-seat-lives-the-student-flow));
+this changes where Join as student is offered and where staff attempts are
+shown ([Real student view and return](#real-student-view-and-return),
+[Staff attempts](#staff-attempts)), and amends
+[ADR-041](ADR-041-entrainement-espace.md) (a staff seat's own cards),
+[ADR-115](ADR-115-revision-ciblee-par-notion.md) §10 (a staff seat's own
+revision) and F-ORG-15, F-RES-04, F-GBOOK-01, F-GBOOK-05, F-NOTIF-07,
+F-DRILL-01 and 05 §5.7.
 
 ## Context
 
@@ -32,11 +42,18 @@ dashboard goes to that evaluation's `/take/:id`; an existing student route stays
 other pages go to the student home. Return restores the entry route.
 
 The switch does not enroll anyone. A teacher obtains a staff seat explicitly with
-Join as student on the classroom page. Without a seat, `/take/:id` answers 404
-as it does to a stranger (invariant 6), and its screen explains that path to a
-teacher. A teacher who is not staff of the classroom holds no seat and gets the
+Join as student. Without a seat, `/take/:id` answers 404
+as it does to a stranger (invariant 6). A teacher who is not staff of the classroom holds no seat and gets the
 same 404; this record does not change that. The former evaluation-page button and its
 automatic enrollment confirmation are gone.
+*Amended 2026-11-17 (product owner): Join as student is offered on the
+teacher's classroom page, on the student classroom page, where it is the
+page's one primary action while the caller holds no seat, and on the `/take/:id`
+screen in one click, after which the entry is asked again
+([A staff seat lives the student flow](#a-staff-seat-lives-the-student-flow),
+point 1). The classroom to join comes from the teacher's own staff read of the
+evaluation, never from the 404, whose body stays a stranger's. A teacher off the
+course's staff gets the same 404 and no Join.*
 
 The real attempt uses the student's lobby, player, content, grading and server
 clock, including the normal deadline/410 rules and confined-exam requirements
@@ -48,6 +65,11 @@ palette; returning leaves the attempt open. Students never see that banner.
 ### Staff attempts
 
 Staff attempts are visible and badged in the dashboard, grading and result tables.
+*Amended 2026-11-17 (product owner): shown by default in the live dashboard
+and grading; hidden by default in the results table and the teacher's
+gradebook, behind a "Staff attempts: show / hide" toggle that changes rows
+only ([A staff seat lives the student flow](#a-staff-seat-lives-the-student-flow),
+point 5).*
 A staff seat without an attempt creates no row. One shared staff-attempt query
 identifies them. They count in no completion/success statistic, histogram,
 per-question distribution, released grade snapshot or CSV. The export omits the
@@ -84,6 +106,88 @@ member on their way out of the group, whose access is not revoked yet). It
 never counts a staff seat's rehearsal nor a staff test repository. The
 evaluation's `attemptCount`, which locks the item list (F-EVAL-26), still counts
 every attempt, the staff's included.
+
+### A staff seat lives the student flow
+
+*Accepted 2026-11-17 (product owner).* A teacher in the student view who holds a
+staff seat could start an attempt but not follow the student's flow to its end:
+no grade on the Grades tab, no notification, no drill card. The rule is now one
+sentence. **A staff seat is a student seat for everything about the person
+themself** — the feedback page, `/grades`, the classroom's Grades tab, their own
+notifications, their own drill cards and targeted revision — **and stays out of
+every class or pool aggregate**: statistics, histograms, means, the
+`released_grades` snapshot, the CSV and every export, the teacher gradebook's
+mean, counts, participants, completion, question statistics
+([ADR-038](ADR-038-statistiques-de-question.md)), class mastery
+([ADR-098](ADR-098-maitrise-des-notions-par-l-etudiant.md)), F-STAT-06,
+revision times ([ADR-039](ADR-039-temps-passe-par-question.md) §6b), "who
+revised", and every notification to the staff about students. Presence stays
+the one exception of [Staff attempts](#staff-attempts).
+
+"Staff seat" always means `enrollments.staff` judged on the line's CURRENT flag
+(a self-enroll can convert a student line), never course membership
+(`staffAccess`). `released_grades` stays class-only: a self read computes the
+staff seat's grade live (`gradeShown`), as `/grades` and the feedback page
+already do.
+
+1. **The student view knows its seat.** The student classroom page carries
+   `seat: none | staff | student`, derived only from the seat
+   `readableClassroom` loaded; a student and an impersonation session only
+   ever read `student`. A staff seat is badged in the page's header, with
+   one line saying its attempts count in no class result. With `none`, Join as
+   student is the page's single primary action (F-ORG-15's accent moves to
+   it; no activity button takes it). On the `/take/:id` no-seat screen Join
+   is one click, then the entry is asked again; the classroom comes from a
+   separate staff-loaded read of the evaluation, and the 404 body stays
+   byte-identical to a stranger's (invariant 6). Join is absent from `seb`,
+   `kiosk` and impersonation sessions. When the self-enroll would convert a
+   student roster line carrying the teacher's address (and revoke its GitHub
+   access, [ADR-077](ADR-077-depots-de-test-du-personnel.md)), the server
+   refuses it as `409 student_line` until the teacher confirms
+   (`?convert=1`). The student home's empty states speak to a teacher in the
+   student view too. In French the action is « S'inscrire à la classe »;
+   « Rejoindre » stays a group's word (docs/spec/01 §1.5).
+2. **The classroom's Grades tab** of a staff seat is exactly a student's
+   (chosen over "attempts only"): every column, the derived scale minimum or
+   absence of a released evaluation never taken, the mean if published, the
+   grades computed live. `/grades` follows the same rule. Project cells follow
+   the student rule.
+3. **Notifications to a staff seat**: the student kinds (`results_released`,
+   `results_updated`, deadline reminders, drill and revision reminders) only
+   for evaluations where that seat has an attempt; never
+   `activity_available`; projects unchanged (ADR-077 §2 stands). Default
+   channels unchanged. The teacher kinds (`student_joined`, the
+   `grading_ready` counts, F-NOTIF-08, -09, -11) keep ignoring staff seats.
+4. **Drill**: a staff seat's attempts create drill cards for the teacher
+   themself, at the hand-in and at the release
+   ([ADR-041](ADR-041-entrainement-espace.md) §1), and the student drill and
+   revision reads open to their owner. Every class or pool aggregate excludes
+   staff-seat cards by the current flag: the population rule of the shared
+   mastery loader is split between the class read and the self read, never
+   relaxed for the class, and the revision times of ADR-039 §6b exclude staff
+   seats explicitly. No backfill: a past staff attempt makes cards only at a
+   future hand-in or release.
+5. **The teacher's side**: a "Staff attempts: show / hide" toggle changes ROWS
+   only, never a figure; it is kept in the browser per screen, never on the
+   server, and has no effect on any export. Hidden by default in the results
+   table and the teacher gradebook; shown by default in grading and the live
+   dashboard. In the gradebook a staff row appears only when shown, badged,
+   out of the mean and read-only: a mark on a staff seat is refused with the
+   404 of a missing line, as today.
+6. **"You" in the anonymous grading panel**: the anonymous payload carries a
+   server-computed boolean, true only on the caller's own attempt (no id, no
+   name), absent or false on every other row. Anonymity stays server-side
+   ([ADR-044](ADR-044-grille-de-correction.md)).
+7. **Crossing back**: "Open my copy" on the teacher's evaluation page (its
+   `self.attemptId`) and, on the feedback page in the student view, "See the
+   class results", which leaves the student view for that evaluation's
+   results. Both are secondary chrome (invariant 2).
+
+Rejected: a staff seat that reads only its attempts on the Grades tab (no
+derived minimum, no mean) — the walk this record exists for must show what a
+student reads; a server-side setting for the toggle — a display preference is
+the browser's; adding staff seats to the `released_grades` snapshot — the
+snapshot is the class's.
 
 ### Stateless evaluation preview
 
@@ -147,7 +251,10 @@ allowed on a structurally frozen evaluation.
 ## Implementation references
 
 - `apps/web/src/studentView.ts`, `App.tsx`, `Shell.tsx`: mode, routing and banners.
-- `apps/api/src/modules/evaluation/` and `modules/guards.ts`: staff attempts/reset.
+- `apps/api/src/modules/evaluation/` and `modules/guards.ts`: staff attempts/reset;
+  `studentSeat` in `guards.ts`, the seat the student classroom page names.
+- `apps/api/src/modules/org/service.ts` (`selfEnroll`, `409 student_line`) and
+  `apps/web/src/student/joinClassroom.ts`: Join as student and its confirmation.
 - `apps/api/src/modules/preview/routes.ts` and `service.ts`: access, seeds, budgets,
   grading and runner failures; `packages/contracts/src/preview.ts`: payloads.
 - `apps/web/src/preview/`: player adapter, edit/version detection and correction.

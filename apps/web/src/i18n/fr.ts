@@ -541,7 +541,10 @@ export const fr: Record<keyof Dict, string> = {
   "roster.impersonateFailed": "Impossible de créer le lien.",
   "roster.revokeFailed": "Impossible d'annuler ce rattachement.",
   "roster.updateFailed": "La mise à jour a échoué",
-  "roster.join": "Rejoindre comme étudiant",
+  "roster.join": "S'inscrire à la classe",
+  "roster.convert.title": "Votre adresse est dans la liste des étudiants",
+  "roster.convert.body": "Cette ligne devient votre place enseignante. Elle ne compte plus dans l'effectif et perd ses accès GitHub.",
+  "roster.convert.confirm": "Utiliser cette ligne",
 
   "import.title": "Ajouter des étudiants",
   "import.subtitle": "Nom, prénom et adresse e-mail. Chaque étudiant est rattaché à sa première connexion.",
@@ -3563,7 +3566,7 @@ export const fr: Record<keyof Dict, string> = {
   "sproj.state.deleted": "Dépôt supprimé sur GitHub : demandez à l'équipe enseignante",
   "sproj.state.notAccepted": "Non accepté avant l'échéance",
   "sproj.staffTest": "Votre dépôt de test : il ne compte pas et les étudiants ne le voient pas",
-  "sproj.readOnly.noSeat": "Lecture seule : vous n'avez pas de place dans cette classe. Pour tester ce projet, utilisez « S'inscrire comme étudiant » sur la page de la classe.",
+  "sproj.readOnly.noSeat": "Lecture seule : vous n'avez pas de place dans cette classe. Pour tester ce projet, utilisez « S'inscrire à la classe » sur la page de la classe.",
   "sproj.invitation.pending": "Invitation en attente sur GitHub",
   "sproj.locked": "Lecture seule depuis l'échéance",
   "sproj.collected": "Votre espace de travail a été relevé à l'échéance : les modifications faites ensuite ne sont pas rendues.",
@@ -3613,6 +3616,7 @@ export const fr: Record<keyof Dict, string> = {
   "sproj.criteria.locked": "Évalué à un point de contrôle et verrouillé : la correction finale ne le modifie pas.",
   "shome.empty.title": "Aucune activité pour l'instant",
   "shome.empty.body": "Une évaluation apparaît ici dès qu'elle est ouverte pour votre classe.",
+  "shome.empty.bodyStaff": "Les activités des classes où vous avez pris une place apparaissent ici.",
   "shome.retake": "Recommencer",
   "shome.retakeLast.title": "La dernière tentative compte",
   "shome.retakeLast.body": "Le résultat retenu sera celui de cette nouvelle tentative, même s'il est plus bas. Commencer une nouvelle tentative ?",
@@ -3677,6 +3681,7 @@ export const fr: Record<keyof Dict, string> = {
   "shome.day.later": "Plus tard",
   "shome.rooms.empty.title": "Aucune classe",
   "shome.rooms.empty.body": "L'inscription à une classe est faite par l'équipe enseignante. La classe apparaît ici dès que vous vous connectez avec l'adresse inscrite.",
+  "shome.rooms.empty.bodyStaff": "Ouvrez une de vos classes et utilisez « S'inscrire à la classe » pour la voir ici.",
   "shome.teachers": "Équipe enseignante : {names}",
   "shome.bonus": "Temps supplémentaire : +{n} %",
   // M5-02 (F-ORG-14, F-ORG-15): the student's Courses and classroom page.
@@ -3735,6 +3740,8 @@ export const fr: Record<keyof Dict, string> = {
   "sgroups.row.choose": "Choisir un groupe",
   "sgroups.row.see": "Voir les groupes",
   "sroom.empty.title": "Aucune activité pour l'instant",
+  "sroom.noSeat.title": "Vous n'avez pas de place dans cette classe",
+  "sroom.seat.notCounted": "Vos tentatives ici ne comptent dans aucun résultat de la classe.",
 
   "lobby.title": "Salle d'attente",
   "lobby.present": "présents",
@@ -4004,7 +4011,8 @@ export const fr: Record<keyof Dict, string> = {
   "player.loadFailed": "Cette évaluation n'a pas pu être ouverte.",
   "player.notOpen": "Cette évaluation n'est pas ouverte.",
   "player.notAvailable": "Cette évaluation ne vous est pas accessible.",
-  "player.noSeatHint": "Inscrivez-vous dans la classe en vue enseignant (« S'inscrire comme étudiant »), puis revenez ici.",
+  "player.noSeatHint": "Inscrivez-vous dans la classe en vue enseignant (« S'inscrire à la classe »), puis revenez ici.",
+  "player.noSeat.join": "Vous n'avez pas de place dans la classe de cette évaluation.",
   "player.ipBlocked": "Cette évaluation ne peut pas être passée depuis ce réseau.",
 
   // WP8: evaluation + dashboard

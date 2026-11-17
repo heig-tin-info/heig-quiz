@@ -13,7 +13,7 @@ import type { Db } from "../db/client.js";
 import { courseStaff, enrollments, users } from "../db/schema.js";
 import { testDb } from "../test/db.js";
 import { seedLive, type Seeded } from "../test/live.js";
-import { findReadableClassroom, type Caller } from "./guards.js";
+import { findReadableClassroom, studentSeat, type Caller } from "./guards.js";
 
 let db: Db;
 let mine: Seeded;
@@ -94,6 +94,14 @@ describe("findReadableClassroom", () => {
     expect((await read(keptSeat, other.classroomId))!.payload).toBe("staff");
     expect(await read(keptSeat, other.classroomId, impersonation)).toBeNull();
     expect((await read(keptSeat, mine.classroomId, impersonation))!.payload).toBe("student");
+  });
+
+  it("names the caller's own seat (ADR-018): none for the staff, student for a student and an impersonation", async () => {
+    const seatOf = async (caller: Caller, auth: SessionAuth = PORTAL) => studentSeat((await read(caller, mine.classroomId, auth))!);
+    expect(await seatOf(teacher)).toBe("none");
+    expect(await seatOf(student)).toBe("student");
+    expect(await seatOf(student, impersonation)).toBe("student");
+    expect(await seatOf(keptSeat, impersonation)).toBe("student");
   });
 
   it("refuses a seb session, whoever holds it (ADR-027)", async () => {

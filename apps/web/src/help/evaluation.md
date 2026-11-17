@@ -83,13 +83,15 @@ only, so you can keep the dashboard open in one tab and take the quiz in
 another.
 
 It needs a seat in the classroom: **Join as student**, on the classroom
-page, gives you one. A quiz still in preparation has no waiting room open
+page or on the evaluation's own screen in the student view, gives you one. A quiz still in preparation has no waiting room open
 yet, so start it — or open it — before walking it.
 
-Your test attempt is a real attempt: it shows up on the live dashboard, in
-the grading panel and in the results table, each time with a *staff* badge.
-It counts in nothing — not in the class average, not in the success rate of
-a question, not in the exported file.
+Your test attempt is a real attempt: it shows up on the live dashboard and
+in the grading panel, each time with a *staff* badge, and in the results
+table when you show the staff attempts. You read its feedback, your grade
+and your practice cards as a student would. It counts in no class figure —
+not in the class average, not in the success rate of a question, not in the
+exported file.
 
 Because an evaluation is taken once, walking it again means throwing the
 first walk away: **Reset my test attempt**, under **Actions**. It deletes

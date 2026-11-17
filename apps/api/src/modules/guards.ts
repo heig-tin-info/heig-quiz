@@ -19,7 +19,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, isNull, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { PgSelect } from "drizzle-orm/pg-core";
 
-import { EvaluationSettings, type CourseRole, type PoolRole } from "@quiz/contracts";
+import { EvaluationSettings, type CourseRole, type PoolRole, type StudentSeat } from "@quiz/contracts";
 import {
   type CoursePoolMode,
   courseRoleAllows,
@@ -981,12 +981,29 @@ export function classroomPayload(facts: ClassroomReadFacts): ClassroomPayload | 
   return facts.seat ? "student" : null;
 }
 
+/**
+ * The caller's own seat as the student pages name it (`StudentSeat`,
+ * ADR-018): pure, from the seat {@link findReadableClassroom} loaded. An
+ * impersonation session reads `student` whatever the line, since the
+ * student payload is all it ever gets; otherwise a staff seat is the line's
+ * CURRENT `staff` flag (a self-enroll may have converted a student line),
+ * and `none` is reachable only by the course's staff (anyone else without a
+ * seat has the 404).
+ */
+export function studentSeat(facts: { delegated: boolean; seat: { staff: boolean } | null }): StudentSeat {
+  if (facts.delegated) return "student";
+  if (facts.seat === null) return "none";
+  return facts.seat.staff ? "staff" : "student";
+}
+
 /** A classroom loaded through {@link readableClassroom}. */
 export interface ReadableClassroom {
   room: typeof classrooms.$inferSelect;
   course: typeof courses.$inferSelect;
   /** The caller's own claimed seat in it; null for a staff member without one. `staff`: a staff seat (ADR-018), never a student's. */
   seat: { id: string; timeBonusPercent: number; staff: boolean } | null;
+  /** An impersonation session (ADR-034) loaded it: {@link studentSeat} names its seat `student`. */
+  delegated: boolean;
   payload: ClassroomPayload;
 }
 
@@ -1018,17 +1035,18 @@ export async function findReadableClassroom(
     .where(eq(classrooms.id, classroomId))
     .limit(1);
   if (!row) return null;
+  const isDelegated = delegated(auth);
   const payload = classroomPayload({
     // Fail closed: every kind that is neither the portal nor a delegated
     // session is confined here (`seb`, `kiosk`, and any kind added later),
     // not only the ones `confined()` lists. A null auth is an API token.
-    confined: auth !== null && auth.kind !== "portal" && !delegated(auth),
-    delegated: delegated(auth),
+    confined: auth !== null && auth.kind !== "portal" && !isDelegated,
+    delegated: isDelegated,
     staff: row.staff,
     seat: row.seat !== null,
     studentView,
   });
-  return payload === null ? null : { room: row.room, course: row.course, seat: row.seat, payload };
+  return payload === null ? null : { room: row.room, course: row.course, seat: row.seat, delegated: isDelegated, payload };
 }
 
 /**
