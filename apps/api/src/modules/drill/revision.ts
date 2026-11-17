@@ -82,7 +82,7 @@ export async function revisableConcepts(db: DbOrTx, courseId: string, lang: Conc
     .map(({ id, label, qualifier }) => ({ id, label, qualifier }));
 }
 
-/** Whether the caller may revise in this classroom: its drill on, not archived, their student seat, not opted out. */
+/** Whether the caller may revise in this classroom: its drill on, not archived, their seat (a staff seat included), not opted out. */
 async function revisionOpen(db: Db, classroomId: string, userId: string): Promise<boolean> {
   const [room] = await studentDrillClassrooms(db, userId, classroomId);
   return room !== undefined && room.optedOutAt === null;

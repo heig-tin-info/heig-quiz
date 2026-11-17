@@ -79,6 +79,7 @@ import {
   evaluations,
   gradings,
   isStaffAttempt,
+  isStaffCard,
   officialAttempt,
   questionVersions,
   questions,
@@ -273,10 +274,11 @@ async function dwellsOf(db: Db, ofPool: SQL): Promise<Map<string, number[]>> {
  * `stats_since`. A second pass, or the first pass of a later round, adds
  * nothing: it follows a key already shown in a round, and one value per
  * student keeps `n` a count of students. Read only, by join: the tables are
- * the `drill` module's. No population filter: a round exists only on a
- * student seat, and the rounds before an opt-out or in an archived
- * classroom count (an anonymous aggregate, unlike the drill's classroom
- * reads).
+ * the `drill` module's. One population filter: a teacher's staff seat, which
+ * drills its own cards (ADR-018, amended 2026-11-17), is never a student
+ * (`isStaffCard`, on its current flag); the rounds before an opt-out or in
+ * an archived classroom count (an anonymous aggregate, unlike the drill's
+ * classroom reads).
  */
 async function firstRevisionPassesOf(db: Db, ofPool: SQL) {
   return db
@@ -292,6 +294,7 @@ async function firstRevisionPassesOf(db: Db, ofPool: SQL) {
       and(
         ofPool,
         eq(drillRevisionAnswers.pass, 1),
+        sql`not ${isStaffCard}`,
         // Answered: the answer, its correctness and its time are set together (`drill_revision_answers_answered_ck`).
         isNotNull(drillRevisionAnswers.timeMs),
         // The reset (F-STAT-05) covers this series too, by the instant the pass was served.

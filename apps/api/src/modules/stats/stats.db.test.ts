@@ -561,6 +561,28 @@ describe("the time in targeted revision (ADR-039 §6b)", () => {
     expect(await revisionTimeOf(seed)).toMatchObject({ n: 10, medianS: 50 });
   });
 
+  it("leaves out a teacher's staff seat, which revises its own cards, on its current flag (ADR-018, amended 2026-11-17)", async () => {
+    const seed = await seedLive(db, { students: 9 });
+    await firstTries(seed, tens.slice(0, 9));
+    const seatId = randomUUID();
+    await db.insert(enrollments).values({
+      id: seatId,
+      classroomId: seed.classroomId,
+      nom: "Teacher",
+      prenom: "Seated",
+      email: `staff-${seed.classroomId.slice(0, 6)}@heig.test`,
+      userId: seed.teacherId,
+      claimedAt: new Date(),
+      staff: true,
+    });
+    await firstTries({ ...seed, studentIds: [seed.teacherId] }, [39]);
+    // Nine students: under the threshold, the seat's first try counted nowhere.
+    expect(await revisionTimeOf(seed)).toBeUndefined();
+    // The same rows on a student seat would cross it: the filter is what keeps it out.
+    await db.update(enrollments).set({ staff: false }).where(eq(enrollments.id, seatId));
+    expect(await revisionTimeOf(seed)).toMatchObject({ n: 10 });
+  });
+
   it("counts an opted-out student's earlier rounds and an archived classroom's; a removed card takes its value", async () => {
     const seed = await seedLive(db, { students: 10 });
     await firstTries(seed, tens);

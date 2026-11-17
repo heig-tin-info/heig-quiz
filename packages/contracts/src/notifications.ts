@@ -465,7 +465,8 @@ export type OutboundNotificationKind = Exclude<NotificationKind, AppOnlyKind>;
 /**
  * Who a kind is sent to. `seat`: the claimed STUDENT seats of a classroom
  * (`enrollments.staff = false`), whatever the account's global role — a
- * teacher or an admin on a colleague's roster holds one too. `course`: the
+ * teacher or an admin on a colleague's roster holds one too; a teacher's
+ * staff seat gets {@link STAFF_SEAT_KINDS} of its own attempts. `course`: the
  * staff seats of a course (`course_staff`: `tellStaff`, `staffOf`), never a
  * seatless admin. `pool`: pool owners and members, which only a teacher or an
  * admin reaches. `admin`: the accounts whose role is admin (the platform's
@@ -534,6 +535,22 @@ export const GITHUB_KINDS = [
 const githubKinds: readonly NotificationKind[] = GITHUB_KINDS;
 
 /**
+ * The seat kinds a teacher's staff seat receives (ADR-018, amended
+ * 2026-11-17): those about its own attempt of an evaluation, and only where
+ * it has one. Never `activity_available` nor a project kind (ADR-077 §2).
+ * The settings grid lists them; their senders decide who gets them, and must
+ * stay in sync with this list: `results_released` in `releaseResults`
+ * (apps/api `results/service.ts`), `results_updated` in `results/updated.ts`,
+ * `deadline_approaching` in `notifications/deadline.ts`.
+ */
+export const STAFF_SEAT_KINDS = [
+  "results_released",
+  "deadline_approaching",
+  "results_updated",
+] as const satisfies readonly NotificationKind[];
+const staffSeatKinds: readonly NotificationKind[] = STAFF_SEAT_KINDS;
+
+/**
  * The kinds an account can receive, as the settings grid lists them (ADR-030
  * §f: a toggle for a kind that sends nothing is a lie). A student always sees
  * the seat kinds, before the first seat is claimed too; a teacher or an admin
@@ -543,16 +560,21 @@ const githubKinds: readonly NotificationKind[] = GITHUB_KINDS;
  * controls nothing (#287). The admin kinds go to an admin, and only there;
  * the account kinds ({@link ACCOUNT_KINDS}) are never listed.
  * The GitHub kinds ({@link GITHUB_KINDS}) only on a platform with the App.
+ * A teacher's staff seat adds the kinds it may receive of its own attempts
+ * ({@link STAFF_SEAT_KINDS}), and only those.
  */
 export function notificationKindsFor({
   role,
   studentSeat,
+  staffSeat,
   courseSeat,
   github,
 }: {
   role: UserRole;
   /** A claimed student seat (`enrollments.staff = false`). */
   studentSeat: boolean;
+  /** A claimed staff seat (`enrollments.staff = true`, ADR-018). */
+  staffSeat: boolean;
   /** A seat on a course staff (`course_staff`). */
   courseSeat: boolean;
   /** The platform has Quiz's GitHub App configured (`GITHUB_APP_ID`). */
@@ -566,7 +588,11 @@ export function notificationKindsFor({
     // Never a row of the grid: nothing to choose (ADR-117 §4).
     account: false,
   };
-  return NOTIFICATION_KINDS.filter((kind) => reaches[NOTIFICATION_AUDIENCE[kind]] && (github || !githubKinds.includes(kind)));
+  return NOTIFICATION_KINDS.filter(
+    (kind) =>
+      (reaches[NOTIFICATION_AUDIENCE[kind]] || (staffSeat && staffSeatKinds.includes(kind))) &&
+      (github || !githubKinds.includes(kind)),
+  );
 }
 
 /** The resolved grid: every kind × every channel, defaults filled in. */

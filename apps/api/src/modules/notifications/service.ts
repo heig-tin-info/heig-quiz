@@ -471,7 +471,7 @@ export async function notificationSettings(
   teamsAvailable: boolean,
   githubAvailable: boolean,
 ): Promise<NotificationSettings> {
-  const [matrix, link, [user], [seat], courseSeat, email] = await Promise.all([
+  const [matrix, link, [user], seats, courseSeat, email] = await Promise.all([
     preferenceMatrix(db, userId),
     teamsLinkOf(db, { userId }),
     db
@@ -479,12 +479,9 @@ export async function notificationSettings(
       .from(users)
       .where(eq(users.id, userId))
       .limit(1),
-    // A claimed student seat: what the seat kinds are sent to, whatever the role.
-    db
-      .select({ id: enrollments.id })
-      .from(enrollments)
-      .where(and(eq(enrollments.userId, userId), eq(enrollments.staff, false)))
-      .limit(1),
+    // A claimed seat of each sort: a student seat is what the seat kinds are
+    // sent to, whatever the role; a staff seat, the kinds of its own attempts.
+    db.selectDistinct({ staff: enrollments.staff }).from(enrollments).where(eq(enrollments.userId, userId)),
     holdsCourseSeat(db, userId),
     notificationAddress(db, userId),
   ]);
@@ -494,7 +491,8 @@ export async function notificationSettings(
     matrix,
     kinds: notificationKindsFor({
       role: user?.role ?? "student",
-      studentSeat: seat !== undefined,
+      studentSeat: seats.some((s) => !s.staff),
+      staffSeat: seats.some((s) => s.staff),
       courseSeat,
       github: githubAvailable,
     }),

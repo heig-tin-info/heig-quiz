@@ -83,7 +83,6 @@ function activeCards(db: DbOrTx, where: SQL | undefined) {
       and(
         eq(enrollments.classroomId, drillCards.classroomId),
         eq(enrollments.userId, drillCards.userId),
-        eq(enrollments.staff, false),
         isNull(enrollments.drillOptedOutAt),
       ),
     )

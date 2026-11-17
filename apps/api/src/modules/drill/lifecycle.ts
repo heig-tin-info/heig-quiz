@@ -155,7 +155,8 @@ export async function currentVersions(
  * classroom and evaluation unless the student already has one (ON CONFLICT:
  * the first meeting wins, 06, question 28 (j)). Nothing when the evaluation
  * does not allow drill, when its classroom has the drill off or is archived,
- * and nothing for a student who opted out, a staff seat or a guest.
+ * and nothing for a student who opted out or a guest. A teacher's staff seat
+ * gets its own cards as a student does (ADR-018, amended 2026-11-17).
  */
 async function createCards(
   db: Db,
@@ -182,7 +183,6 @@ async function createCards(
       and(
         eq(enrollments.classroomId, room.id),
         inArray(enrollments.userId, [...userIds]),
-        eq(enrollments.staff, false),
         isNull(enrollments.drillOptedOutAt),
       ),
     );

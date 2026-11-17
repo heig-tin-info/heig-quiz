@@ -28,9 +28,11 @@ import { studentBoard, type PastEntry } from "./studentHome.js";
  * it stands; it carries points and a grade only where the student may read
  * them (`gradeReadable`), the indicative points alone where the feedback
  * page already shows them before the release (`PastEntry.early`), and opens
- * the feedback page only where it has something to show. A staff seat that
- * took no attempt is not listed (ADR-018 §3). A project is listed once
- * released, with the release's snapshot ({@link projectRow}).
+ * the feedback page only where it has something to show. A teacher's staff
+ * seat is listed exactly as a student seat (ADR-018, amended 2026-11-17),
+ * its released grades computed live (`releasedGradesOf`): the class's
+ * snapshot never holds it. A project is listed once released, with the
+ * release's snapshot ({@link projectRow}).
  */
 export async function studentGrades(db: Db, userId: string, now: Date): Promise<StudentGrades> {
   const [evaluations, projects] = await Promise.all([
@@ -63,9 +65,7 @@ interface Placed {
 
 async function evaluationRows(db: Db, userId: string, now: Date, classroomId?: string): Promise<Placed[]> {
   const { past } = await studentBoard(db, userId, now, classroomId);
-  return past
-    .filter((entry) => !(entry.row.staff && entry.row.attempt === null))
-    .map((entry) => ({ classroom: classroomHeader(entry.card.classroomId, entry.row), row: gradeRow(entry, countsOf(entry)) }));
+  return past.map((entry) => ({ classroom: classroomHeader(entry.card.classroomId, entry.row), row: gradeRow(entry, countsOf(entry)) }));
 }
 
 /** A group's header (F-ORG-14), archived classrooms included and marked. */

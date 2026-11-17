@@ -159,6 +159,22 @@ describe("deadline_approaching", () => {
     expect(markers.map((m) => m.sentAt)).toEqual([boundary, boundary]);
   });
 
+  it("reminds a teacher's staff seat only once it has an attempt not handed in (ADR-018, amended 2026-11-17)", async () => {
+    const without = await running();
+    const started = await running();
+    const finished = await running();
+    await attempt(started, started.teacherId, "in_progress");
+    await attempt(finished, finished.teacherId, "submitted");
+    await sendDeadlineReminders(db, boundary);
+    expect(await remindersOf(without.teacherId, without.evaluationId)).toEqual([]);
+    expect((await remindersOf(started.teacherId, started.evaluationId)).map((r) => r.payload)).toEqual([
+      { kind: "deadline_approaching", evaluationId: started.evaluationId, evaluationTitle: "Test évaluation" },
+    ]);
+    expect(await remindersOf(finished.teacherId, finished.evaluationId)).toEqual([]);
+    // The students are told as ever.
+    expect(await countsOf(started)).toEqual([1, 1]);
+  });
+
   it("applies to an exam as to an exercise", async () => {
     const seed = await running({ mode: "exam" });
     await sendDeadlineReminders(db, boundary);

@@ -220,10 +220,27 @@ describe("results_updated (F-NOTIF-07)", () => {
     expect(told.find((n) => n.userId === first)!.payload).toMatchObject({ count: 2 });
   });
 
-  it("tells nobody of a correction of a teacher's own test (ADR-018)", async () => {
+  it("tells a teacher's staff seat of a correction of its own copy, and nobody else (ADR-018, amended 2026-11-17)", async () => {
     const built = await releasedExam({ students: 1, items: 2, points: 3, teacherTest: true });
     await override(built, built.seed.teacherId, 0, 5);
-    expect(await notices(built)).toEqual([]);
+    expect(await notices(built)).toEqual([
+      {
+        userId: built.seed.teacherId,
+        payload: expect.objectContaining({ kind: "results_updated", attemptId: built.attemptOf.get(built.seed.teacherId), count: 1 }),
+      },
+    ]);
+  });
+
+  it("tells a teacher's staff seat of its released copy (ADR-018, amended 2026-11-17)", async () => {
+    const built = await releasedExam({ students: 2, items: 1, points: 3, teacherTest: true });
+    const told = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.evaluationId, built.evaluationId), sql`${notifications.payload}->>'kind' = 'results_released'`));
+    expect(told.map((n) => n.userId).sort()).toEqual([...built.seed.studentIds, built.seed.teacherId].sort());
+    expect(told.find((n) => n.userId === built.seed.teacherId)!.payload).toMatchObject({
+      attemptId: built.attemptOf.get(built.seed.teacherId),
+    });
   });
 });
 

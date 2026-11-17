@@ -3,8 +3,9 @@
  * F-ORG-14) over the real application: the home's Past, by classroom, with a
  * grade only where the feedback policy lets the student read it. What it
  * must never carry — a grade under the policy `none`, a grade before the
- * release — and whom it lists: a staff seat only once it took an attempt
- * (ADR-018 §3), an archived classroom too. Who reads it: the student's
+ * release — and whom it lists: a teacher's staff seat exactly as a student
+ * seat, its grade computed live and never in the class's snapshot (ADR-018,
+ * amended 2026-11-17), an archived classroom too. Who reads it: the student's
  * portal and an impersonation session (ADR-034), never a `seb` or `kiosk`
  * one (ADR-027, ADR-051). A project is listed once released, with the
  * release's snapshot of the student's own or group's repository, or excused
@@ -238,11 +239,21 @@ describe("GET /app/api/student/results — the groups", () => {
     expect(groups.filter((g) => g.classroom.archived)).toHaveLength(1);
   });
 
-  it("lists a staff seat's evaluations only where it took an attempt (ADR-018 §3)", async () => {
+  it("lists a staff seat's evaluations exactly as a student's, its grade live (ADR-018, amended 2026-11-17)", async () => {
     const { groups } = await grades(seated.headers);
-    expect(evaluationRows(groups).map((r) => r.evaluationId)).toEqual([
-      evaluationIds["released on_release"],
-    ]);
+    const rows = evaluationRows(groups);
+    const studentIds = evaluationRows((await grades(student.headers)).groups).map((r) => r.evaluationId);
+    expect(rows.map((r) => r.evaluationId).sort()).toEqual(studentIds.sort());
+    expect(rows.find((r) => r.evaluationId === evaluationIds["released on_release"])).toMatchObject({
+      status: "released",
+      score: { points: 0, grade: 1 },
+      feedbackAttemptId: expect.any(String),
+    });
+    // A released evaluation it never took: the scale minimum, as a student's.
+    expect(rows.find((r) => r.evaluationId === evaluationIds["released missed"])).toMatchObject({
+      status: "missed",
+      score: { points: 0, grade: 1 },
+    });
   });
 });
 
@@ -319,7 +330,7 @@ describe("GET /app/api/student/results — a project's row (F-PROJ-14, F-ORG-14)
     mate = await server.signIn("student");
     room = await seedLive(db(), { teacherId: teacher.id, studentIds: [mine.id, other.id, mate.id], questions: 0 });
     archivedRoom = await seedLive(db(), { teacherId: teacher.id, studentIds: [mine.id], questions: 0 });
-    // The teacher's staff seat in the room: never listed (ADR-018 §3).
+    // The teacher's staff seat in the room, read by the student rule (ADR-018, amended 2026-11-17).
     await db().insert(enrollments).values({
       id: randomUUID(),
       classroomId: room.classroomId,
@@ -422,8 +433,11 @@ describe("GET /app/api/student/results — a project's row (F-PROJ-14, F-ORG-14)
     expect((await projectRows(other.headers)).of("Others only")).toMatchObject({ score: { points: 13.25, totalPoints: 19 } });
   });
 
-  it("lists a staff seat's projects never (ADR-018 §3)", async () => {
-    expect((await projectRows(seated.headers)).rows).toEqual([]);
+  it("lists a staff seat's released projects by the student rule (ADR-018, amended 2026-11-17)", async () => {
+    // The fixture wrote a snapshot on the seat's repository: the rule reads it as a student's, nothing else.
+    const { rows, of } = await projectRows(seated.headers);
+    expect(rows.map((r) => r.projectId)).toEqual([ids["Released"]]);
+    expect(of("Released")).toMatchObject({ status: "released", score: { points: 3, totalPoints: 10 } });
   });
 
   it("gives a classroom with projects only its heading, an archived one marked, its row still opening the project", async () => {

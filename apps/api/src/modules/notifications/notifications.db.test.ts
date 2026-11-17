@@ -452,7 +452,8 @@ describe("preferences", () => {
   /*
    * #277: the rows of the grid are the kinds the account can receive. The
    * seat kinds go to claimed STUDENT seats whatever the global role, so a
-   * teacher sees them only while on a roster; a staff seat does not count.
+   * teacher sees them only while on a roster; a staff seat adds the kinds of
+   * its own attempts only (ADR-018, amended 2026-11-17).
    */
   it("lists the kinds the account can receive: a teacher's student kinds follow a student seat", async () => {
     const frank = await seedUser("frank@heig.test");
@@ -469,9 +470,12 @@ describe("preferences", () => {
       });
     const kinds = async (userId: string) => (await service.notificationSettings(db, userId, true, true)).kinds;
 
-    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false, github: true }));
+    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, staffSeat: false, courseSeat: false, github: true }));
+    // A staff seat adds the kinds of its own attempts only (ADR-018, amended 2026-11-17).
     await seat(true);
-    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false, github: true }));
+    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, staffSeat: true, courseSeat: false, github: true }));
+    expect(await kinds(frank)).toEqual(expect.arrayContaining(["results_released", "results_updated", "deadline_approaching"]));
+    expect(await kinds(frank)).not.toContain("activity_available");
     await seat(false);
     // Every kind but the administrators' own (`system_alert`) and the account's
     // lifecycle, which nobody chooses (`account_dormant`).
@@ -479,7 +483,7 @@ describe("preferences", () => {
 
     const gina = await seedUser("gina@heig.test");
     await db.update(users).set({ role: "student" }).where(eq(users.id, gina));
-    expect(await kinds(gina)).toEqual(notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false, github: true }));
+    expect(await kinds(gina)).toEqual(notificationKindsFor({ role: "student", studentSeat: false, staffSeat: false, courseSeat: false, github: true }));
   });
 
   /*
