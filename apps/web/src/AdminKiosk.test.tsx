@@ -141,6 +141,46 @@ describe("the kiosk stations section (ADR-051 §5)", () => {
     );
   });
 
+  it("sorts by its headers from the server's order, and a row keeps its open name field", async () => {
+    const ten: KioskDevice = {
+      ...active,
+      id: "33333333-3333-4333-8333-000000000010",
+      googleDeviceId: "5CD0000010",
+      label: "Poste n° 10",
+      checkedAt: "2026-09-29T08:00:00.000Z",
+    };
+    const nine: KioskDevice = {
+      ...active,
+      id: "33333333-3333-4333-8333-000000000009",
+      googleDeviceId: "5CD0000009",
+      label: "Poste n° 9",
+      checkedAt: "2026-10-01T08:00:00.000Z",
+    };
+    // The server's order: the waiting station first, then by name.
+    mockFetch({ [CONFIG]: ON, [LIST]: ok([unnamed, ten, nine]) });
+    renderWithProviders(<KioskSection />);
+    const serials = () => screen.getAllByText(/^5CD/).map((el) => el.textContent);
+
+    const field = await screen.findByRole("textbox", { name: /station name/i });
+    await userEvent.type(field, "Poste 1");
+    expect(serials()).toEqual(["5CD3281JXQ", "5CD0000010", "5CD0000009"]);
+
+    // By name, numbers as numbers; the station with no name last either way.
+    const station = screen.getByRole("button", { name: /^station$/i });
+    await userEvent.click(station);
+    expect(serials()).toEqual(["5CD0000009", "5CD0000010", "5CD3281JXQ"]);
+    await userEvent.click(station);
+    expect(serials()).toEqual(["5CD0000010", "5CD0000009", "5CD3281JXQ"]);
+
+    // The last check by its time, not its verdict: the most recent last when ascending.
+    await userEvent.click(screen.getByRole("button", { name: /^last check$/i }));
+    expect(serials()).toEqual(["5CD0000010", "5CD3281JXQ", "5CD0000009"]);
+
+    // The waiting row moved twice and kept what was typed in it.
+    expect(screen.getByRole("textbox", { name: /station name/i })).toHaveValue("Poste 1");
+    expect(within(screen.getByRole("columnheader", { name: /actions/i })).queryByRole("button")).toBeNull();
+  });
+
   it("says so when no station has attested yet, and offers a retry on failure", async () => {
     mockFetch({ [CONFIG]: ON, [LIST]: ok([]) });
     const { unmount } = renderWithProviders(<KioskSection />);

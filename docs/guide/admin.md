@@ -30,7 +30,7 @@ The administrator's own address can be granted, for the workspace's number only:
 
 ## Kiosk stations
 
-Where the platform has kiosk stations, the **People** tab also lists the school's Chromebooks that attested themselves. A new one appears as **Unnamed**, with its serial number: **Name** it after the sticker on the machine and it becomes **Active**, ready to be paired by students. **Rename** changes that name, **Retire** takes a station out of service (it can no longer be paired, and shows "Station not recognised"), **Reactivate** puts it back. Each row also shows the station's **Last check** (**Attested**, **Google unreachable** or **Refused**) and when it was **Last attested**. Setting the stations up in the Google Admin console is described in [Kiosk stations](../development/kiosk.md).
+Where the platform has kiosk stations, the **Kiosk stations** tab, next to **People**, lists the school's Chromebooks that attested themselves; elsewhere the tab is not shown. A new one appears first, as **Unnamed**, with its serial number: **Name** it after the sticker on the machine and it becomes **Active**, ready to be paired by students. **Rename** changes that name, **Retire** takes a station out of service (it can no longer be paired, and shows "Station not recognised"), **Reactivate** puts it back. Each row also shows the station's **Last check** (**Attested**, **Google unreachable** or **Refused**) and when it was **Last attested**. The list comes with the stations waiting for a name first, then the active ones and the retired ones, by name; click a header to sort by it; by name, a station without one stays last. Setting the stations up in the Google Admin console is described in [Kiosk stations](../development/kiosk.md).
 
 ## Concepts
 
