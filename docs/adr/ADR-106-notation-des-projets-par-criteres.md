@@ -29,6 +29,14 @@ ADR-007, ADR-016 point 2, ADR-101 and ADR-062 addendum 1. §1's "never
 automatically" is amended for the creation form (ADR-119 §9). The rest
 holds (ADR-119 §1).
 
+**Amended by [ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md)
+(2026-11-17, product owner), for a schema-3 snapshot, scope §3 and §4:**
+the tarball is fetched at the pass's graded commit when one was built
+(ADR-132 §2, §4); a Regrade replaces the repository's `auto` and `llm`
+rows, validated ones included, once its run is accepted — never a `manual`
+nor a locked row — and is allowed after the release with an explicit
+acknowledgement (ADR-132 §5).
+
 Scope: how a project whose staff chose the `criteria` grading mode is graded —
 its criteria, the evidence the platform collects, the LLM pass, the
 milestones, the teacher's validation, the release and what the student sees.
