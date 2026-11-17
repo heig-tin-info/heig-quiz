@@ -26,7 +26,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Source repository | The teacher's repository a project is made from, in the classroom's organization. Never shown to a student, nor its existence. Never called a "template", which is an evaluation template's word. |
 | Distribution repository | The private repository the platform builds from the source and hands out from (`<slug>-squashed`): the source's tree in one commit per branch (`squash`), or its history (`whole`). Written by the App only. |
 | Student repository | The repository of one student, or of one group (*group repository*), made at Accept from the distribution repository, with which it shares an ancestor. The student holds the `push` permission, never more. |
-| Group set | A named list of groups of a classroom's students (fr *répartition*), reusable by several projects; formed by the staff, by hand or at random, or by the students (ADR-070). A student is in at most one group of a set. The word "team" is not used: it names the course's staff in French and Microsoft Teams in English. |
+| Group set | A named list of groups of a classroom's students (fr *groupes*, never *répartition* since 2026-11-17, §1.5), reusable by several projects; formed by the staff, by hand or at random, or by the students (ADR-070). A student is in at most one group of a set. The word "team" is not used: it names the course's staff in French and Microsoft Teams in English. |
 | Project group | A project's copy of a group of its group set; it follows the set until the deadline, then no longer moves. One repository per group (ADR-048, ADR-070). A student is in at most one group of a project. |
 | Push receipt | The server's own record of a push to a tracked repository — head commit and the time the platform received the webhook — written as the webhook arrives. The legal reference of a deadline: the commit's date is never trusted (ADR-012). |
 | Grade run | One CI run of `grading.yml` on a student repository, with the score it reported (`points / max`) or why it has none. Immutable. heig-classroom's name, kept for the table (`project_grade_runs`), though it holds a score. |
@@ -273,7 +273,7 @@ by the product owner on 2026-10-20.
 | Dashboard (live) | dashboard | tableau de bord | — |
 | Drill, practice | practice | entraînement | drill, révisions |
 | Targeted revision | targeted revision | révision ciblée | — |
-| Group set | group set | répartition | — |
+| Group set (a named list of groups, ADR-070; 2026-11-17) | group set | groupes, shown by the set's name (« Groupes Labo », « ces groupes »); one of its groups is *un groupe*; the Groups tab's button is *Nouveau groupe* | répartition (*répartition des notes / des réponses / par question*, a distribution, stays), série, jeu, ensemble |
 | A teacher takes a staff seat in a classroom (ADR-018; 2026-11-17) | join as student | s'inscrire à la classe | rejoindre comme étudiant (*rejoindre* stays a group's) |
 | Journal | journal | journal | carnet |
 | Gradebook | gradebook | carnet de notes | — |
