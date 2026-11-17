@@ -17,6 +17,10 @@
  *
  * The refusals of §4.4 each have a screen: a network that is not allowed and
  * an evaluation that is not open. There is no access code to type (ADR-053).
+ * The 404 of a classroom where the caller holds no seat is a stranger's,
+ * byte for byte (invariant 6); a member of the course's staff learns which
+ * classroom to join from their own staff read of the evaluation, never from
+ * that 404, and joins it here in one click (ADR-018).
  *
  * `/take/:evaluationId/practice` (ADR-122) is the same route for a practice
  * attempt on an exercise that is over: `POST …/practice` answers the ready
@@ -25,11 +29,12 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { Lock, ShieldAlert, UserX } from "lucide-react";
+import { Lock, ShieldAlert, UserPlus, UserX } from "lucide-react";
 
 import type { AttemptEntry, PracticeRefusalReason } from "@quiz/contracts";
 
 import { ApiError, api, refusalCodeOf, refusedWith, useMe } from "../api";
+import { useEvaluation } from "../evaluation/api";
 import { feedbackLink } from "../grading";
 import { useT, type Dict } from "../i18n";
 import type { Navigate } from "../router";
@@ -39,6 +44,7 @@ import { Lobby } from "./Lobby";
 import { ScreenOverlay } from "./PausedOverlay";
 import { Player } from "./Player";
 import { Ready } from "./Ready";
+import { useJoinClassroom } from "./joinClassroom";
 import { attemptEntryKey, practiceEntryKey } from "../queryKeys";
 import { toKiosk } from "../kiosk/navigation";
 import { useStationAttestation } from "../kiosk/useStationAttestation";
@@ -90,6 +96,21 @@ export function AttemptPage({
 
   // ADR-051 §7: a kiosk station has no home but its own screen.
   const kind = me.data?.session?.kind;
+  // ADR-018: a member of the course's staff without a seat joins from here.
+  // Which classroom is their own staff read's answer (a 404 for anyone off
+  // the staff), never the refusal's: the 404 above stays a stranger's. A
+  // `seb`, `kiosk` or impersonation session never asks. Join is offered only
+  // when that read says the caller holds no seat (`self.seat`): a seated
+  // teacher refused for another reason (a draft, a confined exam opened from
+  // the portal) would otherwise join, be refused again, and loop.
+  const portal = kind === undefined || kind === "portal";
+  const askStaff = staff && portal && refusalCodeOf(entry.error) === "not_found" && !practice;
+  const staffRead = useEvaluation(askStaff ? evaluationId : null, { retry: false });
+  const joinClassroomId =
+    askStaff && staffRead.data?.self.seat === false ? staffRead.data.evaluation.classroomId : null;
+  // The older hint ("join from the teacher view") only when no staff read
+  // can name the classroom; nothing while that read is on its way.
+  const noSeatHint = askStaff ? staffRead.isError : staff;
   const station = kind === "kiosk";
   // ADR-051, ADR-027: the trusted client the attempt is sat in, if any.
   const confinement = kind === "kiosk" || kind === "seb" ? kind : undefined;
@@ -157,12 +178,25 @@ export function AttemptPage({
                       : t("player.notOpen")
               }
               action={
-                <Button variant="primary" onClick={home}>
-                  {t("player.closed.home")}
-                </Button>
+                joinClassroomId !== null ? (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button variant="secondary" onClick={home}>
+                      {t("player.closed.home")}
+                    </Button>
+                    <JoinAndRetry classroomId={joinClassroomId} onJoined={() => void entry.refetch()} />
+                  </div>
+                ) : (
+                  <Button variant="primary" onClick={home}>
+                    {t("player.closed.home")}
+                  </Button>
+                )
               }
             >
-              {missing && staff ? t("player.noSeatHint") : null}
+              {joinClassroomId !== null
+                ? `${t("player.noSeat.join")} ${t("sroom.seat.notCounted")}`
+                : missing && noSeatHint
+                  ? t("player.noSeatHint")
+                  : null}
             </EmptyState>
           </Card>
         </main>
@@ -203,3 +237,13 @@ export function AttemptPage({
   );
 }
 
+/** Join as student, then the entry asked again (ADR-018): the screen's primary once the staff read named the classroom. */
+function JoinAndRetry({ classroomId, onJoined }: { classroomId: string; onJoined: () => void }) {
+  const t = useT();
+  const join = useJoinClassroom(classroomId, { onJoined });
+  return (
+    <Button variant="primary" loading={join.isPending} onClick={() => join.mutate()}>
+      <UserPlus /> {t("roster.join")}
+    </Button>
+  );
+}

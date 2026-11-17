@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -73,6 +73,7 @@ const classroomPage = (over: Partial<StudentClassroomPage> = {}): StudentClassro
   practice: [],
   hasJournal: false,
   hasGroups: false,
+  seat: "student",
   serverNow: new Date().toISOString(),
   ...over,
 });
@@ -119,6 +120,67 @@ describe("the student classroom page", () => {
     expect(within(trail).getAllByRole("link")).toHaveLength(2);
     await userEvent.click(within(trail).getByRole("link", { name: "Courses" }));
     expect(navigate).toHaveBeenCalledWith({ view: "studentCourses" });
+  });
+
+  it("badges a teacher's staff seat, and says its attempts count in no class result (ADR-018)", async () => {
+    mockFetch({ [URL_R1]: ok(classroomPage({ seat: "staff" })) });
+    render();
+    await screen.findByRole("heading", { level: 1, name: /PRG1-2026/ });
+    expect(screen.getByText("staff")).toBeVisible();
+    expect(screen.getByText("Your attempts here count in no class result.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Join as student" })).toBeNull();
+  });
+
+  it("makes Join as student the one primary of a teacher without a seat, and joins (ADR-018)", async () => {
+    const seatless = classroomPage({
+      seat: "none",
+      activities: { polls: [], groupSets: [], open: [], upcoming: [], past: [] },
+    });
+    let joined = false;
+    const { calls } = mockFetch({
+      [URL_R1]: () => ok(joined ? classroomPage({ seat: "staff" }) : seatless),
+      "POST /app/api/classrooms/r1/self-enroll": () => {
+        joined = true;
+        return ok({ ok: true });
+      },
+    });
+    render();
+    const join = await screen.findByRole("button", { name: "Join as student" });
+    expect(screen.getByText("You hold no seat in this classroom")).toBeVisible();
+    // The page's one primary: no activity button competes with it.
+    expect([...document.querySelectorAll("button.bg-accent")]).toEqual([join]);
+    await userEvent.click(join);
+    expect(await screen.findByText("Your attempts here count in no class result.")).toBeVisible();
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual(["/app/api/classrooms/r1/self-enroll"]);
+  });
+
+  it("asks before turning the student line holding the teacher's address into their seat", async () => {
+    const seatless = classroomPage({
+      seat: "none",
+      activities: { polls: [], groupSets: [], open: [], upcoming: [], past: [] },
+    });
+    const { calls } = mockFetch({
+      [URL_R1]: ok(seatless),
+      "POST /app/api/classrooms/r1/self-enroll": fail(409, { error: "student_line" }),
+      "POST /app/api/classrooms/r1/self-enroll?convert=1": ok({ ok: true }),
+    });
+    render();
+    await userEvent.click(await screen.findByRole("button", { name: "Join as student" }));
+    expect(await screen.findByText("Your address is on the roster")).toBeVisible();
+    expect(calls.some((c) => c.url.endsWith("?convert=1"))).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Use this line" }));
+    await waitFor(() => expect(calls.some((c) => c.url === "/app/api/classrooms/r1/self-enroll?convert=1")).toBe(true));
+  });
+
+  it("converts nothing when the teacher declines", async () => {
+    const { calls } = mockFetch({
+      [URL_R1]: ok(classroomPage({ seat: "none", activities: { polls: [], groupSets: [], open: [], upcoming: [], past: [] } })),
+      "POST /app/api/classrooms/r1/self-enroll": fail(409, { error: "student_line" }),
+    });
+    render();
+    await userEvent.click(await screen.findByRole("button", { name: "Join as student" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    expect(calls.some((c) => c.url.endsWith("?convert=1"))).toBe(false);
   });
 
   it("says an archived classroom is archived", async () => {

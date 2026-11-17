@@ -33,8 +33,9 @@ import { useStaffJournal } from "./journal/api";
 import { JournalReader } from "./journal/JournalReader";
 // WP8: evaluation + dashboard
 import { NewEvaluationModal } from "./evaluation/NewEvaluationModal";
-import { useErrorToast, useToast } from "./notify";
+import { useErrorToast } from "./notify";
 import { RosterImport } from "./RosterImport";
+import { useJoinClassroom } from "./student/joinClassroom";
 import { RosterTable } from "./RosterTable";
 import { useSearchParam, type Navigate, type Route } from "./router";
 import { useScreenCommands } from "./screenCommands";
@@ -53,7 +54,6 @@ import {
   Skeleton,
   Tabs,
 } from "./ui";
-import { classroomKey } from "./queryKeys";
 import { Trail, useClassroomCrumbs } from "./Trail";
 import { invalidateHint } from "./realtime/hints";
 import { useClassroom } from "./course/parts";
@@ -196,9 +196,6 @@ export function ClassroomView({
   journalPath?: string;
 }) {
   const t = useT();
-  const qc = useQueryClient();
-  const toast = useToast();
-  const toastError = useErrorToast();
   const me = useMe();
   /** The one dialog open over the page: the roster import, the period, a new evaluation. */
   const [layer, setLayer] = useState<"import" | "period" | "evaluation" | null>(null);
@@ -232,14 +229,7 @@ export function ClassroomView({
    * The teacher takes a (staff) seat in their own classroom, to walk the
    * student flow without a second account. It stays out of the headcount.
    */
-  const join = useMutation({
-    mutationFn: () => api(`/app/api/classrooms/${id}/self-enroll`, { method: "POST" }),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: classroomKey(id) });
-      toast(t("roster.joinDone"), "success");
-    },
-    onError: toastError("roster.joinFailed"),
-  });
+  const join = useJoinClassroom(id);
   // ADR-070 §2: a new set, named by the server, opened at once.
   const newSet = useCreateGroupSet(id, (created) => navigate({ view: "groupSet", classroomId: id, id: created.set.id }));
   const createSet = () => newSet.mutate();

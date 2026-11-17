@@ -1065,6 +1065,15 @@ const scenes = [
   { name: "student-home-projects-workspace", role: "student", path: "/?projects=1&codespace=1" },
   { name: "student-classroom-projects", role: "student", path: "/classrooms/r1?projects=1" },
   { name: "student-view-classroom-projects", role: "teacher", path: "/classrooms/r1?projects=1", ss: { "quiz-view-as": "student", "quiz-view-as-return": "/classrooms/r1" } },
+  // ADR-018 (2026-11-17): the student view knows its seat. Without one, Join as
+  // student is the page's primary; once joined, the staff seat is badged; on
+  // `/take/:id`, the no-seat screen joins in one click.
+  { name: "student-view-classroom-noseat", role: "teacher", path: "/classrooms/r1?scene=noseat", ss: { "quiz-view-as": "student", "quiz-view-as-return": "/classrooms/r1" } },
+  { name: "student-view-classroom-staffseat", role: "teacher", path: "/classrooms/r1?scene=noseat", ss: { "quiz-view-as": "student", "quiz-view-as-return": "/classrooms/r1" }, act: async (p) => {
+    await p.getByRole("button", { name: /^(Join as student|S'inscrire à la classe)$/ }).click();
+    await p.getByText(/^(staff|enseignant)$/).waitFor();
+  } },
+  { name: "student-view-take-noseat", role: "teacher", path: "/take/running?scene=noseat", fold: true, ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/running" } },
   { name: "student-project", role: "student", path: `/projects/${SPROJ.open}?projects=1` },
   // ADR-047 (M6-06): Open workspace; a Safe Exam Browser project; the start route's refusal sent back.
   { name: "student-project-workspace", role: "student", path: `/projects/${SPROJ.open}?projects=1&codespace=1` },

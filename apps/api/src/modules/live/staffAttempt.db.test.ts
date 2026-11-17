@@ -124,6 +124,19 @@ describe("a staff seat walks the real student flow (ADR-018)", () => {
       attemptId: entered.view.attempt.id,
     });
   });
+
+  it("answers the staff without a seat the stranger's 404, byte for byte; their own staff read names the classroom", async () => {
+    const world = await running();
+    const stranger = await server.signIn("teacher");
+    const url = `/app/api/evaluations/${world.seed.evaluationId}/attempt`;
+    const [mine, theirs] = await Promise.all([post(url, teacher.headers), post(url, stranger.headers)]);
+    expect(mine.statusCode).toBe(404);
+    expect([theirs.statusCode, theirs.body]).toEqual([mine.statusCode, mine.body]);
+    // The Join of the no-seat screen reads the classroom from the staff route, never from the 404.
+    const read = await get(`/app/api/evaluations/${world.seed.evaluationId}`, teacher.headers);
+    expect(read.json().evaluation.classroomId).toBe(world.seed.classroomId);
+    expect((await get(`/app/api/evaluations/${world.seed.evaluationId}`, stranger.headers)).statusCode).toBe(404);
+  });
 });
 
 describe("resetting one's own test attempt (ADR-018)", () => {

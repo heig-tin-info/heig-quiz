@@ -27,6 +27,7 @@ const page = (hasJournal: boolean): StudentClassroomPage => ({
   practice: [],
   hasJournal,
   hasGroups: false,
+  seat: "student",
   serverNow: new Date().toISOString(),
 });
 

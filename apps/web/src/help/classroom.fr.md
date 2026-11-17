@@ -15,7 +15,7 @@ suppl.** est l'aménagement, en pourcent de la durée nominale de chaque
 évaluation chronométrée. **Ajouter des étudiants** importe un export Excel
 ou CSV.
 
-**S'inscrire comme étudiant** vous donne une place dans votre propre classe,
+**S'inscrire à la classe** vous donne une place dans votre propre classe,
 pour passer l'évaluation comme un étudiant la passe. Cette place porte le
 badge *équipe* et reste hors de l'effectif. Depuis une évaluation, **Voir en
 tant qu'étudiant** fait tout cela d'un clic — la place vous est proposée si

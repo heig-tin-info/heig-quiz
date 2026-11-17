@@ -271,8 +271,9 @@ describe("GET /app/api/student/classrooms/:id", () => {
   });
 
   describe("the staff read the student payload", () => {
-    it("a teacher without a seat: the header, no cards", async () => {
+    it("a teacher without a seat: the header, no cards, the seat `none` (ADR-018)", async () => {
       const { body, page: p } = await page(teacher.headers);
+      expect(p.seat).toBe("none");
       expect(p.classroom).toMatchObject({ id: mine.classroomId, timeBonusPercent: 0 });
       expect(titles(p)).toEqual({ open: [], upcoming: [], past: [] });
       expect(p.practice).toEqual([]);
@@ -281,6 +282,7 @@ describe("GET /app/api/student/classrooms/:id", () => {
 
     it("a teacher on their staff seat sees what a student sees, never a draft", async () => {
       const { body, page: p } = await page(seatedTeacher.headers);
+      expect(p.seat).toBe("staff");
       expect(titles(p)).toEqual(titles((await page(student.headers)).page));
       expect(p.practice.map((c) => c.id)).toEqual([ids["past exercise"]]);
       expect(body).not.toContain("draft exam");
@@ -292,6 +294,8 @@ describe("GET /app/api/student/classrooms/:id", () => {
     it("an impersonation session reads exactly what the student reads", async () => {
       const as = await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id });
       const [theirs, ours] = await Promise.all([page(student.headers), page(as)]);
+      // A student and the session acting as them only ever read `student` (ADR-018).
+      expect([theirs.page.seat, ours.page.seat]).toEqual(["student", "student"]);
       expect(ours.body.replace(/"serverNow":"[^"]+"/, "")).toBe(theirs.body.replace(/"serverNow":"[^"]+"/, ""));
     });
 
@@ -304,5 +308,47 @@ describe("GET /app/api/student/classrooms/:id", () => {
     it("an anonymous caller is asked to sign in", async () => {
       expect((await get(pageUrl(mine.classroomId), {})).statusCode).toBe(401);
     });
+  });
+});
+
+/**
+ * Join as student (ADR-018, amended 2026-11-17): the staff seat is the page's
+ * one way in for a teacher without a seat; a student line holding the
+ * teacher's address becomes it only once confirmed (`409 student_line`).
+ */
+describe("POST /app/api/classrooms/:id/self-enroll", () => {
+  const enroll = (headers: Record<string, string>, query = "") =>
+    server.app.inject({ method: "POST", url: `/app/api/classrooms/${mine.classroomId}/self-enroll${query}`, headers });
+
+  it("seats a teacher at once when no line holds their address: the page then reads `staff`", async () => {
+    const joiner = await server.signIn("teacher");
+    await server.app.db.insert(courseStaff).values({ courseId: mine.courseId, userId: joiner.id });
+    expect((await page(joiner.headers)).page.seat).toBe("none");
+    expect((await enroll(joiner.headers)).statusCode).toBe(201);
+    expect((await page(joiner.headers)).page.seat).toBe("staff");
+  });
+
+  it("asks before turning a student line holding the teacher's address into their staff seat", async () => {
+    const email = "converted@heig.test";
+    const joiner = await server.signIn("teacher", email);
+    await server.app.db.insert(courseStaff).values({ courseId: mine.courseId, userId: joiner.id });
+    const line = randomUUID();
+    await server.app.db.insert(enrollments).values({ id: line, classroomId: mine.classroomId, nom: "Con", prenom: "Verted", email });
+
+    const asked = await enroll(joiner.headers);
+    expect(asked.statusCode).toBe(409);
+    expect(asked.json()).toMatchObject({ error: "student_line" });
+    const [kept] = await server.app.db.select().from(enrollments).where(eq(enrollments.id, line));
+    expect(kept).toMatchObject({ staff: false, userId: null });
+    expect((await page(joiner.headers)).page.seat).toBe("none");
+
+    expect((await enroll(joiner.headers, "?convert=1")).statusCode).toBe(201);
+    const [seat] = await server.app.db.select().from(enrollments).where(eq(enrollments.id, line));
+    expect(seat).toMatchObject({ staff: true, userId: joiner.id });
+    expect((await page(joiner.headers)).page.seat).toBe("staff");
+  });
+
+  it("refuses any other value of `convert`", async () => {
+    expect((await enroll(teacher.headers, "?convert=yes")).statusCode).toBe(400);
   });
 });

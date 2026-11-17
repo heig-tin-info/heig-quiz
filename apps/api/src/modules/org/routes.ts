@@ -31,6 +31,7 @@ import {
   EnrollmentPatch,
   IdParam,
   RosterEntryParams,
+  SelfEnrollQuery,
   StaffAdd,
   StaffParam,
   StaffPatch,
@@ -524,13 +525,15 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
 
   // Self-enroll: a teacher takes a (staff) seat in their own classroom to
   // exercise the student flow without a second account. The seat is claimed
-  // immediately and flagged `staff` so it stays out of the headcount.
+  // immediately and flagged `staff` so it stays out of the headcount. A
+  // student line holding their address is converted only on `?convert=1`
+  // (`409 student_line` otherwise, ADR-018).
   app.post(
     "/app/api/classrooms/:id/self-enroll",
     { preHandler: requireTeacher },
-    teacher(onClassroom(), async ({ req, reply, now, scope }) => {
+    teacher({ ...onClassroom(), query: SelfEnrollQuery }, async ({ req, reply, now, query, scope }) => {
       const me = userOf(req);
-      await service.selfEnroll(app.db, scope.room.id, me, revocation(req, now));
+      await service.selfEnroll(app.db, scope.room.id, me, revocation(req, now), { convert: query.convert === "1" });
       await trace(req, "roster.self_enroll", "classroom", scope.room.id);
       publish("roster", [`classroom:${scope.room.id}`, `user:${me.id}`]);
       return reply.code(201).send({ ok: true });

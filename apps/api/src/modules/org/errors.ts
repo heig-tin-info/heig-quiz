@@ -11,6 +11,7 @@ import { DomainError } from "../http.js";
 const REFUSALS: Record<RosterErrorCode, { status: number; message: string }> = {
   duplicate_email: { status: 409, message: "This e-mail is already in the roster" },
   already_enrolled: { status: 409, message: "You are already enrolled in this classroom under another address" },
+  student_line: { status: 409, message: "A student line holds your address: confirm to turn it into your staff seat" },
   revoke_failed: { status: 502, message: "GitHub did not take the student's access away: nothing was changed, try again" },
 };
 

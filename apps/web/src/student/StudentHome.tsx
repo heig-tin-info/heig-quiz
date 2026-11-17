@@ -35,6 +35,7 @@ import { useServerNow } from "../realtime/useServerClock";
 import type { Route } from "../router";
 import { Card, EmptyState, MetaItem, PageHeader, QueryError, SectionHeading, Skeleton } from "../ui";
 import { studentHomeKey } from "../queryKeys";
+import { useStudentView } from "../studentView";
 import {
   ActivityCard,
   ActivityRow,
@@ -75,6 +76,9 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
   // the payload's `serverNow`, never the browser's clock alone.
   const now = useServerNow(home.data?.serverNow);
   const actions = useCardActions(navigate);
+  // ADR-018: a teacher in the student view sees only the classrooms where
+  // they took a seat, so the empty home says how to take one.
+  const teacherView = useStudentView();
 
   // ADR-041 §6 (#317): today's drill, while it holds something — the home's
   // "today's drill is available", beside what else is open now.
@@ -108,7 +112,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
             {open.length === 0 && polls.length === 0 && groupSets.length === 0 && !drill ? (
               <Card>
                 <EmptyState icon={CheckCircle2} title={t("shome.empty.title")}>
-                  {t("shome.empty.body")}
+                  {t(teacherView ? "shome.empty.bodyStaff" : "shome.empty.body")}
                 </EmptyState>
               </Card>
             ) : (

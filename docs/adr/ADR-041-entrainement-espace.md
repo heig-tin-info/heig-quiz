@@ -46,6 +46,12 @@ The drill is a declared teaching activity whose reviews the student is told
 their teacher sees; platform presence (ADR-107) is not, and stays aggregated
 for the administrator only.
 
+Amended 2026-11-17 by [ADR-018](ADR-018-vue-etudiant-reelle.md#a-staff-seat-lives-the-student-flow)
+(product owner): a teacher's staff seat makes cards for the teacher themself
+(§1) and reads its own drill; "the classroom's current student seats" of §8
+and §15 are the lines whose `staff` flag is false NOW, so every class read
+keeps leaving staff-seat cards out, a converted line included.
+
 Amended 2026-10-15 (§8's "The student is told" only, issue #868): the
 data-protection page it names is the "Data and privacy" page of N-DATA-07
 (`/privacy`); it says that the teacher sees the drill activity, at what times
@@ -106,6 +112,10 @@ sections keep their numbers and the two folded ones are not reused; the
 
 - A card is one per student and question. It is created at the **release of an
   exam's results**, never before, and at the **hand-in of an exercise**.
+  *Amended 2026-11-17 ([ADR-018](ADR-018-vue-etudiant-reelle.md#a-staff-seat-lives-the-student-flow)):
+  a teacher's staff seat gets its own cards on the same two paths, never counted
+  in a class read nor in the reference time of §4; turning the drill on for a
+  classroom covers its staff seat as a student's.*
 - A card enters as **new**: the evaluation's answer is not its first review (its
   time was an exam's pace), and a later attempt of an exercise creates nothing.
   A **poll creates no card**. *(Second round.)*

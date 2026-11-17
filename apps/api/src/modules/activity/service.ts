@@ -24,7 +24,7 @@ import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { enrollments } from "../../db/schema.js";
 import type { EvaluationHome } from "../evaluation/service.js";
-import type { Caller, ReadableClassroom } from "../guards.js";
+import { studentSeat, type Caller, type ReadableClassroom } from "../guards.js";
 import { hasStudentGroupSets, studentGroupSetCards } from "../group/service.js";
 import { hasJournal } from "../journal/service.js";
 import { studentClassroomHeader } from "../org/service.js";
@@ -149,6 +149,7 @@ export async function studentClassroomPage(
     practice,
     hasJournal: journal,
     hasGroups: groups,
+    seat: studentSeat(scope),
     serverNow: iso(now),
   };
 }

@@ -13,7 +13,7 @@ mène là où la mission se joue — il ne fait jamais le geste à votre place.
 
 ## 1. Être étudiant
 
-Cliquez **S'inscrire comme étudiant** sur cette page : vous obtenez une place
+Cliquez **S'inscrire à la classe** sur cette page : vous obtenez une place
 dans votre propre classe, marquée *staff*. Ouvrez ensuite le menu de votre
 compte et **Passer en vue étudiant** : le portail devient ce qu'un étudiant
 voit. Faites l'exercice d'accueil : une question par type, chacune sur un geste

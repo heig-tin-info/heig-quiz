@@ -19,17 +19,20 @@
  *     Journal tab the document owns the title, so the header folds to a
  *     13 px breadcrumb.
  *   - Color: ONE accent, the button of the single most urgent open activity
- *     (`mostUrgent`); every other button is secondary. The time bonus is a
- *     soft badge, as on the home card.
+ *     (`mostUrgent`); every other button is secondary. For a teacher in the
+ *     student view who holds no seat (`seat: "none"`, ADR-018) the accent is
+ *     Join as student instead, in the header, and no activity takes it. The
+ *     time bonus is a soft badge, as on the home card; a staff seat is a
+ *     badge beside the title.
  *   - Space: 24 between the header, the tabs and the body; 32 between the
  *     groups; 12 between the cards of a group.
  *   - Finish: cards on the canvas, hairlines, no shadow.
  */
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, GraduationCap, UserPlus } from "lucide-react";
 import { useEffect } from "react";
 
-import type { PracticeCard, StudentActivities, StudentActivityCard, StudentClassroomPage } from "@quiz/contracts";
+import type { PracticeCard, StudentActivities, StudentActivityCard, StudentClassroomPage, StudentSeat } from "@quiz/contracts";
 
 import { api, isNotFound } from "../api";
 import { StudentGradebook } from "../gradebook/StudentGradebook";
@@ -61,6 +64,7 @@ import {
   UpcomingByDay,
   useCardActions,
 } from "./cards";
+import { useJoinClassroom } from "./joinClassroom";
 import { PastSeries } from "./PastSeries";
 import { needsStudentAction } from "./projectRow";
 
@@ -214,21 +218,32 @@ export function StudentClassroom({
 
   return (
     <div className="space-y-6">
-      <ClassroomHeader room={data.classroom} navigate={navigate} />
+      <ClassroomHeader room={data.classroom} seat={data.seat} navigate={navigate} />
       {tabs}
       {tab === "groups" ? (
         <StudentGroups classroomId={id} />
       ) : tab === "grades" ? (
         <StudentGradebook classroomId={id} />
       ) : (
-        <Activities activities={data.activities} practice={data.practice} serverNow={data.serverNow} navigate={navigate} />
+        <Activities
+          activities={data.activities}
+          practice={data.practice}
+          serverNow={data.serverNow}
+          seated={data.seat !== "none"}
+          navigate={navigate}
+        />
       )}
     </div>
   );
 }
 
-/** The page's header: the trail (Courses, the classroom), the classroom, its course, period and teachers. */
-function ClassroomHeader({ room, navigate }: { room: Header; navigate: Navigate }) {
+/**
+ * The page's header: the trail (Courses, the classroom), the classroom, its
+ * course, period and teachers. A staff seat says so beside the title, and
+ * what it means under the teachers (ADR-018); a teacher without a seat finds
+ * Join as student here, the page's one primary action.
+ */
+function ClassroomHeader({ room, seat, navigate }: { room: Header; seat: StudentSeat; navigate: Navigate }) {
   const t = useT();
   return (
     <PageHeader
@@ -236,6 +251,7 @@ function ClassroomHeader({ room, navigate }: { room: Header; navigate: Navigate 
       title={
         <span className="flex flex-wrap items-baseline gap-3">
           {room.name}
+          {seat === "staff" ? <Badge tone="zinc" icon={GraduationCap}>{t("roster.status.staff")}</Badge> : null}
           {room.archived ? <Badge tone="zinc">{t("classrooms.archived")}</Badge> : null}
         </span>
       }
@@ -250,10 +266,27 @@ function ClassroomHeader({ room, navigate }: { room: Header; navigate: Navigate 
               {t("shome.teachers", { names: room.teachers.join(", ") })}
             </p>
           ) : null}
+          {seat === "staff" ? <p className="mt-0.5 text-[13px] text-fg-faint">{t("sroom.seat.notCounted")}</p> : null}
         </>
       }
-      actions={<BonusBadge percent={room.timeBonusPercent} />}
+      actions={seat === "none" ? <JoinButton classroomId={room.id} /> : <BonusBadge percent={room.timeBonusPercent} />}
     />
+  );
+}
+
+/**
+ * Join as student (ADR-018), for a member of the course's staff in the student
+ * view who holds no seat: the page's primary. The server names that seat
+ * `none` only for them, never for a student nor an impersonation session, and
+ * a `seb` or `kiosk` session never reads this page.
+ */
+function JoinButton({ classroomId }: { classroomId: string }) {
+  const t = useT();
+  const join = useJoinClassroom(classroomId);
+  return (
+    <Button loading={join.isPending} onClick={() => join.mutate()}>
+      <UserPlus /> {t("roster.join")}
+    </Button>
   );
 }
 
@@ -274,11 +307,14 @@ function Activities({
   activities,
   practice,
   serverNow,
+  seated,
   navigate,
 }: {
   activities: StudentActivities;
   practice: readonly PracticeCard[];
   serverNow: string;
+  /** False for the staff without a seat (who read no card): the empty state says why. */
+  seated: boolean;
   navigate: Navigate;
 }) {
   const t = useT();
@@ -295,7 +331,13 @@ function Activities({
         <SectionHeading title={t("shome.open")} />
         {polls.length === 0 && open.length === 0 && groupSets.length === 0 ? (
           <Card>
-            <EmptyState icon={CheckCircle2} title={t("sroom.empty.title")} />
+            {seated ? (
+              <EmptyState icon={CheckCircle2} title={t("sroom.empty.title")} />
+            ) : (
+              <EmptyState icon={UserPlus} title={t("sroom.noSeat.title")}>
+                {t("sroom.seat.notCounted")}
+              </EmptyState>
+            )}
           </Card>
         ) : null}
         {polls.map((poll) => (
