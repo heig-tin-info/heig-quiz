@@ -60,6 +60,9 @@ const ACCOUNT_KEY = /^(account|admin\.inactive)\./;
  */
 const COMPONENT_KEY = /^(courses\.(settings\.)?components|gbook\.(settings|head|noComponent|componentMean|mean\.components|refusal\.component))/;
 
+/** « Répartition » names a group set (refused) unless it is a distribution (glossary §1.5). */
+const REPARTITION = /\brépartitions?\b(?! (des (notes|réponses|points|scores)|par question)\b)/i;
+
 const BOTH: Lang[] = ["fr", "en"];
 const FR: Lang[] = ["fr"];
 const EN: Lang[] = ["en"];
@@ -102,6 +105,8 @@ const RULES: Rule[] = [
   { name: "word-soumettre", langs: FR, fix: "rendre", test: has(/\bsoum(ettre|is|ise|ission)/i) },
   // A teacher's seat in a classroom (ADR-018): s'inscrire; rejoindre stays a group's (F-PROJ-22).
   { name: "word-join-classroom", langs: FR, fix: "s'inscrire comme étudiant; rejoindre is a group's word", test: has(/\brejoindre (comme|la classe|cette classe|une classe)\b/i) },
+  // A group set (ADR-070, 2026-11-17): « groupes », shown by its name; « répartition des notes / des réponses / par question » is a distribution, and stays.
+  { name: "word-repartition", langs: FR, fix: "groupes: a group set is « groupes », shown by its own name", test: has(REPARTITION) },
   { name: "word-codespace", langs: BOTH, fix: "workspace, espace de travail; codespace is an internal word", test: has(/\bcodespaces?\b/i) },
   // A component of the mean (ADR-131): never a group, which is the students' (ADR-070), nor a category, which is a pool's.
   { name: "word-component", langs: FR, fix: "composante", test: (t, k) => COMPONENT_KEY.test(k) && has(/\b(groupes?|catégories?)\b/i)(t) },
@@ -167,6 +172,16 @@ describe("copy lint (N-I18N-04)", () => {
   it("lists exceptions under existing rules only", () => {
     const names = new Set(checks.map((c) => c.name));
     expect(Object.keys(exceptions).filter((n) => !names.has(n))).toEqual([]);
+  });
+});
+
+/** The French help pages speak the interface's words: no « répartition » for a group set there either. */
+const HELP_FR = import.meta.glob("../help/*.fr.md", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+
+describe("copy lint of the French help pages (N-I18N-04)", () => {
+  it("never calls a group set a « répartition »", () => {
+    expect(Object.keys(HELP_FR).length).toBeGreaterThan(0);
+    expect(Object.keys(HELP_FR).filter((file) => REPARTITION.test(HELP_FR[file]!))).toEqual([]);
   });
 });
 

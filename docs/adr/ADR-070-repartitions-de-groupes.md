@@ -15,6 +15,12 @@ whatever its groups (a student in no group meets `409 no_group` on Accept);
 Schedule refuses what Publish refuses — and decision 8's "published
 project": a `scheduled` one does not show its closed set.
 
+Amended 2026-11-17 (product owner), scope: decision 1's French word. The
+interface no longer says *répartition*: a set is *groupes*, shown by its own
+name, and the Groups tab's button reads *Nouveau groupe*. The interface
+glossary (`docs/spec/01-glossaire-et-domaine.md` §1.5) owns the wording; the
+English *group set* and the code's `group_set` are unchanged.
+
 Scope: where a classroom's groups of students live, who forms them and how,
 and how a group project uses them, including the GitHub side of a group
 repository (decision 12, folded from [ADR-048](ADR-048-projets-de-groupe.md)'s
@@ -71,7 +77,8 @@ were settled by the product owner on 2026-10-04.
 ## Decision
 
 1. **Words.** The unit is a **group** (fr *groupe*); a named list of groups of
-   one classroom is a **group set** (fr *répartition*). Code says `group_set`,
+   one classroom is a **group set** (fr *répartition*; since 2026-11-17 the
+   interface says *groupes*, see Status). Code says `group_set`,
    `group`; "team" is not used, in the interface or in the code. A group's name
    is free text; the default is "Group k" (fr "Groupe k"), the first free k.
 

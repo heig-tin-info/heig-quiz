@@ -8,7 +8,7 @@
  * (N-SEC-20).
  *
  * Words (ADR-070 §1): a **group** (fr *groupe*), a **group set** (fr
- * *répartition*), never a "team". A student is a roster line
+ * *groupes*, glossary §1.5), never a "team". A student is a roster line
  * (`enrollmentId`), claimed or not; a staff seat (ADR-018) is never placed.
  */
 import { z } from "zod";

@@ -16,7 +16,7 @@ n'ont pas encore de groupe. Rien d'autre à leur sujet.
 ## À la fin
 
 À la date, les groupes se ferment et votre enseignant place ceux qui n'ont
-pas de groupe. Dès qu'un groupe de l'ensemble obtient son dépôt, les groupes
+pas de groupe. Dès qu'un de ces groupes obtient son dépôt, les groupes
 ne peuvent plus changer.
 
 ## Projets de groupe

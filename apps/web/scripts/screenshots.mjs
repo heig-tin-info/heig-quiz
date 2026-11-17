@@ -42,6 +42,8 @@ const heightOpt = opt("height").map(Number).find(Boolean);
 // ls     extra localStorage entries, written before the first paint
 // ss     extra sessionStorage entries (the student view lives there: it is a
 //        property of the WINDOW, not of the browser)
+// lang   the browser's language ("fr"): a persona's saved language is
+//        "the browser's", so `quiz-locale` alone holds on public pages only
 // act    what to open once the page settled (a sheet, a menu, a dialog)
 // fold   viewport only, whatever --fold says. For a scene whose layer is
 //        `fixed`: full-page, the backdrop covers the viewport and everything
@@ -560,6 +562,9 @@ const scenes = [
   // project's group work, and a draft group project with and without its set.
   { name: "classroom-groups-empty", role: "teacher", path: "/classrooms/r1/groups" },
   { name: "classroom-groups", role: "teacher", path: "/classrooms/r1/groups?groups=1&projects=1" },
+  // The French words of the sets (2026-11-17): « Nouveau groupe », never « répartition ».
+  { name: "classroom-groups-fr", role: "teacher", path: "/classrooms/r1/groups?groups=1&projects=1", lang: "fr" },
+  { name: "group-set-fr", role: "teacher", path: `${SET_FINAL}?groups=1&projects=1`, lang: "fr" },
   // M5-04 (F-GBOOK): the classroom's Grades tab. The teacher's matrix (an a1.0
   // cell, a column not released, the mean), a cell's menu, a column's menu,
   // a classroom without a gradebook (the empty state); the student's own cells
@@ -680,7 +685,7 @@ const scenes = [
       await fillProject(p);
       await p.getByRole("button", { name: /^(advanced options|options avancées)$/i }).click();
       await p.getByRole("switch", { name: /^(groups|groupes)$/i }).click();
-      await p.getByLabel(/^(group set|répartition)$/i).selectOption({ index: 1 });
+      await p.getByLabel(/^(group set|groupes)$/i).selectOption({ index: 1 });
     },
   },
   {
@@ -689,7 +694,7 @@ const scenes = [
     path: "/projects/pj-draft?projects=1&groups=1",
     act: async (p) => {
       await p.getByRole("button", { name: /^(publish|publier)$/i }).click();
-      await p.getByText(/(Choose a group set first|Choisissez d'abord une répartition)/).first().waitFor();
+      await p.getByText(/(Choose a group set first|Choisissez d'abord les groupes)/).first().waitFor();
     },
   },
   { name: "project-group", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000b4?projects=1&groups=1" },
@@ -715,7 +720,7 @@ const scenes = [
     path: `/projects/${PJ_GROUP_STOPPED}?projects=1&groups=1`,
     fold: true,
     act: async (p) => {
-      await p.getByRole("button", { name: /^(resync with the set|resynchroniser avec la répartition)$/i }).click();
+      await p.getByRole("button", { name: /^(resync with the set|réappliquer les groupes)$/i }).click();
       await p.getByRole("dialog").waitFor();
     },
   },
@@ -725,7 +730,7 @@ const scenes = [
     path: "/projects/0190d3c4-0000-7000-8000-0000000000b4?projects=1&groups=1&unassigned=1",
     act: async (p) => {
       await p.getByRole("button", { name: /^(publish|publier)$/i }).click();
-      await p.getByRole("link", { name: /^(place them in the group set|les placer dans la répartition)$/i }).waitFor();
+      await p.getByRole("link", { name: /^(place these students|placer ces étudiants)$/i }).waitFor();
     },
   },
   // F-ORG-13 (D24, M2-07): the Settings tab. A classroom that is not
@@ -2669,7 +2674,8 @@ for (const width of widths.length ? widths : [1440]) {
       if (m.type() === "error") problems.push(m.text());
     });
     await page.addInitScript(
-      ({ role, ls, ss, dark }) => {
+      ({ role, ls, ss, dark, lang }) => {
+        if (lang) Object.defineProperty(navigator, "languages", { get: () => [lang] });
         localStorage.clear();
         sessionStorage.clear();
         localStorage.setItem("quiz-mock-role", role);
@@ -2677,7 +2683,7 @@ for (const width of widths.length ? widths : [1440]) {
         for (const [k, v] of Object.entries(ls ?? {})) localStorage.setItem(k, v);
         for (const [k, v] of Object.entries(ss ?? {})) sessionStorage.setItem(k, v);
       },
-      { role: scene.role, ls: scene.ls, ss: scene.ss, dark },
+      { role: scene.role, ls: scene.ls, ss: scene.ss, dark, lang: scene.lang },
     );
     try {
       await page.goto(BASE + scene.path, { waitUntil: "domcontentloaded" });
