@@ -51,6 +51,7 @@ const repo = (id: string, rows: CriteriaTableRow[], total: { points: number; max
   table: rows,
   evidence: null,
   total,
+  pass: null,
 });
 
 const names = (columns: readonly MatrixColumn[]) => columns.map((c) => (c.kind === "leaf" ? c.id : `[${c.key}]`));

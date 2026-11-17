@@ -65,8 +65,9 @@
  * `no_result`.
  *
  * Settling writes through the single writer (`writeCriterionGrades`),
- * never over a held criterion; once settled, the pass's LLM review is
- * queued (`project.review`, `reviewPass.ts`, ADR-119 §7).
+ * never over a held criterion — a Regrade's results over a validated
+ * machine row included (ADR-132 §5) —; once settled, the pass's LLM review
+ * is queued (`project.review`, `reviewPass.ts`, ADR-119 §7).
  */
 import { randomUUID } from "node:crypto";
 
@@ -215,8 +216,11 @@ const fraction = (score: string) => score.replace(/\s+/g, "");
  * pass loses — and its automatic criteria's rows written, proposed
  * (`writeCriterionGrades`: a held criterion is left alone): 0 points with
  * the reason, or each criterion's points from the results (`no_result` for
- * one the file does not answer), its rationale the fraction. The results
- * are stored first, the logs staff-only. False when another settled it.
+ * one the file does not answer), its rationale the fraction. A Regrade's
+ * results also replace a validated row; its failures never do (ADR-132
+ * §5): a failure that left a row standing is recorded on the pass
+ * (`kept_failures`), for the staff. The results are stored first, the logs
+ * staff-only. False when another settled it.
  */
 async function settle(app: FastifyInstance, loaded: LoadedPass, settlement: Settlement): Promise<boolean> {
   const db = app.db;
@@ -229,12 +233,14 @@ async function settle(app: FastifyInstance, loaded: LoadedPass, settlement: Sett
     .returning({ id: gradeDispatches.id });
   if (!won) return false;
   const leaves = automaticLeaves(loaded);
+  const regrade = pass.trigger === "regrade";
   const row = (leaf: CriteriaLeaf, more: Pick<CriterionGradeInput, "points" | "rationale" | "reason">): CriterionGradeInput => ({
     criterionId: leaf.id,
     max: leaf.maxPoints,
     source: "auto",
     state: "proposed",
     passId: pass.id,
+    regrade,
     ...more,
     ...scope.lock(now),
   });
@@ -252,17 +258,23 @@ async function settle(app: FastifyInstance, loaded: LoadedPass, settlement: Sett
     );
   }
   // Not held, nor already this pass's (a settle replayed); the writer checks again under its lock.
-  const held = await heldCriteria(db, pass.repoId, pass.id);
-  await writeCriterionGrades(
-    db,
-    pass.repoId,
-    inputs.filter((input) => !held.has(input.criterionId)),
-    now,
+  const held = await heldCriteria(db, pass.repoId, pass.id, regrade);
+  const written = new Set(
+    (
+      await writeCriterionGrades(
+        db,
+        pass.repoId,
+        inputs.filter((input) => !held.has(input.criterionId)),
+        now,
+      )
+    ).map((r) => r.criterionId),
   );
+  const kept = inputs.flatMap((input) => (input.reason && !written.has(input.criterionId) ? [[input.criterionId, input.reason] as const] : []));
+  if (kept.length > 0) await db.update(gradeDispatches).set({ keptFailures: Object.fromEntries(kept) }).where(eq(gradeDispatches.id, pass.id));
   await hintProjectStaff(db, [loaded.project.id]);
   // The pass's LLM review follows (ADR-119 §7), on its results' logs or, without any, the sources alone.
   // A queue's job: without `app.boss` the review is not run, as the dispatch is not sent (`sendCiPasses`).
-  const review: ReviewJob = { repoId: pass.repoId, passId: pass.id, checkpointId: pass.checkpointId ?? undefined };
+  const review: ReviewJob = { repoId: pass.repoId, passId: pass.id, checkpointId: pass.checkpointId ?? undefined, ...(regrade ? { regrade } : {}) };
   if (app.boss) await app.boss.send(PROJECT_REVIEW_QUEUE, review);
   return true;
 }
@@ -341,6 +353,12 @@ async function graftPass(app: FastifyInstance, config: AppConfig, loaded: Loaded
   }
 }
 
+/** A graded commit's paths as the audit and the staff's line keep them (ADR-132 §6): their count, and the first ones, capped by count and length. */
+function cappedPaths(paths: readonly string[]): { count: number; paths: string[] } {
+  let chars = 0;
+  return { count: paths.length, paths: paths.slice(0, GRAFT_AUDIT_PATHS).filter((path) => (chars += path.length) <= GRAFT_AUDIT_CHARS) };
+}
+
 /** A graft's audit entry (ADR-132 §6): its shas and paths, the paths capped by count and length; or why it failed. */
 async function auditGraft(db: Db | Tx, { pass, repo, project }: LoadedPass, target: string, outcome: GraftOutcome): Promise<void> {
   const base = { ...SYSTEM_ACTOR, subjectType: "project_repo" as const, subjectId: repo.id };
@@ -349,13 +367,10 @@ async function auditGraft(db: Db | Tx, { pass, repo, project }: LoadedPass, targ
     return;
   }
   if (!outcome.graft) return;
-  const { sha, paths } = outcome.graft;
-  let chars = 0;
-  const kept = paths.slice(0, GRAFT_AUDIT_PATHS).filter((path) => (chars += path.length) <= GRAFT_AUDIT_CHARS);
   await audit(db, {
     ...base,
     action: "project_repo.grade_grafted",
-    payload: { projectId: project.id, passId: pass.id, target, gradedSha: sha, distributionSha: outcome.distributionSha, count: paths.length, paths: kept },
+    payload: { projectId: project.id, passId: pass.id, target, gradedSha: outcome.graft.sha, distributionSha: outcome.distributionSha, ...cappedPaths(outcome.graft.paths) },
   });
 }
 
@@ -407,7 +422,7 @@ export async function runCiDispatch(app: FastifyInstance, config: AppConfig, job
   const claimed = await db.transaction(async (tx) => {
     const [row] = await tx
       .update(gradeDispatches)
-      .set({ sha: target, gradedSha: graft?.sha ?? null, distributionSha })
+      .set({ sha: target, gradedSha: graft?.sha ?? null, distributionSha, graftedPaths: graft ? cappedPaths(graft.paths) : null })
       .where(and(eq(gradeDispatches.id, pass.id), eq(gradeDispatches.sha, ""), OPEN))
       .returning({ id: gradeDispatches.id });
     if (row) await auditGraft(tx, loaded, target, grafted);

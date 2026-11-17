@@ -6,7 +6,9 @@ Accepted (2026-11-17). The principles, the graft (A), the Regrade's
 semantics and its use after the release, C and B are the **product
 owner's** decisions; choices (a) to (j) are the **orchestrator's**, after
 the spec challenge and the code. Delivered in this order, tracked in
-`changes/`: A1 (§2–§4, §7), A2 (§5, §6), C, B.
+`changes/`: A1 (§2–§4, §7), A2 (§5, §6), C, B. A1 and A2 are delivered
+(`changes/project-update-graded-commit.md`, `changes/project-regrade-machine.md`);
+C and B are not.
 
 Scope: a project graded by criteria whose snapshot is schema version 3
 (ADR-119): which commit its graded run reads, which distribution files that
@@ -234,18 +236,38 @@ cap and top-level stripping are unchanged (invariant 15).
   replaces an `llm` row, validated included, with the model's reply only;
   a review that fails (`llm_budget`, `grader_error`, sources unavailable)
   leaves a validated row as it was.
+- *Delivered (A2):* one rule, `holdsCriterion` (`@quiz/domain`), read by
+  the single writer under the repository's lock: a teacher's row and a
+  locked row hold their criterion against every machine proposal; a
+  validated row holds it too, unless the proposal is a Regrade pass's
+  (`grade_dispatches.trigger = regrade`) and carries no failure reason. The
+  failures that left a row standing are recorded on the pass
+  (`grade_dispatches.kept_failures`) and shown on the staff's line (§6).
+  The final pass and a milestone pass keep ADR-106's rule. Only a
+  schema-3 Regrade has this power; a schema-2 Regrade keeps ADR-106 §4.
 - **After the release** (owner): Regrade stays allowed, behind an explicit
   confirmation; the API refuses it for a released project unless the
-  request carries the acknowledgement (`409 regrade_released`). What a
-  released grade does meanwhile (F-PROJ-14, F-PROJ-26): the student keeps
-  reading the release's snapshot (`released_points`, `released_grade`) —
-  their grade does not move; the replaced rows wait for the teacher's
-  validation again, so the repository is no longer validated, its staff
-  score falls back to its next source and shows "changed after release";
-  a new release is refused (`409 not_validated`) until every repository is
-  validated, and only that release changes what the student reads, with no
-  new notification (`project_grade_final` goes out on the first release
-  only). The confirmation says so.
+  request carries the acknowledgement (`409 regrade_released`;
+  `ProjectRegradeRequest.releasedAcknowledged`, on the project's route and
+  a repository's). What a released grade does meanwhile (F-PROJ-14,
+  F-PROJ-26): the student keeps reading the release's snapshot
+  (`released_points`, `released_grade`) — their grade does not move; the
+  replaced rows wait for the teacher's validation again, so the repository
+  is no longer validated, its staff score falls back to its next source and
+  shows "changed after release" when that source differs from the
+  snapshot; a new release is refused (`409 not_validated`) until every
+  repository is validated, and only that release changes the grade the
+  student reads, with no new notification (`project_grade_final` goes out
+  on the first release only). The confirmation says so.
+- *Corrected at delivery (A2), from the code:* the student's **criteria
+  table** is not a snapshot of the release. It is rendered on read from
+  the current rows (ADR-106 §9, `criteriaTable`): a replaced row, proposed
+  again, shows to the student as an indicative point count, without its
+  rationale, until it is validated and the project released again; a row
+  the Regrade did not replace stays validated. This already held for a
+  teacher's correction after the release. The confirmation says this too;
+  freezing the student's table at the release would be a product decision
+  of its own.
 - A Regrade's caps (3 a day per project, 3 per repository) are unchanged.
 
 ### 6. The staff's trace and the audit (choice i)
@@ -256,6 +278,14 @@ cap and top-level stripping are unchanged (invariant 15).
   student changed: that needs every version the distribution ever handed
   out per file, which the truthful line "N files replaced by the
   distribution's version" does not. Nothing of it reaches a student.
+- *Delivered (A2):* the paths are stored on the pass
+  (`grade_dispatches.grafted_paths`, migration 0141: the count and the
+  paths, capped as the audit's, 100 and 8 KiB), written with the claim;
+  the screen reads the repository's latest CI pass claimed or settled, not
+  the audit log. The same line names the criteria a failure left standing
+  (§5). The field (`ProjectGradingRepo.pass`) is the staff's payload only;
+  the student view never reads `grade_dispatches`, and its test searches
+  every student response for it.
 - A graft is audited `project_repo.grade_grafted` (the closed union of
   `apps/api/src/audit.ts`): the project, the pass, the graded and
   distribution shas and the paths (at most 100 and 8 KiB of them, with
@@ -330,7 +360,7 @@ Open points:
 - A teacher fixes a test, a criterion or a README in the source, syncs (or
   reloads the criteria), and regrades: every repository is graded with the
   fix, locked or not, merged or not, with no reopen and no hand push (a
-  validated row is redone from A2 on, §5).
+  validated row is redone, §5).
 - The student's branches, history and receipts never move for it. The
   graded commit is visible to the repository's members on its ref.
 - A student who never merges a sync is graded with the teacher's current

@@ -6,9 +6,11 @@ import {
   CriteriaIncomplete,
   PointsOutOfRange,
   type CriterionGradeWrite,
+  type ProjectGradingPass,
   type ProjectGradingRepo,
   type ProjectGradingView,
   type ProjectRegradeAccepted,
+  type ProjectRegradeRequest,
   type ProjectValidated,
 } from "@quiz/contracts";
 
@@ -39,6 +41,7 @@ import { refusalMessage, shortSha } from "../projectPage";
 import { CommitGraphPanel } from "./CommitGraphPanel";
 import { CriteriaTable, type GradeWrite } from "./CriteriaTable";
 import { gradingPrimary, toValidate, type GradingPrimary } from "./gradingModel";
+import { RationaleFold } from "./RationaleFold";
 import { RepoBar } from "./RepoBar";
 
 /**
@@ -57,8 +60,12 @@ import { RepoBar } from "./RepoBar";
  * A criterion with no points (a teacher-only one) holds Validate back: the
  * screen names it above the table, never defaults it to 0. *Validate the
  * rest as proposed* and a Regrade of the repository (one model call, said
- * by its confirmation) are in the overflow menu. The release itself is the
- * project page's (its confirmation, its refusals): Release leads there.
+ * by its confirmation) are in the overflow menu. On a schema-3 project the
+ * confirmation says what a Regrade redoes (ADR-132 §5) and, once released,
+ * what the release keeps; it then carries the acknowledgement the server
+ * asks. Under the evidence, the latest CI pass's trace (`PassLine`). The
+ * release itself is the project page's (its confirmation, its refusals):
+ * Release leads there.
  *
  * The repository on screen lives in `?repo=`, so a reload lands on it.
  */
@@ -140,8 +147,11 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
   });
   const regrade = useMutation({
     // One repository's regrade, or the whole project's (`repoId` undefined).
-    mutationFn: (repoId?: string) =>
-      api<ProjectRegradeAccepted>(`/app/api/projects/${id}${repoId ? `/repos/${repoId}` : ""}/regrade`, { method: "POST" }),
+    mutationFn: (v: { repoId?: string; body: ProjectRegradeRequest }) =>
+      api<ProjectRegradeAccepted>(`/app/api/projects/${id}${v.repoId ? `/repos/${v.repoId}` : ""}/regrade`, {
+        method: "POST",
+        body: JSON.stringify(v.body satisfies ProjectRegradeRequest),
+      }),
     onSuccess: async () => {
       await refresh();
       toast(t("project.grading.regrade.done"), "success");
@@ -185,27 +195,31 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
       validateRest.mutate();
     }
   };
+  // A schema-3 Regrade redoes the machine's correction (ADR-132 §5); once released, the server asks for its acknowledgement.
+  const ci = data.project.schemaVersion === 3;
+  const acknowledged = ci && data.project.released;
+  const regradeMessage = (body: string) => (acknowledged ? `${body} ${t("project.grading.regradeReleased.body")}` : body);
   const onRegradeAll = async () => {
     const frozen = repos.filter((r) => r.frozen).length;
     if (
       await confirm({
         title: t("project.grading.regradeAll.title"),
-        message: t("project.grading.regradeAll.body", { n: frozen }),
+        message: regradeMessage(t(ci ? "project.grading.regradeAllCi.body" : "project.grading.regradeAll.body", { n: frozen })),
         confirmLabel: t("project.grading.regrade.confirm"),
       })
     ) {
-      regrade.mutate(undefined);
+      regrade.mutate({ body: acknowledged ? { releasedAcknowledged: true } : {} });
     }
   };
   const onRegrade = async (target: ProjectGradingRepo) => {
     if (
       await confirm({
         title: t("project.grading.regrade.title", { name: target.label }),
-        message: t("project.grading.regrade.body"),
+        message: regradeMessage(t(ci ? "project.grading.regradeCi.body" : "project.grading.regrade.body")),
         confirmLabel: t("project.grading.regrade.confirm"),
       })
     ) {
-      regrade.mutate(target.id);
+      regrade.mutate({ repoId: target.id, body: acknowledged ? { releasedAcknowledged: true } : {} });
     }
   };
   const menuItems: MenuItem[] = [
@@ -282,6 +296,7 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
           onRelease={() => navigate({ view: "project", id })}
         />
       </div>
+      <PassLine pass={repo.pass} />
       {repo.frozen && repo.validation.missing.length > 0 ? (
         <Alert tone="warning" icon={AlertTriangle} title={t("project.grading.missing.title")}>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
@@ -355,6 +370,39 @@ function EvidenceLine({ repo }: { repo: ProjectGradingRepo }) {
         <span>{t("project.grading.total.pending")}</span>
       )}
     </p>
+  );
+}
+
+/**
+ * The repository's latest CI pass, staff only (ADR-132 §5, §6): how many
+ * files its graded commit holds in the distribution's version, their paths
+ * folded under it; and how many criteria got no new result while their
+ * earlier row stayed, with why. Nothing when it has neither.
+ */
+function PassLine({ pass }: { pass: ProjectGradingPass | null }) {
+  const t = useT();
+  if (!pass || (pass.replaced.count === 0 && pass.kept.length === 0)) return null;
+  const { count, paths } = pass.replaced;
+  const reasons = [...new Set(pass.kept.map((k) => k.reason))].map((reason) => t(`project.grading.reason.${reason}`)).join(", ");
+  return (
+    <div className="flex flex-col items-start gap-1 text-[13px] text-fg-muted">
+      {count > 0 ? (
+        <RationaleFold label={t(count === 1 ? "project.grading.pass.replaced.one" : "project.grading.pass.replaced", { n: count })}>
+          <ul className="space-y-0.5 font-mono text-xs">
+            {paths.map((path) => (
+              <li key={path}>{path}</li>
+            ))}
+          </ul>
+          {count > paths.length ? <span className="text-xs">{t("project.grading.pass.more", { n: count - paths.length })}</span> : null}
+        </RationaleFold>
+      ) : null}
+      {pass.kept.length > 0 ? (
+        <p className="inline-flex items-center gap-1.5">
+          <AlertTriangle aria-hidden className="size-3.5 shrink-0" />
+          {t(pass.kept.length === 1 ? "project.grading.pass.kept.one" : "project.grading.pass.kept", { n: pass.kept.length, reasons })}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

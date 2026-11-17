@@ -86,6 +86,7 @@ const STATUS: Record<Code, number> = {
   // A Regrade (ADR-106 §4).
   not_criteria: 409,
   regrade_limit: 429,
+  regrade_released: 409,
   // The grading screen and the release gate (ADR-106 §8).
   points_out_of_range: 422,
   criteria_incomplete: 409,

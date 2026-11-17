@@ -48,6 +48,23 @@ export interface CriterionGradeLike {
   lockedAt: Date | null;
 }
 
+/**
+ * Whether a standing row holds its criterion against a machine's proposal
+ * (ADR-106 §4, §5): a teacher's row and a milestone's locked row always; a
+ * validated row too, unless the proposal is a Regrade's actual result —
+ * points from an accepted run or a model's reply, no failure reason
+ * (ADR-132 §5: a Regrade redoes the machine's correction, validated rows
+ * included, and only a new result replaces one).
+ */
+export function holdsCriterion(
+  row: { source: CriterionGradeLike["source"]; state: CriterionGradeLike["state"]; locked: boolean },
+  proposal: { regrade?: boolean | undefined; reason?: CriterionReason | null | undefined },
+): boolean {
+  if (row.state === "superseded") return false;
+  if (row.source === "manual" || row.locked) return true;
+  return row.state === "validated" && !(proposal.regrade === true && proposal.reason == null);
+}
+
 /** One line of the table. `source`, `reason` are the staff's only; `rationale` the student's only after the freeze. */
 export interface CriteriaTableRow {
   criterionId: string;

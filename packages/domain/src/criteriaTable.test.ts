@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { criteriaScore, criteriaTable, currentCriterionRows, repoValidation, type CriterionGradeLike } from "./criteriaTable.js";
+import { criteriaScore, criteriaTable, currentCriterionRows, holdsCriterion, repoValidation, type CriterionGradeLike } from "./criteriaTable.js";
 
 const snapshot = {
   leaves: [
@@ -164,5 +164,33 @@ describe("criteriaScore (ADR-106 §7)", () => {
   it("has no score for a snapshot without a positive maximum", () => {
     const bonusOnly = { leaves: [snapshot.leaves[2]!] };
     expect(criteriaScore(bonusOnly, [validated("rapport.bonus", 1)])).toBeNull();
+  });
+});
+
+describe("holdsCriterion (ADR-106 §4, §5; ADR-132 §5)", () => {
+  const result = { reason: null };
+  const failure = { reason: "no_result" as const };
+
+  it("holds a teacher's row and a milestone's locked row against every machine proposal, a Regrade's result included", () => {
+    for (const state of ["proposed", "validated"] as const) {
+      expect(holdsCriterion({ source: "manual", state, locked: false }, { regrade: true, ...result })).toBe(true);
+      expect(holdsCriterion({ source: "auto", state, locked: true }, { regrade: true, ...result })).toBe(true);
+    }
+  });
+
+  it("holds a validated machine row against a final or milestone pass, and against a Regrade's failure", () => {
+    for (const source of ["auto", "llm"] as const) {
+      const row = { source, state: "validated" as const, locked: false };
+      expect(holdsCriterion(row, result)).toBe(true);
+      expect(holdsCriterion(row, { regrade: false, ...result })).toBe(true);
+      expect(holdsCriterion(row, { regrade: true, ...failure })).toBe(true);
+      expect(holdsCriterion(row, { regrade: true, ...result })).toBe(false);
+      expect(holdsCriterion(row, { regrade: true })).toBe(false);
+    }
+  });
+
+  it("never holds with a machine's proposal or a superseded row", () => {
+    expect(holdsCriterion({ source: "llm", state: "proposed", locked: false }, failure)).toBe(false);
+    expect(holdsCriterion({ source: "manual", state: "superseded", locked: true }, result)).toBe(false);
   });
 });

@@ -53,6 +53,7 @@ import {
   ProjectListQuery,
   ProjectPatch,
   ProjectRegradeAccepted,
+  ProjectRegradeRequest,
   ProjectRepoDeadline,
   ProjectRepoParams,
   ProjectSourceParams,
@@ -224,14 +225,15 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   /**
    * ADR-106 §4: a Regrade of every repository frozen for good — 202 with
    * the counts the confirmation priced; `409 not_criteria`, `409
-   * not_frozen`, `429 regrade_limit`. A write: the course role
-   * (`requireCourseRole`, owner or assistant).
+   * regrade_released` (ADR-132 §5: a released schema-3 project without the
+   * acknowledgement), `409 not_frozen`, `429 regrade_limit`. A write: the
+   * course role (`requireCourseRole`, owner or assistant).
    */
   app.post(
     "/app/api/projects/:id/regrade",
     session,
-    teacher(onStaffedProject, async ({ req, reply, now, scope }) =>
-      reply.code(202).send(ProjectRegradeAccepted.parse(await service.regrade(app, config, scope.project, null, actorOf(req), now))),
+    teacher({ ...onStaffedProject, body: ProjectRegradeRequest, optionalBody: true }, async ({ req, reply, now, body, scope }) =>
+      reply.code(202).send(ProjectRegradeAccepted.parse(await service.regrade(app, config, scope.project, null, actorOf(req), now, body))),
     ),
   );
 
@@ -457,12 +459,12 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     ),
   );
 
-  /** ADR-106 §4: a Regrade of one repository frozen for good; as the project's, it counts toward the day's three. */
+  /** ADR-106 §4: a Regrade of one repository frozen for good; as the project's, it counts toward the day's three, and asks the same acknowledgement. */
   app.post(
     "/app/api/projects/:id/repos/:rid/regrade",
     session,
-    teacher(onStaffedRepo, async ({ req, reply, now, scope }) =>
-      reply.code(202).send(ProjectRegradeAccepted.parse(await service.regrade(app, config, scope.project, scope.repo, actorOf(req), now))),
+    teacher({ ...onStaffedRepo, body: ProjectRegradeRequest, optionalBody: true }, async ({ req, reply, now, body, scope }) =>
+      reply.code(202).send(ProjectRegradeAccepted.parse(await service.regrade(app, config, scope.project, scope.repo, actorOf(req), now, body))),
     ),
   );
 

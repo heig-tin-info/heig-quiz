@@ -25,6 +25,13 @@
  *   `sig=` in no row, audit nor error;
  * - the 24 h on the server's clock; a Regrade dispatching anew with a new
  *   nonce, the old one retired;
+ * - a Regrade redoes the machine's correction (ADR-132 §5): an accepted
+ *   run's results replace validated `auto` rows, a teacher's, a locked one
+ *   and a criterion the results lack stay; a failed run (`no_result`,
+ *   `ci_tampered`, `ci_unavailable`) leaves them, recorded for the staff's
+ *   line; the final and milestone passes never replace one; after the
+ *   release, the acknowledgement, the student's released grade, the
+ *   release refused until validated, the staff's line staff only;
  * - a schema-2 snapshot still on the runner, a schema-3 one never;
  * - the LLM pass (ADR-119 §7, card L-06c), through the real gateway and a
  *   fake provider: the sources at the target and the accepted logs, masked
@@ -43,7 +50,7 @@ import { and, eq, ne } from "drizzle-orm";
 import type { Octokit } from "octokit";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { ProjectSummary } from "@quiz/contracts";
+import { ProjectGradingView, ProjectSummary, StudentProject } from "@quiz/contracts";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 
 import { SYSTEM_ACTOR } from "../../audit.js";
@@ -209,14 +216,14 @@ async function lab(version: 2 | 3 = 3, criteria = CRITERIA): Promise<Lab> {
 }
 
 /** A student's repository: a copy of the source's files on GitHub, its row. */
-async function studentRepo(l: Lab, name: string) {
+async function studentRepo(l: Lab, name: string, userId?: string) {
   const fullName = `${l.login}/${name}`;
   world.source(l.login, name, { main: FILES });
   const id = randomUUID();
   await server.app.db.insert(projectRepos).values({
     id,
     projectId: l.projectId,
-    userId: (await server.signIn("student")).id,
+    userId: userId ?? (await server.signIn("student")).id,
     githubRepoId: world.ids.get(fullName)!,
     fullName,
     defaultBranch: "main",
@@ -835,6 +842,204 @@ describe("the 24 h and a Regrade", () => {
   });
 });
 
+describe("a Regrade redoes the machine's correction (ADR-132 §5)", () => {
+  let l: Lab;
+  let checkpointId: string;
+  beforeAll(async () => {
+    l = await lab();
+    checkpointId = randomUUID();
+    await server.app.db.insert(projectCheckpoints).values({ id: checkpointId, projectId: l.projectId, name: "mid", dueAt: before(10) });
+  });
+
+  const MAX: Record<string, number> = { "code.format": 1, "code.tests": 10, "code.crash": -2, "bonus.extra": 0, "rapport.style": 2 };
+  const ALL = { criteria: { "code.format": { score: "1/1" }, "code.tests": { score: "10/10" }, "code.crash": { score: "1/1" }, "bonus.extra": { score: "1/1" } } };
+  /** Validated rows, as a teacher's validation left them: a machine's (from an earlier pass), or a teacher's. */
+  const validated = (repoId: string, rows: (Pick<Parameters<typeof writeCriterionGrades>[2][number], "criterionId" | "points" | "source"> & { locked?: boolean })[]) =>
+    writeCriterionGrades(
+      server.app.db,
+      repoId,
+      rows.map(({ locked, ...row }) => ({
+        ...row,
+        max: MAX[row.criterionId]!,
+        state: "validated" as const,
+        passId: row.source === "manual" ? null : randomUUID(),
+        ...(locked ? { lockedByCheckpointId: checkpointId, lockedAt: new Date(NOW) } : {}),
+      })),
+      server.clock.now(),
+    );
+  const machine = (points: Record<string, number>) => Object.entries(points).map(([criterionId, p]) => ({ criterionId, points: p, source: "auto" as const }));
+  const standing = async (repoId: string) =>
+    Object.fromEntries(
+      (
+        await server.app.db
+          .select()
+          .from(projectCriterionGrades)
+          .where(and(eq(projectCriterionGrades.repoId, repoId), ne(projectCriterionGrades.state, "superseded")))
+      ).map((r) => [r.criterionId, [r.points, r.state, r.source]]),
+    );
+  const freeze = (repoId: string) =>
+    server.app.db.update(projectRepos).set({ deadlineAppliedAt: new Date(NOW), frozenAt: new Date(NOW) }).where(eq(projectRepos.id, repoId));
+  const ctxOf = async (repo: { githubRepoId: number }) => (await repoContext(server.app.db, repo.githubRepoId))!;
+  /** A Regrade of one repository through the service, then its `project.ci` job: the pass. */
+  async function regradePass(lab_: Lab, repoId: string, outcome: "dispatched" | "settled" = "dispatched") {
+    const [project] = await server.app.db.select().from(projects).where(eq(projects.id, lab_.projectId));
+    const [row] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repoId));
+    expect(await regrade(server.app, config, project!, row!, SYSTEM_ACTOR, server.clock.now(), { releasedAcknowledged: true })).toEqual({ repos: 1 });
+    const [pass] = await server.app.db.select().from(gradeDispatches).where(and(eq(gradeDispatches.repoId, repoId), eq(gradeDispatches.trigger, "regrade")));
+    expect(await runCiDispatch(server.app, config, { passId: pass!.id })).toBe(outcome);
+    return passRow(pass!.id);
+  }
+
+  it("replaces validated automatic rows with an accepted run's results; a teacher's row, a milestone's locked row and a criterion the results lack stay", async () => {
+    const repo = await studentRepo(l, "rg-anna");
+    const target = await work(repo);
+    await freeze(repo.id);
+    await validated(repo.id, [
+      { criterionId: "code.format", points: 0, source: "auto" },
+      { criterionId: "code.tests", points: 5, source: "auto", locked: true },
+      { criterionId: "code.crash", points: -1, source: "manual" },
+      { criterionId: "bonus.extra", points: 0, source: "auto" },
+    ]);
+    const pass = await regradePass(l, repo.id);
+    const run = gradedRun(pass.nonce!, target);
+    upload(run.workflowRunId, { criteria: { "code.format": { score: "1/1" }, "code.tests": { score: "10/10" }, "code.crash": { score: "1/1" } } });
+    expect(await intakeGradedRun(server.app, await octokitOf(l), await ctxOf(repo), run)).toBe("accepted");
+    expect(await standing(repo.id)).toEqual({
+      "code.format": [1, "proposed", "auto"],
+      "code.tests": [5, "validated", "auto"],
+      "code.crash": [-1, "validated", "manual"],
+      "bonus.extra": [0, "validated", "auto"],
+    });
+    expect((await passRow(pass.id)).keptFailures).toEqual({ "bonus.extra": "no_result" });
+    // The staff's line says it; the repository waits for its validation again.
+    const res = await server.app.inject({ method: "GET", url: `/app/api/projects/${l.projectId}/grading`, headers: teacher.headers });
+    expect(res.statusCode, res.body).toBe(200);
+    const entry = ProjectGradingView.parse(res.json()).repos.find((r) => r.id === repo.id)!;
+    expect(entry.pass).toEqual({ replaced: { count: 0, paths: [] }, kept: [{ criterionId: "bonus.extra", reason: "no_result" }] });
+    expect(entry.validation.validated).toBe(false);
+  });
+
+  it("leaves the validated rows as they were when the Regrade's run fails: no_result, ci_tampered, ci_unavailable", async () => {
+    const before_ = { "code.format": 1, "code.tests": 4, "code.crash": 0, "bonus.extra": 0 };
+    const expected = Object.fromEntries(Object.entries(before_).map(([id, p]) => [id, [p, "validated", "auto"]]));
+    const setUp = async (name: string) => {
+      const repo = await studentRepo(l, name);
+      const target = await work(repo);
+      await freeze(repo.id);
+      await validated(repo.id, machine(before_));
+      return { repo, target };
+    };
+
+    // An accepted run without its artifact.
+    const a = await setUp("rg-bert");
+    const passA = await regradePass(l, a.repo.id);
+    expect(await intakeGradedRun(server.app, await octokitOf(l), await ctxOf(a.repo), gradedRun(passA.nonce!, a.target))).toBe("no_result");
+    // A run whose grading.yml the distribution never handed out.
+    const b = await setUp("rg-cleo");
+    const passB = await regradePass(l, b.repo.id);
+    const head = world.commit(b.repo.fullName, "main", { ".github/workflows/grading.yml": `${WORKFLOW}# mine\n` });
+    const tampered = gradedRun(passB.nonce!, head);
+    upload(tampered.workflowRunId, ALL);
+    expect(await intakeGradedRun(server.app, await octokitOf(l), await ctxOf(b.repo), tampered)).toBe("ci_tampered");
+    // GitHub refusing the dispatch: settled ci_unavailable at once, its review queued as a Regrade's.
+    const c = await setUp("rg-dina");
+    refusing.set(c.repo.fullName, 422);
+    const sent: { name: string; data: object }[] = [];
+    const app = server.app as { boss?: JobQueue };
+    app.boss = { createQueue: async () => {}, send: async (name, data) => void sent.push({ name, data }), work: async () => {}, stop: async () => {} };
+    let passC: Awaited<ReturnType<typeof passRow>>;
+    try {
+      passC = await regradePass(l, c.repo.id, "settled");
+    } finally {
+      delete app.boss;
+    }
+    expect(sent.filter((s) => s.name === "project.review")).toEqual([
+      { name: "project.review", data: { repoId: c.repo.id, passId: passC.id, checkpointId: undefined, regrade: true } },
+    ]);
+
+    for (const [{ repo }, pass, reason] of [
+      [a, passA, "no_result"],
+      [b, passB, "ci_tampered"],
+      [c, passC, "ci_unavailable"],
+    ] as const) {
+      expect(await standing(repo.id), reason).toEqual(expected);
+      expect((await passRow(pass.id)).keptFailures, reason).toEqual(Object.fromEntries(Object.keys(before_).map((id) => [id, reason])));
+    }
+  });
+
+  it("never lets the final pass nor a milestone's replace a validated row", async () => {
+    const repo = await studentRepo(l, "rg-emil");
+    const target = await work(repo);
+    await validated(repo.id, machine({ "code.format": 0, "code.tests": 2, "code.crash": 0, "bonus.extra": 0 }));
+    const expected = await standing(repo.id);
+    for (const checkpoint of [undefined, checkpointId]) {
+      const claimed = await claimFinal(repo.id, checkpoint);
+      expect(await runCiDispatch(server.app, config, { passId: claimed.passId })).toBe("dispatched");
+      const run = gradedRun((await passRow(claimed.passId)).nonce!, target);
+      upload(run.workflowRunId, ALL);
+      expect(await intakeGradedRun(server.app, await octokitOf(l), await ctxOf(repo), run)).toBe("accepted");
+      expect(await standing(repo.id), String(checkpoint)).toEqual(expected);
+    }
+  });
+
+  it("after the release: 409 regrade_released without the acknowledgement; the student reads the released grade until a release again, refused until validated", async () => {
+    const own = await lab();
+    const student = await server.signIn("student");
+    const [project] = await server.app.db.update(projects).set({ state: "published" }).where(eq(projects.id, own.projectId)).returning();
+    await server.app.db
+      .insert(enrollments)
+      .values({ id: randomUUID(), classroomId: project!.classroomId, nom: "Rossier", prenom: "Fanny", email: "fanny.rossier@heig-vd.ch", userId: student.id });
+    const repo = await studentRepo(own, "rg-fanny", student.id);
+    // An obsolete copy of a protected file: the graded commit takes the distribution's.
+    const target = await work(repo, { "src/main.c": "int main(){}\n", "tests/check.sh": "exit 0\n" });
+    await freeze(repo.id);
+    await validated(repo.id, [...machine({ "code.format": 1, "code.tests": 5, "code.crash": 0, "bonus.extra": 0 }), { criterionId: "rapport.style", points: 1, source: "llm" }]);
+    const call = (method: "GET" | "POST", url: string, headers: Record<string, string>, payload?: object) =>
+      server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
+    const bodies: string[] = [];
+    const read = async () => {
+      const res = await call("GET", `/app/api/student/projects/${own.projectId}`, student.headers);
+      expect(res.statusCode, res.body).toBe(200);
+      bodies.push(res.body);
+      return StudentProject.parse(res.json());
+    };
+    const release = () => call("POST", `/app/api/projects/${own.projectId}/release`, teacher.headers);
+    const released = await release();
+    expect(released.statusCode, released.body).toBe(200);
+    const first = await read();
+    expect(first.release?.points).not.toBeNull();
+
+    for (const url of [`/app/api/projects/${own.projectId}/regrade`, `/app/api/projects/${own.projectId}/repos/${repo.id}/regrade`]) {
+      const refused = await call("POST", url, teacher.headers);
+      expect([refused.statusCode, refused.json().error], refused.body).toEqual([409, "regrade_released"]);
+    }
+    const accepted = await call("POST", `/app/api/projects/${own.projectId}/repos/${repo.id}/regrade`, teacher.headers, { releasedAcknowledged: true });
+    expect([accepted.statusCode, accepted.json()], accepted.body).toEqual([202, { repos: 1 }]);
+    const [pass] = await server.app.db.select().from(gradeDispatches).where(and(eq(gradeDispatches.repoId, repo.id), eq(gradeDispatches.trigger, "regrade")));
+    expect(await runCiDispatch(server.app, config, { passId: pass!.id })).toBe("dispatched");
+    const run = gradedRun(pass!.nonce!, target);
+    upload(run.workflowRunId, ALL);
+    expect(await intakeGradedRun(server.app, await octokitOf(own), await ctxOf(repo), run)).toBe("accepted");
+
+    // The student's grade is the release's; their criteria show the replaced rows as indicative points.
+    const after = await read();
+    expect(after.release).toEqual(first.release);
+    expect(after.criteria!.find((r) => r.criterionId === "code.tests")).toMatchObject({ points: 10, state: "indicative" });
+    expect(after.criteria!.find((r) => r.criterionId === "rapport.style")).toMatchObject({ points: 1, state: "validated" });
+    // A release again waits for the validation.
+    const again = await release();
+    expect([again.statusCode, again.json().error], again.body).toEqual([409, "not_validated"]);
+
+    // The staff's line, staff only: the file the distribution's version replaced.
+    const staff = await call("GET", `/app/api/projects/${own.projectId}/grading`, teacher.headers);
+    const entry = ProjectGradingView.parse(staff.json()).repos.find((r) => r.id === repo.id)!;
+    expect(entry.pass).toEqual({ replaced: { count: 1, paths: ["tests/check.sh"] }, kept: [] });
+    for (const body of bodies) {
+      for (const secret of ["tests/check.sh", '"replaced"', '"kept"', '"pass"']) expect(body, secret).not.toContain(secret);
+    }
+  });
+});
+
 describe("the two paths (ADR-119 §11)", () => {
   it("never runs a schema-3 snapshot on the runner, nor proposes an auto row from JUnit", async () => {
     const l = await lab();
@@ -1089,6 +1294,46 @@ describe("the LLM pass of a schema-3 pass (ADR-119 §7)", () => {
     expect(gh.calls.some((c) => c.includes(`/app/installations/${installationId}/access_tokens`))).toBe(true);
     expect(seen).toHaveLength(0);
     expect((await rowsOf(pass.repo.id))["rapport.style"]).toEqual([0, "github_unavailable", null]);
+  });
+
+  it("redoes a validated llm row with the model's reply on a Regrade's pass only; a failed review leaves it (ADR-132 §5)", async () => {
+    const repo = await namedRepo("h8");
+    await work(repo);
+    await server.app.db.update(projectRepos).set({ deadlineAppliedAt: new Date(NOW), frozenAt: new Date(NOW) }).where(eq(projectRepos.id, repo.id));
+    await writeCriterionGrades(
+      server.app.db,
+      repo.id,
+      [{ criterionId: "rapport.style", points: 1, max: 2, source: "llm", state: "validated", rationale: "Kept.", passId: randomUUID() }],
+      server.clock.now(),
+    );
+    const [project] = await server.app.db.select().from(projects).where(eq(projects.id, l.projectId));
+    const [row] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repo.id));
+    await regrade(server.app, config, project!, row!, SYSTEM_ACTOR, server.clock.now());
+    const [pass] = await server.app.db.select().from(gradeDispatches).where(and(eq(gradeDispatches.repoId, repo.id), eq(gradeDispatches.trigger, "regrade")));
+    expect(await runCiDispatch(server.app, config, { passId: pass!.id })).toBe("dispatched");
+    answer = { "rapport.style": { points: 2, rationale: "Redone." } };
+    const job = { repoId: repo.id, passId: pass!.id };
+    // Another pass's review (the final pass's, a milestone's): the validated row holds, no call.
+    seen.length = 0;
+    expect(await runReview(server.app, config, job)).toBe(0);
+    expect(seen).toHaveLength(0);
+    // A Regrade's review that fails: the validated row holds.
+    const llm = server.app.llm;
+    server.app.llm = null;
+    try {
+      expect(await runReview(server.app, config, { ...job, regrade: true })).toBe(0);
+    } finally {
+      server.app.llm = llm;
+    }
+    expect((await rowsOf(repo.id))["rapport.style"]).toEqual([1, null, "Kept."]);
+    // Its model's reply replaces it, waiting for the validation again.
+    expect(await runReview(server.app, config, { ...job, regrade: true })).toBe(1);
+    expect((await rowsOf(repo.id))["rapport.style"]).toEqual([2, null, "Redone."]);
+    const [style] = await server.app.db
+      .select()
+      .from(projectCriterionGrades)
+      .where(and(eq(projectCriterionGrades.repoId, repo.id), eq(projectCriterionGrades.criterionId, "rapport.style"), ne(projectCriterionGrades.state, "superseded")));
+    expect(style).toMatchObject({ source: "llm", state: "proposed", passId: pass!.id });
   });
 
   it("queues the pass's review once it is settled", async () => {

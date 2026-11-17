@@ -6471,6 +6471,7 @@ export const en = {
   "project.refusal.criteriaIncomplete": "A criterion has no points yet: give it some, 0 included, before validating.",
   "project.refusal.notValidated": "Every repository's criteria must be validated before the release.",
   "project.refusal.regradeLimit": "This project was regraded three times today: try again tomorrow.",
+  "project.refusal.regradeReleased": "The project is released: confirm the regrade again to replace validated rows.",
   "project.grading.open": "Grade",
   "project.grading.openLink": "Grading screen",
   "project.grading.title": "Grading by criteria",
@@ -6552,6 +6553,17 @@ export const en = {
   "project.grading.regradeAll.body": "The tests and the AI run again for each repository ({n} calls). Validated rows and teachers' rows stay. At most three regrades of the whole project a day.",
   "project.grading.regrade.confirm": "Regrade",
   "project.grading.regrade.done": "Regrade started: the proposals arrive in a moment.",
+  "project.grading.regradeCi.body":
+    "The CI and the AI grade it again (1 call). Each result they return replaces the automatic or AI row, even a validated one, and teachers' points and milestone rows stay. At most three regrades a day per repository.",
+  "project.grading.regradeAllCi.body":
+    "The CI and the AI grade each repository again ({n} calls). Each result they return replaces the automatic or AI row, even a validated one, and teachers' points and milestone rows stay. At most three regrades of the whole project a day.",
+  "project.grading.regradeReleased.body":
+    "The project is released. Students keep the released grade until you release again, with no new notification, and meanwhile their criteria show the new points as indicative. Replaced rows wait for your validation.",
+  "project.grading.pass.replaced.one": "1 file replaced by the distribution's version",
+  "project.grading.pass.replaced": "{n} files replaced by the distribution's version",
+  "project.grading.pass.more": "and {n} more",
+  "project.grading.pass.kept.one": "No new result for 1 criterion ({reasons}): its earlier row stays",
+  "project.grading.pass.kept": "No new result for {n} criteria ({reasons}): their earlier rows stay",
   "project.grading.keys": "← → between repositories",
   "project.grading.ciLog": "CI output",
   "project.grading.ciLog.none": "No output.",

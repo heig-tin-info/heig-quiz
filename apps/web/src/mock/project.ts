@@ -50,6 +50,7 @@ import {
   PROJECT_DEFAULTS,
   ProjectGroupResync,
   ProjectPatch,
+  ProjectRegradeRequest,
   ProjectReleaseRefusal,
   ReviewCheckpointCreate,
   ScoreOverride,
@@ -1534,6 +1535,23 @@ function gradingRepoOf(p: MockProject, r: MockRepo): ProjectGradingRepo {
     ),
     evidence: EVIDENCE.get(r.id) ?? null,
     total: criteriaScore(SNAPSHOT, rows),
+    pass: passOf(p, r),
+  };
+}
+
+/**
+ * The latest CI pass's trace (ADR-132 §5, §6): every frozen repository's
+ * graded commit took the distribution's tests and `criteria.yml`, a second
+ * one's also its README; the failed repository's run gave no result for
+ * its tests' row, which stayed.
+ */
+function passOf(p: MockProject, r: MockRepo): ProjectGradingRepo["pass"] {
+  const i = p.repos.indexOf(r);
+  if (r.frozenAt === null) return null;
+  const paths = ["criteria.yml", "tests/test_parser.c", "tests/test_words.c", ...(i % 2 === 1 ? ["README.md"] : [])];
+  return {
+    replaced: { count: paths.length, paths },
+    kept: i === 4 ? [{ criterionId: CI_CRITERION, reason: "ci_unavailable" }] : [],
   };
 }
 
@@ -1587,7 +1605,8 @@ function validateRepo(r: MockRepo): boolean {
 on("GET", "/app/api/projects/:id/grading", (m): ProjectGradingView => {
   const p = criteriaProjectOr409(m.groups!.id!);
   return {
-    project: { id: p.summary.id, classroomId: p.summary.classroomId, name: p.summary.name, deadlineAt: p.summary.deadlineAt },
+    // The screen's CI logs are a schema-3 pass's (ADR-119 §8): its Regrade redoes the machine's correction (ADR-132 §5).
+    project: { id: p.summary.id, classroomId: p.summary.classroomId, name: p.summary.name, deadlineAt: p.summary.deadlineAt, schemaVersion: 3, released: p.releasedAt !== null },
     repos: p.repos
       .filter((r) => isLive(p, r))
       .map((r) => gradingRepoOf(p, r))
@@ -1648,10 +1667,24 @@ on("POST", "/app/api/projects/:id/validate", (m): ProjectValidated => {
   return { validated: repos.filter(validateRepo).length };
 });
 
-on("POST", "/app/api/projects/:id/repos/:rid/regrade", (m): ProjectRegradeAccepted => {
+/** A Regrade of a released project without its acknowledgement: `409 regrade_released` (ADR-132 §5). */
+function refuseUnacknowledged(p: MockProject, raw: unknown): void {
+  if (p.releasedAt !== null && !ProjectRegradeRequest.parse(raw ?? {}).releasedAcknowledged) {
+    throw refuse(409, "regrade_released", "The project is released: confirm the regrade");
+  }
+}
+
+on("POST", "/app/api/projects/:id/repos/:rid/regrade", (m, raw): ProjectRegradeAccepted => {
   const p = criteriaProjectOr409(m.groups!.id!);
   frozenRepoOr409(p, m.groups!.rid!);
+  refuseUnacknowledged(p, raw);
   return { repos: 1 };
+});
+
+on("POST", "/app/api/projects/:id/regrade", (m, raw): ProjectRegradeAccepted => {
+  const p = criteriaProjectOr409(m.groups!.id!);
+  refuseUnacknowledged(p, raw);
+  return { repos: p.repos.filter((r) => isLive(p, r) && r.frozenAt !== null).length };
 });
 
 /** What Publish and Schedule refuse alike (ADR-127 §6): the distribution, the groups. */

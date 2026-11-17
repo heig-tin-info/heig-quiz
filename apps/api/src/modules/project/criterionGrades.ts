@@ -12,9 +12,9 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 
-import { criteriaScore, currentCriterionRows, repoValidation, type ParsedCriteria, type RepoValidation } from "@quiz/domain";
+import { criteriaScore, currentCriterionRows, holdsCriterion, repoValidation, type ParsedCriteria, type RepoValidation } from "@quiz/domain";
 
 import type { Db, Tx } from "../../db/client.js";
 import { projectCriteria, projectCriterionGrades, projectRepos, projects } from "../../db/schema.js";
@@ -95,28 +95,30 @@ export function awaitsValidation(gradingMode: string, standing: CriteriaStanding
   return gradingMode === "criteria" && standing?.validation.validated !== true;
 }
 
-/**
- * The criteria of a repository a machine may not propose: a standing
- * validated, teacher's or locked row (a milestone's, §5) — and, with
- * `passId`, a row of that pass (a job run twice proposes nothing again).
- */
-export async function heldCriteria(db: Db | Tx, repoId: string, passId?: string): Promise<Set<string>> {
-  const rows = await db
-    .select({ criterionId: projectCriterionGrades.criterionId })
+/** A repository's standing rows, as a hold reads them (`holdsCriterion`). */
+async function standingRows(db: Db | Tx, repoId: string) {
+  return db
+    .select({
+      criterionId: projectCriterionGrades.criterionId,
+      source: projectCriterionGrades.source,
+      state: projectCriterionGrades.state,
+      locked: sql<boolean>`${projectCriterionGrades.lockedByCheckpointId} is not null`,
+      passId: projectCriterionGrades.passId,
+    })
     .from(projectCriterionGrades)
-    .where(
-      and(
-        eq(projectCriterionGrades.repoId, repoId),
-        ne(projectCriterionGrades.state, "superseded"),
-        or(
-          eq(projectCriterionGrades.state, "validated"),
-          eq(projectCriterionGrades.source, "manual"),
-          isNotNull(projectCriterionGrades.lockedByCheckpointId),
-          passId === undefined ? sql`false` : eq(projectCriterionGrades.passId, passId),
-        ),
-      ),
-    );
-  return new Set(rows.map((r) => r.criterionId));
+    .where(and(eq(projectCriterionGrades.repoId, repoId), ne(projectCriterionGrades.state, "superseded")));
+}
+
+/**
+ * The criteria of a repository a machine may not propose (`holdsCriterion`):
+ * a standing teacher's or locked row (a milestone's, §5), or a validated
+ * one — unless `regrade`: a Regrade's result redoes a validated machine row
+ * (ADR-132 §5) —, and, with `passId`, a row of that pass (a job run twice
+ * proposes nothing again).
+ */
+export async function heldCriteria(db: Db | Tx, repoId: string, passId?: string, regrade = false): Promise<Set<string>> {
+  const rows = await standingRows(db, repoId);
+  return new Set(rows.filter((r) => (passId !== undefined && r.passId === passId) || holdsCriterion(r, { regrade })).map((r) => r.criterionId));
 }
 
 /**
@@ -159,6 +161,8 @@ export interface CriterionGradeInput {
   /** A milestone pass's lock (§5); a row without one inherits the lock of the row it supersedes. */
   lockedByCheckpointId?: string | null;
   lockedAt?: Date | null;
+  /** Proposed by a Regrade's pass (ADR-132 §5): its result, without a failure reason, redoes a validated machine row. */
+  regrade?: boolean;
 }
 
 /**
@@ -170,11 +174,12 @@ export interface CriterionGradeInput {
  * - A `manual` input — a teacher's row, in the state it carries — and a
  *   `validated` one supersede everything standing on their criterion,
  *   whatever its source or state.
- * - A machine's `proposed` input supersedes only a machine's proposal, and
- *   is DROPPED when its criterion is held ({@link heldCriteria}: a standing
- *   validated or teacher's row) — read under the lock, so a teacher's row
- *   written while a model was being asked always wins (the callers' own
- *   check only spares a needless call).
+ * - A machine's `proposed` input is DROPPED when a standing row holds its
+ *   criterion (`holdsCriterion`: a teacher's or locked row, a validated one
+ *   unless the input is a Regrade's result, ADR-132 §5), and supersedes the
+ *   rest — read under the lock, so a teacher's row written while a model
+ *   was being asked always wins (the callers' own check only spares a
+ *   needless call).
  *
  * A new row without a lock of its own keeps the lock of a row it
  * supersedes (§5): a teacher's correction or a validation of a locked row
@@ -210,13 +215,10 @@ async function lockRepos(tx: Tx, repoIds: readonly string[]) {
 /** {@link writeCriterionGrades}'s supersede-and-insert, under the lock its caller holds. */
 async function writeLocked(tx: Tx, repoId: string, all: readonly CriterionGradeInput[], now: Date): Promise<CriterionGradeRow[]> {
   const overrides = (i: CriterionGradeInput) => i.source === "manual" || i.state === "validated";
-  const held = await heldCriteria(tx, repoId);
-  const inputs = all.filter((i) => overrides(i) || !held.has(i.criterionId));
+  const standing = await standingRows(tx, repoId);
+  const inputs = all.filter((i) => overrides(i) || !standing.some((r) => r.criterionId === i.criterionId && holdsCriterion(r, i)));
   if (inputs.length === 0) return [];
-  const among = (override: boolean) => {
-    const ids = inputs.filter((i) => overrides(i) === override).map((i) => i.criterionId);
-    return ids.length === 0 ? sql`false` : inArray(projectCriterionGrades.criterionId, ids);
-  };
+  // Every standing row of a criterion kept is one its input replaces: the filter above, under the same lock, left no other.
   const superseded = await tx
     .update(projectCriterionGrades)
     .set({ state: "superseded" })
@@ -224,9 +226,9 @@ async function writeLocked(tx: Tx, repoId: string, all: readonly CriterionGradeI
       and(
         eq(projectCriterionGrades.repoId, repoId),
         ne(projectCriterionGrades.state, "superseded"),
-        or(
-          among(true),
-          and(among(false), eq(projectCriterionGrades.state, "proposed"), ne(projectCriterionGrades.source, "manual")),
+        inArray(
+          projectCriterionGrades.criterionId,
+          inputs.map((i) => i.criterionId),
         ),
       ),
     )
@@ -246,7 +248,7 @@ async function writeLocked(tx: Tx, repoId: string, all: readonly CriterionGradeI
   return tx
     .insert(projectCriterionGrades)
     .values(
-      inputs.map((input) => {
+      inputs.map(({ regrade: _regrade, ...input }) => {
         const lost = previous.get(input.criterionId);
         return {
           ...input,

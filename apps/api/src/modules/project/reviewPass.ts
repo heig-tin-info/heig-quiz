@@ -5,7 +5,9 @@
  * project's creator, for the llm criteria no one holds — not validated, not
  * a teacher's, not locked by a milestone, not already proposed by this pass
  * — and, for a milestone pass (§5), those its checkpoint tags only, their
- * rows locked. Everything sent is masked before it is cut (N-DATA-05,
+ * rows locked. A Regrade's pass of a schema-3 project (ADR-132 §5) asks for
+ * the validated ones too: the model's reply replaces them, a failure never
+ * does (`holdsCriterion`). Everything sent is masked before it is cut (N-DATA-05,
  * `renderMaterial`): the classroom's roster and the repository's members —
  * names, e-mail addresses, GitHub logins — and the repository's owner and
  * name. Its proposals are `llm` rows in state `proposed`, their rationale
@@ -76,6 +78,8 @@ export interface ReviewJob {
   evidenceId?: string | undefined;
   /** A milestone pass's checkpoint (§5). */
   checkpointId?: string | undefined;
+  /** A Regrade's pass of a schema-3 project (ADR-132 §5): its replies redo validated llm rows. */
+  regrade?: boolean | undefined;
 }
 
 /** Review jobs a process runs at once, as `grading.llm`. */
@@ -242,7 +246,8 @@ export async function runReview(app: FastifyInstance, config: AppConfig, job: Re
   if (!scope) return 0;
   const loaded: Loaded = { repo, project, snapshot, scope };
   // Not held, nor already proposed by this pass (a job run twice): spares a needless call, the writer checks again.
-  const held = await heldCriteria(db, repo.id, job.passId);
+  const regrade = job.regrade === true;
+  const held = await heldCriteria(db, repo.id, job.passId, regrade);
   const leaves = llmLeaves(scope.leaves, snapshotSettings(project, snapshot.schemaVersion)).filter((leaf) => !held.has(leaf.id));
   if (leaves.length === 0) return 0;
   const material =
@@ -257,7 +262,7 @@ export async function runReview(app: FastifyInstance, config: AppConfig, job: Re
   const written = await writeCriterionGrades(
     db,
     repo.id,
-    inputs.map((input) => ({ ...input, ...scope.lock(now) })),
+    inputs.map((input) => ({ ...input, regrade, ...scope.lock(now) })),
     now,
   );
   await hintProjectStaff(db, [project.id]);
