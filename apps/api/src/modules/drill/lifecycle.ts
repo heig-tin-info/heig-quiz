@@ -156,15 +156,13 @@ export async function currentVersions(
  * the first meeting wins, 06, question 28 (j)). Nothing when the evaluation
  * does not allow drill, when its classroom has the drill off or is archived,
  * and nothing for a student who opted out or a guest. A teacher's staff seat
- * gets its own cards at a hand-in or a release (`population: "all"`, ADR-018,
- * amended 2026-11-17), never from the past: a backfill passes `"students"`.
+ * gets its own cards as a student does (ADR-018, amended 2026-11-17).
  */
 async function createCards(
   db: Db,
   evaluation: EvaluationRecord,
   userIds: readonly string[],
   now: Date,
-  population: "all" | "students" = "all",
 ): Promise<number> {
   if (evaluation.classroomId === null || !drillAllowed(evaluation) || userIds.length === 0) return 0;
   const [room] = await db
@@ -185,7 +183,6 @@ async function createCards(
       and(
         eq(enrollments.classroomId, room.id),
         inArray(enrollments.userId, [...userIds]),
-        population === "students" ? eq(enrollments.staff, false) : undefined,
         isNull(enrollments.drillOptedOutAt),
       ),
     );
@@ -255,9 +252,7 @@ async function finishedTakers(db: Db, evaluationId: string): Promise<string[]> {
  * §13): the cards its past evaluations would have created, by the same path —
  * the exams whose results are released, the exercises for every student who
  * handed one in. Idempotent: a card that exists is kept, the first meeting
- * wins, and an evaluation that does not allow drill creates nothing. A staff
- * seat's past attempts create none: its cards come at a hand-in or a release
- * only (ADR-018, amended 2026-11-17).
+ * wins, and an evaluation that does not allow drill creates nothing.
  */
 export async function backfillClassroom(db: Db, classroomId: string, now: Date): Promise<number> {
   const rows = await db
@@ -268,7 +263,7 @@ export async function backfillClassroom(db: Db, classroomId: string, now: Date):
   let created = 0;
   for (const evaluation of rows) {
     if (evaluation.mode === "exam" && evaluation.releasedAt === null) continue;
-    created += await createCards(db, evaluation, await finishedTakers(db, evaluation.id), now, "students");
+    created += await createCards(db, evaluation, await finishedTakers(db, evaluation.id), now);
   }
   return created;
 }

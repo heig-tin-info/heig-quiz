@@ -470,7 +470,7 @@ describe("preferences", () => {
       });
     const kinds = async (userId: string) => (await service.notificationSettings(db, userId, true, true)).kinds;
 
-    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false, github: true }));
+    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, staffSeat: false, courseSeat: false, github: true }));
     // A staff seat adds the kinds of its own attempts only (ADR-018, amended 2026-11-17).
     await seat(true);
     expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, staffSeat: true, courseSeat: false, github: true }));
@@ -483,7 +483,7 @@ describe("preferences", () => {
 
     const gina = await seedUser("gina@heig.test");
     await db.update(users).set({ role: "student" }).where(eq(users.id, gina));
-    expect(await kinds(gina)).toEqual(notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false, github: true }));
+    expect(await kinds(gina)).toEqual(notificationKindsFor({ role: "student", studentSeat: false, staffSeat: false, courseSeat: false, github: true }));
   });
 
   /*

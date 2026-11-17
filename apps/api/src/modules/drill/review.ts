@@ -62,6 +62,7 @@ import {
   drillNewUnlocks,
   drillReviews,
   enrollments,
+  isStaffCard,
   questionConcepts,
 } from "../../db/schema.js";
 import type { DbOrTx } from "../evaluation/service.js";
@@ -181,7 +182,8 @@ async function servable(db: DbOrTx, userId: string, cardId: string, now: Date) {
 /**
  * The reference time of each question for one student on one device class
  * (ADR-041 §4, `drillReferenceOf`): the count and the median of the correct
- * reviews of every student on that class, and the student's own latest
+ * reviews of every student on that class — never a teacher's staff seat
+ * (`isStaffCard`, ADR-018) — and the caller's own latest
  * correct time, all three computed by the database. Read before the review
  * being rated is written. No estimate per type in v1: a right answer with no
  * reference is rated Good (ADR-041 §10, item 7).
@@ -207,7 +209,8 @@ async function referenceTimes(
       })
       .from(drillReviews)
       .innerJoin(drillCards, eq(drillCards.id, drillReviews.cardId))
-      .where(correct)
+      // Every STUDENT's: a teacher's staff seat reviews its own cards, never the class's reference (ADR-018).
+      .where(and(correct, sql`not ${isStaffCard}`))
       .groupBy(drillCards.questionId),
     db
       .selectDistinctOn([drillCards.questionId], {

@@ -14,9 +14,9 @@ import { mockFetch, ok, renderWithProviders } from "../test/render";
  * and the Teams link.
  */
 
-const STUDENT = notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false, github: true });
-const TEACHER = notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false, github: true });
-const TEACHER_ON_A_ROSTER = notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false, github: true });
+const STUDENT = notificationKindsFor({ role: "student", studentSeat: false, staffSeat: false, courseSeat: false, github: true });
+const TEACHER = notificationKindsFor({ role: "teacher", studentSeat: false, staffSeat: false, courseSeat: false, github: true });
+const TEACHER_ON_A_ROSTER = notificationKindsFor({ role: "teacher", studentSeat: true, staffSeat: false, courseSeat: false, github: true });
 
 const ALL_ON = { bell: true, email: true, teams: true };
 const OFF = { available: false, linkedAt: null, teamsName: null, teamsUsername: null };
@@ -260,7 +260,7 @@ describe("the notification settings", () => {
   });
 
   it("gives an administrator the platform health, by app and e-mail, never Teams (ADR-055 §5)", async () => {
-    const ADMIN = notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: false, github: true });
+    const ADMIN = notificationKindsFor({ role: "admin", studentSeat: false, staffSeat: false, courseSeat: false, github: true });
     mockFetch({ [GET]: ok(settings(LINKED, ADMIN)) });
     renderWithProviders(<SettingsPage me={makeMe({ role: "admin" })} />);
     const grid = await screen.findByRole("table", { name: "Notifications" });

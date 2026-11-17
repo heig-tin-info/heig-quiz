@@ -538,6 +538,10 @@ const githubKinds: readonly NotificationKind[] = GITHUB_KINDS;
  * The seat kinds a teacher's staff seat receives (ADR-018, amended
  * 2026-11-17): those about its own attempt of an evaluation, and only where
  * it has one. Never `activity_available` nor a project kind (ADR-077 §2).
+ * The settings grid lists them; their senders decide who gets them, and must
+ * stay in sync with this list: `results_released` in `releaseResults`
+ * (apps/api `results/service.ts`), `results_updated` in `results/updated.ts`,
+ * `deadline_approaching` in `notifications/deadline.ts`.
  */
 export const STAFF_SEAT_KINDS = [
   "results_released",
@@ -562,7 +566,7 @@ const staffSeatKinds: readonly NotificationKind[] = STAFF_SEAT_KINDS;
 export function notificationKindsFor({
   role,
   studentSeat,
-  staffSeat = false,
+  staffSeat,
   courseSeat,
   github,
 }: {
@@ -570,7 +574,7 @@ export function notificationKindsFor({
   /** A claimed student seat (`enrollments.staff = false`). */
   studentSeat: boolean;
   /** A claimed staff seat (`enrollments.staff = true`, ADR-018). */
-  staffSeat?: boolean;
+  staffSeat: boolean;
   /** A seat on a course staff (`course_staff`). */
   courseSeat: boolean;
   /** The platform has Quiz's GitHub App configured (`GITHUB_APP_ID`). */

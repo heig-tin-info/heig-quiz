@@ -28,6 +28,8 @@ export async function reviewedMasteryCards(
   now: Date,
   userId?: string,
 ): Promise<MasteryCard[]> {
+  // The class excludes a staff seat by its current flag; one's own seat is one's own, whichever it is.
+  const population = userId === undefined ? eq(enrollments.staff, false) : eq(drillCards.userId, userId);
   const rows = await db
     .select({ card: drillCards, conceptId: questionConcepts.conceptId })
     .from(drillCards)
@@ -35,8 +37,7 @@ export async function reviewedMasteryCards(
       enrollments,
       and(
         eq(enrollments.classroomId, classroomId),
-        // The class excludes a staff seat by its current flag; one's own seat is one's own.
-        userId === undefined ? eq(enrollments.staff, false) : undefined,
+        population,
         eq(enrollments.userId, drillCards.userId),
       ),
     )
@@ -45,7 +46,6 @@ export async function reviewedMasteryCards(
       and(
         eq(drillCards.classroomId, classroomId),
         isNotNull(drillCards.lastReviewAt),
-        userId === undefined ? undefined : eq(drillCards.userId, userId),
       ),
     );
   const found = new Map<string, { card: (typeof rows)[number]["card"]; conceptIds: string[] }>();

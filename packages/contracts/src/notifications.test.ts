@@ -109,7 +109,7 @@ describe("account_dormant — the account's lifecycle e-mail (ADR-117 §4)", () 
   it("is never a row of the settings grid, whatever the account", () => {
     for (const role of ["student", "teacher", "admin"] as const) {
       for (const seat of [false, true]) {
-        expect(notificationKindsFor({ role, studentSeat: seat, courseSeat: seat, github: true })).not.toContain("account_dormant");
+        expect(notificationKindsFor({ role, studentSeat: seat, staffSeat: false, courseSeat: seat, github: true })).not.toContain("account_dormant");
       }
     }
   });
@@ -142,21 +142,21 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
   const ADMIN_KINDS = ["system_alert"];
 
   it("gives a student the seat kinds, with or without a claimed seat", () => {
-    expect(notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false, github: true })).toEqual(SEAT_KINDS);
-    expect(notificationKindsFor({ role: "student", studentSeat: true, courseSeat: false, github: true })).toEqual(SEAT_KINDS);
+    expect(notificationKindsFor({ role: "student", studentSeat: false, staffSeat: false, courseSeat: false, github: true })).toEqual(SEAT_KINDS);
+    expect(notificationKindsFor({ role: "student", studentSeat: true, staffSeat: false, courseSeat: false, github: true })).toEqual(SEAT_KINDS);
   });
 
   it("gives a teacher without a student seat the staff kinds, course seat or not", () => {
-    expect(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false, github: true })).toEqual(STAFF_KINDS);
-    expect(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: true, github: true })).toEqual(STAFF_KINDS);
+    expect(notificationKindsFor({ role: "teacher", studentSeat: false, staffSeat: false, courseSeat: false, github: true })).toEqual(STAFF_KINDS);
+    expect(notificationKindsFor({ role: "teacher", studentSeat: false, staffSeat: false, courseSeat: true, github: true })).toEqual(STAFF_KINDS);
   });
 
   it("gives an admin the course kinds only while holding a course seat (#287)", () => {
-    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: false, github: true })).toEqual([
+    expect(notificationKindsFor({ role: "admin", studentSeat: false, staffSeat: false, courseSeat: false, github: true })).toEqual([
       ...POOL_KINDS,
       ...ADMIN_KINDS,
     ]);
-    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: true, github: true })).toEqual([
+    expect(notificationKindsFor({ role: "admin", studentSeat: false, staffSeat: false, courseSeat: true, github: true })).toEqual([
       ...STAFF_KINDS,
       ...ADMIN_KINDS,
     ]);
@@ -171,24 +171,24 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
     ]);
     // A student seat beside it gives every seat kind, as before.
     expect(notificationKindsFor({ role: "teacher", studentSeat: true, staffSeat: true, courseSeat: false, github: true })).toEqual(
-      notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false, github: true }),
+      notificationKindsFor({ role: "teacher", studentSeat: true, staffSeat: false, courseSeat: false, github: true }),
     );
   });
 
   it("gives the admin kinds to an admin only", () => {
-    expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: true, github: true })).not.toContain("system_alert");
+    expect(notificationKindsFor({ role: "teacher", studentSeat: true, staffSeat: false, courseSeat: true, github: true })).not.toContain("system_alert");
   });
 
   it("gives a teacher on a roster every kind but the admin and account ones, and an admin every kind but the account ones, in the catalogue order", () => {
     const listed = NOTIFICATION_KINDS.filter((k) => !ACCOUNT_KINDS.includes(k));
-    expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false, github: true })).toEqual(
+    expect(notificationKindsFor({ role: "teacher", studentSeat: true, staffSeat: false, courseSeat: false, github: true })).toEqual(
       listed.filter((k) => !ADMIN_KINDS.includes(k)),
     );
-    expect(notificationKindsFor({ role: "admin", studentSeat: true, courseSeat: true, github: true })).toEqual(listed);
+    expect(notificationKindsFor({ role: "admin", studentSeat: true, staffSeat: false, courseSeat: true, github: true })).toEqual(listed);
   });
 
   it("hides the project kinds on a platform without Quiz's GitHub App: a toggle that does nothing is a lie (F-NOTIF-13)", () => {
-    const shown = notificationKindsFor({ role: "admin", studentSeat: true, courseSeat: true, github: false });
+    const shown = notificationKindsFor({ role: "admin", studentSeat: true, staffSeat: false, courseSeat: true, github: false });
     const gated: readonly string[] = GITHUB_KINDS;
     expect(shown).toEqual(NOTIFICATION_KINDS.filter((k) => !gated.includes(k) && !ACCOUNT_KINDS.includes(k)));
     for (const kind of GITHUB_KINDS) expect(shown).not.toContain(kind);

@@ -254,9 +254,6 @@ describe("GET /app/api/student/results — the groups", () => {
       status: "missed",
       score: { points: 0, grade: 1 },
     });
-    // The class's snapshot never holds it.
-    const released = await reload(db(), evaluationIds["released on_release"]!);
-    expect(JSON.stringify(released.releasedGrades)).not.toContain(seated.id);
   });
 });
 

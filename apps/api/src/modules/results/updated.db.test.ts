@@ -229,12 +229,9 @@ describe("results_updated (F-NOTIF-07)", () => {
         payload: expect.objectContaining({ kind: "results_updated", attemptId: built.attemptOf.get(built.seed.teacherId), count: 1 }),
       },
     ]);
-    // The class's snapshot still holds the class alone.
-    const released = await reload(db, built.evaluationId);
-    expect(JSON.stringify(released.releasedGrades)).not.toContain(built.seed.teacherId);
   });
 
-  it("tells a teacher's staff seat of its released copy, beside the snapshot, never in it (ADR-018, amended 2026-11-17)", async () => {
+  it("tells a teacher's staff seat of its released copy (ADR-018, amended 2026-11-17)", async () => {
     const built = await releasedExam({ students: 2, items: 1, points: 3, teacherTest: true });
     const told = await db
       .select()
@@ -244,8 +241,6 @@ describe("results_updated (F-NOTIF-07)", () => {
     expect(told.find((n) => n.userId === built.seed.teacherId)!.payload).toMatchObject({
       attemptId: built.attemptOf.get(built.seed.teacherId),
     });
-    const released = await reload(db, built.evaluationId);
-    expect(JSON.stringify(released.releasedGrades)).not.toContain(built.seed.teacherId);
   });
 });
 

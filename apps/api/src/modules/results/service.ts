@@ -466,7 +466,7 @@ export async function releaseResults(
     try {
       await notifyMany(
         db,
-        [...snapshot.rows, ...computed.rows.filter((r) => r.staff)].flatMap((row) =>
+        computed.rows.flatMap((row) =>
           row.attemptId === null
             ? []
             : [

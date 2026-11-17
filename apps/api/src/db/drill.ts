@@ -116,7 +116,8 @@ export const drillCards = pgTable(
  * The row `drill_cards` belongs to a STAFF seat of its classroom (ADR-018,
  * amended 2026-11-17: a teacher's staff seat drills its own cards): THE
  * definition, judged on the seat's current flag, read by the aggregates
- * that span several classrooms (the time in targeted revision, ADR-039 §6b).
+ * that span several classrooms: the time in targeted revision (ADR-039 §6b)
+ * and the reference time a review is rated against (ADR-041 §4).
  * Only in a SELECT that joins `drill_cards` by name; beside the table, as
  * `isStaffAttempt`.
  */

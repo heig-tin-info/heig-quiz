@@ -180,7 +180,7 @@ describe("a staff seat's own cards (ADR-018, amended 2026-11-17)", () => {
     expect(await onExam(students[0]!.id)).toHaveLength(1);
   });
 
-  it("never come from the past: enabling the drill backfills the students only", async () => {
+  it("are created by enabling the drill on a classroom, from the past evaluations, as a student's", async () => {
     const other = await seedLive(db(), { teacherId: teacher.id, studentIds: [students[0]!.id], mode: "exercise", questions: 2 });
     const joined = await inject("POST", `/app/api/classrooms/${other.classroomId}/self-enroll`, teacher.headers);
     expect(joined.statusCode, joined.body).toBe(201);
@@ -189,11 +189,12 @@ describe("a staff seat's own cards (ADR-018, amended 2026-11-17)", () => {
     const on = await inject("PUT", `/app/api/classrooms/${other.classroomId}/drill`, teacher.headers, { enabled: true });
     expect(on.statusCode, on.body).toBe(200);
     expect(await cardsOf(students[0]!.id, other.classroomId)).toHaveLength(2);
-    expect(await cardsOf(teacher.id, other.classroomId)).toHaveLength(0);
+    expect(await cardsOf(teacher.id, other.classroomId)).toHaveLength(2);
   });
 
   it("are served and reviewed through the student routes, the classroom listed and its opt-out the seat's own", async () => {
-    const mine = new Set((await cardsOf(teacher.id)).map((c) => c.id));
+    // Every classroom's: the seat's cards of the backfilled classroom too.
+    const mine = new Set((await db().select().from(drillCards).where(eq(drillCards.userId, teacher.id))).map((c) => c.id));
     const session = DrillSession.parse((await inject("GET", "/app/api/drill/session", teacher.headers)).json());
     expect(session.cards.length).toBeGreaterThan(0);
     for (const card of session.cards) expect(mine.has(card.id)).toBe(true);
@@ -252,6 +253,54 @@ describe("a staff seat's own concept mastery, and the class's without it", () =>
     const { staff, student } = await bothWays(() => classroomConfidence(db(), seed.classroomId));
     expect(staff.map((r) => r.questionId)).not.toContain(seed.questionIds[1]);
     expect(student.find((r) => r.questionId === seed.questionIds[1])).toMatchObject({ students: 10 });
+  });
+});
+
+describe("the reference time a student's review is rated against (ADR-041 §4)", () => {
+  /** A right review of `userId`'s card on the last question, on a fine pointer, taking `ms`. */
+  async function right(userId: string, ms: number) {
+    const [card] = await db()
+      .select()
+      .from(drillCards)
+      .where(and(eq(drillCards.userId, userId), eq(drillCards.questionId, seed.questionIds[5]!)));
+    await db().insert(drillReviews).values({
+      id: randomUUID(),
+      cardId: card!.id,
+      rating: 3,
+      correctness: "right",
+      elapsedMs: ms,
+      deviceClass: "fine",
+      reviewedAt: new Date(Date.parse(T0) + ++minute * 60_000),
+    });
+  }
+
+  /** The reference `who` is rated against on the last question: their card served, then answered. */
+  async function referenceOf(who: Session) {
+    const [card] = await db()
+      .select()
+      .from(drillCards)
+      .where(and(eq(drillCards.userId, who.id), eq(drillCards.questionId, seed.questionIds[5]!)));
+    expect((await inject("POST", `/app/api/drill/cards/${card!.id}/serve`, who.headers)).statusCode).toBe(200);
+    const res = await inject("POST", `/app/api/drill/cards/${card!.id}/answer`, who.headers, { answer: "x", deviceClass: "fine" });
+    expect(res.statusCode, res.body).toBe(200);
+    return (res.json() as { referenceMs: number | null }).referenceMs;
+  }
+
+  it("leaves out a staff seat's right answers: they move neither the count nor the median", async () => {
+    // Nine students, two with a time of their own, and the seat: ten right answers if it counted.
+    await right(students[0]!.id, 50_000);
+    await right(students[1]!.id, 60_000);
+    for (const s of students.slice(2)) await right(s.id, 20_000);
+    await right(teacher.id, 20_000);
+    // Nine: under the count a class median needs, so the student's own time is the reference.
+    expect(await referenceOf(students[0]!)).toBe(50_000);
+    // The same answers on a student seat would make ten, and the class's median the reference.
+    await seatIsStaff(false);
+    try {
+      expect(await referenceOf(students[1]!)).toBe(20_000);
+    } finally {
+      await seatIsStaff(true);
+    }
   });
 });
 
