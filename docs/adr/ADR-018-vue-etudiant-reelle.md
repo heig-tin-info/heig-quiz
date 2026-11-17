@@ -153,8 +153,9 @@ already do.
    grades computed live. `/grades` follows the same rule. Project cells follow
    the student rule.
 3. **Notifications to a staff seat**: the student kinds (`results_released`,
-   `results_updated`, deadline reminders, drill and revision reminders) only
-   for evaluations where that seat has an attempt; never
+   `results_updated`, the deadline reminder of an attempt not handed in yet;
+   the drill sends no reminder of its own) only for evaluations where that
+   seat has an attempt; never
    `activity_available`; projects unchanged (ADR-077 §2 stands). Default
    channels unchanged. The teacher kinds (`student_joined`, the
    `grading_ready` counts, F-NOTIF-08, -09, -11) keep ignoring staff seats.
