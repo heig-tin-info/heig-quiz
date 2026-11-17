@@ -8,7 +8,9 @@
  *   seat, each cell with its source, the staff marks, every student's mean
  *   over the RELEASED columns that count, and the class means (#545): a
  *   released column's, over its cells' grades, and the overall one, over
- *   the students' means.
+ *   the students' means. A teacher's staff seat is a row too, flagged,
+ *   its cells computed as a student's, in no class mean (ADR-018, amended
+ *   2026-11-17); the CSV leaves it out.
  * - {@link studentGradebook}: the caller's own cells of a classroom loaded
  *   through `readableClassroom`, the gradebook's student exit (05 §5.7):
  *   only what the kinds' student views let a student read, no source, no
@@ -38,7 +40,6 @@ import type { GradebookBeneath } from "../activity/kind.js";
 import type { ReadableClassroom } from "../guards.js";
 import {
   cellKey,
-  claimedSeats,
   columnFactsOf,
   columnOf,
   inOrder,
@@ -47,6 +48,7 @@ import {
   meanPublished,
   settingsOf,
   storedColumns,
+  tableSeats,
   type ColumnScope,
   type MarkWithSetter,
 } from "./columns.js";
@@ -105,7 +107,7 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
   const [entries, stored, seats, marks, published, components] = await Promise.all([
     gradebookEntries(db, room.id),
     storedColumns(db, room.id),
-    claimedSeats(db, room.id),
+    tableSeats(db, room.id),
     marksByCell(db, room.id),
     meanPublished(db, room.id),
     courseComponents(db, room.courseId),
@@ -128,8 +130,19 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
       if (entry.released) counted.push({ weight: settings.weight, counts: settings.counts, componentId: settings.componentId, cell: outcome });
     }
     const means = gradebookMeans(counted, components);
-    return { enrollmentId: seat.enrollmentId, email: seat.email, nom: seat.nom, prenom: seat.prenom, cells, mean: means.mean, componentMeans: means.components };
+    return {
+      enrollmentId: seat.enrollmentId,
+      email: seat.email,
+      nom: seat.nom,
+      prenom: seat.prenom,
+      staff: seat.staff,
+      cells,
+      mean: means.mean,
+      componentMeans: means.components,
+    };
   });
+  // The class: a teacher's staff seat is a row, computed as a student's, and in no class mean (ADR-018, amended 2026-11-17).
+  const classRows = rows.filter((row) => !row.staff);
   return {
     classroomId: room.id,
     archived: room.archivedAt !== null,
@@ -138,7 +151,7 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
       id,
       name,
       weight,
-      classMean: classMean(rows.map((row) => row.componentMeans[id] ?? null)),
+      classMean: classMean(classRows.map((row) => row.componentMeans[id] ?? null)),
     })),
     columns: columns.map(({ entry, settings }) => ({
       kind: entry.kind,
@@ -152,10 +165,10 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
       position: settings.position,
       componentId: settings.componentId,
       // The released grades only, as the screen shows them: a mark in a column not released is not one yet.
-      classMean: entry.released ? classMean(rows.map((row) => row.cells[entry.activityId]!.grade)) : null,
+      classMean: entry.released ? classMean(classRows.map((row) => row.cells[entry.activityId]!.grade)) : null,
     })),
     rows,
-    classMean: classMean(rows.map((row) => row.mean)),
+    classMean: classMean(classRows.map((row) => row.mean)),
   };
 }
 

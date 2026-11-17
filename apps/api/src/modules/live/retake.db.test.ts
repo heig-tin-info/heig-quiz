@@ -646,7 +646,7 @@ describe("the screens with several attempts", () => {
     await sit(app, evaluation, items, student, [false, true], await retake(app, evaluation, student));
     await sit(app, evaluation, items, seed.studentIds[1]!, [true, true]);
     const record = await reload(db, evaluation.id);
-    const queue = await gradingQueue(db, record, { anonymous: true });
+    const queue = await gradingQueue(db, record, { anonymous: true }, null);
     // One row per attempt, numbered only for the student who retook — and
     // the number travels anonymous too, where no name does (ADR-044).
     const rows = new Map(queue.entries.map((e) => [e.attemptId, e]));
@@ -659,7 +659,7 @@ describe("the screens with several attempts", () => {
     const single = [...rows.values()].find((e) => e.attemptNumber === null)!;
     expect(single.kept).toBe(true);
     // Named, the label is the name alone: the number is no longer glued to it.
-    const named = await gradingQueue(db, record, { anonymous: false });
+    const named = await gradingQueue(db, record, { anonymous: false }, null);
     expect(named.entries.every((e) => e.label !== null && !e.label.includes("#"))).toBe(true);
     expect(queue.counts.total).toBe(3 * items.length);
   });

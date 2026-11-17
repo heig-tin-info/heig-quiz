@@ -315,7 +315,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // WP10: the student's own feedback page, reachable in either UI — a teacher
   // checking the student view opens the same page a student does. It is the
   // ONE student results page: WP9's `/results/:id` is gone.
-  feedback: (r, c) => <Feedback attemptId={r.attemptId} navigate={c.navigate} />,
+  // ADR-018 (amended 2026-11-17): a teacher in the student view reads their own walk here, with the class's results one click away.
+  feedback: (r, c) => <Feedback attemptId={r.attemptId} navigate={c.navigate} studentView={c.studentView === true} />,
   // ADR-041 (#317): a student page; the teacher UI has no drill of its own.
   drill: (_, c) =>
     c.teacherUi ? <TeacherHome navigate={c.navigate} /> : <DrillPage navigate={c.navigate} />,

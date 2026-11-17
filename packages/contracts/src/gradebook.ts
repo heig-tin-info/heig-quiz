@@ -263,6 +263,13 @@ export const GradebookStaffRow = z.object({
   email: z.string(),
   nom: z.string(),
   prenom: z.string(),
+  /**
+   * A teacher's staff seat (ADR-018, amended 2026-11-17): its cells are
+   * computed as a student's, and it stays out of every class mean and of
+   * the CSV; a mark on it is refused. The table lists these rows after the
+   * students'.
+   */
+  staff: z.boolean(),
   /** By activity id; one cell per column. */
   cells: z.record(z.string(), GradebookStaffCell),
   /** The weighted mean of the released, counted columns the student has a grade in — of the component means once the course has components (ADR-131); null with none. */
@@ -291,7 +298,7 @@ export const GradebookStaff = z.object({
   /** Every component of the course, in creation order (ADR-131); none: the one-level mean. */
   components: z.array(GradebookStaffComponent),
   columns: z.array(GradebookColumn),
-  /** One row per claimed student seat, by last then first name; never a staff seat (ADR-018 §3). */
+  /** One row per claimed student seat, by last then first name, then each claimed staff seat (`staff`), out of every class mean. */
   rows: z.array(GradebookStaffRow),
   /** The class's overall mean: the mean of the students' means, a student with none left out; null with none. */
   classMean: z.number().nullable(),

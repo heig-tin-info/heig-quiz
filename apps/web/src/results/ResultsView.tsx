@@ -57,6 +57,7 @@ import { useEvaluation, useResultsByQuestion } from "../evaluation/api";
 import { ExcuseDialog } from "../gradebook/dialogs";
 import { PaperEntryDialog } from "../paper/PaperEntryDialog";
 import { useStaffWrites } from "../gradebook/useStaffWrites";
+import { StaffRowsSwitch, useStaffRows } from "../staffRows";
 
 type Tab = (typeof RESULTS_TABS)[number];
 
@@ -126,10 +127,12 @@ export function ResultsView({
    * builds the histogram — the one rule `inStatistics`.
    */
   const bucket = view?.stats.histogram.find((b) => String(b.bucket) === bucketParam)?.bucket ?? null;
+  /** A teacher's own walk is a row only when the switch shows it, hidden by default (ADR-018, amended 2026-11-17). */
+  const staffRows = useStaffRows("results", view?.rows ?? NO_ROWS);
   const rows = useMemo(() => {
-    const all = view?.rows ?? NO_ROWS;
+    const all = staffRows.visible;
     return bucket === null ? all : all.filter((r) => inStatistics(r) && histogramBucket(r.grade) === bucket);
-  }, [view, bucket]);
+  }, [staffRows.visible, bucket]);
   const table = useGradeSort(rows);
   /** The open copy, and ↑ / ↓ through the table's attempts in the order on screen. */
   const copy = useMemo(() => {
@@ -357,12 +360,20 @@ export function ResultsView({
               }
             />
             <div className="space-y-2">
-              {bucket === null ? null : (
-                <Chip
-                  label={t("results.filter.bucket", { range: bucketLabel(bucket) })}
-                  remove={t("results.filter.clear")}
-                  onRemove={() => setBucketParam("")}
-                />
+              {bucket === null && !staffRows.present ? null : (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  {bucket === null ? null : (
+                    <Chip
+                      label={t("results.filter.bucket", { range: bucketLabel(bucket) })}
+                      remove={t("results.filter.clear")}
+                      onRemove={() => setBucketParam("")}
+                    />
+                  )}
+                  {/* Rows only: the histogram and the figures above are the class's whatever it says. */}
+                  <div className="ml-auto">
+                    <StaffRowsSwitch rows={staffRows} />
+                  </div>
+                </div>
               )}
               <GradeTable
                 table={table}

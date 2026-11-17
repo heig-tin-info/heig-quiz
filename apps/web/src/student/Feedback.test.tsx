@@ -2,8 +2,9 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { makeFeedback } from "../test/grading-fixtures";
+import { makeEvaluationDetail, makeFeedback } from "../test/grading-fixtures";
 import { fail, mockFetch, ok, publicConfig, renderWithProviders } from "../test/render";
+import { enterStudentView, studentViewOn } from "../studentView";
 import { Feedback } from "./Feedback";
 
 /*
@@ -214,5 +215,52 @@ describe("student feedback", () => {
     renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
     expect(await screen.findByText("It grows down.")).toBeVisible();
     expect(screen.queryByRole("list", { name: "Points per criterion" })).toBeNull();
+  });
+});
+
+describe("a teacher in the student view (ADR-018, amended 2026-11-17)", () => {
+  const EVALUATION = "GET /app/api/evaluations/e1";
+  /** The evaluation's staff read, saying whose walk this attempt is. */
+  const staffRead = (self: { seat: boolean; staffSeat: boolean; attemptId: string | null }) => ok(makeEvaluationDetail({ self }));
+  const OWN = { seat: true, staffSeat: true, attemptId: "a1" };
+
+  it("offers the class's results on their own staff walk, which leave the student view for that evaluation's results", async () => {
+    enterStudentView({ view: "evaluation", id: "e1" });
+    const navigate = vi.fn();
+    const feedback = makeFeedback();
+    mockFetch({ [`GET ${URL}`]: ok(feedback), [EVALUATION]: staffRead(OWN) });
+    renderWithProviders(<Feedback attemptId="a1" navigate={navigate} studentView />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "See the class results" }));
+    expect(studentViewOn()).toBe(false);
+    expect(navigate).toHaveBeenCalledWith({ view: "results", evaluationId: feedback.evaluation.id });
+  });
+
+  it("offers it on a page still waiting too", async () => {
+    mockFetch({
+      [`GET ${URL}`]: ok({ available: false, reason: "results_pending", evaluation: { id: "e1", title: "Quiz 3" } }),
+      [EVALUATION]: staffRead(OWN),
+    });
+    renderWithProviders(<Feedback attemptId="a1" navigate={vi.fn()} studentView />);
+    expect(await screen.findByRole("button", { name: "See the class results" })).toBeVisible();
+  });
+
+  it("offers nothing on an attempt that is not their staff walk, nor off the course's staff", async () => {
+    for (const evaluation of [staffRead({ seat: true, staffSeat: false, attemptId: "a1" }), staffRead({ ...OWN, attemptId: "a9" }), fail(404, { error: "not_found" })]) {
+      const { calls } = mockFetch({ [`GET ${URL}`]: ok(makeFeedback()), [EVALUATION]: evaluation });
+      const { unmount } = renderWithProviders(<Feedback attemptId="a1" navigate={vi.fn()} studentView />);
+      expect(await screen.findByRole("heading", { name: "Your results" })).toBeVisible();
+      await waitFor(() => expect(calls.some((c) => c.url === "/app/api/evaluations/e1")).toBe(true));
+      expect(screen.queryByRole("button", { name: "See the class results" })).toBeNull();
+      unmount();
+    }
+  });
+
+  it("is never offered to a student, who reads no staff route", async () => {
+    const { calls } = mockFetch({ [`GET ${URL}`]: ok(makeFeedback()) });
+    renderWithProviders(<Feedback attemptId="a1" navigate={vi.fn()} />);
+    expect(await screen.findByRole("heading", { name: "Your results" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "See the class results" })).toBeNull();
+    expect(calls.some((c) => c.url.startsWith("/app/api/evaluations/"))).toBe(false);
   });
 });

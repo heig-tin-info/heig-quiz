@@ -121,7 +121,7 @@ export function inOrder<T extends { entry: Pick<GradebookEntryFacts, "date" | "t
   );
 }
 
-/** A claimed student seat: a row of the table. A staff seat is never one (ADR-018 §3), nor an unclaimed roster line. */
+/** A claimed seat: a row of the table. Never an unclaimed roster line. */
 export interface Seat {
   enrollmentId: string;
   userId: string;
@@ -130,13 +130,37 @@ export interface Seat {
   prenom: string;
 }
 
-export async function claimedSeats(db: Db | Tx, classroomId: string): Promise<Seat[]> {
+/** A row of the staff's table: a claimed seat, flagged when it is a teacher's staff seat (ADR-018, amended 2026-11-17). */
+export interface TableSeat extends Seat {
+  staff: boolean;
+}
+
+/**
+ * The claimed seats of a classroom, the students first, then the staff
+ * seats (the current `enrollments.staff` flag), each by last then first
+ * name. The staff's table lists both, the staff seats flagged and out of
+ * every class mean; everything a student may be told of reads
+ * {@link claimedSeats}.
+ */
+export async function tableSeats(db: Db | Tx, classroomId: string): Promise<TableSeat[]> {
   const rows = await db
-    .select({ enrollmentId: enrollments.id, userId: enrollments.userId, email: enrollments.email, nom: enrollments.nom, prenom: enrollments.prenom })
+    .select({
+      enrollmentId: enrollments.id,
+      userId: enrollments.userId,
+      email: enrollments.email,
+      nom: enrollments.nom,
+      prenom: enrollments.prenom,
+      staff: enrollments.staff,
+    })
     .from(enrollments)
-    .where(and(eq(enrollments.classroomId, classroomId), eq(enrollments.staff, false), isNotNull(enrollments.userId)))
-    .orderBy(asc(enrollments.nom), asc(enrollments.prenom), asc(enrollments.email));
+    .where(and(eq(enrollments.classroomId, classroomId), isNotNull(enrollments.userId)))
+    .orderBy(asc(enrollments.staff), asc(enrollments.nom), asc(enrollments.prenom), asc(enrollments.email));
   return rows.map((row) => ({ ...row, userId: row.userId! }));
+}
+
+/** The claimed STUDENT seats: never a staff seat (ADR-018 §3), nor an unclaimed roster line. */
+export async function claimedSeats(db: Db | Tx, classroomId: string): Promise<Seat[]> {
+  return (await tableSeats(db, classroomId)).filter((seat) => !seat.staff);
 }
 
 /** A staff mark with the name of whoever set it. */

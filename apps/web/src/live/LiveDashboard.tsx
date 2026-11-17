@@ -35,6 +35,7 @@ import { InspectModal } from "./InspectModal";
 import { LobbyPanel } from "./LobbyPanel";
 import { LiveHeader, type LiveControls } from "./LiveHeader";
 import { QuestionModal } from "./QuestionModal";
+import { StaffRowsSwitch, useStaffRows } from "../staffRows";
 import { SebUnlock } from "./SebUnlock";
 import { StudentGrid } from "./StudentGrid";
 import { useLiveToggles } from "./toggles";
@@ -44,6 +45,8 @@ import { useLiveCommands } from "./useLiveCommands";
 import { useRowDensity } from "./useRowDensity";
 import { dashboardKey, evaluationKey } from "../queryKeys";
 import { useEvaluation } from "../evaluation/api";
+
+const NO_ROWS: DashboardRow[] = [];
 
 /**
  * The live dashboard (mockup 03, F-DASH, F-LIVE-11).
@@ -115,7 +118,10 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   // The grid fits the class on one screen (#227): the row height is what the
   // viewport leaves under the grid's top, minus the shortcuts line under it and the
   // page's bottom padding, all measured by the hook.
-  const { rowHeight, gridRef, belowRef } = useRowDensity(query.data?.view.rows.length ?? 0);
+  // A teacher's own walk is a row of the grid while the switch shows it, shown by
+  // default (ADR-018, amended 2026-11-17): the rows only, never the totals nor the presence.
+  const staffRows = useStaffRows("live", query.data?.view.rows ?? NO_ROWS);
+  const { rowHeight, gridRef, belowRef } = useRowDensity(staffRows.visible.length);
 
   // The server's time, as a stable function: every countdown on the page
   // re-reads it on the one shared tick of `useNow`, so they all agree
@@ -200,6 +206,11 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   );
 
   const state = query.data ?? null;
+  /** What the grid and the question's cards draw: the state, its rows as the switch says. */
+  const shownState = useMemo(
+    () => (state === null ? null : { ...state, view: { ...state.view, rows: staffRows.visible } }),
+    [state, staffRows.visible],
+  );
   const evaluationState = state?.view.evaluation.state ?? "draft";
   const live = isLiveState(evaluationState);
   // Only an exam pauses (§1 glossary); unknown until the detail has loaded.
@@ -357,7 +368,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   if (query.isLoading) {
     return <PageSkeleton header="title-and-bar" />;
   }
-  if (query.isError || !state) {
+  if (query.isError || !state || !shownState) {
     return (
       <PageError title={t("live.notFound")} query={query} />
     );
@@ -416,6 +427,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
               {t(`live.toggle.${field}`)}
             </label>
           ))}
+          <StaffRowsSwitch rows={staffRows} />
         </div>
         <span
           className={cx(
@@ -447,7 +459,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         <SebUnlock password={view.evaluation.sebUnlockPassword} />
       </div>
 
-      {view.rows.length === 0 ? (
+      {/* The grid's rows are the switch's: only staff ones, hidden, read as an empty roster. The
+          lobby keeps every seat, and draws no switch (the row of switches is hidden there). */}
+      {(lobby ? view.rows : shownState.view.rows).length === 0 ? (
         <Card>
           <EmptyState icon={Users} title={t("live.empty.title")} />
         </Card>
@@ -458,7 +472,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
           <div ref={gridRef} style={{ "--row-h": `${rowHeight}px` } as React.CSSProperties}>
             <Card className="min-w-0 overflow-hidden">
               <StudentGrid
-                state={state}
+                state={shownState}
                 clock={serverNow}
                 commonDeadline={deadline}
                 paused={evaluationState === "paused"}
@@ -542,8 +556,8 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
               // ("Student 1, 2, 3…"), not the hidden roster order.
               rows={
                 toggles.names
-                  ? view.rows
-                  : [...view.rows].sort((a, b) => (numbers.get(a.seatId) ?? 0) - (numbers.get(b.seatId) ?? 0))
+                  ? staffRows.visible
+                  : [...staffRows.visible].sort((a, b) => (numbers.get(a.seatId) ?? 0) - (numbers.get(b.seatId) ?? 0))
               }
               nameOf={nameOf}
               showAnswers={toggles.answers}

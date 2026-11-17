@@ -127,8 +127,8 @@ export async function gradingPlugin(app: FastifyInstance) {
   app.get(
     "/app/api/evaluations/:id/grading",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, query: GradingQuery, load: staffEvaluation }, ({ query, scope }) =>
-      service.gradingQueue(app.db, scope.evaluation, query),
+    teacher({ params: IdParam, query: GradingQuery, load: staffEvaluation }, ({ req, query, scope }) =>
+      service.gradingQueue(app.db, scope.evaluation, query, callerOf(req).id),
     ),
   );
 

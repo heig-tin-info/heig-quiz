@@ -1313,3 +1313,51 @@ describe("GradingPanel — accepting a card of a board past eight cards (ADR-128
     );
   });
 });
+
+describe("GradingPanel — a teacher's own walk (ADR-018, amended 2026-11-17)", () => {
+  const entries = () => [
+    { ...proposal("a1", 2), staff: true, mine: true },
+    { ...proposal("a2", 1), staff: true, mine: false },
+    proposal("a3", 0),
+  ];
+
+  it("says You on the reader's own row, Teacher on a colleague's, and nothing on a student's", async () => {
+    mockFetch(routes(entries()));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    expect(await answerRows()).toHaveLength(3);
+    expect(within(rowOf("a1")).getByText("You")).toBeInTheDocument();
+    expect(within(rowOf("a1")).queryByText("Teacher")).toBeNull();
+    expect(within(rowOf("a2")).getByText("Teacher")).toBeInTheDocument();
+    expect(within(rowOf("a2")).queryByText("You")).toBeNull();
+    expect(within(rowOf("a3")).queryByText("You")).toBeNull();
+    expect(within(rowOf("a3")).queryByText("Teacher")).toBeNull();
+  });
+
+  it("shows the staff rows by default; the switch hides them and the choice is remembered", async () => {
+    mockFetch(routes(entries()));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    expect(await answerRows()).toHaveLength(3);
+    const toggle = screen.getByRole("switch", { name: "Show test attempts" });
+    expect(toggle).toBeChecked();
+
+    await userEvent.click(toggle);
+    expect(await answerRows()).toHaveLength(1);
+    expect(rowOf("a1")).toBeNull();
+    expect(localStorage.getItem("quiz-staff-rows-grading")).toBe("hidden");
+  });
+
+  it("counts the hidden staff proposals in the batch: the server validates them too", async () => {
+    localStorage.setItem("quiz-staff-rows-grading", "hidden");
+    mockFetch(routes(entries()));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    expect(await answerRows()).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /Validate 3/ })).toBeEnabled();
+  });
+
+  it("offers no switch while no answer is a staff one", async () => {
+    mockFetch(routes([proposal("a3", 0)]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    expect(screen.queryByRole("switch", { name: "Show test attempts" })).toBeNull();
+  });
+});

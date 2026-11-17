@@ -455,6 +455,8 @@ export interface ResultsSource {
   rows: readonly {
     nom: string;
     prenom: string;
+    /** A teacher's staff seat: a row of the staff's table, never a student of the results. */
+    staff: boolean;
     cells: Readonly<Record<string, { kind: "grade" | "absent" | "excused" | "empty"; grade: number | null }>>;
     mean: number | null;
     componentMeans: Readonly<Record<string, number | null>>;
@@ -514,7 +516,8 @@ export function assistResults(table: ResultsSource): AssistResults {
       counts: countsInMean(counts, componentId, table.components.length > 0),
       component: componentId === null ? null : (names.get(componentId) ?? null),
     })),
-    students: table.rows.map((row) => ({
+    // The class: a teacher's staff seat is in no export of the results (ADR-018, amended 2026-11-17).
+    students: table.rows.filter((row) => !row.staff).map((row) => ({
       name: `${row.prenom} ${row.nom}`.trim(),
       grades: released.map((c) => {
         const cell = row.cells[c.activityId];

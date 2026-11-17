@@ -258,8 +258,8 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
       { activityId: "live", mode: "exam", title: "Running", date: "2026-10-08T08:00:00.000Z", released: false, weight: 100, counts: true, componentId: null },
     ],
     rows: [
-      { nom: "Doe", prenom: "Ada", cells: { e1: cell(5), live: cell(2.5) }, mean: 5, componentMeans: {} },
-      { nom: "Roe", prenom: "Bo", cells: { e1: cell(1, "absent"), live: cell(null) }, mean: 1, componentMeans: {} },
+      { nom: "Doe", prenom: "Ada", staff: false, cells: { e1: cell(5), live: cell(2.5) }, mean: 5, componentMeans: {} },
+      { nom: "Roe", prenom: "Bo", staff: false, cells: { e1: cell(1, "absent"), live: cell(null) }, mean: 1, componentMeans: {} },
     ],
   };
 
@@ -275,8 +275,14 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
     expect(JSON.stringify(results)).not.toContain("Running");
   });
 
+  it("leaves a teacher's staff seat out: a row of the staff's table, never a student of the results", () => {
+    const seated = { ...table, rows: [...table.rows, { nom: "Seated", prenom: "Teacher", staff: true, cells: { e1: cell(6) }, mean: 6, componentMeans: {} }] };
+    expect(assistResults(seated).students.map((s) => s.name)).toEqual(["Ada Doe", "Bo Roe"]);
+    expect(JSON.stringify(assistResults(seated))).not.toContain("Seated");
+  });
+
   it("names an excused cell, which counts in no mean (#969)", () => {
-    const excused = { ...table, rows: [{ nom: "Doe", prenom: "Ada", cells: { e1: { kind: "excused" as const, grade: null } }, mean: null, componentMeans: {} }] };
+    const excused = { ...table, rows: [{ nom: "Doe", prenom: "Ada", staff: false, cells: { e1: { kind: "excused" as const, grade: null } }, mean: null, componentMeans: {} }] };
     expect(assistResults(excused).students).toEqual([{ name: "Ada Doe", grades: ["excused"], mean: null, componentMeans: [] }]);
   });
 
@@ -285,7 +291,7 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
       ...table,
       components: [{ id: "labo", name: "Labo", weight: 40 }, { id: "cours", name: "Cours", weight: 60 }],
       columns: [{ ...table.columns[0]!, componentId: "labo" }, { ...table.columns[0]!, activityId: "x", title: "X", componentId: null }],
-      rows: [{ nom: "Doe", prenom: "Ada", cells: { e1: cell(5), x: cell(3) }, mean: 5, componentMeans: { labo: 5, cours: null } }],
+      rows: [{ nom: "Doe", prenom: "Ada", staff: false, cells: { e1: cell(5), x: cell(3) }, mean: 5, componentMeans: { labo: 5, cours: null } }],
     };
     const results = assistResults(parted);
     expect(results.components).toEqual([{ name: "Labo", weight: 40 }, { name: "Cours", weight: 60 }]);

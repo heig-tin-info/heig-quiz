@@ -41,7 +41,7 @@ import {
   type FeedbackPolicy,
   type GradebookStaffCell,
 } from "@quiz/contracts";
-import { gradebookMean, gradeFromPoints } from "@quiz/domain";
+import { classMean, gradebookMean, gradeFromPoints } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
@@ -155,13 +155,13 @@ async function makeEvaluation(
   return created.id;
 }
 
-/** Runs the evaluation: each taker hands in, the teacher closes, grades 10-point items, and releases when asked. */
-async function play(id: string, takers: { student: number; points: number }[], release: boolean) {
+/** Runs the evaluation: each taker (a student by index, or another account) hands in, the teacher closes, grades 10-point items, and releases when asked. */
+async function play(id: string, takers: { student: number | Signed; points: number }[], release: boolean) {
   const now = server.clock.now();
   let evaluation = await applyState(db(), await reload(db(), id), "running", now);
   const attempts: { attemptId: string; points: number }[] = [];
   for (const { student, points } of takers) {
-    const participant = (await live.participantOf(db(), evaluation, students[student]!.id))!;
+    const participant = (await live.participantOf(db(), evaluation, (typeof student === "number" ? students[student]! : student).id))!;
     const created = await live.ensureAttempt(db(), evaluation, participant, now);
     const attempt = await live.beginAttempt(db(), evaluation, created, participant, now);
     await live.submitAttempt(db(), evaluation, attempt, now);
@@ -222,9 +222,9 @@ beforeAll(async () => {
 
   // E1: s0 8/10 -> 5.0, s1 5/10 -> 3.5, s2 absent. Released.
   await play(seed.evaluationId, [{ student: 0, points: 8 }, { student: 1, points: 5 }], true);
-  // E2: s0 6/10 -> 4.0, s2 10/10 -> 6.0, s1 absent. Released.
+  // E2: s0 6/10 -> 4.0, s2 10/10 -> 6.0, s1 absent. Released. The teacher's staff seat took it too: 10/10 -> 6.0, in no class figure.
   col["E2"] = await makeEvaluation("E2", "exam");
-  await play(col["E2"], [{ student: 0, points: 6 }, { student: 2, points: 10 }], true);
+  await play(col["E2"], [{ student: 0, points: 6 }, { student: 2, points: 10 }, { student: seated, points: 10 }], true);
   // X1, an exercise: s0 9/10 -> 5.5; the others never opened it. Released.
   col["X1"] = await makeEvaluation("X1", "exercise");
   await play(col["X1"], [{ student: 0, points: 9 }], true);
@@ -246,13 +246,28 @@ afterAll(async () => {
 });
 
 describe("the staff's table (F-GBOOK-01)", () => {
-  it("has a row per claimed student seat, never a staff seat nor an unclaimed line", async () => {
+  it("has a row per claimed student seat, then the staff seat flagged (ADR-018, amended 2026-11-17), never an unclaimed line", async () => {
     const table = await staffTable();
-    expect(table.rows.map((r) => r.enrollmentId).sort()).toEqual([...seats].sort());
-    expect(table.rows.map((r) => r.email)).not.toContain("seated@heig.test");
+    expect(table.rows.filter((r) => !r.staff).map((r) => r.enrollmentId).sort()).toEqual([...seats].sort());
+    expect(table.rows.filter((r) => r.staff).map((r) => r.email)).toEqual(["seated@heig.test"]);
+    expect(table.rows.at(-1)!.staff).toBe(true);
     expect(table.rows.map((r) => r.email)).not.toContain("unclaimed@heig.test");
     expect(table.archived).toBe(false);
     expect(table.meanPublished).toBe(false);
+  });
+
+  it("computes the staff seat's cells as a student's: its own live grade, a derived absence, an empty cell; in no class mean", async () => {
+    const table = await staffTable();
+    const row = table.rows.find((r) => r.staff)!;
+    expect(row.cells[col["E2"]!]).toMatchObject({ kind: "grade", grade: 6, points: 10, source: "results", hasGrade: true });
+    expect(row.cells[col["E1"]!]).toMatchObject({ kind: "absent", grade: 1, source: "derived" });
+    expect(row.cells[col["X1"]!]).toMatchObject({ kind: "empty", grade: null });
+    expect(row.cells[col["P1"]!]).toMatchObject({ kind: "empty", grade: null });
+    expect(row.mean).not.toBeNull();
+    // The class figures are the students' alone: with the staff row, E2 would read (11 + 6) / 4.
+    const students = table.rows.filter((r) => !r.staff);
+    expect(table.columns.find((c) => c.activityId === col["E2"])!.classMean).toBe(3.7);
+    expect(table.classMean).toBe(classMean(students.map((r) => r.mean)));
   });
 
   it("lists exams, exercises and graded projects, never a poll; what counts follows the kind (D06)", async () => {

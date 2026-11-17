@@ -434,10 +434,12 @@ export function RowMarks({ entry }: { entry: GradingEntry }) {
           </Badge>
         </Tip>
       ) : null}
-      {entry.staff ? (
-        <Tip label={t("grading.staff.tip")}>
+      {/* The reader's own walk says "You" (the server's `mine`, ADR-018 amended
+          2026-11-17); a colleague's says "Teacher". Neither is a name. */}
+      {entry.mine || entry.staff ? (
+        <Tip label={t(entry.mine ? "grading.you.tip" : "grading.staff.tip")}>
           <Badge tone="zinc" icon={GraduationCap}>
-            {t("grading.staff")}
+            {t(entry.mine ? "grading.you" : "grading.staff")}
           </Badge>
         </Tip>
       ) : null}
