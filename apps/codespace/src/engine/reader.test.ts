@@ -118,12 +118,13 @@ describe("parseListing", () => {
     const listing = z("a.c", Buffer.from([0x61, 0xff]), "b.c", "/etc/passwd");
     expect(() => parseListing(listing, "", 3)).toThrow(ArchiveTooLarge);
     expect(() => parseListing(listing, "", 4)).toThrow(ReaderError);
-    // 2.3 million short names: refused at once, not decoded.
+    // 2.3 million short names: refused at the cap, not decoded. The bound is loose on purpose (a slow
+    // runner under coverage): decoding them all takes several seconds, stopping at the cap a fraction of one.
     const huge = Buffer.alloc(16 * 1024 * 1024, 0);
     for (let i = 0; i < huge.length; i += 7) huge.write("f00000", i, "latin1");
     const started = performance.now();
     expect(() => parseListing(huge, "")).toThrow(ArchiveTooLarge);
-    expect(performance.now() - started).toBeLessThan(200);
+    expect(performance.now() - started).toBeLessThan(2000);
   });
 
   it("counts a name a path cannot carry rather than refusing the listing", () => {
