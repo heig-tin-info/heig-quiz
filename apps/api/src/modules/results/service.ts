@@ -457,6 +457,8 @@ export async function releaseResults(
   // re-release keeps the original `released_at`, the date they were told
   // about, and telling them twice would announce nothing new. Only a student
   // with an attempt has a feedback page to open; an absent one is not told.
+  // A teacher's staff seat with an attempt is told too, of its own copy
+  // (ADR-018, amended 2026-11-17): beside the snapshot, never in it.
   //
   // Best-effort (ADR-030 §h): the release has committed, and a notification
   // that fails is logged, never thrown at the teacher who released.
@@ -464,7 +466,7 @@ export async function releaseResults(
     try {
       await notifyMany(
         db,
-        snapshot.rows.flatMap((row) =>
+        [...snapshot.rows, ...computed.rows.filter((r) => r.staff)].flatMap((row) =>
           row.attemptId === null
             ? []
             : [

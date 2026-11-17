@@ -46,7 +46,7 @@ import { users } from "./auth.js";
 import type { StoredInstance } from "./columns.js";
 import { concepts } from "./concept.js";
 import { evaluations } from "./evaluation.js";
-import { classrooms } from "./org.js";
+import { classrooms, enrollments } from "./org.js";
 import { questions } from "./pool.js";
 
 export const drillCards = pgTable(
@@ -112,6 +112,16 @@ export const drillCards = pgTable(
  * view and a later re-optimisation of the weights read. Kept five years
  * (N-DATA-03), then purged by the `drill.purge` ticker task.
  */
+/**
+ * The row `drill_cards` belongs to a STAFF seat of its classroom (ADR-018,
+ * amended 2026-11-17: a teacher's staff seat drills its own cards): THE
+ * definition, judged on the seat's current flag, read by the aggregates
+ * that span several classrooms (the time in targeted revision, ADR-039 §6b).
+ * Only in a SELECT that joins `drill_cards` by name; beside the table, as
+ * `isStaffAttempt`.
+ */
+export const isStaffCard = sql`exists (select 1 from ${enrollments} where ${enrollments.classroomId} = ${drillCards.classroomId} and ${enrollments.userId} = ${drillCards.userId} and ${enrollments.staff})`;
+
 export const drillReviews = pgTable(
   "drill_reviews",
   {

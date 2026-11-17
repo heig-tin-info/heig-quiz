@@ -543,11 +543,13 @@ describe("targeted revision: who may revise", () => {
     expect((await serve(open.id, open.cards[0]!.id)).pass).toBe(1);
   });
 
-  it("is closed to a teacher in the student view, whose staff seat holds no card", async () => {
+  it("is open to a teacher in the student view on their own staff seat, which holds no card here (ADR-018, amended 2026-11-17)", async () => {
     const concepts = await as(teacher.headers, "GET", conceptsUrl());
-    expect(concepts.json()).toEqual({ available: false, concepts: [] });
+    expect(concepts.json()).toEqual((await as(alice.headers, "GET", conceptsUrl())).json());
     expect((await as(teacher.headers, "GET", roundsUrl())).json()).toEqual([]);
-    expect((await inject("POST", roundsUrl(), teacher.headers, { conceptId: ids.course })).statusCode).toBe(404);
+    // No card of theirs covers it: no round, and nothing written.
+    expect(await start(teacher.headers, ids.course)).toBeNull();
+    expect(await db().select().from(drillRevisionRounds).where(eq(drillRevisionRounds.userId, teacher.id))).toHaveLength(0);
   });
 
   it("lets an impersonation session read what the student reads, and write nothing", async () => {

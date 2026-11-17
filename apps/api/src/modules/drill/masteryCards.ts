@@ -1,11 +1,14 @@
 /**
  * The ONE loader of the cards a mastery counts (#599 step 9, ADR-081 sixth
- * addendum §9, ADR-098): the classroom's reviewed cards of its current
- * student seats, each with the concept ids of its question as they stand
- * now, its retrievability at `now`, and only when its key may already reach
- * the student ({@link keyOpen}: a suspended card is out). The teacher's read
- * passes no `userId`; the student's passes their own, so no other student's
- * row can enter it.
+ * addendum §9, ADR-098): the classroom's reviewed cards, each with the
+ * concept ids of its question as they stand now, its retrievability at
+ * `now`, and only when its key may already reach the student
+ * ({@link keyOpen}: a suspended card is out). Two populations, one rule each:
+ * the teacher's read passes no `userId` and reads the CLASS — the current
+ * student seats, never a teacher's staff seat (ADR-018); the student's
+ * passes their own, so no other student's row can enter it, and reads their
+ * seat whichever it is — a staff seat's own cards included (amended
+ * 2026-11-17).
  *
  * It returns ids only: neither a concept row nor a question's content is
  * loaded, so a caller that must not name a concept never holds one.
@@ -32,7 +35,8 @@ export async function reviewedMasteryCards(
       enrollments,
       and(
         eq(enrollments.classroomId, classroomId),
-        eq(enrollments.staff, false),
+        // The class excludes a staff seat by its current flag; one's own seat is one's own.
+        userId === undefined ? eq(enrollments.staff, false) : undefined,
         eq(enrollments.userId, drillCards.userId),
       ),
     )

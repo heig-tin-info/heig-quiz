@@ -371,7 +371,8 @@ export type DrillQuestionConfidence = z.infer<typeof DrillQuestionConfidence>;
  * declares, labelled in their language, by label (the same list as the
  * student's concept mastery, ADR-098). `available` is false, and the list
  * empty, unless the classroom's drill is on, it is not archived, the caller
- * holds a student seat there and has not opted out. No count: whether a
+ * holds a seat there — a teacher's staff seat included, which revises its
+ * own cards (ADR-018, amended 2026-11-17) — and has not opted out. No count: whether a
  * concept has cards is learnt by starting a round.
  */
 export const StudentRevisionConcepts = z.object({

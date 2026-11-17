@@ -14,7 +14,10 @@
  *     an accommodation or a "+N min" is closing, not approaching);
  *   - `started_at <= closes_at - 24 h`: a window shorter than a day (a
  *     two-hour exam, a ten-minute exercise) gets no reminder;
- *   - the student holds a CLAIMED, non-staff seat of the classroom;
+ *   - the student holds a CLAIMED seat of the classroom: a student seat,
+ *     or a teacher's staff seat that has an attempt of the evaluation — a
+ *     teacher who has not started one is never reminded (ADR-018, amended
+ *     2026-11-17);
  *   - the student has NO FINISHED attempt (`submitted` or `expired`): no
  *     attempt at all, or one not started or in progress. With retakes
  *     (F-EVAL-15), a student who has submitted once has something that
@@ -32,12 +35,12 @@
  * nobody again. Best-effort: a notification that fails is logged, its
  * markers stay (not retried), and the scan never throws at the ticker.
  */
-import { and, eq, inArray, isNotNull, lte, gt, ne, notExists, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, lte, gt, ne, notExists, or, sql } from "drizzle-orm";
 
 import { DEADLINE_REMINDER_MS, FINISHED_ATTEMPT_STATES } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { attempts, deadlineReminders, enrollments, evaluations } from "../../db/schema.js";
+import { attempts, deadlineReminders, enrollments, evaluations, officialAttempt } from "../../db/schema.js";
 import { notifyUsers, type NotifyLog } from "./service.js";
 
 /**
@@ -62,8 +65,16 @@ export async function sendDeadlineReminders(
       enrollments,
       and(
         eq(enrollments.classroomId, evaluations.classroomId),
-        eq(enrollments.staff, false),
         isNotNull(enrollments.userId),
+        or(
+          eq(enrollments.staff, false),
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(attempts)
+              .where(and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, enrollments.userId), officialAttempt)),
+          ),
+        ),
       ),
     )
     .where(

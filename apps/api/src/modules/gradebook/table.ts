@@ -167,10 +167,13 @@ function outcomeOf(cell: GradebookStudentCell): CellOutcome {
 
 /**
  * `GET /app/api/student/classrooms/:id/gradebook` (F-GBOOK-05): the caller's
- * own cells, through the student view of each kind. A staff seat, or no seat
- * (a teacher in the student view), has no cell and so no column: the same
- * shape, empty. The mean, when published, is computed from the cells AS
- * DISPLAYED — a grade withheld or only indicative is not in it.
+ * own cells, through the student view of each kind. A teacher's staff seat
+ * reads its own cells exactly as a student does (ADR-018, amended
+ * 2026-11-17): its grades are computed live, never put in the class's
+ * snapshot or the staff's table. No seat (a teacher in the student view who
+ * did not join) has no cell and so no column: the same shape, empty. The
+ * mean, when published, is computed from the cells AS DISPLAYED — a grade
+ * withheld or only indicative is not in it.
  *
  * The components of the mean (ADR-131): the name of the component of each
  * column that counts, always — structure, like the `counts` flag; only the
@@ -181,7 +184,7 @@ export async function studentGradebook(db: Db, scope: ReadableClassroom, userId:
   const { room, seat } = scope;
   const published = await meanPublished(db, room.id);
   const meanKey = (mean: number | null) => (published ? { mean } : {});
-  if (seat === null || seat.staff) return { classroomId: room.id, components: [], columns: [], cells: {}, ...meanKey(null) };
+  if (seat === null) return { classroomId: room.id, components: [], columns: [], cells: {}, ...meanKey(null) };
 
   const [entries, stored, marks, components] = await Promise.all([
     studentGradebookEntries(db, userId, room.id, now),

@@ -138,8 +138,10 @@ export interface StudentProjectGrade {
 
 /**
  * The RELEASED projects of every classroom where `userId` holds a claimed
- * student seat, archived classrooms included — the gradebook's columns
- * ({@link gradebookProjects}' rule), never a staff seat (ADR-018 §3).
+ * seat, archived classrooms included — the gradebook's columns
+ * ({@link gradebookProjects}' rule). A teacher's staff seat reads them by
+ * the same rule (ADR-018, amended 2026-11-17): its test repository is never
+ * released (`studentRepos`), so its cell stays empty.
  * `classroomId` narrows it to one classroom. Each with the release's snapshot
  * of the seat's own repository or its group's (`seatRepos`, N-SEC-20).
  */
@@ -169,7 +171,6 @@ export async function studentProjectGrades(db: Db, userId: string, classroomId?:
     .where(
       and(
         eq(enrollments.userId, userId),
-        eq(enrollments.staff, false),
         classroomId === undefined ? undefined : eq(enrollments.classroomId, classroomId),
         inGradebook(),
         isNotNull(projects.releasedAt),

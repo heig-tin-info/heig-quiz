@@ -23,7 +23,7 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { Db } from "../../db/client.js";
 import { attempts, evaluations, officialAttempt } from "../../db/schema.js";
-import { byId, staffAttemptIds, type EvaluationRecord } from "../evaluation/service.js";
+import { byId, type EvaluationRecord } from "../evaluation/service.js";
 import { pointsAcrossRegrade } from "../grading/service.js";
 import { notifyMany, type Delivery } from "../notifications/service.js";
 import { shownGrades, type PointsReader, type ShownGrade } from "./service.js";
@@ -97,21 +97,19 @@ export async function watchReleasedGrades(
  * The students whose shown grade differs, told once each per write. The
  * evaluation is read again: a release withdrawn meanwhile tells nobody, and
  * the grade after is the one the page serves now (`modified_after_release`,
- * raised by the write, stops serving the frozen one). A teacher's own test
- * (ADR-018) is not a result anybody is told about.
+ * raised by the write, stops serving the frozen one). A teacher's staff
+ * seat is told of its own copy as a student is (ADR-018, amended
+ * 2026-11-17): only a seat with an attempt is ever watched.
  */
 async function announceChanges(db: Db, watched: readonly Watched[]): Promise<void> {
   for (const { evaluation, before } of watched) {
     try {
       const current = await byId(db, evaluation.id);
       if (!current || current.releasedAt === null) continue;
-      const [after, staff] = await Promise.all([
-        shownGrades(db, current, [...before.keys()]),
-        staffAttemptIds(db, current),
-      ]);
+      const after = await shownGrades(db, current, [...before.keys()]);
       const deliveries: Delivery[] = [];
       for (const [userId, shown] of after) {
-        if (!shown.visible || shown.attemptId === null || staff.has(shown.attemptId)) continue;
+        if (!shown.visible || shown.attemptId === null) continue;
         if (shown.grade === before.get(userId)?.grade) continue;
         deliveries.push({
           userId,

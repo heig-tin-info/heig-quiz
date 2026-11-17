@@ -162,6 +162,19 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
     ]);
   });
 
+  it("gives a teacher on a staff seat only the kinds of their own attempts (ADR-018, 2026-11-17)", () => {
+    expect(notificationKindsFor({ role: "teacher", studentSeat: false, staffSeat: true, courseSeat: true, github: true })).toEqual([
+      "results_released",
+      "deadline_approaching",
+      "results_updated",
+      ...STAFF_KINDS,
+    ]);
+    // A student seat beside it gives every seat kind, as before.
+    expect(notificationKindsFor({ role: "teacher", studentSeat: true, staffSeat: true, courseSeat: false, github: true })).toEqual(
+      notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false, github: true }),
+    );
+  });
+
   it("gives the admin kinds to an admin only", () => {
     expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: true, github: true })).not.toContain("system_alert");
   });

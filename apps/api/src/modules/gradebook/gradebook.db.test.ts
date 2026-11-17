@@ -738,13 +738,20 @@ describe("the student's own cells (F-GBOOK-05, F-RES-04) and what must never rea
     }
   });
 
-  it("gives a teacher in the student view, on their staff seat or none, the same shape with no cell", async () => {
-    for (const headers of [seated.headers, teacher.headers]) {
-      const { parsed, raw } = await studentRead(headers);
-      expect(parsed.columns).toEqual([]);
-      expect(parsed.cells).toEqual({});
-      expect("mean" in raw).toBe(false);
-    }
+  it("gives a teacher's staff seat its own cells exactly as a student's, and no seat the same shape with no cell (ADR-018, amended 2026-11-17)", async () => {
+    // The seat took nothing: every column a student has, the released exams an absence derived, the rest empty or withheld.
+    const own = await studentRead(seated.headers);
+    expect(own.parsed.columns.map((c) => c.activityId)).toEqual((await studentRead(students[1]!.headers)).parsed.columns.map((c) => c.activityId));
+    expect(studentCell(own.parsed, "E1")).toEqual({ kind: "absent", grade: 1, points: null, max: null });
+    expect(studentCell(own.parsed, "X1")).toMatchObject({ kind: "empty", grade: null });
+    expect(studentCell(own.parsed, "E4")).toMatchObject({ kind: "withheld", grade: null });
+    expect(studentCell(own.parsed, "P1")).toMatchObject({ kind: "empty", grade: null });
+    expect("mean" in own.raw).toBe(false);
+
+    const none = await studentRead(teacher.headers);
+    expect(none.parsed.columns).toEqual([]);
+    expect(none.parsed.cells).toEqual({});
+    expect("mean" in none.raw).toBe(false);
   });
 
   it("shows the mean only when the teacher publishes it, from the cells as displayed, with the weights then", async () => {
@@ -1267,10 +1274,14 @@ describe("the components of the mean (ADR-131)", () => {
         X1: [true, "Labo"],
       });
     }
-    // A teacher in the student view, on a staff seat or none: the same shape, empty, and nothing withheld either.
-    for (const headers of [seated.headers, teacher.headers]) {
+    // A teacher in the student view: on their staff seat, their own columns' components as a student's (ADR-018,
+    // amended 2026-11-17); with no seat, the same shape, empty. Nothing withheld either way.
+    for (const [headers, components] of [
+      [seated.headers, [{ id: part["Labo"], name: "Labo" }, { id: part["Cours"], name: "Cours" }]],
+      [teacher.headers, []],
+    ] as const) {
       const { parsed, body } = await studentRead(headers);
-      expect(parsed.components).toEqual([]);
+      expect(parsed.components).toEqual(components);
       for (const forbidden of ['"weight"', '"mean"', '"classMean"', '"componentMeans"']) expect(body).not.toContain(forbidden);
       expect(leaks(body)).toEqual([]);
       const page = await call("GET", "/app/api/student/results", headers);

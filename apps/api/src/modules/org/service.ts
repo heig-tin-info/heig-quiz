@@ -529,10 +529,11 @@ export async function setClassroomDrill(
 }
 
 /**
- * A student's opt-out of one classroom's drill, on their own claimed student
- * seat. Opting out keeps the first instant (what the teacher's view hides
- * from); opting back in clears it. `undefined` when the user holds no such
- * seat.
+ * A student's opt-out of one classroom's drill, on their own claimed seat —
+ * a teacher's staff seat too, whose own cards are drilled (ADR-018, amended
+ * 2026-11-17). Opting out keeps the first instant (what the teacher's view
+ * hides from); opting back in clears it. `undefined` when the user holds no
+ * such seat.
  */
 export async function setDrillOptOut(
   db: Db,
@@ -552,7 +553,6 @@ export async function setDrillOptOut(
       and(
         eq(enrollments.classroomId, classroomId),
         eq(enrollments.userId, userId),
-        eq(enrollments.staff, false),
       ),
     )
     .returning({ optedOutAt: enrollments.drillOptedOutAt });

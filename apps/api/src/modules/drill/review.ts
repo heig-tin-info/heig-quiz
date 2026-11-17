@@ -505,7 +505,11 @@ export async function answerCard(
   });
 }
 
-/** The classrooms whose drill the student is in or opted out of, for the tab. */
+/**
+ * The classrooms whose drill the student is in or opted out of, for the tab;
+ * a teacher's staff seat too, whose own cards are drilled like a student's
+ * (ADR-018, amended 2026-11-17).
+ */
 export async function studentDrillClassrooms(db: Db, userId: string, classroomId?: string) {
   const rows = await db
     .select({
@@ -521,7 +525,6 @@ export async function studentDrillClassrooms(db: Db, userId: string, classroomId
     .where(
       and(
         eq(enrollments.userId, userId),
-        eq(enrollments.staff, false),
         isNotNull(classrooms.drillEnabledAt),
         isNull(classrooms.archivedAt),
         classroomId === undefined ? undefined : eq(classrooms.id, classroomId),
