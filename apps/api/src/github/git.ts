@@ -114,7 +114,12 @@ function run(args: string[], env: Record<string, string>, opts: GitCallOptions &
       if (size > MAX_OUTPUT_BYTES) kill("output too large");
       else out.push(chunk);
     });
-    child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
+    // Its stderr is kept up to the same bound, the rest dropped: a chatty git is never killed for it.
+    let errSize = 0;
+    child.stderr.on("data", (chunk: Buffer) => {
+      if (errSize < MAX_OUTPUT_BYTES) err.push(chunk.subarray(0, MAX_OUTPUT_BYTES - errSize));
+      errSize += chunk.length;
+    });
     child.on("error", (e) => {
       clearTimeout(timer);
       reject(new Error(redactTokens(String(e.message))));

@@ -71,6 +71,7 @@ beforeAll(() => {
     ["100644", "schema_version: 3\n", "criteria.yml"],
     ["100644", "exit 0\n", "tests/check.sh"],
     ["100644", "# Lab\n", "README.md"],
+    ["100644", "Énoncé\n", "\u00c3\u00a9nonc\u00c3\u00a9.md"],
   ]);
   milestone = commit("student", STUDENT.slice(0, 5));
   target = commit("student", STUDENT, milestone);
@@ -82,7 +83,7 @@ beforeAll(() => {
     distributionRepo: "org/dist",
     target,
     distributionSha: distribution,
-    paths: ["criteria.yml", "tests", ".github/workflows"],
+    paths: ["criteria.yml", "tests", ".github/workflows", "énoncé.md"],
     passId: "p1",
     at: new Date("2026-11-17T10:00:00Z"),
   };
@@ -97,7 +98,9 @@ describe("buildGradedCommit", () => {
   it("pushes a target behind the branch's tip, with the distribution's graded paths, to its own ref; the branch untouched, the rest of the tree kept", async () => {
     const before = grafts().length;
     const graft = await buildGradedCommit(order);
-    expect(graft!.paths).toEqual(["criteria.yml", "tests/check.sh", "tests/extra.sh"]);
+    // A protected path with an accent: grafted, and reported in UTF-8.
+    expect(graft!.paths).toEqual(["criteria.yml", "tests/check.sh", "tests/extra.sh", "énoncé.md"]);
+    expect(read("student", graft!.sha, "énoncé.md")).toBe("Énoncé");
     expect(gradeRef("p1")).toBe("refs/quiz-grade-p1/graded");
     expect(git("student", ["rev-parse", "refs/quiz-grade-p1/graded"])).toBe(graft!.sha);
     expect(git("student", ["rev-parse", "refs/heads/main"])).toBe(late);

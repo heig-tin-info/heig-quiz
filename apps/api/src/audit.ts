@@ -643,7 +643,7 @@ export type AuditAction =
    * A v3 pass's graded commit (ADR-132 §2), by the system, subject the
    * `project_repos` row. `grade_grafted`: the target with the protected
    * files (`criteria.yml` included) of the distribution commit, pushed to
-   * `refs/quiz-grade-<pass>`; `payload.projectId`, `passId`, `target`,
+   * `refs/quiz-grade-<pass>/graded`; `payload.projectId`, `passId`, `target`,
    * `gradedSha`, `distributionSha`, `count` and `paths` (the paths it
    * changed, at most 100 and 8 KiB of them). `grade_graft_failed`: none could
    * be built, the pass settled `ci_unavailable`; `payload.projectId`,

@@ -64,8 +64,13 @@ a member with push access who creates `refs/quiz/grade` (or `refs/quiz`)
 makes every later `refs/quiz/grade/<pass>` push fail on the name conflict,
 after the deadline too; once a ref is deleted, its commit is still fetched
 by sha (`git fetch --depth=1 <url> <sha>`) and GitHub's tarball of a
-commit no ref names works. Still owed on staging: the Consequences'
-"Before production" list.
+commit no ref names works. On real GitHub too (user token, a repository
+under the lock, 2026-11-17): `git fetch --depth=1 <url> <sha>` of a target
+that is not the branch's tip works; the shallow, negotiated push of the
+graded commit to `refs/quiz-grade-<uuid>/graded` is accepted; the commit
+holds the teacher's file and the student's tree at the target, not the
+later push. Still owed on staging, with the App's installation token: the
+Consequences' "Before production" list.
 
 ## Decision
 
@@ -86,8 +91,9 @@ student repository a **graded commit**. It does not depend on a dispatch:
 a pass whose scope holds no automatic criterion (ADR-119 §6, amendment of
 2026-11-02) is never dispatched, but still gets its graded commit, which
 its LLM review reads (§4). Only a repository that cannot be written — gone,
-archived as its lock, or without an installation — gets none, and its
-review reads the target as before.
+archived as its lock, or without an installation — or whose graft failed
+or is above the size ceiling gets none, and its review reads the target
+as before.
 
 - **Its tree** is the target's (the pass's target commit, ADR-106 §3 and
   ADR-119 §6, chosen exactly as today) with every entry under the
@@ -348,6 +354,11 @@ Open points:
   is reviewed by the LLM on the target's own files; without an automatic
   criterion such a pass has no row to carry `ci_unavailable`, and only the
   audit says why.
+- GitHub recomputes a repository's `size` only periodically: a large push
+  just before the deadline can pass the 200 MB ceiling, and the depth-1
+  fetch is then bounded by the 120 s budget only. A blobless fetch
+  (`--filter=blob:none`) would close it; it needs a check on real GitHub,
+  not done.
 
 **Before production** (on staging, with the App's installation token, on
 a repository under `hgc-deadline-lock`): a pass whose push to

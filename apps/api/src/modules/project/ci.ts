@@ -307,14 +307,17 @@ type GraftOutcome = { graft: Graft | null; distributionSha: string | null } | { 
  * repository is read first — gone (`missing`), or above
  * {@link GRAFT_REPO_MAX_KB} (`too_large`) —; any failure, GitHub's, git's or
  * one the student's tree causes, is tried again up to {@link GRAFT_TRIES}
- * times in the job, then is `failed`.
+ * times in the job, each try with a fresh installation client (a token
+ * near its expiry would fail them all), then is `failed`.
  */
-async function graftPass(app: FastifyInstance, client: { octokit: Octokit; token: string }, loaded: LoadedPass, target: string): Promise<GraftOutcome> {
+async function graftPass(app: FastifyInstance, config: AppConfig, loaded: LoadedPass, target: string): Promise<GraftOutcome> {
   const { pass, repo, project } = loaded;
   if (project.distributionFullName === null) return { graft: null, distributionSha: null };
   const { owner, repo: name } = ownerRepo(repo.fullName!);
   for (let attempt = 1; ; attempt++) {
     try {
+      const client = await projectClient(app.db, config, project, app.log);
+      if (!client) throw new Error("graft: no installation client");
       const size = await unless404(async () => (await client.octokit.request("GET /repos/{owner}/{repo}", { owner, repo: name })).data.size);
       if (size === null) return { failed: "missing" };
       if (size > GRAFT_REPO_MAX_KB) return { failed: "too_large" };
@@ -339,7 +342,7 @@ async function graftPass(app: FastifyInstance, client: { octokit: Octokit; token
 }
 
 /** A graft's audit entry (ADR-132 §6): its shas and paths, the paths capped by count and length; or why it failed. */
-async function auditGraft(db: Db, { pass, repo, project }: LoadedPass, target: string, outcome: GraftOutcome): Promise<void> {
+async function auditGraft(db: Db | Tx, { pass, repo, project }: LoadedPass, target: string, outcome: GraftOutcome): Promise<void> {
   const base = { ...SYSTEM_ACTOR, subjectType: "project_repo" as const, subjectId: repo.id };
   if ("failed" in outcome) {
     await audit(db, { ...base, action: "project_repo.grade_graft_failed", payload: { projectId: project.id, passId: pass.id, target, cause: outcome.failed } });
@@ -363,8 +366,9 @@ async function auditGraft(db: Db, { pass, repo, project }: LoadedPass, target: s
  * whose scope holds no automatic criterion gets its graded commit, for its
  * review, but no dispatch. A graft that cannot be built settles the pass
  * at once: `repo_missing` for a repository GitHub lost, else
- * `ci_unavailable` (audited `project_repo.grade_graft_failed`), never a 24 h
- * silence. Audited per graft (`project_repo.grade_grafted`) and per
+ * `ci_unavailable` (audited `project_repo.grade_graft_failed` when that
+ * settled it), never a 24 h silence. Audited per graft
+ * (`project_repo.grade_grafted`, in the claim's transaction) and per
  * dispatch sent, the one entry of a CI pass's dispatch:
  * `project.review_dispatched` (the final pass, a Regrade) or
  * `project.checkpoint_dispatched` (a milestone).
@@ -389,21 +393,27 @@ export async function runCiDispatch(app: FastifyInstance, config: AppConfig, job
   // No installation, or its client cannot be made: nothing is written nor dispatched, the teacher grades.
   const client = await projectClient(db, config, project, app.log);
   if (!client) return settled("ci_unavailable");
-  const grafted = await graftPass(app, client, loaded, target);
+  const grafted = await graftPass(app, config, loaded, target);
   if ("failed" in grafted && grafted.failed === "missing") return gone();
   if ("failed" in grafted) {
-    await auditGraft(db, loaded, target, grafted);
-    return settled("ci_unavailable");
+    // Audited only when this settled the pass: a Regrade may have closed it meanwhile.
+    const outcome = await settled("ci_unavailable");
+    if (outcome === "settled") await auditGraft(db, loaded, target, grafted);
+    return outcome;
   }
   const { graft, distributionSha } = grafted;
-  // The claim: the target and its graded commit recorded before GitHub is called, so a pass is never sent twice.
-  const [claimed] = await db
-    .update(gradeDispatches)
-    .set({ sha: target, gradedSha: graft?.sha ?? null, distributionSha })
-    .where(and(eq(gradeDispatches.id, pass.id), eq(gradeDispatches.sha, ""), OPEN))
-    .returning({ id: gradeDispatches.id });
+  // The claim: the target and its graded commit recorded before GitHub is called, so a pass is never sent twice;
+  // the graft's audit in the same transaction, so no pushed graft goes unaudited.
+  const claimed = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(gradeDispatches)
+      .set({ sha: target, gradedSha: graft?.sha ?? null, distributionSha })
+      .where(and(eq(gradeDispatches.id, pass.id), eq(gradeDispatches.sha, ""), OPEN))
+      .returning({ id: gradeDispatches.id });
+    if (row) await auditGraft(tx, loaded, target, grafted);
+    return row !== undefined;
+  });
   if (!claimed) return "none";
-  await auditGraft(db, loaded, target, grafted);
   // No automatic criterion in scope: a run would be read for nothing; settled now, the review reads the graded commit.
   if (automaticLeaves(loaded).length === 0) return settled("no_result");
   const payload = {

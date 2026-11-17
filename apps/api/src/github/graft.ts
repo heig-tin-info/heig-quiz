@@ -4,10 +4,11 @@
  * taken from a distribution commit (`overlayTree`, `@quiz/domain`), its
  * parent the target, pushed to `refs/quiz-grade-<pass id>/graded` of the
  * student repository: never a branch, which the deadline's lock does not
- * cover, and under a component holding the pass id, which nobody can create
- * before the push nor block with a ref of their own (git refuses a ref
- * directly under `refs/`, so the name has a second component). The ref is a best-effort
- * anchor only: the dispatch, the acceptance and the review read the sha
+ * cover, and under a component holding the pass id, which nobody knows
+ * before the push, so nobody can create a ref that blocks it beforehand
+ * (git refuses a ref directly under `refs/`, so the name has a second
+ * component); once pushed, a member may move or delete it. The ref is a
+ * best-effort anchor only: the dispatch, the acceptance and the review read the sha
  * the pass recorded, so a member of the repository who moves or deletes
  * the ref changes nothing.
  *
