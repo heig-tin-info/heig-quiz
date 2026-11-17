@@ -80,6 +80,7 @@ import { botCommits, classrooms, gradeDispatches, projectRepos, projects } from 
 import { githubApp, githubStatus, ownerRepo } from "../../github/app.js";
 import { pushEmptyCommit } from "../../github/commit.js";
 import { lockStudentRepo, setRepoArchived, unlockStudentRepo } from "../../github/lock.js";
+import { sweepGraftDirs } from "../../github/graft.js";
 import { isPlanRestriction } from "../../github/provision.js";
 import {
   PROJECT_DEADLINE_QUEUE,
@@ -414,7 +415,9 @@ export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue,
   await queue.work<EvidenceJob>(PROJECT_EVIDENCE_QUEUE, (job) => runEvidencePass(app, config, job), {
     localConcurrency: EVIDENCE_CONCURRENCY,
   });
-  // The CI's graded run of a schema-3 project (ADR-119 §6): one dispatch per job, paced by its `startAfter`.
+  // The CI's graded run of a schema-3 project (ADR-119 §6): one dispatch per job, paced by its `startAfter`;
+  // its graft tries again within the job (ADR-132 §2). The graft directories a crash left are swept first.
+  await sweepGraftDirs();
   await queue.createQueue(PROJECT_CI_QUEUE, { retryLimit: 0 });
   await queue.work<CiDispatchJob>(PROJECT_CI_QUEUE, async (job) => {
     await runCiDispatch(app, config, job);

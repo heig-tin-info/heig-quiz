@@ -166,7 +166,7 @@ export async function provisionStudentRepo(opts: {
       // side: retry the push on transient failures instead of surfacing
       // "provisioning failed" to the student.
       await pushWithRetry(() =>
-        gitBare(join(work, "src.git"), "push", "--quiet", url(targetRepo), ...refspecs),
+        gitBare(join(work, "src.git"), ["push", "--quiet", url(targetRepo), ...refspecs]),
       );
     } finally {
       rmSync(work, { recursive: true, force: true });

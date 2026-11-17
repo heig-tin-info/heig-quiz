@@ -63,7 +63,7 @@ import { branchHead, githubStatus, installationClient, isZeroSha, ownerRepo, unl
 import { openSyncWorkspace, SourceRewritten, updateSquashedRepo, type SyncWorkspace } from "../../github/sync.js";
 import { PROJECT_SYNC_QUEUE } from "../../jobs.js";
 import { projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
-import { refreshCriteria } from "./criteria.js";
+import { ciGraded, refreshCriteria } from "./criteria.js";
 import { isLive } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { claimLeases, LEASE_MS, releaseLease, runLeased, type LeasedRun, type ProjectJob } from "./lease.js";
@@ -280,7 +280,10 @@ async function storePr(
  * one. An open one is commented on when the update `moved` its head (a
  * retry says nothing again). Titles, bodies and comments name the
  * DISTRIBUTION's commit (`head`), never the source (N-SEC-20), in English
- * (D12).
+ * (D12). The body says what grading takes from the update: in a project
+ * graded by a schema-3 snapshot the protected files and `criteria.yml`
+ * are graded in the teacher's version, merged or not (ADR-132 §7);
+ * otherwise nothing until it is merged.
  */
 async function upsertSyncPr(
   db: Db,
@@ -290,6 +293,8 @@ async function upsertSyncPr(
   head: string,
   moved: boolean,
   files: { filename: string; status: string }[],
+  /** The project is graded by its CI (`ciGraded`): its protected files and `criteria.yml` are graded in the teacher's version. */
+  graded: boolean,
   now: Date,
 ): Promise<"opened" | "updated"> {
   const { owner, repo: name } = ownerRepo(repo.fullName!);
@@ -333,8 +338,11 @@ async function upsertSyncPr(
     base: branch,
     body:
       `Your teacher updated the project. Merge this pull request to receive the update:\n\n${list}\n\n` +
-      `If GitHub reports conflicts, resolve them keeping your own work where it matters. ` +
-      `Your score never depends on this pull request until you merge it.`,
+      `If GitHub reports conflicts, resolve them keeping your own work where it matters.\n\n` +
+      (graded
+        ? `Merged or not, your work is graded with your teacher's version of the protected files and of \`criteria.yml\`; ` +
+          `every other file is graded as you pushed it.`
+        : `Your score never depends on this pull request until you merge it.`),
   });
   await storePr(db, repo.id, branch, created.number, "open", now);
   return "opened";
@@ -365,7 +373,7 @@ async function gone(octokit: Octokit, owner: string, repo: string): Promise<bool
  * throws, for the frame to count and retry. A repository GitHub lost is
  * marked deleted and skipped.
  */
-async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspace, repoId: string): Promise<SyncOutcome> {
+async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspace, repoId: string, graded: boolean): Promise<SyncOutcome> {
   const db = app.db;
   const [row] = await repoWithProject(db, { courseId: classrooms.courseId })
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
@@ -393,7 +401,7 @@ async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspac
       });
       const files = (cmp.files ?? []).map((f) => ({ filename: f.filename, status: f.status }));
       // No file differs: the student has everything already, no pull request (F-PROJ-12).
-      outcomes.push(files.length === 0 ? "up_to_date" : await upsertSyncPr(db, octokit, repo, branch, head, moved, files, now));
+      outcomes.push(files.length === 0 ? "up_to_date" : await upsertSyncPr(db, octokit, repo, branch, head, moved, files, graded, now));
     }
   } catch (err) {
     if (await gone(octokit, owner, name)) {
@@ -426,13 +434,14 @@ export async function runSyncJob(app: FastifyInstance, config: AppConfig, job: P
     // The teachers' test repositories follow the source too (ADR-077), outside the tallies and never failing the pass.
     const counted = new Set(repos.map((r) => r.id));
     const tests = (await db.select().from(projectRepos).where(eq(projectRepos.projectId, project.id))).filter((r) => !counted.has(r.id));
+    const graded = await ciGraded(db, project);
     const ws = await openSyncWorkspace({ token, org: owner, squashedRepo });
     let failedRepos: string[];
     try {
       failedRepos = await each(repos, async (repo) => {
-        tally[await syncRepo(app, octokit, ws, repo.id)] += 1;
+        tally[await syncRepo(app, octokit, ws, repo.id, graded)] += 1;
       });
-      await each(tests, (repo) => syncRepo(app, octokit, ws, repo.id).then(() => undefined));
+      await each(tests, (repo) => syncRepo(app, octokit, ws, repo.id, graded).then(() => undefined));
     } finally {
       ws.dispose();
     }

@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,10 +12,10 @@ vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:child_process")>();
   return {
     ...actual,
-    execFile: vi.fn(actual.execFile),
+    spawn: vi.fn(actual.spawn),
   };
 });
-const spawned = vi.mocked(execFile);
+const spawned = vi.mocked(spawn);
 
 const TOKEN = "ghs_secret123FAKEFAKE";
 const BASIC = Buffer.from(`x-access-token:${TOKEN}`).toString("base64");
@@ -113,6 +113,16 @@ describe("gitRunner", () => {
     }
   });
 
+  it("kills a call still running at its deadline with every process it started", async () => {
+    // A command git starts and that outlives a plain kill of git (as `git-remote-https` would): its pid written, then a long sleep.
+    const pidFile = join(dir, "helper.pid");
+    const { gitBare } = gitRunner({ deadline: Date.now() + 500 });
+    const started = Date.now();
+    await expect(gitBare(remote, ["-c", `alias.hang=!sh -c 'echo $$ > ${pidFile}; exec sleep 30'`, "hang"])).rejects.toThrow();
+    expect(Date.now() - started).toBeLessThan(5_000);
+    const pid = Number(readFileSync(pidFile, "utf8").trim());
+    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 2_000 });
+  });
   it("sets no credential without a token", async () => {
     await plain.git(dir, "ls-remote", `file://${remote}`);
     expect(spawned.mock.calls[0]![2]?.env?.GIT_CONFIG_VALUE_0).toBeUndefined();

@@ -105,9 +105,9 @@ export async function createSquashedRepo(opts: {
       await git(work, "clone", "--quiet", "--bare", url(sourceRepo), "src.git");
       const src = join(work, "src.git");
       const refspecs = branches.map((b) => `refs/heads/${b}:refs/heads/${b}`);
-      await pushWithRetry(() => gitBare(src, "push", "--quiet", url(targetRepo), ...refspecs));
+      await pushWithRetry(() => gitBare(src, ["push", "--quiet", url(targetRepo), ...refspecs]));
       for (const b of branches) {
-        heads[b] = sourceHeads[b] = (await gitBare(src, "rev-parse", `refs/heads/${b}`)).trim();
+        heads[b] = sourceHeads[b] = (await gitBare(src, ["rev-parse", `refs/heads/${b}`])).trim();
       }
     } else {
       for (const branch of branches) {

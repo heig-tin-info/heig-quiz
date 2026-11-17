@@ -26,6 +26,11 @@ Amendments in force:
 - 2026-10-26 (#899): staff read the distribution on demand, `pull` only ([decision 6](#decision)).
 - 2026-10-26 (#917), as amended 2026-10-28: each branch's root commit is
   signed for the App, never by a forced move ([decision 7](#decision)).
+- 2026-11-17, amended by
+  [ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md) §2,
+  scope addendum 1 for a v3 graded pass only: the graded commit takes the
+  protected files from the distribution commit of the criteria snapshot,
+  not the current head; the restore on a branch is unchanged.
 
 ## Context
 

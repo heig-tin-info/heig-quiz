@@ -363,21 +363,32 @@ async function store(
 }
 
 /**
- * The installation's client of the project's organization, or null when
- * Quiz's App cannot act there: no installation, or its client could not
- * be made (the App's key, the network; logged). The one entry of the
- * evidence, the CI's dispatch and the review: each turns null into its
- * reason, never a failed job with nothing written.
+ * The installation's client of the project's organization, with its token
+ * (for git, through the environment only), or null when Quiz's App cannot
+ * act there: no installation, or its client could not be made (the App's
+ * key, the network; logged). The one entry of the evidence, the CI's
+ * dispatch and the review: each turns null into its reason, never a failed
+ * job with nothing written.
  */
-export async function projectOctokit(db: Db, config: AppConfig, project: Pick<ProjectRow, "orgId">, log: FastifyBaseLogger): Promise<Octokit | null> {
+export async function projectClient(
+  db: Db,
+  config: AppConfig,
+  project: Pick<ProjectRow, "orgId">,
+  log: FastifyBaseLogger,
+): Promise<{ octokit: Octokit; token: string } | null> {
   const org = await projectInstallation(db, project.orgId);
   if (!org) return null;
   try {
-    return (await installationClient(config, org.installationId)).octokit;
+    return await installationClient(config, org.installationId);
   } catch (err) {
     log.error({ err, installationId: org.installationId }, "github: the installation's client could not be made");
     return null;
   }
+}
+
+/** {@link projectClient}'s client alone. */
+export async function projectOctokit(db: Db, config: AppConfig, project: Pick<ProjectRow, "orgId">, log: FastifyBaseLogger): Promise<Octokit | null> {
+  return (await projectClient(db, config, project, log))?.octokit ?? null;
 }
 
 /** The commits the identity criterion reads: one page of GitHub's listing, the newest. */

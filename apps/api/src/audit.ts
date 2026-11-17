@@ -640,6 +640,19 @@ export type AuditAction =
    */
   | "project_repo.ci_tampered"
   /**
+   * A v3 pass's graded commit (ADR-132 §2), by the system, subject the
+   * `project_repos` row. `grade_grafted`: the target with the protected
+   * files (`criteria.yml` included) of the distribution commit, pushed to
+   * `refs/quiz-grade-<pass>/graded`; `payload.projectId`, `passId`, `target`,
+   * `gradedSha`, `distributionSha`, `count` and `paths` (the paths it
+   * changed, at most 100 and 8 KiB of them). `grade_graft_failed`: none could
+   * be built, the pass settled `ci_unavailable`; `payload.projectId`,
+   * `passId`, `target`, `cause` (`too_large`: the repository above the
+   * ceiling; `failed`: GitHub or git failed every try). Never a token.
+   */
+  | "project_repo.grade_grafted"
+  | "project_repo.grade_graft_failed"
+  /**
    * The staff's writes on a repository (F-PROJ-07, F-PROJ-08, F-PROJ-14;
    * merge task M3-08b), subject the `project_repos` row. `grade_override`:
    * the teacher's score, `payload.before` and `after` (`points`, `max`,

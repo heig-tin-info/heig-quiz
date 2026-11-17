@@ -6,7 +6,11 @@ import {
   collectionRef,
   collectionTooLate,
   composeCollectionTree,
+  indexInfo,
   keptEntriesMatch,
+  overlayTree,
+  parseLsTree,
+  treeDifference,
   storedCollection,
   withUnreadableKept,
   type CollectionTreeEntry,
@@ -158,5 +162,58 @@ describe("storedCollection", () => {
   it("reads a value no list holds any more as failed, with no reason", () => {
     expect(storedCollection("stale_snapshot", null)).toEqual({ outcome: "failed", reason: null });
     expect(storedCollection("failed", "gone_reason")).toEqual({ outcome: "failed", reason: null });
+  });
+});
+
+describe("overlayTree (the graded commit, ADR-132 §2)", () => {
+  const target = [
+    blob("src/main.c", "a"),
+    blob("tests/check.sh", "b"),
+    blob("tests/mine.sh", "c"),
+    blob("criteria.yml", "d"),
+    blob("vendor/lib", "e", "160000"),
+    blob("docs", "f", "120000"),
+  ];
+  const distribution = [blob("tests/check.sh", "1"), blob("criteria.yml", "2"), blob("docs/README.md", "3"), blob("src/main.c", "9")];
+
+  it("takes every kept entry from the base, a kept directory whole, and keeps the rest of the tree, gitlinks included", () => {
+    expect(overlayTree(target, distribution, ["tests", "criteria.yml", "docs"])).toEqual([
+      blob("criteria.yml", "2"),
+      // A link standing where a kept directory goes is dropped; the directory comes from the base.
+      blob("docs/README.md", "3"),
+      blob("src/main.c", "a"),
+      // The student's file added under a kept directory is gone.
+      blob("tests/check.sh", "1"),
+      blob("vendor/lib", "e", "160000"),
+    ]);
+  });
+
+  it("drops a kept path the base lacks", () => {
+    expect(overlayTree([blob("README.md", "a"), blob("x", "b")], [], ["README.md"])).toEqual([blob("x", "b")]);
+  });
+
+  it("is the collection's rule but for the gitlinks", () => {
+    const kept = ["tests"];
+    expect(composeCollectionTree(target, distribution, kept)).toEqual(overlayTree(target, distribution, kept).filter((e) => e.mode !== "160000"));
+  });
+});
+
+describe("treeDifference", () => {
+  it("lists the paths whose mode or object differs, or that one side lacks", () => {
+    expect(treeDifference([blob("a", "1"), blob("b", "2"), blob("c", "3")], [blob("a", "1"), blob("b", "2", "100755"), blob("d", "4")])).toEqual([
+      "b",
+      "c",
+      "d",
+    ]);
+    expect(treeDifference([blob("a", "1")], [blob("a", "1")])).toEqual([]);
+  });
+});
+
+describe("parseLsTree and indexInfo", () => {
+  it("read and write the NUL-separated listing, a path with a tab or a space included", () => {
+    const out = `100644 blob ${sha("a")}\tsrc/a b.c\u0000120000 blob ${sha("b")}\tlink\u0000160000 commit ${sha("c")}\tsub\tx\u0000`;
+    const entries = parseLsTree(out);
+    expect(entries).toEqual([blob("src/a b.c", "a"), blob("link", "b", "120000"), blob("sub\tx", "c", "160000")]);
+    expect(indexInfo(entries)).toBe(`100644 ${sha("a")}\tsrc/a b.c\u0000120000 ${sha("b")}\tlink\u0000160000 ${sha("c")}\tsub\tx\u0000`);
   });
 });

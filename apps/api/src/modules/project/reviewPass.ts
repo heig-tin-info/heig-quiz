@@ -188,8 +188,10 @@ async function runnerMaterial(db: Db, { repo, project, snapshot }: Loaded, evide
 
 /**
  * A schema-3 pass's material (ADR-119 §7): the sources at the pass's
- * target commit — the one it dispatched, else (a pass settled before its
- * dispatch: archived, no installation, never sent) `passTarget` —
+ * graded commit (ADR-132 §4: the teacher's protected files and
+ * `criteria.yml` beside the student's work), else its target — the one it
+ * recorded, else (a pass settled before its claim: archived, no
+ * installation) `passTarget` —
  * from the tarball the platform fetches itself, and the `log` of each of
  * the pass's automatic criteria in its accepted `results.json`; a pass that
  * accepted none (`no_result`, `ci_tampered`, `ci_unavailable`) is judged
@@ -200,13 +202,13 @@ async function runnerMaterial(db: Db, { repo, project, snapshot }: Loaded, evide
 async function ciMaterial(app: FastifyInstance, config: AppConfig, { repo, project, snapshot, scope }: Loaded, passId: string): Promise<Material> {
   const db = app.db;
   const [found] = await db
-    .select({ sha: gradeDispatches.sha, results: projectCiResults.results })
+    .select({ sha: gradeDispatches.sha, gradedSha: gradeDispatches.gradedSha, results: projectCiResults.results })
     .from(gradeDispatches)
     .leftJoin(projectCiResults, eq(projectCiResults.passId, gradeDispatches.id))
     .where(and(eq(gradeDispatches.id, passId), eq(gradeDispatches.repoId, repo.id)));
   if (!found) return { reason: "grader_error" };
   if (repo.deletedAt !== null || repo.fullName === null) return { reason: "repo_missing" };
-  const target = found.sha !== "" ? found.sha : await passTarget(db, repo, project, scope);
+  const target = found.gradedSha ?? (found.sha !== "" ? found.sha : await passTarget(db, repo, project, scope));
   if (target === null) return { reason: "no_commit" };
   const octokit = await projectOctokit(db, config, project, app.log);
   if (!octokit) return { reason: "github_unavailable" };
