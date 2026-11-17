@@ -915,6 +915,14 @@ const scenes = [
   { name: "live-running-staff", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live?mytest=1" },
   { name: "grading-staff", role: "teacher", path: "/evaluations/closed/grading?mytest=1" },
   { name: "results-staff", role: "teacher", path: "/evaluations/closed/results?mytest=1" },
+  // ADR-018, amended 2026-11-17: "Show staff attempts", per screen, hidden by
+  // default on the results and the gradebook; the gradebook's staff row; the
+  // teacher's own copy, and the way from it to the class's results.
+  { name: "results-staff-shown", role: "teacher", path: "/evaluations/closed/results?mytest=1", ls: { "quiz-staff-rows-results": "shown" } },
+  { name: "classroom-grades-staff", role: "teacher", path: "/classrooms/r1/grades?mytest=1", ls: { "quiz-staff-rows-gradebook": "shown" } },
+  { name: "live-running-staff-hidden", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live?mytest=1", ls: { "quiz-live-toggles-v2": ALL_ON, "quiz-staff-rows-live": "hidden" } },
+  { name: "eval-open-my-copy", role: "teacher", path: "/evaluations/closed?mytest=1", fold: true },
+  { name: "feedback-class-results", role: "teacher", path: `/attempts/${ATTEMPT_PAST}/feedback`, ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/closed" } },
   // The banner the walk comes back through: the student view, entered from an
   // evaluation, with "Back to teacher view" pointing at it.
   { name: "student-view-banner", role: "teacher", path: "/", ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/closed" } },

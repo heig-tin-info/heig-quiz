@@ -242,6 +242,13 @@ export const GradingEntry = z.object({
    */
   staff: z.boolean(),
   /**
+   * The attempt is the reader's own (a teacher's staff seat, ADR-018,
+   * amended 2026-11-17): the panel says "You" rather than "Teacher". Sent
+   * anonymous too, and like `staff` it names nobody else: it is true on the
+   * caller's own rows only, false on every other.
+   */
+  mine: z.boolean(),
+  /**
    * Which of a student's attempts this is (ADR-025), `null` when the student
    * holds only one — every exam. A number, never a name, so it is sent
    * anonymous too: two answers of one student to one question must not read

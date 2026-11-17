@@ -9,6 +9,7 @@ import {
   Download,
   Eye,
   FileStack,
+  FileText,
   MonitorPlay,
   RotateCcw,
   Trash2,
@@ -25,6 +26,7 @@ import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import { routeToPath, useSearchParam } from "../router";
 import { Trail, useEvaluationCrumbs } from "../Trail";
+import { enterStudentView } from "../studentView";
 import {
   Alert,
   Badge,
@@ -219,6 +221,18 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
     window.open(routeToPath({ view: "evaluationPreview", id }), "_blank", "noopener");
   };
 
+  /*
+   * "Open my copy" (ADR-018, amended 2026-11-17): the teacher's own walk,
+   * read where a student reads theirs, the feedback page in the student
+   * view. Its way back is this page; the feedback page also offers the
+   * class's results. Only with a staff seat and an attempt of it.
+   */
+  const ownAttempt = self.staffSeat ? self.attemptId : null;
+  const openMyCopy = (attemptId: string) => {
+    enterStudentView({ view: "evaluation", id });
+    navigate({ view: "feedback", attemptId });
+  };
+
 
   return (
     <div className="w-full space-y-6" style={pane.box(step === "questions")}>
@@ -249,6 +263,11 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
             <Button variant="secondary" onClick={openPreview}>
               <Eye /> {t("eval.preview")}
             </Button>
+            {ownAttempt === null ? null : (
+              <Button variant="secondary" onClick={() => openMyCopy(ownAttempt)}>
+                <FileText /> {t("eval.openMyCopy")}
+              </Button>
+            )}
             {/* WP10: once it is closed, the correction is where this screen
                 leads — the configuration is history at that point. */}
             {isEvaluationOver(evaluation.state) ? (

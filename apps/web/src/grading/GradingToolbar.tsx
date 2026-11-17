@@ -50,6 +50,7 @@ export function GradingToolbar({
   anonymise,
   onAnonymise,
   exports,
+  staffRows,
   primary,
 }: {
   view: GradingView;
@@ -60,6 +61,8 @@ export function GradingToolbar({
   onAnonymise: (on: boolean) => void;
   /** The question's Export menu (F-EXP-01), when its type renders as text. */
   exports?: ReactNode;
+  /** "Show test attempts" (ADR-018, amended 2026-11-17), which draws nothing while no answer is a staff one. */
+  staffRows?: ReactNode;
   primary: ReactNode;
 }) {
   const t = useT();
@@ -118,6 +121,7 @@ export function GradingToolbar({
           closes the filters' row and never stands alone at the start of a line. */}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2.5">
         {exports}
+        {staffRows}
         <label className="flex items-center gap-2 text-[13px] font-medium text-fg-muted">
           <Switch checked={anonymise} onChange={onAnonymise} label={t("grading.anonymise")} />
           <span aria-hidden>{t("grading.anonymise")}</span>

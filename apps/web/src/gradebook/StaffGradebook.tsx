@@ -46,6 +46,7 @@ import {
   CirclePlus,
   Eraser,
   EyeOff,
+  GraduationCap,
   Pencil,
   Scale,
   Table2,
@@ -67,6 +68,7 @@ import { countsInMean } from "@quiz/domain";
 
 import { useT, type TFunction } from "../i18n";
 import {
+  Badge,
   Card,
   cx,
   Dash,
@@ -84,6 +86,7 @@ import { useStaffGradebook } from "./api";
 import { ColumnDialog, ScoreDialog } from "./dialogs";
 import { AbsentSigil, ExcusedSigil, fullName, GradeOrDash, MODE_LABEL } from "./cells";
 import { useStaffWrites } from "./useStaffWrites";
+import { useStaffRows } from "../staffRows";
 
 /**
  * The mean stays in view while the grades scroll under it, once the card has
@@ -212,6 +215,18 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
   const optional = (column: GradebookColumn) => column.mode === "exercise" && !column.counts;
   const hasOptional = data.columns.some(optional);
   const columns = showExercises ? data.columns : data.columns.filter((column) => !optional(column));
+  /*
+   * A teacher's staff seat is a row the server computes as a student's
+   * and keeps out of every class mean and of the CSV (ADR-018, amended
+   * 2026-11-17): hidden by default, read-only, badged. The switch moves
+   * rows, never a figure of the footer.
+   */
+  const staffRows = useStaffRows("gradebook", data.rows);
+  const staffSwitch = staffRows.present ? (
+    <SettingRow title={t("staffRows.show")} className="py-0">
+      <Switch checked={staffRows.shown} label={t("staffRows.show")} onChange={staffRows.setShown} />
+    </SettingRow>
+  ) : null;
 
   const putMark = (column: GradebookColumn, row: GradebookStaffRow, mark: GradebookMarkPut): Promise<boolean> =>
     marks.putMark(column, { enrollmentId: row.enrollmentId, name: fullName(row) }, mark);
@@ -244,13 +259,16 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
   const columnControl = (column: GradebookColumn): HeadControl =>
     readOnly ? null : hasComponents ? { open: () => setDialog({ kind: "column", column }) } : { items: columnItems(column) };
 
-  if (data.columns.length === 0 || data.rows.length === 0) {
+  if (data.columns.length === 0 || staffRows.visible.length === 0) {
     return (
-      <Card>
-        <EmptyState icon={Table2} title={t(data.columns.length === 0 ? "gbook.empty.noColumns" : "gbook.empty.noRows")}>
-          {t(data.columns.length === 0 ? "gbook.empty.noColumnsBody" : "gbook.empty.noRowsBody")}
-        </EmptyState>
-      </Card>
+      <div className="space-y-3">
+        {data.columns.length === 0 ? null : staffSwitch}
+        <Card>
+          <EmptyState icon={Table2} title={t(data.columns.length === 0 ? "gbook.empty.noColumns" : "gbook.empty.noRows")}>
+            {t(data.columns.length === 0 ? "gbook.empty.noColumnsBody" : "gbook.empty.noRowsBody")}
+          </EmptyState>
+        </Card>
+      </div>
     );
   }
 
@@ -273,6 +291,7 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
           <Switch checked={showExercises} label={t("gbook.exercises.show")} onChange={setShowExercises} />
         </SettingRow>
       ) : null}
+      {staffSwitch}
       {inNoMean.length > 0 ? (
         <p className="flex items-start gap-1.5 text-[13px] text-fg-muted">
           <TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0 text-warning" />
@@ -336,13 +355,22 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
             </tr>
           </thead>
           <tbody>
-            {data.rows.map((row) => (
+            {staffRows.visible.map((row) => (
               <tr key={row.enrollmentId} className={cx(T.row, "group hover:bg-surface-2/70")}>
                 <th
                   scope="row"
                   className={cx(T.td, "sticky left-0 z-10 bg-surface text-left font-normal group-hover:bg-surface-2")}
                 >
-                  <span className="block max-w-36 truncate font-semibold @lg:max-w-56">{fullName(row)}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="block max-w-36 truncate font-semibold @lg:max-w-56">{fullName(row)}</span>
+                    {row.staff ? (
+                      <Tip label={t("gbook.staffRow.help")}>
+                        <Badge tone="zinc" icon={GraduationCap}>
+                          {t("roster.status.staff")}
+                        </Badge>
+                      </Tip>
+                    ) : null}
+                  </span>
                   {/* On a phone the name alone: the sticky column keeps room for the grades. */}
                   <span className="hidden max-w-56 truncate text-xs text-fg-muted @lg:block">{row.email}</span>
                 </th>
@@ -354,7 +382,8 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                         <CellButton
                           cell={cell}
                           label={t("gbook.cell.label", { student: fullName(row), column: column.title })}
-                          items={readOnly ? null : cellItems(column, row, cell)}
+                          // A staff seat takes no mark: the server refuses it (404), so none is offered.
+                          items={readOnly || row.staff ? null : cellItems(column, row, cell)}
                           t={t}
                         />
                       ) : (

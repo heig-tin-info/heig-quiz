@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Hourglass, RotateCcw, type LucideIcon } from "lucide-react";
+import { BarChart3, CheckCircle2, Hourglass, RotateCcw, type LucideIcon } from "lucide-react";
 
 import type {
   FeedbackPending,
@@ -28,6 +28,8 @@ import {
   type Tone,
 } from "../ui";
 import { attemptFeedbackKey } from "../queryKeys";
+import { leaveStudentView } from "../studentView";
+import { useEvaluation } from "../evaluation/api";
 import { CopyItem } from "../CopyItem";
 import { PendingLine } from "./cards";
 import { useRetake } from "./retake";
@@ -250,9 +252,12 @@ function ReviewList({ review }: { review: readonly ReviewItem[] }) {
 export function Feedback({
   attemptId,
   navigate,
+  studentView = false,
 }: {
   attemptId: string;
   navigate: (r: Route) => void;
+  /** A teacher in the student view, reading their own walk (ADR-018): the class's results are one secondary link away. */
+  studentView?: boolean;
 }) {
   const t = useT();
   const feedback = useQuery<StudentFeedback>({
@@ -266,6 +271,16 @@ export function Feedback({
       return grading && query.state.dataUpdateCount < SCORE_POLLS ? SCORE_POLL_MS : false;
     },
   });
+
+  /*
+   * The class's results are offered on the teacher's own staff walk only,
+   * as the evaluation's staff read says it (`self`, ADR-018): the page the
+   * evaluation page already loaded, so mostly from the cache. A teacher off
+   * the course's staff gets its 404, and no link.
+   */
+  const evaluationId = studentView ? (feedback.data?.evaluation.id ?? null) : null;
+  const self = useEvaluation(evaluationId, { retry: false }).data?.self;
+  const ownStaffWalk = self !== undefined && self.staffSeat && self.attemptId === attemptId;
 
   if (feedback.isLoading) {
     return <PageSkeleton body="summary-and-block" className="mx-auto max-w-180" />;
@@ -284,19 +299,39 @@ export function Feedback({
   // notification must know what they are looking at before they know whether
   // there is anything in it.
   const practice = data.available && data.practice === true;
+  /*
+   * Out of the student view, onto this evaluation's results (ADR-018,
+   * amended 2026-11-17): secondary chrome, the page's own action stays the
+   * student's. Never offered to a student, whom the page never knows as one.
+   */
+  const classResults = ownStaffWalk ? (
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={() => {
+        leaveStudentView();
+        navigate({ view: "results", evaluationId: data.evaluation.id });
+      }}
+    >
+      <BarChart3 /> {t("feedback.classResults")}
+    </Button>
+  ) : null;
   const header = (released: string | null) => (
-    <header>
-      <p className="text-[13px] text-fg-muted">{data.evaluation.title}</p>
-      <h1 className="mt-1 text-[28px] font-bold leading-tight tracking-[-0.02em]">
-        {t(practice ? "feedback.practice.title" : "feedback.title")}
-      </h1>
-      {/* ADR-122: a practice attempt counts for nothing, and says so first. */}
-      {practice ? <p className="mt-1.5 text-sm text-fg-muted">{t("feedback.practice.note")}</p> : null}
-      {released && !practice ? (
-        <p className="mt-1.5 text-sm text-fg-muted">
-          {t("feedback.released")} <RelativeTime iso={released} />
-        </p>
-      ) : null}
+    <header className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-[13px] text-fg-muted">{data.evaluation.title}</p>
+        <h1 className="mt-1 text-[28px] font-bold leading-tight tracking-[-0.02em]">
+          {t(practice ? "feedback.practice.title" : "feedback.title")}
+        </h1>
+        {/* ADR-122: a practice attempt counts for nothing, and says so first. */}
+        {practice ? <p className="mt-1.5 text-sm text-fg-muted">{t("feedback.practice.note")}</p> : null}
+        {released && !practice ? (
+          <p className="mt-1.5 text-sm text-fg-muted">
+            {t("feedback.released")} <RelativeTime iso={released} />
+          </p>
+        ) : null}
+      </div>
+      {classResults}
     </header>
   );
 

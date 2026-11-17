@@ -53,6 +53,7 @@ import { useGradingData } from "./useGradingData";
 import { useItemCounting } from "./useItemCounting";
 import { useGradingKeys } from "./useGradingKeys";
 import { useGradingView } from "./view";
+import { StaffRowsSwitch, useStaffRows } from "../staffRows";
 
 /**
  * The grading screen (F-GRADE-03 to 06, ADR-044): ONE QUESTION AT A TIME,
@@ -165,14 +166,21 @@ export function GradingPanel({
       }),
     [base, view],
   );
+  /*
+   * A teacher's own walk is drawn while the switch shows it, shown by
+   * default (ADR-018, amended 2026-11-17). It draws rows only: the batch
+   * the primary action sends is the server's scope, staff answers included,
+   * so its count reads `visible`, never what the switch leaves on screen.
+   */
+  const staffRows = useStaffRows("grading", visible);
   const sortable = useMemo(
     () => sortColumns(t, columns, !anonymise, (e) => whoOf(t, e), parameters !== null),
     [t, columns, anonymise, parameters],
   );
   const rows = useMemo(() => {
     const byKey = new Map(sortable.map((c) => [c.key, c]));
-    return sortRows(visible, shownSort, (e, key) => byKey.get(key)?.sortValue(e) ?? "");
-  }, [visible, shownSort, sortable]);
+    return sortRows(staffRows.visible, shownSort, (e, key) => byKey.get(key)?.sortValue(e) ?? "");
+  }, [staffRows.visible, shownSort, sortable]);
 
   useEffect(() => {
     const at = rows.findIndex((e) => entryKey(e) === selected);
@@ -360,13 +368,14 @@ export function GradingPanel({
           if (on && sort?.key === "name") setSort(null);
         }}
         exports={item && data.exportable ? <AnswersExport evaluationId={evaluationId} itemId={item.id} /> : null}
+        staffRows={<StaffRowsSwitch rows={staffRows} />}
         primary={
           <PrimaryButton
             // Read-only, the screen's one action walks the questions.
             action={
               readOnly
                 ? { kind: isLast ? "results" : "next" }
-                : primaryAction(entries, rows, isLast)
+                : primaryAction(entries, visible, isLast)
             }
             busy={actions.batch.isPending}
             onValidate={(n) => void actions.validateBatch(scope, n)}

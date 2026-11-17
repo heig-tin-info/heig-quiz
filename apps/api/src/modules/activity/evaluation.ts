@@ -52,7 +52,9 @@ function facts(ev: EvaluationRecord): GradebookEntryFacts {
 
 /**
  * The staff's cell of each seat: the results page's row, or what an
- * evaluation not taken is — an absence once released, for an exam.
+ * evaluation not taken is — an absence once released, for an exam. A
+ * teacher's staff seat reads its own row as a student's does, live (ADR-018,
+ * amended 2026-11-17): the results list it once it took the evaluation.
  */
 async function staffCells(
   db: Db,
@@ -60,7 +62,7 @@ async function staffCells(
   seats: readonly GradebookSeat[],
 ): Promise<Map<string, GradebookBeneath>> {
   const view = await resultsView(db, ev);
-  const byUser = new Map(view.rows.filter((r) => !r.staff).map((r) => [r.userId, r]));
+  const byUser = new Map(view.rows.map((r) => [r.userId, r]));
   const released = ev.releasedAt !== null;
   return new Map(
     seats.map(({ enrollmentId, userId }): [string, GradebookBeneath] => {

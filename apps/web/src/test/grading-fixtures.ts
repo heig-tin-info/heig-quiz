@@ -69,6 +69,7 @@ export function makeEntry(over: Partial<GradingEntry> = {}): GradingEntry {
     label: null,
     guest: null,
     staff: false,
+    mine: false,
     attemptNumber: null,
     kept: true,
     answer: { selected: [1] },

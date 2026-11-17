@@ -239,18 +239,26 @@ async function loadQueueContext(
   };
 }
 
+/** Who reads the panel: whether the names are asked for, and the reader's own account, which `mine` compares. */
+interface PanelReader {
+  anonymous: boolean;
+  userId: string | null;
+}
+
 /**
  * One cell of the panel. The views still come from `studentViewOf`/`solutionViewOf` (invariant 4).
  *
  * Anonymous (the default), nothing in it names the student: no label, no
  * user id. The attempt id stays — it names an attempt, and it is what every
- * write of the panel addresses.
+ * write of the panel addresses. `mine` says the attempt is the reader's own,
+ * a teacher's walk from a staff seat (ADR-018, amended 2026-11-17): it is
+ * computed here, against the reader, and names nobody else.
  */
 function entryOf(
   { attempt, item, hook }: { attempt: AttemptRecord; item: JoinedItem; hook: AcceptanceHook | undefined },
   grading: GradingRecord | null,
   context: QueueContext,
-  anonymous: boolean,
+  { anonymous, userId }: PanelReader,
 ): GradingEntry {
   const key = pairKey(attempt.id, item.item.id);
   const answer = context.answers.get(key) ?? null;
@@ -265,6 +273,7 @@ function entryOf(
     label: anonymous ? null : (who?.displayName ?? null),
     guest: anonymous ? null : (who?.guest ?? null),
     staff: context.staffAttempts.has(attempt.id),
+    mine: userId !== null && attempt.userId === userId,
     attemptNumber: who?.attemptNumber ?? null,
     kept: context.kept.has(attempt.id),
     answer: answer?.payload ?? null,
@@ -295,6 +304,8 @@ export async function gradingQueue(
   db: Db,
   evaluation: EvaluationRecord,
   query: GradingQuery,
+  /** The reader's account, which `mine` compares; null for a reader with none (a test, a job). */
+  readerId: string | null,
 ): Promise<GradingQueue> {
   const [allItems, attemptRows] = await Promise.all([
     joinedItems(db, evaluation.id),
@@ -323,7 +334,9 @@ export async function gradingQueue(
       const grading = context.standing.get(pairKey(attempt.id, item.item.id)) ?? null;
       if (counts && grading?.state === "validated") validated += 1;
       else if (counts && grading?.state === "proposed") proposed += 1;
-      entries.push(entryOf({ attempt, item, hook: hooks.get(item.item.id) }, grading, context, query.anonymous));
+      entries.push(
+        entryOf({ attempt, item, hook: hooks.get(item.item.id) }, grading, context, { anonymous: query.anonymous, userId: readerId }),
+      );
     }
   }
 

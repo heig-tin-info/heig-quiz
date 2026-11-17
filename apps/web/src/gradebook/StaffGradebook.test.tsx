@@ -45,6 +45,7 @@ function makeTable(over: Partial<GradebookStaff> = {}): GradebookStaff {
         email: "alice.dupont@heig-vd.ch",
         nom: "Dupont",
         prenom: "Alice",
+        staff: false,
         mean: 5.5,
         componentMeans: {},
         cells: {
@@ -58,6 +59,7 @@ function makeTable(over: Partial<GradebookStaff> = {}): GradebookStaff {
         email: "bob.favre@heig-vd.ch",
         nom: "Favre",
         prenom: "Bob",
+        staff: false,
         mean: 1,
         componentMeans: {},
         cells: {
@@ -499,5 +501,47 @@ describe("a setting that moves the means students read now", () => {
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1));
     expect(screen.queryByRole("dialog", { name: "Change the students' means?" })).toBeNull();
+  });
+});
+
+describe("a teacher's staff seat (ADR-018, amended 2026-11-17)", () => {
+  const SEATED = "0190d3c4-0000-7000-8000-0000000000e9";
+  const withStaff = () => {
+    const table = makeTable();
+    table.rows.push({
+      enrollmentId: SEATED,
+      email: "prof.demo@heig-vd.ch",
+      nom: "Démo",
+      prenom: "Prof",
+      staff: true,
+      mean: 6,
+      componentMeans: {},
+      cells: { [TEST]: { ...empty, kind: "grade", grade: 6, points: 20, max: 20, source: "results", hasGrade: true }, [EXERCISE]: empty, [LATER]: empty },
+    });
+    return table;
+  };
+  const toggle = () => screen.getByRole("switch", { name: "Show test attempts" });
+  const footer = () => screen.getByRole("row", { name: /Class mean/ }).textContent;
+
+  it("is hidden by default, then a badged, read-only row; the class means stay the server's", async () => {
+    renderTab(withStaff());
+    await cell("Alice Dupont", "Test 1");
+    expect(screen.queryByRole("row", { name: /Prof Démo/ })).toBeNull();
+    const before = footer();
+
+    await userEvent.click(toggle());
+    const row = screen.getByRole("row", { name: /Prof Démo/ });
+    expect(within(row).getByText("staff")).toBeInTheDocument();
+    expect(within(row).getAllByRole("cell").at(-1)).toHaveTextContent("6.0");
+    // No mark is offered on a staff seat: the server refuses it.
+    expect(within(row).queryByRole("button", { name: /Marks for/ })).toBeNull();
+    expect(footer()).toBe(before);
+    expect(localStorage.getItem("quiz-staff-rows-gradebook")).toBe("shown");
+  });
+
+  it("offers no switch while no row is a staff one", async () => {
+    renderTab(makeTable());
+    await cell("Alice Dupont", "Test 1");
+    expect(screen.queryByRole("switch", { name: "Show test attempts" })).toBeNull();
   });
 });

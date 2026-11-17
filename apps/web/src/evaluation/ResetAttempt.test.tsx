@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { makeClassroomDetail } from "../test/fixtures";
 import { EVALUATION_ID, id, makeEvaluationDetail } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
+import { studentViewOn, studentViewReturn } from "../studentView";
 import { EvaluationConfig } from "./EvaluationConfig";
 
 /*
@@ -92,5 +93,36 @@ describe("Reset my test attempt (ADR-018)", () => {
     expect(screen.queryByRole("menuitem", { name: /^rename$/i })).toBeNull();
     expect(calls.some((c) => c.url.endsWith("/self-enroll"))).toBe(false);
     expect(calls.some((c) => c.url.endsWith("/preview"))).toBe(false);
+  });
+});
+
+describe("Open my copy (ADR-018, amended 2026-11-17)", () => {
+  it("opens the teacher's own feedback page in the student view, the way back being this page", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    mockFetch(routes(makeEvaluationDetail({ self: { seat: true, staffSeat: true, attemptId: ATTEMPT } })));
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=questions",
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Open my copy" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: ATTEMPT });
+    expect(studentViewOn()).toBe(true);
+    expect(studentViewReturn()).toEqual({ view: "evaluation", id: EVALUATION_ID });
+  });
+
+  it("is absent without a staff attempt, and on a student seat's", async () => {
+    for (const self of [
+      { seat: true, staffSeat: true, attemptId: null },
+      { seat: true, staffSeat: false, attemptId: ATTEMPT },
+    ]) {
+      mockFetch(routes(makeEvaluationDetail({ self })));
+      const { unmount } = renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={vi.fn()} />, {
+        route: "/evaluations/x?step=questions",
+      });
+      expect(await screen.findByRole("button", { name: /^actions$/i })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Open my copy" })).toBeNull();
+      unmount();
+    }
   });
 });

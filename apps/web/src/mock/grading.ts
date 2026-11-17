@@ -996,6 +996,8 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
     label: anonymous ? null : attempt.displayName,
     guest: null,
     staff: attempt.staff,
+    // The mock's one staff walk is the reader's own (ADR-018, amended 2026-11-17).
+    mine: attempt.staff,
     // One attempt per student in this mock: no retake number, and it counts.
     attemptNumber: null,
     kept: true,

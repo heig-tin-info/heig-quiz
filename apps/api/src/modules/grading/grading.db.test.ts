@@ -221,7 +221,7 @@ describe("the panel queue (F-GRADE-03)", () => {
     const cell = (entry: { attemptId: string; itemId: string }) =>
       `s${rows.findIndex((r) => r.id === entry.attemptId)}q${items.findIndex((i) => i.item.id === entry.itemId)}`;
     const queue = async (query: Partial<Parameters<typeof service.gradingQueue>[2]>) => {
-      const result = await service.gradingQueue(db, record, { anonymous: true, ...query });
+      const result = await service.gradingQueue(db, record, { anonymous: true, ...query }, null);
       return {
         items: result.items.map((i) => i.id),
         counts: result.counts,
@@ -269,11 +269,11 @@ describe("the panel queue (F-GRADE-03)", () => {
       .set({ userId: null, guestId })
       .where(eq(attempts.id, rows[0]!.id));
     const record = (await byId(db, evaluation.id))!;
-    const named = await service.gradingQueue(db, record, { anonymous: false });
+    const named = await service.gradingQueue(db, record, { anonymous: false }, null);
     // The guest is a number, worded by the web; the account keeps its name.
     const who = [...new Set(named.entries.map((e) => `${e.label}/${e.guest}`))];
     expect(who).toEqual(["null/1", "Test student/null"]);
-    const anonymous = await service.gradingQueue(db, record, { anonymous: true });
+    const anonymous = await service.gradingQueue(db, record, { anonymous: true }, null);
     expect(anonymous.entries.every((e) => e.label === null && e.guest === null)).toBe(true);
   });
 
@@ -1048,5 +1048,36 @@ describe("writeGradings", () => {
 
   it("writes nothing for an empty batch", async () => {
     expect(await writeGradings(db, [])).toEqual([]);
+  });
+});
+
+/*
+ * ADR-018, amended 2026-11-17 (decision 6): the panel says "You" on the
+ * reader's own attempt (a teacher's walk from a staff seat). `mine` is the
+ * server's, computed against the reader: true on that attempt's rows only,
+ * false on every other, and it names nobody, anonymised or not.
+ */
+describe("the reader's own attempt (`mine`)", () => {
+  it("is true on the reader's own rows only, and anonymised names nobody", async () => {
+    const { evaluation, attempts: rows } = await closedEvaluation();
+    const record = (await byId(db, evaluation.id))!;
+    const reader = rows[0]!.userId!;
+    const queue = await service.gradingQueue(db, record, { anonymous: true }, reader);
+    expect(queue.entries.length).toBeGreaterThan(2);
+    for (const entry of queue.entries) {
+      expect(entry.mine, entry.attemptId).toBe(entry.attemptId === rows[0]!.id);
+      expect(entry).toMatchObject({ label: null, guest: null });
+    }
+    const body = JSON.stringify(queue);
+    for (const forbidden of [reader, rows[1]!.userId!, "Test student"]) expect(body).not.toContain(forbidden);
+  });
+
+  it("is false on every row for another reader, or none", async () => {
+    const { evaluation } = await closedEvaluation();
+    const record = (await byId(db, evaluation.id))!;
+    for (const reader of [randomUUID(), null]) {
+      const queue = await service.gradingQueue(db, record, { anonymous: true }, reader);
+      expect(queue.entries.every((e) => !e.mine)).toBe(true);
+    }
   });
 });

@@ -103,14 +103,14 @@ describe("a teacher's staff seat stays out of every class figure (ADR-018)", () 
     expect(csv).not.toContain(seatEmail);
   });
 
-  it("is not a row of the teacher's gradebook, nor in a class mean", async () => {
+  it("is a flagged row of the teacher's gradebook, in no class mean", async () => {
     const res = await get(gradebookUrl(), teacher.headers);
     expect(res.statusCode, res.body).toBe(200);
     const table = GradebookStaff.parse(res.json());
-    expect(table.rows.map((r) => r.email)).toEqual([expect.not.stringContaining(seatEmail)]);
+    expect(table.rows.filter((r) => !r.staff).map((r) => r.email)).toEqual([expect.not.stringContaining(seatEmail)]);
+    expect(table.rows.filter((r) => r.staff).map((r) => r.email)).toEqual([seatEmail]);
     expect(table.columns.find((c) => c.activityId === seed.evaluationId)!.classMean).toBe(1);
     expect(table.classMean).toBe(1);
-    expect(res.body).not.toContain(seatEmail);
     const csv = await get(`${gradebookUrl()}.csv`, teacher.headers);
     expect(csv.statusCode, csv.body).toBe(200);
     expect(csv.payload).not.toContain(seatEmail);

@@ -237,7 +237,7 @@ describe("a practice attempt counts nowhere (ADR-122 §4)", () => {
     expect(view.practisedCount).toBe(1);
 
     // The grading queue and its progress know nothing of it.
-    const queue = await gradingQueue(db, await reload(db, evaluation.id), { anonymous: true });
+    const queue = await gradingQueue(db, await reload(db, evaluation.id), { anonymous: true }, null);
     expect(queue.entries.some((e) => e.attemptId === practice.id)).toBe(false);
     const progress = await progressOf(db, evaluation.id);
     expect(progress.total).toBe(2 * 1);
@@ -525,7 +525,7 @@ describe("a practice essay graded by the model (ADR-122 §6)", () => {
     for (const cell of cells.filter((c) => c.state !== "superseded")) {
       expect(cell).toMatchObject({ source: "llm", state: "validated" });
     }
-    const queue = await gradingQueue(db, await reload(db, evaluation.id), { anonymous: true });
+    const queue = await gradingQueue(db, await reload(db, evaluation.id), { anonymous: true }, null);
     expect(queue.entries.some((e) => e.attemptId === done.id)).toBe(false);
   });
 

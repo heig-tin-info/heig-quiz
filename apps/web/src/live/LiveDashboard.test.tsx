@@ -599,6 +599,33 @@ describe("LiveDashboard — one question for the class (F-DASH-07, #353)", () =>
   });
 });
 
+describe("LiveDashboard — a teacher's own walk (ADR-018, amended 2026-11-17)", () => {
+  beforeEach(() => localStorage.removeItem("quiz-staff-rows-live"));
+
+  it("shows the staff row by default; the switch hides the row and leaves the class row alone", async () => {
+    const view = makeDashboard(3, 2);
+    view.rows[0] = { ...view.rows[0]!, staff: true, displayName: "Prof Test" };
+    setup(view);
+    expect(await screen.findByText("Prof Test")).toBeInTheDocument();
+    const classRow = () => screen.getByText(/^class$/i).closest("tr")!.textContent;
+    const before = classRow();
+    const toggle = screen.getByRole("switch", { name: "Show test attempts" });
+    expect(toggle).toBeChecked();
+
+    await userEvent.click(toggle);
+    expect(screen.queryByText("Prof Test")).toBeNull();
+    expect(screen.getAllByRole("row")).toHaveLength(2 + 2);
+    expect(classRow()).toBe(before);
+    expect(localStorage.getItem("quiz-staff-rows-live")).toBe("hidden");
+  });
+
+  it("offers no switch while no row is a staff one", async () => {
+    setup(makeDashboard(3, 2));
+    expect(await screen.findByText(/^class$/i)).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Show test attempts" })).toBeNull();
+  });
+});
+
 describe("LiveDashboard — states", () => {
   it("shows the waiting room instead of the grid before anyone starts", async () => {
     const view = makeDashboard(4, 3);

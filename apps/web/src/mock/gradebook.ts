@@ -183,6 +183,17 @@ function beneathOf(spec: Spec, i: number, me: number): Beneath {
   }
 }
 
+/**
+ * The mock teacher's staff seat (`?mytest=1`, ADR-018, amended 2026-11-17):
+ * a row of the staff's table, its cells a student's, in no class mean. It
+ * took the first exam (a 6.0) and never the others: an absence derived on a
+ * released exam, as a student's.
+ */
+const staffSeatsOf = (roomId: string) =>
+  (rooms.find((r) => r.id === roomId)?.roster ?? []).filter((s) => s.staff && s.status === "claimed");
+const staffBeneath = (spec: Spec): Beneath =>
+  spec.n === 1 ? { kind: "grade", grade: 6, points: 20, max: 20 } : spec.mode === "exam" ? { kind: "absent" } : { kind: "empty" };
+
 /** The claimed student seats of a classroom (the student persona's line always is one). */
 const seatsOf = (roomId: string) => classroomRoster(roomId).filter((s) => s.status === "claimed" || s.id === ME_LINE);
 
@@ -203,7 +214,7 @@ function buildBook(roomId: string): MockBook | null {
     position: null,
     componentId: flags.components ? (spec.component ?? null) : null,
     withheld: spec.withheld ?? false,
-    beneath: new Map(students.map((s, i) => [s.id, beneathOf(spec, i, me)])),
+    beneath: new Map([...students.map((s, i): [string, Beneath] => [s.id, beneathOf(spec, i, me)]), ...staffSeatsOf(roomId).map((s): [string, Beneath] => [s.id, staffBeneath(spec)])]),
   }));
   const book: MockBook = { meanPublished: roomId === "r1" && !flags.unpublished, columns, marks: new Map() };
   const mark = (col: number, student: number, m: Omit<MockMark, "setAt" | "comment">) => {
@@ -284,36 +295,40 @@ const meansOf = (columns: MockColumn[], outcomes: Map<string, CellOutcome>, comp
   );
 
 function staffTable(room: (typeof rooms)[number], book: MockBook): GradebookStaff {
-  const students = seatsOf(room.id);
+  const students = seatsOf(room.id).map((s) => ({ ...s, staff: false }));
+  // The staff seats after the students.
+  const staffSeats = staffSeatsOf(room.id).map((s) => ({ ...s, staff: true }));
   const components = componentsOf(room.courseId);
-  const rows = students
-      .slice()
-      .sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`))
-      .map((s) => {
-        const cells: GradebookStaff["rows"][number]["cells"] = {};
-        const outcomes = new Map<string, CellOutcome>();
-        for (const column of book.columns) {
-          const cell = staffCell(column, s.id, book);
-          cells[column.activityId] = cell;
-          outcomes.set(
-            column.activityId,
-            displayed(cell),
-          );
-        }
-        const means = meansOf(book.columns, outcomes, components);
-        return { enrollmentId: s.id, email: s.email, nom: s.nom, prenom: s.prenom, cells, mean: means.mean, componentMeans: means.components };
-      });
+  const rows = [
+    ...students.slice().sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`)),
+    ...staffSeats,
+  ].map((s) => {
+    const cells: GradebookStaff["rows"][number]["cells"] = {};
+    const outcomes = new Map<string, CellOutcome>();
+    for (const column of book.columns) {
+      const cell = staffCell(column, s.id, book);
+      cells[column.activityId] = cell;
+      outcomes.set(
+        column.activityId,
+        displayed(cell),
+      );
+    }
+    const means = meansOf(book.columns, outcomes, components);
+    return { enrollmentId: s.id, email: s.email, nom: s.nom, prenom: s.prenom, staff: s.staff, cells, mean: means.mean, componentMeans: means.components };
+  });
+  // Every class mean is the students' alone, as the server's.
+  const classRows = rows.filter((row) => !row.staff);
   return {
     classroomId: room.id,
     archived: room.archivedAt !== null,
     meanPublished: book.meanPublished,
-    components: components.map((c) => ({ ...c, classMean: classMean(rows.map((row) => row.componentMeans[c.id] ?? null)) })),
+    components: components.map((c) => ({ ...c, classMean: classMean(classRows.map((row) => row.componentMeans[c.id] ?? null)) })),
     columns: book.columns.map(({ withheld: _w, beneath: _b, ...column }) => ({
       ...column,
-      classMean: column.released ? classMean(rows.map((row) => row.cells[column.activityId]!.grade)) : null,
+      classMean: column.released ? classMean(classRows.map((row) => row.cells[column.activityId]!.grade)) : null,
     })),
     rows,
-    classMean: classMean(rows.map((row) => row.mean)),
+    classMean: classMean(classRows.map((row) => row.mean)),
   };
 }
 

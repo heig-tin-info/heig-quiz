@@ -127,7 +127,7 @@ describe("ResultsView", () => {
       mockFetch({ [`GET ${VIEW}`]: ok(filterable()) });
       renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
       await screen.findByRole("heading", { name: "Results" });
-      expect(names()).toHaveLength(6);
+      expect(names()).toHaveLength(5);
 
       await userEvent.click(bar("2.0–2.5: 2"));
       // The class's rows of that bar, by the bar's own rule: the teacher's test is not one.
@@ -137,7 +137,7 @@ describe("ResultsView", () => {
       expect(screen.getByText("Grades 2.0–2.5")).toBeVisible();
 
       await userEvent.click(bar("2.0–2.5: 2"));
-      expect(names()).toHaveLength(6);
+      expect(names()).toHaveLength(5);
       expect(window.location.search).toBe("");
       expect(screen.queryByText("Grades 2.0–2.5")).toBeNull();
     });
@@ -149,7 +149,7 @@ describe("ResultsView", () => {
       expect(names()).toEqual(["Lea Andrey", "Adam Perret"]);
 
       await userEvent.click(screen.getByRole("button", { name: "Clear filter — Grades 2.0–2.5" }));
-      expect(names()).toHaveLength(6);
+      expect(names()).toHaveLength(5);
       expect(bar("2.0–2.5: 2")).toHaveAttribute("aria-pressed", "false");
       expect(window.location.search).toBe("");
     });
@@ -167,7 +167,7 @@ describe("ResultsView", () => {
       mockFetch({ [`GET ${VIEW}`]: ok(filterable()) });
       renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />, { route: "/?bucket=2.2" });
       await screen.findByRole("heading", { name: "Results" });
-      expect(names()).toHaveLength(6);
+      expect(names()).toHaveLength(5);
     });
 
     it("is reached and pressed from the keyboard", async () => {
@@ -376,5 +376,46 @@ describe("ResultsView", () => {
     await screen.findByRole("heading", { name: "Results" });
     await waitFor(() => expect(screen.getByRole("button", { name: /Grading panel/ })).toBeVisible());
     expect(screen.queryByRole("button", { name: "Present" })).toBeNull();
+  });
+  describe("a teacher's own walk (ADR-018, amended 2026-11-17)", () => {
+    const withStaff = () => {
+      const view = makeResultsView();
+      view.rows.push({ ...view.rows[0]!, userId: "u9", attemptId: "a9", displayName: "Yves Prof", firstName: "Yves", lastName: "Prof", grade: 6, staff: true });
+      return view;
+    };
+    const toggle = () => screen.getByRole("switch", { name: "Show test attempts" });
+
+    it("is hidden by default, shown by the switch, and moves no figure", async () => {
+      mockFetch({ [`GET ${VIEW}`]: ok(withStaff()) });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+      await screen.findByRole("heading", { name: "Results" });
+      expect(names()).toEqual(["Zoe Blanc", "Noah Currat", "Adam Perret", "Marie Rochat"]);
+      expect(toggle()).not.toBeChecked();
+      const figures = () => [screen.getByText("Mean").nextSibling?.textContent, screen.getByText("Pass rate").nextSibling?.textContent];
+      const before = figures();
+
+      await userEvent.click(toggle());
+      expect(names()).toContain("Yves Profstaff");
+      expect(names()).toHaveLength(5);
+      expect(figures()).toEqual(before);
+      // Remembered for this screen, in this browser.
+      expect(localStorage.getItem("quiz-staff-rows-results")).toBe("shown");
+    });
+
+    it("starts on the remembered choice", async () => {
+      localStorage.setItem("quiz-staff-rows-results", "shown");
+      mockFetch({ [`GET ${VIEW}`]: ok(withStaff()) });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+      await screen.findByRole("heading", { name: "Results" });
+      expect(names()).toContain("Yves Profstaff");
+      expect(toggle()).toBeChecked();
+    });
+
+    it("offers no switch while no row is a staff one", async () => {
+      mockFetch({ [`GET ${VIEW}`]: ok(makeResultsView()) });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+      await screen.findByRole("heading", { name: "Results" });
+      expect(screen.queryByRole("switch", { name: "Show test attempts" })).toBeNull();
+    });
   });
 });
