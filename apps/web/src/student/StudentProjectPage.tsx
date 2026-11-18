@@ -448,7 +448,6 @@ function ScoreSection({ repo }: { repo: StudentProjectRepo }) {
   );
 }
 
-/** What the release gave the student (F-PROJ-14): the final score, its grade, the teacher's comment as the release wrote it. */
 /**
  * "Update from your teacher" (ADR-132 §10): the latest sync's message, the
  * teacher's own plain text — a text node, never Markdown — and its date.
@@ -465,6 +464,7 @@ function TeacherUpdateSection({ update }: { update: NonNullable<StudentProject["
   );
 }
 
+/** What the release gave the student (F-PROJ-14): the final score, its grade, the teacher's comment as the release wrote it. */
 function ReleaseSection({ release }: { release: NonNullable<StudentProject["release"]> }) {
   const t = useT();
   return (

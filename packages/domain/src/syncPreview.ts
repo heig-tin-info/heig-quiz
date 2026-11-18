@@ -15,9 +15,13 @@ export const SYNC_PREVIEW_PATHS_MAX = 200;
 /** The teacher's message to the students, at most this many characters once trimmed. */
 export const SYNC_MESSAGE_MAX = 500;
 
-export interface SyncPreviewPath {
+/** One path a sync adds, modifies or deletes in the distribution. */
+export interface SyncPathChange {
   path: string;
   change: SyncChange;
+}
+
+export interface SyncPreviewPath extends SyncPathChange {
   /** Under the project's protected list (`criteria.yml` and the workflows in `criteria` mode). */
   protected: boolean;
 }
@@ -29,7 +33,7 @@ export interface SyncPreviewPath {
  * the rest.
  */
 export function previewPaths(
-  changes: readonly { path: string; change: SyncChange }[],
+  changes: readonly SyncPathChange[],
   entries: readonly string[],
   max: number = SYNC_PREVIEW_PATHS_MAX,
 ): { paths: SyncPreviewPath[]; more: number } {

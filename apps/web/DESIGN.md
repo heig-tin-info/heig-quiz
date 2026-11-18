@@ -2215,7 +2215,8 @@ header, whatever the tab.
   grouped Added / Modified / Deleted, each heading 13 px semibold with its
   count faint, the paths 12 px mono in a `surface-2` well, a protected path
   with a zinc "protected" badge — never a warning, it is a fact. The notes
-  that apply sit under a hairline, 13 px muted. Then the optional message
+  that apply sit under a hairline, 13 px muted. Then the optional message,
+  opened with the current one and absent on a draft
   (its count on the label line, the hint under it). Sync is disabled while
   it loads, on an error, and with nothing to send unless the last sync
   failed somewhere (a retry).

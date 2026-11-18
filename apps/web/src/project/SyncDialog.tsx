@@ -20,7 +20,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CircleCheck, RefreshCw } from "lucide-react";
 import { useId, useState } from "react";
 
-import { SYNC_CHANGES, SYNC_MESSAGE_MAX, type SyncChange } from "@quiz/domain";
+import { projectIsVisible, SYNC_CHANGES, SYNC_MESSAGE_MAX, type SyncChange } from "@quiz/domain";
 import type { ProjectDetail, ProjectSyncPreview } from "@quiz/contracts";
 
 import { api } from "../api";
@@ -36,7 +36,7 @@ const HEADING: Record<SyncChange, keyof Dict> = {
 };
 
 /** Which of the two notes apply: a protected path listed, another path listed (or counted beyond the cap). */
-export function syncNotes(preview: ProjectSyncPreview): { protectedNote: boolean; otherNote: boolean } {
+function syncNotes(preview: ProjectSyncPreview): { protectedNote: boolean; otherNote: boolean } {
   const paths = preview.branches.flatMap((b) => b.paths);
   return {
     // Graded in the distribution's version, merged or not: a criteria v3 project only (ADR-132 §2).
@@ -46,7 +46,7 @@ export function syncNotes(preview: ProjectSyncPreview): { protectedNote: boolean
 }
 
 /** Nothing to send: every branch's list empty. */
-export const nothingToSend = (preview: ProjectSyncPreview): boolean => preview.branches.every((b) => b.paths.length === 0 && b.more === 0);
+const nothingToSend = (preview: ProjectSyncPreview): boolean => preview.branches.every((b) => b.paths.length === 0 && b.more === 0);
 
 export function SyncDialog({
   project,
@@ -60,7 +60,8 @@ export function SyncDialog({
   onClose: () => void;
 }) {
   const t = useT();
-  const [message, setMessage] = useState("");
+  // The last message, kept unless edited: a retry never clears it by accident.
+  const [message, setMessage] = useState(project.sync.message?.text ?? "");
   const messageId = useId();
   const preview = useQuery<ProjectSyncPreview>({
     queryKey: projectSyncPreviewKey(project.id),
@@ -128,7 +129,7 @@ export function SyncDialog({
           <ChangeList preview={preview.data} />
         )}
 
-        {canSync ? (
+        {canSync && projectIsVisible(project.state) ? (
           <div className="flex flex-col gap-1.5">
             <FieldLabel htmlFor={messageId} hint={`${message.length}/${SYNC_MESSAGE_MAX}`}>
               {t("project.syncDialog.message")}

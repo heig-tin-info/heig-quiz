@@ -231,8 +231,32 @@ describe("the one primary action", () => {
       expect(within(dialog.getByText("src/util.c").closest("li")!).queryByText("protected")).toBeNull();
       expect(dialog.getByText("And 3 more files.")).toBeInTheDocument();
       expect(dialog.getByTestId("sync-note-protected")).toHaveTextContent("graded in this version for everyone at the next correction, merged or not");
-      expect(dialog.getByTestId("sync-note-other")).toHaveTextContent("only once the update is merged");
+      expect(dialog.getByTestId("sync-note-other")).toHaveTextContent("arrive when the update is merged");
       expect(dialog.getByText(/Do not name the source repository/)).toBeInTheDocument();
+    });
+
+    it("keeps the last message unless edited, so a retry never clears it", async () => {
+      const { calls } = routes(project({ message: { text: "Test 3 fixed.", at: PAST } }), {
+        [`GET ${BASE}/sync/preview`]: ok(PREVIEW),
+        [`POST ${BASE}/sync`]: ok({ requestedAt: PAST }),
+      });
+      renderPage();
+      const dialog = await open();
+      await dialog.findByText("criteria.yml");
+      expect(dialog.getByLabelText("Message to students")).toHaveValue("Test 3 fixed.");
+      await userEvent.click(dialog.getByRole("button", { name: "Sync" }));
+      await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ body: { message: "Test 3 fixed." } })]));
+    });
+
+    it("offers no message on a draft", async () => {
+      routes(makeDraft({ sync: { ahead, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 } }), {
+        [`GET ${BASE}/sync/preview`]: ok(PREVIEW),
+      });
+      renderPage();
+      const dialog = await open();
+      await dialog.findByText("criteria.yml");
+      expect(dialog.queryByLabelText("Message to students")).toBeNull();
+      expect(dialog.getByRole("button", { name: "Sync" })).toBeEnabled();
     });
 
     it("says nothing of grading for a project not graded by its CI, nor the other note when only protected paths change", async () => {

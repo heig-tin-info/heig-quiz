@@ -20,16 +20,18 @@
  * distribution's commit message carries no sha, and the sync's pull
  * request names the distribution's commit (`modules/project/sync.ts`).
  */
-import { cpSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { cp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { Octokit } from "octokit";
 
 import type { SourceStrategy } from "@quiz/contracts";
-import type { SyncChange } from "@quiz/domain";
+import type { SyncPathChange } from "@quiz/domain";
 
 import { type GitRunner, gitRunner, repoUrl } from "./git.js";
+import { GRAFT_BUDGET_MS } from "./graft.js";
 import { pushWithRetry } from "./retry.js";
 import { signedCommit } from "./signedCommit.js";
 import { applyStudentHandout } from "./studentize.js";
@@ -43,12 +45,6 @@ export interface SquashedUpdate {
   changed: string[];
 }
 
-/** One path of the distribution the update adds, modifies or deletes. */
-export interface DistributionChange {
-  path: string;
-  change: SyncChange;
-}
-
 /** The `whole` strategy refused: the source's history was rewritten and the distribution cannot fast-forward. */
 export class SourceRewritten extends Error {
   constructor(branches: string[]) {
@@ -59,6 +55,9 @@ export class SourceRewritten extends Error {
 
 /** The distribution's commit message (D12: English; never the source's sha, N-SEC-20). */
 export const SYNC_COMMIT_MESSAGE = "Project update";
+
+/** A preview's budget for all its git calls: the graft's (ADR-132 §2). */
+const PREVIEW_BUDGET_MS = GRAFT_BUDGET_MS;
 
 /** Git's tree with nothing in it: what a branch the distribution lacks is compared from. */
 const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
@@ -82,15 +81,15 @@ interface BranchPlan {
   sourceHead: string;
   /** The distribution's head now; null when it lacks the branch. */
   head: string | null;
-  changes: DistributionChange[];
+  changes: SyncPathChange[];
   /** Sends the update and returns the distribution's new head; null when there is nothing to send. */
   send: (() => Promise<string>) | null;
 }
 
 /** `git diff --name-status -z` read as changes (renames off): a type change is a modification. */
-function nameStatus(out: string): DistributionChange[] {
+function nameStatus(out: string): SyncPathChange[] {
   const fields = out.split("\0");
-  const changes: DistributionChange[] = [];
+  const changes: SyncPathChange[] = [];
   for (let i = 0; i + 1 < fields.length; i += 2) {
     const status = fields[i]!;
     changes.push({ path: fields[i + 1]!, change: status === "A" ? "added" : status === "D" ? "deleted" : "modified" });
@@ -151,12 +150,12 @@ async function planDistribution(runner: GitRunner, work: string, opts: Distribut
     const sourceHead = (await git(srcDir, "rev-parse", "HEAD")).trim();
     applyStudentHandout(srcDir);
 
-    // Replace the working tree with the source content, keep .git.
-    for (const entry of readdirSync(sqDir)) {
-      if (entry !== ".git") rmSync(join(sqDir, entry), { recursive: true, force: true });
+    // Replace the working tree with the source content, keep .git; off the event loop.
+    for (const entry of await readdir(sqDir)) {
+      if (entry !== ".git") await rm(join(sqDir, entry), { recursive: true, force: true });
     }
-    for (const entry of readdirSync(srcDir)) {
-      if (entry !== ".git") cpSync(join(srcDir, entry), join(sqDir, entry), { recursive: true });
+    for (const entry of await readdir(srcDir)) {
+      if (entry !== ".git") await cp(join(srcDir, entry), join(sqDir, entry), { recursive: true });
     }
     await git(sqDir, "add", "-A");
     const head = (await git(sqDir, "rev-parse", "HEAD")).trim();
@@ -190,13 +189,18 @@ async function planDistribution(runner: GitRunner, work: string, opts: Distribut
   return plans;
 }
 
-/** `fn` in a temporary directory removed on every exit; the runner has an identity for the throwaway commits, which end on no branch. */
-async function inWork<T>(token: string, fn: (runner: GitRunner, work: string) => Promise<T>): Promise<T> {
-  const work = mkdtempSync(join(tmpdir(), "quiz-sync-"));
+/**
+ * `fn` in a temporary directory removed on every exit (`quiz-sync-<pid>-`,
+ * swept at startup after a crash, `sweepGraftDirs`); the runner has an
+ * identity for the throwaway commits, which end on no branch, and, given
+ * `deadline` (an epoch in ms), kills a git call still running then.
+ */
+async function inWork<T>(token: string, fn: (runner: GitRunner, work: string) => Promise<T>, deadline?: number): Promise<T> {
+  const work = mkdtempSync(join(tmpdir(), `quiz-sync-${process.pid}-`));
   try {
-    return await fn(gitRunner({ identity: true, token }), work);
+    return await fn(gitRunner({ identity: true, token, ...(deadline === undefined ? {} : { deadline }) }), work);
   } finally {
-    rmSync(work, { recursive: true, force: true });
+    await rm(work, { recursive: true, force: true });
   }
 }
 
@@ -213,10 +217,16 @@ export async function updateSquashedRepo(opts: DistributionUpdateOptions): Promi
   });
 }
 
-/** Step 1 previewed (ADR-132 §10): per branch, what the update would change; nothing is sent. */
-export async function previewSquashedRepo(opts: DistributionUpdateOptions): Promise<{ branch: string; changes: DistributionChange[] }[]> {
-  return inWork(opts.token, async (runner, work) =>
-    (await planDistribution(runner, work, opts)).map(({ branch, changes }) => ({ branch, changes })),
+/**
+ * Step 1 previewed (ADR-132 §10): per branch, what the update would change;
+ * nothing is sent. Every git call is bounded by {@link PREVIEW_BUDGET_MS}
+ * from the start: a preview past it fails.
+ */
+export async function previewSquashedRepo(opts: DistributionUpdateOptions): Promise<{ branch: string; changes: SyncPathChange[] }[]> {
+  return inWork(
+    opts.token,
+    async (runner, work) => (await planDistribution(runner, work, opts)).map(({ branch, changes }) => ({ branch, changes })),
+    Date.now() + PREVIEW_BUDGET_MS,
   );
 }
 
@@ -251,7 +261,7 @@ export interface SyncWorkspace {
 export async function openSyncWorkspace(opts: { token: string; org: string; squashedRepo: string }): Promise<SyncWorkspace> {
   const { token, org, squashedRepo } = opts;
   const { git, gitBare } = gitRunner({ token });
-  const work = mkdtempSync(join(tmpdir(), "quiz-syncpush-"));
+  const work = mkdtempSync(join(tmpdir(), `quiz-syncpush-${process.pid}-`));
   await git(work, "clone", "--quiet", "--bare", repoUrl(org, squashedRepo), "sq.git");
   const sq = join(work, "sq.git");
   return {

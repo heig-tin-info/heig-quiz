@@ -27,7 +27,7 @@
  * - after a sync, a protected file is restored to the NEW distribution
  *   version, and never when the student's copy already is it (ADR-062);
  * - ADR-132 §10: the preview lists what the following sync commits (the
- *   hand-out, `whole`, the cap, the protected marked) and writes nothing;
+ *   hand-out, `whole`, the protected marked; the cap is the domain's test) and writes nothing;
  *   the teacher's message stored, replaced, cleared, capped, quoted inert
  *   in the pull request and its comment, shown to every student and the
  *   staff; the repositories graded before the latest update.
@@ -40,7 +40,7 @@ import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProjectDetail, ProjectErrorCode, ProjectSummary, ProjectSyncAccepted, ProjectSyncPreview, StudentProject } from "@quiz/contracts";
-import { SYNC_MESSAGE_MAX, SYNC_PREVIEW_PATHS_MAX } from "@quiz/domain";
+import { SYNC_MESSAGE_MAX } from "@quiz/domain";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 
 import { loadConfig } from "../../config.js";
@@ -620,16 +620,6 @@ describe("the sync's preview (ADR-132 §10)", () => {
     expect(await auditOf(p.id, "project.sync_failed")).toHaveLength(0);
   });
 
-  it("caps the list per branch, the protected paths kept, and counts the rest", async () => {
-    const p = await project();
-    const many = Object.fromEntries(Array.from({ length: SYNC_PREVIEW_PATHS_MAX + 4 }, (_, i) => [`data/f${String(i).padStart(3, "0")}.txt`, `${i}`]));
-    await sourcePush(p, { ...many, [GRADING]: "grade: v2" });
-    const [branch] = (await previewed(p.id)).branches;
-    expect(branch!.paths).toHaveLength(SYNC_PREVIEW_PATHS_MAX);
-    expect(branch!.paths[0]).toEqual({ path: GRADING, change: "modified", protected: true });
-    expect(branch!.more).toBe(5);
-  });
-
   it("is refused while a sync runs and on an archived project; a student and a teacher off the staff get the 404 of a missing project", async () => {
     const p = await project();
     await sourcePush(p, { "src/util.c": "v1" });
@@ -689,6 +679,14 @@ describe("the teacher's message (ADR-132 §10)", () => {
     expect((await syncWith(p.id, "Second fix")).statusCode).toBe(202);
     expect((await projectRow(p.id)).syncMessage).toBe("Second fix");
     expect(comments(open.fullName!, pr!.number)).toEqual([expect.stringContaining("```text\nSecond fix\n```")]);
+    // The same text again (a retry) keeps its date and says nothing again; a new text with nothing new to send still reaches the open pull request.
+    server.clock.set(at(NOW, 2 * HOUR));
+    expect((await syncWith(p.id, "Second fix")).statusCode).toBe(202);
+    expect(await projectRow(p.id)).toMatchObject({ syncMessage: "Second fix", syncMessageAt: at(NOW, HOUR) });
+    expect(comments(open.fullName!, pr!.number)).toHaveLength(1);
+    expect((await syncWith(p.id, "Third note")).statusCode).toBe(202);
+    expect(comments(open.fullName!, pr!.number)).toHaveLength(2);
+    expect(comments(open.fullName!, pr!.number)[1]).toBe("Your teacher's message:\n\n```text\nThird note\n```");
     // A sync with none, or an empty one, clears it.
     await sourcePush(p, { "src/util.c": "v3" });
     expect((await syncWith(p.id, "   ")).statusCode).toBe(202);
@@ -703,9 +701,24 @@ describe("the teacher's message (ADR-132 §10)", () => {
     expect((await syncWith(p.id, "x".repeat(SYNC_MESSAGE_MAX + 1))).statusCode).toBe(400);
     expect((await syncWith(p.id, 42)).statusCode).toBe(400);
     expect((await call("POST", `/app/api/projects/${p.id}/sync`, teacher.headers, { message: "ok", extra: 1 })).statusCode).toBe(400);
+    // A control or direction character, refused before anything moves: a NUL would fail the write after the distribution's push.
+    for (const bad of ["a\u0000b", "a\u0007b", "a\u0085b", "a‮b", "a⁦b"]) {
+      expect((await syncWith(p.id, bad)).statusCode, JSON.stringify(bad)).toBe(400);
+    }
+    expect(await auditOf(p.id, "project.sync_requested")).toHaveLength(0);
     // Trimmed first: spaces around a full message do not count.
-    expect((await syncWith(p.id, ` ${"x".repeat(SYNC_MESSAGE_MAX)} `)).statusCode).toBe(202);
+    expect((await syncWith(p.id, ` ${"x".repeat(SYNC_MESSAGE_MAX)}\t `)).statusCode).toBe(202);
     expect(await auditOf(p.id, "project.sync_requested")).toHaveLength(1);
+  });
+
+  it("is never kept on a draft, which no student reads; published, it is", async () => {
+    const draft = await project({ publish: false });
+    expect((await syncWith(draft.id, "Before anyone started")).statusCode).toBe(202);
+    expect(await projectRow(draft.id)).toMatchObject({ syncMessage: null, syncMessageAt: null });
+    expect(await auditOf(draft.id, "project.sync_requested")).toMatchObject([{ payload: { message: null } }]);
+    expect((await call("POST", `/app/api/projects/${draft.id}/publish`, teacher.headers)).statusCode).toBe(200);
+    expect((await syncWith(draft.id, "Now it is read")).statusCode).toBe(202);
+    expect(await projectRow(draft.id)).toMatchObject({ syncMessage: "Now it is read", syncMessageAt: at(NOW) });
   });
 });
 

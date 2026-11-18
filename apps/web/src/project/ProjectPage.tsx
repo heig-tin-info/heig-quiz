@@ -21,6 +21,7 @@ import type {
   ProjectReleaseResult,
   ProjectSummary,
   ProjectSyncAccepted,
+  ProjectSyncRequest,
 } from "@quiz/contracts";
 import { projectBeforePublication } from "@quiz/domain";
 
@@ -221,7 +222,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const [syncOpen, setSyncOpen] = useState(false);
   const syncNow = useMutation({
     mutationFn: (message: string) =>
-      api<ProjectSyncAccepted>(`/app/api/projects/${id}/sync`, { method: "POST", body: JSON.stringify(message ? { message } : {}) }),
+      api<ProjectSyncAccepted>(`/app/api/projects/${id}/sync`, { method: "POST", body: JSON.stringify({ message } satisfies ProjectSyncRequest) }),
     onSuccess: async () => {
       setSyncOpen(false);
       await refresh();

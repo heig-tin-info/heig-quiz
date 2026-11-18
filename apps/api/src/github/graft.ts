@@ -47,6 +47,8 @@ export const gradeRef = (passId: string): string => `refs/quiz-grade-${passId}/g
 
 /** This process's work directories: `quiz-graft-<pid>-…` under the temporary directory. */
 const DIR_PREFIX = "quiz-graft-";
+/** The work directories {@link sweepGraftDirs} removes: the graft's, and the sync's and its preview's (`github/sync.ts`, ADR-132 §10). */
+const SWEPT = /^quiz-(?:graft|sync|syncpush)-(\d+)-/;
 
 /** What the graft needs. */
 export interface GraftOrder {
@@ -125,14 +127,15 @@ function alive(pid: number): boolean {
 
 /**
  * The work directories a crash or a deploy left (a `finally` that never
- * ran), removed at startup: this process's own pid's (it has none in
- * flight yet) and a dead process's; never a live one's (a test file's
- * grafts, another process on the same host).
+ * ran) — the graft's and the sync's ({@link SWEPT}) —, removed at
+ * startup: this process's own pid's (it has none in flight yet) and a dead
+ * process's; never a live one's (a test file's grafts, another process on
+ * the same host).
  */
 export async function sweepGraftDirs(): Promise<void> {
   const root = tmpdir();
   for (const name of await readdir(root).catch(() => [] as string[])) {
-    const pid = Number(new RegExp(`^${DIR_PREFIX}(\\d+)-`).exec(name)?.[1]);
+    const pid = Number(SWEPT.exec(name)?.[1]);
     if (!Number.isInteger(pid) || pid <= 0 || (pid !== process.pid && alive(pid))) continue;
     await rm(join(root, name), { recursive: true, force: true });
   }

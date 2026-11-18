@@ -769,6 +769,8 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         "participantCount", // the staff list's count (ADR-018, amended 2026-10-13)
         "syncMessage",
         "sync_message",
+        "gradedBefore", // the staff's notice (ADR-132 §10)
+        "protectedGraded",
       ];
       expect(studentBodies.length).toBeGreaterThan(from + 30);
       for (const body of studentBodies.slice(from)) {

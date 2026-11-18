@@ -31,14 +31,10 @@ project grades the protected files and `criteria.yml` in the teacher's
 version either way (ADR-132 §7).
 
 **Amended by [ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md)
-§10 (part C, 2026-11-18), scope §2 and §4:** §2 — Sync opens a dialog
-that first reads `GET …/sync/preview`, the same distribution update
-(`planDistribution`, `github/sync.ts`) stopped before its commit, with no
-lease and no write; the request takes an optional teacher's message,
-stored on the project (`sync_message`, `sync_message_at`), the latest
-replacing the previous, audited with `project.sync_requested`. §4 — the
-pull request's body and the comment on an open one quote that message in a
-fenced block no line of it can close. The rules are ADR-132 §10's.
+§10 (part C, 2026-11-18), scope §2 (a preview before the request, a
+teacher's message with it, the `whole` strategy's fast-forward checked
+before any push) and §4 (the message in the pull request's body and
+comments).
 
 Relations: depends on [ADR-064](ADR-064-echeance-des-projets-baux.md) (the
 claims and leases of a project's GitHub work, reused as they are) and on

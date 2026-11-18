@@ -412,7 +412,6 @@ const scenes = [
   // send, a refusal —, and the criteria project synced with a message after
   // its grading (the staff's notice and the message on the Source tile).
   ...[
-    ["project-sync-dialog", "/projects/pj-published?projects=1&ahead=1"],
     ["project-sync-dialog-criteria", `/projects/0190d3c4-0000-7000-8000-0000000000c2?projects=1&pjcriteria=1&ahead=1`],
     ["project-sync-dialog-empty", "/projects/pj-published?projects=1&ahead=1&syncempty=1"],
     ["project-sync-dialog-error", "/projects/pj-published?projects=1&ahead=1&distfail=1"],

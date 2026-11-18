@@ -6,6 +6,7 @@ import {
   ProjectCreate,
   ProjectGradingScale,
   ProjectPatch,
+  ProjectSyncRequest,
   StudentProject,
   StudentProjectCard,
   defaultProjectGradingScale,
@@ -92,6 +93,7 @@ describe("the student's project card (F-PROJ-04)", () => {
       },
       release: null,
       criteria: null,
+      projectUpdate: { text: "Test 3 fixed.", at: START },
       serverNow: START,
     };
     expect(StudentProject.parse(view)).toEqual(view);
@@ -228,5 +230,15 @@ describe("ProjectCreate and ProjectPatch (F-PROJ-01, F-PROJ-03, M3-02)", () => {
     }
     expect(ProtectedPath.safeParse(".github/workflows/grading.yml").success).toBe(true);
     expect(ProjectCreate.safeParse({ ...LAB, name: "!!!" }).success).toBe(false);
+  });
+});
+
+describe("the sync's request (ADR-132 §10)", () => {
+  it("trims the teacher's message, keeps tabs and line feeds, refuses control and direction characters and anything past the limit", () => {
+    expect(ProjectSyncRequest.parse({ message: "  Fixed.\n\tSee the README.  " })).toEqual({ message: "Fixed.\n\tSee the README." });
+    expect(ProjectSyncRequest.parse({})).toEqual({});
+    for (const bad of ["a\u0000b", "a\rb", "a\u007fb", "a\u0085b", "a‮b", "a⁩b", "x".repeat(501)]) {
+      expect(ProjectSyncRequest.safeParse({ message: bad }).success, JSON.stringify(bad)).toBe(false);
+    }
   });
 });

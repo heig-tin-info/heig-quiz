@@ -65,7 +65,7 @@ import type {
   SyncOutcome,
   SyncPrState,
 } from "@quiz/contracts";
-import { previewPaths, syncSkips } from "@quiz/domain";
+import { previewPaths, projectIsVisible, syncSkips } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
@@ -231,9 +231,28 @@ const syncRunning = (project: Pick<ProjectRow, "syncJobAt">, now: Date): boolean
  * against the project's protected list (`previewPaths`). It takes no lease
  * and writes nothing, on GitHub or here: it never holds a sync back, and
  * while one runs it is refused `409 sync_in_progress` (it would read a
- * distribution being updated). Refused as the sync is otherwise.
+ * distribution being updated). Refused as the sync is otherwise; a preview
+ * past its budget (`previewSquashedRepo`) is `502 sync_failed`. One at a
+ * time per project: a second request while one runs awaits its answer.
  */
-export async function previewSync(
+export function previewSync(
+  app: FastifyInstance,
+  config: AppConfig,
+  project: ProjectRow,
+  now: Date,
+  log: FastifyBaseLogger,
+): Promise<ProjectSyncPreview> {
+  const running = previewsInFlight.get(project.id);
+  if (running) return running;
+  const preview = computePreview(app, config, project, now, log).finally(() => previewsInFlight.delete(project.id));
+  previewsInFlight.set(project.id, preview);
+  return preview;
+}
+
+/** The previews under way, by project: the dialog reopened, Retry or a token's loop never clones twice at once. */
+const previewsInFlight = new Map<string, Promise<ProjectSyncPreview>>();
+
+async function computePreview(
   app: FastifyInstance,
   config: AppConfig,
   project: ProjectRow,
@@ -279,13 +298,17 @@ export async function requestSync(
   if (!job) throw new ProjectError("sync_in_progress", "A sync of the project is under way");
 
   const subject = { subjectType: "project" as const, subjectId: project.id };
-  // One message per sync (ADR-132 §10): the latest replaces the previous, none clears it.
-  const message = body.message || null;
+  // One message per sync (ADR-132 §10): the latest replaces the previous, none
+  // clears it; only on a project its students read (a draft's is never kept).
+  // The same text keeps its date: the job comments on the open pull requests
+  // for a message dated by this sync only.
+  const message = projectIsVisible(project.state) ? body.message || null : null;
+  const messageAt = message === null ? null : message === project.syncMessage ? project.syncMessageAt : now;
   try {
     const update = await updateSquashedRepo(await updateOptions(config, project, org, log));
     await app.db
       .update(projects)
-      .set({ sourceHeads: update.sourceHeads, syncMessage: message, syncMessageAt: message === null ? null : now })
+      .set({ sourceHeads: update.sourceHeads, syncMessage: message, syncMessageAt: messageAt })
       .where(eq(projects.id, project.id));
     await audit(app.db, {
       ...actor,
@@ -337,6 +360,8 @@ interface PrWords {
   /** The project is graded by its CI (`ciGraded`): its protected files and `criteria.yml` are graded in the teacher's version. */
   graded: boolean;
   message: string | null;
+  /** The message is this sync's (dated by its request): an open pull request is told even when its head did not move. */
+  fresh: boolean;
 }
 
 /** The state of pull request `number` on GitHub, or null when it is gone. */
@@ -380,7 +405,8 @@ async function storePr(
  * The sync pull request of a branch (F-PROJ-12): never two — the stored one
  * while GitHub says it is open, else the open one from `sync/<branch>`
  * found by its head (a row lost, a pull request opened by hand), else a new
- * one. An open one is commented on when the update `moved` its head (a
+ * one. An open one is commented on when the update `moved` its head, or
+ * when the message is this sync's (`fresh`, ADR-132 §10) (a
  * retry says nothing again). Titles, bodies and comments name the
  * DISTRIBUTION's commit (`head`), never the source (N-SEC-20), in English
  * (D12). The body says what grading takes from the update: in a project
@@ -397,7 +423,7 @@ async function upsertSyncPr(
   head: string,
   moved: boolean,
   files: { filename: string; status: string }[],
-  { graded, message }: PrWords,
+  { graded, message, fresh }: PrWords,
   now: Date,
 ): Promise<"opened" | "updated"> {
   const { owner, repo: name } = ownerRepo(repo.fullName!);
@@ -422,12 +448,12 @@ async function upsertSyncPr(
     open = found[0]?.number ?? null;
   }
   if (open !== null) {
-    if (moved) {
+    if (moved || fresh) {
       await octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
         owner,
         repo: name,
         issue_number: open,
-        body: `Updated to \`${short}\`. Files now included:\n\n${list}`,
+        body: moved ? `Updated to \`${short}\`. Files now included:\n\n${list}` : quotedMessage(message).trimStart(),
       });
     }
     await storePr(db, repo.id, branch, open, "open", now);
@@ -537,7 +563,11 @@ export async function runSyncJob(app: FastifyInstance, config: AppConfig, job: P
     // The teachers' test repositories follow the source too (ADR-077), outside the tallies and never failing the pass.
     const counted = new Set(repos.map((r) => r.id));
     const tests = (await db.select().from(projectRepos).where(eq(projectRepos.projectId, project.id))).filter((r) => !counted.has(r.id));
-    const words: PrWords = { graded: await ciGraded(db, project), message: project.syncMessage };
+    const words: PrWords = {
+      graded: await ciGraded(db, project),
+      message: project.syncMessage,
+      fresh: project.syncMessageAt?.toISOString() === job.lease,
+    };
     const ws = await openSyncWorkspace({ token, org: owner, squashedRepo });
     let failedRepos: string[];
     try {
@@ -622,14 +652,19 @@ export const pullRequest: WebhookHandler = async (app, config, delivery) => {
  */
 export async function gradedBeforeUpdate(db: Db, project: ProjectRow, repos: readonly RepoRow[]): Promise<number> {
   const frozen = repos.filter((repo) => repo.frozenAt !== null && isLive(repo, project)).map((repo) => repo.id);
-  if (frozen.length === 0 || !(await ciGraded(db, project))) return 0;
-  const [snapshot] = await db.select({ sourceSha: projectCriteria.sourceSha }).from(projectCriteria).where(eq(projectCriteria.projectId, project.id));
+  if (frozen.length === 0 || project.gradingMode !== "criteria") return 0;
+  // `ciGraded`'s rule, on the one read of the snapshot this needs anyway.
+  const [snapshot] = await db
+    .select({ criteria: projectCriteria.criteria, sourceSha: projectCriteria.sourceSha })
+    .from(projectCriteria)
+    .where(eq(projectCriteria.projectId, project.id));
+  if (snapshot?.criteria.schemaVersion !== 3) return 0;
   const latest = await db
     .selectDistinctOn([gradeDispatches.repoId], { distributionSha: gradeDispatches.distributionSha })
     .from(gradeDispatches)
     .where(and(inArray(gradeDispatches.repoId, frozen), inArray(gradeDispatches.trigger, ["deadline", "regrade"])))
     .orderBy(gradeDispatches.repoId, desc(gradeDispatches.createdAt));
-  return latest.filter((pass) => pass.distributionSha !== null && pass.distributionSha !== snapshot?.sourceSha).length;
+  return latest.filter((pass) => pass.distributionSha !== null && pass.distributionSha !== snapshot.sourceSha).length;
 }
 
 /** The sync as the project page states it (`ProjectSyncState`), from the project's row and its student repositories; `gradedBefore` from {@link gradedBeforeUpdate}. */

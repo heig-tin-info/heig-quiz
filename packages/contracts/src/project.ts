@@ -1120,13 +1120,29 @@ export const ProjectSyncState = z.object({
 export type ProjectSyncState = z.infer<typeof ProjectSyncState>;
 
 /**
+ * What a message to the students never holds (ADR-132 §10): the C0 controls
+ * but tab and line feed, DEL, the C1 controls, and the bidirectional
+ * overrides and isolates — `CONTROL_CHAR` of `journal.ts`, widened. A NUL
+ * would fail the database's write after the distribution moved.
+ */
+// eslint-disable-next-line no-control-regex
+const MESSAGE_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/;
+
+/**
  * `POST /app/api/projects/:id/sync`'s optional body (ADR-132 §10): the
  * teacher's message to the students, plain text, trimmed, at most
- * {@link SYNC_MESSAGE_MAX} characters. One per sync: the latest replaces the
- * previous, and an empty or absent one clears it.
+ * {@link SYNC_MESSAGE_MAX} characters, no control character but tab and
+ * line feed. One per sync: a different text replaces the previous, and an
+ * empty or absent one clears it; ignored on a project its students cannot
+ * read yet (a draft).
  */
 export const ProjectSyncRequest = z.strictObject({
-  message: z.string().trim().max(SYNC_MESSAGE_MAX).optional(),
+  message: z
+    .string()
+    .trim()
+    .max(SYNC_MESSAGE_MAX)
+    .refine((text) => !MESSAGE_CONTROL.test(text), "no control or direction character")
+    .optional(),
 });
 export type ProjectSyncRequest = z.infer<typeof ProjectSyncRequest>;
 

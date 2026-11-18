@@ -102,6 +102,7 @@ import {
   editableProjectFields,
   projectBeforePublication,
   projectIsLive,
+  projectIsVisible,
   patchedDraftDates,
   previewPaths,
   projectFieldRefusal,
@@ -120,7 +121,7 @@ import {
   type CriterionGradeLike,
   type ProjectDatesChange,
   type ProjectLifeLike,
-  type SyncChange,
+  type SyncPathChange,
 } from "@quiz/domain";
 
 import {
@@ -142,7 +143,7 @@ import { D, flags, H, iso, MockError, MockPayload, nextId, now, on, refuse, role
 const ORG = "heig-tin-info";
 const PROTECTED = ["criteria.yml", "README.md", ".github/workflows/grading.yml"];
 /** The seeded message of the last sync (ADR-132 §10), the same on the staff's page and the students'. */
-export const MOCK_SYNC_MESSAGE = "Test 3 expected the wrong rounding: it is fixed, and criteria.yml now gives it 2 points.\nNothing to change in your code.";
+const MOCK_SYNC_MESSAGE = "Test 3 expected the wrong rounding: it is fixed, and criteria.yml now gives it 2 points.\nNothing to change in your code.";
 
 /** A repository of the mock, mutable: what the page's writes change. */
 interface MockRepo {
@@ -1207,9 +1208,9 @@ on("POST", "/app/api/projects/:id/sync", (m, raw) => {
   if (!parsed.success) throw new MockPayload(400, { error: "validation", message: parsed.error.message });
   syncRefusal(p);
   p.sync.inProgressReads = 2;
-  // ADR-132 §10: the latest message replaces the previous, none clears it.
-  const text = parsed.data.message || null;
-  p.sync.message = text === null ? null : { text, at: iso(0) };
+  // ADR-132 §10: the latest message replaces the previous (the same text keeps its date), none clears it; never on a draft.
+  const text = projectIsVisible(p.summary.state) ? parsed.data.message || null : null;
+  p.sync.message = text === null ? null : text === p.sync.message?.text ? p.sync.message : { text, at: iso(0) };
   const answer: ProjectSyncAccepted = { requestedAt: iso(0) };
   return answer;
 });
@@ -1224,13 +1225,13 @@ function syncRefusal(p: MockProject): void {
 /**
  * The sync's preview (ADR-132 §10): a sample of each kind while the source
  * is ahead — the protected files of the project among them —, nothing to
- * send otherwise; `?many=1` lists more than the cap.
+ * send otherwise (`?syncempty=1` too).
  */
 on("GET", "/app/api/projects/:id/sync/preview", (m): ProjectSyncPreview => {
   const p = projectOr404(m.groups!.id!);
   syncRefusal(p);
   if (flags.distfail) throw refuse(502, "sync_failed", "Updating the distribution repository failed: try again");
-  const changes: { path: string; change: SyncChange }[] =
+  const changes: SyncPathChange[] =
     p.sync.aheadAt === null || flags.syncempty
       ? []
       : [
@@ -1239,7 +1240,6 @@ on("GET", "/app/api/projects/:id/sync/preview", (m): ProjectSyncPreview => {
           { path: "tests/test_rounding.c", change: "modified" },
           { path: "docs/old-notes.md", change: "deleted" },
           ...p.summary.protectedFiles.filter((f) => f.split("/").pop()!.includes(".")).map((path) => ({ path, change: "modified" as const })),
-          ...(flags.many ? Array.from({ length: 260 }, (_, i) => ({ path: `data/sample-${i}.txt`, change: "added" as const })) : []),
         ];
   return {
     // The mock's criteria projects play a schema-3 one here (ADR-132 §2), though their sample snapshot says 2.
