@@ -124,7 +124,7 @@ async function regradePass(db: Db | Tx, repoId: string): Promise<string | null> 
     .innerJoin(projectRepos, eq(projectRepos.id, gradeDispatches.repoId))
     .innerJoin(projects, eq(projects.id, projectRepos.projectId))
     .where(and(eq(gradeDispatches.repoId, repoId), isNull(gradeDispatches.checkpointId)))
-    .orderBy(desc(gradeDispatches.createdAt))
+    .orderBy(desc(gradeDispatches.createdAt), desc(gradeDispatches.id))
     .limit(1)
     .for("share", { of: projects });
   return latest && regradePower(latest, latest.releasedAt) ? latest.id : null;
@@ -248,13 +248,17 @@ async function writeLocked(tx: Tx, repoId: string, all: readonly CriterionGradeI
   const overrides = (i: CriterionGradeInput) => i.source === "manual" || i.state === "validated";
   const standing = await standingRows(tx, repoId);
   const inputs = all.filter((i) => overrides(i) || !standing.some((r) => r.criterionId === i.criterionId && holdsCriterion(r, proposal(i, power))));
-  // A failure that left a row standing, on its CI pass: what the staff's line names (ADR-132 §6).
-  const kept = all.filter((i) => !inputs.includes(i) && i.reason && i.passId !== null);
-  for (const passId of new Set(kept.map((i) => i.passId!))) {
-    const failures = Object.fromEntries(kept.filter((i) => i.passId === passId).map((i) => [i.criterionId, i.reason]));
+  // On a CI pass, what the staff's line names (ADR-132 §6): a failure that left a row standing; cleared once the pass writes its criterion.
+  const proposals = all.filter((i) => !overrides(i) && i.passId !== null);
+  for (const passId of new Set(proposals.map((i) => i.passId!))) {
+    const own = proposals.filter((i) => i.passId === passId);
+    const kept = Object.fromEntries(own.filter((i) => i.reason && !inputs.includes(i)).map((i) => [i.criterionId, i.reason]));
+    const written = JSON.stringify(own.filter((i) => inputs.includes(i)).map((i) => i.criterionId));
     await tx
       .update(gradeDispatches)
-      .set({ keptFailures: sql`coalesce(${gradeDispatches.keptFailures}, '{}'::jsonb) || ${JSON.stringify(failures)}::jsonb` })
+      .set({
+        keptFailures: sql`(coalesce(${gradeDispatches.keptFailures}, '{}'::jsonb) - array(select jsonb_array_elements_text(${written}::jsonb))) || ${JSON.stringify(kept)}::jsonb`,
+      })
       .where(and(eq(gradeDispatches.id, passId), isNotNull(gradeDispatches.nonce)));
   }
   if (inputs.length === 0) return [];

@@ -6510,14 +6510,15 @@ export const fr: Record<keyof Dict, string> = {
   "project.grading.regrade.confirm": "Recorriger",
   "project.grading.regrade.done": "Recorrection lancée : les propositions arrivent dans un instant.",
   "project.grading.regradeCi.body":
-    "La CI et l'IA corrigent à nouveau ce dépôt (un appel). Leurs résultats remplacent les lignes de la machine, validées comprises. Vos points et les lignes d'un point de contrôle restent. Trois fois par jour au plus.",
+    "La CI et l'IA corrigent à nouveau ce dépôt (un appel). Leurs résultats remplacent les lignes de la machine, validées comprises. Les points de l'équipe enseignante et les lignes d'un point de contrôle restent. Trois fois par jour au plus.",
   "project.grading.regradeAllCi.body":
-    "La CI et l'IA corrigent à nouveau chaque dépôt ({n} appels). Leurs résultats remplacent les lignes de la machine, validées comprises. Vos points et les lignes d'un point de contrôle restent. Trois fois par jour au plus.",
+    "La CI et l'IA corrigent à nouveau chaque dépôt ({n} appels). Leurs résultats remplacent les lignes de la machine, validées comprises. Les points de l'équipe enseignante et les lignes d'un point de contrôle restent. Trois fois par jour au plus.",
   "project.grading.regradeReleased.body":
-    "Le projet est publié. Les étudiants gardent la note publiée jusqu'à la prochaine publication, sans nouvelle notification, et leurs critères affichent entre-temps les nouveaux points comme indicatifs. Les lignes remplacées attendent votre validation.",
+    "Les étudiants gardent la note publiée jusqu'à la prochaine publication, sans nouvelle notification, pendant que leurs critères affichent les nouveaux points comme indicatifs et que les lignes remplacées attendent votre validation.",
   "project.grading.pass.replaced.one": "1 fichier remplacé par la version de la distribution",
   "project.grading.pass.replaced": "{n} fichiers remplacés par la version de la distribution",
   "project.grading.pass.more": "et {n} autres",
+  "project.grading.pass.keptFlag": "lignes précédentes conservées",
   "project.grading.pass.kept.one": "Aucun nouveau résultat pour {criteria} ({reasons}) : la ligne précédente reste",
   "project.grading.pass.kept": "Aucun nouveau résultat pour {criteria} ({reasons}) : les lignes précédentes restent",
   "project.grading.keys": "← → entre les dépôts",

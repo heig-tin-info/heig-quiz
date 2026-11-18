@@ -97,6 +97,7 @@ import { runEvidence } from "./evidence.js";
 import { runReview } from "./reviewPass.js";
 import { completedRun, type CompletedRun } from "./grading.js";
 import { claimPasses } from "./milestone.js";
+import { releaseProject } from "./grades.js";
 import { regrade } from "./regrade.js";
 import { repoContext } from "./repos.js";
 import { passTarget } from "./review.js";
@@ -1005,8 +1006,12 @@ describe("a Regrade redoes the machine's correction (ADR-132 §5)", () => {
       return StudentProject.parse(res.json());
     };
     const release = () => call("POST", `/app/api/projects/${own.projectId}/release`, teacher.headers);
+    // The page loaded before the release: a Regrade sent from it finds the release under the project's lock.
+    const [stale] = await server.app.db.select().from(projects).where(eq(projects.id, own.projectId));
+    const [repoRow] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repo.id));
     const released = await release();
     expect(released.statusCode, released.body).toBe(200);
+    await expect(regrade(server.app, config, stale!, repoRow!, SYSTEM_ACTOR, server.clock.now())).rejects.toMatchObject({ code: "regrade_released" });
     const first = await read();
     expect(first.release?.points).not.toBeNull();
 
@@ -1056,8 +1061,11 @@ describe("a Regrade redoes the machine's correction (ADR-132 §5)", () => {
     const pass = await regradePass(own, repo.id);
     server.clock.set(new Date(new Date(NOW).getTime() + 60_000));
     try {
-      const released = await server.app.inject({ method: "POST", url: `/app/api/projects/${own.projectId}/release`, headers: teacher.headers });
-      expect(released.statusCode, released.body).toBe(200);
+      // The release stamps `released_at` from the clock it reads once the project's row is held, not the request's start.
+      const stamp = new Date(new Date(NOW).getTime() + 30_000);
+      await releaseProject(server.app.db, own.projectId, SYSTEM_ACTOR, teacher.id, { now: () => stamp });
+      const [released] = await server.app.db.select({ releasedAt: projects.releasedAt }).from(projects).where(eq(projects.id, own.projectId));
+      expect(released!.releasedAt).toEqual(stamp);
       const run = gradedRun(pass.nonce!, target);
       upload(run.workflowRunId, ALL);
       expect(await intakeGradedRun(server.app, await octokitOf(own), await ctxOf(repo), run)).toBe("accepted");
@@ -1378,6 +1386,8 @@ describe("the LLM pass of a schema-3 pass (ADR-119 §7)", () => {
     // Its model's reply replaces it, waiting for the validation again.
     expect(await runReview(server.app, config, { repoId: repo.id, passId })).toBe(1);
     expect(await style(repo.id)).toMatchObject({ points: 2, rationale: "Redone.", source: "llm", state: "proposed", passId });
+    // The staff's line no longer names it: the pass wrote its criterion.
+    expect((await passRow(passId)).keptFailures).toEqual({});
     server.clock.set(NOW);
   });
 

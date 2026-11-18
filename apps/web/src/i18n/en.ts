@@ -6554,14 +6554,15 @@ export const en = {
   "project.grading.regrade.confirm": "Regrade",
   "project.grading.regrade.done": "Regrade started: the proposals arrive in a moment.",
   "project.grading.regradeCi.body":
-    "The CI and the AI grade it again (1 call). Their results replace the machine's rows, validated ones included. Your points and checkpoint rows stay. At most three a day.",
+    "The CI and the AI grade it again (1 call). Their results replace the machine's rows, validated ones included. Teachers' points and checkpoint rows stay. At most three a day.",
   "project.grading.regradeAllCi.body":
-    "The CI and the AI grade each repository again ({n} calls). Their results replace the machine's rows, validated ones included. Your points and checkpoint rows stay. At most three a day.",
+    "The CI and the AI grade each repository again ({n} calls). Their results replace the machine's rows, validated ones included. Teachers' points and checkpoint rows stay. At most three a day.",
   "project.grading.regradeReleased.body":
-    "The project is released. Students keep the released grade until you release again, with no new notification, and meanwhile their criteria show the new points as indicative. Replaced rows wait for your validation.",
+    "Students keep the released grade until you release again, with no new notification, while their criteria show the new points as indicative and the replaced rows wait for your validation.",
   "project.grading.pass.replaced.one": "1 file replaced by the distribution's version",
   "project.grading.pass.replaced": "{n} files replaced by the distribution's version",
   "project.grading.pass.more": "and {n} more",
+  "project.grading.pass.keptFlag": "earlier rows kept",
   "project.grading.pass.kept.one": "No new result for {criteria} ({reasons}): its earlier row stays",
   "project.grading.pass.kept": "No new result for {criteria} ({reasons}): their earlier rows stay",
   "project.grading.keys": "← → between repositories",

@@ -347,7 +347,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/projects/:id/release",
     session,
     teacher(onOwnedProject, async ({ req, now, scope }) =>
-      service.releaseProject(app.db, scope.project.id, actorOf(req), callerOf(req).id, now),
+      service.releaseProject(app.db, scope.project.id, actorOf(req), callerOf(req).id, app.clock),
     ),
   );
 

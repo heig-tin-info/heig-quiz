@@ -266,7 +266,12 @@ cap and top-level stripping are unchanged (invariant 15).
   (`grade_dispatches.kept_failures`) and named on the staff's line (§6).
   A schema-2 Regrade has no `grade_dispatches` row, so no power: it keeps
   ADR-106 §4. A Regrade after the release is audited with
-  `afterRelease: true`.
+  `afterRelease: true`. The release and a Regrade's claim read their
+  instants (`released_at`, `created_at`) once the project's row is locked
+  (for update, for share), and the claim re-reads `released_at` there for
+  its `409 regrade_released`: no interleaving gives a pass claimed before
+  a release a later stamp. A pass's kept failure is cleared when that pass
+  later writes the criterion.
 - **After the release** (owner): Regrade stays allowed, behind an explicit
   confirmation; the API refuses it for a released project unless the
   request carries the acknowledgement (`409 regrade_released`;

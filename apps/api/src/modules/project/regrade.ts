@@ -95,12 +95,7 @@ export async function regrade(
   const db = app.db;
   const [snapshot] = await db.select().from(projectCriteria).where(eq(projectCriteria.projectId, project.id));
   if (project.gradingMode !== "criteria" || !snapshot) throw new ProjectError("not_criteria", "The project is not graded by criteria");
-  // A schema-3 snapshot's Regrade can replace validated rows (ADR-132 §5): after the release, only acknowledged.
   const ci = snapshot.criteria.schemaVersion === 3;
-  const afterRelease = ci && project.releasedAt !== null;
-  if (afterRelease && body.releasedAcknowledged !== true) {
-    throw new ProjectError("regrade_released", "The project is released: a regrade replaces validated rows, confirm it");
-  }
   const repos =
     repo === null
       ? await db
@@ -116,8 +111,11 @@ export async function regrade(
   if ((await regradesToday(db, project.id, action, repo?.id ?? null, now)) >= PROJECT_REGRADES_PER_DAY) {
     throw new ProjectError("regrade_limit", "Regraded as often as a day allows: try again tomorrow");
   }
-  // A schema-3 snapshot: each repository's CI graded run dispatched anew, a new nonce each (ADR-119 §6).
-  const passIds = ci ? await claimRegrades(db, repos.map((r) => r.id), now) : [randomUUID()];
+  // A schema-3 snapshot: each repository's CI graded run dispatched anew, a new nonce each (ADR-119 §6); it can
+  // replace validated rows (ADR-132 §5), so after the release only acknowledged, decided under the project's lock.
+  const { passIds, afterRelease } = ci
+    ? await claimRegrades(db, project.id, repos.map((r) => r.id), app.clock, body.releasedAcknowledged === true)
+    : { passIds: [randomUUID()], afterRelease: false };
   const passId = passIds[0]!;
   // Both on the project; the repository's in the payload, which its own day's cap counts.
   await audit(db, {

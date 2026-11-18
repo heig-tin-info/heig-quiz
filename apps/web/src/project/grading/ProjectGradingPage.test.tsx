@@ -175,6 +175,10 @@ describe("grading", () => {
     expect(screen.getByText("tests/check.sh")).toBeInTheDocument();
     expect(screen.getByText("and 1 more")).toBeInTheDocument();
     expect(screen.getByText("No new result for Tests pass, Clean history (No CI result): their earlier rows stay")).toBeInTheDocument();
+    // The rail flags the repository whose latest pass kept earlier rows, and only it.
+    const rail = screen.getByRole("navigation", { name: "Repositories" });
+    expect(within(rail).getByRole("button", { name: /^Question 1,.*earlier rows kept/ })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: /^Question 2,/ })).not.toHaveAccessibleName(/earlier rows kept/);
     // Nothing replaced and nothing kept: no line.
     await userEvent.keyboard("{ArrowRight}");
     await screen.findByRole("table", { name: "Criteria of Rossi Luca" });
