@@ -1,7 +1,7 @@
 import type { NodeViewProps } from "@tiptap/core";
 import { NodeViewWrapper } from "@tiptap/react";
 import { Check, ImageOff, Loader2, RotateCcw, RotateCw, Scaling, Trash2 } from "lucide-react";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 import { useT } from "../i18n";
 import { IconButton, Menu } from "../ui";
@@ -88,6 +88,33 @@ async function rotateImage(url: string, alt: string, quarter: 1 | -1): Promise<F
   return new File([out], rotatedName(alt, type), { type });
 }
 
+/**
+ * Whether the asset at `url` is a bitmap the browser can rotate, asked once
+ * `wanted`. A quarter turn redraws a BITMAP through a canvas: an SVG
+ * (ADR-134) would come back as a PNG of itself, so it offers no rotation.
+ * The URL is immutable and the picture is already on screen, so the request
+ * is answered from the HTTP cache; a failure hides the buttons until the
+ * next time the bar opens.
+ */
+function useRotatable(url: string | null, wanted: boolean): boolean {
+  const [known, setKnown] = useState<{ url: string; type: string | null } | null>(null);
+  useEffect(() => {
+    if (!url || !wanted) return;
+    let live = true;
+    fetch(url)
+      .then((res) => (res.ok ? res.headers.get("content-type") : null))
+      .catch(() => null)
+      .then((type) => {
+        if (live) setKnown({ url, type });
+      });
+    return () => {
+      live = false;
+    };
+  }, [url, wanted]);
+  const type = known?.url === url ? known.type : null;
+  return type !== null && type.startsWith("image/") && !type.startsWith("image/svg");
+}
+
 export function ImageView({
   node,
   updateAttributes,
@@ -114,6 +141,7 @@ export function ImageView({
 
   const editable = editor.isEditable;
   const open = editable && (hover || selected);
+  const rotatable = useRotatable(url, open && uploadImage !== undefined);
 
   async function rotate(quarter: 1 | -1) {
     if (!uploadImage || !url || busy) return;
@@ -180,7 +208,7 @@ export function ImageView({
           // The bar floats over the document; nothing in it moves the caret.
           onMouseDown={(e) => e.preventDefault()}
         >
-          {uploadImage && url ? (
+          {uploadImage && url && rotatable ? (
             <>
               <IconButton
                 size="sm"

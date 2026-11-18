@@ -36,6 +36,7 @@ const VARIABLES_RULES = [
  */
 const MARKDOWN_RULES = [
   "Every Markdown field (prompt, choices, cards, explanation…) renders LaTeX with KaTeX: write any formula, symbol or unit in math mode, `$…$` inline (no space after the opening `$` nor before the closing one, no digit right after it) or `$$…$$` in its own paragraph for a display equation. Never bare LaTeX (`\\frac{1}{2}` outside `$`), no Unicode substitutes (`x²`, `√2`, `≤`) when a formula is meant. A `$` that is a price stays text; `\\$` forces a literal dollar. A formula never spans a backtick or a link.",
+  "An image is only `![alt](asset:<id>)`, the `markdown` that upload_asset returns for an SVG it stored (ADR-134); an `https://` or `data:` image, a path or raw `<img>` is refused. The student can read the SVG's source: never put the answer, a hint or the correct choice in it.",
 ];
 
 interface TypeGuide {

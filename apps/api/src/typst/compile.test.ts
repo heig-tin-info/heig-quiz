@@ -24,6 +24,8 @@ import { drawable, renderTypst } from "@quiz/docexport/typst";
 
 import { compileArgs, compileTypst, DEAD_PROXY, inTempDir, run, TypstFailure, typstEnv } from "./compile.js";
 import { pdfText, pdfTools, TYPST_BIN as BIN, typstProbe as probe } from "../test/pdf.js";
+import { SVG_FIXTURES } from "../test/svg.js";
+import { checkSvg } from "../modules/pool/svgCheck.js";
 import { prlimitCaps } from "./service.js";
 
 /** On a workstation without Typst or `pdftotext`, skip; in CI, run and fail. */
@@ -196,6 +198,18 @@ describe.skipIf(skip)(`a compile, with ${BIN} (${probe.version ?? "missing"})`, 
       compileTypst({ source: sourceOf(blocks), assets: [{ path: "../escape", bytes: png }] }, options()),
     ).rejects.toThrow(/escapes the compile root/);
     expect(await readdir(parent)).toEqual([]);
+  });
+
+  it("draws an accepted SVG asset, stored as `assets/<id>` with no extension (ADR-134)", async () => {
+    const [figure] = SVG_FIXTURES;
+    expect(checkSvg(figure!.bytes).ok).toBe(true);
+    const blocks = [markdown("![ALT_OF_SVG](asset:f1?w=50)")];
+    const text = await pdfText(
+      await compileTypst({ source: sourceOf(blocks, ["f1"]), assets: [{ path: "assets/f1", bytes: figure!.bytes }] }, options()),
+    );
+    // Drawn, not replaced by its alt text, and the diagram's own words are in the PDF.
+    expect(text).not.toContain("ALT_OF_SVG");
+    expect(text).toContain("Dessinable");
   });
 
   it("lists one answer zone per id for palier B", async () => {

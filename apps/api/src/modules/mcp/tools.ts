@@ -49,6 +49,8 @@ import {
 } from "@quiz/contracts";
 import { clockChoiceOf, filterIds, isUnscheduledDraft, scopeCovers, type LabelResolution } from "@quiz/domain";
 
+import { SVG_MAX_BYTES } from "../pool/service.js";
+import { imageIssues } from "./images.js";
 import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
 
 /** A refusal of the route a tool forwarded to, with its status and body. */
@@ -78,6 +80,8 @@ export interface Api {
   patch(path: string, body: unknown): Promise<any>;
   /** Reaches only the closed list of `DELETABLE_PATHS` (`service.ts`); any other path is refused unsent. */
   delete(path: string): Promise<any>;
+  /** POSTs an SVG as the one file of a `multipart/form-data` request, as the web app's image upload does (ADR-134). */
+  upload(path: string, bytes: Buffer): Promise<any>;
   /** The web app's URL of a screen, for the model to hand the teacher. */
   link(path: string): string;
   /** Whether Quiz's GitHub App is configured, so the project routes exist; absent: off. */
@@ -219,6 +223,19 @@ async function saveAndPublish(
     url: api.link(`/questions/${questionId}`),
   };
 }
+
+/**
+ * Refuses a question write whose OWN config or explanation holds an image
+ * the renderer would not draw (ADR-134, `images.ts`), before any request:
+ * the inherited draft is not checked, only what this call sends.
+ */
+function refuseForeignImages(sent: { config?: unknown; explanation?: string | undefined }, nothing: "created" | "changed") {
+  const issues = imageIssues(sent);
+  if (issues) throw new ToolRefusal(`An image is not an uploaded asset; nothing was ${nothing}.`, issues);
+}
+
+/** `alt` as Markdown image text: one line, no bracket nor backslash to end it early. */
+const altText = (alt: string | undefined) => (alt ?? "").replace(/[\r\n]+/g, " ").replace(/[[\]\\]/g, "").trim();
 
 /** The arguments `create_evaluation` and `create_template` share: what the quiz is. */
 const QuizFields = {
@@ -636,6 +653,36 @@ export const TOOLS: Tool[] = [
   }),
 
   tool({
+    name: "upload_asset",
+    title: "Upload an SVG image for a question",
+    description:
+      "Stores an SVG image in a pool and returns the Markdown that shows it, `![alt](asset:<id>)`: put that " +
+      "`markdown` in any Markdown field of a question (prompt, choices, explanation…). It is the ONLY way to " +
+      "put an image in a question: an `https://` or `data:` image, a file path or raw `<img>` is refused by " +
+      "create_question and update_question. SVG only, at most 512 KB (the whole request under 1 MB), and " +
+      "checked strictly, refused with the reason otherwise: drawing elements only (svg, g, defs, symbol, use, " +
+      "path, rect, circle, ellipse, line, polyline, polygon, text, tspan, textPath, marker, linearGradient, " +
+      "radialGradient, stop, clipPath, mask, pattern, style), presentation attributes only, no script, no " +
+      "event handler, no image, filter, animation, link nor foreignObject, no title, desc, metadata nor XML " +
+      "comment, references only to `#id` of the same SVG, the `xmlns=\"http://www.w3.org/2000/svg\"` root. " +
+      "A student taking the question can read the SVG's source: NEVER put the answer, a hint or which choice " +
+      "is correct in it, not even hidden. Needs the contributor role on the pool; the same SVG uploaded twice " +
+      "is the same asset.",
+    input: z
+      .object({
+        poolId: Id,
+        svg: z.string().min(1).max(SVG_MAX_BYTES).describe("The SVG source, `<svg xmlns=\"http://www.w3.org/2000/svg\" …>…</svg>`"),
+        alt: z.string().max(300).optional().describe("What the image shows, for a reader who cannot see it"),
+      })
+      .strict(),
+    annotations: { ...WRITE, idempotentHint: true },
+    run: async (api, a) => {
+      const asset = await api.upload(`/pools/${a.poolId}/assets`, Buffer.from(a.svg, "utf8"));
+      return { assetId: asset.id, markdown: `![${altText(a.alt)}](asset:${asset.id})` };
+    },
+  }),
+
+  tool({
     name: "create_question",
     title: "Create a question",
     description:
@@ -661,6 +708,7 @@ export const TOOLS: Tool[] = [
     .strict(),
     annotations: WRITE,
     run: async (api, a) => {
+      refuseForeignImages(a, "created");
       if (a.publish) {
         const issues = checkConfig(a.type, a.config, { explanation: a.explanation, variables: a.variables });
         if (issues) throw new ToolRefusal("The config does not satisfy the type's schema; nothing was created.", issues);
@@ -708,6 +756,8 @@ export const TOOLS: Tool[] = [
     .strict(),
     annotations: WRITE,
     run: async (api, a) => {
+      // Before the metadata PATCH below: a refusal changes nothing at all.
+      refuseForeignImages(a, "changed");
       const current = await api.get(`/questions/${a.questionId}`);
       const meta = metaOf(a);
       if (Object.keys(meta).length > 0) await api.patch(`/questions/${a.questionId}`, meta);

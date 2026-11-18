@@ -75,6 +75,13 @@ reads a project's grading by criteria and proposes a criterion's points;
 three grading routes take a personal or OAuth token — see the addendum at
 the end of §C.
 
+**Amended 2026-11-18 by [ADR-134](ADR-134-svg-dans-les-questions.md)
+(product owner's decision), scope: §B's JSON-only client and §C.** The
+writing tool `upload_asset` joins the closed list: it stores an SVG for a
+question through the pool's own multipart upload route, and
+`create_question` and `update_question` refuse an image that is not an
+uploaded asset.
+
 ## Context
 
 A teacher wants to ask an assistant — Claude Desktop, Claude Code, ChatGPT,
@@ -158,7 +165,8 @@ Writing: `create_course`, `create_classroom`, `create_pool`,
 `add_questions_to_template`, `instantiate_template`, `create_project`,
 `remove_question_from_evaluation`, `remove_question_from_template`,
 `update_evaluation_item_versions`, `update_template_item_versions`,
-`update_evaluation_item`, `update_template_item`, `grade_criterion`.
+`update_evaluation_item`, `update_template_item`, `grade_criterion`,
+`upload_asset` (ADR-134).
 
 - `describe_question_types` hands the model the JSON Schema of the type's
   `configSchema` — generated, so it cannot drift from the publication gate —

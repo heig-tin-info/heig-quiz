@@ -25,6 +25,7 @@ function fakeApi(get: (path: string) => unknown): Api & { writes: string[] } {
     put: write,
     patch: write,
     delete: write,
+    upload: write,
     link: (path) => `https://quiz.test${path}`,
   };
 }

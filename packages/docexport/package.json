@@ -16,6 +16,10 @@
       "types": "./dist/typst/index.d.ts",
       "default": "./dist/typst/index.js"
     },
+    "./images": {
+      "types": "./dist/images.d.ts",
+      "default": "./dist/images.js"
+    },
     "./entities": {
       "types": "./dist/entities.d.ts",
       "default": "./dist/entities.js"

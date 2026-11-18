@@ -100,6 +100,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-102 — Mathematical expression answers: a math field, numerical equivalence, no CAS](ADR-102-type-expression-mathematique.md)
 - [ADR-103 — Blocks: a block-programming question type, a warehouse robot graded by a pure interpreter](ADR-103-type-blocs.md)
 - [ADR-109 — Each question type draws its own answer key for the debrief](ADR-109-cle-de-correction-par-type.md)
+- [ADR-134 — SVG in questions: a strict check that refuses, an MCP upload tool](ADR-134-svg-dans-les-questions.md)
 
 ### Evaluations, grading and practice
 

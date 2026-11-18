@@ -63,7 +63,7 @@ Every requirement is identified `F-AREA-nn`, with its original planning phase P1
 | F-QST-03 | Publishing validates the draft against the type's schema and creates version N+1 with an optional change note. The draft stays equal to the published version until the next change. | P1 | M |
 | F-QST-04 | The version history can be browsed with a diff of the configuration. A version may be restored into the draft. | P1 | S |
 | F-QST-05 | A version may be marked `deprecated` with a reason. The evaluations that use it show this to the teacher. | P1 | S |
-| F-QST-06 | The statement and the explanation are markdown with a WYSIWYG editor: headings, bold, lists, code, pasted or dragged images, inline and block KaTeX equations. | P1 | M |
+| F-QST-06 | The statement and the explanation are markdown with a WYSIWYG editor: headings, bold, lists, code, pasted or dragged images, inline and block KaTeX equations. *Amended 2026-11-18 ([ADR-134](../adr/ADR-134-svg-dans-les-questions.md)): an image is PNG, JPEG, GIF, WebP or SVG (the latter strictly checked); an MCP client uploads an SVG with `upload_asset`.* | P1 | M |
 | F-QST-07 | Pasted images are stored on the server and referenced by a stable id. The canonical export embeds them. | P1 | M |
 | F-QST-08 | A question declares whether it can be shuffled and whether it supports random values. | P1 | M |
 | F-QST-09 | The editor offers a preview of the player exactly as the student will see it, with the possibility to answer and to see the grading. | P1 | M |

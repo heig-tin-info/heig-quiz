@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { elapse, flowingClock } from "../test/clock";
 import { FORMULA_LABELS } from "../test/formula";
@@ -331,6 +331,16 @@ describe("RichText — images", () => {
 });
 
 describe("RichText — the toolbar of an image", () => {
+  // The bar asks the type an asset is served with (an SVG is not rotated, ADR-134): the
+  // setup's own fetch stub, renewed before every test, answers it here — no global to restore
+  // (`vi.unstubAllGlobals` would also drop the setup's ResizeObserver stub).
+  beforeEach(() => {
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const svg = String(input).startsWith("/app/api/assets/svg");
+      return new Response("", { headers: { "content-type": svg ? "image/svg+xml" : "image/png" } });
+    });
+  });
+
   /*
    * A picture with a line of text above it, which is what a prompt looks
    * like: a document that OPENS on an image starts with the image selected
@@ -376,6 +386,7 @@ describe("RichText — the toolbar of an image", () => {
     const { container } = withImage();
     fireEvent.mouseEnter(await frame(container));
     await screen.findByRole("toolbar", { name: "Image" });
+    await screen.findByRole("button", { name: "Rotate left" });
     for (const name of ["Rotate left", "Rotate right", "Size", "Remove the image"]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
@@ -392,6 +403,15 @@ describe("RichText — the toolbar of an image", () => {
     await screen.findByRole("toolbar", { name: "Image" });
     expect(screen.queryByRole("button", { name: "Rotate left" })).toBeNull();
     expect(screen.getByRole("button", { name: "Size" })).toBeInTheDocument();
+  });
+
+  it("hides the two rotate buttons for an SVG, which a canvas cannot turn (ADR-134)", async () => {
+    const { container } = withImage({ initial: "Before\n\n![schema](asset:svg1)" });
+    fireEvent.mouseEnter(await frame(container));
+    await screen.findByRole("toolbar", { name: "Image" });
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/app/api/assets/svg1"));
+    expect(screen.getByRole("button", { name: "Size" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rotate left" })).toBeNull();
   });
 
   it("writes the chosen width as a query on the asset reference", async () => {

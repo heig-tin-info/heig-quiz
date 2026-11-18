@@ -12,9 +12,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ApiTokenCreated } from "@quiz/contracts";
 import { questionType } from "@quiz/registry/server";
 
-import { conceptTagSortings, courseConcepts, evaluations } from "../../db/schema.js";
+import { auditLog, conceptTagSortings, courseConcepts, evaluations } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { EXPLANATION, PARAMETERIZED, VARIABLES } from "../../test/parameterized.js";
+import { SVG_FIXTURES } from "../../test/svg.js";
 
 import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
 import { injectedApi } from "./service.js";
@@ -142,6 +143,7 @@ describe("the transport", () => {
         "create_pool",
         "link_pool_to_course",
         "create_category",
+        "upload_asset",
         "create_question",
         "update_question",
         "create_evaluation",
@@ -480,6 +482,76 @@ describe("an authoring session", () => {
     expect(isError).toBe(true);
     expect(data.details.length).toBeGreaterThan(0);
     expect((await ok("list_questions", { poolId: pool.id })).total).toBe(0);
+  });
+
+  describe("images (ADR-134)", () => {
+    const mcq = (prompt: string) => ({ ...(describeQuestionType("mcq").example as Record<string, unknown>), prompt });
+
+    it("uploads an SVG through the pool's upload route and hands back its Markdown", async () => {
+      const pool = await ok("create_pool", { name: "Figures" });
+      const asset = await ok("upload_asset", { poolId: pool.id, svg: SVG_FIXTURES[0]!.bytes.toString("utf8"), alt: "Une [interface]" });
+      expect(asset.markdown).toBe(`![Une interface](asset:${asset.assetId})`);
+      const [audit] = await server.app.db.select().from(auditLog).where(eq(auditLog.subjectId, asset.assetId));
+      expect(audit).toMatchObject({ action: "pool.asset_upload", actorUserId: teacher.id, actorType: "api_key" });
+      // The same SVG twice is the same asset.
+      expect((await ok("upload_asset", { poolId: pool.id, svg: SVG_FIXTURES[0]!.bytes.toString("utf8") })).assetId).toBe(asset.assetId);
+
+      const q = await ok("create_question", {
+        poolId: pool.id,
+        type: "mcq",
+        internalName: "with-a-figure",
+        config: mcq(`Que montre cette figure ?\n\n${asset.markdown}`),
+      });
+      expect(q.publishedVersion).toBe(1);
+
+      // A refused SVG comes back with the check's code and an English message; nothing is stored.
+      const evil = await call("upload_asset", { poolId: pool.id, svg: '<svg xmlns="http://www.w3.org/2000/svg"><script>x</script></svg>' });
+      expect(evil.isError).toBe(true);
+      expect(evil.data).toMatchObject({ status: 415, body: { error: "svg_refused", code: "element", name: "script", message: expect.stringContaining("<script>") } });
+    });
+
+    it("refuses a question whose own Markdown holds a foreign image, and writes nothing", async () => {
+      const pool = await ok("create_pool", { name: "Images étrangères" });
+      for (const [config, explanation] of [
+        [mcq("Voici ![schéma](https://example.org/a.png)"), undefined],
+        [mcq("Voici ![schéma](data:image/png;base64,AAAA)"), undefined],
+        [mcq("Voici <img src=x>"), undefined],
+        [mcq("Voici ![schéma][ref]\n\n[ref]: https://example.org/a.png"), undefined],
+        [mcq("Bien"), "Voir ![](./figure.svg)"],
+      ] as const) {
+        const refused = await call("create_question", {
+          poolId: pool.id,
+          type: "mcq",
+          internalName: `foreign-${randomUUID().slice(0, 8)}`,
+          config,
+          ...(explanation === undefined ? {} : { explanation }),
+        });
+        expect(refused.isError).toBe(true);
+        expect(refused.data.error).toContain("nothing was created");
+        expect(refused.data.details[0].message).toContain("upload_asset");
+      }
+      expect((await ok("list_questions", { poolId: pool.id })).total).toBe(0);
+    });
+
+    it("refuses an update with a foreign image before changing even its metadata", async () => {
+      const pool = await ok("create_pool", { name: "Mise à jour" });
+      const q = await ok("create_question", { poolId: pool.id, type: "mcq", internalName: "avant", config: mcq("Bien") });
+      const before = await ok("get_question", { questionId: q.questionId });
+      const refused = await call("update_question", {
+        questionId: q.questionId,
+        internalName: "après",
+        difficulty: 5,
+        concepts: [],
+        config: mcq("Voici ![x](http://example.org/x.png)"),
+      });
+      expect(refused.isError).toBe(true);
+      expect(refused.data.details).toEqual([{ path: "prompt", message: expect.stringContaining("upload_asset") }]);
+      const after = await ok("get_question", { questionId: q.questionId });
+      expect(after.meta).toEqual(before.meta);
+      expect(after.versions).toHaveLength(1);
+      // Only what the call sends is checked: a metadata change alone passes.
+      expect(await call("update_question", { questionId: q.questionId, internalName: "après", publish: false })).toMatchObject({ isError: false });
+    });
   });
 
   it("writes a parameterized question end to end, and drops its variables on update (ADR-056)", async () => {

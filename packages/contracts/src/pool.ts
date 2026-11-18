@@ -781,20 +781,57 @@ export type TryResult = z.infer<typeof TryResult>;
 // --- Assets --------------------------------------------------------------
 
 /**
- * THE set of image types the platform accepts, and the source of truth for
- * every place that has to repeat it (B-19). SVG is deliberately absent: it is
- * a script container, and sanitising it is a project of its own (N-SEC).
+ * THE set of image types a question may embed, and the source of truth for
+ * every place that has to repeat it (B-19). SVG is accepted for a question
+ * only after the strict server-side check of ADR-134 (`svgCheck.ts`), which
+ * refuses rather than rewrites, and is shown through `<img>` alone.
  */
-export const AssetMime = z.enum(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+export const AssetMime = z.enum(["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"]);
 export type AssetMime = z.infer<typeof AssetMime>;
 
 /**
- * The same set for an avatar, minus the animated gif: a profile picture is
- * cropped to a still 256x256 square, so accepting an animation would only
- * store frames nothing ever shows.
+ * The types of an avatar and of a remote picture (N-SEC-02): raster only,
+ * never SVG (ADR-134 keeps it to question assets), and no animated gif — a
+ * profile picture is cropped to a still 256x256 square, so accepting an
+ * animation would only store frames nothing ever shows.
  */
-export const AvatarMime = AssetMime.exclude(["image/gif"]);
+export const AvatarMime = AssetMime.exclude(["image/gif", "image/svg+xml"]);
 export type AvatarMime = z.infer<typeof AvatarMime>;
+
+/**
+ * Why the strict check of a question's SVG refused it (ADR-134 §2): a CLOSED
+ * set of codes, so the web words each in the reader's language; `name` is
+ * the element, attribute, namespace, function or construct at fault, or the
+ * limit passed (`too_large`, `too_deep`, `too_complex`). The 415 body is
+ * `{ error: "svg_refused", code, name?, message }`, `message` the English
+ * wording an MCP client reads.
+ */
+export const SvgRefusalCode = z.enum([
+  "too_large",
+  "malformed",
+  "not_svg",
+  "construct",
+  "text",
+  "element",
+  "attribute",
+  "namespace",
+  "reference",
+  "function",
+  "css",
+  "escape",
+  "cycle",
+  "too_deep",
+  "too_complex",
+]);
+export type SvgRefusalCode = z.infer<typeof SvgRefusalCode>;
+
+export const SvgRefusal = z.object({
+  error: z.literal("svg_refused"),
+  code: SvgRefusalCode,
+  name: z.string().optional(),
+  message: z.string(),
+});
+export type SvgRefusal = z.infer<typeof SvgRefusal>;
 
 export const Asset = z.object({
   id: z.uuid(),

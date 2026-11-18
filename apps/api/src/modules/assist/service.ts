@@ -221,6 +221,7 @@ async function asTheTeacher<T>(deps: AskDeps, userId: string, now: Date, fn: (ap
     put: refuse,
     patch: refuse,
     delete: refuse,
+    upload: refuse,
     link: deps.link,
   };
   try {

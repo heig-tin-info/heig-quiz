@@ -2,6 +2,7 @@ import DOMPurify from "dompurify";
 import { Marked, type Tokens } from "marked";
 
 import { decodeEntities } from "@quiz/docexport/entities";
+import { ASSET_ID, ASSET_REF } from "@quiz/docexport/images";
 import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
 import { FormulaBudget } from "@quiz/docrender/katex";
 import { spaceTextToken } from "@quiz/docrender/typography";
@@ -43,19 +44,6 @@ import { formulaHtml, type FormulaLabels } from "./formula";
 /** Where an `asset:<id>` image resolves to. Same origin, no CDN (N-SEC-02). */
 const ASSET_BASE = "/app/api/assets/";
 
-/**
- * Ids are what the upload endpoint returns; anything else is not an asset.
- *
- * The optional query is how an image carries its WIDTH. A teacher who sizes a
- * picture in the editor writes `![alt](asset:<id>?w=50)`, and that is the
- * whole of it: no second attribute to invent, no HTML in the markdown, and a
- * reader who opens the source pane sees what the setting is. Anything but the
- * presets below is ignored rather than honoured, so a hand-typed `?w=900`
- * cannot push an image out of the column.
- */
-const ASSET_ID = "[A-Za-z0-9_-]{1,64}";
-const ASSET_REF = new RegExp(`^asset:(${ASSET_ID})(?:\\?([A-Za-z0-9_=&%.-]{0,64}))?$`);
-
 /** The exact `src` the image renderer writes: one id segment, no `..`, no query. */
 const ASSET_SRC = new RegExp(`^${ASSET_BASE}${ASSET_ID}$`);
 
@@ -63,17 +51,27 @@ const ASSET_SRC = new RegExp(`^${ASSET_BASE}${ASSET_ID}$`);
 export const IMAGE_WIDTHS = [25, 33, 50, 66, 75, 100] as const;
 export type ImageWidth = (typeof IMAGE_WIDTHS)[number];
 
-/** `asset:<id>` -> the same-origin URL, or null when it is not an asset ref. */
+/**
+ * `asset:<id>` -> the same-origin URL, or null when it is not an asset ref.
+ * Ids are what the upload endpoint returns; `ASSET_ID` and `ASSET_REF` are
+ * `@quiz/docexport/images`' own, shared with the PDF and the MCP tools'
+ * check of foreign images (ADR-134).
+ */
 export function assetUrl(href: string): string | null {
   const m = ASSET_REF.exec(href.trim());
   return m ? ASSET_BASE + m[1] : null;
 }
 
 /**
- * The width an asset reference asks for, as a percentage. 100 when it asks
- * for nothing, or for something that is not one of the presets: a full-width
- * image is what every image in the app was before the setting existed, so an
- * unreadable query degrades to the old behaviour instead of to nothing.
+ * The width an asset reference asks for, as a percentage. The optional query
+ * is how an image carries its WIDTH: a teacher who sizes a picture in the
+ * editor writes `![alt](asset:<id>?w=50)`, and that is the whole of it — no
+ * second attribute, no HTML in the markdown, and the source pane shows the
+ * setting. 100 when it asks for nothing, or for something that is not one of
+ * the presets (a hand-typed `?w=900` cannot push an image out of the
+ * column): a full-width image is what every image in the app was before the
+ * setting existed, so an unreadable query degrades to the old behaviour
+ * instead of to nothing.
  */
 export function assetWidth(href: string): ImageWidth {
   const m = ASSET_REF.exec(href.trim());

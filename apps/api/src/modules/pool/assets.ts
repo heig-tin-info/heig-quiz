@@ -4,8 +4,10 @@
  * Three rules, all enforced here:
  *   - the TYPE is decided by the bytes, never by the `content-type` the
  *     browser sent: a file is accepted only if its magic number says png,
- *     jpeg, gif or webp. SVG is refused outright — it is a script container,
- *     and sanitising it is a project of its own (N-SEC);
+ *     jpeg, gif or webp, or — for a question's image only — if it is an SVG
+ *     that passes the strict check of `svgCheck.ts` (ADR-134), which refuses
+ *     and never rewrites. `sniffImage` stays raster-only: avatars and remote
+ *     pictures share it and never take an SVG (N-SEC-02);
  *   - the same bytes are stored ONCE: the sha256 is the identity of an
  *     asset, so pasting the same screenshot in ten questions costs one file;
  *   - the file is served from the same origin with an immutable cache and
@@ -38,7 +40,11 @@ export function isAllowedMime(mime: string): mime is AssetMime {
   return AssetMime.safeParse(mime).success;
 }
 
-interface ImageFacts {
+/** The raster types, the only ones `sniffImage` recognises. */
+type RasterMime = Exclude<AssetMime, "image/svg+xml">;
+
+/** What an upload is, by its bytes; a question's SVG is `image/svg+xml` once `checkSvg` accepted it. */
+export interface ImageFacts {
   mime: AssetMime;
   width: number | null;
   height: number | null;
@@ -49,12 +55,13 @@ const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 /**
  * What the bytes actually are, and how big the picture is.
  *
- * Returns null for anything that is not one of the four accepted formats —
+ * Returns null for anything that is not one of the four raster formats —
  * including an SVG, which is plain text and therefore matches no magic
- * number. The dimensions are best effort: a format we can read the header of
- * gives them, otherwise they stay null (the column is nullable).
+ * number: only the question-asset upload goes on to `checkSvg`. The
+ * dimensions are best effort: a format we can read the header of gives
+ * them, otherwise they stay null (the column is nullable).
  */
-export function sniffImage(bytes: Buffer): ImageFacts | null {
+export function sniffImage(bytes: Buffer): (ImageFacts & { mime: RasterMime }) | null {
   if (bytes.length >= 24 && bytes.subarray(0, 8).equals(PNG_MAGIC)) {
     return { mime: "image/png", width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
   }

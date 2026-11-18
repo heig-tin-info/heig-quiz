@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { z } from "zod";
 
-import { ConceptWriteRefusal, PoolConcept, QuestionMeta } from "@quiz/contracts";
+import { ConceptWriteRefusal, PoolConcept, QuestionMeta, SvgRefusal } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { assets, auditLog, coursePools, courseStaff, courses, pools, questionVersions, questions, users } from "../../db/schema.js";
@@ -14,6 +14,7 @@ import { type Method, type Payload, testServer, type TestServer } from "../../te
 import { fakeRunnerType, fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
 import { newPool } from "../../test/pools.js";
+import { SVG_FIXTURES } from "../../test/svg.js";
 import { addItems, applyState, byId } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { LlmError } from "../llm/provider.js";
@@ -642,12 +643,12 @@ describe("assets", () => {
     expect(shard).toEqual([rows[0]!.sha256]);
   });
 
-  it("refuses an SVG, and anything else the bytes do not vouch for", async () => {
-    for (const [bytes, name, declared] of [
-      [SVG, "payload.svg", "image/svg+xml"],
+  it("refuses an SVG with a script, and anything else the bytes do not vouch for", async () => {
+    for (const [bytes, name, declared, error] of [
+      [SVG, "payload.svg", "image/svg+xml", "svg_refused"],
       // A lie about the content type changes nothing: the bytes decide.
-      [SVG, "payload.png", "image/png"],
-      [Buffer.from("not an image at all"), "text.png", "image/png"],
+      [SVG, "payload.png", "image/png", "svg_refused"],
+      [Buffer.from("not an image at all"), "text.png", "image/png", "unsupported_media_type"],
     ] as const) {
       const body = multipart(bytes, name, declared);
       const res = await server.app.inject({
@@ -657,8 +658,9 @@ describe("assets", () => {
         payload: body.payload,
       });
       expect(res.statusCode).toBe(415);
-      expect(res.json().error).toBe("unsupported_media_type");
+      expect(res.json().error).toBe(error);
     }
+    expect(await server.app.db.select().from(assets)).toHaveLength(1);
   });
 
   it("serves the bytes to a staff session, immutably, and 404 to a student", async () => {
@@ -750,6 +752,54 @@ describe("a student reads the assets of their own attempt (H3)", () => {
 
     // A student of another classroom stays at 404, attempt or no attempt.
     expect((await served(elsewhere.headers)).statusCode).toBe(404);
+  });
+});
+
+/**
+ * ADR-134: a question's image may be an SVG, accepted by the strict check
+ * and stored as sent, served inert; the check's closed code comes back on a
+ * refusal. A student reaches it as any asset, through the attempt that shows
+ * it (H3, above).
+ */
+describe("SVG question assets (ADR-134)", () => {
+  const upload = (bytes: Buffer, name = "figure.svg", declared = "image/svg+xml") => {
+    const body = multipart(bytes, name, declared);
+    return server.app.inject({
+      method: "POST",
+      url: `/app/api/pools/${poolId}/assets`,
+      headers: { ...owner.headers, "content-type": body.contentType },
+      payload: body.payload,
+    });
+  };
+
+  it("stores an SVG as sent, with no size, and serves it as image/svg+xml, inert", async () => {
+    const [figure] = SVG_FIXTURES;
+    const res = await upload(figure!.bytes);
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ mime: "image/svg+xml", width: null, height: null, bytes: figure!.bytes.length });
+
+    const served = await server.app.inject({ method: "GET", url: `/app/api/assets/${res.json().id}`, headers: owner.headers });
+    expect(served.statusCode).toBe(200);
+    expect(served.headers["content-type"]).toBe("image/svg+xml");
+    expect(served.headers["x-content-type-options"]).toBe("nosniff");
+    expect(served.headers["content-security-policy"]).toBe("default-src 'none'; sandbox");
+    expect(served.rawPayload.equals(figure!.bytes)).toBe(true);
+  });
+
+  it("refuses a malicious SVG with the check's code, any other type, and an SVG over its cap", async () => {
+    const evil = await upload(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>'));
+    expect(evil.statusCode).toBe(415);
+    expect(SvgRefusal.parse(evil.json())).toMatchObject({ error: "svg_refused", code: "attribute", name: "onload" });
+
+    const text = await upload(Buffer.from("plain words"), "notes.svg");
+    expect(text.statusCode).toBe(415);
+    expect(text.json()).toMatchObject({ error: "unsupported_media_type", message: expect.stringContaining("SVG") });
+
+    // Under ASSETS_MAX_BYTES, over the SVG's own cap.
+    const big = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg">${"<rect/>".repeat(80_000)}</svg>`);
+    const tooBig = await upload(big);
+    expect(tooBig.statusCode).toBe(415);
+    expect(tooBig.json()).toMatchObject({ error: "svg_refused", code: "too_large" });
   });
 });
 
