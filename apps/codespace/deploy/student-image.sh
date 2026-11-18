@@ -19,7 +19,8 @@ DIR=apps/codespace/images/c-dev
 NEED_KIB=$((3 * 1024 * 1024))
 LOG=/var/log/quiz-codespace-student-image.log
 
-force= check=
+force=''
+check=''
 case "${1:-}" in
 	"") ;;
 	--force) force=1 ;;
