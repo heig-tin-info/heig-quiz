@@ -504,10 +504,10 @@ describe("an authoring session", () => {
       });
       expect(q.publishedVersion).toBe(1);
 
-      // A refused SVG comes back with the check's reason; nothing is stored.
+      // A refused SVG comes back with the check's code and an English message; nothing is stored.
       const evil = await call("upload_asset", { poolId: pool.id, svg: '<svg xmlns="http://www.w3.org/2000/svg"><script>x</script></svg>' });
       expect(evil.isError).toBe(true);
-      expect(evil.data).toMatchObject({ status: 415, body: { error: "svg_refused", reason: "element <script>" } });
+      expect(evil.data).toMatchObject({ status: 415, body: { error: "svg_refused", code: "element", name: "script", message: expect.stringContaining("<script>") } });
     });
 
     it("refuses a question whose own Markdown holds a foreign image, and writes nothing", async () => {

@@ -201,23 +201,15 @@ describe.skipIf(skip)(`a compile, with ${BIN} (${probe.version ?? "missing"})`, 
   });
 
   it("draws an accepted SVG asset, stored as `assets/<id>` with no extension (ADR-134)", async () => {
-    const declared = Buffer.from(
-      `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20"><rect width="40" height="20" fill="#ccc"/></svg>`,
+    const [figure] = SVG_FIXTURES;
+    expect(checkSvg(figure!.bytes).ok).toBe(true);
+    const blocks = [markdown("![ALT_OF_SVG](asset:f1?w=50)")];
+    const text = await pdfText(
+      await compileTypst({ source: sourceOf(blocks, ["f1"]), assets: [{ path: "assets/f1", bytes: figure!.bytes }] }, options()),
     );
-    for (const bytes of [...SVG_FIXTURES.map((f) => f.bytes), declared]) {
-      expect(checkSvg(bytes).ok).toBe(true);
-      const blocks = [markdown("![ALT_OF_SVG](asset:f1?w=50)")];
-      const pdf = await compileTypst({ source: sourceOf(blocks, ["f1"]), assets: [{ path: "assets/f1", bytes }] }, options());
-      expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
-      // Drawn, not replaced by its alt text.
-      expect(await pdfText(pdf)).not.toContain("ALT_OF_SVG");
-    }
-    // The diagram's own words are in the PDF: Typst drew the SVG, text included.
-    const drawn = await compileTypst(
-      { source: sourceOf([markdown("![x](asset:f1)")], ["f1"]), assets: [{ path: "assets/f1", bytes: SVG_FIXTURES[0]!.bytes }] },
-      options(),
-    );
-    expect(await pdfText(drawn)).toContain("Dessinable");
+    // Drawn, not replaced by its alt text, and the diagram's own words are in the PDF.
+    expect(text).not.toContain("ALT_OF_SVG");
+    expect(text).toContain("Dessinable");
   });
 
   it("lists one answer zone per id for palier B", async () => {

@@ -4,11 +4,12 @@ import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } fr
 import type { Asset, NewConceptName, PoolDetail, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
 import { PARAMETERIZED_TYPES } from "@quiz/domain";
 
-import { api, ApiError, refusedWith } from "../api";
+import { api } from "../api";
 import { HelpIcon } from "../help";
 import { useToast } from "../notify";
 import { useT } from "../i18n";
 import { MarkdownField } from "../markdown/MarkdownField";
+import { uploadRefusalText } from "../markdown/uploadRefusal";
 import { pickerConceptIds } from "../pool/pickerConceptIds";
 import { QuestionEditorHost, type TryOutcome } from "../questionTypes";
 import type { Navigate } from "../router";
@@ -79,9 +80,8 @@ export function QuestionEditTab({
         return `asset:${asset.id}`;
       } catch (error) {
         // A refused file says why (ADR-134): the SVG check's reason, or the accepted types.
-        const reason = (error instanceof ApiError ? (error.body as { reason?: unknown } | null)?.reason : null) ?? "";
-        if (refusedWith(error, "svg_refused")) toast(t("md.image.svgRefused", { reason: String(reason) }), "error");
-        else if (refusedWith(error, "unsupported_media_type")) toast(t("md.image.typeRefused"), "error");
+        const refusal = uploadRefusalText(error, t);
+        if (refusal) toast(refusal, "error");
         throw error;
       }
     },

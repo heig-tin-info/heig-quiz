@@ -80,19 +80,12 @@ export interface Api {
   patch(path: string, body: unknown): Promise<any>;
   /** Reaches only the closed list of `DELETABLE_PATHS` (`service.ts`); any other path is refused unsent. */
   delete(path: string): Promise<any>;
-  /** POSTs one file as `multipart/form-data`, as the web app's image upload does (ADR-134). */
-  upload(path: string, file: UploadFile): Promise<any>;
+  /** POSTs an SVG as the one file of a `multipart/form-data` request, as the web app's image upload does (ADR-134). */
+  upload(path: string, bytes: Buffer): Promise<any>;
   /** The web app's URL of a screen, for the model to hand the teacher. */
   link(path: string): string;
   /** Whether Quiz's GitHub App is configured, so the project routes exist; absent: off. */
   github?: boolean;
-}
-
-/** A file a tool uploads: its name and type are the tool's own, its bytes the model's. */
-export interface UploadFile {
-  filename: string;
-  contentType: string;
-  bytes: Buffer;
 }
 
 interface ToolAnnotations {
@@ -684,11 +677,7 @@ export const TOOLS: Tool[] = [
       .strict(),
     annotations: { ...WRITE, idempotentHint: true },
     run: async (api, a) => {
-      const asset = await api.upload(`/pools/${a.poolId}/assets`, {
-        filename: "image.svg",
-        contentType: "image/svg+xml",
-        bytes: Buffer.from(a.svg, "utf8"),
-      });
+      const asset = await api.upload(`/pools/${a.poolId}/assets`, Buffer.from(a.svg, "utf8"));
       return { assetId: asset.id, markdown: `![${altText(a.alt)}](asset:${asset.id})` };
     },
   }),

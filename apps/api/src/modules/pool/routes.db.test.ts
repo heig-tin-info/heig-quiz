@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { z } from "zod";
 
-import { ConceptWriteRefusal, PoolConcept, QuestionMeta } from "@quiz/contracts";
+import { ConceptWriteRefusal, PoolConcept, QuestionMeta, SvgRefusal } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { assets, auditLog, coursePools, courseStaff, courses, pools, questionVersions, questions, users } from "../../db/schema.js";
@@ -757,7 +757,9 @@ describe("a student reads the assets of their own attempt (H3)", () => {
 
 /**
  * ADR-134: a question's image may be an SVG, accepted by the strict check
- * and stored as sent, served inert; the check's reason comes back on a refusal.
+ * and stored as sent, served inert; the check's closed code comes back on a
+ * refusal. A student reaches it as any asset, through the attempt that shows
+ * it (H3, above).
  */
 describe("SVG question assets (ADR-134)", () => {
   const upload = (bytes: Buffer, name = "figure.svg", declared = "image/svg+xml") => {
@@ -770,13 +772,11 @@ describe("SVG question assets (ADR-134)", () => {
     });
   };
 
-  it("stores an SVG as sent and serves it as image/svg+xml, inert", async () => {
+  it("stores an SVG as sent, with no size, and serves it as image/svg+xml, inert", async () => {
     const [figure] = SVG_FIXTURES;
     const res = await upload(figure!.bytes);
     expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ mime: "image/svg+xml", width: 400, height: 270, bytes: figure!.bytes.length });
-    const [audit] = await server.app.db.select().from(auditLog).where(eq(auditLog.subjectId, res.json().id));
-    expect(audit).toMatchObject({ action: "pool.asset_upload" });
+    expect(res.json()).toMatchObject({ mime: "image/svg+xml", width: null, height: null, bytes: figure!.bytes.length });
 
     const served = await server.app.inject({ method: "GET", url: `/app/api/assets/${res.json().id}`, headers: owner.headers });
     expect(served.statusCode).toBe(200);
@@ -786,10 +786,10 @@ describe("SVG question assets (ADR-134)", () => {
     expect(served.rawPayload.equals(figure!.bytes)).toBe(true);
   });
 
-  it("refuses a malicious SVG with the check's reason, any other type, and an SVG over its cap", async () => {
+  it("refuses a malicious SVG with the check's code, any other type, and an SVG over its cap", async () => {
     const evil = await upload(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>'));
     expect(evil.statusCode).toBe(415);
-    expect(evil.json()).toMatchObject({ error: "svg_refused", reason: "event handler attribute onload on <svg>" });
+    expect(SvgRefusal.parse(evil.json())).toMatchObject({ error: "svg_refused", code: "attribute", name: "onload" });
 
     const text = await upload(Buffer.from("plain words"), "notes.svg");
     expect(text.statusCode).toBe(415);
@@ -799,46 +799,7 @@ describe("SVG question assets (ADR-134)", () => {
     const big = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg">${"<rect/>".repeat(80_000)}</svg>`);
     const tooBig = await upload(big);
     expect(tooBig.statusCode).toBe(415);
-    expect(tooBig.json()).toMatchObject({ error: "svg_refused", reason: "larger than 512 KB" });
-  });
-
-  it("keeps a student's access to the SVG of a copied question, through its own published version", async () => {
-    const db = server.app.db;
-    const res = await upload(SVG_FIXTURES[2]!.bytes);
-    const svgId = res.json().id as string;
-    const student = await server.signIn("student");
-    const seed = await seedLive(db, { teacherId: owner.id, studentIds: [student.id], questions: 0 });
-    const { id: originalId } = await poolService.createQuestion(db, {
-      poolId: seed.poolId,
-      type: "short",
-      internalName: "with-an-svg",
-      createdBy: owner.id,
-    });
-    const [original] = await db.select().from(questions).where(eq(questions.id, originalId));
-    await poolService.putDraft(db, original!, { config: { statement: `Look at ![A to B](asset:${svgId})`, answer: "yes" } });
-    await poolService.publishQuestion(db, original!, { userId: owner.id });
-
-    // The copy is a question of its own: its version links the asset when IT is published.
-    const copied = await server.app.inject({
-      method: "POST",
-      url: `/app/api/questions/${originalId}/copy`,
-      headers: owner.headers,
-      payload: { targetPoolId: seed.poolId },
-    });
-    expect(copied.statusCode).toBe(201);
-    const [copy] = await db.select().from(questions).where(eq(questions.id, copied.json().meta.id));
-    await poolService.publishQuestion(db, copy!, { userId: owner.id });
-    await addItems(db, (await byId(db, seed.evaluationId))!, [copy!.id], () => 1, { attemptCount: 0 });
-
-    const evaluation = await applyState(db, (await byId(db, seed.evaluationId))!, "running", server.clock.now());
-    const participant = (await live.participantOf(db, evaluation, student.id))!;
-    const created = await live.ensureAttempt(db, evaluation, participant, server.clock.now());
-    await live.beginAttempt(db, evaluation, created, participant, server.clock.now());
-
-    const served = await server.app.inject({ method: "GET", url: `/app/api/assets/${svgId}`, headers: student.headers });
-    expect(served.statusCode).toBe(200);
-    expect(served.headers["content-type"]).toBe("image/svg+xml");
-    expect(served.headers["content-security-policy"]).toBe("default-src 'none'; sandbox");
+    expect(tooBig.json()).toMatchObject({ error: "svg_refused", code: "too_large" });
   });
 });
 

@@ -795,17 +795,47 @@ export type AssetMime = z.infer<typeof AssetMime>;
  * profile picture is cropped to a still 256x256 square, so accepting an
  * animation would only store frames nothing ever shows.
  */
-export const AvatarMime = z.enum(["image/png", "image/jpeg", "image/webp"]);
+export const AvatarMime = AssetMime.exclude(["image/gif", "image/svg+xml"]);
 export type AvatarMime = z.infer<typeof AvatarMime>;
 
 /**
- * An image reference a Markdown field may hold, the one the renderer draws:
- * `asset:<id>` as the upload endpoint gives it, with an optional query that
- * carries the width (`?w=50`). Anything else is not drawn. The web renderer
- * and the MCP tools' check of foreign images both read it (ADR-134);
- * `@quiz/docexport` keeps its own copy, having no dependency on this package.
+ * Why the strict check of a question's SVG refused it (ADR-134 §2): a CLOSED
+ * set of codes, so the web words each in the reader's language; `name` is
+ * the element, attribute, namespace, function or construct at fault. The
+ * 415 body is `{ error: "svg_refused", code, name?, message }`, `message`
+ * the English wording an MCP client reads.
  */
-export const ASSET_REF = /^asset:([A-Za-z0-9_-]{1,64})(?:\?([A-Za-z0-9_=&%.-]{0,64}))?$/;
+export const SVG_REFUSAL_CODES = [
+  "too_large",
+  "encoding",
+  "malformed",
+  "not_svg",
+  "doctype",
+  "comment",
+  "instruction",
+  "cdata",
+  "text",
+  "element",
+  "attribute",
+  "namespace",
+  "href",
+  "url",
+  "function",
+  "css",
+  "escape",
+  "use_chain",
+  "too_deep",
+] as const;
+export const SvgRefusalCode = z.enum(SVG_REFUSAL_CODES);
+export type SvgRefusalCode = z.infer<typeof SvgRefusalCode>;
+
+export const SvgRefusal = z.object({
+  error: z.literal("svg_refused"),
+  code: SvgRefusalCode,
+  name: z.string().optional(),
+  message: z.string(),
+});
+export type SvgRefusal = z.infer<typeof SvgRefusal>;
 
 export const Asset = z.object({
   id: z.uuid(),

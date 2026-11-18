@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 
 import { INTERNAL_CALL_HEADER } from "../../auth/plugin.js";
-import { ApiError, ToolRefusal, type Api, type UploadFile } from "./tools.js";
+import { ApiError, ToolRefusal, type Api } from "./tools.js";
 export { checkConfig } from "./questionTypes.js";
 
 export {
@@ -35,19 +35,23 @@ const DELETABLE_PATHS: readonly RegExp[] = [
   new RegExp(`^/templates/${UUID}/items/${UUID}$`, "i"),
 ];
 
+/** The one part of an upload a tool sends: an SVG (ADR-134), as the web app's file picker would. */
+const UPLOAD_PART = 'Content-Disposition: form-data; name="file"; filename="image.svg"\r\nContent-Type: image/svg+xml';
+
 /**
- * One file as the body of a `multipart/form-data` request, in the field
+ * `bytes` as the body of a `multipart/form-data` request, in the field
  * `file`: what the web app's upload sends, so a tool reaches the SAME upload
- * route (ADR-134). The name and type are the tool's own, never a client's.
+ * route (ADR-134).
  */
-function multipartFile(file: UploadFile): { contentType: string; payload: Buffer } {
+function multipartFile(bytes: Buffer): { contentType: string; payload: Buffer } {
   const boundary = `----quiz-mcp-${randomUUID()}`;
-  const head =
-    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${file.filename}"\r\n` +
-    `Content-Type: ${file.contentType}\r\n\r\n`;
   return {
     contentType: `multipart/form-data; boundary=${boundary}`,
-    payload: Buffer.concat([Buffer.from(head), file.bytes, Buffer.from(`\r\n--${boundary}--\r\n`)]),
+    payload: Buffer.concat([
+      Buffer.from(`--${boundary}\r\n${UPLOAD_PART}\r\n\r\n`),
+      bytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]),
   };
 }
 
@@ -124,7 +128,7 @@ export function injectedApi(
       DELETABLE_PATHS.some((allowed) => allowed.test(path))
         ? call("DELETE", path)
         : Promise.reject(new ToolRefusal("No tool deletes this; nothing was sent.")),
-    upload: (path, file) => send("POST", path, multipartFile(file)),
+    upload: (path, bytes) => send("POST", path, multipartFile(bytes)),
     link: (path) => `${webUrl}${path}`,
     github,
   };

@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
-import { IdParam, type Asset } from "@quiz/contracts";
+import { IdParam, type Asset, type SvgRefusal } from "@quiz/contracts";
 
 import { assets } from "../../db/schema.js";
 import { INERT_IMAGE_HEADERS, isAllowedMime, readAsset, sniffImage, storeAsset, type ImageFacts } from "./assets.js";
@@ -45,7 +45,7 @@ export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
    * when the BYTES are not an accepted image — the bytes decide the type, not
    * the header. A raster image is sniffed by its magic number; markup goes
    * through the strict SVG check (ADR-134), whose refusal is `415
-   * svg_refused` with the reason it gave. Past `ASSETS_MAX_BYTES` the `413`
+   * svg_refused` with its closed `code` and `name`. Past `ASSETS_MAX_BYTES` the `413`
    * is Fastify's: `toBuffer()` throws `FST_REQ_FILE_TOO_LARGE`, which the
    * wrapper hands to the global handler.
    */
@@ -67,8 +67,11 @@ export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     if (facts) return { bytes, facts };
     if (looksLikeMarkup(bytes)) {
       const svg = checkSvg(bytes);
-      if (svg.ok) return { bytes, facts: { mime: "image/svg+xml", width: svg.width, height: svg.height } };
-      await reply.code(415).send({ error: "svg_refused", reason: svg.reason, message: `This SVG is refused: ${svg.reason}` });
+      // An SVG's size is its renderer's business: no width nor height is stored.
+      if (svg.ok) return { bytes, facts: { mime: "image/svg+xml", width: null, height: null } };
+      const { ok: _ok, ...refusal } = svg;
+      const body: SvgRefusal = { error: "svg_refused", ...refusal, message: `This SVG is refused: ${svg.message}` };
+      await reply.code(415).send(body);
       return null;
     }
     await reply.code(415).send({

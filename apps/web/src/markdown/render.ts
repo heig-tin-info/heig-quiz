@@ -1,8 +1,8 @@
 import DOMPurify from "dompurify";
 import { Marked, type Tokens } from "marked";
 
-import { ASSET_REF } from "@quiz/contracts";
 import { decodeEntities } from "@quiz/docexport/entities";
+import { ASSET_ID, ASSET_REF } from "@quiz/docexport/images";
 import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
 import { FormulaBudget } from "@quiz/docrender/katex";
 import { spaceTextToken } from "@quiz/docrender/typography";
@@ -44,8 +44,10 @@ import { formulaHtml, type FormulaLabels } from "./formula";
 /** Where an `asset:<id>` image resolves to. Same origin, no CDN (N-SEC-02). */
 const ASSET_BASE = "/app/api/assets/";
 
-/**
+/*
  * Ids are what the upload endpoint returns; anything else is not an asset.
+ * `ASSET_ID` and `ASSET_REF` are `@quiz/docexport/images`' own, shared with
+ * the PDF and the MCP tools' check of foreign images (ADR-134).
  *
  * The optional query is how an image carries its WIDTH. A teacher who sizes a
  * picture in the editor writes `![alt](asset:<id>?w=50)`, and that is the
@@ -54,8 +56,6 @@ const ASSET_BASE = "/app/api/assets/";
  * presets below is ignored rather than honoured, so a hand-typed `?w=900`
  * cannot push an image out of the column.
  */
-const ASSET_ID = "[A-Za-z0-9_-]{1,64}";
-// `ASSET_REF` (the reference itself) is the contracts' one, shared with the MCP tools' check (ADR-134).
 
 /** The exact `src` the image renderer writes: one id segment, no `..`, no query. */
 const ASSET_SRC = new RegExp(`^${ASSET_BASE}${ASSET_ID}$`);

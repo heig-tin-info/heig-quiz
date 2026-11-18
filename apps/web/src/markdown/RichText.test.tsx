@@ -331,15 +331,14 @@ describe("RichText — images", () => {
 });
 
 describe("RichText — the toolbar of an image", () => {
-  // The bar asks the type an asset is served with (an SVG is not rotated, ADR-134).
+  // The bar asks the type an asset is served with (an SVG is not rotated, ADR-134): the
+  // setup's own fetch stub, renewed before every test, answers it here — no global to restore
+  // (`vi.unstubAllGlobals` would also drop the setup's ResizeObserver stub).
   beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const svg = String(input).startsWith("/app/api/assets/svg");
-        return new Response("", { headers: { "content-type": svg ? "image/svg+xml" : "image/png" } });
-      }),
-    );
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const svg = String(input).startsWith("/app/api/assets/svg");
+      return new Response("", { headers: { "content-type": svg ? "image/svg+xml" : "image/png" } });
+    });
   });
 
   /*

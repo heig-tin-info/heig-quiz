@@ -89,33 +89,24 @@ async function rotateImage(url: string, alt: string, quarter: 1 | -1): Promise<F
 }
 
 /**
- * The type each asset URL is served with, asked once per page. A quarter
- * turn redraws a BITMAP through a canvas: an SVG (ADR-134) would come back
- * as a PNG of itself, so it offers no rotation. The URL is immutable and
- * the picture is already on screen, so the request is answered from the
- * browser's cache; a failure counts as "not a bitmap" and hides the buttons.
+ * Whether the asset at `url` is a bitmap the browser can rotate, asked once
+ * `wanted`. A quarter turn redraws a BITMAP through a canvas: an SVG
+ * (ADR-134) would come back as a PNG of itself, so it offers no rotation.
+ * The URL is immutable and the picture is already on screen, so the request
+ * is answered from the HTTP cache; a failure hides the buttons until the
+ * next time the bar opens.
  */
-const servedTypes = new Map<string, Promise<string | null>>();
-function servedType(url: string): Promise<string | null> {
-  let type = servedTypes.get(url);
-  if (!type) {
-    type = fetch(url)
-      .then((res) => (res.ok ? res.headers.get("content-type") : null))
-      .catch(() => null);
-    servedTypes.set(url, type);
-  }
-  return type;
-}
-
-/** Whether the asset at `url` is a bitmap the browser can rotate; asked only once `wanted`. */
 function useRotatable(url: string | null, wanted: boolean): boolean {
   const [known, setKnown] = useState<{ url: string; type: string | null } | null>(null);
   useEffect(() => {
     if (!url || !wanted) return;
     let live = true;
-    void servedType(url).then((type) => {
-      if (live) setKnown({ url, type });
-    });
+    fetch(url)
+      .then((res) => (res.ok ? res.headers.get("content-type") : null))
+      .catch(() => null)
+      .then((type) => {
+        if (live) setKnown({ url, type });
+      });
     return () => {
       live = false;
     };

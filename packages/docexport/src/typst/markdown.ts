@@ -23,6 +23,7 @@
 import { Marked, type Token, type Tokens } from "marked";
 
 import { decodeEntities } from "../entities.js";
+import { ASSET_REF } from "../images.js";
 import { rawBlock, typstString, typstTable, typstText } from "./escape.js";
 import { latexToTypstMath } from "./math.js";
 
@@ -52,12 +53,6 @@ export const typstContext = (math: TypstContext["math"] = "typst"): TypstContext
   formulas: 0,
 });
 
-/**
- * The asset ids the upload endpoint gives; the optional query carries the
- * width (`?w=50`). A copy of `ASSET_REF` of `@quiz/contracts`, which this
- * package does not depend on: keep the two equal.
- */
-const ASSET_REF = /^asset:([A-Za-z0-9_-]{1,64})(?:\?([A-Za-z0-9_=&%.-]{0,64}))?$/;
 
 /** The widths the web's size menu offers, in percent of the column; anything else is full width. */
 const IMAGE_WIDTHS: readonly number[] = [25, 33, 50, 66, 75, 100];
