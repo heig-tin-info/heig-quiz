@@ -417,10 +417,24 @@ html.dark {
  * ink is the same hue pulled toward `fg`; measured, it holds 5.4:1 or better
  * on its tint in the light theme and 4.8:1 in the dark one (DESIGN.md).
  */
-.score-ramp {
+.score-ramp,
+.score-ramp-stroke {
   --ramp: color-mix(in oklch, var(--success) var(--rate, 0%), var(--danger));
+}
+.score-ramp {
   background: color-mix(in oklab, var(--ramp) calc(10% + var(--rate, 0%) * 0.3), var(--surface));
   color: color-mix(in oklab, var(--ramp) 55%, var(--fg));
+}
+
+/*
+ * The same ramp on the arc of a ring (`RingChart`'s `ramp` tone: a
+ * repository's CI rate on the project page). The hue follows the share as
+ * above, and the stroke deepens with it, from 55 % of the hue over the
+ * surface at zero to the full hue at 100 %: a step of lightness again, so
+ * the arc reads in grey; its length and the points beside it say the rest.
+ */
+.score-ramp-stroke {
+  stroke: color-mix(in oklab, var(--ramp) calc(55% + var(--rate, 0%) * 0.45), var(--surface));
 }
 
 .tip-bubble {

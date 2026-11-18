@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  ciShare,
   clampAwarded,
   classifyCriterion,
   commandNeedsNetwork,
@@ -189,6 +190,22 @@ describe("criteriaTotals and clampAwarded", () => {
       bonusMax: 0.3,
       missing: ["b", "d"],
     });
+  });
+});
+
+describe("ciShare (product owner, 2026-11-18)", () => {
+  it("splits the CI's maximum into awarded and missed, and the rest of the total into later", () => {
+    expect(ciShare({ points: 40, max: 48 }, 78)).toEqual({ awarded: 40, missed: 8, later: 30 });
+    expect(ciShare({ points: 48, max: 48 }, 48)).toEqual({ awarded: 48, missed: 0, later: 0 });
+  });
+
+  it("keeps the points within the CI's maximum and leaves nothing later past the total", () => {
+    expect(ciShare({ points: 9, max: 8 }, 6)).toEqual({ awarded: 8, missed: 0, later: 0 });
+    expect(ciShare({ points: -1, max: 8 }, 20)).toEqual({ awarded: 0, missed: 8, later: 12 });
+  });
+
+  it("rounds a binary artefact away", () => {
+    expect(ciShare({ points: 0.1, max: 0.3 }, 0.7)).toEqual({ awarded: 0.1, missed: 0.2, later: 0.4 });
   });
 });
 

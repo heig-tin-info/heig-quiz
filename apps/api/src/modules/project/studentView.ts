@@ -64,7 +64,7 @@ import {
   projectGraded,
   projectIsLive,
   PROJECT_VISIBLE_STATES,
-  scoreGrade,
+  projectScoreGrade,
   studentCiReading,
   studentProjectGroup,
   studentProjectStatus,
@@ -302,7 +302,13 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts, c
   const { run, frozen } = chosen;
   const score: StudentProjectScore | null =
     projectGraded(project.gradingMode) && run.parseStatus === "ok" && run.points !== null
-      ? { points: run.points, max: run.max, grade: scoreGrade(run.points, run.max, project.gradingScale), frozen }
+      ? {
+          points: run.points,
+          max: run.max,
+          // The CI's share of a project graded by criteria has no grade (`ciShareOnly`, product owner 2026-11-18).
+          grade: projectScoreGrade(project, "ci", run.points, run.max),
+          frozen,
+        }
       : null;
   return {
     ...stored,

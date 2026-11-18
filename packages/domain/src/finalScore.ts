@@ -12,6 +12,7 @@
  * becomes a Swiss grade, and when a student sees it, is D05
  * (`docs/merge/08-decisions.md`), not this function.
  */
+import type { ProjectGradingModeName } from "./projectView.js";
 
 /** Where a final score comes from (I42: the gradebook names it). */
 export const FINAL_SCORE_SOURCES = ["teacher", "criteria", "review", "ci"] as const;
@@ -76,6 +77,20 @@ export function resolveFinalScore(repo: FinalScoreInput): FinalScore | null {
   if (review) return { points: review.points, max: review.max, source: "review", toVerify: review.toVerify === true };
   if (ci) return { points: ci.points, max: ci.max, source: "ci", toVerify: ci.toVerify === true };
   return null;
+}
+
+/**
+ * Whether a final score is only the CI's share of a project graded by
+ * criteria (product owner, 2026-11-18): the `ci` source under the
+ * `criteria` mode. The CI grades the criteria carrying a check alone (its
+ * `GRADE` is their points over THEIR maximum, ADR-119 §12) and the AI and
+ * the teacher grade the rest later, so a grade drawn from it means nothing
+ * yet: the screens show the CI's rate, never a grade. Every other final
+ * score is a whole one: the teacher's, the validated criteria's, a review's,
+ * and a CI score under `auto`, where the CI grades the whole project.
+ */
+export function ciShareOnly(gradingMode: ProjectGradingModeName, source: FinalScoreSource): boolean {
+  return gradingMode === "criteria" && source === "ci";
 }
 
 /** Why a teacher's score is refused (`422`): the codes of `ProjectErrorCode`. */

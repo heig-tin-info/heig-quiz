@@ -111,15 +111,17 @@ import {
   projectListDates,
   projectPhase,
   projectPrimaryAction,
+  projectScoreGrade,
   proratedByTests,
   resolveFinalScore,
   repoValidation,
   reviewState,
-  scoreGrade,
+  roundPoints,
   teacherScoreMax,
   staffReviewRefusal,
   withForcedProtected,
   type CriterionGradeLike,
+  type FinalScoreSource,
   type ProjectDatesChange,
   type ProjectLifeLike,
   type SyncPathChange,
@@ -596,6 +598,13 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
       dispatch: locked ? { sha: sha(99), dispatchedAt: iso(seed.deadline + 31 * 60_000) } : null,
     }),
   );
+  // Graded by criteria: a run's `GRADE` is the CI's own criteria over THEIR maximum (ADR-119 §12), the sample's tests criterion.
+  if (project.gradingMode === "criteria") {
+    const ciMax = SAMPLE_LEAVES.find((leaf) => leaf.id === CI_CRITERION)!.maxPoints;
+    for (const r of repos.flatMap((repo) => repo.runs)) {
+      if (r.kind === "ci" && r.points !== null && r.max !== null) Object.assign(r, { points: roundPoints((r.points * ciMax) / r.max), max: ciMax });
+    }
+  }
   return repos;
 }
 
@@ -1002,9 +1011,9 @@ function mockCollection(p: MockProject, r: MockRepo): ProjectRepoView["collectio
 }
 
 function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
-  const scale = p.summary.gradingScale;
-  const graded = (s: { runId: string; points: number | null; max: number | null } | null) =>
-    s ? { ...s, grade: scoreGrade(s.points, s.max, scale) } : null;
+  // As the server grades them (`projectScoreGrade`): none for the CI's share of a project graded by criteria.
+  const graded = (s: { runId: string; points: number | null; max: number | null } | null, source: FinalScoreSource) =>
+    s ? { ...s, grade: projectScoreGrade(p.summary, source, s.points, s.max) } : null;
   const final = finalOf(r);
   const latest = r.runs[0];
   return {
@@ -1020,11 +1029,11 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
     commits: r.live ? Math.max(0, r.live.commitCount - 1) : 0,
     live: p.read ? r.live : null,
     scores: {
-      current: graded(slot(r, r.currentRunId)),
-      frozen: graded(slot(r, r.frozenRunId)),
-      review: graded(slot(r, r.reviewRunId)),
+      current: graded(slot(r, r.currentRunId), "ci"),
+      frozen: graded(slot(r, r.frozenRunId), "ci"),
+      review: graded(slot(r, r.reviewRunId), "review"),
       teacher: r.teacher,
-      final: final ? { ...final, grade: scoreGrade(final.points, final.max, scale) } : null,
+      final: final ? { ...final, grade: projectScoreGrade(p.summary, final.source, final.points, final.max) } : null,
       scoreMax: runMaxOf(r),
     },
     review: reviewOf(p, r),

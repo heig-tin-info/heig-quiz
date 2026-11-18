@@ -11,6 +11,7 @@ import {
   projectPhase,
   projectPrimaryAction,
   reviewState,
+  projectScoreGrade,
   scoreGrade,
   scoresFinal,
   type PrimaryActionInput,
@@ -26,6 +27,18 @@ describe("scoreGrade", () => {
     expect(scoreGrade(null, 10, { kind: "linear" })).toBeNull();
     expect(scoreGrade(4, null, { kind: "linear" })).toBeNull();
     expect(scoreGrade(4, 0, { kind: "linear" })).toBeNull();
+  });
+});
+
+describe("projectScoreGrade (product owner, 2026-11-18)", () => {
+  const scale = { kind: "linear" } as const;
+  it("gives no grade to the CI's share of a project graded by criteria", () => {
+    expect(projectScoreGrade({ gradingMode: "criteria", gradingScale: scale }, "ci", 5, 10)).toBeNull();
+  });
+
+  it("grades every other score by the project's scale", () => {
+    expect(projectScoreGrade({ gradingMode: "criteria", gradingScale: scale }, "teacher", 5, 10)).toEqual({ grade: 3.5 });
+    expect(projectScoreGrade({ gradingMode: "auto", gradingScale: scale }, "ci", 5, 10)).toEqual({ grade: 3.5 });
   });
 });
 

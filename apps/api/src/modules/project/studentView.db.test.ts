@@ -443,6 +443,10 @@ describe("the student's project (F-PROJ-15)", () => {
       run: { sha, url: `https://github.com/${fullName}/actions/runs/4242`, conclusion: "success", completedAt: NOW },
       score: { points: 7.5, max: 10, grade: { grade: 4.8 }, frozen: false },
     });
+    // Graded by criteria, the CI's score is only its share (`ciShareOnly`, product owner 2026-11-18): no grade.
+    await setProject(lab.id, { gradingMode: "criteria" });
+    expect((await view(lab.id, student.headers)).repo!.score).toEqual({ points: 7.5, max: 10, grade: null, frozen: false });
+    await setProject(lab.id, { gradingMode: "auto" });
 
     // The deadline passed, not yet applied by the ticker: the row's head moved to a late push, the view stands on the selected run.
     const lateSha = "f".repeat(40);

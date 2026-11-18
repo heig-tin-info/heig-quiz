@@ -43,7 +43,16 @@ import {
   type ProjectSlotScore,
   type ProjectStudent,
 } from "@quiz/contracts";
-import { changedAfterRelease, draftStartsLater, projectPhase, projectPrimaryAction, reviewState, scoreGrade, type ProjectScale } from "@quiz/domain";
+import {
+  changedAfterRelease,
+  ciShareOnly,
+  draftStartsLater,
+  projectPhase,
+  projectPrimaryAction,
+  projectScoreGrade,
+  reviewState,
+  type FinalScoreSource,
+} from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
@@ -125,13 +134,14 @@ async function liveStates(
   return { live, complete: done };
 }
 
-function slotScore(run: RunRow | undefined, scale: ProjectScale): ProjectSlotScore | null {
+/** A slot's score, graded as every view grades it (`projectScoreGrade`: none for the CI's share of a criteria project). */
+function slotScore(run: RunRow | undefined, project: ProjectRow, source: FinalScoreSource): ProjectSlotScore | null {
   if (!run) return null;
   return {
     runId: run.id,
     points: run.points,
     max: run.max,
-    grade: scoreGrade(run.points, run.max, scale),
+    grade: projectScoreGrade(project, source, run.points, run.max),
   };
 }
 
@@ -191,20 +201,19 @@ async function finalDispatches(db: Db, repoIds: string[]): Promise<Map<string, D
  * criteria standing ({@link scoreFacts}).
  */
 export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts): ProjectRepoScores {
-  const scale = project.gradingScale;
   const [current, frozen, review] = slots(repo, facts.runs);
   const final = finalOf(repo, facts);
   const released = project.releasedAt !== null;
   return {
     scores: {
-      current: slotScore(current, scale),
-      frozen: slotScore(frozen, scale),
-      review: slotScore(review, scale),
+      current: slotScore(current, project, "ci"),
+      frozen: slotScore(frozen, project, "ci"),
+      review: slotScore(review, project, "review"),
       teacher:
         repo.teacherPoints === null
           ? null
           : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment, gradedAt: isoOrNull(repo.teacherGradedAt) },
-      final: final && { ...final, grade: scoreGrade(final.points, final.max, scale) },
+      final: final && { ...final, grade: projectScoreGrade(project, final.source, final.points, final.max) },
       scoreMax: teacherRunMax(repo, facts),
     },
     released: released ? { points: repo.releasedPoints, max: repo.releasedMax } : null,
@@ -237,10 +246,17 @@ export function teacherRunMax(repo: RepoRow, facts: ScoreFacts): number | null {
  * and so can never be settled by the teacher: released as NO score, so that
  * it neither blocks the release nor shows "changed after release" forever.
  * A live repository's score to verify is the release's `to_verify` refusal
- * instead (`grades.ts`).
+ * instead (`grades.ts`). Likewise the CI's share of a project graded by
+ * criteria (`ciShareOnly`, product owner 2026-11-18) on a repository no
+ * longer live, which is never validated: released as no score. A live one
+ * is validated before any release (`not_validated`).
  */
-export function releasableScore<T extends { toVerify: boolean }>(project: ProjectRow, repo: RepoRow, final: T | null): T | null {
-  return final !== null && final.toVerify && !isLive(repo, project) ? null : final;
+export function releasableScore<T extends { toVerify: boolean; source: FinalScoreSource }>(
+  project: ProjectRow,
+  repo: RepoRow,
+  final: T | null,
+): T | null {
+  return final !== null && (final.toVerify || ciShareOnly(project.gradingMode, final.source)) && !isLive(repo, project) ? null : final;
 }
 
 /** The final review's state of a repository, from its row and its ledger row (`reviewState`, `@quiz/domain`). */

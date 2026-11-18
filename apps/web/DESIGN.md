@@ -2092,7 +2092,9 @@ surfaces, so its rules are written here.
 - The ring is drawn by `RingChart` (`ui/ring.tsx`, parts in order, `total`
   optional, the figure in the hole, one sentence for the bubble and the
   accessible name); the launcher's `OutcomeBadge` and the project page's
-  acceptance both use it. (`Ring` of `ui/live.tsx` is the single-value
+  acceptance both use it, and `RateRing` (one rate as a `ramp` part over a
+  `track`, 20 px, the figure beside it) draws a repository's CI rate with
+  it. (`Ring` of `ui/live.tsx` is the single-value
   countdown ring, a different primitive.)
 
 ## The Activities summary
@@ -2269,7 +2271,14 @@ header, whatever the tab.
   a last commit stays amber. On a phone the "own deadline" badge shows the date
   alone (the sentence is there for a screen reader): the State column has no
   room for more. The score is bold points over the grade as text,
-  with the source (CI, review, teacher) as faint text under it.
+  with the source (CI, review, teacher) as faint text under it. The CI's
+  score of a project graded by criteria (`ciShareOnly`: source `ci` under
+  `criteria`) is only the CI's share — the AI and the teacher grade the rest
+  later —, so it has NO grade (the server sends none): a 20 px `RateRing` before the points, its arc
+  the CI's points over the CI's own maximum, on the live grid's red-to-green
+  ramp (`.score-ramp-stroke`: the hue by the rate, the stroke deepening
+  with it, so it reads in grey) over a `surface-3` track, the rate in words
+  in its name and bubble. Every other source keeps its grade.
 - **Settings** stay editable after publication, in their own tab: one `Card`
   of setting rows (strategy, protected files, work mode, the criteria in that
   mode). A draft has no such tab: its settings are the form above.
@@ -2801,7 +2810,17 @@ evaluation's results page. The CI and the score are not repeated in the
 header. The teacher's message of the latest sync (ADR-132 §10), when there
 is one, comes first under the header: an outlined `NotePanel`, "Update from
 your teacher" as its eyebrow and the date beside it, the text as plain text
-(line breaks kept). On a project graded by criteria, a **Criteria** section follows the
+(line breaks kept). On a project graded by criteria the score before the
+release is the CI's share, never a grade (the server sends none,
+`ciShareOnly`; `CiShareStat`): one `Stat`, the CI's points over its own
+maximum, "out of n points" (the criteria's total) on its label line, then a
+`SegmentedBar` of the whole — `success` what the CI awarded, `danger` what
+it missed, `muted` what the AI or the teacher grades —, its `BarLegend`
+("AI or teacher"), and one line saying the points they grade and that no
+grade comes before the release. Never "later": the criteria table below
+may already hold their indicative points. The bar names its parts
+to a screen reader and on hover. After the release the result is the
+released grade, as on any project. A **Criteria** section follows the
 score (ADR-106 §9): three columns — the criterion (its description, its
 rationale shown unfolded under it as plain text, at most 70ch wide, once
 the server sends one — the staff's grading table keeps its fold), the
