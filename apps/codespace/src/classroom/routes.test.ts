@@ -1098,10 +1098,15 @@ describe("GET /review", () => {
     const first = await liveReview("u-sam", REPO_A);
     const [b, c] = await Promise.all([review({ projectRepoId: REPO_B }), review({ projectRepoId: REPO_C })]);
     expect([b.statusCode, c.statusCode]).toEqual([303, 303]);
-    // B replaced A, then C replaced B: never two at once.
-    expect(h.closes).toEqual([first, `sess-u-sam-review-${REPO_B}`]);
+    // Which opening reaches the serializer first depends on the token check
+    // that precedes it, so either order may win; the second replaces the
+    // first, which replaced A: never two at once.
     const live = h.db.all<{ id: string }>("SELECT id FROM sessions WHERE student = 'u-sam' AND state = 'running'");
-    expect(live).toEqual([{ id: `sess-u-sam-review-${REPO_C}` }]);
+    expect(live).toHaveLength(1);
+    const [winner, loser] =
+      live[0]!.id === `sess-u-sam-review-${REPO_C}` ? [REPO_C, REPO_B] : [REPO_B, REPO_C];
+    expect(live).toEqual([{ id: `sess-u-sam-review-${winner}` }]);
+    expect(h.closes).toEqual([first, `sess-u-sam-review-${loser}`]);
   });
 
   it("resuming the same repository's live review consults no quota and closes nothing", async () => {
