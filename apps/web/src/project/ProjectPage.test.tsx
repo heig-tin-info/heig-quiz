@@ -18,6 +18,8 @@ import {
   PROJECT_ID,
   row,
 } from "../test/project-fixtures";
+import { coursesKey } from "../queryKeys";
+import { makeCourseSummary } from "../test/fixtures";
 import { fail, makeQueryClient, mockFetch, noContent, ok, renderWithProviders, type RouteHandler } from "../test/render";
 import { TOURS } from "../coach/catalog";
 import { ProjectPage } from "./ProjectPage";
@@ -591,6 +593,40 @@ describe("a group project's set (ADR-070, M3-16a)", () => {
     expect(await screen.findByText("Its groups stopped following the set at the deadline.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Binômes — 12 groups · 2 not placed" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Group set" })).toBeNull();
+  });
+});
+
+describe("Close project (#1147)", () => {
+  const courses = (myRole: "owner" | "assistant") => ({ "GET /app/api/courses": ok([makeCourseSummary({ id: "c1", myRole })]) });
+
+  it("asks first, saying the deadline, the grace and the lock, then POSTs close", async () => {
+    const { calls } = routes(makeProject({ graceMinutes: 30 }), { ...courses("owner"), [`POST ${BASE}/close`]: ok({ id: makeProject().id }) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Close project" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Close “Labo 2 — pointeurs” now?")).toBeInTheDocument();
+    expect(within(dialog).getByText(/The repositories are locked, and the work is frozen for grading after 30 min of grace\./)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Close project" }));
+    await waitFor(() => expect(writes(calls).map((c) => c.url)).toEqual([`${BASE}/close`]));
+    expect(await screen.findByText("Project closed")).toBeInTheDocument();
+  });
+
+  /** The page with the course list read: the role is known, a missing button is not one still loading. */
+  async function settled(project: ProjectDetail, myRole: "owner" | "assistant") {
+    routes(project, courses(myRole));
+    const { queryClient } = renderPage();
+    await screen.findByRole("heading", { level: 1 });
+    await waitFor(() => expect(queryClient.getQueryState(coursesKey)?.status).toBe("success"));
+  }
+
+  it("is not offered to an assistant (the owner's, ADR-068)", async () => {
+    await settled(makeProject(), "assistant");
+    expect(screen.queryByRole("button", { name: "Close project" })).toBeNull();
+  });
+
+  it("is not offered once the deadline has passed", async () => {
+    await settled(makeProject({ deadlineAt: PAST }), "owner");
+    expect(screen.queryByRole("button", { name: "Close project" })).toBeNull();
   });
 });
 

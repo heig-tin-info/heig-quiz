@@ -408,6 +408,30 @@ const scenes = [
     act: (p) => p.getByTestId("project-tiles").getByRole("button", { name: /(no commit|sans commit)/i }).click(),
   },
   { name: "project-staff-repo", role: "teacher", path: "/projects/pj-published?projects=1&staffrepo=1&tab=repositories", settle: 2500 },
+  // #1147: Close project's confirmation (the deadline now, the lock, the grace).
+  {
+    name: "project-close",
+    role: "teacher",
+    path: "/projects/pj-published?projects=1",
+    settle: 2500,
+    fold: true,
+    act: (p) => p.getByRole("button", { name: /^(Close project|Clôturer le projet)$/ }).click(),
+  },
+  // Confirmed: the deadline applied at once (the mock plays the ticker), the button gone.
+  {
+    name: "project-closed",
+    role: "teacher",
+    path: "/projects/pj-published?projects=1",
+    settle: 2500,
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(Close project|Clôturer le projet)$/ }).click();
+      await p.getByRole("dialog").getByRole("button", { name: /^(Close project|Clôturer le projet)$/ }).click();
+      await p.waitForTimeout(1000);
+    },
+  },
+  // Beside the server's primary (Sync, the source ahead): red ink, no second fill.
+  { name: "project-close-beside-sync", role: "teacher", path: "/projects/pj-published?projects=1&ahead=1", settle: 2500, fold: true },
   // ADR-132 §10: the Sync dialog — the list (the source ahead), nothing to
   // send, a refusal —, and the criteria project synced with a message after
   // its grading (the staff's notice and the message on the Source tile).

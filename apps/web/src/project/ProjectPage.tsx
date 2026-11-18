@@ -12,6 +12,7 @@ import {
   Rocket,
   Send,
   Settings,
+  Square,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
@@ -28,6 +29,7 @@ import { projectBeforePublication } from "@quiz/domain";
 import { api, isNotFound, refusedWith } from "../api";
 import { AppLink } from "../AppLink";
 import { useConfirm } from "../confirm";
+import { useClassroom, useIsCourseOwner } from "../course/parts";
 import { useT } from "../i18n";
 import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
@@ -48,6 +50,7 @@ import {
   QueryError,
   TabPanel,
   Tabs,
+  useNow,
   type MenuItem,
 } from "../ui";
 import { projectPhaseLabel, projectPhaseStyle } from "./common";
@@ -65,6 +68,7 @@ import { ProjectRepos } from "./ProjectRepos";
 import { ProjectSettings } from "./ProjectSettings";
 import { ProjectWorkspace } from "./ProjectWorkspace";
 import {
+  offersClose,
   offersSync,
   projectRefetchInterval,
   projectStatus,
@@ -120,7 +124,10 @@ import { useProjectPatch, useProjectRefresh, useRenameProject } from "./useProje
  * the source is ahead (F-PROJ-12, M3-07: the distribution repository is
  * updated and the students get a pull request each), offered as a
  * secondary button beside Publish or Release while the source is ahead
- * (`offersSync`); `none` leaves the header to its sentence. Archive,
+ * (`offersSync`); `none` leaves the header to its sentence. *Close
+ * project* (#1147), the course owner's while the project is published and
+ * its deadline ahead (`offersClose`), is a `danger-quiet` button of the header, as
+ * the live evaluation's Close, confirmed first with what follows. Archive,
  * Restore and Delete live in the overflow menu — a deletion names the
  * project, and says that nothing is deleted on GitHub (F-PROJ-16).
  *
@@ -153,6 +160,9 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   });
   const classroomId = detail.data?.classroomId ?? null;
   const crumbs = useClassroomCrumbs(classroomId);
+  /** Close project is the course owner's (#1147), like the release: the course read from the crumbs' classroom. */
+  const isOwner = useIsCourseOwner(useClassroom(classroomId, { retry: false }).data?.course.id);
+  const now = useNow();
   // F-PROJ-21 (M3-09c): what each re-read found changed, counted per kind.
   useNoticeToasts(detail, (prev, next) => projectNotices(prev, next).map((n) => projectNoticeToast(n, t)));
 
@@ -227,6 +237,15 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       setSyncOpen(false);
       await refresh();
       toast(t("project.sync.started"), "success");
+    },
+    onError: failed,
+  });
+  /** #1147: the deadline brought to the server's now; the ticker applies it as any deadline. */
+  const closeNow = useMutation({
+    mutationFn: () => api<ProjectSummary>(`/app/api/projects/${id}/close`, { method: "POST" }),
+    onSuccess: async () => {
+      await refresh();
+      toast(t("project.closedToast"), "success");
     },
     onError: failed,
   });
@@ -310,6 +329,21 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       })
     ) {
       release.mutate();
+    }
+  };
+  const onCloseNow = async () => {
+    if (
+      await confirm({
+        title: t("project.close.confirm.title", { name: project.name }),
+        message: t(
+          project.deadlineStrategy === "commit" ? "project.close.confirm.body.commit" : "project.close.confirm.body.lock",
+          { n: project.graceMinutes },
+        ),
+        confirmLabel: t("project.close"),
+        danger: true,
+      })
+    ) {
+      closeNow.mutate();
     }
   };
   const menuItems: MenuItem[] = [
@@ -411,6 +445,12 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
                   {publish.isPending ? null : <Rocket />} {t("project.publishNow")}
                 </Button>
               </>
+            ) : null}
+            {/* #1147: the evaluation's Close, mirrored in red ink: the fill is its confirmation's, never beside the primary. */}
+            {isOwner && offersClose(project, now) ? (
+              <Button variant="danger-quiet" onClick={() => void onCloseNow()} loading={closeNow.isPending}>
+                {closeNow.isPending ? null : <Square />} {t("project.close")}
+              </Button>
             ) : null}
             {project.primaryAction === "publish" ? (
               <Button

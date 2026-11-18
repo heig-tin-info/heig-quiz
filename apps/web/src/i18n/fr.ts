@@ -6099,6 +6099,13 @@ export const fr: Record<keyof Dict, string> = {
   "project.publishNow": "Publier maintenant",
   "project.unschedule": "Annuler la planification",
   "project.unscheduledToast": "Planification annulée",
+  "project.close": "Clôturer le projet",
+  "project.close.confirm.title": "Clôturer « {name} » maintenant ?",
+  "project.close.confirm.body.lock":
+    "L'échéance devient maintenant pour tous les étudiants, échéances individuelles comprises. Les dépôts sont verrouillés et le travail est figé pour la correction après {n} min de délai de grâce.",
+  "project.close.confirm.body.commit":
+    "L'échéance devient maintenant pour tous les étudiants, échéances individuelles comprises. Un commit d'échéance est ajouté aux dépôts et le travail est figé pour la correction après {n} min de délai de grâce.",
+  "project.closedToast": "Projet clôturé",
   "project.archived": "Projet archivé",
   "project.unarchived": "Projet restauré",
   "project.delete": "Supprimer le projet",
@@ -6435,6 +6442,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.checkpoint.deleted": "Point de contrôle supprimé",
   "project.refusal.notDraft": "Seul un brouillon peut être modifié ainsi.",
   "project.refusal.notScheduled": "Ce projet n'est pas planifié.",
+  "project.refusal.notOpen": "Ce projet n'est plus ouvert.",
   "project.refusal.distributionMissing": "Le dépôt de distribution n'est pas encore construit : publiez quand il le sera.",
   "project.refusal.strategyFrozen": "L'effet de l'échéance ne se change plus une fois celle-ci passée.",
   "project.refusal.publishModeFrozen": "Le choix de l'ouverture est fixé une fois le projet planifié ou publié.",

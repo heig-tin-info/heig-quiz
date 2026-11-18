@@ -17,6 +17,7 @@ import {
   railSteps,
   deadlineDesc,
   isReopen,
+  offersClose,
   offersResync,
   offersSync,
   LIVE_STALE_REFETCH_MS,
@@ -185,6 +186,17 @@ describe("the refetch cadence", () => {
     expect(projectRefetchInterval(makeProject({ liveStale: true }))).toBe(LIVE_STALE_REFETCH_MS);
     expect(projectRefetchInterval(makeProject({ sync: { ...makeProject().sync, inProgress: true } }))).toBe(LIVE_STALE_REFETCH_MS);
     expect(LIVE_STALE_REFETCH_MS).toBeLessThan(REFETCH_MS);
+  });
+});
+
+describe("Close project (#1147)", () => {
+  it("is offered while published, not archived, its deadline ahead", () => {
+    const now = Date.now();
+    expect(offersClose(makeProject(), now)).toBe(true);
+    expect(offersClose(makeProject({ deadlineAt: PAST }), now)).toBe(false);
+    expect(offersClose(makeProject({ state: "locked" }), now)).toBe(false);
+    expect(offersClose(makeProject({ state: "scheduled" }), now)).toBe(false);
+    expect(offersClose(makeProject({ archivedAt: PAST }), now)).toBe(false);
   });
 });
 

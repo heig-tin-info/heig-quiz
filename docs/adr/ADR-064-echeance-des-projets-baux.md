@@ -15,7 +15,9 @@ addendum carries it to projects), ADR-012 and D13 (amended the same day,
 [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md) §2, §5:
 the job collects an online workspace due for collection before it locks
 or commits a repository, a collection failing or timing out never holding
-the lock back.
+the lock back. Amended 2026-11-18 by the
+[Close now amendment](#amendment-2026-11-18-1147-close-now) (#1147): the
+course owner ends a published project now, through the same path.
 
 ## Context
 
@@ -191,3 +193,37 @@ the review round's tightening of 2, 4 and 6):
    refusal. A repository already at its deadline (even in its grace) gets
    none. Deleting one is refused once any ledger row names it; the
    deletion and the claim are ordered by the checkpoint's row lock.
+
+## Amendment (2026-11-18, #1147): Close now
+
+The product owner asked (2026-11-18) for a way to end a published project
+before its deadline, and decided two points: closing **applies the grace**
+— the deadline becomes now and everything that follows a deadline follows
+this one — and there is **no Reopen** action (moving the deadline later,
+F-PROJ-09, still reopens a locked project, as before). The rest was
+decided by the orchestrator of #1147.
+
+1. **One move, no parallel path.** `POST /app/api/projects/:id/close`
+   (`closeProjectNow`, `deadline.ts`) sets the project's `deadline_at` to
+   the server's now (invariant 5; the client sends nothing) on its row
+   read `FOR UPDATE`, and requalifies the runs of the repositories that
+   follow it (`effectiveDeadlineMoved`). Nothing is applied in the
+   request: the ticker applies the deadline at its next pass, then the
+   lock or the deadline commit, the collection of an online workspace
+   (ADR-130), the freeze at the deadline plus the grace, the final passes
+   and the notices, exactly as at a deadline reached by the clock.
+2. **For everyone.** A repository's own deadline still ahead
+   (`project_repos.deadline_at`, D13 as amended) is taken back — set to
+   null, so the repository follows the project's again, its reminder claim
+   dropped as `setRepoDeadline(null)` drops it; one already past is kept.
+3. **Checkpoints are not rescheduled.** A J−n checkpoint not yet
+   dispatched keeps its date, which lies after the new deadline: it is
+   void and never fires (Addendum point 5), rather than a J−n moved into
+   the past and fired at once beside the final pass.
+4. **Refusals.** Only a published project whose deadline lies ahead:
+   `409 not_open` otherwise — a draft, a scheduled or locked project, a
+   deadline come but not yet applied by the ticker, and a second Close —
+   and `409 project_archived` for an archived one. The course owner's,
+   like the release (ADR-068): an assistant gets `403 owner_required`,
+   anyone off the staff the 404 of a missing project (invariant 6).
+   Audited `project.closed_now` (`deadlineAt`, `previous`, `extensions`).

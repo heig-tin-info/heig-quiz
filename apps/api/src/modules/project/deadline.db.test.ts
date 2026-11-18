@@ -22,7 +22,9 @@
  * - the reopen: markers cleared, runs requalified, scores reselected,
  *   teacher scores and a release kept, the locks lifted and an archive
  *   undone; the staff's unlock never locked again;
- * - the J−n checkpoints follow a moved deadline in calendar days.
+ * - the J−n checkpoints follow a moved deadline in calendar days;
+ * - Close now (#1147): the deadline brought to the server's now, the
+ *   extensions ahead taken back, then the usual path; the owner's only.
  */
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
@@ -41,6 +43,8 @@ import { loadConfig } from "../../config.js";
 import {
   auditLog,
   botCommits,
+  classrooms,
+  courseStaff,
   projectCheckpoints,
   projectGradeRuns,
   projectRepos,
@@ -768,5 +772,93 @@ describe("the J−n checkpoints (F-PROJ-11)", () => {
     const [checkpoint] = await server.app.db.select().from(projectCheckpoints).where(eq(projectCheckpoints.id, id));
     // 23:59 on the 24th, summer time: 73 hours before 23:59 on the 27th, winter time.
     expect(checkpoint!.dueAt).toEqual(new Date("2026-10-24T21:59:00Z"));
+  });
+});
+
+describe("Close now (#1147, ADR-064 amendment of 2026-11-18)", () => {
+  const close = (p: { id: string }, headers = teacher.headers) => call("POST", `/app/api/projects/${p.id}/close`, headers);
+  const refusal = (res: { statusCode: number; json: () => { error?: string } }) => [res.statusCode, res.json().error];
+
+  it("brings the deadline to the server's now for everyone; the ticker then applies it, the grace, the lock and the freeze", async () => {
+    const p = await project({ students: 3 });
+    const [follows, extended, past] = p.repos;
+    const checkpoint = randomUUID();
+    await server.app.db
+      .insert(projectCheckpoints)
+      .values({ id: checkpoint, projectId: p.id, name: "mid", dueAt: at(DEADLINE, -86_400_000), offsetDays: -1 });
+    // An extension beyond the project's deadline, and one that has already come.
+    const own = (repo: Repo, deadlineAt: string) =>
+      call("PUT", `/app/api/projects/${p.id}/repos/${repo.id}/deadline`, teacher.headers, { deadlineAt });
+    expect((await own(extended!, "2026-10-12T22:00:00.000Z")).statusCode).toBe(200);
+    expect((await own(past!, at(NOW, 60 * MINUTE).toISOString())).statusCode).toBe(200);
+    server.clock.set(at(NOW, 2 * 60 * MINUTE));
+    await tick();
+    await runJobs(p.id);
+    expect((await repoRow(past!.id)).deadlineAppliedAt).not.toBeNull();
+
+    const closedAt = server.clock.now();
+    const res = await close(p);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(ProjectSummary.parse(res.json())).toMatchObject({ state: "published", deadlineAt: closedAt.toISOString() });
+    expect(await projectRow(p.id)).toMatchObject({ state: "published", deadlineAt: closedAt, deadlineAppliedAt: null });
+    // The extension ahead taken back, the one already past kept.
+    expect(await repoRow(extended!.id)).toMatchObject({ deadlineAt: null, reminderSentAt: null });
+    expect((await repoRow(past!.id)).deadlineAt).toEqual(at(NOW, 60 * MINUTE));
+    // A J−n checkpoint still to come is not moved: it lies after the new deadline, void, never fired.
+    const [mid] = await server.app.db.select().from(projectCheckpoints).where(eq(projectCheckpoints.id, checkpoint));
+    expect(mid!.dueAt).toEqual(at(DEADLINE, -86_400_000));
+    const [entry] = await auditOf(p.id, "project.closed_now");
+    expect(entry!.actorUserId).toBe(teacher.id);
+    expect(entry!.payload).toEqual({ deadlineAt: closedAt.toISOString(), previous: DEADLINE, extensions: 1 });
+
+    // The usual path: the next tick applies the deadline, the job locks.
+    server.clock.advance(1000);
+    expect(await tick()).toBe(true);
+    expect(await projectRow(p.id)).toMatchObject({ state: "locked", deadlineAppliedAt: server.clock.now() });
+    for (const repo of [follows!, extended!]) expect((await repoRow(repo.id)).deadlineAppliedAt).toEqual(server.clock.now());
+    await runJobs(p.id);
+    for (const repo of p.repos) expect(lockRuleset(repo.fullName!)).toBe(true);
+
+    // Frozen for good at the new deadline + the grace, not before.
+    const { graceMinutes } = await projectRow(p.id);
+    server.clock.set(at(closedAt.toISOString(), graceMinutes * MINUTE - 1000));
+    await tick();
+    expect((await repoRow(follows!.id)).frozenAt).toBeNull();
+    server.clock.set(at(closedAt.toISOString(), graceMinutes * MINUTE));
+    await tick();
+    for (const repo of [follows!, extended!]) expect((await repoRow(repo.id)).frozenAt).toEqual(server.clock.now());
+  });
+
+  it("is refused unless published with a deadline ahead, and a second Close is refused the same way", async () => {
+    const draft = await project({ publish: false });
+    expect(refusal(await close(draft))).toEqual([409, "not_open"]);
+
+    const p = await project();
+    expect((await close(p)).statusCode).toBe(200);
+    expect(refusal(await close(p))).toEqual([409, "not_open"]);
+    expect(await auditOf(p.id, "project.closed_now")).toHaveLength(1);
+
+    const archived = await project();
+    expect((await call("POST", `/app/api/projects/${archived.id}/archive`, teacher.headers)).statusCode).toBe(200);
+    expect(refusal(await close(archived))).toEqual([409, "project_archived"]);
+    expect((await projectRow(archived.id)).deadlineAt).toEqual(at(DEADLINE));
+
+    // Its deadline come, not yet applied by the ticker: nothing to close either.
+    const due = await project();
+    server.clock.set(at(DEADLINE, 1000));
+    expect(refusal(await close(due))).toEqual([409, "not_open"]);
+    expect((await projectRow(due.id)).deadlineAt).toEqual(at(DEADLINE));
+  });
+
+  it("is the course owner's: an assistant gets 403 owner_required, another course's teacher the 404 (invariant 6)", async () => {
+    const p = await project();
+    const [room] = await server.app.db.select({ courseId: classrooms.courseId }).from(classrooms).where(eq(classrooms.id, p.classroomId));
+    const assistant = await server.signIn("teacher");
+    await server.app.db.insert(courseStaff).values({ courseId: room!.courseId, userId: assistant.id, role: "assistant" });
+    expect(refusal(await close(p, assistant.headers))).toEqual([403, "owner_required"]);
+    const outsider = await server.signIn("teacher");
+    expect(refusal(await close(p, outsider.headers))).toEqual([404, "not_found"]);
+    expect(await projectRow(p.id)).toMatchObject({ deadlineAt: at(DEADLINE), state: "published" });
+    expect(await auditOf(p.id, "project.closed_now")).toHaveLength(0);
   });
 });
