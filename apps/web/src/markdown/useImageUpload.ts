@@ -38,8 +38,9 @@ export function useImageUpload(
         }
       } catch {
         // A failed upload ends here. The journal's uploader has said what
-        // went wrong (a toast); the question editor's says nothing. Either
-        // way the pictures not yet laid down stay out of the text.
+        // went wrong (a toast); the question editor's says it for a refused
+        // file (ADR-134). Either way the pictures not yet laid down stay out
+        // of the text.
       } finally {
         setUploading((n) => Math.max(0, n - images.length));
       }

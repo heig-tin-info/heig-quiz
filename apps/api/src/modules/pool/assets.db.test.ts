@@ -128,11 +128,11 @@ describe("sniffImage: the bytes decide the type", () => {
     expect(sniffImage(wav)).toBeNull();
   });
 
-  it("accepts exactly the four image types as mime", () => {
-    for (const mime of ["image/png", "image/jpeg", "image/gif", "image/webp"]) {
+  it("accepts exactly the four raster types and SVG (ADR-134) as mime", () => {
+    for (const mime of ["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"]) {
       expect(isAllowedMime(mime)).toBe(true);
     }
-    for (const mime of ["image/svg+xml", "text/html", "application/octet-stream", ""]) {
+    for (const mime of ["image/bmp", "text/html", "application/octet-stream", ""]) {
       expect(isAllowedMime(mime)).toBe(false);
     }
   });
@@ -267,9 +267,9 @@ describe("asset access", () => {
             poolId: seed.poolId,
           })
         ).row;
-      const [shown, unrelated, svg] = [await store(1), await store(2), await store(3)];
-      // In the statement too, but of a type no student is served.
-      await db.update(assets).set({ mime: "image/svg+xml" }).where(eq(assets.id, svg.id));
+      const [shown, unrelated, odd] = [await store(1), await store(2), await store(3)];
+      // In the statement too, but of a type no one is served.
+      await db.update(assets).set({ mime: "image/bmp" }).where(eq(assets.id, odd.id));
 
       const { id: questionId } = await poolService.createQuestion(db, {
         poolId: seed.poolId,
@@ -279,13 +279,13 @@ describe("asset access", () => {
       });
       const [question] = await db.select().from(questions).where(eq(questions.id, questionId));
       await poolService.putDraft(db, question!, {
-        config: { statement: `![](asset:${shown.id}) ![](asset:${svg.id})`, answer: "yes" },
+        config: { statement: `![](asset:${shown.id}) ![](asset:${odd.id})`, answer: "yes" },
       });
       await poolService.publishQuestion(db, question!, { userId: owner.id });
       await addItems(db, (await byId(db, seed.evaluationId))!, [questionId], () => 1, { attemptCount: 0 });
 
       const reader = { id: student.id, role: "student" };
-      const ids = [shown.id, unrelated.id, svg.id, "not-a-uuid"];
+      const ids = [shown.id, unrelated.id, odd.id, "not-a-uuid"];
       const read = () => poolService.readableAssets(db, server.assetsDir, ids, reader);
 
       // No attempt yet: nothing is theirs.
@@ -297,7 +297,7 @@ describe("asset access", () => {
       const created = await live.ensureAttempt(db, evaluation, participant, now);
       await live.beginAttempt(db, evaluation, created, participant, now);
 
-      // The shown image only: not the unrelated one, not the SVG, and the
+      // The shown image only: not the unrelated one, not the odd type, and the
       // malformed id dropped before the query (a UUID column would refuse it).
       expect(await read()).toEqual([{ id: shown.id, bytes: png(1) }]);
       // A teacher reads every allowed one.

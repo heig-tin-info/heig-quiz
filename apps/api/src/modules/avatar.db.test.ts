@@ -11,6 +11,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { enrollments, users } from "../db/schema.js";
 import { REMOTE_IMAGE_MAX_BYTES } from "../remoteImage.js";
 import { testServer, type TestServer } from "../test/http.js";
+import { SVG_FIXTURES } from "../test/svg.js";
 import { addStaff, createClassroom, createCourse } from "./org/service.js";
 import { createPool } from "./pool/service.js";
 
@@ -60,6 +61,12 @@ describe("avatar", () => {
     expect((await put(html, "image/png")).statusCode).toBe(415);
     // A real PNG declared as JPEG is refused as well: the header must match.
     expect((await put(PNG, "image/jpeg")).statusCode).toBe(415);
+  });
+
+  it("refuses an SVG, even one a question would accept (ADR-134: avatars stay raster)", async () => {
+    const [figure] = SVG_FIXTURES;
+    expect((await put(figure!.bytes, "image/svg+xml")).statusCode).toBe(415);
+    expect((await put(figure!.bytes, "image/png")).statusCode).toBe(415);
   });
 
   it("stores a real image and serves it with nosniff and a sandboxing CSP", async () => {
@@ -206,6 +213,11 @@ describe("avatar", () => {
     it("refuses what is not an image by its bytes, whatever its declared type", async () => {
       const html = () => new Response("<html><script>alert(1)</script></html>", { headers: { "content-type": "image/png" } });
       expect((await (await withPicture("https://idp.example/p/3.png", html)).read()).statusCode).toBe(404);
+    });
+
+    it("refuses an SVG, even one a question would accept (ADR-134: remote pictures stay raster)", async () => {
+      const svg = () => new Response(SVG_FIXTURES[0]!.bytes, { headers: { "content-type": "image/svg+xml" } });
+      expect((await (await withPicture("https://idp.example/p/5.svg", svg)).read()).statusCode).toBe(404);
     });
 
     it("refuses a body over the cap", async () => {

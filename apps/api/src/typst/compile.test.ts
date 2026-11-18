@@ -24,6 +24,8 @@ import { drawable, renderTypst } from "@quiz/docexport/typst";
 
 import { compileArgs, compileTypst, DEAD_PROXY, inTempDir, run, TypstFailure, typstEnv } from "./compile.js";
 import { pdfText, pdfTools, TYPST_BIN as BIN, typstProbe as probe } from "../test/pdf.js";
+import { SVG_FIXTURES } from "../test/svg.js";
+import { checkSvg } from "../modules/pool/svgCheck.js";
 import { prlimitCaps } from "./service.js";
 
 /** On a workstation without Typst or `pdftotext`, skip; in CI, run and fail. */
@@ -196,6 +198,26 @@ describe.skipIf(skip)(`a compile, with ${BIN} (${probe.version ?? "missing"})`, 
       compileTypst({ source: sourceOf(blocks), assets: [{ path: "../escape", bytes: png }] }, options()),
     ).rejects.toThrow(/escapes the compile root/);
     expect(await readdir(parent)).toEqual([]);
+  });
+
+  it("draws an accepted SVG asset, stored as `assets/<id>` with no extension (ADR-134)", async () => {
+    const declared = Buffer.from(
+      `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20"><rect width="40" height="20" fill="#ccc"/></svg>`,
+    );
+    for (const bytes of [...SVG_FIXTURES.map((f) => f.bytes), declared]) {
+      expect(checkSvg(bytes).ok).toBe(true);
+      const blocks = [markdown("![ALT_OF_SVG](asset:f1?w=50)")];
+      const pdf = await compileTypst({ source: sourceOf(blocks, ["f1"]), assets: [{ path: "assets/f1", bytes }] }, options());
+      expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+      // Drawn, not replaced by its alt text.
+      expect(await pdfText(pdf)).not.toContain("ALT_OF_SVG");
+    }
+    // The diagram's own words are in the PDF: Typst drew the SVG, text included.
+    const drawn = await compileTypst(
+      { source: sourceOf([markdown("![x](asset:f1)")], ["f1"]), assets: [{ path: "assets/f1", bytes: SVG_FIXTURES[0]!.bytes }] },
+      options(),
+    );
+    expect(await pdfText(drawn)).toContain("Dessinable");
   });
 
   it("lists one answer zone per id for palier B", async () => {

@@ -781,20 +781,31 @@ export type TryResult = z.infer<typeof TryResult>;
 // --- Assets --------------------------------------------------------------
 
 /**
- * THE set of image types the platform accepts, and the source of truth for
- * every place that has to repeat it (B-19). SVG is deliberately absent: it is
- * a script container, and sanitising it is a project of its own (N-SEC).
+ * THE set of image types a question may embed, and the source of truth for
+ * every place that has to repeat it (B-19). SVG is accepted for a question
+ * only after the strict server-side check of ADR-134 (`svgCheck.ts`), which
+ * refuses rather than rewrites, and is shown through `<img>` alone.
  */
-export const AssetMime = z.enum(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+export const AssetMime = z.enum(["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"]);
 export type AssetMime = z.infer<typeof AssetMime>;
 
 /**
- * The same set for an avatar, minus the animated gif: a profile picture is
- * cropped to a still 256x256 square, so accepting an animation would only
- * store frames nothing ever shows.
+ * The types of an avatar and of a remote picture (N-SEC-02): raster only,
+ * never SVG (ADR-134 keeps it to question assets), and no animated gif — a
+ * profile picture is cropped to a still 256x256 square, so accepting an
+ * animation would only store frames nothing ever shows.
  */
-export const AvatarMime = AssetMime.exclude(["image/gif"]);
+export const AvatarMime = z.enum(["image/png", "image/jpeg", "image/webp"]);
 export type AvatarMime = z.infer<typeof AvatarMime>;
+
+/**
+ * An image reference a Markdown field may hold, the one the renderer draws:
+ * `asset:<id>` as the upload endpoint gives it, with an optional query that
+ * carries the width (`?w=50`). Anything else is not drawn. The web renderer
+ * and the MCP tools' check of foreign images both read it (ADR-134);
+ * `@quiz/docexport` keeps its own copy, having no dependency on this package.
+ */
+export const ASSET_REF = /^asset:([A-Za-z0-9_-]{1,64})(?:\?([A-Za-z0-9_=&%.-]{0,64}))?$/;
 
 export const Asset = z.object({
   id: z.uuid(),

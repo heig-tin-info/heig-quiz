@@ -1547,6 +1547,8 @@ export const en = {
   // An image outside the journal, never fetched (M4-06).
   "md.image.refused": "External image, not shown",
   "md.image.refusedAlt": "External image, not shown: {alt}",
+  "md.image.svgRefused": "SVG refused: {reason}",
+  "md.image.typeRefused": "Image not accepted: use PNG, JPEG, GIF, WebP or SVG.",
   "md.placeholder.body": "Write the question…",
   "md.placeholder.bold": "bold text",
   "md.placeholder.italic": "italic text",

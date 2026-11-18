@@ -1,6 +1,7 @@
 import DOMPurify from "dompurify";
 import { Marked, type Tokens } from "marked";
 
+import { ASSET_REF } from "@quiz/contracts";
 import { decodeEntities } from "@quiz/docexport/entities";
 import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
 import { FormulaBudget } from "@quiz/docrender/katex";
@@ -54,7 +55,7 @@ const ASSET_BASE = "/app/api/assets/";
  * cannot push an image out of the column.
  */
 const ASSET_ID = "[A-Za-z0-9_-]{1,64}";
-const ASSET_REF = new RegExp(`^asset:(${ASSET_ID})(?:\\?([A-Za-z0-9_=&%.-]{0,64}))?$`);
+// `ASSET_REF` (the reference itself) is the contracts' one, shared with the MCP tools' check (ADR-134).
 
 /** The exact `src` the image renderer writes: one id segment, no `..`, no query. */
 const ASSET_SRC = new RegExp(`^${ASSET_BASE}${ASSET_ID}$`);

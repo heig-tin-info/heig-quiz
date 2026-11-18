@@ -4,10 +4,12 @@
  * assistant (ADR-080 §8) reads with the same tools, through the same chain,
  * so the access loaders, the contracts and the audit are the routes' own.
  */
+import { randomUUID } from "node:crypto";
+
 import type { FastifyInstance } from "fastify";
 
 import { INTERNAL_CALL_HEADER } from "../../auth/plugin.js";
-import { ApiError, ToolRefusal, type Api } from "./tools.js";
+import { ApiError, ToolRefusal, type Api, type UploadFile } from "./tools.js";
 export { checkConfig } from "./questionTypes.js";
 
 export {
@@ -34,6 +36,22 @@ const DELETABLE_PATHS: readonly RegExp[] = [
 ];
 
 /**
+ * One file as the body of a `multipart/form-data` request, in the field
+ * `file`: what the web app's upload sends, so a tool reaches the SAME upload
+ * route (ADR-134). The name and type are the tool's own, never a client's.
+ */
+function multipartFile(file: UploadFile): { contentType: string; payload: Buffer } {
+  const boundary = `----quiz-mcp-${randomUUID()}`;
+  const head =
+    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${file.filename}"\r\n` +
+    `Content-Type: ${file.contentType}\r\n\r\n`;
+  return {
+    contentType: `multipart/form-data; boundary=${boundary}`,
+    payload: Buffer.concat([Buffer.from(head), file.bytes, Buffer.from(`\r\n--${boundary}--\r\n`)]),
+  };
+}
+
+/**
  * The in-process client of `/app/api`, acting with a bearer token
  * (`authorization` is the whole header): every call is an `app.inject`, so a
  * tool reaches exactly what the token's owner reaches, and a refusal is an
@@ -55,6 +73,18 @@ export function injectedApi(
     path: string,
     body?: unknown,
     query?: Record<string, string | number | undefined>,
+  ) =>
+    send(
+      method,
+      path,
+      body === undefined ? undefined : { contentType: "application/json", payload: JSON.stringify(body) },
+      query,
+    );
+  const send = async (
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+    path: string,
+    body?: { contentType: string; payload: string | Buffer },
+    query?: Record<string, string | number | undefined>,
   ) => {
     const search = new URLSearchParams();
     for (const [k, v] of Object.entries(query ?? {})) if (v !== undefined) search.set(k, String(v));
@@ -70,9 +100,9 @@ export function injectedApi(
         // SAME token through on the routes a tool forwards to, and only from
         // inside this process.
         [INTERNAL_CALL_HEADER]: app.internalCallSecret,
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...(body === undefined ? {} : { "content-type": body.contentType }),
       },
-      ...(body === undefined ? {} : { payload: JSON.stringify(body) }),
+      ...(body === undefined ? {} : { payload: body.payload }),
     });
     let parsed: unknown = null;
     if (res.body) {
@@ -94,6 +124,7 @@ export function injectedApi(
       DELETABLE_PATHS.some((allowed) => allowed.test(path))
         ? call("DELETE", path)
         : Promise.reject(new ToolRefusal("No tool deletes this; nothing was sent.")),
+    upload: (path, file) => send("POST", path, multipartFile(file)),
     link: (path) => `${webUrl}${path}`,
     github,
   };

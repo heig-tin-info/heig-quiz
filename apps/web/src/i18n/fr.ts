@@ -1530,6 +1530,8 @@ export const fr: Record<keyof Dict, string> = {
   "md.image.remove": "Supprimer l'image",
   "md.image.refused": "Image externe, non affichée",
   "md.image.refusedAlt": "Image externe, non affichée : {alt}",
+  "md.image.svgRefused": "SVG refusé : {reason}",
+  "md.image.typeRefused": "Image refusée : utilisez PNG, JPEG, GIF, WebP ou SVG.",
   "md.placeholder.body": "Rédigez la question…",
   "md.placeholder.bold": "texte en gras",
   "md.placeholder.italic": "texte en italique",

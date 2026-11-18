@@ -6,7 +6,8 @@ import { z } from "zod";
 import { IdParam, type Asset } from "@quiz/contracts";
 
 import { assets } from "../../db/schema.js";
-import { INERT_IMAGE_HEADERS, isAllowedMime, readAsset, sniffImage, storeAsset } from "./assets.js";
+import { INERT_IMAGE_HEADERS, isAllowedMime, readAsset, sniffImage, storeAsset, type ImageFacts } from "./assets.js";
+import { checkSvg, looksLikeMarkup } from "./svgCheck.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
 import { callerOf, userOf } from "../guards.js";
@@ -42,14 +43,16 @@ export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
    * The one image of a multipart upload, or null once the refusal is sent:
    * `415` when it is not multipart, `400` without a file, and `415` again
    * when the BYTES are not an accepted image — the bytes decide the type, not
-   * the header, so an SVG (or anything else) sniffs to nothing and is refused
-   * here. Past `ASSETS_MAX_BYTES` the `413` is Fastify's: `toBuffer()` throws
-   * `FST_REQ_FILE_TOO_LARGE`, which the wrapper hands to the global handler.
+   * the header. A raster image is sniffed by its magic number; markup goes
+   * through the strict SVG check (ADR-134), whose refusal is `415
+   * svg_refused` with the reason it gave. Past `ASSETS_MAX_BYTES` the `413`
+   * is Fastify's: `toBuffer()` throws `FST_REQ_FILE_TOO_LARGE`, which the
+   * wrapper hands to the global handler.
    */
   async function readImage(
     req: FastifyRequest,
     reply: FastifyReply,
-  ): Promise<{ bytes: Buffer; facts: NonNullable<ReturnType<typeof sniffImage>> } | null> {
+  ): Promise<{ bytes: Buffer; facts: ImageFacts } | null> {
     if (!req.isMultipart()) {
       await reply.code(415).send({ error: "unsupported_media_type", message: "Expected multipart/form-data" });
       return null;
@@ -61,14 +64,18 @@ export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     }
     const bytes = await part.toBuffer();
     const facts = sniffImage(bytes);
-    if (!facts || !isAllowedMime(facts.mime)) {
-      await reply.code(415).send({
-        error: "unsupported_media_type",
-        message: "Only PNG, JPEG, GIF and WebP images are accepted",
-      });
+    if (facts) return { bytes, facts };
+    if (looksLikeMarkup(bytes)) {
+      const svg = checkSvg(bytes);
+      if (svg.ok) return { bytes, facts: { mime: "image/svg+xml", width: svg.width, height: svg.height } };
+      await reply.code(415).send({ error: "svg_refused", reason: svg.reason, message: `This SVG is refused: ${svg.reason}` });
       return null;
     }
-    return { bytes, facts };
+    await reply.code(415).send({
+      error: "unsupported_media_type",
+      message: "Only PNG, JPEG, GIF, WebP and SVG images are accepted",
+    });
+    return null;
   }
 
   /**

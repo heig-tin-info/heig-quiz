@@ -4,8 +4,9 @@ import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } fr
 import type { Asset, NewConceptName, PoolDetail, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
 import { PARAMETERIZED_TYPES } from "@quiz/domain";
 
-import { api } from "../api";
+import { api, ApiError, refusedWith } from "../api";
 import { HelpIcon } from "../help";
+import { useToast } from "../notify";
 import { useT } from "../i18n";
 import { MarkdownField } from "../markdown/MarkdownField";
 import { pickerConceptIds } from "../pool/pickerConceptIds";
@@ -65,17 +66,26 @@ export function QuestionEditTab({
   /** A concept the AI card suggested to create: the properties panel's picker opens its form with it. */
   const [conceptPrefill, setConceptPrefill] = useState<NewConceptName | null>(null);
 
+  const toast = useToast();
   const uploadAsset = useCallback(
     async (file: File): Promise<string> => {
       const form = new FormData();
       form.append("file", file);
-      const asset = await api<Asset>(`/app/api/pools/${poolId}/assets`, {
-        method: "POST",
-        body: form,
-      });
-      return `asset:${asset.id}`;
+      try {
+        const asset = await api<Asset>(`/app/api/pools/${poolId}/assets`, {
+          method: "POST",
+          body: form,
+        });
+        return `asset:${asset.id}`;
+      } catch (error) {
+        // A refused file says why (ADR-134): the SVG check's reason, or the accepted types.
+        const reason = (error instanceof ApiError ? (error.body as { reason?: unknown } | null)?.reason : null) ?? "";
+        if (refusedWith(error, "svg_refused")) toast(t("md.image.svgRefused", { reason: String(reason) }), "error");
+        else if (refusedWith(error, "unsupported_media_type")) toast(t("md.image.typeRefused"), "error");
+        throw error;
+      }
     },
-    [poolId],
+    [poolId, toast, t],
   );
 
   // The table's issues go to the Variables section, the rest to the type's form.
