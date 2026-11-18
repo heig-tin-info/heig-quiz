@@ -2,6 +2,7 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { ScoreOverride, type ProjectDetail, type ProjectRepoScores, type ProjectRepoView } from "@quiz/contracts";
+import { formatPoints } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { FormError } from "../queryError";
@@ -86,7 +87,7 @@ function TeacherScoreForm({
             onChange={(e) => setMax(e.target.value)}
           />
         ) : (
-          <span className="pb-1.5 text-sm text-fg-muted tabular-nums">{t("project.teacherScore.outOf", { max: runMax })}</span>
+          <span className="pb-1.5 text-sm text-fg-muted tabular-nums">{t("project.teacherScore.outOf", { max: formatPoints(runMax) })}</span>
         )}
       </div>
       <p className="text-[13px] text-fg-muted">

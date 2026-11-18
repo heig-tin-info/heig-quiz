@@ -4,6 +4,7 @@
  * the release, and the page's one primary action. The `project` module
  * reads the rows; these decide.
  */
+import { roundPoints } from "./criteria.js";
 import { projectGrade, type ProjectGrade, type ProjectScale } from "./projectGrade.js";
 import type { DeadlineStrategyName } from "./projectRuns.js";
 
@@ -86,7 +87,9 @@ export function scoreGrade(points: number | null, max: number | null, scale: Pro
 /**
  * Whether a final score differs from what the release wrote (D05 addendum,
  * F-PROJ-14): only once the project was released; a score that appeared,
- * vanished, or changed its points or its maximum since then.
+ * vanished, or changed its points or its maximum since then. Both sides are
+ * read at the hundredth ({@link roundPoints}): a snapshot written before the
+ * totals were rounded (`6.1899999999999995`) is the same score as `6.19`.
  */
 export function changedAfterRelease(
   released: boolean,
@@ -94,7 +97,8 @@ export function changedAfterRelease(
   snapshot: { points: number | null; max: number | null },
 ): boolean {
   if (!released) return false;
-  return (final?.points ?? null) !== snapshot.points || (final?.max ?? null) !== snapshot.max;
+  const same = (a: number | null, b: number | null) => (a === null || b === null ? a === b : roundPoints(a) === roundPoints(b));
+  return !same(final?.points ?? null, snapshot.points) || !same(final?.max ?? null, snapshot.max);
 }
 
 /** The one primary action of the staff's project page (F-PROJ-13). */

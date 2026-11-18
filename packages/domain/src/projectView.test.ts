@@ -41,6 +41,15 @@ describe("changedAfterRelease", () => {
     expect(changedAfterRelease(true, { points: 8, max: 12 }, snap)).toBe(true);
   });
 
+  it("reads both sides at the hundredth: a float artefact of an older snapshot is no change (#1144)", () => {
+    expect(changedAfterRelease(true, { points: 6.19, max: 26 }, { points: 6.1899999999999995, max: 26 })).toBe(false);
+    expect(changedAfterRelease(true, { points: 5.21, max: 26 }, { points: 5.210000000000001, max: 26 })).toBe(false);
+    expect(changedAfterRelease(true, { points: 35.2, max: 44 }, { points: 35.19999999999999, max: 43.999999999999986 })).toBe(false);
+    expect(changedAfterRelease(true, { points: 6.2, max: 26 }, { points: 6.1899999999999995, max: 26 })).toBe(true);
+    expect(changedAfterRelease(true, { points: 6.19, max: 26.01 }, { points: 6.19, max: 26 })).toBe(true);
+    expect(changedAfterRelease(true, { points: 6.19, max: null }, { points: 6.19, max: 26 })).toBe(true);
+  });
+
   it("sees a score that appeared or vanished since", () => {
     expect(changedAfterRelease(true, null, snap)).toBe(true);
     expect(changedAfterRelease(true, { points: 1, max: 6 }, { points: null, max: null })).toBe(true);
