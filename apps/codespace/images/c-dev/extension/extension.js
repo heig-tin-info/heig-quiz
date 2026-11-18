@@ -29,6 +29,12 @@
  * container already reaches, authenticated by its address. No other
  * network access, no telemetry, no dependency, no credential (invariants 1
  * and 2).
+ *
+ * Since 0.3.0, a fourth item, "Teacher's update" (ADR-132 §11): the same
+ * answer names the commit a teacher's sync handed out for the session's
+ * branch, with the teacher's message; while that commit is not in the
+ * student's history, the item offers to merge it, locally and as the
+ * student (./update.js holds every decision; this file only shows them).
  */
 "use strict";
 
@@ -38,6 +44,7 @@ const os = require("node:os");
 const path = require("node:path");
 const vscode = require("vscode");
 const { holderArgs, programTerminalConfig, sharedPending, TTY_RE, wantsProgramTerminal } = require("./debugIo");
+const { applyUpdate, gitRunner, isTaken, parseUpdate, plainText } = require("./update");
 
 /** Refresh period of the countdown. */
 const TICK_MS = 30_000;
@@ -69,6 +76,22 @@ const STRINGS = {
     programTerminal: "Programme",
     programTerminalFailed:
       "Le terminal du programme n'a pas démarré : ce que le programme affiche et lit passe par la console de débogage.",
+    update: "Mise à jour de l'équipe enseignante",
+    updateTooltip: (at) => `L'équipe enseignante a mis à jour le projet${at ? `, ${at}` : ""}. Cliquez pour appliquer la mise à jour.`,
+    updateMessage: "Message de l'équipe enseignante :",
+    updateConfirm:
+      "Appliquer la mise à jour de l'équipe enseignante ? Elle est fusionnée dans votre branche par un commit de fusion ; poussez ensuite comme d'habitude.",
+    apply: "Appliquer",
+    updateApplied: "Mise à jour appliquée. Poussez pour l'envoyer avec votre travail.",
+    updateCurrent: "Cette mise à jour est déjà dans votre travail.",
+    updateUnavailable: "La mise à jour n'a pas pu être récupérée. Réessayez dans un moment.",
+    updateOtherBranch: (branch) => `Passez sur la branche ${branch} pour appliquer la mise à jour.`,
+    updateBusy: "Une fusion est en cours : terminez-la ou annulez-la, puis réessayez.",
+    updateDirty: (files) =>
+      `Rien n'a été modifié : vos changements non commités dans ${files} seraient écrasés. Commitez votre travail, puis réessayez.`,
+    updateConflict: (files) =>
+      `Rien n'a été modifié : la mise à jour entre en conflit avec votre travail dans ${files}. Demandez à l'équipe enseignante, ou fusionnez à la main avec git.`,
+    updateFailed: (detail) => `Rien n'a été modifié : git a refusé la fusion (${detail}).`,
     remaining: (h, m) =>
       h > 0
         ? `${h} h ${m} min restantes`
@@ -91,6 +114,22 @@ const STRINGS = {
     programTerminal: "Program",
     programTerminalFailed:
       "The program's terminal did not start: what the program prints and reads goes through the debug console.",
+    update: "Teacher's update",
+    updateTooltip: (at) => `Your teacher updated the project${at ? `, ${at}` : ""}. Click to apply it.`,
+    updateMessage: "Your teacher's message:",
+    updateConfirm:
+      "Apply your teacher's update? It is merged into your branch with a merge commit; then push as usual.",
+    apply: "Apply",
+    updateApplied: "Update applied. Push to send it with your work.",
+    updateCurrent: "This update is already in your work.",
+    updateUnavailable: "The update could not be fetched. Try again in a moment.",
+    updateOtherBranch: (branch) => `Switch to the ${branch} branch to apply the update.`,
+    updateBusy: "A merge is in progress: finish or abort it, then try again.",
+    updateDirty: (files) =>
+      `Nothing was changed: your uncommitted changes to ${files} would be overwritten. Commit your work, then try again.`,
+    updateConflict: (files) =>
+      `Nothing was changed: the update conflicts with your work in ${files}. Ask your teacher, or merge it by hand with git.`,
+    updateFailed: (detail) => `Nothing was changed: git refused the merge (${detail}).`,
     remaining: (h, m) => (h > 0 ? `${h} h ${m} min left` : `${m} min left`),
   },
 };
@@ -312,12 +351,30 @@ function activate(context) {
   // --- the debugged program's terminal (#1103) ------------------------------
   registerProgramTerminal(context, t);
 
-  // --- 3. a push GitHub refused (ADR-078 §6) --------------------------------
+  // --- 3. a push GitHub refused (ADR-078 §6), 4. the teacher's update (ADR-132 §11)
   const remote = portalRemote();
-  if (remote) {
+  const folder = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0];
+  if (remote && folder) {
     const refused = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 95);
     refused.text = `$(warning) ${t.pushRejected}`;
     refused.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+    const offered = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 96);
+    offered.text = `$(cloud-download) ${t.update}`;
+    offered.command = "codespace.applyUpdate";
+    const run = gitRunner(folder.uri.fsPath);
+    /** The update shown, while it is not in the student's history. */
+    let pending = null;
+    let applying = false;
+
+    /** The teacher's message and its date, as plain text only (never a MarkdownString). */
+    const describe = (update) => {
+      const date = update.message ? new Date(update.message.at) : null;
+      const at = date && !Number.isNaN(date.getTime()) ? formatDeadline(date, fr) : "";
+      const lines = [t.updateTooltip(at)];
+      if (update.message) lines.push("", t.updateMessage, plainText(update.message.text));
+      return lines.join("\n");
+    };
+
     const poll = async () => {
       const status = await readPushStatus(remote);
       const rejected = status && status.rejected;
@@ -328,10 +385,68 @@ function activate(context) {
       } else {
         refused.hide();
       }
+      if (!applying) {
+        const update = parseUpdate(status);
+        pending = update && !(await isTaken(run, update.sha)) ? update : null;
+      }
+      if (pending) {
+        offered.tooltip = describe(pending);
+        offered.show();
+      } else {
+        offered.hide();
+      }
     };
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand("codespace.applyUpdate", async () => {
+        const update = pending;
+        if (!update || applying) return;
+        const choice = await vscode.window.showInformationMessage(
+          t.updateConfirm,
+          { modal: true, detail: describe(update) },
+          t.apply,
+        );
+        if (choice !== t.apply) return;
+        applying = true;
+        let result;
+        try {
+          result = await applyUpdate(run, update);
+        } finally {
+          applying = false;
+        }
+        const files = plainText((result.files || []).slice(0, 10).join(", ") + ((result.files || []).length > 10 ? ", …" : ""));
+        switch (result.outcome) {
+          case "applied":
+            void vscode.window.showInformationMessage(t.updateApplied);
+            break;
+          case "current":
+            void vscode.window.showInformationMessage(t.updateCurrent);
+            break;
+          case "unavailable":
+            void vscode.window.showWarningMessage(t.updateUnavailable);
+            break;
+          case "otherBranch":
+            void vscode.window.showWarningMessage(t.updateOtherBranch(update.branch));
+            break;
+          case "busy":
+            void vscode.window.showWarningMessage(t.updateBusy);
+            break;
+          case "dirty":
+            void vscode.window.showWarningMessage(t.updateDirty(files));
+            break;
+          case "conflict":
+            void vscode.window.showWarningMessage(t.updateConflict(files));
+            break;
+          default:
+            void vscode.window.showErrorMessage(t.updateFailed(plainText(result.detail || "?")));
+        }
+        await poll();
+      }),
+    );
+
     void poll();
     const timer = setInterval(() => void poll(), TICK_MS);
-    context.subscriptions.push(refused, { dispose: () => clearInterval(timer) });
+    context.subscriptions.push(refused, offered, { dispose: () => clearInterval(timer) });
   }
 }
 

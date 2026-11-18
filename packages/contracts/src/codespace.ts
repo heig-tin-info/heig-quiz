@@ -18,12 +18,13 @@ import {
   GIT_TOKEN_REFUSALS,
   STAFF_REVIEW_REFUSALS,
   SUPERVISED_DEVICE_LEVELS,
+  SYNC_MESSAGE_MAX,
   WORK_MODE_REFUSALS,
   WORK_MODES,
   WORKSPACE_START_REFUSALS,
 } from "@quiz/domain";
 
-import { ProtectedPath, RepositoryFullName, Sha1 } from "./gitNames.js";
+import { BranchName, MESSAGE_CONTROL, ProtectedPath, RepositoryFullName, Sha1 } from "./gitNames.js";
 
 /**
  * Work mode of a project; `online_seb` is supervised: it opens only from
@@ -100,6 +101,29 @@ export const CodespaceRepoRef = z.object({
 export type CodespaceRepoRef = z.infer<typeof CodespaceRepoRef>;
 
 /**
+ * The teacher's update of an `online` project (ADR-132 §11): per handed-out
+ * branch, the distribution's head the latest sync handed out — the commit
+ * each student repository received on its `sync/<branch>` —, and the
+ * teacher's message of that sync with its instant, or null. The portal
+ * fetches each commit onto `refs/quiz/update/<branch>` of the student's
+ * staging repository and the workspace offers to merge it; the sha the
+ * workspace is told is this one, never a ref's.
+ */
+export const CodespaceProjectUpdate = z.object({
+  heads: z.array(z.object({ branch: BranchName, sha: Sha1 })).min(1).max(10),
+  message: z
+    .object({
+      text: z
+        .string()
+        .max(SYNC_MESSAGE_MAX)
+        .refine((text) => !MESSAGE_CONTROL.test(text), "no control or direction character"),
+      at: IsoDate,
+    })
+    .nullable(),
+});
+export type CodespaceProjectUpdate = z.infer<typeof CodespaceProjectUpdate>;
+
+/**
  * An assignment as the portal needs it: sent (PUT, idempotent) every time an
  * `online*` assignment is saved, before any student can launch it.
  */
@@ -124,6 +148,12 @@ export const CodespaceAssignmentSync = z.object({
   quota: z.object({ maxActiveSessions: z.number().int().min(0) }),
   startAt: IsoDate,
   deadlineAt: IsoDate.nullable(),
+  /**
+   * The project's update for the workspace (ADR-132 §11): on an `online`
+   * project its students can read, once a sync handed a commit out; null
+   * otherwise, and absent from an older platform.
+   */
+  projectUpdate: CodespaceProjectUpdate.nullable().default(null),
 });
 export type CodespaceAssignmentSync = z.infer<typeof CodespaceAssignmentSync>;
 

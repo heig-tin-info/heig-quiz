@@ -13,6 +13,11 @@ again): it polls `GET <origin>/push-status` on the portal's git channel, the
 workspace's `origin` remote, every 30 s. No other network access, no
 telemetry, no dependency, no credential.
 
+Since 0.3.0 the same answer may name a teacher's update (ADR-132 §11): the
+item "Teacher's update" offers to merge it into the student's branch, a
+merge commit of the student's, applied cleanly or not at all
+(`update.js`, which needs no `vscode`).
+
 Since 0.2.0 it also gives every gdb launch of webfreak.debug the debugged
 program's own terminal, "Program" (`debugIo.js`): without it the program's
 stdin and stdout stay on gdb's pipes, where the student can neither see what

@@ -37,4 +37,5 @@ export {
   type StagingResult,
   type StagingSource,
 } from "./staging.js";
-export type { RepoRef, SessionLookup, StagingSession } from "./types.js";
+export { fetchProjectUpdate } from "./projectUpdate.js";
+export type { RepoRef, SessionLookup, SessionUpdate, StagingSession } from "./types.js";

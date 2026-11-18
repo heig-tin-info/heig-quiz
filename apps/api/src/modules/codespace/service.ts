@@ -35,6 +35,7 @@ import {
   CodespaceAssignmentSync,
   CodespaceAssignmentSyncResult,
   CodespaceSessionSummary,
+  type CodespaceProjectUpdate,
   DEFAULT_MAX_ACTIVE_SESSIONS,
   LAUNCH_AUDIENCE,
   LAUNCH_TOKEN_TTL_SECONDS,
@@ -61,6 +62,8 @@ import {
   isOnlineMode,
   portalDeadline,
   projectIsLive,
+  projectIsVisible,
+  SYNC_MESSAGE_MAX,
   deviceLevelClients,
   quotaHolder,
   requestBinding,
@@ -272,7 +275,9 @@ export async function holderGrant(
  * on that repository for an `online_seb` project (ADR-078, M6-10). Its
  * `deadlineAt` is `portalDeadline`'s: none for an `online` project under
  * the `commit` strategy, whose start route decides student by student
- * (#958; ADR-078 as amended 2026-10-29).
+ * (#958; ADR-078 as amended 2026-10-29). It carries the teacher's update of
+ * an `online` project ({@link projectUpdateOf}, ADR-132 §11), which the end
+ * of every sync pass sends again.
  */
 export async function syncPayload(db: Db, projectId: string): Promise<CodespaceAssignmentSync | null> {
   const [row] = await db
@@ -299,7 +304,32 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     quota: { maxActiveSessions: grant?.maxActiveSessions ?? DEFAULT_MAX_ACTIVE_SESSIONS },
     startAt: project.startAt.toISOString(),
     deadlineAt: portalDeadline(project)?.toISOString() ?? null,
+    projectUpdate: projectUpdateOf(project),
   });
+}
+
+/**
+ * The update an `online` project's workspaces offer to merge (ADR-132 §11):
+ * the heads its latest sync handed out, on the handed-out branches, with
+ * that sync's message — on a project its students can read only, as the
+ * message itself (`requestSync`). `online_seb` waits for its own delivery
+ * (§11), `free` has no workspace. The message is the contract's already;
+ * the cap is kept here too, so a longer text never fails the whole PUT.
+ */
+export function projectUpdateOf(
+  project: Pick<typeof projects.$inferSelect, "workMode" | "state" | "branches" | "syncHeads" | "syncMessage" | "syncMessageAt">,
+): CodespaceProjectUpdate | null {
+  if (project.workMode !== "online" || !projectIsVisible(project.state) || project.syncHeads === null) return null;
+  const heads = project.branches.flatMap((branch) => {
+    const sha = project.syncHeads?.[branch];
+    return sha ? [{ branch, sha }] : [];
+  });
+  if (heads.length === 0) return null;
+  const message =
+    project.syncMessage === null || project.syncMessageAt === null
+      ? null
+      : { text: project.syncMessage.slice(0, SYNC_MESSAGE_MAX), at: project.syncMessageAt.toISOString() };
+  return { heads, message };
 }
 
 /** Writes the outcome of a sync attempt on the project's portal row. */

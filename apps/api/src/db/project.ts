@@ -200,6 +200,14 @@ export const projects = pgTable(
      */
     syncMessage: text("sync_message"),
     syncMessageAt: timestamp("sync_message_at", { withTimezone: true }),
+    /**
+     * The distribution's head per handed-out branch after the latest sync
+     * of a project its students can read (ADR-132 §11): the commit every
+     * student repository receives on its `sync/<branch>`, which the online
+     * workspace offers to merge. Written with `sync_message`; null before
+     * any such sync.
+     */
+    syncHeads: jsonb("sync_heads").$type<Record<string, string>>(),
     /** Validated by `ProjectGradingScale` of `@quiz/contracts` (D05); no default, the service writes it. */
     gradingScale: jsonb("grading_scale").$type<ProjectGradingScale>().notNull(),
     /**

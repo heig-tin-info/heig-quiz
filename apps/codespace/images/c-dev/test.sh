@@ -23,7 +23,7 @@ PODMAN_URL="${PODMAN_URL:-unix:///run/podman/podman.sock}"
 SECCOMP_DEFAULT="${SECCOMP_DEFAULT:-/usr/share/containers/seccomp.json}"
 
 # The status-bar extension's version, as the Containerfile's EXT_STATUSBAR_VERSION.
-STATUSBAR_VERSION=0.2.0
+STATUSBAR_VERSION=0.3.0
 STATUSBAR_DIR="/opt/code-server/extensions/heig.codespace-statusbar-${STATUSBAR_VERSION}"
 
 CTR_A=cdev-p1-a
@@ -374,7 +374,7 @@ ok "heig.codespace-statusbar@${STATUSBAR_VERSION} installed and listed by code-s
 
 cexec 'grep -qF "heig.codespace-statusbar" /etc/code-server/extensions.lock' >/dev/null 2>&1 \
   || fail "heig.codespace-statusbar missing from /etc/code-server/extensions.lock"
-cexec "test -f ${STATUSBAR_DIR}/extension.js" >/dev/null 2>&1 \
+cexec "test -f ${STATUSBAR_DIR}/extension.js && test -f ${STATUSBAR_DIR}/update.js" >/dev/null 2>&1 \
   || fail "the status-bar extension code is not in the extensions directory"
 if cexec "touch ${STATUSBAR_DIR}/extension.js" >/dev/null 2>&1; then
   fail "the status-bar extension can be modified at run time"

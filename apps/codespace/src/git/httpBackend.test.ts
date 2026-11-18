@@ -17,6 +17,7 @@ import {
   requestedService,
   serviceAllowed,
 } from "./httpBackend.js";
+import { fetchProjectUpdate } from "./projectUpdate.js";
 import { createPushEventStore, type PushEventRow, type PushEventStore } from "./pushEvents.js";
 import { ensureStagingRepo, refSnapshot } from "./staging.js";
 import type { SessionLookup, StagingSession } from "./types.js";
@@ -255,19 +256,47 @@ describe("Git channel end to end (loopback)", () => {
       expect(res.headers.get("cache-control")).toBe("no-store");
       return res.json();
     };
-    expect(await status()).toEqual({ rejected: null });
+    expect(await status()).toEqual({ rejected: null, update: null });
     const at = new Date("2026-10-07T09:00:00Z");
     const [row] = await h.store.insert([
       { id: "e1", sessionId: h.session.sessionId, student: h.session.student, assignment: h.session.assignment, ref: "refs/heads/main", sha: "a".repeat(40), oldSha: null, receivedAt: at, state: "pending", attempts: 0 },
     ]);
     await h.store.markRejected([row!.id], "fetch first");
-    expect(await status()).toEqual({ rejected: { ref: "refs/heads/main", at: at.toISOString(), reason: "fetch first" } });
+    expect(await status()).toEqual({ rejected: { ref: "refs/heads/main", at: at.toISOString(), reason: "fetch first" }, update: null });
 
     const other = await harness({ sessionId: "s-other", containerIp: "10.77.0.9" });
     expect((await fetch(`${other.remote}/push-status`)).status).toBe(403);
     expect((await fetch(`http://127.0.0.1:${h.port}/git/s-none/push-status`)).status).toBe(404);
     h.close();
     other.close();
+  });
+
+  it("announces the teacher's update only while the staging repository holds it at the assignment's sha; a push to refs/quiz is refused and never recorded (ADR-132 §11)", async () => {
+    const h = await harness();
+    const message = { text: "[click](command:x) $(alert) <b>README fixed</b>", at: "2026-11-17T20:00:00.000Z" };
+    const update = { branch: "main", sha: h.src.sha, message };
+    h.session.update = update;
+    const status = async () => (await fetch(`${h.remote}/push-status`)).json();
+    // Named by the assignment, absent from the staging repository: not announced.
+    expect(await status()).toEqual({ rejected: null, update: null });
+    await fetchProjectUpdate({ gitDir: h.staging.gitDir, url: h.src.gitDir, heads: [{ branch: "main", sha: h.src.sha }] });
+    // The message as the platform sent it: data, rendered by nobody here.
+    expect(await status()).toEqual({ rejected: null, update });
+    // The ref elsewhere than the assignment's sha: not announced either.
+    h.session.update = { ...update, sha: "d".repeat(40) };
+    expect(await status()).toEqual({ rejected: null, update: null });
+    h.session.update = update;
+
+    // The student's own channel cannot plant one.
+    const clone = join(h.base, "clone-update");
+    await git(["clone", "-q", h.remote, clone], { env: FIXTURE_ENV });
+    await git(["-C", clone, "commit", "-q", "--allow-empty", "-m", "forged"], { env: FIXTURE_ENV });
+    const refused = await git(["-C", clone, "push", "origin", "HEAD:refs/quiz/update/main"], { env: FIXTURE_ENV }).catch((e: Error) => e.message);
+    expect(String(refused)).toMatch(/hidden ref/);
+    expect(await status()).toEqual({ rejected: null, update });
+    expect(await h.store.bySession(h.session.sessionId)).toEqual([]);
+    expect(h.relayed).toEqual([]);
+    h.close();
   });
 
   it("an unknown session gets a 404", async () => {

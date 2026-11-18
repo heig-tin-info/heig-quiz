@@ -36,6 +36,13 @@
       "when": 1794745728066,
       "tag": "0004_kiosk_sittings",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794964875267,
+      "tag": "0005_project_update",
+      "breakpoints": true
     }
   ]
 }

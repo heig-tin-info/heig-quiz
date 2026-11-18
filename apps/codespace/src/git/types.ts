@@ -39,6 +39,19 @@ export interface StagingSession {
   readOnly?: boolean;
   /** Where successful pushes are relayed. Absent = keep locally only. */
   targetRepo?: RepoRef;
+  /**
+   * The teacher's update of the session's branch (ADR-132 §11), from the
+   * assignment row: what `push-status` announces once the staging
+   * repository holds it at that sha. Absent: nothing to offer.
+   */
+  update?: SessionUpdate;
+}
+
+/** A branch's update as the workspace reads it: the commit to merge, and the teacher's message. */
+export interface SessionUpdate {
+  branch: string;
+  sha: string;
+  message: { text: string; at: string } | null;
 }
 
 export interface SessionLookup {

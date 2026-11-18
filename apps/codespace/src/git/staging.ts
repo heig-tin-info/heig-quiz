@@ -92,6 +92,23 @@ export function stagingPaths(volumesRoot: string, student: string, assignment: s
 
 const REFSPECS = ["+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*"];
 
+/**
+ * The portal's own refs in a staging repository (the teacher's update,
+ * ADR-132 §11, `projectUpdate.ts`): never a branch, never relayed, never a
+ * student's to push.
+ */
+export const PORTAL_REFS = "refs/quiz";
+
+/**
+ * Refuses every student push to {@link PORTAL_REFS} — an update, a
+ * deletion, a name that would block one (`receive.hideRefs`: git answers
+ * "deny updating a hidden ref"). Fetches still see them: the workspace
+ * takes its update from there.
+ */
+export async function guardPortalRefs(gitDir: string): Promise<void> {
+  await gitBare(gitDir, ["config", "receive.hideRefs", PORTAL_REFS]);
+}
+
 async function isBareRepo(gitDir: string): Promise<boolean> {
   try {
     const entries = await readdir(gitDir);
@@ -161,6 +178,7 @@ export async function ensureStagingRepo(opts: StagingOptions): Promise<StagingRe
     "receive.maxInputSize",
     String(RECEIVE_MAX_INPUT_BYTES),
   ]);
+  await guardPortalRefs(paths.gitDir);
 
   const from = sourceUrl(opts.source);
   let fetched = false;

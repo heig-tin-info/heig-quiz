@@ -38,7 +38,7 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | git | 2.47.3 | Debian stable repository |
 | `llvm-vs-code-extensions.vscode-clangd` | 0.6.0 | Open VSX, resolved at build time |
 | `webfreak.debug` | 0.27.0 | Open VSX, resolved at build time |
-| `heig.codespace-statusbar` | 0.2.0 | local source `extension/`, packaged at build time |
+| `heig.codespace-statusbar` | 0.3.0 | local source `extension/`, packaged at build time |
 | Python | 3.13.5 (package `python3`) | Debian stable repository; the interpreter of Baygon and pytest |
 | Baygon | **0.7.0** (MIT, HEIG-VD) | `baygon/requirements.txt`: it and its 18 dependencies pinned by version and sha256, wheels only |
 | pytest | 8.3.5 (Debian 8.3.5-2), with pluggy 1.5.0, iniconfig 1.1.1, packaging 25.0 | Debian stable repository (package `python3-pytest`, § pytest) |
@@ -352,10 +352,12 @@ picks dies with the container: the `user-data-dir` is a tmpfs.
 ## Status bar extension `heig.codespace-statusbar`
 
 Feedback 3 of [docs/history/leads.md](../../docs/history/leads.md). Publisher `heig`, name
-`codespace-statusbar`, version `0.2.0` (0.2.0 adds the debugged program's
-terminal, § Debugging). Source in `extension/`:
-plain JavaScript, two useful files (`package.json`, `extension.js`), **no
-dependency, no bundler, no network access, no telemetry**.
+`codespace-statusbar`, version `0.3.0` (0.2.0 adds the debugged program's
+terminal, § Debugging; 0.3.0 the teacher's update, below). Source in
+`extension/`: plain JavaScript (`package.json`, `extension.js`, and the
+two modules that need no `vscode`, `debugIo.js` and `update.js`, unit-tested
+from `apps/codespace/src`), **no dependency, no bundler, no network access
+beyond the portal's git channel, no telemetry**.
 
 ### What it displays
 
@@ -368,6 +370,28 @@ Two items on the right of the status bar:
    (`TZ=Europe/Zurich`) and the title of the assignment;
 2. **"Close"** — command `codespace.close`, which opens the return URL with
    `vscode.env.openExternal`.
+
+Two more, read from `GET <origin>/push-status` on the portal's git channel
+every 30 s: **"Push refused by GitHub"** (ADR-078 §6), and since 0.3.0
+**"Teacher's update"** (ADR-132 §11). After a teacher's sync the portal
+holds the sync's commit on `refs/quiz/update/<branch>` of the staging
+repository and names it, with the teacher's message, in that answer. While
+`git merge-base --is-ancestor <sha> HEAD` says it is not in the student's
+history, the item shows; its tooltip and its confirmation show the date and
+the message as plain text (never a `MarkdownString`; link and icon syntax
+broken by an invisible space). *Apply* fetches the ref from `origin` and
+runs `git merge --no-ff --no-edit -m "Merge the teacher's update" <sha>` as
+the student (the container's `GIT_*`): always a merge commit, never a
+fast-forward (a pushed head equal to the sync's commit would read as the
+platform's own). It applies cleanly or not at all — a conflict found first
+by `git merge-tree --write-tree`, uncommitted changes the merge would
+overwrite refused by git before it writes anything, a merge that still
+stops aborted, the student's own merge in progress left alone — and names
+the blocking files. The student then pushes as usual. Not tried in a real
+container yet: the decisions are `update.js`'s, tested on real repositories
+(`apps/codespace/src/workspaceUpdate.test.ts`); the VS Code glue is checked
+by hand after a rebuild (open a lab after a sync: the item, its tooltip,
+Apply, then a push).
 
 French as soon as `vscode.env.language` starts with `fr`, English otherwise.
 

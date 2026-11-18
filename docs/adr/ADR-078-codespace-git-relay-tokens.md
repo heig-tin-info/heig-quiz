@@ -27,6 +27,10 @@ Amended 2026-11-16 by [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echean
 (the workspace collected at the deadline): context fact 1 and §7 corrected
 (the lock binds the App), §2's relay head narrowed to a SHA-1,
 [§13](#13-amendment-2026-11-16-the-collection-at-the-deadline-adr-130).
+Amended 2026-11-18 by [ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md)
+§11 (the teacher's update fetched into an `online` workspace): one more use
+of the write grant, no rule changed,
+[§14](#14-amendment-2026-11-18-the-teachers-update-adr-132).
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -636,6 +640,28 @@ here.
   base's, and signs nothing otherwise (ADR-130 §4.3). Only the deadline
   job's collection path writes a `collected` receipt, dated by Quiz
   (ADR-130 §6).
+
+### 14. Amendment 2026-11-18: the teacher's update (ADR-132)
+
+Scope: what the write grant of §2 may be used for. [ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md)
+§11 owns the rule (the orchestrator's design, the owner's principle); this
+section names what changes here.
+
+- **The condition is unchanged.** To bring a teacher's sync into an
+  `online` workspace, the portal fetches the commit the sync pushed to the
+  student's `sync/<branch>`, by its sha, from the student's own repository,
+  with the token it obtains exactly as for a relay or a seeding: the same
+  request, checks 2 to 6, the same cache (§3). It asks only when the
+  staging repository lacks that commit's ref, for a running session or at
+  a session's opening. A `closed` refusal fetches nothing, not even
+  anonymously. The read grant on the distribution stays `online_seb`'s
+  only (check 3).
+- **One more use of it: a fetch.** The commit lands on
+  `refs/quiz/update/<branch>` of the staging repository, never a branch,
+  never relayed, never a `PushEvent`; nothing is written on GitHub. The
+  token reaches git through the environment only, as everywhere here.
+- **Blast radius (§9).** None added: a fetch with a grant the portal
+  already holds for the same repository and the same window.
 
 ## Consequences
 

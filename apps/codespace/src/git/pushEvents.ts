@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 
 import { pushEvents, type NewPushEventRow, type PushEventRow } from "../db/schema.js";
+import { PORTAL_REFS } from "./staging.js";
 import type { RefChange, StagingSession } from "./types.js";
 
 export type { PushEventRow };
@@ -69,16 +70,20 @@ export interface RelayScheduler {
 /**
  * Refs whose value changed between two `for-each-ref` snapshots. A ref that
  * disappeared is reported with `sha = NULL_OID` so the relay can propagate
- * the deletion instead of silently diverging.
+ * the deletion instead of silently diverging. The portal's own refs
+ * (`refs/quiz/*`, the teacher's update, ADR-132 §11) are never a push: no
+ * student may write them (`receive.hideRefs`), and the portal's fetch of
+ * one landing during a push is neither recorded nor relayed.
  */
 export function diffRefs(before: Map<string, string>, after: Map<string, string>): RefChange[] {
   const changes: RefChange[] = [];
+  const portal = (ref: string) => ref.startsWith(`${PORTAL_REFS}/`);
   for (const [ref, sha] of after) {
     const old = before.get(ref);
-    if (old !== sha) changes.push({ ref, oldSha: old ?? null, sha });
+    if (old !== sha && !portal(ref)) changes.push({ ref, oldSha: old ?? null, sha });
   }
   for (const [ref, old] of before) {
-    if (!after.has(ref)) changes.push({ ref, oldSha: old, sha: NULL_OID });
+    if (!after.has(ref) && !portal(ref)) changes.push({ ref, oldSha: old, sha: NULL_OID });
   }
   return changes.sort((a, b) => a.ref.localeCompare(b.ref));
 }

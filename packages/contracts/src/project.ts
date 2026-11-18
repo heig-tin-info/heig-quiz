@@ -52,7 +52,7 @@ import {
 
 
 import { ProjectRepoCollection, StudentProjectWorkspace } from "./codespace.js";
-import { ProtectedPath, RepoName } from "./gitNames.js";
+import { BranchName, MESSAGE_CONTROL, ProtectedPath, RepoName } from "./gitNames.js";
 import { Rounding } from "./evaluation.js";
 import { GroupConfirm } from "./group.js";
 
@@ -215,23 +215,6 @@ export type ProjectSeatKind = z.infer<typeof ProjectSeatKind>;
  */
 export const PROTECTED_FILE_SUGGESTIONS = [CRITERIA_FILE, "README.md", GRADING_WORKFLOW] as const;
 
-/**
- * A branch to hand out: what `git check-ref-format --branch` accepts, minus
- * what could read as an option (a leading `-`).
- */
-export const BranchName = z
-  .string()
-  .min(1)
-  .max(200)
-  .regex(/^[A-Za-z0-9._/-]+$/)
-  .refine(
-    (b) =>
-      !b.startsWith("-") &&
-      !b.endsWith(".lock") &&
-      !b.includes("..") &&
-      b.split("/").every((part) => part !== "" && !part.startsWith(".") && !part.endsWith(".")),
-    "not a branch name",
-  );
 
 // ---------------------------------------------------------- grading by criteria (ADR-106 §2)
 
@@ -1119,15 +1102,6 @@ export const ProjectSyncState = z.object({
 });
 export type ProjectSyncState = z.infer<typeof ProjectSyncState>;
 
-/**
- * What a message to the students never holds (ADR-132 §10): the C0 controls
- * but tab and line feed, DEL, the C1 controls, and the bidirectional
- * overrides and isolates — `CONTROL_CHAR` of `journal.ts`, widened —, and a
- * lone surrogate (its text is no valid JSON for the audit). A NUL
- * would fail the database's write after the distribution moved.
- */
-// eslint-disable-next-line no-control-regex
-const MESSAGE_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]|\p{Cs}/u;
 
 /**
  * `POST /app/api/projects/:id/sync`'s optional body (ADR-132 §10): the

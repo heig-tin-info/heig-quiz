@@ -373,9 +373,18 @@ async function classroomRoutesImpl(
           closesAt: body.deadlineAt ? new Date(body.deadlineAt) : null,
           // Teacher-side secrets (ADR-047 §7): stored, never logged.
           beks: mode === "exam" ? body.browserExamKeys : [],
+          // The teacher's update (ADR-132 §11), `lab` only: an exam's staging is the template's.
+          projectUpdate: mode === "lab" ? body.projectUpdate : null,
           createdAt: new Date(),
         };
         upsertAssignment(db, row);
+        // Into the running workspaces' staging repositories, in the background:
+        // the platform's sync never waits on GitHub. A closed one takes it at its next opening.
+        if (row.projectUpdate) {
+          void manager.refreshUpdates(body.id).catch((err: unknown) => {
+            request.log.warn({ assignmentId: body.id, err: String((err as Error).message ?? err) }, "teacher's update not dispatched to the running workspaces");
+          });
+        }
 
         request.log.info(
           { assignmentId: body.id, mode, classroomId: body.classroomId },

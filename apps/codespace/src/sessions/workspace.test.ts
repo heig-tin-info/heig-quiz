@@ -17,10 +17,11 @@ import { chmod, lstat, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { openDb, type Db, type DbHandle } from "../db/client.js";
 import { assignments, users, type AssignmentRow, type UserRow } from "../db/schema.js";
+import { ForgeRefusedError } from "../git/forge.js";
 import type { ContainerInfo, Engine, RunRequest } from "../engine/index.js";
 import { ForgeUnconfiguredError, git, gitBare, refSnapshot, type ForgeOwner } from "../git/index.js";
 import { FIXTURE_ENV, makeSourceRepo } from "../git/fixtures.js";
@@ -28,6 +29,7 @@ import { causeText } from "../web/i18n.js";
 
 import {
   REVIEW_WIPE_ARGV,
+  sessionUpdateOf,
   createSessionManager,
   defaultBranchOf,
   forgeOwnerOf,
@@ -124,7 +126,7 @@ function makeManager(extra: Partial<ManagerDeps> = {}) {
     healthTimeoutMs: 1000,
     gitRemoteHost: "portal.internal",
     gitRemotePort: 9418,
-    log: LOG,
+    log: extra.log ?? LOG,
   });
 }
 
@@ -645,5 +647,134 @@ describe("review session (ADR-129 §10)", () => {
     expect(findAnySession(db, "student", "review-dead")).toBeUndefined();
     expect(findAnySession(db, "student", "review-x")?.state).toBe("closed");
     expect(db.select().from(assignments).all().map((a) => a.id).sort()).toEqual(["review-live", "review-x", "tp"]);
+  });
+});
+
+describe("the teacher's update (ADR-132 §11)", () => {
+  const MESSAGE = { text: "README fixed.", at: "2026-11-17T20:00:00.000Z" };
+  const UPDATE_REF = "refs/quiz/update/main";
+  const NOT_FETCHED = "teacher's update not fetched: tried again at the next opening or sync";
+
+  /** The student's repository on the local forge, and `sync(text)`: the platform's sync pushing `sync/main`; its sha. */
+  async function studentRepo(): Promise<{ sync: (text: string) => Promise<string> }> {
+    const dist = join(root, "dist-work");
+    await git(["init", "-q", "--initial-branch=main", dist], { env: FIXTURE_ENV });
+    await writeFile(join(dist, "README.md"), "v1\n", "utf8");
+    await git(["-C", dist, "add", "README.md"], { env: FIXTURE_ENV });
+    await git(["-C", dist, "commit", "-qm", "hand-out"], { env: FIXTURE_ENV });
+    await git(["clone", "-q", "--bare", dist, forgePath("org", "tp-student")], { env: FIXTURE_ENV });
+    return {
+      async sync(text) {
+        await writeFile(join(dist, "README.md"), text, "utf8");
+        await git(["-C", dist, "commit", "-qam", "Project update"], { env: FIXTURE_ENV });
+        await git(["-C", dist, "push", "-q", "--force", forgePath("org", "tp-student"), "HEAD:refs/heads/sync/main"], { env: FIXTURE_ENV });
+        return (await git(["-C", dist, "rev-parse", "HEAD"], { env: FIXTURE_ENV })).trim();
+      },
+    };
+  }
+  const setUpdate = (sha: string) =>
+    db.update(assignments).set({ projectUpdate: { heads: [{ branch: "main", sha }], message: MESSAGE } }).run();
+  const theAssignment = (): AssignmentRow => db.select().from(assignments).all()[0]!;
+  const updateRefOf = async (volumeDir: string) => (await refSnapshot(join(volumeDir, "staging.git"))).get(UPDATE_REF);
+  const branchesOf = async (volumeDir: string) =>
+    [...(await refSnapshot(join(volumeDir, "staging.git")))].filter(([ref]) => ref.startsWith("refs/heads/"));
+
+  it("is fetched at the start, at a sync for a running session, and at the next opening of a closed one — never moving a branch; the lookup announces it", async () => {
+    const forge = await studentRepo();
+    const first = await forge.sync("v2\n");
+    await insertAssignment({ targetRepoPattern: "org/tp-{student}" });
+    setUpdate(first);
+    const owners: ForgeOwner[] = [];
+    const manager = makeManager({
+      forgeUrlOf: localForgeUrl,
+      forgeAuthorization: async (_repo, owner) => {
+        owners.push(owner);
+        return "basic token";
+      },
+    });
+
+    const { session } = await manager.start(user, theAssignment());
+    await vi.waitFor(async () => expect(await updateRefOf(session.volumeDir)).toBe(first));
+    const branches = await branchesOf(session.volumeDir);
+    expect(await manager.lookup.bySessionId(session.id)).toMatchObject({ update: { branch: "main", sha: first, message: MESSAGE } });
+    // The token is the student's own grant on their repository, as the seeding's.
+    expect(owners.at(-1)).toEqual({ assignment: "tp", student: "student" });
+
+    // The platform's sync: every running session, one after the other.
+    const second = await forge.sync("v3\n");
+    setUpdate(second);
+    expect(await manager.refreshUpdates("tp")).toBe(1);
+    expect(await updateRefOf(session.volumeDir)).toBe(second);
+    expect(await branchesOf(session.volumeDir)).toEqual(branches);
+
+    // Closed: nothing at the sync; at the next opening.
+    await manager.close(session.id, "test");
+    const third = await forge.sync("v4\n");
+    setUpdate(third);
+    expect(await manager.refreshUpdates("tp")).toBe(0);
+    expect(await updateRefOf(session.volumeDir)).toBe(second);
+    await manager.start(user, theAssignment());
+    await vi.waitFor(async () => expect(await updateRefOf(session.volumeDir)).toBe(third));
+    expect(await branchesOf(session.volumeDir)).toEqual(branches);
+  });
+
+  it("never holds a start: Quiz's refusal (closed) or GitHub down leaves the session usable, nothing fetched, and the next occasion tries again", async () => {
+    const forge = await studentRepo();
+    await insertAssignment({ targetRepoPattern: "org/tp-{student}" });
+    const warnings: string[] = [];
+    let refuse = false;
+    const manager = makeManager({
+      log: { ...LOG, warn: (_o: object, m: string) => void warnings.push(m) },
+      forgeUrlOf: localForgeUrl,
+      forgeAuthorization: async () => {
+        if (refuse) throw new ForgeRefusedError("closed");
+        return "basic token";
+      },
+    });
+    // Seeded before the sync: the staging repository does not hold its commit.
+    const { session } = await manager.start(user, theAssignment());
+    const sha = await forge.sync("v2\n");
+    setUpdate(sha);
+
+    // Quiz refuses the grant (`closed`): nothing fetched, not even anonymously.
+    refuse = true;
+    expect(await manager.refreshUpdates("tp")).toBe(1);
+    expect(warnings).toEqual([NOT_FETCHED]);
+    expect(await updateRefOf(session.volumeDir)).toBeUndefined();
+    expect((await manager.lookup.bySessionId(session.id))?.update).toMatchObject({ sha });
+
+    // GitHub down — the student's repository unreachable: the opening goes on, nothing fetched.
+    refuse = false;
+    await rm(forgePath("org", "tp-student"), { recursive: true, force: true });
+    warnings.length = 0;
+    await manager.close(session.id, "test");
+    await manager.start(user, theAssignment());
+    expect(engine.runs).toBe(2);
+    await vi.waitFor(() => expect(warnings).toContain(NOT_FETCHED));
+    expect(await updateRefOf(session.volumeDir)).toBeUndefined();
+  });
+
+  it("needs no GitHub when the staging repository already holds the commit (a seeding after the sync mirrored sync/main)", async () => {
+    const forge = await studentRepo();
+    const sha = await forge.sync("v2\n");
+    await insertAssignment({ targetRepoPattern: "org/tp-{student}" });
+    setUpdate(sha);
+    const manager = makeManager({ forgeUrlOf: localForgeUrl });
+    const { session } = await manager.start(user, theAssignment());
+    await vi.waitFor(async () => expect(await updateRefOf(session.volumeDir)).toBe(sha));
+    // Gone from the forge, the commit is still set from the staging repository's own objects.
+    await rm(forgePath("org", "tp-student"), { recursive: true, force: true });
+    await gitBare(join(session.volumeDir, "staging.git"), ["update-ref", "-d", UPDATE_REF]);
+    expect(await manager.refreshUpdates("tp")).toBe(1);
+    expect(await updateRefOf(session.volumeDir)).toBe(sha);
+  });
+
+  it("is a lab's only: an exam, a session on another branch, or no update announces nothing", () => {
+    const projectUpdate = { heads: [{ branch: "main", sha: "a".repeat(40) }], message: null };
+    const lab = { mode: "lab" as const, sourceRepo: null, projectUpdate };
+    expect(sessionUpdateOf({ targetRepo: null }, lab)).toEqual({ branch: "main", sha: "a".repeat(40), message: null });
+    expect(sessionUpdateOf({ targetRepo: null }, { ...lab, mode: "exam" })).toBeUndefined();
+    expect(sessionUpdateOf({ targetRepo: { fullName: "org/tp", defaultBranch: "master" } }, lab)).toBeUndefined();
+    expect(sessionUpdateOf({ targetRepo: null }, { ...lab, projectUpdate: null })).toBeUndefined();
   });
 });
