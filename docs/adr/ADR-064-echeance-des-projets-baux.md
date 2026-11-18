@@ -15,7 +15,9 @@ addendum carries it to projects), ADR-012 and D13 (amended the same day,
 [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md) §2, §5:
 the job collects an online workspace due for collection before it locks
 or commits a repository, a collection failing or timing out never holding
-the lock back.
+the lock back. Amended 2026-11-18 by the
+[Close now amendment](#amendment-2026-11-18-1147-close-now) (#1147): the
+course owner ends a published project now, through the same path.
 
 ## Context
 
@@ -191,3 +193,20 @@ the review round's tightening of 2, 4 and 6):
    refusal. A repository already at its deadline (even in its grace) gets
    none. Deleting one is refused once any ledger row names it; the
    deletion and the claim are ordered by the checkpoint's row lock.
+
+## Amendment (2026-11-18, #1147): Close now
+
+The course owner may end a published project before its deadline (`POST
+…/close`, `closeProjectNow`). The product owner decided that closing applies
+the grace (the deadline becomes the server's now, and the ticker then applies
+it as any deadline: lock or commit, ADR-130 collection, freeze, final passes)
+and that there is no Reopen action (moving the deadline later still reopens).
+The orchestrator of #1147 decided the rest:
+
+1. **Take-back.** A repository's own deadline still ahead is set to null, so
+   it follows the project's; one already past is kept.
+2. **Checkpoints left void.** A J−n not yet dispatched keeps its date, now
+   after the deadline, and never fires, instead of firing at once.
+3. **Refusals** (`closeRefusal`, `@quiz/domain`): `409 not_open` unless
+   published with the deadline ahead, a second Close included; `409
+   project_archived`; `403 owner_required` for an assistant (ADR-068).

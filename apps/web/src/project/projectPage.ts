@@ -26,7 +26,7 @@ import {
   type WorkModeRefusal,
   type WorkspaceStartRefusal,
 } from "@quiz/contracts";
-import { isVoidCheckpoint, projectBeforePublication, projectGraded, projectIsLive, reopens } from "@quiz/domain";
+import { closeRefusal, isVoidCheckpoint, projectBeforePublication, projectGraded, projectIsLive, reopens } from "@quiz/domain";
 
 import { ApiError, refusalCodeOf, wordedRefusal } from "../api";
 import { studentName } from "../group/groupRules";
@@ -61,6 +61,10 @@ export const projectRefetchInterval = (detail: ProjectDetail | undefined): numbe
  * (`primaryAction`).
  */
 export const offersSync = (p: ProjectDetail): boolean => p.primaryAction !== "sync" && (p.sync.ahead !== null || p.sync.inProgress);
+
+/** Whether the header offers *Close project* (#1147): the server's rule, `closeRefusal`; the owner's role is the caller's. */
+export const offersClose = (p: ProjectDetail, now: number): boolean =>
+  closeRefusal({ state: p.state, deadlineAt: new Date(p.deadlineAt), archived: p.archivedAt !== null }, new Date(now)) === null;
 
 /**
  * The sentence under the title: the project's situation, and the one action
@@ -338,6 +342,7 @@ type KnownCode =
 const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   not_draft: "project.refusal.notDraft",
   not_scheduled: "project.refusal.notScheduled",
+  not_open: "project.refusal.notOpen",
   distribution_missing: "project.refusal.distributionMissing",
   deadline_past: "project.refusal.deadlinePast",
   start_past: "project.refusal.startPast",

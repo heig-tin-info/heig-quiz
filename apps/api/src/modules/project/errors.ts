@@ -30,6 +30,8 @@ const STATUS: Record<Code, number> = {
   start_past: 422,
   not_draft: 409,
   not_scheduled: 409,
+  // #1147: *Close now* of a project not published, or whose deadline has come.
+  not_open: 409,
   publish_mode_frozen: 409,
   strategy_frozen: 409,
   unassigned_students: 409,

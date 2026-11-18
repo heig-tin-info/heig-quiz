@@ -6140,6 +6140,14 @@ export const en = {
   "project.publishNow": "Publish now",
   "project.unschedule": "Cancel schedule",
   "project.unscheduledToast": "Schedule cancelled",
+  // #1147: Close now, the course owner's, while the project is published and its deadline ahead.
+  "project.close": "Close project",
+  "project.close.confirm.title": "Close “{name}” now?",
+  "project.close.confirm.body.lock":
+    "The deadline becomes now for every student, own deadlines included. The repositories are locked, and the work is frozen for grading after {n} min of grace.",
+  "project.close.confirm.body.commit":
+    "The deadline becomes now for every student, own deadlines included. A deadline commit is added to the repositories, and the work is frozen for grading after {n} min of grace.",
+  "project.closedToast": "Project closed",
   "project.archived": "Project archived",
   "project.unarchived": "Project restored",
   "project.delete": "Delete project",
@@ -6476,6 +6484,7 @@ export const en = {
   "project.checkpoint.deleted": "Checkpoint deleted",
   "project.refusal.notDraft": "Only a draft can be changed this way.",
   "project.refusal.notScheduled": "This project is not scheduled.",
+  "project.refusal.notOpen": "This project is no longer open.",
   "project.refusal.distributionMissing": "The distribution repository is not built yet: publish once it is.",
   "project.refusal.strategyFrozen": "What happens at the deadline is fixed once it has passed.",
   "project.refusal.publishModeFrozen": "The opening choice is fixed once scheduled or published.",

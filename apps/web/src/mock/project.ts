@@ -94,6 +94,7 @@ import {
   checkpointDueAt,
   checkpointRefusal,
   classifyCriterion,
+  closeRefusal,
   criteriaScore,
   criteriaTable,
   criteriaTotals,
@@ -1790,6 +1791,29 @@ on("POST", "/app/api/projects/:id/unschedule", (m) => {
   const s = p.summary;
   if (s.state !== "scheduled") throw refuse(409, "not_scheduled", "The project is not scheduled");
   s.state = "draft";
+  s.editable = editableProjectFields(lifeOf(s, p.releasedAt), new Date(now));
+  return s;
+});
+
+/**
+ * #1147: Close now — the deadline becomes now, the extensions ahead taken
+ * back; then what the ticker does at once on the server: the project and
+ * the repositories at its deadline applied (locked under `lock`).
+ */
+on("POST", "/app/api/projects/:id/close", (m) => {
+  const p = projectOr404(m.groups!.id!);
+  const s = p.summary;
+  const refusal = closeRefusal({ state: s.state, deadlineAt: new Date(s.deadlineAt), archived: s.archivedAt !== null }, new Date(now));
+  if (refusal) throw refuse(409, refusal, "The project cannot be closed");
+  s.deadlineAt = iso(0);
+  s.state = "locked";
+  s.deadlineAppliedAt = s.deadlineAt;
+  for (const r of p.repos) {
+    if (r.deadlineAt !== null && Date.parse(r.deadlineAt) > now) r.deadlineAt = null;
+    if (r.deadlineAt !== null || !isLive(p, r)) continue;
+    r.deadlineAppliedAt = s.deadlineAt;
+    r.locked = s.deadlineStrategy === "lock";
+  }
   s.editable = editableProjectFields(lifeOf(s, p.releasedAt), new Date(now));
   return s;
 });

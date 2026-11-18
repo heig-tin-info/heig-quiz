@@ -66,7 +66,7 @@ export { criterionCiLog, gradeCriterion, gradingRepo, gradingView, validateProje
 export { repoCommitGraph } from "./commitGraph.js";
 export { regrade } from "./regrade.js";
 export { projectDetail, repoRuns } from "./detail.js";
-export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
+export { closeProjectNow, repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";
 export {
   columnProject,

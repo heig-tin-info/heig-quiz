@@ -2,7 +2,7 @@
  * HTTP surface of the `project` module, the staff's lifecycle (spec 05
  * §5.11, merge task M3-02): a classroom's projects and their creation, the
  * organization's repository browser, one project's summary, patch, delete,
- * schedule, unschedule (ADR-127), publish, archive and unarchive. Every body and payload is a schema of
+ * schedule, unschedule (ADR-127), publish, close now (#1147), archive and unarchive. Every body and payload is a schema of
  * `packages/contracts/src/project.ts` (invariant 7).
  *
  * From M3-08a, the staff's reads: the project page (`GET
@@ -317,6 +317,24 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       const row = await service.publishProject(app.db, scope.project.id, now, actorOf(req));
       await requestCodespaceSync(app, config, row.id);
       await service.refreshCriteria(app.db, config, row.id, "publish", actorOf(req), now, req.log);
+      return service.projectSummary(app.db, row, now);
+    }),
+  );
+
+  /**
+   * #1147 (ADR-064 amendment of 2026-11-18): *Close now* — the deadline
+   * brought to the server's now for every repository, the ticker applying it
+   * as any deadline (`closeProjectNow`); `409 not_open`, `409
+   * project_archived`. The course owner's, like the release (`403
+   * owner_required`). The portal reads the deadline of an online project.
+   */
+  app.post(
+    "/app/api/projects/:id/close",
+    session,
+    teacher(onOwnedProject, async ({ req, now, scope }) => {
+      const row = await service.closeProjectNow(app.db, scope.project.id, actorOf(req), now);
+      // No `requestDeadlineWork`, unlike the deadline's PATCH: nothing to lift, the ticker applies the deadline at its next pass.
+      await requestCodespaceSync(app, config, row.id);
       return service.projectSummary(app.db, row, now);
     }),
   );

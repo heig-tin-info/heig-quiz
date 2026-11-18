@@ -615,6 +615,9 @@ export const PROJECT_REFUSALS = [
   "points_out_of_range",
   "criteria_incomplete",
   "not_validated",
+  // #1147, *Close now* (`POST …/close`, ADR-064 amendment of 2026-11-18): a
+  // project that is not published, or whose deadline has come (409).
+  "not_open",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;

@@ -463,11 +463,15 @@ export type AuditAction =
    * `unlocked`, `committed`, `deleted` (counts) and `failed` (full names):
    * the facts M3-09's `project_deadline_applied` notice is worded from. By
    * the staff: `deadline_reopened` — a deadline already applied moved later,
-   * `payload.deadlineAt`, `previous`, `repos` (the repositories reopened).
+   * `payload.deadlineAt`, `previous`, `repos` (the repositories reopened);
+   * `closed_now` — *Close now* (#1147, ADR-064 amendment of 2026-11-18), the
+   * course owner's: `payload.deadlineAt` (the server's now), `previous`,
+   * `extensions` (the ids of the repositories whose own deadline was taken back).
    */
   | "project.deadline_applied"
   | "project.deadline_enforced"
   | "project.deadline_reopened"
+  | "project.closed_now"
   /**
    * One pass of a reconciliation (N-RES-08, ADR-011; merge task M3-06),
    * subject the scheduled task (`reconcile.grades`, `reconcile.repos`), one
