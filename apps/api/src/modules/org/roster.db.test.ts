@@ -70,8 +70,8 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
     // The exact production case: edu-ID hands over a Gmail address while the
     // GAPS roster only holds the @heig-vd.ch one.
     const classroomId = await seedClassroom(db);
-    const userId = await seedUser(db, "willy.tk89@gmail.test", "william.ammann@heig.test");
-    const enrollmentId = await seedEntry(db, classroomId, "william.ammann@heig.test", "Ammann");
+    const userId = await seedUser(db, "sam.pixel42@gmail.test", "samuel.exemple@heig.test");
+    const enrollmentId = await seedEntry(db, classroomId, "samuel.exemple@heig.test", "Exemple");
 
     expect(await claimEnrollments(db, { id: userId })).toBe(1);
     expect((await entry(db, enrollmentId)).userId).toBe(userId);

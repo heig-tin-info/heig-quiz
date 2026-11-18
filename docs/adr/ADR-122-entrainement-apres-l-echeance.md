@@ -3,7 +3,7 @@
 ## Status
 
 Accepted (2026-11-02, product owner Yves Chevallier, on issue #985 raised
-by the student noah-missegue: "once a series is closed I can no longer redo
+by a student: "once a series is closed I can no longer redo
 it to revise"). Migration `0125_attempt_after_due.sql`.
 
 Scope: an `exercise` that is over (closed, being graded, released), the

@@ -46,15 +46,15 @@ describe("parseRosterCsv (AU-13..16)", () => {
 });
 
 describe("rosterFromRows, permissive identification (Excel)", () => {
-  it("real HEIG layout: accents, E-mail, stray columns", () => {
+  it("HEIG export layout: accents, E-mail, stray columns", () => {
     const rows = [
       ["Nom", "Prénom", "Formation", "Mode de formation", "E-mail"],
-      ["Baschiera", "Michele", "EEM", "PT", "michele.baschiera@heig-vd.ch"],
-      ["Cornuz", "Aurélien", "EN", "EE", "aurelien.cornuz@heig-vd.ch"],
+      ["Dumartheray", "Mélina", "EEM", "PT", "melina.dumartheray@heig-vd.ch"],
+      ["Vuilleumoz", "Théo", "EN", "EE", "theo.vuilleumoz@heig-vd.ch"],
     ];
     expect(ok(rosterFromRows(rows))).toEqual([
-      { nom: "Baschiera", prenom: "Michele", email: "michele.baschiera@heig-vd.ch", timeBonusPercent: 0 },
-      { nom: "Cornuz", prenom: "Aurélien", email: "aurelien.cornuz@heig-vd.ch", timeBonusPercent: 0 },
+      { nom: "Dumartheray", prenom: "Mélina", email: "melina.dumartheray@heig-vd.ch", timeBonusPercent: 0 },
+      { nom: "Vuilleumoz", prenom: "Théo", email: "theo.vuilleumoz@heig-vd.ch", timeBonusPercent: 0 },
     ]);
   });
 
