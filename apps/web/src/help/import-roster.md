@@ -16,6 +16,14 @@ The extra-time column is optional. It is recognized under names like
 `bonus`, `temps supplémentaire` or `extra time`, and accepts `25`, `25 %` or
 `0.25`.
 
+## One student
+
+Type a few letters of a name: the list offers the students of your school who
+already signed in, with their school address. Pick one, then **Add**. Someone
+the list does not show is added by their e-mail address alone; the line then
+takes its name at their first sign-in. A name you typed or imported is never
+replaced.
+
 ## What happens on re-import
 
 The import is atomic: a single bad line rejects the whole file, and nothing

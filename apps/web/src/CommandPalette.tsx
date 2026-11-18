@@ -79,7 +79,7 @@ export function CommandPalette(props: CommandPaletteProps) {
   };
   // The shared combobox (virtual focus, wrapping arrows), with Home/End to
   // the ends of the list. Escape never reaches it: `useLayer` takes it first,
-  // in the capture phase, and closes the palette. A new query starts the
+  // in the capture phase, and closes the palette (`layerEscape`). A new query starts the
   // highlight over on the best match rather than on a row that now means
   // something else.
   const combobox = useCombobox({
@@ -88,6 +88,7 @@ export function CommandPalette(props: CommandPaletteProps) {
     query,
     ends: true,
     state: ALWAYS_OPEN,
+    layerEscape: true,
   });
   const { active } = combobox;
 

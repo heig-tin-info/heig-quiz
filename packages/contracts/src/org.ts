@@ -134,6 +134,46 @@ export const RosterErrorCode = z.enum(ROSTER_REFUSALS);
 export type RosterErrorCode = z.infer<typeof RosterErrorCode>;
 
 /**
+ * `GET /classrooms/:id/roster/candidates?q=` (ADR-133): a few letters of a
+ * name or of a school address. Under three letters the answer is empty, and
+ * so it is for a caller who may not search: they add by address.
+ */
+export const RosterCandidateQuery = z.object({ q: z.string().trim().max(100).default("") });
+export type RosterCandidateQuery = z.infer<typeof RosterCandidateQuery>;
+
+/**
+ * A person of the caller's school the roster does not hold yet: the name and
+ * the school address, nothing else — no account id, no picture, no sign-in.
+ * The address is also the pick: `RosterLineAdd` sends it back, and the
+ * server checks it again against the same filter.
+ */
+export const RosterCandidate = z.object({
+  givenName: z.string(),
+  familyName: z.string(),
+  email: z.string(),
+});
+export type RosterCandidate = z.infer<typeof RosterCandidate>;
+
+export const RosterCandidates = z.array(RosterCandidate);
+export type RosterCandidates = z.infer<typeof RosterCandidates>;
+
+/**
+ * `POST /classrooms/:id/roster/line` (ADR-133): one student, by address.
+ * `picked`: the address of a search result, whose name the server takes
+ * from the account (`404 student_not_found` when it is no longer one, `403
+ * student_search_unavailable` for a caller who may not search);
+ * otherwise an address-only line, its name blank until the claim fills it.
+ * Either way the line stays pending (F-ORG-05).
+ */
+export const RosterLineAdd = z.object({
+  email: z.string().trim().toLowerCase().email().max(200),
+  picked: z.boolean().default(false),
+  /** Accommodation: extra time in percent of the nominal duration. */
+  timeBonusPercent: z.number().int().min(0).max(300).default(0),
+});
+export type RosterLineAdd = z.infer<typeof RosterLineAdd>;
+
+/**
  * `POST /classrooms/:id/self-enroll`: `convert=1` confirms that the student
  * line holding the caller's e-mail becomes their staff seat (`409
  * student_line` without it).

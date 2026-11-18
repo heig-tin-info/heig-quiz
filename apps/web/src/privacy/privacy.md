@@ -10,11 +10,11 @@
 
 ### Your account
 
-At each sign-in, Switch edu-ID sends your name, your e-mail addresses, your edu-ID identifier and the address of your picture. Quiz also keeps everything edu-ID released at your last sign-in, your affiliations included: they decide whether your account is a teacher's, and they help diagnose sign-in problems; they are shown nowhere. It keeps your preferences (language, theme, notifications) and, if you link one, your GitHub account.
+At each sign-in, Switch edu-ID sends your name, your e-mail addresses, your edu-ID identifier and the address of your picture. Quiz also keeps everything edu-ID released at your last sign-in, your affiliations and your school address included: they decide whether your account is a teacher's and which school you belong to, and they help diagnose sign-in problems. They are shown nowhere, except your school address, to the teachers of your school (below). It keeps your preferences (language, theme, notifications) and, if you link one, your GitHub account.
 
 ### Your place in a class
 
-Your teacher imports the class list: your name, your school address, any extra time you were granted, and a note that only the teaching staff see.
+Your teacher imports the class list: your name, your school address, any extra time you were granted, and a note that only the teaching staff see. A teacher may also add you by your address alone; your name then fills that line at your first sign-in.
 
 ### Evaluations
 
@@ -81,6 +81,7 @@ Deleted data stays in the platform's backups for about four more months. That pe
 - **You**: your classrooms, your answers, and your results and feedback once your teacher publishes them.
 - **Other students**: never your grades or your picture. In a group project, your teammates share the repository and see its score. When a teacher shows the correction of an exercise, a poll's votes or the results in class, answers and results appear without names by default, unless the teacher chooses to display names; even without them, in a very small class, or from an answer quoted as typed, others may still guess whose it is.
 - **The teaching staff of your course** (its teachers and assistants): everything you do in that course, past years included: your answers, grades, attempt journal, drill activity and project repositories, and your progress live during an evaluation.
+- **Teachers of your school**: your name and your school address, to find you and add you to a class after your first sign-in. Nothing else of your account.
 - **Teachers who can read a question** you answered in an exam or revised by concept: only statistics over all the students who answered it, never with fewer than ten answers (ten students for the time in revision), never your name.
 - **The administrator of the platform**: the list of accounts with their picture and last activity, and the hours of use as counts. To reach a course, the administrator turns on special rights that last one hour and are recorded. To help you with a problem, an administrator may open a session in your name: it lasts at most an hour, cannot answer or submit anything for you, and is recorded under the administrator's name. Once it is closed, a notification tells you, with when it was opened and when it was closed.
 - **The people who run the servers** can technically reach all the data, through the machines themselves.

@@ -364,9 +364,11 @@ export const userEmails = pgTable(
  * Raw claim set released by the IdP at the last login. Diagnostic and
  * matching material only. Deliberately NOT minimized (see auth/claims.ts);
  * in exchange the table is never read by a user-facing view and never
- * leaves the server. One read derives from it: which of the account's own
+ * leaves the server. Two reads derive from it: which of the account's own
  * addresses the institution asserts (`notifications/address.ts`), exposed
- * as a flag on addresses the user already sees.
+ * as a flag on addresses the user already sees; and the school addresses a
+ * teacher of the same school finds a student by, with their name, to add
+ * them to a roster (ADR-133, `org/studentSearch.ts`).
  */
 export const userIdpClaims = pgTable("user_idp_claims", {
   userId: uuid("user_id")

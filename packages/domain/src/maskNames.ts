@@ -4,6 +4,8 @@
  * an evaluation, wherever a student typed them, become {@link MASK}.
  */
 
+import { foldForSearch } from "./studentSearch.js";
+
 /** What replaces a name; the grading prompt explains it to the model. */
 export const MASK = "[student]";
 
@@ -24,20 +26,13 @@ export interface MaskedPerson {
 /** A handle shorter than this would mask a variable named `a` everywhere. */
 const MIN_HANDLE = 2;
 
-/** Lowercase, without accents: how a name and a word are compared. */
-const fold = (word: string): string =>
-  word
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase();
-
 /** A word: letters, with their combining marks. A hyphen or an apostrophe separates two. */
 const WORD = /\p{L}[\p{L}\p{M}]*/gu;
 /** What may stand between two words of one name: spaces, a hyphen, an apostrophe. */
 const NAME_GAP = /^[\s\-'’]+$/u;
 
 const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const wordsOf = (text: string): string[] => (text.match(WORD) ?? []).map(fold);
+const wordsOf = (text: string): string[] => (text.match(WORD) ?? []).map(foldForSearch);
 
 interface Token {
   start: number;
@@ -87,7 +82,7 @@ export function maskNames(text: string, people: readonly MaskedPerson[], handles
       ? text.replace(new RegExp(`(?<![\\p{L}\\p{N}])(?:${whole.map(escape).join("|")})(?![\\p{L}\\p{N}])`, "giu"), MASK)
       : text;
 
-  const tokens = [...unmailed.matchAll(WORD)].map((m) => ({ start: m.index, end: m.index + m[0].length, word: fold(m[0]) }));
+  const tokens = [...unmailed.matchAll(WORD)].map((m) => ({ start: m.index, end: m.index + m[0].length, word: foldForSearch(m[0]) }));
   const masked = tokens.map((t) => parts.has(t.word));
   tokens.forEach((_, i) => {
     for (const name of names) if (spells(unmailed, tokens, i, name)) masked.fill(true, i, i + name.length);

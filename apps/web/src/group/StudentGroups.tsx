@@ -31,7 +31,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { GroupName, type GroupMemberName, type StudentGroupSet, type StudentGroupSets } from "@quiz/contracts";
 
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import {
   Badge,
@@ -48,6 +48,9 @@ import {
 } from "../ui";
 import { studentWrite, useStudentGroupSets, useStudentGroupWrite, type StudentWrite } from "./api";
 import { groupRefusalMessage, studentName } from "./groupRules";
+
+/** A classmate as listed here: a line added by its address alone has no name until its claim (ADR-133), and its address never reaches a student. */
+const memberName = (t: TFunction, m: GroupMemberName): string => studentName(m).trim() || t("sgroups.nameToCome");
 
 type Group = StudentGroupSet["groups"][number];
 
@@ -253,7 +256,7 @@ function GroupCard({
         <ul className="space-y-1 px-4 py-3 text-[13px]">
           {group.members.map((m, i) => (
             <li key={i} className="truncate">
-              {studentName(m)}
+              {memberName(t, m)}
             </li>
           ))}
         </ul>
@@ -275,7 +278,7 @@ function Unplaced({ names }: { names: GroupMemberName[] }) {
         <span className="text-[13px] font-normal tabular-nums text-fg-faint">{names.length}</span>
       </p>
       {names.length > 0 ? (
-        <p className="mt-1 text-[13px] text-fg-muted">{names.map(studentName).join(" · ")}</p>
+        <p className="mt-1 text-[13px] text-fg-muted">{names.map((m) => memberName(t, m)).join(" · ")}</p>
       ) : (
         <p className="mt-1 text-[13px] text-fg-faint">{t("groups.unplaced.empty")}</p>
       )}

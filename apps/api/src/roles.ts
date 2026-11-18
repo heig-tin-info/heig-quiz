@@ -192,6 +192,7 @@ export async function roleForUser(
   db: Db | Tx,
   config: AppConfig,
   userId: string,
+  { seats = true }: { seats?: boolean } = {},
 ): Promise<RoleDecision> {
   const [stored] = await db
     .select({ affiliations: userIdpClaims.affiliations })
@@ -202,7 +203,10 @@ export async function roleForUser(
     // Every address the account ever had verified: the set never shrinks.
     emails: await knownEmails(db, userId),
     affiliations: stored?.affiliations ?? [],
-    userId,
+    // `seats: false` leaves the course seats out: the role the account holds
+    // in its own right — an admin, a grant, a staff affiliation — which a
+    // student assistant seated on a course does not (ADR-133 §3).
+    ...(seats ? { userId } : {}),
   });
 }
 

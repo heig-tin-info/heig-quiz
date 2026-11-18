@@ -65,7 +65,7 @@ import { copyFollows, defaultGroupName, defaultSetName, duplicateSetName, formRa
 import { audit, type AuditAction, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
-import { classrooms, courses, enrollments, groupSets, projects, studentGroupMembers, studentGroups } from "../../db/schema.js";
+import { classrooms, courses, enrollments, groupSets, projects, studentGroupMembers, studentGroups, staffShownNom } from "../../db/schema.js";
 import { openSet, studentVisibleSet } from "../guards.js";
 import { notFoundError } from "../http.js";
 import { ConfirmationNeeded, copiesBefore, followingCopies, projectsChanged, RepoGroupTouched, setFrozen, stepCopies } from "../project/service.js";
@@ -194,11 +194,11 @@ export async function groupSetDetail(db: Db, setId: string, now: Date): Promise<
   const { set } = row;
   const groups = await db.select().from(studentGroups).where(eq(studentGroups.setId, set.id)).orderBy(asc(studentGroups.position));
   const students = await db
-    .select({ enrollmentId: enrollments.id, nom: enrollments.nom, prenom: enrollments.prenom, userId: enrollments.userId, groupId: studentGroupMembers.groupId })
+    .select({ enrollmentId: enrollments.id, nom: staffShownNom, prenom: enrollments.prenom, userId: enrollments.userId, groupId: studentGroupMembers.groupId })
     .from(enrollments)
     .leftJoin(studentGroupMembers, and(eq(studentGroupMembers.enrollmentId, enrollments.id), eq(studentGroupMembers.setId, set.id)))
     .where(isStudentOf(set.classroomId))
-    .orderBy(asc(enrollments.nom), asc(enrollments.prenom), asc(enrollments.id));
+    .orderBy(asc(staffShownNom), asc(enrollments.prenom), asc(enrollments.id));
   const view = (s: (typeof students)[number]) => ({ enrollmentId: s.enrollmentId, nom: s.nom, prenom: s.prenom, claimed: s.userId !== null });
   return {
     set: {
@@ -620,7 +620,10 @@ export interface StudentReader {
  * THE student exit of the module (ADR-070 §8, N-SEC-20). Every field is
  * picked by hand: names, sizes, members' first and last names; never a
  * roster line's id, a claim, an e-mail, a GitHub login, the projects naming
- * a set. Open: every group and the students in no group; closed: the
+ * a set. The names are the raw columns, never `staffShownNom`: a line added
+ * by its address alone (ADR-133) is sent with a blank name, counted in its
+ * group's size, and shown by the client as a name to come. Open: every
+ * group and the students in no group; closed: the
  * reader's own group alone. Three reads whatever the number of sets.
  */
 export async function studentGroupSets(db: Db, classroomId: string, reader: StudentReader, now: Date): Promise<StudentGroupSets> {

@@ -16,6 +16,14 @@ La colonne de temps supplémentaire est facultative. Elle est reconnue sous
 des noms comme `bonus`, `temps supplémentaire` ou `extra time`, et accepte
 `25`, `25 %` ou `0.25`.
 
+## Un étudiant
+
+Tapez quelques lettres d'un nom : la liste propose les étudiants de votre
+école déjà connectés, avec leur adresse de l'école. Choisissez une personne,
+puis **Ajouter**. Une personne absente de la liste s'ajoute par sa seule
+adresse e-mail ; la ligne prend alors son nom à la première connexion. Un nom
+saisi ou importé n'est jamais remplacé.
+
 ## Réimporter
 
 L'import est atomique : une seule ligne fautive rejette tout le fichier, et

@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, exists, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
+import { and, eq, exists, inArray, isNull, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { parseRosterCsv, rosterFromRows, type Cell, type RosterParse } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
+import { qualified } from "../../db/qualified.js";
 import {
   avatars,
   classrooms,
@@ -12,6 +13,7 @@ import {
   enrollments,
   githubAccounts,
   githubClassroomLinks,
+  staffShownNom,
   userEmails,
   users,
 } from "../../db/schema.js";
@@ -42,31 +44,10 @@ export async function importRoster(
   let updated = 0;
   await db.transaction(async (tx) => {
     for (const row of parse.rows) {
-      const [res] = await tx
-        .insert(enrollments)
-        .values({
-          id: randomUUID(),
-          classroomId,
-          nom: row.nom,
-          prenom: row.prenom,
-          email: row.email,
-          timeBonusPercent: row.timeBonusPercent,
-        })
-        .onConflictDoUpdate({
-          target: [enrollments.classroomId, enrollments.email],
-          // The accommodation column is only written when the sheet carries
-          // one: re-importing a list without it must not wipe a bonus the
-          // teacher set by hand.
-          set: {
-            nom: row.nom,
-            prenom: row.prenom,
-            ...(row.timeBonusPercent > 0 ? { timeBonusPercent: row.timeBonusPercent } : {}),
-          },
-        })
-        .returning({ claimedAt: enrollments.claimedAt, userId: enrollments.userId });
+      const res = await upsertLine(tx, classroomId, row, { names: true });
       // xmax = 0 is Postgres's insert marker, but let's stay portable:
       // we count as "inserted" what was not yet claimed nor known.
-      if (res && res.userId === null && res.claimedAt === null) inserted += 1;
+      if (res.userId === null && res.claimedAt === null) inserted += 1;
       else updated += 1;
     }
   });
@@ -75,6 +56,40 @@ export async function importRoster(
   // Fine-grained insert/update counting will come with a real need; what
   // matters is atomicity and idempotent replay.
   return { parse, summary: { inserted, updated } };
+}
+
+type Line = { email: string; nom: string; prenom: string; timeBonusPercent: number };
+
+/**
+ * One roster line upserted by (classroom, email): inserted pending, or the
+ * line already there updated — its names when `names` (an import refreshes
+ * them; a line added by hand keeps them, ADR-133 §4), its extra time only
+ * when one is given: a list without the column must not wipe a bonus set
+ * by hand. Its claim is never touched.
+ */
+async function upsertLine(db: Db | Tx, classroomId: string, line: Line, { names }: { names: boolean }) {
+  const [row] = await db
+    .insert(enrollments)
+    .values({ id: randomUUID(), classroomId, ...line })
+    .onConflictDoUpdate({
+      target: [enrollments.classroomId, enrollments.email],
+      set: {
+        ...(names ? { nom: line.nom, prenom: line.prenom } : {}),
+        timeBonusPercent: line.timeBonusPercent > 0 ? line.timeBonusPercent : sql`${enrollments.timeBonusPercent}`,
+      },
+    })
+    .returning({ id: enrollments.id, claimedAt: enrollments.claimedAt, userId: enrollments.userId });
+  return row!;
+}
+
+/**
+ * One line added by hand (ADR-133 §5, §6): an address, and the name of the
+ * search result it was picked from, blank for an address typed. Pending,
+ * whatever account the address may belong to: its holder's own next request
+ * claims it (ADR-053 addendum §1). Returns the line's id.
+ */
+export async function addRosterLine(db: Db, classroomId: string, line: Line): Promise<string> {
+  return (await upsertLine(db, classroomId, line, { names: false })).id;
 }
 
 /** What happened to a classroom's roster, as its staff are told of it. */
@@ -129,6 +144,21 @@ function countIn(
   const room = rooms.get(classroomId) ?? { courseId, classroomId, classroomName, count: 0 };
   room.count += 1;
   rooms.set(classroomId, room);
+}
+
+/**
+ * The `set` of a claim that gives a nameless line (an address added alone,
+ * ADR-133 §4) the account's name. A name typed or imported by the staff is
+ * theirs and stays: never overwritten. Both read the row as it was.
+ */
+function nameOfAccount(userId: string) {
+  const nameless = sql`(btrim(${enrollments.nom}) = '' AND btrim(${enrollments.prenom}) = '')`;
+  const ofAccount = (column: AnyColumn) =>
+    sql`(SELECT ${qualified(column)} FROM ${users} WHERE ${qualified(users.id)} = ${userId})`;
+  return {
+    nom: sql`CASE WHEN ${nameless} THEN ${ofAccount(users.familyName)} ELSE ${enrollments.nom} END`,
+    prenom: sql`CASE WHEN ${nameless} THEN ${ofAccount(users.givenName)} ELSE ${enrollments.prenom} END`,
+  };
 }
 
 /** A pending roster line, and the account a claim pass would attach it to. */
@@ -187,7 +217,11 @@ async function settleClaims<M extends ClaimMatch>(
     try {
       [attached] = await db
         .update(enrollments)
-        .set({ userId: match.userId, claimedAt: new Date() })
+        .set({
+          userId: match.userId,
+          claimedAt: new Date(),
+          ...nameOfAccount(match.userId),
+        })
         .where(and(eq(enrollments.id, match.entryId), isNull(enrollments.userId)))
         .returning({ id: enrollments.id });
     } catch {
@@ -341,7 +375,7 @@ export async function rosterView(db: Db, classroomId: string) {
       ),
     )
     .where(eq(enrollments.classroomId, classroomId))
-    .orderBy(enrollments.nom, enrollments.prenom);
+    .orderBy(staffShownNom, enrollments.prenom);
   return rows.map(({ avatarAt, pictureUrl, claimedAt, ...r }) => ({
     ...r,
     lastLoginAt: r.lastLoginAt?.toISOString() ?? null,

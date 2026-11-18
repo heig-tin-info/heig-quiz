@@ -87,6 +87,7 @@ import {
   projects,
   studentGroupMembers,
   studentGroups,
+  staffShownNom,
 } from "../../db/schema.js";
 import { assertNoLiveGrant, type GrantRow } from "./access.js";
 import type { RepoRow } from "./repos.js";
@@ -337,7 +338,7 @@ export async function describeConsequences(tx: Tx, added: (PlanConsequence & { p
     .where(inArray(projects.id, [...new Set(added.map((c) => c.projectId))]));
   const projectOf = new Map(named.map((p) => [p.id, p.name]));
   const lines = await tx
-    .select({ id: enrollments.id, nom: enrollments.nom, prenom: enrollments.prenom })
+    .select({ id: enrollments.id, nom: staffShownNom, prenom: enrollments.prenom })
     .from(enrollments)
     .where(inArray(enrollments.id, [...new Set(added.map((c) => c.enrollmentId))]));
   const lineOf = new Map(lines.map((l) => [l.id, l]));

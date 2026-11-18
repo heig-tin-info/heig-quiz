@@ -351,6 +351,10 @@ const scenes = [
   // ADR-085 §8: the 2×2 per question is on `classroom-drill`; here no question has ten students yet.
   { name: "classroom-drill-unstated", role: "teacher", path: "/classrooms/r1?tab=drill&unstated=1" },
   { name: "classroom-import", role: "teacher", path: "/classrooms/r1?tab=roster", act: (p) => p.getByRole("button", { name: /add students/i }).first().click() },
+  // ADR-133: the student search of the sheet, its list open on a name; then
+  // a line added by its address alone, named by it on the roster.
+  { name: "classroom-import-search", role: "teacher", path: "/classrooms/r1?tab=roster", fold: true, act: async (p) => { await p.getByRole("button", { name: /add students|ajouter des étudiants/i }).first().click(); await p.getByRole("combobox").fill("roch"); await p.getByRole("option").first().waitFor(); } },
+  { name: "classroom-import-nameless", role: "teacher", path: "/classrooms/r1?tab=roster", fold: true, act: async (p) => { await p.getByRole("button", { name: /add students|ajouter des étudiants/i }).first().click(); await p.getByRole("combobox").fill("aaa.new@heig-vd.ch"); await p.getByText(/^(One student|Un étudiant)$/).click(); await p.waitForTimeout(400); await p.getByRole("button", { name: /^(Add|Ajouter)$/ }).click(); await p.waitForTimeout(600); await p.keyboard.press("Escape"); await p.waitForTimeout(1000); } },
   // #156: the period dialog — the months, the two semester presets, the label
   // — opened from the period beside the title (the header's overflow menu
   // left for the Settings tab, D24).

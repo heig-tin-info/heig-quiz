@@ -536,6 +536,37 @@ describe("the student view, the group module's one exit (N-SEC-20)", () => {
   });
 });
 
+describe("a classmate added by address alone (ADR-133, invariant 4)", () => {
+  it("is nameless in the student view, counted, and its address reaches no student response", async () => {
+    const room = await classroom("N");
+    const [ana, ben] = room.students as [Who, Who];
+    const placed = randomUUID();
+    const unplaced = randomUUID();
+    await server.app.db.insert(enrollments).values([
+      { id: placed, classroomId: room.id, nom: "", prenom: "", email: "placed-nameless@nowhere.test" },
+      { id: unplaced, classroomId: room.id, nom: "", prenom: "", email: "unplaced-nameless@nowhere.test" },
+    ]);
+    const set = await newSet(room, "Nameless", 3);
+    const group = (await detailOk(await staff("POST", `/app/api/group-sets/${set.set.id}/groups`, { name: "Avec" }))).groups[0]!;
+    await detailOk(await staff("PUT", `/app/api/group-sets/${set.set.id}/members/${placed}`, { groupId: group.id }));
+
+    const open = (await setOf(room, ana.headers, set.set.id))!;
+    expect(open.groups[0]).toMatchObject({ name: "Avec", size: 1, members: [{ nom: "", prenom: "" }] });
+    expect(open.unplaced).toContainEqual({ nom: "", prenom: "" });
+    // Every student exit of the module: the view, and each write's answer.
+    await answer(await join(set.set.id, ana, group.id), set.set.id);
+    await answer(await create(set.set.id, ben, { name: "Autre" }), set.set.id, 201);
+    await answer(await rename(set.set.id, ben, (await setOf(room, ben.headers, set.set.id))!.myGroupId!, "Renamed"), set.set.id);
+    await answer(await leave(set.set.id, ana), set.set.id);
+    await asStudent(await call("GET", "/app/api/student/home", ana.headers));
+    await asStudent(await call("GET", `/app/api/student/classrooms/${room.id}`, ana.headers));
+    expect(studentBodies.length).toBeGreaterThan(6);
+    for (const body of studentBodies) {
+      expect(body).not.toContain("nameless@nowhere.test");
+    }
+  });
+});
+
 // ---------------------------------------------------------------- hints
 
 describe("the hints of a set (ADR-070 §9)", () => {

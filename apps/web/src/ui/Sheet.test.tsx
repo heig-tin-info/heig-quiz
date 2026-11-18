@@ -41,6 +41,18 @@ describe("Sheet", () => {
     expect(dialog.parentElement?.parentElement).toBe(document.body);
   });
 
+  it("leaves Escape to a combobox whose list is open: the list closes, not the sheet", async () => {
+    const { dialog, onClose } = await openSheet();
+    const input = within(dialog).getByRole("textbox", { name: "Name" });
+    input.setAttribute("data-list-escape", "");
+    input.focus();
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+    input.removeAttribute("data-list-escape");
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("closes on Escape and hands the focus back to the opener", async () => {
     const { dialog, onClose } = await openSheet();
     expect(dialog.contains(document.activeElement)).toBe(true);

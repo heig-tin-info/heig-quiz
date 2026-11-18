@@ -10,11 +10,11 @@
 
 ### Votre compte
 
-À chaque connexion, Switch edu-ID transmet votre nom, vos adresses e-mail, votre identifiant edu-ID et l'adresse de votre photo. Quiz conserve aussi tout ce qu'edu-ID a transmis à votre dernière connexion, vos affiliations comprises : elles décident si votre compte est celui d'un enseignant, et aident à diagnostiquer les problèmes de connexion ; elles ne sont affichées nulle part. Il conserve vos préférences (langue, thème, notifications) et, si vous en liez un, votre compte GitHub.
+À chaque connexion, Switch edu-ID transmet votre nom, vos adresses e-mail, votre identifiant edu-ID et l'adresse de votre photo. Quiz conserve aussi tout ce qu'edu-ID a transmis à votre dernière connexion, vos affiliations et votre adresse de l'école comprises : elles décident si votre compte est celui d'un enseignant et de quelle école vous faites partie, et aident à diagnostiquer les problèmes de connexion. Elles ne sont affichées nulle part, sauf votre adresse de l'école, aux enseignants de votre école (plus bas). Il conserve vos préférences (langue, thème, notifications) et, si vous en liez un, votre compte GitHub.
 
 ### Votre place dans une classe
 
-Votre enseignant importe la liste de classe : votre nom, votre adresse de l'école, le temps supplémentaire qui vous a été accordé, et une note que seule l'équipe enseignante voit.
+Votre enseignant importe la liste de classe : votre nom, votre adresse de l'école, le temps supplémentaire qui vous a été accordé, et une note que seule l'équipe enseignante voit. Un enseignant peut aussi vous ajouter par votre seule adresse ; votre nom complète alors cette ligne à votre première connexion.
 
 ### Les évaluations
 
@@ -81,6 +81,7 @@ Les données supprimées restent environ quatre mois de plus dans les sauvegarde
 - **Vous** : vos classes, vos réponses, et vos résultats et retours une fois que votre enseignant les publie.
 - **Les autres étudiants** : jamais vos notes ni votre photo. Dans un projet de groupe, vos coéquipiers partagent le dépôt et voient son score. Quand un enseignant montre en classe la correction d'un exercice, les votes d'un sondage ou les résultats, les réponses et les résultats apparaissent sans nom par défaut, sauf si l'enseignant choisit d'afficher les noms ; même sans eux, dans une très petite classe, ou d'après une réponse citée telle qu'écrite, d'autres peuvent tout de même deviner de qui elle vient.
 - **L'équipe enseignante de votre cours** (ses enseignants et assistants) : tout ce que vous faites dans ce cours, années passées comprises : vos réponses, notes, journal de tentative, activité de révision et dépôts de projet, et votre progression en direct pendant une évaluation.
+- **Les enseignants de votre école** : votre nom et votre adresse de l'école, pour vous trouver et vous ajouter à une classe après votre première connexion. Rien d'autre de votre compte.
 - **Les enseignants qui peuvent lire une question** à laquelle vous avez répondu dans un examen ou que vous avez révisée par notion : seulement des statistiques sur l'ensemble des étudiants qui y ont répondu, jamais avec moins de dix réponses (dix étudiants pour le temps en révision), jamais votre nom.
 - **L'administrateur de la plateforme** : la liste des comptes avec leur photo et leur dernière activité, et les heures d'utilisation sous forme de nombres. Pour accéder à un cours, l'administrateur active des droits spéciaux qui durent une heure et sont enregistrés. Pour vous aider à résoudre un problème, un administrateur peut ouvrir une session à votre nom : elle dure au plus une heure, ne peut rien répondre ni rendre à votre place, et elle est enregistrée au nom de l'administrateur. Une fois qu'elle est fermée, une notification vous le dit, avec l'heure de son ouverture et celle de sa fermeture.
 - **Les personnes qui exploitent les serveurs** peuvent techniquement atteindre toutes les données, par les machines elles-mêmes.

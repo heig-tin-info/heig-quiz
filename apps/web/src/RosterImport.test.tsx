@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { RosterImport, spreadsheetRows } from "./RosterImport";
+import { candidatesFor } from "./test/candidates";
 import { fail, mockFetch, ok, renderWithProviders } from "./test/render";
 
 /*
@@ -57,6 +58,83 @@ describe("RosterImport rejected lines", () => {
     openSheet(ok({ imported: 1 }));
     await pasteAndImport();
     await waitFor(() => expect(screen.getByText("Import done")).toBeVisible());
+  });
+});
+
+describe("RosterImport one student (ADR-133)", () => {
+  const CANDIDATES = "/app/api/classrooms/c1/roster/candidates";
+  const LINE = "POST /app/api/classrooms/c1/roster/line";
+  const lea = { givenName: "Léa", familyName: "Rochat", email: "lea.rochat@heig-vd.ch" };
+
+  const open = (stubs: Parameters<typeof mockFetch>[0]) => {
+    const stub = mockFetch(stubs);
+    const onClose = vi.fn();
+    renderWithProviders(<RosterImport classroomId="c1" onClose={onClose} />, {
+      route: "/classrooms/c1?tab=students",
+    });
+    return { ...stub, onClose };
+  };
+  const field = () => screen.getByRole("combobox", { name: /Name or e-mail/ });
+  const posted = (calls: { method: string; url: string; body: unknown }[]) =>
+    calls.filter((c) => c.method === "POST").map((c) => c.body);
+
+  it("adds a person picked by name, with the school address shown, by a click", async () => {
+    const { calls } = open({ ...candidatesFor(CANDIDATES, "roch", [lea]), [LINE]: ok({ ok: true }) });
+    await userEvent.type(field(), "roch");
+    await userEvent.click(await screen.findByRole("option", { name: /Léa Rochat/ }));
+    // The address names the pick on the label line: two homonyms differ there.
+    expect(screen.getByText("lea.rochat@heig-vd.ch")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /Add/ }));
+    await waitFor(() => expect(posted(calls)).toEqual([{ email: "lea.rochat@heig-vd.ch", picked: true, timeBonusPercent: 0 }]));
+    expect(await screen.findByText("Added: Léa Rochat")).toBeVisible();
+  });
+
+  it("never adds on Enter: Enter only picks the highlighted match", async () => {
+    const { calls } = open(candidatesFor(CANDIDATES, "rochat", [lea]));
+    await userEvent.type(field(), "rochat");
+    await screen.findByRole("option", { name: /Léa Rochat/ });
+    await userEvent.keyboard("{Enter}");
+    expect(field()).toHaveValue("Léa Rochat");
+    await userEvent.keyboard("{Enter}");
+    expect(posted(calls)).toEqual([]);
+  });
+
+  it("adds a typed address nobody was picked from, nameless", async () => {
+    const { calls } = open({ ...candidatesFor(CANDIDATES, "new@school.test", []), [LINE]: ok({ ok: true }) });
+    await userEvent.type(field(), "New@school.test");
+    await userEvent.type(screen.getByLabelText("Extra time (%)"), "25");
+    await userEvent.click(screen.getByRole("button", { name: /Add/ }));
+    await waitFor(() => expect(posted(calls)).toEqual([{ email: "new@school.test", picked: false, timeBonusPercent: 25 }]));
+  });
+
+  it("waits for three letters, blanks aside, before it searches", async () => {
+    const { calls } = open({});
+    await userEvent.type(field(), "a b");
+    expect(await screen.findByText("Type three letters of a name or of a school address.")).toBeVisible();
+    expect(calls.filter((c) => c.url.includes("/roster/candidates"))).toEqual([]);
+  });
+
+  it("says that nobody of the school matches, and that an address is added as typed", async () => {
+    open(candidatesFor(CANDIDATES, "dupont", []));
+    await userEvent.type(field(), "dupont");
+    expect(await screen.findByText(/No one of your school matches “dupont”/)).toBeVisible();
+  });
+
+  it("closes the open list on Escape, not the sheet", async () => {
+    const { onClose } = open(candidatesFor(CANDIDATES, "roch", [lea]));
+    await userEvent.type(field(), "roch");
+    await screen.findByRole("option", { name: /Léa Rochat/ });
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("says a pick that is no longer offered", async () => {
+    open({ ...candidatesFor(CANDIDATES, "roch", [lea]), [LINE]: fail(404, { error: "student_not_found" }) });
+    await userEvent.type(field(), "roch");
+    await userEvent.click(await screen.findByRole("option", { name: /Léa Rochat/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Add/ }));
+    expect(await screen.findByText(/can no longer be added from the search/)).toBeVisible();
   });
 });
 

@@ -23,7 +23,7 @@ import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { users } from "../db/schema.js";
 import { claimEnrollments } from "../modules/org/service.js";
-import { syncUserEmails } from "./claims.js";
+import { recordIdpClaims, syncUserEmails } from "./claims.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
 import type { SessionUser } from "./plugin.js";
 
@@ -93,7 +93,16 @@ export async function upsertPersona(
     })
     .returning();
   if (!row) throw new Error("Persona upsert returned no row");
-  await syncUserEmails(app.db, row.id, { email: persona.email }, true);
+  // The claims edu-ID would release for a HEIG-VD account: the school
+  // address and the affiliation, so the student search (ADR-133) and the
+  // role rule see a development school as they see the real one.
+  const claims = {
+    email: persona.email,
+    swissEduIDLinkedAffiliationMail: [persona.email],
+    eduPersonScopedAffiliation: [persona.role === "student" ? "student@hes-so.ch" : "staff@hes-so.ch"],
+  };
+  await recordIdpClaims(app.db, row.id, claims);
+  await syncUserEmails(app.db, row.id, claims, true);
   await claimEnrollments(app.db, { id: row.id });
   const [fresh] = await app.db.select().from(users).where(eq(users.id, row.id)).limit(1);
   return fresh ?? row;

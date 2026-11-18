@@ -15,6 +15,7 @@ import {
 import { Fragment, useState } from "react";
 
 import type { ImpersonationLink, RosterEntry } from "@quiz/contracts";
+import { displayName } from "@quiz/domain";
 
 import { api, ApiError, apiErrorMessage } from "./api";
 import { useConfirm } from "./confirm";
@@ -64,15 +65,19 @@ function Row({
   });
   const invalidate = () => qc.invalidateQueries({ queryKey: classroomKey(classroomId) });
   const base = `/app/api/classrooms/${classroomId}/roster/${entry.id}`;
-  const fullName = `${entry.prenom} ${entry.nom}`;
+  // A line added by its address alone has no name until its holder's first
+  // sign-in (ADR-133): it is named by its address meanwhile.
+  const fullName = displayName({ givenName: entry.prenom, familyName: entry.nom, email: entry.email });
+  const named = entry.nom.trim() !== "" || entry.prenom.trim() !== "";
 
   const save = useMutation({
     mutationFn: () =>
       api(base, {
         method: "PATCH",
         body: JSON.stringify({
-          nom: form.nom,
-          prenom: form.prenom,
+          // A name left blank stays as it is: the line takes one at the claim.
+          ...(form.nom.trim() ? { nom: form.nom } : {}),
+          ...(form.prenom.trim() ? { prenom: form.prenom } : {}),
           email: form.email,
           timeBonusPercent: Number(form.timeBonusPercent) || 0,
         }),
@@ -197,11 +202,11 @@ function Row({
       <tr className={cx(T.row, T.rowHover)}>
         <td className={`${T.td} font-semibold`}>
           <span className="flex items-center gap-2.5">
-            <PersonAvatar name={[entry.prenom, entry.nom]} src={entry.avatarUrl} />
-            {entry.nom}
+            <PersonAvatar name={named ? [entry.prenom, entry.nom] : [fullName, ""]} src={entry.avatarUrl} />
+            {named ? entry.nom : <span className="font-normal text-fg-muted">{fullName}</span>}
           </span>
         </td>
-        <td className={T.td}>{entry.prenom}</td>
+        <td className={T.td}>{named ? entry.prenom : <span className="text-fg-faint">—</span>}</td>
         <td className={cx(T.td, "text-fg-muted", T.colHigh)}>
           <a href={`mailto:${entry.email}`} className="hover:text-fg hover:underline">
             {entry.email}

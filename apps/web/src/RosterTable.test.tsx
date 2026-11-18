@@ -108,6 +108,23 @@ describe("RosterTable impersonation link (ADR-034)", () => {
   });
 });
 
+describe("RosterTable nameless line (ADR-133)", () => {
+  it("names a line added by its address alone by that address, and saves it without a blank name", async () => {
+    const { calls } = mockFetch({ "PATCH /app/api/classrooms/c1/roster/e-1": ok({}) });
+    const entry = makeRosterEntry({ nom: "", prenom: "", email: "new@school.test", status: "pending", userId: null });
+    renderWithProviders(<RosterTable classroomId="c1" roster={[entry]} />, { route: "/classrooms/c1?tab=students" });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Actions for new@school.test" }));
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Edit" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === "PATCH").map((c) => c.body)).toEqual([
+        { email: "new@school.test", timeBonusPercent: 0 },
+      ]),
+    );
+  });
+});
+
 describe("RosterTable GitHub login", () => {
   it("shows a linked student's login under the address, and nothing for the others", () => {
     renderWithProviders(

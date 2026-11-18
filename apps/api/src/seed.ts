@@ -43,6 +43,12 @@ const CLASSROOM = {
 };
 /** Léa gets the accommodation, so the extra-time path is always exercised. */
 const TIME_BONUS: Record<string, number> = { lea: 25 };
+/** Students of the school on no roster: the student search finds them (ADR-133). */
+const SCHOOL_STUDENTS: Persona[] = [
+  { key: "school-camille", givenName: "Camille", familyName: "Rey", email: "camille.rey@heig-vd.ch", role: "student" },
+  { key: "school-hugo", givenName: "Hugo", familyName: "Rochat", email: "hugo.rochat@heig-vd.ch", role: "student" },
+  { key: "school-ines", givenName: "Inès", familyName: "Pittet", email: "ines.pittet@heig-vd.ch", role: "student" },
+];
 
 /**
  * A Fastify-shaped stub carrying what the services below actually read: the
@@ -130,6 +136,10 @@ export async function seed(
   log(
     `roster       ${students.length} students (${students.filter((p) => TIME_BONUS[p.key]).length} with extra time)`,
   );
+  // Students of the school who signed in but sit in no classroom: what the
+  // student search of "Add students" finds (ADR-133). Not on the login page.
+  for (const persona of SCHOOL_STUDENTS) await upsertPersona(app, persona);
+  log(`school       ${SCHOOL_STUDENTS.length} students on no roster`);
 
   const counts = await seedDemoContent(
     app,
