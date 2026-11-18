@@ -641,6 +641,12 @@ export async function scheduleProject(db: Db, projectId: string, now: Date, acto
 }
 
 /**
+ * A project back to a draft forgets its sync's message (ADR-132 §10): no
+ * student reads a draft, and a later publication must not show an old one.
+ */
+const NO_SYNC_MESSAGE = { syncMessage: null, syncMessageAt: null };
+
+/**
  * `POST …/unschedule` (ADR-127): a scheduled project back to a draft — off
  * the students' Upcoming, nobody told; `409 not_scheduled` otherwise.
  * Audited `project.unschedule`.
@@ -649,7 +655,7 @@ export async function unscheduleProject(db: Db, projectId: string, actor: AuditA
   return db.transaction(async (tx) => {
     const project = await lockedProject(tx, projectId);
     if (project.state !== "scheduled") throw new ProjectError("not_scheduled", "The project is not scheduled");
-    const [row] = await tx.update(projects).set({ state: "draft" }).where(eq(projects.id, project.id)).returning();
+    const [row] = await tx.update(projects).set({ state: "draft", ...NO_SYNC_MESSAGE }).where(eq(projects.id, project.id)).returning();
     await audit(tx, { ...actor, action: "project.unschedule", subjectType: "project", subjectId: project.id });
     return row!;
   });
@@ -752,7 +758,7 @@ export async function setProjectArchived(
   return db.transaction(async (tx) => {
     const [row] = await tx
       .update(projects)
-      .set({ archivedAt: archived ? now : null, ...(stale ? { state: "draft" as const } : {}) })
+      .set({ archivedAt: archived ? now : null, ...(stale ? { state: "draft" as const, ...NO_SYNC_MESSAGE } : {}) })
       .where(eq(projects.id, project.id))
       .returning();
     if (archived) await stopProjects(tx, [project.id], now);

@@ -702,7 +702,7 @@ describe("the teacher's message (ADR-132 §10)", () => {
     expect((await syncWith(p.id, 42)).statusCode).toBe(400);
     expect((await call("POST", `/app/api/projects/${p.id}/sync`, teacher.headers, { message: "ok", extra: 1 })).statusCode).toBe(400);
     // A control or direction character, refused before anything moves: a NUL would fail the write after the distribution's push.
-    for (const bad of ["a\u0000b", "a\u0007b", "a\u0085b", "a‮b", "a⁦b"]) {
+    for (const bad of ["a\u0000b", "a\u0007b", "a\u0085b", "a\u202eb", "a\u2066b", "a\ud800b"]) {
       expect((await syncWith(p.id, bad)).statusCode, JSON.stringify(bad)).toBe(400);
     }
     expect(await auditOf(p.id, "project.sync_requested")).toHaveLength(0);

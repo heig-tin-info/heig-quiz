@@ -121,7 +121,11 @@ export function SyncDialog({
             <div>
               <p className="font-medium">{t("project.syncDialog.empty")}</p>
               <p className="text-fg-muted">
-                {failed > 0 ? t("project.syncDialog.retryFailed", { n: failed }) : t("project.syncDialog.emptyBody")}
+                {failed === 1
+                  ? t("project.syncDialog.retryFailed.one")
+                  : failed > 1
+                    ? t("project.syncDialog.retryFailed", { n: failed })
+                    : t("project.syncDialog.emptyBody")}
               </p>
             </div>
           </div>
@@ -182,7 +186,9 @@ function ChangeList({ preview }: { preview: ProjectSyncPreview }) {
               </div>
             );
           })}
-          {b.more > 0 ? <p className="text-xs text-fg-muted">{t("project.syncDialog.more", { n: b.more })}</p> : null}
+          {b.more > 0 ? (
+            <p className="text-xs text-fg-muted">{b.more === 1 ? t("project.syncDialog.more.one") : t("project.syncDialog.more", { n: b.more })}</p>
+          ) : null}
         </section>
       ))}
       {protectedNote || otherNote ? (

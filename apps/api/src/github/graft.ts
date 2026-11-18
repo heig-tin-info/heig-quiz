@@ -128,9 +128,10 @@ function alive(pid: number): boolean {
 /**
  * The work directories a crash or a deploy left (a `finally` that never
  * ran) — the graft's and the sync's ({@link SWEPT}) —, removed at
- * startup: this process's own pid's (it has none in flight yet) and a dead
- * process's; never a live one's (a test file's grafts, another process on
- * the same host).
+ * startup: this process's own pid's and a dead process's; never a live
+ * one's (a test file's grafts, another process on the same host). Its own
+ * have none in flight only because `registerProjectJobs` calls this before
+ * any queue works, and the app is built before the server listens.
  */
 export async function sweepGraftDirs(): Promise<void> {
   const root = tmpdir();

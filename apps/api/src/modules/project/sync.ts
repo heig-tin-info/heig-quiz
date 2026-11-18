@@ -352,7 +352,7 @@ export function quotedMessage(message: string | null): string {
   if (message === null) return "";
   const longest = Math.max(0, ...[...message.matchAll(/`+/g)].map((run) => run[0].length));
   const fence = "`".repeat(Math.max(3, longest + 1));
-  return `\n\nYour teacher's message:\n\n${fence}text\n${message.replace(/\r\n?/g, "\n")}\n${fence}`;
+  return `\n\nYour teacher's message:\n\n${fence}text\n${message}\n${fence}`;
 }
 
 /** What a sync pull request says beside its files: whether grading takes the update merged or not, and the teacher's message. */

@@ -6,9 +6,9 @@ Accepted (2026-11-17). The principles, the graft (A), the Regrade's
 semantics and its use after the release, C and B are the **product
 owner's** decisions; choices (a) to (j), and C's (k) to (m) (2026-11-18, §10), are the **orchestrator's**, after
 the spec challenge and the code. Delivered in this order, tracked in
-`changes/`: A1 (§2–§4, §7), A2 (§5, §6), C, B. A1 and A2 are delivered
-(`changes/project-update-graded-commit.md`, `changes/project-regrade-machine.md`);
-C and B are not.
+`changes/`: A1 (§2–§4, §7), A2 (§5, §6), C, B. A1, A2 and C are delivered
+(`changes/project-update-graded-commit.md`, `changes/project-regrade-machine.md`,
+`changes/project-sync-preview.md`); B is not.
 
 Scope: a project graded by criteria whose snapshot is schema version 3
 (ADR-119): which commit its graded run reads, which distribution files that
@@ -400,15 +400,19 @@ orchestrator's, the owner being unreachable that night.
   somewhere — a sync with nothing new still retries those repositories
   (ADR-073 §2).
 - **The teacher's message** (choice l): optional, plain text, trimmed, at
-  most 500 characters (`SYNC_MESSAGE_MAX`), no control character but tab
-  and line feed and no bidirectional override or isolate (the contract
-  refuses them, `400`, before anything moves: a NUL would otherwise fail
-  the database's write after the distribution's push). It exists only on
+  most 500 characters (`SYNC_MESSAGE_MAX`), its CRLF and CR made line
+  feeds before the cap and the check, no control character but tab and
+  line feed, no bidirectional override or isolate and no lone surrogate
+  (the contract refuses them, `400`, before anything moves: a NUL would
+  fail the database's write, a lone surrogate the audit's JSON, after the
+  distribution's push). It exists only on
   a project its students can read, the states the student view serves
   (`projectIsVisible`: scheduled, published, locked): on a draft the dialog
   offers no field and the request stores none, whatever it carries — a
   draft's message would reach students at publication, dated before they
-  had the project, about a change no pull request carries. Stored on the
+  had the project, about a change no pull request carries; a project back
+  to a draft (unscheduled, or unarchived past its start) forgets its
+  message for the same reason. Stored on the
   project (`projects.sync_message`, `sync_message_at`, migration 0142) in
   the same statement that records the shas handed out, once the
   distribution is updated: one per sync, a different text replacing the
@@ -431,7 +435,10 @@ orchestrator's, the owner being unreachable that night.
     under "Your teacher's message:", in a fenced block whose fence is
     longer than any run of backticks in the text, so that no line of it
     closes the block: no `@mention` notifies, no `#123` links, no Markdown
-    or HTML runs (`quotedMessage`);
+    or HTML runs (`quotedMessage`). A known limit: a message-only sync
+    whose comment fails on one repository, retried with the same text,
+    never comments there (neither moved nor this sync's message); that
+    student still reads it on their Quiz page;
   - to the staff beside the last sync's state, on the project's Source
     tile.
   A hint under the field says every student reads it and that it should

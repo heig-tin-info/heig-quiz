@@ -530,9 +530,12 @@ describe("schedule and unschedule (ADR-127)", () => {
     const project = await create(room.id, DATED);
     expect(refusal(await post(project.id, "unschedule"))).toEqual([409, "not_scheduled"]);
     expect((await post(project.id, "schedule")).statusCode).toBe(200);
+    // A sync's message while announced (ADR-132 §10): a draft forgets it, so a later publication never shows it.
+    await server.app.db.update(projects).set({ syncMessage: "Test 3 fixed.", syncMessageAt: new Date(NOW) }).where(eq(projects.id, project.id));
     const back = await post(project.id, "unschedule");
     expect(back.statusCode, back.body).toBe(200);
     expect(ProjectSummary.parse(back.json())).toMatchObject({ state: "draft", startAt: "2026-10-05T08:00:00.000Z" });
+    expect(await rowOf(project.id)).toMatchObject({ syncMessage: null, syncMessageAt: null });
     expect(await auditOf(project.id, "project.unschedule")).toHaveLength(1);
     // Back as a draft, the start choice opens again.
     expect((await patch(project.id, { publishMode: "manual" })).statusCode).toBe(200);

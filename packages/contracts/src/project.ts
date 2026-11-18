@@ -1122,23 +1122,27 @@ export type ProjectSyncState = z.infer<typeof ProjectSyncState>;
 /**
  * What a message to the students never holds (ADR-132 §10): the C0 controls
  * but tab and line feed, DEL, the C1 controls, and the bidirectional
- * overrides and isolates — `CONTROL_CHAR` of `journal.ts`, widened. A NUL
+ * overrides and isolates — `CONTROL_CHAR` of `journal.ts`, widened —, and a
+ * lone surrogate (its text is no valid JSON for the audit). A NUL
  * would fail the database's write after the distribution moved.
  */
 // eslint-disable-next-line no-control-regex
-const MESSAGE_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/;
+const MESSAGE_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]|\p{Cs}/u;
 
 /**
  * `POST /app/api/projects/:id/sync`'s optional body (ADR-132 §10): the
  * teacher's message to the students, plain text, trimmed, at most
  * {@link SYNC_MESSAGE_MAX} characters, no control character but tab and
- * line feed. One per sync: a different text replaces the previous, and an
+ * line feed (CRLF and CR become line feeds), no lone surrogate. One per
+ * sync: a different text replaces the previous, and an
  * empty or absent one clears it; ignored on a project its students cannot
  * read yet (a draft).
  */
 export const ProjectSyncRequest = z.strictObject({
   message: z
     .string()
+    // CRLF and CR are line feeds, before the cap and the check (an API client's text, ADR-132 §10).
+    .overwrite((text) => text.replace(/\r\n?/g, "\n"))
     .trim()
     .max(SYNC_MESSAGE_MAX)
     .refine((text) => !MESSAGE_CONTROL.test(text), "no control or direction character")
