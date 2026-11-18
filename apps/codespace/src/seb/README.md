@@ -169,6 +169,24 @@ was the state of the deployment until 2026-09-19 (audit M1); `loadConfig()`
 now refuses to start in production without the list. See
 heig-classroom's `apps/codespace/classroom's docs/deploy.md` § 6 (not imported; M6-04 writes Quiz's).
 
+## Inside SEB: clipboard and battery in the editor (#1149, #1151)
+
+The portal verifies SEB; what SEB does to the page is handled in the student
+image, not here. SEB Windows isolates the clipboard and its `Clipboard.js`
+cancels every copy and paste on the page, which left VS Code's editor and
+terminal unable to paste. `images/c-dev/seb-workbench.js`, loaded by
+code-server's workbench page, bridges SEB's clipboard to the editor, the
+terminal, the text fields and `navigator.clipboard`, and shows the battery
+in the status bar; outside SEB it changes nothing. The why, the CSP check and
+the limits: [images/c-dev/README.md](../../images/c-dev/README.md), § Safe
+Exam Browser in the workbench. Its test, `sebWorkbench.test.ts`, lives in
+this directory because the image has no test runner of its own.
+
+**It reaches students only once the image is rebuilt on the engine VM**
+(`/opt/quiz-runner/apps/codespace/images/build.sh`, then
+`images/c-dev/test.sh`); a session already running keeps its image until it
+restarts.
+
 ## The `.seb` file
 
 An **unencrypted** XML plist, served as `application/seb` under the name
