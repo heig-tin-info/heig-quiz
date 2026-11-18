@@ -78,7 +78,7 @@ async function world() {
   await git(["-C", dist, "commit", "-qam", "Project update"], { env: FIXTURE_ENV });
   await git(["-C", dist, "push", "-q", "origin", "HEAD:refs/heads/sync/main"], { env: FIXTURE_ENV });
   const sha = (await git(["-C", dist, "rev-parse", "HEAD"])).trim();
-  await fetchProjectUpdate({ gitDir: staging.gitDir, url: github.gitDir, heads: [{ branch: "main", sha }] });
+  await fetchProjectUpdate({ gitDir: staging.gitDir, url: github.gitDir, head: { branch: "main", sha } });
   const update: Update = { branch: "main", sha, message: { text: "Test fixed", at: "2026-11-17T20:00:00.000Z" } };
   return { base, work, env, run, update, stagingGitDir: staging.gitDir };
 }
@@ -185,20 +185,46 @@ describe("Apply, as the student", () => {
     const other = { ...w.update, sha: "f".repeat(40) };
     expect(await ext.applyUpdate(w.run, other)).toEqual({ outcome: "unavailable" });
   });
+
+  it("leaves alone a rebase of the student's own, stopped on a conflict: busy, not another branch", async () => {
+    const w = await world();
+    await w.run(["switch", "-q", "-c", "side"]);
+    await writeFile(join(w.work, "main.c"), "side\n");
+    await w.run(["commit", "-qam", "side"]);
+    await w.run(["switch", "-q", "main"]);
+    await writeFile(join(w.work, "main.c"), "main\n");
+    await w.run(["commit", "-qam", "main"]);
+    expect((await w.run(["rebase", "side"])).code).not.toBe(0);
+    const rebasing = await snapshot(w.work, w.run);
+    expect(await ext.applyUpdate(w.run, w.update)).toEqual({ outcome: "busy" });
+    expect(await snapshot(w.work, w.run)).toEqual(rebasing);
+  });
+
+  it("reports a merge a student's hook stopped as failed, the merge aborted, the work tree as before", async () => {
+    const w = await world();
+    const hook = join(w.work, ".git", "hooks", "pre-merge-commit");
+    await writeFile(hook, "#!/bin/sh\necho 'no merge today' >&2\nexit 1\n", { mode: 0o755 });
+    await writeFile(join(w.work, "notes.txt"), "draft\n");
+    const before = await snapshot(w.work, w.run);
+    const result = await ext.applyUpdate(w.run, w.update);
+    expect(result.outcome).toBe("failed");
+    expect(result.files).toBeUndefined();
+    expect(await snapshot(w.work, w.run)).toEqual(before);
+  });
 });
 
 describe("what the extension reads and shows", () => {
-  it("takes push-status's update only with a full sha and a plain branch, the message capped", () => {
+  it("takes push-status's update only with a full sha and a plain branch", () => {
     const sha = "a".repeat(40);
     expect(ext.parseUpdate({ update: null })).toBeNull();
     expect(ext.parseUpdate(null)).toBeNull();
     expect(ext.parseUpdate({ update: { branch: "main", sha: "HEAD", message: null } })).toBeNull();
     expect(ext.parseUpdate({ update: { branch: "--upload-pack=x", sha, message: null } })).toBeNull();
     expect(ext.parseUpdate({ update: { branch: "a..b", sha, message: null } })).toBeNull();
-    expect(ext.parseUpdate({ update: { branch: "main", sha, message: { text: "x".repeat(900), at: "t" } } })).toEqual({
+    expect(ext.parseUpdate({ update: { branch: "main", sha, message: { text: "Fixed.", at: "t" } } })).toEqual({
       branch: "main",
       sha,
-      message: { text: "x".repeat(500), at: "t" },
+      message: { text: "Fixed.", at: "t" },
     });
   });
 

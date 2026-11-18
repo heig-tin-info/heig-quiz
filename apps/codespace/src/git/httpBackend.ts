@@ -223,10 +223,8 @@ export const gitBackendPlugin: FastifyPluginAsync<GitBackendOptions> = async (ap
   /**
    * What the workspace's status bar reads (ADR-078 §6): the session's last
    * push GitHub refused and nothing replaced, with the forge's reason; and
-   * the teacher's update of its branch (ADR-132 §11) — its sha from the
-   * assignment row, announced only once the staging repository holds
-   * `refs/quiz/update/<branch>` at that sha, with the message as the
-   * platform sent it, plain text the extension never renders. JSON,
+   * the teacher's update of its branch (ADR-132 §11), only while the
+   * staging repository's update ref is at the assignment's sha. JSON,
    * `no-store`. Same door as the Git services: the session's own
    * container address, nothing else; no credential, nothing of another
    * session.

@@ -1,1 +1,0 @@
-ALTER TABLE `assignments` ADD `project_update` text;

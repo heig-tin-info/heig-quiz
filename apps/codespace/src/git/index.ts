@@ -14,12 +14,14 @@
 export {
   createForgejoForge,
   createUnconfiguredGithubForge,
+  ForgeOriginError,
+  ForgeRefusedError,
   ForgeUnconfiguredError,
   type Forge,
   type ForgeOwner,
 } from "./forge.js";
 export { createQuizForge, type QuizForgeOptions } from "./quizForge.js";
-export { git, gitBare, redactSecrets } from "./gitRunner.js";
+export { git, gitBare, GitError, redactSecrets } from "./gitRunner.js";
 export { startGitServer } from "./httpBackend.js";
 export {
   createPushEventStore,
@@ -27,10 +29,11 @@ export {
   type PushEventStore,
   type RejectedPush,
 } from "./pushEvents.js";
-export { createRelayWorker, stagingTargets, type RelayWorker } from "./relay.js";
+export { createRelayWorker, credentialRefused, stagingTargets, type RelayWorker } from "./relay.js";
 export {
   ensureStagingRepo,
   refSnapshot,
+  seededRefCount,
   stagingHeadBranch,
   stagingPaths,
   type StagingPaths,

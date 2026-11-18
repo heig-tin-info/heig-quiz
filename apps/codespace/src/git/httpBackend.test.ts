@@ -279,7 +279,7 @@ describe("Git channel end to end (loopback)", () => {
     const status = async () => (await fetch(`${h.remote}/push-status`)).json();
     // Named by the assignment, absent from the staging repository: not announced.
     expect(await status()).toEqual({ rejected: null, update: null });
-    await fetchProjectUpdate({ gitDir: h.staging.gitDir, url: h.src.gitDir, heads: [{ branch: "main", sha: h.src.sha }] });
+    await fetchProjectUpdate({ gitDir: h.staging.gitDir, url: h.src.gitDir, head: { branch: "main", sha: h.src.sha } });
     // The message as the platform sent it: data, rendered by nobody here.
     expect(await status()).toEqual({ rejected: null, update });
     // The ref elsewhere than the assignment's sha: not announced either.

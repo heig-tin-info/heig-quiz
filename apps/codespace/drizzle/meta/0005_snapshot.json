@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "44a8fd2a-e6b9-4d09-8dad-0c0988cae06f",
+  "id": "a454e1c9-0d62-44aa-9a44-981648c1bbe9",
   "prevId": "3634c935-fa5f-43d6-9d6c-dd599c652341",
   "tables": {
     "assignments": {
@@ -143,8 +143,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "project_update": {
-          "name": "project_update",
+        "workspace_update": {
+          "name": "workspace_update",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

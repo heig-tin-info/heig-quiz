@@ -25,7 +25,7 @@ container ──push──▶ portal 10.77.0.254:9418/git/<session>  (auth = sou
 | `collect.ts`      | the workspace collected at the deadline: read through the confined reader (`../engine/reader.ts`, never `shadow.git`), kept paths from the base, the tree carried to a `refs/quiz/collect/` ref Quiz names (ADR-130) |
 | `workTree.ts`     | the reader's listing and archive turned into blobs of the collection's own repository (`git fast-import`, bytes only) |
 | `workArchive.ts`  | the reader's GNU tar judged as data: regular files and links only, a link never followed, listed relative paths, size-capped |
-| `projectUpdate.ts`| the teacher's update (ADR-132 §11): the sync's commit fetched by sha from the student's repository onto `refs/quiz/update/<branch>`, only when missing, one at a time per staging repository; `push-status` announces it at the assignment's sha |
+| `projectUpdate.ts`| the teacher's update (ADR-132 §11): a sync's commit set by sha on `refs/quiz/update/<branch>` |
 | `fixtures.ts`     | shared test repositories (not a `*.test.ts`, therefore type-checked); `../engine/readerFixtures.ts` runs the reader's commands on the host for the unit suite |
 
 The `push_events` table: [`src/db/schema.ts`](../db/schema.ts).
@@ -241,15 +241,9 @@ project, the user and the repository in its claims); the body is empty.
   door as the Git services); the staff, in Quiz's workspace list
   (`CodespaceSessionSummary.rejectedPush`). Both read `lastRejectedPush`: a
   later push of the same branch replaces it.
-- **The teacher's update** (ADR-132 §11, ADR-078 §14): the same write
-  grant, asked only when `refs/quiz/update/<branch>` lacks the commit the
-  assignment names, fetches that commit by sha from the student's
-  repository (`projectUpdate.ts`), at a session's opening and, for running
-  sessions, when Quiz's assignment sync arrives. `refs/quiz/` is the
-  portal's: `receive.hideRefs` refuses every student push to it, `diffRefs`
-  never records it, the relay never carries it. `push-status` names the
-  update (sha, message, instant) only while the ref is at the assignment's
-  sha; the status-bar extension merges it in the container, as the student.
+- **The teacher's update** (ADR-132 §11, which owns it; ADR-078 §14): the
+  same write grant fetches a sync's commit onto `refs/quiz/update/<branch>`
+  (`projectUpdate.ts`).
 
 ## What is left to do after V1
 

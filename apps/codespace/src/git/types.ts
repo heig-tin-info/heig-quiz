@@ -3,6 +3,7 @@
  * OIDC or the session store: the backend receives a `SessionLookup` and a
  * `PushEventStore`, and the modules that own those tables implement them.
  */
+import type { SyncMessage } from "@quiz/contracts";
 
 /** A repository on the forge, `<owner>/<name>`. */
 export interface RepoRef {
@@ -39,11 +40,7 @@ export interface StagingSession {
   readOnly?: boolean;
   /** Where successful pushes are relayed. Absent = keep locally only. */
   targetRepo?: RepoRef;
-  /**
-   * The teacher's update of the session's branch (ADR-132 §11), from the
-   * assignment row: what `push-status` announces once the staging
-   * repository holds it at that sha. Absent: nothing to offer.
-   */
+  /** The teacher's update of the session's branch, from the assignment row (ADR-132 §11). */
   update?: SessionUpdate;
 }
 
@@ -51,7 +48,7 @@ export interface StagingSession {
 export interface SessionUpdate {
   branch: string;
   sha: string;
-  message: { text: string; at: string } | null;
+  message: SyncMessage | null;
 }
 
 export interface SessionLookup {

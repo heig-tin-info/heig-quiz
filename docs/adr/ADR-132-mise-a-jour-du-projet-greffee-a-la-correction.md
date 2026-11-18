@@ -478,39 +478,43 @@ fixed test run by their own `make test`.
 - **Scope: `online` only** (the portal's `lab` mode). `online_seb` is not
   delivered; below, what remains for it.
 - **Carried by the existing assignment sync.** `PUT /api/assignments/:id`
-  (`CodespaceAssignmentSync`) gains `projectUpdate`: per handed-out branch
-  the distribution's head the latest sync handed out (`projects.sync_heads`,
-  migration 0142, written with `sync_message` in the same statement and
-  under the same rule: only on a project its students can read), and that
-  sync's message with its instant (§10), or null; nothing for `free`,
-  `online_seb` or a draft (`projectUpdateOf`). The end of every sync pass of
-  an `online` project sends the PUT again (`runSyncJob`): by then each
-  student repository holds the commit on `sync/<branch>`. The portal stores
-  it on the assignment row (`assignments.project_update`, portal migration
-  0005); an exam row keeps none.
-- **Into the staging repository on a non-branch ref.** The portal fetches
-  the commit, **by its sha** (the row's, never a ref's), onto
-  `refs/quiz/update/<branch>` of each `lab` staging repository
-  (`git/projectUpdate.ts`); `refs/heads/*` is never touched, so nothing the
+  (`CodespaceAssignmentSync`) gains `workspaceUpdate`: per handed-out
+  branch the distribution's head the latest sync handed out
+  (`projects.sync_heads`, written with `sync_message` in the same statement
+  and under the same rule: only on a project its students can read), and
+  that sync's message (§10, the one `SyncMessage` schema), or null; nothing
+  for `free`, `online_seb` or a draft (`workspaceUpdateOf`). The end of every
+  sync pass of an `online` project sends the PUT again (`runSyncJob`): by
+  then each student repository holds the commit on `sync/<branch>`. The
+  portal stores it on the assignment row (`assignments.workspace_update`,
+  portal migration 0005); an exam row keeps none.
+- **Into the staging repository on a non-branch ref.** For each session,
+  the portal sets its branch's commit — the one it may announce
+  (`sessionUpdateOf`, the one rule: a student's `lab` session) — **by its
+  sha** (the row's, never a ref's) on `refs/quiz/update/<branch>`
+  (`git/projectUpdate.ts`): `refs/heads/*` is never touched, so nothing the
   student pushed moves and no relay carries it. `refs/quiz/` is the
   portal's: `receive.hideRefs` refuses every student push to it — an
-  update, a new name, a deletion — so nobody plants an "update", and
-  `diffRefs` ignores it, so a fetch landing during a push is no
-  `PushEvent`. Triggers: the PUT, for the assignment's running sessions,
-  one after the other, in the background; and every session start and
-  resume. "Needed" is the repository's state (the ref missing or at
-  another sha); one operation at a time per staging repository; bounded
-  (60 s per fetch); a failure is logged and tried again at the next
-  occasion, and **no start ever waits for it**. A staging repository whose
-  seeding mirrored `sync/<branch>` already holds the commit: git then sets
-  the ref from its own objects, without GitHub.
+  update, a new name, a deletion — so nobody plants an "update"; `diffRefs`
+  ignores it, so a fetch landing during a push is no `PushEvent`; and it
+  never counts as a seeding (`seededRefCount`), so a missed seeding is still
+  repaired. Triggers: the PUT, for the assignment's running sessions, one
+  after the other, in the background; and every session start and resume.
+  Nothing happens when the ref is at the sha; when the staging repository
+  holds the commit (its seeding mirrored `sync/<branch>`), the ref is set
+  from its own objects, with no token and no network; otherwise one fetch
+  by sha, 60 s at most. One operation at a time per staging repository; a
+  failure is logged and tried again at the next occasion, and **no start
+  ever waits for it**.
 - **The token: the student's own write grant (option a).** The source is the
   student's repository, where the sync pushed the commit; the grant is the
   one the relay and the seeding already obtain (`POST
   /app/codespace/git-token`, `gitTokenRefusal` unchanged, audited
-  `codespace.git_token_issued`), cached with them, asked for only when a
-  ref is missing, through the environment only; Quiz's `closed` refusal
-  fetches nothing (not even anonymously). Option (b) — one read grant per
+  `codespace.git_token_issued`), cached with them, asked for only when the
+  commit must come from GitHub, through the environment only; Quiz's
+  `closed` refusal, or a forge refusing the origin, fetches nothing (not
+  even anonymously), and a credential GitHub refuses is forgotten
+  (`Forge.invalidate`, as the relay does). Option (b) — one read grant per
   assignment on the distribution — would issue fewer tokens but widen
   ADR-078 §2's rule to `online`; (a) changes no rule, and a closed session
   asks for nothing until its next opening, when the relay would ask anyway.
@@ -522,7 +526,7 @@ fixed test run by their own `make test`.
   (`heig.codespace-statusbar` 0.3.0, `images/c-dev/extension/update.js`,
   inside the container, as the student) decides with the student's own git
   whether it is taken (`git merge-base --is-ancestor <sha> HEAD`); if not,
-  the item "Teacher's update" shows, its tooltip and confirmation carrying
+  the item "Update from your teacher" (fr "Mise à jour de l'équipe enseignante", the student page's title) shows, its tooltip and confirmation carrying
   the date and the message as plain text (never a `MarkdownString`; link
   and icon syntax broken, controls removed).
 - **Apply**: `git fetch origin refs/quiz/update/<branch>`, then `git merge
@@ -532,10 +536,10 @@ fixed test run by their own `make test`.
   read as the App's push (`pushAuthor`). It applies cleanly or not at all: a
   conflict is found before anything is touched (`git merge-tree
   --write-tree`), uncommitted changes the merge would overwrite make git
-  refuse before writing anything, a merge that still stops is aborted, a
-  merge of the student's own in progress is left to them; the student is
-  told which files block it and what to do (commit their work, or ask the
-  teacher). No stash. The next ordinary push is a fast-forward for GitHub,
+  refuse before writing anything, a merge that still stops (a student's
+  hook) is aborted, a merge, rebase or cherry-pick of the student's own in
+  progress is left to them; the student is told which files block it and
+  what to do (commit their work, or ask the teacher). No stash. The next ordinary push is a fast-forward for GitHub,
   which marks the sync's pull request merged. A student who knows git may
   still merge by hand.
 - **Nothing else changes**: the relay's rules, `gitTokenRefusal`, the
@@ -546,6 +550,15 @@ fixed test run by their own `make test`.
 - **Deployment**: the extension ships in the `c-dev` image, built by hand
   on the engine VM (`apps/codespace/deploy/RUNBOOK.md`); a running session
   keeps the extension it started with until its container is restarted.
+- **Known limits.** A student who applied an update S1 and pushes it after
+  the teacher synced S2, which changed a protected file, pushes S1's version
+  of that file: the restore fires (F-PROJ-08), counts toward its cap of 5 an
+  hour and flags the runs to verify — as for a `free` student merging
+  `sync/<branch>` late; the next Apply brings S2. A repository a sync
+  skipped (past its deadline) never holds the commit: its fetch fails at
+  every opening, one audited token request and one warning each. The VS
+  Code glue (`extension.js`) is untested in a real container until the
+  image is rebuilt.
 
 What remains for **`online_seb`**: its staging repository is seeded from
 the template — the distribution — never from the student's repository (the

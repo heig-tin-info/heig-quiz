@@ -44,7 +44,7 @@ import {
   type AdminTeacher,
   type SessionKind,
 } from "@quiz/contracts";
-import { bindingMismatch, requestBinding, SYNC_MESSAGE_MAX, verifyHs256 } from "@quiz/domain";
+import { bindingMismatch, requestBinding, verifyHs256 } from "@quiz/domain";
 
 import { createApiToken } from "../../auth/tokens.js";
 import type { AppConfig } from "../../config.js";
@@ -61,7 +61,7 @@ import {
 } from "../../db/schema.js";
 import { orgsRoute } from "../../github/testing.js";
 import { sessionOf } from "../../test/http.js";
-import { grantOf, projectUpdateOf, runCodespaceSync, syncPayload } from "./service.js";
+import { grantOf, workspaceUpdateOf, runCodespaceSync, syncPayload } from "./service.js";
 import {
   CODESPACE_ENV,
   PORTAL,
@@ -337,14 +337,14 @@ describe("the sync (codespace.sync)", () => {
     expect(CodespaceAssignmentSync.parse(portal.calls[0]!.body).name).toBe("Synced lab 2");
   });
 
-  it("carries the teacher's update at the end of an online project's sync pass: the heads its student repositories received, the message capped (ADR-132 §11)", async () => {
+  it("carries the teacher's update at the end of an online project's sync pass: the heads its student repositories received, the message (ADR-132 §11)", async () => {
     const student = await newStudent();
     const room = await connected([student]);
     const lab = await project(room, "Updated lab");
     expect((await setMode(lab.id, "online")).statusCode).toBe(200);
     await accept(lab.id, student);
     // Before any sync, nothing to offer.
-    expect((await syncPayload(server.app.db, lab.id))!.projectUpdate).toBeNull();
+    expect((await syncPayload(server.app.db, lab.id))!.workspaceUpdate).toBeNull();
 
     world.commit(`${room.org}/starter`, "main", { "README.md": "# Lab, fixed" });
     portal.calls.length = 0;
@@ -357,7 +357,7 @@ describe("the sync (codespace.sync)", () => {
     const puts = portal.calls.filter((c) => c.method === "PUT");
     expect(puts).toHaveLength(1);
     await expectBoundServiceToken(puts[0]!);
-    expect(CodespaceAssignmentSync.parse(puts[0]!.body).projectUpdate).toEqual({
+    expect(CodespaceAssignmentSync.parse(puts[0]!.body).workspaceUpdate).toEqual({
       heads: [{ branch: "main", sha: distHead }],
       message: { text: "README fixed: read it again.", at: NOW },
     });
@@ -365,11 +365,7 @@ describe("the sync (codespace.sync)", () => {
     // A sync without a message keeps the update and clears the message; any later PUT carries the same.
     portal.calls.length = 0;
     expect((await call("POST", `/app/api/projects/${lab.id}/sync`, owner.headers, {})).statusCode).toBe(202);
-    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body).projectUpdate).toEqual({ heads: [{ branch: "main", sha: distHead }], message: null });
-
-    // A stored text over the limit never fails the PUT: it is cut at the contract's cap.
-    await server.app.db.update(projects).set({ syncMessage: "x".repeat(SYNC_MESSAGE_MAX + 20), syncMessageAt: new Date(NOW) }).where(eq(projects.id, lab.id));
-    expect((await syncPayload(server.app.db, lab.id))!.projectUpdate!.message!.text).toBe("x".repeat(SYNC_MESSAGE_MAX));
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body).workspaceUpdate).toEqual({ heads: [{ branch: "main", sha: distHead }], message: null });
   });
 
   it("offers no update under free (no PUT at all), on a draft, under online_seb, or for a branch no longer handed out (ADR-132 §11)", async () => {
@@ -389,12 +385,12 @@ describe("the sync (codespace.sync)", () => {
       syncMessage: null,
       syncMessageAt: null,
     };
-    expect(projectUpdateOf(online)).toEqual({ heads: [{ branch: "main", sha }], message: null });
-    expect(projectUpdateOf({ ...online, state: "draft" })).toBeNull();
-    expect(projectUpdateOf({ ...online, workMode: "online_seb" })).toBeNull();
-    expect(projectUpdateOf({ ...online, workMode: "free" })).toBeNull();
-    expect(projectUpdateOf({ ...online, syncHeads: null })).toBeNull();
-    expect(projectUpdateOf({ ...online, branches: ["dev"] })).toBeNull();
+    expect(workspaceUpdateOf(online)).toEqual({ heads: [{ branch: "main", sha }], message: null });
+    expect(workspaceUpdateOf({ ...online, state: "draft" })).toBeNull();
+    expect(workspaceUpdateOf({ ...online, workMode: "online_seb" })).toBeNull();
+    expect(workspaceUpdateOf({ ...online, workMode: "free" })).toBeNull();
+    expect(workspaceUpdateOf({ ...online, syncHeads: null })).toBeNull();
+    expect(workspaceUpdateOf({ ...online, branches: ["dev"] })).toBeNull();
   });
 
   it("carries the quota of the oldest owner once the creator holds no owner seat (decision C)", async () => {

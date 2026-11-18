@@ -643,25 +643,13 @@ here.
 
 ### 14. Amendment 2026-11-18: the teacher's update (ADR-132)
 
-Scope: what the write grant of §2 may be used for. [ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md)
-§11 owns the rule (the orchestrator's design, the owner's principle); this
-section names what changes here.
-
-- **The condition is unchanged.** To bring a teacher's sync into an
-  `online` workspace, the portal fetches the commit the sync pushed to the
-  student's `sync/<branch>`, by its sha, from the student's own repository,
-  with the token it obtains exactly as for a relay or a seeding: the same
-  request, checks 2 to 6, the same cache (§3). It asks only when the
-  staging repository lacks that commit's ref, for a running session or at
-  a session's opening. A `closed` refusal fetches nothing, not even
-  anonymously. The read grant on the distribution stays `online_seb`'s
-  only (check 3).
-- **One more use of it: a fetch.** The commit lands on
-  `refs/quiz/update/<branch>` of the staging repository, never a branch,
-  never relayed, never a `PushEvent`; nothing is written on GitHub. The
-  token reaches git through the environment only, as everywhere here.
-- **Blast radius (§9).** None added: a fetch with a grant the portal
-  already holds for the same repository and the same window.
+[ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md) §11
+owns the rule. The write grant of §2 serves one more use: fetching, from the
+student's own repository, the commit a teacher's sync pushed there, onto a
+non-branch ref of the staging repository. The token is obtained exactly as
+for a relay (checks 2 to 6, the cache of §3); no rule changes, the read grant
+on the distribution stays `online_seb`'s, nothing is written on GitHub, and
+§9's blast radius gains nothing.
 
 ## Consequences
 

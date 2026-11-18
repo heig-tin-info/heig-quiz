@@ -183,11 +183,11 @@ describe("assignment sync", () => {
   });
 
   it("carries the project's update (ADR-132 §11): absent from an older platform is null; a branch, a full sha and plain text only", () => {
-    expect(CodespaceAssignmentSync.parse(sync).projectUpdate).toBeNull();
+    expect(CodespaceAssignmentSync.parse(sync).workspaceUpdate).toBeNull();
     const sha = "a".repeat(40);
     const update = { heads: [{ branch: "main", sha }], message: { text: "README fixed.\n\tSee the test.", at: "2026-11-17T20:00:00.000Z" } };
-    expect(CodespaceAssignmentSync.parse({ ...sync, mode: "online", projectUpdate: update }).projectUpdate).toEqual(update);
-    expect(CodespaceAssignmentSync.safeParse({ ...sync, projectUpdate: { ...update, message: null } }).success).toBe(true);
+    expect(CodespaceAssignmentSync.parse({ ...sync, mode: "online", workspaceUpdate: update }).workspaceUpdate).toEqual(update);
+    expect(CodespaceAssignmentSync.safeParse({ ...sync, workspaceUpdate: { ...update, message: null } }).success).toBe(true);
     for (const bad of [
       { ...update, heads: [] },
       { ...update, heads: [{ branch: "main", sha: "abc" }] },
@@ -197,8 +197,9 @@ describe("assignment sync", () => {
       { ...update, message: { text: "x".repeat(501), at: update.message.at } },
       { ...update, message: { text: "nul\u0000", at: update.message.at } },
       { ...update, message: { text: "rtl‮", at: update.message.at } },
+      { ...update, message: { text: "lone \ud800", at: update.message.at } },
     ]) {
-      expect(CodespaceAssignmentSync.safeParse({ ...sync, projectUpdate: bad }).success, JSON.stringify(bad)).toBe(false);
+      expect(CodespaceAssignmentSync.safeParse({ ...sync, workspaceUpdate: bad }).success, JSON.stringify(bad)).toBe(false);
     }
   });
 

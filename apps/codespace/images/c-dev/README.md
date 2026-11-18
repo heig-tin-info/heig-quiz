@@ -373,7 +373,7 @@ Two items on the right of the status bar:
 
 Two more, read from `GET <origin>/push-status` on the portal's git channel
 every 30 s: **"Push refused by GitHub"** (ADR-078 §6), and since 0.3.0
-**"Teacher's update"** (ADR-132 §11). After a teacher's sync the portal
+**"Update from your teacher"** (ADR-132 §11). After a teacher's sync the portal
 holds the sync's commit on `refs/quiz/update/<branch>` of the staging
 repository and names it, with the teacher's message, in that answer. While
 `git merge-base --is-ancestor <sha> HEAD` says it is not in the student's
@@ -386,7 +386,7 @@ fast-forward (a pushed head equal to the sync's commit would read as the
 platform's own). It applies cleanly or not at all — a conflict found first
 by `git merge-tree --write-tree`, uncommitted changes the merge would
 overwrite refused by git before it writes anything, a merge that still
-stops aborted, the student's own merge in progress left alone — and names
+stops aborted, the student's own merge, rebase or cherry-pick left alone — and names
 the blocking files. The student then pushes as usual. Not tried in a real
 container yet: the decisions are `update.js`'s, tested on real repositories
 (`apps/codespace/src/workspaceUpdate.test.ts`); the VS Code glue is checked

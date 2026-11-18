@@ -14,7 +14,7 @@ workspace's `origin` remote, every 30 s. No other network access, no
 telemetry, no dependency, no credential.
 
 Since 0.3.0 the same answer may name a teacher's update (ADR-132 §11): the
-item "Teacher's update" offers to merge it into the student's branch, a
+item "Update from your teacher" offers to merge it into the student's branch, a
 merge commit of the student's, applied cleanly or not at all
 (`update.js`, which needs no `vscode`).
 

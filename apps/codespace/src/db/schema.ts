@@ -15,7 +15,7 @@
  * heig-classroom stores `timestamptz`. SQLite has no timestamp type and a
  * text date would sort badly across time zones.
  */
-import { CODESPACE_SESSION_STATES, type CodespaceProjectUpdate } from "@quiz/contracts";
+import { CODESPACE_SESSION_STATES, type CodespaceWorkspaceUpdate } from "@quiz/contracts";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
@@ -192,7 +192,7 @@ export const assignments = sqliteTable("assignments", {
    * Replaced by every sync, null when the platform sends none; never set
    * on an exam (its delivery is still to come) nor on a review.
    */
-  projectUpdate: text("project_update", { mode: "json" }).$type<CodespaceProjectUpdate>(),
+  workspaceUpdate: text("workspace_update", { mode: "json" }).$type<CodespaceWorkspaceUpdate>(),
 });
 
 /** Repository on the forge, as classroom names it (`CodespaceRepoRef`). */

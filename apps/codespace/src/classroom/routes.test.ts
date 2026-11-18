@@ -404,17 +404,17 @@ describe("PUT /api/assignments/:id", () => {
 
   it("stores the teacher's update of a lab and asks the running workspaces to fetch it; an exam keeps none, a sync without one clears it (ADR-132 §11)", async () => {
     const update = { heads: [{ branch: "main", sha: "c".repeat(40) }], message: { text: "Test fixed.", at: "2026-11-17T20:00:00.000Z" } };
-    expect((await put(syncBody({ projectUpdate: update }))).statusCode).toBe(200);
-    expect(findAssignment(h.db, "a-lab")?.projectUpdate).toEqual(update);
+    expect((await put(syncBody({ workspaceUpdate: update }))).statusCode).toBe(200);
+    expect(findAssignment(h.db, "a-lab")?.workspaceUpdate).toEqual(update);
     expect(h.refreshes).toEqual(["a-lab"]);
 
     expect((await put(syncBody())).statusCode).toBe(200);
-    expect(findAssignment(h.db, "a-lab")?.projectUpdate).toBeNull();
-    expect((await put(syncBody({ mode: "online_seb", projectUpdate: update }))).statusCode).toBe(200);
-    expect(findAssignment(h.db, "a-lab")?.projectUpdate).toBeNull();
+    expect(findAssignment(h.db, "a-lab")?.workspaceUpdate).toBeNull();
+    expect((await put(syncBody({ mode: "online_seb", workspaceUpdate: update }))).statusCode).toBe(200);
+    expect(findAssignment(h.db, "a-lab")?.workspaceUpdate).toBeNull();
     expect(h.refreshes).toEqual(["a-lab"]);
     // Anything but a branch and a full sha never reaches a refspec.
-    expect((await put(syncBody({ projectUpdate: { ...update, heads: [{ branch: "main", sha: "HEAD" }] } }))).statusCode).toBe(400);
+    expect((await put(syncBody({ workspaceUpdate: { ...update, heads: [{ branch: "main", sha: "HEAD" }] } }))).statusCode).toBe(400);
   });
 });
 

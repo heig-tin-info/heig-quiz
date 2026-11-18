@@ -30,7 +30,7 @@
  * network access, no telemetry, no dependency, no credential (invariants 1
  * and 2).
  *
- * Since 0.3.0, a fourth item, "Teacher's update" (ADR-132 §11): the same
+ * Since 0.3.0, a fourth item, "Update from your teacher" (ADR-132 §11): the same
  * answer names the commit a teacher's sync handed out for the session's
  * branch, with the teacher's message; while that commit is not in the
  * student's history, the item offers to merge it, locally and as the
@@ -83,10 +83,9 @@ const STRINGS = {
       "Appliquer la mise à jour de l'équipe enseignante ? Elle est fusionnée dans votre branche par un commit de fusion ; poussez ensuite comme d'habitude.",
     apply: "Appliquer",
     updateApplied: "Mise à jour appliquée. Poussez pour l'envoyer avec votre travail.",
-    updateCurrent: "Cette mise à jour est déjà dans votre travail.",
     updateUnavailable: "La mise à jour n'a pas pu être récupérée. Réessayez dans un moment.",
     updateOtherBranch: (branch) => `Passez sur la branche ${branch} pour appliquer la mise à jour.`,
-    updateBusy: "Une fusion est en cours : terminez-la ou annulez-la, puis réessayez.",
+    updateBusy: "Une fusion, un rebase ou un cherry-pick est en cours : terminez-le ou annulez-le, puis réessayez.",
     updateDirty: (files) =>
       `Rien n'a été modifié : vos changements non commités dans ${files} seraient écrasés. Commitez votre travail, puis réessayez.`,
     updateConflict: (files) =>
@@ -114,17 +113,16 @@ const STRINGS = {
     programTerminal: "Program",
     programTerminalFailed:
       "The program's terminal did not start: what the program prints and reads goes through the debug console.",
-    update: "Teacher's update",
+    update: "Update from your teacher",
     updateTooltip: (at) => `Your teacher updated the project${at ? `, ${at}` : ""}. Click to apply it.`,
     updateMessage: "Your teacher's message:",
     updateConfirm:
       "Apply your teacher's update? It is merged into your branch with a merge commit; then push as usual.",
     apply: "Apply",
     updateApplied: "Update applied. Push to send it with your work.",
-    updateCurrent: "This update is already in your work.",
     updateUnavailable: "The update could not be fetched. Try again in a moment.",
     updateOtherBranch: (branch) => `Switch to the ${branch} branch to apply the update.`,
-    updateBusy: "A merge is in progress: finish or abort it, then try again.",
+    updateBusy: "A merge, rebase or cherry-pick is in progress: finish or abort it, then try again.",
     updateDirty: (files) =>
       `Nothing was changed: your uncommitted changes to ${files} would be overwritten. Commit your work, then try again.`,
     updateConflict: (files) =>
@@ -414,32 +412,19 @@ function activate(context) {
         } finally {
           applying = false;
         }
-        const files = plainText((result.files || []).slice(0, 10).join(", ") + ((result.files || []).length > 10 ? ", …" : ""));
-        switch (result.outcome) {
-          case "applied":
-            void vscode.window.showInformationMessage(t.updateApplied);
-            break;
-          case "current":
-            void vscode.window.showInformationMessage(t.updateCurrent);
-            break;
-          case "unavailable":
-            void vscode.window.showWarningMessage(t.updateUnavailable);
-            break;
-          case "otherBranch":
-            void vscode.window.showWarningMessage(t.updateOtherBranch(update.branch));
-            break;
-          case "busy":
-            void vscode.window.showWarningMessage(t.updateBusy);
-            break;
-          case "dirty":
-            void vscode.window.showWarningMessage(t.updateDirty(files));
-            break;
-          case "conflict":
-            void vscode.window.showWarningMessage(t.updateConflict(files));
-            break;
-          default:
-            void vscode.window.showErrorMessage(t.updateFailed(plainText(result.detail || "?")));
-        }
+        const names = result.files || [];
+        const files = plainText(names.slice(0, 10).join(", ") + (names.length > 10 ? ", …" : ""));
+        // `current` (already in the work) says nothing: the re-poll hides the item.
+        const said = {
+          applied: ["showInformationMessage", t.updateApplied],
+          unavailable: ["showWarningMessage", t.updateUnavailable],
+          otherBranch: ["showWarningMessage", t.updateOtherBranch(update.branch)],
+          busy: ["showWarningMessage", t.updateBusy],
+          dirty: ["showWarningMessage", t.updateDirty(files)],
+          conflict: ["showWarningMessage", t.updateConflict(files)],
+          failed: ["showErrorMessage", t.updateFailed(plainText(result.detail || "?"))],
+        }[result.outcome];
+        if (said) void vscode.window[said[0]](said[1]);
         await poll();
       }),
     );

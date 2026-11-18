@@ -1,8 +1,8 @@
 /**
  * The names both `project.ts` and `codespace.ts` need — a commit id, a
- * repository's name and full name, a path inside a repository, a branch,
- * what a message to the students never holds — one schema each, here
- * because the second is imported by the first, so neither can own them.
+ * repository's name and full name, a path inside a repository, a branch —
+ * one schema each, here because the second is imported by the first, so
+ * neither can own them.
  */
 import { z } from "zod";
 
@@ -58,12 +58,3 @@ export const BranchName = z
       b.split("/").every((part) => part !== "" && !part.startsWith(".") && !part.endsWith(".")),
     "not a branch name",
   );
-
-/**
- * What a message to the students never holds (ADR-132 §10): the C0 controls
- * but tab and line feed, DEL, the C1 controls, and the bidirectional
- * overrides and isolates — `CONTROL_CHAR` of `journal.ts`, widened. A NUL
- * would fail the database's write after the distribution moved.
- */
-// eslint-disable-next-line no-control-regex
-export const MESSAGE_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/;
