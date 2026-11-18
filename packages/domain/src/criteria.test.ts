@@ -174,6 +174,22 @@ describe("criteriaTotals and clampAwarded", () => {
     expect(criteriaTotals(leaves, { a: 0, p: -3, b: 0 }).points).toBe(0);
     expect(criteriaTotals(leaves, { a: 4, p: 0, b: 2 })).toEqual({ points: 6, max: 4, bonusMax: 2, missing: [] });
   });
+
+  it("rounds the sums, never a binary artefact (#1144)", () => {
+    const maxima = [1.7, 2.4, 0.1, 1.1, 0.1, 0.8, 37.8];
+    const given = [1, 1.1, 0, 0.6, 0.1, 0.1, 32.3];
+    // The bug: summed as they come, they read 35.199999999999996 / 43.99999999999999.
+    expect(maxima.reduce((s, x) => s + x, 0)).not.toBe(44);
+    expect(given.reduce((s, x) => s + x, 0)).not.toBe(35.2);
+    const tenths = maxima.map((maxPoints, i) => ({ id: `c${i}`, maxPoints }));
+    const awarded = Object.fromEntries(given.map((points, i) => [`c${i}`, points]));
+    expect(criteriaTotals([...tenths, { id: "b", maxPoints: 0, bonusPoints: 0.1 }, { id: "d", maxPoints: 0, bonusPoints: 0.2 }], awarded)).toEqual({
+      points: 35.2,
+      max: 44,
+      bonusMax: 0.3,
+      missing: ["b", "d"],
+    });
+  });
 });
 
 describe("parseCriteria refusals", () => {

@@ -10,6 +10,7 @@ import {
   type ProjectSourceRepo,
   type ProjectSummary,
 } from "@quiz/contracts";
+import { formatScore } from "@quiz/domain";
 
 import { api } from "../api";
 import { useHoldChanged } from "../build";
@@ -423,7 +424,7 @@ function SourceCriteria({
         title={t("project.criteria.switch")}
         desc={
           criteria.ok
-            ? t("project.criteria.source.desc", { max: criteria.max, bonus: criteria.bonusMax })
+            ? t("project.criteria.source.desc", { max: formatScore(criteria.max), bonus: formatScore(criteria.bonusMax) })
             : undefined
         }
       >
