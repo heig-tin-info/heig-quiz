@@ -3,12 +3,13 @@
 ## Status
 
 Accepted (2026-09-21, first production deployment). Amended 2026-09-25,
-2026-09-30, 2026-10-07, 2026-10-08, 2026-10-11 (twice), 2026-10-12 and
-2026-10-26. Every rule the amendments added is under
+2026-09-30, 2026-10-07, 2026-10-08, 2026-10-11 (twice), 2026-10-12,
+2026-10-26 and 2026-11-18. Every rule the amendments added is under
 [Amendments in force](#amendments-in-force), where nothing of the runner's
 hardening (root `CLAUDE.md` invariants 10–13) is relaxed; their dated text,
 with the reasons and the transitions, is in the [historical record](history/ADR-016-runner-sur-vm-separee.md#status).
 
+- 2026-11-18 (owner): the production portal deploy rebuilds the student image when its sources changed, tested before it is tagged; staging never builds it ([amendment](#2026-11-18-the-prod-portal-deploy-rebuilds-the-student-image)). Amends the M6-04 point "never by a deploy".
 - **2026-10-11 (security audit M6, L12, L13): gVisor is the default runtime of the runner's own Podman service** (`runsc --oci-seccomp`), never a `containerArgs` flag; `RUNNER_RUNTIME=runsc` makes the runner refuse to start unless a real container runs under it (`proveRuntime`); the runner binds the loopback ([amendment](#2026-10-11-gvisor-the-containers-state-the-bind-address)).
 - 2026-10-11 (security audit H4): the staging portal deploys only once approved, through a frozen dispatcher ([amendment](#2026-10-11-the-staging-portal-deploys-only-once-approved)).
 - 2026-10-08 (M6-05 part 2): the engine VM's cgroup slices (`--cgroup-parent`), backups and host firewall ([amendment](#2026-10-08-capacity-and-backups-of-the-engine-vm)).
@@ -141,8 +142,9 @@ steps are unchanged.*
   **no secret inside**) and runs as a quadlet like the runner: host
   network, the rootful socket, the data directory bound at the same path,
   **read-only root, no capability**. The student image is built on the VM
-  by hand (`apps/codespace/images/build.sh`), **never by a deploy, never
-  pulled**.
+  (`apps/codespace/images/build.sh`), **never pulled**; by hand until
+  2026-11-18, since then by the `prod` portal deploy when its sources
+  changed ([amendment](#2026-11-18-the-prod-portal-deploy-rebuilds-the-student-image)).
 - **The live-session guard.** A `prod` deploy **refuses (exit 3)** while a
   session container of that instance runs, unless the request starts with
   `force` (CI: `CODESPACE_FORCE_SHA` naming the run's sha); `staging` is not
@@ -250,6 +252,66 @@ staging VM.*
 - *Rejected*: `deploy.sh` delegating its staging scope to the frozen script;
   a separate staging VM or a rootless staging engine (for now); a gate in
   the workflow alone, without moving the key.
+
+### 2026-11-18: the prod portal deploy rebuilds the student image
+
+*Owner's decision; scope: the M6-04 point "the student image is built on
+the VM by hand, never by a deploy". The supply-chain rule (built on the VM
+from the checkout, never pulled), the staging half and the live-session
+guard are unchanged.*
+
+**Context.** Every change under `apps/codespace/images/c-dev/` (the
+extension's update button, SEB's quit hint, Baygon) waited for the owner
+to ssh to the engine VM and run `build.sh` then `test.sh`, after the
+production deploy: a step forgotten once is a feature that never reaches
+the students. The manual step had three reasons: one tag shared by both
+instances in one rootful store (a staging build would put an unapproved
+commit under production's new sessions); its cost (1–2 min, ~1.5 GB, 3 GB
+free, downloads); a broken image blocks every new session.
+
+**Decision.** Each reason becomes a guarantee of
+`apps/codespace/deploy/student-image.sh`, the last step of
+`install.sh prod` (operations: `apps/codespace/deploy/RUNBOOK.md`, §7 The
+student image).
+
+- **Production only, after the portal.** It runs in the approved `codespace
+  prod` deploy, from production's checkout at the deployed commit, after
+  the portal of that commit answers and after the live-session guard. The
+  staging dispatcher still runs nothing of a commit, so staging never
+  builds it; the runner's deploy does not either (it does not own the
+  image).
+- **Only when it changed, without a state file.** The image carries the
+  label `heig-codespace.source-tree`, the git tree of `images/c-dev` it was
+  built from (the build's whole context). An equal tree builds nothing; a
+  different or absent label, or a missing image, rebuilds. A checkout
+  whose `images/c-dev` differs from its commit refuses to build.
+- **Never break the image in service.** Free space first (3 GiB); the
+  build goes to a candidate tag, `test.sh` runs against it, and only a pass
+  gives it the image's tag. A failure keeps the image in service, removes
+  the candidate and the build's leftovers, prints the log's tail and fails
+  the deploy job, the portal itself already deployed. Leftovers are removed
+  by ID, never with `-f`, and the only prune is scoped by the label: **no
+  global prune** still holds.
+- **Running sessions keep their container**, and so their image, until it
+  restarts; new sessions take the new image.
+- **Where it runs.** In the rootful Podman service, as the manual build
+  did: outside `codespace.slice`, so it cannot take the sessions' memory,
+  and below `quiz-runner.slice` in CPU weight. Its downloads leave as
+  before: the host policy filters input only.
+
+**Consequences.** A change to `images/c-dev/` reaches production's new
+sessions with the production deploy that ships it, and staging's at the
+same time (one tag). A deploy that changes nothing there costs an `image
+inspect`. A red `deploy-codespace-prod` may now mean "portal deployed,
+image not rebuilt"; the job's log says which. The first deploy after this
+amendment rebuilds once (no image carries the label yet), as does the next
+after any build by hand. A forced deploy during a session builds beside it.
+
+*Rejected*: building in CI and pulling (the supply-chain rule); building
+from the staging dispatcher (the H4 amendment); a state file of the last
+built commit (the image is its own record, and a file would disagree with
+an image built or removed by hand); building in place and rolling back on
+failure (the tag would name a broken image between the two).
 
 ## Update 2026-09-25
 

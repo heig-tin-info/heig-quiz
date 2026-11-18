@@ -155,6 +155,10 @@ jobs:
       - run: bash infra/engine/slices.test.sh
       # The root timer's snapshot: one blocked volume never stops the walk.
       - run: bash apps/codespace/deploy/shadow-snapshot.test.sh
+      # The student image's rebuild by the prod portal deploy: built only
+      # when images/c-dev changed, tagged only once its test passed.
+      - run: shellcheck -x -P SCRIPTDIR apps/codespace/deploy/student-image.sh apps/codespace/deploy/student-image.test.sh apps/codespace/images/build.sh
+      - run: bash apps/codespace/deploy/student-image.test.sh
       - env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && 'HEAD^1' || '' }}
         run: node scripts/check-changes.mjs ${BASE:+--base "$BASE"}
@@ -500,4 +504,7 @@ jobs:
             force="force "
             echo "::warning::CODESPACE_FORCE_SHA names this sha: the live-session guard is overridden."
           fi
-          ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "${force}codespace prod $GITHUB_SHA $CODESPACE_DIGEST $GHCR_TOKEN"
+          # Keep-alives: a rebuild of the student image (student-image.sh)
+          # prints nothing for minutes while it builds and tests.
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "${force}codespace prod $GITHUB_SHA $CODESPACE_DIGEST $GHCR_TOKEN"

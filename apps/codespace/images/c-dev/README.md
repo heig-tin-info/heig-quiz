@@ -88,7 +88,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 - **Add an extension**: one `ARG` for its identifier, one `--install-extension` in the same `RUN`, one `grep -qi "^<id>@"` against `/etc/code-server/extensions.lock` so that the build fails if it is missing, its id in `extensions.allowed` of `settings.json`, the exact expected list asserted in `test.sh` § 3 (three ids, sorted), and a row in the pinned-versions table.
 - **Bump Baygon**: the version in `baygon/baygon.in`, then the `uv pip compile` command in the header of `baygon/requirements.txt` (keep the header), the version asserted by `test.sh` § 11, and the row above. A dependency that ships no wheel for CPython 3.13 on x86_64 fails the build (`--only-binary=:all:`): no compiler is ever brought in for it.
 - **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/history/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`). Then re-check copy and paste in the editor, the terminal and the find widget under SEB 3.10.3's `Clipboard.js` (transcribed and injected after load, Windows user agent): `seb-workbench.js` relies on VS Code's EditContext editor, xterm's paste handler and `navigator.clipboard` (§ Safe Exam Browser in the workbench).
-- **Deploy**: classroom's `deploy/push.sh --rebuild-image` rebuilds the image on the VM; without the flag it is only built there when the tag is missing.
+- **Deploy**: the production portal deploy rebuilds the image on the engine VM when this directory changed, and gives it the tag only once `test.sh` passed against it (`deploy/student-image.sh`, [deploy/RUNBOOK.md](../../deploy/RUNBOOK.md) §7). Any file here counts, this README and `test.sh` included.
 - **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its fifteen sections prove, in order:
   - § 0 the container starts under `run-hardened.sh` and answers `/healthz` (prints `MESURE_DEMARRAGE_SECONDES`);
   - § 1 `gdb` runs a program and produces a backtrace, with no "Operation not permitted", and breaks in `main`, steps over a line and into a call;
@@ -814,9 +814,9 @@ the image does to load it.
 - **Checked** by `test.sh` § 7 (the tag, the CSP, the file served as
   JavaScript); the script by `src/seb/sebWorkbench.test.ts`.
 - **Rebuild.** A student only gets a change once the image is rebuilt on the
-  engine VM: `/opt/quiz-runner/apps/codespace/images/build.sh`, then
-  `images/c-dev/test.sh`; a running session keeps its image until it
-  restarts.
+  engine VM, which the production portal deploy does when this directory
+  changed (§ Modifying the image, Deploy); a running session keeps its
+  image until it restarts.
 
 Limits:
 
