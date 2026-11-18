@@ -21,6 +21,9 @@ describe("uploadRefusalText", () => {
     const french = uploadRefusalText(svgRefused("element", "script"), tOf(fr));
     expect(french).toContain("<script>");
     expect(french).not.toContain("refused");
+    // A limit comes from the server, never from the dictionary.
+    expect(uploadRefusalText(svgRefused("too_large", "512 KB"), tOf(en))).toBe("This SVG is over 512 KB.");
+    expect(uploadRefusalText(svgRefused("too_complex", "20000"), tOf(fr))).toContain("20000");
   });
 
   it("names the accepted types for another refused file, and says nothing of any other failure", () => {

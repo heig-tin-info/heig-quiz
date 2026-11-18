@@ -72,28 +72,43 @@ document — script, external fetches, embedded HTML, text nobody sees drawn.
      on an allow-list — `rgb`, `rgba`, `hsl`, `hsla`, `calc`, `url` (as
      above) and the transforms `matrix`, `translate(X|Y)`, `scale(X|Y)`,
      `rotate`, `skew(X|Y)`; any other (`image(`, `image-set(`,
-     `cross-fade(`, `src(`, `expression(`, `var(`, a selector's `:not(`…)
-     is refused.
+     `cross-fade(`, `src(`, `expression(`, `var(`…) is refused. A known
+     limit, accepted rather than parsing CSS: the scan also trips on
+     selectors and conditions written like calls — `:not(`, `:nth-child(`,
+     `@media … and (` — which are refused, the refusal naming them.
    - **Stylesheets**: the text and CDATA of one `<style>` are joined and
      checked once, at its close tag, so a construct cut across CDATA
      sections is seen whole; a stylesheet or a `style=` holds no `@import`,
      no comment (`/*`), no backslash, no `javascript:`, and only allowed
      functions.
-   - **`<use>`**: it may repeat only an element that neither is nor holds a
-     `<use>`, checked once the whole SVG is read (targets defined later
-     included): no amplification by chains of `<use>`.
+   - **A drawn-element budget**: every reference is an `href` or an
+     `xlink:href` (both counted when both are there) or a `url(#id)` in an
+     attribute or a `style=`. Once the whole SVG is read, an element costs
+     1, plus its children, plus the element it references, once per
+     reference: a `<use>`, a mask, a clip path, a pattern, a gradient or a
+     marker is drawn again where it is used — a marker counted once per
+     element that names it, not once per vertex. A `url(#id)` of a
+     `<style>` may apply to every element: it costs its target once per
+     element of the SVG. A reference cycle is refused; the root's cost,
+     the stylesheet's share included, is at most 20,000
+     (`SVG_MAX_DRAWN`). One rule bounds every amplification: flat copies,
+     chains of `<use>`, masks or patterns referencing each other.
    - **Depth**: at most 64 levels of nesting, because renderers (usvg in
      Typst, the browsers) recurse on it.
 
    The refusal is `415 { error: "svg_refused", code, name?, message }`
    (`SvgRefusal` of `@quiz/contracts`): `code` is one of a CLOSED set —
-   `too_large`, `encoding`, `malformed`, `not_svg`, `doctype`, `comment`,
-   `instruction`, `cdata`, `text`, `element`, `attribute`, `namespace`,
-   `href`, `url`, `function`, `css`, `escape`, `use_chain`, `too_deep` —,
-   `name` the element, attribute, namespace, function or construct at fault,
-   and `message` an English wording for an MCP client. The web words each
-   code in the reader's language. Bytes that are neither raster nor markup
-   stay `415 unsupported_media_type`.
+   `too_large`, `malformed` (not UTF-8, another declared encoding, not
+   well-formed: only the parser's own error), `not_svg`, `construct`
+   (DOCTYPE, comment, processing instruction, CDATA outside `<style>`),
+   `text`, `element`, `attribute`, `namespace`, `reference` (an `href` or a
+   `url()` that is not `#id`), `function`, `css`, `escape`, `cycle`,
+   `too_deep`, `too_complex` —, `name` the element, attribute, namespace,
+   function or construct at fault, or the limit passed (`512 KB`, `64`,
+   `20000`, so no limit is written in the web's dictionaries), and
+   `message` an English wording for an MCP client. The web words each code
+   in the reader's language. Bytes that are neither raster nor markup stay
+   `415 unsupported_media_type`.
 
 3. **Why a check, and why it is the second barrier.** An asset is shown
    through `<img>` only — the renderer's one image rule — where a browser

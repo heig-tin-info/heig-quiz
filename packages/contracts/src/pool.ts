@@ -801,32 +801,28 @@ export type AvatarMime = z.infer<typeof AvatarMime>;
 /**
  * Why the strict check of a question's SVG refused it (ADR-134 §2): a CLOSED
  * set of codes, so the web words each in the reader's language; `name` is
- * the element, attribute, namespace, function or construct at fault. The
- * 415 body is `{ error: "svg_refused", code, name?, message }`, `message`
- * the English wording an MCP client reads.
+ * the element, attribute, namespace, function or construct at fault, or the
+ * limit passed (`too_large`, `too_deep`, `too_complex`). The 415 body is
+ * `{ error: "svg_refused", code, name?, message }`, `message` the English
+ * wording an MCP client reads.
  */
-export const SVG_REFUSAL_CODES = [
+export const SvgRefusalCode = z.enum([
   "too_large",
-  "encoding",
   "malformed",
   "not_svg",
-  "doctype",
-  "comment",
-  "instruction",
-  "cdata",
+  "construct",
   "text",
   "element",
   "attribute",
   "namespace",
-  "href",
-  "url",
+  "reference",
   "function",
   "css",
   "escape",
-  "use_chain",
+  "cycle",
   "too_deep",
-] as const;
-export const SvgRefusalCode = z.enum(SVG_REFUSAL_CODES);
+  "too_complex",
+]);
 export type SvgRefusalCode = z.infer<typeof SvgRefusalCode>;
 
 export const SvgRefusal = z.object({
