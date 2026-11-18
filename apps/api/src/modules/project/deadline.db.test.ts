@@ -809,7 +809,7 @@ describe("Close now (#1147, ADR-064 amendment of 2026-11-18)", () => {
     expect(mid!.dueAt).toEqual(at(DEADLINE, -86_400_000));
     const [entry] = await auditOf(p.id, "project.closed_now");
     expect(entry!.actorUserId).toBe(teacher.id);
-    expect(entry!.payload).toEqual({ deadlineAt: closedAt.toISOString(), previous: DEADLINE, extensions: 1 });
+    expect(entry!.payload).toEqual({ deadlineAt: closedAt.toISOString(), previous: DEADLINE, extensions: [extended!.id] });
 
     // The usual path: the next tick applies the deadline, the job locks.
     server.clock.advance(1000);

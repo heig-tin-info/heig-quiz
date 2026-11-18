@@ -103,7 +103,7 @@ At the deadline, on the server's clock, Quiz applies the strategy within a minut
 
 - **A repository's own deadline.** In a repository's sheet, give it an individual deadline (a date ahead of now), or **Follow the project's** again. That effective deadline is what every rule reads for the repository. It replaces extra time for projects.
 - **Lock now** and **Unlock** act on a single repository by hand.
-- **Close project**, in the header, ends a published project now (the course's owner only, after a confirmation). The deadline becomes now for every student, own deadlines included, and then applies as usual: the lock or the deadline commit, the grace, the freeze. A review checkpoint still to come never fires. There is no reopen button: moving the deadline later reopens the project.
+- **Close project** (header, the course's owner) ends a published project now: the deadline becomes now for every student, own deadlines included, then applies as usual, grace included.
 - **Moving the deadline later** after it passed **reopens** the project: locks lifted, freeze and final review undone, runs requalified. Teacher scores and a release already made are kept. Quiz asks you to confirm.
 
 On a plan without rulesets, the lock archives the repository instead; the row shows *locked by archiving*.

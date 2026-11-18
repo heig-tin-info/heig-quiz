@@ -6102,9 +6102,9 @@ export const fr: Record<keyof Dict, string> = {
   "project.close": "Clôturer le projet",
   "project.close.confirm.title": "Clôturer « {name} » maintenant ?",
   "project.close.confirm.body.lock":
-    "L'échéance devient maintenant pour tous les étudiants, échéances individuelles comprises. Les dépôts sont verrouillés et le travail est figé pour la correction après {n} min de délai de grâce.",
+    "L'échéance devient maintenant pour tous les étudiants, échéances propres comprises. Les dépôts sont verrouillés et le travail est figé pour la correction après {n} min de délai de grâce.",
   "project.close.confirm.body.commit":
-    "L'échéance devient maintenant pour tous les étudiants, échéances individuelles comprises. Un commit d'échéance est ajouté aux dépôts et le travail est figé pour la correction après {n} min de délai de grâce.",
+    "L'échéance devient maintenant pour tous les étudiants, échéances propres comprises. Un commit d'échéance est ajouté aux dépôts et le travail est figé pour la correction après {n} min de délai de grâce.",
   "project.closedToast": "Projet clôturé",
   "project.archived": "Projet archivé",
   "project.unarchived": "Projet restauré",

@@ -29,7 +29,7 @@
 import { and, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 
 import type { ProjectRepoDeadlineState } from "@quiz/contracts";
-import { checkpointDueAt, deadlineWantsLock, effectiveDeadline, receivedLate, reminderClaimAfterMove, reopens } from "@quiz/domain";
+import { checkpointDueAt, closeRefusal, deadlineWantsLock, effectiveDeadline, receivedLate, reminderClaimAfterMove, reopens } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { COLLECTION_UNSETTLED } from "../codespace/service.js";
@@ -218,15 +218,14 @@ export async function rescheduleCheckpoints(tx: Tx, projectId: string, deadlineA
 }
 
 /**
- * The project's deadline moved by a patch, in the caller's transaction on
- * the row it locked: its checkpoints, the reminder re-armed when the new
- * deadline is more than a day away (`reminderClaimAfterMove`, M3-09b), and
- * the repositories that follow it ({@link effectiveDeadlineMoved}). A
- * deadline already applied moved later REOPENS the project (F-PROJ-09):
- * `published` again, its final review undone, audited
- * `project.deadline_reopened`. (A publication counting its duration moves
- * a draft's deadline: no repository yet, only `rescheduleCheckpoints`.)
- * The updated row.
+ * The project's deadline moved, in the caller's transaction on the row it
+ * locked: the reminder re-armed when the new deadline is more than a day
+ * away (`reminderClaimAfterMove`, M3-09b), and the repositories that follow
+ * it ({@link effectiveDeadlineMoved}). A deadline already applied moved
+ * later REOPENS the project (F-PROJ-09): `published` again, its final
+ * review undone, audited `project.deadline_reopened`. The checkpoints are
+ * the caller's (`rescheduleCheckpoints`): a patch moves them, a Close
+ * leaves them void. The updated row.
  */
 export async function projectDeadlineMoved(
   tx: Tx,
@@ -245,7 +244,6 @@ export async function projectDeadlineMoved(
     })
     .where(eq(projects.id, before.id))
     .returning();
-  await rescheduleCheckpoints(tx, before.id, deadlineAt);
   const following = await tx
     .select({ id: projectRepos.id })
     .from(projectRepos)
@@ -269,55 +267,33 @@ export async function projectDeadlineMoved(
 }
 
 /**
- * `POST /app/api/projects/:id/close` (#1147, ADR-064 amendment of
- * 2026-11-18): *Close now*, the course owner's. The project's deadline
- * becomes the server's `now`, and the usual machinery runs from there as at
- * any deadline — the ticker applies it within a tick, the grace, the lock
- * or the deadline commit, an online workspace's collection, the freeze and
- * the final passes — nothing is applied here. It ends the project for
- * everyone: a repository's own deadline still ahead is taken back (it
- * follows the project's again, its reminder claim dropped as
- * `setRepoDeadline(null)` drops it); one already past is kept. The
- * checkpoints are NOT rescheduled: one still to come lies at or after the
- * new deadline, so it is void and never fires (`isVoidCheckpoint`), rather
- * than a J−n fired at once. Only a published project whose deadline lies
- * ahead (`409 not_open`; a second Close is refused the same way), never an
- * archived one (`409 project_archived`). Audited `project.closed_now`, with
- * the previous deadline. The updated row.
+ * `POST /app/api/projects/:id/close` (#1147): the deadline moved to the
+ * server's `now` for every repository, its own deadlines still ahead taken
+ * back, the checkpoints left void; the ticker applies it as any deadline.
+ * Refused by `closeRefusal` (`@quiz/domain`). Audited `project.closed_now`.
+ * The rationale: ADR-064, amendment of 2026-11-18.
  */
 export async function closeProjectNow(db: Db, projectId: string, actor: AuditActor, now: Date): Promise<ProjectRow> {
   return db.transaction(async (tx) => {
     // The project first, then its repositories: the order every writer of both takes.
     const [before] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!before) throw notFoundError("project");
-    if (before.archivedAt !== null) throw new ProjectError("project_archived", "The project is archived");
-    if (before.state !== "published" || before.deadlineAt.getTime() <= now.getTime()) {
-      throw new ProjectError("not_open", "Only a published project whose deadline lies ahead is closed");
-    }
+    const refusal = closeRefusal({ ...before, archived: before.archivedAt !== null }, now);
+    if (refusal) throw new ProjectError(refusal, "Only a published project, not archived, whose deadline lies ahead is closed");
     const extensions = await tx
       .update(projectRepos)
       .set({ deadlineAt: null, reminderSentAt: null })
       .where(and(eq(projectRepos.projectId, projectId), sql`${projectRepos.deadlineAt} > ${ts(now)}`))
       .returning({ id: projectRepos.id });
-    const [row] = await tx.update(projects).set({ deadlineAt: now }).where(eq(projects.id, projectId)).returning();
-    const following = await tx
-      .select({ id: projectRepos.id })
-      .from(projectRepos)
-      .where(and(eq(projectRepos.projectId, projectId), isNull(projectRepos.deadlineAt)));
-    await effectiveDeadlineMoved(
-      tx,
-      row!,
-      following.map((r) => r.id),
-      now,
-    );
+    const row = await projectDeadlineMoved(tx, before, now, actor, now);
     await audit(tx, {
       ...actor,
       action: "project.closed_now",
       subjectType: "project",
       subjectId: projectId,
-      payload: { deadlineAt: now.toISOString(), previous: before.deadlineAt.toISOString(), extensions: extensions.length },
+      payload: { deadlineAt: now.toISOString(), previous: before.deadlineAt.toISOString(), extensions: extensions.map((r) => r.id) },
     });
-    return row!;
+    return row;
   });
 }
 

@@ -116,6 +116,19 @@ export function gradingModeRefusal(
   return to === undefined || to === "criteria" || project.gradingMode === "criteria" ? null : "not_draft";
 }
 
+/**
+ * Why *Close project* (#1147, ADR-064 amendment of 2026-11-18) is refused
+ * at `now`, or null when it may run: only a published project, not
+ * archived, whose deadline lies ahead.
+ */
+export function closeRefusal(
+  project: { state: ProjectStateName; deadlineAt: Date; archived: boolean },
+  now: Date,
+): "project_archived" | "not_open" | null {
+  if (project.archived) return "project_archived";
+  return project.state === "published" && project.deadlineAt.getTime() > now.getTime() ? null : "not_open";
+}
+
 /** The fields of `project` that may change at `now` (`ProjectSummary.editable`). */
 export function editableProjectFields(project: ProjectLifeLike, now: Date): ProjectPatchField[] {
   return PROJECT_PATCH_FIELDS.filter((field) => projectFieldRefusal(project, field, now) === null);

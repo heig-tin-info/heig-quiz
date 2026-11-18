@@ -94,6 +94,7 @@ import {
   checkpointDueAt,
   checkpointRefusal,
   classifyCriterion,
+  closeRefusal,
   criteriaScore,
   criteriaTable,
   criteriaTotals,
@@ -1802,8 +1803,8 @@ on("POST", "/app/api/projects/:id/unschedule", (m) => {
 on("POST", "/app/api/projects/:id/close", (m) => {
   const p = projectOr404(m.groups!.id!);
   const s = p.summary;
-  if (s.archivedAt !== null) throw refuse(409, "project_archived", "The project is archived");
-  if (s.state !== "published" || Date.parse(s.deadlineAt) <= now) throw refuse(409, "not_open", "The project is not open");
+  const refusal = closeRefusal({ state: s.state, deadlineAt: new Date(s.deadlineAt), archived: s.archivedAt !== null }, new Date(now));
+  if (refusal) throw refuse(409, refusal, "The project cannot be closed");
   s.deadlineAt = iso(0);
   s.state = "locked";
   s.deadlineAppliedAt = s.deadlineAt;

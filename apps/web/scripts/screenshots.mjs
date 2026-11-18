@@ -417,19 +417,6 @@ const scenes = [
     fold: true,
     act: (p) => p.getByRole("button", { name: /^(Close project|Clôturer le projet)$/ }).click(),
   },
-  // Confirmed: the deadline applied at once (the mock plays the ticker), the button gone.
-  {
-    name: "project-closed",
-    role: "teacher",
-    path: "/projects/pj-published?projects=1",
-    settle: 2500,
-    fold: true,
-    act: async (p) => {
-      await p.getByRole("button", { name: /^(Close project|Clôturer le projet)$/ }).click();
-      await p.getByRole("dialog").getByRole("button", { name: /^(Close project|Clôturer le projet)$/ }).click();
-      await p.waitForTimeout(1000);
-    },
-  },
   // Beside the server's primary (Sync, the source ahead): red ink, no second fill.
   { name: "project-close-beside-sync", role: "teacher", path: "/projects/pj-published?projects=1&ahead=1", settle: 2500, fold: true },
   // ADR-132 §10: the Sync dialog — the list (the source ahead), nothing to

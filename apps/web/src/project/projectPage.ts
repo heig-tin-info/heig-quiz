@@ -26,7 +26,7 @@ import {
   type WorkModeRefusal,
   type WorkspaceStartRefusal,
 } from "@quiz/contracts";
-import { isVoidCheckpoint, projectBeforePublication, projectGraded, projectIsLive, reopens } from "@quiz/domain";
+import { closeRefusal, isVoidCheckpoint, projectBeforePublication, projectGraded, projectIsLive, reopens } from "@quiz/domain";
 
 import { ApiError, refusalCodeOf, wordedRefusal } from "../api";
 import { studentName } from "../group/groupRules";
@@ -62,14 +62,9 @@ export const projectRefetchInterval = (detail: ProjectDetail | undefined): numbe
  */
 export const offersSync = (p: ProjectDetail): boolean => p.primaryAction !== "sync" && (p.sync.ahead !== null || p.sync.inProgress);
 
-/**
- * Whether the header offers *Close project* (#1147, ADR-064 amendment of
- * 2026-11-18): published, not archived, its deadline still ahead — what the
- * server accepts (`409 not_open` otherwise). The owner's only, decided by the
- * caller (`useIsCourseOwner`).
- */
+/** Whether the header offers *Close project* (#1147): the server's rule, `closeRefusal`; the owner's role is the caller's. */
 export const offersClose = (p: ProjectDetail, now: number): boolean =>
-  p.state === "published" && p.archivedAt === null && Date.parse(p.deadlineAt) > now;
+  closeRefusal({ state: p.state, deadlineAt: new Date(p.deadlineAt), archived: p.archivedAt !== null }, new Date(now)) === null;
 
 /**
  * The sentence under the title: the project's situation, and the one action

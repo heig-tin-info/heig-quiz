@@ -2192,13 +2192,10 @@ header, whatever the tab.
   server names (Publish / Sync / Release / Grade), the same on every tab — no
   tab has a primary of its own. No counts line: the figures live in the
   tiles. Nothing in a tile is `primary`. **Close project** (#1147) is the
-  live evaluation's Close, mirrored in place but `danger-quiet` (red ink,
-  no fill: the server's primary may stand beside it, and the fill belongs
-  to the confirmation), left of the primary, for the course owner while the project is published and
-  its deadline ahead, confirmed first with what follows (the deadline now,
-  the lock or the commit, the grace in minutes). Not in the overflow menu:
-  ending the work is the one move of a running project, and it must be
-  found; not in the Deadline tile, which edits the date and holds no action.
+  live evaluation's Close, in the header left of the primary but
+  `danger-quiet` (the fill belongs to its confirmation), for the course
+  owner while the project is published and its deadline ahead; the
+  confirmation says the deadline now, the lock or the commit, the grace.
 - **Four tiles** (`ProjectOverview`, the `Stat` tile variant; 4 columns from
   `lg`, 2×2 at `sm`, one column on a phone):
   *Accepted* — a 56 px ring beside "26 / 30", parts in fixed order: ready

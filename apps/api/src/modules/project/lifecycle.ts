@@ -469,7 +469,10 @@ export async function patchProject(
     }
     // The checkpoints, the repositories following it, and the reopen of a
     // deadline already applied (F-PROJ-09, M3-05a).
-    if (movedTo !== undefined) row = await projectDeadlineMoved(tx, row, movedTo as Date, actor, now);
+    if (movedTo !== undefined) {
+      await rescheduleCheckpoints(tx, project.id, movedTo as Date);
+      row = await projectDeadlineMoved(tx, row, movedTo as Date, actor, now);
+    }
     await audit(tx, { ...actor, action: "project.update", subjectType: "project", subjectId: project.id, payload: body });
     return row;
   });

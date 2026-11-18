@@ -466,7 +466,7 @@ export type AuditAction =
    * `payload.deadlineAt`, `previous`, `repos` (the repositories reopened);
    * `closed_now` — *Close now* (#1147, ADR-064 amendment of 2026-11-18), the
    * course owner's: `payload.deadlineAt` (the server's now), `previous`,
-   * `extensions` (the repositories' own deadlines taken back).
+   * `extensions` (the ids of the repositories whose own deadline was taken back).
    */
   | "project.deadline_applied"
   | "project.deadline_enforced"

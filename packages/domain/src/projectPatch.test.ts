@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  closeRefusal,
   editableProjectFields,
   gradingModeRefusal,
   patchedDraftDates,
@@ -113,5 +114,17 @@ describe("patchedDraftDates (F-PROJ-03)", () => {
     expect(patchedDraftDates(manual, { deadlineAt: EARLIER }, NOW)).toEqual({ ok: false, refusal: "deadline_past" });
     expect(patchedDraftDates({ ...manual, durationMinutes: 60 }, { publishMode: "scheduled" }, NOW)).toEqual({ ok: false, refusal: "duration_needs_manual" });
     expect(patchedDraftDates(scheduled, { deadlineAt: FUTURE }, NOW)).toEqual({ ok: false, refusal: "deadline_before_start" });
+  });
+});
+
+describe("closeRefusal (#1147)", () => {
+  const open = { state: "published" as const, deadlineAt: LATER, archived: false };
+
+  it("lets a published project whose deadline lies ahead be closed, nothing else", () => {
+    expect(closeRefusal(open, NOW)).toBeNull();
+    expect(closeRefusal({ ...open, deadlineAt: NOW }, NOW)).toBe("not_open");
+    expect(closeRefusal({ ...open, deadlineAt: EARLIER }, NOW)).toBe("not_open");
+    for (const state of ["draft", "scheduled", "locked"] as const) expect(closeRefusal({ ...open, state }, NOW)).toBe("not_open");
+    expect(closeRefusal({ ...open, archived: true }, NOW)).toBe("project_archived");
   });
 });

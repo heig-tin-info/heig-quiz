@@ -333,6 +333,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     session,
     teacher(onOwnedProject, async ({ req, now, scope }) => {
       const row = await service.closeProjectNow(app.db, scope.project.id, actorOf(req), now);
+      // No `requestDeadlineWork`, unlike the deadline's PATCH: nothing to lift, the ticker applies the deadline at its next pass.
       await requestCodespaceSync(app, config, row.id);
       return service.projectSummary(app.db, row, now);
     }),
