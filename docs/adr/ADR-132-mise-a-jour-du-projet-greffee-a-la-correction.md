@@ -480,7 +480,7 @@ fixed test run by their own `make test`.
 - **Carried by the existing assignment sync.** `PUT /api/assignments/:id`
   (`CodespaceAssignmentSync`) gains `workspaceUpdate`: per handed-out
   branch the distribution's head the latest sync handed out
-  (`projects.sync_heads`, written with `sync_message` in the same statement
+  (`projects.sync_heads`, migration 0143, written with `sync_message` in the same statement
   and under the same rule: only on a project its students can read), and
   that sync's message (§10, the one `SyncMessage` schema), or null; nothing
   for `free`, `online_seb` or a draft (`workspaceUpdateOf`). The end of every
