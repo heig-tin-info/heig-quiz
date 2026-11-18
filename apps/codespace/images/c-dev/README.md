@@ -17,6 +17,7 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | `settings.json` | machine settings, installed as `/etc/code-server/settings.json` |
 | `clangd.yaml` | clangd's default flags per language, installed as `/etc/clangd/config.yaml` and `~/.config/clangd/config.yaml` (§ C++) |
 | `resolv.conf` | empty resolver, installed as `/etc/resolv.conf` |
+| `seb-workbench.js` | Safe Exam Browser clipboard bridge and battery button, loaded by the workbench page (§ Safe Exam Browser in the workbench) |
 | `extension/` | source of `heig.codespace-statusbar`, packaged into a `.vsix` at build time |
 | `baygon/baygon.in`, `baygon/requirements.txt` | Baygon's one requirement, and everything it installs, pinned by hash (§ Baygon) |
 | `run-hardened.sh` | `podman run` with the mandatory hardening |
@@ -86,7 +87,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 - **Add an apt package**: add it to the `apt-get install` list of the `Containerfile` (step 1), add its binary to the presence assertion of `test.sh` § 7 (`test -x /usr/bin/…`), and add a row to the pinned-versions table above.
 - **Add an extension**: one `ARG` for its identifier, one `--install-extension` in the same `RUN`, one `grep -qi "^<id>@"` against `/etc/code-server/extensions.lock` so that the build fails if it is missing, its id in `extensions.allowed` of `settings.json`, the exact expected list asserted in `test.sh` § 3 (three ids, sorted), and a row in the pinned-versions table.
 - **Bump Baygon**: the version in `baygon/baygon.in`, then the `uv pip compile` command in the header of `baygon/requirements.txt` (keep the header), the version asserted by `test.sh` § 11, and the row above. A dependency that ships no wheel for CPython 3.13 on x86_64 fails the build (`--only-binary=:all:`): no compiler is ever brought in for it.
-- **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/history/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`).
+- **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/history/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`). Then re-check copy and paste in the editor, the terminal and the find widget under SEB 3.10.3's `Clipboard.js` (transcribed and injected after load, Windows user agent): `seb-workbench.js` relies on VS Code's EditContext editor, xterm's paste handler and `navigator.clipboard` (§ Safe Exam Browser in the workbench).
 - **Deploy**: classroom's `deploy/push.sh --rebuild-image` rebuilds the image on the VM; without the flag it is only built there when the tag is missing.
 - **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its fifteen sections prove, in order:
   - § 0 the container starts under `run-hardened.sh` and answers `/healthz` (prints `MESURE_DEMARRAGE_SECONDES`);
@@ -96,7 +97,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
   - § 4 the root filesystem is read-only, `CapEff` is zero, `NoNewPrivs` is 1, the seccomp filter is loaded and the AppArmor label is the `codespace` profile (skipped with a note on a host without AppArmor);
   - § 5 uid 1000 inside, host UID outside 0–65535, and two containers side by side get different host UIDs;
   - § 6 a fork bomb is capped by `--pids-limit 256`, the host and the neighbouring container are intact;
-  - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, the colour-scheme settings and their two bundled themes, the return URL's origin trusted (and nothing trusted without one), the port proxy refused (`/proxy/<port>/` and `/absproxy/<port>/` answer 403/404 with a listener on the port), `/vscode-remote-resource` still sent with CSP `sandbox`, no notebook support (`ipynb` and `notebook-renderers` absent, no extension contributing a notebook type), neutralised gallery, no uncaught exception, toolchain binaries (`pytest` included) and man pages present;
+  - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, the colour-scheme settings and their two bundled themes, the return URL's origin trusted (and nothing trusted without one), the port proxy refused (`/proxy/<port>/` and `/absproxy/<port>/` answer 403/404 with a listener on the port), `/vscode-remote-resource` still sent with CSP `sandbox`, no notebook support (`ipynb` and `notebook-renderers` absent, no extension contributing a notebook type), the workbench page loading `seb-workbench.js` under `script-src 'self'` and the file served as JavaScript, neutralised gallery, no uncaught exception, toolchain binaries (`pytest` included) and man pages present;
   - § 8 `/etc/resolv.conf` comes from the image, with no nameserver, and resolution fails in under two seconds;
   - § 9 the container carries the seven portal variables and nothing else, the git identity works without a configuration file, and the VS Code server inherits the environment.
   - § 10 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`;
@@ -773,6 +774,42 @@ both end before `-std=c++20`). Every other flag of the project is kept. The
 same held for `-std=c17` before this change. A lab on another standard is
 not served by the image's default; clangd 19 has no condition on "no
 compilation database", and `clangd.fallbackFlags` cannot tell C from C++.
+
+## Safe Exam Browser in the workbench (2026-11-18, #1149, #1151)
+
+SEB Windows' isolated clipboard left VS Code's editor and terminal unable to
+paste, and its hidden taskbar hides a laptop's battery. `seb-workbench.js`
+bridges the clipboard and shows the battery; what SEB does, what breaks, what
+the script does and what it gates on: its header comment. Here, only what
+the image does to load it.
+
+- **Injection.** code-server 4.137 has no option to add a script to the
+  page. Step 2c of the `Containerfile` copies the file beside `workbench.js`
+  (`lib/vscode/out/vs/code/browser/workbench/`, served by the same static
+  route) and adds a classic `<script src>` before `</head>` of
+  `workbench.html`, which VS Code's server reads from disk on every request
+  (substituting `{{WORKBENCH_WEB_BASE_URL}}`).
+- **CSP.** The page's policy is a header from VS Code's server (code-server
+  adds none): `script-src 'self' 'unsafe-eval' … blob: 'nonce-…'`. A
+  same-origin `src` passes.
+- **`?v=`.** The static route caches for a year under a URL that only
+  changes with code-server's version, so the tag carries the file's hash
+  (the route reads the path only).
+- **Checked** by `test.sh` § 7 (the tag, the CSP, the file served as
+  JavaScript); the script by `src/seb/sebWorkbench.test.ts`.
+- **Rebuild.** A student only gets a change once the image is rebuilt on the
+  engine VM: `/opt/quiz-runner/apps/codespace/images/build.sh`, then
+  `images/c-dev/test.sh`; a running session keeps its image until it
+  restarts.
+
+Limits:
+
+- Only plain text crosses SEB's clipboard (`text/plain`), as with SEB's own
+  script.
+- The battery button sits in the middle of the status bar; a very narrow
+  window can make it cover an item.
+- Text in French only once the image ships a language pack (as for the
+  status bar extension).
 
 ## Resolver: `/etc/resolv.conf` shipped by the image
 

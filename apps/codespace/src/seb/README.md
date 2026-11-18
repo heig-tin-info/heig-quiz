@@ -169,6 +169,14 @@ was the state of the deployment until 2026-09-19 (audit M1); `loadConfig()`
 now refuses to start in production without the list. See
 heig-classroom's `apps/codespace/classroom's docs/deploy.md` § 6 (not imported; M6-04 writes Quiz's).
 
+## Inside SEB: clipboard and battery in the editor (#1149, #1151)
+
+What SEB does to the workspace page is handled in the student image, not
+here: `images/c-dev/seb-workbench.js` (its header says why and how; loading:
+[images/c-dev/README.md](../../images/c-dev/README.md)). Its test,
+`sebWorkbench.test.ts`, lives in this directory because the image has no test
+runner of its own.
+
 ## The `.seb` file
 
 An **unencrypted** XML plist, served as `application/seb` under the name

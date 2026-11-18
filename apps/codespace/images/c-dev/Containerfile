@@ -118,6 +118,23 @@ RUN rm -rf /usr/lib/code-server/lib/vscode/extensions/ipynb \
            /usr/lib/code-server/lib/vscode/extensions/notebook-renderers && \
     ! grep -l '"notebooks"' /usr/lib/code-server/lib/vscode/extensions/*/package.json
 
+# 2c. Safe Exam Browser support in the workbench page (#1149, #1151): copy and
+#     paste through SEB's isolated clipboard, and a battery indicator. The
+#     script sits beside workbench.js, served by the same static route, and
+#     workbench.html (read from disk on every request by VS Code's server)
+#     loads it as a classic script before </head>: same origin, so the page's
+#     CSP (`script-src 'self' …`) admits it. `?v=` is the file's hash: the
+#     static route caches for a year under a URL that only changes with
+#     code-server's version (README, § Safe Exam Browser in the workbench).
+COPY seb-workbench.js /usr/lib/code-server/lib/vscode/out/vs/code/browser/workbench/seb-workbench.js
+RUN dir=/usr/lib/code-server/lib/vscode/out/vs/code/browser/workbench && \
+    v="$(sha256sum "$dir/seb-workbench.js" | cut -c1-12)" && \
+    test "$(grep -c '</head>' "$dir/workbench.html")" = 1 && \
+    sed -i "s#</head>#\t<script src=\"{{WORKBENCH_WEB_BASE_URL}}/out/vs/code/browser/workbench/seb-workbench.js?v=$v\"></script>\n\t</head>#" \
+        "$dir/workbench.html" && \
+    grep -q "seb-workbench.js?v=$v\"></script>" "$dir/workbench.html" && \
+    chmod 0644 "$dir/seb-workbench.js" "$dir/workbench.html"
+
 # 3. student user, uid 1000. /work is the volume mount point.
 #    coder-logs is a link into the tmpfs: without it code-server throws at
 #    start-up trying to write its logs on the read-only root. The rest of

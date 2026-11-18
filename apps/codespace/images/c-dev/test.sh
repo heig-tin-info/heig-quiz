@@ -545,6 +545,24 @@ NB=$(cexec "grep -l '\"notebooks\"' $EXTS/*/package.json /opt/code-server/extens
 [ -z "$NB" ] || fail "an installed extension contributes a notebook type" "$NB"
 ok "no notebook support: ipynb and notebook-renderers absent, no extension contributes a notebook type"
 
+# Safe Exam Browser support (Containerfile 2c, #1149 #1151): the workbench page
+# loads seb-workbench.js, the static route serves it as JavaScript, and the
+# page's CSP still admits a same-origin script. A code-server bump that
+# rewrites workbench.html or the policy is noticed here.
+PAGE=$(cexec "curl -sS -m 5 -L -D - http://localhost:8080/" 2>&1 | tr -d '\r')
+SRC=$(printf '%s\n' "$PAGE" | grep -o 'src="[^"]*seb-workbench\.js?v=[0-9a-f]\{12\}"' | head -n 1 | sed 's/^src="//; s/"$//')
+[ -n "$SRC" ] || fail "the workbench page does not load seb-workbench.js" "$(printf '%s\n' "$PAGE" | head -40)"
+case "$PAGE" in
+  *"Content-Security-Policy: "*"script-src 'self' "*) : ;;
+  *) fail "the workbench page's CSP no longer has script-src 'self'" "$(printf '%s\n' "$PAGE" | grep -i '^content-security-policy')" ;;
+esac
+SRC=${SRC#./}
+OUT=$(cexec "curl -sS -m 5 -o /dev/null -w '%{http_code} %{content_type}' 'http://localhost:8080/${SRC#/}'" 2>&1)
+case "$OUT" in
+  "200 text/javascript"*) ok "workbench page loads seb-workbench.js under script-src 'self', served as JavaScript" ;;
+  *) fail "seb-workbench.js is not served as JavaScript: $OUT" "$SRC" ;;
+esac
+
 for f in /run/code-server/User/settings.json /run/code-server/Machine/settings.json; do
   cexec "test -f $f" >/dev/null 2>&1 || fail "machine settings not copied into $f"
   for k in '"files.autoSave": "afterDelay"' '"files.autoSaveDelay": 1000' \
