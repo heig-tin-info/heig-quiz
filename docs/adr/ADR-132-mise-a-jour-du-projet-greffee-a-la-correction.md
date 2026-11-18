@@ -236,15 +236,37 @@ cap and top-level stripping are unchanged (invariant 15).
   replaces an `llm` row, validated included, with the model's reply only;
   a review that fails (`llm_budget`, `grader_error`, sources unavailable)
   leaves a validated row as it was.
-- *Delivered (A2):* one rule, `holdsCriterion` (`@quiz/domain`), read by
-  the single writer under the repository's lock: a teacher's row and a
-  locked row hold their criterion against every machine proposal; a
-  validated row holds it too, unless the proposal is a Regrade pass's
-  (`grade_dispatches.trigger = regrade`) and carries no failure reason. The
-  failures that left a row standing are recorded on the pass
-  (`grade_dispatches.kept_failures`) and shown on the staff's line (§6).
-  The final pass and a milestone pass keep ADR-106's rule. Only a
-  schema-3 Regrade has this power; a schema-2 Regrade keeps ADR-106 §4.
+- **A Regrade's failure replaces no machine row** (orchestrator,
+  2026-11-18, at A2's review): not a validated row, nor a proposed one.
+  When a pass holding the Regrade power fails on a criterion (a reason:
+  `no_result`, `ci_tampered`, `ci_unavailable`, `llm_budget`,
+  `grader_error`, sources unavailable…), any standing machine row holds it,
+  and the failure is recorded for the staff; a criterion with no standing
+  row still gets its 0-point failure row. The final pass and the
+  milestone passes are unchanged (their failure replaces a proposal).
+- **The Regrade power is decided at the write** (orchestrator, 2026-11-18,
+  at A2's review), from the database, never from a job's payload: a
+  proposal has it only when its pass is a `regrade` row of
+  `grade_dispatches`, the repository's latest pass that is not a
+  milestone's, claimed after the project's last release (`released_at`,
+  which every release moves, earlier than the pass's `created_at`) or on
+  a project never released. A Regrade claimed before a release loses it
+  at that release, so a run or a review still in flight then replaces no
+  validated row and the release stays what it published; an earlier
+  Regrade's late review has none once a later pass is claimed.
+- *Delivered (A2):* one rule, `holdsCriterion` with `regradePower`
+  (`@quiz/domain`), read by the single writer
+  (`writeCriterionGrades`) under the repository's lock, the project's row
+  share-locked first so a release waits for the write or precedes it: a
+  teacher's row and a locked row hold their criterion against every
+  machine proposal; against a proposal of the pass holding the Regrade
+  power, a result replaces any machine row and a failure none; against
+  any other, a validated row holds. Every failure the writer drops so,
+  the CI's and the review's, is recorded on its pass
+  (`grade_dispatches.kept_failures`) and named on the staff's line (§6).
+  A schema-2 Regrade has no `grade_dispatches` row, so no power: it keeps
+  ADR-106 §4. A Regrade after the release is audited with
+  `afterRelease: true`.
 - **After the release** (owner): Regrade stays allowed, behind an explicit
   confirmation; the API refuses it for a released project unless the
   request carries the acknowledgement (`409 regrade_released`;
@@ -283,7 +305,7 @@ cap and top-level stripping are unchanged (invariant 15).
   paths, capped as the audit's, 100 and 8 KiB), written with the claim;
   the screen reads the repository's latest CI pass claimed or settled, not
   the audit log. The same line names the criteria a failure left standing
-  (§5). The field (`ProjectGradingRepo.pass`) is the staff's payload only;
+  (§5), the CI's and the review's. The field (`ProjectGradingRepo.pass`) is the staff's payload only;
   the student view never reads `grade_dispatches`, and its test searches
   every student response for it.
 - A graft is audited `project_repo.grade_grafted` (the closed union of

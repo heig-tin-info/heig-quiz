@@ -101,7 +101,7 @@ import { buildGradedCommit, type Graft } from "../../github/graft.js";
 import { referenceBlob } from "../../github/revert.js";
 import { PROJECT_CI_QUEUE, PROJECT_REVIEW_QUEUE } from "../../jobs.js";
 import { ciGraded } from "./criteria.js";
-import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
+import { writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
 import { projectClient } from "./evidence.js";
 import { ingestCompletedRun, type CompletedRun } from "./grading.js";
 import { CI_SNAPSHOT, ciNonce, passScope, type PassScope } from "./milestone.js";
@@ -216,11 +216,11 @@ const fraction = (score: string) => score.replace(/\s+/g, "");
  * pass loses — and its automatic criteria's rows written, proposed
  * (`writeCriterionGrades`: a held criterion is left alone): 0 points with
  * the reason, or each criterion's points from the results (`no_result` for
- * one the file does not answer), its rationale the fraction. A Regrade's
- * results also replace a validated row; its failures never do (ADR-132
- * §5): a failure that left a row standing is recorded on the pass
- * (`kept_failures`), for the staff. The results are stored first, the logs
- * staff-only. False when another settled it.
+ * one the file does not answer), its rationale the fraction — a Regrade's
+ * results over a validated row too, its failures over no machine row
+ * (ADR-132 §5, the writer's rule, which records such a failure on the
+ * pass). The results are stored first, the logs staff-only. False when
+ * another settled it.
  */
 async function settle(app: FastifyInstance, loaded: LoadedPass, settlement: Settlement): Promise<boolean> {
   const db = app.db;
@@ -233,14 +233,12 @@ async function settle(app: FastifyInstance, loaded: LoadedPass, settlement: Sett
     .returning({ id: gradeDispatches.id });
   if (!won) return false;
   const leaves = automaticLeaves(loaded);
-  const regrade = pass.trigger === "regrade";
   const row = (leaf: CriteriaLeaf, more: Pick<CriterionGradeInput, "points" | "rationale" | "reason">): CriterionGradeInput => ({
     criterionId: leaf.id,
     max: leaf.maxPoints,
     source: "auto",
     state: "proposed",
     passId: pass.id,
-    regrade,
     ...more,
     ...scope.lock(now),
   });
@@ -257,24 +255,12 @@ async function settle(app: FastifyInstance, loaded: LoadedPass, settlement: Sett
         : row(byId.get(outcome.id)!, { points: outcome.points, rationale: fraction(results.criteria[outcome.id]!.score), reason: null }),
     );
   }
-  // Not held, nor already this pass's (a settle replayed); the writer checks again under its lock.
-  const held = await heldCriteria(db, pass.repoId, pass.id, regrade);
-  const written = new Set(
-    (
-      await writeCriterionGrades(
-        db,
-        pass.repoId,
-        inputs.filter((input) => !held.has(input.criterionId)),
-        now,
-      )
-    ).map((r) => r.criterionId),
-  );
-  const kept = inputs.flatMap((input) => (input.reason && !written.has(input.criterionId) ? [[input.criterionId, input.reason] as const] : []));
-  if (kept.length > 0) await db.update(gradeDispatches).set({ keptFailures: Object.fromEntries(kept) }).where(eq(gradeDispatches.id, pass.id));
+  // The writer leaves a held criterion alone (`holdsCriterion`), under its lock; a settle runs once (`won`).
+  await writeCriterionGrades(db, pass.repoId, inputs, now);
   await hintProjectStaff(db, [loaded.project.id]);
   // The pass's LLM review follows (ADR-119 §7), on its results' logs or, without any, the sources alone.
   // A queue's job: without `app.boss` the review is not run, as the dispatch is not sent (`sendCiPasses`).
-  const review: ReviewJob = { repoId: pass.repoId, passId: pass.id, checkpointId: pass.checkpointId ?? undefined, ...(regrade ? { regrade } : {}) };
+  const review: ReviewJob = { repoId: pass.repoId, passId: pass.id, checkpointId: pass.checkpointId ?? undefined };
   if (app.boss) await app.boss.send(PROJECT_REVIEW_QUEUE, review);
   return true;
 }

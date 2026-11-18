@@ -24,8 +24,10 @@
  * validated ones included; a failure replaces no validated row; a
  * teacher's row and a milestone's locked row stay. Once the project is
  * released it asks for the staff's acknowledgement (`409
- * regrade_released`): the replaced rows wait for a validation again, and
- * the students read the release's grade until a new release.
+ * regrade_released`; audited `afterRelease`): the replaced rows wait for a
+ * validation again, and the students read the release's grade until a new
+ * release. Which pass may replace a validated row is the writer's rule
+ * (`holdsCriterion`, from the pass's row at the write).
  */
 import { randomUUID } from "node:crypto";
 
@@ -95,7 +97,8 @@ export async function regrade(
   if (project.gradingMode !== "criteria" || !snapshot) throw new ProjectError("not_criteria", "The project is not graded by criteria");
   // A schema-3 snapshot's Regrade can replace validated rows (ADR-132 §5): after the release, only acknowledged.
   const ci = snapshot.criteria.schemaVersion === 3;
-  if (ci && project.releasedAt !== null && body.releasedAcknowledged !== true) {
+  const afterRelease = ci && project.releasedAt !== null;
+  if (afterRelease && body.releasedAcknowledged !== true) {
     throw new ProjectError("regrade_released", "The project is released: a regrade replaces validated rows, confirm it");
   }
   const repos =
@@ -122,7 +125,10 @@ export async function regrade(
     action,
     subjectType: "project",
     subjectId: project.id,
-    payload: repo === null ? { passId, repos: repos.length, ...(ci ? { passIds } : {}) } : { passId, repoId: repo.id },
+    payload: {
+      ...(repo === null ? { passId, repos: repos.length, ...(ci ? { passIds } : {}) } : { passId, repoId: repo.id }),
+      ...(afterRelease ? { afterRelease: true } : {}),
+    },
     at: now,
   });
   if (ci) {

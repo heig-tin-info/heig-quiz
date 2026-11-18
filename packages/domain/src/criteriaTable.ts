@@ -50,19 +50,31 @@ export interface CriterionGradeLike {
 
 /**
  * Whether a standing row holds its criterion against a machine's proposal
- * (ADR-106 §4, §5): a teacher's row and a milestone's locked row always; a
- * validated row too, unless the proposal is a Regrade's actual result —
- * points from an accepted run or a model's reply, no failure reason
- * (ADR-132 §5: a Regrade redoes the machine's correction, validated rows
- * included, and only a new result replaces one).
+ * (ADR-106 §4, §5): a teacher's row and a milestone's locked row always.
+ * Otherwise, against a proposal of a pass holding the Regrade power
+ * ({@link regradePower}, ADR-132 §5): its result (points, no failure
+ * reason) replaces any machine row, validated ones included, and its
+ * failure none. Against any other pass's proposal, a validated row holds.
  */
 export function holdsCriterion(
   row: { source: CriterionGradeLike["source"]; state: CriterionGradeLike["state"]; locked: boolean },
-  proposal: { regrade?: boolean | undefined; reason?: CriterionReason | null | undefined },
+  proposal: { regrade: boolean; reason?: CriterionReason | null | undefined },
 ): boolean {
   if (row.state === "superseded") return false;
   if (row.source === "manual" || row.locked) return true;
-  return row.state === "validated" && !(proposal.regrade === true && proposal.reason == null);
+  if (proposal.regrade) return proposal.reason != null;
+  return row.state === "validated";
+}
+
+/**
+ * Whether a repository's latest pass that is not a milestone's holds the
+ * Regrade power (ADR-132 §5): a Regrade, claimed after the project's last
+ * release (or never released). A Regrade claimed before a release loses it
+ * at that release; an earlier Regrade, once a later pass is claimed, has
+ * none.
+ */
+export function regradePower(latest: { trigger: string; createdAt: Date }, releasedAt: Date | null): boolean {
+  return latest.trigger === "regrade" && (releasedAt === null || releasedAt.getTime() < latest.createdAt.getTime());
 }
 
 /** One line of the table. `source`, `reason` are the staff's only; `rationale` the student's only after the freeze. */

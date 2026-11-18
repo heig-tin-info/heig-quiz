@@ -46,7 +46,7 @@ import { join } from "node:path";
 import { inspect } from "node:util";
 
 import { zipSync } from "fflate";
-import { and, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import type { Octokit } from "octokit";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -919,14 +919,17 @@ describe("a Regrade redoes the machine's correction (ADR-132 §5)", () => {
     expect(entry.validation.validated).toBe(false);
   });
 
-  it("leaves the validated rows as they were when the Regrade's run fails: no_result, ci_tampered, ci_unavailable", async () => {
+  it("leaves the machine's rows as they were, validated or proposed, when the Regrade's run fails: no_result, ci_tampered, ci_unavailable", async () => {
     const before_ = { "code.format": 1, "code.tests": 4, "code.crash": 0, "bonus.extra": 0 };
-    const expected = Object.fromEntries(Object.entries(before_).map(([id, p]) => [id, [p, "validated", "auto"]]));
+    const expected = { ...Object.fromEntries(Object.entries(before_).map(([id, p]) => [id, [p, "validated", "auto"]])), "bonus.extra": [0, "proposed", "auto"] };
     const setUp = async (name: string) => {
       const repo = await studentRepo(l, name);
       const target = await work(repo);
       await freeze(repo.id);
-      await validated(repo.id, machine(before_));
+      const { "bonus.extra": proposed, ...rest } = before_;
+      await validated(repo.id, machine(rest));
+      // A machine's proposal an earlier pass left: a Regrade's failure replaces it no more than a validated row.
+      await writeCriterionGrades(server.app.db, repo.id, [{ criterionId: "bonus.extra", points: proposed, max: 0, source: "auto", state: "proposed", passId: randomUUID() }], server.clock.now());
       return { repo, target };
     };
 
@@ -941,7 +944,7 @@ describe("a Regrade redoes the machine's correction (ADR-132 §5)", () => {
     const tampered = gradedRun(passB.nonce!, head);
     upload(tampered.workflowRunId, ALL);
     expect(await intakeGradedRun(server.app, await octokitOf(l), await ctxOf(b.repo), tampered)).toBe("ci_tampered");
-    // GitHub refusing the dispatch: settled ci_unavailable at once, its review queued as a Regrade's.
+    // GitHub refusing the dispatch: settled ci_unavailable at once, its review queued (its power is read from the pass at the write).
     const c = await setUp("rg-dina");
     refusing.set(c.repo.fullName, 422);
     const sent: { name: string; data: object }[] = [];
@@ -954,7 +957,7 @@ describe("a Regrade redoes the machine's correction (ADR-132 §5)", () => {
       delete app.boss;
     }
     expect(sent.filter((s) => s.name === "project.review")).toEqual([
-      { name: "project.review", data: { repoId: c.repo.id, passId: passC.id, checkpointId: undefined, regrade: true } },
+      { name: "project.review", data: { repoId: c.repo.id, passId: passC.id, checkpointId: undefined } },
     ]);
 
     for (const [{ repo }, pass, reason] of [
@@ -996,11 +999,9 @@ describe("a Regrade redoes the machine's correction (ADR-132 §5)", () => {
     await validated(repo.id, [...machine({ "code.format": 1, "code.tests": 5, "code.crash": 0, "bonus.extra": 0 }), { criterionId: "rapport.style", points: 1, source: "llm" }]);
     const call = (method: "GET" | "POST", url: string, headers: Record<string, string>, payload?: object) =>
       server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
-    const bodies: string[] = [];
     const read = async () => {
       const res = await call("GET", `/app/api/student/projects/${own.projectId}`, student.headers);
       expect(res.statusCode, res.body).toBe(200);
-      bodies.push(res.body);
       return StudentProject.parse(res.json());
     };
     const release = () => call("POST", `/app/api/projects/${own.projectId}/release`, teacher.headers);
@@ -1009,12 +1010,19 @@ describe("a Regrade redoes the machine's correction (ADR-132 §5)", () => {
     const first = await read();
     expect(first.release?.points).not.toBeNull();
 
+    // A Regrade claimed after the release holds the power (ADR-132 §5): the server's clock moves on.
+    server.clock.set(new Date(new Date(NOW).getTime() + 60_000));
     for (const url of [`/app/api/projects/${own.projectId}/regrade`, `/app/api/projects/${own.projectId}/repos/${repo.id}/regrade`]) {
       const refused = await call("POST", url, teacher.headers);
       expect([refused.statusCode, refused.json().error], refused.body).toEqual([409, "regrade_released"]);
     }
     const accepted = await call("POST", `/app/api/projects/${own.projectId}/repos/${repo.id}/regrade`, teacher.headers, { releasedAcknowledged: true });
     expect([accepted.statusCode, accepted.json()], accepted.body).toEqual([202, { repos: 1 }]);
+    const [audited] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.subjectId, own.projectId), eq(auditLog.action, "project_repo.regrade")));
+    expect(audited!.payload).toMatchObject({ repoId: repo.id, afterRelease: true });
     const [pass] = await server.app.db.select().from(gradeDispatches).where(and(eq(gradeDispatches.repoId, repo.id), eq(gradeDispatches.trigger, "regrade")));
     expect(await runCiDispatch(server.app, config, { passId: pass!.id })).toBe("dispatched");
     const run = gradedRun(pass!.nonce!, target);
@@ -1029,13 +1037,33 @@ describe("a Regrade redoes the machine's correction (ADR-132 §5)", () => {
     // A release again waits for the validation.
     const again = await release();
     expect([again.statusCode, again.json().error], again.body).toEqual([409, "not_validated"]);
+    server.clock.set(NOW);
 
-    // The staff's line, staff only: the file the distribution's version replaced.
+    // The staff's line (studentView.db.test.ts searches every student response for it): the file the distribution's version replaced.
     const staff = await call("GET", `/app/api/projects/${own.projectId}/grading`, teacher.headers);
     const entry = ProjectGradingView.parse(staff.json()).repos.find((r) => r.id === repo.id)!;
     expect(entry.pass).toEqual({ replaced: { count: 1, paths: ["tests/check.sh"] }, kept: [] });
-    for (const body of bodies) {
-      for (const secret of ["tests/check.sh", '"replaced"', '"kept"', '"pass"']) expect(body, secret).not.toContain(secret);
+  });
+
+  it("takes the Regrade power from a pass in flight at the release: its results arriving after it replace nothing", async () => {
+    const own = await lab();
+    const repo = await studentRepo(own, "rg-gael");
+    const target = await work(repo);
+    await freeze(repo.id);
+    await validated(repo.id, [...machine({ "code.format": 0, "code.tests": 5, "code.crash": 0, "bonus.extra": 0 }), { criterionId: "rapport.style", points: 1, source: "llm" }]);
+    const expected = await standing(repo.id);
+    // Regraded before the release (no acknowledgement asked), released while its run is in flight.
+    const pass = await regradePass(own, repo.id);
+    server.clock.set(new Date(new Date(NOW).getTime() + 60_000));
+    try {
+      const released = await server.app.inject({ method: "POST", url: `/app/api/projects/${own.projectId}/release`, headers: teacher.headers });
+      expect(released.statusCode, released.body).toBe(200);
+      const run = gradedRun(pass.nonce!, target);
+      upload(run.workflowRunId, ALL);
+      expect(await intakeGradedRun(server.app, await octokitOf(own), await ctxOf(repo), run)).toBe("accepted");
+      expect(await standing(repo.id)).toEqual(expected);
+    } finally {
+      server.clock.set(NOW);
     }
   });
 });
@@ -1296,8 +1324,9 @@ describe("the LLM pass of a schema-3 pass (ADR-119 §7)", () => {
     expect((await rowsOf(pass.repo.id))["rapport.style"]).toEqual([0, "github_unavailable", null]);
   });
 
-  it("redoes a validated llm row with the model's reply on a Regrade's pass only; a failed review leaves it (ADR-132 §5)", async () => {
-    const repo = await namedRepo("h8");
+  /** A frozen repository whose llm criterion a teacher validated. */
+  async function validatedStyle(suffix: string) {
+    const repo = await namedRepo(suffix);
     await work(repo);
     await server.app.db.update(projectRepos).set({ deadlineAppliedAt: new Date(NOW), frozenAt: new Date(NOW) }).where(eq(projectRepos.id, repo.id));
     await writeCriterionGrades(
@@ -1306,34 +1335,90 @@ describe("the LLM pass of a schema-3 pass (ADR-119 §7)", () => {
       [{ criterionId: "rapport.style", points: 1, max: 2, source: "llm", state: "validated", rationale: "Kept.", passId: randomUUID() }],
       server.clock.now(),
     );
+    return repo;
+  }
+  /** A Regrade of the repository claimed at `at` (the acknowledgement given): its pass's id. */
+  async function regradeAt(repoId: string, at: Date) {
+    server.clock.set(at);
     const [project] = await server.app.db.select().from(projects).where(eq(projects.id, l.projectId));
-    const [row] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repo.id));
-    await regrade(server.app, config, project!, row!, SYSTEM_ACTOR, server.clock.now());
-    const [pass] = await server.app.db.select().from(gradeDispatches).where(and(eq(gradeDispatches.repoId, repo.id), eq(gradeDispatches.trigger, "regrade")));
-    expect(await runCiDispatch(server.app, config, { passId: pass!.id })).toBe("dispatched");
+    const [row] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repoId));
+    await regrade(server.app, config, project!, row!, SYSTEM_ACTOR, at, { releasedAcknowledged: true });
+    const [pass] = await server.app.db
+      .select()
+      .from(gradeDispatches)
+      .where(and(eq(gradeDispatches.repoId, repoId), eq(gradeDispatches.trigger, "regrade")))
+      .orderBy(desc(gradeDispatches.createdAt))
+      .limit(1);
+    return pass!.id;
+  }
+  const minute = (n: number) => new Date(new Date(NOW).getTime() + n * 60_000);
+  const style = async (repoId: string) =>
+    (
+      await server.app.db
+        .select()
+        .from(projectCriterionGrades)
+        .where(and(eq(projectCriterionGrades.repoId, repoId), eq(projectCriterionGrades.criterionId, "rapport.style"), ne(projectCriterionGrades.state, "superseded")))
+    )[0]!;
+
+  it("redoes a validated llm row with the model's reply of the latest Regrade; a failed review replaces nothing and is recorded (ADR-132 §5)", async () => {
+    const repo = await validatedStyle("h8");
+    const passId = await regradeAt(repo.id, minute(0));
+    expect(await runCiDispatch(server.app, config, { passId })).toBe("dispatched");
     answer = { "rapport.style": { points: 2, rationale: "Redone." } };
-    const job = { repoId: repo.id, passId: pass!.id };
-    // Another pass's review (the final pass's, a milestone's): the validated row holds, no call.
-    seen.length = 0;
-    expect(await runReview(server.app, config, job)).toBe(0);
-    expect(seen).toHaveLength(0);
-    // A Regrade's review that fails: the validated row holds.
+    // The review fails: the validated row holds, the failure on the pass.
     const llm = server.app.llm;
     server.app.llm = null;
     try {
-      expect(await runReview(server.app, config, { ...job, regrade: true })).toBe(0);
+      expect(await runReview(server.app, config, { repoId: repo.id, passId })).toBe(0);
     } finally {
       server.app.llm = llm;
     }
     expect((await rowsOf(repo.id))["rapport.style"]).toEqual([1, null, "Kept."]);
+    expect((await passRow(passId)).keptFailures).toEqual({ "rapport.style": "llm_not_configured" });
     // Its model's reply replaces it, waiting for the validation again.
-    expect(await runReview(server.app, config, { ...job, regrade: true })).toBe(1);
-    expect((await rowsOf(repo.id))["rapport.style"]).toEqual([2, null, "Redone."]);
-    const [style] = await server.app.db
-      .select()
-      .from(projectCriterionGrades)
-      .where(and(eq(projectCriterionGrades.repoId, repo.id), eq(projectCriterionGrades.criterionId, "rapport.style"), ne(projectCriterionGrades.state, "superseded")));
-    expect(style).toMatchObject({ source: "llm", state: "proposed", passId: pass!.id });
+    expect(await runReview(server.app, config, { repoId: repo.id, passId })).toBe(1);
+    expect(await style(repo.id)).toMatchObject({ points: 2, rationale: "Redone.", source: "llm", state: "proposed", passId });
+    server.clock.set(NOW);
+  });
+
+  it("decides the Regrade power at the write: a stale review, a review after a release, after a quick re-release (ADR-132 §5)", async () => {
+    try {
+      // A stale review: Regrade 1's reply after Regrade 2's was validated.
+      const stale = await validatedStyle("j1");
+      const first = await regradeAt(stale.id, minute(0));
+      const second = await regradeAt(stale.id, minute(1));
+      answer = { "rapport.style": { points: 2, rationale: "Second." } };
+      expect(await runReview(server.app, config, { repoId: stale.id, passId: second })).toBe(1);
+      await writeCriterionGrades(
+        server.app.db,
+        stale.id,
+        [{ criterionId: "rapport.style", points: 2, max: 2, source: "llm", state: "validated", rationale: "Second.", passId: second }],
+        server.clock.now(),
+      );
+      answer = { "rapport.style": { points: 0.5, rationale: "First, late." } };
+      expect(await runReview(server.app, config, { repoId: stale.id, passId: first })).toBe(0);
+      expect(await style(stale.id)).toMatchObject({ points: 2, state: "validated", passId: second });
+
+      // A Regrade claimed before a release: its reply after the release replaces nothing.
+      const repo = await validatedStyle("k2");
+      const before_ = await regradeAt(repo.id, minute(1));
+      await server.app.db.update(projects).set({ releasedAt: minute(2) }).where(eq(projects.id, l.projectId));
+      answer = { "rapport.style": { points: 2, rationale: "After the release." } };
+      expect(await runReview(server.app, config, { repoId: repo.id, passId: before_ })).toBe(0);
+      expect(await style(repo.id)).toMatchObject({ points: 1, state: "validated" });
+      // An acknowledged Regrade, then a quick re-release before its reply: nothing replaced either.
+      const acknowledged = await regradeAt(repo.id, minute(3));
+      await server.app.db.update(projects).set({ releasedAt: minute(4) }).where(eq(projects.id, l.projectId));
+      expect(await runReview(server.app, config, { repoId: repo.id, passId: acknowledged })).toBe(0);
+      expect(await style(repo.id)).toMatchObject({ points: 1, state: "validated" });
+      // An acknowledged Regrade whose reply arrives before any new release: replaced.
+      const last = await regradeAt(repo.id, minute(5));
+      expect(await runReview(server.app, config, { repoId: repo.id, passId: last })).toBe(1);
+      expect(await style(repo.id)).toMatchObject({ points: 2, state: "proposed", passId: last });
+    } finally {
+      await server.app.db.update(projects).set({ releasedAt: null }).where(eq(projects.id, l.projectId));
+      server.clock.set(NOW);
+    }
   });
 
   it("queues the pass's review once it is settled", async () => {

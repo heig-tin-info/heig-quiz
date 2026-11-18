@@ -156,7 +156,11 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
       await refresh();
       toast(t("project.grading.regrade.done"), "success");
     },
-    onError: failed,
+    // Released meanwhile (another tab): the screen re-reads, so the next confirmation says it and carries the acknowledgement.
+    onError: async (error) => {
+      if (refusedWith(error, "regrade_released")) await qc.invalidateQueries({ queryKey: projectGradingKey(id) });
+      failed(error);
+    },
   });
 
   const jump = (i: number) => {
@@ -195,10 +199,11 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
       validateRest.mutate();
     }
   };
-  // A schema-3 Regrade redoes the machine's correction (ADR-132 §5); once released, the server asks for its acknowledgement.
+  // A schema-3 Regrade redoes the machine's correction (ADR-132 §5): its copy, and once released what the students read.
+  // The acknowledgement goes with every Regrade of a released project; the server asks it of a schema-3 one only.
   const ci = data.project.schemaVersion === 3;
-  const acknowledged = ci && data.project.released;
-  const regradeMessage = (body: string) => (acknowledged ? `${body} ${t("project.grading.regradeReleased.body")}` : body);
+  const regradeBody: ProjectRegradeRequest = data.project.released ? { releasedAcknowledged: true } : {};
+  const regradeMessage = (body: string) => (ci && data.project.released ? `${body} ${t("project.grading.regradeReleased.body")}` : body);
   const onRegradeAll = async () => {
     const frozen = repos.filter((r) => r.frozen).length;
     if (
@@ -208,7 +213,7 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
         confirmLabel: t("project.grading.regrade.confirm"),
       })
     ) {
-      regrade.mutate({ body: acknowledged ? { releasedAcknowledged: true } : {} });
+      regrade.mutate({ body: regradeBody });
     }
   };
   const onRegrade = async (target: ProjectGradingRepo) => {
@@ -219,7 +224,7 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
         confirmLabel: t("project.grading.regrade.confirm"),
       })
     ) {
-      regrade.mutate({ repoId: target.id, body: acknowledged ? { releasedAcknowledged: true } : {} });
+      regrade.mutate({ repoId: target.id, body: regradeBody });
     }
   };
   const menuItems: MenuItem[] = [
@@ -296,7 +301,7 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
           onRelease={() => navigate({ view: "project", id })}
         />
       </div>
-      <PassLine pass={repo.pass} />
+      <PassLine pass={repo.pass} describe={describe} />
       {repo.frozen && repo.validation.missing.length > 0 ? (
         <Alert tone="warning" icon={AlertTriangle} title={t("project.grading.missing.title")}>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
@@ -376,10 +381,10 @@ function EvidenceLine({ repo }: { repo: ProjectGradingRepo }) {
 /**
  * The repository's latest CI pass, staff only (ADR-132 §5, §6): how many
  * files its graded commit holds in the distribution's version, their paths
- * folded under it; and how many criteria got no new result while their
- * earlier row stayed, with why. Nothing when it has neither.
+ * folded under it; and the criteria that got no new result while their
+ * earlier row stayed, named, with why. Nothing when it has neither.
  */
-function PassLine({ pass }: { pass: ProjectGradingPass | null }) {
+function PassLine({ pass, describe }: { pass: ProjectGradingPass | null; describe: (criterionId: string) => string }) {
   const t = useT();
   if (!pass || (pass.replaced.count === 0 && pass.kept.length === 0)) return null;
   const { count, paths } = pass.replaced;
@@ -399,7 +404,10 @@ function PassLine({ pass }: { pass: ProjectGradingPass | null }) {
       {pass.kept.length > 0 ? (
         <p className="inline-flex items-center gap-1.5">
           <AlertTriangle aria-hidden className="size-3.5 shrink-0" />
-          {t(pass.kept.length === 1 ? "project.grading.pass.kept.one" : "project.grading.pass.kept", { n: pass.kept.length, reasons })}
+          {t(pass.kept.length === 1 ? "project.grading.pass.kept.one" : "project.grading.pass.kept", {
+            criteria: pass.kept.map((k) => describe(k.criterionId)).join(", "),
+            reasons,
+          })}
         </p>
       ) : null}
     </div>
