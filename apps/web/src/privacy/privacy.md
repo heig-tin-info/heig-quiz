@@ -14,7 +14,7 @@ At each sign-in, Switch edu-ID sends your name, your e-mail addresses, your edu-
 
 ### Your place in a class
 
-Your teacher imports the class list: your name, your school address, any extra time you were granted, and a note that only the teaching staff see.
+Your teacher imports the class list: your name, your school address, any extra time you were granted, and a note that only the teaching staff see. A teacher may also add you by your address alone; your name then fills that line at your first sign-in.
 
 ### Evaluations
 

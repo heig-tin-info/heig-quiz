@@ -68,10 +68,11 @@ describe("RosterImport one student (ADR-133)", () => {
 
   const open = (stubs: Parameters<typeof mockFetch>[0]) => {
     const stub = mockFetch(stubs);
-    renderWithProviders(<RosterImport classroomId="c1" onClose={vi.fn()} />, {
+    const onClose = vi.fn();
+    renderWithProviders(<RosterImport classroomId="c1" onClose={onClose} />, {
       route: "/classrooms/c1?tab=students",
     });
-    return stub;
+    return { ...stub, onClose };
   };
   const field = () => screen.getByRole("combobox", { name: /Name or e-mail/ });
   const posted = (calls: { method: string; url: string; body: unknown }[]) =>
@@ -106,6 +107,13 @@ describe("RosterImport one student (ADR-133)", () => {
     await waitFor(() => expect(posted(calls)).toEqual([{ email: "new@school.test", picked: false, timeBonusPercent: 25 }]));
   });
 
+  it("waits for three letters, blanks aside, before it searches", async () => {
+    const { calls } = open({});
+    await userEvent.type(field(), "a b");
+    expect(await screen.findByText("Type three letters of a name or of a school address.")).toBeVisible();
+    expect(calls.filter((c) => c.url.includes("/roster/candidates"))).toEqual([]);
+  });
+
   it("says that nobody of the school matches, and that an address is added as typed", async () => {
     open(candidatesFor(CANDIDATES, "dupont", []));
     await userEvent.type(field(), "dupont");
@@ -113,12 +121,12 @@ describe("RosterImport one student (ADR-133)", () => {
   });
 
   it("closes the open list on Escape, not the sheet", async () => {
-    open(candidatesFor(CANDIDATES, "roch", [lea]));
+    const { onClose } = open(candidatesFor(CANDIDATES, "roch", [lea]));
     await userEvent.type(field(), "roch");
     await screen.findByRole("option", { name: /Léa Rochat/ });
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("listbox")).toBeNull();
-    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("says a pick that is no longer offered", async () => {

@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, FileSpreadsheet, Upload, UserPlus } from "
 import { useRef, useState } from "react";
 
 import type { RosterCandidate, RosterCandidateQuery, RosterLineAdd } from "@quiz/contracts";
-import { STUDENT_SEARCH_MIN_LENGTH } from "@quiz/domain";
+import { searchWords } from "@quiz/domain";
 
 import { api, ApiError, wordedRefusal } from "./api";
 import { HelpIcon } from "./help";
@@ -94,7 +94,7 @@ function OneStudent({ classroomId }: { classroomId: string }) {
           }
           label={t("import.findLabel")}
           idle={t("import.findIdle")}
-          minLength={STUDENT_SEARCH_MIN_LENGTH}
+          searches={(q) => searchWords(q).length > 0}
           words="studentPicker"
           disabled={add.isPending}
           {...who.picker}

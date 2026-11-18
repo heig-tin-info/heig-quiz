@@ -145,6 +145,15 @@ describe("the search (ADR-133)", () => {
     expect((await search(teacher.headers, "noe")).json()).toEqual([]);
   });
 
+  it("matches by name only someone whose school address is exactly in the tenant", async () => {
+    // Each passes the SQL prefilter (`LIKE '%@heig-vd.ch%'`) or comes near it.
+    await person("Zelda", "Suffixe", "zs@x.test", ["zelda@heig-vd.ch.example"]);
+    await person("Zelda", "Sousdomaine", "zd@x.test", ["zelda@mail.heig-vd.ch"]);
+    await person("Zelda", "Prefixe", "zp@x.test", ["zelda@notheig-vd.ch"]);
+    expect((await search(teacher.headers, "zelda")).json()).toEqual([]);
+    expect((await add(teacher.headers, { email: "zelda@heig-vd.ch.example", picked: true }, await newRoom())).statusCode).toBe(404);
+  });
+
   it("gives a teacher of another school their own school's students only", async () => {
     const hefr = await teacherWith(["prof@hefr.ch"]);
     expect((await search(hefr.headers, "rochat")).json()).toEqual([{ givenName: "Léa", familyName: "Rochat", email: "lea.rochat@hefr.ch" }]);

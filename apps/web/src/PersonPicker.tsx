@@ -107,7 +107,7 @@ export function PersonPicker<C extends Person>({
   candidatesUrl,
   label,
   idle,
-  minLength = 0,
+  searches = () => true,
   words,
   text,
   selected,
@@ -128,11 +128,11 @@ export function PersonPicker<C extends Person>({
   /**
    * What the empty list says while nothing is searched: everyone is seated
    * already (teachers, listed from an empty text), or how much to type
-   * (`minLength`).
+   * (`searches`).
    */
   idle: string;
-  /** The characters a search takes; under them nothing is asked. */
-  minLength?: number;
+  /** Whether `q` is enough to search; otherwise nothing is asked and `idle` shows. Any text by default. */
+  searches?: (q: string) => boolean;
   /** Whom it lists, which says its placeholder, list name, failure and empty search. */
   words: keyof typeof WORDS;
   /** What is typed; the name of the pick once one is made. */
@@ -149,7 +149,7 @@ export function PersonPicker<C extends Person>({
   const [open, setOpen] = useState(false);
 
   const q = text.trim();
-  const searching = q.length >= minLength;
+  const searching = searches(q);
   const candidates = useQuery<C[]>({
     queryKey: [...candidatesKey, q],
     queryFn: () => api(candidatesUrl(q)),

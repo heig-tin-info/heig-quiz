@@ -134,6 +134,10 @@ async function candidates(
   const found: RosterCandidate[] = [];
   for (const row of rows) {
     const school = addressesInTenant(institutionalAddressesOf(row.claims), scope.tenant);
+    // The prefilter is a superset (`@heig-vd.ch.example` passes it): the
+    // exact-domain rule decides, before any match on the name.
+    const [shown] = school;
+    if (shown === undefined) continue;
     if (school.some((address) => onRoster.has(address))) continue;
     const fits =
       "words" in match
@@ -143,7 +147,7 @@ async function candidates(
     found.push({
       givenName: row.givenName,
       familyName: row.familyName,
-      email: "address" in match ? match.address : school[0]!,
+      email: "address" in match ? match.address : shown,
     });
     if (found.length === STUDENT_SEARCH_LIMIT) break;
   }

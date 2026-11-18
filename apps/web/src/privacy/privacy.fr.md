@@ -14,7 +14,7 @@
 
 ### Votre place dans une classe
 
-Votre enseignant importe la liste de classe : votre nom, votre adresse de l'école, le temps supplémentaire qui vous a été accordé, et une note que seule l'équipe enseignante voit.
+Votre enseignant importe la liste de classe : votre nom, votre adresse de l'école, le temps supplémentaire qui vous a été accordé, et une note que seule l'équipe enseignante voit. Un enseignant peut aussi vous ajouter par votre seule adresse ; votre nom complète alors cette ligne à votre première connexion.
 
 ### Les évaluations
 
