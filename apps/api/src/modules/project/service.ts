@@ -95,5 +95,5 @@ export {
 } from "./lifecycle.js";
 export { listSources, sourceDetail } from "./sources.js";
 export { studentProject, studentProjectCards, studentResendInvitation } from "./studentView.js";
-export { requestSync } from "./sync.js";
+export { previewSync, requestSync } from "./sync.js";
 export { classroomProjects, projectSummary, teacherProjects, type ProjectRow } from "./views.js";

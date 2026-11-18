@@ -396,6 +396,9 @@ export const PROJECT_TASKS: readonly TickTask[] = [{ name: "project.deadlines", 
 
 /** The workers of `project.deadline`, `project.dispatch`, `group.sync`, `project.criteria`, `project.sync` and `project.evidence`, registered only with Quiz's App (`app.ts`). */
 export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue, config: AppConfig): Promise<void> {
+  // The work directories a crash left — the graft's, the sync's and its preview's (ADR-132 §2, §10) — are swept
+  // before any queue works: once one does, a job of this process may hold one of them.
+  await sweepGraftDirs();
   await queue.createQueue(PROJECT_DEADLINE_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_DEADLINE_QUEUE, (job) => runDeadlineJob(app, config, job));
   await queue.createQueue(PROJECT_DISPATCH_QUEUE, { retryLimit: 0 });
@@ -416,8 +419,7 @@ export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue,
     localConcurrency: EVIDENCE_CONCURRENCY,
   });
   // The CI's graded run of a schema-3 project (ADR-119 §6): one dispatch per job, paced by its `startAfter`;
-  // its graft tries again within the job (ADR-132 §2). The graft directories a crash left are swept first.
-  await sweepGraftDirs();
+  // its graft tries again within the job (ADR-132 §2).
   await queue.createQueue(PROJECT_CI_QUEUE, { retryLimit: 0 });
   await queue.work<CiDispatchJob>(PROJECT_CI_QUEUE, async (job) => {
     await runCiDispatch(app, config, job);

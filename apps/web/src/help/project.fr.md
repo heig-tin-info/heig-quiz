@@ -46,7 +46,13 @@ conflit* et vous réactivez la protection à la main.
 
 ## Synchronisation et fin du projet
 
-Quand la source a de nouveaux commits, **Synchroniser** ouvre une pull
-request par branche distribuée dans chaque dépôt ouvert ; l'étudiant la
-fusionne, jamais Quiz. **Archiver** masque le projet. **Supprimer le
+Quand la source a de nouveaux commits, **Synchroniser** liste d'abord ce
+qui serait envoyé : les fichiers ajoutés, modifiés et supprimés, les
+fichiers protégés signalés. Un message facultatif dit aux étudiants ce qui
+change et pourquoi ; ils le lisent sur la page du projet et dans la pull
+request. La synchronisation ouvre ensuite une pull request par branche
+distribuée dans chaque dépôt ouvert ; l'étudiant la fusionne, jamais Quiz.
+Quand des dépôts ont été notés avant la mise à jour, la page mène à
+l'écran de correction, où **Recorriger tous les dépôts** les note à
+nouveau. **Archiver** masque le projet. **Supprimer le
 projet** efface ses lignes dans Quiz, jamais un dépôt sur GitHub.

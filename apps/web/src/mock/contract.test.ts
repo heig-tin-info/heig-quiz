@@ -102,6 +102,7 @@ import {
   PollIdeaBoard,
   ProjectActivitySummary,
   ProjectCriteriaView,
+  ProjectSyncPreview,
   ProjectDetail,
   ProjectGradingView,
   ProjectCommitGraph,
@@ -570,6 +571,8 @@ const CHECKED: Case[] = [
   ),
   // Grading by criteria (ADR-106 §2): each project's settings and snapshot.
   ...projectIds.map((id) => one("/app/api/projects/:id/criteria", `/app/api/projects/${id}/criteria`, ProjectCriteriaView)),
+  // The sync's preview (ADR-132 §10).
+  ...projectIds.map((id) => one("/app/api/projects/:id/sync/preview", `/app/api/projects/${id}/sync/preview`, ProjectSyncPreview)),
   // The online workspace (M6-06, `?codespace=1`): each project's, and its open workspaces.
   ...projectIds.map((id) => one("/app/api/projects/:id/workspace", `/app/api/projects/${id}/workspace`, ProjectWorkspace)),
   ...projectIds.map((id) =>

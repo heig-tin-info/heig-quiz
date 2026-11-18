@@ -169,6 +169,9 @@ async function run(repoId: string, patch: RunPatch = {}): Promise<string> {
   return id;
 }
 
+/** A sync's message to the students (ADR-132 §10), searched for in every student response. */
+const TEACHER_UPDATE = "Teacher-update-7f3a";
+
 /** Every body a student caller received, for the leak test (N-SEC-20). */
 const studentBodies: string[] = [];
 
@@ -404,6 +407,8 @@ describe("the student's project (F-PROJ-15)", () => {
       criteria: null,
       // No online workspace on this platform (ADR-047 §5): `CODESPACE_URL` is empty.
       workspace: null,
+      // No sync carried a message (ADR-132 §10).
+      projectUpdate: null,
       serverNow: NOW,
     });
 
@@ -647,6 +652,8 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
       // The source ahead and the sync's facts (M3-07): the staff's only.
       const sourceSha = "5ad0c0de".repeat(5);
       await setProject(lab.id, { sourceAheadSha: sourceSha, sourcePushedAt: at(NOW), sourceAhead: { main: 3 }, sourceHeads: { main: "c0ffee42".repeat(5) }, syncedAt: at(NOW) });
+      // The latest sync's message (ADR-132 §10): the project page's `projectUpdate`, nowhere else.
+      await setProject(lab.id, { syncMessage: TEACHER_UPDATE, syncMessageAt: at(NOW) });
       await setRepo(mine.id, { syncOutcome: "opened", syncOutcomeAt: at(NOW) });
       await server.app.db.insert(projectSyncPrs).values({ repoId: mine.id, branch: "main", prNumber: 987654321, state: "open", updatedAt: at(NOW) });
       // The second student's run, review, teacher's score; a flagged run of the first's.
@@ -760,10 +767,22 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         "syncOutcome",
         "sourceAhead",
         "participantCount", // the staff list's count (ADR-018, amended 2026-10-13)
+        "syncMessage",
+        "sync_message",
+        "gradedBefore", // the staff's notice (ADR-132 §10)
+        "protectedGraded",
       ];
       expect(studentBodies.length).toBeGreaterThan(from + 30);
       for (const body of studentBodies.slice(from)) {
         for (const secret of forbidden) expect(body, secret).not.toContain(secret);
+      }
+      // The teacher's message: only as the project page's `projectUpdate`, never on a card nor elsewhere in the page.
+      const carrying = studentBodies.slice(from).filter((body) => body.includes(TEACHER_UPDATE));
+      expect(carrying.length).toBeGreaterThan(0);
+      for (const body of carrying) {
+        const { projectUpdate, ...rest } = StudentProject.parse(JSON.parse(body));
+        expect(projectUpdate).toEqual({ text: TEACHER_UPDATE, at: at(NOW).toISOString() });
+        expect(JSON.stringify(rest)).not.toContain(TEACHER_UPDATE);
       }
 
       // The second student's hints go to their own topic and the course's staff, never where the first listens.

@@ -191,6 +191,15 @@ export const projects = pgTable(
     sourceHeads: jsonb("source_heads").$type<Record<string, string>>(),
     /** The last sync pass that finished (F-PROJ-12). */
     syncedAt: timestamp("synced_at", { withTimezone: true }),
+    /**
+     * The teacher's message of the latest sync request (ADR-132 §10), plain
+     * text, and when that sync was asked (the server's clock): written by
+     * every sync whose distribution update succeeded, both null when it
+     * carried none. The students read it on their project page, the pull
+     * request quotes it.
+     */
+    syncMessage: text("sync_message"),
+    syncMessageAt: timestamp("sync_message_at", { withTimezone: true }),
     /** Validated by `ProjectGradingScale` of `@quiz/contracts` (D05); no default, the service writes it. */
     gradingScale: jsonb("grading_scale").$type<ProjectGradingScale>().notNull(),
     /**

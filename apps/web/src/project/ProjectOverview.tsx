@@ -313,6 +313,13 @@ function SourceTile({
           {t("project.sync.last", { date: isoDateTime(sync.syncedAt), ...sync.last })}
         </p>
       ) : null}
+      {/* ADR-132 §10: the latest sync's message, as the students read it. */}
+      {sync.message ? (
+        <div className="text-xs" data-testid="project-sync-message">
+          <p className="text-fg-faint">{t("project.sync.message", { date: isoDateTime(sync.message.at) })}</p>
+          <p className="line-clamp-4 whitespace-pre-wrap text-fg-muted">{sync.message.text}</p>
+        </div>
+      ) : null}
       {/* The header's secondary Sync moved here; as the primary action it stays in the header. */}
       {offersSync(project) && project.archivedAt === null ? (
         <SyncButton sync={sync} onSync={onSync} syncing={syncing} size="sm" coach="project.sync" />

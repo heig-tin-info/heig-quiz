@@ -143,7 +143,7 @@ export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
     groupsDrifted: false,
     groupSyncPending: false,
     primaryAction: "none",
-    sync: { ahead: null, inProgress: false, syncedAt: null, last: null },
+    sync: { ahead: null, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 },
     counts: { live: accepted, frozen: 0 },
     liveStale: false,
     rows,

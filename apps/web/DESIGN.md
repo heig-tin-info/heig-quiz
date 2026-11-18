@@ -2204,8 +2204,26 @@ header, whatever the tab.
   as a zinc badge, grace, frozen k / n, how many have their own deadline, and
   the field that edits it (the reopen confirmation and `deadline_past` are
   unchanged). *Progress* — "n pushed". *Source* — the repositories, branches,
-  history, publication, scoring, the sync state, the last sync and Sync
+  history, publication, scoring, the sync state, the last sync and its
+  message to the students (12 px muted, four lines at most), and Sync
   (secondary) when `offersSync`.
+- **The Sync dialog** (`SyncDialog`, ADR-132 §10): every Sync button opens
+  it; nothing is sent before its own primary, Sync. A `lg` reading dialog
+  (`scroll`): what the sync would send, read on opening (a line and three
+  skeleton bars while it loads; the refusal in words with Retry; "Nothing
+  to send" in a `surface-2` well with a success check), else the paths
+  grouped Added / Modified / Deleted, each heading 13 px semibold with its
+  count faint, the paths 12 px mono in a `surface-2` well, a protected path
+  with a zinc "protected" badge — never a warning, it is a fact. The notes
+  that apply sit under a hairline, 13 px muted. Then the optional message,
+  opened with the current one and absent on a draft
+  (its count on the label line, the hint under it). Sync is disabled while
+  it loads, on an error, and with nothing to send unless the last sync
+  failed somewhere (a retry).
+- **After an update** (ADR-132 §10): while repositories of a criteria v3
+  project were graded before the latest update, the Summary opens on a
+  warning `Alert` counting them, its action a secondary link to the grading
+  screen. Regrade itself stays there: no second button.
 - **Sub-figures filter the table.** "n pending", "n not accepted" (Accepted)
   and "n no commit", "n CI failing", "n to verify", "n alerts" (Progress) are
   small `aria-pressed` buttons; a zero is muted and disabled unless it is the
@@ -2772,7 +2790,10 @@ button; below, the repository (the invitation only while pending), the
 latest CI run, and the score (or the result after the release) as stat
 cards and a teacher's comment in one frame, at the rhythm of an
 evaluation's results page. The CI and the score are not repeated in the
-header. On a project graded by criteria, a **Criteria** section follows the
+header. The teacher's message of the latest sync (ADR-132 §10), when there
+is one, comes first under the header: an outlined `NotePanel`, "Update from
+your teacher" as its eyebrow and the date beside it, the text as plain text
+(line breaks kept). On a project graded by criteria, a **Criteria** section follows the
 score (ADR-106 §9): three columns — the criterion (its description, its
 rationale shown unfolded under it as plain text, at most 70ch wide, once
 the server sends one — the staff's grading table keeps its fold), the

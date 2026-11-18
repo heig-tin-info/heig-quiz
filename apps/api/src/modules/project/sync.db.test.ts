@@ -25,7 +25,12 @@
  * - `pull_request` events: the App's, from `sync/*`, replays about an older
  *   pull request ignored;
  * - after a sync, a protected file is restored to the NEW distribution
- *   version, and never when the student's copy already is it (ADR-062).
+ *   version, and never when the student's copy already is it (ADR-062);
+ * - ADR-132 §10: the preview lists what the following sync commits (the
+ *   hand-out, `whole`, the protected marked; the cap is the domain's test) and writes nothing;
+ *   the teacher's message stored, replaced, cleared, capped, quoted inert
+ *   in the pull request and its comment, shown to every student and the
+ *   staff; the repositories graded before the latest update.
  */
 import { randomUUID } from "node:crypto";
 import { chmodSync, rmSync, writeFileSync } from "node:fs";
@@ -34,7 +39,8 @@ import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ProjectDetail, ProjectErrorCode, ProjectSummary, ProjectSyncAccepted } from "@quiz/contracts";
+import { ProjectDetail, ProjectErrorCode, ProjectSummary, ProjectSyncAccepted, ProjectSyncPreview, StudentProject } from "@quiz/contracts";
+import { SYNC_MESSAGE_MAX } from "@quiz/domain";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 
 import { loadConfig } from "../../config.js";
@@ -42,6 +48,7 @@ import {
   auditLog,
   botCommits,
   githubOrganizations,
+  gradeDispatches,
   projectCriteria,
   projectRepos,
   projects,
@@ -318,7 +325,7 @@ describe("the request and the pass (F-PROJ-12)", () => {
     }
 
     const d = await detail(p.id);
-    expect(d.sync).toEqual({ ahead: null, inProgress: false, syncedAt: at(NOW, HOUR).toISOString(), last: { opened: 2, updated: 0, upToDate: 0, failed: 0, skipped: 0 } });
+    expect(d.sync).toEqual({ ahead: null, inProgress: false, syncedAt: at(NOW, HOUR).toISOString(), last: { opened: 2, updated: 0, upToDate: 0, failed: 0, skipped: 0 }, message: null, gradedBefore: 0 });
     expect(d.primaryAction).toBe("none");
     expect(d.rows.find((r) => r.repo?.id === r1.id)!.repo!.sync).toEqual({
       pr: { number: pulls(r1.fullName!)[0]!.number, state: "open" },
@@ -504,6 +511,242 @@ describe("the request and the pass (F-PROJ-12)", () => {
     const stranger = await server.signIn("teacher");
     expect((await sync(draft.id, stranger.headers)).statusCode).toBe(404);
     expect((await sync(p.id, p.students[0]!.headers)).statusCode).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------- the preview, the message, the notice (ADR-132 §10)
+
+const preview = (id: string, headers = teacher.headers) => call("GET", `/app/api/projects/${id}/sync/preview`, headers);
+async function previewed(id: string) {
+  const res = await preview(id);
+  expect(res.statusCode, res.body).toBe(200);
+  return ProjectSyncPreview.parse(res.json());
+}
+/** What the distribution's last update changed, by git: `<change> <path>` sorted, as the preview lists it. */
+function committed(fullName: string, from: string, to = "main"): string[] {
+  const letter: Record<string, string> = { A: "added", D: "deleted", M: "modified" };
+  return world
+    .git(fullName, "diff", "--name-status", "--no-renames", from, to)
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [status, path] = line.split("\t");
+      return `${letter[status!]} ${path}`;
+    })
+    .sort();
+}
+const listed = (p: ProjectSyncPreview, branch = "main") =>
+  p.branches.find((b) => b.branch === branch)!.paths.map((x) => `${x.change} ${x.path}`).sort();
+/** Everything a preview must leave as it was: the distribution, its refs, the project's row, the audit. */
+async function untouched(p: Project) {
+  return {
+    head: head(p.distribution),
+    refs: world.git(p.distribution, "for-each-ref", "--format=%(refname) %(objectname)"),
+    apiCommits: world.apiCommits.length,
+    row: await projectRow(p.id),
+    audit: (await server.app.db.select().from(auditLog).where(eq(auditLog.subjectId, p.id))).length,
+  };
+}
+/** A schema-3 snapshot read at `sourceSha` (ADR-119), the project switched to `criteria`. */
+async function criteriaV3(projectId: string, sourceSha: string) {
+  const parsed = parseCriteria("schema_version: 3\ncriteria:\n  code:\n    format: {description: Format, max_points: 1, command: [make]}\n", { version: 3 });
+  if (!parsed.ok) throw new Error("the fixture does not parse");
+  await server.app.db.update(projects).set({ gradingMode: "criteria" }).where(eq(projects.id, projectId));
+  await server.app.db
+    .insert(projectCriteria)
+    .values({ projectId, fileSha: "f", sourceSha, criteria: parsed.criteria, loadedAt: new Date(NOW) })
+    .onConflictDoUpdate({ target: projectCriteria.projectId, set: { sourceSha } });
+}
+
+describe("the sync's preview (ADR-132 §10)", () => {
+  it("lists what the following sync commits — added, modified, deleted, the protected marked first —, and writes nothing", async () => {
+    const p = await project();
+    await sourcePush(p, { "src/util.c": "int util;", "README.md": "# Lab v2", "src/main.c": null, [GRADING]: "grade: v2" });
+    const before = await untouched(p);
+    const shown = await previewed(p.id);
+    expect(shown).toEqual({
+      protectedGraded: false,
+      branches: [
+        {
+          branch: "main",
+          paths: [
+            { path: GRADING, change: "modified", protected: true },
+            { path: "README.md", change: "modified", protected: false },
+            { path: "src/main.c", change: "deleted", protected: false },
+            { path: "src/util.c", change: "added", protected: false },
+          ],
+          more: 0,
+        },
+      ],
+    });
+    // Nothing written, on GitHub or here.
+    expect(await untouched(p)).toEqual(before);
+
+    await synced(p.id);
+    expect(committed(p.distribution, before.head)).toEqual(listed(shown));
+    // Synced: nothing left to send.
+    expect(await previewed(p.id)).toEqual({ protectedGraded: false, branches: [{ branch: "main", paths: [], more: 0 }] });
+    // Graded by a schema-3 snapshot: the protected paths are graded as the distribution has them, merged or not.
+    await criteriaV3(p.id, head(p.distribution));
+    expect((await previewed(p.id)).protectedGraded).toBe(true);
+  });
+
+  it("goes through the hand-out: a changed .studentignore takes a path out, the overlay and the ignore file never appear", async () => {
+    const p = await project();
+    await sourcePush(p, { ".studentignore": "src/main.c\n", "student/src/util.c": "/* todo */", "src/util.c": "int solved;" });
+    const shown = await previewed(p.id);
+    expect(listed(shown)).toEqual(["added src/util.c", "deleted src/main.c"]);
+    const distBefore = head(p.distribution);
+    await synced(p.id);
+    expect(committed(p.distribution, distBefore)).toEqual(listed(shown));
+    expect(world.read(p.distribution, "main", "src/util.c")).toBe("/* todo */");
+  });
+
+  it("under `whole`, lists the difference between the distribution's head and the source's; a rewritten source is refused as the sync is", async () => {
+    const p = await project({ body: { sourceStrategy: "whole" }, commits: 2 });
+    await sourcePush(p, { "src/util.c": "int util;", ".studentignore": "src/main.c\n" });
+    const before = await untouched(p);
+    const shown = await previewed(p.id);
+    // No hand-out under `whole`: the ignore file is handed out as it is.
+    expect(listed(shown)).toEqual(["added .studentignore", "added src/util.c"]);
+    expect(await untouched(p)).toEqual(before);
+    await synced(p.id);
+    expect(committed(p.distribution, before.head)).toEqual(listed(shown));
+
+    world.git(p.source, "update-ref", "refs/heads/main", "main~2");
+    await sourcePush(p, { "README.md": "# Rewritten" });
+    expect(refusal(await preview(p.id))).toEqual([409, "source_rewritten"]);
+    expect(await auditOf(p.id, "project.sync_failed")).toHaveLength(0);
+  });
+
+  it("is refused while a sync runs and on an archived project; a student and a teacher off the staff get the 404 of a missing project", async () => {
+    const p = await project();
+    await sourcePush(p, { "src/util.c": "v1" });
+    expect((await queued(() => sync(p.id))).statusCode).toBe(202);
+    expect(refusal(await preview(p.id))).toEqual([409, "sync_in_progress"]);
+    for (const job of jobsOf(p.id)) await runSyncJob(server.app, config, job);
+    expect((await preview(p.id)).statusCode).toBe(200);
+
+    const stranger = await server.signIn("teacher");
+    expect((await preview(p.id, stranger.headers)).statusCode).toBe(404);
+    expect((await preview(p.id, p.students[0]!.headers)).statusCode).toBe(404);
+    expect((await call("POST", `/app/api/projects/${p.id}/archive`, teacher.headers)).statusCode).toBe(200);
+    expect(refusal(await preview(p.id))).toEqual([409, "project_archived"]);
+  });
+});
+
+describe("the teacher's message (ADR-132 §10)", () => {
+  /** Every Markdown trap a message can hold: a team mention, an issue reference, a closing tag, a closing fence, inline code. */
+  const HOSTILE = "Test 3 fixed, see #123 @org/team\n</details>\n```\n**merge now** `x`";
+  const syncWith = (id: string, message: unknown) => call("POST", `/app/api/projects/${id}/sync`, teacher.headers, { message });
+  /** The body's text outside the teacher's fenced block, and the block's content. */
+  const split = (body: string) => {
+    const [before, rest] = body.split("````text\n") as [string, string];
+    const [inside, after] = rest.split("\n````") as [string, string];
+    return { outside: before + after, inside };
+  };
+
+  it("is stored trimmed with the sync, quoted inert in the pull request and its comment, replaced by the next, cleared by none; shown to every student and the staff", async () => {
+    const p = await project({ students: 2 });
+    const [open, locked] = p.repos as [Repo, Repo];
+    await server.app.db.update(projectRepos).set({ lockedAt: at(NOW) }).where(eq(projectRepos.id, locked.id));
+    await sourcePush(p, { "src/util.c": "v1" });
+    server.clock.set(at(NOW, HOUR));
+    expect((await syncWith(p.id, `  ${HOSTILE}  \n`)).statusCode).toBe(202);
+    expect(await projectRow(p.id)).toMatchObject({ syncMessage: HOSTILE, syncMessageAt: at(NOW, HOUR) });
+    expect(await auditOf(p.id, "project.sync_requested")).toMatchObject([{ payload: { message: HOSTILE } }]);
+
+    // The pull request quotes it in a fence no line of it can close: nothing of it acts on GitHub.
+    const [pr] = pulls(open.fullName!);
+    const body = split(pr!.body as string);
+    expect(body.inside).toBe(HOSTILE);
+    for (const live of ["@org", "#123", "</details>", "**merge now**"]) expect(body.outside, live).not.toContain(live);
+    expect(pulls(locked.fullName!)).toHaveLength(0); // skipped: no pull request
+
+    // The staff read it beside the last sync; every student on their page, the skipped one too, and nothing else of the sync.
+    expect((await detail(p.id)).sync.message).toEqual({ text: HOSTILE, at: at(NOW, HOUR).toISOString() });
+    for (const student of p.students) {
+      const res = await call("GET", `/app/api/student/projects/${p.id}`, student.headers);
+      expect(StudentProject.parse(res.json()).projectUpdate).toEqual({ text: HOSTILE, at: at(NOW, HOUR).toISOString() });
+      for (const secret of ["starter", "syncMessage", "sync_message", "opened", "skipped"]) expect(res.body, secret).not.toContain(secret);
+      const home = await call("GET", "/app/api/student/home", student.headers);
+      expect(home.body).not.toContain("Test 3 fixed");
+    }
+
+    // The next sync's message replaces it, and the comment on the open pull request quotes the new one.
+    await sourcePush(p, { "src/util.c": "v2" });
+    expect((await syncWith(p.id, "Second fix")).statusCode).toBe(202);
+    expect((await projectRow(p.id)).syncMessage).toBe("Second fix");
+    expect(comments(open.fullName!, pr!.number)).toEqual([expect.stringContaining("```text\nSecond fix\n```")]);
+    // The same text again (a retry) keeps its date and says nothing again; a new text with nothing new to send still reaches the open pull request.
+    server.clock.set(at(NOW, 2 * HOUR));
+    expect((await syncWith(p.id, "Second fix")).statusCode).toBe(202);
+    expect(await projectRow(p.id)).toMatchObject({ syncMessage: "Second fix", syncMessageAt: at(NOW, HOUR) });
+    expect(comments(open.fullName!, pr!.number)).toHaveLength(1);
+    expect((await syncWith(p.id, "Third note")).statusCode).toBe(202);
+    expect(comments(open.fullName!, pr!.number)).toHaveLength(2);
+    expect(comments(open.fullName!, pr!.number)[1]).toBe("Your teacher's message:\n\n```text\nThird note\n```");
+    // A sync with none, or an empty one, clears it.
+    await sourcePush(p, { "src/util.c": "v3" });
+    expect((await syncWith(p.id, "   ")).statusCode).toBe(202);
+    expect(await projectRow(p.id)).toMatchObject({ syncMessage: null, syncMessageAt: null });
+    expect((await call("GET", `/app/api/student/projects/${p.id}`, p.students[0]!.headers)).json()).toMatchObject({ projectUpdate: null });
+    expect((await synced(p.id)).requestedAt).toBeTruthy(); // no body at all: as before
+    expect((await detail(p.id)).sync.message).toBeNull();
+  });
+
+  it("refuses a message above the limit, and anything but text", async () => {
+    const p = await project();
+    expect((await syncWith(p.id, "x".repeat(SYNC_MESSAGE_MAX + 1))).statusCode).toBe(400);
+    expect((await syncWith(p.id, 42)).statusCode).toBe(400);
+    expect((await call("POST", `/app/api/projects/${p.id}/sync`, teacher.headers, { message: "ok", extra: 1 })).statusCode).toBe(400);
+    // A control or direction character, refused before anything moves: a NUL would fail the write after the distribution's push.
+    for (const bad of ["a\u0000b", "a\u0007b", "a\u0085b", "a\u202eb", "a\u2066b", "a\ud800b"]) {
+      expect((await syncWith(p.id, bad)).statusCode, JSON.stringify(bad)).toBe(400);
+    }
+    expect(await auditOf(p.id, "project.sync_requested")).toHaveLength(0);
+    // Trimmed first: spaces around a full message do not count.
+    expect((await syncWith(p.id, ` ${"x".repeat(SYNC_MESSAGE_MAX)}\t `)).statusCode).toBe(202);
+    expect(await auditOf(p.id, "project.sync_requested")).toHaveLength(1);
+  });
+
+  it("is never kept on a draft, which no student reads; published, it is", async () => {
+    const draft = await project({ publish: false });
+    expect((await syncWith(draft.id, "Before anyone started")).statusCode).toBe(202);
+    expect(await projectRow(draft.id)).toMatchObject({ syncMessage: null, syncMessageAt: null });
+    expect(await auditOf(draft.id, "project.sync_requested")).toMatchObject([{ payload: { message: null } }]);
+    expect((await call("POST", `/app/api/projects/${draft.id}/publish`, teacher.headers)).statusCode).toBe(200);
+    expect((await syncWith(draft.id, "Now it is read")).statusCode).toBe(202);
+    expect(await projectRow(draft.id)).toMatchObject({ syncMessage: "Now it is read", syncMessageAt: at(NOW) });
+  });
+});
+
+describe("the repositories graded before the latest update (ADR-132 §10)", () => {
+  it("counts the frozen repositories whose latest final pass or Regrade grafted from another distribution commit than the snapshot's, in a criteria v3 project only", async () => {
+    const p = await project({ students: 3 });
+    const [a, b, c] = p.repos as [Repo, Repo, Repo];
+    const db = server.app.db;
+    const pass = (repoId: string, trigger: "deadline" | "regrade", distributionSha: string | null, minutes: number) =>
+      db.insert(gradeDispatches).values({ id: randomUUID(), repoId, trigger, sha: "t".repeat(40), distributionSha, createdAt: at(NOW, minutes * 60_000) });
+    const gradedBefore = async () => (await detail(p.id)).sync.gradedBefore;
+
+    await db.update(projectRepos).set({ frozenAt: at(NOW) }).where(eq(projectRepos.projectId, p.id));
+    await pass(a.id, "deadline", "v1", 1);
+    await pass(b.id, "deadline", "v1", 1);
+    await pass(c.id, "deadline", null, 1); // claimed before ADR-132: no commit recorded
+    // Not graded by criteria v3: nothing.
+    expect(await gradedBefore()).toBe(0);
+    await criteriaV3(p.id, "v1");
+    expect(await gradedBefore()).toBe(0);
+
+    // A sync moved the snapshot: the two passes grafted from v1 were graded before it.
+    await criteriaV3(p.id, "v2");
+    expect(await gradedBefore()).toBe(2);
+    // A Regrade of one grafts from the snapshot: it leaves the count; a repository not frozen is not counted.
+    await pass(a.id, "regrade", "v2", 2);
+    await db.update(projectRepos).set({ frozenAt: null }).where(eq(projectRepos.id, b.id));
+    expect(await gradedBefore()).toBe(0);
   });
 });
 

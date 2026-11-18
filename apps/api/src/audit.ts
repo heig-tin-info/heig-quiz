@@ -532,7 +532,9 @@ export type AuditAction =
    * The source's sync (F-PROJ-12; merge task M3-07), subject the project.
    * By the staff: `sync_requested` — the distribution repository updated in
    * the request, `payload.changed` (the branches whose content changed),
-   * `sourceHeads` (the source's shas now handed out, by branch); by the
+   * `sourceHeads` (the source's shas now handed out, by branch), `message`
+   * (the teacher's message to the students, ADR-132 §10, null without
+   * one); by the
    * `project.sync` job: `synced` — one entry per pass, `payload.opened`,
    * `updated`, `upToDate`, `failed`, `skipped` (counts) and `failedRepos`
    * (full names: the next sync retries them); `sync_failed` — the

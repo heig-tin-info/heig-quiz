@@ -55,6 +55,7 @@ const project = (over: Partial<StudentProject> = {}): StudentProject => ({
     score: { points: 34, max: 40, grade: { grade: 5.3 }, frozen: false },
   },
   release: null,
+  projectUpdate: null,
   serverNow: at(0),
   ...over,
 });
@@ -98,6 +99,32 @@ describe("the page's states", () => {
     render();
     expect(await screen.findByText("boom")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+  });
+});
+
+describe("the teacher's update (ADR-132 §10)", () => {
+  it("shows the latest sync's message as plain text, with its date, and nothing without one", async () => {
+    const text = "Test 3 fixed: see **criteria.yml**.\n<b>Nothing</b> to change.";
+    mockFetch({ [URL]: ok(project({ projectUpdate: { text, at: at(-1) } })) });
+    render();
+    const block = await screen.findByTestId("sproj-teacher-update");
+    expect(within(block).getByText("Update from your teacher")).toBeInTheDocument();
+    // A text node, never Markdown nor HTML.
+    expect(within(block).getByText((_, el) => el?.tagName === "P" && el.textContent === text)).toBeInTheDocument();
+    expect(block.querySelector("b, strong")).toBeNull();
+  });
+
+  it("is absent without a message", async () => {
+    mockFetch({ [URL]: ok(project()) });
+    render();
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByTestId("sproj-teacher-update")).toBeNull();
+  });
+
+  it("says it in French", async () => {
+    mockFetch({ [URL]: ok(project({ projectUpdate: { text: "Corrigé.", at: at(-1) } })) });
+    render({ locale: "fr" });
+    expect(await screen.findByText("Mise à jour de l'équipe enseignante")).toBeInTheDocument();
   });
 });
 

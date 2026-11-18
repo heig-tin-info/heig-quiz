@@ -50,6 +50,7 @@ const project = (over: Partial<StudentProject> = {}): StudentProject => ({
   criteria: null,
   repo: repo(),
   release: null,
+  projectUpdate: null,
   serverNow: at(0),
   ...over,
 });

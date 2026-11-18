@@ -163,6 +163,8 @@ export const projectGradingKey = (id: string) => [...projectKey(id), "grading"] 
 export const projectCommitsKey = (id: string, repoId: string) => [...projectKey(id), "commits", repoId] as const;
 /** A criterion's CI log on the grading screen, by its route's path (ADR-119 §8). */
 export const projectCiLogKey = (path: string) => ["projectCiLog", path] as const;
+/** The sync's preview (ADR-132 §10): outside the project's root, so a refresh of the page never re-reads it (it clones two repositories). */
+export const projectSyncPreviewKey = (id: string) => ["projectSyncPreview", id] as const;
 /** The online workspace of a project (ADR-047, M6-06): its mode and sync, and its open workspaces live from the portal. */
 export const projectWorkspaceKey = (id: string) => [...projectKey(id), "workspace"] as const;
 export const projectWorkspaceSessionsKey = (id: string) => [...projectWorkspaceKey(id), "sessions"] as const;

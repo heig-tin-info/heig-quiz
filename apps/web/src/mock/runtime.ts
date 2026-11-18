@@ -54,7 +54,8 @@ export const STUDENT_PROJECT_INVITED = "77777777-7777-4777-8777-777777777705";
  * `journalconflict`: ...and every save of a page meets a page saved
  *   meanwhile, `409 conflict` (`mock/journal.ts`).
  * `srcmissing`: a new project's create is refused `422 source_not_found`
- *   (`mock/projectNew.ts`); `distfail`: ...`502 distribution_failed`.
+ *   (`mock/projectNew.ts`); `distfail`: ...`502 distribution_failed`, and the
+ *   sync's preview `502 sync_failed`; `syncempty`: the preview has nothing to send.
  * `unassigned`: publishing the draft project is refused `409
  *   unassigned_students`, three students in no group (`mock/project.ts`).
  * `groups`: PRG1-2026 has three group sets and PRG1-2024 one, and with
@@ -134,6 +135,7 @@ export const FLAG_NAMES = [
   "criteriafail",
   "pjcriteria",
   "ahead",
+  "syncempty",
   "groups",
   "superpowers",
   "lastminutes",

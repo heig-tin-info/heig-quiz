@@ -29,6 +29,11 @@ export function projectIsLive(state: ProjectStateName): boolean {
   return (PROJECT_LIVE_STATES as readonly ProjectStateName[]).includes(state);
 }
 
+/** {@link PROJECT_VISIBLE_STATES}: scheduled, published or locked — a project its students read. */
+export function projectIsVisible(state: ProjectStateName): boolean {
+  return (PROJECT_VISIBLE_STATES as readonly ProjectStateName[]).includes(state);
+}
+
 /**
  * Not published yet — a draft or a scheduled project: edited like a draft
  * (ADR-127 §4), its group copy following its set (ADR-070 §4).

@@ -12,12 +12,16 @@
  *   written at the build and at each sync; GitHub's compare counts them, in
  *   the background). Nothing reaches a student: the staff see "ahead" and
  *   decide.
+ * - **The preview** ({@link previewSync}, ADR-132 §10): what the request
+ *   would send, by the request's own transform stopped before its commit;
+ *   no lease, nothing written.
  * - **The request** ({@link requestSync}): takes the project's `sync_job_at`
  *   lease (held: `409 sync_in_progress`), updates the distribution
  *   repository in the request — seconds, on the asynchronous git runner,
  *   like the build (ADR-062) — so that a rewritten source under the `whole`
  *   strategy is refused there and then (`409 source_rewritten`, audited),
- *   records the source's shas now handed out, and sends ONE `project.sync`
+ *   records the source's shas now handed out and the teacher's message (the
+ *   latest replaces the previous), and sends ONE `project.sync`
  *   job. A draft syncs its distribution and nothing else; an archived
  *   project nothing (`409 project_archived`). Never refused for a source
  *   that is not ahead: a retry reaches the repositories that failed.
@@ -47,20 +51,36 @@
  * DISTRIBUTION's sha. Every text written into GitHub is English (D12).
  */
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 import { z } from "zod";
 
-import type { ProjectRepoSync, ProjectSyncAccepted, ProjectSyncState, SyncOutcome, SyncPrState } from "@quiz/contracts";
-import { syncSkips } from "@quiz/domain";
+import type {
+  ProjectRepoSync,
+  ProjectSyncAccepted,
+  ProjectSyncPreview,
+  ProjectSyncRequest,
+  ProjectSyncState,
+  SyncMessage,
+  SyncOutcome,
+  SyncPrState,
+} from "@quiz/contracts";
+import { previewPaths, projectIsVisible, syncSkips } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { botCommits, classrooms, projectRepos, projects, projectSyncPrs } from "../../db/schema.js";
+import { botCommits, classrooms, gradeDispatches, projectCriteria, projectRepos, projects, projectSyncPrs } from "../../db/schema.js";
 import { branchHead, githubStatus, installationClient, isZeroSha, ownerRepo, unless404 } from "../../github/app.js";
-import { openSyncWorkspace, SourceRewritten, updateSquashedRepo, type SyncWorkspace } from "../../github/sync.js";
+import {
+  openSyncWorkspace,
+  previewSquashedRepo,
+  SourceRewritten,
+  updateSquashedRepo,
+  type DistributionUpdateOptions,
+  type SyncWorkspace,
+} from "../../github/sync.js";
 import { PROJECT_SYNC_QUEUE } from "../../jobs.js";
 import { projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
 import { ciGraded, refreshCriteria } from "./criteria.js";
@@ -163,51 +183,138 @@ export const sourcePush: WebhookHandler = async (app, config, delivery) => {
 
 // ---------------------------------------------------------------- the request
 
+/** The App's installation on a project that may sync — refused `project_archived`, `distribution_missing`, `app_not_installed` otherwise: the sync's and its preview's one gate. */
+async function syncInstallation(db: Db, project: ProjectRow): Promise<{ login: string; installationId: number }> {
+  if (project.archivedAt !== null) throw new ProjectError("project_archived", "An archived project syncs nothing");
+  if (project.distributionFullName === null) {
+    throw new ProjectError("distribution_missing", "The project's distribution repository is not built");
+  }
+  const org = await projectInstallation(db, project.orgId);
+  if (!org) throw new ProjectError("app_not_installed", "Quiz's GitHub App no longer acts on the project's organization");
+  return org;
+}
+
+/** What `github/sync.ts` computes the distribution's update from, the App's client and token included. */
+async function updateOptions(
+  config: AppConfig,
+  project: ProjectRow,
+  org: { login: string; installationId: number },
+  log: FastifyBaseLogger,
+): Promise<DistributionUpdateOptions> {
+  const { octokit, token } = await installationClient(config, org.installationId);
+  return {
+    octokit,
+    token,
+    log,
+    org: org.login,
+    sourceRepo: ownerRepo(project.sourceFullName).repo,
+    squashedRepo: ownerRepo(project.distributionFullName!).repo,
+    strategy: project.sourceStrategy,
+    branches: project.branches,
+  };
+}
+
+/** A failed update of the distribution, as the sync and its preview refuse it. */
+const updateRefusal = (err: unknown): ProjectError =>
+  err instanceof SourceRewritten
+    ? new ProjectError("source_rewritten", "The source's history was rewritten: the distribution cannot fast-forward")
+    : new ProjectError("sync_failed", "Updating the distribution repository failed: try again");
+
+/** A sync holds the project's lease (`sync_job_at`, not expired). */
+const syncRunning = (project: Pick<ProjectRow, "syncJobAt">, now: Date): boolean =>
+  project.syncJobAt !== null && now.getTime() - project.syncJobAt.getTime() < LEASE_MS;
+
+/**
+ * `GET /app/api/projects/:id/sync/preview` (ADR-132 §10): what the next sync
+ * would send, per handed-out branch — the sync's own transform
+ * (`previewSquashedRepo`), stopped before its commit, each path marked
+ * against the project's protected list (`previewPaths`). It takes no lease
+ * and writes nothing, on GitHub or here: it never holds a sync back, and
+ * while one runs it is refused `409 sync_in_progress` (it would read a
+ * distribution being updated). Refused as the sync is otherwise; a preview
+ * past its budget (`previewSquashedRepo`) is `502 sync_failed`. One at a
+ * time per project: a second request while one runs awaits its answer.
+ */
+export function previewSync(
+  app: FastifyInstance,
+  config: AppConfig,
+  project: ProjectRow,
+  now: Date,
+  log: FastifyBaseLogger,
+): Promise<ProjectSyncPreview> {
+  const running = previewsInFlight.get(project.id);
+  if (running) return running;
+  const preview = computePreview(app, config, project, now, log).finally(() => previewsInFlight.delete(project.id));
+  previewsInFlight.set(project.id, preview);
+  return preview;
+}
+
+/** The previews under way, by project: the dialog reopened, Retry or a token's loop never clones twice at once. */
+const previewsInFlight = new Map<string, Promise<ProjectSyncPreview>>();
+
+async function computePreview(
+  app: FastifyInstance,
+  config: AppConfig,
+  project: ProjectRow,
+  now: Date,
+  log: FastifyBaseLogger,
+): Promise<ProjectSyncPreview> {
+  const org = await syncInstallation(app.db, project);
+  if (syncRunning(project, now)) throw new ProjectError("sync_in_progress", "A sync of the project is under way");
+  let branches: Awaited<ReturnType<typeof previewSquashedRepo>>;
+  try {
+    branches = await previewSquashedRepo(await updateOptions(config, project, org, log));
+  } catch (err) {
+    log.warn({ err, project: project.id }, "source sync: the preview could not be computed");
+    throw updateRefusal(err);
+  }
+  return {
+    protectedGraded: await ciGraded(app.db, project),
+    branches: branches.map(({ branch, changes }) => ({ branch, ...previewPaths(changes, project.protectedFiles) })),
+  };
+}
+
 /**
  * `POST /app/api/projects/:id/sync` (F-PROJ-12). The project was loaded under
  * `staffAccess` by the route (invariant 6). Takes the lease, updates the
- * distribution repository here, records the source's shas handed out, audits
- * `project.sync_requested`, sends the job — or runs it in the request without
- * a queue (`JOBS_DISABLED=1`). Refused `project_archived`,
- * `distribution_missing`, `app_not_installed`, `sync_in_progress`,
- * `source_rewritten` (audited `project.sync_failed`), `sync_failed` (502).
+ * distribution repository here, records the source's shas handed out and the
+ * teacher's message (ADR-132 §10), audits `project.sync_requested`, sends the
+ * job — or runs it in the request without a queue (`JOBS_DISABLED=1`).
+ * Refused `project_archived`, `distribution_missing`, `app_not_installed`,
+ * `sync_in_progress`, `source_rewritten` (audited `project.sync_failed`),
+ * `sync_failed` (502).
  */
 export async function requestSync(
   app: FastifyInstance,
   config: AppConfig,
   project: ProjectRow,
+  body: ProjectSyncRequest,
   actor: AuditActor,
   now: Date,
   log: FastifyBaseLogger,
 ): Promise<ProjectSyncAccepted> {
-  if (project.archivedAt !== null) throw new ProjectError("project_archived", "An archived project syncs nothing");
-  if (project.distributionFullName === null) {
-    throw new ProjectError("distribution_missing", "The project's distribution repository is not built");
-  }
-  const org = await projectInstallation(app.db, project.orgId);
-  if (!org) throw new ProjectError("app_not_installed", "Quiz's GitHub App no longer acts on the project's organization");
+  const org = await syncInstallation(app.db, project);
   const [job] = await claimLeases(app.db, "syncJobAt", now, sql`true`, project.id);
   if (!job) throw new ProjectError("sync_in_progress", "A sync of the project is under way");
 
   const subject = { subjectType: "project" as const, subjectId: project.id };
+  // One message per sync (ADR-132 §10): the latest replaces the previous, none
+  // clears it; only on a project its students read (a draft's is never kept).
+  // The same text keeps its date: the job comments on the open pull requests
+  // for a message dated by this sync only.
+  const message = projectIsVisible(project.state) ? body.message || null : null;
+  const messageAt = message === null ? null : message === project.syncMessage ? project.syncMessageAt : now;
   try {
-    const { octokit, token } = await installationClient(config, org.installationId);
-    const update = await updateSquashedRepo({
-      octokit,
-      token,
-      log,
-      org: org.login,
-      sourceRepo: ownerRepo(project.sourceFullName).repo,
-      squashedRepo: ownerRepo(project.distributionFullName).repo,
-      strategy: project.sourceStrategy,
-      branches: project.branches,
-    });
-    await app.db.update(projects).set({ sourceHeads: update.sourceHeads }).where(eq(projects.id, project.id));
+    const update = await updateSquashedRepo(await updateOptions(config, project, org, log));
+    await app.db
+      .update(projects)
+      .set({ sourceHeads: update.sourceHeads, syncMessage: message, syncMessageAt: messageAt })
+      .where(eq(projects.id, project.id));
     await audit(app.db, {
       ...actor,
       action: "project.sync_requested",
       ...subject,
-      payload: { changed: update.changed, sourceHeads: update.sourceHeads },
+      payload: { changed: update.changed, sourceHeads: update.sourceHeads, message },
     });
     // The criteria follow the distribution (ADR-106 §2), best-effort.
     await refreshCriteria(app.db, config, project.id, "sync", actor, now, log);
@@ -219,8 +326,7 @@ export async function requestSync(
     const rewritten = err instanceof SourceRewritten;
     log.error({ err, project: project.id }, "source sync: the distribution repository could not be updated");
     await audit(app.db, { ...actor, action: "project.sync_failed", ...subject, payload: { reason: rewritten ? "source_rewritten" : "github" } });
-    if (rewritten) throw new ProjectError("source_rewritten", "The source's history was rewritten: the distribution cannot fast-forward");
-    throw new ProjectError("sync_failed", "Updating the distribution repository failed: try again");
+    throw updateRefusal(err);
   }
   return { requestedAt: iso(now) };
 }
@@ -234,6 +340,28 @@ function fileList(files: { filename: string; status: string }[]): string {
   const shown = files.slice(0, FILES_SHOWN).map((f) => `- \`${f.filename}\` (${f.status})`);
   const more = files.length > shown.length ? `\n… and ${files.length - shown.length} more files.` : "";
   return `${shown.join("\n")}${more}`;
+}
+
+/**
+ * The teacher's message as GitHub shows it inert (ADR-132 §10): a fenced
+ * block whose fence is longer than any run of backticks in the text, so
+ * that no line of it closes the block — inside it no `@mention` notifies,
+ * no `#123` links, no Markdown or HTML runs. Nothing without a message.
+ */
+export function quotedMessage(message: string | null): string {
+  if (message === null) return "";
+  const longest = Math.max(0, ...[...message.matchAll(/`+/g)].map((run) => run[0].length));
+  const fence = "`".repeat(Math.max(3, longest + 1));
+  return `\n\nYour teacher's message:\n\n${fence}text\n${message}\n${fence}`;
+}
+
+/** What a sync pull request says beside its files: whether grading takes the update merged or not, and the teacher's message. */
+interface PrWords {
+  /** The project is graded by its CI (`ciGraded`): its protected files and `criteria.yml` are graded in the teacher's version. */
+  graded: boolean;
+  message: string | null;
+  /** The message is this sync's (dated by its request): an open pull request is told even when its head did not move. */
+  fresh: boolean;
 }
 
 /** The state of pull request `number` on GitHub, or null when it is gone. */
@@ -277,13 +405,15 @@ async function storePr(
  * The sync pull request of a branch (F-PROJ-12): never two — the stored one
  * while GitHub says it is open, else the open one from `sync/<branch>`
  * found by its head (a row lost, a pull request opened by hand), else a new
- * one. An open one is commented on when the update `moved` its head (a
+ * one. An open one is commented on when the update `moved` its head, or
+ * when the message is this sync's (`fresh`, ADR-132 §10) (a
  * retry says nothing again). Titles, bodies and comments name the
  * DISTRIBUTION's commit (`head`), never the source (N-SEC-20), in English
  * (D12). The body says what grading takes from the update: in a project
  * graded by a schema-3 snapshot the protected files and `criteria.yml`
  * are graded in the teacher's version, merged or not (ADR-132 §7);
- * otherwise nothing until it is merged.
+ * otherwise nothing until it is merged. The body and the comment quote the
+ * teacher's message, inert ({@link quotedMessage}, ADR-132 §10).
  */
 async function upsertSyncPr(
   db: Db,
@@ -293,13 +423,12 @@ async function upsertSyncPr(
   head: string,
   moved: boolean,
   files: { filename: string; status: string }[],
-  /** The project is graded by its CI (`ciGraded`): its protected files and `criteria.yml` are graded in the teacher's version. */
-  graded: boolean,
+  { graded, message, fresh }: PrWords,
   now: Date,
 ): Promise<"opened" | "updated"> {
   const { owner, repo: name } = ownerRepo(repo.fullName!);
   const short = head.slice(0, 7);
-  const list = fileList(files);
+  const list = fileList(files) + quotedMessage(message);
   const [known] = await db
     .select()
     .from(projectSyncPrs)
@@ -319,12 +448,12 @@ async function upsertSyncPr(
     open = found[0]?.number ?? null;
   }
   if (open !== null) {
-    if (moved) {
+    if (moved || fresh) {
       await octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
         owner,
         repo: name,
         issue_number: open,
-        body: `Updated to \`${short}\`. Files now included:\n\n${list}`,
+        body: moved ? `Updated to \`${short}\`. Files now included:\n\n${list}` : quotedMessage(message).trimStart(),
       });
     }
     await storePr(db, repo.id, branch, open, "open", now);
@@ -373,7 +502,7 @@ async function gone(octokit: Octokit, owner: string, repo: string): Promise<bool
  * throws, for the frame to count and retry. A repository GitHub lost is
  * marked deleted and skipped.
  */
-async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspace, repoId: string, graded: boolean): Promise<SyncOutcome> {
+async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspace, repoId: string, words: PrWords): Promise<SyncOutcome> {
   const db = app.db;
   const [row] = await repoWithProject(db, { courseId: classrooms.courseId })
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
@@ -401,7 +530,7 @@ async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspac
       });
       const files = (cmp.files ?? []).map((f) => ({ filename: f.filename, status: f.status }));
       // No file differs: the student has everything already, no pull request (F-PROJ-12).
-      outcomes.push(files.length === 0 ? "up_to_date" : await upsertSyncPr(db, octokit, repo, branch, head, moved, files, graded, now));
+      outcomes.push(files.length === 0 ? "up_to_date" : await upsertSyncPr(db, octokit, repo, branch, head, moved, files, words, now));
     }
   } catch (err) {
     if (await gone(octokit, owner, name)) {
@@ -434,14 +563,18 @@ export async function runSyncJob(app: FastifyInstance, config: AppConfig, job: P
     // The teachers' test repositories follow the source too (ADR-077), outside the tallies and never failing the pass.
     const counted = new Set(repos.map((r) => r.id));
     const tests = (await db.select().from(projectRepos).where(eq(projectRepos.projectId, project.id))).filter((r) => !counted.has(r.id));
-    const graded = await ciGraded(db, project);
+    const words: PrWords = {
+      graded: await ciGraded(db, project),
+      message: project.syncMessage,
+      fresh: project.syncMessageAt?.toISOString() === job.lease,
+    };
     const ws = await openSyncWorkspace({ token, org: owner, squashedRepo });
     let failedRepos: string[];
     try {
       failedRepos = await each(repos, async (repo) => {
-        tally[await syncRepo(app, octokit, ws, repo.id, graded)] += 1;
+        tally[await syncRepo(app, octokit, ws, repo.id, words)] += 1;
       });
-      await each(tests, (repo) => syncRepo(app, octokit, ws, repo.id, graded).then(() => undefined));
+      await each(tests, (repo) => syncRepo(app, octokit, ws, repo.id, words).then(() => undefined));
     } finally {
       ws.dispose();
     }
@@ -506,8 +639,36 @@ export const pullRequest: WebhookHandler = async (app, config, delivery) => {
 
 // ---------------------------------------------------------------- the page
 
-/** The sync as the project page states it (`ProjectSyncState`), from the project's row and its student repositories. */
-export function projectSyncState(project: ProjectRow, repos: readonly RepoRow[], now: Date): ProjectSyncState {
+/**
+ * `ProjectSyncState.gradedBefore` (ADR-132 §10): in a project graded by a
+ * schema-3 snapshot, the live frozen repositories whose latest final pass or
+ * Regrade grafted from another distribution commit than the snapshot's
+ * (`grade_dispatches.distribution_sha`, `project_criteria.source_sha`, both
+ * ADR-132 §2's). Every sync whose `criteria.yml` is accepted moves the
+ * snapshot, so this counts the repositories graded before the latest
+ * update, whatever it changed; a Regrade grafts from the snapshot and takes
+ * its repository out. A pass claimed before ADR-132 recorded no commit and
+ * counts for nothing.
+ */
+export async function gradedBeforeUpdate(db: Db, project: ProjectRow, repos: readonly RepoRow[]): Promise<number> {
+  const frozen = repos.filter((repo) => repo.frozenAt !== null && isLive(repo, project)).map((repo) => repo.id);
+  if (frozen.length === 0 || project.gradingMode !== "criteria") return 0;
+  // `ciGraded`'s rule, on the one read of the snapshot this needs anyway.
+  const [snapshot] = await db
+    .select({ criteria: projectCriteria.criteria, sourceSha: projectCriteria.sourceSha })
+    .from(projectCriteria)
+    .where(eq(projectCriteria.projectId, project.id));
+  if (snapshot?.criteria.schemaVersion !== 3) return 0;
+  const latest = await db
+    .selectDistinctOn([gradeDispatches.repoId], { distributionSha: gradeDispatches.distributionSha })
+    .from(gradeDispatches)
+    .where(and(inArray(gradeDispatches.repoId, frozen), inArray(gradeDispatches.trigger, ["deadline", "regrade"])))
+    .orderBy(gradeDispatches.repoId, desc(gradeDispatches.createdAt));
+  return latest.filter((pass) => pass.distributionSha !== null && pass.distributionSha !== snapshot.sourceSha).length;
+}
+
+/** The sync as the project page states it (`ProjectSyncState`), from the project's row and its student repositories; `gradedBefore` from {@link gradedBeforeUpdate}. */
+export function projectSyncState(project: ProjectRow, repos: readonly RepoRow[], now: Date, gradedBefore: number): ProjectSyncState {
   const counts = Object.values(project.sourceAhead ?? {});
   const outcomes = repos.map((r) => r.syncOutcome).filter((o): o is SyncOutcome => o !== null);
   const count = (outcome: SyncOutcome) => outcomes.filter((o) => o === outcome).length;
@@ -520,14 +681,20 @@ export function projectSyncState(project: ProjectRow, repos: readonly RepoRow[],
             pushedAt: iso(project.sourcePushedAt),
             commits: counts.length > 0 && counts.every((n) => n !== null) ? counts.reduce((a, n) => a + n!, 0) : null,
           },
-    inProgress: project.syncJobAt !== null && now.getTime() - project.syncJobAt.getTime() < LEASE_MS,
+    inProgress: syncRunning(project, now),
     syncedAt: isoOrNull(project.syncedAt),
     last:
       outcomes.length === 0
         ? null
         : { opened: count("opened"), updated: count("updated"), upToDate: count("up_to_date"), failed: count("failed"), skipped: count("skipped") },
+    message: syncMessage(project),
+    gradedBefore,
   };
 }
+
+/** The latest sync's message (ADR-132 §10), as the staff and the students read it. */
+export const syncMessage = (project: Pick<ProjectRow, "syncMessage" | "syncMessageAt">): SyncMessage | null =>
+  project.syncMessage === null || project.syncMessageAt === null ? null : { text: project.syncMessage, at: iso(project.syncMessageAt) };
 
 /**
  * The sync of each repository as its row states it (`ProjectRepoSync`), by

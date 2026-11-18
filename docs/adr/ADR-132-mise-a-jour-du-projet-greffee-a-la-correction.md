@@ -4,11 +4,11 @@
 
 Accepted (2026-11-17). The principles, the graft (A), the Regrade's
 semantics and its use after the release, C and B are the **product
-owner's** decisions; choices (a) to (j) are the **orchestrator's**, after
+owner's** decisions; choices (a) to (j), and C's (k) to (m) (2026-11-18, §10), are the **orchestrator's**, after
 the spec challenge and the code. Delivered in this order, tracked in
-`changes/`: A1 (§2–§4, §7), A2 (§5, §6), C, B. A1 and A2 are delivered
-(`changes/project-update-graded-commit.md`, `changes/project-regrade-machine.md`);
-C and B are not.
+`changes/`: A1 (§2–§4, §7), A2 (§5, §6), C, B. A1, A2 and C are delivered
+(`changes/project-update-graded-commit.md`, `changes/project-regrade-machine.md`,
+`changes/project-sync-preview.md`); B is not.
 
 Scope: a project graded by criteria whose snapshot is schema version 3
 (ADR-119): which commit its graded run reads, which distribution files that
@@ -24,7 +24,7 @@ LLM's sources); [ADR-106](ADR-106-notation-des-projets-par-criteres.md) §3
 [ADR-062](ADR-062-depot-de-distribution.md) addendum 1 (which distribution
 commit a graded pass reads; the restore unchanged);
 [ADR-073](ADR-073-synchronisation-de-la-source.md) §4 (the pull request's
-body) and, with C, §3; F-PROJ-11, -12, -23, -25 (docs/spec/02). Builds on
+body) and, with C, §2 (the preview, the message); F-PROJ-11, -12, -15, -23, -25 (docs/spec/02). Builds on
 [ADR-012](ADR-012-gel-note-deux-temps.md) and
 [ADR-064](ADR-064-echeance-des-projets-baux.md) (the target commit and the
 freezes, unchanged), [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
@@ -346,19 +346,117 @@ server built on it (ADR-132 §2), never uploaded by a client." Its last
 sentence binds the graded run by "its nonce and a workflow version the
 distribution handed out (ADR-132 §3)". The detail is §2's and §3's.
 
-### 10. C — the sync, previewed and explained (owner; to be delivered)
+### 10. C — the sync, previewed and explained (owner; delivered)
 
-- Before Sync, a **preview**: the paths the distribution would add, modify
-  and delete, protected or not.
-- An optional **teacher's message**, shown on the student's Quiz project
-  page and in the pull request's body.
-- After a sync, **Regrade** is offered (§5's semantics).
+The three parts are the owner's (2026-11-17); every choice below is the
+orchestrator's, the owner being unreachable that night.
 
-Open points: where the message is stored and how long it shows; whether the
-preview reads the source through the hand-out transform or the updated
-distribution, given that the request updates the distribution before the
-job (ADR-073 §2); the message's length and its language (the pull request
-is English, D12; the message is the teacher's own text).
+- **The preview reads the sync's own transform** (choice k).
+  `GET /app/api/projects/:id/sync/preview`, open to whoever may sync
+  (`onProject`), computes the distribution's update exactly as the request
+  does — `planDistribution` of `github/sync.ts`, which both
+  `updateSquashedRepo` and `previewSquashedRepo` call — and stops before the
+  commit: under `squash`, what git stages once the source went through the
+  hand-out (`student/`, `.studentignore`, a changed `.studentignore`
+  included) over the distribution's tree; under `whole`, the difference
+  between the distribution's head and the source's, a source whose history
+  lacks that head refused `409 source_rewritten` as the sync is. Per
+  handed-out branch, each path added, modified or deleted, marked protected
+  by the project's list (`previewPaths`, `@quiz/domain`): the protected
+  first, at most 200 per branch, the rest counted. It writes nothing on
+  GitHub nor in the database and takes **no lease**: it never holds a sync
+  back, and while a sync holds the lease it is refused
+  `409 sync_in_progress` (it would read a distribution being updated). A
+  sync that starts during a preview only makes that preview stale. The
+  other refusals are the sync's (`project_archived`, `distribution_missing`,
+  `app_not_installed`, `sync_failed`). It is not the updated distribution
+  the job pushes from: the request updates that distribution, so reading
+  it after would show the change, never preview it. It is **bounded**:
+  every git call of a preview dies past one budget from its start (the
+  graft's 120 s, §2), answered `502 sync_failed`; and **single-flight** per
+  project — a second request while one runs (the dialog reopened, Retry, a
+  token's loop) awaits the same answer instead of cloning again. The
+  working tree's replacement is copied off the event loop (`fs/promises`)
+  for the sync and the preview alike; the hand-out itself
+  (`applyStudentHandout`, shared with the build) stays synchronous, a known
+  limit. Their temporary directories carry the process's pid and are swept
+  at startup with the graft's (`sweepGraftDirs`).
+- **The `whole` strategy, for the sync too**: the fast-forward is checked
+  before any push (`merge-base --is-ancestor` of the distribution's head),
+  one push per branch; a source whose history lacks that head stays
+  `409 source_rewritten`, a non-fast-forward is never pushed, and a
+  distribution that moves between the check and the push (a hand push)
+  now answers `502 sync_failed`, where a pattern on the push's error once
+  said `source_rewritten`.
+- **Sync opens a dialog** on the staff project page: the preview loading,
+  failing (its refusal in words, a retry), empty or listed, grouped added /
+  modified / deleted, protected paths marked. Two notes, each only when
+  such a path is listed: a protected path, in a project graded by a
+  schema-3 snapshot only (`ciGraded`), "graded in this version for
+  everyone at the next correction, merged or not"; any other path,
+  "arrive when the update is merged, conflicts possible; grading reads
+  the repository's version". Its one primary is
+  Sync; with nothing to send it is held, unless the last sync failed
+  somewhere — a sync with nothing new still retries those repositories
+  (ADR-073 §2).
+- **The teacher's message** (choice l): optional, plain text, trimmed, at
+  most 500 characters (`SYNC_MESSAGE_MAX`), its CRLF and CR made line
+  feeds before the cap and the check, no control character but tab and
+  line feed, no bidirectional override or isolate and no lone surrogate
+  (the contract refuses them, `400`, before anything moves: a NUL would
+  fail the database's write, a lone surrogate the audit's JSON, after the
+  distribution's push). It exists only on
+  a project its students can read, the states the student view serves
+  (`projectIsVisible`: scheduled, published, locked): on a draft the dialog
+  offers no field and the request stores none, whatever it carries — a
+  draft's message would reach students at publication, dated before they
+  had the project, about a change no pull request carries; a project back
+  to a draft (unscheduled, or unarchived past its start) forgets its
+  message for the same reason. Stored on the
+  project (`projects.sync_message`, `sync_message_at`, migration 0142) in
+  the same statement that records the shas handed out, once the
+  distribution is updated: one per sync, a different text replacing the
+  previous with this sync's date, the same text keeping its date, a sync
+  without one clearing it. The dialog opens with the current message, so a
+  retry never clears it by accident; emptying the field does. It shows
+  until a sync replaces or clears it. Audited in `project.sync_requested`
+  (`payload.message`, the text, as `grade_override` carries the teacher's
+  comment). Its language is the teacher's: the platform's own text around
+  it stays English (D12). Shown:
+  - to the students on their project page, as "Update from your teacher"
+    with its date, through the project's student view only
+    (`StudentProject.projectUpdate`, `studentView.ts`): to every student of
+    the project, a repository the sync skipped included (their grade uses
+    the update, §2); nothing else of the sync (no source, no count;
+    N-SEC-20); rendered as a text node, never Markdown or HTML;
+  - in the pull request's body and in the comment an open one receives —
+    when its head moved, or when the message is this sync's (dated by its
+    request) though nothing new reached the branch —,
+    under "Your teacher's message:", in a fenced block whose fence is
+    longer than any run of backticks in the text, so that no line of it
+    closes the block: no `@mention` notifies, no `#123` links, no Markdown
+    or HTML runs (`quotedMessage`). A known limit: a message-only sync
+    whose comment fails on one repository, retried with the same text,
+    never comments there (neither moved nor this sync's message); that
+    student still reads it on their Quiz page;
+  - to the staff beside the last sync's state, on the project's Source
+    tile.
+  A hint under the field says every student reads it and that it should
+  not name the source repository.
+- **Regrade is offered after the sync, not in the dialog** (choice m). On
+  the staff project page's Summary, a notice counts the repositories
+  graded before the latest update and links to the grading screen, where
+  "Regrade every repository" lives (§5); there is no second Regrade button.
+  Its condition takes no new state (`gradedBefore`, `ProjectSyncState`):
+  in a project graded by a schema-3 snapshot, the live frozen repositories
+  whose latest final pass or Regrade recorded a `distribution_sha` other
+  than the snapshot's `source_sha`. A sync whose `criteria.yml` is accepted
+  moves the snapshot whatever it changed, so the notice follows any
+  update of the distribution, not only one that changed a protected path:
+  telling those apart needs either GitHub at page load or a stored flag,
+  and the notice stays true either way ("graded before the latest
+  update"). A pass claimed before ADR-132 recorded no commit and counts
+  for nothing.
 
 ### 11. B — "Teacher's update" in the online workspace (owner; to be delivered)
 

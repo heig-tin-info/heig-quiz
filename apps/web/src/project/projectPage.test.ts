@@ -194,10 +194,10 @@ describe("the sync (F-PROJ-12, M3-07)", () => {
 
   it("offers Sync beside another primary action while the server says the source is ahead or a sync runs", () => {
     expect(offersSync(makeProject())).toBe(false);
-    expect(offersSync(makeProject({ sync: { ahead, inProgress: false, syncedAt: null, last: null } }))).toBe(true);
-    expect(offersSync(makeProject({ sync: { ahead: null, inProgress: true, syncedAt: null, last: null } }))).toBe(true);
+    expect(offersSync(makeProject({ sync: { ahead, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 } }))).toBe(true);
+    expect(offersSync(makeProject({ sync: { ahead: null, inProgress: true, syncedAt: null, last: null, message: null, gradedBefore: 0 } }))).toBe(true);
     // The server's own primary action: the button is the primary one, not a second.
-    expect(offersSync(makeProject({ primaryAction: "sync", sync: { ahead, inProgress: false, syncedAt: null, last: null } }))).toBe(false);
+    expect(offersSync(makeProject({ primaryAction: "sync", sync: { ahead, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 } }))).toBe(false);
   });
 
   it("tags a row: a failed sync first, else the pull request by its state (open linked), else up to date or skipped, else nothing", () => {

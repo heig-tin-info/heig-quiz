@@ -28,8 +28,13 @@ addendum (`docs/merge/08-decisions.md`).
 (2026-11-17, product owner), scope §4's pull-request body:** it no longer
 says the score never depends on the pull request until it is merged — a v3
 project grades the protected files and `criteria.yml` in the teacher's
-version either way (ADR-132 §7). ADR-132's part C (to be delivered) adds a
-preview and a teacher's message to the sync.
+version either way (ADR-132 §7).
+
+**Amended by [ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md)
+§10 (part C, 2026-11-18), scope §2 (a preview before the request, a
+teacher's message with it, the `whole` strategy's fast-forward checked
+before any push) and §4 (the message in the pull request's body and
+comments).
 
 Relations: depends on [ADR-064](ADR-064-echeance-des-projets-baux.md) (the
 claims and leases of a project's GitHub work, reused as they are) and on

@@ -87,6 +87,7 @@ import { lastCollections } from "../codespace/service.js";
 import { slotRuns } from "./scores.js";
 import { ProjectError } from "./errors.js";
 import { seatRepo, seatRepos } from "./groupRepos.js";
+import { syncMessage } from "./sync.js";
 import { resendInvitation } from "./invitation.js";
 import type { RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
@@ -381,6 +382,8 @@ export async function studentProject(
             comment: repo?.releasedComment ?? null,
           },
     criteria,
+    // ADR-132 §10: the latest sync's message and its date, nothing else of the sync (N-SEC-20).
+    projectUpdate: syncMessage(project),
     workspace: studentWorkspace(project, codespace),
     serverNow: iso(now),
   };
