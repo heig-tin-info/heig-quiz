@@ -154,13 +154,14 @@ gallery`, and `test.sh` makes an assertion out of it.
 ### No notebook support (2026-10-11, audit L24)
 
 The image deletes code-server's bundled `ipynb` and `notebook-renderers`
-extensions (`Containerfile` step 2b): a notebook's HTML output runs script
-in a webview on the portal's origin as soon as the `.ipynb` is opened.
+extensions (`Containerfile` step 2b): a notebook's rendered output has no
+place on the portal's shared origin (audit L24).
 `ipynb` is the only bundled extension contributing a notebook type; without
 it the notebook editor fails on an `.ipynb` and offers the text editor. Deleting at build time, rather than
 `--disable-extension` in the entrypoint, leaves nothing to load or re-enable
-and is redone by every rebuild; `test.sh` § 7 asserts it. The remaining gaps
-are in [ADR-047's amendment of 2026-10-11](../../../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
+and is redone by every rebuild; `test.sh` § 7 asserts it. The rule set and
+its planned full fix are
+[ADR-047's amendment of 2026-10-11](../../../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
 
 ## Machine settings
 
