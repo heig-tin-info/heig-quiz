@@ -12,7 +12,8 @@ import { Score } from "./parts";
  * the CI's rate as a ring, the points beside it, never a grade.
  */
 type Final = NonNullable<ProjectRepoView["scores"]["final"]>;
-const final = (over: Partial<Final> = {}): Final => ({ points: 40, max: 48, source: "ci", toVerify: false, grade: { grade: 5.2 }, ...over });
+// The server sends no grade for the CI's share of a project graded by criteria (`ciShareOnly`).
+const final = (over: Partial<Final> = {}): Final => ({ points: 40, max: 48, source: "ci", toVerify: false, grade: null, ...over });
 
 describe("Score", () => {
   it("draws the CI's score of a project graded by criteria as its rate, without a grade", () => {
@@ -20,7 +21,6 @@ describe("Score", () => {
     expect(screen.getByRole("img", { name: "CI: 40 of 48 points, 83%" })).toBeInTheDocument();
     expect(screen.getByText("40/48")).toBeInTheDocument();
     expect(screen.getByText("CI")).toBeInTheDocument();
-    expect(screen.queryByText("5.2")).toBeNull();
     expect(container.querySelector<SVGCircleElement>(".score-ramp-stroke")!.style.getPropertyValue("--rate")).toBe("83%");
   });
 

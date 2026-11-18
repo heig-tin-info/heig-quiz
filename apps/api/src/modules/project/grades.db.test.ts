@@ -21,14 +21,16 @@ import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { ProjectDetail, ProjectReleaseResult, ProjectRepoScores, CSRF_COOKIE } from "@quiz/contracts";
+import { parseCriteria } from "@quiz/domain/criteriaParse";
 
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
-import { auditLog, courseStaff, enrollments, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
+import { auditLog, courseStaff, enrollments, projectCriteria, projectCriterionGrades, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
 import { resetLiveStateCache } from "../../github/metrics.js";
 import { json, orgsRoute, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { accessibleProject, accessibleProjectRepo } from "../guards.js";
+import { projectLiveScores } from "./gradebook.js";
 import { call, newOrg, server, teacher, useProjectWorld, type Headers } from "../../test/projectWorld.js";
 
 const NOW = "2026-10-10T08:00:00.000Z";
@@ -55,7 +57,7 @@ interface World {
 }
 
 /** A locked, graded project past its deadline, of `students` claimed students; no repository yet. */
-async function world(opts: { students?: number; gradingMode?: "auto" | "none" } = {}): Promise<World> {
+async function world(opts: { students?: number; gradingMode?: "auto" | "none" | "criteria" } = {}): Promise<World> {
   const db = server.app.db;
   const students = await Promise.all(Array.from({ length: opts.students ?? 1 }, () => server.signIn("student")));
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
@@ -434,6 +436,55 @@ describe("the release (F-PROJ-14, D05)", () => {
     const res = await release(w);
     expect(res.statusCode, res.body).toBe(200);
     expect(ProjectReleaseResult.parse(res.json())).toMatchObject({ repos: 1 });
+  });
+});
+
+describe("the gradebook's live cell (product owner, 2026-11-18)", () => {
+  it("has no grade for the CI's share of a project graded by criteria, the cell left empty; auto unchanged", async () => {
+    for (const gradingMode of ["auto", "criteria"] as const) {
+      const w = await world({ gradingMode });
+      const [student] = w.students;
+      const repo = await repoOf(w, student!.id);
+      await setRepo(repo, { frozenGradeRunId: await run(repo) });
+      const [seat] = await server.app.db
+        .select()
+        .from(enrollments)
+        .where(and(eq(enrollments.classroomId, w.classroomId), eq(enrollments.userId, student!.id)));
+      const cells = await projectLiveScores(server.app.db, await projectRow(w.projectId), [seat!.id]);
+      expect(rowOf(await detail(w), student!.id).scores.final).toMatchObject({ source: "ci", points: 7, max: 10 });
+      expect(cells.get(seat!.id)).toEqual(
+        gradingMode === "auto" ? { points: 7, max: 10, grade: 4.5, source: "ci", changedAfterRelease: false } : undefined,
+      );
+    }
+  });
+
+  it("releases a deleted repository of a project graded by criteria at its CI points, with no grade", async () => {
+    const w = await world({ students: 2, gradingMode: "criteria" });
+    const [s1, s2] = w.students;
+    const parsed = parseCriteria("schema_version: 2\ncriteria:\n  git:\n    commits: {description: Commits, awarded_points: 0, max_points: 4}\n", { version: 2 });
+    if (!parsed.ok) throw new Error("the fixture does not parse");
+    await server.app.db.insert(projectCriteria).values({ projectId: w.projectId, fileSha: "f", sourceSha: "s", criteria: parsed.criteria, loadedAt: at(NOW) });
+    // A live repository, validated: the criteria's total, graded.
+    const live = await repoOf(w, s1!.id);
+    await server.app.db.insert(projectCriterionGrades).values({
+      id: randomUUID(),
+      repoId: live,
+      criterionId: "git.commits",
+      points: 3,
+      max: 4,
+      source: "manual",
+      state: "validated",
+      createdAt: at(NOW),
+      createdBy: teacher.id,
+    });
+    // Deleted before its freeze with a CI score: never validated, released at the CI's share.
+    const deleted = await repoOf(w, s2!.id, { deletedAt: at(NOW), deadlineAppliedAt: null, frozenAt: null });
+    await setRepo(deleted, { currentGradeRunId: await run(deleted, { points: 2, max: 10 }) });
+
+    const res = await release(w);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(await repoRow(live)).toMatchObject({ releasedPoints: 3, releasedMax: 4, releasedGrade: 4.8 });
+    expect(await repoRow(deleted)).toMatchObject({ releasedPoints: 2, releasedMax: 10, releasedGrade: null });
   });
 });
 

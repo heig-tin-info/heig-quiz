@@ -90,6 +90,7 @@ import {
 } from "@quiz/contracts";
 import {
   awardedRange,
+  ciShareOnly,
   changedAfterRelease,
   checkpointDueAt,
   checkpointRefusal,
@@ -121,6 +122,7 @@ import {
   staffReviewRefusal,
   withForcedProtected,
   type CriterionGradeLike,
+  type FinalScoreSource,
   type ProjectDatesChange,
   type ProjectLifeLike,
   type SyncPathChange,
@@ -229,7 +231,6 @@ const PJ_GROUP_STOPPED = "0190d3c4-0000-7000-8000-0000000000b6";
 /** `?pjcriteria=1`: the projects graded by criteria (ADR-106), frozen and open. */
 const PJ_CRITERIA = "0190d3c4-0000-7000-8000-0000000000c1";
 const PJ_CRITERIA_OPEN = "0190d3c4-0000-7000-8000-0000000000c2";
-const PJ_CRITERIA_RELEASED = "0190d3c4-0000-7000-8000-0000000000c3";
 
 const SEEDS: {
   id: string;
@@ -278,14 +279,12 @@ const SEEDS: {
 
 /**
  * `?pjcriteria=1` (ADR-106 §8): graded by criteria — one frozen and awaiting
- * its validation, one still open, one released (every repository validated).
- * Read at each seeding, not at import, so a test may turn the flag on for
- * its own scenes only.
+ * its validation, one still open. Read at each seeding, not at import, so a
+ * test may turn the flag on for its own scenes only.
  */
 const CRITERIA_SEEDS: (typeof SEEDS)[number][] = [
   { id: PJ_CRITERIA, title: "Labo 00 — par critères", state: "locked", start: -21 * D, deadline: -3 * D, unreleased: true, summary: { gradingMode: "criteria", gradingScale: { kind: "linear", rounding: "nearest" } } },
   { id: PJ_CRITERIA_OPEN, title: "Labo 01 — par critères", state: "published", start: -3 * D, deadline: 9 * D, summary: { gradingMode: "criteria" } },
-  { id: PJ_CRITERIA_RELEASED, title: "Labo 0a — par critères", state: "locked", start: -40 * D, deadline: -20 * D, summary: { gradingMode: "criteria" } },
 ];
 /** The seeds in force: the criteria ones with their flag. */
 const seedsNow = () => [...SEEDS, ...(flags.pjcriteria ? CRITERIA_SEEDS : [])];
@@ -747,14 +746,7 @@ function seeded(): MockProject[] {
           : [];
     PROJECTS.set(seed.id, project);
     // Graded by criteria (ADR-106): the snapshot, and the passes' rows of every frozen repository.
-    if (summary.gradingMode === "criteria") {
-      seedCriteria(project);
-      // Released at the final scores of the day, the validated criteria's now that their rows exist.
-      for (const r of project.repos.filter((x) => x.released !== null)) {
-        const final = finalOf(r);
-        r.released = { points: final?.points ?? null, max: final?.max ?? null };
-      }
-    }
+    if (summary.gradingMode === "criteria") seedCriteria(project);
     // The locked one was synced with a message after its grading (ADR-132 §10): its frozen repositories were graded before.
     if (seed.id === PJ_CRITERIA) {
       Object.assign(project.sync, {
@@ -1020,9 +1012,11 @@ function mockCollection(p: MockProject, r: MockRepo): ProjectRepoView["collectio
 }
 
 function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
-  const scale = p.summary.gradingScale;
-  const graded = (s: { runId: string; points: number | null; max: number | null } | null) =>
-    s ? { ...s, grade: scoreGrade(s.points, s.max, scale) } : null;
+  // As the server grades them (`gradeOf`, `detail.ts`): none for the CI's share of a project graded by criteria.
+  const gradeOf = (source: FinalScoreSource, points: number | null, max: number | null) =>
+    ciShareOnly(p.summary.gradingMode, source) ? null : scoreGrade(points, max, p.summary.gradingScale);
+  const graded = (s: { runId: string; points: number | null; max: number | null } | null, source: FinalScoreSource) =>
+    s ? { ...s, grade: gradeOf(source, s.points, s.max) } : null;
   const final = finalOf(r);
   const latest = r.runs[0];
   return {
@@ -1038,11 +1032,11 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
     commits: r.live ? Math.max(0, r.live.commitCount - 1) : 0,
     live: p.read ? r.live : null,
     scores: {
-      current: graded(slot(r, r.currentRunId)),
-      frozen: graded(slot(r, r.frozenRunId)),
-      review: graded(slot(r, r.reviewRunId)),
+      current: graded(slot(r, r.currentRunId), "ci"),
+      frozen: graded(slot(r, r.frozenRunId), "ci"),
+      review: graded(slot(r, r.reviewRunId), "review"),
       teacher: r.teacher,
-      final: final ? { ...final, grade: scoreGrade(final.points, final.max, scale) } : null,
+      final: final ? { ...final, grade: gradeOf(final.source, final.points, final.max) } : null,
       scoreMax: runMaxOf(r),
     },
     review: reviewOf(p, r),
@@ -1478,8 +1472,7 @@ const RATIONALES: Record<string, string[]> = {
  * project graded by criteria — the tests' row, the model's proposals with
  * their rationale (one quoting a script, shown as text), a failed pass
  * (`llm_budget`) on one; every third repository already validated, the
- * teacher-only `git.commits` written by the teacher there and nowhere else
- * (every repository of a released project);
+ * teacher-only `git.commits` written by the teacher there and nowhere else;
  * the tests' row of every other repository locked by a milestone (§5).
  */
 function seedCriteria(p: MockProject): void {
@@ -1487,10 +1480,8 @@ function seedCriteria(p: MockProject): void {
   p.repos.forEach((r, i) => {
     if (r.frozenAt === null || !isLive(p, r)) return;
     const at = new Date(Date.parse(r.frozenAt) + 20 * 60_000);
-    // A released project's repositories are all validated, none with a failed pass.
-    const released = p.releasedAt !== null;
-    const validated = released || i % 3 === 0;
-    const failed = !released && i === 4;
+    const validated = i % 3 === 0;
+    const failed = i === 4;
     const rows: MockCriterionRow[] = [];
     const add = (criterionId: string, points: number, source: MockCriterionRow["source"], rationale: string | null = null) => {
       const leaf = SAMPLE_LEAVES.find((l) => l.id === criterionId)!;

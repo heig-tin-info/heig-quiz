@@ -967,8 +967,8 @@ const studentProjectView = (card: CardFacts): StudentProject => {
             : released
               ? { points: 18, max: 20, grade: { grade: 5.5 }, frozen: true }
               : criteria
-                ? // Graded by criteria: the CI's `GRADE` is its two checks' points over their 8 (ADR-119 §12); the grade the server still sends is the CI's alone.
-                  { points: Math.min(8, (card.id === STUDENT_PROJECT_FROZEN ? 7 : 6) + pushes), max: 8, grade: { grade: 4.8 }, frozen: card.status === "locked" }
+                ? // Graded by criteria: the CI's `GRADE` is its two checks' points over their 8 (ADR-119 §12), and no grade (`ciShareOnly`).
+                  { points: Math.min(8, (card.id === STUDENT_PROJECT_FROZEN ? 7 : 6) + pushes), max: 8, grade: null, frozen: card.status === "locked" }
                 : { points: Math.min(40, 34 + 2 * pushes), max: 40, grade: { grade: 5.3 }, frozen: card.status === "locked" || card.status === "deadline_passed" },
         };
   return {

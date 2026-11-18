@@ -86,7 +86,9 @@ export interface ProjectGradeCell {
 /**
  * The LIVE final score of each seat's repository, graded by the project's
  * scale: the seat's own or its copy group's (`seatRepos`). A seat with no
- * repository, no score, or a score without a maximum is absent from the map.
+ * repository, no score, a score without a maximum, or one without a grade —
+ * the CI's share of a project graded by criteria before its validation
+ * (`ciShareOnly`) — is absent from the map.
  */
 export async function projectLiveScores(
   db: Db,

@@ -391,6 +391,19 @@ describe("the project page (F-PROJ-13)", () => {
     expect(scores(s4!.id).frozen).toBeNull();
     // The maximum a teacher's score is held to, per row: the review's, the frozen run's, the current one's (`teacherRunMax`).
     expect([s1, s2, s3, s4].map((s) => scores(s!.id).scoreMax)).toEqual([6, 6, 10, 6]);
+
+    // Graded by criteria (`ciShareOnly`, product owner 2026-11-18): the CI's score is only its share, so it has no
+    // grade, final or slot; the teacher's and the review's keep theirs.
+    await server.app.db.update(projects).set({ gradingMode: "criteria" }).where(eq(projects.id, w.projectId));
+    const c = await detail(w.projectId);
+    const criteria = (userId: string) => rowOf(c, userId).repo!.scores;
+    expect(criteria(s1!.id).final).toMatchObject({ source: "teacher", grade: { grade: 5.6 } });
+    expect(criteria(s2!.id).final).toMatchObject({ source: "review", grade: { grade: 3.5 } });
+    expect(criteria(s2!.id).review).toMatchObject({ grade: { grade: 3.5 } });
+    expect(criteria(s3!.id).final).toEqual({ points: 7, max: 10, source: "ci", toVerify: false, grade: null });
+    expect(criteria(s3!.id).frozen).toMatchObject({ points: 7, max: 10, grade: null });
+    expect(criteria(s4!.id).final).toEqual({ points: 4.5, max: 6, source: "ci", toVerify: false, grade: null });
+    expect(criteria(s4!.id).current).toMatchObject({ points: 4.5, max: 6, grade: null });
   });
 
   it("shows a score changed after the release, and offers the release again for it", async () => {

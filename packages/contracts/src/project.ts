@@ -853,7 +853,10 @@ export type ProjectSlotScore = z.infer<typeof ProjectSlotScore>;
  * the maximum it was written with (M3-08b); `max` is null only for an
  * imported teacher score on a repository without a scored run. `toVerify`:
  * the run behind the score is to verify (F-PROJ-08) — the release waits for
- * the teacher's score to settle it; never for a teacher's score.
+ * the teacher's score to settle it; never for a teacher's score. `grade`
+ * is null for the CI's share of a project graded by criteria (`ciShareOnly`
+ * of `@quiz/domain`, the `current` and `frozen` slots' too): the AI and the
+ * teacher grade the rest later.
  */
 export const ProjectFinalScore = z.object({
   points: z.number(),
@@ -1417,7 +1420,9 @@ export type StudentProjectRun = z.infer<typeof StudentProjectRun>;
  * The score a student reads before the release, INDICATIVE until then
  * (N-SEC-21): the current CI score, or the frozen one (`frozen`) once their
  * deadline is applied — provisional or definitive alike. Graded by the
- * project's scale. Never the review's nor the teacher's (F-PROJ-15).
+ * project's scale, except on a project graded by criteria, where it is only
+ * the CI's share and has no grade (`ciShareOnly` of `@quiz/domain`). Never
+ * the review's nor the teacher's (F-PROJ-15).
  */
 export const StudentProjectScore = z.object({
   points: z.number(),

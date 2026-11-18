@@ -41,26 +41,27 @@ export const SCORE_SOURCE_KEY: Record<NonNullable<ProjectRepoView["scores"]["fin
  *
  * The CI's score of a project graded by criteria (`ciShareOnly`, product
  * owner 2026-11-18) is only the CI's share: the AI and the teacher grade the
- * rest later. No grade then, but a small ring of the CI's rate on the
- * red-to-green ramp before the points, the points still written.
+ * rest later. The server sends no grade for it; a small ring of the CI's
+ * rate on the red-to-green ramp stands before the points, still written.
  */
 export function Score({ score, gradingMode }: { score: ProjectRepoView["scores"]["final"]; gradingMode: ProjectGradingMode }) {
   const t = useT();
   if (!score) return <Dash />;
-  const rate = ciShareOnly(gradingMode, score.source) && score.max !== null ? rateOf(score.points, score.max) : null;
+  const { max } = score;
+  const rate = ciShareOnly(gradingMode, score.source) && max !== null ? rateOf(score.points, max) : null;
   return (
     <span className="inline-flex flex-col items-end leading-tight">
       <span className={cx("inline-flex gap-x-2", rate === null ? "items-baseline" : "items-center")}>
-        {rate !== null ? (
+        {rate !== null && max !== null ? (
           <RateRing
             rate={rate}
-            sentence={t("project.score.ciRate", { points: formatScore(score.points), max: formatScore(score.max!), rate: Math.round(rate * 100) })}
+            sentence={t("project.score.ciRate", { points: formatScore(score.points), max: formatScore(max), rate: Math.round(rate * 100) })}
           />
         ) : null}
         <span className="font-semibold">
-          <Points points={score.points} max={score.max} />
+          <Points points={score.points} max={max} />
         </span>
-        {score.grade && rate === null ? (
+        {score.grade ? (
           <span className="tabular-nums text-fg-muted">
             <Grade value={score.grade.grade} />
           </span>

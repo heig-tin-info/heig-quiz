@@ -610,21 +610,21 @@ describe("the criteria table (ADR-106 §9, L-02f)", () => {
     const base = project();
     const rows = [row({ max: 8 }), row({ criterionId: "code.style", max: 10 }), row({ criterionId: "penalty", max: -3 }), row({ criterionId: "bonus", max: 0, bonus: 2 })];
     mockFetch({
-      [URL]: ok(project({ gradingMode: "criteria", criteria: rows, repo: { ...base.repo!, score: { points: 6, max: 8, grade: { grade: 4.8 }, frozen: false } } })),
+      [URL]: ok(project({ gradingMode: "criteria", criteria: rows, repo: { ...base.repo!, score: { points: 6, max: 8, grade: null, frozen: false } } })),
     });
     render();
     expect(await screen.findByText("CI score")).toBeInTheDocument();
     expect(screen.getByText("6 / 8")).toBeInTheDocument();
     // The total: the positive maxima, no penalty, no bonus.
     expect(screen.getByText("out of 18 points")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Awarded: 6 · Missed: 2 · Graded later: 10" })).toBeInTheDocument();
-    expect(screen.getByText("10 points graded later, by the AI or your teacher. No grade before the scores are released.")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Awarded: 6 · Missed: 2 · Graded by the AI or your teacher: 10" })).toBeInTheDocument();
+    expect(screen.getByText("10 points graded by the AI or your teacher. No grade before the scores are released.")).toBeInTheDocument();
     expect(screen.queryByText("Grade")).toBeNull();
-    expect(screen.queryByText("4.8")).toBeNull();
+    expect(screen.getByText("AI or teacher")).toBeInTheDocument();
     expect(screen.queryByText(/indicative until the scores are released/)).toBeNull();
   });
 
-  it("names the frozen CI score and leaves nothing for later when the CI grades the whole", async () => {
+  it("names the frozen CI score, and no grey part when the CI grades the whole", async () => {
     const base = project();
     mockFetch({
       [URL]: ok(
@@ -632,14 +632,14 @@ describe("the criteria table (ADR-106 §9, L-02f)", () => {
           gradingMode: "criteria",
           criteria: [row({ max: 7 }), row({ criterionId: "rendu.style", max: 1 })],
           status: "locked",
-          repo: { ...base.repo!, locked: true, score: { points: 7, max: 8, grade: { grade: 5.4 }, frozen: true } },
+          repo: { ...base.repo!, locked: true, score: { points: 7, max: 8, grade: null, frozen: true } },
         }),
       ),
     });
     render({ locale: "fr" });
     expect(await screen.findByText("Score de la CI à l'échéance")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Obtenu : 7 · Manqué : 1" })).toBeInTheDocument();
-    expect(screen.queryByText("Corrigé plus tard")).toBeNull();
+    expect(screen.queryByText("IA ou enseignant")).toBeNull();
     expect(screen.getByText("Pas de note avant la publication des scores.")).toBeInTheDocument();
   });
 

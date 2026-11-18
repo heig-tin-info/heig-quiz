@@ -20,18 +20,16 @@ import { cx, Tip } from "./layers";
  * larger one leaves the rest of the ring empty (rows no part describes), or
  * on its `track`.
  *
- * A part may sit on the red-to-green ramp instead of a tone (`ramp`, with
- * its `rate`, 0 to 1): the live grid's `.score-ramp`, as a stroke that
- * deepens with the rate (`.score-ramp-stroke`) — a single rate drawn as an
- * arc over the track (`RateRing`).
+ * A part may sit on the red-to-green ramp instead of a tone (`ramp`): the
+ * live grid's `.score-ramp`, at the part's own share of the ring, as a
+ * stroke that deepens with it (`.score-ramp-stroke`) — a single rate drawn
+ * as an arc over the track (`RateRing`).
  */
 export type RingTone = "success" | "warning" | "danger" | "faint";
 
 export interface RingPart {
   value: number;
   tone: RingTone | "ramp";
-  /** A `ramp` part's place on the ramp, 0 to 1. */
-  rate?: number;
 }
 
 const STROKE: Record<RingPart["tone"], string> = {
@@ -112,7 +110,7 @@ export function RingChart({
                 strokeDasharray={`${dash} ${circumference - dash}`}
                 strokeDashoffset={offset}
                 className={STROKE[part.tone]}
-                style={part.tone === "ramp" ? ({ "--rate": `${Math.round((part.rate ?? 0) * 100)}%` } as CSSProperties) : undefined}
+                style={part.tone === "ramp" ? ({ "--rate": `${Math.round((part.value / whole) * 100)}%` } as CSSProperties) : undefined}
               />
             );
           })}
@@ -135,7 +133,7 @@ export function RingChart({
  */
 export function RateRing({ rate, sentence, size = 20 }: { rate: number; sentence: string; size?: number }) {
   const share = Math.min(Math.max(rate, 0), 1);
-  return <RingChart parts={[{ value: share, tone: "ramp", rate: share }]} total={1} size={size} thickness={3} track sentence={sentence} />;
+  return <RingChart parts={[{ value: share, tone: "ramp" }]} total={1} size={size} thickness={3} track sentence={sentence} />;
 }
 
 /** The swatch of a legend: the same token as the segment. */

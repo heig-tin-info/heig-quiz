@@ -44,7 +44,7 @@ import {
   type StudentProject,
   type StudentProjectRepo,
 } from "@quiz/contracts";
-import { ciShare, criteriaTotals, formatScore } from "@quiz/domain";
+import { ciShare, ciShareOnly, criteriaTotals, formatScore } from "@quiz/domain";
 
 import { api, apiErrorMessage, isNotFound, refusalCodeOf, useMe } from "../api";
 import { usePortalLaunch } from "../portalLaunch";
@@ -436,8 +436,11 @@ function ScoreSection({ repo, project }: { repo: StudentProjectRepo; project: Pi
   return (
     <section className="space-y-3" data-coach="sproj.score">
       <SectionHeading title={t("sproj.score")} />
-      {repo.score && repo.score.max !== null && project.gradingMode === "criteria" ? (
-        <CiShareStat score={{ ...repo.score, max: repo.score.max }} total={criteriaTotal(project.criteria) ?? repo.score.max} />
+      {repo.score && repo.score.max !== null && ciShareOnly(project.gradingMode, "ci") ? (
+        <CiShareStat
+          score={{ ...repo.score, max: repo.score.max }}
+          total={Math.max(criteriaTotal(project.criteria) ?? 0, repo.score.max)}
+        />
       ) : repo.score ? (
         <div className="grid gap-3 sm:grid-cols-2">
           <Stat
@@ -464,30 +467,34 @@ const criteriaTotal = (rows: StudentProject["criteria"]): number | null =>
  * The CI's score of a project graded by criteria, before the release
  * (product owner, 2026-11-18): only the CI's share, the AI and the teacher
  * grading the rest later, so no grade. The points out of the CI's maximum,
- * the whole total beside them, and one bar of the whole (`ciShare`): green
- * what the CI awarded, red what it did not, grey what is graded later. The
- * bar spells its parts out to a screen reader and on hover; the legend and
- * the sentence under it say the same in words.
+ * the whole total beside them (`total`, never below the CI's maximum), and
+ * one bar of the whole (`ciShare`): green what the CI awarded, red what it
+ * did not, grey what the AI or the teacher grades — "later" is not said: the
+ * table below may already hold their indicative points. The bar spells its
+ * parts out to a screen reader and on hover; the legend and the sentence
+ * under it say the same in words.
  */
 function CiShareStat({ score, total }: { score: { points: number; max: number; frozen: boolean }; total: number }) {
   const t = useT();
   const share = ciShare(score, total);
-  const parts: BarPart[] = [
-    { tone: "success", value: share.awarded, label: t("sproj.share.awarded") },
-    { tone: "danger", value: share.missed, label: t("sproj.share.missed") },
-    ...(share.later > 0 ? [{ tone: "muted" as const, value: share.later, label: t("sproj.share.later") }] : []),
+  const parts: (BarPart & { label: string; legend: string })[] = [
+    { tone: "success", value: share.awarded, label: t("sproj.share.awarded"), legend: t("sproj.share.awarded") },
+    { tone: "danger", value: share.missed, label: t("sproj.share.missed"), legend: t("sproj.share.missed") },
+    ...(share.later > 0
+      ? [{ tone: "muted" as const, value: share.later, label: t("sproj.share.others"), legend: t("sproj.share.others.legend") }]
+      : []),
   ];
   return (
     <Stat
       label={t(score.frozen ? "sproj.share.frozen" : "sproj.share.current")}
-      aside={t("sproj.share.total", { n: formatScore(score.max + share.later) })}
+      aside={t("sproj.share.total", { n: formatScore(total) })}
       value={scorePoints(score.points, score.max)}
     >
       <SegmentedBar parts={parts} className="h-2.5" />
-      <BarLegend parts={parts.map(({ tone, label }) => ({ tone, label: label! }))} />
+      <BarLegend parts={parts.map(({ tone, legend }) => ({ tone, label: legend }))} />
       <p>
         {share.later > 0
-          ? `${t(share.later === 1 ? "sproj.share.laterPoints.one" : "sproj.share.laterPoints", { n: formatScore(share.later) })} `
+          ? `${t(share.later === 1 ? "sproj.share.othersPoints.one" : "sproj.share.othersPoints", { n: formatScore(share.later) })} `
           : ""}
         {t("sproj.share.noGrade")}
       </p>

@@ -43,7 +43,17 @@ import {
   type ProjectSlotScore,
   type ProjectStudent,
 } from "@quiz/contracts";
-import { changedAfterRelease, draftStartsLater, projectPhase, projectPrimaryAction, reviewState, scoreGrade, type ProjectScale } from "@quiz/domain";
+import {
+  changedAfterRelease,
+  ciShareOnly,
+  draftStartsLater,
+  projectPhase,
+  projectPrimaryAction,
+  reviewState,
+  scoreGrade,
+  type FinalScoreSource,
+  type ProjectScale,
+} from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
@@ -125,13 +135,22 @@ async function liveStates(
   return { live, complete: done };
 }
 
-function slotScore(run: RunRow | undefined, scale: ProjectScale): ProjectSlotScore | null {
+/**
+ * A score graded by the project's scale — none for the CI's share of a
+ * project graded by criteria (`ciShareOnly`, product owner 2026-11-18): the
+ * AI and the teacher grade the rest later, so a grade of it means nothing.
+ */
+function gradeOf(project: ProjectRow, source: FinalScoreSource, points: number | null, max: number | null): ProjectSlotScore["grade"] {
+  return ciShareOnly(project.gradingMode, source) ? null : scoreGrade(points, max, project.gradingScale);
+}
+
+function slotScore(run: RunRow | undefined, project: ProjectRow, source: FinalScoreSource): ProjectSlotScore | null {
   if (!run) return null;
   return {
     runId: run.id,
     points: run.points,
     max: run.max,
-    grade: scoreGrade(run.points, run.max, scale),
+    grade: gradeOf(project, source, run.points, run.max),
   };
 }
 
@@ -191,20 +210,19 @@ async function finalDispatches(db: Db, repoIds: string[]): Promise<Map<string, D
  * criteria standing ({@link scoreFacts}).
  */
 export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts): ProjectRepoScores {
-  const scale = project.gradingScale;
   const [current, frozen, review] = slots(repo, facts.runs);
   const final = finalOf(repo, facts);
   const released = project.releasedAt !== null;
   return {
     scores: {
-      current: slotScore(current, scale),
-      frozen: slotScore(frozen, scale),
-      review: slotScore(review, scale),
+      current: slotScore(current, project, "ci"),
+      frozen: slotScore(frozen, project, "ci"),
+      review: slotScore(review, project, "review"),
       teacher:
         repo.teacherPoints === null
           ? null
           : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment, gradedAt: isoOrNull(repo.teacherGradedAt) },
-      final: final && { ...final, grade: scoreGrade(final.points, final.max, scale) },
+      final: final && { ...final, grade: gradeOf(project, final.source, final.points, final.max) },
       scoreMax: teacherRunMax(repo, facts),
     },
     released: released ? { points: repo.releasedPoints, max: repo.releasedMax } : null,

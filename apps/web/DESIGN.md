@@ -2274,7 +2274,7 @@ header, whatever the tab.
   with the source (CI, review, teacher) as faint text under it. The CI's
   score of a project graded by criteria (`ciShareOnly`: source `ci` under
   `criteria`) is only the CI's share — the AI and the teacher grade the rest
-  later —, so it has NO grade: a 20 px `RateRing` before the points, its arc
+  later —, so it has NO grade (the server sends none): a 20 px `RateRing` before the points, its arc
   the CI's points over the CI's own maximum, on the live grid's red-to-green
   ramp (`.score-ramp-stroke`: the hue by the rate, the stroke deepening
   with it, so it reads in grey) over a `surface-3` track, the rate in words
@@ -2811,12 +2811,14 @@ header. The teacher's message of the latest sync (ADR-132 §10), when there
 is one, comes first under the header: an outlined `NotePanel`, "Update from
 your teacher" as its eyebrow and the date beside it, the text as plain text
 (line breaks kept). On a project graded by criteria the score before the
-release is the CI's share, never a grade (`CiShareStat`): one `Stat`, the
-CI's points over its own maximum, "out of n points" (the criteria's total)
-on its label line, then a `SegmentedBar` of the whole — `success` what the
-CI awarded, `danger` what it missed, `muted` what the AI or the teacher
-grades later —, its `BarLegend`, and one line saying the points graded
-later and that no grade comes before the release. The bar names its parts
+release is the CI's share, never a grade (the server sends none,
+`ciShareOnly`; `CiShareStat`): one `Stat`, the CI's points over its own
+maximum, "out of n points" (the criteria's total) on its label line, then a
+`SegmentedBar` of the whole — `success` what the CI awarded, `danger` what
+it missed, `muted` what the AI or the teacher grades —, its `BarLegend`
+("AI or teacher"), and one line saying the points they grade and that no
+grade comes before the release. Never "later": the criteria table below
+may already hold their indicative points. The bar names its parts
 to a screen reader and on hover. After the release the result is the
 released grade, as on any project. A **Criteria** section follows the
 score (ADR-106 §9): three columns — the criterion (its description, its

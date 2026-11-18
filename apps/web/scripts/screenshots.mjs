@@ -496,10 +496,9 @@ const scenes = [
   { name: "project-criteria", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1", settle: 2500, fold: true },
   { name: "project-matrix", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=grading", settle: 2500 },
   // Its Repositories tab (owner, 2026-11-18): the CI's rate as a ring and no grade while the CI alone scored
-  // (open; frozen, not validated), the grade once validated or released.
+  // (open; frozen, not validated), the grade once validated.
   { name: "project-repos-criteria-live", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c2?projects=1&pjcriteria=1&tab=repositories", settle: 2500 },
   { name: "project-repos-criteria-final", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=repositories", settle: 2500 },
-  { name: "project-repos-criteria-released", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c3?projects=1&pjcriteria=1&tab=repositories", settle: 2500 },
   {
     name: "project-matrix-open",
     role: "teacher",
@@ -1175,7 +1174,7 @@ const scenes = [
     act: (p) => p.getByRole("button", { name: /^(rationale|justification)$/i }).locator("visible=true").first().click(),
   },
   { name: "student-project-criteria-released", role: "student", path: `/projects/${SPROJ.past}?projects=1&pjcriteria=1` },
-  // The CI's share before the release (owner, 2026-11-18): awarded, missed, graded later; no grade.
+  // The CI's share before the release (owner, 2026-11-18): awarded, missed, graded by the AI or the teacher; no grade.
   { name: "student-project-criteria-share", role: "student", path: `/projects/${SPROJ.open}?projects=1&pjcriteria=1` },
   // ADR-077: a teacher on a staff seat tests the project: the real actions, their own repository.
   { name: "student-project-staff-seat", role: "student", path: `/projects/${SPROJ.accept}?projects=1&staffseat=1` },
