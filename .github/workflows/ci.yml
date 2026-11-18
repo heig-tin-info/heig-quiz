@@ -153,6 +153,9 @@ jobs:
       - run: bash infra/engine/staging-dispatch.test.sh
       - run: bash infra/engine/lib.test.sh
       - run: bash infra/engine/slices.test.sh
+      # Caddy is reloaded only when it does not run what the files give, and
+      # a reload that does not return is judged by what Caddy runs.
+      - run: bash infra/engine/caddy.test.sh
       # The root timer's snapshot: one blocked volume never stops the walk.
       - run: bash apps/codespace/deploy/shadow-snapshot.test.sh
       # The portal's deploy scripts; the student image is rebuilt only when

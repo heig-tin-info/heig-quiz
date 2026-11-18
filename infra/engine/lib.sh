@@ -138,3 +138,81 @@ drop_old_sha_tags() {
 		pd rmi "$id" >/dev/null 2>&1 || true
 	done
 }
+
+# The VM's Caddy (its unit reloads with `caddy reload --force`): a component
+# installs its sites with caddy_site, validates, then calls caddy_apply ONCE
+# where it used to run `systemctl reload caddy`; a reload can stay pending,
+# so none is made that is not needed (apps/codespace/deploy/RUNBOOK.md,
+# Caddy reloads). The variables serve the test (caddy.test.sh). Every
+# cs_instance sources this file again (through infra/net/common.sh): each
+# one keeps the value it has.
+CADDY_CONFIG="${CADDY_CONFIG:-/etc/caddy/Caddyfile}"
+CADDY_ADMIN="${CADDY_ADMIN:-http://127.0.0.1:2019}"
+CADDY_RELOAD_TIMEOUT="${CADDY_RELOAD_TIMEOUT:-60}"
+CADDY_CHANGED="${CADDY_CHANGED:-}"
+
+# caddy_site <rendered fragment> <installed path>: installs the fragment
+# (0644) only when its content differs from the installed copy, says so, and
+# records it in CADDY_CHANGED.
+caddy_site() {
+	cmp -s "$1" "$2" && return 0
+	install -m 0644 "$1" "$2" || return 1
+	CADDY_CHANGED=1
+	echo "deploy: caddy: $2 changed"
+}
+
+# caddy_state: 0 when the running config (the admin API's /config/) is what
+# CADDY_CONFIG adapts to, compared as parsed JSON (python3, already a
+# dependency of the network test: no jq); 2 when the admin API does not
+# answer within 10 s (a reload still pending); 1 otherwise, a comparison
+# that cannot be made included.
+caddy_state() {
+	local running wanted rc=0
+	running=$(curl -fsS -m 10 "$CADDY_ADMIN/config/" 2>/dev/null) || rc=$?
+	[ "$rc" != 28 ] || return 2
+	[ "$rc" = 0 ] || return 1
+	wanted=$(caddy adapt --config "$CADDY_CONFIG" --adapter caddyfile 2>/dev/null) || return 1
+	printf '%s\0%s' "$running" "$wanted" | python3 -I -c '
+import json, sys
+running, wanted = sys.stdin.buffer.read().split(b"\0")
+sys.exit(0 if json.loads(running) == json.loads(wanted) else 1)' 2>/dev/null
+}
+
+# caddy_apply: reloads Caddy at most once, and only when the running config
+# is not the one the files give (a fragment changed, or an earlier reload
+# did not take); the caller has validated the files. The reload is bounded
+# by CADDY_RELOAD_TIMEOUT: `timeout` stops systemctl, the client, never
+# systemd's job, which ends by the unit's own rules. Then it checks what
+# Caddy runs. It fails only when Caddy runs the old config, or when an
+# earlier reload is still pending and a site changed (no second reload is
+# queued behind it). Never restarts Caddy: that would cut every live session.
+caddy_apply() {
+	local state=0 rc=0
+	caddy_state || state=$?
+	case "$state" in
+		0)
+			echo "deploy: caddy: runs this configuration, no reload"
+			return 0
+			;;
+		2)
+			if [ -z "$CADDY_CHANGED" ]; then
+				echo "deploy: warning: an earlier Caddy reload is still pending; no site changed, no reload" >&2
+				return 0
+			fi
+			echo "deploy: an earlier Caddy reload is still pending: this deploy's site change is not live; re-run the deploy later (apps/codespace/deploy/RUNBOOK.md, Caddy reloads)" >&2
+			return 1
+			;;
+	esac
+	timeout "$CADDY_RELOAD_TIMEOUT" systemctl reload caddy || rc=$?
+	state=0
+	caddy_state || state=$?
+	case "$rc:$state" in
+		0:*) echo "deploy: caddy reloaded" ;;
+		*:0) echo "deploy: warning: systemctl reload caddy returned $rc, but Caddy runs the new configuration" >&2 ;;
+		*:2) echo "deploy: warning: Caddy reload still pending: the new configuration serves; further reloads will wait until it completes" >&2 ;;
+		*)
+			echo "deploy: systemctl reload caddy failed (exit $rc) and Caddy does not run the new configuration: sudo journalctl -u caddy" >&2
+			return 1
+			;;
+	esac
+}

@@ -86,8 +86,8 @@ step "network and shadow timer of $CS_INSTANCE"
 systemctl enable --now "quiz-codespace-net@$CS_INSTANCE.service" >/dev/null
 systemctl enable --now "quiz-codespace-shadow@$CS_INSTANCE.timer" >/dev/null
 ok "$CS_NET on $CS_IFACE, gateway $CS_GATEWAY; shadow timer $(systemctl is-active "quiz-codespace-shadow@$CS_INSTANCE.timer")"
-systemctl reload caddy
-ok "caddy reloaded ($CS_HOST -> 127.0.0.1:$CS_PORT)"
+caddy_apply
+ok "caddy serves $CS_HOST -> 127.0.0.1:$CS_PORT"
 
 student="$(cs_student_image)"
 if pd image exists "$student"; then

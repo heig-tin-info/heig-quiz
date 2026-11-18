@@ -85,7 +85,9 @@ cs_install_host() {
 
 # One instance's pieces: its seccomp profile (a HOST path, opened by the
 # Podman server), its quadlet and its Caddy site, generated from the
-# templates with the values of cs_instance (never from a request).
+# templates with the values of cs_instance (never from a request). It
+# validates Caddy's config but never reloads it: the caller's caddy_apply
+# does, once.
 cs_install_instance() {
 	install -d -m 0700 "$CS_ETC"
 	install -m 0644 "$CS_APP/infra/seccomp/codespace.json" "$CS_ETC/seccomp.json"
@@ -99,17 +101,26 @@ cs_install_instance() {
 		-e "s|@GIT_PORT@|$CS_GIT_PORT|g"
 	)
 	install -d -m 0755 /etc/caddy/conf.d
-	local quadlet="/etc/containers/systemd/$CS_UNIT.container" site="/etc/caddy/conf.d/$CS_UNIT.caddy" f
+	local quadlet="/etc/containers/systemd/$CS_UNIT.container" site f
+	# The site is rendered aside and replaces the installed one only when it
+	# differs (caddy_site), so that the caller's one caddy_apply reloads
+	# Caddy only when needed (infra/engine/lib.sh).
+	site=$(mktemp) || return 1
 	sed "${subst[@]}" "$CS_APP/deploy/quiz-codespace.container" > "$quadlet"
 	sed "${subst[@]}" "$CS_APP/deploy/Caddyfile" > "$site"
 	# A template naming a value this table lacks would ship its placeholder.
 	for f in "$quadlet" "$site"; do
 		if grep -q '@[A-Z_][A-Z_]*@' "$f"; then
-			echo "deploy: $f still holds a @PLACEHOLDER@" >&2
+			echo "deploy: $f (for $CS_UNIT) still holds a @PLACEHOLDER@" >&2
+			rm -f "$site"
 			return 1
 		fi
 	done
-	chmod 0644 "$quadlet" "$site"
+	chmod 0644 "$quadlet"
+	local rc=0
+	caddy_site "$site" "/etc/caddy/conf.d/$CS_UNIT.caddy" || rc=$?
+	rm -f "$site"
+	[ "$rc" = 0 ] || return "$rc"
 	caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 }
 

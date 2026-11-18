@@ -4,11 +4,12 @@
 
 Accepted (2026-09-21, first production deployment). Amended 2026-09-25,
 2026-09-30, 2026-10-07, 2026-10-08, 2026-10-11 (twice), 2026-10-12,
-2026-10-26 and 2026-11-18. Every rule the amendments added is under
+2026-10-26 and 2026-11-18 (twice). Every rule the amendments added is under
 [Amendments in force](#amendments-in-force), where nothing of the runner's
 hardening (root `CLAUDE.md` invariants 10–13) is relaxed; their dated text,
 with the reasons and the transitions, is in the [historical record](history/ADR-016-runner-sur-vm-separee.md#status).
 
+- 2026-11-18 (owner): the engine VM's deploys reload Caddy only when its running config is not the files', at most once, bounded and checked, never a restart; `grace_period 10s` by hand ([amendment](#2026-11-18-caddy-reloaded-only-when-needed)).
 - 2026-11-18 (owner): the production portal deploy rebuilds the student image when its sources changed, tested before it is tagged; staging never builds it ([amendment](#2026-11-18-the-prod-portal-deploy-rebuilds-the-student-image)). Amends the M6-04 point "never by a deploy".
 - **2026-10-11 (security audit M6, L12, L13): gVisor is the default runtime of the runner's own Podman service** (`runsc --oci-seccomp`), never a `containerArgs` flag; `RUNNER_RUNTIME=runsc` makes the runner refuse to start unless a real container runs under it (`proveRuntime`); the runner binds the loopback ([amendment](#2026-10-11-gvisor-the-containers-state-the-bind-address)).
 - 2026-10-11 (security audit H4): the staging portal deploys only once approved, through a frozen dispatcher ([amendment](#2026-10-11-the-staging-portal-deploys-only-once-approved)).
@@ -280,6 +281,24 @@ unchanged. Operations: `apps/codespace/deploy/RUNBOOK.md` §7.*
   staging dispatcher (the H4 amendment); a state file of the last build (it
   disagrees with an image built or removed by hand); building in place and
   rolling back (the tag would name a broken image in between).
+
+### 2026-11-18: Caddy reloaded only when needed
+
+*Owner; scope: the Caddy reloads of the engine VM's deploys. Operations:
+`apps/codespace/deploy/RUNBOOK.md`, Caddy reloads.*
+
+- **At most one reload per deploy script, only when needed**: a site is
+  installed only when it differs, and Caddy is reloaded only when its
+  running config is not what the files adapt to (`caddy_apply`,
+  `infra/engine/lib.sh`), after `caddy validate`.
+- **Bounded and checked**: a reload can stay pending; the deploy detects it
+  and says so. It fails only when Caddy runs the old config, or when an
+  earlier reload is still pending and a site changed. **A deploy never
+  restarts Caddy** (it would cut every live session); that stays an
+  operator's last resort, in an exam-free window.
+- **`grace_period 10s`** in the host's `/etc/caddy/Caddyfile`, by hand: that
+  file is not the repository's, and no deploy writes it.
+- A Caddy upgrade is a separate decision.
 
 ## Update 2026-09-25
 
