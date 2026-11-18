@@ -148,3 +148,59 @@ export function useFullscreen(): [boolean, () => void] {
   }, []);
   return [on, toggle];
 }
+
+// --- The device ---
+
+/** What the Battery Status API says of the machine, at its last event. */
+export type BatteryReading = {
+  /** 0 to 1. */
+  level: number;
+  charging: boolean;
+  /** Seconds to full; `Infinity` when unknown or discharging. */
+  chargingTime: number;
+  /** Seconds to empty; `Infinity` when unknown or charging. */
+  dischargingTime: number;
+};
+
+/** The `BatteryManager` of the Battery Status API, which the DOM typings leave out. */
+type BatteryManager = BatteryReading & EventTarget;
+
+const BATTERY_EVENTS = ["levelchange", "chargingchange", "chargingtimechange", "dischargingtimechange"];
+
+/**
+ * The machine's battery, followed through its events (issue #1151), or
+ * `null` while it is asked for and wherever it cannot be read: a browser
+ * without `navigator.getBattery` (Safari, so Safe Exam Browser on macOS and
+ * iPad; Firefox) or one that refuses it. Never a guess: a screen shows
+ * nothing rather than a level it made up.
+ */
+export function useBattery(): BatteryReading | null {
+  const [reading, setReading] = useState<BatteryReading | null>(null);
+  useEffect(() => {
+    const nav = navigator as Navigator & { getBattery?: () => Promise<BatteryManager> };
+    if (typeof nav.getBattery !== "function") return;
+    let battery: BatteryManager | null = null;
+    let gone = false;
+    const read = () => {
+      if (!battery) return;
+      const { level, charging, chargingTime, dischargingTime } = battery;
+      setReading({ level, charging, chargingTime, dischargingTime });
+    };
+    nav
+      .getBattery()
+      .then((b) => {
+        if (gone) return;
+        battery = b;
+        for (const name of BATTERY_EVENTS) b.addEventListener(name, read);
+        read();
+      })
+      .catch(() => {
+        /* refused: nothing to show */
+      });
+    return () => {
+      gone = true;
+      if (battery) for (const name of BATTERY_EVENTS) battery.removeEventListener(name, read);
+    };
+  }, []);
+  return reading;
+}

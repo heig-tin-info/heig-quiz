@@ -33,6 +33,12 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  */
 export const STUDENT_PROJECT_INVITED = "77777777-7777-4777-8777-777777777705";
 
+/**
+ * The student persona's open exam (`mock/student.ts`): here for the same
+ * reason, the session being confined to it under `?sebexam=1`.
+ */
+export const STUDENT_EVAL = "11111111-1111-4111-8111-111111111111";
+
 /** Scene flags: read from the URL, then remembered like the persona. */
 /**
  * `negative`: every evaluation of the mock scores its choice questions negatively (ADR-026).
@@ -76,6 +82,10 @@ export const STUDENT_PROJECT_INVITED = "77777777-7777-4777-8777-777777777705";
  * `codespace`: the platform has the online workspace (ADR-047, M6-06): a
  *   project's workspace section, the student's *Open workspace*, the
  *   administration's grants (`mock/codespace.ts`); off, those routes 404.
+ * `sebexam`: the student persona is in Safe Exam Browser, on the `seb`
+ *   session of its open exam (ADR-027, `mock/session.ts`): `/take/1111…`
+ *   and nothing else, with the battery and the time in the player's bar
+ *   wherever the browser has the Battery Status API (issue #1151).
  * `sebproject`: the student persona is in Safe Exam Browser, on the `seb`
  *   session of its `online_seb` project (D21, M6-07; `mock/session.ts`):
  *   that project page and nothing else. With `codespace`.
@@ -151,6 +161,7 @@ export const FLAG_NAMES = [
   "staffseat",
   "staffrepo",
   "codespace",
+  "sebexam",
   "sebproject",
   "kioskprojects",
   "pjkiosk",

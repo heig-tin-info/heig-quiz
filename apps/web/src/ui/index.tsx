@@ -45,7 +45,7 @@
 //   paintSelection a drag across checkboxes ticks them all
 //             (usePaintSelection). Imports no sibling.
 //   state     browser state a screen reads: remembered choices
-//             (usePersistentChoice), isTyping, useFullscreen. Imports no
+//             (usePersistentChoice), isTyping, useFullscreen, useBattery. Imports no
 //             sibling.
 //   toolDock  a tool docked at the bottom right (ToolDock: the calculator,
 //             the notepad, the help assistant), on layers.

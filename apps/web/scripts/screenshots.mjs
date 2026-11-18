@@ -45,6 +45,10 @@ const heightOpt = opt("height").map(Number).find(Boolean);
 // lang   the browser's language ("fr"): a persona's saved language is
 //        "the browser's", so `quiz-locale` alone holds on public pages only
 // act    what to open once the page settled (a sheet, a menu, a dialog)
+// battery what `navigator.getBattery` answers (issue #1151), for the player
+//        in a confined session: headless Chromium reports no battery. A time
+//        left out is the API's Infinity, "unknown" (the init script's
+//        argument goes through JSON, which has no Infinity).
 // fold   viewport only, whatever --fold says. For a scene whose layer is
 //        `fixed`: full-page, the backdrop covers the viewport and everything
 //        below the fold comes out undimmed, which reads as a bug and is not
@@ -1202,6 +1206,11 @@ const scenes = [
   // ADR-076: a running evaluation not yet started: one Start, the clock said before it.
   { name: "student-ready", role: "student", path: `${TAKE}?scene=ready` },
   { name: "player-mcq", role: "student", path: `${TAKE}?scene=running` },
+  // Issue #1151: in SEB, the battery and the time in the bar; collapsed, low, unfolded, no battery.
+  { name: "player-seb-battery", role: "student", path: `${TAKE}?scene=running&sebexam=1`, fold: true, battery: { level: 0.64, dischargingTime: 7800 } },
+  { name: "player-seb-battery-low", role: "student", path: `${TAKE}?scene=running&sebexam=1`, fold: true, battery: { level: 0.17, dischargingTime: 1500 } },
+  { name: "player-seb-battery-open", role: "student", path: `${TAKE}?scene=running&sebexam=1`, fold: true, battery: { level: 0.64, dischargingTime: 7800 }, act: openBattery },
+  { name: "player-seb-clock", role: "student", path: `${TAKE}?scene=running&sebexam=1`, fold: true, battery: { level: 1, charging: true, chargingTime: 0 }, act: openBattery },
   // ADR-079: the conditions read before the start, reopened from the bar.
   { name: "player-conditions", role: "student", path: `${TAKE}?scene=running`, fold: true, act: (p) => p.getByRole("button", { name: /^(show the conditions|voir les conditions)$/i }).click() },
   // F-EVAL-13: back on the page after leaving it, the integrity notice top right.
@@ -2575,6 +2584,11 @@ async function correctionPresent(page) {
   await page.waitForTimeout(1200);
 }
 
+/** The player's battery pill unfolded: the time and the battery's state (issue #1151). */
+async function openBattery(page) {
+  await page.getByRole("button", { name: /^(battery|batterie|time|heure)\b/i }).click();
+}
+
 /** How the journal's editor scenes open the editor (M4-06). */
 async function openEditor(page) {
   await page.getByRole("button", { name: /^(edit|modifier)$/i }).click();
@@ -2724,8 +2738,17 @@ for (const width of widths.length ? widths : [1440]) {
       if (m.type() === "error") problems.push(m.text());
     });
     await page.addInitScript(
-      ({ role, ls, ss, dark, lang }) => {
+      ({ role, ls, ss, dark, lang, battery }) => {
         if (lang) Object.defineProperty(navigator, "languages", { get: () => [lang] });
+        if (battery) {
+          const reading = Object.assign(new EventTarget(), {
+            charging: false,
+            chargingTime: Infinity,
+            dischargingTime: Infinity,
+            ...battery,
+          });
+          Object.defineProperty(navigator, "getBattery", { configurable: true, value: () => Promise.resolve(reading) });
+        }
         localStorage.clear();
         sessionStorage.clear();
         localStorage.setItem("quiz-mock-role", role);
@@ -2733,7 +2756,7 @@ for (const width of widths.length ? widths : [1440]) {
         for (const [k, v] of Object.entries(ls ?? {})) localStorage.setItem(k, v);
         for (const [k, v] of Object.entries(ss ?? {})) sessionStorage.setItem(k, v);
       },
-      { role: scene.role, ls: scene.ls, ss: scene.ss, dark, lang: scene.lang },
+      { role: scene.role, ls: scene.ls, ss: scene.ss, dark, lang: scene.lang, battery: scene.battery },
     );
     try {
       await page.goto(BASE + scene.path, { waitUntil: "domcontentloaded" });

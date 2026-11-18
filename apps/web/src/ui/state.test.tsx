@@ -1,7 +1,8 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isTyping, useFullscreen, usePersistentChoice } from "./state";
+import { installBattery, refuseBattery, uninstallBattery } from "../test/battery";
+import { isTyping, useBattery, useFullscreen, usePersistentChoice } from "./state";
 
 const KEY = "quiz-test-choice";
 const VALUES = ["cards", "list"] as const;
@@ -90,5 +91,43 @@ describe("useFullscreen", () => {
       document.dispatchEvent(new Event("fullscreenchange"));
     });
     expect(result.current[0]).toBe(false);
+  });
+});
+
+describe("useBattery", () => {
+  afterEach(uninstallBattery);
+
+  it("is null where the browser has no Battery Status API", async () => {
+    const { result } = renderHook(() => useBattery());
+    await act(async () => {});
+    expect(result.current).toBeNull();
+  });
+
+  it("is null where the browser refuses it", async () => {
+    refuseBattery();
+    const { result } = renderHook(() => useBattery());
+    await act(async () => {});
+    expect(result.current).toBeNull();
+  });
+
+  it("reads the battery, then follows its events", async () => {
+    const fake = installBattery({ level: 0.42, charging: false, dischargingTime: 4800 });
+    const { result } = renderHook(() => useBattery());
+    await waitFor(() => expect(result.current).not.toBeNull());
+    expect(result.current).toEqual({ level: 0.42, charging: false, chargingTime: Infinity, dischargingTime: 4800 });
+    fake.set({ level: 0.41 });
+    expect(result.current?.level).toBe(0.41);
+    fake.set({ charging: true, dischargingTime: Infinity, chargingTime: 1200 });
+    expect(result.current).toMatchObject({ charging: true, chargingTime: 1200 });
+  });
+
+  it("stops listening once unmounted", async () => {
+    const fake = installBattery();
+    const { result, unmount } = renderHook(() => useBattery());
+    await waitFor(() => expect(result.current).not.toBeNull());
+    const removed = vi.spyOn(fake.battery, "removeEventListener");
+    unmount();
+    expect(removed).toHaveBeenCalledWith("levelchange", expect.any(Function));
+    expect(removed).toHaveBeenCalledWith("chargingchange", expect.any(Function));
   });
 });

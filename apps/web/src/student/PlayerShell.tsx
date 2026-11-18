@@ -92,6 +92,7 @@ export function PlayerShell({
   headerAction,
   home,
   onConditions,
+  device,
   commands,
   banner,
   footer,
@@ -142,6 +143,12 @@ export function PlayerShell({
    * never a second floating one — the calculator holds the bottom right.
    */
   onConditions?: (() => void) | undefined;
+  /**
+   * The machine's battery and the time (issue #1151), in a confined session
+   * only, where the operating system's own are hidden: left of the theme
+   * toggle, quiet, never beside Hand in.
+   */
+  device?: ReactNode;
   /** What `Ctrl+K` offers here. Empty means no palette at all. */
   commands?: Command[];
   /** The offline alert, in the flow under the bar. */
@@ -266,6 +273,7 @@ export function PlayerShell({
                 <ScrollText />
               </IconButton>
             ) : null}
+            {device}
             {/* Left of the clock, and there whether or not there IS a clock:
                 a `manual` evaluation has no deadline, and the toggle then
                 simply sits where the countdown would have been. */}

@@ -92,6 +92,7 @@ import { PlayerActions } from "./PlayerActions";
 import { PlayerEnd, type Confinement } from "./PlayerEnd";
 import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
 import { PlayerRail } from "./PlayerRail";
+import { BatteryClock } from "./BatteryClock";
 import { PlayerShell } from "./PlayerShell";
 import { PlayerTools } from "./PlayerTools";
 import { isAnswered, isWide } from "./QuestionHost";
@@ -492,6 +493,8 @@ export function PlayerView({
         progressLabel={progressLabel}
         commands={commands}
         onConditions={openConditions}
+        // Issue #1151: SEB and a station hide the system's battery and clock.
+        device={confinement ? <BatteryClock /> : undefined}
         wide={item !== undefined && isWide(item.type)}
         // Issue #125: an exercise may be left and continued later; an exam
         // may not look like it can. The teacher's preview, exam or not, has

@@ -507,6 +507,10 @@ live in `ui/state.ts`, each written once.
   browser out, or the reader is left inside an overlay whose button says
   "Leave full screen" about a full screen already gone. The poll projection
   and the live dashboard share this one.
+- `useBattery()`: the machine's battery, followed through the Battery Status
+  API's events, or `null` while it is asked for, where the API is absent
+  (WebKit, Firefox) and where it is refused. Never a guessed level: the
+  player's battery pill (below) draws nothing then.
 
 ## Components
 
@@ -3046,6 +3050,29 @@ same `ToolDock`.
   accent's red frame around it reads as an error. Delete asks nothing: an
   `info` toast with Undo (`notify.tsx`'s one action) puts the page back. A
   write the device refuses shows one 12 px `warning` line under the page.
+
+## The battery and the time (issue #1151)
+
+Safe Exam Browser hides the system's task bar and a kiosk station has none,
+so an attempt sat there shows the machine's battery in the player's bar
+(`student/BatteryClock.tsx`), left of the theme toggle. Never in a browser
+tab: the system shows both already, and a second battery is noise.
+
+- **Only where it can be true**: a `seb` or `kiosk` session (the server's
+  `me.session.kind`, the player's `confinement`) and a browser whose Battery
+  Status API answers (`useBattery`). Absent or refused (WebKit: SEB on
+  macOS and iPad), nothing is drawn.
+- **The pill**: one line, `rounded-control`, hairline `line` on `surface`,
+  13 px `fg-muted`, tabular; the battery glyph and the level. A click
+  unfolds the local time and "charging" or the time left (`aria-expanded`;
+  the label says all of it). On a phone the time takes the level's place.
+  A machine with no battery (full, charging, never empty) shows a watch
+  glyph alone: the countdown wears the clock, and two clocks side by side
+  read as one.
+- **Low**: discharging, `warning-soft` / `warning` at 20 %, `danger-soft` /
+  `danger` at 10 %; no dialog, no sound. Charging, it stays neutral.
+- **Second to the countdown**: smaller, quieter, no accent. The time is the
+  browser's, for reading only; nothing closes or counts on it (invariant 5).
 
 ## The help assistant (ADR-080)
 

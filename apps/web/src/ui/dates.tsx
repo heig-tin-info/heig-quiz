@@ -49,6 +49,11 @@ export function formatDateTimeAs(iso: string, f: DateFormat): string {
   return `${date} ${time}`;
 }
 
+/** The local time of day of an instant, in the account's format: "14:05", "2:05 PM". */
+export function timeOfDay(ms: number): string {
+  return datePartsAs(new Date(ms).toISOString(), dateFormat).time;
+}
+
 /** A `datetime-local` value from an ISO instant, in the reader's own zone; "" for none. */
 export function toLocalInput(iso: string | null): string {
   if (!iso) return "";
@@ -208,7 +213,12 @@ const SECONDS_BAND = 10 * MINUTE;
  * feeds it the clock.
  */
 export function timeLeft(iso: string, now: number, t: TFunction): string {
-  const ms = Math.max(0, new Date(iso).getTime() - now);
+  return spanLeft(new Date(iso).getTime() - now, t);
+}
+
+/** A span of `ms`, written as {@link timeLeft} writes what is left; a negative span is "0 s". */
+export function spanLeft(span: number, t: TFunction): string {
+  const ms = Math.max(0, span);
   const totalSeconds = Math.floor(ms / SECOND);
   const totalMinutes = Math.floor(ms / MINUTE);
   if (ms < SECONDS_BAND) {
