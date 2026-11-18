@@ -119,8 +119,9 @@ channel divergence for its containers.
 
 1. **No secret inside the student container.** No token, no key, no
    credential helper. The closed list of variables set at `podman run` is
-   `CONTAINER_ENV_KEYS` (`src/sessions/manager.ts`): three `CODESPACE_*`
-   for the status bar extension, four `GIT_{AUTHOR,COMMITTER}_{NAME,EMAIL}`
+   `CONTAINER_ENV_KEYS` (`src/sessions/manager.ts`): four `CODESPACE_*`
+   for the status bar extension (a session gets three at most: `CODESPACE_SEB`
+   replaces `CODESPACE_RETURN_URL` under SEB), four `GIT_{AUTHOR,COMMITTER}_{NAME,EMAIL}`
    for the student's git identity. None is a secret; a unit test and
    `images/c-dev/test.sh` § 9 assert there is no other one. Adding a key is
    done in that list, with its test.

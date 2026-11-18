@@ -5,7 +5,7 @@
  * Two levels, both unit tests and without Podman:
  *  - `containerEnvFor`: the decision, assignment by assignment;
  *  - `engine.runArgs`: what the decision becomes as `podman run` arguments, and
- *    the fact that no eighth variable gets in.
+ *    the fact that no other variable gets in.
  */
 import { describe, expect, it } from "vitest";
 
@@ -22,8 +22,8 @@ function assignment(patch: Partial<AssignmentRow> = {}): Pick<AssignmentRow, "ti
   return { title: "TP 3 — pointeurs et tableaux", closesAt: null, ...patch };
 }
 
-function session(patch: Partial<SessionRow> = {}): Pick<SessionRow, "launchJti"> {
-  return { launchJti: null, ...patch };
+function session(patch: Partial<SessionRow> = {}): Pick<SessionRow, "launchJti" | "sebVerified"> {
+  return { launchJti: null, sebVerified: false, ...patch };
 }
 
 function user(
@@ -38,19 +38,33 @@ function user(
 }
 
 describe("containerEnvFor — these variables, not one more", () => {
-  it("never produces a key outside CONTAINER_ENV_KEYS", () => {
-    const env = containerEnvFor(
-      session({ launchJti: "jti-1" }),
-      assignment({ closesAt: new Date("2026-10-01T12:00:00Z") }),
-      URLS,
-      user(),
-    );
-    expect(Object.keys(env).sort()).toEqual([...CONTAINER_ENV_KEYS].sort());
+  it("never produces a key outside CONTAINER_ENV_KEYS, and every key is reachable", () => {
+    const full = (sebVerified: boolean) =>
+      containerEnvFor(
+        session({ launchJti: "jti-1", sebVerified }),
+        assignment({ closesAt: new Date("2026-10-01T12:00:00Z") }),
+        URLS,
+        user(),
+      );
+    const outside = Object.keys(full(false));
+    const inSeb = Object.keys(full(true));
+    expect(outside.sort()).toEqual(CONTAINER_ENV_KEYS.filter((k) => k !== "CODESPACE_SEB").sort());
+    expect(inSeb.sort()).toEqual(CONTAINER_ENV_KEYS.filter((k) => k !== "CODESPACE_RETURN_URL").sort());
   });
 
-  it("has no secret in its values: no token, no key, no password", () => {
+  it("in a SEB session: the SEB flag, and no return URL (the Close tab has no session there)", () => {
+    const env = containerEnvFor(session({ launchJti: "jti-1", sebVerified: true }), assignment(), URLS);
+    expect(env.CODESPACE_SEB).toBe("1");
+    expect(env.CODESPACE_RETURN_URL).toBeUndefined();
+  });
+
+  it("outside SEB: no SEB flag", () => {
+    expect(containerEnvFor(session({ launchJti: "jti-1" }), assignment(), URLS).CODESPACE_SEB).toBeUndefined();
+  });
+
+  it.each([false, true])("has no secret in its values: no token, no key, no password (SEB %s)", (sebVerified) => {
     const env = containerEnvFor(
-      session({ launchJti: "jti-1" }),
+      session({ launchJti: "jti-1", sebVerified }),
       assignment({ closesAt: new Date("2026-10-01T12:00:00Z") }),
       URLS,
       user(),
@@ -146,7 +160,20 @@ describe("engine.runArgs — the container environment carries only these variab
   }
 
   it("sets exactly the expected variables", () => {
-    expect(envArgs(args).map((a) => a.split("=")[0]).sort()).toEqual([...CONTAINER_ENV_KEYS].sort());
+    expect(envArgs(args).map((a) => a.split("=")[0]).sort()).toEqual(
+      CONTAINER_ENV_KEYS.filter((k) => k !== "CODESPACE_SEB").sort(),
+    );
+  });
+
+  it("carries the SEB flag, and no return URL, for a SEB session", () => {
+    const seb = engine.runArgs({
+      sessionId: "s4",
+      name: "cs-s4",
+      workDir: "/vol/a/b/work",
+      env: containerEnvFor(session({ launchJti: "jti-1", sebVerified: true }), assignment(), URLS, user()),
+    });
+    expect(envArgs(seb)).toContain("CODESPACE_SEB=1");
+    expect(envArgs(seb).some((a) => a.startsWith("CODESPACE_RETURN_URL="))).toBe(false);
   });
 
   it("carries the values decided by the session manager", () => {

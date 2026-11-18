@@ -116,9 +116,10 @@ export interface RunRequest {
   /**
    * Environment variables set on the container, in addition to those of the
    * image. **Invariant 1**: no secret ever gets in. The only caller is
-   * `sessions/manager.ts`, which puts nothing there but the seven variables of
-   * `CONTAINER_ENV_KEYS` (three `CODESPACE_*`: deadline, return URL, assignment
-   * title; four `GIT_*`: the student's git identity) — a unit test asserts it.
+   * `sessions/manager.ts`, which puts nothing there but the variables of
+   * `CONTAINER_ENV_KEYS` (four `CODESPACE_*`: deadline, return URL or the SEB
+   * flag, assignment title; four `GIT_*`: the student's git identity) — a
+   * unit test asserts it.
    */
   env?: Record<string, string>;
 }

@@ -3,7 +3,10 @@
  *
  * Three items at the right of the status bar:
  *   1. the time left until the assignment deadline, refreshed every 30 s;
- *   2. a « Fermer » button that opens the return URL (classroom or portal);
+ *   2. a « Fermer » button that opens the return URL (classroom or portal),
+ *      or, in a Safe Exam Browser session (since 0.4.0), the hint
+ *      « Quitter : Ctrl+Q » in its place: SEB's own quit, since the button's
+ *      new tab has no platform session inside SEB and quits nothing;
  *   3. a warning when GitHub refused the student's last push (ADR-078 §6):
  *      the relay never forces, so a push behind a commit of the platform's
  *      App is not relayed until the student pulls.
@@ -13,6 +16,7 @@
  *   CODESPACE_DEADLINE         ISO 8601 deadline  (optional: without it, no countdown)
  *   CODESPACE_RETURN_URL       return URL         (optional: without it, no button)
  *   CODESPACE_ASSIGNMENT_NAME  assignment title   (optional, shown in the tooltip)
+ *   CODESPACE_SEB              "1" in a SEB session (then no return URL: the quit hint)
  *
  * The code-server extension host inherits the server's environment:
  * `ExtensionHostConnection#buildUserEnvironment` builds `{...process.env, ...}`
@@ -54,7 +58,7 @@ const WARN_MS = 10 * 60 * 1000;
  * Witness file written at activation. It only serves to check, from the host,
  * that the extension host really received the container environment
  * (images/c-dev/test.sh, and a manual check after the editor is opened). It
- * contains no secret: only the three variables.
+ * contains no secret: only the four variables.
  */
 const WITNESS = path.join(os.tmpdir(), "codespace-statusbar.json");
 /** How long the program's terminal may take to report its tty name. */
@@ -69,6 +73,11 @@ const STRINGS = {
     deadline: "Échéance",
     assignment: "Devoir",
     noReturnUrl: "Aucune URL de retour n'a été transmise à cette session.",
+    // The wording of Quiz's own hint (apps/web, `seb.quit` and `seb.quit.keys`).
+    sebQuit: "Quitter : Ctrl+Q",
+    sebQuitTooltip:
+      "Quitter Safe Exam Browser. Raccourci : Ctrl+Q (Windows) ou ⌘Q (Mac), qui peut demander un mot de passe. " +
+      "Vos fichiers sont enregistrés automatiquement.",
     pushRejected: "Push refusé par GitHub",
     pushRejectedTooltip: (branch, reason) =>
       `Votre dernier push sur ${branch} n'a pas été transmis à GitHub (${reason}). ` +
@@ -106,6 +115,10 @@ const STRINGS = {
     deadline: "Deadline",
     assignment: "Assignment",
     noReturnUrl: "No return URL was given to this session.",
+    sebQuit: "Quit: Ctrl+Q",
+    sebQuitTooltip:
+      "Quit Safe Exam Browser. Shortcut: Ctrl+Q (Windows) or ⌘Q (Mac), which may ask for a password. " +
+      "Your files are saved automatically.",
     pushRejected: "Push refused by GitHub",
     pushRejectedTooltip: (branch, reason) =>
       `Your last push of ${branch} was not relayed to GitHub (${reason}). ` +
@@ -287,6 +300,7 @@ function activate(context) {
   const rawDeadline = readEnv("CODESPACE_DEADLINE");
   const returnUrl = readEnv("CODESPACE_RETURN_URL");
   const assignmentName = readEnv("CODESPACE_ASSIGNMENT_NAME");
+  const seb = readEnv("CODESPACE_SEB") === "1";
 
   const parsed = rawDeadline ? new Date(rawDeadline) : null;
   const deadline = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
@@ -298,6 +312,7 @@ function activate(context) {
     deadlineParsed: deadline ? deadline.toISOString() : null,
     returnUrl: returnUrl ?? null,
     assignmentName: assignmentName ?? null,
+    seb,
   });
 
   // --- 1. countdown --------------------------------------------------------
@@ -322,12 +337,18 @@ function activate(context) {
     context.subscriptions.push(countdown, { dispose: () => clearInterval(timer) });
   }
 
-  // --- 2. « Fermer » button ------------------------------------------------
+  // --- 2. « Fermer » button, or SEB's quit hint ----------------------------
   // The command is always registered (it is declared by the manifest, so it is
   // visible in the palette); the status bar item, though, only exists if the
-  // portal passed a return URL.
+  // portal passed a return URL. In a SEB session the portal passes none, and
+  // the item is a hint with no command: SEB quits on its own shortcut (it
+  // asks to confirm), and `files.autoSave` has already saved the files.
   context.subscriptions.push(
     vscode.commands.registerCommand("codespace.close", async () => {
+      if (seb) {
+        await vscode.window.showInformationMessage(t.sebQuitTooltip);
+        return;
+      }
       if (!returnUrl) {
         await vscode.window.showInformationMessage(t.noReturnUrl);
         return;
@@ -337,7 +358,13 @@ function activate(context) {
     }),
   );
 
-  if (returnUrl) {
+  if (seb) {
+    const hint = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
+    hint.text = `$(sign-out) ${t.sebQuit}`;
+    hint.tooltip = t.sebQuitTooltip;
+    hint.show();
+    context.subscriptions.push(hint);
+  } else if (returnUrl) {
     const close = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
     close.text = `$(sign-out) ${t.close}`;
     close.tooltip = `${t.closeTooltip} (${returnUrl})`;
