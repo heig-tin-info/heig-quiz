@@ -21,7 +21,7 @@ const SHA = /^[0-9a-f]{40}$/;
 const BRANCH = /^[A-Za-z0-9._/-]{1,200}$/;
 /** What a message never shows: the controls but tab and line feed, the bidirectional overrides. */
 // eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f‪-‮⁦-⁩]/g;
+const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
 
 /** `push-status`'s `update`, checked: `{ branch, sha, message: { text, at } | null }`, or null. */
 function parseUpdate(status) {
@@ -36,7 +36,7 @@ function parseUpdate(status) {
 
 /** Text any VS Code surface shows as it is: no control character, no link nor icon syntax. */
 function plainText(text) {
-  return String(text).replace(CONTROL, "").replace(/\]\(/g, "]​(").replace(/\$\(/g, "$​(");
+  return String(text).replace(CONTROL, "").replace(/\]\(/g, "]\u200b(").replace(/\$\(/g, "$\u200b(");
 }
 
 /** A git call is killed past this; the merge itself gets {@link MERGE_TIMEOUT_MS}. */
@@ -127,7 +127,10 @@ async function applyUpdate(run, update) {
 
   const merged = await run(["merge", "--no-ff", "--no-edit", "-m", MERGE_MESSAGE, update.sha], MERGE_TIMEOUT_MS);
   if (merged.code === 0) return { outcome: "applied" };
-  if ((await run(["rev-parse", "--quiet", "--verify", "MERGE_HEAD"])).code === 0) {
+  const merging = await run(["rev-parse", "--quiet", "--verify", "MERGE_HEAD"]);
+  // A merge the student started meanwhile, in the terminal: theirs, never aborted.
+  if (merging.code === 0 && merging.stdout.trim() !== update.sha) return { outcome: "busy" };
+  if (merging.code === 0) {
     // A merge stopped by something else than a conflict merge-tree foresaw — a
     // student's hook (`pre-merge-commit`, `commit-msg`) —: aborted, never left half-done.
     const files = nulList((await run(["diff", "--name-only", "-z", "--diff-filter=U"])).stdout, false);

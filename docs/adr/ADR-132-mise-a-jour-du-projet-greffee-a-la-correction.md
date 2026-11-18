@@ -549,14 +549,19 @@ fixed test run by their own `make test`.
   `push-status` only). Nothing new for the staff.
 - **Deployment**: the extension ships in the `c-dev` image, built by hand
   on the engine VM (`apps/codespace/deploy/RUNBOOK.md`); a running session
-  keeps the extension it started with until its container is restarted.
+  keeps the extension it started with until its container is restarted. No
+  deploy order is required between the API and the portal: both sides'
+  `CodespaceAssignmentSync` drop unknown keys.
 - **Known limits.** A student who applied an update S1 and pushes it after
   the teacher synced S2, which changed a protected file, pushes S1's version
   of that file: the restore fires (F-PROJ-08), counts toward its cap of 5 an
   hour and flags the runs to verify — as for a `free` student merging
   `sync/<branch>` late; the next Apply brings S2. A repository a sync
   skipped (past its deadline) never holds the commit: its fetch fails at
-  every opening, one audited token request and one warning each. The VS
+  every opening with one warning (the token stays cached: git's "not our
+  ref" is no credential refusal, so it is requested again only once the
+  cache drops it). A branch the contract refuses (`BranchName`: GitHub's
+  default taken as it is, `développement`) carries no update. The VS
   Code glue (`extension.js`) is untested in a real container until the
   image is rebuilt.
 

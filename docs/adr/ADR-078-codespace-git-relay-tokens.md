@@ -647,7 +647,9 @@ here.
 owns the rule. The write grant of §2 serves one more use: fetching, from the
 student's own repository, the commit a teacher's sync pushed there, onto a
 non-branch ref of the staging repository. The token is obtained exactly as
-for a relay (checks 2 to 6, the cache of §3); no rule changes, the read grant
+for a relay (checks 2 to 6, the cache of §3), and only when the staging
+repository lacks the commit; a forge with no credentials at all fetches
+anonymously, as the seeding does. No rule changes, the read grant
 on the distribution stays `online_seb`'s, nothing is written on GitHub, and
 §9's blast radius gains nothing.
 

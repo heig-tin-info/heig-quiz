@@ -200,6 +200,31 @@ describe("Apply, as the student", () => {
     expect(await snapshot(w.work, w.run)).toEqual(rebasing);
   });
 
+  it("never aborts a merge the student started in the terminal while the button was on its way: busy, their merge left as it was", async () => {
+    const w = await world();
+    await w.run(["switch", "-q", "-c", "side"]);
+    await writeFile(join(w.work, "main.c"), "side\n");
+    await w.run(["commit", "-qam", "side"]);
+    await w.run(["switch", "-q", "main"]);
+    await writeFile(join(w.work, "main.c"), "main\n");
+    await w.run(["commit", "-qam", "main"]);
+    let theirs: unknown = null;
+    // The student's `git merge side` lands between the button's checks and its merge.
+    const racing: Run = Object.assign(
+      async (args: string[]) => {
+        if (args[0] === "merge" && args.includes(ext.MERGE_MESSAGE)) {
+          expect((await w.run(["merge", "side"])).code).not.toBe(0);
+          theirs = await snapshot(w.work, w.run);
+        }
+        return w.run(args);
+      },
+      { cwd: w.work },
+    );
+    expect(await ext.applyUpdate(racing, w.update)).toEqual({ outcome: "busy" });
+    expect(theirs).not.toBeNull();
+    expect(await snapshot(w.work, w.run)).toEqual(theirs);
+  });
+
   it("reports a merge a student's hook stopped as failed, the merge aborted, the work tree as before", async () => {
     const w = await world();
     const hook = join(w.work, ".git", "hooks", "pre-merge-commit");
@@ -229,8 +254,8 @@ describe("what the extension reads and shows", () => {
   });
 
   it("shows the teacher's text as text: no link, no icon, no control or direction character", () => {
-    const shown = ext.plainText("See [the test](command:workbench.action.terminal.new) $(alert)‮\u0007 <b>now</b>\nline 2");
-    expect(shown).not.toMatch(/\]\(|\$\(|[‮\u0007]/);
+    const shown = ext.plainText("See [the test](command:workbench.action.terminal.new) $(alert)\u202e\u0007 <b>now</b>\nline 2");
+    expect(shown).not.toMatch(/\]\(|\$\(|[\u202e\u0007]/);
     expect(shown).toContain("<b>now</b>\nline 2");
   });
 

@@ -196,7 +196,7 @@ describe("assignment sync", () => {
       { ...update, heads: [{ branch: "main:refs/heads/x", sha }] },
       { ...update, message: { text: "x".repeat(501), at: update.message.at } },
       { ...update, message: { text: "nul\u0000", at: update.message.at } },
-      { ...update, message: { text: "rtl‮", at: update.message.at } },
+      { ...update, message: { text: "rtl\u202e", at: update.message.at } },
       { ...update, message: { text: "lone \ud800", at: update.message.at } },
     ]) {
       expect(CodespaceAssignmentSync.safeParse({ ...sync, workspaceUpdate: bad }).success, JSON.stringify(bad)).toBe(false);

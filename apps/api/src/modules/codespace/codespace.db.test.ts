@@ -393,6 +393,22 @@ describe("the sync (codespace.sync)", () => {
     expect(workspaceUpdateOf({ ...online, branches: ["dev"] })).toBeNull();
   });
 
+  it("never fails a project's assignment sync for a branch the contract refuses: that branch carries no update (ADR-132 §11)", async () => {
+    const room = await connected([]);
+    const lab = await project(room, "Accented lab");
+    expect((await setMode(lab.id, "online")).statusCode).toBe(200);
+    const sha = "c".repeat(40);
+    // GitHub's default branch, taken as it is at the build.
+    await server.app.db.update(projects).set({ branches: ["développement"], syncHeads: { développement: sha } }).where(eq(projects.id, lab.id));
+    portal.calls.length = 0;
+    expect(await runCodespaceSync(server.app, CONFIG, lab.id, server.app.log)).toBe("synced");
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body).workspaceUpdate).toBeNull();
+
+    await server.app.db.update(projects).set({ branches: ["main", "feat+x"], syncHeads: { main: sha, "feat+x": sha } }).where(eq(projects.id, lab.id));
+    expect(await runCodespaceSync(server.app, CONFIG, lab.id, server.app.log)).toBe("synced");
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body).workspaceUpdate).toEqual({ heads: [{ branch: "main", sha }], message: null });
+  });
+
   it("carries the quota of the oldest owner once the creator holds no owner seat (decision C)", async () => {
     const room = await connected([]);
     const creator = await grantedTeacher(true, 5);

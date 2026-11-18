@@ -16,7 +16,7 @@ import { SYNC_MESSAGE_MAX } from "@quiz/domain";
  * database's write after the distribution moved.
  */
 // eslint-disable-next-line no-control-regex
-const MESSAGE_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f‪-‮⁦-⁩]|\p{Cs}/u;
+const MESSAGE_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]|\p{Cs}/u;
 
 /**
  * Its text: plain, CRLF and CR made line feeds, trimmed, at most

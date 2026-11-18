@@ -32,6 +32,7 @@ import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
+  BranchName,
   CodespaceAssignmentSync,
   CodespaceAssignmentSyncResult,
   CodespaceSessionSummary,
@@ -318,9 +319,11 @@ export function workspaceUpdateOf(
   project: Pick<typeof projects.$inferSelect, "workMode" | "state" | "branches" | "syncHeads" | "syncMessage" | "syncMessageAt">,
 ): CodespaceWorkspaceUpdate | null {
   if (project.workMode !== "online" || !projectIsVisible(project.state) || project.syncHeads === null) return null;
+  // A branch the contract refuses (GitHub's default taken as it is, `développement`)
+  // carries no update, rather than failing every assignment sync of the project.
   const heads = project.branches.flatMap((branch) => {
     const sha = project.syncHeads?.[branch];
-    return sha ? [{ branch, sha }] : [];
+    return sha && BranchName.safeParse(branch).success ? [{ branch, sha }] : [];
   });
   if (heads.length === 0) return null;
   const message =
