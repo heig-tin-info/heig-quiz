@@ -16,7 +16,6 @@ import {
   courseStaff,
   courses,
   enrollments,
-  shownNom,
   teacherGrants,
   userEmails,
   users,
@@ -119,6 +118,12 @@ describe("the search (ADR-133)", () => {
 
   it("ignores case, accents and word order; tolerates no typo", async () => {
     expect((await search(teacher.headers, "ROCHAT léa")).json()).toHaveLength(1);
+    // The fold of the database (translate) and of the domain rule agree,
+    // composed or decomposed, beyond Latin-1.
+    await person("Le\u0301onie", "Østergård", "leonie@x.test", ["leonie.ostergard@heig-vd.ch"]);
+    await person("Łucja", "DVOŘÁK", "lucja@x.test", ["lucja.dvorak@heig-vd.ch"]);
+    expect((await search(teacher.headers, "léonie ØSTER")).json()).toHaveLength(1);
+    expect((await search(teacher.headers, "łucja dvorak")).json()).toHaveLength(1);
     expect((await search(teacher.headers, "lea rochat@heig")).json()).toHaveLength(1);
     expect((await search(teacher.headers, "rochta")).json()).toEqual([]);
   });
@@ -155,17 +160,27 @@ describe("the search (ADR-133)", () => {
     expect((await search(teacher.headers, "zoé")).json()).toEqual([{ givenName: "Zoé", familyName: "Presente", email: "zoe.presente@heig-vd.ch" }]);
   });
 
-  it("leaves out anyone already on this roster, by line or by any verified address, and the course's staff", async () => {
+  it("leaves out who claimed a line of this roster, a school address on it, and the course's staff", async () => {
     const room = await newRoom();
     const onLine = await person("Marc", "Ligne", "marc@x.test", ["marc.ligne@heig-vd.ch"]);
     await db().insert(enrollments).values({ id: randomUUID(), classroomId: room, nom: "", prenom: "", email: "x@y.test", userId: onLine });
-    await person("Marc", "Prive", "marc.prive@x.test", ["marc.prive@heig-vd.ch"]);
-    // A line under the private address leaves the school address out too.
-    await db().insert(enrollments).values({ id: randomUUID(), classroomId: room, nom: "P", prenom: "M", email: "marc.prive@x.test" });
+    await person("Marc", "Ecole", "marc.ecole@x.test", ["marc.ecole@heig-vd.ch"]);
+    await db().insert(enrollments).values({ id: randomUUID(), classroomId: room, nom: "", prenom: "", email: "marc.ecole@heig-vd.ch" });
     await teacherWith(["marc.collegue@heig-vd.ch"]);
     expect((await search(teacher.headers, "marc", room)).json()).toEqual([]);
     // Another roster of the course still finds the students.
     expect((await search(teacher.headers, "marc")).json()).toHaveLength(2);
+  });
+
+  it("is no oracle on a private address: a line under it changes neither the search nor the pick", async () => {
+    const room = await newRoom();
+    const before = (await search(teacher.headers, "rochat", room)).json();
+    expect(before).toEqual([{ givenName: "Léa", familyName: "Rochat", email: "lea.rochat@heig-vd.ch" }]);
+    // The teacher adds Léa's private login address, as anyone may.
+    expect((await add(teacher.headers, { email: "lea.private@gmail.test" }, room)).statusCode).toBe(201);
+    expect((await search(teacher.headers, "rochat", room)).json()).toEqual(before);
+    const pick = await add(teacher.headers, { email: "lea.rochat@heig-vd.ch", picked: true }, room);
+    expect(pick.statusCode).toBe(201);
   });
 
   it("offers ten people at most", async () => {
@@ -175,11 +190,21 @@ describe("the search (ADR-133)", () => {
 });
 
 describe("who may search (ADR-133 §3)", () => {
+  /** A caller who may not search: an empty search, and a pick refused; nothing written. */
+  async function refused(headers: Record<string, string>, { writes = true } = {}) {
+    const res = await search(headers, "rochat");
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([]);
+    if (!writes) return;
+    const room = await newRoom();
+    const pick = await add(headers, { email: "lea.rochat@heig-vd.ch", picked: true }, room);
+    expect(pick.statusCode).toBe(403);
+    expect(pick.json().error).toBe("student_search_unavailable");
+    expect(await lineOf("lea.rochat@heig-vd.ch", room)).toBeUndefined();
+  }
+
   it("refuses a teacher whose role comes from a course seat alone", async () => {
-    const assistant = await teacherWith(["assistant.etudiant@heig-vd.ch"], "student@hes-so.ch");
-    const res = await search(assistant.headers, "rochat");
-    expect(res.statusCode).toBe(403);
-    expect(res.json().error).toBe("student_search_unavailable");
+    await refused((await teacherWith(["assistant.etudiant@heig-vd.ch"], "student@hes-so.ch")).headers);
   });
 
   it("refuses a caller with no institutional address, a grant notwithstanding", async () => {
@@ -187,15 +212,15 @@ describe("who may search (ADR-133 §3)", () => {
     await db().insert(userEmails).values({ userId: granted.id, email: "granted@private.test", source: "login", verified: true });
     await db().insert(teacherGrants).values({ id: randomUUID(), email: "granted@private.test", createdBy: granted.id });
     await db().insert(courseStaff).values({ courseId, userId: granted.id });
-    expect((await search(granted.headers, "rochat")).statusCode).toBe(403);
+    await refused(granted.headers);
   });
 
   it("refuses a personal token and an impersonation session of an entitled teacher", async () => {
     const { token } = await createApiToken(db(), teacher.id, { name: "cli", expiresInDays: 1, scope: "api" });
-    expect((await search({ authorization: `Bearer ${token}` }, "rochat")).statusCode).toBe(403);
+    await refused({ authorization: `Bearer ${token}` });
     const admin = await server.signIn("admin");
-    const delegated = await sessionOf(db(), teacher.id, { kind: "impersonation", actorUserId: admin.id });
-    expect((await search(delegated, "rochat")).statusCode).toBe(403);
+    // An impersonation writes nothing at all; its search is empty.
+    await refused(await sessionOf(db(), teacher.id, { kind: "impersonation", actorUserId: admin.id }), { writes: false });
   });
 
   it("answers a teacher off the course with the 404 of a missing classroom", async () => {
@@ -246,11 +271,12 @@ describe("adding one student (ADR-133 §5, §6)", () => {
     expect((await add(teacher.headers, { email: "lea.rochat@heig-vd.ch", picked: true }, room)).statusCode).toBe(404);
   });
 
-  it("shows a nameless line as its address to every reader", async () => {
+  it("shows a nameless pending line by its address to a staff reader: the group set's detail", async () => {
     const room = await newRoom();
     await add(teacher.headers, { email: "shown@nowhere.test" }, room);
-    const [row] = await db().select({ nom: shownNom, prenom: enrollments.prenom }).from(enrollments).where(eq(enrollments.classroomId, room));
-    expect(row).toEqual({ nom: "shown@nowhere.test", prenom: "" });
+    const res = await server.app.inject({ method: "POST", url: `/app/api/classrooms/${room}/group-sets`, headers: teacher.headers, payload: { name: "Labo" } });
+    expect(res.statusCode, res.body).toBe(201);
+    expect(res.json().unplaced).toEqual([expect.objectContaining({ nom: "shown@nowhere.test", prenom: "" })]);
   });
 });
 

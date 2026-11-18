@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { TeacherCandidate, TeacherChoice } from "@quiz/contracts";
 
 import { api } from "./api";
-import { useT } from "./i18n";
+import { useT, type Dict } from "./i18n";
 import { ComboboxList, ComboboxOption, cx, ErrorText, FieldLabel, Initials, useCombobox, TextInput } from "./ui";
 
 /**
@@ -29,6 +29,22 @@ import { ComboboxList, ComboboxOption, cx, ErrorText, FieldLabel, Initials, useC
 
 /** Enough of an address to be worth sending: the API does the real check. */
 const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** What each picker says: its placeholder, its list's name, a failed and an empty search. */
+const WORDS = {
+  teacherPicker: {
+    placeholder: "teacherPicker.placeholder",
+    list: "teacherPicker.list",
+    failed: "teacherPicker.failed",
+    none: "teacherPicker.none",
+  },
+  studentPicker: {
+    placeholder: "studentPicker.placeholder",
+    list: "studentPicker.list",
+    failed: "studentPicker.failed",
+    none: "studentPicker.none",
+  },
+} as const satisfies Record<string, Record<string, keyof Dict>>;
 
 /** What a picker lists of a person: a name and an address. */
 export interface Person {
@@ -102,8 +118,12 @@ export function PersonPicker<C extends Person>({
 }: {
   /** The prefix of the search's query key; the typed text is appended to it. */
   candidatesKey: readonly unknown[];
-  /** The candidates route, without its `?q=`. */
-  candidatesUrl: string;
+  /**
+   * The candidates route asked for `q`: built at the call site, where its
+   * query is typed by the route's contract (`TeacherCandidateQuery`,
+   * `RosterCandidateQuery`).
+   */
+  candidatesUrl: (q: string) => string;
   label: string;
   /**
    * What the empty list says while nothing is searched: everyone is seated
@@ -113,15 +133,8 @@ export function PersonPicker<C extends Person>({
   idle: string;
   /** The characters a search takes; under them nothing is asked. */
   minLength?: number;
-  /** What the picker says of whom it lists; the colleagues' words by default. */
-  words?: {
-    placeholder: string;
-    /** The list's accessible name. */
-    list: string;
-    failed: string;
-    /** An empty search for `q`. */
-    none: (q: string) => string;
-  };
+  /** Whom it lists, which says its placeholder, list name, failure and empty search. */
+  words: keyof typeof WORDS;
   /** What is typed; the name of the pick once one is made. */
   text: string;
   selected: C | null;
@@ -134,18 +147,12 @@ export function PersonPicker<C extends Person>({
   // Held here, not in the combobox: the query below needs it, and the
   // combobox needs the query's rows.
   const [open, setOpen] = useState(false);
-  const said = words ?? {
-    placeholder: t("teacherPicker.placeholder"),
-    list: t("teacherPicker.list"),
-    failed: t("teacherPicker.failed"),
-    none: (q: string) => t("teacherPicker.none", { q }),
-  };
 
   const q = text.trim();
   const searching = q.length >= minLength;
   const candidates = useQuery<C[]>({
     queryKey: [...candidatesKey, q],
-    queryFn: () => api(`${candidatesUrl}?${new URLSearchParams({ q })}`),
+    queryFn: () => api(candidatesUrl(q)),
     // Asked only while the list shows: the form opens on its fields, not on
     // the directory.
     enabled: open && searching,
@@ -181,7 +188,7 @@ export function PersonPicker<C extends Person>({
           {...combo.inputProps}
           autoComplete="off"
           spellCheck={false}
-          placeholder={said.placeholder}
+          placeholder={t(WORDS[words].placeholder)}
           onChange={(e) => {
             onText(e.target.value);
             setOpen(true);
@@ -190,23 +197,23 @@ export function PersonPicker<C extends Person>({
         />
 
         {open && !disabled ? (
-          <ComboboxList combobox={combo} label={said.list}>
+          <ComboboxList combobox={combo} label={t(WORDS[words].list)}>
             {!searching ? (
               <p className="px-2.5 py-2 text-[13px] text-fg-faint">{idle}</p>
             ) : candidates.isPending ? (
               <p className="px-2.5 py-2 text-[13px] text-fg-faint">{t("teacherPicker.loading")}</p>
             ) : candidates.isError ? (
-              <ErrorText className="px-2.5 py-2">{said.failed}</ErrorText>
+              <ErrorText className="px-2.5 py-2">{t(WORDS[words].failed)}</ErrorText>
             ) : rows.length === 0 ? (
               <p className="px-2.5 py-2 text-[13px] text-fg-faint">
-                {q === "" ? idle : said.none(q)}
+                {q === "" ? idle : t(WORDS[words].none, { q })}
               </p>
             ) : (
               rows.map((candidate, index) => {
                 const isActive = index === combo.active;
                 return (
                   <ComboboxOption
-                    key={candidate.email}
+                    key={`${index}:${candidate.email}`}
                     combobox={combo}
                     index={index}
                     className="flex items-center gap-2.5"

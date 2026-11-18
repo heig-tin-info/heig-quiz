@@ -135,8 +135,8 @@ export type RosterErrorCode = z.infer<typeof RosterErrorCode>;
 
 /**
  * `GET /classrooms/:id/roster/candidates?q=` (ADR-133): a few letters of a
- * name or of a school address. Under three characters the answer is empty;
- * a caller who may not search gets `403 student_search_unavailable`.
+ * name or of a school address. Under three letters the answer is empty, and
+ * so it is for a caller who may not search: they add by address.
  */
 export const RosterCandidateQuery = z.object({ q: z.string().trim().max(100).default("") });
 export type RosterCandidateQuery = z.infer<typeof RosterCandidateQuery>;
@@ -160,7 +160,8 @@ export type RosterCandidates = z.infer<typeof RosterCandidates>;
 /**
  * `POST /classrooms/:id/roster/line` (ADR-133): one student, by address.
  * `picked`: the address of a search result, whose name the server takes
- * from the account (`404 student_not_found` when it is no longer one);
+ * from the account (`404 student_not_found` when it is no longer one, `403
+ * student_search_unavailable` for a caller who may not search);
  * otherwise an address-only line, its name blank until the claim fills it.
  * Either way the line stays pending (F-ORG-05).
  */

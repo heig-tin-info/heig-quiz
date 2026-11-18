@@ -62,7 +62,7 @@ import {
   enrollments,
   questionConcepts,
   questions,
-  shownNom,
+  staffShownNom,
 } from "../../db/schema.js";
 import { byLabel, courseConceptsOf, coverage, finalConceptRefs, toConceptRef } from "../concept/service.js";
 import { reviewedMasteryCards } from "./masteryCards.js";
@@ -147,13 +147,13 @@ export async function classroomActivity(db: Db, classroomId: string, now: Date):
     db
       .select({
         id: enrollments.id,
-        nom: shownNom,
+        nom: staffShownNom,
         prenom: enrollments.prenom,
         optedOutAt: enrollments.drillOptedOutAt,
       })
       .from(enrollments)
       .where(studentSeat(classroomId))
-      .orderBy(shownNom, enrollments.prenom),
+      .orderBy(staffShownNom, enrollments.prenom),
     db
       .select({
         enrollmentId: v.enrollmentId,

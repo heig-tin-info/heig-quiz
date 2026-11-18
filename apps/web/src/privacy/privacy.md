@@ -10,7 +10,7 @@
 
 ### Your account
 
-At each sign-in, Switch edu-ID sends your name, your e-mail addresses, your edu-ID identifier and the address of your picture. Quiz also keeps everything edu-ID released at your last sign-in, your affiliations included: they decide whether your account is a teacher's, and they help diagnose sign-in problems; they are shown nowhere. It keeps your preferences (language, theme, notifications) and, if you link one, your GitHub account.
+At each sign-in, Switch edu-ID sends your name, your e-mail addresses, your edu-ID identifier and the address of your picture. Quiz also keeps everything edu-ID released at your last sign-in, your affiliations and your school address included: they decide whether your account is a teacher's and which school you belong to, and they help diagnose sign-in problems. They are shown nowhere, except your school address, to the teachers of your school (below). It keeps your preferences (language, theme, notifications) and, if you link one, your GitHub account.
 
 ### Your place in a class
 

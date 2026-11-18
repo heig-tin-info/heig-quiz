@@ -16,19 +16,22 @@ export const STUDENT_SEARCH_MIN_LENGTH = 3;
 /** At most this many people are offered. */
 export const STUDENT_SEARCH_LIMIT = 10;
 
-/** Lowercase, without accents: how a typed word and a name are compared. */
+/**
+ * Lowercase, without accents: how a typed word and a name are compared, here
+ * and when names are masked (`maskNames`).
+ */
 export function foldForSearch(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
 /**
- * The folded words of a search, or none when it is shorter than
- * {@link STUDENT_SEARCH_MIN_LENGTH} once trimmed.
+ * The folded words of a search, or none when they hold fewer than
+ * {@link STUDENT_SEARCH_MIN_LENGTH} characters in all, blanks and accents
+ * aside: "a b" or a letter and its marks search nothing.
  */
 export function searchWords(query: string): string[] {
-  const trimmed = query.trim();
-  if (trimmed.length < STUDENT_SEARCH_MIN_LENGTH) return [];
-  return foldForSearch(trimmed).split(/\s+/).filter((w) => w !== "");
+  const words = foldForSearch(query).split(/\s+/).filter((w) => w !== "");
+  return words.join("").length < STUDENT_SEARCH_MIN_LENGTH ? [] : words;
 }
 
 /** Whether every word appears in one of `fields` (none matches no words). */

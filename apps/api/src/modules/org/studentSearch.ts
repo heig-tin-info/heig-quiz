@@ -18,8 +18,12 @@
  *    address has an account, and whose). **Returned**: the name and one
  *    such address, nothing else.
  *  - **Left out**: pseudonymized and dormant accounts (ADR-117), accounts
- *    with no claims, anyone holding a line of this roster or a verified
- *    address on it, and the course's staff (ADR-018: Join as student).
+ *    with no claims, anyone who claimed a line of this roster or whose
+ *    school address (in the tenant) is on it, and the course's staff
+ *    (ADR-018: Join as student). Never by another address of theirs: a line
+ *    under a private address would otherwise vanish its holder from the
+ *    results, and so name whose address it is. Two pending lines of one
+ *    person end as a claim conflict (AU-21), as any other two.
  *
  * The database prefilters, with the fold of `@quiz/domain`'s
  * `foldForSearch` encoded as `translate()`; the domain rule decides.
@@ -41,7 +45,8 @@ import { INSTITUTIONAL_MAIL_CLAIMS, institutionalAddressesOf } from "../../auth/
 import type { AppConfig } from "../../config.js";
 import { likeContains, type Db } from "../../db/client.js";
 import { qualified } from "../../db/qualified.js";
-import { courseStaff, enrollments, userEmails, userIdpClaims, users } from "../../db/schema.js";
+import { courseStaff, enrollments, userIdpClaims, users } from "../../db/schema.js";
+import { normalizeEmail } from "../../identity.js";
 import { roleForUser } from "../../roles.js";
 
 /** Where a search looks: the roster it adds to, and the caller's school. */
@@ -100,6 +105,13 @@ async function candidates(
     "words" in match
       ? match.words.map((word) => sql`${haystack} LIKE ${likeContains(word)}`)
       : [sql`lower(${institutionalText}) LIKE ${likeContains(match.address)}`];
+  // The addresses on this roster: a school address among them leaves its
+  // holder out (the search would show that address anyway).
+  const onRoster = new Set(
+    (await db.select({ email: enrollments.email }).from(enrollments).where(eq(enrollments.classroomId, scope.classroomId))).map(
+      (line) => normalizeEmail(line.email),
+    ),
+  );
   const rows = await db
     .select({ givenName: users.givenName, familyName: users.familyName, claims: userIdpClaims.claims })
     .from(users)
@@ -111,10 +123,7 @@ async function candidates(
         or(...scope.tenant.map((domain) => sql`lower(${institutionalText}) LIKE ${likeContains(`@${domain}`)}`)),
         ...prefilter,
         sql`NOT EXISTS (SELECT 1 FROM ${enrollments}
-          WHERE ${qualified(enrollments.classroomId)} = ${scope.classroomId}
-            AND (${qualified(enrollments.userId)} = ${account}
-              OR lower(${qualified(enrollments.email)}) IN (SELECT ${qualified(userEmails.email)} FROM ${userEmails}
-                WHERE ${qualified(userEmails.userId)} = ${account} AND ${qualified(userEmails.verified)})))`,
+          WHERE ${qualified(enrollments.classroomId)} = ${scope.classroomId} AND ${qualified(enrollments.userId)} = ${account})`,
         sql`NOT EXISTS (SELECT 1 FROM ${courseStaff}
           WHERE ${qualified(courseStaff.courseId)} = ${scope.courseId} AND ${qualified(courseStaff.userId)} = ${account})`,
       ),
@@ -125,6 +134,7 @@ async function candidates(
   const found: RosterCandidate[] = [];
   for (const row of rows) {
     const school = addressesInTenant(institutionalAddressesOf(row.claims), scope.tenant);
+    if (school.some((address) => onRoster.has(address))) continue;
     const fits =
       "words" in match
         ? matchesEveryWord(match.words, [row.givenName, row.familyName, ...school])

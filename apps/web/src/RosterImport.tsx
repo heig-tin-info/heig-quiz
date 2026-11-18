@@ -1,11 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, Upload, UserPlus } from "lucide-react";
 import { useRef, useState } from "react";
 
-import type { RosterCandidate, RosterLineAdd } from "@quiz/contracts";
+import type { RosterCandidate, RosterCandidateQuery, RosterLineAdd } from "@quiz/contracts";
 import { STUDENT_SEARCH_MIN_LENGTH } from "@quiz/domain";
 
-import { api, ApiError, refusalCodeOf, wordedRefusal } from "./api";
+import { api, ApiError, wordedRefusal } from "./api";
 import { HelpIcon } from "./help";
 import { useT } from "./i18n";
 import { nameOf, PersonPicker, usePersonPick } from "./PersonPicker";
@@ -56,8 +56,8 @@ async function fileToPayload(
  * teacher's school, or named by an address. A pick only fills the field,
  * with the address on its label line, so homonyms are told apart; the line
  * is added by the button, never by Enter on the first match. A caller who
- * may not search (`403 student_search_unavailable`: no school address, a
- * course seat only) types an address.
+ * may not search (no school address, a course seat only) finds nobody and
+ * types an address.
  */
 function OneStudent({ classroomId }: { classroomId: string }) {
   const t = useT();
@@ -66,14 +66,6 @@ function OneStudent({ classroomId }: { classroomId: string }) {
   const [bonus, setBonus] = useState("");
   // Who the last line added was: the field is empty by the time it is said.
   const [added, setAdded] = useState<string | null>(null);
-  const url = `/app/api/classrooms/${classroomId}/roster/candidates`;
-  // The empty search says whether the caller may search at all.
-  const probe = useQuery({
-    queryKey: [...rosterCandidatesKey(classroomId), ""],
-    queryFn: () => api<RosterCandidate[]>(`${url}?q=`),
-    retry: false,
-  });
-  const searchable = refusalCodeOf(probe.error) !== "student_search_unavailable";
   const timeBonusPercent = Number(bonus) || 0;
   const line: RosterLineAdd | null = who.selected
     ? { email: who.selected.email, picked: true, timeBonusPercent }
@@ -95,32 +87,18 @@ function OneStudent({ classroomId }: { classroomId: string }) {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-end gap-3">
-        {searchable ? (
-          <PersonPicker<RosterCandidate>
-            candidatesKey={rosterCandidatesKey(classroomId)}
-            candidatesUrl={url}
-            label={t("import.findLabel")}
-            idle={t("import.findIdle")}
-            minLength={STUDENT_SEARCH_MIN_LENGTH}
-            words={{
-              placeholder: t("import.findPlaceholder"),
-              list: t("import.findList"),
-              failed: t("import.findFailed"),
-              none: (q) => t("import.findNone", { q }),
-            }}
-            disabled={add.isPending}
-            {...who.picker}
-          />
-        ) : (
-          <Field
-            label={t("roster.col.email")}
-            type="email"
-            fullWidth
-            className="min-w-0 flex-1 basis-56"
-            value={who.picker.text}
-            onChange={(e) => who.picker.onText(e.target.value)}
-          />
-        )}
+        <PersonPicker<RosterCandidate>
+          candidatesKey={rosterCandidatesKey(classroomId)}
+          candidatesUrl={(q) =>
+            `/app/api/classrooms/${classroomId}/roster/candidates?${new URLSearchParams({ q } satisfies RosterCandidateQuery)}`
+          }
+          label={t("import.findLabel")}
+          idle={t("import.findIdle")}
+          minLength={STUDENT_SEARCH_MIN_LENGTH}
+          words="studentPicker"
+          disabled={add.isPending}
+          {...who.picker}
+        />
         <Field
           label={t("import.bonus")}
           type="number"

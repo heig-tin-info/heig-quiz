@@ -59,7 +59,6 @@ import {
   questionVersions,
   questions,
   users,
-  shownNom,
 } from "../../db/schema.js";
 import { first } from "../../db/query.js";
 import { conceptsOf } from "../concept/service.js";
@@ -666,7 +665,7 @@ export async function staffRosterWithAttempt(
     .select({
       seatId: enrollments.id,
       userId: sql<string>`${enrollments.userId}`,
-      nom: shownNom,
+      nom: enrollments.nom,
       prenom: enrollments.prenom,
       email: enrollments.email,
       timeBonusPercent: enrollments.timeBonusPercent,
@@ -684,7 +683,7 @@ export async function staffRosterWithAttempt(
     .where(
       and(seatsOf(evaluation), eq(enrollments.staff, true)),
     )
-    .orderBy(asc(shownNom), asc(enrollments.prenom));
+    .orderBy(asc(enrollments.nom), asc(enrollments.prenom));
 }
 
 /**

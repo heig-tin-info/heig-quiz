@@ -18,7 +18,7 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 |---|---|---|
 | `users` | `oidc_sub`, `email`, `given_name`, `family_name` (the display name is derived from them), `swiss_edu_id`, `role` enum student / teacher / admin, `locale`, `date_format`, `mcq_policy`, `coach_enabled`, `coach_seen`, `anonymized_at` | Global role |
 | `user_emails` | `user_id`, `email` unique, `source` login / idp / roster | Identity = set of addresses |
-| `user_idp_claims` | `user_id`, `claims` jsonb, `seen_at` | Never exposed |
+| `user_idp_claims` | `user_id`, `claims` jsonb, `seen_at` | Never exposed as such; two derived reads: the institutional flag of the account's own addresses (ADR-030), and the school address a teacher of the same school finds a student by ([ADR-133](../../adr/ADR-133-trouver-un-etudiant-deja-sur-la-plateforme.md)) |
 | `sessions` | `sid_hash` pk, `user_id`, `expires_at`, `kind` portal / seb / impersonation / kiosk, `actor_user_id` nullable, `evaluation_id` nullable, `device_id` nullable (FK `kiosk_devices`), `seb_config_key` nullable | ADR-027, ADR-034, ADR-051. `evaluation_id` set on a confined session (`seb`, `kiosk`); partial unique index on `device_id`: one session per station |
 | `kiosk_devices` | `google_device_id` unique, `label`, `status` unnamed / active / retired, `attested_at`, `checked_at`, `attestation` ok / unavailable / refused, `credential_hash`, `watch` ok / unavailable / suspended (what the supervisor was last told) | The station registry, admin-only (ADR-051 §5, §6) |
 | `kiosk_pairings` | `device_id`, `device_code_hash`, `user_code_hash`, `state` pending / approved / consumed / expired, `user_id`, `evaluation_id`, `approved_by`, `expires_at` | RFC 8628 device authorization (ADR-051 §7) |

@@ -14,7 +14,7 @@ import { countsByDefault, WEIGHT_DEFAULT, type GradebookColumnKind, type MarkOut
 
 import type { AuditActor } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
-import { enrollments, gradebookColumns, gradebookMarks, gradebookSettings, users, shownNom } from "../../db/schema.js";
+import { enrollments, gradebookColumns, gradebookMarks, gradebookSettings, users } from "../../db/schema.js";
 import type { GradebookColumnFacts, GradebookEntry, GradebookEntryFacts } from "../activity/kind.js";
 import { gradebookColumnFacts, gradebookEntries } from "../activity/service.js";
 import { notFoundError } from "../http.js";
@@ -148,13 +148,13 @@ export async function tableSeats(db: Db | Tx, classroomId: string): Promise<Tabl
       enrollmentId: enrollments.id,
       userId: enrollments.userId,
       email: enrollments.email,
-      nom: shownNom,
+      nom: enrollments.nom,
       prenom: enrollments.prenom,
       staff: enrollments.staff,
     })
     .from(enrollments)
     .where(and(eq(enrollments.classroomId, classroomId), isNotNull(enrollments.userId)))
-    .orderBy(asc(enrollments.staff), asc(shownNom), asc(enrollments.prenom), asc(enrollments.email));
+    .orderBy(asc(enrollments.staff), asc(enrollments.nom), asc(enrollments.prenom), asc(enrollments.email));
   return rows.map((row) => ({ ...row, userId: row.userId! }));
 }
 

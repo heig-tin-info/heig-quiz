@@ -106,10 +106,19 @@ describe("RosterImport one student (ADR-133)", () => {
     await waitFor(() => expect(posted(calls)).toEqual([{ email: "new@school.test", picked: false, timeBonusPercent: 25 }]));
   });
 
-  it("asks for an address when the caller may not search", async () => {
-    open({ [`GET ${CANDIDATES}?q=`]: fail(403, { error: "student_search_unavailable" }) });
-    expect(await screen.findByRole("textbox", { name: "E-mail" })).toBeVisible();
-    expect(screen.queryByRole("combobox")).toBeNull();
+  it("says that nobody of the school matches, and that an address is added as typed", async () => {
+    open(candidatesFor(CANDIDATES, "dupont", []));
+    await userEvent.type(field(), "dupont");
+    expect(await screen.findByText(/No one of your school matches “dupont”/)).toBeVisible();
+  });
+
+  it("closes the open list on Escape, not the sheet", async () => {
+    open(candidatesFor(CANDIDATES, "roch", [lea]));
+    await userEvent.type(field(), "roch");
+    await screen.findByRole("option", { name: /Léa Rochat/ });
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.getByRole("dialog")).toBeVisible();
   });
 
   it("says a pick that is no longer offered", async () => {

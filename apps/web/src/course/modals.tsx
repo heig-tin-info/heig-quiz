@@ -8,6 +8,7 @@ import {
   type CourseRole,
   type CourseSummary,
   type StaffAdd,
+  type TeacherCandidateQuery,
 } from "@quiz/contracts";
 
 import { api, wordedRefusal } from "../api";
@@ -270,9 +271,10 @@ export function AddStaffModal({ course, onClose }: { course: CourseSummary; onCl
     >
       <PersonPicker
         candidatesKey={courseStaffCandidatesKey(course.id)}
-        candidatesUrl={`/app/api/courses/${course.id}/staff/candidates`}
+        candidatesUrl={(q) => `/app/api/courses/${course.id}/staff/candidates?${new URLSearchParams({ q } satisfies TeacherCandidateQuery)}`}
         label={t("courses.staffPerson")}
         idle={t("courses.staffEveryoneSeated")}
+        words="teacherPicker"
         disabled={add.isPending}
         autoFocus
         {...who.picker}

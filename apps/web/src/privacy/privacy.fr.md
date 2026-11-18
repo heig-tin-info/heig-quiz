@@ -10,7 +10,7 @@
 
 ### Votre compte
 
-À chaque connexion, Switch edu-ID transmet votre nom, vos adresses e-mail, votre identifiant edu-ID et l'adresse de votre photo. Quiz conserve aussi tout ce qu'edu-ID a transmis à votre dernière connexion, vos affiliations comprises : elles décident si votre compte est celui d'un enseignant, et aident à diagnostiquer les problèmes de connexion ; elles ne sont affichées nulle part. Il conserve vos préférences (langue, thème, notifications) et, si vous en liez un, votre compte GitHub.
+À chaque connexion, Switch edu-ID transmet votre nom, vos adresses e-mail, votre identifiant edu-ID et l'adresse de votre photo. Quiz conserve aussi tout ce qu'edu-ID a transmis à votre dernière connexion, vos affiliations et votre adresse de l'école comprises : elles décident si votre compte est celui d'un enseignant et de quelle école vous faites partie, et aident à diagnostiquer les problèmes de connexion. Elles ne sont affichées nulle part, sauf votre adresse de l'école, aux enseignants de votre école (plus bas). Il conserve vos préférences (langue, thème, notifications) et, si vous en liez un, votre compte GitHub.
 
 ### Votre place dans une classe
 

@@ -25,7 +25,7 @@ import { formattedValues } from "@quiz/domain/parameters";
 import { iso } from "../../clock.js";
 import { itemKeyBlocks, provenanceOf } from "../../documents/blocks.js";
 import type { Db } from "../../db/client.js";
-import { answers, enrollments, shownNom } from "../../db/schema.js";
+import { answers, enrollments, staffShownNom } from "../../db/schema.js";
 import { joinedItem, seatsOf, type EvaluationRecord } from "../evaluation/service.js";
 import { typeOf } from "../pool/config.js";
 import { parametersOf, readingPerAttempt } from "../pool/service.js";
@@ -63,13 +63,13 @@ export async function itemAnswers(
     db
       .select({
         userId: enrollments.userId,
-        lastName: shownNom,
+        lastName: staffShownNom,
         firstName: enrollments.prenom,
         email: enrollments.email,
       })
       .from(enrollments)
       .where(and(seatsOf(evaluation), eq(enrollments.staff, false)))
-      .orderBy(asc(shownNom), asc(enrollments.prenom)),
+      .orderBy(asc(staffShownNom), asc(enrollments.prenom)),
     keptAttempts(db, evaluation),
   ]);
   const counted = roster.flatMap((s) => {

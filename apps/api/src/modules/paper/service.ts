@@ -29,7 +29,7 @@ import { localDate } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
-import { enrollments, evaluations, paperSheets, users, shownNom } from "../../db/schema.js";
+import { enrollments, evaluations, paperSheets, users } from "../../db/schema.js";
 import * as evaluation from "../evaluation/service.js";
 import type { EvaluationRecord, JoinedItem } from "../evaluation/service.js";
 import { refusalClass, type Refusal } from "../http.js";
@@ -85,7 +85,7 @@ async function eligibleItems(db: Db, record: EvaluationRecord): Promise<JoinedIt
  */
 async function studentSeat(db: Db | Tx, record: EvaluationRecord, userId: string, lock = false) {
   const query = db
-    .select({ prenom: enrollments.prenom, nom: shownNom, email: enrollments.email })
+    .select({ prenom: enrollments.prenom, nom: enrollments.nom, email: enrollments.email })
     .from(enrollments)
     .innerJoin(users, eq(users.id, enrollments.userId))
     .where(and(evaluation.seatsOf(record), eq(enrollments.userId, userId), eq(enrollments.staff, false)))

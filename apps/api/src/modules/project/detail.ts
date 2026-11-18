@@ -48,7 +48,7 @@ import { changedAfterRelease, draftStartsLater, projectPhase, projectPrimaryActi
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, projectGroups, users, shownNom } from "../../db/schema.js";
+import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, projectGroups, users, staffShownNom } from "../../db/schema.js";
 import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
@@ -335,7 +335,7 @@ export async function projectDetail(
     .select({
       enrollmentId: enrollments.id,
       userId: enrollments.userId,
-      nom: shownNom,
+      nom: staffShownNom,
       prenom: enrollments.prenom,
       email: enrollments.email,
       claimedAt: enrollments.claimedAt,
@@ -345,7 +345,7 @@ export async function projectDetail(
     .from(enrollments)
     .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
     .where(eq(enrollments.classroomId, project.classroomId))
-    .orderBy(enrollments.staff, shownNom, enrollments.prenom, enrollments.id);
+    .orderBy(enrollments.staff, staffShownNom, enrollments.prenom, enrollments.id);
   // Whose repository: a student's own, or their copy group's (`seatRepos`,
   // N-SEC-20: never the group repository's creator for having created it);
   // one row per student, each member reading the group's. A staff seat reads

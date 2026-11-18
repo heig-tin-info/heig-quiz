@@ -253,6 +253,9 @@ export function useLayer(
     const onKey = (e: KeyboardEvent) => {
       if (!onTop()) return;
       if (e.key === "Escape" && escape) {
+        // A combobox whose list is open closes that list first (its own
+        // handler, `useCombobox`): this listener runs before it, in capture.
+        if ((e.target as HTMLElement | null)?.hasAttribute?.("data-list-escape")) return;
         e.stopPropagation();
         close.current();
         return;

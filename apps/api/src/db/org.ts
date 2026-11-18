@@ -180,8 +180,13 @@ export const enrollments = pgTable(
  * address. `displayName` (`@quiz/domain`) in SQL, for the readers that hand
  * `nom` and `prenom` on separately; the roster's own view reads the raw
  * columns, being where a name is typed, and names a line by `displayName`.
+ *
+ * STAFF READERS ONLY. It carries a roster line's e-mail: never in a student
+ * exit (invariant 4). The students' group view reads the raw columns, and a
+ * nameless classmate stays nameless there (`studentGroups.db.test.ts`
+ * searches every student response for the address).
  */
-export const shownNom = sql<string>`(CASE WHEN btrim(${qualified(enrollments.nom)}) = '' AND btrim(${qualified(enrollments.prenom)}) = '' THEN ${qualified(enrollments.email)} ELSE ${qualified(enrollments.nom)} END)`;
+export const staffShownNom = sql<string>`(CASE WHEN btrim(${qualified(enrollments.nom)}) = '' AND btrim(${qualified(enrollments.prenom)}) = '' THEN ${qualified(enrollments.email)} ELSE ${qualified(enrollments.nom)} END)`;
 
 /**
  * One user's own display state for one course (#155, ADR-032). Today it

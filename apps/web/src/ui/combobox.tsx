@@ -35,6 +35,12 @@ export interface ComboboxOptions {
    * list is open, and `count` comes from that fetch.
    */
   state?: [boolean, (open: boolean) => void];
+  /**
+   * The list IS the layer (the command palette): Escape closes the layer, as
+   * `useLayer` does by default. Otherwise an open list takes Escape first
+   * (`data-list-escape`), and the sheet or dialog around it stays.
+   */
+  layerEscape?: boolean;
 }
 
 export interface Combobox {
@@ -51,6 +57,7 @@ export interface Combobox {
     "aria-controls": string | undefined;
     "aria-activedescendant": string | undefined;
     "aria-autocomplete": "list";
+    "data-list-escape": "" | undefined;
     onFocus: (() => void) | undefined;
     onBlur: () => void;
     onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
@@ -85,6 +92,7 @@ export function useCombobox({
   listId: fixedListId,
   optionId: fixedOptionId,
   state,
+  layerEscape = false,
 }: ComboboxOptions): Combobox {
   const uid = useId();
   const listId = fixedListId ?? `${uid}-list`;
@@ -138,6 +146,7 @@ export function useCombobox({
       "aria-controls": completion && !open ? undefined : listId,
       "aria-activedescendant": open && count > 0 ? optionId(active) : undefined,
       "aria-autocomplete": "list",
+      "data-list-escape": open && !layerEscape ? "" : undefined,
       onFocus: completion
         ? undefined
         : () => {

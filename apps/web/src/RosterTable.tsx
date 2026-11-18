@@ -68,7 +68,7 @@ function Row({
   // A line added by its address alone has no name until its holder's first
   // sign-in (ADR-133): it is named by its address meanwhile.
   const fullName = displayName({ givenName: entry.prenom, familyName: entry.nom, email: entry.email });
-  const named = fullName !== entry.email;
+  const named = entry.nom.trim() !== "" || entry.prenom.trim() !== "";
 
   const save = useMutation({
     mutationFn: () =>

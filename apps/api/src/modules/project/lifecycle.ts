@@ -47,7 +47,7 @@ import {
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
-import { classrooms, codespaceProjects, enrollments, groupSets, projectGroupMembers, projectGroups, projects, shownNom } from "../../db/schema.js";
+import { classrooms, codespaceProjects, enrollments, groupSets, projectGroupMembers, projectGroups, projects, staffShownNom } from "../../db/schema.js";
 import type { InstallationClient } from "../../github/app.js";
 import { RepoNameTaken } from "../../github/provision.js";
 import { createSquashedRepo } from "../../github/squash.js";
@@ -551,7 +551,7 @@ export interface Unassigned {
  */
 export async function unassignedStudents(db: Db | Tx, project: Pick<ProjectRow, "id" | "classroomId">): Promise<Unassigned[]> {
   return db
-    .select({ enrollmentId: enrollments.id, nom: shownNom, prenom: enrollments.prenom })
+    .select({ enrollmentId: enrollments.id, nom: staffShownNom, prenom: enrollments.prenom })
     .from(enrollments)
     .leftJoin(
       projectGroupMembers,
@@ -565,7 +565,7 @@ export async function unassignedStudents(db: Db | Tx, project: Pick<ProjectRow, 
         isNull(projectGroupMembers.id),
       ),
     )
-    .orderBy(shownNom, enrollments.prenom);
+    .orderBy(staffShownNom, enrollments.prenom);
 }
 
 /** Opening a project needs its distribution built (ADR-062): `distribution_missing`. */

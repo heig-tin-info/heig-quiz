@@ -11,6 +11,7 @@ import {
   type PoolMembers,
   type PoolRole,
   type PoolUnpublishImpact,
+  type TeacherCandidateQuery,
 } from "@quiz/contracts";
 
 import { api, ApiError, apiErrorMessage, isNotFound, refusedWith } from "../api";
@@ -332,9 +333,10 @@ export function PoolSharing({ pool }: { pool: Pool }) {
           >
             <PersonPicker
               candidatesKey={poolCandidatesKey(pool.id)}
-              candidatesUrl={`/app/api/pools/${pool.id}/candidates`}
+              candidatesUrl={(q) => `/app/api/pools/${pool.id}/candidates?${new URLSearchParams({ q } satisfies TeacherCandidateQuery)}`}
               label={t("share.teacher")}
               idle={t("share.everyoneSeated")}
+              words="teacherPicker"
               disabled={invite.isPending}
               {...who.picker}
             />

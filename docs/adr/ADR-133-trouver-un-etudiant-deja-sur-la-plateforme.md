@@ -54,20 +54,25 @@ schools apart, and `LOGIN_DOMAINS` is an admission list, not a tenant.
    `users.email`: the login address is often private, and matching it would
    tell whether a private address has an account, and whose. A result is the
    name and one such school address: no account id, no picture, no last
-   sign-in, no GitHub login. A search takes three characters and offers ten
-   people at most. Left out: pseudonymized accounts (`anonymized_at`),
-   accounts without claims (the heig-classroom placeholders), dormant ones
-   (`inactivity_notified_at`, ADR-117 §3), anyone whose line or verified
-   address is already on this roster, and the course's staff (they take a
-   seat through *Join as student*, ADR-018).
+   sign-in, no GitHub login. A search takes three characters, blanks and
+   accents aside, and offers ten people at most. Left out: pseudonymized
+   accounts (`anonymized_at`), accounts without claims (the heig-classroom
+   placeholders), dormant ones (`inactivity_notified_at`, ADR-117 §3),
+   anyone who claimed a line of this roster or whose school address (in the
+   tenant) is on it, and the course's staff (they take a seat through *Join
+   as student*, ADR-018). Never by another address of the person: a line
+   under a private address would otherwise remove its holder from the
+   results, and so tell whose address it is. Two pending lines of one person
+   end as a claim conflict (AU-21), as any other two.
 3. **Who may search** (assumed). A caller whose role holds in its own right
    (an admin, a teacher grant, a staff affiliation), never by a course seat
    alone: a student assistant seated on a course does not search the school.
    From the caller's own `portal` session only: no personal token (ADR-113),
    no MCP, no help assistant (ADR-080), no impersonation (ADR-034). Super
    Powers (ADR-054) do not widen the tenant. The classroom is loaded first
-   by the staff loader (invariant 6); a refused caller then gets `403
-   student_search_unavailable`.
+   by the staff loader (invariant 6). A caller who may not search finds
+   nobody (an empty list, the sheet unchanged) and adds by address; a pick
+   they send is refused, `403 student_search_unavailable`.
 4. **The name at the claim** (assumed). A line's names are the staff's: a
    typed or imported name is never overwritten, and official names keep
    coming by CSV. The claim fills only a line whose name is blank, from the
@@ -76,8 +81,11 @@ schools apart, and `LOGIN_DOMAINS` is an admission list, not a tenant.
    e-mail", plus the extra time. A picked result writes its name and school
    address; an address typed with no result writes a nameless line. The CSV
    import and the pasted list are unchanged. A nameless line is shown as its
-   address by every reader: `displayName` (`@quiz/domain`) in the web app,
-   its SQL encoding `shownNom` (`db/org.ts`) in the API readers.
+   address by every staff reader: `displayName` (`@quiz/domain`) in the web
+   app, its SQL encoding `staffShownNom` (`db/org.ts`) in the API readers.
+   Never by a student reader (invariant 4): the students' group view sends
+   a nameless classmate with a blank name, counted in their group, and shows
+   "Name to come".
 6. **A line added from a result stays pending.** The staff action writes no
    `user_id`; the person's next own request claims the line, as every other
    (ADR-053 addendum §2). The pick is the school address, and the server
@@ -120,7 +128,10 @@ directory (`directory.ts`), where a student still never appears.
   is a derived school address, never a claim.
 - The search scans the accounts with claims, prefiltered in SQL; the
   platform holds thousands of accounts, not millions. A larger platform
-  would want an indexed column of school domains.
+  would want an indexed column of school domains. The prefilter reads at
+  most 100 accounts before the domain rule decides, and its fold covers
+  U+00C0–U+024F: either can hide a true match (a rarer letter, a common
+  word), never show one that should not be.
 - Staging's copied data carries claims `'{}'` (`scripts/staging-pseudonymize.sql`):
   there the search finds only the people who signed in to staging
   themselves. The development personas carry HEIG-VD claims, and the seed
