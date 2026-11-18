@@ -39,6 +39,7 @@ import { projectGraded, scoresFinal, teacherScoreMax } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
+import type { Clock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { projectRepos, projects } from "../../db/schema.js";
 import { notFoundError } from "../http.js";
@@ -120,12 +121,15 @@ export async function overrideScore(
  * (`releasableScore`) rather than deadlocking the release. The student repositories
  * (`studentRepos`) and the counts (`releaseCounts`) are the page's. Writes
  * every repository's snapshot and the project's `released_at`; idempotent
- * in effect, audited each time.
+ * in effect, audited each time. `released_at` is read from `clock` once the
+ * project's row is held: a Regrade claimed meanwhile (`claimRegrades`,
+ * under its share lock) is stamped before it or sees it (ADR-132 §5).
  */
-export async function releaseProject(db: Db, projectId: string, actor: AuditActor, userId: string, now: Date): Promise<ProjectReleaseResult> {
+export async function releaseProject(db: Db, projectId: string, actor: AuditActor, userId: string, clock: Clock): Promise<ProjectReleaseResult> {
   const { result, project, repos } = await db.transaction(async (tx) => {
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!project) throw notFoundError("project");
+    const now = clock.now();
     if (!projectGraded(project.gradingMode)) throw new ProjectError("grading_none", "The project is not graded");
     if (groupSyncOwed(project)) throw new ProjectError("group_sync_pending", "A resync of the groups is still being applied on GitHub");
     const repos = await studentRepos(tx, project);

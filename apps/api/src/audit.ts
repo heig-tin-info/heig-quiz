@@ -570,7 +570,9 @@ export type AuditAction =
    * `payload.passId`, `repos` (their count), the project's cap;
    * `project_repo.regrade` — `payload.passId`, `repoId`, that repository's.
    * For a schema-3 project (ADR-119 §6) each repository's pass is its own:
-   * `passId` is the first's, `passIds` (the project's) all of them.
+   * `passId` is the first's, `passIds` (the project's) all of them;
+   * `afterRelease: true` when the project was released and the staff
+   * acknowledged it (ADR-132 §5).
    */
   | "project.regrade"
   | "project_repo.regrade"

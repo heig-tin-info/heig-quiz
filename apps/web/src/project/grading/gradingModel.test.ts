@@ -13,6 +13,7 @@ const repo = (id: string, over: Partial<ProjectGradingRepo> = {}, validation: Pa
   table: [],
   evidence: null,
   total: null,
+  pass: null,
   ...over,
 });
 const done = (id: string) => repo(id, {}, { validated: true, proposed: [] });

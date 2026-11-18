@@ -54,7 +54,7 @@ choice (c) compares at that commit against that distribution commit, and
 accepts at the run's head a `grading.yml` the distribution handed out (any
 version of its history under `squash`, its live head's under `whole`); the
 LLM reads the graded commit; a Regrade replaces the machine's rows,
-validated ones included, on an actual new result (A2, to be delivered).
+validated ones included, on an actual new result.
 
 Scope: how a project in the `criteria` grading mode whose snapshot is
 schema version 3 gets its automatic evidence (the repository's CI,

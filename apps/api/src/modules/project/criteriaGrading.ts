@@ -15,19 +15,23 @@
  *
  * A criterion whose current row a CI pass set, with a log stored for it,
  * is marked `ciLog`; the log is read on demand from that pass's results
- * (`criterionCiLog`, ADR-119 §8): staff only, like everything here.
+ * (`criterionCiLog`, ADR-119 §8): staff only, like everything here. A
+ * repository's latest CI pass gives its trace (`pass`, ADR-132 §5, §6):
+ * the files its graded commit took from the distribution, and the failures
+ * that left an earlier row standing.
  *
  * Grading starts at a repository's definitive freeze (`409 not_frozen`).
  * STAFF ONLY (N-SEC-20): the routes load the project (and repository)
  * through `staffAccess`, every write also behind `requireCourseRole`
  * (invariant 6); nothing here is a student's view.
  */
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 
 import type {
   CriteriaTableRow as TableRowContract,
   CriterionCiLog,
   CriterionGradeWrite,
+  ProjectGradingPass,
   ProjectGradingRepo,
   ProjectGradingView,
   ProjectRepoCriteria,
@@ -38,7 +42,7 @@ import { awardedRange, criteriaTable, currentCriterionRows, type CriteriaTableRo
 import { audit, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { projectCiResults, projectCriteria, projectEvidence, projectGroups, users } from "../../db/schema.js";
+import { gradeDispatches, projectCiResults, projectCriteria, projectEvidence, projectGroups, users } from "../../db/schema.js";
 import { notFoundError } from "../http.js";
 import { criteriaStandings, type CriteriaStanding, validateProposals, writeCriterionGrades } from "./criterionGrades.js";
 import { isLive } from "./deadline.js";
@@ -102,6 +106,39 @@ async function evidenceSummaries(db: Db, repoIds: readonly string[]): Promise<Ma
   );
 }
 
+/**
+ * The trace of the latest CI pass of each of `repoIds` claimed or settled
+ * (ADR-132 §5, §6), by repository, in one read: the files its graded commit
+ * replaced, and its failures that left an earlier row standing.
+ */
+async function passTraces(db: Db, repoIds: readonly string[]): Promise<Map<string, ProjectGradingPass>> {
+  if (repoIds.length === 0) return new Map();
+  const rows = await db
+    .selectDistinctOn([gradeDispatches.repoId], {
+      repoId: gradeDispatches.repoId,
+      graftedPaths: gradeDispatches.graftedPaths,
+      keptFailures: gradeDispatches.keptFailures,
+    })
+    .from(gradeDispatches)
+    .where(
+      and(
+        inArray(gradeDispatches.repoId, [...repoIds]),
+        isNotNull(gradeDispatches.nonce),
+        or(ne(gradeDispatches.sha, ""), isNotNull(gradeDispatches.closedAt)),
+      ),
+    )
+    .orderBy(gradeDispatches.repoId, desc(gradeDispatches.createdAt));
+  return new Map(
+    rows.map((row) => [
+      row.repoId,
+      {
+        replaced: row.graftedPaths ?? { count: 0, paths: [] },
+        kept: Object.entries(row.keptFailures ?? {}).map(([criterionId, reason]) => ({ criterionId, reason })),
+      },
+    ]),
+  );
+}
+
 /** The current row of each criterion set by a CI pass (ADR-119 §6): its pass, by criterion. */
 const ciPasses = (standing: CriteriaStanding) =>
   [...currentCriterionRows(standing.rows).values()].filter((row) => row.source === "auto" && row.passId !== null && row.reason === null);
@@ -135,9 +172,10 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
   if (repos.length === 0) return [];
   const groupIds = repos.flatMap((r) => (r.groupId === null ? [] : [r.groupId]));
   const userIds = repos.filter((r) => r.groupId === null).map((r) => r.userId);
-  const [standings, evidence, groups, people] = await Promise.all([
+  const [standings, evidence, passes, groups, people] = await Promise.all([
     criteriaStandings(db, repos),
     evidenceSummaries(db, repos.map((r) => r.id)),
+    passTraces(db, repos.map((r) => r.id)),
     groupIds.length === 0
       ? []
       : db.select({ id: projectGroups.id, name: projectGroups.name }).from(projectGroups).where(inArray(projectGroups.id, groupIds)),
@@ -165,6 +203,7 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
           table: table.map((row): TableRowContract => (own?.has(row.criterionId) ? { ...row, ciLog: true } : row)),
           evidence: evidence.get(repo.id) ?? null,
           total: standing.score,
+          pass: passes.get(repo.id) ?? null,
         },
       ];
     })
@@ -184,9 +223,16 @@ export async function gradingRepo(db: Db, project: ProjectRow, repo: RepoRow): P
 
 /** `GET /app/api/projects/:id/grading`: every repository the screen grades. */
 export async function gradingView(db: Db, project: ProjectRow): Promise<ProjectGradingView> {
-  await snapshotOf(db, project);
+  const { schemaVersion } = await snapshotOf(db, project);
   return {
-    project: { id: project.id, classroomId: project.classroomId, name: project.name, deadlineAt: iso(project.deadlineAt) },
+    project: {
+      id: project.id,
+      classroomId: project.classroomId,
+      name: project.name,
+      deadlineAt: iso(project.deadlineAt),
+      schemaVersion,
+      released: project.releasedAt !== null,
+    },
     repos: await gradingRepos(db, project, await gradedRepos(db, project)),
   };
 }

@@ -439,6 +439,20 @@ const scenes = [
       await p.evaluate(() => window.scrollTo(0, 0));
     },
   },
+  // ADR-132 §5, §6: the latest CI pass's line, its replaced files unfolded; then a Regrade's confirmation (schema 3).
+  {
+    name: "project-grading-regrade",
+    role: "teacher",
+    path: "/projects/0190d3c4-0000-7000-8000-0000000000c1/grading?projects=1&pjcriteria=1",
+    settle: 1500,
+    act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /(replaced by the distribution's version|remplacés? par la version de la distribution)/ }).click();
+      await p.getByRole("button", { name: /^(More actions|Plus d'actions)$/ }).click();
+      await p.getByRole("menuitem", { name: /^(Regrade this repository|Recorriger ce dépôt)$/ }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
   { name: "project-grading-empty", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c2/grading?projects=1&pjcriteria=1" },
   // Its project page: Grade, the primary action while a repository is to
   // validate; its Grading tab (the statistics of the validated repositories

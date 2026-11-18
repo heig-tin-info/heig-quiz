@@ -6426,6 +6426,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.refusal.pointsOutOfRange": "Ces points sont hors des bornes du critère.",
   "project.refusal.criteriaIncomplete": "Un critère n'a pas encore de points : donnez-lui-en, 0 compris, avant de valider.",
   "project.refusal.notValidated": "Les critères de chaque dépôt doivent être validés avant la publication.",
+  "project.refusal.regradeReleased": "Le projet est publié : confirmez à nouveau la recorrection pour remplacer des lignes validées.",
   "project.refusal.regradeLimit": "Ce projet a déjà été recorrigé trois fois aujourd'hui : réessayez demain.",
   "project.grading.open": "Corriger",
   "project.grading.openLink": "Écran de correction",
@@ -6508,6 +6509,18 @@ export const fr: Record<keyof Dict, string> = {
   "project.grading.regradeAll.body": "Les tests et l'IA tournent à nouveau pour chaque dépôt ({n} appels). Les lignes validées ou saisies par un enseignant sont conservées. Au plus trois recorrections du projet entier par jour.",
   "project.grading.regrade.confirm": "Recorriger",
   "project.grading.regrade.done": "Recorrection lancée : les propositions arrivent dans un instant.",
+  "project.grading.regradeCi.body":
+    "La CI et l'IA corrigent à nouveau ce dépôt (un appel). Leurs résultats remplacent les lignes de la machine, validées comprises. Les points de l'équipe enseignante et les lignes d'un point de contrôle restent. Trois fois par jour au plus.",
+  "project.grading.regradeAllCi.body":
+    "La CI et l'IA corrigent à nouveau chaque dépôt ({n} appels). Leurs résultats remplacent les lignes de la machine, validées comprises. Les points de l'équipe enseignante et les lignes d'un point de contrôle restent. Trois fois par jour au plus.",
+  "project.grading.regradeReleased.body":
+    "Les étudiants gardent la note publiée jusqu'à la prochaine publication, sans nouvelle notification, pendant que leurs critères affichent les nouveaux points comme indicatifs et que les lignes remplacées attendent votre validation.",
+  "project.grading.pass.replaced.one": "1 fichier remplacé par la version de la distribution",
+  "project.grading.pass.replaced": "{n} fichiers remplacés par la version de la distribution",
+  "project.grading.pass.more": "et {n} autres",
+  "project.grading.pass.keptFlag": "lignes précédentes conservées",
+  "project.grading.pass.kept.one": "Aucun nouveau résultat pour {criteria} ({reasons}) : la ligne précédente reste",
+  "project.grading.pass.kept": "Aucun nouveau résultat pour {criteria} ({reasons}) : les lignes précédentes restent",
   "project.grading.keys": "← → entre les dépôts",
   "project.grading.ciLog": "Sortie de la CI",
   "project.grading.ciLog.none": "Aucune sortie.",

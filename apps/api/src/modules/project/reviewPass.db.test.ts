@@ -569,6 +569,17 @@ describe("Regrade", () => {
     }
   });
 
+  it("regrades a released schema-2 project without a body: no acknowledgement asked (ADR-132 §5 is schema 3's)", async () => {
+    const l = await lab();
+    const a = await studentRepo(l, "rg-v2");
+    await pushed(a);
+    await server.app.db.update(projects).set({ releasedAt: new Date(NOW) }).where(eq(projects.id, l.projectId));
+    const res = await server.app.inject({ method: "POST", url: regradeUrl(l, a.id), headers: teacher.headers });
+    expect([res.statusCode, res.json()], res.body).toEqual([202, { repos: 1 }]);
+    const [audited] = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "project_repo.regrade"), eq(auditLog.subjectId, l.projectId)));
+    expect(audited!.payload).not.toHaveProperty("afterRelease");
+  });
+
   // No 403 to test: every staff seat is an owner or an assistant (`course_staff.role` NOT NULL), and both pass
   // `requireCourseRole("assistant")`; someone off the staff gets the loader's 404.
   it("is refused to an outsider (404), off the criteria mode, and on a repository not frozen for good", async () => {

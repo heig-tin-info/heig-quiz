@@ -620,9 +620,11 @@ export const PROJECT_REFUSALS = [
   "not_invitable",
   // ADR-106 §4: a Regrade of a project not graded by criteria (409; a
   // repository not frozen for good is `not_frozen`), and past the project's
-  // three a day (429).
+  // three a day (429). ADR-132 §5: a Regrade of a released schema-3 project
+  // without its acknowledgement (409).
   "not_criteria",
   "regrade_limit",
+  "regrade_released",
   // ADR-106 §8, the grading screen: a teacher's points outside the
   // criterion's range (422); a validation while a criterion has no row
   // (`repos`, {@link CriteriaIncomplete}); a release while a live
@@ -1704,9 +1706,18 @@ export const ProjectSourceDetail = z.object({
 export type ProjectSourceDetail = z.infer<typeof ProjectSourceDetail>;
 
 /**
- * `POST /app/api/projects/:id/regrade` and `…/repos/:rid/regrade` (ADR-106
- * §4), 202: the repositories sent through a new pass — one model call each,
- * what the confirmation's cost estimate counts. No body.
+ * The body of `POST /app/api/projects/:id/regrade` and `…/repos/:rid/regrade`
+ * (ADR-106 §4), optional: a Regrade of a released schema-3 project replaces
+ * validated rows (ADR-132 §5), so it carries the staff's acknowledgement,
+ * else `409 regrade_released`.
+ */
+export const ProjectRegradeRequest = z.strictObject({ releasedAcknowledged: z.literal(true).optional() });
+export type ProjectRegradeRequest = z.infer<typeof ProjectRegradeRequest>;
+
+/**
+ * The answer of a Regrade (ADR-106 §4), 202: the repositories sent through
+ * a new pass — one model call each, what the confirmation's cost estimate
+ * counts.
  */
 export const ProjectRegradeAccepted = z.object({ repos: z.number().int().nonnegative() });
 export type ProjectRegradeAccepted = z.infer<typeof ProjectRegradeAccepted>;
@@ -1771,10 +1782,24 @@ export const RepoValidation = z.object({ validated: z.boolean(), missing: z.arra
 export type RepoValidation = z.infer<typeof RepoValidation>;
 
 /**
+ * The latest CI pass of a schema-3 repository (ADR-132 §5, §6), staff only
+ * (N-SEC-20): how many files its graded commit holds in the distribution's
+ * version instead of the student's, the first of their paths (capped), and
+ * its automatic criteria that got no new result while an earlier row
+ * stayed, with why.
+ */
+export const ProjectGradingPass = z.object({
+  replaced: z.object({ count: z.number().int().nonnegative(), paths: z.array(z.string()) }),
+  kept: z.array(z.object({ criterionId: z.string(), reason: CriterionReason })),
+});
+export type ProjectGradingPass = z.infer<typeof ProjectGradingPass>;
+
+/**
  * One repository of the grading screen — and the answer of `GET
  * …/repos/:rid/criteria`, the same computation: its criteria table and last
  * evidence ({@link ProjectRepoCriteria}), whose it is, frozen or not, its
- * validation and, once validated, its criteria total (`criteriaScore`).
+ * validation and, once validated, its criteria total (`criteriaScore`); its
+ * latest CI pass's trace (null without one).
  */
 export const ProjectGradingRepo = ProjectRepoCriteria.extend({
   id: z.uuid(),
@@ -1785,6 +1810,7 @@ export const ProjectGradingRepo = ProjectRepoCriteria.extend({
   frozen: z.boolean(),
   validation: RepoValidation,
   total: z.object({ points: z.number(), max: z.number() }).nullable(),
+  pass: ProjectGradingPass.nullable(),
 });
 export type ProjectGradingRepo = z.infer<typeof ProjectGradingRepo>;
 
@@ -1800,6 +1826,9 @@ export const ProjectGradingView = z.object({
     classroomId: z.uuid(),
     name: z.string(),
     deadlineAt: z.iso.datetime(),
+    /** The snapshot's schema: 3, a Regrade redoes the machine's correction (ADR-132 §5). */
+    schemaVersion: z.union([z.literal(2), z.literal(3)]),
+    released: z.boolean(),
   }),
   repos: z.array(ProjectGradingRepo),
 });

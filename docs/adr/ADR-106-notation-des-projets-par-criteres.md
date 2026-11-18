@@ -35,7 +35,7 @@ the tarball is fetched at the pass's graded commit when one was built
 (ADR-132 §2, §4); a Regrade replaces the repository's `auto` and `llm`
 rows, validated ones included, once its run is accepted — never a `manual`
 nor a locked row — and is allowed after the release with an explicit
-acknowledgement (ADR-132 §5; A2, to be delivered).
+acknowledgement (ADR-132 §5).
 
 Scope: how a project whose staff chose the `criteria` grading mode is graded —
 its criteria, the evidence the platform collects, the LLM pass, the

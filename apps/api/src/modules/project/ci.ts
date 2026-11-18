@@ -65,8 +65,9 @@
  * `no_result`.
  *
  * Settling writes through the single writer (`writeCriterionGrades`),
- * never over a held criterion; once settled, the pass's LLM review is
- * queued (`project.review`, `reviewPass.ts`, ADR-119 §7).
+ * never over a held criterion — a Regrade's results over a validated
+ * machine row included (ADR-132 §5) —; once settled, the pass's LLM review
+ * is queued (`project.review`, `reviewPass.ts`, ADR-119 §7).
  */
 import { randomUUID } from "node:crypto";
 
@@ -91,6 +92,7 @@ import {
 } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
+import type { Clock } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { githubOrganizations, gradeDispatches, projectCiResults, projectCriteria, projectRepos, projects } from "../../db/schema.js";
@@ -100,7 +102,8 @@ import { buildGradedCommit, type Graft } from "../../github/graft.js";
 import { referenceBlob } from "../../github/revert.js";
 import { PROJECT_CI_QUEUE, PROJECT_REVIEW_QUEUE } from "../../jobs.js";
 import { ciGraded } from "./criteria.js";
-import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
+import { ProjectError } from "./errors.js";
+import { writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
 import { projectClient } from "./evidence.js";
 import { ingestCompletedRun, type CompletedRun } from "./grading.js";
 import { CI_SNAPSHOT, ciNonce, passScope, type PassScope } from "./milestone.js";
@@ -156,11 +159,27 @@ async function loadPass(db: Db | Tx, passId: string): Promise<LoadedPass | null>
 /**
  * A Regrade's passes (ADR-119 §6: always a new dispatch, with a new nonce),
  * one `regrade` row per repository, each closing the open final pass or
- * earlier Regrade of its repository (a milestone's stays). The pass ids.
+ * earlier Regrade of its repository (a milestone's stays). Under the
+ * project's row, share-locked first (a release's order), its `released_at`
+ * re-read: released, the claim needs the acknowledgement (`409
+ * regrade_released`, ADR-132 §5); its `created_at` read from `clock` once
+ * the lock is held, so a release is stamped before it or after it commits.
+ * The pass ids, and whether the project was released.
  */
-export async function claimRegrades(db: Db, repoIds: readonly string[], now: Date): Promise<string[]> {
-  if (repoIds.length === 0) return [];
+export async function claimRegrades(
+  db: Db,
+  projectId: string,
+  repoIds: readonly string[],
+  clock: Clock,
+  acknowledged: boolean,
+): Promise<{ passIds: string[]; afterRelease: boolean }> {
   return db.transaction(async (tx) => {
+    const [project] = await tx.select({ releasedAt: projects.releasedAt }).from(projects).where(eq(projects.id, projectId)).for("share");
+    const afterRelease = project?.releasedAt != null;
+    if (afterRelease && !acknowledged) {
+      throw new ProjectError("regrade_released", "The project is released: a regrade replaces validated rows, confirm it");
+    }
+    const now = clock.now();
     await tx
       .update(gradeDispatches)
       .set({ closedAt: now })
@@ -169,7 +188,7 @@ export async function claimRegrades(db: Db, repoIds: readonly string[], now: Dat
       .insert(gradeDispatches)
       .values(repoIds.map((repoId) => ({ id: randomUUID(), repoId, trigger: "regrade" as const, sha: "", nonce: ciNonce(), createdAt: now })))
       .returning({ id: gradeDispatches.id });
-    return rows.map((r) => r.id);
+    return { passIds: rows.map((r) => r.id), afterRelease };
   });
 }
 
@@ -215,8 +234,11 @@ const fraction = (score: string) => score.replace(/\s+/g, "");
  * pass loses — and its automatic criteria's rows written, proposed
  * (`writeCriterionGrades`: a held criterion is left alone): 0 points with
  * the reason, or each criterion's points from the results (`no_result` for
- * one the file does not answer), its rationale the fraction. The results
- * are stored first, the logs staff-only. False when another settled it.
+ * one the file does not answer), its rationale the fraction — a Regrade's
+ * results over a validated row too, its failures over no machine row
+ * (ADR-132 §5, the writer's rule, which records such a failure on the
+ * pass). The results are stored first, the logs staff-only. False when
+ * another settled it.
  */
 async function settle(app: FastifyInstance, loaded: LoadedPass, settlement: Settlement): Promise<boolean> {
   const db = app.db;
@@ -251,14 +273,8 @@ async function settle(app: FastifyInstance, loaded: LoadedPass, settlement: Sett
         : row(byId.get(outcome.id)!, { points: outcome.points, rationale: fraction(results.criteria[outcome.id]!.score), reason: null }),
     );
   }
-  // Not held, nor already this pass's (a settle replayed); the writer checks again under its lock.
-  const held = await heldCriteria(db, pass.repoId, pass.id);
-  await writeCriterionGrades(
-    db,
-    pass.repoId,
-    inputs.filter((input) => !held.has(input.criterionId)),
-    now,
-  );
+  // The writer leaves a held criterion alone (`holdsCriterion`), under its lock; a settle runs once (`won`).
+  await writeCriterionGrades(db, pass.repoId, inputs, now);
   await hintProjectStaff(db, [loaded.project.id]);
   // The pass's LLM review follows (ADR-119 §7), on its results' logs or, without any, the sources alone.
   // A queue's job: without `app.boss` the review is not run, as the dispatch is not sent (`sendCiPasses`).
@@ -341,6 +357,12 @@ async function graftPass(app: FastifyInstance, config: AppConfig, loaded: Loaded
   }
 }
 
+/** A graded commit's paths as the audit and the staff's line keep them (ADR-132 §6): their count, and the first ones, capped by count and length. */
+function cappedPaths(paths: readonly string[]): { count: number; paths: string[] } {
+  let chars = 0;
+  return { count: paths.length, paths: paths.slice(0, GRAFT_AUDIT_PATHS).filter((path) => (chars += path.length) <= GRAFT_AUDIT_CHARS) };
+}
+
 /** A graft's audit entry (ADR-132 §6): its shas and paths, the paths capped by count and length; or why it failed. */
 async function auditGraft(db: Db | Tx, { pass, repo, project }: LoadedPass, target: string, outcome: GraftOutcome): Promise<void> {
   const base = { ...SYSTEM_ACTOR, subjectType: "project_repo" as const, subjectId: repo.id };
@@ -349,13 +371,10 @@ async function auditGraft(db: Db | Tx, { pass, repo, project }: LoadedPass, targ
     return;
   }
   if (!outcome.graft) return;
-  const { sha, paths } = outcome.graft;
-  let chars = 0;
-  const kept = paths.slice(0, GRAFT_AUDIT_PATHS).filter((path) => (chars += path.length) <= GRAFT_AUDIT_CHARS);
   await audit(db, {
     ...base,
     action: "project_repo.grade_grafted",
-    payload: { projectId: project.id, passId: pass.id, target, gradedSha: sha, distributionSha: outcome.distributionSha, count: paths.length, paths: kept },
+    payload: { projectId: project.id, passId: pass.id, target, gradedSha: outcome.graft.sha, distributionSha: outcome.distributionSha, ...cappedPaths(outcome.graft.paths) },
   });
 }
 
@@ -407,7 +426,7 @@ export async function runCiDispatch(app: FastifyInstance, config: AppConfig, job
   const claimed = await db.transaction(async (tx) => {
     const [row] = await tx
       .update(gradeDispatches)
-      .set({ sha: target, gradedSha: graft?.sha ?? null, distributionSha })
+      .set({ sha: target, gradedSha: graft?.sha ?? null, distributionSha, graftedPaths: graft ? cappedPaths(graft.paths) : null })
       .where(and(eq(gradeDispatches.id, pass.id), eq(gradeDispatches.sha, ""), OPEN))
       .returning({ id: gradeDispatches.id });
     if (row) await auditGraft(tx, loaded, target, grafted);

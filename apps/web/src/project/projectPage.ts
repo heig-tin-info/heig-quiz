@@ -395,6 +395,7 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   criteria_incomplete: "project.refusal.criteriaIncomplete",
   not_validated: "project.refusal.notValidated",
   regrade_limit: "project.refusal.regradeLimit",
+  regrade_released: "project.refusal.regradeReleased",
   command_needs_network: "project.criteria.error.command_needs_network",
   seb_required: "project.refusal.sebRequired",
   // ADR-129 §5: the staff's *Open in workspace*.

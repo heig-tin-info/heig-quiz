@@ -9,6 +9,8 @@ export interface Step {
   label: string;
   description?: string | undefined;
   done: boolean;
+  /** A flag over the step, and its words for a screen reader. */
+  flag?: string | undefined;
 }
 
 /**
@@ -88,7 +90,7 @@ export function StepBar({
           className="mt-1"
           label={label}
           onSelect={(_id, i) => onJump(i)}
-          segments={steps.map((s, i) => ({ id: s.id, mark: s.done ? "answered" : "unanswered", current: i === index }))}
+          segments={steps.map((s, i) => ({ id: s.id, mark: s.done ? "answered" : "unanswered", current: i === index, flagged: s.flag !== undefined, flagLabel: s.flag }))}
         />
       ) : null}
     </section>

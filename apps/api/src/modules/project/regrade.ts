@@ -7,7 +7,7 @@
  * the same target and distribution commits reused, `collectEvidence`),
  * then its review (`reviewPass.ts`), which proposes again the llm criteria
  * no one holds; the evidence job proposes the automatic ones. Neither ever
- * supersedes a validated row nor a teacher's. At most
+ * supersedes a validated row nor a teacher's (a schema-2 snapshot). At most
  * {@link PROJECT_REGRADES_PER_DAY} a day per project, the project's and a
  * repository's counting one each, on the audit log's entries and the
  * server's day in the school's zone (ADR-058 L2 (b)): two pressed at the
@@ -18,14 +18,23 @@
  * CI: each repository gets a new pass (`claimRegrades`: a new nonce, the
  * previous one closed) and its `quiz-grade` dispatch (`sendCiPasses`);
  * the automatic criteria follow from the run accepted. `payload.passId` is
- * then the first repository's pass, `payload.passIds` all of them.
+ * then the first repository's pass, `payload.passIds` all of them. Such a
+ * Regrade redoes the machine's correction (ADR-132 §5): the accepted run's
+ * results and the model's replies replace the `auto` and `llm` rows,
+ * validated ones included; a failure replaces no validated row; a
+ * teacher's row and a milestone's locked row stay. Once the project is
+ * released it asks for the staff's acknowledgement (`409
+ * regrade_released`; audited `afterRelease`): the replaced rows wait for a
+ * validation again, and the students read the release's grade until a new
+ * release. Which pass may replace a validated row is the writer's rule
+ * (`holdsCriterion`, from the pass's row at the write).
  */
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 
-import type { ProjectRegradeAccepted } from "@quiz/contracts";
+import type { ProjectRegradeAccepted, ProjectRegradeRequest } from "@quiz/contracts";
 import { PROJECT_REGRADES_PER_DAY, SCHOOL_TIME_ZONE } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
@@ -34,7 +43,6 @@ import type { Db } from "../../db/client.js";
 import { auditLog, projectCriteria, projectRepos, projects } from "../../db/schema.js";
 import { PROJECT_EVIDENCE_QUEUE } from "../../jobs.js";
 import { claimRegrades, sendCiPasses } from "./ci.js";
-import { snapshotVersion } from "./criteria.js";
 import { isLive, LIVE } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import type { EvidenceJob } from "./evidence.js";
@@ -68,11 +76,12 @@ async function regradesToday(db: Db, projectId: string, action: RegradeAction, r
 
 /**
  * `POST …/regrade` (`repo` null) and `POST …/repos/:rid/regrade`: refused
- * with `409 not_criteria` off the `criteria` mode, `409 not_frozen` when
- * the repository (or every repository) is not frozen for good, `429
- * regrade_limit` past the day's three; audited, then each repository's
- * evidence job sent (run here without a queue). The repositories sent: one
- * model call each, what the confirmation priced.
+ * with `409 not_criteria` off the `criteria` mode, `409 regrade_released`
+ * for a released schema-3 project without `releasedAcknowledged`, `409
+ * not_frozen` when the repository (or every repository) is not frozen for
+ * good, `429 regrade_limit` past the day's three; audited, then each
+ * repository's evidence job sent (run here without a queue). The
+ * repositories sent: one model call each, what the confirmation priced.
  */
 export async function regrade(
   app: FastifyInstance,
@@ -81,10 +90,12 @@ export async function regrade(
   repo: RepoRow | null,
   actor: AuditActor,
   now: Date,
+  body: ProjectRegradeRequest = {},
 ): Promise<ProjectRegradeAccepted> {
   const db = app.db;
   const [snapshot] = await db.select().from(projectCriteria).where(eq(projectCriteria.projectId, project.id));
   if (project.gradingMode !== "criteria" || !snapshot) throw new ProjectError("not_criteria", "The project is not graded by criteria");
+  const ci = snapshot.criteria.schemaVersion === 3;
   const repos =
     repo === null
       ? await db
@@ -100,9 +111,11 @@ export async function regrade(
   if ((await regradesToday(db, project.id, action, repo?.id ?? null, now)) >= PROJECT_REGRADES_PER_DAY) {
     throw new ProjectError("regrade_limit", "Regraded as often as a day allows: try again tomorrow");
   }
-  // A schema-3 snapshot: each repository's CI graded run dispatched anew, a new nonce each (ADR-119 §6).
-  const ci = (await snapshotVersion(db, project.id)) === 3;
-  const passIds = ci ? await claimRegrades(db, repos.map((r) => r.id), now) : [randomUUID()];
+  // A schema-3 snapshot: each repository's CI graded run dispatched anew, a new nonce each (ADR-119 §6); it can
+  // replace validated rows (ADR-132 §5), so after the release only acknowledged, decided under the project's lock.
+  const { passIds, afterRelease } = ci
+    ? await claimRegrades(db, project.id, repos.map((r) => r.id), app.clock, body.releasedAcknowledged === true)
+    : { passIds: [randomUUID()], afterRelease: false };
   const passId = passIds[0]!;
   // Both on the project; the repository's in the payload, which its own day's cap counts.
   await audit(db, {
@@ -110,7 +123,10 @@ export async function regrade(
     action,
     subjectType: "project",
     subjectId: project.id,
-    payload: repo === null ? { passId, repos: repos.length, ...(ci ? { passIds } : {}) } : { passId, repoId: repo.id },
+    payload: {
+      ...(repo === null ? { passId, repos: repos.length, ...(ci ? { passIds } : {}) } : { passId, repoId: repo.id }),
+      ...(afterRelease ? { afterRelease: true } : {}),
+    },
     at: now,
   });
   if (ci) {

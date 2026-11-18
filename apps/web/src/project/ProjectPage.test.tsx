@@ -1938,12 +1938,13 @@ function gradingRepo(n: number, label: string, points: [number, number, number, 
     ],
     evidence: null,
     total: validated ? { points: Math.max(0, points[0] + points[1] + points[2] + points[3]), max: 12 } : null,
+    pass: null,
     ...over,
   };
 }
 
 function gradingView(repos: ProjectGradingRepo[]): ProjectGradingView {
-  return { project: { id: makeProject().id, classroomId: CLASSROOM_ID, name: "Labo 2", deadlineAt: PAST }, repos };
+  return { project: { id: makeProject().id, classroomId: CLASSROOM_ID, name: "Labo 2", deadlineAt: PAST, schemaVersion: 3, released: false }, repos };
 }
 
 describe("the Grading tab", () => {
