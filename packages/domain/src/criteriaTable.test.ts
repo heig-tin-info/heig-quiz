@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { criteriaScore, criteriaTable, currentCriterionRows, repoValidation, type CriterionGradeLike } from "./criteriaTable.js";
+import { criteriaScore, criteriaTable, currentCriterionRows, holdsCriterion, regradePower, repoValidation, type CriterionGradeLike } from "./criteriaTable.js";
 
 const snapshot = {
   leaves: [
@@ -164,5 +164,55 @@ describe("criteriaScore (ADR-106 §7)", () => {
   it("has no score for a snapshot without a positive maximum", () => {
     const bonusOnly = { leaves: [snapshot.leaves[2]!] };
     expect(criteriaScore(bonusOnly, [validated("rapport.bonus", 1)])).toBeNull();
+  });
+});
+
+describe("holdsCriterion (ADR-106 §4, §5; ADR-132 §5)", () => {
+  const result = { reason: null };
+  const failure = { reason: "no_result" as const };
+
+  it("holds a teacher's row and a milestone's locked row against every machine proposal, a Regrade's included", () => {
+    for (const state of ["proposed", "validated"] as const) {
+      for (const proposal of [result, failure]) {
+        for (const regrade of [false, true]) {
+          expect(holdsCriterion({ source: "manual", state, locked: false }, { regrade, ...proposal })).toBe(true);
+          expect(holdsCriterion({ source: "auto", state, locked: true }, { regrade, ...proposal })).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("lets a Regrade's result replace any machine row, validated ones included, and its failure none", () => {
+    for (const source of ["auto", "llm"] as const) {
+      for (const state of ["proposed", "validated"] as const) {
+        const row = { source, state, locked: false };
+        expect(holdsCriterion(row, { regrade: true, ...result })).toBe(false);
+        expect(holdsCriterion(row, { regrade: true })).toBe(false);
+        expect(holdsCriterion(row, { regrade: true, ...failure })).toBe(true);
+      }
+    }
+  });
+
+  it("holds a validated machine row against any other pass, never a proposed one", () => {
+    for (const proposal of [result, failure]) {
+      expect(holdsCriterion({ source: "auto", state: "validated", locked: false }, { regrade: false, ...proposal })).toBe(true);
+      expect(holdsCriterion({ source: "llm", state: "proposed", locked: false }, { regrade: false, ...proposal })).toBe(false);
+    }
+    expect(holdsCriterion({ source: "manual", state: "superseded", locked: true }, { regrade: true, ...failure })).toBe(false);
+  });
+});
+
+describe("regradePower (ADR-132 §5)", () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 10, 18, 8, minute));
+
+  it("belongs to a Regrade claimed after the last release, or with none", () => {
+    expect(regradePower({ trigger: "regrade", createdAt: at(5) }, null)).toBe(true);
+    expect(regradePower({ trigger: "regrade", createdAt: at(5) }, at(4))).toBe(true);
+  });
+
+  it("is lost at a release after its claim, and never held by the final pass", () => {
+    expect(regradePower({ trigger: "regrade", createdAt: at(5) }, at(6))).toBe(false);
+    expect(regradePower({ trigger: "regrade", createdAt: at(5) }, at(5))).toBe(false);
+    expect(regradePower({ trigger: "deadline", createdAt: at(5) }, null)).toBe(false);
   });
 });

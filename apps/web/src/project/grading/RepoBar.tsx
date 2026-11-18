@@ -39,7 +39,14 @@ export function RepoBar({ repos, index, onJump }: { repos: ProjectGradingRepo[];
       nextLabel={t("project.grading.nextRepo")}
       index={index}
       onJump={onJump}
-      steps={repos.map((r) => ({ id: r.id, label: r.label, description: standingWords(r, t), done: r.validation.validated }))}
+      steps={repos.map((r) => ({
+        id: r.id,
+        label: r.label,
+        description: standingWords(r, t),
+        done: r.validation.validated,
+        // Its latest pass left earlier rows standing for lack of a result (ADR-132 §5): flagged on the rail.
+        flag: r.pass && r.pass.kept.length > 0 ? t("project.grading.pass.keptFlag") : undefined,
+      }))}
       lead={
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate font-semibold">{repo.label}</span>

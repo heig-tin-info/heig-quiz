@@ -316,6 +316,8 @@ export interface Segment {
   current?: boolean;
   /** Flagged for review by the student (issue #89): a flag over the number. */
   flagged?: boolean;
+  /** The flag's words when it means something else ("flagged for review" otherwise). */
+  flagLabel?: string | undefined;
   /** Closed by the navigation (validated in `forward_only`, behind a checkpoint). */
   locked?: boolean;
 }
@@ -350,7 +352,7 @@ function segmentLabelStep(width: number, count: number): 1 | 5 {
 function segmentName(t: TFunction, segment: Segment, i: number): string {
   const facts = [
     t(SEGMENT_LABEL[segment.mark]),
-    ...(segment.flagged ? [t("segments.flagged")] : []),
+    ...(segment.flagged ? [segment.flagLabel ?? t("segments.flagged")] : []),
     ...(segment.locked ? [t("segments.locked")] : []),
     ...(segment.current ? [t("segments.current")] : []),
   ];

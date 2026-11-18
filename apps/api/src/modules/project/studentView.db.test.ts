@@ -53,6 +53,7 @@ import {
   auditLog,
   projectCheckpoints,
   projectCriteria,
+  gradeDispatches,
   projectEvidence,
   projectGradeRuns,
   projectRepos,
@@ -957,6 +958,17 @@ describe("the criteria table (ADR-106 §9, N-SEC-20, L-02f)", () => {
         commits: [{ sha: "c".repeat(40), name: "Ada Commit-Secret", email: commitEmail, subject: "Rendu du labo" }],
         createdAt: at(NOW, -DAY),
       });
+      // The staff's trace of a CI pass (ADR-132 §6): the paths its graded commit replaced, a failure that kept a row.
+      await server.app.db.insert(gradeDispatches).values({
+        id: randomUUID(),
+        repoId: mine.id,
+        trigger: "regrade",
+        sha: "e".repeat(40),
+        nonce: "f".repeat(32),
+        graftedPaths: { count: 1, paths: ["tests/Graft-secret-path.sh"] },
+        keptFailures: { "rendu.tests": "ci_unavailable" },
+        closedAt: at(NOW, -DAY),
+      });
 
       const admin = await server.signIn("admin");
       const impersonation = await sessionOf(first.id, { kind: "impersonation", actorUserId: admin.id });
@@ -1064,6 +1076,10 @@ describe("the criteria table (ADR-106 §9, N-SEC-20, L-02f)", () => {
         commitEmail,
         "Commit-Secret",
         "c".repeat(40),
+        "Graft-secret-path",
+        "ci_unavailable",
+        '"replaced"',
+        '"kept"',
       ];
       const bodies = studentBodies.slice(from);
       expect(bodies.length).toBeGreaterThan(40);

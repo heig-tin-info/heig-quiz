@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -54,14 +54,15 @@ function repo(id: string, label: string, over: Partial<ProjectGradingRepo> = {})
       createdAt: "2026-10-09T22:50:00.000Z",
     },
     total: null,
+    pass: null,
     ...over,
   };
 }
 
 const A = "0190d3c4-0000-7000-8000-000000000001";
 const B = "0190d3c4-0000-7000-8000-000000000002";
-const view = (repos: ProjectGradingRepo[]): ProjectGradingView => ({
-  project: { id: ID, classroomId: CLASSROOM, name: "Labo 00", deadlineAt: "2026-10-09T22:00:00.000Z" },
+const view = (repos: ProjectGradingRepo[], project: Partial<ProjectGradingView["project"]> = {}): ProjectGradingView => ({
+  project: { id: ID, classroomId: CLASSROOM, name: "Labo 00", deadlineAt: "2026-10-09T22:00:00.000Z", schemaVersion: 2, released: false, ...project },
   repos,
 });
 
@@ -156,6 +157,80 @@ describe("grading", () => {
     expect(await screen.findByRole("table", { name: "Criteria of Rossi Luca" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Release scores/ }));
     expect(navigate).toHaveBeenCalledWith({ view: "project", id: ID });
+  });
+
+  it("shows the latest CI pass's trace to the staff: the files replaced, their paths on demand, the rows a failure kept (ADR-132 §6)", async () => {
+    const pass = {
+      replaced: { count: 3, paths: ["criteria.yml", "tests/check.sh"] },
+      kept: [
+        { criterionId: "rendu.tests", reason: "no_result" as const },
+        { criterionId: "git.commits", reason: "no_result" as const },
+      ],
+    };
+    routes(ok(view([repo(A, "Bernasconi Zoé", { pass }), repo(B, "Rossi Luca", { pass: { replaced: { count: 0, paths: [] }, kept: [] } })])));
+    renderPage();
+    const fold = await screen.findByRole("button", { name: "3 files replaced by the distribution's version" });
+    expect(screen.queryByText("tests/check.sh")).toBeNull();
+    await userEvent.click(fold);
+    expect(screen.getByText("tests/check.sh")).toBeInTheDocument();
+    expect(screen.getByText("and 1 more")).toBeInTheDocument();
+    expect(screen.getByText("No new result for Tests pass, Clean history (No CI result): their earlier rows stay")).toBeInTheDocument();
+    // The rail flags the repository whose latest pass kept earlier rows, and only it.
+    const rail = screen.getByRole("navigation", { name: "Repositories" });
+    expect(within(rail).getByRole("button", { name: /^Question 1,.*earlier rows kept/ })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: /^Question 2,/ })).not.toHaveAccessibleName(/earlier rows kept/);
+    // Nothing replaced and nothing kept: no line.
+    await userEvent.keyboard("{ArrowRight}");
+    await screen.findByRole("table", { name: "Criteria of Rossi Luca" });
+    expect(screen.queryByText(/replaced by the distribution's version/)).toBeNull();
+  });
+
+  it("says what a Regrade does: a schema-2 project's copy, a schema-3 one's, and once released the acknowledgement it sends", async () => {
+    const regraded = (project: Partial<ProjectGradingView["project"]>, reply = ok({ repos: 1 })) => {
+      const result = routes(ok(view([repo(A, "Bernasconi Zoé")], project)), { [`POST ${BASE}/repos/${A}/regrade`]: reply });
+      renderPage();
+      return result;
+    };
+    const confirmRegrade = async () => {
+      await userEvent.click(await screen.findByRole("button", { name: "More actions" }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "Regrade this repository" }));
+      return screen.findByRole("dialog");
+    };
+
+    regraded({ schemaVersion: 2 });
+    const v2 = await confirmRegrade();
+    expect(v2).toHaveTextContent("Validated rows and teachers' rows stay.");
+    cleanup();
+
+    regraded({ schemaVersion: 3 });
+    const v3 = await confirmRegrade();
+    expect(v3).toHaveTextContent("validated ones included");
+    expect(v3).not.toHaveTextContent("The project is released.");
+    cleanup();
+
+    const { calls } = regraded({ schemaVersion: 3, released: true });
+    const dialog = await confirmRegrade();
+    expect(dialog).toHaveTextContent("Students keep the released grade until you release again");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Regrade" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.body)).toEqual([{ releasedAcknowledged: true }]);
+    cleanup();
+
+    // A released schema-2 project: the old copy, the acknowledgement sent all the same (the server ignores it there).
+    const v2Released = regraded({ schemaVersion: 2, released: true });
+    const old = await confirmRegrade();
+    expect(old).not.toHaveTextContent("The project is released.");
+    await userEvent.click(within(old).getByRole("button", { name: "Regrade" }));
+    await waitFor(() => expect(v2Released.calls.some((c) => c.method === "POST")).toBe(true));
+    expect(v2Released.calls.filter((c) => c.method === "POST").map((c) => c.body)).toEqual([{ releasedAcknowledged: true }]);
+    cleanup();
+
+    // Released meanwhile in another tab: refused, the screen re-reads the project.
+    const stale = regraded({ schemaVersion: 3 }, fail(409, { error: "regrade_released", message: "released" }));
+    const refused = await confirmRegrade();
+    await userEvent.click(within(refused).getByRole("button", { name: "Regrade" }));
+    expect(await screen.findByText("The project is released: confirm the regrade again to replace validated rows.")).toBeInTheDocument();
+    await waitFor(() => expect(stale.calls.filter((c) => c.method === "GET" && c.url.endsWith("/grading"))).toHaveLength(2));
   });
 
   it("speaks French", async () => {

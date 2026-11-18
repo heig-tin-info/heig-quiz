@@ -5,7 +5,10 @@
  * project's creator, for the llm criteria no one holds — not validated, not
  * a teacher's, not locked by a milestone, not already proposed by this pass
  * — and, for a milestone pass (§5), those its checkpoint tags only, their
- * rows locked. Everything sent is masked before it is cut (N-DATA-05,
+ * rows locked. The pass holding the Regrade power of a schema-3 project
+ * (ADR-132 §5, decided by the writer from the pass's row) asks for the
+ * validated ones too: the model's reply replaces them, a failure replaces
+ * no machine row and is recorded on the pass (`holdsCriterion`). Everything sent is masked before it is cut (N-DATA-05,
  * `renderMaterial`): the classroom's roster and the repository's members —
  * names, e-mail addresses, GitHub logins — and the repository's owner and
  * name. Its proposals are `llm` rows in state `proposed`, their rationale

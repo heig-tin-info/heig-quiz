@@ -819,6 +819,18 @@ export const gradeDispatches = pgTable(
     gradedSha: text("graded_sha"),
     /** The distribution commit a v3 pass grafted from and is accepted against; null on a pass claimed before ADR-132. */
     distributionSha: text("distribution_sha"),
+    /**
+     * The files `graded_sha` holds in the distribution's version instead of
+     * the target's (ADR-132 §6): their count and their paths, capped as the
+     * audit's. Staff only; null when nothing was grafted.
+     */
+    graftedPaths: jsonb("grafted_paths").$type<{ count: number; paths: string[] }>(),
+    /**
+     * The pass's automatic criteria that got no new result while a row they
+     * could not replace stayed (ADR-132 §5: a Regrade's failure keeps the
+     * validated row), with why. Staff only; null when none.
+     */
+    keptFailures: jsonb("kept_failures").$type<Record<string, CriterionReason>>(),
   },
   (t) => [
     uniqueIndex("grade_dispatches_repo_trigger_uq")
