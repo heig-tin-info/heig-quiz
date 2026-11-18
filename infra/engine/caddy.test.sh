@@ -60,6 +60,8 @@ case "\$(cat "$work/reload-mode")" in
 esac
 EOF
 chmod +x "$bin"/*
+# The stubs come first for the whole test; it calls none of these itself.
+PATH="$bin:$PATH"
 
 before='{"apps":{"http":{"servers":{"srv0":{"listen":[":443"]}}}}}'
 after='{"apps":{"http":{"servers":{"srv0":{"listen":[":443",":8443"]}}}}}'
@@ -90,7 +92,6 @@ scenario() {
 	(
 		# shellcheck source=lib.sh
 		. "$here/lib.sh"
-		PATH="$bin:$PATH"
 		CADDY_RELOAD_TIMEOUT=1
 		caddy_site "$work/rendered.caddy" "$work/installed.caddy" || exit 9
 		caddy_apply
@@ -144,7 +145,6 @@ setup "$before" "$after" silent ok yes
 (
 	# shellcheck source=../../apps/codespace/deploy/lib.sh
 	. "$here/../../apps/codespace/deploy/lib.sh"
-	PATH="$bin:$PATH"
 	CADDY_RELOAD_TIMEOUT=1
 	cs_instance prod
 	caddy_site "$work/rendered.caddy" "$work/installed.caddy" || exit 9
