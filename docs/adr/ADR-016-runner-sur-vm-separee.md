@@ -284,22 +284,21 @@ unchanged. Operations: `apps/codespace/deploy/RUNBOOK.md` §7.*
 
 ### 2026-11-18: Caddy reloaded only when needed
 
-*Owner; scope: the Caddy reloads of the engine VM's deploys, which a
-long-lived connection can keep from completing. Operations:
+*Owner; scope: the Caddy reloads of the engine VM's deploys. Operations:
 `apps/codespace/deploy/RUNBOOK.md`, Caddy reloads.*
 
 - **At most one reload per deploy script, only when needed**: a site is
   installed only when it differs, and Caddy is reloaded only when its
   running config is not what the files adapt to (`caddy_apply`,
   `infra/engine/lib.sh`), after `caddy validate`.
-- **Bounded and checked**: a reload that does not return within 60 s is
-  judged by what Caddy runs; the new config running is a warning, anything
-  else fails the deploy with the reason. **A deploy never restarts Caddy**
-  (it would cut every live session); that stays an operator's step, in an
-  exam-free window.
+- **Bounded and checked**: a reload can stay pending; the deploy detects it
+  and says so. It fails only when Caddy runs the old config, or when an
+  earlier reload is still pending and a site changed. **A deploy never
+  restarts Caddy** (it would cut every live session); that stays an
+  operator's last resort, in an exam-free window.
 - **`grace_period 10s`** in the host's `/etc/caddy/Caddyfile`, by hand: that
   file is not the repository's, and no deploy writes it.
-- *Rejected for now*: upgrading Caddy.
+- A Caddy upgrade is a separate decision.
 
 ## Update 2026-09-25
 

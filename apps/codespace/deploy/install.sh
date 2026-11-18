@@ -25,7 +25,7 @@ if [ "${1:-}" != prod ]; then
 	echo "deploy: install.sh deploys the prod instance only, not '${1:-}' (staging: the frozen dispatcher, deployment.md §4)" >&2
 	exit 2
 fi
-cs_instance prod
+cs_instance "$1"
 if [ ! -f "$CS_ETC/env" ]; then
 	echo "deploy: $CS_ETC/env is missing: bootstrap the instance first (apps/codespace/deploy/RUNBOOK.md)" >&2
 	exit 2
@@ -83,11 +83,11 @@ done
 # staging-dispatch.sh); its next restart picks them up. Skipped until the
 # staging instance is bootstrapped. cs_instance rebinds CS_*: the test in a
 # subshell, the install in this shell (caddy_site records a change in it),
-# prod's values bound again after it.
+# this deploy's instance bound again after it.
 if (cs_instance staging && [ -f "$CS_ETC/env" ]); then
 	cs_instance staging
 	cs_install_instance
-	cs_instance prod
+	cs_instance "$1"
 	systemctl daemon-reload
 fi
 

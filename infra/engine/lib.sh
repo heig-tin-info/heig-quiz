@@ -140,15 +140,16 @@ drop_old_sha_tags() {
 }
 
 # The VM's Caddy (its unit reloads with `caddy reload --force`): a component
-# installs its sites with caddy_site, then calls caddy_apply ONCE where it
-# used to run `systemctl reload caddy`. No reload is made that is not
-# needed: a long-lived connection can keep a reload from completing
-# (apps/codespace/deploy/RUNBOOK.md, Caddy reloads). The variables serve
-# the test (caddy.test.sh).
+# installs its sites with caddy_site, validates, then calls caddy_apply ONCE
+# where it used to run `systemctl reload caddy`; a reload can stay pending,
+# so none is made that is not needed (apps/codespace/deploy/RUNBOOK.md,
+# Caddy reloads). The variables serve the test (caddy.test.sh). Every
+# cs_instance sources this file again (through infra/net/common.sh): each
+# one keeps the value it has.
 CADDY_CONFIG="${CADDY_CONFIG:-/etc/caddy/Caddyfile}"
 CADDY_ADMIN="${CADDY_ADMIN:-http://127.0.0.1:2019}"
 CADDY_RELOAD_TIMEOUT="${CADDY_RELOAD_TIMEOUT:-60}"
-CADDY_CHANGED=
+CADDY_CHANGED="${CADDY_CHANGED:-}"
 
 # caddy_site <rendered fragment> <installed path>: installs the fragment
 # (0644) only when its content differs from the installed copy, says so, and
@@ -163,8 +164,8 @@ caddy_site() {
 # caddy_state: 0 when the running config (the admin API's /config/) is what
 # CADDY_CONFIG adapts to, compared as parsed JSON (python3, already a
 # dependency of the network test: no jq); 2 when the admin API does not
-# answer within 10 s (as while a reload has not completed); 1 otherwise, a
-# comparison that cannot be made included.
+# answer within 10 s (a reload still pending); 1 otherwise, a comparison
+# that cannot be made included.
 caddy_state() {
 	local running wanted rc=0
 	running=$(curl -fsS -m 10 "$CADDY_ADMIN/config/" 2>/dev/null) || rc=$?
@@ -177,66 +178,41 @@ running, wanted = sys.stdin.buffer.read().split(b"\0")
 sys.exit(0 if json.loads(running) == json.loads(wanted) else 1)' 2>/dev/null
 }
 
-# caddy_blocked <what was seen>: the failure of a reload that has not
-# completed, with the connections on :443 as counts: the deploy log is the
-# CI's, and a peer's address is a student's. Never restarts Caddy: that
-# would cut every live session.
-caddy_blocked() {
-	local conns
-	conns=$(ss -Htn state established '( sport = :443 )' 2>/dev/null || true)
-	{
-		echo "deploy: Caddy reload blocked ($1) — most likely a long-lived connection keeps it from completing; re-run the deploy later or restart caddy in an exam-free window (sudo journalctl -u caddy; apps/codespace/deploy/RUNBOOK.md, Caddy reloads)"
-		printf '%s\n' "$conns" | awk 'NF { n++; if ($2 > 0) q++ } END {
-			printf "deploy: %d connection(s) established on :443, %d with unsent data (Send-Q > 0)\n", n, q }'
-	} >&2
-}
-
 # caddy_apply: reloads Caddy at most once, and only when the running config
 # is not the one the files give (a fragment changed, or an earlier reload
-# did not take), after `caddy validate`; then checks what Caddy runs. The
-# reload is bounded by CADDY_RELOAD_TIMEOUT: `timeout` stops systemctl, the
-# client, never systemd's job, which ends by the unit's own rules, so
-# systemd's state stays consistent. A reload that fails or does not return
-# is judged by caddy_state: the new config running is a warning (the
-# reload has not finished, harmless), anything else fails.
+# did not take); the caller has validated the files. The reload is bounded
+# by CADDY_RELOAD_TIMEOUT: `timeout` stops systemctl, the client, never
+# systemd's job, which ends by the unit's own rules. Then it checks what
+# Caddy runs. It fails only when Caddy runs the old config, or when an
+# earlier reload is still pending and a site changed (no second reload is
+# queued behind it). Never restarts Caddy: that would cut every live session.
 caddy_apply() {
 	local state=0 rc=0
 	caddy_state || state=$?
 	case "$state" in
 		0)
-			if [ -n "$CADDY_CHANGED" ]; then
-				echo "deploy: caddy: already runs this config, no reload"
-			else
-				echo "deploy: caddy: unchanged, no reload"
-			fi
+			echo "deploy: caddy: runs this configuration, no reload"
 			return 0
 			;;
 		2)
 			if [ -z "$CADDY_CHANGED" ]; then
-				echo "deploy: warning: Caddy's admin API does not answer (an earlier reload still blocked?); no fragment changed, no reload" >&2
+				echo "deploy: warning: an earlier Caddy reload is still pending; no site changed, no reload" >&2
 				return 0
 			fi
-			caddy_blocked "its admin API does not answer before the reload: an earlier one is still pending"
+			echo "deploy: an earlier Caddy reload is still pending: this deploy's site change is not live; re-run the deploy later (apps/codespace/deploy/RUNBOOK.md, Caddy reloads)" >&2
 			return 1
 			;;
 	esac
-	caddy validate --config "$CADDY_CONFIG" --adapter caddyfile >/dev/null || return 1
 	timeout "$CADDY_RELOAD_TIMEOUT" systemctl reload caddy || rc=$?
 	state=0
 	caddy_state || state=$?
-	if [ "$rc" = 0 ]; then
-		[ "$state" = 0 ] \
-			|| echo "deploy: warning: caddy reloaded, but its running config does not compare equal to the adapted files (state $state)" >&2
-		echo "deploy: caddy reloaded"
-		return 0
-	fi
-	case "$state" in
-		0)
-			echo "deploy: warning: systemctl reload caddy failed or did not return within ${CADDY_RELOAD_TIMEOUT} s (exit $rc), but Caddy runs the new config: the reload has not finished, harmless (sudo journalctl -u caddy)" >&2
-			return 0
+	case "$rc:$state" in
+		0:*) echo "deploy: caddy reloaded" ;;
+		*:0) echo "deploy: warning: systemctl reload caddy returned $rc, but Caddy runs the new configuration" >&2 ;;
+		*:2) echo "deploy: warning: Caddy reload still pending: the new configuration serves; further reloads will wait until it completes" >&2 ;;
+		*)
+			echo "deploy: systemctl reload caddy failed (exit $rc) and Caddy does not run the new configuration: sudo journalctl -u caddy" >&2
+			return 1
 			;;
-		2) caddy_blocked "no answer within ${CADDY_RELOAD_TIMEOUT} s, and its admin API does not answer" ;;
-		*) echo "deploy: systemctl reload caddy failed (exit $rc) and Caddy does not run the new config: sudo journalctl -u caddy" >&2 ;;
 	esac
-	return 1
 }
