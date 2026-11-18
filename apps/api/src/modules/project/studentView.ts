@@ -59,13 +59,12 @@ import type {
   ProjectRepoCollection,
 } from "@quiz/contracts";
 import {
-  ciShareOnly,
   criteriaTable,
   effectiveDeadline,
   projectGraded,
   projectIsLive,
   PROJECT_VISIBLE_STATES,
-  scoreGrade,
+  projectScoreGrade,
   studentCiReading,
   studentProjectGroup,
   studentProjectStatus,
@@ -307,7 +306,7 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts, c
           points: run.points,
           max: run.max,
           // The CI's share of a project graded by criteria has no grade (`ciShareOnly`, product owner 2026-11-18).
-          grade: ciShareOnly(project.gradingMode, "ci") ? null : scoreGrade(run.points, run.max, project.gradingScale),
+          grade: projectScoreGrade(project, "ci", run.points, run.max),
           frozen,
         }
       : null;

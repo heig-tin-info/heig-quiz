@@ -458,7 +458,7 @@ describe("the gradebook's live cell (product owner, 2026-11-18)", () => {
     }
   });
 
-  it("releases a deleted repository of a project graded by criteria at its CI points, with no grade", async () => {
+  it("releases a deleted repository of a project graded by criteria, never validated, as no score", async () => {
     const w = await world({ students: 2, gradingMode: "criteria" });
     const [s1, s2] = w.students;
     const parsed = parseCriteria("schema_version: 2\ncriteria:\n  git:\n    commits: {description: Commits, awarded_points: 0, max_points: 4}\n", { version: 2 });
@@ -477,14 +477,17 @@ describe("the gradebook's live cell (product owner, 2026-11-18)", () => {
       createdAt: at(NOW),
       createdBy: teacher.id,
     });
-    // Deleted before its freeze with a CI score: never validated, released at the CI's share.
+    // Deleted before its freeze with a CI score: never validated, its CI share is no score (`releasableScore`).
     const deleted = await repoOf(w, s2!.id, { deletedAt: at(NOW), deadlineAppliedAt: null, frozenAt: null });
     await setRepo(deleted, { currentGradeRunId: await run(deleted, { points: 2, max: 10 }) });
 
     const res = await release(w);
     expect(res.statusCode, res.body).toBe(200);
+    expect(ProjectReleaseResult.parse(res.json())).toMatchObject({ repos: 2, scored: 1 });
     expect(await repoRow(live)).toMatchObject({ releasedPoints: 3, releasedMax: 4, releasedGrade: 4.8 });
-    expect(await repoRow(deleted)).toMatchObject({ releasedPoints: 2, releasedMax: 10, releasedGrade: null });
+    expect(await repoRow(deleted)).toMatchObject({ releasedPoints: null, releasedMax: null, releasedGrade: null });
+    // Nor does it show "changed after release" for ever.
+    expect(rowOf(await detail(w), s2!.id).flags.changedAfterRelease).toBe(false);
   });
 });
 

@@ -639,7 +639,7 @@ describe("the criteria table (ADR-106 §9, L-02f)", () => {
     render({ locale: "fr" });
     expect(await screen.findByText("Score de la CI à l'échéance")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Obtenu : 7 · Manqué : 1" })).toBeInTheDocument();
-    expect(screen.queryByText("IA ou enseignant")).toBeNull();
+    expect(screen.queryByText("IA ou équipe enseignante")).toBeNull();
     expect(screen.getByText("Pas de note avant la publication des scores.")).toBeInTheDocument();
   });
 

@@ -90,7 +90,6 @@ import {
 } from "@quiz/contracts";
 import {
   awardedRange,
-  ciShareOnly,
   changedAfterRelease,
   checkpointDueAt,
   checkpointRefusal,
@@ -112,12 +111,12 @@ import {
   projectListDates,
   projectPhase,
   projectPrimaryAction,
+  projectScoreGrade,
   proratedByTests,
   resolveFinalScore,
   repoValidation,
   reviewState,
   roundPoints,
-  scoreGrade,
   teacherScoreMax,
   staffReviewRefusal,
   withForcedProtected,
@@ -1012,11 +1011,9 @@ function mockCollection(p: MockProject, r: MockRepo): ProjectRepoView["collectio
 }
 
 function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
-  // As the server grades them (`gradeOf`, `detail.ts`): none for the CI's share of a project graded by criteria.
-  const gradeOf = (source: FinalScoreSource, points: number | null, max: number | null) =>
-    ciShareOnly(p.summary.gradingMode, source) ? null : scoreGrade(points, max, p.summary.gradingScale);
+  // As the server grades them (`projectScoreGrade`): none for the CI's share of a project graded by criteria.
   const graded = (s: { runId: string; points: number | null; max: number | null } | null, source: FinalScoreSource) =>
-    s ? { ...s, grade: gradeOf(source, s.points, s.max) } : null;
+    s ? { ...s, grade: projectScoreGrade(p.summary, source, s.points, s.max) } : null;
   const final = finalOf(r);
   const latest = r.runs[0];
   return {
@@ -1036,7 +1033,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
       frozen: graded(slot(r, r.frozenRunId), "ci"),
       review: graded(slot(r, r.reviewRunId), "review"),
       teacher: r.teacher,
-      final: final ? { ...final, grade: gradeOf(final.source, final.points, final.max) } : null,
+      final: final ? { ...final, grade: projectScoreGrade(p.summary, final.source, final.points, final.max) } : null,
       scoreMax: runMaxOf(r),
     },
     review: reviewOf(p, r),

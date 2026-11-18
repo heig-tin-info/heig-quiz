@@ -3635,7 +3635,7 @@ export const fr: Record<keyof Dict, string> = {
   "sproj.share.awarded": "Obtenu",
   "sproj.share.missed": "Manqué",
   "sproj.share.others": "Corrigé par l'IA ou l'équipe enseignante",
-  "sproj.share.others.legend": "IA ou enseignant",
+  "sproj.share.others.legend": "IA ou équipe enseignante",
   "sproj.share.othersPoints": "{n} points corrigés par l'IA ou l'équipe enseignante.",
   "sproj.share.othersPoints.one": "1 point corrigé par l'IA ou l'équipe enseignante.",
   "sproj.share.noGrade": "Pas de note avant la publication des scores.",

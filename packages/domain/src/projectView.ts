@@ -5,6 +5,7 @@
  * reads the rows; these decide.
  */
 import { roundPoints } from "./criteria.js";
+import { ciShareOnly, type FinalScoreSource } from "./finalScore.js";
 import { projectGrade, type ProjectGrade, type ProjectScale } from "./projectGrade.js";
 import type { DeadlineStrategyName } from "./projectRuns.js";
 
@@ -82,6 +83,21 @@ export type PublishModeName = (typeof PUBLISH_MODES)[number];
 /** A score's grade by the project's scale, or null when it has no maximum to read it against. */
 export function scoreGrade(points: number | null, max: number | null, scale: ProjectScale): ProjectGrade | null {
   return points !== null && max !== null && max > 0 ? projectGrade(points, max, scale) : null;
+}
+
+/**
+ * A project score's grade as every view gives it ({@link scoreGrade}):
+ * none for the CI's share of a project graded by criteria
+ * ({@link ciShareOnly}, product owner 2026-11-18), whose grade would mean
+ * nothing until the AI and the teacher grade the rest.
+ */
+export function projectScoreGrade(
+  project: { gradingMode: ProjectGradingModeName; gradingScale: ProjectScale },
+  source: FinalScoreSource,
+  points: number | null,
+  max: number | null,
+): ProjectGrade | null {
+  return ciShareOnly(project.gradingMode, source) ? null : scoreGrade(points, max, project.gradingScale);
 }
 
 /**
