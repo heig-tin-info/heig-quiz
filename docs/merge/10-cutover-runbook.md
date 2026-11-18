@@ -16,18 +16,16 @@ staging first: M8-06 runs this page there and times it (§7).
 
 - **owner**: the product owner. Only the owner may do these: the GitHub UI,
   the SWITCH registry, the uptime service, approvals, anything as `srvstg`,
-  anything in `/etc/caddy/conf.d/` (the agent's sandbox blocks it), and
-  every go/no-go.
-- **agent (srv)**: an agent over `ssh srv@128.140.71.35`, after the owner
-  has said go for that step. Reading is always allowed. Writing to a
-  production database or stopping a service needs the owner's go in the
-  session.
+  anything in `/etc/caddy/conf.d/`, and every go/no-go.
+- **agent (srv)**: an agent working as `srv` on the application VM, after
+  the owner has said go for that step. Reading is always allowed. Writing
+  to a production database or stopping a service needs the owner's go in
+  the session.
 - **teachers**: through the owner.
 
-Root SSH to the application VM is refused. `srv` may use sudo only for
-`caddy validate` and `systemctl reload caddy`. No step writes to a
-production database by hand: data changes go through the import or the
-product's own actions.
+Access policy: operator notes (internal). No step writes to a production
+database by hand: data changes go through the import or the product's own
+actions.
 
 ## 0. One-page checklist
 
@@ -80,8 +78,7 @@ left unticked; PROGRESS.md is the record.
 - [ ] **D**: one to two weeks of observation (§4)
 - [ ] **E / M9-01**: 302 changed to 308, the final copy of classroom's data off the VM (as run: its last nightly dump on the owner's workstation, §5 step 2), every personal-data copy deleted, classroom removed, its App uninstalled last, repository archived
 
-**Shell helpers**, used everywhere below. On the application VM, as `srv`
-(`ssh srv@128.140.71.35`):
+**Shell helpers**, used everywhere below. On the application VM, as `srv`:
 
 ```bash
 export DOCKER_HOST=${DOCKER_HOST:-unix:///run/user/$(id -u)/docker.sock}

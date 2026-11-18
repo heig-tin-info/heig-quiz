@@ -49,68 +49,22 @@ workspace never opened. A reinstall of the code VM keeps that block.
 
 ### Human access
 
-Each human has an account of their own on each VM (`ycr`, `tmz` on the
-application VM), in the `sudo` group, with a password used for `sudo`
-only. Nobody signs in as root or as a service account: root reaches a
-shell through `sudo` or the Hetzner console, production through
-`sudo machinectl shell srv@` (the login session carries the rootless
-Docker socket; a plain `sudo -iu srv` does not) and staging through
-`sudo machinectl shell srvstg@`. The `sudo` lines then say who did
-what, which a shared root session never does; with SSH's, they are kept
-in `/var/log/auth-trail.log` at most about 180 days (§7, *Host logs*). A drop-in in
-`/etc/ssh/sshd_config.d/`, loaded before `sshd_config` (OpenSSH keeps
-the first value it reads), pins the policy on each VM:
+Access policy (accounts, SSH and `sudo` rules, brute-force protection):
+operator notes (internal). What the deployment itself needs:
 
-```text
-# /etc/ssh/sshd_config.d/10-hardening.conf, application VM
-PermitRootLogin no
-PasswordAuthentication no
-KbdInteractiveAuthentication no
-MaxAuthTries 3
-AllowUsers ycr tmz srv srvstg
-
-# /etc/ssh/sshd_config.d/00-quiz-hardening.conf, runner VM
-PermitRootLogin forced-commands-only
-PasswordAuthentication no
-KbdInteractiveAuthentication no
-MaxAuthTries 3
-AllowUsers ycr root
-```
-
-The runner VM's `forced-commands-only` is the exact fit for its
-`authorized_keys`: the two CI keys carry a `command=` (*Forced commands*,
-§4) and keep deploying as root, while a root key without one, leaked or
-planted, opens nothing. `root` stays in that `AllowUsers` for the same
-reason; on the application VM the CI keys sit on `srv` and `srvstg`, so
-root is closed outright. The service accounts' `authorized_keys` hold the
-CI line and, on `srv`, the operator's own keys, kept on purpose so that
-the agents' `ssh srv` checks still work: that is the one shared sign-in
-left, and it goes the day the checks run as a human.
-
-`fail2ban` watches `sshd` on both VMs through the journal (`backend =
-systemd` in `/etc/fail2ban/jail.local`: Ubuntu 24.04 and later ship no
-`/var/log/auth.log`), five failures in ten minutes for an hour's ban;
-`fail2ban-client status sshd` lists the current bans. The Hetzner Cloud
-firewall admits 22, 80 and 443 inbound (and 8443 on the runner VM), and
-the runner VM's own `nftables` table narrows that further (*The host
-firewall*, §3). Port 22 stays open to the world because GitHub's runners
-deploy from changing addresses; the keys, not the network, are the
-barrier. A `/etc/update-motd.d/00-quiz` on each VM greets a sign-in
-with the account to switch to, the paths that matter and the page to
-read, instead of Ubuntu's advertisements (`10-help-text` and
-`50-motd-news` lose their execute bit).
-
-**Changing the policy.** Edit the drop-in, `sshd -t`, then
-`systemctl reload ssh`, all from a session kept open; prove the change
-from a second terminal before closing the first: the human account signs
-in and `sudo -i` works, `ssh root@<vm>` is refused, and the next CI
-deploy (an approval of `deploy-staging-portal` is the cheapest) still
-runs its forced command. A human key is ed25519, one per workstation,
-passphrase-protected and loaded in an agent (`ssh-keygen -p` adds a
-passphrase to an existing key); it is removed from every `authorized_keys`
-the day the workstation goes. Adding a human: `adduser`, the `sudo`
-group, their key in `~/.ssh/authorized_keys` (0600), their name in
-`AllowUsers`, reload.
+- the CI deploys over SSH with keys whose `authorized_keys` line carries a
+  `command=`, so a deploy key opens nothing but its forced command
+  (*Forced commands*, §4): on `srv` and `srvstg` on the application VM, on
+  `root` of the runner VM;
+- production's stack runs in `srv`'s systemd user session, staging's in
+  `srvstg`'s: a shell for either must be that account's login session,
+  which carries the rootless Docker socket (`sudo machinectl shell srv@`;
+  a plain `sudo -iu srv` does not);
+- the Hetzner Cloud firewall admits 22, 80 and 443 inbound (and 8443 on
+  the runner VM), and the runner VM's own `nftables` table narrows that
+  further (*The host firewall*, §3);
+- `sudo` and SSH events are kept in `/var/log/auth-trail.log` (§7, *Host
+  logs*).
 
 ## 1. DNS
 
@@ -174,10 +128,11 @@ included, so staging and production carry the same policy.
 Production runs as the service account `srv`, which owns `/srv` and runs
 **rootless Docker** in its systemd user session (socket
 `/run/user/1000/docker.sock`, lingering enabled so the containers restart at
-boot; there is no root Docker daemon). A human reaches it with
-`sudo machinectl shell srv@` (*Human access*, above). Its sudo covers exactly two commands,
+boot; there is no root Docker daemon). A shell for it is its login session
+(*Human access*, above). Installing the Caddy fragment needs to write
+`/etc/caddy/conf.d/quiz.caddy`, then
 `caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile` and
-`systemctl reload caddy`; `/etc/caddy/conf.d/` is group-writable by `srv`.
+`systemctl reload caddy` (the header of `Caddyfile`).
 
 In rootless Docker, uid 1000 inside a container (`node` in the image) is host
 uid 100999, so a host-side `chown 1000:1000` is wrong: ownership the
@@ -865,7 +820,8 @@ calls. Then:
 
 ```bash
 curl -s -H "Authorization: Bearer $METRICS_TOKEN" https://quiz.chevallier.io/healthz | jq .   # database, jobs, runner: "up"
-ssh srv@portal.heig.chevallier.io 'cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image logs --tail 50 app'
+# as srv (Human access, above):
+cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image logs --tail 50 app
 ssh root@code.chevallier.io 'journalctl -u quiz-runner -n 30'   # "podman engine ready", "quiz-runner started"
 ```
 
@@ -1059,7 +1015,7 @@ $C start app
 - **VM lost**: new VM → §2 → secrets from the vault → the dumps and the
   images from the off-site copy (below) → restore the dump → re-point the
   DNS. Timed restore test every semester, from the off-site copy on a
-  workstation (below, *Restoring from the box*).
+  workstation (below, *Restoring from the off-site copy*).
 
 In development the equivalent of the database is the directory
 `apps/api/.data/pglite`, which is only ever copied to keep a state, never
@@ -1067,45 +1023,28 @@ deployed.
 
 ### The off-site copy (#235)
 
-Every night `srv`'s user timer `quiz-offsite-backup.timer` (05:30 UTC, give
-or take a quarter of an hour, `Persistent`) runs
+Every night `srv`'s user timer `quiz-offsite-backup.timer` runs
 `scripts/offsite-backup/push.sh`: one [borg](https://www.borgbackup.org/)
 archive, `zstd,6`, of the backups of **every service of this VM**, into one
-encrypted repository (`repokey-blake2`) on a Hetzner Storage Box (BX11,
-Helsinki): another product, another machine and another site than the VM.
-The box's account, host and repository name are not in this repository:
-they are in the vault and in each machine's env file (below).
+encrypted repository (`repokey-blake2`) on an off-site storage: another
+product, another machine and another site than the VM. The provider's
+account, host and repository, where the key, the passphrase and the env
+file sit, what the vault holds and the schedule are in the operator notes
+(internal) and the vault, never in this repository.
 
-The VM writes through a key the box forces into `borg serve --append-only`,
-and holds the passphrase; pruning runs only from the operator's workstation.
-Why, and what that leaves exposed: [ADR-009](../adr/ADR-009-deploiement-vm-compose.md),
-amendment of decision 3.
+The VM writes through a key the storage forces into `borg serve
+--append-only`, and holds the passphrase; pruning runs only from the
+operator's workstation. Why, and what that leaves exposed:
+[ADR-009](../adr/ADR-009-deploiement-vm-compose.md), amendment of
+decision 3.
 
 | | |
 | --- | --- |
-| Box | `u<id>@u<id>.your-storagebox.de`, SSH on port **23**, a restricted shell (no redirect, no pipe); borg 1.2 and 1.4 on the server side, the clients use `BORG_REMOTE_PATH=borg-1.4` |
-| Repository | `ssh://u<id>@u<id>.your-storagebox.de:23/./<repo>`; archives `<hostname>-<YYYY-MM-DDTHH:MM>` (the VM's time) |
 | Sources | `/srv/quiz/backups` (**required**: missing, the run fails); `/srv/quiz/assets`, `/srv/evaluation-tb/backups`, `/srv/evaluation-tb/assets`, `/srv/quiz-engine-backups` (skipped with a log line when missing). A file still being written (`*.tmp`, `.*.part`) is left out. `/srv/heig-classroom/backups` was a source until heig-classroom's decommission (M9-01, 2026-10-14): the archives made before then hold its dumps until the prune drops them |
 | Not in it | the PostgreSQL data directories (the dumps suffice; the Hetzner VM backup holds the physical copy), the images (pulled or rebuilt), the secrets (the vault, ADR-010) |
-| On the VM | borgbackup 1.4 (apt); the key `~/.ssh/storagebox-borg`; the passphrase `~/.config/borg-offsite/passphrase` and the env file `~/.config/borg-offsite/env`, both mode 600 |
-| In the vault | the box's account and **password** (password SSH cannot be relied on being off), its full-access key, the passphrase and the exported repository key (`borg key export`, and `--paper`), beside `.env.prod` and `secrets/` |
-| The night (UTC) | quiz dump 21:01, evaluation-tb dump 03:17, engine pull 03:00–05:00, then the off-site copy |
 
-Both scripts read the repository and the credentials from
-`~/.config/borg-offsite/env` (mode 600, outside any checkout) and refuse to
-run without it. On the VM; the workstation's has its own `BORG_RSH` (the
-full-access key), or none if ssh's configuration selects it:
-
-```bash
-export BORG_REPO=ssh://u<id>@u<id>.your-storagebox.de:23/./<repo>
-export BORG_REMOTE_PATH=borg-1.4
-export BORG_PASSCOMMAND="cat $HOME/.config/borg-offsite/passphrase"
-export BORG_RSH="ssh -i $HOME/.ssh/storagebox-borg -o IdentitiesOnly=yes -o BatchMode=yes -o ServerAliveInterval=30"
-```
-
-(`push.sh` falls back to that `BORG_RSH` when the file sets none.) The first
-archive held 165 MB, 146 MB once deduplicated, in 3 s: each following night
-adds only what changed.
+Both scripts read the repository and the credentials from an env file
+outside any checkout (mode 600) and refuse to run without it.
 
 **The report.** After each run, success or failure, `push.sh` writes one
 line of JSON to the path its unit passes,
@@ -1119,46 +1058,13 @@ the **Off-site copy** check (ADR-055, `offsite`), with the dump's thresholds
 (a warning past 26 h, a failure past 50 h or when the run failed), and the
 coarse `backup` word of `/healthz` is the worse of the two copies (§7).
 
-Setting it up, once (done on 2026-10-09; kept for a new VM or a new box):
-
-```bash
-# application VM, as srv: the key, the box's host key, the passphrase, the env file
-ssh-keygen -t ed25519 -N '' -C borg-offsite@<vm> -f ~/.ssh/storagebox-borg
-ssh-keyscan -p 23 u<id>.your-storagebox.de >> ~/.ssh/known_hosts    # compare with Hetzner's fingerprints
-install -d -m 0700 ~/.config/borg-offsite
-(umask 077; openssl rand -base64 32 > ~/.config/borg-offsite/passphrase)   # the same value goes to the vault
-(umask 077; nano ~/.config/borg-offsite/env)                               # the four lines above
-```
-
-The box's shell takes no redirect: write its `.ssh/authorized_keys` on the
-workstation and put it through sftp with the full-access account. It holds
-the workstation's own key, unrestricted, and the VM's, forced:
-
-```text
-command="borg-1.4 serve --append-only --restrict-to-repository /home/<repo>",restrict ssh-ed25519 AAAA… borg-offsite@<vm>
-```
-
-```bash
-# workstation: put the file, create the repository, export its key
-sftp -P 23 u<id>@u<id>.your-storagebox.de
-#   sftp> mkdir .ssh
-#   sftp> put authorized_keys .ssh/authorized_keys
-#   sftp> chmod 600 .ssh/authorized_keys
-source ~/.config/borg-offsite/env       # the workstation's, with the VM's passphrase copied
-borg init --encryption=repokey-blake2
-borg key export :: repo.borg-key && borg key export --paper :: > repo.borg-key.txt   # both to the vault
-
-# application VM, as srv: the user units, then a first run by hand
-install -d ~/.config/systemd/user
-cp /srv/quiz/scripts/offsite-backup/quiz-offsite-backup.{service,timer} ~/.config/systemd/user/
-systemctl --user daemon-reload && systemctl --user enable --now quiz-offsite-backup.timer
-systemctl --user start quiz-offsite-backup.service
-```
-
-The production deploy brings both these scripts (its checkout) and the
-`offsite` check: until `offsite.json` exists the check warns and `/healthz`
-raises `attention`. Pause the external probe's monitor, deploy, install the
-units and start the service at once, then resume it.
+Setting it up on a new VM or a new storage (done once on 2026-10-09: the
+key, the storage's forced command, the repository, its exported key, the
+user units): operator notes (internal). The production deploy brings both
+these scripts (its checkout) and the `offsite` check: until `offsite.json`
+exists the check warns and `/healthz` raises `attention`. Pause the
+external probe's monitor, deploy, install the units and start the service
+at once, then resume it.
 
 Checking it, as `srv`:
 
@@ -1166,12 +1072,12 @@ Checking it, as `srv`:
 systemctl --user list-timers quiz-offsite-backup.timer
 journalctl --user -u quiz-offsite-backup -n 30 --no-pager      # borg's --stats and its rc
 cat /srv/quiz/backup-status/offsite.json
-source ~/.config/borg-offsite/env && borg list                 # the archives
+borg list                                                      # the archives, with the env file sourced
 ```
 
-**Restoring from the box.** Any machine with borg, the env file's values,
-the passphrase and the repository key reads it (the vault's export, through
-`borg key import`, if the repository's own copy is lost or cannot be
+**Restoring from the off-site copy.** Any machine with borg, the env file's
+values, the passphrase and the repository key reads it (the vault's export,
+through `borg key import`, if the repository's own copy is lost or cannot be
 trusted). List, then extract what you need into an empty directory; the
 paths come back without their leading `/`:
 
@@ -1193,13 +1099,9 @@ restore it into a disposable `postgres:17` container (`pg_restore
 --no-owner --no-privileges --role=quiz --exit-on-error`), count a few
 tables, then delete the container and the extracted file. Never into
 staging: since ADR-028 §3's reversal (#750) staging holds only
-pseudonymized copies, and a raw production dump would undo that.
-
-| Drill | Archive | Dump | Extracted | Restored, checked | Total |
-| --- | --- | --- | --- | --- | --- |
-| 2026-10-15, operator's workstation (borg 1.4.4, `postgres:17`) | `heig-portal-2026-10-15T05:44` | `quiz-2026-10-14.dump`, 14 MB | 7 s | 143 users, 99 tables in `public` | 13 s |
-
-The next drill is due before the spring semester (2027-02); add its row.
+pseudonymized copies, and a raw production dump would undo that. Each
+drill is recorded in the operator notes (internal); the first ran on
+2026-10-15, the next is due before the spring semester (2027-02).
 
 **Recovering from a deletion through the append-only key.** A `delete` or
 a `prune` sent with the VM's key is recorded, not applied: until a compact
@@ -1394,7 +1296,7 @@ it names hold the values.
 **Applying it**, by hand, once per VM and again when a file changes (no
 deploy installs them), as an administrator; `R` is the checkout,
 `/srv/quiz` or `/opt/quiz-runner`. rsyslog may be missing (Ubuntu 24.04
-has no `/var/log/auth.log`, *Human access*); `apt install` changes nothing
+ships no `/var/log/auth.log`); `apt install` changes nothing
 when it is there:
 
 ```bash
@@ -1626,7 +1528,7 @@ configuration.
 | `SEB_CONFIG_KEY_ENFORCE` | `1` in production and staging (proof B, 2026-10-10); unset (`0`) in development | the Config Key header on every request of a Safe Exam Browser session ([ADR-051](../adr/ADR-051-postes-kiosque-attestes.md) §3): off, a mismatch is only audited (`auth.seb_config_key_mismatch`); on (production), the request is anonymous. The launch refuses a bad header either way |
 | `SEB_EXTRA_ALLOWED_HOSTS` | unset (empty) | hosts every `.seb` lets SEB reach beside Quiz (and, for a project, the workspace portal): comma-separated host names, `*` wildcards, no scheme (D21, M6-07). Empty keeps an evaluation's file as ADR-027 pinned it |
 | `KIOSK_ATTESTATION` | unset (`off`) until the stations are set up, then `google` | the attested kiosk stations ([ADR-051](../adr/ADR-051-postes-kiosque-attestes.md), [setup](kiosk.md)): `off`, the kiosk routes answer 404 and exams are not offered the setting; `mock`, the development fixture, is refused: the process does not start |
-| `KIOSK_PROJECTS` | unset (`0`) by default; `1` in production since 2026-11-15, turned on by the owner without waiting for the proofs, for a class on 2026-11-16 (the owner's decision). On 2026-11-16 a real station framed the portal and the editor opened once the Admin console's URL allowlist named the portal's host (`code.chevallier.io`); the same day a class used it in production: three station sittings on a supervised project (two ended by Leave, one by the deadline, none suspended), beside 22 Safe Exam Browser sessions of the same project, each carrying a Config Key. The points of proof K (sockets, clipboard, shortcuts, cookies across the 303) and of project proof B were not checked one by one and are not recorded | kiosk stations for supervised projects ([ADR-089](../adr/ADR-089-kiosque-pour-l-espace-de-travail.md), amendment point 1), with `KIOSK_ATTESTATION` not `off`: on, a project's setting offers "SEB or kiosk" and "Kiosk only"; off, a change to them is `422 kiosk_unavailable`. A project already at such a level keeps it either way: the kill switch is `KIOSK_ATTESTATION=off` |
+| `KIOSK_PROJECTS` | unset (`0`) by default; `1` in production since 2026-11-15 (the owner's decision); the hardware proofs are owed ([question 72](../spec/06-questions-ouvertes.md)). The Admin console's URL allowlist of the stations must name the portal's host (`code.chevallier.io`) | kiosk stations for supervised projects ([ADR-089](../adr/ADR-089-kiosque-pour-l-espace-de-travail.md), amendment point 1), with `KIOSK_ATTESTATION` not `off`: on, a project's setting offers "SEB or kiosk" and "Kiosk only"; off, a change to them is `422 kiosk_unavailable`. A project already at such a level keeps it either way: the kill switch is `KIOSK_ATTESTATION=off` |
 | `KIOSK_VA_KEY_FILE` | `secrets/verified-access-key.json` | the Chrome Verified Access service account's JSON key, in the read-only `./secrets` mount; with `google`, an unreadable file is refused |
 | `KIOSK_GOOGLE_CUSTOMER_ID`, `KIOSK_ENROLLMENT_DOMAIN`, `KIOSK_EXTENSION_ID` | the Workspace's customer id, the stations' enrollment domain, the companion extension's id | with `google`, each one missing is refused, all of them named in one error |
 | `SESSION_TTL_HOURS` | `12` | idle timeout with sliding expiry, at most 720 |
