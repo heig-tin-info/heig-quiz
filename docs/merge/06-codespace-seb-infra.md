@@ -54,7 +54,7 @@ the app VM loses one stack (~180 MB).
 
 | Invariant | Codespace | Verdict |
 | --- | --- | --- |
-| 10 closed env list, tested | `CONTAINER_ENV_KEYS` (7), tested | compatible |
+| 10 closed env list, tested | `CONTAINER_ENV_KEYS` (8, at most 7 per session), tested | compatible |
 | 11 `--network none` | internal bridge, `--dns=none`, git channel | **sanctioned divergence** |
 | 12 hardening flags | same + `apparmor=codespace`, tmpfs `mode=1777` | compatible |
 | 12 nothing mounted, tmpfs `/work` | `-v <workDir>:/work:U`, persistent per student | **sanctioned divergence** |

@@ -202,8 +202,10 @@ export function stagingSourceFor(
  * in addition to those of the image. Invariant 1: no secret leaves the portal,
  * and this list is what a test asserts.
  *
- * The three `CODESPACE_` ones are read by `heig.codespace-statusbar`, the
- * status-bar extension baked into the image (`images/c-dev/extension`).
+ * The four `CODESPACE_` ones are read by `heig.codespace-statusbar`, the
+ * status-bar extension baked into the image (`images/c-dev/extension`); a
+ * session sets at most three of them, `CODESPACE_SEB` taking the place of
+ * `CODESPACE_RETURN_URL` in a SEB session.
  *
  * The four `GIT_` ones are the student's identity (`users.display_name`,
  * `users.email`). Git honours them **without any configuration file at all**,
@@ -215,6 +217,7 @@ export const CONTAINER_ENV_KEYS = [
   "CODESPACE_DEADLINE",
   "CODESPACE_RETURN_URL",
   "CODESPACE_ASSIGNMENT_NAME",
+  "CODESPACE_SEB",
   "GIT_AUTHOR_NAME",
   "GIT_AUTHOR_EMAIL",
   "GIT_COMMITTER_NAME",
@@ -254,23 +257,34 @@ function rootUrl(base: string | undefined): string | undefined {
  *    the extension then shows no countdown;
  *  - `CODESPACE_RETURN_URL`: the platform for a session born from a launch token
  *    (`launchJti`), the portal otherwise. That is where the "Close" button
- *    takes you back;
+ *    takes you back. Never in a SEB session: the button opens a new tab,
+ *    which inside Safe Exam Browser has no platform session and quits nothing;
+ *  - `CODESPACE_SEB`: `1` in a SEB session (`sebVerified`, sticky on the row
+ *    once a SEB launch opened it or relaunched its container): the extension
+ *    shows SEB's own quit shortcut instead of the "Close" button. A container
+ *    still running when a SEB launch resumes it is not restarted, so it keeps
+ *    the environment it was started with (and its "Close") until its next
+ *    relaunch;
  *  - `CODESPACE_ASSIGNMENT_NAME`: the assignment title, shown in the tooltip.
  *
- * None of these values is a secret, and there is no fourth one.
+ * None of these values is a secret, and there is no other one.
  */
 export function containerEnvFor(
-  session: Pick<SessionRow, "launchJti">,
+  session: Pick<SessionRow, "launchJti" | "sebVerified">,
   assignment: Pick<AssignmentRow, "title" | "closesAt">,
   urls: { platformUrl?: string; publicUrl?: string },
   user?: Pick<UserRow, "displayName" | "email" | "login"> | undefined,
 ): Record<string, string> {
   const env: Record<string, string> = {};
   if (assignment.closesAt) env.CODESPACE_DEADLINE = assignment.closesAt.toISOString();
-  // The session comes from the platform if and only if a launch token opened or
-  // resumed it: `launchJti` is what says so, not the assignment.
-  const back = rootUrl(session.launchJti ? urls.platformUrl : urls.publicUrl);
-  if (back) env.CODESPACE_RETURN_URL = back;
+  if (session.sebVerified) {
+    env.CODESPACE_SEB = "1";
+  } else {
+    // The session comes from the platform if and only if a launch token opened
+    // or resumed it: `launchJti` is what says so, not the assignment.
+    const back = rootUrl(session.launchJti ? urls.platformUrl : urls.publicUrl);
+    if (back) env.CODESPACE_RETURN_URL = back;
+  }
   if (assignment.title.trim() !== "") env.CODESPACE_ASSIGNMENT_NAME = assignment.title;
   const identity = user ? gitIdentityOf(user) : null;
   if (identity) {

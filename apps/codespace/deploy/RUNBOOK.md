@@ -164,14 +164,15 @@ unapproved commit's image under production's new sessions. A running session
 keeps the image it started with until its container restarts.
 
 The status-bar extension (`images/c-dev/extension/`) is part of the image:
-a change to it — for instance 0.3.0, the teacher's update of ADR-132 §11 —
-reaches the students only through this rebuild, after the production deploy
-of the portal that serves it. Check the version `test.sh` § 3 reports
-(`heig.codespace-statusbar@0.3.0 installed and listed by code-server`). The
+a change to it — for instance 0.3.0, the teacher's update of ADR-132 §11, or
+0.4.0, SEB's quit hint in place of the Close button — reaches the students
+only through this rebuild, after the production deploy of the portal that
+serves it. Check the version `test.sh` § 3 reports
+(`heig.codespace-statusbar@0.4.0 installed and listed by code-server`). The
 sessions running during the rebuild keep the old extension until their
 container is restarted (a close and a reopen, or the idle collection); the
 portal's side works with either, the old extension simply ignoring the
-update.
+update (0.3.0 under `CODESPACE_SEB` shows neither the button nor the hint).
 
 Since 2026-11-15 (#1102, Baygon) the build also downloads from PyPI
 (`pypi.org` for the index, `files.pythonhosted.org` for the wheels of `images/c-dev/baygon/requirements.txt`,

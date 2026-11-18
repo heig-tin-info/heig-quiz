@@ -23,7 +23,7 @@ PODMAN_URL="${PODMAN_URL:-unix:///run/podman/podman.sock}"
 SECCOMP_DEFAULT="${SECCOMP_DEFAULT:-/usr/share/containers/seccomp.json}"
 
 # The status-bar extension's version, as the Containerfile's EXT_STATUSBAR_VERSION.
-STATUSBAR_VERSION=0.3.0
+STATUSBAR_VERSION=0.4.0
 STATUSBAR_DIR="/opt/code-server/extensions/heig.codespace-statusbar-${STATUSBAR_VERSION}"
 
 CTR_A=cdev-p1-a
@@ -215,9 +215,11 @@ echo "seccomp : ${REPO_ROOT}/infra/seccomp/codespace.json"
 # --------------------------------------------------------------------------
 head2 "0. start under run-hardened.sh, and time to /healthz"
 # --------------------------------------------------------------------------
-# The seven variables the portal sets on `podman run` (sessions/manager.ts,
-# CONTAINER_ENV_KEYS): three CODESPACE_ for the status-bar extension, four GIT_
-# for the student's identity. Container A carries them, container B does not:
+# The seven variables the portal sets on `podman run` for a session outside
+# SEB (sessions/manager.ts, CONTAINER_ENV_KEYS): three CODESPACE_ for the
+# status-bar extension, four GIT_ for the student's identity; a SEB session
+# swaps CODESPACE_RETURN_URL for CODESPACE_SEB, seven still. Container A
+# carries them, container B does not:
 # section 9 compares the two environments and requires exactly seven lines of
 # difference. No secret goes in there, invariant 1.
 ENV_DEADLINE=2026-10-01T12:00:00.000Z

@@ -27,6 +27,8 @@ import { remoteUrl } from "./workspace.js";
 class FakeEngine implements Engine {
   readonly containers = new Map<string, ContainerInfo>();
   runs = 0;
+  /** The environment of every `run`, in order. */
+  readonly envs: Array<Record<string, string> | undefined> = [];
   private next = 10;
 
   containerName(sessionId: string): string {
@@ -37,6 +39,7 @@ class FakeEngine implements Engine {
   }
   async run(req: RunRequest): Promise<ContainerInfo> {
     this.runs += 1;
+    this.envs.push(req.env);
     const info: ContainerInfo = {
       id: `ctr-${this.runs}`,
       name: req.name,
@@ -244,6 +247,44 @@ describe("creation and resumption (analyse.md D5)", () => {
     const second = await manager.start(user, assignment);
     expect(second.session.id).toBe(first.session.id);
     expect(findAnySession(db, "student", "tp")?.state).toBe("running");
+  });
+});
+
+describe("the container learns it runs under SEB (CODESPACE_SEB)", () => {
+  const URLS = { publicUrl: "https://code.example.test" };
+
+  it("a SEB launch sets the flag and no return URL", async () => {
+    const assignment = await insertAssignment();
+    await makeManager(60_000, URLS).start(user, assignment, { sebVerified: true });
+    expect(engine.envs[0]?.CODESPACE_SEB).toBe("1");
+    expect(engine.envs[0]?.CODESPACE_RETURN_URL).toBeUndefined();
+  });
+
+  it("a launch outside SEB keeps the return URL and sets no flag", async () => {
+    const assignment = await insertAssignment();
+    await makeManager(60_000, URLS).start(user, assignment);
+    expect(engine.envs[0]?.CODESPACE_SEB).toBeUndefined();
+    expect(engine.envs[0]?.CODESPACE_RETURN_URL).toBe("https://code.example.test/");
+  });
+
+  it("a session started outside SEB, resumed from SEB, relaunches with the flag", async () => {
+    const assignment = await insertAssignment();
+    const manager = makeManager(60_000, URLS);
+    const first = await manager.start(user, assignment);
+    await manager.close(first.session.id, "test");
+    await manager.start(user, assignment, { sebVerified: true });
+    expect(engine.envs).toHaveLength(2);
+    expect(engine.envs[1]?.CODESPACE_SEB).toBe("1");
+    expect(engine.envs[1]?.CODESPACE_RETURN_URL).toBeUndefined();
+  });
+
+  it("the flag is sticky: a relaunch after the SEB launch keeps it", async () => {
+    const assignment = await insertAssignment();
+    const manager = makeManager(60_000, URLS);
+    const { session } = await manager.start(user, assignment, { sebVerified: true });
+    engine.kill(engine.containerName(session.id));
+    await manager.ensureRunning(session.id);
+    expect(engine.envs[1]?.CODESPACE_SEB).toBe("1");
   });
 });
 

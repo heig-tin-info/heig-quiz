@@ -39,7 +39,7 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | git | 2.47.3 | Debian stable repository |
 | `llvm-vs-code-extensions.vscode-clangd` | 0.6.0 | Open VSX, resolved at build time |
 | `webfreak.debug` | 0.27.0 | Open VSX, resolved at build time |
-| `heig.codespace-statusbar` | 0.3.0 | local source `extension/`, packaged at build time |
+| `heig.codespace-statusbar` | 0.4.0 | local source `extension/`, packaged at build time |
 | Python | 3.13.5 (package `python3`) | Debian stable repository; the interpreter of Baygon and pytest |
 | Baygon | **0.7.0** (MIT, HEIG-VD) | `baygon/requirements.txt`: it and its 18 dependencies pinned by version and sha256, wheels only |
 | pytest | 8.3.5 (Debian 8.3.5-2), with pluggy 1.5.0, iniconfig 1.1.1, packaging 25.0 | Debian stable repository (package `python3-pytest`, § pytest) |
@@ -353,8 +353,9 @@ picks dies with the container: the `user-data-dir` is a tmpfs.
 ## Status bar extension `heig.codespace-statusbar`
 
 Feedback 3 of [docs/history/leads.md](../../docs/history/leads.md). Publisher `heig`, name
-`codespace-statusbar`, version `0.3.0` (0.2.0 adds the debugged program's
-terminal, § Debugging; 0.3.0 the teacher's update, below). Source in
+`codespace-statusbar`, version `0.4.0` (0.2.0 adds the debugged program's
+terminal, § Debugging; 0.3.0 the teacher's update, below; 0.4.0 SEB's quit
+hint in place of "Close"). Source in
 `extension/`: plain JavaScript (`package.json`, `extension.js`, and the
 two modules that need no `vscode`, `debugIo.js` and `update.js`, unit-tested
 from `apps/codespace/src`), **no dependency, no bundler, no network access
@@ -370,7 +371,16 @@ Two items on the right of the status bar:
    beyond it. The tooltip carries the local date and time of the container
    (`TZ=Europe/Zurich`) and the title of the assignment;
 2. **"Close"** — command `codespace.close`, which opens the return URL with
-   `vscode.env.openExternal`.
+   `vscode.env.openExternal`. In a Safe Exam Browser session (since 0.4.0,
+   `CODESPACE_SEB=1`) the portal passes no return URL and the item is the
+   hint **"Quit: Ctrl+Q"** instead, with no command; its tooltip is Quiz's own
+   (`seb.quit`, `seb.quit.keys`: Ctrl+Q on Windows, ⌘Q on Mac, which may ask
+   for a password) and says the files are saved automatically
+   (`files.autoSave`, 1 s, `settings.json`). The owner's decision of
+   2026-11-18: under SEB, "Close" opened a second tab with an edu-ID login
+   (that tab has no platform session) and quit nothing. SEB asks to confirm
+   before it quits; the work is already on disk. The palette's
+   `codespace.close` shows the same hint.
 
 Two more, read from `GET <origin>/push-status` on the portal's git channel
 every 30 s: **"Push refused by GitHub"** (ADR-078 §6), and since 0.3.0
@@ -406,20 +416,25 @@ adds it to the product's trusted domains; no new container variable.
 
 ### What it reads
 
-Three of the seven environment variables that the portal sets at `podman run` time
-(`src/sessions/manager.ts`, `CONTAINER_ENV_KEYS`, then `src/engine/index.ts`):
+Four of the eight environment variables of `CONTAINER_ENV_KEYS` that the
+portal may set at `podman run` time (`src/sessions/manager.ts`, then
+`src/engine/index.ts`); a session gets seven at most, `CODESPACE_SEB` and
+`CODESPACE_RETURN_URL` never together:
 
 | Variable | Contents | Absent |
 | --- | --- | --- |
 | `CODESPACE_DEADLINE` | ISO 8601 deadline (`deadlineAt` from classroom, column `assignments.closes_at`) | no countdown |
-| `CODESPACE_RETURN_URL` | `${CLASSROOM_URL}/` for a session born from a launch token, `${PUBLIC_URL}/` otherwise | no "Close" button |
+| `CODESPACE_RETURN_URL` | `${CLASSROOM_URL}/` for a session born from a launch token, `${PUBLIC_URL}/` otherwise; never in a SEB session | no "Close" button |
+| `CODESPACE_SEB` | `1` when the session is SEB-verified (`sessions.seb_verified`, kept once a SEB launch opened the session or relaunched its container; a container still running when a SEB launch resumes it keeps its old environment, "Close" included, until its next relaunch) | the "Close" button, if a return URL was passed |
 | `CODESPACE_ASSIGNMENT_NAME` | title of the assignment | tooltip without the title |
 
 **No secret goes in there** (invariant 1). A unit test
 (`src/sessions/containerEnv.test.ts`) asserts that the portal never sets a
 key outside `CONTAINER_ENV_KEYS`, and `test.sh` § 9 compares the environment of a
 container started by the portal with that of a bare container: exactly seven
-lines of difference, all of them in `CODESPACE_` or `GIT_`.
+lines of difference, all of them in `CODESPACE_` or `GIT_` (container A is a
+session outside SEB; a SEB session swaps `CODESPACE_RETURN_URL` for
+`CODESPACE_SEB`, seven still).
 
 ## Git identity of the student
 
@@ -510,7 +525,8 @@ The hardening is intact: `test.sh` § 3 keeps checking that no
 ### Limits
 
 - **`openExternal` opens a new tab.** In lab mode, the
-  "Close" button closes nothing: it opens classroom (or the portal) in one more
+  "Close" button closes nothing (under SEB it is replaced by the quit hint,
+  above): it opens classroom (or the portal) in one more
   tab and leaves the editor behind. That is the behaviour of
   `vscode.env.openExternal` in VS Code Web, which has no way of closing
   the current tab. A real exit would require a portal page
@@ -1076,13 +1092,11 @@ listed here.
   Two attempts at driving a headless Chromium (chrome-headless-shell
   and Chrome for Testing 153) stopped at the management connection, without
   ever reaching the extension host connection.
-- `TODO(verify)` **heig.codespace-statusbar 0.1.0 under SEB** — in exam mode,
-  `vscode.env.openExternal` asks the browser to open a URL. Under Safe Exam
-  Browser, the URL filter may refuse the opening, or open it in an
-  extra window that the student will not know how to close. Behaviour to be
-  observed at the first rehearsal in the exam room. The classroom domain is already
-  allowed by the filter (`sebAllowedHosts`), so the refusal, if it happens,
-  will come from SEB's window policy, not from the host filter.
+- **heig.codespace-statusbar under SEB** — observed 2026-11-18 in an
+  `online_seb` project: "Close" opened a second tab with an edu-ID login
+  prompt and quit nothing. Since 0.4.0 a SEB session gets the quit hint
+  instead (§ What it displays). `TODO(verify)` the hint in a real SEB after
+  the image rebuild.
 
 - `TODO(verify)` **VS Code 1.137.0** —
   `terminal.integrated.stickyScroll.enabled: false`: the chain of causes is
