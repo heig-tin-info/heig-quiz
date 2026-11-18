@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { cx, Tip } from "./layers";
 
@@ -17,20 +17,29 @@ import { cx, Tip } from "./layers";
  *   spells every share out in words.
  *
  * The shares are `value / total`; `total` defaults to the parts' sum, and a
- * larger one leaves the rest of the ring empty (rows no part describes).
+ * larger one leaves the rest of the ring empty (rows no part describes), or
+ * on its `track`.
+ *
+ * A part may sit on the red-to-green ramp instead of a tone (`ramp`, with
+ * its `rate`, 0 to 1): the live grid's `.score-ramp`, as a stroke that
+ * deepens with the rate (`.score-ramp-stroke`) — a single rate drawn as an
+ * arc over the track (`RateRing`).
  */
 export type RingTone = "success" | "warning" | "danger" | "faint";
 
 export interface RingPart {
   value: number;
-  tone: RingTone;
+  tone: RingTone | "ramp";
+  /** A `ramp` part's place on the ramp, 0 to 1. */
+  rate?: number;
 }
 
-const STROKE: Record<RingTone, string> = {
+const STROKE: Record<RingPart["tone"], string> = {
   success: "stroke-success",
   warning: "stroke-warning",
   danger: "stroke-danger",
   faint: "stroke-fg-faint/50",
+  ramp: "score-ramp-stroke",
 };
 const FILL: Record<RingTone, string> = {
   success: "bg-success",
@@ -50,12 +59,15 @@ export function RingChart({
   hole,
   holeClassName = "text-[10px]",
   sentence,
+  track = false,
   className,
 }: {
   parts: RingPart[];
   total?: number;
   size?: number;
   thickness?: number;
+  /** The whole ring drawn under the parts, in `surface-3` (a segmented track's): the empty rest then reads as one. */
+  track?: boolean;
   /** The figure in the hole. */
   hole?: ReactNode;
   /** Sizes the figure in the hole; `text-[10px]` for a 36 px ring. */
@@ -81,6 +93,9 @@ export function RingChart({
         style={{ width: size, height: size }}
       >
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
+          {track ? (
+            <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={thickness} className="stroke-surface-3" />
+          ) : null}
           {drawn.map((part, i) => {
             const length = (part.value / whole) * circumference;
             const dash = Math.max(length - gap, 0.75);
@@ -97,6 +112,7 @@ export function RingChart({
                 strokeDasharray={`${dash} ${circumference - dash}`}
                 strokeDashoffset={offset}
                 className={STROKE[part.tone]}
+                style={part.tone === "ramp" ? ({ "--rate": `${Math.round((part.rate ?? 0) * 100)}%` } as CSSProperties) : undefined}
               />
             );
           })}
@@ -109,6 +125,17 @@ export function RingChart({
       </span>
     </Tip>
   );
+}
+
+/**
+ * One rate as a small ring (20 px by default): an arc as long as the rate,
+ * on the red-to-green ramp, over the track. A rate below 0 draws nothing,
+ * above 1 the whole ring. The figure is beside it, never inside: the
+ * caller writes it, and `sentence` says it to a screen reader and on hover.
+ */
+export function RateRing({ rate, sentence, size = 20 }: { rate: number; sentence: string; size?: number }) {
+  const share = Math.min(Math.max(rate, 0), 1);
+  return <RingChart parts={[{ value: share, tone: "ramp", rate: share }]} total={1} size={size} thickness={3} track sentence={sentence} />;
 }
 
 /** The swatch of a legend: the same token as the segment. */

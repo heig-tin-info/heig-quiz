@@ -3,15 +3,15 @@
  * points out of their maximum, the final score with its grade and source, a
  * CI status as a tag.
  */
-import type { ProjectRepoCollection, ProjectRepoView, ProjectStudent, ProjectSyncState } from "@quiz/contracts";
-import { formatScore, WORKSPACE_PUSH_MAX_BYTES } from "@quiz/domain";
+import type { ProjectGradingMode, ProjectRepoCollection, ProjectRepoView, ProjectStudent, ProjectSyncState } from "@quiz/contracts";
+import { ciShareOnly, formatScore, rateOf, WORKSPACE_PUSH_MAX_BYTES } from "@quiz/domain";
 
 import { GitPullRequest, PackageCheck, RefreshCw } from "lucide-react";
 
 import { Grade } from "../Grade";
 import { studentName } from "../group/groupRules";
 import { useT, type Dict } from "../i18n";
-import { Badge, Button, cx, Dash, isoDateTime, type Tone } from "../ui";
+import { Badge, Button, cx, Dash, isoDateTime, RateRing, type Tone } from "../ui";
 import { syncTag } from "./projectPage";
 
 /** A score out of its maximum, to the tenth ("8/10", "7.2/26", "9" without one), or a dash without points. */
@@ -38,17 +38,29 @@ export const SCORE_SOURCE_KEY: Record<NonNullable<ProjectRepoView["scores"]["fin
  * bold tabular text, the grade as text beside them (never a badge), and under
  * them, as faint text, where the score comes from (CI, review, teacher) —
  * visible, not only a tooltip (I42).
+ *
+ * The CI's score of a project graded by criteria (`ciShareOnly`, product
+ * owner 2026-11-18) is only the CI's share: the AI and the teacher grade the
+ * rest later. No grade then, but a small ring of the CI's rate on the
+ * red-to-green ramp before the points, the points still written.
  */
-export function Score({ score }: { score: ProjectRepoView["scores"]["final"] }) {
+export function Score({ score, gradingMode }: { score: ProjectRepoView["scores"]["final"]; gradingMode: ProjectGradingMode }) {
   const t = useT();
   if (!score) return <Dash />;
+  const rate = ciShareOnly(gradingMode, score.source) && score.max !== null ? rateOf(score.points, score.max) : null;
   return (
     <span className="inline-flex flex-col items-end leading-tight">
-      <span className="inline-flex items-baseline gap-x-2">
+      <span className={cx("inline-flex gap-x-2", rate === null ? "items-baseline" : "items-center")}>
+        {rate !== null ? (
+          <RateRing
+            rate={rate}
+            sentence={t("project.score.ciRate", { points: formatScore(score.points), max: formatScore(score.max!), rate: Math.round(rate * 100) })}
+          />
+        ) : null}
         <span className="font-semibold">
           <Points points={score.points} max={score.max} />
         </span>
-        {score.grade ? (
+        {score.grade && rate === null ? (
           <span className="tabular-nums text-fg-muted">
             <Grade value={score.grade.grade} />
           </span>

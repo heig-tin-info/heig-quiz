@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { renderWithProviders } from "../test/render";
-import { RingChart, ringFill, type RingPart } from "./ring";
+import { RateRing, RingChart, ringFill, type RingPart } from "./ring";
 
 const parts: RingPart[] = [
   { value: 26, tone: "success" },
@@ -45,6 +45,32 @@ describe("RingChart", () => {
     const { container } = renderWithProviders(<RingChart parts={[{ value: 1, tone: "success" }]} total={4} sentence="s" />);
     const [dash] = container.querySelector("circle")!.getAttribute("stroke-dasharray")!.split(" ").map(Number);
     expect(dash!).toBeCloseTo(CIRCUMFERENCE / 4, 3);
+  });
+});
+
+describe("RateRing", () => {
+  const RATE_CIRCUMFERENCE = 2 * Math.PI * 8.5;
+  const arcs = (container: HTMLElement) => [...container.querySelectorAll("circle")];
+
+  it("draws the rate as an arc on the ramp over the track, named by its sentence", () => {
+    const { container } = renderWithProviders(<RateRing rate={0.833} sentence="CI: 40 of 48 points, 83%" />);
+    expect(screen.getByRole("img", { name: "CI: 40 of 48 points, 83%" })).toHaveStyle({ width: "20px" });
+    const [track, arc] = arcs(container);
+    expect(track!.getAttribute("class")).toBe("stroke-surface-3");
+    expect(track!.getAttribute("stroke-dasharray")).toBeNull();
+    expect(arc!.getAttribute("class")).toBe("score-ramp-stroke");
+    expect(arc!.style.getPropertyValue("--rate")).toBe("83%");
+    const [dash] = arc!.getAttribute("stroke-dasharray")!.split(" ").map(Number);
+    expect(dash!).toBeCloseTo(0.833 * RATE_CIRCUMFERENCE, 3);
+  });
+
+  it("draws the track alone at zero, and the whole ring past full marks", () => {
+    const zero = renderWithProviders(<RateRing rate={-0.2} sentence="s" />);
+    expect(arcs(zero.container)).toHaveLength(1);
+    const full = renderWithProviders(<RateRing rate={1.4} sentence="s" />);
+    const arc = arcs(full.container)[1]!;
+    expect(arc.style.getPropertyValue("--rate")).toBe("100%");
+    expect(Number(arc.getAttribute("stroke-dasharray")!.split(" ")[0])).toBeCloseTo(RATE_CIRCUMFERENCE, 3);
   });
 });
 

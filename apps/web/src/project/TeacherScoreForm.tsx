@@ -182,7 +182,7 @@ export function ScoreSection({
           <Points points={repo.scores.teacher?.points ?? null} max={repo.scores.teacher?.max ?? null} />
         </Fact>
         <Fact label={t("project.score.final")}>
-          <Score score={repo.scores.final} />
+          <Score score={repo.scores.final} gradingMode={project.gradingMode} />
         </Fact>
         <ReviewState repo={repo} />
       </dl>

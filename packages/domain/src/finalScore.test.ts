@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { finalPoints, resolveFinalScore, teacherScoreMax } from "./finalScore.js";
+import { ciShareOnly, finalPoints, resolveFinalScore, teacherScoreMax } from "./finalScore.js";
+
+describe("ciShareOnly (product owner, 2026-11-18)", () => {
+  it("is the CI's score of a project graded by criteria, and nothing else", () => {
+    expect(ciShareOnly("criteria", "ci")).toBe(true);
+    for (const source of ["teacher", "criteria", "review"] as const) expect(ciShareOnly("criteria", source)).toBe(false);
+    expect(ciShareOnly("auto", "ci")).toBe(false);
+    expect(ciShareOnly("none", "ci")).toBe(false);
+  });
+});
 
 const s = (points: number | null, max: number | null = 6, parseStatus = "ok") => ({
   points,

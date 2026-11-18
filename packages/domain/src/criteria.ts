@@ -320,3 +320,26 @@ export function criteriaTotals(
   bonusMax = roundPoints(bonusMax);
   return { points: Math.max(0, Math.min(roundPoints(max + bonusMax), roundPoints(points))), max, bonusMax, missing };
 }
+
+/** The CI's score of a project graded by criteria laid against the criteria's whole ({@link ciShare}). */
+export interface CiShare {
+  /** The points the CI awarded, within `[0, its maximum]`. */
+  awarded: number;
+  /** The points of the CI's maximum it did not award. */
+  missed: number;
+  /** The rest of the criteria's total: what the AI or the teacher grades later. */
+  later: number;
+}
+
+/**
+ * The CI's score against the whole of a project graded by criteria (product
+ * owner, 2026-11-18): the CI's points out of its own maximum (its `GRADE`,
+ * ADR-119 §12) split into awarded and missed, and what the criteria's total
+ * (`criteriaTotals`' `max`) holds beyond that maximum, graded later by the
+ * AI or the teacher. A CI maximum above the total leaves nothing for later.
+ * Rounded by {@link roundPoints}.
+ */
+export function ciShare(ci: { points: number; max: number }, total: number): CiShare {
+  const awarded = Math.max(0, Math.min(ci.points, ci.max));
+  return { awarded, missed: roundPoints(ci.max - awarded), later: roundPoints(Math.max(0, total - ci.max)) };
+}
