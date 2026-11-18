@@ -216,16 +216,17 @@ follow-up it enables: the header of `infra/engine/deploy.sh`.
 ### 9. Quiz's side: the URL and the secret
 
 The secret travels VM to VM, never through the workstation's disk. The keys
-must not already be in the files (`grep -c '^CODESPACE_' …` → 0):
+must not already be in the files (`grep -c '^CODESPACE_' …` → 0). Read the
+secret on the code VM from `/etc/quiz-codespace/<instance>/env`
+(`CODESPACE_LAUNCH_SECRET=`), and append, through a pipe, on the application
+VM:
 
-```bash
-# from the workstation: production
-ssh root@code.chevallier.io "sed -n 's/^CODESPACE_LAUNCH_SECRET=//p' /etc/quiz-codespace/prod/env" \
-  | ssh srv@portal.heig.chevallier.io 'umask 077; s=$(cat); printf "\nCODESPACE_URL=https://code.chevallier.io\nCODESPACE_LAUNCH_SECRET=%s\n" "$s" >> /srv/quiz/.env.prod'
-# staging
-ssh root@code.chevallier.io "sed -n 's/^CODESPACE_LAUNCH_SECRET=//p' /etc/quiz-codespace/staging/env" \
-  | ssh srvstg@portal.heig.chevallier.io 'umask 077; s=$(cat); printf "\nCODESPACE_URL=https://code-dev.chevallier.io\nCODESPACE_LAUNCH_SECRET=%s\n" "$s" >> /home/srvstg/quiz-staging/.env.staging'
-```
+- as `srv`, to `/srv/quiz/.env.prod` (umask 077):
+  `CODESPACE_URL=https://code.chevallier.io` and
+  `CODESPACE_LAUNCH_SECRET=<the prod instance's>`;
+- as `srvstg`, to `/home/srvstg/quiz-staging/.env.staging`:
+  `CODESPACE_URL=https://code-dev.chevallier.io` and
+  `CODESPACE_LAUNCH_SECRET=<the staging instance's>`.
 
 The application reads them when its container is created: the next deploy,
 or now (production: outside a live evaluation):

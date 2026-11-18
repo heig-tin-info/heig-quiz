@@ -325,12 +325,7 @@ VS Code's webviews are served from the same origin and run script there:
 a notebook's HTML output did so as soon as the `.ipynb` was opened, which
 rule 4 closes (an `.ipynb` no longer opens as a notebook, only as text;
 verified in Chromium).
-Known gaps, closed only by a subdomain per session (each session its own
-origin, a wildcard certificate): a markdown preview runs script once the
-student turns its security off, and a student's process can take port 8080
-for the moment between a `SIGUSR1` to code-server and the container's exit.
-Either can set a `path=/` cookie in that student's own browser; neither can
-widen a service worker's scope, and another browser never loads the page
-without the session's cookie. An image that must serve a web application
-waits for that fix.
+Known gaps remain, closed only by a subdomain per session (each session
+its own origin, a wildcard certificate); details: operator notes
+(internal). An image that must serve a web application waits for that fix.
 

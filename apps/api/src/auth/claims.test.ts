@@ -74,15 +74,15 @@ describe("addressesOf", () => {
     expect(
       addressesOf(
         {
-          email: "Willy.TK89@gmail.test",
-          swissEduIDLinkedAffiliationMail: ["William.Ammann@heig-vd.ch"],
+          email: "Sam.Pixel42@gmail.test",
+          swissEduIDLinkedAffiliationMail: ["Samuel.Exemple@heig-vd.ch"],
         },
         true,
       ),
     ).toEqual([
-      { email: "willy.tk89@gmail.test", source: "login", verified: true },
+      { email: "sam.pixel42@gmail.test", source: "login", verified: true },
       {
-        email: "william.ammann@heig-vd.ch",
+        email: "samuel.exemple@heig-vd.ch",
         source: "swissEduIDLinkedAffiliationMail",
         verified: true,
       },

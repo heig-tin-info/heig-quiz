@@ -454,8 +454,8 @@ What the job relaxes is the HOST, never the sandbox: it adds the
 hands the rootful socket to the job's user. The containers get the flags of
 `containerArgs()`, unchanged.
 
-The job has two legs. `default` drives the system socket (crun), as
-production does today. `runsc` runs `deploy/install-gvisor.sh` and the suite
+The job has two legs. `default` drives the system socket with Podman's
+default runtime (crun), the engine of a host without gVisor. `runsc` runs `deploy/install-gvisor.sh` and the suite
 through the gVisor socket with `RUNNER_RUNTIME=runsc`: `proveRuntime` gates
 it, the seccomp probe must see the profile's own `EPERM`, the isolation
 probes gVisor's `EPERM` for every refusal ([gVisor](#gvisor)), and every

@@ -337,24 +337,15 @@ short fix):
    `ipynb` and `notebook-renderers` extensions are deleted at build time
    (the orchestrator's decision of the same day, on the owner's authority).
 
-Rationale: the port proxy put whatever a student's program serves on the
-shared origin, with its own headers, so it could set cookies on the whole
-origin or register a service worker over it; nothing in the product uses
-it. VS Code 1.137 already sends rule 3's headers, so the workbench is known
-to work with them (verified in Chromium through a real portal).
-
-VS Code's webviews are served from the same origin and run script there:
-a notebook's HTML output did so as soon as the `.ipynb` was opened, which
-rule 4 closes (an `.ipynb` no longer opens as a notebook, only as text;
-verified in Chromium).
-Known gaps, closed only by a subdomain per session (each session its own
-origin, a wildcard certificate): a markdown preview runs script once the
-student turns its security off, and a student's process can take port 8080
-for the moment between a `SIGUSR1` to code-server and the container's exit.
-Either can set a `path=/` cookie in that student's own browser; neither can
-widen a service worker's scope, and another browser never loads the page
-without the session's cookie. An image that must serve a web application
-waits for that fix.
+Rationale: every session shares one origin, so what a session serves must
+not be able to act on that origin; the port proxy is not used by the
+product. VS Code 1.137 already sends rule 3's headers, so the workbench is
+known to work with them (verified in Chromium through a real portal).
+Rule 4 removes notebook rendering from the student image (an `.ipynb`
+opens only as text; verified in Chromium).
+Known gaps remain, closed only by a subdomain per session (each session
+its own origin, a wildcard certificate); details: operator notes
+(internal). An image that must serve a web application waits for that fix.
 
 ## Amendment 2026-11-14: the staff's review session (ADR-129)
 
@@ -363,15 +354,12 @@ M6-06 (C) (whose quota a session consumes) and M6-03 (b) ("every portal
 account is a student"). [ADR-129](ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md)
 owns the rule (product owner, 2026-11-14).
 
-- **The L24 premise no longer holds for a review.** "Another browser never
-  loads the page without the session's cookie" stays true of a student's
-  workspace; a review session loads a student's repository and programs in
-  a staff member's browser, beside any other portal session open there.
-  Decision: at most one live review session per staff member, and the
-  residual risk — the two gaps above, and whatever the reviewed
-  repository can make run on the origin once opened, reaching the staff
-  member's own sessions open in that browser — accepted in writing
-  (ADR-129 §1, §9).
+- **The L24 premise no longer holds for a review.** A student's workspace
+  is loaded in that student's own browser; a review session loads a
+  student's repository in a staff member's browser, beside any other portal
+  session open there. Decision: at most one live review session per staff
+  member, and the residual risk to the staff member's own sessions open in
+  that browser accepted in writing (ADR-129 §1, §9).
   The subdomain per session stays the full fix (06, question 70).
 - **Quota (M6-06 (C)).** A review session counts against the project's
   quota holder like a student's, with at most two live review sessions per

@@ -5,14 +5,9 @@
 Accepted (2026-11-15): the product owner's four decisions and the model and rules settled at review
 the same day, in the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag),
 which overrides §1, §2, §4, §6, §9 and §12 where it says so. Proposed 2026-10-09 (points 1, 7 and 9 the
-owner's then). Built behind `KIOSK_PROJECTS`. The owner turned it on in production on 2026-11-15
-without waiting for the proofs (the owner's decision), for a class on 2026-11-16; on 2026-11-16 a
-real station framed the portal and the editor opened once the Admin console's URL allowlist named
-the portal's host (`code.chevallier.io`). The same day a class used it in production: three
-station sittings on a supervised project (two ended by Leave, one by the deadline, none
-suspended), beside 22 Safe Exam Browser sessions of the same project, each carrying a Config Key.
-The points of proof K (sockets, clipboard, shortcuts, cookies across the 303) and of project
-proof B were not checked one by one and are not recorded. Amended 2026-11-16 (owner): a
+owner's then). Built behind `KIOSK_PROJECTS`, enabled in production since 2026-11-15 (the
+owner's decision); the hardware proofs (proof K, project proof B) are owed, question 72 of
+[06](../spec/06-questions-ouvertes.md). Amended 2026-11-16 (owner): a
 restarted station frees itself, [amendment of 2026-11-16](#amendment-2026-11-16-a-restarted-station-frees-itself).
 Delivery: [merge progress](../merge/PROGRESS.md), M6-11a–f.
 
@@ -163,26 +158,19 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
    hold are point 4 of the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag).*
 7. **Suspension v1** (owner). A suspended station covers the iframe with
    ADR-051's suspension screen, and `kiosk.suspended` names the project.
-   The work is not frozen on the portal: like SEB, the portal checks trust
-   at launch only. **For the owner: N-SEC-10's suspension is weaker on this
-   path** — a screen over the iframe, while writes to the portal continue,
-   where an exam's suspension is the server's `423`. A portal "suspend"
+   Like SEB, the portal checks trust at launch only. A portal "suspend"
    message is a possible later step, not promised here.
    *Accepted as a residual risk, 2026-11-15 (owner): point 5 (a) of the
    [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag).*
-8. **The deadline.** **For the owner: the station's session ends at the
-   effective deadline, not at deadline plus the grace** that ADR-078 §7
-   grants the git relay; a push in flight at the deadline still lands
-   within the grace, but the student cannot keep working on the station.
-   When the portal answers 403 because its 4 h `exam_session` expired
+8. **The deadline.** The station's session ends at the student's
+   effective deadline, not at deadline plus the grace that ADR-078 §7
+   grants the git relay. When the portal answers 403 because its 4 h `exam_session` expired
    before that, the station page relaunches (point 4); resuming a workspace
    consumes no quota. *Accepted as a residual risk, 2026-11-15 (owner):
    point 5 (b) of the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag).*
    *Corrected 2026-11-16 ([ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
-   §9): under `lock`, a push relayed after the deadline job applied the lock
-   (seconds after the deadline) is refused by GitHub, not received within the
-   grace; what the workspace holds at the deadline is collected by the
-   platform instead (ADR-130), a station left early included.*
+   §9): what the workspace holds at the deadline is collected by the
+   platform (ADR-130), a station left early included.*
 9. **Sequencing** (owner). This ADR is written now. Implementation waits
    until SEB projects are open to students (proof B recorded, M6-07).
    Offering the setting in production further requires **proof K** on
@@ -296,9 +284,8 @@ reviewer in charge), marked *review*: it is not the owner's.
    allowlist gains the portal's host; it stands on ADR-051's own station
    checks, `docs/development/kiosk.md` §7). This waives §9's
    "implementation waits", **not the proofs**.
-   *Amended 2026-11-16 (owner): turned on in production on 2026-11-15
-   without the proofs, for a class on 2026-11-16; what has been observed and
-   what is still owed is in the Status.*
+   *Amended 2026-11-16 (owner): turned on in production on 2026-11-15;
+   the proofs are owed (06, question 72).*
    *The flag's rule* (*review*). One predicate,
    `kioskProjectsOn(config) = KIOSK_ATTESTATION !== "off" && KIOSK_PROJECTS`,
    read in exactly two places: the mode write refuses a change TO a station
@@ -468,9 +455,10 @@ reviewer in charge), marked *review*: it is not the owner's.
      learns it from the code request's `409` only (the station's payload no
      longer carries it), and a restarted station no longer waits for the 6 h
      or an administrator — the [amendment of 2026-11-16](#amendment-2026-11-16-a-restarted-station-frees-itself).*
-5. **Accepted residual risks** (*owner*):
-   - (a) **Suspension** (§7): a suspended station only covers the frame;
-     the portal's writes continue — weaker than an exam's `423` (N-SEC-10).
+5. **Accepted residual risks** (*owner*), details in the operator notes
+   (internal):
+   - (a) **Suspension** (§7): a suspension on this path is weaker than an
+     exam's `423` (N-SEC-10).
    - (b) **The deadline** (§8): the station's session ends at the
      student's effective deadline (`effectiveDeadline`: a per-student
      extension follows the repository's own, ADR-078 §2), not at deadline

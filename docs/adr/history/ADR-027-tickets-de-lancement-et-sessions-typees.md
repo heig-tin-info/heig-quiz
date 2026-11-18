@@ -102,14 +102,10 @@ not per address, since an exam room shares one address; the others are
 logged only.
 
 **Addendum (2026-11-06): the unlock password, scope: §2 and the file.**
-SEB Windows 3.x shows its lock screen after a user-session switch
-(Ctrl+Alt+Del, switch user, come back) and, when the file defines no quit
-password, logs "No unlock password is defined, allowing user to resume
-session!" and lets the student resume (`ClientResponsibility.cs`,
-`WaitForLockScreenResolution`); a student demonstrated it. Quiz now draws
-an unlock password PER EVALUATION: three lowercase letters then three
-digits from an alphabet without `i`, `l`, `o`, `0`, `1` (`cde234`;
-`@quiz/domain` `drawSebUnlockPassword`, from `node:crypto`'s `randomInt`).
+SEB asks for the file's quit password, when it defines one, to resume
+from its lock screen and to quit. Quiz now draws an unlock password PER
+EVALUATION: six characters, short enough to read aloud (`@quiz/domain`
+`drawSebUnlockPassword`, from `node:crypto`'s `randomInt`).
 No global secret, no field for the teacher. It is stored in the nullable
 column `evaluations.seb_unlock_password`, never in `settings` (which the
 student view and every copy take whole), drawn on first need by one
@@ -117,10 +113,9 @@ statement (`sebUnlockPasswordOf`, `modules/evaluation/sebUnlock.ts`: the
 first `.seb` download or the first look at the live screen) and never
 changed: no regeneration in v1, no audit event, never copied by a
 duplicate, a template or an instance. Every `.seb` of the evaluation
-carries its SHA-256 (UTF-8, lowercase hex) as `hashedQuitPassword`, right
-after `quitURLConfirm`: SEB asks for it on its lock screen and on Ctrl+Q /
-⌘Q. The quit link of 2026-10-08 still quits without it, so the student
-uses the button, whose shortcut line now says the keys ask for a password.
+carries it as SEB's quit password: SEB asks for it on its lock screen and
+on Ctrl+Q / ⌘Q. The shortcut line beside the quit link of 2026-10-08 now
+says the keys ask for a password.
 The staff read the password on the evaluation's live screen
 (`DashboardView.evaluation.sebUnlockPassword`, `null` unless the
 evaluation trusts SEB), hidden until clicked and in that tab only: the
@@ -141,18 +136,17 @@ template, a duplicate and an instance start without one.
   never draws: the route takes no session, so only the authenticated
   download and the staff's live screen write the password.
 - The Config Key of every evaluation file changes
-  (`auth/seb.snapshot.test.ts` pins a second fixture, with `cde234`): a
+  (`auth/seb.snapshot.test.ts` pins a second fixture, with a password): a
   file downloaded before the deploy is refused at its start route without
   burning its ticket, and the student downloads it again.
-- Accepted limit: the file is unencrypted and the hash is unsalted, and
-  six characters from 23³·8³ (about 6.2 million) are cracked in seconds
-  by a student who reads their own file. The same class of limit as the
-  Config Key (§2, M10): it stops the accidental and the lazy, and the
-  high-stakes exams sit on attested kiosk stations (ADR-051).
-- Known gap: a project's `workspace.seb` (D21) carries no password in v1
-  and still resumes from the lock screen.
-- `TODO(verify)`: that the quit link still quits without the password,
-  and how SEB for macOS behaves at its lock screen, on a real machine.
+- Accepted limit: the unlock password raises the bar against the
+  lock-screen bypass; it is not a secret against a determined student.
+  The same class of limit as the Config Key (§2, M10), and the high-stakes
+  exams sit on attested kiosk stations (ADR-051). Details: operator notes
+  (internal).
+- Known gap: a project's `workspace.seb` (D21) carries no password in v1.
+- `TODO(verify)`: the behaviour at the lock screen on real machines, SEB
+  for Windows and for macOS.
 
 ## Context
 
@@ -211,15 +205,14 @@ against Moodle's own 201-key SEB-JSON vector. There is no Browser Exam Key
 list: it needs one key per SEB version and platform, which one person cannot
 maintain.
 
-What the header proves is limited, and said so: a student who reads the file
-can compute it. It stops the accidental and the lazy — opening the file's
-URL in Chrome — not the determined. The server-side confinement below is the
-security boundary; SEB's own restrictions are not.
+What the header proves is limited, and said so: it stops the accidental —
+opening the file's URL in an ordinary browser — not a determined student.
+The server-side confinement below is the security boundary; SEB's own
+restrictions are not.
 
 *Noted 2026-10-11: the security audit of 2026-10-10 records exactly this
-limit as finding M10 (a Config Key header forged without a Browser Exam
-Key); the decision is unchanged — an accepted risk, and the high-stakes
-exams sit on attested kiosk stations (ADR-051).*
+limit as finding M10; the decision is unchanged — an accepted risk, and the
+high-stakes exams sit on attested kiosk stations (ADR-051).*
 
 ### 3. Typed sessions and default deny
 

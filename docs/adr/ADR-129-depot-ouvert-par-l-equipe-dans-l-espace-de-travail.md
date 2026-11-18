@@ -65,13 +65,11 @@ What exists bears on it:
    (`quizForge.ts`, `projectId: owner.assignment`).
 5. **Every session shares one web origin** (`/s/<session>/`). ADR-047's
    amendment of 2026-10-11 (audit L24) closed the port proxy and filtered
-   code-server's answers, and accepted two known gaps — a markdown preview
-   whose security the user turned off, a process taking port 8080 between
-   code-server's `SIGUSR1` and the container's exit — on the premise that
-   "another browser never loads the page without the session's cookie".
+   code-server's answers, and accepted the remaining known gaps on the
+   premise that a workspace is loaded only in its own student's browser.
    A review breaks that premise: the staff member's browser loads a
-   workspace whose content and running programs a student wrote, and the
-   same browser may hold other portal sessions.
+   workspace whose content a student wrote, and the same browser may hold
+   other portal sessions.
 6. **The quota** is per quota holder across all projects, counted by the
    portal on `sessions.teacherId` (portal invariant 8; ADR-047 M6-06 (C),
    `quotaHolder` of `packages/domain/src/workMode.ts`).
@@ -272,23 +270,13 @@ already refuses a repository that is not the user's own.
 ### 9. The residual risk of decision 1, stated plainly
 
 Code in a review session runs in the hardened container (portal invariants
-1–3, 13), never in the browser. What reaches the staff member's browser is
-what the student's repository and programs can make code-server serve on
-the portal's origin, which every session shares. The audit L24 gaps remain:
-a markdown preview whose security the staff member turns off runs the
-repository's script, and a program of the student's run by the staff member
-may take port 8080 for the moment between code-server's `SIGUSR1` and the
-container's exit. Script that runs on that origin is same-origin with
-**every portal session open in that browser**: it may set a `path=/` cookie
-there, and read or drive another session's workspace whose cookie the
-browser holds.
-
-**Opening the repository may be enough.** A review session turns automatic
-tasks off (§10), but that is a mitigation, not a guarantee: a workspace
-opened on a student's repository may run content the student controls —
-an extension's behaviour triggered by a file, a preview — without the staff
-member running anything. The accepted risk is worded for that case, not
-only for programs the staff member chooses to run.
+1–3, 13), never in the browser. Every portal session shares the portal's
+origin, and the known gaps of that shared origin (audit L24,
+[ADR-047's amendment of 2026-10-11](ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24))
+remain: content of the reviewed repository may reach other portal sessions
+open in the same browser. A review session turns automatic tasks off
+(§10), a mitigation, not a guarantee; the accepted risk does not assume
+that the staff member runs anything. Details: operator notes (internal).
 
 Decision 1 bounds this: one live review session per staff member, so a
 student's repository can never reach another student's repository through a
@@ -296,10 +284,9 @@ second review open beside it. What it does not bound, and is accepted:
 
 - the staff member's **own** workspace sessions open in the same browser —
   a staff seat's test workspace (ADR-077), or a student workspace of the
-  same person — are not closed by a review; content of the reviewed
-  repository that runs on the origin could read or act in them;
-- a cookie set with `path=/` outlives the review in that browser until it
-  expires or is cleared;
+  same person — are not closed by a review, and are within that reach;
+- what the reviewed content leaves in that browser outlives the review
+  until it expires or is cleared;
 - Quiz itself is out of reach: it is another origin, and the portal's
   cookies are not Quiz's.
 

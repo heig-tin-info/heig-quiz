@@ -74,11 +74,10 @@ reads `criteria.yml`: it ingests one total per run
 (`packages/domain/src/ciScore.ts`), keeps four slots (current, frozen,
 review, teacher; `finalScore.ts`) and releases a total.
 
-The marks obtained this way on labo 00 (Prog-A, `labo-prog-00`, 26
-repositories, locked, not released) are neither objective nor correct, in the
-product owner's judgement: the review runs in code the student controls, its
-result is one number with no per-criterion trace the teacher can check, and
-the platform cannot show the student why.
+In the product owner's judgement, such marks cannot be trusted: the review
+runs in code the student controls, its result is one number with no
+per-criterion trace the teacher can check, and the platform cannot show the
+student why.
 
 StudentScore's `criteria.yml` already describes what a teacher needs (§2).
 What is missing is that the platform own it: the criteria as data, the
