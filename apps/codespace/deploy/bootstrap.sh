@@ -93,7 +93,7 @@ student="$(cs_student_image)"
 if pd image exists "$student"; then
 	ok "student image $student present"
 else
-	printf '  ..    student image %s missing: apps/codespace/images/build.sh\n' "$student"
+	printf '  ..    student image %s missing: the first prod deploy builds it (or apps/codespace/deploy/student-image.sh)\n' "$student"
 fi
 
 step "next"

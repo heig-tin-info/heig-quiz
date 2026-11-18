@@ -68,7 +68,9 @@ Start button, its teacher dashboard and its YAML seed (all removed, below).
   engine VM (ADR-016's M6-04 amendment, [deploy/RUNBOOK.md](deploy/RUNBOOK.md)).
   `CODESPACE_INSTANCE` names an instance; its session containers carry its
   name and label, and an engine lists only its own (`engine/instance.test.ts`).
-  `images/` is built on the VM by hand (`images/build.sh`), never in CI.
+  `images/` is built on the VM, never in CI: by the prod deploy when
+  `images/c-dev` changed, tested before it is tagged
+  (`deploy/student-image.sh`, RUNBOOK §7), or by hand.
 - **Pages in English and French** (`src/web/i18n.ts`, the language from
   `Accept-Language`, French by default): `en` is the dictionary, `fr` is
   typed `Record<keyof typeof en, string>`, so a missing translation is a

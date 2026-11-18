@@ -63,7 +63,7 @@ expect "static: a fixed PATH" \
 expect "static: bash -n" bash -n "$script"
 
 # --- 2. In step with what production writes: the instance's row of
-# apps/codespace/deploy/lib.sh, the lock of infra/engine/deploy.sh.
+# apps/codespace/deploy/lib.sh, the lock of infra/engine/lib.sh.
 in_step() {
 	(
 		# shellcheck source=../../apps/codespace/deploy/lib.sh
@@ -78,12 +78,13 @@ in_step() {
 			&& [ "$QUADLET" = "/etc/containers/systemd/$CS_UNIT.container" ] \
 			&& [ "$ENV_FILE" = "$CS_ETC/env" ] \
 			&& [ "$HEALTH_URL" = "http://127.0.0.1:$CS_PORT/healthz" ] \
-			&& [ "$PODMAN_URL" = "$ENGINE_PODMAN_URL" ]
+			&& [ "$PODMAN_URL" = "$ENGINE_PODMAN_URL" ] \
+			&& [ "$LOCK" = "$ENGINE_LOCK" ]
 	)
 }
-expect "in step: the staging row of codespace's lib.sh" in_step
-expect "in step: deploy.sh takes the same lock" \
-	grep -qF 'exec 9>/run/quiz-engine-deploy.lock' "$here/deploy.sh"
+expect "in step: the staging row of codespace's lib.sh, the engine's lock" in_step
+expect "in step: deploy.sh takes the engine's lock" \
+	grep -qE '^if ! engine_lock [0-9]+; then$' "$here/deploy.sh"
 
 # --- 3. The stubs and the allowed real tools.
 bin="$work/bin"

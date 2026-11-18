@@ -3,10 +3,10 @@
 # Runs the image through run-hardened.sh and executes every P1 assertion.
 # Exits non-zero on the first one that fails, with a clear message.
 #
-#   ./images/c-dev/test.sh
+#   ./images/c-dev/test.sh [<image>]    # or IMAGE=; codespace/c-dev:4.137.0 by default
 #
 # Prerequisites: rootful Podman reachable on unix:///run/podman/podman.sock,
-# image codespace/c-dev:4.137.0 built, python3 on the host (to build the fake
+# the image built, python3 on the host (to build the fake
 # .vsix), and the `codespace` AppArmor profile loaded
 # (`sudo apparmor_parser -r /etc/apparmor.d/codespace`, see
 # infra/apparmor/codespace). No sudo otherwise.
@@ -18,7 +18,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
-IMAGE="${IMAGE:-codespace/c-dev:4.137.0}"
+IMAGE="${1:-${IMAGE:-codespace/c-dev:4.137.0}}"
 PODMAN_URL="${PODMAN_URL:-unix:///run/podman/podman.sock}"
 SECCOMP_DEFAULT="${SECCOMP_DEFAULT:-/usr/share/containers/seccomp.json}"
 

@@ -3,12 +3,13 @@
 ## Status
 
 Accepted (2026-09-21, first production deployment). Amended 2026-09-25,
-2026-09-30, 2026-10-07, 2026-10-08, 2026-10-11 (twice), 2026-10-12 and
-2026-10-26. Every rule the amendments added is under
+2026-09-30, 2026-10-07, 2026-10-08, 2026-10-11 (twice), 2026-10-12,
+2026-10-26 and 2026-11-18. Every rule the amendments added is under
 [Amendments in force](#amendments-in-force), where nothing of the runner's
 hardening (root `CLAUDE.md` invariants 10–13) is relaxed; their dated text,
 with the reasons and the transitions, is in the [historical record](history/ADR-016-runner-sur-vm-separee.md#status).
 
+- 2026-11-18 (owner): the production portal deploy rebuilds the student image when its sources changed, tested before it is tagged; staging never builds it ([amendment](#2026-11-18-the-prod-portal-deploy-rebuilds-the-student-image)). Amends the M6-04 point "never by a deploy".
 - **2026-10-11 (security audit M6, L12, L13): gVisor is the default runtime of the runner's own Podman service** (`runsc --oci-seccomp`), never a `containerArgs` flag; `RUNNER_RUNTIME=runsc` makes the runner refuse to start unless a real container runs under it (`proveRuntime`); the runner binds the loopback ([amendment](#2026-10-11-gvisor-the-containers-state-the-bind-address)).
 - 2026-10-11 (security audit H4): the staging portal deploys only once approved, through a frozen dispatcher ([amendment](#2026-10-11-the-staging-portal-deploys-only-once-approved)).
 - 2026-10-08 (M6-05 part 2): the engine VM's cgroup slices (`--cgroup-parent`), backups and host firewall ([amendment](#2026-10-08-capacity-and-backups-of-the-engine-vm)).
@@ -141,8 +142,9 @@ steps are unchanged.*
   **no secret inside**) and runs as a quadlet like the runner: host
   network, the rootful socket, the data directory bound at the same path,
   **read-only root, no capability**. The student image is built on the VM
-  by hand (`apps/codespace/images/build.sh`), **never by a deploy, never
-  pulled**.
+  (`apps/codespace/images/build.sh`), **never pulled**; by hand until
+  2026-11-18, since then by the `prod` portal deploy when its sources
+  changed ([amendment](#2026-11-18-the-prod-portal-deploy-rebuilds-the-student-image)).
 - **The live-session guard.** A `prod` deploy **refuses (exit 3)** while a
   session container of that instance runs, unless the request starts with
   `force` (CI: `CODESPACE_FORCE_SHA` naming the run's sha); `staging` is not
@@ -250,6 +252,34 @@ staging VM.*
 - *Rejected*: `deploy.sh` delegating its staging scope to the frozen script;
   a separate staging VM or a rootless staging engine (for now); a gate in
   the workflow alone, without moving the key.
+
+### 2026-11-18: the prod portal deploy rebuilds the student image
+
+*Owner; scope: the M6-04 point "the student image is built on the VM by
+hand, never by a deploy" (a forgotten manual step left changes under
+`images/c-dev/` away from the students); built on the VM, never pulled, is
+unchanged. Operations: `apps/codespace/deploy/RUNBOOK.md` §7.*
+
+- **Production only, after the portal.** The last step of the approved
+  `codespace prod` deploy, from production's checkout, once the portal of
+  that commit answers. Staging never builds it (one tag, one store: a
+  staging build would put an unapproved commit under production's
+  sessions), nor does a deploy forced past live sessions.
+- **Only when it changed, no state file.** The image carries the git tree
+  of `images/c-dev` (the build's whole context) as a label; an equal tree
+  builds nothing, a checkout that differs from its commit builds nothing.
+- **Never break the image in service.** 3 GiB free first; build under a
+  candidate tag, run `test.sh` against it, and only a pass takes the
+  image's tag. A failure leaves the image in service and fails the deploy
+  job, the portal already deployed. Leftovers go by ID, never `-f`; the only
+  prune is scoped by the label (**no global prune** holds). Running
+  sessions keep their container.
+- **Where it runs**: in the rootful Podman service, as by hand: outside
+  `codespace.slice`, below `quiz-runner.slice` in CPU weight.
+- *Rejected*: building in CI and pulling (the supply-chain rule); from the
+  staging dispatcher (the H4 amendment); a state file of the last build (it
+  disagrees with an image built or removed by hand); building in place and
+  rolling back (the tag would name a broken image in between).
 
 ## Update 2026-09-25
 

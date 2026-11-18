@@ -12,8 +12,8 @@
 # instance's files, 4. replay the instance's network setup, restart the
 # portal and wait for its /healthz, 5. write the staging instance's files,
 # 6. untag older sha tags and delete the repository's images no tag names
-# and no container uses. The student image is NOT touched: it is built on
-# the VM on purpose (images/build.sh).
+# and no container uses, 7. rebuild the student image if its sources
+# changed (student-image.sh, RUNBOOK.md §7), never beside a live session.
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/../../.."
@@ -88,10 +88,14 @@ if (cs_instance staging && [ -f "$CS_ETC/env" ]); then
 	systemctl reload caddy
 fi
 
-student="$(cs_student_image)"
-if ! pd image exists "$student"; then
-	echo "deploy: warning: the student image $student is missing: no session can start (apps/codespace/images/build.sh)" >&2
-fi
-
 drop_old_sha_tags "$CS_IMAGE_REPO" "$tag"
 echo "deploy: codespace $CS_INSTANCE at ${tag:0:7}"
+
+# After the portal of this commit answers (RUNBOOK.md §7): a no-op unless
+# images/c-dev changed. Its exit code is the deploy's. A deploy forced past
+# live sessions builds nothing beside them.
+if [ -n "$live" ]; then
+	echo "student image: $(printf '%s\n' "$live" | wc -l) session(s) running, rebuild deferred: run apps/codespace/deploy/student-image.sh once they close (RUNBOOK.md §7)"
+	exit 0
+fi
+exec apps/codespace/deploy/student-image.sh

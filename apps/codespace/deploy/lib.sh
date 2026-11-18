@@ -113,10 +113,16 @@ cs_install_instance() {
 	caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 }
 
+# cs_env <KEY>: the value the instance's env file gives KEY (its last line
+# wins), or nothing.
+cs_env() {
+	sed -n "s/^$1=//p" "$CS_ETC/env" 2>/dev/null | tail -n 1
+}
+
 # The student image the instance's env names (CODESPACE_IMAGE), or the
-# default. Built on the VM by images/build.sh, never pulled.
+# default. Built on the VM, never pulled (deploy/student-image.sh).
 cs_student_image() {
 	local image
-	image="$(sed -n 's/^CODESPACE_IMAGE=//p' "$CS_ETC/env" 2>/dev/null | tail -n 1)"
+	image="$(cs_env CODESPACE_IMAGE)"
 	echo "${image:-codespace/c-dev:4.137.0}"
 }
