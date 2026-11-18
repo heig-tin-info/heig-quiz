@@ -260,8 +260,11 @@ function rootUrl(base: string | undefined): string | undefined {
  *    takes you back. Never in a SEB session: the button opens a new tab,
  *    which inside Safe Exam Browser has no platform session and quits nothing;
  *  - `CODESPACE_SEB`: `1` in a SEB session (`sebVerified`, sticky on the row
- *    once a SEB launch opened or resumed it): the extension shows SEB's own
- *    quit shortcut instead of the "Close" button;
+ *    once a SEB launch opened it or relaunched its container): the extension
+ *    shows SEB's own quit shortcut instead of the "Close" button. A container
+ *    still running when a SEB launch resumes it is not restarted, so it keeps
+ *    the environment it was started with (and its "Close") until its next
+ *    relaunch;
  *  - `CODESPACE_ASSIGNMENT_NAME`: the assignment title, shown in the tooltip.
  *
  * None of these values is a secret, and there is no other one.

@@ -425,7 +425,7 @@ portal may set at `podman run` time (`src/sessions/manager.ts`, then
 | --- | --- | --- |
 | `CODESPACE_DEADLINE` | ISO 8601 deadline (`deadlineAt` from classroom, column `assignments.closes_at`) | no countdown |
 | `CODESPACE_RETURN_URL` | `${CLASSROOM_URL}/` for a session born from a launch token, `${PUBLIC_URL}/` otherwise; never in a SEB session | no "Close" button |
-| `CODESPACE_SEB` | `1` when the session is SEB-verified (`sessions.seb_verified`, kept once a SEB launch opened or resumed it) | the "Close" button, if a return URL was passed |
+| `CODESPACE_SEB` | `1` when the session is SEB-verified (`sessions.seb_verified`, kept once a SEB launch opened the session or relaunched its container; a container still running when a SEB launch resumes it keeps its old environment, "Close" included, until its next relaunch) | the "Close" button, if a return URL was passed |
 | `CODESPACE_ASSIGNMENT_NAME` | title of the assignment | tooltip without the title |
 
 **No secret goes in there** (invariant 1). A unit test
