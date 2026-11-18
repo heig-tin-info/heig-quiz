@@ -756,8 +756,12 @@ done). Then they diverge:
   the runner image by its digest (by its sha tag without one), tag it
   `:<sha>` and `:latest` (the tag the quadlet
   runs), install the seccomp profile, the quadlet and the Caddy fragment
-  from the checkout, `caddy validate`, `systemctl daemon-reload`, restart
-  `quiz-runner.service`, reload Caddy, untag the older sha-tagged runner
+  from the checkout (the fragment only when it differs), `caddy validate`,
+  `systemctl daemon-reload`, restart `quiz-runner.service`, reload Caddy
+  only when it does not run what the files give, bounded at 60 s and
+  checked (`caddy_apply`, `infra/engine/lib.sh`; the portal's deploy does
+  the same, once for its two sites; [RUNBOOK, Caddy reloads](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md#caddy-reloads)),
+  untag the older sha-tagged runner
   images and delete the runner images no tag names any more and no
   container uses (`drop_old_sha_tags`; no global prune: the portal's
   sessions share the engine), print the deployed commit.

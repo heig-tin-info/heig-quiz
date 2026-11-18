@@ -22,11 +22,12 @@ pull_retag "$image" "$tag" latest
 install -m 0644 apps/runner/infra/seccomp/runner.json /etc/quiz-runner/seccomp.json
 install -m 0644 apps/runner/deploy/quiz-runner.container /etc/containers/systemd/quiz-runner.container
 install_slices
-install -m 0644 apps/runner/deploy/Caddyfile /etc/caddy/conf.d/quiz-runner.caddy
+caddy_site apps/runner/deploy/Caddyfile /etc/caddy/conf.d/quiz-runner.caddy
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 systemctl daemon-reload
 systemctl restart quiz-runner.service
-systemctl reload caddy
+# A reload only when Caddy does not run what the files give (lib.sh).
+caddy_apply
 warn_manual_drift
 drop_old_sha_tags "$image" "$tag"
 echo "deploy: runner at ${tag:0:7}"

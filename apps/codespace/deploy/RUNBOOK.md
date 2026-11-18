@@ -99,6 +99,7 @@ it into an existing global block if there is one:
 
 ```caddyfile
 {
+	grace_period 10s
 	log default {
 		output stderr
 		format filter {
@@ -120,6 +121,8 @@ import /etc/caddy/conf.d/*.caddy
 grep -n 'code.chevallier.io\|3100' /etc/caddy/Caddyfile    # nothing
 ```
 
+`grace_period` bounds what an old config's servers wait for after a reload
+or at a stop ([Caddy reloads](#caddy-reloads) says what it does not bound).
 Do not reload yet: the bootstrap validates and reloads. Check after step 10
 that a 502 (`systemctl stop quiz-codespace-staging`, open a `/launch?token=x`
 URL, start it again) leaves `journalctl -u caddy | grep -c 'token=x'` at 0.
@@ -138,7 +141,8 @@ Each run checks the socket, the `containers` range and Caddy's import; makes
 `/etc/quiz-codespace/<i>/env` from `env.example` (a fresh
 `CODESPACE_LAUNCH_SECRET` and `EXAM_COOKIE_SECRET`) **only if absent**;
 installs the host-level files, the quadlet and the Caddy site; starts the
-network unit and the shadow timer; reloads Caddy. No portal starts before
+network unit and the shadow timer; reloads Caddy when it does not run that
+site yet ([Caddy reloads](#caddy-reloads)). No portal starts before
 its first deploy (step 10).
 
 ```bash
@@ -356,6 +360,89 @@ journalctl -u quiz-codespace-shadow@prod -n 5 --no-pager
 podman ps --filter label=heig-codespace.instance=prod
 podman ps -a --filter label=heig-codespace.role=reader   # empty but during a deadline collection
 ```
+
+### Caddy reloads
+
+The VM's Caddy is the distribution's package; its unit reloads with `caddy
+reload --force`. A long-lived connection can keep a reload from completing,
+so a deploy reloads only when it must. A deploy (the runner's `install.sh`,
+this portal's `install.sh` for both sites, `bootstrap.sh`) installs a site
+only when the rendered file differs from the installed one (`caddy_site`), then calls `caddy_apply`
+once (`infra/engine/lib.sh`, tested by `infra/engine/caddy.test.sh`). It
+reloads only when the running config, the admin API's
+`http://127.0.0.1:2019/config/`, is not what `caddy adapt --config
+/etc/caddy/Caddyfile` gives (compared as parsed JSON, with python3): a
+change that adapts to the same config (a comment) reloads nothing, and a
+re-run after a reload that did not take reloads again. Then `caddy
+validate`, `timeout 60 systemctl reload caddy` (the bound stops the client
+only; systemd's job ends by the unit's own rules), and the same check:
+
+| What the deploy sees | Outcome |
+| --- | --- |
+| Caddy already runs the files' config | no reload |
+| the reload returns | done |
+| no return within 60 s, or a failure, but Caddy runs the new config | warning: the reload has not finished, harmless |
+| no return within 60 s, and the admin API does not answer | **fails**: `Caddy reload blocked …` |
+| a failure, and Caddy runs the old config | **fails**: `sudo journalctl -u caddy` |
+| the admin API does not answer before any reload, nothing changed | warning, no reload |
+| the same, a site changed | **fails**, no second reload queued behind the first |
+
+A deploy never restarts Caddy: that cuts every live session. Its messages
+count connections and never print a peer's address: the deploy log is the
+CI's, and a peer is a student.
+
+**Diagnosing a blocked reload**:
+
+```bash
+sudo journalctl -u caddy --since -15min --no-pager
+curl -sS -m 5 -o /dev/null http://127.0.0.1:2019/config/; echo $?   # 28: the admin API does not answer
+ss -tn state established '( sport = :443 )'          # a Send-Q that stays above 0 marks a connection to look at
+```
+
+The access log writes a connection's line when it ends, its `duration` its
+whole life: the long connections of the past, for instance, are
+
+```bash
+python3 -I - /var/log/caddy/quiz-codespace-prod.log <<'EOF'
+import datetime, json, sys
+for line in open(sys.argv[1]):
+    e = json.loads(line)
+    if e.get("duration", 0) > 3600:
+        end = datetime.datetime.fromtimestamp(e["ts"])
+        start = end - datetime.timedelta(seconds=e["duration"])
+        print(start, "->", end, f'{e["duration"] / 3600:.1f} h', e.get("status"), e["request"]["uri"][:60])
+EOF
+```
+
+Then either re-run the deploy later (a re-run whose sites are already
+installed does not reload while the admin API does not answer, it warns),
+or, in an exam-free window and with no
+running session that matters (`podman ps --filter
+label=heig-codespace.session`), `sudo systemctl restart caddy`.
+
+**`grace_period 10s`, by hand.** `/etc/caddy/Caddyfile` is not the
+repository's (§5): no deploy writes it. In an exam-free window, add one line
+at the top level of its global block, beside `log default`, not inside a
+`servers` block, then validate and reload:
+
+```caddyfile
+{
+	grace_period 10s
+	…
+}
+```
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
+sudo journalctl -u caddy -n 5 --no-pager   # no error; caddy adapt … | grep -o '"grace_period":[0-9]*' gives 10000000000
+```
+
+Caddy's default grace period is eternal: an old config's servers keep
+serving their in-flight HTTP requests (a download, a streamed answer) for
+as long as those last, after a reload and at a stop. With 10 s they are cut
+after 10 s. It bounds nothing else: a websocket is not an in-flight
+request, and it does not make a reload return sooner. A safety net; what
+keeps deploys clear of blocked reloads is reloading only when needed.
 
 ### Recovering work from `shadow.git`
 

@@ -11,6 +11,7 @@
 # :prod, the tag the quadlet runs, 3. install the host-level files and the
 # instance's files, 4. replay the instance's network setup, restart the
 # portal and wait for its /healthz, 5. write the staging instance's files,
+# then reload Caddy once, only if it does not run what the files give,
 # 6. untag older sha tags and delete the repository's images no tag names
 # and no container uses, 7. rebuild the student image if its sources
 # changed (student-image.sh, RUNBOOK.md §7), never beside a live session.
@@ -63,7 +64,6 @@ systemctl daemon-reload
 # idempotent, so the bridge and its anchor exist before the portal starts.
 systemctl restart "quiz-codespace-net@$CS_INSTANCE.service"
 systemctl restart "$CS_UNIT.service"
-systemctl reload caddy
 
 # The exit code the CI receives is the instance's health.
 for i in $(seq 1 60); do
@@ -81,12 +81,19 @@ done
 # The staging instance's quadlet, Caddy site and seccomp profile, from this
 # approved commit: no staging deploy writes them (infra/engine/
 # staging-dispatch.sh); its next restart picks them up. Skipped until the
-# staging instance is bootstrapped. In subshells: cs_instance rebinds CS_*.
+# staging instance is bootstrapped. cs_instance rebinds CS_*: the test in a
+# subshell, the install in this shell (caddy_site records a change in it),
+# prod's values bound again after it.
 if (cs_instance staging && [ -f "$CS_ETC/env" ]); then
-	(cs_instance staging; cs_install_instance)
+	cs_instance staging
+	cs_install_instance
+	cs_instance prod
 	systemctl daemon-reload
-	systemctl reload caddy
 fi
+
+# One Caddy reload for both sites, and only when Caddy does not run what the
+# files give (infra/engine/lib.sh, caddy_apply).
+caddy_apply
 
 drop_old_sha_tags "$CS_IMAGE_REPO" "$tag"
 echo "deploy: codespace $CS_INSTANCE at ${tag:0:7}"
