@@ -409,7 +409,7 @@ orchestrator's, the owner being unreachable that night.
   offers no field and the request stores none, whatever it carries — a
   draft's message would reach students at publication, dated before they
   had the project, about a change no pull request carries. Stored on the
-  project (`projects.sync_message`, `sync_message_at`, migration 0141) in
+  project (`projects.sync_message`, `sync_message_at`, migration 0142) in
   the same statement that records the shas handed out, once the
   distribution is updated: one per sync, a different text replacing the
   previous with this sync's date, the same text keeping its date, a sync
