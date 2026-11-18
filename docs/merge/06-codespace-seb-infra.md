@@ -138,10 +138,9 @@ limits it found, both for the product owner:
   binary AND the configuration (the sibling's `analyse.md` §4.4). Quiz's
   `.seb` is per student (its start URL carries the one-time ticket), so a
   BEK is expected to differ from one student to the next, and a list typed
-  by the staff to match nobody. Quiz therefore sends no BEK (Config Key
-  only); the portal still accepts a list. **BEK list: after proof B step 7
-  (per-student `.seb` likely gives per-student BEKs).** Evaluations keep
-  the Config Key alone too.
+  by the staff to match nobody. Decision: Quiz keeps no BEK list and checks
+  the Config Key; the portal still accepts a list. **BEK list: after proof B
+  step 7.** Evaluations are checked the same way.
 - **Plan B is not built.** The auto-submitted POST form needs an inline
   script page on Quiz's side (its CSP forbids inline scripts) and a
   `POST /launch` on the portal whose hashed URL no longer carries the
