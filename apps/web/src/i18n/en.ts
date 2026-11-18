@@ -3973,6 +3973,7 @@ export const en = {
   "player.battery.charging": "charging",
   "player.battery.left": "{time} left",
   "player.battery.time": "Time {time}",
+  "player.battery.timePart": "time {time}",
   "player.battery.clock": "Time",
   "notepad.open": "Notepad",
   "notepad.close": "Close the notepad",

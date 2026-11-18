@@ -1206,12 +1206,10 @@ const scenes = [
   // ADR-076: a running evaluation not yet started: one Start, the clock said before it.
   { name: "student-ready", role: "student", path: `${TAKE}?scene=ready` },
   { name: "player-mcq", role: "student", path: `${TAKE}?scene=running` },
-  // Issue #1151: in SEB, the battery and the time in the bar; collapsed, low, unfolded, critical, charging, no battery.
+  // Issue #1151: in SEB, the battery and the time in the bar; collapsed, low, unfolded, no battery.
   { name: "player-seb-battery", role: "student", path: `${TAKE}?scene=running&sebexam=1`, fold: true, battery: { level: 0.64, dischargingTime: 7800 } },
   { name: "player-seb-battery-low", role: "student", path: `${TAKE}?scene=running&sebexam=1`, fold: true, battery: { level: 0.17, dischargingTime: 1500 } },
   { name: "player-seb-battery-open", role: "student", path: `${TAKE}?scene=running&sebexam=1`, fold: true, battery: { level: 0.64, dischargingTime: 7800 }, act: openBattery },
-  { name: "player-seb-battery-critical", role: "student", path: `${TAKE}?scene=running&sebexam=1`, fold: true, battery: { level: 0.08, dischargingTime: 540 }, act: openBattery },
-  { name: "player-seb-battery-charging", role: "student", path: `${TAKE}?scene=running&sebexam=1`, fold: true, battery: { level: 0.31, charging: true, chargingTime: 2400 }, act: openBattery },
   { name: "player-seb-clock", role: "student", path: `${TAKE}?scene=running&sebexam=1`, fold: true, battery: { level: 1, charging: true, chargingTime: 0 }, act: openBattery },
   // ADR-079: the conditions read before the start, reopened from the bar.
   { name: "player-conditions", role: "student", path: `${TAKE}?scene=running`, fold: true, act: (p) => p.getByRole("button", { name: /^(show the conditions|voir les conditions)$/i }).click() },

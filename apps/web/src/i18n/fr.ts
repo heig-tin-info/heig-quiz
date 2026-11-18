@@ -3946,6 +3946,7 @@ export const fr: Record<keyof Dict, string> = {
   "player.battery.charging": "en charge",
   "player.battery.left": "autonomie {time}",
   "player.battery.time": "Heure {time}",
+  "player.battery.timePart": "heure {time}",
   "player.battery.clock": "Heure",
   "notepad.open": "Bloc-notes",
   "notepad.close": "Fermer le bloc-notes",

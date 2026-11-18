@@ -1279,7 +1279,7 @@ describe("the zen player's integrity journal (F-EVAL-13)", () => {
 describe("the battery and the time", () => {
   afterEach(uninstallBattery);
 
-  const session = (kind: "seb" | "portal") => ({
+  const session = (kind: "seb" | "kiosk" | "portal") => ({
     "GET /app/api/me": ok(
       makeMe({
         role: "student",
@@ -1288,10 +1288,15 @@ describe("the battery and the time", () => {
     ),
   });
 
-  it("are in the bar of an attempt sat in Safe Exam Browser", async () => {
+  it.each(["seb", "kiosk"] as const)("are in the bar of an attempt sat in a %s session", async (kind) => {
     installBattery({ level: 0.42 });
     const view = attemptView();
-    stubs(view, session("seb"));
+    stubs(view, {
+      ...session(kind),
+      // A station attests itself (ADR-051 §6); accepted here.
+      "POST /app/api/kiosk/attest/challenge": ok({ challenge: "Yw==" }),
+      "POST /app/api/kiosk/attest/verify": ok({ station: { label: "Poste n° 7", status: "active" } }),
+    });
     render(view);
     const pill = await screen.findByRole("button", { name: /^Batterie 42/ });
     expect(pill.closest("header")).not.toBeNull();

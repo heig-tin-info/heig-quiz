@@ -213,7 +213,12 @@ const SECONDS_BAND = 10 * MINUTE;
  * feeds it the clock.
  */
 export function timeLeft(iso: string, now: number, t: TFunction): string {
-  const ms = Math.max(0, new Date(iso).getTime() - now);
+  return spanLeft(new Date(iso).getTime() - now, t);
+}
+
+/** A span of `ms`, written as {@link timeLeft} writes what is left; a negative span is "0 s". */
+export function spanLeft(span: number, t: TFunction): string {
+  const ms = Math.max(0, span);
   const totalSeconds = Math.floor(ms / SECOND);
   const totalMinutes = Math.floor(ms / MINUTE);
   if (ms < SECONDS_BAND) {
