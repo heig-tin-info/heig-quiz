@@ -13,8 +13,7 @@
 # portal and wait for its /healthz, 5. write the staging instance's files,
 # 6. untag older sha tags and delete the repository's images no tag names
 # and no container uses, 7. rebuild the student image if its sources
-# changed (student-image.sh, which says why only here): its failure fails
-# the deploy, the portal already up and the image in service untouched.
+# changed (student-image.sh, RUNBOOK.md §7), never beside a live session.
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/../../.."
@@ -93,5 +92,10 @@ drop_old_sha_tags "$CS_IMAGE_REPO" "$tag"
 echo "deploy: codespace $CS_INSTANCE at ${tag:0:7}"
 
 # After the portal of this commit answers (RUNBOOK.md §7): a no-op unless
-# images/c-dev changed. Its exit code is the deploy's.
+# images/c-dev changed. Its exit code is the deploy's. A deploy forced past
+# live sessions builds nothing beside them.
+if [ -n "$live" ]; then
+	echo "student image: $(printf '%s\n' "$live" | wc -l) session(s) running, rebuild deferred: run apps/codespace/deploy/student-image.sh once they close (RUNBOOK.md §7)"
+	exit 0
+fi
 exec apps/codespace/deploy/student-image.sh

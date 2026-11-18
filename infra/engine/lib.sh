@@ -9,6 +9,18 @@ ENGINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # The rootful engine, always through its socket (root invariant 13).
 pd() { podman --remote --url "$ENGINE_PODMAN_URL" "$@"; }
 
+# engine_lock <seconds>: one deploy at a time on the VM, the lock the frozen
+# staging dispatcher takes too (its LOCK). Held on descriptor 9, which an
+# exec and the children keep; a no-op when the caller already holds it
+# (QUIZ_DEPLOY_LOCKED). Returns 1 when not obtained within <seconds>.
+ENGINE_LOCK=/run/quiz-engine-deploy.lock
+engine_lock() {
+	[ -z "${QUIZ_DEPLOY_LOCKED:-}" ] || return 0
+	exec 9>"$ENGINE_LOCK"
+	flock -w "$1" 9 || return 1
+	export QUIZ_DEPLOY_LOCKED=1
+}
+
 # pull_retag <repository> <sha> <local tag>: pulls the CI's image of the sha
 # and gives it the tag the quadlet runs (Pull=never: never the registry's
 # moving tag). With QUIZ_DEPLOY_DIGEST (set by deploy.sh from the CI's

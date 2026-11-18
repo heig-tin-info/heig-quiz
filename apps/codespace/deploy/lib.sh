@@ -120,45 +120,9 @@ cs_env() {
 }
 
 # The student image the instance's env names (CODESPACE_IMAGE), or the
-# default. Built on the VM, never pulled: by the prod deploy when its sources
-# changed (deploy/student-image.sh), or by hand.
+# default. Built on the VM, never pulled (deploy/student-image.sh).
 cs_student_image() {
 	local image
 	image="$(cs_env CODESPACE_IMAGE)"
 	echo "${image:-codespace/c-dev:4.137.0}"
-}
-
-# The student image's change detection (deploy/student-image.sh; ADR-016,
-# amendment of 2026-11-18). The build reads images/c-dev and nothing else
-# (it is images/build.sh's context, the Containerfile inside it), so the git
-# tree of that directory names what an image was built from, and the image
-# carries it as this label. No state file: the image is its own record.
-CS_STUDENT_LABEL=heig-codespace.source-tree
-CS_STUDENT_DIR=apps/codespace/images/c-dev
-# The free space the image store needs before a build, in KiB: the new image
-# (~1.5 GB) beside the one in service, which stays while sessions use it.
-CS_STUDENT_BUILD_KIB=$((3 * 1024 * 1024))
-
-# cs_student_image_plan <exists: yes|no> <label> <tree> [force]: prints
-# `keep` when the image in service was built from <tree>, otherwise
-# `build <reason>`: forced, missing, unlabelled (built by hand, or before
-# the label existed) or changed.
-cs_student_image_plan() {
-	if [ -n "${4:-}" ]; then
-		echo "build forced"
-	elif [ "$1" != yes ]; then
-		echo "build missing"
-	elif [ -z "$2" ]; then
-		echo "build unlabelled"
-	elif [ "$2" != "$3" ]; then
-		echo "build changed"
-	else
-		echo keep
-	fi
-}
-
-# cs_disk_room <available KiB> <needed KiB>: true when the first is a whole
-# number at least the second.
-cs_disk_room() {
-	[[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge "$2" ]
 }

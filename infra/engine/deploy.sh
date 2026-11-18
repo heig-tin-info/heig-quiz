@@ -49,18 +49,17 @@ case "$scope" in
 esac
 
 # The descriptor survives the re-exec, and so does the lock.
-if [ -z "${QUIZ_DEPLOY_LOCKED:-}" ]; then
-  exec 9>/run/quiz-engine-deploy.lock
-  if ! flock -w 900 9; then
-    echo "deploy: another deploy has held the engine VM for 15 minutes" >&2
-    exit 4
-  fi
-  export QUIZ_DEPLOY_LOCKED=1
+if ! engine_lock 900; then
+  echo "deploy: another deploy has held the engine VM for 15 minutes" >&2
+  exit 4
 fi
 
 token=
+request="${SSH_ORIGINAL_COMMAND:-}"
+# The request carries the GHCR token: out of the environment that every
+# step below (install.sh, the student image's build and test) inherits.
+unset SSH_ORIGINAL_COMMAND
 if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
-  request="${SSH_ORIGINAL_COMMAND:-}"
   QUIZ_DEPLOY_FORCE=
   QUIZ_DEPLOY_DIGEST=
   if [[ "$request" =~ ^force[[:space:]]+(.+)$ ]]; then
@@ -122,7 +121,7 @@ if ! git cat-file -e "$target:infra/engine/deploy.sh" 2>/dev/null; then
 fi
 git checkout --quiet --detach "$target"
 if [ "$before" != "$(git rev-parse HEAD)" ] && [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
-  QUIZ_DEPLOY_REEXEC=1 SSH_ORIGINAL_COMMAND='' exec "$0" "$@"
+  QUIZ_DEPLOY_REEXEC=1 exec "$0" "$@"
 fi
 
 case "$QUIZ_DEPLOY_COMPONENT" in

@@ -255,63 +255,31 @@ staging VM.*
 
 ### 2026-11-18: the prod portal deploy rebuilds the student image
 
-*Owner's decision; scope: the M6-04 point "the student image is built on
-the VM by hand, never by a deploy". The supply-chain rule (built on the VM
-from the checkout, never pulled), the staging half and the live-session
-guard are unchanged.*
+*Owner; scope: the M6-04 point "the student image is built on the VM by
+hand, never by a deploy" (a forgotten manual step left changes under
+`images/c-dev/` away from the students); built on the VM, never pulled, is
+unchanged. Operations: `apps/codespace/deploy/RUNBOOK.md` §7.*
 
-**Context.** Every change under `apps/codespace/images/c-dev/` (the
-extension's update button, SEB's quit hint, Baygon) waited for the owner
-to ssh to the engine VM and run `build.sh` then `test.sh`, after the
-production deploy: a step forgotten once is a feature that never reaches
-the students. The manual step had three reasons: one tag shared by both
-instances in one rootful store (a staging build would put an unapproved
-commit under production's new sessions); its cost (1–2 min, ~1.5 GB, 3 GB
-free, downloads); a broken image blocks every new session.
-
-**Decision.** Each reason becomes a guarantee of
-`apps/codespace/deploy/student-image.sh`, the last step of
-`install.sh prod` (operations: `apps/codespace/deploy/RUNBOOK.md`, §7 The
-student image).
-
-- **Production only, after the portal.** It runs in the approved `codespace
-  prod` deploy, from production's checkout at the deployed commit, after
-  the portal of that commit answers and after the live-session guard. The
-  staging dispatcher still runs nothing of a commit, so staging never
-  builds it; the runner's deploy does not either (it does not own the
-  image).
-- **Only when it changed, without a state file.** The image carries the
-  label `heig-codespace.source-tree`, the git tree of `images/c-dev` it was
-  built from (the build's whole context). An equal tree builds nothing; a
-  different or absent label, or a missing image, rebuilds. A checkout
-  whose `images/c-dev` differs from its commit refuses to build.
-- **Never break the image in service.** Free space first (3 GiB); the
-  build goes to a candidate tag, `test.sh` runs against it, and only a pass
-  gives it the image's tag. A failure keeps the image in service, removes
-  the candidate and the build's leftovers, prints the log's tail and fails
-  the deploy job, the portal itself already deployed. Leftovers are removed
-  by ID, never with `-f`, and the only prune is scoped by the label: **no
-  global prune** still holds.
-- **Running sessions keep their container**, and so their image, until it
-  restarts; new sessions take the new image.
-- **Where it runs.** In the rootful Podman service, as the manual build
-  did: outside `codespace.slice`, so it cannot take the sessions' memory,
-  and below `quiz-runner.slice` in CPU weight. Its downloads leave as
-  before: the host policy filters input only.
-
-**Consequences.** A change to `images/c-dev/` reaches production's new
-sessions with the production deploy that ships it, and staging's at the
-same time (one tag). A deploy that changes nothing there costs an `image
-inspect`. A red `deploy-codespace-prod` may now mean "portal deployed,
-image not rebuilt"; the job's log says which. The first deploy after this
-amendment rebuilds once (no image carries the label yet), as does the next
-after any build by hand. A forced deploy during a session builds beside it.
-
-*Rejected*: building in CI and pulling (the supply-chain rule); building
-from the staging dispatcher (the H4 amendment); a state file of the last
-built commit (the image is its own record, and a file would disagree with
-an image built or removed by hand); building in place and rolling back on
-failure (the tag would name a broken image between the two).
+- **Production only, after the portal.** The last step of the approved
+  `codespace prod` deploy, from production's checkout, once the portal of
+  that commit answers. Staging never builds it (one tag, one store: a
+  staging build would put an unapproved commit under production's
+  sessions), nor does a deploy forced past live sessions.
+- **Only when it changed, no state file.** The image carries the git tree
+  of `images/c-dev` (the build's whole context) as a label; an equal tree
+  builds nothing, a checkout that differs from its commit builds nothing.
+- **Never break the image in service.** 3 GiB free first; build under a
+  candidate tag, run `test.sh` against it, and only a pass takes the
+  image's tag. A failure leaves the image in service and fails the deploy
+  job, the portal already deployed. Leftovers go by ID, never `-f`; the only
+  prune is scoped by the label (**no global prune** holds). Running
+  sessions keep their container.
+- **Where it runs**: in the rootful Podman service, as by hand: outside
+  `codespace.slice`, below `quiz-runner.slice` in CPU weight.
+- *Rejected*: building in CI and pulling (the supply-chain rule); from the
+  staging dispatcher (the H4 amendment); a state file of the last build (it
+  disagrees with an image built or removed by hand); building in place and
+  rolling back (the tag would name a broken image in between).
 
 ## Update 2026-09-25
 

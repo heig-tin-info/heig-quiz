@@ -30,7 +30,7 @@ The values (names, ports, platform URLs) are in `deploy/lib.sh`
 | Caddy site, access log | `/etc/caddy/conf.d/quiz-codespace-<i>.caddy`, `/var/log/caddy/quiz-codespace-<i>.log` |
 | Host-level copies (both instances) | `/usr/local/lib/quiz-codespace/`, `/etc/apparmor.d/codespace`, `/etc/systemd/system/quiz-codespace-*@.*` |
 | Session containers | `cs-<i>-<session>`, label `heig-codespace.instance=<i>` |
-| Student image (both instances) | `CODESPACE_IMAGE` (`codespace/c-dev:4.137.0`) in the rootful store, labelled with its sources' git tree; rebuilt by a prod deploy when they changed (§7), its last build's log `/var/log/quiz-codespace-student-image.log` |
+| Student image (both instances) | `CODESPACE_IMAGE` (`codespace/c-dev:4.137.0`) in the rootful store, rebuilt by a prod deploy (§7) |
 
 ## The switch from heig-classroom's portal
 
@@ -148,99 +148,50 @@ nft list table inet codespace
 
 ### 7. The student image
 
-**The production portal deploy rebuilds it when its sources changed**
-(since 2026-11-18, [ADR-016's amendment](../../../docs/adr/ADR-016-runner-sur-vm-separee.md#2026-11-18-the-prod-portal-deploy-rebuilds-the-student-image)).
-The last step of `install.sh prod`, once the portal of the same commit
-answers its `/healthz`, is `deploy/student-image.sh`:
+The production portal deploy rebuilds it when `images/c-dev/` changed,
+never staging ([ADR-016, amendment of 2026-11-18](../../../docs/adr/ADR-016-runner-sur-vm-separee.md#2026-11-18-the-prod-portal-deploy-rebuilds-the-student-image)):
+the last step of `install.sh prod`, once the portal of the same commit
+answers, is `deploy/student-image.sh`. Any file of that directory counts,
+`test.sh` and the README included; a deploy that changes none costs an
+`image inspect`. One build covers both instances (one tag, one store).
+Running sessions keep their container until it restarts; new ones start on
+the new image. A deploy forced past live sessions (`CODESPACE_FORCE_SHA`)
+builds nothing and says so: run the script once they have closed.
 
-1. **The key.** The image carries the label `heig-codespace.source-tree`,
-   the git tree of `apps/codespace/images/c-dev` it was built from (the
-   build reads that directory and nothing else). The script compares it
-   with `git rev-parse HEAD:apps/codespace/images/c-dev` of the checkout:
-   equal, nothing is built and the deploy costs nothing more; different,
-   absent (an image built by hand, or before 2026-11-18) or no image at
-   all, it rebuilds. No state file. Any file of the directory counts,
-   `test.sh` and the README included.
-2. **The checks before.** The checkout's `images/c-dev` must be exactly
-   the commit's (no edited, untracked or ignored file); 3 GiB free under
-   `/var/lib/containers` (the new image beside the one in service, which
-   stays while a session uses it).
-3. **Build, test, then tag.** `images/build.sh <image>-candidate
-   --layers=false --label …`, then `images/c-dev/test.sh <image>-candidate`
-   (with the prod env's `CODESPACE_APPARMOR_PROFILE` when the file sets
-   it), both into `/var/log/quiz-codespace-student-image.log`. Only if both
-   pass does the candidate take the image's tag (`CODESPACE_IMAGE` of
-   `/etc/quiz-codespace/prod/env`, `codespace/c-dev:4.137.0` by default).
-4. **After.** The candidate's name goes, then what the build left
-   dangling and the replaced image, by ID and never with `-f`: an image a
-   running session uses stays, and a later deploy's label-scoped
-   `podman image prune --filter label=heig-codespace.source-tree` removes it
-   once the session is gone. Never a global prune.
-
-**On a failure** (build, test, disk, a changed checkout) the image in
-service keeps its tag, new sessions keep starting on it, the candidate and
-the leftovers are removed, the deploy prints the log's last 40 lines and
-exits 1: `deploy-codespace-prod` turns red **after** the portal itself is
-deployed and healthy. Read the log on the VM, fix on a branch; the next
-production deploy retries, or retry by hand once the cause is gone (below).
-
-**Sessions** already running keep their container, and so the image they
-started with, until it restarts (a close and a reopen, or the idle
-collection); the deploy says so. One build covers both instances: they run
-the same tag from the one rootful store.
-
-**Production only.** The image is built from approved commits only: the
-staging dispatcher runs nothing of a commit, and a staging build would put
-an unapproved commit under production's new sessions. A change to
-`images/c-dev/` therefore reaches staging's sessions only with production.
-The live-session guard runs first: a refused deploy builds nothing; a
-forced one (`CODESPACE_FORCE_SHA`) builds while sessions run, which keep
-theirs. The build runs in the rootful Podman service (as by hand), not in
-`codespace.slice`: its memory never counts against the sessions', and its
-CPU weight stays below the runner's slice. The acceptance test's three
-containers are capped at 1536m each, as a session.
+**A red `deploy-codespace-prod` after `deploy: codespace prod at <sha>`**
+means the portal is deployed and healthy but the image was not rebuilt
+(build, acceptance test, under 3 GiB free under `/var/lib/containers`, or a
+checkout whose `images/c-dev` differs from its commit). The image in
+service is untouched and new sessions keep starting on it. The job prints
+the end of the log; the whole of it is `/var/log/quiz-codespace-student-image.log`.
+Fix on a branch; the next production deploy retries, or run the script
+(never re-run the job alone during a live exam: The live-session guard).
 
 By hand, as root, from production's checkout (it takes the deploy lock):
 
 ```bash
 cd /opt/quiz-runner
-apps/codespace/deploy/student-image.sh --check   # what the next deploy would do; changes nothing
+apps/codespace/deploy/student-image.sh --check   # what a deploy would do; changes nothing
 apps/codespace/deploy/student-image.sh           # rebuild if images/c-dev changed
-apps/codespace/deploy/student-image.sh --force   # rebuild anyway (a base image's security update)
-podman --remote --url unix:///run/podman/podman.sock image inspect \
-  --format '{{index .Labels "heig-codespace.source-tree"}}' codespace/c-dev:4.137.0
+apps/codespace/deploy/student-image.sh --force   # rebuild anyway (a base image's security fix)
 ```
 
-The low-level fallback, the two commands the deploy wraps (an image built
-this way carries no label, so the next production deploy rebuilds it once):
-
-```bash
-/opt/quiz-runner/apps/codespace/images/build.sh       # 1 to 2 min, ~1.5 GB, keep 3 GB free
-/opt/quiz-runner/apps/codespace/images/c-dev/test.sh
-```
+The low-level commands it wraps stay usable (`images/build.sh`, then
+`images/c-dev/test.sh`); an image built that way carries no label, so the
+next production deploy rebuilds it once.
 
 **A code-server bump** changes the image's tag (`images/c-dev/README.md`,
-Modifying the image): set the new `CODESPACE_IMAGE` in both instances' env
-files when the commit reaches production, then run `student-image.sh` (or
-re-run the deploy); a tag no image carries is built. Until the env file
-names it, the deploy rebuilds under the old tag.
+Modifying the image): when the commit reaches production, set the new
+`CODESPACE_IMAGE` in both instances' env files, then run the script. Until
+then the script warns that the tag and the Containerfile disagree, and
+builds under the old tag.
 
-The status-bar extension (`images/c-dev/extension/`) is part of the image:
-a change to it — for instance 0.3.0, the teacher's update of ADR-132 §11, or
-0.4.0, SEB's quit hint in place of the Close button — reaches the students
-with the production deploy that ships it. Check the version `test.sh` § 3
-reports in the log (`heig.codespace-statusbar@0.4.0 installed and listed by
-code-server`). The portal's side works with either extension, the old one
-simply ignoring the update (0.3.0 under `CODESPACE_SEB` shows neither the
-button nor the hint).
-
-Since 2026-11-15 (#1102, Baygon) the build also downloads from PyPI
-(`pypi.org` for the index, `files.pythonhosted.org` for the wheels of `images/c-dev/baygon/requirements.txt`,
-each checked against its hash), beside Debian's mirror, GitHub (code-server)
-and Open VSX: the engine VM's outbound traffic must allow it during the
-build. It does: `infra/engine/host.nft` filters input only (output is free)
-and accepts aardvark-dns on the build's `podman*` bridge, whoever starts the
-build. The containers themselves still have no network.
+The status-bar extension is part of the image: its version is in the log
+(`test.sh` § 3, `heig.codespace-statusbar@0.4.0 installed and listed by
+code-server`); the portal works with an older one, which ignores what it
+does not know. The build downloads from Debian, GitHub (code-server), Open
+VSX and PyPI (Baygon's wheels, hash-checked): the host policy
+(`infra/engine/host.nft`) filters input only. The containers have no network.
 
 ### 8. The CI keys
 
@@ -381,6 +332,11 @@ gh variable delete CODESPACE_FORCE_SHA --repo heig-tin-info/heig-quiz
 ```
 
 `DEPLOY_FORCE_SHA` (the application's guard) does not force this one.
+
+**Never re-run `deploy-codespace-prod` alone during a live exam.** The
+live-evaluation guard is the application's, in `deploy-production`; this
+job runs after it and does not repeat it, so a re-run of this job alone
+passes only the workspace's guard (and may rebuild the student image, §7).
 
 ### How long a workspace stays up
 

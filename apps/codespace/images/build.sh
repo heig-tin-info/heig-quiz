@@ -9,12 +9,7 @@
 # students' code runs in are built HERE, from this checkout, never pulled
 # from a registry. The base and the code-server .deb are pinned in
 # c-dev/Containerfile (and its README).
-#
-# The production portal deploy calls this through deploy/student-image.sh,
-# which builds a candidate tag, labels it with the sources' git tree, tests
-# it and only then gives it the image's tag (ADR-016, amendment of
-# 2026-11-18). By hand, prefer that script (`--force`): an image built here
-# directly carries no label, so the next production deploy rebuilds it once.
+# The production deploy calls it through deploy/student-image.sh (RUNBOOK.md §7).
 #
 # 1.5 GB, one to two minutes on 2 vCPU; keep 3 GB free. A running session
 # keeps the image it started with; a new session takes the new one.

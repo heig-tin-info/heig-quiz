@@ -3,11 +3,7 @@
 # Runs the image through run-hardened.sh and executes every P1 assertion.
 # Exits non-zero on the first one that fails, with a clear message.
 #
-#   ./images/c-dev/test.sh [<image>]
-#
-# <image> (or IMAGE) defaults to codespace/c-dev:4.137.0; the production
-# deploy passes the candidate it has just built (deploy/student-image.sh),
-# which takes the image's tag only if this script exits 0.
+#   ./images/c-dev/test.sh [<image>]    # or IMAGE=; codespace/c-dev:4.137.0 by default
 #
 # Prerequisites: rootful Podman reachable on unix:///run/podman/podman.sock,
 # the image built, python3 on the host (to build the fake

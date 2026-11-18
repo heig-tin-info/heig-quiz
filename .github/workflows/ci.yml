@@ -155,9 +155,9 @@ jobs:
       - run: bash infra/engine/slices.test.sh
       # The root timer's snapshot: one blocked volume never stops the walk.
       - run: bash apps/codespace/deploy/shadow-snapshot.test.sh
-      # The student image's rebuild by the prod portal deploy: built only
-      # when images/c-dev changed, tagged only once its test passed.
-      - run: shellcheck -x -P SCRIPTDIR apps/codespace/deploy/student-image.sh apps/codespace/deploy/student-image.test.sh apps/codespace/images/build.sh
+      # The portal's deploy scripts; the student image is rebuilt only when
+      # images/c-dev changed, and tagged only once its test passed.
+      - run: shellcheck -x -P SCRIPTDIR apps/codespace/deploy/*.sh apps/codespace/images/build.sh
       - run: bash apps/codespace/deploy/student-image.test.sh
       - env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && 'HEAD^1' || '' }}
