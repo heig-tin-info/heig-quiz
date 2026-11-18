@@ -46,13 +46,12 @@ import {
   PUBLISH_MODES,
   STUDENT_PROJECT_STATUSES,
   SYNC_CHANGES,
-  SYNC_MESSAGE_MAX,
   slugify,
 } from "@quiz/domain";
 
-
 import { ProjectRepoCollection, StudentProjectWorkspace } from "./codespace.js";
-import { ProtectedPath, RepoName } from "./gitNames.js";
+import { BranchName, ProtectedPath, RepoName } from "./gitNames.js";
+import { MessageText, SyncMessage } from "./message.js";
 import { Rounding } from "./evaluation.js";
 import { GroupConfirm } from "./group.js";
 
@@ -214,24 +213,6 @@ export type ProjectSeatKind = z.infer<typeof ProjectSeatKind>;
  * them (F-PROJ-01); unchecking `grading.yml` warns.
  */
 export const PROTECTED_FILE_SUGGESTIONS = [CRITERIA_FILE, "README.md", GRADING_WORKFLOW] as const;
-
-/**
- * A branch to hand out: what `git check-ref-format --branch` accepts, minus
- * what could read as an option (a leading `-`).
- */
-export const BranchName = z
-  .string()
-  .min(1)
-  .max(200)
-  .regex(/^[A-Za-z0-9._/-]+$/)
-  .refine(
-    (b) =>
-      !b.startsWith("-") &&
-      !b.endsWith(".lock") &&
-      !b.includes("..") &&
-      b.split("/").every((part) => part !== "" && !part.startsWith(".") && !part.endsWith(".")),
-    "not a branch name",
-  );
 
 // ---------------------------------------------------------- grading by criteria (ADR-106 §2)
 
@@ -1077,13 +1058,6 @@ export const ProjectPrimaryAction = z.enum(PROJECT_PRIMARY_ACTIONS);
 export type ProjectPrimaryAction = z.infer<typeof ProjectPrimaryAction>;
 
 /**
- * The teacher's message of a sync (ADR-132 §10): their own plain text, never
- * Markdown, and the instant of the sync that carried it.
- */
-export const SyncMessage = z.object({ text: z.string(), at: z.iso.datetime() });
-export type SyncMessage = z.infer<typeof SyncMessage>;
-
-/**
  * The source's sync, for the staff (F-PROJ-12, M3-07). `ahead`: the source
  * holds commits on a handed-out branch that the distribution repository
  * lacks — since `pushedAt` (the server's receipt of the push), `commits` of
@@ -1120,34 +1094,12 @@ export const ProjectSyncState = z.object({
 export type ProjectSyncState = z.infer<typeof ProjectSyncState>;
 
 /**
- * What a message to the students never holds (ADR-132 §10): the C0 controls
- * but tab and line feed, DEL, the C1 controls, and the bidirectional
- * overrides and isolates — `CONTROL_CHAR` of `journal.ts`, widened —, and a
- * lone surrogate (its text is no valid JSON for the audit). A NUL
- * would fail the database's write after the distribution moved.
- */
-// eslint-disable-next-line no-control-regex
-const MESSAGE_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]|\p{Cs}/u;
-
-/**
  * `POST /app/api/projects/:id/sync`'s optional body (ADR-132 §10): the
- * teacher's message to the students, plain text, trimmed, at most
- * {@link SYNC_MESSAGE_MAX} characters, no control character but tab and
- * line feed (CRLF and CR become line feeds), no lone surrogate. One per
- * sync: a different text replaces the previous, and an
- * empty or absent one clears it; ignored on a project its students cannot
- * read yet (a draft).
+ * teacher's message to the students ({@link MessageText}). One per sync: a
+ * different text replaces the previous, and an empty or absent one clears
+ * it; ignored on a project its students cannot read yet (a draft).
  */
-export const ProjectSyncRequest = z.strictObject({
-  message: z
-    .string()
-    // CRLF and CR are line feeds, before the cap and the check (an API client's text, ADR-132 §10).
-    .overwrite((text) => text.replace(/\r\n?/g, "\n"))
-    .trim()
-    .max(SYNC_MESSAGE_MAX)
-    .refine((text) => !MESSAGE_CONTROL.test(text), "no control or direction character")
-    .optional(),
-});
+export const ProjectSyncRequest = z.strictObject({ message: MessageText.optional() });
 export type ProjectSyncRequest = z.infer<typeof ProjectSyncRequest>;
 
 /**

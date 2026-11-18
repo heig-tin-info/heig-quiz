@@ -32,9 +32,11 @@ import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
+  BranchName,
   CodespaceAssignmentSync,
   CodespaceAssignmentSyncResult,
   CodespaceSessionSummary,
+  type CodespaceWorkspaceUpdate,
   DEFAULT_MAX_ACTIVE_SESSIONS,
   LAUNCH_AUDIENCE,
   LAUNCH_TOKEN_TTL_SECONDS,
@@ -61,6 +63,7 @@ import {
   isOnlineMode,
   portalDeadline,
   projectIsLive,
+  projectIsVisible,
   deviceLevelClients,
   quotaHolder,
   requestBinding,
@@ -272,7 +275,9 @@ export async function holderGrant(
  * on that repository for an `online_seb` project (ADR-078, M6-10). Its
  * `deadlineAt` is `portalDeadline`'s: none for an `online` project under
  * the `commit` strategy, whose start route decides student by student
- * (#958; ADR-078 as amended 2026-10-29).
+ * (#958; ADR-078 as amended 2026-10-29). It carries the teacher's update of
+ * an `online` project ({@link workspaceUpdateOf}, ADR-132 §11), which the end
+ * of every sync pass sends again.
  */
 export async function syncPayload(db: Db, projectId: string): Promise<CodespaceAssignmentSync | null> {
   const [row] = await db
@@ -299,7 +304,33 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     quota: { maxActiveSessions: grant?.maxActiveSessions ?? DEFAULT_MAX_ACTIVE_SESSIONS },
     startAt: project.startAt.toISOString(),
     deadlineAt: portalDeadline(project)?.toISOString() ?? null,
+    workspaceUpdate: workspaceUpdateOf(project),
   });
+}
+
+/**
+ * The update an `online` project's workspaces offer to merge (ADR-132 §11):
+ * the heads its latest sync handed out, on the handed-out branches, with
+ * that sync's message — on a project its students can read only, as the
+ * message itself (`requestSync`). `online_seb` waits for its own delivery
+ * (§11), `free` has no workspace.
+ */
+export function workspaceUpdateOf(
+  project: Pick<typeof projects.$inferSelect, "workMode" | "state" | "branches" | "syncHeads" | "syncMessage" | "syncMessageAt">,
+): CodespaceWorkspaceUpdate | null {
+  if (project.workMode !== "online" || !projectIsVisible(project.state) || project.syncHeads === null) return null;
+  // A branch the contract refuses (GitHub's default taken as it is, `développement`)
+  // carries no update, rather than failing every assignment sync of the project.
+  const heads = project.branches.flatMap((branch) => {
+    const sha = project.syncHeads?.[branch];
+    return sha && BranchName.safeParse(branch).success ? [{ branch, sha }] : [];
+  });
+  if (heads.length === 0) return null;
+  const message =
+    project.syncMessage === null || project.syncMessageAt === null
+      ? null
+      : { text: project.syncMessage, at: project.syncMessageAt.toISOString() };
+  return { heads, message };
 }
 
 /** Writes the outcome of a sync attempt on the project's portal row. */

@@ -13,7 +13,10 @@
  *    containers carrying the session label;
  *  - a staff member's review session (ADR-129 §10) is read-only and
  *    ephemeral: its directory removed when it closes and swept
- *    at startup.
+ *    at startup;
+ *  - the teacher's update (ADR-132 §11) reaches a `lab` staging repository
+ *    on a non-branch ref, in the background of a start and of the
+ *    platform's sync, never holding either.
  */
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { readdir, rm } from "node:fs/promises";
@@ -28,13 +31,17 @@ import { sessions } from "../db/schema.js";
 import type { BootstrapCause } from "../web/i18n.js";
 import {
   ForgeUnconfiguredError,
+  GitError,
+  credentialRefused,
   ensureStagingRepo,
+  fetchProjectUpdate,
   redactSecrets,
-  refSnapshot,
+  seededRefCount,
   stagingPaths,
   type ForgeOwner,
   type RepoRef,
   type SessionLookup,
+  type SessionUpdate,
   type StagingResult,
   type StagingSession,
   type StagingSource,
@@ -145,6 +152,29 @@ export interface SessionManager {
    * (it carries the token's repository); the assignment is only a fallback.
    */
   repoOfEvent(row: { sessionId?: string; student: string; assignment: string }): RepoRef | undefined;
+  /**
+   * The teacher's update into the staging repository of every running
+   * session of the assignment, one after the other (ADR-132 §11): what the
+   * platform's sync triggers. A closed session gets it at its next opening.
+   */
+  refreshUpdates(assignmentId: string): Promise<void>;
+}
+
+/**
+ * THE rule of the update a session may fetch and announce (ADR-132 §11):
+ * the assignment's head for the session's branch — the one its `work/`
+ * tracks, {@link defaultBranchOf} — with the message, for a student's `lab`
+ * session only (an exam's staging is the template's, invariant 11; a review
+ * never pushes). Undefined otherwise.
+ */
+export function sessionUpdateOf(
+  session: Pick<SessionRow, "targetRepo">,
+  assignment: Pick<AssignmentRow, "mode" | "sourceRepo" | "workspaceUpdate" | "reviewOf">,
+): SessionUpdate | undefined {
+  if (assignment.mode !== "lab" || isReview(assignment) || !assignment.workspaceUpdate) return undefined;
+  const branch = defaultBranchOf(session, assignment);
+  const head = assignment.workspaceUpdate.heads.find((h) => h.branch === branch);
+  return head ? { branch, sha: head.sha, message: assignment.workspaceUpdate.message } : undefined;
 }
 
 /**
@@ -284,6 +314,8 @@ export interface ManagerDeps extends ManagerOptions {
   forgeAuthorization?: (repo: RepoRef, owner: ForgeOwner, url: string) => Promise<string>;
   /** The seeding fetch that used an authorization is over (`Forge.settle`). */
   forgeSettle?: (authorization: string) => void;
+  /** GitHub refused the credential of a fetch: the forge forgets it (`Forge.invalidate`). */
+  forgeInvalidate?: (repo: RepoRef, owner: ForgeOwner) => void;
   /**
    * A session closed: the forge may forget its credentials when nothing of
    * the workspace waits for the relay (ADR-078 §3).
@@ -482,9 +514,8 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     const targetUrl = repo && opts.forgeUrlOf ? opts.forgeUrlOf(repo) : undefined;
     const wanted = stagingSourceFor(assignment, targetUrl);
 
-    const already = await refSnapshot(paths.gitDir).catch(() => new Map<string, string>());
     const source: StagingSource =
-      wanted.mode === "lab" && already.size > 0 ? { mode: "empty" } : wanted;
+      wanted.mode === "lab" && (await seededRefCount(paths.gitDir)) > 0 ? { mode: "empty" } : wanted;
     const from =
       source.mode === "lab" ? source.mirrorFrom : source.mode === "exam" ? source.templateFrom : null;
     const sourceRepo = from ? repoRefFromUrl(from) : undefined;
@@ -547,6 +578,46 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         "staging repository seeding impossible: the session does not start",
       );
       throw new WorkspaceBootstrapError(cause, detail);
+    }
+  }
+
+  /**
+   * The session's branch's update into its staging repository (ADR-132
+   * §11), with the grant the relay and the seeding use. A forge with no
+   * credentials at all fetches anonymously, as the seeding; Quiz's refusal
+   * or a forge refusing the origin fetches nothing; a credential GitHub
+   * refused is forgotten. **Never throws, and no start awaits it.**
+   */
+  async function refreshUpdate(session: SessionRow, assignment: AssignmentRow): Promise<void> {
+    const head = sessionUpdateOf(session, assignment);
+    const repo = targetRepoOfSession(session, assignment);
+    const url = repo && opts.forgeUrlOf ? opts.forgeUrlOf(repo) : undefined;
+    if (!head || !repo || !url) return;
+    const owner = forgeOwnerOf(session, assignment);
+    const authorize = opts.forgeAuthorization;
+    try {
+      const outcome = await fetchProjectUpdate({
+        gitDir: stagingPaths(opts.volumesRoot, session.student, assignment.id).gitDir,
+        url,
+        head,
+        ...(authorize
+          ? {
+              authorize: () =>
+                authorize(repo, owner, url).catch((err: unknown) => {
+                  if (err instanceof ForgeUnconfiguredError && err.constructor === ForgeUnconfiguredError) return undefined;
+                  throw err;
+                }),
+            }
+          : {}),
+        ...(opts.forgeSettle ? { settle: opts.forgeSettle } : {}),
+      });
+      if (outcome !== "current") log.info({ sessionId: session.id, assignment: assignment.id, outcome }, "teacher's update set in the staging repository");
+    } catch (err) {
+      if (err instanceof GitError && credentialRefused(err.message)) opts.forgeInvalidate?.(repo, owner);
+      log.warn(
+        { sessionId: session.id, assignment: assignment.id, err: redactSecrets(String((err as Error).message ?? err)) },
+        "teacher's update not fetched: tried again at the next opening or sync",
+      );
     }
   }
 
@@ -713,8 +784,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         // inside the live container. Nothing can be overwritten: by
         // construction, there was nothing.
         const identity = gitIdentityOf(user);
-        const refs = await refSnapshot(paths.gitDir).catch(() => new Map<string, string>());
-        if (refs.size === 0) {
+        if ((await seededRefCount(paths.gitDir)) === 0) {
           await seedStaging(existing, assignment);
           const workspace = await ensureWorkspace({
             paths,
@@ -730,6 +800,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         // set at `podman run` — but `work/.git/config` can still be repaired,
         // and that is what `git config user.name` reads.
         await ensureIdentityInContainer(existing, identity);
+        void refreshUpdate(existing, assignment);
         // L3: a resume is a new opening, so it is a new token.
         const touched = updateSession(db, existing.id, {
           ...patch,
@@ -757,6 +828,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       try {
         await seedStaging(revived, assignment);
         const { session, healthyInMs } = await launch(revived, assignment);
+        void refreshUpdate(session, assignment);
         log.info({ sessionId: session.id, student: user.login }, "session resumed on its volume");
         return { session, launched: true, healthyInMs, cookieToken: revived.cookieToken };
       } catch (err) {
@@ -795,6 +867,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     try {
       await seedStaging(created, assignment);
       const { session, healthyInMs } = await launch(created, assignment);
+      void refreshUpdate(session, assignment);
       log.info({ sessionId: session.id, student: user.login }, "session created");
       return { session, launched: true, healthyInMs, cookieToken };
     } catch (err) {
@@ -1014,6 +1087,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         const assignment = findAssignment(db, session.assignmentId);
         if (!assignment) return undefined;
         const repo = targetRepoOfSession(session, assignment);
+        const update = sessionUpdateOf(session, assignment);
         return {
           sessionId: session.id,
           student: session.student,
@@ -1022,8 +1096,16 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
           uploadPack: assignment.uploadPack,
           readOnly: isReview(assignment),
           ...(repo ? { targetRepo: repo } : {}),
+          ...(update ? { update } : {}),
         };
       },
+    },
+
+    async refreshUpdates(assignmentId) {
+      const assignment = findAssignment(db, assignmentId);
+      if (!assignment) return;
+      const running = listLiveSessions(db).filter((s) => s.assignmentId === assignmentId && s.state === "running");
+      for (const session of running) await refreshUpdate(session, assignment);
     },
 
     repoOfEvent(row) {

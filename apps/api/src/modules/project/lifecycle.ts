@@ -641,10 +641,10 @@ export async function scheduleProject(db: Db, projectId: string, now: Date, acto
 }
 
 /**
- * A project back to a draft forgets its sync's message (ADR-132 §10): no
+ * A project back to a draft forgets its sync's message and heads (ADR-132 §10, §11): no
  * student reads a draft, and a later publication must not show an old one.
  */
-const NO_SYNC_MESSAGE = { syncMessage: null, syncMessageAt: null };
+const NO_SYNC_MESSAGE = { syncMessage: null, syncMessageAt: null, syncHeads: null };
 
 /**
  * `POST …/unschedule` (ADR-127): a scheduled project back to a draft — off

@@ -92,6 +92,23 @@ export function stagingPaths(volumesRoot: string, student: string, assignment: s
 
 const REFSPECS = ["+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*"];
 
+/**
+ * The portal's own refs in a staging repository (the teacher's update,
+ * ADR-132 §11, `projectUpdate.ts`): never a branch, never relayed, never a
+ * student's to push.
+ */
+export const PORTAL_REFS = "refs/quiz";
+
+/**
+ * Refuses every student push to {@link PORTAL_REFS} — an update, a
+ * deletion, a name that would block one (`receive.hideRefs`: git answers
+ * "deny updating a hidden ref"). Fetches still see them: the workspace
+ * takes its update from there.
+ */
+export async function guardPortalRefs(gitDir: string): Promise<void> {
+  await gitBare(gitDir, ["config", "receive.hideRefs", PORTAL_REFS]);
+}
+
 async function isBareRepo(gitDir: string): Promise<boolean> {
   try {
     const entries = await readdir(gitDir);
@@ -161,6 +178,7 @@ export async function ensureStagingRepo(opts: StagingOptions): Promise<StagingRe
     "receive.maxInputSize",
     String(RECEIVE_MAX_INPUT_BYTES),
   ]);
+  await guardPortalRefs(paths.gitDir);
 
   const from = sourceUrl(opts.source);
   let fetched = false;
@@ -175,8 +193,7 @@ export async function ensureStagingRepo(opts: StagingOptions): Promise<StagingRe
     fetched = true;
   }
   await pickHead(paths.gitDir, defaultBranch);
-  const refs = await refSnapshot(paths.gitDir);
-  return { ...paths, created: !existed, fetched, refs: refs.size };
+  return { ...paths, created: !existed, fetched, refs: await seededRefCount(paths.gitDir) };
 }
 
 /** Default branch of the staging repository: what `HEAD` points at, or nothing. */
@@ -216,4 +233,14 @@ export async function refSnapshot(gitDir: string): Promise<Map<string, string>> 
     if (sp > 0) refs.set(line.slice(0, sp), line.slice(sp + 1));
   }
   return refs;
+}
+
+/**
+ * How many refs the seeding or the student put there — every ref but the
+ * portal's own {@link PORTAL_REFS}, which never tell that a repository was
+ * seeded. Zero for a repository that does not exist.
+ */
+export async function seededRefCount(gitDir: string): Promise<number> {
+  const refs = await refSnapshot(gitDir).catch(() => new Map<string, string>());
+  return [...refs.keys()].filter((ref) => !ref.startsWith(`${PORTAL_REFS}/`)).length;
 }

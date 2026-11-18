@@ -131,13 +131,19 @@ interface Harness {
   starts: Array<{ login: string; assignmentId: string; opts: StartOptions }>;
   /** Sessions the routes closed, in order. */
   closes: string[];
+  /** Assignments whose update the routes asked the running workspaces to fetch (ADR-132 §11). */
+  refreshes: string[];
 }
 
 /** Runs inside the fake `start`, before its row is written: what lands while the real one awaits. */
 let duringStart: (() => void) | null = null;
 
-function fakeManager(db: Db, starts: Harness["starts"], closes: string[] = []): SessionManager {
+function fakeManager(db: Db, starts: Harness["starts"], closes: string[] = [], refreshes: string[] = []): SessionManager {
   return {
+    async refreshUpdates(assignmentId: string): Promise<number> {
+      refreshes.push(assignmentId);
+      return 0;
+    },
     async close(sessionId: string): Promise<void> {
       closes.push(sessionId);
       // A real close stops a container: it yields, and another request may run meanwhile.
@@ -190,6 +196,7 @@ async function harness(over: Record<string, string> = {}, logLines?: string[]): 
   const handle = openDb(":memory:");
   const starts: Harness["starts"] = [];
   const closes: string[] = [];
+  const refreshes: string[] = [];
   const app = Fastify({
     logger: logLines ? portalLogger("trace", { write: (line: string) => void logLines.push(line) }) : false,
   });
@@ -197,13 +204,13 @@ async function harness(over: Record<string, string> = {}, logLines?: string[]): 
   await app.register(classroomRoutes, {
     config,
     db: handle.db,
-    manager: fakeManager(handle.db, starts, closes),
+    manager: fakeManager(handle.db, starts, closes, refreshes),
     verifier: createSebVerifier({ mode: config.SEB_VERIFIER, nodeEnv: config.NODE_ENV, url: { publicOrigin: PORTAL } }),
     repoUrl: (repo) => `http://forge.test/${repo.owner}/${repo.name}.git`,
     sittingSockets: createSittingSockets(),
   });
   await app.ready();
-  return { app, db: handle.db, handle, config, starts, closes };
+  return { app, db: handle.db, handle, config, starts, closes, refreshes };
 }
 
 let h: Harness;
@@ -393,6 +400,21 @@ describe("PUT /api/assignments/:id", () => {
     const row = findAssignment(h.db, "a-lab");
     expect(row?.mode).toBe("lab");
     expect(row?.beks).toEqual([]);
+  });
+
+  it("stores the teacher's update of a lab and asks the running workspaces to fetch it; an exam keeps none, a sync without one clears it (ADR-132 §11)", async () => {
+    const update = { heads: [{ branch: "main", sha: "c".repeat(40) }], message: { text: "Test fixed.", at: "2026-11-17T20:00:00.000Z" } };
+    expect((await put(syncBody({ workspaceUpdate: update }))).statusCode).toBe(200);
+    expect(findAssignment(h.db, "a-lab")?.workspaceUpdate).toEqual(update);
+    expect(h.refreshes).toEqual(["a-lab"]);
+
+    expect((await put(syncBody())).statusCode).toBe(200);
+    expect(findAssignment(h.db, "a-lab")?.workspaceUpdate).toBeNull();
+    expect((await put(syncBody({ mode: "online_seb", workspaceUpdate: update }))).statusCode).toBe(200);
+    expect(findAssignment(h.db, "a-lab")?.workspaceUpdate).toBeNull();
+    expect(h.refreshes).toEqual(["a-lab"]);
+    // Anything but a branch and a full sha never reaches a refspec.
+    expect((await put(syncBody({ workspaceUpdate: { ...update, heads: [{ branch: "main", sha: "HEAD" }] } }))).statusCode).toBe(400);
   });
 });
 

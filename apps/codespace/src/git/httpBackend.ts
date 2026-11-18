@@ -27,6 +27,7 @@ import Fastify from "fastify";
 
 import { CgiHeadScanner, type CgiHead } from "./cgi.js";
 import { diffRefs, lastRejectedPush, recordPush, type PushEventStore, type RelayScheduler } from "./pushEvents.js";
+import { updateAt } from "./projectUpdate.js";
 import { refSnapshot, stagingPaths } from "./staging.js";
 import type { GitService, SessionLookup, StagingSession } from "./types.js";
 
@@ -221,8 +222,10 @@ export const gitBackendPlugin: FastifyPluginAsync<GitBackendOptions> = async (ap
 
   /**
    * What the workspace's status bar reads (ADR-078 §6): the session's last
-   * push GitHub refused and nothing replaced, with the forge's reason —
-   * JSON, `no-store`. Same door as the Git services: the session's own
+   * push GitHub refused and nothing replaced, with the forge's reason; and
+   * the teacher's update of its branch (ADR-132 §11), only while the
+   * staging repository's update ref is at the assignment's sha. JSON,
+   * `no-store`. Same door as the Git services: the session's own
    * container address, nothing else; no credential, nothing of another
    * session.
    */
@@ -233,9 +236,13 @@ export const gitBackendPlugin: FastifyPluginAsync<GitBackendOptions> = async (ap
       return deny(reply, 403, "source address not allowed for this session");
     }
     const rejected = lastRejectedPush(await opts.store.bySession(session.sessionId));
-    return reply
-      .header("cache-control", "no-store")
-      .send({ rejected: rejected ? { ref: rejected.ref, at: rejected.at.toISOString(), reason: rejected.reason } : null });
+    const { update } = session;
+    const gitDir = stagingPaths(opts.volumesRoot, session.student, session.assignment).gitDir;
+    const ready = update !== undefined && (await updateAt(gitDir, update.branch, update.sha));
+    return reply.header("cache-control", "no-store").send({
+      rejected: rejected ? { ref: rejected.ref, at: rejected.at.toISOString(), reason: rejected.reason } : null,
+      update: ready ? update : null,
+    });
   });
 
   app.all<{ Params: { sessionId: string; "*": string } }>(

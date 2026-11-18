@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "sync_heads" jsonb;

@@ -23,7 +23,8 @@ import {
   WORKSPACE_START_REFUSALS,
 } from "@quiz/domain";
 
-import { ProtectedPath, RepositoryFullName, Sha1 } from "./gitNames.js";
+import { BranchName, ProtectedPath, RepositoryFullName, Sha1 } from "./gitNames.js";
+import { SyncMessage } from "./message.js";
 
 /**
  * Work mode of a project; `online_seb` is supervised: it opens only from
@@ -100,6 +101,18 @@ export const CodespaceRepoRef = z.object({
 export type CodespaceRepoRef = z.infer<typeof CodespaceRepoRef>;
 
 /**
+ * The teacher's update of an `online` project for its workspaces (ADR-132
+ * §11): per handed-out branch, the distribution's head the latest sync
+ * handed out (each student repository holds it on `sync/<branch>`), and
+ * that sync's message, or null.
+ */
+export const CodespaceWorkspaceUpdate = z.object({
+  heads: z.array(z.object({ branch: BranchName, sha: Sha1 })).min(1).max(10),
+  message: SyncMessage.nullable(),
+});
+export type CodespaceWorkspaceUpdate = z.infer<typeof CodespaceWorkspaceUpdate>;
+
+/**
  * An assignment as the portal needs it: sent (PUT, idempotent) every time an
  * `online*` assignment is saved, before any student can launch it.
  */
@@ -124,6 +137,11 @@ export const CodespaceAssignmentSync = z.object({
   quota: z.object({ maxActiveSessions: z.number().int().min(0) }),
   startAt: IsoDate,
   deadlineAt: IsoDate.nullable(),
+  /**
+   * On an `online` project its students can read, once a sync handed a
+   * commit out (ADR-132 §11); null otherwise, and absent from an older platform.
+   */
+  workspaceUpdate: CodespaceWorkspaceUpdate.nullable().default(null),
 });
 export type CodespaceAssignmentSync = z.infer<typeof CodespaceAssignmentSync>;
 

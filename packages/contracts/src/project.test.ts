@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BranchName,
   PROJECT_DEFAULTS,
   ProjectCreate,
   ProjectGradingScale,
@@ -11,7 +10,7 @@ import {
   StudentProjectCard,
   defaultProjectGradingScale,
 } from "./project.js";
-import { ProtectedPath } from "./gitNames.js";
+import { BranchName, ProtectedPath } from "./gitNames.js";
 import { GradeRow, ProjectGradeRow, StudentGrades } from "./results.js";
 import { StudentActivityCard } from "./student.js";
 

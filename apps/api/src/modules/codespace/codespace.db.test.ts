@@ -11,7 +11,8 @@
  *   default quota (amendment 2026-10-08); the invitation's permission by mode;
  * - the sync: the PUT the portal receives (a service token it verifies, a
  *   `CodespaceAssignmentSync`, the quota of the holder of decision C), a
- *   failure recorded, the staff's *Resync*;
+ *   failure recorded, the staff's *Resync*; the teacher's update, sent
+ *   again at the end of an online project's sync pass (ADR-132 §11);
  * - the start route: anonymous, impersonation, `seb`, `kiosk`, a stranger,
  *   each refusal sent back to the project page, and the launch — a token
  *   `verifyHs256` accepts with the right claims, its `jti` audited, the
@@ -60,7 +61,7 @@ import {
 } from "../../db/schema.js";
 import { orgsRoute } from "../../github/testing.js";
 import { sessionOf } from "../../test/http.js";
-import { grantOf, runCodespaceSync } from "./service.js";
+import { grantOf, workspaceUpdateOf, runCodespaceSync, syncPayload } from "./service.js";
 import {
   CODESPACE_ENV,
   PORTAL,
@@ -334,6 +335,78 @@ describe("the sync (codespace.sync)", () => {
     portal.calls.length = 0;
     await call("PATCH", `/app/api/projects/${lab.id}`, owner.headers, { name: "Synced lab 2" });
     expect(CodespaceAssignmentSync.parse(portal.calls[0]!.body).name).toBe("Synced lab 2");
+  });
+
+  it("carries the teacher's update at the end of an online project's sync pass: the heads its student repositories received, the message (ADR-132 §11)", async () => {
+    const student = await newStudent();
+    const room = await connected([student]);
+    const lab = await project(room, "Updated lab");
+    expect((await setMode(lab.id, "online")).statusCode).toBe(200);
+    await accept(lab.id, student);
+    // Before any sync, nothing to offer.
+    expect((await syncPayload(server.app.db, lab.id))!.workspaceUpdate).toBeNull();
+
+    world.commit(`${room.org}/starter`, "main", { "README.md": "# Lab, fixed" });
+    portal.calls.length = 0;
+    const res = await call("POST", `/app/api/projects/${lab.id}/sync`, owner.headers, { message: "README fixed: read it again." });
+    expect(res.statusCode, res.body).toBe(202);
+
+    // The PUT comes after the pass: the student's repository already holds the commit on sync/main.
+    const distHead = world.git(lab.distribution!.fullName, "rev-parse", "main").trim();
+    expect(world.git((await repoOf(lab.id, student.id)).fullName!, "rev-parse", "sync/main").trim()).toBe(distHead);
+    const puts = portal.calls.filter((c) => c.method === "PUT");
+    expect(puts).toHaveLength(1);
+    await expectBoundServiceToken(puts[0]!);
+    expect(CodespaceAssignmentSync.parse(puts[0]!.body).workspaceUpdate).toEqual({
+      heads: [{ branch: "main", sha: distHead }],
+      message: { text: "README fixed: read it again.", at: NOW },
+    });
+
+    // A sync without a message keeps the update and clears the message; any later PUT carries the same.
+    portal.calls.length = 0;
+    expect((await call("POST", `/app/api/projects/${lab.id}/sync`, owner.headers, {})).statusCode).toBe(202);
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body).workspaceUpdate).toEqual({ heads: [{ branch: "main", sha: distHead }], message: null });
+  });
+
+  it("offers no update under free (no PUT at all), on a draft, under online_seb, or for a branch no longer handed out (ADR-132 §11)", async () => {
+    const room = await connected([]);
+    const free = await project(room, "Free lab");
+    world.commit(`${room.org}/starter`, "main", { "README.md": "# Lab, fixed" });
+    portal.calls.length = 0;
+    expect((await call("POST", `/app/api/projects/${free.id}/sync`, owner.headers, { message: "Fixed." })).statusCode).toBe(202);
+    expect(portal.calls).toEqual([]);
+
+    const sha = "b".repeat(40);
+    const online = {
+      workMode: "online" as const,
+      state: "published" as const,
+      branches: ["main"],
+      syncHeads: { main: sha },
+      syncMessage: null,
+      syncMessageAt: null,
+    };
+    expect(workspaceUpdateOf(online)).toEqual({ heads: [{ branch: "main", sha }], message: null });
+    expect(workspaceUpdateOf({ ...online, state: "draft" })).toBeNull();
+    expect(workspaceUpdateOf({ ...online, workMode: "online_seb" })).toBeNull();
+    expect(workspaceUpdateOf({ ...online, workMode: "free" })).toBeNull();
+    expect(workspaceUpdateOf({ ...online, syncHeads: null })).toBeNull();
+    expect(workspaceUpdateOf({ ...online, branches: ["dev"] })).toBeNull();
+  });
+
+  it("never fails a project's assignment sync for a branch the contract refuses: that branch carries no update (ADR-132 §11)", async () => {
+    const room = await connected([]);
+    const lab = await project(room, "Accented lab");
+    expect((await setMode(lab.id, "online")).statusCode).toBe(200);
+    const sha = "c".repeat(40);
+    // GitHub's default branch, taken as it is at the build.
+    await server.app.db.update(projects).set({ branches: ["développement"], syncHeads: { développement: sha } }).where(eq(projects.id, lab.id));
+    portal.calls.length = 0;
+    expect(await runCodespaceSync(server.app, CONFIG, lab.id, server.app.log)).toBe("synced");
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body).workspaceUpdate).toBeNull();
+
+    await server.app.db.update(projects).set({ branches: ["main", "feat+x"], syncHeads: { main: sha, "feat+x": sha } }).where(eq(projects.id, lab.id));
+    expect(await runCodespaceSync(server.app, CONFIG, lab.id, server.app.log)).toBe("synced");
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body).workspaceUpdate).toEqual({ heads: [{ branch: "main", sha }], message: null });
   });
 
   it("carries the quota of the oldest owner once the creator holds no owner seat (decision C)", async () => {

@@ -82,6 +82,7 @@ import {
   type SyncWorkspace,
 } from "../../github/sync.js";
 import { PROJECT_SYNC_QUEUE } from "../../jobs.js";
+import { requestCodespaceSync } from "../codespace/service.js";
 import { projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
 import { ciGraded, refreshCriteria } from "./criteria.js";
 import { isLive } from "./deadline.js";
@@ -306,9 +307,11 @@ export async function requestSync(
   const messageAt = message === null ? null : message === project.syncMessage ? project.syncMessageAt : now;
   try {
     const update = await updateSquashedRepo(await updateOptions(config, project, org, log));
+    // The heads handed out, for the online workspace (ADR-132 §11): the message's rule, a draft keeps none.
+    const syncHeads = projectIsVisible(project.state) ? update.heads : null;
     await app.db
       .update(projects)
-      .set({ sourceHeads: update.sourceHeads, syncMessage: message, syncMessageAt: messageAt })
+      .set({ sourceHeads: update.sourceHeads, syncMessage: message, syncMessageAt: messageAt, syncHeads })
       .where(eq(projects.id, project.id));
     await audit(app.db, {
       ...actor,
@@ -551,7 +554,9 @@ async function syncRepo(app: FastifyInstance, octokit: Octokit, ws: SyncWorkspac
  * The `project.sync` job, in the leased frame (`runLeased`): the pass over
  * every student repository of the project, four at a time; then
  * `synced_at`, the source no longer ahead when nothing failed and no push
- * landed meanwhile, and `project.synced` audited with the counts.
+ * landed meanwhile, and `project.synced` audited with the counts; for an
+ * `online` project, the portal's assignment sent again, carrying the update
+ * its workspaces fetch from the `sync/<branch>` just pushed (ADR-132 §11).
  */
 export async function runSyncJob(app: FastifyInstance, config: AppConfig, job: ProjectJob): Promise<void> {
   const db = app.db;
@@ -598,6 +603,8 @@ export async function runSyncJob(app: FastifyInstance, config: AppConfig, job: P
       payload: { opened: tally.opened, updated: tally.updated, upToDate: tally.up_to_date, failed: tally.failed, skipped: tally.skipped, failedRepos },
     });
     await hintProjectStaff(db, [project.id]);
+    // The online workspace takes the update from each `sync/<branch>` this pass wrote (ADR-132 §11).
+    if (project.workMode === "online") await requestCodespaceSync(app, config, project.id);
   };
   // A failed repository gives the lease back: nothing re-claims a sync but the staff, at once.
   await runLeased(app, config, "syncJobAt", job, "project sync", body, { onFailure: "release" });

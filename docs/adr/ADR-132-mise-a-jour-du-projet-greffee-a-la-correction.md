@@ -4,11 +4,13 @@
 
 Accepted (2026-11-17). The principles, the graft (A), the Regrade's
 semantics and its use after the release, C and B are the **product
-owner's** decisions; choices (a) to (j), and C's (k) to (m) (2026-11-18, §10), are the **orchestrator's**, after
+owner's** decisions; choices (a) to (j), C's (k) to (m) (2026-11-18, §10)
+and B's design (2026-11-18, §11) are the **orchestrator's**, after
 the spec challenge and the code. Delivered in this order, tracked in
 `changes/`: A1 (§2–§4, §7), A2 (§5, §6), C, B. A1, A2 and C are delivered
 (`changes/project-update-graded-commit.md`, `changes/project-regrade-machine.md`,
-`changes/project-sync-preview.md`); B is not.
+`changes/project-sync-preview.md`); B for `online`
+(`changes/project-update-workspace.md`), `online_seb` remains (§11).
 
 Scope: a project graded by criteria whose snapshot is schema version 3
 (ADR-119): which commit its graded run reads, which distribution files that
@@ -24,7 +26,9 @@ LLM's sources); [ADR-106](ADR-106-notation-des-projets-par-criteres.md) §3
 [ADR-062](ADR-062-depot-de-distribution.md) addendum 1 (which distribution
 commit a graded pass reads; the restore unchanged);
 [ADR-073](ADR-073-synchronisation-de-la-source.md) §4 (the pull request's
-body) and, with C, §2 (the preview, the message); F-PROJ-11, -12, -15, -23, -25 (docs/spec/02). Builds on
+body) and, with C, §2 (the preview, the message); with B,
+[ADR-078](ADR-078-codespace-git-relay-tokens.md) (§14 there: one more use
+of the write grant, no rule changed); F-PROJ-11, -12, -15, -23, -25 (docs/spec/02). Builds on
 [ADR-012](ADR-012-gel-note-deux-temps.md) and
 [ADR-064](ADR-064-echeance-des-projets-baux.md) (the target commit and the
 freezes, unchanged), [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
@@ -458,27 +462,119 @@ orchestrator's, the owner being unreachable that night.
   update"). A pass claimed before ADR-132 recorded no commit and counts
   for nothing.
 
-### 11. B — "Teacher's update" in the online workspace (owner; to be delivered)
+### 11. B — "Teacher's update" in the online workspace (owner; delivered for `online`)
 
 One click in the workspace's status bar takes the update: a local merge
-commit the student then pushes as any work. `online` first, `online_seb`
-after.
+commit the student then pushes as any work — the pull request's model (the
+student takes the update when ready) without GitHub access, which an
+online student lacks. The principle is the **product owner's**
+(2026-11-17); the design below is the **orchestrator's** (2026-11-18, the
+owner unreachable). The platform still writes no student branch (§1), and
+F-PROJ-12's "the platform never merges" holds: the click is the student's
+merge, in their own work tree. Grading never depends on it (§2); B is for
+the student's working copy — the corrected README in front of them, the
+fixed test run by their own `make test`.
 
-Open points:
+- **Scope: `online` only** (the portal's `lab` mode). `online_seb` is not
+  delivered; below, what remains for it.
+- **Carried by the existing assignment sync.** `PUT /api/assignments/:id`
+  (`CodespaceAssignmentSync`) gains `workspaceUpdate`: per handed-out
+  branch the distribution's head the latest sync handed out
+  (`projects.sync_heads`, migration 0143, written with `sync_message` in the same statement
+  and under the same rule: only on a project its students can read), and
+  that sync's message (§10, the one `SyncMessage` schema), or null; nothing
+  for `free`, `online_seb` or a draft (`workspaceUpdateOf`). The end of every
+  sync pass of an `online` project sends the PUT again (`runSyncJob`): by
+  then each student repository holds the commit on `sync/<branch>`. The
+  portal stores it on the assignment row (`assignments.workspace_update`,
+  portal migration 0005); an exam row keeps none.
+- **Into the staging repository on a non-branch ref.** For each session,
+  the portal sets its branch's commit — the one it may announce
+  (`sessionUpdateOf`, the one rule: a student's `lab` session) — **by its
+  sha** (the row's, never a ref's) on `refs/quiz/update/<branch>`
+  (`git/projectUpdate.ts`): `refs/heads/*` is never touched, so nothing the
+  student pushed moves and no relay carries it. `refs/quiz/` is the
+  portal's: `receive.hideRefs` refuses every student push to it — an
+  update, a new name, a deletion — so nobody plants an "update"; `diffRefs`
+  ignores it, so a fetch landing during a push is no `PushEvent`; and it
+  never counts as a seeding (`seededRefCount`), so a missed seeding is still
+  repaired. Triggers: the PUT, for the assignment's running sessions, one
+  after the other, in the background; and every session start and resume.
+  Nothing happens when the ref is at the sha; when the staging repository
+  holds the commit (its seeding mirrored `sync/<branch>`), the ref is set
+  from its own objects, with no token and no network; otherwise one fetch
+  by sha, 60 s at most. One operation at a time per staging repository; a
+  failure is logged and tried again at the next occasion, and **no start
+  ever waits for it**.
+- **The token: the student's own write grant (option a).** The source is the
+  student's repository, where the sync pushed the commit; the grant is the
+  one the relay and the seeding already obtain (`POST
+  /app/codespace/git-token`, `gitTokenRefusal` unchanged, audited
+  `codespace.git_token_issued`), cached with them, asked for only when the
+  commit must come from GitHub, through the environment only; Quiz's
+  `closed` refusal, or a forge refusing the origin, fetches nothing (not
+  even anonymously), and a credential GitHub refuses is forgotten
+  (`Forge.invalidate`, as the relay does). Option (b) — one read grant per
+  assignment on the distribution — would issue fewer tokens but widen
+  ADR-078 §2's rule to `online`; (a) changes no rule, and a closed session
+  asks for nothing until its next opening, when the relay would ask anyway.
+  ADR-078 records the use (§14 there).
+- **Announced by `push-status`.** `GET /git/<session>/push-status` gains
+  `update`: for the session's branch (the one its `work/` tracks), the sha,
+  the message and its instant — only while the staging repository holds
+  `refs/quiz/update/<branch>` at the row's sha. The status-bar extension
+  (`heig.codespace-statusbar` 0.3.0, `images/c-dev/extension/update.js`,
+  inside the container, as the student) decides with the student's own git
+  whether it is taken (`git merge-base --is-ancestor <sha> HEAD`); if not,
+  the item "Update from your teacher" (fr "Mise à jour de l'équipe enseignante", the student page's title) shows, its tooltip and confirmation carrying
+  the date and the message as plain text (never a `MarkdownString`; link
+  and icon syntax broken, controls removed).
+- **Apply**: `git fetch origin refs/quiz/update/<branch>`, then `git merge
+  --no-ff --no-edit -m "Merge the teacher's update" <sha>` with the
+  student's identity (the container's `GIT_*`). Always a merge commit: the
+  update's sha is in `bot_commits(sync)`, and a pushed head equal to it would
+  read as the App's push (`pushAuthor`). It applies cleanly or not at all: a
+  conflict is found before anything is touched (`git merge-tree
+  --write-tree`), uncommitted changes the merge would overwrite make git
+  refuse before writing anything, a merge that still stops (a student's
+  hook) is aborted, a merge, rebase or cherry-pick of the student's own in
+  progress is left to them; the student is told which files block it and
+  what to do (commit their work, or ask the teacher). No stash. The next ordinary push is a fast-forward for GitHub,
+  which marks the sync's pull request merged. A student who knows git may
+  still merge by hand.
+- **Nothing else changes**: the relay's rules, `gitTokenRefusal`, the
+  collection (ADR-130: its kept paths come from the branch base), exam
+  seeding, what Sync writes on GitHub, `CONTAINER_ENV_KEYS` (no secret
+  enters the container: the update travels through the git channel and
+  `push-status` only). Nothing new for the staff.
+- **Deployment**: the extension ships in the `c-dev` image, built by hand
+  on the engine VM (`apps/codespace/deploy/RUNBOOK.md`); a running session
+  keeps the extension it started with until its container is restarted. No
+  deploy order is required between the API and the portal: both sides'
+  `CodespaceAssignmentSync` drop unknown keys.
+- **Known limits.** A student who applied an update S1 and pushes it after
+  the teacher synced S2, which changed a protected file, pushes S1's version
+  of that file: the restore fires (F-PROJ-08), counts toward its cap of 5 an
+  hour and flags the runs to verify — as for a `free` student merging
+  `sync/<branch>` late; the next Apply brings S2. A repository a sync
+  skipped (past its deadline) never holds the commit: its fetch fails at
+  every opening with one warning (the token stays cached: git's "not our
+  ref" is no credential refusal, so it is requested again only once the
+  cache drops it). A branch the contract refuses (`BranchName`: GitHub's
+  default taken as it is, `développement`) carries no update. The VS
+  Code glue (`extension.js`) is untested in a real container until the
+  image is rebuilt.
 
-- the portal seeds an exam's staging from the template, never from the
-  student's repository (`apps/codespace/CLAUDE.md`, invariant 11): under
-  `online_seb` the update is fetched from the distribution;
-- an exam's staging is force-re-seeded at every resume, so the update must
-  land on a non-branch ref there;
-- Apply always makes a merge commit: a fast-forwarded sync sha is in
-  `bot_commits(sync)` and would be read as the App's push;
-- Apply refuses on a dirty tree or a conflict outside the protected files,
-  and names the files;
-- "update available" is derived from the staging's state;
-- F-PROJ-12's "the platform never merges" holds: the student's click is
-  the merge;
-- no pull request is opened for `online_seb`.
+What remains for **`online_seb`**: its staging repository is seeded from
+the template — the distribution — never from the student's repository (the
+portal's invariant 11), and **force-re-seeded at every resume**
+(`+refs/heads/*`, `--prune`). A sync during a sitting therefore already
+makes a resumed session's next push non-fast-forward: the staging's branch
+is reset to the distribution's new head, which the student's local branch
+does not contain. Its delivery needs: the update fetched from the
+distribution (a read grant the rule already gives `online_seb`) onto the
+same non-branch ref, the re-seed kept from moving a branch the student
+built on, and no pull request (none is opened for `online_seb`).
 
 ## Consequences
 

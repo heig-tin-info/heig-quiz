@@ -27,6 +27,10 @@ Amended 2026-11-16 by [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echean
 (the workspace collected at the deadline): context fact 1 and §7 corrected
 (the lock binds the App), §2's relay head narrowed to a SHA-1,
 [§13](#13-amendment-2026-11-16-the-collection-at-the-deadline-adr-130).
+Amended 2026-11-18 by [ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md)
+§11 (the teacher's update fetched into an `online` workspace): one more use
+of the write grant, no rule changed,
+[§14](#14-amendment-2026-11-18-the-teachers-update-adr-132).
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -636,6 +640,18 @@ here.
   base's, and signs nothing otherwise (ADR-130 §4.3). Only the deadline
   job's collection path writes a `collected` receipt, dated by Quiz
   (ADR-130 §6).
+
+### 14. Amendment 2026-11-18: the teacher's update (ADR-132)
+
+[ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md) §11
+owns the rule. The write grant of §2 serves one more use: fetching, from the
+student's own repository, the commit a teacher's sync pushed there, onto a
+non-branch ref of the staging repository. The token is obtained exactly as
+for a relay (checks 2 to 6, the cache of §3), and only when the staging
+repository lacks the commit; a forge with no credentials at all fetches
+anonymously, as the seeding does. No rule changes, the read grant
+on the distribution stays `online_seb`'s, nothing is written on GitHub, and
+§9's blast radius gains nothing.
 
 ## Consequences
 

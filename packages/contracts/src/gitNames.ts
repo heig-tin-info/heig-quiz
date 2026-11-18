@@ -1,8 +1,8 @@
 /**
  * The names both `project.ts` and `codespace.ts` need — a commit id, a
- * repository's name and full name, a path inside a repository — one schema
- * each, here because the second is imported by the first, so neither can
- * own them.
+ * repository's name and full name, a path inside a repository, a branch —
+ * one schema each, here because the second is imported by the first, so
+ * neither can own them.
  */
 import { z } from "zod";
 
@@ -39,4 +39,22 @@ export const ProtectedPath = z
       !/[\u0000-\u001f\u007f\\]/.test(p) &&
       p.split("/").every((part) => part !== "" && part !== "." && part !== ".." && part.toLowerCase() !== ".git"),
     "not a relative path",
+  );
+
+/**
+ * A branch to hand out: what `git check-ref-format --branch` accepts, minus
+ * what could read as an option (a leading `-`).
+ */
+export const BranchName = z
+  .string()
+  .min(1)
+  .max(200)
+  .regex(/^[A-Za-z0-9._/-]+$/)
+  .refine(
+    (b) =>
+      !b.startsWith("-") &&
+      !b.endsWith(".lock") &&
+      !b.includes("..") &&
+      b.split("/").every((part) => part !== "" && !part.startsWith(".") && !part.endsWith(".")),
+    "not a branch name",
   );

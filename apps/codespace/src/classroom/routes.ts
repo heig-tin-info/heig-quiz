@@ -89,6 +89,7 @@ import {
   outsideSebPage,
   type SebVerifier,
 } from "../seb/index.js";
+import { serializer } from "../serializer.js";
 import { WorkspaceBootstrapError, type SessionManager } from "../sessions/manager.js";
 import { closeSitting, isSittingClosed, type SittingSockets } from "../sessions/sittings.js";
 import {
@@ -231,25 +232,6 @@ export async function tokenRefusal<S extends z.ZodType>(
   return parsed.success ? { claims: parsed.data } : { reason: "bad-claims" };
 }
 
-/**
- * Runs `fn` after every earlier call of the same key has settled: one review
- * opening at a time per staff member, so that two simultaneous `/review`
- * calls cannot both pass the check before either closes or starts
- * (ADR-129 §1). In memory: the portal is one process.
- */
-export function serializer(): <T>(key: string, fn: () => Promise<T>) => Promise<T> {
-  const tails = new Map<string, Promise<unknown>>();
-  return (key, fn) => {
-    const run = (tails.get(key) ?? Promise.resolve()).then(fn, fn);
-    const tail = run.catch(() => undefined);
-    tails.set(key, tail);
-    void tail.then(() => {
-      if (tails.get(key) === tail) tails.delete(key);
-    });
-    return run;
-  };
-}
-
 /** The token of `Authorization: Bearer <token>`, or "" when there is none. */
 export function bearerToken(request: FastifyRequest): string {
   const header = request.headers.authorization ?? "";
@@ -299,6 +281,7 @@ async function classroomRoutesImpl(
     return consumeJti(db, read.claims.jti, read.claims.exp) ? null : "jti-replayed";
   }
 
+  // Two simultaneous `/review` calls cannot both pass the check before either closes or starts (ADR-129 §1).
   const oneReviewAtATime = serializer();
   const oneCollectionAtATime = serializer();
 
@@ -373,9 +356,18 @@ async function classroomRoutesImpl(
           closesAt: body.deadlineAt ? new Date(body.deadlineAt) : null,
           // Teacher-side secrets (ADR-047 §7): stored, never logged.
           beks: mode === "exam" ? body.browserExamKeys : [],
+          // The teacher's update (ADR-132 §11), `lab` only: an exam's staging is the template's.
+          workspaceUpdate: mode === "lab" ? body.workspaceUpdate : null,
           createdAt: new Date(),
         };
         upsertAssignment(db, row);
+        // Into the running workspaces' staging repositories, in the background:
+        // the platform's sync never waits on GitHub. A closed one takes it at its next opening.
+        if (row.workspaceUpdate) {
+          void manager.refreshUpdates(body.id).catch((err: unknown) => {
+            request.log.warn({ assignmentId: body.id, err: String((err as Error).message ?? err) }, "teacher's update not dispatched to the running workspaces");
+          });
+        }
 
         request.log.info(
           { assignmentId: body.id, mode, classroomId: body.classroomId },

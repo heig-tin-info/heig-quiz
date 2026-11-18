@@ -182,6 +182,27 @@ describe("assignment sync", () => {
     expect(CodespaceAssignmentSync.safeParse({ ...sync, id: "a/b" }).success).toBe(false);
   });
 
+  it("carries the project's update (ADR-132 §11): absent from an older platform is null; a branch, a full sha and plain text only", () => {
+    expect(CodespaceAssignmentSync.parse(sync).workspaceUpdate).toBeNull();
+    const sha = "a".repeat(40);
+    const update = { heads: [{ branch: "main", sha }], message: { text: "README fixed.\n\tSee the test.", at: "2026-11-17T20:00:00.000Z" } };
+    expect(CodespaceAssignmentSync.parse({ ...sync, mode: "online", workspaceUpdate: update }).workspaceUpdate).toEqual(update);
+    expect(CodespaceAssignmentSync.safeParse({ ...sync, workspaceUpdate: { ...update, message: null } }).success).toBe(true);
+    for (const bad of [
+      { ...update, heads: [] },
+      { ...update, heads: [{ branch: "main", sha: "abc" }] },
+      { ...update, heads: [{ branch: "-x", sha }] },
+      { ...update, heads: [{ branch: "a/../b", sha }] },
+      { ...update, heads: [{ branch: "main:refs/heads/x", sha }] },
+      { ...update, message: { text: "x".repeat(501), at: update.message.at } },
+      { ...update, message: { text: "nul\u0000", at: update.message.at } },
+      { ...update, message: { text: "rtl\u202e", at: update.message.at } },
+      { ...update, message: { text: "lone \ud800", at: update.message.at } },
+    ]) {
+      expect(CodespaceAssignmentSync.safeParse({ ...sync, workspaceUpdate: bad }).success, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
   it("parses the result: a 64-hex key or null", () => {
     expect(CodespaceAssignmentSyncResult.safeParse({ id: "a", configKey: "0".repeat(64), sebLink: "sebs://x" }).success).toBe(true);
     expect(CodespaceAssignmentSyncResult.safeParse({ id: "a", configKey: null, sebLink: null }).success).toBe(true);

@@ -190,6 +190,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
           // environment.
           forgeAuthorization: (repo, owner, url) => forge.authorization(repo, owner, url),
           forgeSettle: (authorization) => forge.settle?.(authorization),
+          forgeInvalidate: (repo, owner) => forge.invalidate?.(repo, owner),
           // A closed workspace with nothing pending keeps no credential (ADR-078 §3).
           onSessionClosed: async (owner) => {
             if (forge.forget && !(await store.hasPending(owner.student, owner.assignment))) forge.forget(owner);

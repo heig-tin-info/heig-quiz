@@ -1,0 +1,1 @@
+ALTER TABLE `assignments` ADD `workspace_update` text;
