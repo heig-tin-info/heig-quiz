@@ -127,6 +127,7 @@ describe("projectActionKind", () => {
         score: null,
       },
       release: null,
+      projectUpdate: null,
       serverNow: at(0),
     };
     expect(factsOfProject(base).repo).toEqual({ state: "deleted" });

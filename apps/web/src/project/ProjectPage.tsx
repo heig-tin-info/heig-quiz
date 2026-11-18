@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   FolderGit2,
   LayoutDashboard,
+  RefreshCw,
   Rocket,
   Send,
   Settings,
@@ -56,6 +57,7 @@ import { GradingTab } from "./grading/GradingTab";
 import { ProjectGroupSet } from "./ProjectGroupSet";
 import { projectNotices, projectNoticeToast } from "./projectNotices";
 import { SyncButton } from "./parts";
+import { SyncDialog } from "./SyncDialog";
 import { ProjectOverview } from "./ProjectOverview";
 import { ProjectRail } from "./ProjectRail";
 import { ProjectRepos } from "./ProjectRepos";
@@ -215,9 +217,13 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     // Worded with what the body carries (the counts, the students to verify), where the names can be read.
     onError: (error) => setReleaseRefused(releaseRefusal(error, detail.data!, t)),
   });
+  /** The Sync dialog (ADR-132 §10): every Sync button opens it; its own primary sends the sync. */
+  const [syncOpen, setSyncOpen] = useState(false);
   const syncNow = useMutation({
-    mutationFn: () => api<ProjectSyncAccepted>(`/app/api/projects/${id}/sync`, { method: "POST" }),
+    mutationFn: (message: string) =>
+      api<ProjectSyncAccepted>(`/app/api/projects/${id}/sync`, { method: "POST", body: JSON.stringify(message ? { message } : {}) }),
     onSuccess: async () => {
+      setSyncOpen(false);
       await refresh();
       toast(t("project.sync.started"), "success");
     },
@@ -339,7 +345,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     if (next !== null) setTab("repositories");
   };
   const syncButton = (variant: "primary" | "secondary", coach: "project.primary" | "project.sync") => (
-    <SyncButton sync={sync} onSync={() => syncNow.mutate()} syncing={syncNow.isPending} variant={variant} coach={coach} />
+    <SyncButton sync={sync} onSync={() => setSyncOpen(true)} syncing={syncNow.isPending} variant={variant} coach={coach} />
   );
 
   return (
@@ -498,13 +504,36 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
           <TabPanel idPrefix="project" value={tab} className="space-y-8">
             {tab === "summary" ? (
               <>
+                {/* ADR-132 §10: after an update, Regrade is offered where it lives, the grading screen. */}
+                {sync.gradedBefore > 0 ? (
+                  <Alert
+                    tone="warning"
+                    icon={RefreshCw}
+                    title={
+                      sync.gradedBefore === 1
+                        ? t("project.sync.gradedBefore.one")
+                        : t("project.sync.gradedBefore", { n: sync.gradedBefore })
+                    }
+                    action={
+                      <AppLink
+                        route={{ view: "projectGrading", id: project.id }}
+                        navigate={navigate}
+                        className={buttonClass("secondary", "sm")}
+                      >
+                        {t("project.sync.gradedBefore.open")}
+                      </AppLink>
+                    }
+                  >
+                    {t("project.sync.gradedBefore.body")}
+                  </Alert>
+                ) : null}
                 {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
                 <ProjectOverview
                   project={project}
                   patch={patch}
                   filter={filter}
                   onFilter={pickFilter}
-                  onSync={() => syncNow.mutate()}
+                  onSync={() => setSyncOpen(true)}
                   syncing={syncNow.isPending}
                 />
                 <ProjectRail project={project} />
@@ -522,6 +551,9 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       )}
 
       {openRepo ? <RepoSheet project={project} repoId={openRepo} onClose={() => setOpenRepo(null)} /> : null}
+      {syncOpen ? (
+        <SyncDialog project={project} onSync={(message) => syncNow.mutate(message)} syncing={syncNow.isPending} onClose={() => setSyncOpen(false)} />
+      ) : null}
     </div>
   );
 }

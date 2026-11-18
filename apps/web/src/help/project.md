@@ -43,7 +43,12 @@ protection by hand.
 
 ## Sync and the end of the project
 
-When the source has new commits, **Sync** opens one pull request per
-handed-out branch in each open repository; the student merges it, Quiz
-never does. **Archive** hides the project. **Delete project** removes its
+When the source has new commits, **Sync** first lists what it would send:
+the files added, modified and deleted, the protected ones marked. An
+optional message tells students what changed and why; they read it on
+their project page and in the pull request. Sync then opens one pull
+request per handed-out branch in each open repository; the student merges
+it, Quiz never does. Once repositories were graded before the update, the
+page offers the grading screen, where **Regrade every repository** grades
+them again. **Archive** hides the project. **Delete project** removes its
 rows in Quiz and never a repository on GitHub.

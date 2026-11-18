@@ -52,6 +52,7 @@ import {
   ProjectPatch,
   ProjectRegradeRequest,
   ProjectReleaseRefusal,
+  ProjectSyncRequest,
   ReviewCheckpointCreate,
   ScoreOverride,
   type GradeRunList,
@@ -80,6 +81,8 @@ import {
   type ProjectRepoSync,
   type ProjectRepoView,
   type ProjectSyncAccepted,
+  type ProjectSyncPreview,
+  type SyncMessage,
   type ProjectSummary,
   type ReviewCheckpoint,
   type RosterEntry,
@@ -100,6 +103,7 @@ import {
   projectBeforePublication,
   projectIsLive,
   patchedDraftDates,
+  previewPaths,
   projectFieldRefusal,
   projectHasColumn,
   projectListDates,
@@ -116,6 +120,7 @@ import {
   type CriterionGradeLike,
   type ProjectDatesChange,
   type ProjectLifeLike,
+  type SyncChange,
 } from "@quiz/domain";
 
 import {
@@ -136,6 +141,8 @@ import { D, flags, H, iso, MockError, MockPayload, nextId, now, on, refuse, role
 /** PRG1-2026's organization, as `github.ts` names it (which this section, above it, cannot read). */
 const ORG = "heig-tin-info";
 const PROTECTED = ["criteria.yml", "README.md", ".github/workflows/grading.yml"];
+/** The seeded message of the last sync (ADR-132 §10), the same on the staff's page and the students'. */
+export const MOCK_SYNC_MESSAGE = "Test 3 expected the wrong rounding: it is fixed, and criteria.yml now gives it 2 points.\nNothing to change in your code.";
 
 /** A repository of the mock, mutable: what the page's writes change. */
 interface MockRepo {
@@ -201,7 +208,7 @@ interface MockProject {
    * by `aheadCommits`, the last pass, and the pass under way — a POST
    * leaves it in progress for one read, then the next read settles it.
    */
-  sync: { aheadAt: string | null; aheadCommits: number | null; syncedAt: string | null; inProgressReads: number };
+  sync: { aheadAt: string | null; aheadCommits: number | null; syncedAt: string | null; inProgressReads: number; message: SyncMessage | null; gradedBefore: number };
   /** A group project's stopped copy; null while it follows its set (it is then the set's groups). */
   copy: CopyGroup[] | null;
   /** A confirmed resync the job is applying (R2): pending for this many reads more. */
@@ -705,8 +712,8 @@ function seeded(): MockProject[] {
       // `?ahead=1`: the source moved two hours ago, on the draft and the published project (M3-07).
       sync:
         flags.ahead && seed.state !== "locked"
-          ? { aheadAt: iso(-2 * H), aheadCommits: seed.state === "draft" ? null : 3, syncedAt: seed.state === "draft" ? null : iso(-3 * D), inProgressReads: 0 }
-          : { aheadAt: null, aheadCommits: null, syncedAt: null, inProgressReads: 0 },
+          ? { aheadAt: iso(-2 * H), aheadCommits: seed.state === "draft" ? null : 3, syncedAt: seed.state === "draft" ? null : iso(-3 * D), inProgressReads: 0, message: null, gradedBefore: 0 }
+          : { aheadAt: null, aheadCommits: null, syncedAt: null, inProgressReads: 0, message: null, gradedBefore: 0 },
     };
     const deadline = new Date(summary.deadlineAt);
     // Graded `none`: no checkpoint fires (F-PROJ-09).
@@ -728,6 +735,16 @@ function seeded(): MockProject[] {
     PROJECTS.set(seed.id, project);
     // Graded by criteria (ADR-106): the snapshot, and the passes' rows of every frozen repository.
     if (summary.gradingMode === "criteria") seedCriteria(project);
+    // The locked one was synced with a message after its grading (ADR-132 §10): its frozen repositories were graded before.
+    if (seed.id === PJ_CRITERIA) {
+      Object.assign(project.sync, {
+        syncedAt: iso(-1 * D),
+        message: { text: MOCK_SYNC_MESSAGE, at: iso(-1 * D) },
+        gradedBefore: project.repos.filter((r) => r.frozenAt !== null && isLive(project, r)).length,
+      });
+      // Past their deadline: the sync skipped every repository (`syncSkips`).
+      for (const r of project.repos) Object.assign(r, { syncOutcome: "skipped", syncAt: iso(-1 * D) });
+    }
   }
   return seedsNow().map((s) => PROJECTS.get(s.id)!);
 }
@@ -744,7 +761,7 @@ export function addMockProject(summary: ProjectSummary, classroom: MockProject["
     repos: [],
     checkpoints: [],
     read: false,
-    sync: { aheadAt: null, aheadCommits: null, syncedAt: null, inProgressReads: 0 },
+    sync: { aheadAt: null, aheadCommits: null, syncedAt: null, inProgressReads: 0, message: null, gradedBefore: 0 },
     copy: null,
     resyncReads: 0,
   };
@@ -1145,6 +1162,8 @@ function detailOf(p: MockProject): ProjectDetail {
               skipped: p.repos.filter((r) => r.syncOutcome === "skipped").length,
             }
           : null,
+      message: p.sync.message,
+      gradedBefore: p.sync.gradedBefore,
     },
     // Stale only when there was live state to read.
     liveStale: !p.read && readiness.live > 0,
@@ -1182,14 +1201,51 @@ on("POST", "/app/api/projects/:id/groups/resync", (m, raw) => {
 });
 
 /** The source's sync (F-PROJ-12, M3-07): 202, the pass settled by the read after the next. */
-on("POST", "/app/api/projects/:id/sync", (m) => {
+on("POST", "/app/api/projects/:id/sync", (m, raw) => {
   const p = projectOr404(m.groups!.id!);
+  const parsed = ProjectSyncRequest.safeParse(raw ?? {});
+  if (!parsed.success) throw new MockPayload(400, { error: "validation", message: parsed.error.message });
+  syncRefusal(p);
+  p.sync.inProgressReads = 2;
+  // ADR-132 §10: the latest message replaces the previous, none clears it.
+  const text = parsed.data.message || null;
+  p.sync.message = text === null ? null : { text, at: iso(0) };
+  const answer: ProjectSyncAccepted = { requestedAt: iso(0) };
+  return answer;
+});
+
+/** What the sync and its preview refuse alike. */
+function syncRefusal(p: MockProject): void {
   if (p.summary.archivedAt !== null) throw refuse(409, "project_archived", "An archived project syncs nothing");
   if (p.summary.distribution === null) throw refuse(409, "distribution_missing", "The distribution repository is not built");
   if (p.sync.inProgressReads > 0) throw refuse(409, "sync_in_progress", "A sync is under way");
-  p.sync.inProgressReads = 2;
-  const answer: ProjectSyncAccepted = { requestedAt: iso(0) };
-  return answer;
+}
+
+/**
+ * The sync's preview (ADR-132 §10): a sample of each kind while the source
+ * is ahead — the protected files of the project among them —, nothing to
+ * send otherwise; `?many=1` lists more than the cap.
+ */
+on("GET", "/app/api/projects/:id/sync/preview", (m): ProjectSyncPreview => {
+  const p = projectOr404(m.groups!.id!);
+  syncRefusal(p);
+  if (flags.distfail) throw refuse(502, "sync_failed", "Updating the distribution repository failed: try again");
+  const changes: { path: string; change: SyncChange }[] =
+    p.sync.aheadAt === null || flags.syncempty
+      ? []
+      : [
+          { path: "src/main.c", change: "modified" },
+          { path: "src/util.c", change: "added" },
+          { path: "tests/test_rounding.c", change: "modified" },
+          { path: "docs/old-notes.md", change: "deleted" },
+          ...p.summary.protectedFiles.filter((f) => f.split("/").pop()!.includes(".")).map((path) => ({ path, change: "modified" as const })),
+          ...(flags.many ? Array.from({ length: 260 }, (_, i) => ({ path: `data/sample-${i}.txt`, change: "added" as const })) : []),
+        ];
+  return {
+    // The mock's criteria projects play a schema-3 one here (ADR-132 §2), though their sample snapshot says 2.
+    protectedGraded: p.summary.gradingMode === "criteria",
+    branches: p.summary.branches.map((branch) => ({ branch, ...previewPaths(changes, p.summary.protectedFiles) })),
+  };
 });
 
 /** The caller's own `pull` on the distribution (#899): invited at the first click, already in at the next. */

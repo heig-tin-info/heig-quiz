@@ -39,6 +39,22 @@ const columnSettings = ok({ weight: 40, counts: true, componentId: null, release
 /** A group set of the classroom (ADR-070), a uuid as `ProjectPatch` takes one. */
 const SET = "0190d3c4-0000-7000-8000-00000000f001";
 
+/** What the next sync would send (ADR-132 §10): one path of each kind, the protected first, three more beyond the cap. */
+const PREVIEW = {
+  protectedGraded: true,
+  branches: [
+    {
+      branch: "main",
+      paths: [
+        { path: "criteria.yml", change: "modified", protected: true },
+        { path: "src/util.c", change: "added", protected: false },
+        { path: "docs/old.md", change: "deleted", protected: false },
+      ],
+      more: 3,
+    },
+  ],
+};
+
 /** The page's routes: `project` is the detail served, or a reply / handler of its own. */
 function routes(project: ProjectDetail | RouteHandler, extra: Record<string, RouteHandler> = {}) {
   const detail: RouteHandler =
@@ -170,9 +186,10 @@ describe("the one primary action", () => {
     expect(status()).toMatch(/^Draft, invisible to students/);
   });
 
-  it("is Sync, as a button, when the source is ahead (F-PROJ-12, M3-07): one POST, a toast, the page refreshed", async () => {
+  it("is Sync, as a button, when the source is ahead (F-PROJ-12, M3-07): the dialog's preview, then one POST with the message, a toast, the page refreshed", async () => {
     const ahead = { pushedAt: PAST, commits: 3 };
-    const { calls } = routes(makeProject({ primaryAction: "sync", sync: { ahead, inProgress: false, syncedAt: null, last: null } }), {
+    const { calls } = routes(makeProject({ primaryAction: "sync", sync: { ahead, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 } }), {
+      [`GET ${BASE}/sync/preview`]: ok(PREVIEW),
       [`POST ${BASE}/sync`]: ok({ requestedAt: PAST }),
     });
     renderPage();
@@ -181,15 +198,109 @@ describe("the one primary action", () => {
     expect(status()).toBe("The source repository is ahead of the students' copies: a sync is due.");
     expect(screen.getByText(/source 3 commits ahead/)).toBeInTheDocument();
     await userEvent.click(button);
-    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/sync` })]));
+    // The button opens the dialog: nothing is sent before its own Sync.
+    const dialog = within(await screen.findByRole("dialog", { name: "Sync the project" }));
+    expect(await dialog.findByText("criteria.yml")).toBeInTheDocument();
+    expect(writes(calls)).toEqual([]);
+    await userEvent.type(dialog.getByLabelText("Message to students"), "  Test 3 fixed  ");
+    await userEvent.click(dialog.getByRole("button", { name: "Sync" }));
+    await waitFor(() =>
+      expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/sync`, body: { message: "Test 3 fixed" } })]),
+    );
     expect(await screen.findByText(/^Sync started/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
     await waitFor(() => expect(calls.filter((c) => c.url === BASE && c.method === "GET").length).toBeGreaterThan(1));
+  });
+
+  describe("the Sync dialog (ADR-132 §10)", () => {
+    const ahead = { pushedAt: PAST, commits: 3 };
+    const project = (over: Partial<ProjectDetail["sync"]> = {}, detail: Partial<ProjectDetail> = {}) =>
+      makeProject({ primaryAction: "sync", sync: { ahead, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0, ...over }, ...detail });
+    const open = async () => {
+      await userEvent.click(await screen.findByRole("button", { name: "Sync" }));
+      return within(await screen.findByRole("dialog", { name: "Sync the project" }));
+    };
+
+    it("groups the paths added, modified and deleted, marks the protected ones, and says both notes for a criteria v3 project", async () => {
+      routes(project(), { [`GET ${BASE}/sync/preview`]: ok(PREVIEW) });
+      renderPage();
+      const dialog = await open();
+      await dialog.findByText("criteria.yml");
+      for (const heading of ["Added", "Modified", "Deleted"]) expect(dialog.getByRole("heading", { name: new RegExp(`^${heading}`) })).toBeInTheDocument();
+      expect(within(dialog.getByText("criteria.yml").closest("li")!).getByText("protected")).toBeInTheDocument();
+      expect(within(dialog.getByText("src/util.c").closest("li")!).queryByText("protected")).toBeNull();
+      expect(dialog.getByText("And 3 more files.")).toBeInTheDocument();
+      expect(dialog.getByTestId("sync-note-protected")).toHaveTextContent("graded in this version for everyone at the next correction, merged or not");
+      expect(dialog.getByTestId("sync-note-other")).toHaveTextContent("only once the update is merged");
+      expect(dialog.getByText(/Do not name the source repository/)).toBeInTheDocument();
+    });
+
+    it("says nothing of grading for a project not graded by its CI, nor the other note when only protected paths change", async () => {
+      routes(project(), {
+        [`GET ${BASE}/sync/preview`]: ok({ ...PREVIEW, protectedGraded: false }),
+      });
+      renderPage();
+      const dialog = await open();
+      await dialog.findByText("criteria.yml");
+      expect(dialog.queryByTestId("sync-note-protected")).toBeNull();
+      expect(dialog.getByTestId("sync-note-other")).toBeInTheDocument();
+    });
+
+    const EMPTY = { protectedGraded: true, branches: [{ branch: "main", paths: [], more: 0 }] };
+
+    it("says it is reading while the preview loads, Sync held", async () => {
+      const { fetchMock } = routes(project());
+      const served = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation((input, init) =>
+        String(input).endsWith("/sync/preview") ? new Promise<Response>(() => undefined) : served(input, init),
+      );
+      renderPage();
+      const dialog = await open();
+      expect(dialog.getByText("Reading what the sync would send…")).toBeInTheDocument();
+      expect(dialog.getByRole("button", { name: "Sync" })).toBeDisabled();
+    });
+
+    it("holds Sync when there is nothing to send", async () => {
+      routes(project(), { [`GET ${BASE}/sync/preview`]: ok(EMPTY) });
+      renderPage();
+      const dialog = await open();
+      expect(await dialog.findByText("Nothing to send")).toBeInTheDocument();
+      expect(dialog.getByText("The distribution already holds the source.")).toBeInTheDocument();
+      expect(dialog.getByRole("button", { name: "Sync" })).toBeDisabled();
+      expect(dialog.queryByLabelText("Message to students")).toBeNull();
+    });
+
+    it("lets Sync retry the repositories the last sync could not reach, even with nothing new to send", async () => {
+      routes(project({ last: { opened: 0, updated: 2, upToDate: 0, failed: 2, skipped: 0 } }), { [`GET ${BASE}/sync/preview`]: ok(EMPTY) });
+      renderPage();
+      const dialog = await open();
+      expect(await dialog.findByText("Sync retries the 2 repositories the last sync could not reach.")).toBeInTheDocument();
+      expect(dialog.getByRole("button", { name: "Sync" })).toBeEnabled();
+    });
+
+    it("says why the preview failed, in words, offers to retry, and holds Sync", async () => {
+      routes(project(), { [`GET ${BASE}/sync/preview`]: fail(409, { error: "source_rewritten", message: "rewritten" }) });
+      renderPage();
+      const dialog = await open();
+      expect(await dialog.findByText("Could not read what the sync would send")).toBeInTheDocument();
+      expect(dialog.getByRole("button", { name: /Retry/ })).toBeInTheDocument();
+      expect(dialog.getByRole("button", { name: "Sync" })).toBeDisabled();
+    });
+
+    it("shows the staff the last message, and offers the grading screen when repositories were graded before the update", async () => {
+      routes(project({ ahead: null, syncedAt: PAST, message: { text: "Test 3 fixed.\nNothing to change.", at: PAST }, gradedBefore: 4 }, { primaryAction: "none" }));
+      const { navigate } = renderPage();
+      expect(await screen.findByTestId("project-sync-message")).toHaveTextContent("Test 3 fixed.");
+      expect(screen.getByText("4 repositories graded before the latest update")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("link", { name: "Open grading" }));
+      expect(navigate).toHaveBeenCalledWith({ view: "projectGrading", id: PROJECT_ID });
+    });
   });
 
   it("offers Sync beside Publish on a draft whose source is ahead, says what the last sync did, and shows the pass under way", async () => {
     routes(
       makeDraft({
-        sync: { ahead: { pushedAt: PAST, commits: null }, inProgress: false, syncedAt: null, last: null },
+        sync: { ahead: { pushedAt: PAST, commits: null }, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 },
       }),
     );
     renderPage();
@@ -202,7 +313,7 @@ describe("the one primary action", () => {
     routes(
       makeProject({
         primaryAction: "none",
-        sync: { ahead: { pushedAt: PAST, commits: 1 }, inProgress: true, syncedAt: PAST, last: { opened: 2, updated: 1, upToDate: 3, failed: 0, skipped: 1 } },
+        sync: { ahead: { pushedAt: PAST, commits: 1 }, inProgress: true, syncedAt: PAST, last: { opened: 2, updated: 1, upToDate: 3, failed: 0, skipped: 1 }, message: null, gradedBefore: 0 },
       }),
     );
     renderPage();
@@ -357,7 +468,7 @@ describe("the teacher's tour (M7-01)", () => {
       makeProject({
         primaryAction: "release",
         rows: [row(1, makeRepo(1)), row(2, null)],
-        sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null },
+        sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 },
       }),
     );
     renderPage();
@@ -372,7 +483,7 @@ describe("the teacher's tour (M7-01)", () => {
   });
 
   it("keeps the primary, the sync and the checkpoints anchors on a draft, which has no repository to show (the tour skips them)", async () => {
-    routes(makeDraft({ sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null } }));
+    routes(makeDraft({ sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 } }));
     renderPage();
     await screen.findByRole("button", { name: "Sync" });
     const tour = TOURS.find((t) => t.id === "project")!;
@@ -381,7 +492,7 @@ describe("the teacher's tour (M7-01)", () => {
   });
 
   it("points the primary step at Sync when Sync is the primary action, and keeps one anchor each", async () => {
-    routes(makeProject({ primaryAction: "sync", sync: { ahead: { pushedAt: PAST, commits: 1 }, inProgress: false, syncedAt: null, last: null } }));
+    routes(makeProject({ primaryAction: "sync", sync: { ahead: { pushedAt: PAST, commits: 1 }, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 } }));
     renderPage();
     const button = await screen.findByRole("button", { name: "Sync" });
     expect(document.querySelectorAll('[data-coach="project.primary"]')).toHaveLength(1);
@@ -1496,7 +1607,7 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
       makeProject({
         primaryAction: "release",
         state: "locked",
-        sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null },
+        sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 },
       }),
     );
     renderPage();
@@ -1558,7 +1669,7 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     routes(
       makeProject({
         archivedAt: PAST,
-        sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null },
+        sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 },
       }),
       { [`GET ${BASE}/checkpoints`]: ok([makeCheckpoint(1, { name: "soon" })]) },
     );
@@ -1670,7 +1781,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
   });
 
   it("offers Sync in the header, a secondary button, where the draft's source is ahead", async () => {
-    routes(makeDraft({ sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null } }));
+    routes(makeDraft({ sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 } }));
     renderPage();
     const sync = await screen.findByRole("button", { name: "Sync" });
     expect(sync).toHaveAttribute("data-coach", "project.sync");

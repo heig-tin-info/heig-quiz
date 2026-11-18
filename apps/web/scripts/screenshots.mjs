@@ -408,6 +408,23 @@ const scenes = [
     act: (p) => p.getByTestId("project-tiles").getByRole("button", { name: /(no commit|sans commit)/i }).click(),
   },
   { name: "project-staff-repo", role: "teacher", path: "/projects/pj-published?projects=1&staffrepo=1&tab=repositories", settle: 2500 },
+  // ADR-132 §10: the Sync dialog — the list (the source ahead), nothing to
+  // send, a refusal —, and the criteria project synced with a message after
+  // its grading (the staff's notice and the message on the Source tile).
+  ...[
+    ["project-sync-dialog", "/projects/pj-published?projects=1&ahead=1"],
+    ["project-sync-dialog-criteria", `/projects/0190d3c4-0000-7000-8000-0000000000c2?projects=1&pjcriteria=1&ahead=1`],
+    ["project-sync-dialog-empty", "/projects/pj-published?projects=1&ahead=1&syncempty=1"],
+    ["project-sync-dialog-error", "/projects/pj-published?projects=1&ahead=1&distfail=1"],
+  ].map(([name, path]) => ({
+    name,
+    role: "teacher",
+    path,
+    settle: 2500,
+    fold: true,
+    act: (p) => p.getByRole("button", { name: /^(Sync|Synchroniser)$/ }).first().click(),
+  })),
+  { name: "project-synced-criteria", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1", settle: 2500, fold: true },
   {
     name: "project-sheet",
     role: "teacher",
@@ -1098,6 +1115,8 @@ const scenes = [
   } },
   { name: "student-view-take-noseat", role: "teacher", path: "/take/running?scene=noseat", fold: true, ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/running" } },
   { name: "student-project", role: "student", path: `/projects/${SPROJ.open}?projects=1` },
+  // ADR-132 §10: the frozen project carries the teacher's message of the last sync too.
+  { name: "student-project-teacher-update", role: "student", path: `/projects/${SPROJ.frozen}?projects=1`, fold: true },
   // ADR-047 (M6-06): Open workspace; a Safe Exam Browser project; the start route's refusal sent back.
   { name: "student-project-workspace", role: "student", path: `/projects/${SPROJ.open}?projects=1&codespace=1` },
   { name: "student-project-workspace-seb", role: "student", path: `/projects/${SPROJ.invited}?projects=1&codespace=1` },

@@ -62,7 +62,7 @@ import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { studentRepos, type RepoRow } from "./repos.js";
 import { finalOf, scoreFacts, slots, type RunRow, type ScoreFacts } from "./scores.js";
-import { projectSyncState, repoSyncViews } from "./sync.js";
+import { gradedBeforeUpdate, projectSyncState, repoSyncViews } from "./sync.js";
 import { projectSummary, type ProjectRow } from "./views.js";
 
 /** Live-state reads in flight for one page view. */
@@ -431,7 +431,7 @@ export async function projectDetail(
 
   const counts = releaseCounts(project, repos);
   // ONE predicate for the primary action and the page's Sync button: the sync's own `ahead` (M3-07).
-  const sync = projectSyncState(project, repos, now);
+  const sync = projectSyncState(project, repos, now, await gradedBeforeUpdate(db, project, repos));
   // The readiness of the release, as the primary action and the phase read it (ADR-104); the lists count the same
   // repositories (`STUDENT_REPO`, `repos.ts`) through `finalOf` too (`phaseCounts`, `views.ts`).
   const readiness = {

@@ -11,7 +11,8 @@
  * indicative, the frozen score after the deadline (still indicative), and,
  * once released, the final score, the grade and the teacher's comment; on a
  * project graded by criteria, the criteria table under the score
- * (`ProjectCriteria.tsx`, ADR-106 §9), indicative until the release. The
+ * (`ProjectCriteria.tsx`, ADR-106 §9), indicative until the release; the
+ * teacher's message of the latest sync under the header (ADR-132 §10). The
  * clock is the server's (invariant 5): the payload's `serverNow` is sampled
  * into `useServerClock`, and every countdown and gate reads its offset.
  *
@@ -192,6 +193,8 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
           ) : undefined
         }
       />
+
+      {project.projectUpdate ? <TeacherUpdateSection update={project.projectUpdate} /> : null}
 
       {inSeb ? null : (
         <section className="space-y-3">
@@ -446,6 +449,22 @@ function ScoreSection({ repo }: { repo: StudentProjectRepo }) {
 }
 
 /** What the release gave the student (F-PROJ-14): the final score, its grade, the teacher's comment as the release wrote it. */
+/**
+ * "Update from your teacher" (ADR-132 §10): the latest sync's message, the
+ * teacher's own plain text — a text node, never Markdown — and its date.
+ * Shown inside Safe Exam Browser too, where the pull request is out of reach.
+ */
+function TeacherUpdateSection({ update }: { update: NonNullable<StudentProject["projectUpdate"]> }) {
+  const t = useT();
+  return (
+    <section data-testid="sproj-teacher-update">
+      <NotePanel eyebrow={t("sproj.teacherUpdate")} aside={isoDateTime(update.at)} tone="outlined">
+        <p className="mt-1 whitespace-pre-wrap text-sm">{update.text}</p>
+      </NotePanel>
+    </section>
+  );
+}
+
 function ReleaseSection({ release }: { release: NonNullable<StudentProject["release"]> }) {
   const t = useT();
   return (

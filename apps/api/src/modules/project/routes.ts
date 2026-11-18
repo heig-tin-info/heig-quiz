@@ -58,6 +58,8 @@ import {
   ProjectRepoParams,
   ProjectSourceParams,
   ProjectSourceQuery,
+  ProjectSyncPreview,
+  ProjectSyncRequest,
   ReviewCheckpointCreate,
   ScoreOverride,
 } from "@quiz/contracts";
@@ -360,8 +362,21 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   app.post(
     "/app/api/projects/:id/sync",
     session,
-    teacher(onProject, async ({ req, reply, now, scope }) =>
-      reply.code(202).send(await service.requestSync(app, config, scope.project, actorOf(req), now, req.log)),
+    teacher({ ...onProject, body: ProjectSyncRequest, optionalBody: true }, async ({ req, reply, now, body, scope }) =>
+      reply.code(202).send(await service.requestSync(app, config, scope.project, body, actorOf(req), now, req.log)),
+    ),
+  );
+
+  /**
+   * ADR-132 §10: what the next sync would send, per handed-out branch — the
+   * sync's own transform stopped before its commit. Whoever may sync may
+   * preview; it writes nothing.
+   */
+  app.get(
+    "/app/api/projects/:id/sync/preview",
+    session,
+    teacher(onProject, async ({ req, now, scope }) =>
+      ProjectSyncPreview.parse(await service.previewSync(app, config, scope.project, now, req.log)),
     ),
   );
 

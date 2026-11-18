@@ -152,6 +152,7 @@ export * from "./short.js";
 export * from "./protectedFiles.js";
 export * from "./studentIgnore.js";
 export * from "./studentSearch.js";
+export * from "./syncPreview.js";
 export * from "./workspaceCollection.js";
 export * from "./stats.js";
 export * from "./templatePull.js";

@@ -45,6 +45,8 @@ import {
   PROJECT_STATES,
   PUBLISH_MODES,
   STUDENT_PROJECT_STATUSES,
+  SYNC_CHANGES,
+  SYNC_MESSAGE_MAX,
   slugify,
 } from "@quiz/domain";
 
@@ -1075,6 +1077,13 @@ export const ProjectPrimaryAction = z.enum(PROJECT_PRIMARY_ACTIONS);
 export type ProjectPrimaryAction = z.infer<typeof ProjectPrimaryAction>;
 
 /**
+ * The teacher's message of a sync (ADR-132 §10): their own plain text, never
+ * Markdown, and the instant of the sync that carried it.
+ */
+export const SyncMessage = z.object({ text: z.string(), at: z.iso.datetime() });
+export type SyncMessage = z.infer<typeof SyncMessage>;
+
+/**
  * The source's sync, for the staff (F-PROJ-12, M3-07). `ahead`: the source
  * holds commits on a handed-out branch that the distribution repository
  * lacks — since `pushedAt` (the server's receipt of the push), `commits` of
@@ -1099,8 +1108,53 @@ export const ProjectSyncState = z.object({
     failed: z.number().int(),
     skipped: z.number().int(),
   }).nullable(),
+  /** The teacher's message of the latest sync, as the students read it (ADR-132 §10); null without one. */
+  message: SyncMessage.nullable(),
+  /**
+   * Graded by a schema-3 snapshot (ADR-132 §10): the frozen repositories
+   * whose latest final pass or Regrade read an earlier distribution commit
+   * than the snapshot's — graded before the latest update; 0 otherwise.
+   */
+  gradedBefore: z.number().int(),
 });
 export type ProjectSyncState = z.infer<typeof ProjectSyncState>;
+
+/**
+ * `POST /app/api/projects/:id/sync`'s optional body (ADR-132 §10): the
+ * teacher's message to the students, plain text, trimmed, at most
+ * {@link SYNC_MESSAGE_MAX} characters. One per sync: the latest replaces the
+ * previous, and an empty or absent one clears it.
+ */
+export const ProjectSyncRequest = z.strictObject({
+  message: z.string().trim().max(SYNC_MESSAGE_MAX).optional(),
+});
+export type ProjectSyncRequest = z.infer<typeof ProjectSyncRequest>;
+
+/**
+ * `GET /app/api/projects/:id/sync/preview` (ADR-132 §10): per handed-out
+ * branch, what the next sync would add, modify and delete in the
+ * distribution — the sync's own transform, stopped before its commit; under
+ * `whole`, the distribution's head against the source's. Each path marked
+ * protected; the protected first, at most `SYNC_PREVIEW_PATHS_MAX` per
+ * branch, `more` counting the rest. Nothing to send: every branch empty.
+ * `protectedGraded`: the project is graded by a schema-3 snapshot, so its
+ * protected paths and `criteria.yml` are graded in the distribution's
+ * version at the next correction, merged or not (ADR-132 §2).
+ * Refused as the sync is (`409 project_archived`, `distribution_missing`,
+ * `app_not_installed`, `sync_in_progress`, `source_rewritten`,
+ * `502 sync_failed`); it writes nothing.
+ */
+export const ProjectSyncPreview = z.object({
+  protectedGraded: z.boolean(),
+  branches: z.array(
+    z.object({
+      branch: z.string(),
+      paths: z.array(z.object({ path: z.string(), change: z.enum(SYNC_CHANGES), protected: z.boolean() })),
+      more: z.number().int(),
+    }),
+  ),
+});
+export type ProjectSyncPreview = z.infer<typeof ProjectSyncPreview>;
 
 /**
  * `POST /app/api/projects/:id/sync` (F-PROJ-12): the distribution
@@ -1578,6 +1632,12 @@ export const StudentProject = StudentProjectCard.omit({ invitation: true, repoFu
    * every row is `validated` (validated and released).
    */
   criteria: z.array(StudentCriteriaRow).nullable(),
+  /**
+   * "Update from your teacher" (ADR-132 §10): the latest sync's message, to
+   * every student of the project, its repository synced or skipped; null
+   * without one. Nothing else of the sync: no source, no count.
+   */
+  projectUpdate: SyncMessage.nullable(),
   serverNow: z.iso.datetime(),
 });
 export type StudentProject = z.infer<typeof StudentProject>;

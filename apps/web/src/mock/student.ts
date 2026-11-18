@@ -976,6 +976,11 @@ const studentProjectView = (card: CardFacts): StudentProject => {
       ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5 }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste." }
       : null,
     criteria,
+    // ADR-132 §10: the teacher wrote with their last sync, on the open project and on the frozen one (skipped, told all the same).
+    projectUpdate:
+      card.id === STUDENT_PROJECT_OPEN || card.id === STUDENT_PROJECT_FROZEN
+        ? { text: "Le test 3 attendait un mauvais arrondi : il est corrigé.\nRien à changer dans votre code.", at: iso(-1 * D) }
+        : null,
     // `?codespace=1` (ADR-047, M6-06): the open project runs in the workspace, the invited one under Safe Exam Browser;
     // `?pjkiosk=1` (ADR-089): the open one at SEB or kiosk, the invited one at Kiosk only.
     // `?collected=1` (ADR-130): the frozen one was worked online.
