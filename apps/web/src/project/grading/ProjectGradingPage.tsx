@@ -13,6 +13,7 @@ import {
   type ProjectRegradeRequest,
   type ProjectValidated,
 } from "@quiz/contracts";
+import { formatPoints } from "@quiz/domain";
 
 import { api, ApiError, refusedWith } from "../../api";
 import { useConfirm } from "../../confirm";
@@ -370,7 +371,7 @@ function EvidenceLine({ repo }: { repo: ProjectGradingRepo }) {
       ))}
       <span aria-hidden>·</span>
       {total ? (
-        <span className="font-semibold text-fg tabular-nums">{t("project.grading.total", { points: total.points, max: total.max })}</span>
+        <span className="font-semibold text-fg tabular-nums">{t("project.grading.total", { points: formatPoints(total.points), max: formatPoints(total.max) })}</span>
       ) : (
         <span>{t("project.grading.total.pending")}</span>
       )}

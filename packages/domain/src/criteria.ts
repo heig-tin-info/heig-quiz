@@ -297,7 +297,9 @@ export interface CriteriaTotals {
 /**
  * A repository's total from its criteria's points (StudentScore's
  * semantics): each clamped into its range, a penalty subtracted, a bonus
- * added on top, the total clamped to `[0, max + bonusMax]`.
+ * added on top, the total clamped to `[0, max + bonusMax]`. The three sums
+ * are rounded by {@link roundPoints}: criteria worth 0.4 or 0.6 add up in
+ * binary to 43.999999999999986, and every consumer reads these (#1144).
  */
 export function criteriaTotals(
   leaves: readonly Pick<CriteriaLeaf, "id" | "maxPoints" | "bonusPoints">[],
@@ -314,5 +316,7 @@ export function criteriaTotals(
     if (given === null || given === undefined) missing.push(leaf.id);
     else points += clampAwarded(leaf, given);
   }
-  return { points: Math.max(0, Math.min(max + bonusMax, points)), max, bonusMax, missing };
+  max = roundPoints(max);
+  bonusMax = roundPoints(bonusMax);
+  return { points: Math.max(0, Math.min(roundPoints(max + bonusMax), roundPoints(points))), max, bonusMax, missing };
 }

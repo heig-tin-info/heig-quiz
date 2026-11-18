@@ -13,6 +13,7 @@ import {
   type ProjectCriterion,
   type ProjectDetail,
 } from "@quiz/contracts";
+import { formatPoints } from "@quiz/domain";
 
 import { api, ApiError, refusedWith } from "../api";
 import { useConfirm } from "../confirm";
@@ -302,8 +303,8 @@ export function CriteriaRows({ project, disabled, write }: { project: ProjectDet
             ? t("project.criteria.table.none")
             : t("project.criteria.table.desc", {
                 sha: snapshot.sourceSha.slice(0, 7),
-                max: snapshot.max,
-                bonus: snapshot.bonusMax,
+                max: formatPoints(snapshot.max),
+                bonus: formatPoints(snapshot.bonusMax),
               })
         }
       >
