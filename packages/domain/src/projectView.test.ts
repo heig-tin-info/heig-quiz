@@ -6,6 +6,7 @@ import {
   projectBeforePublication,
   projectHasColumn,
   projectIsLive,
+  projectIsVisible,
   projectListDates,
   projectPhase,
   projectPrimaryAction,
@@ -227,6 +228,10 @@ describe("projectPhase (ADR-104)", () => {
 describe("the project states' predicates (ADR-127)", () => {
   it("opens published and locked projects only", () => {
     expect(["draft", "scheduled", "published", "locked"].map((s) => projectIsLive(s as never))).toEqual([false, false, true, true]);
+  });
+
+  it("shows the students a scheduled, a published and a locked project, never a draft", () => {
+    expect(["draft", "scheduled", "published", "locked"].map((s) => projectIsVisible(s as never))).toEqual([false, true, true, true]);
   });
 
   it("edits a draft and a scheduled project like a draft", () => {
