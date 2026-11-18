@@ -49,11 +49,11 @@ describe("rosterFromRows, permissive identification (Excel)", () => {
   it("HEIG export layout: accents, E-mail, stray columns", () => {
     const rows = [
       ["Nom", "Prénom", "Formation", "Mode de formation", "E-mail"],
-      ["Dumartheray", "Mélina", "EEM", "PT", "melina.dumartheray@heig-vd.ch"],
+      ["Quizzardet", "Mélina", "EEM", "PT", "melina.quizzardet@heig-vd.ch"],
       ["Vuilleumoz", "Théo", "EN", "EE", "theo.vuilleumoz@heig-vd.ch"],
     ];
     expect(ok(rosterFromRows(rows))).toEqual([
-      { nom: "Dumartheray", prenom: "Mélina", email: "melina.dumartheray@heig-vd.ch", timeBonusPercent: 0 },
+      { nom: "Quizzardet", prenom: "Mélina", email: "melina.quizzardet@heig-vd.ch", timeBonusPercent: 0 },
       { nom: "Vuilleumoz", prenom: "Théo", email: "theo.vuilleumoz@heig-vd.ch", timeBonusPercent: 0 },
     ]);
   });

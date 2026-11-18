@@ -163,7 +163,8 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
    *Accepted as a residual risk, 2026-11-15 (owner): point 5 (a) of the
    [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag).*
 8. **The deadline.** The station's session ends at the student's
-   effective deadline. When the portal answers 403 because its 4 h `exam_session` expired
+   effective deadline, not at deadline plus the grace that ADR-078 §7
+   grants the git relay. When the portal answers 403 because its 4 h `exam_session` expired
    before that, the station page relaunches (point 4); resuming a workspace
    consumes no quota. *Accepted as a residual risk, 2026-11-15 (owner):
    point 5 (b) of the [amendment of 2026-11-15](#amendment-2026-11-15-accepted-four-levels-built-behind-a-flag).*
@@ -456,10 +457,12 @@ reviewer in charge), marked *review*: it is not the owner's.
      or an administrator — the [amendment of 2026-11-16](#amendment-2026-11-16-a-restarted-station-frees-itself).*
 5. **Accepted residual risks** (*owner*), details in the operator notes
    (internal):
-   - (a) **Suspension** (§7) on this path, measured against N-SEC-10.
+   - (a) **Suspension** (§7): a suspension on this path is weaker than an
+     exam's `423` (N-SEC-10).
    - (b) **The deadline** (§8): the station's session ends at the
      student's effective deadline (`effectiveDeadline`: a per-student
-     extension follows the repository's own, ADR-078 §2).
+     extension follows the repository's own, ADR-078 §2), not at deadline
+     plus the grace.
 6. **Refreshed.** Exams' proof B is done (ADR-051, amendment of
    2026-10-10); the project flow's is owed. §10's `frame-ancestors` is per
    host, so it also covers ADR-129's review pages; harmless, since only

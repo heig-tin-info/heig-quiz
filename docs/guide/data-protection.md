@@ -316,7 +316,7 @@ Network and storage:
 - the database is reached only by the application, over a network internal to the machine;
 - secrets are in files reserved to the service account, never in the repository or the database; the AI key is stored encrypted (ADR-010, ADR-058);
 - the off-site copy is encrypted before it leaves, and the application machine can add archives to it but not remove one (ADR-009);
-- SSH by key only, no root sign-in except the code machine's forced deployment commands, `fail2ban` and a provider firewall (`docs/development/deployment.md`, *Human access*);
+- SSH by key only, no root sign-in except the code machine's forced deployment commands, `fail2ban` and a provider firewall (the operator's access policy);
 - students' code runs in containers with no network, no secret and no access to the machine's files (`apps/runner/README.md`).
 
 The technical logs on the machines are kept for a limited period ([Technical logs](#technical-logs)). Not established from the repository: the encryption of the machines' disks and of Hetzner's backups (**To be confirmed**).

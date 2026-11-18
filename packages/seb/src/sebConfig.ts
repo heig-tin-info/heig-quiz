@@ -40,10 +40,9 @@ export interface SebConfigInput {
   readonly examKeySalt?: string;
   /**
    * The activity's unlock password, in clear (ADR-027, 2026-11-06): the file
-   * carries its SHA-256 as `hashedQuitPassword`, which SEB asks for on its
-   * lock screen after a user-session switch and on Ctrl+Q / Cmd+Q. The quit
-   * link still quits without it. Omitted: no password, the file is the one
-   * ADR-027 pinned, and SEB lets anyone resume from its lock screen.
+   * carries it as `hashedQuitPassword`, which SEB asks for to resume from its
+   * lock screen and to quit. Omitted: no password, the file is the one
+   * ADR-027 pinned.
    */
   readonly quitPassword?: string;
 }

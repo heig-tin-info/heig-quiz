@@ -205,8 +205,8 @@ address, since an exam room shares one address; the others are logged only.
 
 ### 2026-11-06: the unlock password
 
-*Scope: §2 and the file.* Without a quit password, SEB for Windows 3.x
-can be resumed from its lock screen.
+*Scope: §2 and the file.* SEB asks for the file's quit password, when it
+defines one, to resume from its lock screen and to quit.
 
 - **One password per evaluation**: six characters, short enough to read
   aloud (`drawSebUnlockPassword`, `@quiz/domain`, from `node:crypto`'s

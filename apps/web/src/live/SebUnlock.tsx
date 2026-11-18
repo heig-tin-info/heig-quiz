@@ -1,7 +1,7 @@
 /**
  * The unlock password of the evaluation's Safe Exam Browser (ADR-027,
- * addendum of 2026-11-06), for the teacher in the room: SEB locks after a
- * user-session switch and asks for it before the student may resume.
+ * addendum of 2026-11-06), for the teacher in the room: SEB asks for it to
+ * resume from its lock screen and to quit.
  *
  * Hidden until clicked, and hidden again on a reload: the live screen is
  * often projected (F-DASH-02), and a password on the beamer is a password

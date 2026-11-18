@@ -102,8 +102,8 @@ not per address, since an exam room shares one address; the others are
 logged only.
 
 **Addendum (2026-11-06): the unlock password, scope: §2 and the file.**
-SEB for Windows 3.x lets a student resume from its lock screen when the
-file defines no quit password. Quiz now draws an unlock password PER
+SEB asks for the file's quit password, when it defines one, to resume
+from its lock screen and to quit. Quiz now draws an unlock password PER
 EVALUATION: six characters, short enough to read aloud (`@quiz/domain`
 `drawSebUnlockPassword`, from `node:crypto`'s `randomInt`).
 No global secret, no field for the teacher. It is stored in the nullable

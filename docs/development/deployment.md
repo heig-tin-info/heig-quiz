@@ -1027,10 +1027,9 @@ Every night `srv`'s user timer `quiz-offsite-backup.timer` runs
 `scripts/offsite-backup/push.sh`: one [borg](https://www.borgbackup.org/)
 archive, `zstd,6`, of the backups of **every service of this VM**, into one
 encrypted repository (`repokey-blake2`) on an off-site storage: another
-product, another machine and another site than the VM. The provider's
-account, host and repository, where the key, the passphrase and the env
-file sit, what the vault holds and the schedule are in the operator notes
-(internal) and the vault, never in this repository.
+product, another machine and another site than the VM. The storage's
+account, host and repository are in the operator notes (internal) and the
+vault, never in this repository.
 
 The VM writes through a key the storage forces into `borg serve
 --append-only`, and holds the passphrase; pruning runs only from the
@@ -1270,8 +1269,8 @@ they are kept is the next section.
 ### Host logs (#872)
 
 What names a person's address is kept **at most about 30 days**, the
-`sudo` and SSH trail **at most about 180 days**, longer on purpose (*Human
-access*). This table is the one place that states the periods; the files
+`sudo` and SSH trail **at most about 180 days**, longer on purpose: it
+says who did what on the machines. This table is the one place that states the periods; the files
 it names hold the values.
 
 | Log | Kept | Set by |

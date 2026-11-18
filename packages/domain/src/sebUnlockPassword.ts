@@ -1,7 +1,7 @@
 /**
  * The unlock password of an evaluation's Safe Exam Browser (ADR-027,
- * addendum of 2026-11-06): what a teacher types on SEB's lock screen after a
- * user-session switch, and what Ctrl+Q / Cmd+Q asks for. Three lowercase
+ * addendum of 2026-11-06): asked by SEB to resume from its lock screen and to
+ * quit, typed by a teacher. Three lowercase
  * letters then three digits, from an alphabet a teacher can dictate in a
  * noisy room: no `i`, `l`, `o`, no `0`, `1`. One per evaluation, drawn by the
  * api from the CSPRNG; the randomness is injected so the rule stays pure.
