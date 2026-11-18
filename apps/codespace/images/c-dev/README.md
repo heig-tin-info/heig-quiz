@@ -87,7 +87,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 - **Add an apt package**: add it to the `apt-get install` list of the `Containerfile` (step 1), add its binary to the presence assertion of `test.sh` § 7 (`test -x /usr/bin/…`), and add a row to the pinned-versions table above.
 - **Add an extension**: one `ARG` for its identifier, one `--install-extension` in the same `RUN`, one `grep -qi "^<id>@"` against `/etc/code-server/extensions.lock` so that the build fails if it is missing, its id in `extensions.allowed` of `settings.json`, the exact expected list asserted in `test.sh` § 3 (three ids, sorted), and a row in the pinned-versions table.
 - **Bump Baygon**: the version in `baygon/baygon.in`, then the `uv pip compile` command in the header of `baygon/requirements.txt` (keep the header), the version asserted by `test.sh` § 11, and the row above. A dependency that ships no wheel for CPython 3.13 on x86_64 fails the build (`--only-binary=:all:`): no compiler is ever brought in for it.
-- **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/history/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`).
+- **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/history/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`). Then re-check copy and paste in the editor, the terminal and the find widget under SEB 3.10.3's `Clipboard.js` (transcribed and injected after load, Windows user agent): `seb-workbench.js` relies on VS Code's EditContext editor, xterm's paste handler and `navigator.clipboard` (§ Safe Exam Browser in the workbench).
 - **Deploy**: classroom's `deploy/push.sh --rebuild-image` rebuilds the image on the VM; without the flag it is only built there when the tag is missing.
 - **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its fifteen sections prove, in order:
   - § 0 the container starts under `run-hardened.sh` and answers `/healthz` (prints `MESURE_DEMARRAGE_SECONDES`);
@@ -777,95 +777,39 @@ compilation database", and `clangd.fallbackFlags` cannot tell C from C++.
 
 ## Safe Exam Browser in the workbench (2026-11-18, #1149, #1151)
 
-### The defect
+SEB Windows' isolated clipboard left VS Code's editor and terminal unable to
+paste, and its hidden taskbar hides a laptop's battery. `seb-workbench.js`
+bridges the clipboard and shows the battery; what SEB does, what breaks, what
+the script does and what it gates on: its header comment. Here, only what
+the image does to load it.
 
-An `online_seb` project is sat in SEB Windows 3.10.x, whose clipboard is
-isolated (the default of the `.seb` the platform builds; the
-`enablePrivateClipboard` key is ignored on Windows). SEB injects its
-`Clipboard.js` into every frame: document listeners, in the capture phase,
-cancel every `copy`, `cut` and `paste`, keep the text in
-`SafeExamBrowser.clipboard` (synced to SEB's host by `CefSharp.PostMessage`)
-and paste it with `setRangeText`, into a textarea or text input only; SEB
-also empties the Windows clipboard every 50 ms. VS Code 1.137's editors are
-EditContext `div`s that read the pasted text from the event's
-`clipboardData`, empty under SEB: nothing could be pasted into the editor.
-The terminal's Ctrl+V and copy, and every context menu's Paste, go through
-`navigator.clipboard`, that is the emptied Windows clipboard. The status bar
-extension cannot help: it runs on the server, never in the page.
+- **Injection.** code-server 4.137 has no option to add a script to the
+  page. Step 2c of the `Containerfile` copies the file beside `workbench.js`
+  (`lib/vscode/out/vs/code/browser/workbench/`, served by the same static
+  route) and adds a classic `<script src>` before `</head>` of
+  `workbench.html`, which VS Code's server reads from disk on every request
+  (substituting `{{WORKBENCH_WEB_BASE_URL}}`).
+- **CSP.** The page's policy is a header from VS Code's server (code-server
+  adds none): `script-src 'self' 'unsafe-eval' … blob: 'nonce-…'`. A
+  same-origin `src` passes.
+- **`?v=`.** The static route caches for a year under a URL that only
+  changes with code-server's version, so the tag carries the file's hash
+  (the route reads the path only).
+- **Checked** by `test.sh` § 7 (the tag, the CSP, the file served as
+  JavaScript); the script by `src/seb/sebWorkbench.test.ts`.
+- **Rebuild.** A student only gets a change once the image is rebuilt on the
+  engine VM: `/opt/quiz-runner/apps/codespace/images/build.sh`, then
+  `images/c-dev/test.sh`; a running session keeps its image until it
+  restarts.
 
-### What the image does
+Limits:
 
-`seb-workbench.js` is copied beside `workbench.js`
-(`lib/vscode/out/vs/code/browser/workbench/`) and step 2c of the
-`Containerfile` adds a classic `<script src>` before `</head>` of
-`workbench.html`. code-server 4.137 has no option to add a script to the
-page; VS Code's server reads `workbench.html` from disk on every request and
-substitutes `{{WORKBENCH_WEB_BASE_URL}}`, and serves the file through the
-same static route as `workbench.js`. Its CSP, sent as a header by that
-server (code-server adds none), is `script-src 'self' 'unsafe-eval' …
-blob: 'nonce-…'`: a same-origin `src` passes. The static route caches for a
-year under a URL that only changes with code-server's version, so the tag
-carries `?v=` and the file's hash (the route reads the path only).
-`test.sh` § 7 asserts the tag, the CSP and the file served as JavaScript.
-
-Every clipboard handler reads `SafeExamBrowser.clipboard` at each event
-(SEB injects its scripts after the page loads); without it, it returns at
-once and the browser's behaviour is untouched:
-
-| Where the student pastes | What happens |
-| --- | --- |
-| an editor (an element with an EditContext: the code editors and VS Code's other Monaco inputs) | the paste is stopped before SEB's listener and a new `paste` event carrying SEB's text in `clipboardData` is dispatched on the same element; the editor pastes it (proven on SEB Windows 3.10.3 with Monaco, `~/seb-demo`) |
-| the terminal (inside `.xterm`, whose handler reads `clipboardData` too) | the same; Ctrl+V itself goes through `navigator.clipboard` (below) |
-| a text field (find, quick open, inputs) | the paste is stopped, the text inserted at the selection and an `input` event fired, as SEB's unreleased master does it; SEB 3.10.x fires none (the search would not run) and overwrites the characters after the caret |
-| anything else (a contenteditable) | SEB's own handling |
-
-Copy and cut: after the editor or the terminal wrote `clipboardData` (window,
-bubble phase), the text becomes SEB's clipboard and is posted to the host as
-SEB's script does; in a text field SEB's own copy stands, and its cut is
-announced with an `input` event. `navigator.clipboard.readText` and
-`writeText` read and write SEB's clipboard: the terminal's Ctrl+V, Ctrl+C on
-a selection, and the context menus' Copy and Paste.
-
-**Battery.** SEB hides Windows' taskbar, hence a laptop's charge. Inside SEB
-(`window.SafeExamBrowser`) and when the browser has `navigator.getBattery`
-(it has in SEB Windows), a small button in the middle of the status bar
-(the part `#workbench.parts.statusbar`, in which it takes the theme's
-colours) shows the charge and ⚡ while charging, in the warning colour at
-20 % and the error colour at 10 %; a click shows or hides the local time and
-the remaining time. It never takes the focus. Its language follows the
-workspace's, as the status bar extension's does (English today, no language
-pack). The middle of the status bar is the least fragile place found: it
-depends on the part's id, not on a class name, and no item is placed there;
-a very narrow window can make it cover an item.
-
-Tested by `src/seb/sebWorkbench.test.ts` (jsdom, SEB's `Clipboard.js`
-simulated). **A student only gets it once the image is rebuilt on the engine
-VM**: `/opt/quiz-runner/apps/codespace/images/build.sh`, then
-`images/c-dev/test.sh`; a running session keeps its image until it restarts.
-
-### Limits
-
-- The re-dispatched paste is seen by SEB's listener too (nothing can skip a
-  document listener); SEB cancels it and writes nothing into an EditContext
-  `div`, and the terminal empties its textarea after reading.
 - Only plain text crosses SEB's clipboard (`text/plain`), as with SEB's own
   script.
-- Proven on a real SEB (3.10.3): the editor's paste, in a standalone Monaco.
-  Proven against the built image (2026-11-18), headless Chromium with a
-  Windows user agent and SEB 3.10.3's `Clipboard.js` injected after load:
-  Ctrl+V in an untitled editor, Ctrl+C from it (SEB's clipboard and host
-  post), Ctrl+V in the find widget (the search runs), Ctrl+V in the terminal
-  (the text reaches the shell), the battery button in the status bar, and no
-  CSP error; the same run without the script pastes nothing, copies nothing,
-  finds nothing and shows VS Code's "Unable to read from the browser's
-  clipboard". A check on a SEB laptop after the rebuild is still owed.
-- The tilde of #1149 is not this: `keyboard.dispatch: keyCode` changes
-  nothing on Windows, where VS Code always resolves a keydown on its key
-  code (the Windows mapper and the fallback mapper build the same chord), and
-  no Windows keybinding uses Ctrl+Alt with the Swiss `^` key; the owner's
-  log shows AltGr+`^` then Space typing `~` under SEB. Alt+Shift, Windows'
-  input-language switch, invisible while the taskbar is hidden, is the
-  likelier cause.
+- The battery button sits in the middle of the status bar; a very narrow
+  window can make it cover an item.
+- Text in French only once the image ships a language pack (as for the
+  status bar extension).
 
 ## Resolver: `/etc/resolv.conf` shipped by the image
 

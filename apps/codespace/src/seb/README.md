@@ -171,21 +171,11 @@ heig-classroom's `apps/codespace/classroom's docs/deploy.md` § 6 (not imported;
 
 ## Inside SEB: clipboard and battery in the editor (#1149, #1151)
 
-The portal verifies SEB; what SEB does to the page is handled in the student
-image, not here. SEB Windows isolates the clipboard and its `Clipboard.js`
-cancels every copy and paste on the page, which left VS Code's editor and
-terminal unable to paste. `images/c-dev/seb-workbench.js`, loaded by
-code-server's workbench page, bridges SEB's clipboard to the editor, the
-terminal, the text fields and `navigator.clipboard`, and shows the battery
-in the status bar; outside SEB it changes nothing. The why, the CSP check and
-the limits: [images/c-dev/README.md](../../images/c-dev/README.md), § Safe
-Exam Browser in the workbench. Its test, `sebWorkbench.test.ts`, lives in
-this directory because the image has no test runner of its own.
-
-**It reaches students only once the image is rebuilt on the engine VM**
-(`/opt/quiz-runner/apps/codespace/images/build.sh`, then
-`images/c-dev/test.sh`); a session already running keeps its image until it
-restarts.
+What SEB does to the workspace page is handled in the student image, not
+here: `images/c-dev/seb-workbench.js` (its header says why and how; loading:
+[images/c-dev/README.md](../../images/c-dev/README.md)). Its test,
+`sebWorkbench.test.ts`, lives in this directory because the image has no test
+runner of its own.
 
 ## The `.seb` file
 

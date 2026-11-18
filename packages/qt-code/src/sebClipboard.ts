@@ -98,6 +98,7 @@ export function bridgeSebClipboard(node: HTMLElement | null): (() => void) | und
     event.stopPropagation();
   };
 
+  // Same SEB sync as the workspace's apps/codespace/images/c-dev/seb-workbench.js; keep in step (no shared build).
   const onCopy = (event: Event) => {
     const clipboard = sebClipboard();
     const data = (event as ClipboardEvent).clipboardData;

@@ -52,14 +52,13 @@
  * 3. `navigator.clipboard.readText` and `writeText` read and write SEB's
  *    clipboard (the terminal's Ctrl+V and copy, the context menus' Paste).
  *
- * Battery (#1151), only when `window.SafeExamBrowser` exists and the browser
- * has `navigator.getBattery`: SEB hides Windows' taskbar, so a laptop's
- * charge is out of sight during an exam. A small button in the middle of the
- * status bar (`#workbench.parts.statusbar`, the part's id; the page's body
- * when it is missing) shows the charge and whether it charges; a click shows
- * or hides the local time and the remaining time. In the workspace UI's
- * language, French when it starts with "fr", as the status bar extension
- * does (English today: the image ships no language pack).
+ * Battery (#1151), only inside SEB (its user agent carries `SEB/<version>`,
+ * the rule of apps/web's `inSebBrowser`) and when the browser has
+ * `navigator.getBattery`: SEB hides Windows' taskbar, so a laptop's charge is
+ * out of sight during an exam. A small button in the middle of the status
+ * bar (`#workbench.parts.statusbar`, the part's id; the page's body when it
+ * is missing) shows the charge and whether it charges; a click shows or hides
+ * the local time and the remaining time.
  *
  * Plain JavaScript, no dependency, no build step. Tested by
  * `src/seb/sebWorkbench.test.ts`, which loads this file with a `module`
@@ -68,12 +67,14 @@
 "use strict";
 
 (function () {
-  /** How often, and how many times, the battery waits for SEB's object. */
-  const SEB_POLL_MS = 500;
-  const SEB_POLL_TRIES = 60;
   /** Refresh of the clock and of the remaining time. */
   const TICK_MS = 30_000;
 
+  /**
+   * The workspace UI's language, French when it starts with "fr", as the
+   * status bar extension does. French is not reached today: the image ships
+   * no language pack, so VS Code's language is always "en" (extension.js).
+   */
   const STRINGS = {
     en: {
       percent: (n) => `${n}%`,
@@ -97,14 +98,12 @@
     const sebClipboard = () => win.SafeExamBrowser?.clipboard;
     // The paste events this file dispatches, let through untouched.
     const ours = new WeakSet();
-    const cleanups = [];
 
-    function on(target, type, handler, capture) {
-      target.addEventListener(type, handler, capture);
-      cleanups.push(() => target.removeEventListener(type, handler, capture));
-    }
-
-    /** SEB's clipboard takes `text`, and the host is told, as SEB's script does. */
+    /**
+     * SEB's clipboard takes `text`, and the host is told, as SEB's script does.
+     * The same sync as Quiz's own Monaco bridge (packages/qt-code/src/sebClipboard.ts):
+     * keep both in step; no build is shared between the image and the packages.
+     */
     function toSeb(clipboard, text) {
       clipboard.text = text;
       clipboard.ranges = [];
@@ -132,8 +131,7 @@
       return "seb";
     }
 
-    on(
-      win,
+    win.addEventListener(
       "paste",
       (event) => {
         const clipboard = sebClipboard();
@@ -164,6 +162,7 @@
       true,
     );
 
+    // Same sync as qt-code's `onCopy` (packages/qt-code/src/sebClipboard.ts); keep in step.
     const onCopy = (event) => {
       const clipboard = sebClipboard();
       if (!clipboard || !event.defaultPrevented) return;
@@ -175,53 +174,26 @@
         event.target.dispatchEvent(new win.InputEvent("input", { bubbles: true, inputType: "deleteByCut" }));
       }
     };
-    on(win, "copy", onCopy, false);
-    on(win, "cut", onCopy, false);
+    win.addEventListener("copy", onCopy);
+    win.addEventListener("cut", onCopy);
 
     const api = win.navigator.clipboard;
     if (api) {
       const readText = api.readText;
       const writeText = api.writeText;
-      const define = (name, value) => {
-        const own = Object.getOwnPropertyDescriptor(api, name);
-        Object.defineProperty(api, name, { value, configurable: true, writable: true });
-        cleanups.push(() => (own ? Object.defineProperty(api, name, own) : delete api[name]));
-      };
-      define("readText", function () {
+      api.readText = function () {
         const clipboard = sebClipboard();
         return clipboard ? Promise.resolve(String(clipboard.text ?? "")) : readText.apply(api, arguments);
-      });
-      define("writeText", function (text) {
+      };
+      api.writeText = function (text) {
         const clipboard = sebClipboard();
         if (!clipboard) return writeText.apply(api, arguments);
         toSeb(clipboard, String(text));
         return Promise.resolve();
-      });
+      };
     }
 
-    cleanups.push(waitForSeb(win, () => showBattery(win)));
-    return () => {
-      for (const cleanup of cleanups.splice(0).reverse()) cleanup();
-    };
-  }
-
-  /** Calls `start` once `window.SafeExamBrowser` exists. Returns the cleanup. */
-  function waitForSeb(win, start) {
-    let stop = () => {};
-    if (win.SafeExamBrowser) return start() ?? stop;
-    let tries = 0;
-    const timer = win.setInterval(() => {
-      if (win.SafeExamBrowser) {
-        win.clearInterval(timer);
-        stop = start() ?? stop;
-      } else if (++tries >= SEB_POLL_TRIES) {
-        win.clearInterval(timer);
-      }
-    }, SEB_POLL_MS);
-    return () => {
-      win.clearInterval(timer);
-      stop();
-    };
+    if (/\bSEB\b/.test(win.navigator.userAgent)) showBattery(win);
   }
 
   function duration(seconds) {
@@ -229,17 +201,14 @@
     return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
   }
 
-  /** The battery button. Returns its cleanup. */
+  /** The battery button. */
   function showBattery(win) {
-    if (typeof win.navigator.getBattery !== "function") return undefined;
+    if (typeof win.navigator.getBattery !== "function") return;
     const doc = win.document;
-    let stopped = false;
-    let teardown = () => {};
 
     win.navigator
       .getBattery()
       .then((battery) => {
-        if (stopped) return;
         let expanded = false;
         const button = doc.createElement("button");
         button.type = "button";
@@ -302,30 +271,23 @@
             level === "ok"
               ? "transparent"
               : `var(--vscode-statusBarItem-${level}Background, ${level === "error" ? "#c72e0f" : "#b27c00"})`;
-          // The status bar holds the theme's colours; it appears after this
-          // script runs, so the button moves into it on a later render.
+          // The status bar holds the theme's colours.
           const parent = doc.getElementById("workbench.parts.statusbar") ?? doc.body;
           if (parent && button.parentElement !== parent) parent.appendChild(button);
         }
 
         render();
-        const events = ["levelchange", "chargingchange", "chargingtimechange", "dischargingtimechange"];
-        for (const type of events) battery.addEventListener(type, render);
-        const timer = win.setInterval(render, TICK_MS);
-        teardown = () => {
-          win.clearInterval(timer);
-          for (const type of events) battery.removeEventListener(type, render);
-          button.remove();
-        };
+        // The workbench builds its status bar after this script runs: a few
+        // early renders move the button into it without waiting for the tick.
+        for (const ms of [500, 2000, 5000]) win.setTimeout(render, ms);
+        for (const type of ["levelchange", "chargingchange", "chargingtimechange", "dischargingtimechange"]) {
+          battery.addEventListener(type, render);
+        }
+        win.setInterval(render, TICK_MS);
       })
       .catch(() => {
         // No battery information: no button.
       });
-
-    return () => {
-      stopped = true;
-      teardown();
-    };
   }
 
   if (typeof module === "object" && module !== null) {
