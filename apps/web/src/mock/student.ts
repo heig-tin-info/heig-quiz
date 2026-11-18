@@ -39,6 +39,7 @@ import {
   refuse,
   role,
   scene,
+  STUDENT_EVAL,
   STUDENT_PROJECT_INVITED,
 } from "./runtime";
 import {
@@ -111,7 +112,7 @@ import { me } from "./session";
 // that shows all four types at once, and the four are chosen to be read side
 // by side. The teacher's evaluations stay addressable at the same time, so
 // `/evaluations/running/live` and `/take/1111…` both work in one browser.
-export const STUDENT_EVAL = "11111111-1111-4111-8111-111111111111";
+export { STUDENT_EVAL };
 const STUDENT_EVAL_NEXT = "11111111-1111-4111-8111-111111111112";
 const STUDENT_EVAL_PAST = "11111111-1111-4111-8111-111111111113";
 const STUDENT_EVAL_NEXT_TODAY = "11111111-1111-4111-8111-111111111121";

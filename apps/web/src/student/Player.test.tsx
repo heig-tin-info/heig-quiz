@@ -7,7 +7,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AttemptOrLobby, AttemptView } from "@quiz/contracts";
 
 import { makeAttemptItem, makeAttemptView } from "../test/attempt-fixtures";
+import { installBattery, uninstallBattery } from "../test/battery";
 import { elapse, flowingClock } from "../test/clock";
+import { makeMe } from "../test/fixtures";
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { viewport } from "../test/viewport";
 import { AttemptPage } from "./Attempt";
@@ -1266,5 +1268,42 @@ describe("the zen player's integrity journal (F-EVAL-13)", () => {
     await screen.findByText("Question 2");
     await leave();
     expect(events(calls)).toEqual([]);
+  });
+});
+
+/*
+ * Issue #1151: SEB hides the system's task bar and a station has none, so the
+ * player shows the battery and the time there, and only there: a browser tab
+ * sits under the system's own.
+ */
+describe("the battery and the time", () => {
+  afterEach(uninstallBattery);
+
+  const session = (kind: "seb" | "portal") => ({
+    "GET /app/api/me": ok(
+      makeMe({
+        role: "student",
+        session: { kind, evaluationId: EVAL, projectId: null, readOnly: false, superPowersUntil: null, superPowersAvailable: false },
+      }),
+    ),
+  });
+
+  it("are in the bar of an attempt sat in Safe Exam Browser", async () => {
+    installBattery({ level: 0.42 });
+    const view = attemptView();
+    stubs(view, session("seb"));
+    render(view);
+    const pill = await screen.findByRole("button", { name: /^Batterie 42/ });
+    expect(pill.closest("header")).not.toBeNull();
+  });
+
+  it("are not in a browser tab", async () => {
+    installBattery({ level: 0.42 });
+    const view = attemptView();
+    stubs(view, session("portal"));
+    render(view);
+    await screen.findByText("Question 2");
+    await act(async () => {});
+    expect(screen.queryByRole("button", { name: /^Batterie/ })).not.toBeInTheDocument();
   });
 });

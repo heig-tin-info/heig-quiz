@@ -23,6 +23,7 @@ import {
   on,
   refuse,
   role,
+  STUDENT_EVAL,
   STUDENT_PROJECT_INVITED,
 } from "./runtime";
 
@@ -60,6 +61,18 @@ export let me: Me | null = {
             kind: "kiosk",
             evaluationId: null,
             projectId: STUDENT_PROJECT_INVITED,
+            readOnly: false,
+            superPowersUntil: null,
+            superPowersAvailable: false,
+          },
+        }
+    : flags.sebexam && role === "student"
+      ? {
+          // ADR-027: inside SEB, confined to the student's open exam.
+          session: {
+            kind: "seb",
+            evaluationId: STUDENT_EVAL,
+            projectId: null,
             readOnly: false,
             superPowersUntil: null,
             superPowersAvailable: false,

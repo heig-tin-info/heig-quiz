@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { endOfWeek } from "./dates";
+import { endOfWeek, setDateFormat, timeOfDay } from "./dates";
 
 // Local dates, read back with local getters: the same in every zone.
 const at = (d: number, h: number, m: number, s = 0) => new Date(2026, 10, d, h, m, s);
@@ -8,6 +8,16 @@ const local = (iso: string) => {
   const d = new Date(iso);
   return [d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()];
 };
+
+describe("timeOfDay", () => {
+  it("writes the local time in the account's format", () => {
+    const ms = at(2, 14, 5).getTime();
+    expect(timeOfDay(ms)).toBe("14:05");
+    setDateFormat("us");
+    expect(timeOfDay(ms)).toBe("2:05 PM");
+    setDateFormat(null);
+  });
+});
 
 describe("endOfWeek", () => {
   it("is the coming Sunday at 23:59", () => {

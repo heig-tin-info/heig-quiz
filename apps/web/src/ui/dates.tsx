@@ -49,6 +49,11 @@ export function formatDateTimeAs(iso: string, f: DateFormat): string {
   return `${date} ${time}`;
 }
 
+/** The local time of day of an instant, in the account's format: "14:05", "2:05 PM". */
+export function timeOfDay(ms: number): string {
+  return datePartsAs(new Date(ms).toISOString(), dateFormat).time;
+}
+
 /** A `datetime-local` value from an ISO instant, in the reader's own zone; "" for none. */
 export function toLocalInput(iso: string | null): string {
   if (!iso) return "";
