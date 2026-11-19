@@ -1016,6 +1016,13 @@
       "when": 1795093088965,
       "tag": "0144_project_grade_adjustment",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1795111187619,
+      "tag": "0145_project_member_access",
+      "breakpoints": true
     }
   ]
 }

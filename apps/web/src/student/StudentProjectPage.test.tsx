@@ -45,7 +45,6 @@ const project = (over: Partial<StudentProject> = {}): StudentProject => ({
     fullName: "heig/labo-1-lea",
     url: "https://github.com/heig/labo-1-lea",
     invitation: "accepted",
-    group: false,
     deleted: false,
     locked: false,
     lastCommit: { sha: SHA, at: at(-0.1) },
@@ -285,31 +284,12 @@ describe("the invitation", () => {
     await waitFor(() => expect(reads(calls)).toBe(2));
   });
 
-  it("offers a group's member the Resend once the group's invitation is accepted (theirs may have expired), an individual repository's student never", async () => {
-    const { calls } = mockFetch({
-      [URL]: ok(project({ repo: { ...project().repo!, group: true } })),
-      [INVITE]: ok({ invitationStatus: "pending", resentAt: at(0) }),
-    });
-    const { unmount } = render();
-    expect(await screen.findByText("No access to the repository on GitHub?")).toBeInTheDocument();
-    expect(screen.queryByText("Invitation pending on GitHub")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Resend the invitation" }));
-    expect(await screen.findByText(/Invitation sent again/)).toBeInTheDocument();
-    await waitFor(() => expect(reads(calls)).toBe(2));
-    unmount();
-
+  it("offers the Resend on the student's own invitation only: none once theirs is accepted, whoever else is out (ADR-070, 2026-11-19)", async () => {
     mockFetch({ [URL]: ok(project()) });
-    const second = render();
-    await screen.findByRole("heading", { level: 1 });
-    expect(screen.queryByText("No access to the repository on GitHub?")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
-    second.unmount();
-
-    // Locked at the deadline: nothing left to join.
-    mockFetch({ [URL]: ok(project({ status: "locked", repo: { ...project().repo!, group: true, locked: true } })) });
     render();
     await screen.findByRole("heading", { level: 1 });
-    expect(screen.queryByText("No access to the repository on GitHub?")).toBeNull();
+    expect(screen.queryByText("Invitation pending on GitHub")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
   });
 });
 

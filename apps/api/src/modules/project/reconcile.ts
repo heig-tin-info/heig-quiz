@@ -13,17 +13,15 @@
  *   project's graded run, `ci.ts`): a run already known reads and
  *   writes nothing (the UNIQUE of `project_grade_runs`). A reconciled run
  *   has no receipt: late once the deadline passed (GR-14.3).
- * - `reconcile.repos` (daily): a pending invitation of a student's own
- *   repository re-invited at most once a day (`invitation_reinvited_at`,
- *   claimed before GitHub is called) until the repository is frozen, or
- *   found accepted meanwhile; the default branch's head, moved only when it
+ * - `reconcile.repos` (daily): each member's invitation (a student's own
+ *   repository's or a group's, ADR-070's amendment of 2026-11-19) found
+ *   accepted meanwhile, or, gone from GitHub, re-invited at most once a day
+ *   per member (`project_repo_access.reinvited_at`, claimed before GitHub is
+ *   called) until the repository is frozen; the default branch's head, moved only when it
  *   is a person's — not in `bot_commits`, its author and committer both
  *   named by GitHub and neither a bot: the reconciliation knows no pusher —
  *   with its CI state. It writes no push receipt (the intake's alone,
- *   ADR-012) and restores nothing (the push webhook's). A group's
- *   pending invitations are never re-invited (ADR-070 leaves the per-member
- *   follow-up for later); a late acceptance is still read, and its head and
- *   runs are reconciled like any row's. Before them, a repository left
+ *   ADR-012) and restores nothing (the push webhook's). Before them, a repository left
  *   WITHOUT its `hgc-protect` ruleset (`ruleset_id` null: provisioned on a
  *   plan that served none) gets it applied once the plan allows it — live,
  *   not archived, its effective deadline still ahead on the server's clock —
@@ -49,7 +47,7 @@
  * logged and the pass goes on to the next.
  */
 import type { FastifyInstance } from "fastify";
-import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { effectiveDeadline, isQuiet, reconciles } from "@quiz/domain";
@@ -59,7 +57,6 @@ import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { botCommits, classrooms, gradeDispatches, projectGradeRuns, projectRepoAccess, projectRepos, projects, pushReceipts } from "../../db/schema.js";
 import { failFast, githubApp, githubStatus, ownerRepo, rateLimitReset } from "../../github/app.js";
-import { isCollaborator } from "../../github/collaborators.js";
 import { forgetRepoLiveState } from "../../github/metrics.js";
 import { protectStudentRepo } from "../../github/provision.js";
 import type { ScheduledTask } from "../../ticker.js";
@@ -71,11 +68,12 @@ import { purgeEvidenceFiles } from "./evidence.js";
 import { ProjectError } from "./errors.js";
 import { aggregateCiStatus, completedRun, refreshScoreSelection } from "./grading.js";
 import { repoMembers } from "./groupRepos.js";
+import { checkGrants } from "./memberAccess.js";
 import { followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, repoWithProject, type RepoContext } from "./repos.js";
 
 /** The completed runs read per repository (heig-classroom's figure): the lost webhooks of a quiet half hour fit in far fewer. */
 const RUNS_PER_REPO = 20;
-/** The least time between two re-invites of one repository's invitation (F-PROJ-07: at most once a day). */
+/** The least time between two re-invites of one member's invitation (F-PROJ-07: at most once a day). */
 export const REINVITE_INTERVAL_MS = 24 * 3_600_000;
 
 type TaskKey = "reconcile.grades" | "reconcile.repos";
@@ -271,83 +269,90 @@ export function reconcileGrades(app: FastifyInstance, config: AppConfig): Promis
 
 // ---------------------------------------------------------------- reconcile.repos
 
-/** A grant of the repository a revocation asked GitHub about, with no answer yet (M3-15b-2): the reconciliation leaves such a repository's access alone. */
-const BEING_REVOKED = sql`EXISTS (SELECT 1 FROM ${projectRepoAccess}
-  WHERE ${projectRepoAccess.repoId} = ${projectRepos.id} AND ${projectRepoAccess.revokingAt} IS NOT NULL)`;
-
-/** The day's re-invite claimed on the row: a student's own repository, pending, not frozen, no access being revoked, none for a day. */
-async function claimReinvite(db: Db, repoId: string, now: Date): Promise<boolean> {
+/** The day's re-invite of one member claimed on their grant: live, not revoking, not known in, none for a day. */
+async function claimReinvite(db: Db, grantId: string, now: Date): Promise<boolean> {
   const claimed = await db
-    .update(projectRepos)
-    .set({ invitationReinvitedAt: now })
+    .update(projectRepoAccess)
+    .set({ reinvitedAt: now })
     .where(
       and(
-        eq(projectRepos.id, repoId),
-        eq(projectRepos.invitationStatus, "pending"),
-        isNull(projectRepos.groupId),
-        isNull(projectRepos.frozenAt),
-        sql`NOT ${BEING_REVOKED}`,
-        or(isNull(projectRepos.invitationReinvitedAt), lte(projectRepos.invitationReinvitedAt, new Date(now.getTime() - REINVITE_INTERVAL_MS))),
+        eq(projectRepoAccess.id, grantId),
+        isNull(projectRepoAccess.revokedAt),
+        isNull(projectRepoAccess.revokingAt),
+        isNull(projectRepoAccess.acceptedAt),
+        or(isNull(projectRepoAccess.reinvitedAt), lte(projectRepoAccess.reinvitedAt, new Date(now.getTime() - REINVITE_INTERVAL_MS))),
       ),
     )
-    .returning({ id: projectRepos.id });
+    .returning({ id: projectRepoAccess.id });
   return claimed.length > 0;
 }
 
 /**
- * A pending invitation of a student's own repository (F-PROJ-07): re-invited
- * when the day's claim is taken — the student named by the login GitHub
- * knows today for their linked account (`inviteAccount`, as Accept and the
- * staff's resend do; none linked, or gone: skipped, the claim stands) and
- * the row following GitHub's answer; otherwise (frozen, or re-invited within
- * the day) looked for among the collaborators by the login recorded at the
- * invitation, since GitHub sends no event for an invitation accepted late.
- * An access a revocation is taking away (`revoking_at`, M3-15b-2) is neither
- * re-invited nor read: the revocation's answer settles it.
+ * Each member's invitation of the repository (F-PROJ-07, ADR-070's
+ * amendment of 2026-11-19), a student's own or a group's alike. Its live
+ * grants not known in are looked at on GitHub (`checkGrants`: one listing
+ * of the collaborators and one of the invitations, none without such a
+ * grant), since GitHub sends no event for an invitation accepted late: a
+ * collaborator's grant is joined, and the row `accepted` (a group's once one
+ * member is in). A member found neither in nor invited (the invitation
+ * expired or declined) is re-invited when the day's claim on their grant
+ * is taken (once a day per member, never once the repository is frozen):
+ * by the login GitHub knows today for their linked account (`inviteAccount`,
+ * as Accept and the resends do; none linked, another account linked since,
+ * or the account gone: skipped, the claim stands), with the permission of
+ * the work mode, audited `project_group.repo_invite`; a student's own
+ * repository's row follows GitHub's answer, a group's only to `accepted`
+ * (`followInvitation`). A repository whose access a revocation is taking
+ * away (`revoking_at`, M3-15b-2) is neither re-invited nor read: the
+ * revocation's answer settles it.
  */
 async function reconcileInvitation({ app, octokit, ctx, located, counts, now }: Step): Promise<void> {
   const db = app.db;
   const { repo } = ctx;
-  if (await claimReinvite(db, repo.id, now)) {
-    const [member] = await repoMembers(db, repo, ctx.project.classroomId);
-    if (!member?.account) {
-      app.log.info({ repo: located.fullName }, "reconcile.repos: a pending invitation with no linked account to re-invite");
-      return;
-    }
-    let invited: Awaited<ReturnType<typeof inviteAccount>>;
-    try {
-      invited = await inviteAccount(db, octokit, repo, { ...member, account: member.account }, {
-        actor: SYSTEM_ACTOR,
-        now,
-        log: app.log,
-        via: "reconcile",
-        failure: "invite_failed",
-      });
-    } catch (err) {
-      // The account gone or renamed away, or GitHub refusing it: the student relinks; the claim stands.
-      if (!(err instanceof ProjectError)) throw err;
-      app.log.warn({ code: err.code, repo: located.fullName }, "reconcile.repos: a re-invite was refused");
-      return;
-    }
-    if (notRecorded(invited)) return;
-    counts.reinvited += 1;
-    if (invited.invitation === "accepted") counts.accepted += 1;
-    await followInvitation(db, repo, invited.invitation);
-    await hintRepo(db, ctx);
-    return;
-  }
-  const grants = await db
-    .select({ login: projectRepoAccess.githubLogin })
+  const [revoking] = await db
+    .select({ id: projectRepoAccess.id })
     .from(projectRepoAccess)
-    .where(and(eq(projectRepoAccess.repoId, repo.id), isNull(projectRepoAccess.revokedAt), isNull(projectRepoAccess.revokingAt)));
-  const { owner, repo: name } = ownerRepo(located.fullName);
-  for (const { login } of grants) {
-    if (!(await isCollaborator(octokit, owner, name, login))) continue;
-    counts.accepted += 1;
+    .where(and(eq(projectRepoAccess.repoId, repo.id), isNotNull(projectRepoAccess.revokingAt)))
+    .limit(1);
+  if (revoking) return;
+  const { joined, absent } = await checkGrants(db, octokit, repo.id, located.fullName, now);
+  let changed = joined.length > 0;
+  if (changed) {
+    counts.accepted += joined.length;
     await followInvitation(db, repo, "accepted");
-    await hintRepo(db, ctx);
-    return;
   }
+  if (repo.frozenAt === null && absent.length > 0) {
+    const members = await repoMembers(db, repo, ctx.project.classroomId);
+    for (const grant of absent) {
+      if (!(await claimReinvite(db, grant.id, now))) continue;
+      const member = members.find((m) => m.enrollmentId === grant.enrollmentId);
+      if (!member?.account || member.account.githubUserId !== grant.githubUserId) {
+        app.log.info({ repo: located.fullName }, "reconcile.repos: an invitation gone, and no linked account of its grant to re-invite");
+        continue;
+      }
+      let invited: Awaited<ReturnType<typeof inviteAccount>>;
+      try {
+        invited = await inviteAccount(db, octokit, repo, { ...member, account: member.account }, {
+          actor: SYSTEM_ACTOR,
+          now,
+          log: app.log,
+          via: "reconcile",
+          failure: "invite_failed",
+        });
+      } catch (err) {
+        // The account gone or renamed away, or GitHub refusing it: the student relinks; the claim stands.
+        if (!(err instanceof ProjectError)) throw err;
+        app.log.warn({ code: err.code, repo: located.fullName }, "reconcile.repos: a re-invite was refused");
+        continue;
+      }
+      if (notRecorded(invited)) continue;
+      counts.reinvited += 1;
+      if (invited.invitation === "accepted") counts.accepted += 1;
+      await followInvitation(db, repo, invited.invitation);
+      changed = true;
+    }
+  }
+  if (changed) await hintRepo(db, ctx);
 }
 
 /** A GitHub account on a commit, as the API attaches it: a user named, or nobody (null, or an empty object: an e-mail GitHub knows no account for). */
@@ -446,7 +451,7 @@ async function refreshRepo(step: Step): Promise<void> {
     if (rateLimited(err)) throw err;
     step.app.log.warn({ err, repo: step.located.fullName }, "reconciliation: the protection ruleset could not be applied");
   }
-  if (step.ctx.repo.groupId === null && step.ctx.repo.invitationStatus === "pending") await reconcileInvitation(step);
+  await reconcileInvitation(step);
   await refreshHead(step);
 }
 

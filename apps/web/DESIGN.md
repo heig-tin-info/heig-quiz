@@ -2279,6 +2279,13 @@ header, whatever the tab.
   ramp (`.score-ramp-stroke`: the hue by the rate, the stroke deepening
   with it, so it reads in grey) over a `surface-3` track, the rate in words
   in its name and bubble. Every other source keeps its grade.
+  A group's identity cell lists its members one per line, name then mono
+  login (ADR-070, amendment of 2026-11-19); a member not in the repository
+  on GitHub wears one tag after them — invitation pending `amber`,
+  invitation expired `red`, no GitHub account `zinc` — and a joined member
+  none, so a complete group reads plain. While some are out, a `zinc`
+  "x/y joined" badge follows the group's name; the Repository cell then
+  carries no "invitation pending" of the group's own.
 - **Settings** stay editable after publication, in their own tab: one `Card`
   of setting rows (strategy, protected files, work mode, the criteria in that
   mode). A draft has no such tab: its settings are the form above.

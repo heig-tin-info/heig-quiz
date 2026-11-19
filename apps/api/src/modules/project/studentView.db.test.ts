@@ -421,7 +421,6 @@ describe("the student's project (F-PROJ-15)", () => {
       fullName,
       url: `https://github.com/${fullName}`,
       invitation: "pending",
-      group: false,
       deleted: false,
       locked: false,
       lastCommit: null,

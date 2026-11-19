@@ -83,6 +83,7 @@ import {
   type ProjectRepoView,
   type ProjectSyncAccepted,
   type ProjectSyncPreview,
+  type RepoAccessState,
   type SyncMessage,
   type ProjectSummary,
   type ReviewCheckpoint,
@@ -197,6 +198,8 @@ interface MockRepo {
   groupId: string | null;
   /** An access GitHub has not revoked yet (ADR-070 §4). */
   accessToRevoke: boolean;
+  /** A group member's own access when it is not what the row says (ADR-070, 2026-11-19), by roster line. */
+  memberAccess?: Record<string, RepoAccessState>;
 }
 
 /** A group of a project's copy (ADR-070 §4): the set group's id and name, its members' roster lines, stopped or following. */
@@ -391,6 +394,8 @@ function seedGroupRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, g
     const creator = roster.find((s) => s.id === g.members[0]);
     if (!creator || k % (locked ? 4 : 3) === (locked ? 3 : 2)) return [];
     const id = repoId(seed, k + 1);
+    // One linked member still out of an open group's repository whose other member is in: the invitation expired (Groupe 7).
+    const out = locked || k !== 6 ? undefined : g.members.slice(1).find((line) => roster.find((s) => s.id === line)?.githubLogin);
     const latest = run(id, 2, seed.start + (k + 2) * 6 * H, { points: 5 + (k % 6), testsPassed: 5 + (k % 6) });
     const runs = [latest, run(id, 1, seed.start + D, { points: 3, testsPassed: 3, headSha: sha(k * 5) })];
     const repo = mockRepo({
@@ -412,6 +417,7 @@ function seedGroupRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, g
       groupId: g.id,
       accessToRevoke: !locked && k === 1,
       invitationStatus: !locked && k === 4 ? "pending" : "accepted",
+      memberAccess: out === undefined ? undefined : { [out]: "expired" },
     });
     if (locked) {
       const review = run(id, 9, seed.deadline + 40 * 60_000, { kind: "review", points: 60 + (k % 7) * 5, max: 100, testsPassed: null, testsTotal: null, headSha: latest.headSha });
@@ -1112,6 +1118,16 @@ function settleSync(p: MockProject): void {
   Object.assign(p.sync, { aheadAt: null, aheadCommits: null, syncedAt: at });
 }
 
+/**
+ * A student's own access to the repository they read (ADR-070, 2026-11-19):
+ * none without an invitation or a linked account, else what the mock seeded
+ * for them, else the row's.
+ */
+function accessOf(repo: MockRepo, student: { id: string; githubLogin: string | null }): RepoAccessState {
+  if (repo.invitationStatus === "none" || student.githubLogin === null) return "unlinked";
+  return repo.memberAccess?.[student.id] ?? (repo.invitationStatus === "pending" ? "pending" : "joined");
+}
+
 /** A teacher's test repository (ADR-077): the staff seat's row, modelled on `repo`'s state, badged by the page. */
 function staffTestRow(p: MockProject, repo: MockRepo): ProjectDetailRow {
   const view = repoView(p, repo);
@@ -1129,6 +1145,7 @@ function staffTestRow(p: MockProject, repo: MockRepo): ProjectDetailRow {
       githubLogin: "claire-martin-test",
     },
     repo: { ...view, id: `${view.id}-staff`, fullName },
+    access: "joined",
   };
 }
 
@@ -1159,6 +1176,7 @@ function detailOf(p: MockProject): ProjectDetail {
             githubLogin: s.githubLogin,
           },
           repo: repo ? repoView(p, repo) : null,
+          access: repo ? accessOf(repo, s) : null,
           staff: false,
         };
       }),
@@ -1177,6 +1195,7 @@ function detailOf(p: MockProject): ProjectDetail {
           githubLogin: r.student.githubLogin,
         },
         repo: repoView(p, r),
+        access: null,
         staff: false,
       })),
   ];

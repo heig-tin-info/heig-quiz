@@ -10,6 +10,7 @@ import type {
   ProjectRepoView,
   ProjectStudent,
   ProjectSyncState,
+  RepoAccessState,
 } from "@quiz/contracts";
 import { ciShareOnly, formatGrade, formatScore, rateOf, WORKSPACE_PUSH_MAX_BYTES } from "@quiz/domain";
 
@@ -19,7 +20,7 @@ import { Grade } from "../Grade";
 import { studentName } from "../group/groupRules";
 import { useT, type Dict, type TFunction } from "../i18n";
 import { Badge, Button, cx, Dash, isoDateTime, RateRing, Tip, type Tone } from "../ui";
-import { syncTag } from "./projectPage";
+import { syncTag, type RepoMember } from "./projectPage";
 
 /** A relative grade adjustment as written (ADR-135): signed, to the tenth ("+0.2", "−0.4"). */
 export const signedTenth = (n: number): string => `${n < 0 ? "−" : "+"}${formatGrade(Math.abs(n))}`;
@@ -170,22 +171,36 @@ export function StudentAccount({ student }: { student: ProjectStudent }) {
   return student.githubLogin ? <span className="font-mono text-xs text-fg-faint">{student.githubLogin}</span> : null;
 }
 
+/** A member's access as a tag (ADR-070, 2026-11-19): only for one not in, a joined member says nothing. */
+const ACCESS: Record<Exclude<RepoAccessState, "joined">, { tone: Tone; key: keyof Dict }> = {
+  pending: { tone: "amber", key: "project.access.pending" },
+  expired: { tone: "red", key: "project.access.expired" },
+  unlinked: { tone: "zinc", key: "project.access.unlinked" },
+};
+
 /**
- * A group's current members (ADR-070 §4, M3-16b, B7), each by name and
- * GitHub login — "No member" for a repository its group no longer holds
- * anyone in (R1). The table's row and the repository's sheet draw the same.
+ * A group's current members (ADR-070 §4, M3-16b, B7), one per line, each by
+ * name and GitHub login, and a tag for one not in the repository on GitHub
+ * (an invitation pending or expired, no account; ADR-070, 2026-11-19) — an
+ * unclaimed seat says that instead. "No member" for a repository its group no
+ * longer holds anyone in (R1). The table's row and the repository's sheet
+ * draw the same.
  */
-export function MemberList({ members, className }: { members: ProjectStudent[]; className?: string }) {
+export function MemberList({ members, className }: { members: RepoMember[]; className?: string }) {
   const t = useT();
   if (members.length === 0) return <span className={cx("text-fg-faint", className)}>{t("project.repo.noMember")}</span>;
   return (
-    <ul className={cx("flex flex-wrap gap-x-3 gap-y-0.5", className)}>
-      {members.map((m) => (
-        <li key={m.enrollmentId ?? m.email} className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
-          {studentName(m)}
-          <StudentAccount student={m} />
-        </li>
-      ))}
+    <ul className={cx("flex flex-col gap-0.5", className)}>
+      {members.map((m) => {
+        const tag = m.access === null || m.access === "joined" || !m.claimed ? null : ACCESS[m.access];
+        return (
+          <li key={m.enrollmentId ?? m.email} className="flex flex-wrap items-center gap-x-1.5">
+            <span className="whitespace-nowrap">{studentName(m)}</span>
+            <StudentAccount student={m} />
+            {tag ? <Badge tone={tag.tone}>{t(tag.key)}</Badge> : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }

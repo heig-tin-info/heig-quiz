@@ -20,6 +20,7 @@ import {
   type ProjectRepoReview,
   type ProjectRepoView,
   type ProjectStudent,
+  type RepoAccessState,
   type ProjectSummary,
   type ReviewCheckpoint,
   type StaffReviewRefusal,
@@ -446,8 +447,11 @@ export const groupSetPageOf = (p: Pick<ProjectSummary, "id" | "classroomId" | "g
  * repository whose student left the roster). `label` names the row: the
  * group's name, or the student's.
  */
+/** A group's member as the table draws them: the student and their own access to the group's repository (ADR-070, 2026-11-19). */
+export type RepoMember = ProjectStudent & { access: RepoAccessState | null };
+
 export type RepoEntry =
-  | { kind: "group"; key: string; label: string; group: ProjectDetailGroup; members: ProjectStudent[]; repo: ProjectRepoView | null }
+  | { kind: "group"; key: string; label: string; group: ProjectDetailGroup; members: RepoMember[]; repo: ProjectRepoView | null }
   | { kind: "student"; key: string; label: string; student: ProjectStudent; repo: ProjectRepoView | null; staff: boolean };
 
 /**
@@ -462,7 +466,7 @@ export type RepoEntry =
 export function repoEntries(p: Pick<ProjectDetail, "groupMode" | "rows">): RepoEntry[] {
   const students: RepoEntry[] = [];
   const groups = new Map<string, Extract<RepoEntry, { kind: "group" }>>();
-  for (const { student, repo, group, staff } of p.rows) {
+  for (const { student, repo, group, staff, access } of p.rows) {
     if (!p.groupMode || group === null) {
       students.push({ kind: "student", key: repo?.id ?? student.enrollmentId ?? student.email, label: studentName(student), student, repo, staff });
       continue;
@@ -472,12 +476,21 @@ export function repoEntries(p: Pick<ProjectDetail, "groupMode" | "rows">): RepoE
       entry = { kind: "group", key: group.id, label: group.name, group, members: [], repo: null };
       groups.set(group.id, entry);
     }
-    if (student.enrollmentId !== null) entry.members.push(student);
+    if (student.enrollmentId !== null) entry.members.push({ ...student, access });
     entry.repo ??= repo;
   }
   const byName = [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
   return [...byName, ...students];
 }
+
+/** A group's members who joined its repository on GitHub, out of all of them (ADR-070, 2026-11-19). */
+export const joinedCount = (members: readonly RepoMember[]): { n: number; total: number } => ({
+  n: members.filter((m) => m.access === "joined").length,
+  total: members.length,
+});
+
+/** A member whose invitation a resend can still reach: one waiting, or one GitHub dropped. */
+export const invitable = (m: RepoMember): boolean => m.access === "pending" || m.access === "expired";
 
 /** The row of the repository `repoId`, for its sheet. */
 export const repoEntryOf = (p: Pick<ProjectDetail, "groupMode" | "rows">, repoId: string): RepoEntry | undefined =>

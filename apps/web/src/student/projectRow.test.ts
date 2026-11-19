@@ -117,7 +117,6 @@ describe("projectActionKind", () => {
         fullName: "heig/labo-1-lea",
         url: "https://github.com/heig/labo-1-lea",
         invitation: "accepted",
-        group: false,
         deleted: true,
         locked: false,
         lastCommit: null,

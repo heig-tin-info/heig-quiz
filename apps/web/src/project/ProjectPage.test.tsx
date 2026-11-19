@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -773,7 +773,7 @@ describe("the repositories", () => {
       row(8, makeRepo(8, { deadlineAt: AHEAD, invitationStatus: "pending", lastCommit: null, ciStatus: "none" })),
       row(9, null),
       row(10, null, { claimed: false }),
-      { student: { ...makeProject().rows[0]!.student, enrollmentId: null, nom: "Ancien", prenom: "Élève" }, repo: makeRepo(11), group: null, staff: false },
+      { student: { ...makeProject().rows[0]!.student, enrollmentId: null, nom: "Ancien", prenom: "Élève" }, repo: makeRepo(11), group: null, access: null, staff: false },
     ],
   });
 
@@ -923,9 +923,10 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
       editable: [],
       rows: [
         row(0, repoA, {}, g1),
-        row(1, repoA, { githubLogin: null }, g1),
+        row(1, repoA, { githubLogin: null }, g1, "unlinked"),
+        row(7, repoA, {}, g1, "expired"),
         row(2, null, {}, null),
-        row(3, orphan, { enrollmentId: null }, g2),
+        row(3, orphan, { enrollmentId: null }, g2, null),
       ],
       counts: { live: 2, frozen: 0 },
       ...over,
@@ -960,15 +961,43 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
     expect(within(rows[0]!).getByText("student-0")).toBeInTheDocument();
     expect(within(rows[0]!).getByText(/Martin Benoît/)).toBeInTheDocument();
     expect(within(rows[0]!).getByText("access to revoke")).toBeInTheDocument();
+    // Each member on a line of their own, a tag on those not in, the count beside the name (ADR-070, 2026-11-19).
+    expect(rows[0]!.querySelectorAll("li")).toHaveLength(3);
+    expect(within(rows[0]!).getByText("1/3 joined")).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("no GitHub account")).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("invitation expired")).toBeInTheDocument();
+    expect(within(rows[0]!).queryByText("invitation pending")).toBeNull();
     expect(within(rows[1]!).getByText("No member")).toBeInTheDocument();
+    expect(within(rows[1]!).queryByText(/joined/)).toBeNull();
     expect(within(rows[2]!).getByText("no group")).toBeInTheDocument();
     // A group's sheet: titled by the group, its members listed, whether it follows the set.
     await userEvent.click(rows[0]!);
     const sheet = await screen.findByRole("dialog", { name: "Groupe 1" });
     expect(within(sheet).getByText("Members")).toBeInTheDocument();
     expect(within(sheet).getByText("Follows the group set")).toBeInTheDocument();
-    // Accepted by one member, the group's row still offers the Resend: another's invitation may have expired.
+    // Accepted by one member, the group's row offers the Resend: another's invitation expired.
     expect(within(sheet).getByRole("button", { name: "Resend" })).toBeInTheDocument();
+  });
+
+  it("says nothing of a group whose members all joined, and offers no Resend; a pending member gets an amber tag", async () => {
+    const joined = groupProject({ rows: [row(0, repoA, {}, g1), row(1, repoA, {}, g1)] });
+    routes(joined, { [SETS]: ok([]) });
+    renderPage("en", "repositories");
+    let table = await screen.findByRole("table");
+    let [first] = within(table).getAllByRole("row").slice(1);
+    expect(within(first!).queryByText(/joined/)).toBeNull();
+    expect(within(first!).queryByText(/invitation/)).toBeNull();
+    await userEvent.click(first!);
+    const sheet = await screen.findByRole("dialog", { name: "Groupe 1" });
+    expect(within(sheet).queryByRole("button", { name: "Resend" })).toBeNull();
+    cleanup();
+
+    routes(groupProject({ rows: [row(0, repoA, {}, g1), row(1, repoA, {}, g1, "pending")] }), { [SETS]: ok([]) });
+    renderPage("fr", "repositories");
+    table = await screen.findByRole("table");
+    [first] = within(table).getAllByRole("row").slice(1);
+    expect(within(first!).getByText("1/2 ont rejoint")).toBeInTheDocument();
+    expect(within(first!).getByText("invitation en attente")).toHaveClass("bg-warning-soft");
   });
 
   it("says the drift with Resync as a secondary, hidden once released or archived", async () => {

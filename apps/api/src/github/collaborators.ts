@@ -88,20 +88,33 @@ export async function holdsAtLeast(
   return (PERMISSION_RANK[held ?? "none"] ?? 0) >= PERMISSION_RANK[least]!;
 }
 
-/** Whether `login` is a collaborator of `owner/repo` today (GitHub's 204; a pending invitation is not one, 404). */
-export async function isCollaborator(octokit: Octokit, owner: string, repo: string, login: string): Promise<boolean> {
-  const answered = await unless404(() =>
-    octokit.request("GET /repos/{owner}/{repo}/collaborators/{username}", { owner, repo, username: login, request: { retries: 0 } }),
-  );
-  return answered !== null;
+/** A GitHub account as a listing names it: its login, and its immutable id when GitHub gives one. */
+export interface ListedAccount {
+  login: string;
+  accountId?: number;
 }
 
-/** The pending invitations of `owner/repo`: each one's id and its invitee's login. */
-export async function pendingInvitees(octokit: Octokit, owner: string, repo: string): Promise<{ id: number; login: string }[]> {
+/** The pending invitations of `owner/repo`: each one's id and its invitee. */
+export async function pendingInvitees(octokit: Octokit, owner: string, repo: string): Promise<({ id: number } & ListedAccount)[]> {
   const { data } = await octokit.request("GET /repos/{owner}/{repo}/invitations", { owner, repo, per_page: 100 });
-  return data.flatMap((i: { id: number | bigint; invitee?: { login?: string } | null }) =>
-    i.invitee?.login ? [{ id: Number(i.id), login: i.invitee.login }] : [],
+  return data.flatMap((i: { id: number | bigint; invitee?: { login?: string; id?: number | bigint } | null }) =>
+    i.invitee?.login ? [{ id: Number(i.id), login: i.invitee.login, ...(i.invitee.id === undefined ? {} : { accountId: Number(i.invitee.id) }) }] : [],
   );
+}
+
+/**
+ * The direct collaborators of `owner/repo` (a pending invitee is none): one
+ * request, a student repository holds far fewer than a page of them.
+ */
+export async function directCollaborators(octokit: Octokit, owner: string, repo: string): Promise<ListedAccount[]> {
+  const { data } = await octokit.request("GET /repos/{owner}/{repo}/collaborators", {
+    owner,
+    repo,
+    affiliation: "direct",
+    per_page: 100,
+    request: { retries: 0 },
+  });
+  return data.map((c: { login: string; id?: number | bigint }) => ({ login: c.login, ...(c.id === undefined ? {} : { accountId: Number(c.id) }) }));
 }
 
 /**

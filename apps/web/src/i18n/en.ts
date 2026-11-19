@@ -3617,7 +3617,6 @@ export const en = {
   "sproj.staffTest": "Your test repository: it does not count and no student sees it",
   "sproj.readOnly.noSeat": "Read-only: you hold no seat in this classroom. To test this project, use “Join as student” on the classroom page.",
   "sproj.invitation.pending": "Invitation pending on GitHub",
-  "sproj.invitation.lost": "No access to the repository on GitHub?",
   "sproj.locked": "Read-only since the deadline",
   // ADR-130 §7: the online workspace collected at the deadline, said on the page and on the card.
   "sproj.collected": "Your workspace was collected at the deadline: changes made after it are not handed in.",
@@ -6436,6 +6435,10 @@ export const en = {
   "project.repo.provisioning": "being created",
   "project.repo.provisionFailed": "creation failed",
   "project.repo.invitationPending": "invitation pending",
+  "project.access.pending": "invitation pending",
+  "project.access.expired": "invitation expired",
+  "project.access.unlinked": "no GitHub account",
+  "project.access.joinedCount": "{n}/{total} joined",
   "project.repo.commitsTip": "{n} on GitHub, the App's included",
   "project.repo.commitsTipStale": "{n} on GitHub, the App's included (may be out of date)",
   "project.repo.checks": "{passed}/{total} checks",

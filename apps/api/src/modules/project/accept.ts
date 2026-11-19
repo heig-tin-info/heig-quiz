@@ -42,7 +42,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyBaseLogger } from "fastify";
-import { and, eq, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 
 import type { ProjectAcceptance } from "@quiz/contracts";
 import { acceptRefusal, collaboratorPermission, groupRepoName, isLiveIndividualRepo, repoName } from "@quiz/domain";
@@ -411,20 +411,26 @@ async function inviteGroup(db: Db, input: AcceptInput, repo: RepoRow, github: Gi
  * longer) let into — their group's, made by a fellow member, or their own
  * whose access a roster change revoked: they are invited (idempotent on
  * GitHub's side), and the answer is THEIR invitation. An account of theirs
- * already recorded live on a repository whose invitations are all accepted
- * is answered at once, with no call to GitHub. Refused as a first Accept
+ * already recorded live and known in (`accepted_at`) is answered at once,
+ * with no call to GitHub. Refused as a first Accept
  * would be on their account or the App.
  */
 async function joinRepo(db: Db, config: AppConfig, input: AcceptInput, repo: RepoRow): Promise<ProjectAcceptance> {
-  if (repo.invitationStatus === "accepted") {
-    const [live] = await db
-      .select({ id: projectRepoAccess.id })
-      .from(projectRepoAccess)
-      .innerJoin(githubAccounts, and(eq(githubAccounts.userId, input.userId), eq(githubAccounts.githubUserId, projectRepoAccess.githubUserId)))
-      .where(and(eq(projectRepoAccess.repoId, repo.id), eq(projectRepoAccess.enrollmentId, input.enrollmentId), isNull(projectRepoAccess.revokedAt)))
-      .limit(1);
-    if (live) return acceptance(repo);
-  }
+  // Their own account in already (ADR-070, 2026-11-19): a group's row says `accepted` once any member is.
+  const [joined] = await db
+    .select({ id: projectRepoAccess.id })
+    .from(projectRepoAccess)
+    .innerJoin(githubAccounts, and(eq(githubAccounts.userId, input.userId), eq(githubAccounts.githubUserId, projectRepoAccess.githubUserId)))
+    .where(
+      and(
+        eq(projectRepoAccess.repoId, repo.id),
+        eq(projectRepoAccess.enrollmentId, input.enrollmentId),
+        isNull(projectRepoAccess.revokedAt),
+        isNotNull(projectRepoAccess.acceptedAt),
+      ),
+    )
+    .limit(1);
+  if (joined) return { ...acceptance(repo), invitationStatus: "accepted" };
   const github = await githubSide(db, config, input.userId, input.project.orgId);
   const member = { enrollmentId: input.enrollmentId, userId: input.userId, account: github.account };
   const ctx = { actor: input.actor, now: input.now, log: input.log, via: "accept", failure: "provision_failed" } as const;

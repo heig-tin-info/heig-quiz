@@ -9,8 +9,9 @@
  *   a repository active within 30 minutes left alone; the scope — 24 hours
  *   after the freeze unless a final review is pending —; a 404 from the
  *   run listing is no deletion; a rate limit stops the pass at once;
- * - `reconcile.repos`: a pending invitation re-invited once a day, by the
- *   claim on the row, never once frozen, found accepted meanwhile; the
+ * - `reconcile.repos`: an invitation gone from GitHub re-invited once a
+ *   day, by the claim on the grant, never once frozen, one still pending
+ *   left alone, found accepted meanwhile; the
  *   head moved for a person's commit only, with no receipt written; a
  *   rename followed, a 404 by id terminal;
  * - the audit of a pass, and both tasks in the catalog.
@@ -420,13 +421,15 @@ describe("reconcile.grades", () => {
 
 describe("reconcile.repos: the invitations", () => {
   const invites = () => callsTo(/^PUT .*\/collaborators\//);
+  const listings = () => callsTo(/^GET .*\/collaborators$/);
   /** The student's invitation expired on GitHub: neither a collaborator nor invited any more. */
   function expired(repo: Repo, login: string) {
     world.collaborators.get(repo.fullName!)?.delete(login);
     for (const [id, invitee] of world.invitations.get(repo.fullName!) ?? []) if (invitee === login) world.invitations.get(repo.fullName!)!.delete(id);
   }
+  const grantOf = async (repoId: string) => (await server.app.db.select().from(projectRepoAccess).where(eq(projectRepoAccess.repoId, repoId)))[0]!;
 
-  it("re-invites a pending student once a day, the day claimed on the row before GitHub is called", async () => {
+  it("re-invites a student whose invitation is gone once a day, the day claimed on their grant before GitHub is called", async () => {
     const { repos, students } = await project();
     const [repo] = repos;
     expect(repo!.invitationStatus).toBe("pending");
@@ -434,46 +437,60 @@ describe("reconcile.repos: the invitations", () => {
 
     expect(await reconcileRepos(server.app, config)).toBe("1 repositories checked, 1 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 0 deleted, 0 protected; 0 evidence files purged; 0 CI results purged");
     expect(invites()).toHaveLength(1);
-    let row = await repoRow(repo!.id);
-    expect(row.invitationReinvitedAt?.toISOString()).toBe(NOW);
+    let grant = await grantOf(repo!.id);
+    expect(grant.reinvitedAt?.toISOString()).toBe(NOW);
+    expect(grant.invitedAt.toISOString()).toBe(NOW);
+    expect(grant.absentAt).toBeNull(); // a new invitation: found gone no more
+    const row = await repoRow(repo!.id);
     expect(row.invitationStatus).toBe("pending");
     expect(row.invitationResentAt).toBeNull(); // the staff's resend is another matter (M3-08b)
     expect(world.collaborators.get(repo!.fullName!)?.get(students[0]!.login)).toBe("push");
     const [entry] = await auditOf(repo!.id, "project_group.repo_invite");
     expect(entry?.payload).toMatchObject({ via: "reconcile", invitation: "pending", login: students[0]!.login });
 
-    // The same day: no second invitation, the collaborators looked at instead.
+    // The same day: no second invitation, the grant found gone again.
     gh.calls.length = 0;
     expired(repo!, students[0]!.login);
     server.clock.set(at(NOW, 23 * HOUR).toISOString());
     expect(await reconcileRepos(server.app, config)).toContain("0 re-invited");
     expect(invites()).toHaveLength(0);
-    expect(callsTo(/^GET .*\/collaborators\//)).toHaveLength(1);
-    row = await repoRow(repo!.id);
-    expect(row.invitationReinvitedAt?.toISOString()).toBe(NOW);
+    expect(listings()).toHaveLength(1);
+    grant = await grantOf(repo!.id);
+    expect(grant.reinvitedAt?.toISOString()).toBe(NOW);
+    expect(grant.absentAt?.toISOString()).toBe(at(NOW, 23 * HOUR).toISOString());
 
     // A day on: invited again.
     server.clock.set(at(NOW, DAY).toISOString());
     expect(await reconcileRepos(server.app, config)).toContain("1 re-invited");
     expect(invites()).toHaveLength(1);
-    expect((await repoRow(repo!.id)).invitationReinvitedAt?.toISOString()).toBe(at(NOW, DAY).toISOString());
+    expect((await grantOf(repo!.id)).reinvitedAt?.toISOString()).toBe(at(NOW, DAY).toISOString());
   });
 
-  it("finds an invitation accepted meanwhile (GitHub sends no event for it) and marks the row", async () => {
+  it("leaves an invitation still pending on GitHub alone: looked at, never re-invited", async () => {
+    const { repos } = await project();
+    expect(await reconcileRepos(server.app, config)).toContain("0 re-invited, 0 invitations accepted");
+    expect(invites()).toHaveLength(0);
+    expect(listings()).toHaveLength(1);
+    const grant = await grantOf(repos[0]!.id);
+    expect(grant.reinvitedAt).toBeNull();
+    expect(grant.absentAt).toBeNull();
+  });
+
+  it("finds an invitation accepted meanwhile (GitHub sends no event for it) and marks the grant and the row", async () => {
     const { repos, students } = await project();
     const [repo] = repos;
-    await server.app.db.update(projectRepos).set({ invitationReinvitedAt: at(NOW, -HOUR) }).where(eq(projectRepos.id, repo!.id));
     // Accepted on GitHub: the invitation gone, the seat kept.
     for (const [id, invitee] of world.invitations.get(repo!.fullName!) ?? []) if (invitee === students[0]!.login) world.invitations.get(repo!.fullName!)!.delete(id);
 
     expect(await reconcileRepos(server.app, config)).toContain("1 invitations accepted");
     expect((await repoRow(repo!.id)).invitationStatus).toBe("accepted");
+    expect((await grantOf(repo!.id)).acceptedAt?.toISOString()).toBe(NOW);
     expect(invites()).toHaveLength(0);
 
     // Nothing pending any more: no call about it.
     gh.calls.length = 0;
     await reconcileRepos(server.app, config);
-    expect(callsTo(/collaborators/)).toHaveLength(0);
+    expect(callsTo(/collaborators|invitations/)).toHaveLength(0);
   });
 
   it("leaves an access a revocation is taking away alone: neither re-invited nor found accepted", async () => {
@@ -485,10 +502,9 @@ describe("reconcile.repos: the invitations", () => {
 
     expect(await reconcileRepos(server.app, config)).toContain("0 re-invited, 0 invitations accepted");
     expect(invites()).toHaveLength(0);
-    expect(callsTo(/^GET .*\/collaborators\//)).toHaveLength(0);
-    const row = await repoRow(repo!.id);
-    expect(row.invitationReinvitedAt).toBeNull();
-    expect(row.invitationStatus).toBe("pending");
+    expect(callsTo(/collaborators|invitations/)).toHaveLength(0);
+    expect((await grantOf(repo!.id)).reinvitedAt).toBeNull();
+    expect((await repoRow(repo!.id)).invitationStatus).toBe("pending");
   });
 
   it("stops re-inviting once the repository is frozen, and re-invites nobody without a linked account", async () => {
@@ -501,9 +517,10 @@ describe("reconcile.repos: the invitations", () => {
 
     expect(await reconcileRepos(server.app, config)).toContain("0 re-invited");
     expect(invites()).toHaveLength(0);
-    expect((await repoRow(frozen!.id)).invitationReinvitedAt).toBeNull();
+    expect((await grantOf(frozen!.id)).reinvitedAt).toBeNull();
+    expect((await grantOf(frozen!.id)).absentAt?.toISOString()).toBe(NOW); // still looked at
     // The day was claimed all the same: the student relinks and asks for their own resend.
-    expect((await repoRow(unlinked!.id)).invitationReinvitedAt?.toISOString()).toBe(NOW);
+    expect((await grantOf(unlinked!.id)).reinvitedAt?.toISOString()).toBe(NOW);
   });
 });
 
@@ -660,7 +677,7 @@ describe("reconcile.repos: the protection ruleset (M3-14k)", () => {
     const row = await repoRow(first!.id);
     expect(row.rulesetId).toBeNull();
     expect(row.lastCommitSha).toBe(sha); // the head step still ran
-    expect(row.invitationReinvitedAt?.toISOString()).toBe(NOW); // and the invitation's
+    expect(callsTo(new RegExp(`^GET .*/${first!.fullName}/collaborators$`))).toHaveLength(1); // and the invitation's
     expect((await repoRow(second!.id)).rulesetId).not.toBeNull();
   });
 
@@ -699,9 +716,10 @@ describe("reconcile.repos: the repository itself", () => {
     const [gone, kept] = repos;
     byId.set(gone!.githubRepoId!, "gone");
 
-    // The surviving repository is settled as usual (its pending invitation re-invited).
+    // The surviving repository is settled as usual (its pending invitation looked at).
     const summary = await reconcileRepos(server.app, config);
-    expect(summary).toMatch(/^2 repositories checked, 1 re-invited/);
+    expect(summary).toMatch(/^2 repositories checked, 0 re-invited/);
+    expect(callsTo(new RegExp(`^GET .*/${kept!.fullName}/collaborators$`))).toHaveLength(1);
     expect(summary).toContain("1 deleted");
     expect((await repoRow(gone!.id)).deletedAt?.toISOString()).toBe(NOW);
     expect((await repoRow(kept!.id)).deletedAt).toBeNull();

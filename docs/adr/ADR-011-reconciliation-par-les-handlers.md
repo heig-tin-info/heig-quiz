@@ -26,6 +26,13 @@ the quiet rule), settles which 404 is terminal, when a reconciled head moves
 the student's last commit, the daily re-invite, and the stop on a rate
 limit. The Decision stands; the addendum narrows its point 3 for Quiz.
 
+**Amended** 2026-11-19 by [ADR-070](ADR-070-repartitions-de-groupes.md)'s
+second amendment of that day, scope: the addendum's point 4. The re-invite
+is claimed per member on their grant (`project_repo_access.reinvited_at`),
+for a group's members as for a student's own repository, and only for a
+member a check found neither a collaborator nor invited; the check lists
+the collaborators and the invitations once per repository.
+
 ## Context
 
 GitHub can lose or delay webhook deliveries; some events do not exist at all (invitation

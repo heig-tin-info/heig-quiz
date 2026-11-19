@@ -14,7 +14,8 @@
  *   ingestion (`ingestRun`, `ci.ts`: `ingestCompletedRun`, or a schema-3
  *   project's graded run), the path M3-06's
  *   reconciliation takes too.
- * - `member` added: the student accepted the invitation.
+ * - `member` added: the student accepted the invitation (their grant
+ *   joined); removed: their grant no longer is.
  * - `repository`: renamed (the name follows the immutable id — a student's
  *   repository, a project's source or distribution) or deleted (terminal).
  * - `organization` renamed: the `<org>/` prefix of every name stored for
@@ -30,13 +31,13 @@
  * notices (M3-09c). The notifications are `notify.ts`'s, at the writes they
  * announce (M3-09b): none of these handlers sends one.
  */
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { runKind } from "@quiz/domain";
 
-import { githubOrganizations, projectRepos, projects, botCommits } from "../../db/schema.js";
+import { githubOrganizations, projectRepoAccess, projectRepos, projects, botCommits } from "../../db/schema.js";
 import { installationClient, isZeroSha } from "../../github/app.js";
 import { forgetRepoLiveState } from "../../github/metrics.js";
 import { onEvent, onReceipt, projectInstallation, pushAuthor, type WebhookHandler } from "../github/service.js";
@@ -117,16 +118,43 @@ const workflowRun: WebhookHandler = async (app, config, delivery) => {
 const MemberEvent = z.object({
   action: z.string(),
   repository: z.object({ id: z.number().int() }),
+  /** The account added or removed, by its immutable id. */
+  member: z.object({ id: z.number().int().optional() }).optional(),
 });
 
-/** `member` added: the invitation was accepted (F-PROJ-07); the daily reconciliation is the fallback. */
+/**
+ * `member` added: an invitation was accepted (F-PROJ-07) — the account's
+ * live grant is `accepted_at` (the receipt's time) and the repository's row
+ * `accepted` (a group's once one member is in, ADR-070's amendment of
+ * 2026-11-19). `removed`: the account is out again, its grant no longer
+ * joined; the row, the group's aggregate, is left as it is. The daily
+ * reconciliation is the fallback of both.
+ */
 const member: WebhookHandler = async (app, _config, delivery) => {
   const event = MemberEvent.safeParse(delivery.payload);
-  if (!event.success || event.data.action !== "added") return;
+  if (!event.success || !["added", "removed"].includes(event.data.action)) return;
   const ctx = await repoContext(app.db, event.data.repository.id);
-  if (!ctx || ctx.repo.invitationStatus === "accepted") return;
-  await app.db.update(projectRepos).set({ invitationStatus: "accepted" }).where(eq(projectRepos.id, ctx.repo.id));
-  await hintRepo(app.db, ctx);
+  if (!ctx) return;
+  const added = event.data.action === "added";
+  const accountId = event.data.member?.id;
+  const grants =
+    accountId === undefined
+      ? []
+      : await app.db
+          .update(projectRepoAccess)
+          .set(added ? { acceptedAt: delivery.receivedAt, absentAt: null } : { acceptedAt: null })
+          .where(
+            and(
+              eq(projectRepoAccess.repoId, ctx.repo.id),
+              eq(projectRepoAccess.githubUserId, accountId),
+              isNull(projectRepoAccess.revokedAt),
+              added ? isNull(projectRepoAccess.acceptedAt) : isNotNull(projectRepoAccess.acceptedAt),
+            ),
+          )
+          .returning({ id: projectRepoAccess.id });
+  const row = added && ctx.repo.invitationStatus !== "accepted";
+  if (row) await app.db.update(projectRepos).set({ invitationStatus: "accepted" }).where(eq(projectRepos.id, ctx.repo.id));
+  if (row || grants.length > 0) await hintRepo(app.db, ctx);
 };
 
 const RepositoryEvent = z.object({

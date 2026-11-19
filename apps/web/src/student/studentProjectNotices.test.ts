@@ -22,7 +22,6 @@ const repo = (over: Partial<StudentProjectRepo> = {}): StudentProjectRepo => ({
   fullName: "heig/labo-1-lea",
   url: "https://github.com/heig/labo-1-lea",
   invitation: "accepted",
-  group: false,
   deleted: false,
   locked: false,
   lastCommit: { sha: SHA, at: at(-0.1) },
