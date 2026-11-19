@@ -71,7 +71,6 @@ export function EvaluationPreviewPage({
 }) {
   const t = useT();
   const subject = useMemo(() => previewSubject(kind, id), [kind, id]);
-  const base = `${subject.api}/preview`;
   const [walk, setWalk] = useState<Walk | null>(null);
   const [correction, setCorrection] = useState<PreviewCorrection | null>(null);
   /*
@@ -84,7 +83,7 @@ export function EvaluationPreviewPage({
 
   const start = useMutation({
     mutationFn: () =>
-      api<EvaluationPreview>(base, { method: "POST" }),
+      api<EvaluationPreview>(subject.preview, { method: "POST" }),
     onSuccess: (preview) => {
       setCorrection(null);
       setWalk({ preview, startedAt: Date.now() });
@@ -103,7 +102,7 @@ export function EvaluationPreviewPage({
 
   const grade = useMutation({
     mutationFn: (input: { seed: number; answers: Record<string, unknown> }) =>
-      api<PreviewCorrection>(`${base}/grade`, {
+      api<PreviewCorrection>(`${subject.preview}/grade`, {
         method: "POST",
         body: JSON.stringify(PreviewGradeBody.parse({ ...input, coordinates: ANSWER_COORDINATES })),
       }),
@@ -243,9 +242,8 @@ function PreviewWalk({
 }) {
   const t = useT();
   const confirm = useConfirm();
-  const base = `${subject.api}/preview`;
   const session = usePreviewSession({
-    base,
+    base: subject.preview,
     preview: walk.preview,
     startedAt: walk.startedAt,
     onSubmit: onHandIn,
@@ -294,8 +292,8 @@ function PreviewWalk({
             ) : null}
             {walk.preview.view.items.length === 0 ? (
               <Card className="px-6 py-4">
-                <EmptyState icon={Eye} title={t(subject.copy.emptyTitle)}>
-                  {t(subject.copy.emptyBody)}
+                <EmptyState icon={Eye} title={t("preview.empty.title")}>
+                  {t("preview.empty.body")}
                 </EmptyState>
               </Card>
             ) : null}
@@ -307,7 +305,7 @@ function PreviewWalk({
               <PreviewPoints
                 // A new question, a clean slate: no points of another one linger.
                 key={`${current.id}:${current.generation ?? 0}`}
-                base={base}
+                base={subject.preview}
                 seed={walk.preview.seed}
                 itemId={current.id}
                 answer={session.state.answers[current.id]}

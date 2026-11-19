@@ -38,16 +38,10 @@ import {
 } from "@quiz/contracts";
 import type { InteractiveOutcome } from "@quiz/core/server";
 
-import type { EvaluationRecord } from "../evaluation/service.js";
+import type { evaluations } from "../../db/schema.js";
 import { callerOf, loadEvaluation, loadTemplate, teacherGuard } from "../guards.js";
 import { teacherRoute } from "../http.js";
 import * as service from "./service.js";
-
-/** One home of a previewed paper: its path, and the loader that finds it for the caller. */
-interface Home {
-  readonly prefix: string;
-  load(req: FastifyRequest, reply: FastifyReply, params: { id: string }): Promise<EvaluationRecord | null>;
-}
 
 export async function previewPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
@@ -70,18 +64,17 @@ export async function previewPlugin(app: FastifyInstance) {
    * a 404 like a missing one, whoever owns its pool (issue #127, ADR-031
    * addendum c): a colleague on the course's staff previews every item.
    */
-  const homes: readonly Home[] = [
-    {
-      prefix: "/app/api/evaluations",
-      load: async (req, reply, p) => (await loadEvaluation(app, req, reply, p.id))?.evaluation ?? null,
-    },
-    {
-      prefix: "/app/api/templates",
-      load: async (req, reply, p) => (await loadTemplate(app, req, reply, p.id))?.template ?? null,
-    },
+  type Load = (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    p: { id: string },
+  ) => Promise<typeof evaluations.$inferSelect | null>;
+  const homes: readonly (readonly [prefix: string, load: Load])[] = [
+    ["/app/api/evaluations", async (req, reply, p) => (await loadEvaluation(app, req, reply, p.id))?.evaluation ?? null],
+    ["/app/api/templates", async (req, reply, p) => (await loadTemplate(app, req, reply, p.id))?.template ?? null],
   ];
 
-  for (const { prefix, load } of homes) {
+  for (const [prefix, load] of homes) {
     /**
      * A fresh seed — or the one the walk already holds, to reload it (ADR-018,
      * sixth addendum) — and the paper as a student holding it would get it.

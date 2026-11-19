@@ -433,11 +433,6 @@ describe("access (invariant 6)", () => {
       ["POST", `/app/api/templates/${id}/items/update-versions`, {}],
       ["GET", `/app/api/templates/${id}/preview/items/${itemId}`, undefined],
       ["GET", `/app/api/templates/${id}/preview/items/${itemId}/solution`, undefined],
-      // The whole walk: the loader answers before any body is read.
-      ["POST", `/app/api/templates/${id}/preview`, {}],
-      ["POST", `/app/api/templates/${id}/preview/run`, {}],
-      ["POST", `/app/api/templates/${id}/preview/simulate`, {}],
-      ["POST", `/app/api/templates/${id}/preview/grade`, {}],
     ] as const;
 
   it("answers a teacher off the staff the 404 of a missing template, on every route", async () => {

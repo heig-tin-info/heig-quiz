@@ -569,7 +569,7 @@ describe("EvaluationPreviewPage — fixing a question", () => {
     await waitFor(() =>
       expect(screen.queryByText("Version 2 of this question published")).not.toBeInTheDocument(),
     );
-    expect(screen.queryByText("Evaluation changed since this preview started")).not.toBeInTheDocument();
+    expect(screen.queryByText("Questions changed since this preview started")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Hand in" }));
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Hand in" }));
@@ -608,7 +608,7 @@ describe("EvaluationPreviewPage — fixing a question", () => {
         ok(detailOf([row(I1, "q1"), row(I2, "q2"), row("33333333-3333-4333-8333-333333333333", "q3")])),
     });
     renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
-    expect(await screen.findByText("Evaluation changed since this preview started")).toBeInTheDocument();
+    expect(await screen.findByText("Questions changed since this preview started")).toBeInTheDocument();
   });
 });
 
@@ -704,7 +704,7 @@ describe("EvaluationPreviewPage — a template", () => {
 
     await user.click(await screen.findByRole("button", { name: "Edit question" }));
     expect(open).toHaveBeenCalledWith(`/questions/q1?fromTemplatePreview=${TPL}`, "_blank", "noopener");
-    expect(await screen.findByText(/The template still uses version 1/)).toBeInTheDocument();
+    expect(await screen.findByText(/This preview still uses version 1/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Use the new version" }));
     await waitFor(() =>
       expect(calls.filter((c) => c.url === TURL).map((c) => c.body)).toEqual([null, { seed: 42 }]),
@@ -716,7 +716,7 @@ describe("EvaluationPreviewPage — a template", () => {
     await waitFor(() =>
       expect(screen.queryByText("Version 2 of this question published")).not.toBeInTheDocument(),
     );
-    expect(screen.queryByText("Template changed since this preview started")).not.toBeInTheDocument();
+    expect(screen.queryByText("Questions changed since this preview started")).not.toBeInTheDocument();
     open.mockRestore();
   });
 

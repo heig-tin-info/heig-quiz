@@ -27,17 +27,14 @@ import { Pencil, RefreshCw, TriangleAlert } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
 
 import { PreviewStartBody, UpdateVersions, type EvaluationPreview, type ItemRow } from "@quiz/contracts";
-import { itemListLock, type ItemListLock } from "@quiz/domain";
 
 import { api } from "../api";
 import { currentItem } from "../attempt/playerReducer";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
-import { evaluationKey, templateKey } from "../queryKeys";
 import { routeToPath } from "../router";
 import type { PlayerSession } from "../student/Player";
 import { Alert, Button } from "../ui";
-import { useEvaluation, useTemplate } from "../evaluation/api";
 import type { PreviewSubject } from "./subject";
 
 /** Every item of the paper, and only those, on the version the walk shows. */
@@ -46,22 +43,6 @@ function walkMatches(items: readonly ItemRow[], versions: Record<string, number>
     items.length === Object.keys(versions).length &&
     items.every((row) => versions[row.id] === row.versionNumber)
   );
-}
-
-/** What the tools read of the paper's detail, whichever kind it is. */
-interface Paper {
-  items: readonly ItemRow[];
-  editableQuestionIds: readonly string[];
-  lock: ItemListLock | null;
-}
-
-/** The paper's detail: one of the two queries runs, the other waits on its null id. */
-function usePaper(subject: PreviewSubject): Paper | undefined {
-  const evaluation = useEvaluation(subject.kind === "evaluation" ? subject.id : null);
-  const template = useTemplate(subject.kind === "template" ? subject.id : null);
-  if (subject.kind === "template") return template.data && { ...template.data, lock: null };
-  const data = evaluation.data;
-  return data && { ...data, lock: itemListLock(data.evaluation.state, data.attemptCount) };
 }
 
 export function usePreviewEdit({
@@ -82,24 +63,23 @@ export function usePreviewEdit({
   // The versions the walk shows, moved by "Use the new version" alone.
   const [versions, setVersions] = useState(preview.versions);
 
-  const data = usePaper(subject);
+  const data = subject.usePaper();
 
   const { dispatch } = session;
   const seed = preview.seed;
   const adopt = useMutation({
     mutationFn: async (itemId: string) => {
-      await api(`${subject.api}/items/update-versions`, {
+      await api(`${subject.base}/items/update-versions`, {
         method: "POST",
         body: JSON.stringify(UpdateVersions.parse({ itemIds: [itemId] })),
       });
-      const fresh = await api<EvaluationPreview>(`${subject.api}/preview`, {
+      const fresh = await api<EvaluationPreview>(subject.preview, {
         method: "POST",
         body: JSON.stringify(PreviewStartBody.parse({ seed })),
       });
       // The detail catches up BEFORE the walk moves, so the two never
       // disagree on screen and nothing reads as "the paper changed".
-      const queryKey = subject.kind === "evaluation" ? evaluationKey(subject.id) : templateKey(subject.id);
-      await qc.refetchQueries({ queryKey });
+      await qc.refetchQueries({ queryKey: subject.detailKey });
       return fresh;
     },
     onSuccess: (fresh, itemId) => {
@@ -138,14 +118,14 @@ export function usePreviewEdit({
         <Alert
           tone="warning"
           icon={TriangleAlert}
-          title={t(subject.copy.changedTitle)}
+          title={t("preview.changed.title")}
           action={
             <Button variant="secondary" size="sm" onClick={() => void askRestart()}>
               {t("preview.restart")}
             </Button>
           }
         >
-          {t(subject.copy.changedBody)}
+          {t("preview.changed.body")}
         </Alert>
       ),
     };
@@ -175,7 +155,7 @@ export function usePreviewEdit({
         }
       >
         {lock === null
-          ? t(subject.copy.newVersionBody, { n: row.versionNumber })
+          ? t("preview.newVersion.body", { n: row.versionNumber })
           : lock === "attempts"
             ? t("preview.newVersion.attempts")
             : t("preview.newVersion.opened")}

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QUESTION_TABS } from "@quiz/domain";
 
 import { editorSlot, useAssistEditor } from "../assist/editor";
-import { useT } from "../i18n";
+import { useT, type Dict } from "../i18n";
 import { useToast } from "../notify";
 import { tryAdapterFor } from "../questionTypes";
 import { QUESTION_ORIGIN_PARAMS, routeToPath, useSearchParam, type Route } from "../router";
@@ -45,9 +45,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 interface OriginSpec {
   param: Exclude<(typeof QUESTION_ORIGIN_PARAMS)[number], "item">;
-  kind: "grading" | "preview" | "template" | "evaluation";
   /** What the id names: the page's trail is that paper's. */
   paper: "evaluation" | "template";
+  /** The origin's own crumb after the paper's, when it is a page of its own. */
+  crumb?: keyof Dict;
+  /** A preview's tab: the way back closes this one (#959). */
+  preview?: true;
   back: (id: string, item: string | null) => Route;
   /** Publishing is the way back (from the grading screen and the preview). */
   returnOnPublish: boolean;
@@ -56,43 +59,20 @@ interface OriginSpec {
 const ORIGINS: readonly OriginSpec[] = [
   {
     param: "fromGrading",
-    kind: "grading",
     paper: "evaluation",
+    crumb: "grading.title",
     back: (id, item) => ({ view: "grading", evaluationId: id, ...(item ? { item } : {}) }),
     returnOnPublish: true,
   },
-  {
-    param: "fromPreview",
-    kind: "preview",
-    paper: "evaluation",
-    back: (id) => ({ view: "evaluationPreview", id }),
-    returnOnPublish: true,
-  },
-  {
-    param: "fromTemplatePreview",
-    kind: "preview",
-    paper: "template",
-    back: (id) => ({ view: "templatePreview", id }),
-    returnOnPublish: true,
-  },
-  {
-    param: "fromTemplate",
-    kind: "template",
-    paper: "template",
-    back: (id) => ({ view: "template", id }),
-    returnOnPublish: false,
-  },
-  {
-    param: "from",
-    kind: "evaluation",
-    paper: "evaluation",
-    back: (id) => ({ view: "evaluation", id }),
-    returnOnPublish: false,
-  },
+  { param: "fromPreview", paper: "evaluation", crumb: "eval.preview", preview: true, back: (id) => ({ view: "evaluationPreview", id }), returnOnPublish: true },
+  { param: "fromTemplatePreview", paper: "template", crumb: "eval.preview", preview: true, back: (id) => ({ view: "templatePreview", id }), returnOnPublish: true },
+  { param: "fromTemplate", paper: "template", back: (id) => ({ view: "template", id }), returnOnPublish: false },
+  { param: "from", paper: "evaluation", back: (id) => ({ view: "evaluation", id }), returnOnPublish: false },
 ];
 
 interface Origin {
-  kind: OriginSpec["kind"];
+  crumb: OriginSpec["crumb"];
+  preview: boolean;
   /** The evaluation or template the page is about. */
   id: string;
   back: Route;
@@ -125,7 +105,8 @@ function useOrigin(): Origin | null {
   if (!spec) return null;
   const id = params[spec.param];
   return {
-    kind: spec.kind,
+    crumb: spec.crumb,
+    preview: spec.preview === true,
     id,
     back: spec.back(id, UUID.test(params.item) ? params.item : null),
     evaluationId: spec.paper === "evaluation" ? id : null,
@@ -154,10 +135,10 @@ function useQuestionCrumbs(origin: Origin | null, poolId: string | undefined, po
     origin?.id ?? "",
     template.data?.template.title,
   );
-  const paperCrumbs = origin?.templateId ? templateCrumbs : evaluationCrumbs;
-  if (origin?.kind === "template" || origin?.kind === "evaluation") return paperCrumbs;
-  if (origin?.kind === "grading") return [...paperCrumbs, { label: t("grading.title"), route: origin.back }];
-  if (origin?.kind === "preview") return [...paperCrumbs, { label: t("eval.preview"), route: origin.back }];
+  if (origin) {
+    const paperCrumbs = origin.templateId ? templateCrumbs : evaluationCrumbs;
+    return [...paperCrumbs, ...(origin.crumb ? [{ label: t(origin.crumb), route: origin.back }] : [])];
+  }
   return [pools, ...(poolName === undefined || poolId === undefined ? [] : [{ label: poolName, route: { view: "pool", id: poolId } as Route }])];
 }
 
@@ -218,7 +199,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   // time: a second click while closing would schedule a second fallback.
   const leaving = useRef(false);
   const goTo = (route: Route) => {
-    if (origin?.kind === "preview" && routeToPath(route) === routeToPath(origin.back)) {
+    if (origin?.preview && routeToPath(route) === routeToPath(origin.back)) {
       if (leaving.current) return;
       leaving.current = true;
       void autosave.flush().then((saved) => {
@@ -324,7 +305,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         readOnly={readOnly}
         autosave={autosave}
         navigate={goTo}
-        onBackToPreview={origin?.kind === "preview" ? () => goTo(origin.back) : undefined}
+        onBackToPreview={origin?.preview ? () => goTo(origin.back) : undefined}
         onPublish={startPublish}
         onDuplicate={() => duplicate(data.meta)}
         onDelete={() => void askDelete(data.meta)}

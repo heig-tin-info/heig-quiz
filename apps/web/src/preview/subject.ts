@@ -6,70 +6,64 @@
  * `/templates/:id/preview/...` for the other.
  *
  * So the preview page, its session and its question tools are parametrized
- * by DATA — which base URL, which page to go back to, which words name the
- * paper — like the editor's blocks by `editTarget.ts`, and never ask "is
- * this a template?" at a site of their own.
+ * by DATA — where the paper lives (`PaperHome`, shared with the editor's
+ * `editTarget.ts`), which page to go back to, how to read its detail — and
+ * never ask "is this a template?" at a site of their own.
  */
+import type { ItemRow } from "@quiz/contracts";
+import { itemListLock, type ItemListLock } from "@quiz/domain";
+
+import { useEvaluation, useTemplate } from "../evaluation/api";
+import { evaluationHome, templateHome, type PaperHome } from "../evaluation/editTarget";
 import type { Dict } from "../i18n";
 import type { QuestionOrigin, Route } from "../router";
 
 export type PreviewKind = "evaluation" | "template";
 
-/** The strings that name the paper; every other one of the preview is shared. */
-interface PreviewCopy {
-  readonly back: keyof Dict;
-  readonly notFound: keyof Dict;
-  readonly changedTitle: keyof Dict;
-  readonly changedBody: keyof Dict;
-  readonly newVersionBody: keyof Dict;
-  readonly emptyTitle: keyof Dict;
-  readonly emptyBody: keyof Dict;
+/** What the walk's tools read of the paper's detail, whichever kind it is. */
+export interface Paper {
+  items: readonly ItemRow[];
+  editableQuestionIds: readonly string[];
+  /** Why its item list is frozen, or null: a template never is (no attempt, never opened). */
+  lock: ItemListLock | null;
 }
 
-export interface PreviewSubject {
-  readonly kind: PreviewKind;
-  readonly id: string;
-  /** The API path of the paper: its detail, its item versions, its `/preview` routes. */
-  readonly api: string;
+export interface PreviewSubject extends PaperHome {
+  /** `<base>/preview`: the start, and `/run`, `/simulate`, `/grade` under it. */
+  readonly preview: string;
   /** Where the walk leads back to: the evaluation's configuration, the template's editor. */
   readonly back: Route;
   /** How the question editor opened from the walk names it, to close its tab on the way back. */
   readonly questionFrom: Pick<QuestionOrigin, "fromPreview" | "fromTemplatePreview">;
-  readonly copy: PreviewCopy;
+  /** The two strings that name the paper; every other one of the preview is shared. */
+  readonly copy: { readonly back: keyof Dict; readonly notFound: keyof Dict };
+  /** The paper's detail, from the query its editor reads (a hook). */
+  readonly usePaper: () => Paper | undefined;
 }
 
-export function previewSubject(kind: PreviewKind, id: string): PreviewSubject {
-  return kind === "evaluation"
-    ? {
-        kind,
-        id,
-        api: `/app/api/evaluations/${id}`,
-        back: { view: "evaluation", id },
-        questionFrom: { fromPreview: id },
-        copy: {
-          back: "preview.backToEvaluation",
-          notFound: "preview.notFound",
-          changedTitle: "preview.changed.title",
-          changedBody: "preview.changed.body",
-          newVersionBody: "preview.newVersion.body",
-          emptyTitle: "preview.empty.title",
-          emptyBody: "preview.empty.body",
-        },
-      }
-    : {
-        kind,
-        id,
-        api: `/app/api/templates/${id}`,
-        back: { view: "template", id },
-        questionFrom: { fromTemplatePreview: id },
-        copy: {
-          back: "preview.template.back",
-          notFound: "templates.notFound",
-          changedTitle: "preview.template.changed.title",
-          changedBody: "preview.template.changed.body",
-          newVersionBody: "preview.template.newVersion.body",
-          emptyTitle: "preview.template.empty.title",
-          emptyBody: "preview.template.empty.body",
-        },
-      };
-}
+const withPreview = (home: PaperHome) => ({ ...home, preview: `${home.base}/preview` });
+
+const SUBJECTS: Record<PreviewKind, (id: string) => PreviewSubject> = {
+  evaluation: (id) => ({
+    ...withPreview(evaluationHome(id)),
+    back: { view: "evaluation", id },
+    questionFrom: { fromPreview: id },
+    copy: { back: "preview.backToEvaluation", notFound: "preview.notFound" },
+    usePaper: () => {
+      const data = useEvaluation(id).data;
+      return data && { ...data, lock: itemListLock(data.evaluation.state, data.attemptCount) };
+    },
+  }),
+  template: (id) => ({
+    ...withPreview(templateHome(id)),
+    back: { view: "template", id },
+    questionFrom: { fromTemplatePreview: id },
+    copy: { back: "preview.backToTemplate", notFound: "templates.notFound" },
+    usePaper: () => {
+      const data = useTemplate(id).data;
+      return data && { ...data, lock: null };
+    },
+  }),
+};
+
+export const previewSubject = (kind: PreviewKind, id: string): PreviewSubject => SUBJECTS[kind](id);

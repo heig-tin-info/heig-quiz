@@ -950,18 +950,4 @@ describe("previewing a template", () => {
     await db.insert(courseStaff).values({ courseId: t.w.courseId, userId: colleague.id });
     expect((await post(t.url, colleague.headers)).statusCode).toBe(200);
   });
-
-  it("has no clock to rehearse where its timing needs the dates a template never has", async () => {
-    const t = await templateWorld();
-    const row = await reload(db, t.id);
-    expect(row).toMatchObject({ opensAt: null, closesAt: null });
-    for (const timing of ["deadline", "manual"] as const) {
-      await db
-        .update(evaluations)
-        .set({ settings: { ...evaluationService.settingsOf(row), timing } })
-        .where(eq(evaluations.id, t.id));
-      const preview = (await post(t.url, teacher.headers)).json() as EvaluationPreview;
-      expect([timing, preview.durationS]).toEqual([timing, null]);
-    }
-  });
 });

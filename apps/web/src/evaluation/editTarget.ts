@@ -54,10 +54,25 @@ export interface EditTarget<P = unknown> {
   readonly patchBody?: P;
 }
 
+/**
+ * Where a paper lives on the API and in the cache, and nothing else: what
+ * a screen that only READS it needs, the full preview's (`preview/subject.ts`).
+ */
+export type PaperHome = Pick<EditTarget, "base" | "detailKey">;
+
+export const evaluationHome = (id: string): PaperHome => ({
+  base: `/app/api/evaluations/${id}`,
+  detailKey: evaluationKey(id),
+});
+
+export const templateHome = (id: string): PaperHome => ({
+  base: `/app/api/templates/${id}`,
+  detailKey: templateKey(id),
+});
+
 export function evaluationTarget(id: string): EditTarget<EvaluationPatch> {
   return {
-    base: `/app/api/evaluations/${id}`,
-    detailKey: evaluationKey(id),
+    ...evaluationHome(id),
     poolsKey: evaluationPoolsKey(id),
     alsoKeys: [],
     questionFrom: { from: id },
@@ -66,8 +81,7 @@ export function evaluationTarget(id: string): EditTarget<EvaluationPatch> {
 
 export function templateTarget(id: string, courseId: string): EditTarget<TemplateBody> {
   return {
-    base: `/app/api/templates/${id}`,
-    detailKey: templateKey(id),
+    ...templateHome(id),
     poolsKey: templatePoolsKey(id),
     alsoKeys: [courseTemplatesKey(courseId)],
     questionFrom: { fromTemplate: id },
