@@ -299,10 +299,17 @@ describe("the invitation", () => {
     unmount();
 
     mockFetch({ [URL]: ok(project()) });
-    render();
+    const second = render();
     await screen.findByRole("heading", { level: 1 });
     expect(screen.queryByText("No access to the repository on GitHub?")).toBeNull();
     expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
+    second.unmount();
+
+    // Locked at the deadline: nothing left to join.
+    mockFetch({ [URL]: ok(project({ status: "locked", repo: { ...project().repo!, group: true, locked: true } })) });
+    render();
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByText("No access to the repository on GitHub?")).toBeNull();
   });
 });
 

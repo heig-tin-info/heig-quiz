@@ -3,10 +3,11 @@
  * M3-08b, product owner's decision 5 of 2026-10-02): on a live repository
  * (`409 repo_unavailable` otherwise), at most once a minute per repository
  * (`429 resend_too_soon`, claimed on the row before GitHub is called and
- * given back when GitHub's part fails), with the `push` permission and never
- * more (N-SEC-21), audited `project_repo.invite_resent`. An individual
- * repository's invitation must be PENDING (`409 invitation_not_pending`);
- * a group's is resent whatever its row says, to the members still out.
+ * given back when GitHub's part fails — kept when GitHub found nobody out),
+ * with the `push` permission and never more (N-SEC-21), audited
+ * `project_repo.invite_resent`. An individual repository's invitation must
+ * be PENDING (`409 invitation_not_pending`); a group's, pending or accepted
+ * (ADR-070's amendment of 2026-11-19).
  *
  * The student is named by the login GitHub knows TODAY for the immutable
  * account id they linked (`linkedLogin`, as Accept does): a stored login
@@ -19,22 +20,13 @@
  * Whom (M3-15b): the repository's readers (`repoMembers`) — an
  * individual repository's student seat (none: `409 repo_unavailable`), a
  * group's members of the copy, never `project_repos.user_id` (N-SEC-20).
- * A group's member is OUT when no account of theirs is recorded, when an
- * invitation of theirs is pending on GitHub, or when the account recorded
- * is neither a collaborator nor invited: GitHub drops an invitation that
- * expired (after seven days) or was declined from its pending list, while
- * the group's row may already say `accepted` from another member's
- * acceptance. The staff's resend on a group's re-invites the members still
- * out (none: `409 invitation_not_pending`); a member whose account cannot
- * be invited is skipped. A student's own resend invites them alone, on a
- * group's repository only while they are out. Each invitation goes through
- * `inviteAccount` (recorded first, what a departure revokes).
- *
- * The row after a resend: an individual repository's follows GitHub's
- * answer; a group's is `pending` while any member's invitation is. The
- * staff's resend, which answers for every member still out, sets it either
- * way; a member's own makes it `pending` only: their acceptance never
- * speaks for the rest of the group (the `member` webhook's does).
+ * The staff's resend on a group's re-invites the members still out
+ * (`stillOut`; none: `409 invitation_not_pending`); a member whose account
+ * cannot be invited is skipped. A student's own resend invites them alone,
+ * on a group's repository only while they are out. Each invitation goes
+ * through `inviteAccount` (recorded first, what a departure revokes). Only
+ * an individual repository's row follows GitHub's answer: a group's
+ * resend never writes the group's row.
  */
 import { and, eq, isNull } from "drizzle-orm";
 import type { Octokit } from "octokit";
@@ -61,9 +53,9 @@ export const RESEND_INTERVAL_MS = 60_000;
 
 /**
  * The members of a group's repository still out of it: no account of theirs
- * recorded (never invited), an invitation of theirs pending on GitHub, or
- * no account recorded a collaborator nor invited (its invitation expired or
- * declined: GitHub lists it no more).
+ * recorded, an invitation of theirs pending on GitHub, or no account
+ * recorded a collaborator nor invited (expired or declined: GitHub lists it
+ * no more).
  */
 async function stillOut(db: Db, octokit: Octokit, repo: RepoRow, members: RepoMember[]): Promise<RepoMember[]> {
   const { owner, repo: name } = ownerRepo(repo.fullName!);
@@ -89,8 +81,8 @@ async function someCollaborator(octokit: Octokit, owner: string, name: string, l
 /**
  * `POST /app/api/projects/:id/repos/:rid/invite`: the invitation sent
  * again, `invitationStatus` as GitHub answered (`accepted` when the student
- * already is a collaborator: the row follows; a group's is pending while
- * any member's is). `only`: the student's own resend, by their seat.
+ * already is a collaborator: an individual repository's row follows).
+ * `only`: the student's own resend, by their seat.
  */
 export async function resendInvitation(
   db: Db,
@@ -105,8 +97,9 @@ export async function resendInvitation(
   // The minute claimed on the row before GitHub is called.
   const { project, repo } = await db.transaction(async (tx) => {
     const found = await liveRepoForUpdate(tx, projectId, repoId);
-    // A group's members are looked at one by one on GitHub below: its row speaks for none of them.
-    if (found.repo.groupId === null && found.repo.invitationStatus !== "pending") {
+    // A group's row speaks for none of its members (one is in: `accepted`): they are looked at on GitHub below.
+    const status = found.repo.invitationStatus;
+    if (found.repo.groupId === null ? status !== "pending" : status === "none") {
       throw new ProjectError("invitation_not_pending", "The invitation is not pending");
     }
     if (found.repo.invitationResentAt !== null && now.getTime() - found.repo.invitationResentAt.getTime() < RESEND_INTERVAL_MS) {
@@ -116,7 +109,9 @@ export async function resendInvitation(
     return found;
   });
 
-  // GitHub's part: a failure here means the resend did not happen, and the minute is given back.
+  // GitHub's part: a failure here means the resend did not happen, and the
+  // minute is given back — not when GitHub found nobody out, which would
+  // let a member already in ask GitHub again and again.
   const invited: { login: string; invitation: SentInvitation }[] = [];
   try {
     const org = await projectInstallation(db, project.orgId);
@@ -126,9 +121,7 @@ export async function resendInvitation(
     const readers = only === undefined ? members : members.filter((m) => m.enrollmentId === only);
     if (readers.length === 0) throw new ProjectError("repo_unavailable", "The repository has no student on the roster to invite");
     const targets = repo.groupId === null ? readers : await stillOut(db, octokit, repo, readers);
-    if (targets.length === 0) {
-      throw new ProjectError("invitation_not_pending", only === undefined ? "Every member of the group is in" : "You already are in");
-    }
+    if (targets.length === 0) throw new ProjectError("invitation_not_pending", only === undefined ? "Every member of the group is in" : "You already are in");
     const group = repo.groupId !== null && only === undefined;
     const stale = new ProjectError("github_account_stale", "The student's GitHub account is gone or renamed: they must relink it");
     let refusal: unknown = stale;
@@ -146,6 +139,7 @@ export async function resendInvitation(
     }
     if (invited.length === 0) throw refusal;
   } catch (err) {
+    if (err instanceof ProjectError && err.code === "invitation_not_pending") throw err;
     await db
       .update(projectRepos)
       .set({ invitationResentAt: repo.invitationResentAt })
@@ -153,12 +147,11 @@ export async function resendInvitation(
     throw err;
   }
 
-  // GitHub accepted: the row follows its answer, audited with it — one
-  // member's own acceptance never speaks for the rest of their group; their
-  // invitation pending makes the group's pending.
+  // GitHub accepted: an individual repository's row follows its answer; a
+  // group's is left as it is (the `member` webhook's). Audited with it.
   const invitationStatus = invited.some((i) => i.invitation === "pending") ? "pending" : "accepted";
   await db.transaction(async (tx) => {
-    if (repo.groupId === null || only === undefined || invitationStatus === "pending") {
+    if (repo.groupId === null) {
       await tx.update(projectRepos).set({ invitationStatus }).where(eq(projectRepos.id, repo.id));
     }
     await audit(tx, {

@@ -406,8 +406,7 @@ export async function studentProject(
  * (`resendInvitation`: once a minute per repository — the minute shared
  * with whoever asks), on a project loaded through `studentProject` (a
  * claimed student seat): on their own repository, its invitation pending,
- * or their group's while they are out of it (whatever the group's row
- * says: their invitation may have expired), where they alone are invited.
+ * or their group's while they are out of it, where they alone are invited.
  * `409 repo_unavailable` before there is one.
  */
 export async function studentResendInvitation(

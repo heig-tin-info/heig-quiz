@@ -25,13 +25,14 @@ Amended 2026-11-19 (fix of a group member's expired invitation), scope:
 decision 12's *Later* bullet. A group repository's invitation state is the
 group's, `accepted` once one member is in, while another member's
 invitation may have expired (GitHub drops it from the pending list after
-seven days). The resend (F-PROJ-07) therefore asks GitHub about each
-member, whatever that state says: a member is out with no account recorded,
-an invitation pending, or an account recorded that is neither a
-collaborator nor invited; the staff's resend re-invites every member out, a
-student's own resend re-invites them while they are out. Nothing per member
-is stored, and the daily re-invite still serves individual repositories
-only: the stored per-member follow-up stays later.
+seven days). The resend (F-PROJ-07) of a group's repository, pending or
+accepted, therefore asks GitHub about each member: a member is out with no
+account recorded, an invitation pending, or an account recorded that is
+neither a collaborator nor invited; the staff's resend re-invites every
+member out, a student's own resend re-invites them while they are out, and
+neither writes the group's state. Nobody out keeps the minute claimed. Nothing per
+member is stored, and the daily re-invite still serves individual
+repositories only: the stored per-member follow-up stays later.
 
 Scope: where a classroom's groups of students live, who forms them and how,
 and how a group project uses them, including the GitHub side of a group

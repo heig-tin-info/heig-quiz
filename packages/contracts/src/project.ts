@@ -1391,9 +1391,8 @@ export type ProjectRepoProtection = z.infer<typeof ProjectRepoProtection>;
 
 /**
  * `POST /app/api/projects/:id/repos/:rid/invite` (F-PROJ-07): the staff
- * resend a PENDING invitation, or a group's to its members still out —
- * an invitation expired included, whatever the row says (`409
- * invitation_not_pending`; `409
+ * resend a PENDING invitation, or a group's to its members still out
+ * (`409 invitation_not_pending`; `409
  * repo_unavailable` for a repository not provisioned or deleted), at most
  * once a minute per repository (`429 resend_too_soon`), with the `push`
  * permission (N-SEC-21). `invitationStatus` as GitHub answered: `accepted`
@@ -1538,12 +1537,7 @@ export const StudentProjectRepo = StudentProjectWork.extend({
   fullName: z.string(),
   url: z.url(),
   invitation: SentInvitation.nullable(),
-  /**
-   * The repository is their group's (M3-15b): `invitation` is then the
-   * group's — `accepted` once one member is in —, so a member whose own
-   * invitation was lost (expired after GitHub's seven days) may still ask
-   * for it again; the server tells whether they are out (F-PROJ-07).
-   */
+  /** The repository is their group's: `invitation` is then the group's, not theirs (ADR-070, 2026-11-19). */
   group: z.boolean(),
   deleted: z.boolean(),
   locked: z.boolean(),

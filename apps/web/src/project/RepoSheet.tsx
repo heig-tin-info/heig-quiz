@@ -107,7 +107,8 @@ export function RepoSheet({
   const resend = useMutation({
     mutationFn: () => api<ProjectInvitationResent>(`${base}/invite`, { method: "POST" }),
     onSuccess: ({ invitationStatus }) => {
-      settle((r) => ({ ...r, invitationStatus }));
+      // A group's row is not written by a resend: the page's re-read says it.
+      settle((r) => (entry?.kind === "group" ? r : { ...r, invitationStatus }));
       toast(t(invitationStatus === "accepted" ? "project.invitation.alreadyAccepted" : "project.invitation.resent"), "success");
     },
     onError: failed,
