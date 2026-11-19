@@ -117,6 +117,7 @@ describe("projectActionKind", () => {
         fullName: "heig/labo-1-lea",
         url: "https://github.com/heig/labo-1-lea",
         invitation: "accepted",
+        group: false,
         deleted: true,
         locked: false,
         lastCommit: null,
@@ -161,7 +162,7 @@ describe("the refusals of Accept and Resend", () => {
 
   it("words the refusals of the student's Resend", () => {
     expect(studentRefusalMessage(refused(429, "resend_too_soon"), t)).toMatch(/less than a minute ago/);
-    expect(studentRefusalMessage(refused(409, "invitation_not_pending"), t)).toMatch(/no longer pending/);
+    expect(studentRefusalMessage(refused(409, "invitation_not_pending"), t)).toMatch(/already have access/);
     expect(studentRefusalMessage(refused(409, "repo_unavailable"), t)).toMatch(/not available/);
     expect(studentRefusalMessage(refused(502, "invite_failed"), t)).toMatch(/could not send/);
   });

@@ -373,6 +373,7 @@ export async function studentProject(
             fullName: repo.fullName,
             url: htmlUrl(repo.fullName),
             invitation: repo.invitationStatus === "none" ? null : repo.invitationStatus,
+            group: repo.groupId !== null,
             deleted: repo.deletedAt !== null,
             locked: repo.lockedAt !== null,
             ...(live === null
@@ -401,12 +402,12 @@ export async function studentProject(
 
 /**
  * `POST /app/api/student/projects/:id/invite` (F-PROJ-07): the student's own
- * resend of their pending invitation, through the staff's rule and column
- * (`resendInvitation`: pending only, once a minute per repository — the
- * minute shared with whoever asks), on a project loaded through
- * `studentProject` (a claimed student seat): on their own repository, or
- * their group's, where they alone are invited. `409 repo_unavailable`
- * before there is one.
+ * resend of their invitation, through the staff's rule and column
+ * (`resendInvitation`: once a minute per repository — the minute shared
+ * with whoever asks), on a project loaded through `studentProject` (a
+ * claimed student seat): on their own repository, its invitation pending,
+ * or their group's while they are out of it, where they alone are invited.
+ * `409 repo_unavailable` before there is one.
  */
 export async function studentResendInvitation(
   db: Db,

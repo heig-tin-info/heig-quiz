@@ -511,8 +511,10 @@ export type ProjectSummary = z.infer<typeof ProjectSummary>;
  *     run must come with its maximum; `score_max_mismatch` (422) — a
  *     maximum given beside a scored run's that differs from it;
  *     `score_above_max` (422);
- *   - `invitation_not_pending` — a resend of an invitation that is not
- *     pending; `resend_too_soon` (429) — resent less than a minute ago;
+ *   - `invitation_not_pending` — a resend of an individual repository's
+ *     invitation that is not pending, or of a group's with every member
+ *     (the student's own: the student) already in; `resend_too_soon` (429)
+ *     — resent less than a minute ago;
  *     `invite_failed` (502) — GitHub failed the resend.
  * The sync (F-PROJ-12, M3-07; `POST /app/api/projects/:id/sync`):
  *   - `project_archived` — an archived project syncs nothing (a draft syncs
@@ -1389,7 +1391,8 @@ export type ProjectRepoProtection = z.infer<typeof ProjectRepoProtection>;
 
 /**
  * `POST /app/api/projects/:id/repos/:rid/invite` (F-PROJ-07): the staff
- * resend a PENDING invitation (`409 invitation_not_pending`; `409
+ * resend a PENDING invitation, or a group's to its members still out
+ * (`409 invitation_not_pending`; `409
  * repo_unavailable` for a repository not provisioned or deleted), at most
  * once a minute per repository (`429 resend_too_soon`), with the `push`
  * permission (N-SEC-21). `invitationStatus` as GitHub answered: `accepted`
@@ -1534,6 +1537,8 @@ export const StudentProjectRepo = StudentProjectWork.extend({
   fullName: z.string(),
   url: z.url(),
   invitation: SentInvitation.nullable(),
+  /** The repository is their group's: `invitation` is then the group's, not theirs (ADR-070, 2026-11-19). */
+  group: z.boolean(),
   deleted: z.boolean(),
   locked: z.boolean(),
   run: StudentProjectRun.nullable(),

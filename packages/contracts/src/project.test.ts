@@ -81,6 +81,7 @@ describe("the student's project card (F-PROJ-04)", () => {
         fullName: repoFullName,
         url: repoUrl,
         invitation: "accepted",
+        group: false,
         deleted: false,
         locked: false,
         lastCommit: { sha: "a".repeat(40), at: START },

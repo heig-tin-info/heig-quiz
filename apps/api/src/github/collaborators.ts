@@ -88,6 +88,14 @@ export async function holdsAtLeast(
   return (PERMISSION_RANK[held ?? "none"] ?? 0) >= PERMISSION_RANK[least]!;
 }
 
+/** Whether `login` is a collaborator of `owner/repo` today (GitHub's 204; a pending invitation is not one, 404). */
+export async function isCollaborator(octokit: Octokit, owner: string, repo: string, login: string): Promise<boolean> {
+  const answered = await unless404(() =>
+    octokit.request("GET /repos/{owner}/{repo}/collaborators/{username}", { owner, repo, username: login, request: { retries: 0 } }),
+  );
+  return answered !== null;
+}
+
 /** The pending invitations of `owner/repo`: each one's id and its invitee's login. */
 export async function pendingInvitees(octokit: Octokit, owner: string, repo: string): Promise<{ id: number; login: string }[]> {
   const { data } = await octokit.request("GET /repos/{owner}/{repo}/invitations", { owner, repo, per_page: 100 });

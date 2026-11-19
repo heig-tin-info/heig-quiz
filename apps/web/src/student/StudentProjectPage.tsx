@@ -336,7 +336,8 @@ function OpenWorkspaceButton({ projectId, variant }: { projectId: string; varian
 
 /**
  * The student's live repository: its name on GitHub, their invitation while
- * it waits (with the Resend), its lock, and that the online workspace was
+ * it waits (with the Resend; on a group's open repository, also once the
+ * group's is accepted), its lock, and that the online workspace was
  * collected at the deadline (ADR-130 §7): the evaluated commit may then be
  * the platform's, which nothing calls a push. The commit it stands on is the
  * header's; the run and the score have their own sections. No invitation
@@ -368,6 +369,12 @@ function RepoCard({
         <p className="flex flex-wrap items-center gap-3">
           <span>{t("sproj.invitation.pending")}</span>
           {!readOnly ? <ResendButton projectId={project.id} /> : null}
+        </p>
+      ) : repo.group && repo.invitation === "accepted" && !readOnly && !repo.locked && !repo.collected && project.release === null ? (
+        // The group's state says accepted once one member is in: theirs may have expired, the server tells.
+        <p className="flex flex-wrap items-center gap-3 text-fg-muted">
+          <span>{t("sproj.invitation.lost")}</span>
+          <ResendButton projectId={project.id} />
         </p>
       ) : null}
       {repo.locked ? <p className="text-fg-muted">{t("sproj.locked")}</p> : null}

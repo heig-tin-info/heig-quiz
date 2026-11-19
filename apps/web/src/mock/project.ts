@@ -2068,10 +2068,10 @@ on("POST", "/app/api/projects/:id/repos/:rid/protection", (m) => {
   return answer;
 });
 
-/** A pending invitation resent by the staff (F-PROJ-07), at most once a minute. */
+/** A pending invitation resent by the staff (F-PROJ-07), or a group's whatever its row says, at most once a minute. */
 on("POST", "/app/api/projects/:id/repos/:rid/invite", (m) => {
   const [, r] = liveRepoOr409(m);
-  if (r.invitationStatus !== "pending") throw refuse(409, "invitation_not_pending", "The invitation is not pending");
+  if (r.invitationStatus !== "pending" && r.groupId === null) throw refuse(409, "invitation_not_pending", "The invitation is not pending");
   if (r.resentAt !== null && Date.now() - r.resentAt < 60_000) throw refuse(429, "resend_too_soon", "Resent less than a minute ago");
   r.resentAt = Date.now();
   const answer: ProjectInvitationResent = { invitationStatus: "pending", resentAt: iso(0) };

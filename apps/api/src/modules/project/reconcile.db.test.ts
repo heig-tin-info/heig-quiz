@@ -143,15 +143,6 @@ const commitsRoute: Route = (url, req) => {
 /** Commits whose committer GitHub cannot name, while it names the author. */
 const halfAttributed = new Set<string>();
 
-/** GitHub's answer to "is this login a collaborator?": 204, or 404 for a stranger or a pending invitee. */
-const collaboratorRoute: Route = (url, req) => {
-  const m = /^\/repos\/([^/]+\/[^/]+)\/collaborators\/([^/]+)$/.exec(url.pathname);
-  if (url.host !== "api.github.com" || req.method !== "GET" || !m) return undefined;
-  const [fullName, login] = [m[1]!, m[2]!];
-  const pending = [...(world.invitations.get(fullName)?.values() ?? [])].includes(login);
-  return !pending && world.collaborators.get(fullName)?.has(login) ? new Response(null, { status: 204 }) : json({ message: "Not Found" }, 404);
-};
-
 /** What GitHub answers for a repository by id, when the test overrides the world: a new name, or gone. */
 const byId = new Map<number, { full_name: string } | "gone">();
 const byIdRoute: Route = (url, req) => {
@@ -219,7 +210,7 @@ async function freeze(repo: Repo, frozenAt: Date) {
     .where(eq(projectRepos.id, repo.id));
 }
 
-useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, byIdRoute, runsRoute, commitsRoute, collaboratorRoute, world.route] });
+useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, byIdRoute, runsRoute, commitsRoute, world.route] });
 
 beforeEach(async () => {
   // The projects of the earlier tests leave the scope: a pass reads this test's repositories only.

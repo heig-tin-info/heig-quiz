@@ -282,6 +282,98 @@ describe("a group's repository is a student's through the copy only (N-SEC-20)",
   });
 });
 
+describe("a group member whose invitation expired (F-PROJ-07)", () => {
+  /**
+   * Three members invited; two accept, the third's invitation expires: GitHub
+   * lists it no more and she is no collaborator, while the group's row says
+   * `accepted` (the `member` webhook of the first acceptance).
+   */
+  const expired = async () => {
+    const [ana, ben, cid] = [await newStudent(), await newStudent(), await newStudent()];
+    const { project, room } = await groupProject([ana!, ben!, cid!], [[0, 1, 2]]);
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const fullName = `${room.login}/lab-1-group-1`;
+    for (const who of [ana!, ben!, cid!]) acceptInvitation(fullName, who.login);
+    world.collaborators.get(fullName)!.delete(cid!.login);
+    const [row] = await repoRows(project.id);
+    await server.app.db.update(projectRepos).set({ invitationStatus: "accepted" }).where(eq(projectRepos.id, row!.id));
+    return { project, fullName, row: row!, ana: ana!, ben: ben!, cid: cid! };
+  };
+  const puts = (before: number) => gh.calls.slice(before).filter((c) => c.startsWith("PUT"));
+
+  const resend = (projectId: string, repoId: string) => staff("POST", `/app/api/projects/${projectId}/repos/${repoId}/invite`);
+  const ownResend = (projectId: string, who: { headers: Parameters<typeof call>[2] }) => call("POST", `/app/api/student/projects/${projectId}/invite`, who.headers);
+  const viewOf = async (projectId: string, who: { headers: Parameters<typeof call>[2] }) =>
+    StudentProject.parse((await call("GET", `/app/api/student/projects/${projectId}`, who.headers)).json());
+
+  it("is re-invited by the staff's resend, the group's row untouched; once every member is in, 409 invitation_not_pending and the minute kept", async () => {
+    const { project, fullName, row, cid } = await expired();
+    const before = gh.calls.length;
+    const res = await resend(project.id, row.id);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({ invitationStatus: "pending" });
+    expect(puts(before)).toEqual([`PUT api.github.com/repos/${fullName}/collaborators/${cid.login}`]);
+    expect(pendingInvitations(fullName)).toEqual([cid.login]);
+    expect(seats(fullName)[cid.login]).toBe("push");
+    // A group's resend never writes the group's row: the members in keep their view.
+    expect((await repoRows(project.id))[0]!.invitationStatus).toBe("accepted");
+    const [entry] = await auditsOf(row.id, "project_repo.invite_resent");
+    expect(entry!.payload).toEqual({ logins: [cid.login], invitationStatus: "pending" });
+
+    // She accepts: every member is in, nothing to resend — and nothing sent.
+    acceptInvitation(fullName, cid.login);
+    server.clock.advance(60_000);
+    const again = gh.calls.length;
+    const done = await resend(project.id, row.id);
+    expect([done.statusCode, done.json().error]).toEqual([409, "invitation_not_pending"]);
+    expect(puts(again)).toEqual([]);
+    // GitHub was asked: the minute stays claimed.
+    expect((await repoRows(project.id))[0]!.invitationResentAt?.toISOString()).toBe(new Date(Date.parse(NOW) + 60_000).toISOString());
+    expect(await auditsOf(row.id, "project_repo.invite_resent")).toHaveLength(1);
+  });
+
+  it("may resend her own while the group's row says accepted, the other members' view unchanged; a member already in may not, once a minute", async () => {
+    const { project, fullName, ben, cid } = await expired();
+    expect((await viewOf(project.id, cid)).repo).toMatchObject({ invitation: "accepted", group: true });
+
+    const before = gh.calls.length;
+    const own = await ownResend(project.id, cid);
+    expect(own.statusCode, own.body).toBe(200);
+    expect(own.json()).toMatchObject({ invitationStatus: "pending" });
+    expect(puts(before)).toEqual([`PUT api.github.com/repos/${fullName}/collaborators/${cid.login}`]);
+    expect((await repoRows(project.id))[0]!.invitationStatus).toBe("accepted");
+    // Ben, in, still reads the repository as his, accepted, with its work.
+    const his = await viewOf(project.id, ben);
+    expect(his.repo).toMatchObject({ invitation: "accepted", group: true });
+
+    // Ben's own resend: GitHub finds him in, nothing sent, and the minute kept — asked again at once, too soon.
+    server.clock.advance(60_000);
+    const again = gh.calls.length;
+    const refused = await ownResend(project.id, ben);
+    expect([refused.statusCode, refused.json().error]).toEqual([409, "invitation_not_pending"]);
+    expect(puts(again)).toEqual([]);
+    const soon = await ownResend(project.id, ben);
+    expect([soon.statusCode, soon.json().error]).toEqual([429, "resend_too_soon"]);
+  });
+
+  it("invites the caller alone when two members are out, and refuses a group's row that says none", async () => {
+    const { project, fullName, row, ben, cid } = await expired();
+    world.collaborators.get(fullName)!.delete(ben.login);
+    const before = gh.calls.length;
+    const own = await ownResend(project.id, cid);
+    expect(own.statusCode, own.body).toBe(200);
+    expect(puts(before)).toEqual([`PUT api.github.com/repos/${fullName}/collaborators/${cid.login}`]);
+    expect(pendingInvitations(fullName)).toEqual([cid.login]);
+
+    // Nobody invited (`none`): no resend offers it, the server refuses it before any claim.
+    server.clock.advance(60_000);
+    await server.app.db.update(projectRepos).set({ invitationStatus: "none" }).where(eq(projectRepos.id, row.id));
+    const none = await resend(project.id, row.id);
+    expect([none.statusCode, none.json().error]).toEqual([409, "invitation_not_pending"]);
+    expect((await repoRows(project.id))[0]!.invitationResentAt?.toISOString()).toBe(NOW);
+  });
+});
+
 // ---------------------------------------------------------------- the set
 
 describe("a set's write reaching a group with a repository", () => {
