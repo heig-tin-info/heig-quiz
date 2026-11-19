@@ -29,7 +29,8 @@
  *   one of its addresses takes the new address, any other goes); the roster
  *   lines it claimed (names, address, the teacher's note); its GitHub
  *   identities still positive (the linked account and those recorded on its
- *   roster lines) take a negative id GitHub never issues, `github-user-<n>`.
+ *   roster lines) take a negative id GitHub never issues, `github-user-<n>`,
+ *   in the push receipts' commit authors too (ADR-136, migration 0147).
  * - Deleted: its avatar, Teams link and pending Teams link tokens, sessions
  *   (its own and those it acts through), launch tickets, API and OAuth
  *   tokens, OAuth grants and requests, kiosk pairings in progress,

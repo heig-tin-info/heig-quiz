@@ -193,21 +193,32 @@ export function AccessTag({ member }: { member: RepoMember }) {
 
 /**
  * A group's current members (ADR-070 §4, M3-16b, B7), one per line: name,
- * GitHub login and the access tag in three columns from `@2xl` (the
- * table's width), wrapping below it — "No member" for a repository its
- * group no longer holds anyone in (R1). The table's row and the
- * repository's sheet draw the same.
+ * GitHub login, the commits they authored (ADR-136, right-aligned) and the
+ * access tag in four columns from `@2xl` (the table's width), wrapping
+ * below it — "No member" for a repository its group no longer holds anyone
+ * in (R1). The table's row and the repository's sheet draw the same.
  */
 export function MemberList({ members, className }: { members: RepoMember[]; className?: string }) {
   const t = useT();
   if (members.length === 0) return <span className={cx("text-fg-faint", className)}>{t("project.repo.noMember")}</span>;
   return (
-    <ul className={cx("flex flex-col gap-0.5 @2xl:grid @2xl:grid-cols-[repeat(3,max-content)] @2xl:items-center @2xl:gap-x-2", className)}>
+    <ul className={cx("flex flex-col gap-0.5 @2xl:grid @2xl:grid-cols-[repeat(4,max-content)] @2xl:items-center @2xl:gap-x-2", className)}>
       {members.map((m) => (
         <li key={m.enrollmentId ?? m.email} className="flex flex-wrap items-center gap-x-1.5 @2xl:contents">
           <span className="whitespace-nowrap">{studentName(m)}</span>
           <span>
             <StudentAccount student={m} />
+          </span>
+          {/* The commits they authored: "3 commits" where the line wraps, the figure alone in its aligned column from `@2xl`. */}
+          <span className="text-right tabular-nums">
+            {m.authored ? (
+              <>
+                <span className="@2xl:sr-only">{m.authored.n === 1 ? t("sproj.commits.one") : t("sproj.commits", { n: m.authored.n })}</span>
+                <span aria-hidden className="hidden @2xl:inline">
+                  {m.authored.n}
+                </span>
+              </>
+            ) : null}
           </span>
           <span>
             <AccessTag member={m} />

@@ -31,14 +31,15 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, asc, eq, inArray, isNotNull, isNull, lt, notExists } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lt, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { GithubWebhookBody } from "@quiz/contracts";
+import type { CommitAuthor } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { botCommits, codespaceRelays, projectRepos, pushReceipts, webhookDeliveries } from "../../db/schema.js";
+import { botCommits, codespaceRelays, githubAccounts, projectRepos, pushReceipts, webhookDeliveries } from "../../db/schema.js";
 import { githubApp, isZeroSha, rateLimitReset, recentHookDeliveries, redeliverHookDelivery } from "../../github/app.js";
 import { GITHUB_WEBHOOK_QUEUE } from "../../jobs.js";
 import { redactTokens } from "../../redact.js";
@@ -171,8 +172,33 @@ export async function pushAuthor(
  * merged, a branch copied) is no new work, nor one of the App's or a
  * workflow's.
  */
-function pushedCommits(config: AppConfig, commits: z.infer<typeof PushEvent>["commits"]): number | null {
-  return commits?.filter((c) => c.distinct !== false && pushedBy(config, c.author?.username) === "person").length ?? null;
+function pushedCommits(config: AppConfig, commits: z.infer<typeof PushEvent>["commits"]) {
+  return commits?.filter((c) => c.distinct !== false && pushedBy(config, c.author?.username) === "person") ?? null;
+}
+
+/**
+ * Who authored `commits` (ADR-136): each commit's `author.username` as
+ * GitHub reports it — never the pusher, never a `Co-authored-by` trailer —
+ * resolved through the linked accounts (`github_accounts`, case-insensitive
+ * as GitHub's logins are) to the account's immutable id, with its number of
+ * commits. A login no linked account holds, or one two hold (a rename not yet
+ * followed), resolves to nobody, and nothing of it is kept. One read.
+ */
+async function commitAuthors(tx: Tx, commits: ReturnType<typeof pushedCommits>): Promise<CommitAuthor[] | null> {
+  if (commits === null) return null;
+  const login = (c: (typeof commits)[number]) => c.author?.username?.toLowerCase() ?? null;
+  const logins = [...new Set(commits.map(login).filter((l) => l !== null))];
+  if (logins.length === 0) return [];
+  const lowered = sql<string>`lower(${githubAccounts.login})`;
+  const accounts = await tx.select({ login: lowered, id: githubAccounts.githubUserId }).from(githubAccounts).where(inArray(lowered, logins));
+  const holders = new Map<string, number[]>();
+  for (const a of accounts) holders.set(a.login, [...(holders.get(a.login) ?? []), a.id]);
+  const counts = new Map<number, number>();
+  for (const c of commits) {
+    const held = holders.get(login(c) ?? "");
+    if (held?.length === 1) counts.set(held[0]!, (counts.get(held[0]!) ?? 0) + 1);
+  }
+  return [...counts].map(([id, n]) => ({ id, n }));
 }
 
 /**
@@ -215,6 +241,7 @@ async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery
   let tracked = false;
   for (const tracks of trackers) if ((tracked = await tracks(tx, repoId))) break;
   if (!tracked) return;
+  const commits = pushedCommits(config, push.data.commits);
   await tx
     .insert(pushReceipts)
     .values({
@@ -226,7 +253,8 @@ async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery
       // A collection's head already holds its receipt (ADR-130 §6): this insert is a no-op for it, and never sets `collected`.
       isBot: !["person", "collection"].includes(await pushAuthor(tx, config, { senderLogin: push.data.sender?.login, githubRepoId: repoId, after: push.data.after })),
       forced: push.data.forced ?? false,
-      commits: pushedCommits(config, push.data.commits),
+      commits: commits?.length ?? null,
+      authors: await commitAuthors(tx, commits),
     })
     // The FIRST receipt of a head stands: a redelivery never moves it later.
     .onConflictDoNothing();

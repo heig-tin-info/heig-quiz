@@ -226,6 +226,11 @@ describe("staging-pseudonymize.sql, then staging-scrub.sql", () => {
       `INSERT INTO project_repo_access (id, repo_id, enrollment_id, github_user_id, github_login, invited_at) VALUES ($1, $2, $3, 4242424242, 'alicemartin-gh', now())`,
       [randomUUID(), repo, aliceRow],
     );
+    // A push whose commits name Alice, the kept owner, and an account unlinked since (ADR-136).
+    await exec(
+      `INSERT INTO push_receipts (id, github_repo_id, branch, head_sha, received_at, commits, authors) VALUES ($1, 77, 'main', $2, now(), 4, $3)`,
+      [randomUUID(), "c".repeat(40), JSON.stringify([{ id: 4242424242, n: 2 }, { id: 5151515151, n: 1 }, { id: 6363636363, n: 1 }])],
+    );
     await exec(
       `INSERT INTO evaluations (id, classroom_id, title, mode, settings, grading_scale, feedback_policy, created_by) VALUES ($1, $2, 'Sondage', 'poll', '{}', '{}', '{}', $3)`,
       [evaluation, classroom, bob],
@@ -334,6 +339,11 @@ describe("staging-pseudonymize.sql, then staging-scrub.sql", () => {
       expect((await exec("SELECT github_user_id::text AS id, github_login FROM project_repo_access")).rows).toEqual([
         { id: "-1", github_login: "github-user-1" },
       ]);
+      // The commits' authors numbered the same way, the kept account's id kept (ADR-136).
+      expect((await exec("SELECT authors FROM push_receipts")).rows).toEqual([
+        { authors: [{ id: -1, n: 2 }, { id: 5151515151, n: 1 }, { id: -2, n: 1 }] },
+      ]);
+      expect(JSON.stringify((await exec("SELECT * FROM push_receipts")).rows)).not.toMatch(/4242424242|6363636363/);
       expect((await exec("SELECT full_name FROM project_repos")).rows).toEqual([{ full_name: `heig-prod/repo-${repo.slice(0, 8)}` }]);
       // The affiliations stay: the role rule reads them.
       expect((await exec("SELECT claims, affiliations FROM user_idp_claims")).rows).toEqual([{ claims: {}, affiliations: ["student@heig-vd.ch"] }]);

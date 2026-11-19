@@ -183,6 +183,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-119 — Criteria v3: the CI produces the evidence, the platform publishes the schemas](ADR-119-criteres-v3-preuves-de-la-ci.md)
 - [ADR-132 — A project's update reaches the grading, never the student's branch: the graded commit, the machine's correction redone, the teacher's update in the workspace](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md)
 - [ADR-135 — Project grade adjustment: a delta or a pinned grade after the points' grade, justified, the owner's after the release](ADR-135-ajustement-de-la-note-d-un-projet.md)
+- [ADR-136 — Per-member commit attribution: the author GitHub names, resolved at receipt, staff only](ADR-136-attribution-des-commits-par-membre.md)
 - [ADR-127 — A project's `scheduled` state: armed by Schedule, announced, opened by the ticker](ADR-127-etat-planifie-des-projets.md)
 
 ## Maintaining a record

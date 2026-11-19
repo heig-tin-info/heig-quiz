@@ -60,6 +60,7 @@ import {
   type GroupConsequence,
   type GradeRunView,
   type ProjectActivitySummary,
+  type ProjectCommitSeries,
   type ProjectCriteriaView,
   type CriterionCiLog,
   type ProjectCommit,
@@ -103,6 +104,7 @@ import {
   criteriaTotals,
   currentCriterionRows,
   draftStartsLater,
+  localDate,
   editableProjectFields,
   projectBeforePublication,
   projectIsLive,
@@ -122,6 +124,7 @@ import {
   roundPoints,
   teacherScoreMax,
   staffReviewRefusal,
+  weekOf,
   withForcedProtected,
   type CriterionGradeLike,
   type FinalScoreSource,
@@ -1070,7 +1073,9 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
     lastCommit: r.lastCommit,
     ciStatus: r.ciStatus,
     // The student's count: GitHub's total less the App's initial commit (the mock keeps no receipts).
-    commits: r.live ? Math.max(0, r.live.commitCount - 1) : 0,
+    commits: commitsOf(r),
+    // Nobody reading it: all unattributed. `detailOf` gives the readers theirs.
+    unattributed: mockSeries(commitsOf(r)),
     live: p.read ? r.live : null,
     scores: {
       current: graded(slot(r, r.currentRunId), "ci"),
@@ -1129,6 +1134,23 @@ function accessOf(repo: MockRepo, student: { id: string; githubLogin: string | n
   return repo.memberAccess?.[student.id] ?? (repo.invitationStatus === "pending" ? "pending" : "joined");
 }
 
+/** The student's count: GitHub's total less the App's initial commit (the mock keeps no receipts). */
+const commitsOf = (r: MockRepo): number => (r.live ? Math.max(0, r.live.commitCount - 1) : 0);
+
+/** `n` commits as a series (ADR-136): half last week, the rest this one. */
+function mockSeries(n: number): ProjectCommitSeries {
+  const week = (ago: number) => weekOf(localDate(new Date(now - ago * 7 * D)));
+  const earlier = Math.floor(n / 2);
+  const weeks = [
+    { weekStart: week(1), n: earlier },
+    { weekStart: week(0), n: n - earlier },
+  ].filter((w) => w.n > 0);
+  return { n, weeks };
+}
+
+/** The commits each joined reader authored, in roster order (ADR-136); what they leave of the count is unattributed. */
+const AUTHORED = [9, 6, 3];
+
 /** A teacher's test repository (ADR-077): the staff seat's row, modelled on `repo`'s state, badged by the page. */
 function staffTestRow(p: MockProject, repo: MockRepo): ProjectDetailRow {
   const view = repoView(p, repo);
@@ -1147,6 +1169,7 @@ function staffTestRow(p: MockProject, repo: MockRepo): ProjectDetailRow {
     },
     repo: { ...view, id: `${view.id}-staff`, fullName },
     access: "joined",
+    authored: null,
   };
 }
 
@@ -1178,6 +1201,7 @@ function detailOf(p: MockProject): ProjectDetail {
           },
           repo: repo ? repoView(p, repo) : null,
           access: repo ? accessOf(repo, s) : null,
+          authored: null as ProjectCommitSeries | null,
           staff: false,
         };
       }),
@@ -1197,9 +1221,21 @@ function detailOf(p: MockProject): ProjectDetail {
         },
         repo: repoView(p, r),
         access: null,
+        authored: null,
         staff: false,
       })),
   ];
+  // Who authored the commits (ADR-136): each repository's readers on the roster, a member not in the repository none.
+  for (const repo of p.repos) {
+    const read = rows.filter((row) => row.repo?.id === repo.id && row.student.enrollmentId !== null);
+    let left = commitsOf(repo);
+    const authored = read.map((row, k) => {
+      const n = row.access === "joined" && row.student.claimed ? Math.min(AUTHORED[k] ?? 1, left) : 0;
+      left -= n;
+      return n;
+    });
+    read.forEach((row, k) => Object.assign(row, { authored: mockSeries(authored[k]!), repo: { ...row.repo!, unattributed: mockSeries(left) } }));
+  }
   const drifted = p.copy !== null && p.summary.groupSetId !== null && copyKey(p.copy) !== copyKey(setGroupsOf(p.summary.groupSetId));
   const pending = p.resyncReads > 0;
   if (pending) p.resyncReads -= 1;

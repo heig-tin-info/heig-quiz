@@ -29,6 +29,11 @@ amendment of 2026-10-28), [ADR-054](ADR-054-super-powers-admin.md),
 ([06](../spec/06-questions-ouvertes.md)). The retention of attempts (question G)
 is issue #1027.
 
+Amended 2026-11-19 by [ADR-136](ADR-136-attribution-des-commits-par-membre.md),
+scope §8's wipe list: the person's GitHub id is renumbered inside
+`push_receipts.authors` too (migration 0147), as in `github_accounts` and
+`project_repo_access`.
+
 ## Context
 
 Quiz keeps a classroom's data until the teacher deletes it (N-DATA-03), and an

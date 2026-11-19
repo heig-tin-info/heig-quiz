@@ -133,6 +133,11 @@ async function identify(seed: Seeded, userId: string, who: string): Promise<Reco
     `INSERT INTO project_repo_access (id, repo_id, enrollment_id, github_user_id, github_login, invited_at) VALUES ($1, $2, $3, $4, $5, now())`,
     [randomUUID(), repo, line!.id, m.githubId, m.login],
   );
+  // A push to it, whose commits name her GitHub account and a stranger's (ADR-136).
+  await exec(
+    `INSERT INTO push_receipts (id, github_repo_id, branch, head_sha, received_at, commits, authors) VALUES ($1, $2, 'main', $3, now(), 3, $4)`,
+    [randomUUID(), who.charCodeAt(0), who.charAt(0).toLowerCase().repeat(40), JSON.stringify([{ id: Number(m.githubId), n: 2 }, { id: 7, n: 1 }])],
+  );
   // Credentials and traces of use.
   await exec(`INSERT INTO sessions (sid_hash, user_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')`, [
     who.charAt(0).toLowerCase().repeat(64),
@@ -222,6 +227,12 @@ describe("pseudonymizeUser", () => {
     for (const marker of bobMarkers) expect(tablesHolding(after, marker), marker).toEqual(tablesHolding(before, marker));
     expect((await exec("SELECT * FROM users WHERE id = $1", [bob])).rows).toEqual(bobBefore);
 
+    // Her commits stay hers, under her account's new id (ADR-136); a stranger's are untouched.
+    const [account] = (await exec("SELECT github_user_id::text AS id FROM github_accounts WHERE user_id = $1", [alice])).rows as { id: string }[];
+    expect(Number(account!.id)).toBeLessThan(0);
+    const receipts = (await exec("SELECT authors FROM push_receipts WHERE github_repo_id = $1", ["A".charCodeAt(0)])).rows;
+    expect(receipts).toEqual([{ authors: [{ id: Number(account!.id), n: 2 }, { id: 7, n: 1 }] }]);
+
     // What Alice did, under the same id; her account, pseudonymous.
     expect(await kept(alice)).toEqual(aliceBefore);
     const [row] = (await exec("SELECT oidc_sub, email, given_name, family_name, swiss_edu_id, picture_url, notification_email, anonymized_at FROM users WHERE id = $1", [alice])).rows as Record<string, unknown>[];
@@ -244,6 +255,26 @@ describe("pseudonymizeUser", () => {
 
     // Once only.
     await expect(pseudonymizeUser(db, alice, ctx("self"))).rejects.toMatchObject({ code: "already_anonymized" });
+  });
+
+  it("renumbers the commits of an account unlinked before, found through its grant, never onto an id the authors still hold (ADR-136)", async () => {
+    const seed = await seedLive(db, { students: 1, questions: 0 });
+    const [carol] = seed.studentIds as [string];
+    const { githubId } = await identify(seed, carol, "Carol");
+    // She unlinked her account since: her grant and her commits still name it.
+    await exec(`DELETE FROM github_accounts WHERE user_id = $1`, [carol]);
+    // A pseudonymous id that survives only in the authors of another receipt.
+    const lowest = Number((await exec(`SELECT least(0, min(github_user_id))::text AS id FROM (SELECT github_user_id FROM github_accounts UNION ALL SELECT github_user_id FROM project_repo_access) ids`)).rows.map((r) => (r as { id: string }).id)[0]);
+    await exec(
+      `INSERT INTO push_receipts (id, github_repo_id, branch, head_sha, received_at, commits, authors) VALUES ($1, 9999, 'main', $2, now(), 1, $3)`,
+      [randomUUID(), "f".repeat(40), JSON.stringify([{ id: lowest - 1, n: 1 }])],
+    );
+    await pseudonymizeUser(db, carol, ctx("self"));
+    const [grant] = (await exec(`SELECT github_user_id::text AS id FROM project_repo_access r JOIN enrollments e ON e.id = r.enrollment_id WHERE e.user_id = $1`, [carol])).rows as { id: string }[];
+    expect(Number(grant!.id)).toBe(lowest - 2);
+    const receipts = (await exec(`SELECT authors FROM push_receipts WHERE github_repo_id = $1`, ["C".charCodeAt(0)])).rows;
+    expect(receipts).toEqual([{ authors: [{ id: lowest - 2, n: 2 }, { id: 7, n: 1 }] }]);
+    expect(JSON.stringify((await exec(`SELECT authors FROM push_receipts`)).rows)).not.toContain(githubId!);
   });
 
   it("refuses an account with an exam attempt in progress, or with a seat in a classroom still running", async () => {

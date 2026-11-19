@@ -51,6 +51,7 @@ import {
   SYNC_CHANGES,
   slugify,
   validGradeAdjustment,
+  type CommitSeries,
 } from "@quiz/domain";
 
 import { ProjectRepoCollection, StudentProjectWorkspace } from "./codespace.js";
@@ -925,6 +926,19 @@ export const ProjectRepoLive = z.object({
 });
 export type ProjectRepoLive = z.infer<typeof ProjectRepoLive>;
 
+/**
+ * Commits counted by the student's rule (F-PROJ-04), staff only (ADR-136):
+ * `n`, and the same commits by the week of their push's receipt — its
+ * Monday (`weekStart`, the server's clock, the school's days), as the
+ * drill's weeks —, in order, no empty week. `n` is the sum of `weeks`.
+ * `CommitSeries` of `@quiz/domain`, which computes it.
+ */
+export const ProjectCommitSeries = z.object({
+  n: z.number().int().nonnegative(),
+  weeks: z.array(z.object({ weekStart: z.iso.date(), n: z.number().int().positive() })),
+}) satisfies z.ZodType<CommitSeries>;
+export type ProjectCommitSeries = z.infer<typeof ProjectCommitSeries>;
+
 export const ProjectReviewStatus = z.enum(PROJECT_REVIEW_STATUSES);
 export type ProjectReviewStatus = z.infer<typeof ProjectReviewStatus>;
 export const ProjectReviewReason = z.enum(PROJECT_REVIEW_REASONS);
@@ -982,7 +996,8 @@ export type ProjectRepoSync = z.infer<typeof ProjectRepoSync>;
  * with, M3-08b), the final review's state (`review`), the release's
  * snapshot, and the flags. `commits` is the student's own count, as their
  * card shows it, from the push receipts alone (`project/commits.ts` of the
- * API); `live.commitCount` is GitHub's total, only the tooltip's source:
+ * API), `unattributed` the part of it no member authored (ADR-136);
+ * `live.commitCount` is GitHub's total, only the tooltip's source:
  *   - `protectionSuspended` — "protected files in conflict" (F-PROJ-08);
  *   - `toVerify` — the run of one of its three slots is to verify;
  *   - `multiple` — one of its runs printed several `GRADE` annotations (an
@@ -1010,6 +1025,13 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
   lastCommit: z.object({ sha: z.string(), at: z.iso.datetime().nullable() }).nullable(),
   ciStatus: CiStatus,
   commits: z.number().int().nonnegative(),
+  /**
+   * Of `commits`, those no member of the repository authored (ADR-136):
+   * pushed before the authors were recorded, by an author GitHub matched to
+   * no linked account, or by anyone who is not a member — staff included.
+   * `commits` minus the members' `authored`.
+   */
+  unattributed: ProjectCommitSeries,
   live: ProjectRepoLive.nullable(),
   scores: z.object({
     current: ProjectSlotScore.nullable(),
@@ -1105,6 +1127,13 @@ export const ProjectDetailRow = z.object({
    * (`invitationStatus` none), or for one no roster line reads any more.
    */
   access: RepoAccessState.nullable(),
+  /**
+   * The commits of `repo.commits` this student authored (ADR-136): those
+   * whose author GitHub named as their linked GitHub account, by week. Null
+   * without a repository, and for a repository no roster line reads any
+   * more, whose account is no member.
+   */
+  authored: ProjectCommitSeries.nullable(),
   /**
    * A teacher's TEST repository (ADR-077): a staff seat accepted the
    * project. Shown badged, counted nowhere, never graded nor released.
