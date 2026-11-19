@@ -11,9 +11,11 @@ reads it.
 
 Relations: amends [F-PROJ-13](../spec/02-exigences-fonctionnelles.md),
 [N-DATA-02 and N-DATA-07](../spec/03-exigences-non-fonctionnelles.md);
-settles the attribution prerequisite of
-[open question 71](../spec/06-questions-ouvertes.md) (the staff's write path
-itself stays deferred); reads the count's rule of F-PROJ-04 (M3-14i, N-SEC-20),
+meets in part the attribution prerequisite of
+[open question 71](../spec/06-questions-ouvertes.md) (the per-member split
+excludes a staff push; the repository's total still counts it, and the
+staff's write path stays deferred); amends ADR-117 §8's per-account wipe
+list (migration 0147); reads the count's rule of F-PROJ-04 (M3-14i, N-SEC-20),
 the collection's receipt of [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md) §6,
 the groups of [ADR-070](ADR-070-repartitions-de-groupes.md) and the commit
 graph of [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md) §8.
@@ -41,9 +43,10 @@ push by a staff member never counts as a student's work.
    account, or a login two linked accounts hold (a rename not yet followed)
    is unattributed, and nothing of that author is stored: no login, no
    e-mail.
-2. **The week is the receipt's.** A commit's week is the ISO week of its
-   push's `received_at` (the server's clock, the school's time zone), never
-   the commit's own date, which the author's machine writes.
+2. **The week is the receipt's.** A commit's week is the week of its push's
+   `received_at` (the server's clock), named by its Monday in the school's
+   time zone (`weekStart`, `weekOf` of `@quiz/domain`, as the drill's
+   weeks), never the commit's own date, which the author's machine writes.
 3. **The count's own rule.** The per-member counts read the same receipts as
    the repository's count: by the effective deadline, no bot's push, no
    collection's receipt. A member's count is the commits attributed to their
@@ -72,7 +75,9 @@ push by a staff member never counts as a student's work.
 7. **The weekly series lives on the detail row.** `ProjectDetailRow.authored`
    (the member's count and weeks) and `ProjectRepoView.unattributed` (the
    rest, as its own series) are computed by `commitAttribution` of
-   `@quiz/domain` over the receipts the detail already reads for the count.
+   `@quiz/domain` over the receipts the detail already reads for the count
+   (`attributedReceipts`; the student's loader reads `countedReceipts`,
+   which never selects `authors`).
    The repository screen that draws the heatmap reads the same detail.
 
 ## Consequences
@@ -84,8 +89,13 @@ push by a staff member never counts as a student's work.
   authors: `github_accounts` by lowered login, a table of one row per linked
   user. No index is added for it.
 - A member who unlinks and links another GitHub account loses the commits of
-  the old one to unattributed; a pseudonymized account (ADR-117) likewise. The
-  stored ids are GitHub's public numeric ids, nothing more.
+  the old one to unattributed. A pseudonymized account (ADR-117 §8) keeps
+  its counts: `quiz_pseudonymize_account` (migration 0147) renumbers the
+  person's GitHub id inside `push_receipts.authors` as it does in
+  `github_accounts` and `project_repo_access`, so the real id leaves the
+  receipts and the member is still matched, by the new negative id; the
+  staging copy's numbering (`scripts/staging-pseudonymize.sql`) covers the
+  authors too, an account unlinked since included.
 - The detail payload grows by one small series per row (a semester has some
   fifteen weeks). A page of a hundred repositories stays within tens of
   kilobytes.

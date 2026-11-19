@@ -17,8 +17,8 @@
 -- rather than numbered, and the chosen notification address is cleared.
 --
 -- The whole-copy rest, here: the numbering of every GitHub identity of the
--- copy, `github-user-<n>` (run first, so the function finds none left to
--- replace); a roster row nobody claimed takes the identity of the person
+-- copy, `github-user-<n>`, the push receipts' commit authors included
+-- (ADR-136; run first, so the function finds none left to replace); a roster row nobody claimed takes the identity of the person
 -- whose address it holds (once per class, unless that person is claimed
 -- there), any other one becomes `enrollment-<n>@example.invalid`; a grant
 -- of nobody's becomes `grant-<n>@example.invalid`;
@@ -96,6 +96,13 @@ BEGIN
     WHERE NOT EXISTS (
       SELECT 1 FROM github_accounts a
       WHERE a.github_user_id = r.github_user_id AND a.user_id NOT IN (SELECT id FROM staging_people))
+    UNION ALL
+    -- The commits' authors (ADR-136), an account unlinked since included.
+    SELECT (x.e->>'id')::bigint, r.received_at
+    FROM push_receipts r, jsonb_array_elements(coalesce(r.authors, '[]'::jsonb)) AS x(e)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM github_accounts a
+      WHERE a.github_user_id = (x.e->>'id')::bigint AND a.user_id NOT IN (SELECT id FROM staging_people))
   ) ids
   WHERE ids.id > 0
   GROUP BY ids.id;
@@ -103,6 +110,12 @@ BEGIN
   FROM staging_github m WHERE a.github_user_id = m.old_id;
   UPDATE project_repo_access r SET github_user_id = -m.n, github_login = 'github-user-' || m.n
   FROM staging_github m WHERE r.github_user_id = m.old_id;
+  UPDATE push_receipts r SET authors = (
+    SELECT jsonb_agg(CASE WHEN m.n IS NULL THEN x.e ELSE jsonb_set(x.e, '{id}', to_jsonb(-m.n)) END ORDER BY x.o)
+    FROM jsonb_array_elements(r.authors) WITH ORDINALITY AS x(e, o)
+    LEFT JOIN staging_github m ON m.old_id = (x.e->>'id')::bigint
+  )
+  WHERE jsonb_array_length(coalesce(r.authors, '[]'::jsonb)) > 0;
 
   -- The accounts: THE per-account wipe list (migration 0132), the one
   -- production's pseudonymization runs.

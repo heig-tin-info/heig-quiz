@@ -1002,7 +1002,7 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
   });
 
   it("gives each member their commit count and the group's unattributed ones under its total (ADR-136)", async () => {
-    const series = (n: number) => ({ n, weeks: n === 0 ? [] : [{ week: "2026-W41", n }] });
+    const series = (n: number) => ({ n, weeks: n === 0 ? [] : [{ weekStart: "2026-10-05", n }] });
     // 11 in all: Alice 6, Benoît 0 (no linked account), the unattributed 5.
     const repo = makeRepo(1, { fullName: "heig-tin-info/labo-2-groupe-1", unattributed: series(5) });
     const rows = [row(0, repo, {}, g1, "joined", series(6)), row(1, repo, { githubLogin: null }, g1, "unlinked", series(0))];

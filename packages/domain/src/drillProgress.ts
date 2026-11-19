@@ -89,7 +89,7 @@ const toDate = (d: IsoDate) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.s
 const fromDate = (ms: number): IsoDate => new Date(ms).toISOString().slice(0, 10);
 
 /** The Monday of the week holding `date`: a week runs Monday to Sunday, as PostgreSQL's `date_trunc('week')`. */
-function weekOf(date: IsoDate): IsoDate {
+export function weekOf(date: IsoDate): IsoDate {
   const ms = toDate(date);
   const weekday = (new Date(ms).getUTCDay() + 6) % 7;
   return fromDate(ms - weekday * DAY_MS);

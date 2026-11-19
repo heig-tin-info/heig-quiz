@@ -51,6 +51,7 @@ import {
   SYNC_CHANGES,
   slugify,
   validGradeAdjustment,
+  type CommitSeries,
 } from "@quiz/domain";
 
 import { ProjectRepoCollection, StudentProjectWorkspace } from "./codespace.js";
@@ -927,14 +928,15 @@ export type ProjectRepoLive = z.infer<typeof ProjectRepoLive>;
 
 /**
  * Commits counted by the student's rule (F-PROJ-04), staff only (ADR-136):
- * `n`, and the same commits by the ISO week of their push's receipt
- * (`2026-W47`, the server's clock, the school's weeks), in order, no empty
- * week. `n` is the sum of `weeks`.
+ * `n`, and the same commits by the week of their push's receipt — its
+ * Monday (`weekStart`, the server's clock, the school's days), as the
+ * drill's weeks —, in order, no empty week. `n` is the sum of `weeks`.
+ * `CommitSeries` of `@quiz/domain`, which computes it.
  */
 export const ProjectCommitSeries = z.object({
   n: z.number().int().nonnegative(),
-  weeks: z.array(z.object({ week: z.string().regex(/^\d{4}-W\d{2}$/), n: z.number().int().positive() })),
-});
+  weeks: z.array(z.object({ weekStart: z.iso.date(), n: z.number().int().positive() })),
+}) satisfies z.ZodType<CommitSeries>;
 export type ProjectCommitSeries = z.infer<typeof ProjectCommitSeries>;
 
 export const ProjectReviewStatus = z.enum(PROJECT_REVIEW_STATUSES);

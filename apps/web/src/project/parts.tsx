@@ -209,36 +209,21 @@ export function MemberList({ members, className }: { members: RepoMember[]; clas
           <span>
             <StudentAccount student={m} />
           </span>
-          <span className="min-w-6 text-right tabular-nums">{m.authored ? <AuthoredCount n={m.authored.n} /> : null}</span>
+          {/* The commits they authored: the figure, its unit said to a screen reader. */}
+          <span className="text-right tabular-nums">
+            {m.authored ? (
+              <>
+                <span aria-hidden>{m.authored.n}</span>
+                <span className="sr-only">{m.authored.n === 1 ? t("sproj.commits.one") : t("sproj.commits", { n: m.authored.n })}</span>
+              </>
+            ) : null}
+          </span>
           <span>
             <AccessTag member={m} />
           </span>
         </li>
       ))}
     </ul>
-  );
-}
-
-/**
- * A member's commit count (ADR-136): "3 commits" where the line wraps, the
- * figure alone in its column from `@2xl`, its unit said to a screen reader
- * and on hover.
- */
-function AuthoredCount({ n }: { n: number }) {
-  const t = useT();
-  const label = n === 1 ? t("sproj.commits.one") : t("sproj.commits", { n });
-  return (
-    <>
-      <span className="@2xl:hidden">{label}</span>
-      <span className="hidden @2xl:inline">
-        <Tip label={label}>
-          <span>
-            <span aria-hidden>{n}</span>
-            <span className="sr-only">{label}</span>
-          </span>
-        </Tip>
-      </span>
-    </>
   );
 }
 

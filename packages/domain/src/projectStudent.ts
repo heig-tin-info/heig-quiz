@@ -6,7 +6,8 @@
  * reads the rows; these decide.
  */
 import type { DeadlineStrategyName } from "./projectRuns.js";
-import { isoWeek } from "./zone.js";
+import { weekOf, type IsoDate } from "./drillProgress.js";
+import { localDate } from "./zone.js";
 
 /**
  * The spec's words (F-PROJ-04), plus `released` once the scores are out
@@ -149,9 +150,9 @@ export interface AttributedReceipt extends CountedReceipt {
   authors: readonly CommitAuthor[] | null;
 }
 
-/** Commits by ISO week of their receipt (`2026-W47`), the weeks in order, none empty. */
+/** Commits by the week of their receipt: its Monday (`weekOf`, the school's days), the weeks in order, none empty. */
 export interface CommitWeek {
-  week: string;
+  weekStart: IsoDate;
   n: number;
 }
 
@@ -161,34 +162,42 @@ export interface CommitSeries {
   weeks: CommitWeek[];
 }
 
+/** A repository's counted commits, by member (keyed `K`) and unattributed: {@link commitAttribution}. */
+export interface CommitAttribution<K> {
+  total: number;
+  members: Map<K, CommitSeries>;
+  unattributed: CommitSeries;
+}
+
 /**
  * Who authored the commits {@link studentCommitCount} counts (ADR-136,
  * staff only): over the same receipts — no bot's, no collection's (the
- * caller's), received by `deadlineAt` —, each member's commits, those
- * attributed to one of their GitHub account ids (`members`: an id names the
- * first member holding it), and the rest, unattributed: the total minus the
- * members' — a receipt from before the authors were recorded, an author
- * GitHub matched to no linked account, or one who is not a member (the
- * staff included). Each series by the ISO week of the receipt
- * (`isoWeek`, the server's clock), never the commit's own date. The
- * members' and the unattributed counts sum to {@link studentCommitCount}.
+ * caller's), received by `deadlineAt` —, the total, each member's commits,
+ * those attributed to their linked GitHub account's id (`members`, null
+ * without one), and the rest, unattributed: the total minus the members' —
+ * a receipt from before the authors were recorded, an author GitHub matched
+ * to no linked account, or one who is not a member (the staff included).
+ * Each series by the week of the receipt (the server's clock), never the
+ * commit's own date. The members' and the unattributed counts sum to
+ * `total`, which is {@link studentCommitCount}.
  */
 export function commitAttribution<K>(
   receipts: readonly AttributedReceipt[],
   deadlineAt: Date,
-  members: ReadonlyMap<K, readonly number[]>,
-): { members: Map<K, CommitSeries>; unattributed: CommitSeries } {
-  const owner = new Map<number, K>();
-  for (const [key, ids] of members) for (const id of ids) if (!owner.has(id)) owner.set(id, key);
-  const weeks = new Map<K | null, Map<string, number>>();
-  const add = (key: K | null, week: string, n: number) => {
+  members: ReadonlyMap<K, number | null>,
+): CommitAttribution<K> {
+  // A GitHub id is one account's (`github_accounts.github_user_id` is unique): one member at most.
+  const owner = new Map([...members].flatMap(([key, id]) => (id === null ? [] : [[id, key] as const])));
+  const weeks = new Map<K | null, Map<IsoDate, number>>();
+  const add = (key: K | null, week: IsoDate, n: number) => {
     if (n <= 0) return;
-    const of = weeks.get(key) ?? new Map<string, number>();
+    const of = weeks.get(key) ?? new Map<IsoDate, number>();
     of.set(week, (of.get(week) ?? 0) + n);
     weeks.set(key, of);
   };
+  let total = 0;
   for (const r of countedBy(receipts, deadlineAt)) {
-    const week = isoWeek(r.receivedAt);
+    const week = weekOf(localDate(r.receivedAt));
     let attributed = 0;
     for (const a of r.authors ?? []) {
       const key = owner.get(a.id);
@@ -196,11 +205,12 @@ export function commitAttribution<K>(
       add(key, week, a.n);
       attributed += a.n;
     }
+    total += receiptCommits(r);
     add(null, week, receiptCommits(r) - attributed);
   }
   const series = (key: K | null): CommitSeries => {
-    const list = [...(weeks.get(key) ?? [])].map(([week, n]) => ({ week, n })).sort((a, b) => a.week.localeCompare(b.week));
+    const list = [...(weeks.get(key) ?? [])].map(([weekStart, n]) => ({ weekStart, n })).sort((a, b) => a.weekStart.localeCompare(b.weekStart));
     return { n: list.reduce((sum, w) => sum + w.n, 0), weeks: list };
   };
-  return { members: new Map([...members.keys()].map((key) => [key, series(key)])), unattributed: series(null) };
+  return { total, members: new Map([...members.keys()].map((key) => [key, series(key)])), unattributed: series(null) };
 }

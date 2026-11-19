@@ -133,6 +133,11 @@ async function identify(seed: Seeded, userId: string, who: string): Promise<Reco
     `INSERT INTO project_repo_access (id, repo_id, enrollment_id, github_user_id, github_login, invited_at) VALUES ($1, $2, $3, $4, $5, now())`,
     [randomUUID(), repo, line!.id, m.githubId, m.login],
   );
+  // A push to it, whose commits name her GitHub account and a stranger's (ADR-136).
+  await exec(
+    `INSERT INTO push_receipts (id, github_repo_id, branch, head_sha, received_at, commits, authors) VALUES ($1, $2, 'main', $3, now(), 3, $4)`,
+    [randomUUID(), who.charCodeAt(0), who.charAt(0).toLowerCase().repeat(40), JSON.stringify([{ id: Number(m.githubId), n: 2 }, { id: 7, n: 1 }])],
+  );
   // Credentials and traces of use.
   await exec(`INSERT INTO sessions (sid_hash, user_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')`, [
     who.charAt(0).toLowerCase().repeat(64),
@@ -221,6 +226,12 @@ describe("pseudonymizeUser", () => {
     // Bob, untouched: every marker where it was, his account as it was.
     for (const marker of bobMarkers) expect(tablesHolding(after, marker), marker).toEqual(tablesHolding(before, marker));
     expect((await exec("SELECT * FROM users WHERE id = $1", [bob])).rows).toEqual(bobBefore);
+
+    // Her commits stay hers, under her account's new id (ADR-136); a stranger's are untouched.
+    const [account] = (await exec("SELECT github_user_id::text AS id FROM github_accounts WHERE user_id = $1", [alice])).rows as { id: string }[];
+    expect(Number(account!.id)).toBeLessThan(0);
+    const receipts = (await exec("SELECT authors FROM push_receipts WHERE github_repo_id = $1", ["A".charCodeAt(0)])).rows;
+    expect(receipts).toEqual([{ authors: [{ id: Number(account!.id), n: 2 }, { id: 7, n: 1 }] }]);
 
     // What Alice did, under the same id; her account, pseudonymous.
     expect(await kept(alice)).toEqual(aliceBefore);

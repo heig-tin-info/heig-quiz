@@ -6399,7 +6399,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.access.joinedCount": "{n}/{total} ont rejoint",
   "project.repo.unattributed.one": "1 non attribué",
   "project.repo.unattributed": "{n} non attribués",
-  "project.repo.unattributedTip": "Commits d'aucun membre du groupe : poussés avant le relevé des auteurs, ou par un autre compte",
+  "project.repo.unattributedTip": "Poussés sous un compte qu'aucun membre n'a lié, ou avant le relevé des auteurs",
   "project.repo.commitsTip": "{n} sur GitHub, celui de Quiz compris",
   "project.repo.commitsTipStale": "{n} sur GitHub, celui de Quiz compris (peut-être dépassé)",
   "project.repo.checks": "{passed}/{total} vérifications",

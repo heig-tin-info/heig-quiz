@@ -31,7 +31,6 @@ import {
   GRADE_RUN_LIST_LIMIT,
   type GradeRunList,
   type GradeRunView,
-  type ProjectCommitSeries,
   type ProjectDetail,
   type ProjectDetailGroup,
   type ProjectDetailRow,
@@ -53,6 +52,7 @@ import {
   projectPrimaryAction,
   projectScoreGrade,
   reviewState,
+  type CommitAttribution,
   type FinalScore,
   type FinalScoreSource,
   type GradeAdjustment,
@@ -66,7 +66,7 @@ import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, project
 import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
-import { countedReceipts, repoCommitAttribution, repoCommitCount } from "./commits.js";
+import { attributedReceipts, repoCommits } from "./commits.js";
 import { unvalidatedRepos } from "./criterionGrades.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
 import { lastCollections } from "../codespace/service.js";
@@ -337,7 +337,7 @@ function repoView(
   dispatch: DispatchRow | undefined,
   sync: ProjectRepoSync,
   read: LiveRead | undefined,
-  commits: { n: number; unattributed: ProjectCommitSeries },
+  commits: CommitAttribution<string>,
   toRevoke: ReadonlySet<string>,
   collection: ProjectRepoCollection | null,
 ): ProjectRepoView {
@@ -352,7 +352,7 @@ function repoView(
     acceptedAt: iso(repo.acceptedAt),
     lastCommit: repo.lastCommitSha === null ? null : { sha: repo.lastCommitSha, at: isoOrNull(repo.lastCommitAt) },
     ciStatus: repo.ciStatus,
-    commits: commits.n,
+    commits: commits.total,
     unattributed: commits.unattributed,
     live: liveView(read),
     scores,
@@ -446,8 +446,8 @@ export async function projectDetail(
     // The CI final review's ledger only: a `criteria` project's `deadline` rows are its platform pass (ADR-106 §6).
     project.gradingMode === "auto" ? finalDispatches(db, repoIds) : new Map<string, DispatchRow>(),
     repoSyncViews(db, project, shownRepos),
-    // The student's own count (M3-14m): the same receipts and rule as their card.
-    countedReceipts(db, shownRepos.flatMap((repo) => (repo.githubRepoId === null ? [] : [repo.githubRepoId]))),
+    // The student's own count (M3-14m): the same receipts and rule as their card, with their authors (ADR-136).
+    attributedReceipts(db, shownRepos.flatMap((repo) => (repo.githubRepoId === null ? [] : [repo.githubRepoId]))),
   ]);
   const liveRepos = repos.filter((repo) => isLive(repo, project));
   const shownLive = shownRepos.filter((repo) => isLive(repo, project));
@@ -458,28 +458,23 @@ export async function projectDetail(
 
   // The writers of the grade adjustments, named for the staff (ADR-135).
   const names = await adjusterNames(db, shownRepos);
-  // Who authored the counted commits (ADR-136): a repository's readers on the roster, by their linked account.
-  const readers = new Map<string, Map<string, number | null>>();
-  for (const s of roster) {
+  // Each roster line reading a repository — a group's every member —, once: their own access to it on GitHub
+  // (ADR-070's amendment of 2026-11-19), and the commits they authored there, by their linked account (ADR-136).
+  const readers = roster.flatMap((s) => {
     const repo = seats.of(project.id, s.enrollmentId);
-    if (repo !== null) readers.set(repo.id, (readers.get(repo.id) ?? new Map()).set(s.enrollmentId, s.githubUserId));
-  }
-  const authorship = new Map(shownRepos.map((repo) => [repo.id, repoCommitAttribution(project, repo, receipts, readers.get(repo.id) ?? new Map())]));
+    return repo === null ? [] : [{ repoId: repo.id, enrollmentId: s.enrollmentId, githubUserId: s.githubUserId }];
+  });
+  const access = await accessStates(db, readers);
+  const members = new Map<string, Map<string, number | null>>();
+  for (const r of readers) members.set(r.repoId, (members.get(r.repoId) ?? new Map()).set(r.enrollmentId, r.githubUserId));
+  const commits = new Map(shownRepos.map((repo) => [repo.id, repoCommits(project, repo, receipts, members.get(repo.id) ?? new Map())]));
   const views = new Map(
     shownRepos.map((repo) => [
       repo.id,
-      repoView(project, repo, scored, names, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), { n: repoCommitCount(project, repo, receipts), unattributed: authorship.get(repo.id)!.unattributed }, toRevoke, collections.get(repo.id) ?? null),
+      repoView(project, repo, scored, names, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), commits.get(repo.id)!, toRevoke, collections.get(repo.id) ?? null),
     ]),
   );
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));
-  // Each student's own access to the repository they read (ADR-070's amendment of 2026-11-19): a group's every member.
-  const access = await accessStates(
-    db,
-    roster.flatMap((s) => {
-      const repo = seats.of(project.id, s.enrollmentId);
-      return repo === null ? [] : [{ repoId: repo.id, enrollmentId: s.enrollmentId }];
-    }),
-  );
   const shown = new Set<string>();
   const rows: ProjectDetailRow[] = roster.flatMap((s) => {
     const { repo, groupId } = seats.seat(project.id, s.enrollmentId);
@@ -502,7 +497,7 @@ export async function projectDetail(
         repo: view ?? null,
         // Nobody invited on the repository (`none`: an `online_seb` project's, every access revoked): no access to speak of.
         access: view && repo!.invitationStatus !== "none" ? access({ repoId: repo!.id, enrollmentId: s.enrollmentId }) : null,
-        authored: view ? authorship.get(repo!.id)!.members.get(s.enrollmentId)! : null,
+        authored: view ? commits.get(repo!.id)!.members.get(s.enrollmentId)! : null,
         staff: s.staff,
       },
     ];

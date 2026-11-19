@@ -38,9 +38,9 @@ describe("the commits each member of a group authored (ADR-136)", () => {
       authors,
     });
     await server.app.db.insert(pushReceipts).values([
-      // Before the authors were recorded (week 40): unattributed, as a project already running shows them.
+      // Before the authors were recorded (the week of 28 September): unattributed, as a project already running shows them.
       receipt("2026-10-04T10:00:00Z", 2, null),
-      // Week 41: Ana 2, Ben 3, a staff member 1 — counted, never a member's.
+      // The week of 5 October: Ana 2, Ben 3, a staff member 1 — counted, never a member's.
       receipt("2026-10-06T10:00:00Z", 6, [
         { id: ana!.githubUserId, n: 2 },
         { id: ben!.githubUserId, n: 3 },
@@ -55,9 +55,9 @@ describe("the commits each member of a group authored (ADR-136)", () => {
     const rowOf = (who: Student) => detail.rows.find((r) => r.student.enrollmentId === room.lines.get(who.id))!;
     const repo = rowOf(ana!).repo!;
     expect(repo.commits).toBe(8);
-    expect(repo.unattributed).toEqual({ n: 3, weeks: [{ week: "2026-W40", n: 2 }, { week: "2026-W41", n: 1 }] });
-    expect(rowOf(ana!).authored).toEqual({ n: 2, weeks: [{ week: "2026-W41", n: 2 }] });
-    expect(rowOf(ben!).authored).toEqual({ n: 3, weeks: [{ week: "2026-W41", n: 3 }] });
+    expect(repo.unattributed).toEqual({ n: 3, weeks: [{ weekStart: "2026-09-28", n: 2 }, { weekStart: "2026-10-05", n: 1 }] });
+    expect(rowOf(ana!).authored).toEqual({ n: 2, weeks: [{ weekStart: "2026-10-05", n: 2 }] });
+    expect(rowOf(ben!).authored).toEqual({ n: 3, weeks: [{ weekStart: "2026-10-05", n: 3 }] });
     expect(rowOf(cid!).authored).toEqual({ n: 0, weeks: [] });
     expect(rowOf(dan!).authored).toEqual({ n: 0, weeks: [] });
 
@@ -75,7 +75,7 @@ describe("the commits each member of a group authored (ADR-136)", () => {
         bodies.push(res.body);
       }
       for (const body of bodies) {
-        expect(body).not.toMatch(/authored|unattributed|"weeks"|2026-W4/);
+        expect(body).not.toMatch(/authored|unattributed|"weeks"|weekStart/);
         expect(body).not.toContain(String(STAFF_ACCOUNT));
         for (const other of members.filter((m) => m !== who)) {
           expect(body).not.toContain(other.login);

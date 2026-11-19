@@ -6441,7 +6441,7 @@ export const en = {
   "project.access.joinedCount": "{n}/{total} joined",
   "project.repo.unattributed.one": "1 unattributed",
   "project.repo.unattributed": "{n} unattributed",
-  "project.repo.unattributedTip": "Commits by no member of the group: pushed before authors were recorded, or by another account",
+  "project.repo.unattributedTip": "Pushed under an account no member linked, or before authors were recorded",
   "project.repo.commitsTip": "{n} on GitHub, the App's included",
   "project.repo.commitsTipStale": "{n} on GitHub, the App's included (may be out of date)",
   "project.repo.checks": "{passed}/{total} checks",
