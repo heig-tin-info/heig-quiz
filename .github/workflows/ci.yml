@@ -69,9 +69,12 @@ jobs:
 
   # The API's and the SPA's suites, sharded, run side by side: in one job,
   # the API's db tests (each loading a PGlite, src/test/template.ts) and the
-  # SPA's jsdom tests took six minutes. The API gets four shards, the SPA
+  # SPA's jsdom tests took six minutes. The API gets eight shards, the SPA
   # three: with three each, the API shard holding the big db suites was the
-  # critical path at 6.5 minutes against 3 to 4 for every other job. Each
+  # critical path at 6.5 minutes against 3 to 4 for every other job; with four
+  # (2026-11), the project module's db suites (each 2 to 8 minutes) made
+  # shards of 6 to 14 minutes. vitest shards by file, so the floor is the
+  # slowest file (ingest.db.test.ts, about 8 minutes). Each
   # shard builds only the workspace packages its app imports (the tests
   # resolve them through dist/), which costs less than waiting for `build`.
   test-app:
@@ -83,10 +86,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { pkg: api, shard: 1, shards: 4 }
-          - { pkg: api, shard: 2, shards: 4 }
-          - { pkg: api, shard: 3, shards: 4 }
-          - { pkg: api, shard: 4, shards: 4 }
+          - { pkg: api, shard: 1, shards: 8 }
+          - { pkg: api, shard: 2, shards: 8 }
+          - { pkg: api, shard: 3, shards: 8 }
+          - { pkg: api, shard: 4, shards: 8 }
+          - { pkg: api, shard: 5, shards: 8 }
+          - { pkg: api, shard: 6, shards: 8 }
+          - { pkg: api, shard: 7, shards: 8 }
+          - { pkg: api, shard: 8, shards: 8 }
           - { pkg: web, shard: 1, shards: 3 }
           - { pkg: web, shard: 2, shards: 3 }
           - { pkg: web, shard: 3, shards: 3 }
