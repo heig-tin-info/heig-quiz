@@ -67,7 +67,7 @@ export { repoCommitGraph } from "./commitGraph.js";
 export { regrade } from "./regrade.js";
 export { projectDetail, repoRuns } from "./detail.js";
 export { closeProjectNow, repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
-export { overrideScore, releaseProject } from "./grades.js";
+export { adjustRepoGrade, overrideScore, releaseProject, type GradeWriter } from "./grades.js";
 export {
   columnProject,
   gradebookProjects,

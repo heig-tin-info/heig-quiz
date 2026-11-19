@@ -8,7 +8,8 @@
  * From M3-08a, the staff's reads: the project page (`GET
  * /app/api/projects/:id`, `ProjectDetail`) and a repository's runs. From
  * M3-08b, the staff's writes: the release, and on one repository the
- * teacher's score, the protection re-enabled, an invitation resent.
+ * teacher's score, the protection re-enabled, an invitation resent; from
+ * ADR-135, the grade adjustment.
  *
  * Registered only when Quiz's App is configured (`app.ts`), like the
  * `github` module: without it none of these routes exists. Open to every
@@ -42,6 +43,7 @@ import {
   ProjectCheckpointParams,
   CriterionCiLog,
   CriterionGradeWrite,
+  GradeAdjustmentWrite,
   ProjectCommitGraph,
   ProjectCreate,
   ProjectCriterionParams,
@@ -73,6 +75,7 @@ import {
   callerOf,
   gradingProject,
   gradingProjectRepo,
+  isCourseOwner,
   projectsAuthoringClassroom,
   projectsClassroom,
   seatOf,
@@ -535,12 +538,47 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
 
   // ------------------------------------------------------------ one repository's writes (M3-08b)
 
+  // A write of a repository's grade — the teacher's score, the grade
+  // adjustment (ADR-135): an owner or an assistant of the course, the owner
+  // alone once the project is released (ADR-068 as amended by ADR-135, as
+  // an evaluation's grading after its release).
+  const onGradeRepo = {
+    params: ProjectRepoParams,
+    load: withCourseRole(app, accessibleProjectRepo.bind(null, app), (scope) => scope.courseId, (scope) =>
+      scope.project.releasedAt === null ? "assistant" : "owner",
+    ),
+  };
+  /** The writer of a grade, and whether they own the course: the service reads the release again under its lock. */
+  const gradeWriter = async (req: FastifyRequest, now: Date, courseId: string): Promise<service.GradeWriter> => ({
+    actor: actorOf(req),
+    userId: callerOf(req).id,
+    now,
+    owner: await isCourseOwner(app.db, courseId, callerOf(req)),
+  });
+
   /** F-PROJ-14: the teacher's score, after the repository's definitive freeze; null clears it. */
   app.patch(
     "/app/api/projects/:id/repos/:rid/score",
     session,
-    teacher({ ...onRepo, body: ScoreOverride }, async ({ req, now, body, scope }) =>
-      service.overrideScore(app.db, scope.project.id, scope.repo.id, body, actorOf(req), callerOf(req).id, now),
+    teacher({ ...onGradeRepo, body: ScoreOverride }, async ({ req, now, body, scope }) =>
+      service.overrideScore(app.db, scope.project.id, scope.repo.id, body, await gradeWriter(req, now, scope.courseId)),
+    ),
+  );
+
+  /** ADR-135: the repository's grade adjustment, set or replaced (`PUT`) or cleared (`DELETE`). */
+  app.put(
+    "/app/api/projects/:id/repos/:rid/grade-adjustment",
+    session,
+    teacher({ ...onGradeRepo, body: GradeAdjustmentWrite }, async ({ req, now, body, scope }) =>
+      service.adjustRepoGrade(app.db, scope.project.id, scope.repo.id, body, await gradeWriter(req, now, scope.courseId)),
+    ),
+  );
+
+  app.delete(
+    "/app/api/projects/:id/repos/:rid/grade-adjustment",
+    session,
+    teacher(onGradeRepo, async ({ req, now, scope }) =>
+      service.adjustRepoGrade(app.db, scope.project.id, scope.repo.id, null, await gradeWriter(req, now, scope.courseId)),
     ),
   );
 

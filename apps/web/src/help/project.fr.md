@@ -29,6 +29,12 @@ vérifier* repose sur une exécution dont les fichiers protégés ont été
 restaurés : il bloque la publication tant que vous n'avez pas saisi le score
 de l'enseignant.
 
+Pour modifier une note après un échange avec un étudiant, cliquez sur la
+note en fin de ligne dans l'onglet **Correction** : un écart relatif ou une
+note absolue, avec une justification que les étudiants lisent une fois la
+note publiée. Après la publication, seule la personne responsable du cours
+peut ajuster une note ou modifier le score de l'enseignant.
+
 ## Échéance
 
 L'échéance est appliquée sur l'horloge du serveur ; ce qui compte pour un

@@ -422,7 +422,7 @@ describe("the project page (F-PROJ-13)", () => {
     expect(rowOf(before, s1!.id).repo!.released).toBeNull();
 
     await server.app.db.update(projects).set({ releasedAt: at(NOW), releasedBy: teacher.id }).where(eq(projects.id, w.projectId));
-    for (const repo of [r1, r2]) await setRepo(repo, { releasedPoints: 8, releasedMax: 10 });
+    for (const repo of [r1, r2]) await setRepo(repo, { releasedPoints: 8, releasedMax: 10, releasedGrade: 5 });
     const released = await detail(w.projectId);
     expect(released.primaryAction).toBe("none");
     expect(rowOf(released, s1!.id).repo!.flags.changedAfterRelease).toBe(false);

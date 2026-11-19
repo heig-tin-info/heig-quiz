@@ -1,14 +1,14 @@
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { ScoreOverride, type ProjectDetail, type ProjectRepoScores, type ProjectRepoView } from "@quiz/contracts";
-import { formatPoints } from "@quiz/domain";
+import { ScoreOverride, type ProjectDetail, type ProjectGradeAdjustment, type ProjectRepoScores, type ProjectRepoView } from "@quiz/contracts";
+import { formatGrade, formatPoints } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { FormError } from "../queryError";
 import { Badge, Button, Fact, Field, isoDateTime, Textarea } from "../ui";
-import { Points, Score } from "./parts";
-import { refusalMessage, reviewView, shortSha, teacherScoreBlock } from "./projectPage";
+import { AdjustmentByline, AdjustmentMark, baseMovedText, Points, Score, signedTenth } from "./parts";
+import { gradeWriteRefusal, reviewView, shortSha, teacherScoreBlock } from "./projectPage";
 
 const POINTS_ID = "project-teacher-points";
 const MAX_ID = "project-teacher-max";
@@ -102,7 +102,7 @@ function TeacherScoreForm({
         value={comment}
         onChange={(e) => setComment(e.target.value)}
       />
-      <FormError error={score.error} describe={(error) => refusalMessage(error, t)} />
+      <FormError error={score.error} describe={(error) => gradeWriteRefusal(error, t)} />
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" size="sm" disabled={body === null} loading={score.isPending && score.variables?.points !== null}>
           {t("common.save")}
@@ -150,6 +150,36 @@ function ReviewState({ repo }: { repo: Pick<ProjectRepoView, "review" | "frozenA
 }
 
 /**
+ * The repository's grade adjustment (ADR-135), read only — it is written
+ * from the Grading tab's matrix: the delta and the base it applies to (or
+ * the pinned grade and its base), the warning when an absolute pin's base
+ * moved, the justification, who wrote it and when.
+ */
+function AdjustmentFact({ adjustment }: { adjustment: ProjectGradeAdjustment }) {
+  const t = useT();
+  const base = adjustment.base === null ? "—" : formatGrade(adjustment.base);
+  const value =
+    adjustment.kind === "relative"
+      ? t("project.adjust.fact.relative", { delta: signedTenth(adjustment.value), base })
+      : t("project.adjust.fact.absolute", { grade: formatGrade(adjustment.value), base });
+  return (
+    <dl className="border-t border-line pt-3" data-testid="sheet-adjustment">
+      <Fact label={t("project.adjust.fact")}>
+        <span className="flex flex-col gap-1">
+          <span className="inline-flex items-center gap-1.5 tabular-nums">
+            {value}
+            <AdjustmentMark adjustment={adjustment} />
+          </span>
+          {adjustment.moved ? <span className="text-[13px] text-warning">{baseMovedText(t, adjustment.moved)}</span> : null}
+          <span className="whitespace-pre-wrap text-[13px]">{adjustment.comment}</span>
+          <AdjustmentByline adjustment={adjustment} />
+        </span>
+      </Fact>
+    </dl>
+  );
+}
+
+/**
  * The Scores section of the repository's sheet (F-PROJ-13, F-PROJ-14): the
  * five scores slot by slot with the final review's state beside them, then
  * the teacher's score form — or, where the form cannot apply, why: the
@@ -182,10 +212,11 @@ export function ScoreSection({
           <Points points={repo.scores.teacher?.points ?? null} max={repo.scores.teacher?.max ?? null} />
         </Fact>
         <Fact label={t("project.score.final")}>
-          <Score score={repo.scores.final} gradingMode={project.gradingMode} />
+          <Score score={repo.scores.final} gradingMode={project.gradingMode} adjustment={repo.scores.adjustment} />
         </Fact>
         <ReviewState repo={repo} />
       </dl>
+      {repo.scores.adjustment ? <AdjustmentFact adjustment={repo.scores.adjustment} /> : null}
       <div className="space-y-3 border-t border-line pt-3">
         <h4 className="text-[13px] font-medium">{t("project.teacherScore")}</h4>
         {block === null ? (

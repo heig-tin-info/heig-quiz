@@ -506,6 +506,15 @@ const scenes = [
     settle: 2500,
     act: (p) => p.getByRole("table").getByRole("button", { name: /^code/ }).click(),
   },
+  // ADR-135: the grade adjustment, opened from the mark of an adjusted row (a delta), then of a pin whose base moved.
+  ...[0, 1].map((n) => ({
+    name: n === 0 ? "project-grade-adjust" : "project-grade-adjust-moved",
+    role: "teacher",
+    path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=grading",
+    settle: 2500,
+    fold: true,
+    act: (p) => p.getByTestId("matrix-mark").filter({ has: p.getByTestId("grade-adjusted") }).nth(n).click(),
+  })),
   { name: "project-criteria-settings", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=settings", settle: 2500 },
   {
     name: "project-unassigned",

@@ -33,6 +33,8 @@ import {
   DEADLINE_STRATEGIES,
   GRADING_WORKFLOW,
   FINAL_SCORE_SOURCES,
+  GRADE_ADJUSTMENT_COMMENT_MAX,
+  GRADE_ADJUSTMENT_KINDS,
   GRADE_RUN_KINDS,
   GRADE_RUN_PARSE_STATUSES,
   PROJECT_GRADING_MODES,
@@ -47,6 +49,7 @@ import {
   STUDENT_PROJECT_STATUSES,
   SYNC_CHANGES,
   slugify,
+  validGradeAdjustment,
 } from "@quiz/domain";
 
 import { ProjectRepoCollection, StudentProjectWorkspace } from "./codespace.js";
@@ -618,6 +621,9 @@ export const PROJECT_REFUSALS = [
   // #1147, *Close now* (`POST …/close`, ADR-064 amendment of 2026-11-18): a
   // project that is not published, or whose deadline has come (409).
   "not_open",
+  // ADR-135: a grade adjustment on a repository whose final score has no
+  // grade (none yet, no maximum, or the CI's share of a criteria project) (409).
+  "no_grade",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;
@@ -856,7 +862,9 @@ export type ProjectSlotScore = z.infer<typeof ProjectSlotScore>;
  * the teacher's score to settle it; never for a teacher's score. `grade`
  * is null for the CI's share of a project graded by criteria (`ciShareOnly`
  * of `@quiz/domain`, the `current` and `frozen` slots' too): the AI and the
- * teacher grade the rest later.
+ * teacher grade the rest later. Otherwise it is the grade every view shows:
+ * the points' grade through the repository's grade adjustment, if any
+ * (`adjustGrade`, ADR-135; the base is the adjustment's `base`).
  */
 export const ProjectFinalScore = z.object({
   points: z.number(),
@@ -866,6 +874,29 @@ export const ProjectFinalScore = z.object({
   grade: ProjectGradeView.nullable(),
 });
 export type ProjectFinalScore = z.infer<typeof ProjectFinalScore>;
+
+/**
+ * A repository's grade adjustment for its staff (ADR-135): its `kind` and
+ * `value` (a delta, or the pinned grade), the justification, who wrote it
+ * and when (`by` the writer's name, null when the view names nobody), the
+ * base grade now (`base`, null while the final score has none: the
+ * adjustment then applies to nothing) and `moved` — an absolute pin whose
+ * base moved since its write, from the base it was written over to the base
+ * of now, which the staff keep (written again) or clear; null otherwise.
+ * The adjusted grade itself is the final score's `grade`
+ * ({@link ProjectFinalScore}). STAFF ONLY: the student reads the released
+ * grade and the comment alone.
+ */
+export const ProjectGradeAdjustment = z.object({
+  kind: z.enum(GRADE_ADJUSTMENT_KINDS),
+  value: z.number(),
+  comment: z.string(),
+  by: z.string().nullable(),
+  at: z.iso.datetime(),
+  base: z.number().nullable(),
+  moved: z.object({ from: z.number(), to: z.number() }).nullable(),
+});
+export type ProjectGradeAdjustment = z.infer<typeof ProjectGradeAdjustment>;
 
 /**
  * What GitHub says of a repository now (F-PROJ-13), from the live-state
@@ -949,8 +980,9 @@ export type ProjectRepoSync = z.infer<typeof ProjectRepoSync>;
  *   - `clamped` — the run of one of its three slots printed a negative
  *     score, counted 0 (M3-14n);
  *   - `deleted` — gone from GitHub (stored, or GitHub's 404 just now);
- *   - `changedAfterRelease` — the final score differs from the release's
- *     snapshot (only once the project was released).
+ *   - `changedAfterRelease` — the grade (adjusted, ADR-135) or the
+ *     adjustment's comment differs from the release's snapshot (only once
+ *     the project was released).
  */
 export const ProjectRepoView = ProjectRepoDeadlineState.extend({
   /**
@@ -980,6 +1012,8 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
       })
       .nullable(),
     final: ProjectFinalScore.nullable(),
+    /** The repository's grade adjustment (ADR-135), null without one. */
+    adjustment: ProjectGradeAdjustment.nullable(),
     /**
      * The maximum a teacher's score is held to (M3-12b): the scored run's —
      * the one the final score would come from without the teacher —, or
@@ -1263,7 +1297,9 @@ export type ProjectCheckpointErrorCode = z.infer<typeof ProjectCheckpointErrorCo
  * run (`422 score_max_required`) and then the score's own; otherwise the
  * scored run's maximum applies and a `max` given must equal it (`422
  * score_max_mismatch`); `points` never exceed it (`422 score_above_max`).
- * Answers {@link ProjectRepoScores}.
+ * Answers {@link ProjectRepoScores}. The course's owner or an assistant
+ * before the project's release, its owner alone after it (`403
+ * owner_required`, ADR-068 as amended by ADR-135).
  */
 export const ScoreOverride = z.strictObject({
   points: z.number().min(0).max(1000).nullable(),
@@ -1273,7 +1309,29 @@ export const ScoreOverride = z.strictObject({
 export type ScoreOverride = z.infer<typeof ScoreOverride>;
 
 /**
- * The repository's scores as they stand after a write ({@link ScoreOverride}):
+ * `PUT /app/api/projects/:id/repos/:rid/grade-adjustment` (ADR-135): the
+ * repository's grade adjustment, set or replaced — `relative` a delta, a
+ * multiple of 0.1 within ±5 and never 0; `absolute` a grade 1 … 6 at the
+ * tenth (`validGradeAdjustment`, a 400 otherwise) — with its justification,
+ * required. On a graded project (`409 grading_none`), a repository frozen
+ * for good (`409 not_frozen`) whose final score has a grade (`409
+ * no_grade`). Written again, an absolute pin takes the base of now. The
+ * course's owner or an assistant before the release, its owner alone after
+ * it (`403 owner_required`). `DELETE` on the same path clears it. Both
+ * answer {@link ProjectRepoScores}.
+ */
+export const GradeAdjustmentWrite = z
+  .strictObject({
+    kind: z.enum(GRADE_ADJUSTMENT_KINDS),
+    value: z.number(),
+    comment: z.string().trim().min(1).max(GRADE_ADJUSTMENT_COMMENT_MAX),
+  })
+  .refine(validGradeAdjustment, { message: "A multiple of 0.1: a delta within ±5 and not 0, or a grade within 1 and 6", path: ["value"] });
+export type GradeAdjustmentWrite = z.infer<typeof GradeAdjustmentWrite>;
+
+/**
+ * The repository's scores as they stand after a write ({@link ScoreOverride},
+ * {@link GradeAdjustmentWrite}):
  * the `scores`, `released` and `flags.changedAfterRelease` of its
  * {@link ProjectRepoView}, so the row can be patched in place.
  */
@@ -1578,7 +1636,11 @@ export type StudentCriteriaRow = z.infer<typeof StudentCriteriaRow>;
  * snapshot, its grade, and the teacher's comment AS THE RELEASE WROTE IT
  * (`released_comment`: a comment written since waits for the next
  * release, like the score it may describe). `points` null when the
- * release found no score for them.
+ * release found no score for them. `grade` is the ADJUSTED grade and
+ * `adjustmentComment` the adjustment's justification as the release wrote
+ * it (ADR-135), null without one: never the adjustment's kind, value nor
+ * base (a display choice, not a secret: the points and the public scale
+ * make the delta deducible).
  */
 export const StudentProjectRelease = z.object({
   at: z.iso.datetime(),
@@ -1586,6 +1648,7 @@ export const StudentProjectRelease = z.object({
   max: z.number().nullable(),
   grade: ProjectGradeView.nullable(),
   comment: z.string().nullable(),
+  adjustmentComment: z.string().nullable(),
 });
 export type StudentProjectRelease = z.infer<typeof StudentProjectRelease>;
 
@@ -1850,6 +1913,13 @@ export const ProjectGradingRepo = ProjectRepoCriteria.extend({
   frozen: z.boolean(),
   validation: RepoValidation,
   total: z.object({ points: z.number(), max: z.number() }).nullable(),
+  /**
+   * The grade every view shows (ADR-135): the final score's — the
+   * teacher's, else the validated criteria's — through the grade
+   * adjustment; null while there is none (the CI's share alone).
+   */
+  grade: z.number().nullable(),
+  adjustment: ProjectGradeAdjustment.nullable(),
   pass: ProjectGradingPass.nullable(),
 });
 export type ProjectGradingRepo = z.infer<typeof ProjectGradingRepo>;

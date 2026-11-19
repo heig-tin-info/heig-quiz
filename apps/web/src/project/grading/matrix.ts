@@ -1,10 +1,9 @@
-import type { CriteriaTableRow, ProjectGradingRepo, ProjectGradingScale } from "@quiz/contracts";
+import type { CriteriaTableRow, ProjectGradingRepo } from "@quiz/contracts";
 import {
   describe,
   histogram,
   histogramBucket,
   isPassing,
-  projectGrade,
   type Description,
   type GradeBand,
   type HistogramBucket,
@@ -221,9 +220,6 @@ export function cellHeat(cell: CellValue): GradeBand | null {
 export const validatedRepos = (repos: readonly ProjectGradingRepo[]): ProjectGradingRepo[] =>
   repos.filter((r) => r.validation.validated && r.total !== null);
 
-/** A validated repository's mark, by the project's scale, from its (clamped) total; null without one. */
-export const repoMark = (repo: Pick<ProjectGradingRepo, "total">, scale: ProjectGradingScale): number | null =>
-  repo.total === null ? null : projectGrade(repo.total.points, repo.total.max, scale).grade;
 
 /** A validated repository counted under a bar of the histogram, with its mark. */
 export interface BinMember {
@@ -244,9 +240,14 @@ export interface MarkStats {
   passing: number;
 }
 
-/** The marks of the validated repositories: their description, their histogram and who is under each bar. */
-export function markStats(repos: readonly ProjectGradingRepo[], scale: ProjectGradingScale): MarkStats {
-  const counted = validatedRepos(repos).map((repo) => ({ repo, mark: repoMark(repo, scale)! }));
+/**
+ * The marks of the validated repositories: their description, their
+ * histogram and who is under each bar. A mark is the server's grade
+ * (`grade`), adjusted (ADR-135): the one every view reads, never
+ * recomputed here from the total.
+ */
+export function markStats(repos: readonly ProjectGradingRepo[]): MarkStats {
+  const counted = validatedRepos(repos).flatMap((repo) => (repo.grade === null ? [] : [{ repo, mark: repo.grade }]));
   const marks = counted.map((m) => m.mark);
   const members = new Map<number, BinMember[]>();
   for (const member of counted) {

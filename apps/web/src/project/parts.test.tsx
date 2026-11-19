@@ -38,6 +38,33 @@ describe("Score", () => {
     }
   });
 
+  it("marks an adjusted grade with its justification; a moved base is said first (ADR-135)", () => {
+    const adjustment = {
+      kind: "relative" as const,
+      value: 0.3,
+      comment: "Oral defence",
+      by: "Prof Démo",
+      at: "2026-11-10T08:00:00.000Z",
+      base: 5.3,
+      moved: null,
+    };
+    const { unmount } = renderWithProviders(
+      <Score score={final({ source: "teacher", points: 17, max: 20, grade: { grade: 5.6 } })} gradingMode="auto" adjustment={adjustment} />,
+    );
+    expect(screen.getByText("5.6")).toBeInTheDocument();
+    expect(screen.getByTestId("grade-adjusted")).toHaveTextContent("Adjusted grade: Oral defence");
+    unmount();
+    renderWithProviders(
+      <Score
+        score={final({ source: "teacher", points: 17, max: 20, grade: { grade: 4.5 } })}
+        gradingMode="auto"
+        adjustment={{ ...adjustment, kind: "absolute", value: 4.5, base: 5.3, moved: { from: 4.1, to: 5.3 } }}
+      />,
+    );
+    expect(screen.getByTestId("grade-adjusted")).toHaveTextContent("Base grade moved from 4.1 to 5.3. Oral defence");
+    expect(screen.getByTestId("grade-adjusted").className).toContain("text-warning");
+  });
+
   it("writes a dash without a score", () => {
     renderWithProviders(<Score score={null} gradingMode="criteria" />);
     expect(screen.getByText("—")).toBeInTheDocument();

@@ -46,6 +46,7 @@ import {
   CriteriaIncomplete,
   CriterionGradeWrite,
   criterionConflict,
+  GradeAdjustmentWrite,
   snapshotSettings,
   PROJECT_DEFAULTS,
   ProjectGroupResync,
@@ -89,6 +90,7 @@ import {
   type WorkspaceReview,
 } from "@quiz/contracts";
 import {
+  adjustGrade,
   awardedRange,
   changedAfterRelease,
   checkpointDueAt,
@@ -122,7 +124,9 @@ import {
   withForcedProtected,
   type CriterionGradeLike,
   type FinalScoreSource,
+  type GradeAdjustment,
   type ProjectDatesChange,
+  type ReleasedGrade,
   type ProjectLifeLike,
   type SyncPathChange,
 } from "@quiz/domain";
@@ -170,6 +174,10 @@ interface MockRepo {
   degraded: boolean;
   teacher: ProjectRepoView["scores"]["teacher"];
   released: ProjectRepoView["released"];
+  /** The grade adjustment as stored (ADR-135), with its comment, writer and date. */
+  adjustment: (GradeAdjustment & { comment: string; by: string | null; at: string }) | null;
+  /** What the release wrote of the grade (`released_grade`, `released_adjustment_comment`); null before it. */
+  releasedGrade: ReleasedGrade | null;
   protectionSuspended: boolean;
   deleted: boolean;
   runs: GradeRunView[];
@@ -350,6 +358,8 @@ function mockRepo(over: Pick<MockRepo, "id" | "enrollmentId" | "student" | "full
     degraded: false,
     teacher: null,
     released: null,
+    adjustment: null,
+    releasedGrade: null,
     protectionSuspended: false,
     deleted: false,
     runs: [],
@@ -1010,11 +1020,39 @@ function mockCollection(p: MockProject, r: MockRepo): ProjectRepoView["collectio
   return states[p.repos.indexOf(r) % states.length]!;
 }
 
+/**
+ * A repository's grade as the server gives it (`repoScores`, ADR-135): the
+ * final score's grade by the project's scale, through the adjustment; the
+ * adjustment's view; what a release would write of them.
+ */
+function gradeOf(p: MockProject, r: MockRepo) {
+  const final = finalOf(r);
+  const base = final ? (projectScoreGrade(p.summary, final.source, final.points, final.max)?.grade ?? null) : null;
+  const adjusted = adjustGrade(base, r.adjustment);
+  const adjustment: ProjectRepoView["scores"]["adjustment"] = r.adjustment && {
+    kind: r.adjustment.kind,
+    value: r.adjustment.value,
+    comment: r.adjustment.comment,
+    by: r.adjustment.by,
+    at: r.adjustment.at,
+    base: adjusted?.base ?? null,
+    moved: adjusted?.moved ?? null,
+  };
+  const grade = adjusted?.grade ?? null;
+  const releasable: ReleasedGrade = {
+    grade,
+    adjustmentComment: grade !== null && r.adjustment ? r.adjustment.comment : null,
+    points: final?.points ?? null,
+    max: final?.max ?? null,
+  };
+  return { final: final && { ...final, grade: adjusted && { grade: adjusted.grade } }, adjustment, releasable };
+}
+
 function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
   // As the server grades them (`projectScoreGrade`): none for the CI's share of a project graded by criteria.
   const graded = (s: { runId: string; points: number | null; max: number | null } | null, source: FinalScoreSource) =>
     s ? { ...s, grade: projectScoreGrade(p.summary, source, s.points, s.max) } : null;
-  const final = finalOf(r);
+  const { final, adjustment, releasable } = gradeOf(p, r);
   const latest = r.runs[0];
   return {
     ...deadlineState(p, r),
@@ -1033,7 +1071,8 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
       frozen: graded(slot(r, r.frozenRunId), "ci"),
       review: graded(slot(r, r.reviewRunId), "review"),
       teacher: r.teacher,
-      final: final ? { ...final, grade: projectScoreGrade(p.summary, final.source, final.points, final.max) } : null,
+      final,
+      adjustment,
       scoreMax: runMaxOf(r),
     },
     review: reviewOf(p, r),
@@ -1046,7 +1085,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
       malformed: latest?.parseStatus === "malformed" ? latest.parseDetail : null,
       clamped: [r.currentRunId, r.frozenRunId, r.reviewRunId].some((id) => r.runs.find((x) => x.id === id)?.clamped),
       deleted: r.deleted,
-      changedAfterRelease: r.released !== null && changedAfterRelease(true, final, r.released),
+      changedAfterRelease: r.releasedGrade !== null && changedAfterRelease(true, releasable, r.releasedGrade),
     },
     accessToRevoke: r.accessToRevoke,
     collection: mockCollection(p, r),
@@ -1506,6 +1545,21 @@ function seedCriteria(p: MockProject): void {
     }
     if (validated) add("git.commits", 1, "manual", "Identité configurée, messages clairs.");
     CRITERION_ROWS.set(r.id, rows);
+    // ADR-135: one validated repository adjusted by a delta after a talk, another pinned over a base that moved since.
+    const adjustedAt = new Date(at.getTime() + D).toISOString();
+    if (i === 0) {
+      r.adjustment = {
+        kind: "relative",
+        value: -0.4,
+        baseAtWrite: null,
+        comment: "Défense orale : la libération de la liste chaînée n'est pas expliquée.",
+        by: "Prof Démo",
+        at: adjustedAt,
+      };
+    }
+    if (i === 3) {
+      r.adjustment = { kind: "absolute", value: 4.5, baseAtWrite: 4.1, comment: "Rendu tardif excusé, certificat médical.", by: "Prof Démo", at: adjustedAt };
+    }
     EVIDENCE.set(r.id, {
       status: "ok",
       reason: null,
@@ -1601,6 +1655,8 @@ function gradingRepoOf(p: MockProject, r: MockRepo): ProjectGradingRepo {
     ),
     evidence: EVIDENCE.get(r.id) ?? null,
     total: criteriaScore(SNAPSHOT, rows),
+    grade: gradeOf(p, r).final?.grade?.grade ?? null,
+    adjustment: gradeOf(p, r).adjustment,
     pass: passOf(p, r),
   };
 }
@@ -1936,6 +1992,35 @@ on("PATCH", "/app/api/projects/:id/repos/:rid/score", (m, raw) => {
 });
 
 /**
+ * The grade adjustment (ADR-135): as the teacher's score, after the
+ * definitive freeze on a graded project, and a grade to adjust (`409
+ * no_grade`); an absolute pin takes the base of now. DELETE clears it.
+ * Answers the row's scores. The owner rule after the release is the server's:
+ * an assistant's (`?assistant=1`) on a released project gets `403 owner_required`.
+ */
+function adjustRepoGrade(m: { groups?: Record<string, string | undefined> }, raw: unknown, clear: boolean): ProjectRepoScores {
+  const p = projectOr404(m.groups!.id!);
+  const r = p.repos.find((x) => x.id === m.groups!.rid);
+  if (!r) throw new MockError(404, "Not found");
+  const parsed = clear ? null : GradeAdjustmentWrite.safeParse(raw);
+  if (parsed && !parsed.success) throw new MockPayload(400, { error: "validation", message: parsed.error.message });
+  if (flags.assistant && p.releasedAt !== null) throw refuse(403, "owner_required", "Only an owner of this course may do that");
+  if (p.summary.gradingMode === "none") throw refuse(409, "grading_none", "The project is not graded");
+  if (r.frozenAt === null) throw refuse(409, "not_frozen", "The repository is not frozen yet");
+  if (parsed) {
+    const base = gradeOf(p, r).adjustment?.base ?? gradeOf(p, r).final?.grade?.grade ?? null;
+    if (base === null) throw refuse(409, "no_grade", "The repository has no grade to adjust");
+    r.adjustment = { kind: parsed.data.kind, value: parsed.data.value, baseAtWrite: base, comment: parsed.data.comment, by: "Prof Démo", at: iso(0) };
+  } else {
+    r.adjustment = null;
+  }
+  const view = repoView(p, r);
+  return { scores: view.scores, released: view.released, changedAfterRelease: view.flags.changedAfterRelease };
+}
+on("PUT", "/app/api/projects/:id/repos/:rid/grade-adjustment", (m, raw) => adjustRepoGrade(m, raw, false));
+on("DELETE", "/app/api/projects/:id/repos/:rid/grade-adjustment", (m) => adjustRepoGrade(m, null, true));
+
+/**
  * The release (F-PROJ-14, D05): every live repository frozen for good, no
  * final score left to verify; a snapshot per repository, rewritten by a
  * release again. A non-live repository's score to verify is released as none.
@@ -1967,6 +2052,7 @@ on("POST", "/app/api/projects/:id/release", (m) => {
     const resolved = finalOf(r);
     const final = resolved && (isLive(p, r) || !resolved.toVerify) ? resolved : null;
     r.released = { points: final?.points ?? null, max: final?.max ?? null };
+    r.releasedGrade = final ? gradeOf(p, r).releasable : { grade: null, adjustmentComment: null, points: null, max: null };
     if (final) scored += 1;
   }
   p.releasedAt = iso(0);

@@ -518,7 +518,11 @@ function TeacherUpdateSection({ update }: { update: NonNullable<StudentProject["
   );
 }
 
-/** What the release gave the student (F-PROJ-14): the final score, its grade, the teacher's comment as the release wrote it. */
+/**
+ * What the release gave the student (F-PROJ-14): the final score, its grade,
+ * the teacher's comment as the release wrote it, then — when the grade was
+ * adjusted (ADR-135) — the adjustment's justification, never its delta.
+ */
 function ReleaseSection({ release }: { release: NonNullable<StudentProject["release"]> }) {
   const t = useT();
   return (
@@ -531,6 +535,13 @@ function ReleaseSection({ release }: { release: NonNullable<StudentProject["rele
       {release.comment ? (
         <NotePanel eyebrow={t("feedback.comment")} tone="outlined">
           <p className="whitespace-pre-wrap text-sm">{release.comment}</p>
+        </NotePanel>
+      ) : null}
+      {release.adjustmentComment ? (
+        <NotePanel eyebrow={t("sproj.gradeAdjusted")} tone="outlined">
+          <p className="whitespace-pre-wrap text-sm" data-testid="sproj-adjustment">
+            {release.adjustmentComment}
+          </p>
         </NotePanel>
       ) : null}
     </section>

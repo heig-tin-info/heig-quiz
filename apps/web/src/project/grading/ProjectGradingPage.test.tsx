@@ -54,6 +54,8 @@ function repo(id: string, label: string, over: Partial<ProjectGradingRepo> = {})
       createdAt: "2026-10-09T22:50:00.000Z",
     },
     total: null,
+    grade: null,
+    adjustment: null,
     pass: null,
     ...over,
   };

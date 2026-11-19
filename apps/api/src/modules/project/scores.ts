@@ -11,7 +11,8 @@ import { inArray } from "drizzle-orm";
 import { resolveFinalScore, type FinalScore } from "@quiz/domain";
 
 import type { Db, Tx } from "../../db/client.js";
-import { projectGradeRuns } from "../../db/schema.js";
+import { projectGradeRuns, users } from "../../db/schema.js";
+import { fullName } from "../live/service.js";
 import { criteriaStandings, type CriteriaStanding } from "./criterionGrades.js";
 import type { RepoRow } from "./repos.js";
 
@@ -24,6 +25,22 @@ export async function slotRuns(db: Db | Tx, repos: readonly RepoRow[]): Promise<
   );
   if (ids.length === 0) return new Map();
   return new Map((await db.select().from(projectGradeRuns).where(inArray(projectGradeRuns.id, ids))).map((r) => [r.id, r]));
+}
+
+/**
+ * The names of the staff who wrote the grade adjustments of `repos`
+ * (ADR-135), by account, as the staff name a person (`fullName`): one read,
+ * none without an adjustment. Read where a staff view is built, never by
+ * the release or the gradebook.
+ */
+export async function adjusterNames(db: Db | Tx, repos: readonly RepoRow[]): Promise<Map<string, string>> {
+  const ids = [...new Set(repos.flatMap((repo) => (repo.gradeAdjustedBy === null ? [] : [repo.gradeAdjustedBy])))];
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({ id: users.id, given: users.givenName, family: users.familyName, email: users.email })
+    .from(users)
+    .where(inArray(users.id, ids));
+  return new Map(rows.map((u) => [u.id, fullName(u.given, u.family, u.email)]));
 }
 
 /** What a repository's final score reads: its slot runs and, graded by criteria, its standing (ADR-106 §7). */

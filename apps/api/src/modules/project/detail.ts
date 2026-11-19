@@ -44,6 +44,7 @@ import {
   type ProjectStudent,
 } from "@quiz/contracts";
 import {
+  adjustGrade,
   changedAfterRelease,
   ciShareOnly,
   draftStartsLater,
@@ -51,7 +52,10 @@ import {
   projectPrimaryAction,
   projectScoreGrade,
   reviewState,
+  type FinalScore,
   type FinalScoreSource,
+  type GradeAdjustment,
+  type ReleasedGrade,
 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -70,7 +74,7 @@ import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { studentRepos, type RepoRow } from "./repos.js";
-import { finalOf, scoreFacts, slots, type RunRow, type ScoreFacts } from "./scores.js";
+import { adjusterNames, finalOf, scoreFacts, slots, type RunRow, type ScoreFacts } from "./scores.js";
 import { gradedBeforeUpdate, projectSyncState, repoSyncViews } from "./sync.js";
 import { projectSummary, type ProjectRow } from "./views.js";
 
@@ -195,32 +199,88 @@ async function finalDispatches(db: Db, repoIds: string[]): Promise<Map<string, D
 /**
  * A repository's scores (F-PROJ-14) and whether they moved since the
  * release: the three slots, the teacher's score with the maximum it was
- * written with, the final score resolved and graded by the project's scale,
- * the release's snapshot. The one computation behind the page's rows and
- * the score's write (M3-08b); `facts` holds the repository's slot runs and
- * criteria standing ({@link scoreFacts}).
+ * written with, the final score resolved and graded by the project's scale
+ * then through the grade adjustment (ADR-135), the adjustment, the
+ * release's snapshot. The one computation behind the page's rows, the
+ * score's and the adjustment's writes (M3-08b), the release and the
+ * gradebook; `facts` holds the repository's slot runs and criteria
+ * standing ({@link scoreFacts}). `names` names the adjustment's writer
+ * (`adjusterNames`), read by the staff's views alone: without it, `by` is
+ * null.
  */
-export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts): ProjectRepoScores {
+export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts, names: ReadonlyMap<string, string> = NO_NAMES): ProjectRepoScores {
   const [current, frozen, review] = slots(repo, facts.runs);
   const final = finalOf(repo, facts);
+  const stored = storedAdjustment(repo);
+  // Points → their grade by the project's scale → the adjustment (ADR-135): the grade every view shows.
+  const graded = adjustGrade(baseGrade(project, final), stored);
   const released = project.releasedAt !== null;
-  return {
-    scores: {
-      current: slotScore(current, project, "ci"),
-      frozen: slotScore(frozen, project, "ci"),
-      review: slotScore(review, project, "review"),
-      teacher:
-        repo.teacherPoints === null
-          ? null
-          : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment, gradedAt: isoOrNull(repo.teacherGradedAt) },
-      final: final && { ...final, grade: projectScoreGrade(project, final.source, final.points, final.max) },
-      scoreMax: teacherRunMax(repo, facts),
+  const scores: ProjectRepoScores["scores"] = {
+    current: slotScore(current, project, "ci"),
+    frozen: slotScore(frozen, project, "ci"),
+    review: slotScore(review, project, "review"),
+    teacher:
+      repo.teacherPoints === null
+        ? null
+        : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment, gradedAt: isoOrNull(repo.teacherGradedAt) },
+    final: final && { ...final, grade: graded && { grade: graded.grade } },
+    adjustment: stored && {
+      kind: stored.kind,
+      value: stored.value,
+      comment: stored.comment,
+      by: names.get(stored.by) ?? null,
+      at: iso(stored.at),
+      base: graded?.base ?? null,
+      moved: graded?.moved ?? null,
     },
+    scoreMax: teacherRunMax(repo, facts),
+  };
+  return {
+    scores,
     released: released ? { points: repo.releasedPoints, max: repo.releasedMax } : null,
-    changedAfterRelease: changedAfterRelease(released, releasableScore(project, repo, final), {
+    changedAfterRelease: changedAfterRelease(released, releaseOf(project, repo, scores), {
+      grade: repo.releasedGrade,
+      adjustmentComment: repo.releasedAdjustmentComment,
       points: repo.releasedPoints,
       max: repo.releasedMax,
     }),
+  };
+}
+
+/** A final score's grade by the project's scale, before any adjustment (`projectScoreGrade`); null without one. */
+export function baseGrade(project: ProjectRow, final: FinalScore | null): number | null {
+  return final === null ? null : (projectScoreGrade(project, final.source, final.points, final.max)?.grade ?? null);
+}
+
+const NO_NAMES: ReadonlyMap<string, string> = new Map();
+
+/** A repository's grade adjustment as stored (ADR-135), null without one: its six columns are written whole (`project_repos_grade_adjust_whole`). */
+function storedAdjustment(repo: RepoRow): (GradeAdjustment & { comment: string; by: string; at: Date }) | null {
+  const { gradeAdjustKind: kind, gradeAdjustValue: value, gradeAdjustComment: comment, gradeAdjustedBy: by, gradeAdjustedAt: at } = repo;
+  if (kind === null || value === null || comment === null || by === null || at === null) return null;
+  return { kind, value, baseAtWrite: repo.gradeAdjustBase, comment, by, at };
+}
+
+/**
+ * What the release writes of a repository, and what "changed after
+ * release" compares with what it wrote (ADR-135): the releasable final
+ * score ({@link releasableScore}), its ADJUSTED grade, and the
+ * adjustment's comment when the adjustment applied to a grade. ONE rule
+ * for the release, the page's flag and the gradebook's live cell.
+ */
+export function releaseOf(
+  project: ProjectRow,
+  repo: RepoRow,
+  scores: Pick<ProjectRepoScores["scores"], "final" | "adjustment">,
+): ReleasedGrade & { final: ProjectRepoScores["scores"]["final"] } {
+  const final = releasableScore(project, repo, scores.final);
+  const grade = final?.grade?.grade ?? null;
+  return {
+    final,
+    grade,
+    adjustmentComment: grade !== null && scores.adjustment ? scores.adjustment.comment : null,
+    points: final?.points ?? null,
+    max: final?.max ?? null,
   };
 }
 
@@ -270,6 +330,7 @@ function repoView(
   project: ProjectRow,
   repo: RepoRow,
   scored: ScoreFacts,
+  names: ReadonlyMap<string, string>,
   facts: RunFacts | undefined,
   dispatch: DispatchRow | undefined,
   sync: ProjectRepoSync,
@@ -278,7 +339,7 @@ function repoView(
   toRevoke: ReadonlySet<string>,
   collection: ProjectRepoCollection | null,
 ): ProjectRepoView {
-  const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, scored);
+  const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, scored, names);
   const runs = scored.runs;
   return {
     ...repoDeadlineState(repo, project),
@@ -388,10 +449,12 @@ export async function projectDetail(
   // The online workspace's last collection (ADR-130 §7), the `codespace` module's record.
   const collections = await lastCollections(db, repoIds);
 
+  // The writers of the grade adjustments, named for the staff (ADR-135).
+  const names = await adjusterNames(db, shownRepos);
   const views = new Map(
     shownRepos.map((repo) => [
       repo.id,
-      repoView(project, repo, scored, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), repoCommitCount(project, repo, receipts), toRevoke, collections.get(repo.id) ?? null),
+      repoView(project, repo, scored, names, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), repoCommitCount(project, repo, receipts), toRevoke, collections.get(repo.id) ?? null),
     ]),
   );
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));

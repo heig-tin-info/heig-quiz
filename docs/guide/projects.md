@@ -124,9 +124,13 @@ Only runs on a handed-out branch count, on a head commit that no bot pushed. A r
 
 A score resting on a run **to verify** (protected files in conflict) blocks the release: set the teacher's score to settle it.
 
+### Adjust a grade
+
+After a talk with a student, or an explanation given afterwards, you can move the grade itself without touching the criteria or the points. On the **Grading** tab of a project graded by criteria, click the grade at the end of a row: choose **Relative** (a change such as +0.3, in tenths, at most ±5) or **Absolute** (the grade itself, 1.0 to 6.0), and write the justification, which is required. The dialog shows the grade before and after, and names every member of a group. The adjustment applies to the grade of the points, live: a relative change follows a regrade, while an absolute grade stays put and, when the grade of the points moves, the row says *base grade moved*; adjust again to keep it, or remove it. An adjusted grade wears a small mark; its justification is in its bubble and in the repository's sheet. Students read the justification under the teacher's comment once you release, never the change itself (though the points and the scale let one work it out). A teacher's mark in the gradebook still wins over it. Once the project is released, only the person who runs the course (its owner, not an assistant) can adjust a grade or change the teacher's score. *(ADR-135.)*
+
 ## Release
 
-**Release scores** makes the final scores the students' and the gradebook's, converted to grades by the project's scale. It needs every live repository frozen for good, and tells you what is missing otherwise. Before the release a student's score is indicative. A score changed after the release shows *changed after release*, and **Release again** updates the grades.
+**Release scores** makes the final scores the students' and the gradebook's, converted to grades by the project's scale, then adjusted. It needs every live repository frozen for good, and tells you what is missing otherwise. Before the release a student's score is indicative. A grade, or an adjustment's justification, changed after the release shows *changed after release*, and **Release again** updates the grades.
 
 <figure markdown="span">
   ![The release confirmation](../assets/screenshots/mock-project-release-light.png#only-light)

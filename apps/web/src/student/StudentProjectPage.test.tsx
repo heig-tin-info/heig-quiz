@@ -334,7 +334,7 @@ describe("the release", () => {
       status: "released",
       deadlineAt: at(-7),
       repo: { ...project().repo!, locked: true, score: { points: 30, max: 40, grade: null, frozen: true } },
-      release: { at: at(-5), points: 36, max: 40, grade: { grade: 5.5 }, comment: "Bon travail,\nattention aux fuites." },
+      release: { at: at(-5), points: 36, max: 40, grade: { grade: 5.5 }, comment: "Bon travail,\nattention aux fuites.", adjustmentComment: null },
     });
     mockFetch({ [URL]: ok(p) });
     render();
@@ -350,9 +350,26 @@ describe("the release", () => {
     expect(screen.getByText("scores published")).toBeInTheDocument();
   });
 
+  it("shows an adjusted grade's justification after the teacher's comment, never its delta (ADR-135)", async () => {
+    const p = project({
+      status: "released",
+      deadlineAt: at(-7),
+      repo: { ...project().repo!, locked: true, score: { points: 30, max: 40, grade: null, frozen: true } },
+      release: { at: at(-5), points: 36, max: 40, grade: { grade: 5.8 }, comment: "Bon travail.", adjustmentComment: "Défense orale convaincante." },
+    });
+    mockFetch({ [URL]: ok(p) });
+    render();
+    expect(await screen.findByText("5.8")).toBeInTheDocument();
+    const adjusted = screen.getByText("Grade adjusted").closest("div")!;
+    expect(within(adjusted).getByTestId("sproj-adjustment")).toHaveTextContent("Défense orale convaincante.");
+    // After the teacher's comment.
+    const note = screen.getByText("Your teacher's comment");
+    expect(note.compareDocumentPosition(adjusted) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("writes a dash for a release that found no score", async () => {
     mockFetch({
-      [URL]: ok(project({ status: "released", repo: null, release: { at: at(-5), points: null, max: null, grade: null, comment: null } })),
+      [URL]: ok(project({ status: "released", repo: null, release: { at: at(-5), points: null, max: null, grade: null, comment: null, adjustmentComment: null } })),
     });
     render();
     expect(await screen.findByText("Final score")).toBeInTheDocument();

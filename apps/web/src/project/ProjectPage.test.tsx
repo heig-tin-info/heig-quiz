@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { CriteriaTableRow, ProjectDetail, ProjectGradingRepo, ProjectGradingView, ProjectRepoScores, ProjectRepoView } from "@quiz/contracts";
+import { gradeFromPoints } from "@quiz/domain";
 
 import {
   AHEAD,
@@ -2109,6 +2110,9 @@ function gradingRepo(n: number, label: string, points: [number, number, number, 
     ],
     evidence: null,
     total: validated ? { points: Math.max(0, points[0] + points[1] + points[2] + points[3]), max: 12 } : null,
+    // The server's grade (ADR-135): the total's by the linear scale; none until validated.
+    grade: validated ? gradeFromPoints(Math.max(0, points[0] + points[1] + points[2] + points[3]), 12, { rounding: "nearest" }) : null,
+    adjustment: null,
     pass: null,
     ...over,
   };
@@ -2243,6 +2247,106 @@ describe("the Grading tab", () => {
     expect(await screen.findByText("No repository validated yet")).toBeInTheDocument();
     expect(screen.queryByTestId("criteria-bars")).toBeNull();
     expect(heads(await matrix())[0]).toBe("Group");
+  });
+
+  describe("the grade adjustment (ADR-135)", () => {
+    const adjustUrl = (repo: ProjectGradingRepo) => `${BASE}/repos/${repo.id}/grade-adjustment`;
+    const answer = ok({ scores: makeRepo(1).scores, released: null, changedAfterRelease: false });
+
+    it("opens from a row's mark, never the row, names the group's members, previews both kinds, and sends the contract's body", async () => {
+      const group = gradingRepo(1, "Binôme A", [8, 2, 1, 0], { group: true }); // 11/12: 5.6
+      const rows = [row(1, makeRepo(1, { id: group.id })), row(2, makeRepo(2, { id: group.id }))];
+      const { calls } = routes(criteria({ groupMode: true, rows }), {
+        [`GET ${BASE}/grading`]: ok(gradingView([group])),
+        [`PUT ${adjustUrl(group)}`]: answer,
+      });
+      const { navigate } = renderPage("en", "grading");
+      await userEvent.click(within(await matrix()).getByRole("button", { name: /Adjust the grade of Binôme A/ }));
+      expect(navigate).not.toHaveBeenCalled();
+      const dialog = screen.getByRole("dialog", { name: "Adjust the grade of Binôme A" });
+      expect(within(dialog).getByText("Applies to Martin Benoît, Rochat Chloé.")).toBeInTheDocument();
+      const submit = within(dialog).getByRole("button", { name: "Adjust" });
+      expect(submit).toBeDisabled();
+      expect(within(dialog).queryByRole("button", { name: "Remove the adjustment" })).toBeNull();
+
+      // Relative: the delta, then the justification the contract requires.
+      await userEvent.type(within(dialog).getByLabelText("Change"), "0.2");
+      expect(within(dialog).getByTestId("grade-adjust-preview")).toHaveTextContent(/5\.6.*5\.8/);
+      expect(submit).toBeDisabled();
+      await userEvent.type(within(dialog).getByLabelText("Justification"), "Oral defence");
+      expect(submit).toBeEnabled();
+      // A delta off the tenth is refused before it leaves the browser.
+      await userEvent.clear(within(dialog).getByLabelText("Change"));
+      await userEvent.type(within(dialog).getByLabelText("Change"), "0.25");
+      expect(submit).toBeDisabled();
+
+      // Absolute: the field starts from the base, and pins the grade.
+      await userEvent.click(within(dialog).getByRole("radio", { name: "Absolute" }));
+      const grade = within(dialog).getByLabelText("Grade");
+      expect(grade).toHaveValue(5.6);
+      await userEvent.clear(grade);
+      await userEvent.type(grade, "4.5");
+      expect(within(dialog).getByTestId("grade-adjust-preview")).toHaveTextContent(/5\.6.*4\.5/);
+      await userEvent.click(submit);
+      await waitFor(() =>
+        expect(writes(calls)).toEqual([
+          expect.objectContaining({ method: "PUT", url: adjustUrl(group), body: { kind: "absolute", value: 4.5, comment: "Oral defence" } }),
+        ]),
+      );
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it("marks an adjusted grade, warns of a moved base, and removes the adjustment", async () => {
+      const pinned = gradingRepo(1, "Alice", [8, 2, 1, 0], {
+        grade: 4.5,
+        adjustment: { kind: "absolute", value: 4.5, comment: "Late, excused", by: "Prof Démo", at: PAST, base: 5.6, moved: { from: 4.1, to: 5.6 } },
+      });
+      const { calls } = routes(criteria(), {
+        [`GET ${BASE}/grading`]: ok(gradingView([pinned])),
+        [`DELETE ${adjustUrl(pinned)}`]: answer,
+      });
+      renderPage("en", "grading");
+      const mark = within(await matrix()).getByRole("button", { name: /Adjust the grade of Alice/ });
+      expect(mark).toHaveTextContent("4.5");
+      expect(within(mark).getByTestId("grade-adjusted")).toHaveTextContent("Base grade moved from 4.1 to 5.6. Late, excused");
+      await userEvent.click(mark);
+      const dialog = screen.getByRole("dialog", { name: "Adjust the grade of Alice" });
+      expect(within(dialog).getByText("Base grade moved from 4.1 to 5.6")).toBeInTheDocument();
+      expect(within(dialog).getByRole("radio", { name: "Absolute" })).toBeChecked();
+      expect(within(dialog).getByLabelText("Justification")).toHaveValue("Late, excused");
+      expect(within(dialog).getByText(/^Adjusted by Prof Démo/)).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Remove the adjustment" }));
+      await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "DELETE", url: adjustUrl(pinned) })]));
+    });
+
+    it("words the server's refusal under the fields, the dialog kept open", async () => {
+      const alice = gradingRepo(1, "Alice", [8, 2, 1, 0]);
+      routes(criteria(), {
+        [`GET ${BASE}/grading`]: ok(gradingView([alice])),
+        [`PUT ${adjustUrl(alice)}`]: fail(403, { error: "owner_required", message: "Only an owner of this course may do that" }),
+      });
+      renderPage("en", "grading");
+      await userEvent.click(within(await matrix()).getByRole("button", { name: /Adjust the grade of Alice/ }));
+      const dialog = screen.getByRole("dialog");
+      await userEvent.type(within(dialog).getByLabelText("Change"), "-0.5");
+      await userEvent.type(within(dialog).getByLabelText("Justification"), "Copied part");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Adjust" }));
+      expect(await within(dialog).findByText("The grades are released: only the person who runs the course can change them now.")).toBeInTheDocument();
+    });
+
+    it("offers no adjustment on a repository not frozen, nor without a grade", async () => {
+      routes(criteria(), {
+        [`GET ${BASE}/grading`]: ok(
+          gradingView([
+            gradingRepo(1, "Alice", [8, 2, 1, 0], { frozen: false }),
+            gradingRepo(2, "Bob", [8, 2, 1, 0], { validation: { validated: false, missing: [], proposed: ["rendu.tests"] } }),
+          ]),
+        ),
+      });
+      renderPage("en", "grading");
+      expect(within(await matrix()).queryByRole("button", { name: /Adjust the grade/ })).toBeNull();
+    });
   });
 
   it("speaks French", async () => {
