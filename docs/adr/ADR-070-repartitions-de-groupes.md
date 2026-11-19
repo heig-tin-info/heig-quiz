@@ -32,7 +32,44 @@ neither a collaborator nor invited; the staff's resend re-invites every
 member out, a student's own resend re-invites them while they are out, and
 neither writes the group's state. Nobody out keeps the minute claimed. Nothing per
 member is stored, and the daily re-invite still serves individual
-repositories only: the stored per-member follow-up stays later.
+repositories only: the stored per-member follow-up stays later. (Superseded
+in part by the next amendment, the same day.)
+
+Amended 2026-11-19 (product owner, per-member access), scope: decision 12's
+*Later* bullet (its invitation half), the previous amendment's "nothing per
+member is stored", and [ADR-011](ADR-011-reconciliation-par-les-handlers.md)'s
+re-invite claim on the row. Each member's access is now stored on their
+grant (`project_repo_access`): `accepted_at` when GitHub says the account is
+a collaborator (the `member` webhook `added`, which `removed` clears; the
+daily reconciliation's check; an invitation GitHub answers "already a
+collaborator"), `absent_at` when a check found it neither a collaborator nor
+invited (an invitation GitHub still lists but reports `expired` counts as
+none); every new invitation clears both. Accounts are matched by their
+immutable id. One pure rule of `@quiz/domain` (`repoAccessState`), over the
+member's latest live grant, names the state: *joined*, *pending* (never
+found gone since the last invitation), *expired* (found gone by a check —
+never without one), *unlinked* (no live grant). A single nullable time
+(`absent_at`) records the check because only its negative outcome changes a
+state: a check finding the account invited is the default (*pending*), one
+finding it in is `accepted_at`. The daily reconciliation checks every live
+repository's grants not known in with one listing of the collaborators and
+one of the invitations per repository (N-PERF-07), individual and group
+alike, and re-invites a member found gone at most once a day per member
+(the claim `reinvited_at` moves from `project_repos` to the grant: one rule
+for both kinds), never once the repository is frozen (read by the claim
+itself), with the work mode's
+permission through the one invitation path, audited as before; a member
+still invited is never re-invited. The migration (0145) joins the live
+grants of an individual repository whose row says `accepted`; a group's
+are checked by that daily pass, *pending* until then. The repository's
+`invitation_status` stays the aggregate (`accepted` once one member is in,
+never brought back to `pending` by another's invitation), and nothing that
+reads it changes. The student's view carries the caller's OWN invitation,
+their grant's, for a student's own repository as for a group's (an expired
+one reads as pending, theirs to resend), never a teammate's, and the
+group's work whatever their own access; the staff's page names each
+member's state, the Resend offered while one is pending or expired. The
+staff's per-member adjustment of a group's score stays later.
 
 Scope: where a classroom's groups of students live, who forms them and how,
 and how a group project uses them, including the GitHub side of a group
@@ -474,10 +511,10 @@ were settled by the product owner on 2026-10-04.
       (`isLiveIndividualRepo`): their Accept returns it unchanged, and they
       are neither shown, invited nor notified about their group's
       repository. Quiz's own Accept never makes one.
-    - **Later** (heig-classroom's lot 3, unchanged): a per-member follow-up
-      of the invitations, and the staff's per-member adjustment of a group's
-      score. (2026-11-19: the resend already looks at each member on
-      GitHub, see the Status; nothing per member is stored.)
+    - **Later** (heig-classroom's lot 3): the staff's per-member adjustment
+      of a group's score. (2026-11-19: the per-member follow-up of the
+      invitations is delivered, see the Status's second amendment of that
+      day.)
 
 ## Consequences
 

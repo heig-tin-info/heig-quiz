@@ -46,6 +46,7 @@ import {
   PROJECT_SCALE_KINDS,
   PROJECT_STATES,
   PUBLISH_MODES,
+  REPO_ACCESS_STATES,
   STUDENT_PROJECT_STATUSES,
   SYNC_CHANGES,
   slugify,
@@ -672,6 +673,15 @@ export const SentInvitation = InvitationStatus.exclude(["none"]);
 export type SentInvitation = z.infer<typeof SentInvitation>;
 
 /**
+ * A member's own access to a repository (F-PROJ-07, ADR-070's amendment of
+ * 2026-11-19; `repoAccessState` of `@quiz/domain`): joined, an invitation
+ * pending, one a check found gone (`expired`: dropped by GitHub, or
+ * declined), or no live grant (`unlinked`). The staff's payload only.
+ */
+export const RepoAccessState = z.enum(REPO_ACCESS_STATES);
+export type RepoAccessState = z.infer<typeof RepoAccessState>;
+
+/**
  * `POST /app/api/student/projects/:id/accept` (F-PROJ-05): the student's OWN
  * repository — their group's in a group project (ADR-048 lot 2, M3-15b),
  * `invitationStatus` then THEIR invitation on it — and nothing else — never the source nor the distribution
@@ -1088,6 +1098,13 @@ export const ProjectDetailRow = z.object({
   student: ProjectStudent,
   repo: ProjectRepoView.nullable(),
   group: ProjectDetailGroup.nullable(),
+  /**
+   * The student's own access to `repo` on GitHub (their latest live grant,
+   * ADR-070's amendment of 2026-11-19), a group's member's or a student's
+   * own alike. Null without a repository, for one nobody is invited on
+   * (`invitationStatus` none), or for one no roster line reads any more.
+   */
+  access: RepoAccessState.nullable(),
   /**
    * A teacher's TEST repository (ADR-077): a staff seat accepted the
    * project. Shown badged, counted nowhere, never graded nor released.
@@ -1519,7 +1536,10 @@ export type StudentProjectWork = z.infer<typeof StudentProjectWork>;
 
 /**
  * The student's own repository (F-PROJ-15): its name and URL, their
- * invitation (F-PROJ-07) — null when nobody is invited, an `online_seb`
+ * OWN invitation (F-PROJ-07) — on a group's repository their own grant,
+ * never the group's (an expired one is `pending`: theirs to resend; none
+ * recorded is null), never a teammate's (ADR-070's amendment of
+ * 2026-11-19) — null when nobody is invited, an `online_seb`
  * project's (ADR-047 §2) —, whether GitHub lost it (`deleted`) or holds it
  * locked, its {@link StudentProjectWork}, and the run their score comes
  * from. Before the deadline, `lastCommit` and
@@ -1537,8 +1557,6 @@ export const StudentProjectRepo = StudentProjectWork.extend({
   fullName: z.string(),
   url: z.url(),
   invitation: SentInvitation.nullable(),
-  /** The repository is their group's: `invitation` is then the group's, not theirs (ADR-070, 2026-11-19). */
-  group: z.boolean(),
   deleted: z.boolean(),
   locked: z.boolean(),
   run: StudentProjectRun.nullable(),
@@ -1561,7 +1579,8 @@ export type StudentProjectRepo = z.infer<typeof StudentProjectRepo>;
  * (`docs/merge/05-web.md` §5.3, drawn by M3-13): not linked, linked
  * without a repository, invitation pending, ready — `repoFullName` and
  * `repoUrl` name the student's own repository once it exists and is not
- * deleted, `invitation` their invitation on it (F-PROJ-07). The scores are
+ * deleted, `invitation` their OWN invitation on it (F-PROJ-07), as the
+ * view's repository carries it. The scores are
  * the project's student view's ({@link StudentProject}); the card carries
  * their `work` (M3-14i, heig-classroom's row): the commit it stands on, the
  * number of their commits, the CI status and the indicative score, read as

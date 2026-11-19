@@ -90,10 +90,12 @@ export const row = (
   repo: ProjectRepoView | null,
   student: Partial<ProjectStudent> = {},
   group: ProjectDetailGroup | null = null,
+  access: ProjectDetailRow["access"] = repo === null ? null : "joined",
 ): ProjectDetailRow => ({
   student: makeStudent(n, student),
   repo,
   group,
+  access,
   staff: false,
 });
 

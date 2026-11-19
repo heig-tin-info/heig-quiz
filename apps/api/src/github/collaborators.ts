@@ -88,20 +88,42 @@ export async function holdsAtLeast(
   return (PERMISSION_RANK[held ?? "none"] ?? 0) >= PERMISSION_RANK[least]!;
 }
 
-/** Whether `login` is a collaborator of `owner/repo` today (GitHub's 204; a pending invitation is not one, 404). */
-export async function isCollaborator(octokit: Octokit, owner: string, repo: string, login: string): Promise<boolean> {
-  const answered = await unless404(() =>
-    octokit.request("GET /repos/{owner}/{repo}/collaborators/{username}", { owner, repo, username: login, request: { retries: 0 } }),
-  );
-  return answered !== null;
+/** A GitHub account as a listing names it: its login and its immutable id. */
+export interface ListedAccount {
+  login: string;
+  accountId: number;
 }
 
-/** The pending invitations of `owner/repo`: each one's id and its invitee's login. */
-export async function pendingInvitees(octokit: Octokit, owner: string, repo: string): Promise<{ id: number; login: string }[]> {
+/**
+ * The invitations of `owner/repo` GitHub still lists: each one's id, its
+ * invitee, and whether it expired (GitHub keeps listing an expired
+ * invitation, which can no longer be accepted, until it is cancelled).
+ */
+export async function pendingInvitees(octokit: Octokit, owner: string, repo: string): Promise<({ id: number; expired: boolean } & ListedAccount)[]> {
   const { data } = await octokit.request("GET /repos/{owner}/{repo}/invitations", { owner, repo, per_page: 100 });
-  return data.flatMap((i: { id: number | bigint; invitee?: { login?: string } | null }) =>
-    i.invitee?.login ? [{ id: Number(i.id), login: i.invitee.login }] : [],
+  return data.flatMap((i: { id: number | bigint; expired?: boolean; invitee?: { login: string; id: number | bigint } | null }) =>
+    i.invitee ? [{ id: Number(i.id), login: i.invitee.login, accountId: Number(i.invitee.id), expired: i.expired === true }] : [],
   );
+}
+
+/**
+ * The direct collaborators of `owner/repo` (a pending invitee is none): one
+ * request, a student repository holds far fewer than a page of them.
+ */
+export async function directCollaborators(octokit: Octokit, owner: string, repo: string): Promise<ListedAccount[]> {
+  const { data } = await octokit.request("GET /repos/{owner}/{repo}/collaborators", {
+    owner,
+    repo,
+    affiliation: "direct",
+    per_page: 100,
+    request: { retries: 0 },
+  });
+  return data.map((c: { login: string; id: number | bigint }) => ({ login: c.login, accountId: Number(c.id) }));
+}
+
+/** Cancels the invitation `invitationId` of `owner/repo`. */
+export async function cancelInvitation(octokit: Octokit, owner: string, repo: string, invitationId: number): Promise<void> {
+  await octokit.request("DELETE /repos/{owner}/{repo}/invitations/{invitation_id}", { owner, repo, invitation_id: invitationId });
 }
 
 /**
@@ -118,13 +140,7 @@ export async function revokeCollaborator(
   login: string,
 ): Promise<{ invitationsCancelled: number }> {
   const mine = (await pendingInvitees(octokit, owner, repo)).filter((i) => i.login.toLowerCase() === login.toLowerCase());
-  for (const invitation of mine) {
-    await octokit.request("DELETE /repos/{owner}/{repo}/invitations/{invitation_id}", {
-      owner,
-      repo,
-      invitation_id: invitation.id,
-    });
-  }
+  for (const invitation of mine) await cancelInvitation(octokit, owner, repo, invitation.id);
   try {
     await octokit.request("DELETE /repos/{owner}/{repo}/collaborators/{username}", {
       owner,

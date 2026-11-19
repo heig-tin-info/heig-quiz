@@ -286,7 +286,7 @@ describe("a group member whose invitation expired (F-PROJ-07)", () => {
   /**
    * Three members invited; two accept, the third's invitation expires: GitHub
    * lists it no more and she is no collaborator, while the group's row says
-   * `accepted` (the `member` webhook of the first acceptance).
+   * `accepted` and the two grants are joined (the `member` webhooks).
    */
   const expired = async () => {
     const [ana, ben, cid] = [await newStudent(), await newStudent(), await newStudent()];
@@ -297,6 +297,12 @@ describe("a group member whose invitation expired (F-PROJ-07)", () => {
     world.collaborators.get(fullName)!.delete(cid!.login);
     const [row] = await repoRows(project.id);
     await server.app.db.update(projectRepos).set({ invitationStatus: "accepted" }).where(eq(projectRepos.id, row!.id));
+    for (const who of [ana!, ben!]) {
+      await server.app.db
+        .update(projectRepoAccess)
+        .set({ acceptedAt: new Date(NOW) })
+        .where(and(eq(projectRepoAccess.repoId, row!.id), eq(projectRepoAccess.githubUserId, who.githubUserId)));
+    }
     return { project, fullName, row: row!, ana: ana!, ben: ben!, cid: cid! };
   };
   const puts = (before: number) => gh.calls.slice(before).filter((c) => c.startsWith("PUT"));
@@ -334,7 +340,8 @@ describe("a group member whose invitation expired (F-PROJ-07)", () => {
 
   it("may resend her own while the group's row says accepted, the other members' view unchanged; a member already in may not, once a minute", async () => {
     const { project, fullName, ben, cid } = await expired();
-    expect((await viewOf(project.id, cid)).repo).toMatchObject({ invitation: "accepted", group: true });
+    // Her own invitation, not the group's (ADR-070, 2026-11-19).
+    expect((await viewOf(project.id, cid)).repo).toMatchObject({ invitation: "pending" });
 
     const before = gh.calls.length;
     const own = await ownResend(project.id, cid);
@@ -344,7 +351,7 @@ describe("a group member whose invitation expired (F-PROJ-07)", () => {
     expect((await repoRows(project.id))[0]!.invitationStatus).toBe("accepted");
     // Ben, in, still reads the repository as his, accepted, with its work.
     const his = await viewOf(project.id, ben);
-    expect(his.repo).toMatchObject({ invitation: "accepted", group: true });
+    expect(his.repo).toMatchObject({ invitation: "accepted" });
 
     // Ben's own resend: GitHub finds him in, nothing sent, and the minute kept — asked again at once, too soon.
     server.clock.advance(60_000);

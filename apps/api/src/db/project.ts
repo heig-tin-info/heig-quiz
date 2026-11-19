@@ -492,14 +492,6 @@ export const projectRepos = pgTable(
      */
     invitationResentAt: timestamp("invitation_resent_at", { withTimezone: true }),
     /**
-     * The reconciliation's last re-invite of a pending invitation (F-PROJ-07,
-     * N-RES-08, M3-06): at most once a day per repository, claimed on the row
-     * before GitHub is called; a student's own repository only, and never
-     * once the repository is frozen. The staff's resend neither reads nor
-     * writes it: the two never wait for each other.
-     */
-    invitationReinvitedAt: timestamp("invitation_reinvited_at", { withTimezone: true }),
-    /**
      * The repository's own deadline, an individual extension set by its
      * staff (D13 as amended 2026-10-02); null: the project's. The EFFECTIVE
      * deadline, `coalesce(deadline_at, projects.deadline_at)`, is what every
@@ -727,6 +719,29 @@ export const projectRepoAccess = pgTable(
     githubLogin: text("github_login").notNull(),
     /** The last invitation's time (`app.clock`): no default. */
     invitedAt: timestamp("invited_at", { withTimezone: true }).notNull(),
+    /**
+     * GitHub said the account is a collaborator (ADR-070's amendment of
+     * 2026-11-19): the `member` webhook (`added`; `removed` clears it), the
+     * daily reconciliation's check, or an invitation GitHub answered "already
+     * a collaborator". Every new invitation of the account clears it first.
+     */
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    /**
+     * The latest check found the account neither a collaborator nor offered
+     * an invitation (dropped or reported expired by GitHub, or declined):
+     * what `repoAccessState` of `@quiz/domain` calls `expired`. A check
+     * finding it invited or in clears it, as does every new invitation.
+     * Null: never found gone — `pending`, never `expired`, until a check
+     * says otherwise.
+     */
+    absentAt: timestamp("absent_at", { withTimezone: true }),
+    /**
+     * The reconciliation's last re-invite of this account (F-PROJ-07,
+     * N-RES-08): at most once a day per member, claimed on the grant before
+     * GitHub is called, never once the repository is frozen. The staff's and
+     * the student's resend neither read nor write it.
+     */
+    reinvitedAt: timestamp("reinvited_at", { withTimezone: true }),
     /**
      * A revocation asked GitHub and has no answer yet (M3-15b-2): the grant
      * still counts as live (`revoked_at` null) for every check — a crash or

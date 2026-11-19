@@ -73,6 +73,7 @@ import { reposWithAccessToRevoke } from "./groupCopy.js";
 import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
+import { accessStates } from "./memberAccess.js";
 import { studentRepos, type RepoRow } from "./repos.js";
 import { adjusterNames, finalOf, scoreFacts, slots, type RunRow, type ScoreFacts } from "./scores.js";
 import { gradedBeforeUpdate, projectSyncState, repoSyncViews } from "./sync.js";
@@ -393,7 +394,9 @@ export interface DetailOptions {
  * project, null when there is none yet — and, in a group project, the copy
  * group they are in (M3-16b: the page draws one row per group from them),
  * then the repositories no student of the roster reads any more, a group's
- * with its group (R1's group kept with no member). A
+ * with its group (R1's group kept with no member). Each student's row says
+ * their own access to the repository on GitHub (`accessStates`, ADR-070's
+ * amendment of 2026-11-19). A
  * repository of a user who holds a STAFF seat of the classroom is a TEST
  * repository (ADR-077): a row of its own, `staff`, after the students' —
  * and in no count nor in the release's readiness (`studentRepos`,
@@ -458,6 +461,14 @@ export async function projectDetail(
     ]),
   );
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));
+  // Each student's own access to the repository they read (ADR-070's amendment of 2026-11-19): a group's every member.
+  const access = await accessStates(
+    db,
+    roster.flatMap((s) => {
+      const repo = seats.of(project.id, s.enrollmentId);
+      return repo === null ? [] : [{ repoId: repo.id, enrollmentId: s.enrollmentId }];
+    }),
+  );
   const shown = new Set<string>();
   const rows: ProjectDetailRow[] = roster.flatMap((s) => {
     const { repo, groupId } = seats.seat(project.id, s.enrollmentId);
@@ -478,6 +489,8 @@ export async function projectDetail(
           githubLogin: s.githubLogin,
         },
         repo: view ?? null,
+        // Nobody invited on the repository (`none`: an `online_seb` project's, every access revoked): no access to speak of.
+        access: view && repo!.invitationStatus !== "none" ? access({ repoId: repo!.id, enrollmentId: s.enrollmentId }) : null,
         staff: s.staff,
       },
     ];
@@ -504,7 +517,7 @@ export async function projectDetail(
         claimed: false,
         githubLogin,
       };
-      rows.push({ student, repo: views.get(repo.id)!, group: groupOf(repo.groupId), staff: false });
+      rows.push({ student, repo: views.get(repo.id)!, group: groupOf(repo.groupId), access: null, staff: false });
     }
   }
 

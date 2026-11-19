@@ -946,7 +946,13 @@ image reads):
 - `0072_project_sync.sql`: drops `project_repos.sync_pr_number` and
   `sync_pr_state`;
 - `0089_gradebook_weight_percent.sql`: rescales `gradebook_columns.weight`
-  to a whole percentage, which an older image reads as a coefficient.
+  to a whole percentage, which an older image reads as a coefficient;
+- `0099_pool_is_public.sql`: drops `pools.visibility`;
+- `0102_drop_sorting_vestiges.sql`: deletes the incomplete
+  `concept_tag_sortings` rows and drops five of their columns;
+- `0112_item_counting.sql`: drops `evaluation_items.bonus`;
+- `0145_project_member_access.sql`: drops
+  `project_repos.invitation_reinvited_at` (ADR-070, 2026-11-19).
 
 A rollback to an image older than any of them, or than any other migration
 that is not additive, needs that migration's pre-migration dump restored

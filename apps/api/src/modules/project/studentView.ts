@@ -9,7 +9,8 @@
  *
  * What it carries: the project's facts (name, start, the student's
  * EFFECTIVE deadline, state), the caller's OWN repository — its name and
- * URL, their invitation, the commit the view stands on and its CI status,
+ * URL, their OWN invitation (on a group's, their grant's, never the group's
+ * nor a teammate's), the commit the view stands on and its CI status,
  * the run their score comes from and that score, indicative until the
  * release (`studentScoreRun` of `@quiz/domain`: the current CI score, the
  * frozen one once their deadline is applied), the number of commits their
@@ -24,7 +25,8 @@
  * after the repository's definitive freeze, provisional until the release.
  *
  * What it never carries: the source or distribution repository (not even
- * their existence), another student's repository or score, a push or a run
+ * their existence), another student's repository or score, a teammate's
+ * access to the group's repository or their GitHub login, a push or a run
  * after the deadline (once the deadline is applied or passed, the commit
  * and the CI state shown are the SELECTED run's, not the row's, which the
  * webhooks keep moving on an open repository), the review's or the
@@ -50,6 +52,7 @@ import type { FastifyBaseLogger } from "fastify";
 
 import type {
   ProjectInvitationResent,
+  SentInvitation,
   StudentProject,
   ProjectSeatKind,
   StudentCriteriaRow,
@@ -67,6 +70,7 @@ import {
   projectIsLive,
   PROJECT_VISIBLE_STATES,
   projectScoreGrade,
+  type RepoAccessState,
   studentCiReading,
   studentProjectGroup,
   studentProjectStatus,
@@ -86,6 +90,7 @@ import { countedReceipts, repoCommitCount } from "./commits.js";
 import { criteriaStandings } from "./criterionGrades.js";
 import { isLive } from "./deadline.js";
 import { lastCollections } from "../codespace/service.js";
+import { accessStates, seatAccess } from "./memberAccess.js";
 import { slotRuns } from "./scores.js";
 import { ProjectError } from "./errors.js";
 import { seatRepo, seatRepos } from "./groupRepos.js";
@@ -188,6 +193,19 @@ const liveRepo = (row: RepoRow | null, project: ProjectRow): ProvisionedRepo | n
 };
 
 /**
+ * The caller's OWN invitation on their repository (F-PROJ-07, ADR-070's
+ * amendment of 2026-11-19), their grant's state, whatever the kind of
+ * repository (a group's row is the group's, one member in: `accepted`):
+ * joined, an invitation to accept or to resend (pending or expired), or none
+ * (nobody invited on the repository, no grant of theirs, no seat). A
+ * teammate's is never read here.
+ */
+function ownInvitation(repo: RepoRow, access: RepoAccessState | null): SentInvitation | null {
+  if (repo.invitationStatus === "none" || access === null || access === "unlinked") return null;
+  return access === "joined" ? "accepted" : "pending";
+}
+
+/**
  * One card (F-PROJ-04): the facts, the repository's name and URL once it
  * exists and is not deleted, and the state of the work on it once it is
  * theirs, the invitation accepted (M3-14i) — the view's reading, its
@@ -199,6 +217,7 @@ function card(
   now: Date,
   read: Readings,
   codespace: boolean,
+  access: RepoAccessState | null,
 ): { card: StudentProjectCard; group: StudentActivityGroup } {
   const { facts, group } = cardFacts(row, linked, now);
   const live = liveRepo(row.repo, row.project);
@@ -211,7 +230,7 @@ function card(
     group,
     card: {
       ...facts,
-      invitation: live === null || live.invitationStatus === "none" ? null : live.invitationStatus,
+      invitation: live === null ? null : ownInvitation(live, access),
       repoFullName: live?.fullName ?? null,
       repoUrl: live === null ? null : htmlUrl(live.fullName),
       work,
@@ -256,16 +275,17 @@ export async function studentProjectCards(
     rows.map((r) => r.project),
     rows.map((r) => r.seat.id),
   );
-  const cards = rows.map(({ seat, ...row }) => ({ ...row, repo: seats.of(row.project.id, seat.id) }));
+  const cards = rows.map(({ seat, ...row }) => ({ ...row, seatId: seat.id, repo: seats.of(row.project.id, seat.id) }));
   const deadline = (row: CardRow) => effectiveDeadline(row.repo ?? { deadlineAt: null }, row.project).getTime();
   cards.sort((a, b) => deadline(a) - deadline(b) || (a.project.name < b.project.name ? -1 : a.project.name > b.project.name ? 1 : 0));
-  const [linked, read] = await Promise.all([
+  const [linked, read, access] = await Promise.all([
     rows.length > 0 && githubLinked(db, userId),
     readings(db, cards.flatMap((row) => liveRepo(row.repo, row.project) ?? [])),
+    accessStates(db, cards.flatMap((row) => (row.repo === null ? [] : [{ repoId: row.repo.id, enrollmentId: row.seatId }]))),
   ]);
   const groups: StudentProjectCards = { open: [], upcoming: [], past: [] };
-  for (const row of cards) {
-    const placed = card(row, linked, now, read, codespace);
+  for (const { seatId, ...row } of cards) {
+    const placed = card(row, linked, now, read, codespace, row.repo === null ? null : access({ repoId: row.repo.id, enrollmentId: seatId }));
     groups[placed.group].push(placed.card);
   }
   return groups;
@@ -356,10 +376,11 @@ export async function studentProject(
   const seat = scope.seat === null ? null : scope.seat.staff ? ("staff" as const) : ("student" as const);
   const repo = provisioned(row);
   const live = liveRepo(row, project);
-  const [linked, read, criteria] = await Promise.all([
+  const [linked, read, criteria, access] = await Promise.all([
     githubLinked(db, userId),
     readings(db, live === null ? [] : [live]),
     studentCriteria(db, project, repo),
+    repo === null || scope.seat === null ? null : seatAccess(db, { repoId: repo.id, enrollmentId: scope.seat.id }),
   ]);
   const { facts } = cardFacts({ project, classroomName: scope.room.name, courseCode: scope.course.code, repo: row }, linked, now);
   return {
@@ -372,8 +393,7 @@ export async function studentProject(
         : {
             fullName: repo.fullName,
             url: htmlUrl(repo.fullName),
-            invitation: repo.invitationStatus === "none" ? null : repo.invitationStatus,
-            group: repo.groupId !== null,
+            invitation: ownInvitation(repo, access),
             deleted: repo.deletedAt !== null,
             locked: repo.lockedAt !== null,
             ...(live === null

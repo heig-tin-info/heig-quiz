@@ -782,6 +782,17 @@ const scenes = [
     },
   },
   { name: "project-group-rows", role: "teacher", path: `/projects/${PJ_GROUP_LIVE}?projects=1&groups=1&tab=repositories` },
+  // A group's sheet with a member's invitation expired (ADR-070, 2026-11-19): its members, and Resend.
+  {
+    name: "project-group-sheet",
+    role: "teacher",
+    path: `/projects/${PJ_GROUP_LIVE}?projects=1&groups=1&tab=repositories`,
+    fold: true,
+    act: async (p) => {
+      await p.getByText(/^Groupe 7$/).first().click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
   { name: "project-group-drift", role: "teacher", path: `/projects/${PJ_GROUP_STOPPED}?projects=1&groups=1` },
   {
     name: "project-group-resync-confirm",

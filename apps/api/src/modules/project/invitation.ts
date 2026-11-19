@@ -28,7 +28,7 @@
  * an individual repository's row follows GitHub's answer: a group's
  * resend never writes the group's row.
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Octokit } from "octokit";
 import type { FastifyBaseLogger } from "fastify";
 
@@ -38,44 +38,31 @@ import { audit, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { projectRepoAccess, projectRepos } from "../../db/schema.js";
-import { installationClient, ownerRepo } from "../../github/app.js";
-import { isCollaborator, pendingInvitees } from "../../github/collaborators.js";
+import { projectRepos } from "../../db/schema.js";
+import { installationClient } from "../../github/app.js";
 import { projectInstallation } from "../github/service.js";
 import { inviteAccount, notRecorded } from "./access.js";
 import { liveRepoForUpdate } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { repoMembers, type RepoMember } from "./groupRepos.js";
+import { checkGrants, liveGrants } from "./memberAccess.js";
 import type { RepoRow } from "./repos.js";
 
 /** The least time between two resends of one repository's invitation. */
 export const RESEND_INTERVAL_MS = 60_000;
 
 /**
- * The members of a group's repository still out of it: no account of theirs
- * recorded, an invitation of theirs pending on GitHub, or no account
- * recorded a collaborator nor invited (expired or declined: GitHub lists it
- * no more).
+ * The members of a repository still out of it: no live grant of
+ * theirs known in (`accepted_at`, which the `member` webhook's `removed`
+ * clears), and none found in by the check of their other grants
+ * (`checkGrants`, which records what it found on each) — invited and
+ * waiting, or gone (expired or declined).
  */
-async function stillOut(db: Db, octokit: Octokit, repo: RepoRow, members: RepoMember[]): Promise<RepoMember[]> {
-  const { owner, repo: name } = ownerRepo(repo.fullName!);
-  const pending = new Set((await pendingInvitees(octokit, owner, name)).map((i) => i.login.toLowerCase()));
-  const grants = await db
-    .select()
-    .from(projectRepoAccess)
-    .where(and(eq(projectRepoAccess.repoId, repo.id), isNull(projectRepoAccess.revokedAt)));
-  const out: RepoMember[] = [];
-  for (const member of members) {
-    const logins = grants.filter((g) => g.enrollmentId === member.enrollmentId).map((g) => g.githubLogin);
-    if (logins.some((l) => pending.has(l.toLowerCase())) || !(await someCollaborator(octokit, owner, name, logins))) out.push(member);
-  }
-  return out;
-}
-
-/** Whether one of `logins` is a collaborator of `owner/name` (none: false). */
-async function someCollaborator(octokit: Octokit, owner: string, name: string, logins: string[]): Promise<boolean> {
-  for (const login of logins) if (await isCollaborator(octokit, owner, name, login)) return true;
-  return false;
+async function stillOut(db: Db, octokit: Octokit, repo: RepoRow, members: RepoMember[], now: Date): Promise<RepoMember[]> {
+  const grants = await liveGrants(db, repo.id);
+  const { joined } = await checkGrants(db, octokit, repo.fullName!, grants, now);
+  const inside = new Set([...grants.filter((g) => g.acceptedAt !== null), ...joined].map((g) => g.enrollmentId));
+  return members.filter((m) => !inside.has(m.enrollmentId));
 }
 
 /**
@@ -120,7 +107,9 @@ export async function resendInvitation(
     const members = await repoMembers(db, repo, project.classroomId);
     const readers = only === undefined ? members : members.filter((m) => m.enrollmentId === only);
     if (readers.length === 0) throw new ProjectError("repo_unavailable", "The repository has no student on the roster to invite");
-    const targets = repo.groupId === null ? readers : await stillOut(db, octokit, repo, readers);
+    // Checked for both kinds (an expired invitation cancelled first); a student's own repository re-invites its reader whatever the check found.
+    const out = await stillOut(db, octokit, repo, readers, now);
+    const targets = repo.groupId === null ? readers : out;
     if (targets.length === 0) throw new ProjectError("invitation_not_pending", only === undefined ? "Every member of the group is in" : "You already are in");
     const group = repo.groupId !== null && only === undefined;
     const stale = new ProjectError("github_account_stale", "The student's GitHub account is gone or renamed: they must relink it");

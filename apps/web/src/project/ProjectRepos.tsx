@@ -23,10 +23,11 @@ import {
   type Column,
 } from "../ui";
 import { OpenInWorkspaceIcon, useReviewAction } from "./OpenInWorkspace";
-import { CiBadge, CollectionBadge, MemberList, Score, StudentAccount, SyncBadge } from "./parts";
+import { AccessTag, CiBadge, CollectionBadge, MemberList, Score, StudentAccount, SyncBadge } from "./parts";
 import {
   commitTone,
   filterEntries,
+  joinedCount,
   repoEntries,
   repoFlags,
   reviewTag,
@@ -39,9 +40,11 @@ import {
 type SortKey = "student" | "score";
 
 /**
- * The identity cell of a row: a group's name over its members, each by name
- * and GitHub login (M3-16b, B7: the current members only; "No member" for
- * a repository its group no longer holds anyone in), or a student — with
+ * The identity cell of a row: a group's name over its members, one per
+ * line by name and GitHub login, a tag on each one not in the repository on
+ * GitHub, and "x/y joined" beside the name while some are not (ADR-070,
+ * 2026-11-19; M3-16b, B7: the current members only; "No member" for a
+ * repository its group no longer holds anyone in), or a student — with
  * "left the roster", "no group" (a group project's student in none of its
  * groups) or their account.
  */
@@ -49,9 +52,14 @@ function IdentityCell({ entry, groupMode }: { entry: RepoEntry; groupMode: boole
   const t = useT();
   const deleted = entry.repo?.flags.deleted === true;
   if (entry.kind === "group") {
+    const joined = joinedCount(entry.members);
+    const incomplete = entry.repo !== null && joined.total > 0 && joined.n < joined.total;
     return (
       <span className="flex flex-col gap-0.5">
-        <span className={cx("font-semibold", deleted && "font-medium")}>{entry.label}</span>
+        <span className="flex flex-wrap items-center gap-x-2">
+          <span className={cx("font-semibold", deleted && "font-medium")}>{entry.label}</span>
+          {incomplete ? <Badge tone="zinc">{t("project.access.joinedCount", joined)}</Badge> : null}
+        </span>
         <MemberList members={entry.members} className="text-xs text-fg-muted" />
       </span>
     );
@@ -74,11 +82,12 @@ function IdentityCell({ entry, groupMode }: { entry: RepoEntry; groupMode: boole
       ) : (
         <StudentAccount student={student} />
       )}
+      <AccessTag member={student} />
     </span>
   );
 }
 
-/** The repository's cell: its link, or why there is none yet. */
+/** The repository's cell: its link, or why there is none yet. Its readers' invitations are tags beside them. */
 function RepoCell({ repo }: { repo: ProjectRepoView | null }) {
   const t = useT();
   if (!repo) return <span className="text-fg-faint">{t("project.repo.notAccepted")}</span>;
@@ -90,12 +99,7 @@ function RepoCell({ repo }: { repo: ProjectRepoView | null }) {
       </Tip>
     );
   }
-  return (
-    <span className="flex flex-wrap items-center gap-2">
-      {repo.fullName ? <RepoLink fullName={repo.fullName} icon /> : null}
-      {repo.invitationStatus === "pending" ? <Badge tone="amber">{t("project.repo.invitationPending")}</Badge> : null}
-    </span>
-  );
+  return repo.fullName ? <RepoLink fullName={repo.fullName} icon /> : null;
 }
 
 /**

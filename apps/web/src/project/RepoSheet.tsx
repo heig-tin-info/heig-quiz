@@ -21,7 +21,7 @@ import { projectKey, projectRunsKey } from "../queryKeys";
 import { Badge, Button, Dash, Fact, FieldError, fieldErrorProps, isoDateTime, RelativeTime, RepoLink, Sheet } from "../ui";
 import { OpenInWorkspaceButton, useReviewAction } from "./OpenInWorkspace";
 import { CiBadge, CollectionFacts, MemberList, SyncBadge } from "./parts";
-import { actionable, refusalMessage, repoEntryOf, repoFlags, shortSha } from "./projectPage";
+import { actionable, refusalMessage, repoEntryOf, repoFlags, resendable, shortSha } from "./projectPage";
 import { RunHistory } from "./RunHistory";
 import { ScoreSection } from "./TeacherScoreForm";
 
@@ -178,8 +178,8 @@ export function RepoSheet({
             <Fact label={t("project.sheet.invitation")}>
               <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 {t(`project.invitation.${repo.invitationStatus}`)}
-                {/* A group's row says `accepted` once one member is in: another's may have expired (F-PROJ-07). */}
-                {repo.invitationStatus === "pending" || (entry.kind === "group" && repo.invitationStatus === "accepted") ? (
+                {/* Resend while one of its readers is invited or their invitation expired (F-PROJ-07): the server decides. */}
+                {resendable(entry) ? (
                   <Button variant="secondary" size="sm" disabled={!can} loading={resend.isPending} onClick={() => resend.mutate()}>
                     <Mail /> {t("project.invitation.resend")}
                   </Button>

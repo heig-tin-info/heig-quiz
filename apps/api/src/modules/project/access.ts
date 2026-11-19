@@ -129,7 +129,8 @@ export async function recordGrant(db: Db, repo: RepoRow, account: InvitedAccount
       eq(projectRepoAccess.githubUserId, account.githubUserId),
     );
     const [before] = await tx.select().from(projectRepoAccess).where(key).for("update");
-    const fields = { githubLogin: account.login, invitedAt: now, revokingAt: null, revokedAt: null };
+    // A new invitation: what GitHub said of the last one no longer holds (ADR-070, 2026-11-19).
+    const fields = { githubLogin: account.login, invitedAt: now, acceptedAt: null, absentAt: null, revokingAt: null, revokedAt: null };
     if (!before) {
       const id = randomUUID();
       await tx.insert(projectRepoAccess).values({ id, repoId, enrollmentId: account.enrollmentId, githubUserId: account.githubUserId, ...fields });
@@ -137,9 +138,13 @@ export async function recordGrant(db: Db, repo: RepoRow, account: InvitedAccount
     }
     await tx.update(projectRepoAccess).set(fields).where(eq(projectRepoAccess.id, before.id));
     const undo = async () => {
-      if (before.revokedAt !== null || before.revokingAt !== null) {
-        await db.update(projectRepoAccess).set({ revokedAt: before.revokedAt, revokingAt: before.revokingAt }).where(eq(projectRepoAccess.id, before.id));
-      }
+      // The invitation GitHub refused never happened: the grant says what it said before it.
+      const { githubLogin, invitedAt, acceptedAt, absentAt } = before;
+      const revoked = before.revokedAt !== null || before.revokingAt !== null ? { revokedAt: before.revokedAt, revokingAt: before.revokingAt } : {};
+      await db
+        .update(projectRepoAccess)
+        .set({ githubLogin, invitedAt, acceptedAt, absentAt, ...revoked })
+        .where(and(eq(projectRepoAccess.id, before.id), eq(projectRepoAccess.invitedAt, now)));
     };
     return { id: before.id, undo, fresh: before.revokedAt !== null };
   });
@@ -280,6 +285,10 @@ export async function inviteAccount(
     }
     return "gone";
   }
+  // GitHub's 204: the account already is a collaborator (ADR-070, 2026-11-19).
+  if (invitation === "accepted") {
+    await db.update(projectRepoAccess).set({ acceptedAt: ctx.now }).where(and(eq(projectRepoAccess.id, grant.id), isNull(projectRepoAccess.acceptedAt)));
+  }
   if (ctx.via !== "resend") {
     await audit(db, {
       ...ctx.actor,
@@ -295,12 +304,14 @@ export async function inviteAccount(
 
 /**
  * A repository's `invitation_status` after an invitation answered
- * `invitation`: a student's own repository follows it; a group's is pending
- * while any member's is (the per-member follow-up is ADR-048's lot 3).
+ * `invitation`: a student's own repository follows it; a group's is the
+ * aggregate of its members (ADR-070's amendment of 2026-11-19) — `accepted`
+ * once one member is in, never brought back to `pending` by another's
+ * invitation (each member's own state is their grant's, `memberAccess.ts`).
  */
 export async function followInvitation(db: Db, repo: Pick<RepoRow, "id" | "groupId">, invitation: SentInvitation): Promise<void> {
-  if (repo.groupId !== null && invitation === "accepted") return;
-  await db.update(projectRepos).set({ invitationStatus: invitation }).where(and(eq(projectRepos.id, repo.id), ne(projectRepos.invitationStatus, invitation)));
+  const from = repo.groupId !== null && invitation === "pending" ? eq(projectRepos.invitationStatus, "none") : ne(projectRepos.invitationStatus, invitation);
+  await db.update(projectRepos).set({ invitationStatus: invitation }).where(and(eq(projectRepos.id, repo.id), from));
 }
 
 /**

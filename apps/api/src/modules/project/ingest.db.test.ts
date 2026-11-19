@@ -1124,7 +1124,7 @@ describe("member, repository and organization events (F-PROJ-07, F-PROJ-18)", ()
   it("member added: the invitation is accepted", async () => {
     const f = await acceptedRepo({ protectedFiles: [] });
     expect(f.repo.invitationStatus).toBe("pending");
-    await handled("member", { action: "added", repository: { id: f.githubRepoId }, member: { login: f.student.login } });
+    await handled("member", { action: "added", repository: { id: f.githubRepoId }, member: { id: f.student.githubUserId, login: f.student.login } });
     expect((await repoRow(f.projectId)).invitationStatus).toBe("accepted");
   });
 
