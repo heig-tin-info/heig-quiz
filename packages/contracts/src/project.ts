@@ -878,13 +878,14 @@ export type ProjectFinalScore = z.infer<typeof ProjectFinalScore>;
 /**
  * A repository's grade adjustment for its staff (ADR-135): its `kind` and
  * `value` (a delta, or the pinned grade), the justification, who wrote it
- * and when (`by` the writer's name, null once the account is gone), the
- * base grade it was written over (`baseAtWrite`), the base grade now
- * (`base`, null while the final score has none: the adjustment then applies
- * to nothing) and `baseMoved` — an absolute pin whose base moved since its
- * write, which the staff keep (written again) or clear. The adjusted grade
- * itself is the final score's `grade` ({@link ProjectFinalScore}). STAFF
- * ONLY: the student reads the released grade and the comment alone.
+ * and when (`by` the writer's name, null when the view names nobody), the
+ * base grade now (`base`, null while the final score has none: the
+ * adjustment then applies to nothing) and `moved` — an absolute pin whose
+ * base moved since its write, from the base it was written over to the base
+ * of now, which the staff keep (written again) or clear; null otherwise.
+ * The adjusted grade itself is the final score's `grade`
+ * ({@link ProjectFinalScore}). STAFF ONLY: the student reads the released
+ * grade and the comment alone.
  */
 export const ProjectGradeAdjustment = z.object({
   kind: z.enum(GRADE_ADJUSTMENT_KINDS),
@@ -892,9 +893,8 @@ export const ProjectGradeAdjustment = z.object({
   comment: z.string(),
   by: z.string().nullable(),
   at: z.iso.datetime(),
-  baseAtWrite: z.number().nullable(),
   base: z.number().nullable(),
-  baseMoved: z.boolean(),
+  moved: z.object({ from: z.number(), to: z.number() }).nullable(),
 });
 export type ProjectGradeAdjustment = z.infer<typeof ProjectGradeAdjustment>;
 

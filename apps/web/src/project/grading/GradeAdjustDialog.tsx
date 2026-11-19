@@ -2,8 +2,17 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { useState } from "react";
 
-import { GradeAdjustmentWrite, type ProjectGradingRepo, type ProjectRepoScores } from "@quiz/contracts";
-import { adjustGrade, formatGrade, GRADE_ADJUSTMENT_COMMENT_MAX, validGradeAdjustment, type GradeAdjustmentKind } from "@quiz/domain";
+import { GradeAdjustmentWrite, type ProjectGradeAdjustment, type ProjectRepoScores } from "@quiz/contracts";
+import {
+  adjustGrade,
+  formatGrade,
+  GRADE_ADJUSTMENT_COMMENT_MAX,
+  GRADE_ADJUSTMENT_DELTA_MAX,
+  MAX_GRADE,
+  MIN_GRADE,
+  validGradeAdjustment,
+  type GradeAdjustmentKind,
+} from "@quiz/domain";
 
 import { api } from "../../api";
 import { Grade } from "../../Grade";
@@ -11,7 +20,8 @@ import { useT } from "../../i18n";
 import { useToast } from "../../notify";
 import { FormError } from "../../queryError";
 import { projectKey } from "../../queryKeys";
-import { Alert, Button, Field, FormDialog, isoDateTime, Segmented, Textarea } from "../../ui";
+import { Alert, Button, Field, FormDialog, Segmented, Textarea } from "../../ui";
+import { AdjustmentByline, baseMovedText } from "../parts";
 import { gradeWriteRefusal } from "../projectPage";
 
 const VALUE_DESC_ID = "grade-adjust-value-desc";
@@ -25,6 +35,14 @@ const VALUE_DESC_ID = "grade-adjust-value-desc";
 export function gradeAdjustmentBody(kind: GradeAdjustmentKind, value: string, comment: string): GradeAdjustmentWrite | null {
   if (value.trim() === "") return null;
   return GradeAdjustmentWrite.safeParse({ kind, value: Number(value), comment }).data ?? null;
+}
+
+/** What the dialog reads of a repository: its id, its name, its grade (adjusted) and its adjustment. */
+export interface AdjustedRepo {
+  id: string;
+  label: string;
+  grade: number | null;
+  adjustment: ProjectGradeAdjustment | null;
 }
 
 /**
@@ -42,13 +60,13 @@ export function gradeAdjustmentBody(kind: GradeAdjustmentKind, value: string, co
 export function GradeAdjustDialog({
   projectId,
   repo,
-  members,
+  members = [],
   onClose,
 }: {
   projectId: string;
-  repo: ProjectGradingRepo;
+  repo: AdjustedRepo;
   /** The students the repository's grade is theirs: its group's members, or its student. */
-  members: readonly string[];
+  members?: readonly string[];
   onClose: () => void;
 }) {
   const t = useT();
@@ -73,7 +91,7 @@ export function GradeAdjustDialog({
         sent ? { method: "PUT", body: JSON.stringify(sent) } : { method: "DELETE" },
       ),
     onSuccess: (_, sent) => {
-      // The matrix, the page's rows and the gradebook read the grade again.
+      // The matrix and the page's rows read the grade again (the project's key holds both).
       void qc.invalidateQueries({ queryKey: projectKey(projectId) });
       toast(t(sent ? "project.adjust.saved" : "project.adjust.removed"), "success");
       onClose();
@@ -96,8 +114,8 @@ export function GradeAdjustDialog({
       error={<FormError error={write.error} describe={(error) => gradeWriteRefusal(error, t)} />}
     >
       {members.length > 1 ? <p className="text-[13px] text-fg-muted">{t("project.adjust.members", { names: members.join(", ") })}</p> : null}
-      {current?.baseMoved && current.baseAtWrite !== null && current.base !== null ? (
-        <Alert tone="warning" title={t("project.adjust.baseMoved", { from: formatGrade(current.baseAtWrite), to: formatGrade(current.base) })}>
+      {current?.moved ? (
+        <Alert tone="warning" title={baseMovedText(t, current.moved)}>
           {t("project.adjust.baseMoved.body")}
         </Alert>
       ) : null}
@@ -124,8 +142,8 @@ export function GradeAdjustDialog({
             type="number"
             inputMode="decimal"
             step={0.1}
-            min={kind === "relative" ? -5 : 1}
-            max={kind === "relative" ? 5 : 6}
+            min={kind === "relative" ? -GRADE_ADJUSTMENT_DELTA_MAX : MIN_GRADE}
+            max={kind === "relative" ? GRADE_ADJUSTMENT_DELTA_MAX : MAX_GRADE}
             width="w-28"
             className="text-right tabular-nums"
             autoFocus
@@ -143,7 +161,9 @@ export function GradeAdjustDialog({
         </div>
         {/* Under the row, not the 7 rem field: the range reads on one line. */}
         <p id={VALUE_DESC_ID} className="text-xs text-fg-muted">
-          {t(kind === "relative" ? "project.adjust.delta.desc" : "project.adjust.grade.desc")}
+          {kind === "relative"
+            ? t("project.adjust.delta.desc", { max: GRADE_ADJUSTMENT_DELTA_MAX })
+            : t("project.adjust.grade.desc", { min: formatGrade(MIN_GRADE), max: formatGrade(MAX_GRADE) })}
         </p>
       </div>
       <div className="space-y-1.5">
@@ -159,7 +179,7 @@ export function GradeAdjustDialog({
       </div>
       {current ? (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
-          <span className="text-xs text-fg-faint">{t("project.adjust.by", { by: current.by ?? "—", date: isoDateTime(current.at) })}</span>
+          <AdjustmentByline adjustment={current} />
           <Button
             variant="danger-quiet"
             size="sm"

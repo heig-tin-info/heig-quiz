@@ -17,7 +17,7 @@ import { GitPullRequest, PackageCheck, RefreshCw, SlidersHorizontal, TriangleAle
 
 import { Grade } from "../Grade";
 import { studentName } from "../group/groupRules";
-import { useT, type Dict } from "../i18n";
+import { useT, type Dict, type TFunction } from "../i18n";
 import { Badge, Button, cx, Dash, isoDateTime, RateRing, Tip, type Tone } from "../ui";
 import { syncTag } from "./projectPage";
 
@@ -92,6 +92,10 @@ export function Score({
   );
 }
 
+/** "Base grade moved from 4.1 to 4.6" (ADR-135): the one sentence of an absolute pin whose base moved. */
+export const baseMovedText = (t: TFunction, moved: NonNullable<ProjectGradeAdjustment["moved"]>): string =>
+  t("project.adjust.baseMoved", { from: formatGrade(moved.from), to: formatGrade(moved.to) });
+
 /**
  * The mark of an adjusted grade (ADR-135), after the grade it marks: a
  * small faint icon whose bubble holds the justification — the warning icon
@@ -102,10 +106,8 @@ export function Score({
 export function AdjustmentMark({ adjustment }: { adjustment: ProjectGradeAdjustment | null }) {
   const t = useT();
   if (!adjustment) return null;
-  const moved = adjustment.baseMoved && adjustment.baseAtWrite !== null && adjustment.base !== null;
-  const label = moved
-    ? `${t("project.adjust.baseMoved", { from: formatGrade(adjustment.baseAtWrite!), to: formatGrade(adjustment.base!) })}. ${adjustment.comment}`
-    : adjustment.comment;
+  const { moved } = adjustment;
+  const label = moved ? `${baseMovedText(t, moved)}. ${adjustment.comment}` : adjustment.comment;
   const Icon = moved ? TriangleAlert : SlidersHorizontal;
   return (
     <Tip label={label}>
@@ -117,6 +119,12 @@ export function AdjustmentMark({ adjustment }: { adjustment: ProjectGradeAdjustm
       </span>
     </Tip>
   );
+}
+
+/** Who adjusted a grade, and when (ADR-135): a faint caption. */
+export function AdjustmentByline({ adjustment }: { adjustment: Pick<ProjectGradeAdjustment, "by" | "at"> }) {
+  const t = useT();
+  return <span className="text-xs text-fg-faint">{t("project.adjust.by", { by: adjustment.by ?? "—", date: isoDateTime(adjustment.at) })}</span>;
 }
 
 /**

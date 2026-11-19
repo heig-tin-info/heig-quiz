@@ -32,8 +32,8 @@ de l'enseignant.
 Pour modifier une note après un échange avec un étudiant, cliquez sur la
 note en fin de ligne dans l'onglet **Correction** : un écart relatif ou une
 note absolue, avec une justification que les étudiants lisent une fois la
-note publiée. Après la publication, seul un enseignant du cours peut
-ajuster une note ou modifier le score de l'enseignant.
+note publiée. Après la publication, seule la personne responsable du cours
+peut ajuster une note ou modifier le score de l'enseignant.
 
 ## Échéance
 

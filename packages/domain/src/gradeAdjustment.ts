@@ -12,7 +12,7 @@
  *     survives a regrade: the base moves, the delta stays.
  *   - `absolute`: a grade 1.0 … 6.0 at the tenth. It pins the grade; the
  *     base it was written over is kept, and a base that moved since is said
- *     to the staff ({@link AdjustedGrade.baseMoved}) — never re-based
+ *     to the staff ({@link AdjustedGrade.moved}) — never re-based
  *     silently.
  *
  * Computed live, never frozen: every view of the grade (the grading table,
@@ -61,8 +61,12 @@ export interface AdjustedGrade {
   base: number;
   /** The grade every view shows. */
   grade: number;
-  /** An absolute pin whose base moved since it was written: the staff keep it (written again) or clear it. */
-  baseMoved: boolean;
+  /**
+   * An absolute pin whose base moved since it was written — from the base
+   * it was written over to the base of now —, null otherwise: the staff
+   * keep it (written again) or clear it.
+   */
+  moved: { from: number; to: number } | null;
 }
 
 /**
@@ -74,10 +78,11 @@ export interface AdjustedGrade {
  */
 export function adjustGrade(base: number | null, adjustment: GradeAdjustment | null): AdjustedGrade | null {
   if (base === null) return null;
-  if (adjustment === null) return { base, grade: base, baseMoved: false };
+  if (adjustment === null) return { base, grade: base, moved: null };
   if (adjustment.kind === "absolute") {
-    const baseMoved = adjustment.baseAtWrite !== null && !sameTenth(adjustment.baseAtWrite, base);
-    return { base, grade: roundToTenth(adjustment.value), baseMoved };
+    const from = adjustment.baseAtWrite;
+    const moved = from !== null && !sameTenth(from, base) ? { from, to: base } : null;
+    return { base, grade: roundToTenth(adjustment.value), moved };
   }
-  return { base, grade: roundToTenth(clamp(base + adjustment.value, MIN_GRADE, MAX_GRADE)), baseMoved: false };
+  return { base, grade: roundToTenth(clamp(base + adjustment.value, MIN_GRADE, MAX_GRADE)), moved: null };
 }

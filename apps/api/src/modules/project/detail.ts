@@ -74,7 +74,7 @@ import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { studentRepos, type RepoRow } from "./repos.js";
-import { finalOf, scoreFacts, slots, type RunRow, type ScoreFacts } from "./scores.js";
+import { adjusterNames, finalOf, scoreFacts, slots, type RunRow, type ScoreFacts } from "./scores.js";
 import { gradedBeforeUpdate, projectSyncState, repoSyncViews } from "./sync.js";
 import { projectSummary, type ProjectRow } from "./views.js";
 
@@ -203,10 +203,12 @@ async function finalDispatches(db: Db, repoIds: string[]): Promise<Map<string, D
  * then through the grade adjustment (ADR-135), the adjustment, the
  * release's snapshot. The one computation behind the page's rows, the
  * score's and the adjustment's writes (M3-08b), the release and the
- * gradebook; `facts` holds the repository's slot runs, criteria standing
- * and adjuster's name ({@link scoreFacts}).
+ * gradebook; `facts` holds the repository's slot runs and criteria
+ * standing ({@link scoreFacts}). `names` names the adjustment's writer
+ * (`adjusterNames`), read by the staff's views alone: without it, `by` is
+ * null.
  */
-export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts): ProjectRepoScores {
+export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts, names: ReadonlyMap<string, string> = NO_NAMES): ProjectRepoScores {
   const [current, frozen, review] = slots(repo, facts.runs);
   const final = finalOf(repo, facts);
   const stored = storedAdjustment(repo);
@@ -223,12 +225,13 @@ export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts
         : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment, gradedAt: isoOrNull(repo.teacherGradedAt) },
     final: final && { ...final, grade: graded && { grade: graded.grade } },
     adjustment: stored && {
-      ...stored,
-      comment: repo.gradeAdjustComment ?? "",
-      by: repo.gradeAdjustedBy === null ? null : (facts.adjusters.get(repo.gradeAdjustedBy) ?? null),
-      at: iso(repo.gradeAdjustedAt!),
+      kind: stored.kind,
+      value: stored.value,
+      comment: stored.comment,
+      by: names.get(stored.by) ?? null,
+      at: iso(stored.at),
       base: graded?.base ?? null,
-      baseMoved: graded?.baseMoved ?? false,
+      moved: graded?.moved ?? null,
     },
     scoreMax: teacherRunMax(repo, facts),
   };
@@ -238,6 +241,8 @@ export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts
     changedAfterRelease: changedAfterRelease(released, releaseOf(project, repo, scores), {
       grade: repo.releasedGrade,
       adjustmentComment: repo.releasedAdjustmentComment,
+      points: repo.releasedPoints,
+      max: repo.releasedMax,
     }),
   };
 }
@@ -247,10 +252,13 @@ export function baseGrade(project: ProjectRow, final: FinalScore | null): number
   return final === null ? null : (projectScoreGrade(project, final.source, final.points, final.max)?.grade ?? null);
 }
 
-/** A repository's grade adjustment as stored (ADR-135), null without one. */
-function storedAdjustment(repo: RepoRow): GradeAdjustment | null {
-  if (repo.gradeAdjustKind === null || repo.gradeAdjustValue === null) return null;
-  return { kind: repo.gradeAdjustKind, value: repo.gradeAdjustValue, baseAtWrite: repo.gradeAdjustBase };
+const NO_NAMES: ReadonlyMap<string, string> = new Map();
+
+/** A repository's grade adjustment as stored (ADR-135), null without one: its six columns are written whole (`project_repos_grade_adjust_whole`). */
+function storedAdjustment(repo: RepoRow): (GradeAdjustment & { comment: string; by: string; at: Date }) | null {
+  const { gradeAdjustKind: kind, gradeAdjustValue: value, gradeAdjustComment: comment, gradeAdjustedBy: by, gradeAdjustedAt: at } = repo;
+  if (kind === null || value === null || comment === null || by === null || at === null) return null;
+  return { kind, value, baseAtWrite: repo.gradeAdjustBase, comment, by, at };
 }
 
 /**
@@ -267,7 +275,13 @@ export function releaseOf(
 ): ReleasedGrade & { final: ProjectRepoScores["scores"]["final"] } {
   const final = releasableScore(project, repo, scores.final);
   const grade = final?.grade?.grade ?? null;
-  return { final, grade, adjustmentComment: grade !== null && scores.adjustment ? scores.adjustment.comment : null };
+  return {
+    final,
+    grade,
+    adjustmentComment: grade !== null && scores.adjustment ? scores.adjustment.comment : null,
+    points: final?.points ?? null,
+    max: final?.max ?? null,
+  };
 }
 
 /**
@@ -316,6 +330,7 @@ function repoView(
   project: ProjectRow,
   repo: RepoRow,
   scored: ScoreFacts,
+  names: ReadonlyMap<string, string>,
   facts: RunFacts | undefined,
   dispatch: DispatchRow | undefined,
   sync: ProjectRepoSync,
@@ -324,7 +339,7 @@ function repoView(
   toRevoke: ReadonlySet<string>,
   collection: ProjectRepoCollection | null,
 ): ProjectRepoView {
-  const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, scored);
+  const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, scored, names);
   const runs = scored.runs;
   return {
     ...repoDeadlineState(repo, project),
@@ -434,10 +449,12 @@ export async function projectDetail(
   // The online workspace's last collection (ADR-130 §7), the `codespace` module's record.
   const collections = await lastCollections(db, repoIds);
 
+  // The writers of the grade adjustments, named for the staff (ADR-135).
+  const names = await adjusterNames(db, shownRepos);
   const views = new Map(
     shownRepos.map((repo) => [
       repo.id,
-      repoView(project, repo, scored, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), repoCommitCount(project, repo, receipts), toRevoke, collections.get(repo.id) ?? null),
+      repoView(project, repo, scored, names, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), repoCommitCount(project, repo, receipts), toRevoke, collections.get(repo.id) ?? null),
     ]),
   );
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));

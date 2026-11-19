@@ -65,9 +65,14 @@ what the criteria said, and does not say why the grade moved.
    an assistant of the course; after it, the owner alone (`403
    owner_required`), as an evaluation's grading after its release. The same
    rule now holds for the teacher's score (`PATCH …/repos/:rid/score`),
-   which every member could write before: any write of a released
-   project's grade is the owner's. Checked in the route's loader, before
-   the body. The criteria's writes (ADR-106 §8) are not changed here.
+   which every member could write before: on a released project, the
+   teacher's score and the adjustment are the owner's. Checked in the
+   route's loader, before the body, and again in the write's transaction,
+   under the project's lock that the release takes too (a release committed
+   between the two is seen). **Follow-up:** the criteria's writes (ADR-106
+   §8: a criterion's points, a validation) on a released project stay open
+   to assistants; the owner wants every grading write aligned, which a
+   follow-up pull request does.
 10. **The release** writes the ADJUSTED grade into `released_grade` and the
     adjustment's comment into `released_adjustment_comment`. "Changed after
     release" (`changedAfterRelease`) becomes grade-based: the live adjusted
@@ -90,7 +95,8 @@ what the criteria said, and does not say why the grade moved.
     (`GradeAdjustmentWrite`, invariant 7; a value the domain refuses is a
     400) and `DELETE` on the same path; both answer `ProjectRepoScores`.
     The staff's repository view carries `scores.adjustment` (kind, value,
-    comment, writer's name, date, `baseAtWrite`, `base`, `baseMoved`) and
+    comment, writer's name, date, `base`, and `moved` — `{ from, to }`
+    for a pin whose base moved, else null) and
     the grading screen's entry `grade` and `adjustment`.
 14. **Exports.** The gradebook's CSV follows the cell (the adjusted grade).
     No project-level export of grades exists; none is added.
@@ -111,8 +117,10 @@ what the criteria said, and does not say why the grade moved.
   the owner does, as for a released evaluation.
 - A points-only change after the release that does not move the grade no
   longer asks for a release again; a comment-only adjustment change does.
-- `repoScores` reads the adjusters' names: one more query, only when an
-  adjustment exists.
+- The staff's views read the adjusters' names: one more query, only when
+  an adjustment exists; the release and the gradebook never do.
+- The six adjustment columns are written whole: a check constraint
+  (`project_repos_grade_adjust_whole`) holds them all set or all null.
 
 ## Alternatives considered
 

@@ -43,28 +43,46 @@ describe("projectScoreGrade (product owner, 2026-11-18)", () => {
 });
 
 describe("changedAfterRelease (ADR-135: grade-based)", () => {
-  const snap = { grade: 4.5, adjustmentComment: null };
+  const g = (grade: number | null, adjustmentComment: string | null = null, points: number | null = 8, max: number | null = 10) => ({
+    grade,
+    adjustmentComment,
+    points,
+    max,
+  });
+  const none = g(null, null, null, null);
+  const snap = g(4.5);
   it("is false before the release, whatever the grade", () => {
-    expect(changedAfterRelease(false, { grade: 3, adjustmentComment: "x" }, { grade: null, adjustmentComment: null })).toBe(false);
+    expect(changedAfterRelease(false, g(3, "x"), none)).toBe(false);
   });
 
   it("compares the grade with the snapshot's, at the tenth: a float hair is no change (#1144)", () => {
-    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: null }, snap)).toBe(false);
-    expect(changedAfterRelease(true, { grade: 4.6, adjustmentComment: null }, snap)).toBe(true);
-    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: null }, { grade: 4.499999999999, adjustmentComment: null })).toBe(false);
+    expect(changedAfterRelease(true, g(4.5), snap)).toBe(false);
+    expect(changedAfterRelease(true, g(4.6), snap)).toBe(true);
+    expect(changedAfterRelease(true, g(4.5), g(4.499999999999))).toBe(false);
+  });
+
+  it("ignores points that moved without moving the grade", () => {
+    expect(changedAfterRelease(true, g(4.5, null, 8.01, 10), snap)).toBe(false);
   });
 
   it("sees a grade that appeared or vanished since", () => {
-    expect(changedAfterRelease(true, { grade: null, adjustmentComment: null }, snap)).toBe(true);
-    expect(changedAfterRelease(true, { grade: 4, adjustmentComment: null }, { grade: null, adjustmentComment: null })).toBe(true);
-    expect(changedAfterRelease(true, { grade: null, adjustmentComment: null }, { grade: null, adjustmentComment: null })).toBe(false);
+    expect(changedAfterRelease(true, none, snap)).toBe(true);
+    expect(changedAfterRelease(true, g(4), none)).toBe(true);
+    expect(changedAfterRelease(true, none, none)).toBe(false);
+  });
+
+  it("compares the points and the maximum when neither side has a grade, at the hundredth", () => {
+    expect(changedAfterRelease(true, g(null, null, 8, null), g(null, null, 8, null))).toBe(false);
+    expect(changedAfterRelease(true, g(null, null, 9, null), g(null, null, 8, null))).toBe(true);
+    expect(changedAfterRelease(true, g(null, null, 6.19, 26), g(null, null, 6.1899999999999995, 26))).toBe(false);
+    expect(changedAfterRelease(true, g(null, null, 6.19, 26.01), g(null, null, 6.19, 26))).toBe(true);
   });
 
   it("sees an adjustment's comment that appeared, vanished or changed, the grade unchanged", () => {
-    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: "Oral" }, snap)).toBe(true);
-    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: null }, { grade: 4.5, adjustmentComment: "Oral" })).toBe(true);
-    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: "Oral 2" }, { grade: 4.5, adjustmentComment: "Oral" })).toBe(true);
-    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: "Oral" }, { grade: 4.5, adjustmentComment: "Oral" })).toBe(false);
+    expect(changedAfterRelease(true, g(4.5, "Oral"), snap)).toBe(true);
+    expect(changedAfterRelease(true, g(4.5), g(4.5, "Oral"))).toBe(true);
+    expect(changedAfterRelease(true, g(4.5, "Oral 2"), g(4.5, "Oral"))).toBe(true);
+    expect(changedAfterRelease(true, g(4.5, "Oral"), g(4.5, "Oral"))).toBe(false);
   });
 });
 

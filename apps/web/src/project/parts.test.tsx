@@ -45,9 +45,8 @@ describe("Score", () => {
       comment: "Oral defence",
       by: "Prof Démo",
       at: "2026-11-10T08:00:00.000Z",
-      baseAtWrite: 5.3,
       base: 5.3,
-      baseMoved: false,
+      moved: null,
     };
     const { unmount } = renderWithProviders(
       <Score score={final({ source: "teacher", points: 17, max: 20, grade: { grade: 5.6 } })} gradingMode="auto" adjustment={adjustment} />,
@@ -59,7 +58,7 @@ describe("Score", () => {
       <Score
         score={final({ source: "teacher", points: 17, max: 20, grade: { grade: 4.5 } })}
         gradingMode="auto"
-        adjustment={{ ...adjustment, kind: "absolute", value: 4.5, baseAtWrite: 4.1, base: 5.3, baseMoved: true }}
+        adjustment={{ ...adjustment, kind: "absolute", value: 4.5, base: 5.3, moved: { from: 4.1, to: 5.3 } }}
       />,
     );
     expect(screen.getByTestId("grade-adjusted")).toHaveTextContent("Base grade moved from 4.1 to 5.3. Oral defence");

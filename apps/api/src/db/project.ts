@@ -657,6 +657,11 @@ export const projectRepos = pgTable(
     index("project_repos_freeze_due_idx")
       .on(t.projectId)
       .where(sql`${t.deadlineAppliedAt} IS NOT NULL AND ${t.frozenAt} IS NULL`),
+    // A grade adjustment is written and cleared whole (ADR-135): all six columns, or none.
+    check(
+      "project_repos_grade_adjust_whole",
+      sql`num_nonnulls(${t.gradeAdjustKind}, ${t.gradeAdjustValue}, ${t.gradeAdjustBase}, ${t.gradeAdjustComment}, ${t.gradeAdjustedBy}, ${t.gradeAdjustedAt}) IN (0, 6)`,
+    ),
   ],
 );
 

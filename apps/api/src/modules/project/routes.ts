@@ -75,6 +75,7 @@ import {
   callerOf,
   gradingProject,
   gradingProjectRepo,
+  isCourseOwner,
   projectsAuthoringClassroom,
   projectsClassroom,
   seatOf,
@@ -547,13 +548,20 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       scope.project.releasedAt === null ? "assistant" : "owner",
     ),
   };
+  /** The writer of a grade, and whether they own the course: the service reads the release again under its lock. */
+  const gradeWriter = async (req: FastifyRequest, now: Date, courseId: string): Promise<service.GradeWriter> => ({
+    actor: actorOf(req),
+    userId: callerOf(req).id,
+    now,
+    owner: await isCourseOwner(app.db, courseId, callerOf(req)),
+  });
 
   /** F-PROJ-14: the teacher's score, after the repository's definitive freeze; null clears it. */
   app.patch(
     "/app/api/projects/:id/repos/:rid/score",
     session,
     teacher({ ...onGradeRepo, body: ScoreOverride }, async ({ req, now, body, scope }) =>
-      service.overrideScore(app.db, scope.project.id, scope.repo.id, body, actorOf(req), callerOf(req).id, now),
+      service.overrideScore(app.db, scope.project.id, scope.repo.id, body, await gradeWriter(req, now, scope.courseId)),
     ),
   );
 
@@ -562,7 +570,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/projects/:id/repos/:rid/grade-adjustment",
     session,
     teacher({ ...onGradeRepo, body: GradeAdjustmentWrite }, async ({ req, now, body, scope }) =>
-      service.adjustRepoGrade(app.db, scope.project.id, scope.repo.id, body, actorOf(req), callerOf(req).id, now),
+      service.adjustRepoGrade(app.db, scope.project.id, scope.repo.id, body, await gradeWriter(req, now, scope.courseId)),
     ),
   );
 
@@ -570,7 +578,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/projects/:id/repos/:rid/grade-adjustment",
     session,
     teacher(onGradeRepo, async ({ req, now, scope }) =>
-      service.adjustRepoGrade(app.db, scope.project.id, scope.repo.id, null, actorOf(req), callerOf(req).id, now),
+      service.adjustRepoGrade(app.db, scope.project.id, scope.repo.id, null, await gradeWriter(req, now, scope.courseId)),
     ),
   );
 

@@ -31,6 +31,7 @@ import { json, orgsRoute, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { accessibleProject, accessibleProjectRepo } from "../guards.js";
 import { projectLiveScores } from "./gradebook.js";
+import { adjustRepoGrade, overrideScore } from "./grades.js";
 import { call, newOrg, server, teacher, useProjectWorld, type Headers } from "../../test/projectWorld.js";
 
 const NOW = "2026-10-10T08:00:00.000Z";
@@ -519,11 +520,12 @@ describe("the grade adjustment (ADR-135)", () => {
       comment: "Oral defence",
       by: expect.any(String),
       at: NOW,
-      baseAtWrite: 4.5,
       base: 4.5,
-      baseMoved: false,
+      moved: null,
     });
     expect(set.scores.adjustment!.by).not.toBe("");
+    // The page names the writer too.
+    expect(rowOf(await detail(w), w.students[0]!.id).scores.adjustment!.by).toBe(set.scores.adjustment!.by);
     // The page reads the same.
     expect(rowOf(await detail(w), w.students[0]!.id).scores).toMatchObject({ final: { grade: { grade: 4.7 } }, adjustment: { kind: "relative" } });
 
@@ -583,16 +585,16 @@ describe("the grade adjustment (ADR-135)", () => {
     // The teacher's score moves the base to 5.5: the pin holds, flagged.
     const moved = ProjectRepoScores.parse((await score(w, repo, { points: 9 })).json());
     expect(moved.scores.final?.grade).toEqual({ grade: 5 });
-    expect(moved.scores.adjustment).toMatchObject({ kind: "absolute", value: 5, baseAtWrite: 4.5, base: 5.5, baseMoved: true });
+    expect(moved.scores.adjustment).toMatchObject({ kind: "absolute", value: 5, base: 5.5, moved: { from: 4.5, to: 5.5 } });
     // Kept: written again over the base of now.
     const kept = ProjectRepoScores.parse((await adjust(w, repo, { kind: "absolute", value: 5, comment: "Explained after" })).json());
-    expect(kept.scores.adjustment).toMatchObject({ baseAtWrite: 5.5, base: 5.5, baseMoved: false });
+    expect(kept.scores.adjustment).toMatchObject({ base: 5.5, moved: null });
 
     // A relative delta survives the base's move: 5.5 + 0.3, then 4.5 + 0.3 once the teacher's score is cleared.
     expect(ProjectRepoScores.parse((await adjust(w, repo, { kind: "relative", value: 0.3, comment: "Oral" })).json()).scores.final?.grade).toEqual({ grade: 5.8 });
     const back = ProjectRepoScores.parse((await score(w, repo, { points: null })).json());
     expect(back.scores.final?.grade).toEqual({ grade: 4.8 });
-    expect(back.scores.adjustment).toMatchObject({ kind: "relative", base: 4.5, baseMoved: false });
+    expect(back.scores.adjustment).toMatchObject({ kind: "relative", base: 4.5, moved: null });
   });
 
   it("is an assistant's before the release, the owner's alone after it — the teacher's score too (ADR-068 as amended)", async () => {
@@ -614,6 +616,24 @@ describe("the grade adjustment (ADR-135)", () => {
 
     expect((await adjust(w, repo, { kind: "relative", value: 0.2, comment: "After" })).statusCode).toBe(200);
     expect((await score(w, repo, { points: 9 })).statusCode).toBe(200);
+  });
+
+  it("reads the release again under its lock: an assistant loaded before a release committed writes nothing", async () => {
+    const w = await world();
+    const repo = await scoredRepo(w);
+    const assistant = await assistantOf(w);
+    // The loader let the assistant in on the unreleased project; the release commits before the write.
+    expect((await release(w)).statusCode).toBe(200);
+    const writer = { actor: { actorType: "user" as const, actorUserId: assistant.id }, userId: assistant.id, now: at(NOW), owner: false };
+    for (const write of [
+      () => adjustRepoGrade(server.app.db, w.projectId, repo, { kind: "relative", value: 0.2, comment: "Late" }, writer),
+      () => adjustRepoGrade(server.app.db, w.projectId, repo, null, writer),
+      () => overrideScore(server.app.db, w.projectId, repo, { points: 9 }, writer),
+    ]) {
+      await expect(write()).rejects.toMatchObject({ code: "owner_required", status: 403 });
+    }
+    expect(await repoRow(repo)).toMatchObject({ teacherPoints: null, gradeAdjustKind: null });
+    expect(await auditOf(repo, "project_repo.grade_adjust")).toHaveLength(0);
   });
 
   it("is released as the adjusted grade with its own comment, beside the teacher's; a later change shows as changed after release", async () => {

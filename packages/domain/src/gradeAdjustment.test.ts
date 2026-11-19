@@ -27,7 +27,7 @@ describe("validGradeAdjustment (ADR-135)", () => {
 
 describe("adjustGrade (ADR-135)", () => {
   it("leaves the grade as it is without an adjustment", () => {
-    expect(adjustGrade(4.3, null)).toEqual({ base: 4.3, grade: 4.3, baseMoved: false });
+    expect(adjustGrade(4.3, null)).toEqual({ base: 4.3, grade: 4.3, moved: null });
   });
 
   it("makes no grade out of none: an adjustment moves a grade", () => {
@@ -37,8 +37,8 @@ describe("adjustGrade (ADR-135)", () => {
   });
 
   it("adds a relative delta, rounded to the tenth whatever the float hair", () => {
-    expect(adjustGrade(4.3, relative(0.2))).toEqual({ base: 4.3, grade: 4.5, baseMoved: false });
-    expect(adjustGrade(4.3, relative(-0.4))).toEqual({ base: 4.3, grade: 3.9, baseMoved: false });
+    expect(adjustGrade(4.3, relative(0.2))).toEqual({ base: 4.3, grade: 4.5, moved: null });
+    expect(adjustGrade(4.3, relative(-0.4))).toEqual({ base: 4.3, grade: 3.9, moved: null });
     expect(adjustGrade(0.1 * 3 + 4, relative(0.1))?.grade).toBe(4.4);
   });
 
@@ -60,19 +60,19 @@ describe("adjustGrade (ADR-135)", () => {
   it("keeps a relative delta when the base moves: the regrade moves the base, the delta stays", () => {
     const delta = relative(0.3);
     expect(adjustGrade(4, delta)?.grade).toBe(4.3);
-    expect(adjustGrade(4.8, delta)).toEqual({ base: 4.8, grade: 5.1, baseMoved: false });
+    expect(adjustGrade(4.8, delta)).toEqual({ base: 4.8, grade: 5.1, moved: null });
   });
 
   it("pins an absolute grade, and says when its base moved since the write", () => {
-    expect(adjustGrade(4.3, absolute(5, 4.3))).toEqual({ base: 4.3, grade: 5, baseMoved: false });
-    expect(adjustGrade(4.6, absolute(5, 4.3))).toEqual({ base: 4.6, grade: 5, baseMoved: true });
+    expect(adjustGrade(4.3, absolute(5, 4.3))).toEqual({ base: 4.3, grade: 5, moved: null });
+    expect(adjustGrade(4.6, absolute(5, 4.3))).toEqual({ base: 4.6, grade: 5, moved: { from: 4.3, to: 4.6 } });
     // A float hair of the stored base is no move.
-    expect(adjustGrade(4.3, absolute(5, 4.299999999))?.baseMoved).toBe(false);
+    expect(adjustGrade(4.3, absolute(5, 4.299999999))?.moved).toBeNull();
     // No stored base: nothing to compare with.
-    expect(adjustGrade(4.6, absolute(5, null))?.baseMoved).toBe(false);
+    expect(adjustGrade(4.6, absolute(5, null))?.moved).toBeNull();
   });
 
   it("never flags a relative adjustment's base", () => {
-    expect(adjustGrade(4.6, { kind: "relative", value: 0.2, baseAtWrite: 4.3 })?.baseMoved).toBe(false);
+    expect(adjustGrade(4.6, { kind: "relative", value: 0.2, baseAtWrite: 4.3 })?.moved).toBeNull();
   });
 });

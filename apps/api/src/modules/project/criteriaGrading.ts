@@ -49,7 +49,7 @@ import { isLive } from "./deadline.js";
 import { repoScores } from "./detail.js";
 import { ProjectError } from "./errors.js";
 import { studentRepos, type RepoRow } from "./repos.js";
-import { scoreFacts } from "./scores.js";
+import { adjusterNames, scoreFacts } from "./scores.js";
 import type { ProjectRow } from "./views.js";
 
 /** The project's snapshot; `409 not_criteria` off the `criteria` mode. */
@@ -174,8 +174,10 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
   if (repos.length === 0) return [];
   const groupIds = repos.flatMap((r) => (r.groupId === null ? [] : [r.groupId]));
   const userIds = repos.filter((r) => r.groupId === null).map((r) => r.userId);
-  const [facts, evidence, passes, groups, people] = await Promise.all([
+  const [facts, names, evidence, passes, groups, people] = await Promise.all([
     scoreFacts(db, repos),
+    // The writers of the grade adjustments, named for the staff (ADR-135).
+    adjusterNames(db, repos),
     evidenceSummaries(db, repos.map((r) => r.id)),
     passTraces(db, repos.map((r) => r.id)),
     groupIds.length === 0
@@ -197,7 +199,7 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
       const own = logged.get(repo.id);
       const table = criteriaTable(standing.snapshot, standing.rows, { audience: "staff", frozen: repo.frozenAt !== null, released });
       // The grade every view shows, through the adjustment (ADR-135): the page's own computation.
-      const { scores } = repoScores(project, repo, facts);
+      const { scores } = repoScores(project, repo, facts, names);
       return [
         {
           id: repo.id,

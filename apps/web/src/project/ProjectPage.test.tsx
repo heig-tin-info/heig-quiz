@@ -2300,7 +2300,7 @@ describe("the Grading tab", () => {
     it("marks an adjusted grade, warns of a moved base, and removes the adjustment", async () => {
       const pinned = gradingRepo(1, "Alice", [8, 2, 1, 0], {
         grade: 4.5,
-        adjustment: { kind: "absolute", value: 4.5, comment: "Late, excused", by: "Prof Démo", at: PAST, baseAtWrite: 4.1, base: 5.6, baseMoved: true },
+        adjustment: { kind: "absolute", value: 4.5, comment: "Late, excused", by: "Prof Démo", at: PAST, base: 5.6, moved: { from: 4.1, to: 5.6 } },
       });
       const { calls } = routes(criteria(), {
         [`GET ${BASE}/grading`]: ok(gradingView([pinned])),
@@ -2332,7 +2332,7 @@ describe("the Grading tab", () => {
       await userEvent.type(within(dialog).getByLabelText("Change"), "-0.5");
       await userEvent.type(within(dialog).getByLabelText("Justification"), "Copied part");
       await userEvent.click(within(dialog).getByRole("button", { name: "Adjust" }));
-      expect(await within(dialog).findByText("The grades are released: only a teacher of the course may change them now.")).toBeInTheDocument();
+      expect(await within(dialog).findByText("The grades are released: only the person who runs the course can change them now.")).toBeInTheDocument();
     });
 
     it("offers no adjustment on a repository not frozen, nor without a grade", async () => {

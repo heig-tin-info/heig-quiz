@@ -43,7 +43,7 @@ import { eq } from "drizzle-orm";
 import type { GradeAdjustmentWrite, ProjectReleaseResult, ProjectRepoScores, ScoreOverride } from "@quiz/contracts";
 import { projectGraded, scoresFinal, teacherScoreMax } from "@quiz/domain";
 
-import { audit, type AuditActor } from "../../audit.js";
+import { audit, type AuditAction, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
 import type { Clock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -57,118 +57,116 @@ import { ProjectError } from "./errors.js";
 import { repoMembers } from "./groupRepos.js";
 import { groupSyncOwed } from "./groupResync.js";
 import { studentRepos, type RepoRow } from "./repos.js";
-import { adjusterNames, finalOf, scoreFacts } from "./scores.js";
+import { adjusterNames, finalOf, scoreFacts, type ScoreFacts } from "./scores.js";
+import type { ProjectRow } from "./views.js";
 
-/** The teacher's score as the audit records it. */
-const teacherScore = (repo: RepoRow) =>
-  repo.teacherPoints === null ? null : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment };
+/**
+ * Who writes a repository's grade (ADR-135 §9): the audit's actor, the
+ * account, the server's now, and whether that account owns the course
+ * (`isCourseOwner`) — a released project's grade is the owner's alone.
+ */
+export interface GradeWriter {
+  actor: AuditActor;
+  userId: string;
+  now: Date;
+  owner: boolean;
+}
+
+/** One write of a repository's grade: its audit action, the columns it writes, and what the audit records of the row before and after. */
+interface GradeWrite {
+  action: Extract<AuditAction, "project_repo.grade_override" | "project_repo.grade_adjust">;
+  values: (project: ProjectRow, repo: RepoRow, facts: ScoreFacts) => Partial<RepoRow>;
+  record: (repo: RepoRow, scores: ProjectRepoScores["scores"]) => unknown;
+  payload?: Record<string, unknown>;
+}
+
+/**
+ * THE writer of a repository's grade — the teacher's score, the grade
+ * adjustment —, under the project's and the repository's locks: the owner
+ * alone once the project is released (`403 owner_required`: the route's
+ * loader chose the role from the project as it read it, and a release may
+ * have committed since, so the rule is read again here, under the lock the
+ * release takes too), a graded project (`409 grading_none`), a repository
+ * frozen for good (`409 not_frozen`). Audited before and after. Answers the
+ * repository's scores as they now stand ({@link repoScores}), its writer
+ * named.
+ */
+async function writeRepoGrade(db: Db, projectId: string, repoId: string, writer: GradeWriter, write: GradeWrite): Promise<ProjectRepoScores> {
+  return db.transaction(async (tx) => {
+    const { project, repo } = await repoForUpdate(tx, projectId, repoId);
+    if (project.releasedAt !== null && !writer.owner) throw new ProjectError("owner_required", "Only an owner of this course may change a released grade");
+    if (!projectGraded(project.gradingMode)) throw new ProjectError("grading_none", "The project is not graded");
+    if (repo.frozenAt === null) throw new ProjectError("not_frozen", "A grade is written once the repository's deadline and grace have passed");
+    const facts = await scoreFacts(tx, [repo]);
+    const [updated] = await tx.update(projectRepos).set(write.values(project, repo, facts)).where(eq(projectRepos.id, repo.id)).returning();
+    const before = repoScores(project, repo, facts);
+    const after = repoScores(project, updated!, facts, await adjusterNames(tx, [updated!]));
+    await audit(tx, {
+      ...writer.actor,
+      action: write.action,
+      subjectType: "project_repo",
+      subjectId: repo.id,
+      payload: { before: write.record(repo, before.scores), after: write.record(updated!, after.scores), ...write.payload },
+    });
+    return after;
+  });
+}
 
 /**
  * `PATCH /app/api/projects/:id/repos/:rid/score` (F-PROJ-14): the teacher's
- * score, or its clearing (`points: null`), on a repository frozen for good.
- * Answers the repository's scores as they now stand ({@link repoScores}).
+ * score, or its clearing (`points: null`), on a repository frozen for good
+ * ({@link writeRepoGrade}).
  */
-export async function overrideScore(
-  db: Db,
-  projectId: string,
-  repoId: string,
-  body: ScoreOverride,
-  actor: AuditActor,
-  userId: string,
-  now: Date,
-): Promise<ProjectRepoScores> {
-  return db.transaction(async (tx) => {
-    const { project, repo } = await repoForUpdate(tx, projectId, repoId);
-    if (!projectGraded(project.gradingMode)) throw new ProjectError("grading_none", "The project is not graded");
-    if (repo.frozenAt === null) throw new ProjectError("not_frozen", "A score can be set once the repository's deadline and grace have passed");
-    const facts = await scoreFacts(tx, [repo]);
-    let values: Partial<RepoRow>;
-    if (body.points === null) {
-      values = { teacherPoints: null, teacherMax: null, teacherComment: null, teacherGradedBy: null, teacherGradedAt: null };
-    } else {
+export function overrideScore(db: Db, projectId: string, repoId: string, body: ScoreOverride, writer: GradeWriter): Promise<ProjectRepoScores> {
+  return writeRepoGrade(db, projectId, repoId, writer, {
+    action: "project_repo.grade_override",
+    record: (repo) => (repo.teacherPoints === null ? null : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment }),
+    values: (_project, repo, facts) => {
+      if (body.points === null) return { teacherPoints: null, teacherMax: null, teacherComment: null, teacherGradedBy: null, teacherGradedAt: null };
       // The scored run's maximum is the score's; none (a run to verify
       // included, F-PROJ-08): the teacher gives their own (`teacherRunMax`,
       // the rule the page's `scores.scoreMax` reads too).
       const max = teacherScoreMax(body.points, body.max, teacherRunMax(repo, facts));
       if ("refusal" in max) throw new ProjectError(max.refusal);
-      values = {
-        teacherPoints: body.points,
-        teacherMax: max.max,
-        teacherComment: body.comment ?? null,
-        teacherGradedBy: userId,
-        teacherGradedAt: now,
-      };
-    }
-    const [updated] = await tx.update(projectRepos).set(values).where(eq(projectRepos.id, repo.id)).returning();
-    await audit(tx, {
-      ...actor,
-      action: "project_repo.grade_override",
-      subjectType: "project_repo",
-      subjectId: repo.id,
-      payload: { before: teacherScore(repo), after: teacherScore(updated!) },
-    });
-    return repoScores(project, updated!, facts);
+      return { teacherPoints: body.points, teacherMax: max.max, teacherComment: body.comment ?? null, teacherGradedBy: writer.userId, teacherGradedAt: writer.now };
+    },
   });
 }
-
-/** The grade adjustment as the audit records it, with the grade it gave (ADR-135). */
-const adjustmentRecord = (scores: ProjectRepoScores["scores"]) =>
-  scores.adjustment === null
-    ? null
-    : { kind: scores.adjustment.kind, value: scores.adjustment.value, comment: scores.adjustment.comment, base: scores.adjustment.base, grade: scores.final?.grade?.grade ?? null };
 
 /**
  * `PUT` / `DELETE /app/api/projects/:id/repos/:rid/grade-adjustment`
  * (ADR-135): the repository's grade adjustment set — over the base grade of
  * now, which an absolute pin keeps to tell when it moved — or cleared
- * (`body` null). As the teacher's score: on a graded project (`409
- * grading_none`), a repository frozen for good (`409 not_frozen`); a set
- * also needs a grade to adjust (`409 no_grade`: no final score, no maximum,
- * or the CI's share of a criteria project). The value's rule is the
- * contract's (`validGradeAdjustment`). Audited `project_repo.grade_adjust`;
- * no notification: the student reads it at the next release. Answers the
- * repository's scores as they now stand ({@link repoScores}).
+ * (`body` null), under the teacher's score's rules ({@link writeRepoGrade});
+ * a set also needs a grade to adjust (`409 no_grade`: no final score, no
+ * maximum, or the CI's share of a criteria project). The value's rule is
+ * the contract's (`validGradeAdjustment`). Audited
+ * `project_repo.grade_adjust`, with the grade it gave; no notification:
+ * the student reads it at the next release.
  */
-export async function adjustRepoGrade(
-  db: Db,
-  projectId: string,
-  repoId: string,
-  body: GradeAdjustmentWrite | null,
-  actor: AuditActor,
-  userId: string,
-  now: Date,
-): Promise<ProjectRepoScores> {
-  return db.transaction(async (tx) => {
-    const { project, repo } = await repoForUpdate(tx, projectId, repoId);
-    if (!projectGraded(project.gradingMode)) throw new ProjectError("grading_none", "The project is not graded");
-    if (repo.frozenAt === null) throw new ProjectError("not_frozen", "A grade can be adjusted once the repository's deadline and grace have passed");
-    const facts = await scoreFacts(tx, [repo]);
-    let values: Partial<RepoRow>;
-    if (body === null) {
-      values = { gradeAdjustKind: null, gradeAdjustValue: null, gradeAdjustBase: null, gradeAdjustComment: null, gradeAdjustedBy: null, gradeAdjustedAt: null };
-    } else {
+export function adjustRepoGrade(db: Db, projectId: string, repoId: string, body: GradeAdjustmentWrite | null, writer: GradeWriter): Promise<ProjectRepoScores> {
+  return writeRepoGrade(db, projectId, repoId, writer, {
+    action: "project_repo.grade_adjust",
+    record: (_repo, { adjustment, final }) =>
+      adjustment === null
+        ? null
+        : { kind: adjustment.kind, value: adjustment.value, comment: adjustment.comment, base: adjustment.base, grade: final?.grade?.grade ?? null },
+    payload: { cleared: body === null },
+    values: (project, repo, facts) => {
+      if (body === null) {
+        return { gradeAdjustKind: null, gradeAdjustValue: null, gradeAdjustBase: null, gradeAdjustComment: null, gradeAdjustedBy: null, gradeAdjustedAt: null };
+      }
       const base = baseGrade(project, finalOf(repo, facts));
       if (base === null) throw new ProjectError("no_grade", "The repository has no grade to adjust");
-      values = {
+      return {
         gradeAdjustKind: body.kind,
         gradeAdjustValue: body.value,
         gradeAdjustBase: base,
         gradeAdjustComment: body.comment,
-        gradeAdjustedBy: userId,
-        gradeAdjustedAt: now,
+        gradeAdjustedBy: writer.userId,
+        gradeAdjustedAt: writer.now,
       };
-    }
-    const [updated] = await tx.update(projectRepos).set(values).where(eq(projectRepos.id, repo.id)).returning();
-    // The writer's name, read again: the row's adjuster may be someone else than before.
-    const after = repoScores(project, updated!, { ...facts, adjusters: await adjusterNames(tx, [updated!]) });
-    await audit(tx, {
-      ...actor,
-      action: "project_repo.grade_adjust",
-      subjectType: "project_repo",
-      subjectId: repo.id,
-      payload: { before: adjustmentRecord(repoScores(project, repo, facts).scores), after: adjustmentRecord(after.scores), cleared: body === null },
-    });
-    return after;
+    },
   });
 }
 

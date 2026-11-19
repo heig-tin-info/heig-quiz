@@ -7,7 +7,7 @@ import { formatGrade, formatPoints } from "@quiz/domain";
 import { useT } from "../i18n";
 import { FormError } from "../queryError";
 import { Badge, Button, Fact, Field, isoDateTime, Textarea } from "../ui";
-import { AdjustmentMark, Points, Score, signedTenth } from "./parts";
+import { AdjustmentByline, AdjustmentMark, baseMovedText, Points, Score, signedTenth } from "./parts";
 import { gradeWriteRefusal, reviewView, shortSha, teacherScoreBlock } from "./projectPage";
 
 const POINTS_ID = "project-teacher-points";
@@ -170,15 +170,9 @@ function AdjustmentFact({ adjustment }: { adjustment: ProjectGradeAdjustment }) 
             {value}
             <AdjustmentMark adjustment={adjustment} />
           </span>
-          {adjustment.baseMoved && adjustment.baseAtWrite !== null && adjustment.base !== null ? (
-            <span className="text-[13px] text-warning">
-              {t("project.adjust.baseMoved", { from: formatGrade(adjustment.baseAtWrite), to: formatGrade(adjustment.base) })}
-            </span>
-          ) : null}
+          {adjustment.moved ? <span className="text-[13px] text-warning">{baseMovedText(t, adjustment.moved)}</span> : null}
           <span className="whitespace-pre-wrap text-[13px]">{adjustment.comment}</span>
-          <span className="text-xs text-fg-faint">
-            {t("project.adjust.by", { by: adjustment.by ?? "—", date: isoDateTime(adjustment.at) })}
-          </span>
+          <AdjustmentByline adjustment={adjustment} />
         </span>
       </Fact>
     </dl>

@@ -1030,12 +1030,21 @@ function gradeOf(p: MockProject, r: MockRepo) {
   const base = final ? (projectScoreGrade(p.summary, final.source, final.points, final.max)?.grade ?? null) : null;
   const adjusted = adjustGrade(base, r.adjustment);
   const adjustment: ProjectRepoView["scores"]["adjustment"] = r.adjustment && {
-    ...r.adjustment,
+    kind: r.adjustment.kind,
+    value: r.adjustment.value,
+    comment: r.adjustment.comment,
+    by: r.adjustment.by,
+    at: r.adjustment.at,
     base: adjusted?.base ?? null,
-    baseMoved: adjusted?.baseMoved ?? false,
+    moved: adjusted?.moved ?? null,
   };
   const grade = adjusted?.grade ?? null;
-  const releasable: ReleasedGrade = { grade, adjustmentComment: grade !== null && r.adjustment ? r.adjustment.comment : null };
+  const releasable: ReleasedGrade = {
+    grade,
+    adjustmentComment: grade !== null && r.adjustment ? r.adjustment.comment : null,
+    points: final?.points ?? null,
+    max: final?.max ?? null,
+  };
   return { final: final && { ...final, grade: adjusted && { grade: adjusted.grade } }, adjustment, releasable };
 }
 
@@ -2043,7 +2052,7 @@ on("POST", "/app/api/projects/:id/release", (m) => {
     const resolved = finalOf(r);
     const final = resolved && (isLive(p, r) || !resolved.toVerify) ? resolved : null;
     r.released = { points: final?.points ?? null, max: final?.max ?? null };
-    r.releasedGrade = final ? gradeOf(p, r).releasable : { grade: null, adjustmentComment: null };
+    r.releasedGrade = final ? gradeOf(p, r).releasable : { grade: null, adjustmentComment: null, points: null, max: null };
     if (final) scored += 1;
   }
   p.releasedAt = iso(0);

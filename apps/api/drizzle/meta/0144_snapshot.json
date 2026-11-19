@@ -1,5 +1,5 @@
 {
-  "id": "605d2d51-4b36-4b7e-921a-e9a810b174b8",
+  "id": "9cb0506d-84c7-463a-9156-21a60f7f1f0b",
   "prevId": "848b8d0b-b6b7-4ebb-9ff2-d521f7668588",
   "version": "7",
   "dialect": "postgresql",
@@ -10683,7 +10683,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "project_repos_grade_adjust_whole": {
+          "name": "project_repos_grade_adjust_whole",
+          "value": "num_nonnulls(\"project_repos\".\"grade_adjust_kind\", \"project_repos\".\"grade_adjust_value\", \"project_repos\".\"grade_adjust_base\", \"project_repos\".\"grade_adjust_comment\", \"project_repos\".\"grade_adjusted_by\", \"project_repos\".\"grade_adjusted_at\") IN (0, 6)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.project_sync_prs": {

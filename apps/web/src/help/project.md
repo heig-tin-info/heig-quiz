@@ -30,7 +30,7 @@ restored: it blocks the release until you set the teacher's score.
 To move a grade after a talk with a student, click the grade at the end
 of its row on the **Grading** tab: a relative change or an absolute grade,
 with a justification students read once released. After the release, only
-a teacher of the course can adjust a grade or change the teacher's score.
+the person who runs the course can adjust a grade or change the teacher's score.
 
 ## Deadline
 

@@ -4,6 +4,7 @@
  * the release, and the page's one primary action. The `project` module
  * reads the rows; these decide.
  */
+import { roundPoints } from "./criteria.js";
 import { ciShareOnly, type FinalScoreSource } from "./finalScore.js";
 import { projectGrade, type ProjectGrade, type ProjectScale } from "./projectGrade.js";
 import type { DeadlineStrategyName } from "./projectRuns.js";
@@ -99,12 +100,15 @@ export function projectScoreGrade(
   return ciShareOnly(project.gradingMode, source) ? null : scoreGrade(points, max, project.gradingScale);
 }
 
-/** What the release writes of a repository's grade, and what "changed after release" reads of it since. */
+/** What the release writes of a repository's score, and what "changed after release" reads of it since. */
 export interface ReleasedGrade {
   /** The ADJUSTED grade (`adjustGrade`, ADR-135); null without a released score or without a grade. */
   grade: number | null;
   /** The adjustment's comment, the student's to read beside the grade; null without an adjustment. */
   adjustmentComment: string | null;
+  /** The released score's points and maximum: what is compared when neither side has a grade. */
+  points: number | null;
+  max: number | null;
 }
 
 /**
@@ -113,15 +117,18 @@ export interface ReleasedGrade {
  * released; a grade that appeared, vanished or moved — read at the tenth,
  * as it is written, so a float hair of an older snapshot is no change — or
  * an adjustment's comment that changed. Points that moved without moving
- * the grade are no change for the student.
+ * the grade are no change for the student. With no grade on either side (a
+ * score without a maximum), the points and the maximum are compared, at the
+ * hundredth ({@link roundPoints}, #1144).
  */
 export function changedAfterRelease(released: boolean, live: ReleasedGrade, snapshot: ReleasedGrade): boolean {
   if (!released) return false;
-  const sameGrade =
-    live.grade === null || snapshot.grade === null
-      ? live.grade === snapshot.grade
-      : Math.round(live.grade * 10) === Math.round(snapshot.grade * 10);
-  return !sameGrade || live.adjustmentComment !== snapshot.adjustmentComment;
+  if (live.adjustmentComment !== snapshot.adjustmentComment) return true;
+  if (live.grade === null && snapshot.grade === null) {
+    const same = (a: number | null, b: number | null) => (a === null || b === null ? a === b : roundPoints(a) === roundPoints(b));
+    return !same(live.points, snapshot.points) || !same(live.max, snapshot.max);
+  }
+  return live.grade === null || snapshot.grade === null || Math.round(live.grade * 10) !== Math.round(snapshot.grade * 10);
 }
 
 /** The one primary action of the staff's project page (F-PROJ-13). */
