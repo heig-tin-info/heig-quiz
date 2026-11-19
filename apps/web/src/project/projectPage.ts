@@ -38,6 +38,8 @@ import {
   projectBeforePublication,
   projectGraded,
   projectIsLive,
+  quantile,
+  rateOf,
   reopens,
 } from "@quiz/domain";
 
@@ -506,7 +508,7 @@ export const joinedCount = (members: readonly RepoMember[]): { n: number; total:
 });
 
 /** A member whose invitation a resend can still reach: one waiting, or one GitHub dropped. */
-export const invitable =(m: RepoMember): boolean => m.access === "pending" || m.access === "expired";
+export const invitable = (m: RepoMember): boolean => m.access === "pending" || m.access === "expired";
 
 /** The readers of a row's repository: a group's members, or its one student. */
 export const entryMembers = (e: RepoEntry): RepoMember[] => (e.kind === "group" ? e.members : [e.student]);
@@ -514,17 +516,19 @@ export const entryMembers = (e: RepoEntry): RepoMember[] => (e.kind === "group" 
 /** A row whose Resend can reach someone: one of its readers is invited, or their invitation expired. */
 export const resendable = (e: RepoEntry): boolean => entryMembers(e).some(invitable);
 
+/** A row's id on the roster: its group's, else its student's roster line (null for a student who left it). */
+const rosterId = (e: RepoEntry): string | null => (e.kind === "group" ? e.group.id : e.student.enrollmentId);
+
 /**
  * The id of a row's own page (ADR-137, `/projects/:id/repos/:rowId`): its
- * repository's, else — not accepted yet — its group's or its student's
- * roster line's, so every row of the table opens; null for none of them.
+ * repository's, else — not accepted yet — its roster id, so every row of the
+ * table opens; null for none of them.
  */
-export const entryRowId = (e: RepoEntry): string | null =>
-  e.repo?.id ?? (e.kind === "group" ? e.group.id : e.student.enrollmentId);
+export const entryRowId = (e: RepoEntry): string | null => e.repo?.id ?? rosterId(e);
 
-/** The row a page's `rowId` names: by its repository, else by its group or its student's roster line (a row accepted since keeps its address). */
+/** The row a page's `rowId` names: by its repository, else by its roster id (a row accepted since keeps its address). */
 export const entryOfRow = (p: Pick<ProjectDetail, "groupMode" | "rows">, rowId: string): RepoEntry | undefined =>
-  repoEntries(p).find((e) => e.repo?.id === rowId || (e.kind === "group" ? e.group.id : e.student.enrollmentId) === rowId);
+  repoEntries(p).find((e) => e.repo?.id === rowId || rosterId(e) === rowId);
 
 /** The staff's test repository (ADR-077): a row of the table, counted nowhere, never a step of the walk. */
 export const isStaffTest = (e: RepoEntry): boolean => e.kind === "student" && e.staff;
@@ -562,15 +566,32 @@ export type RepoPrimary = "grade" | "teacherScore" | null;
 
 /**
  * The primary of a repository's page follows its state (ADR-137): none
- * during the project (*Open in workspace* stays secondary, ADR-129 §11);
- * once frozen for good, Grade — the grading screen on it — under criteria,
- * the teacher's score under the CI's score; none for a project graded
- * `none` nor for the staff's test repository, never graded.
+ * during the project (*Open in workspace* stays secondary, ADR-129 §11) —
+ * none wherever the teacher's score cannot be written yet
+ * (`teacherScoreBlock`); once frozen for good, Grade — the grading screen
+ * on it — under criteria, the teacher's score under the CI's; none for the
+ * staff's test repository, never graded.
  */
 export function repoPrimary(entry: RepoEntry, project: Pick<ProjectDetail, "gradingMode">): RepoPrimary {
-  if (entry.repo === null || entry.repo.frozenAt === null || isStaffTest(entry)) return null;
-  if (project.gradingMode === "criteria") return "grade";
-  return project.gradingMode === "auto" ? "teacherScore" : null;
+  if (!entry.repo || isStaffTest(entry) || teacherScoreBlock(entry.repo, project) !== null) return null;
+  return project.gradingMode === "criteria" ? "grade" : "teacherScore";
+}
+
+/** The state of a row's repository, as the header's one badge (ADR-104's grammar: green open, a fact zinc). */
+export interface RepoStateBadge {
+  key: keyof Dict;
+  tone: Tone;
+  icon?: "lock" | "frozen";
+}
+
+export function repoStateBadge(repo: ProjectRepoView | null): RepoStateBadge {
+  if (repo === null) return { key: "project.repo.notAccepted", tone: "zinc" };
+  if (repo.provisionStatus === "pending") return { key: "project.repo.provisioning", tone: "zinc" };
+  if (repo.provisionStatus === "error") return { key: "project.repo.provisionFailed", tone: "red" };
+  if (repo.frozenAt !== null) return { key: "project.frozen", tone: "zinc", icon: "frozen" };
+  if (repo.deadlineAppliedAt !== null) return { key: "project.frozen.provisional", tone: "zinc", icon: "frozen" };
+  if (repo.locked) return { key: "project.lock.locked", tone: "zinc", icon: "lock" };
+  return { key: "project.lock.open", tone: "green" };
 }
 
 /** One row of a repository's weekly commits: a member, or the commits none of them authored. */
@@ -582,18 +603,15 @@ export interface CommitHeatRow {
 
 /**
  * The weeks a repository's heatmap spans (ADR-137): Mondays, from the
- * project's start to its deadline or `now`, whichever comes first, widened
- * to every week that holds a commit (a receipt before the start, a late one
- * after the deadline). The dates are the school's days, as the series'.
+ * project's start to its deadline, or to `now` once past it, widened to
+ * every week that holds a commit (a receipt before the start, a late one
+ * after the deadline): a project under way shows its weeks to come, empty.
+ * The dates are the school's days, as the series'.
  */
 export function commitWeeks(rows: readonly CommitHeatRow[], p: Pick<ProjectDetail, "startAt" | "deadlineAt">, now: number): string[] {
   const held = rows.flatMap((r) => r.series.weeks.map((w) => w.weekStart)).sort();
-  const start = localDate(new Date(p.startAt));
-  const end = localDate(new Date(Math.min(Date.parse(p.deadlineAt), now)));
-  const from = held[0] !== undefined && held[0] < start ? held[0] : start;
-  const last = held.at(-1);
-  const to = last !== undefined && last > end ? last : end;
-  return from <= to ? drillWeekStarts(from, to) : drillWeekStarts(to, to);
+  const days = [localDate(new Date(p.startAt)), localDate(new Date(Math.max(Date.parse(p.deadlineAt), now))), ...held].sort();
+  return drillWeekStarts(days[0]!, days.at(-1)!);
 }
 
 /** A row's commits in each of `weeks`, 0 for a week it holds none. */
@@ -602,35 +620,35 @@ export const weekCounts = (series: ProjectCommitSeries, weeks: readonly string[]
   return weeks.map((w) => by.get(w) ?? 0);
 };
 
+/** Where a repository's final score sits in the class. */
+export interface ClassPosition {
+  rank: number;
+  total: number;
+  rate: number;
+  median: number;
+  /** Every final score's share of its maximum, ascending. */
+  rates: number[];
+}
+
 /**
  * Where a repository's final score sits in the class (ADR-137): its rank
  * among the counted repositories' final scores, as a share of their
  * maximum (1 the best; tied scores share a rank), the median share and
  * every share for the strip. A CI's share under criteria (`ciShareOnly`) is
- * no final score and takes no part. Null without a final score of its own,
- * or with fewer than three scored repositories.
+ * no final score and takes no part, nor does the staff's test repository.
+ * Null without a final score of its own, or with fewer than three scored
+ * repositories.
  */
-export function classPosition(
-  p: Pick<ProjectDetail, "groupMode" | "rows" | "gradingMode">,
-  repoId: string,
-): { rank: number; total: number; rate: number; median: number; rates: number[] } | null {
-  const rateOf = (repo: ProjectRepoView): number | null => {
-    const final = repo.scores.final;
-    if (!final || final.max === null || final.max <= 0 || ciShareOnly(p.gradingMode, final.source)) return null;
-    return final.points / final.max;
-  };
-  const scored = repoEntries(p)
-    .filter((e) => !isStaffTest(e) && e.repo !== null && exists(e.repo))
-    .flatMap((e) => {
-      const rate = rateOf(e.repo!);
-      return rate === null ? [] : [{ id: e.repo!.id, rate }];
-    });
+export function classPosition(p: Pick<ProjectDetail, "groupMode" | "rows" | "gradingMode">, repoId: string): ClassPosition | null {
+  const scored = repoEntries(p).flatMap((e) => {
+    const final = e.repo !== null && !isStaffTest(e) && exists(e.repo) ? e.repo.scores.final : null;
+    const rate = final && final.max !== null && !ciShareOnly(p.gradingMode, final.source) ? rateOf(final.points, final.max) : null;
+    return rate === null ? [] : [{ id: e.repo!.id, rate }];
+  });
   const own = scored.find((s) => s.id === repoId);
   if (!own || scored.length < 3) return null;
   const rates = scored.map((s) => s.rate).sort((a, b) => a - b);
-  const mid = rates.length / 2;
-  const median = rates.length % 2 === 1 ? rates[Math.floor(mid)]! : (rates[mid - 1]! + rates[mid]!) / 2;
-  return { rank: 1 + rates.filter((r) => r > own.rate).length, total: rates.length, rate: own.rate, median, rates };
+  return { rank: 1 + rates.filter((r) => r > own.rate).length, total: rates.length, rate: own.rate, median: quantile(rates, 0.5), rates };
 }
 
 /**

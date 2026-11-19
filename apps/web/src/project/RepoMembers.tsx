@@ -2,13 +2,12 @@ import { Activity, Mail, Users } from "lucide-react";
 
 import type { ProjectDetail, ProjectRepoView } from "@quiz/contracts";
 
-import { weekLabel } from "../drill/WeeklyProgress";
 import { studentName } from "../group/groupRules";
 import { useI18n, useT } from "../i18n";
-import { Button, Card, Dash, HeatLegend, HeatTable, SectionHeading, SegmentedBar, T, TableHead, Tip, useNow } from "../ui";
+import { Button, Card, Dash, HeatLegend, HeatTable, SectionHeading, SegmentedBar, T, TableHead, Tip, useNow, weekLabel } from "../ui";
 import { AccessTag, StudentAccount } from "./parts";
-import { commitWeeks, entryMembers, invitable, weekCounts, type CommitHeatRow, type RepoEntry } from "./projectPage";
-import type { RepoWrites } from "./RepoPage";
+import { commitWeeks, entryMembers, resendable, weekCounts, type CommitHeatRow, type RepoEntry } from "./projectPage";
+import type { RepoWrites } from "./useRepoWrites";
 
 /** A count of commits and its share of the repository's, as a thin bar on the neutral `info` ink (no verdict). */
 function CommitShare({ n, total }: { n: number | null; total: number }) {
@@ -27,20 +26,16 @@ function CommitShare({ n, total }: { n: number | null; total: number }) {
  * GitHub login; their access as a tag while they are not in (joined says
  * nothing); the commits they authored with their share of the repository's
  * count, whose denominator holds the unattributed ones, said on a last row
- * when there are any; and **Resend** for one whose invitation waits or
- * expired, the repository's one resend, which reaches every member still
- * out. A row not accepted yet lists its members and nothing of GitHub.
+ * when there are any. **Resend** is the section's one action while someone
+ * waits or their invitation expired: the repository's resend reaches every
+ * member still out. A row not accepted yet lists its members and nothing
+ * of GitHub.
  */
 export function RepoMembers({ entry, can, resend }: { entry: RepoEntry; can: boolean; resend: RepoWrites["resend"] }) {
   const t = useT();
   const members = entryMembers(entry);
   const { repo } = entry;
   const unattributed = repo?.unattributed.n ?? 0;
-  const resendButton = (
-    <Button variant="secondary" size="sm" disabled={!can} loading={resend.isPending} onClick={() => resend.mutate()}>
-      <Mail /> {t("project.invitation.resend")}
-    </Button>
-  );
   return (
     <section aria-labelledby="repo-members" className="space-y-3">
       <SectionHeading
@@ -48,6 +43,13 @@ export function RepoMembers({ entry, can, resend }: { entry: RepoEntry; can: boo
         title={<span id="repo-members">{t("project.sheet.members")}</span>}
         count={members.length}
         description={t(repo ? "project.repoPage.members.desc" : "project.repoPage.members.notAccepted")}
+        actions={
+          repo && resendable(entry) ? (
+            <Button variant="secondary" size="sm" disabled={!can} loading={resend.isPending} onClick={() => resend.mutate()}>
+              <Mail /> {t("project.invitation.resend")}
+            </Button>
+          ) : undefined
+        }
       />
       <Card className={`${T.container} overflow-x-auto`}>
         {members.length === 0 ? (
@@ -57,9 +59,12 @@ export function RepoMembers({ entry, can, resend }: { entry: RepoEntry; can: boo
             <TableHead
               columns={[
                 { key: "member", label: t("project.repoPage.col.member") },
-                ...(repo ? [{ key: "access", label: t("project.repoPage.col.access"), className: T.colHigh }] : []),
-                ...(repo ? [{ key: "commits", label: t("project.repoPage.commits"), className: "w-1/3" }] : []),
-                { key: "actions", label: t("common.actions"), srOnly: true },
+                ...(repo
+                  ? [
+                      { key: "access", label: t("project.repoPage.col.access"), className: T.colHigh },
+                      { key: "commits", label: t("project.repoPage.commits"), className: "w-1/2" },
+                    ]
+                  : []),
               ]}
             />
             <tbody>
@@ -85,7 +90,6 @@ export function RepoMembers({ entry, can, resend }: { entry: RepoEntry; can: boo
                       </td>
                     </>
                   ) : null}
-                  <td className={`${T.td} whitespace-nowrap text-right`}>{repo && invitable(m) ? resendButton : null}</td>
                 </tr>
               ))}
               {repo && unattributed > 0 ? (
@@ -99,7 +103,6 @@ export function RepoMembers({ entry, can, resend }: { entry: RepoEntry; can: boo
                   <td className={`${T.td} text-fg-muted`}>
                     <CommitShare n={unattributed} total={repo.commits} />
                   </td>
-                  <td className={T.td} />
                 </tr>
               ) : null}
             </tbody>
@@ -110,12 +113,16 @@ export function RepoMembers({ entry, can, resend }: { entry: RepoEntry; can: boo
   );
 }
 
+/** A week's column: about square, the label above it fitting ("Nov 16"). */
+const WEEK = { rowHeader: "9rem", column: "2.5rem" };
+
 /**
  * The repository's commits per week (ADR-137, ADR-136): one row per member
- * who authored any and one for the unattributed ones, one column per week
- * (its Monday) from the project's start to its deadline or today, on the
- * heat ramp. A cell names the person, the week and the count. A
- * repository with no commit says so instead.
+ * who authored any and one for the unattributed ones, one fixed-width
+ * column per week (its Monday) from the project's start to its deadline —
+ * the weeks to come empty — or to today once past it, on the heat ramp. A
+ * cell names the person, the week and the count. A repository with no
+ * commit says so instead.
  */
 export function RepoActivity({ project, entry, repo }: { project: ProjectDetail; entry: RepoEntry; repo: ProjectRepoView }) {
   const t = useT();
@@ -127,8 +134,6 @@ export function RepoActivity({ project, entry, repo }: { project: ProjectDetail;
   ];
   const weeks = commitWeeks(rows, project, now);
   const labels = weeks.map((w) => weekLabel(w, locale));
-  /** A label every few weeks past twelve, so a semester fits. */
-  const every = Math.ceil(weeks.length / 12);
   return (
     <section aria-labelledby="repo-activity" className="space-y-3">
       <SectionHeading icon={Activity} title={<span id="repo-activity">{t("project.repoPage.activity")}</span>} description={t("project.repoPage.activity.desc")} />
@@ -140,13 +145,12 @@ export function RepoActivity({ project, entry, repo }: { project: ProjectDetail;
             <HeatTable
               caption={t("project.repoPage.activity.caption")}
               rowHeader={t("project.repoPage.col.member")}
-              columns={weeks.map((w, i) => ({ key: w, label: i % every === 0 ? labels[i]! : null, srLabel: labels[i]! }))}
+              columns={weeks.map((w, i) => ({ key: w, label: labels[i]!, srLabel: labels[i]! }))}
               rows={rows.map((r) => ({ key: r.key, label: r.label, values: weekCounts(r.series, weeks) }))}
               cellTitle={(r, c, n) =>
                 t(n === 1 ? "project.repoPage.activity.cell.one" : "project.repoPage.activity.cell", { who: rows[r]!.label, week: labels[c]!, n })
               }
-              minWidth={`${9 + weeks.length * 2.5}rem`}
-              rowHeaderWidth="w-36"
+              fixed={WEEK}
             />
             <HeatLegend offHours={false} />
           </>

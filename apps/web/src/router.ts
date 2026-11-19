@@ -4,6 +4,7 @@ import { LOGIN_REFUSED_PATH, SEB_QUIT_PATH, encodeJournalPath, projectStationPat
 import { COURSE_TABS, type AdminTab, type ClassroomQueryTab, type CourseTab } from "@quiz/domain";
 
 import { build, useHold } from "./build";
+import type { RepoFilter } from "./project/projectPage";
 
 const isCourseTab = (s: string | undefined): s is CourseTab =>
   (COURSE_TABS as readonly (string | undefined)[]).includes(s);
@@ -93,7 +94,7 @@ export type Route =
    * `?tab=` and `?filter=` only, the way back from a repository's page:
    * `parsePath` never reads them back, the page reads them off the query.
    */
-  | { view: "project"; id: string; tab?: "repositories"; filter?: string }
+  | { view: "project"; id: string; tab?: "repositories"; filter?: RepoFilter }
   /**
    * One row of a project's Repositories tab, its own page (ADR-137,
    * `project/RepoPage`): `rowId` is its repository's id, else — a row not
@@ -101,7 +102,7 @@ export type Route =
    * the table's filter it was opened under, rides in `?filter=` for its
    * previous and next.
    */
-  | { view: "projectRepo"; id: string; rowId: string; filter?: string }
+  | { view: "projectRepo"; id: string; rowId: string; filter?: RepoFilter }
   /** The grading screen of a project graded by criteria (ADR-106 §8; `project/grading/ProjectGradingPage`); `?repo=` the repository on screen. */
   | { view: "projectGrading"; id: string }
   /**

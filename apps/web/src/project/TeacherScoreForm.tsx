@@ -1,4 +1,5 @@
 import type { UseMutationResult } from "@tanstack/react-query";
+import { PenLine } from "lucide-react";
 import { useState } from "react";
 
 import { ScoreOverride, type ProjectDetail, type ProjectGradeAdjustment, type ProjectRepoScores, type ProjectRepoView } from "@quiz/contracts";
@@ -124,6 +125,20 @@ export function TeacherScoreForm({
         ) : null}
       </div>
     </form>
+  );
+}
+
+/**
+ * What opens the teacher's score dialog of a repository's page (ADR-137):
+ * Enter the score, or Edit it once one is written. The header's primary
+ * under the CI's score, a small secondary of the scores card under criteria.
+ */
+export function TeacherScoreButton({ repo, onClick, secondary = false }: { repo: ProjectRepoView; onClick: () => void; secondary?: boolean }) {
+  const t = useT();
+  return (
+    <Button variant={secondary ? "secondary" : "primary"} size={secondary ? "sm" : undefined} onClick={onClick}>
+      <PenLine /> {t(repo.scores.teacher ? "project.teacherScore.edit" : "project.teacherScore.enter")}
+    </Button>
   );
 }
 

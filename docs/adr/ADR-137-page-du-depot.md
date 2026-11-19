@@ -51,13 +51,14 @@ from an approved mockup.
    under (`?filter=`, which the project page now keeps in its address too).
    The staff's test repository (ADR-077) is never a step, though its row
    still opens its page, which has no steps.
-4. **What it shows.** Four figures (commits, last commit, CI checks, the
-   final score — or, ungraded, how many joined); the members with their
-   access tag while not in, the commits they authored and their share of
-   the repository's count (the unattributed included in it, on a row of
-   their own when there are any), and Resend for one whose invitation
-   waits or expired; the commits per member and per week on the heat
-   ramp, from the project's start to its deadline or today; the runs.
+4. **What it shows.** The figures (commits, last commit, CI checks and,
+   graded, the final score); the members with their access tag while not
+   in, the commits they authored and their share of the repository's count
+   (the unattributed included in it, on a row of their own when there are
+   any), and one Resend for the section while a member's invitation waits
+   or expired; the commits per member and per week on the heat ramp, from
+   the project's start to its deadline (the weeks to come empty) or to
+   today once past it; the runs.
    A rail: the deadline and the lock, the scores, the place of the final
    score in the class (from the detail's rows, the CI's share under
    criteria excluded), the repository's facts. No per-member last commit:
@@ -70,8 +71,8 @@ from an approved mockup.
   the address, so Back from a repository's page finds it.
 - The heatmap primitive takes any columns (`HeatTable`), the hour grid
   being its 24-column case.
-- Resend reaches every member still out (the route's rule): each member out
-  shows it, and any of them sends the same request.
+- Resend reaches every member still out (the route's rule), so the page
+  offers it once, not per member.
 
 ## Alternatives considered
 

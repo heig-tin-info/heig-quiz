@@ -23,15 +23,13 @@ import {
   type Column,
 } from "../ui";
 import { OpenInWorkspaceIcon, useReviewAction } from "./OpenInWorkspace";
-import { AccessTag, CiBadge, CollectionBadge, MemberList, Score, StudentAccount, SyncBadge } from "./parts";
+import { AccessTag, CiBadge, MemberList, RepoTags, Score, StudentAccount, unattributedText } from "./parts";
 import {
   commitTone,
   entryRowId,
   filterEntries,
   joinedCount,
   repoEntries,
-  repoFlags,
-  reviewTag,
   shortSha,
   type CommitTone,
   type RepoEntry,
@@ -153,7 +151,7 @@ function Unattributed({ n }: { n: number }) {
   if (n === 0) return null;
   return (
     <Tip label={t("project.repo.unattributedTip")}>
-      <span className="whitespace-nowrap text-xs text-fg-faint tabular-nums">{n === 1 ? t("project.repo.unattributed.one") : t("project.repo.unattributed", { n })}</span>
+      <span className="whitespace-nowrap text-xs text-fg-faint tabular-nums">{unattributedText(t, n)}</span>
     </Tip>
   );
 }
@@ -181,8 +179,6 @@ function OwnDeadlineBadge({ at }: { at: string }) {
  */
 function StateCell({ repo }: { repo: ProjectRepoView }) {
   const t = useT();
-  const flags = repoFlags(repo);
-  const review = reviewTag(repo);
   return (
     <span className="flex flex-wrap items-center gap-1">
       {repo.locked ? (
@@ -205,24 +201,7 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
         </Badge>
       ) : null}
       {repo.deadlineAt !== null ? <OwnDeadlineBadge at={repo.deadlineAt} /> : null}
-      {review ? <Badge tone={review.tone}>{t(review.key)}</Badge> : null}
-      <CollectionBadge repo={repo} />
-      <SyncBadge repo={repo} />
-      {/* Wrappers, not classes on the badges: a badge's own `inline-flex` would win over `hidden`. */}
-      <span className="hidden @2xl:contents">
-        {flags.map((f) => (
-          <Badge key={f.key} tone={f.tone}>
-            {t(f.key)}
-          </Badge>
-        ))}
-      </span>
-      {flags.length > 0 ? (
-        <span className="@2xl:hidden">
-          <Badge tone={flags.some((f) => f.tone === "red") ? "red" : flags[0]!.tone}>
-            {flags.length === 1 ? t("project.flags.one") : t("project.flags.count", { n: flags.length })}
-          </Badge>
-        </span>
-      ) : null}
+      <RepoTags repo={repo} fold className="contents" />
     </span>
   );
 }

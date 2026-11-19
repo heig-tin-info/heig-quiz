@@ -4,12 +4,18 @@ import type { ProjectRepoView } from "@quiz/contracts";
 
 import { ApiError } from "../api";
 import { repoShortName } from "../ui";
-import { AHEAD, makeCheckpoint, makeGroup, makeProject, makeRepo, PAST, row } from "../test/project-fixtures";
+import { AHEAD, frozenRepo, makeCheckpoint, makeGroup, makeProject, makeRepo, PAST, row } from "../test/project-fixtures";
 import {
   checkpointStatus,
+  classPosition,
   commitWeeks,
   entryOfRow,
   repoFilterOf,
+  repoPrimary,
+  repoStateBadge,
+  repoSteps,
+  type ClassPosition,
+  type RepoFilter,
   commitTone,
   deadlinePassed,
   elapsedFraction,
@@ -786,8 +792,84 @@ describe("a repository's page (ADR-137)", () => {
   it("spans the weeks from the start to the deadline or now, widened to every week holding a commit", () => {
     const p = { startAt: "2026-10-28T10:00:00.000Z", deadlineAt: "2026-11-20T22:00:00.000Z" };
     const now = Date.parse("2026-11-10T12:00:00.000Z");
-    expect(commitWeeks([], p, now)).toEqual(["2026-10-26", "2026-11-02", "2026-11-09"]);
-    const late = [{ key: "a", label: "A", series: { n: 1, weeks: [{ weekStart: "2026-11-16", n: 1 }] } }];
-    expect(commitWeeks(late, p, now).at(-1)).toBe("2026-11-16");
+    // Under way: the weeks to come up to the deadline's, empty.
+    expect(commitWeeks([], p, now)).toEqual(["2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16"]);
+    // Past the deadline: up to today's week; a receipt outside the span widens it.
+    expect(commitWeeks([], p, Date.parse("2026-12-01T12:00:00.000Z")).at(-1)).toBe("2026-11-30");
+    const early = [{ key: "a", label: "A", series: { n: 1, weeks: [{ weekStart: "2026-10-19", n: 1 }] } }];
+    expect(commitWeeks(early, p, now)[0]).toBe("2026-10-19");
+  });
+
+  describe("repoSteps: the tab's rows, the filter's, never the staff's test repository", () => {
+    const staff = { ...row(9, makeRepo(9)), staff: true };
+    const rows = [row(1, makeRepo(1)), row(2, makeRepo(2, { ciStatus: "fail" })), row(3, null), staff, row(4, makeRepo(4, { ciStatus: "fail" }))];
+    const p = makeProject({ rows });
+    const at = (rowId: string) => entryOfRow(p, rowId)!;
+    const notAccepted = rows[2]!.student.enrollmentId!;
+    it.each<[string, string, RepoFilter | null, ReturnType<typeof repoSteps>]>([
+      ["the first row", makeRepo(1).id, null, { n: 1, total: 4, prev: null, next: makeRepo(2).id }],
+      ["a row not accepted, by its roster line", notAccepted, null, { n: 3, total: 4, prev: makeRepo(2).id, next: makeRepo(4).id }],
+      ["the last row, the test repository skipped before it", makeRepo(4).id, null, { n: 4, total: 4, prev: notAccepted, next: null }],
+      ["a row under its filter", makeRepo(2).id, "ciFail", { n: 1, total: 2, prev: null, next: makeRepo(4).id }],
+      ["a row the filter no longer keeps: every row", makeRepo(1).id, "ciFail", { n: 1, total: 4, prev: null, next: makeRepo(2).id }],
+      ["the staff's test repository: no steps", makeRepo(9).id, null, null],
+    ])("%s", (_case, rowId, filter, expected) => {
+      expect(repoSteps(p, at(rowId), filter)).toEqual(expected);
+    });
+  });
+
+  describe("repoPrimary: none during the project, Grade or the teacher's score once frozen", () => {
+    const open = makeRepo(1);
+    const frozen = frozenRepo(1);
+    it.each<[string, ProjectRepoView | null, "auto" | "criteria" | "none", boolean, ReturnType<typeof repoPrimary>]>([
+      ["not frozen, auto", open, "auto", false, null],
+      ["not frozen, criteria", open, "criteria", false, null],
+      ["provisionally frozen", { ...open, deadlineAppliedAt: PAST }, "criteria", false, null],
+      ["frozen, criteria", frozen, "criteria", false, "grade"],
+      ["frozen, auto", frozen, "auto", false, "teacherScore"],
+      ["frozen, graded none", frozen, "none", false, null],
+      ["frozen, the staff's test repository", frozen, "auto", true, null],
+      ["not accepted", null, "auto", false, null],
+    ])("%s", (_case, repo, gradingMode, staff, expected) => {
+      const entry = repoEntries({ groupMode: false, rows: [{ ...row(1, repo), staff }] })[0]!;
+      expect(repoPrimary(entry, { gradingMode })).toBe(expected);
+    });
+  });
+
+  it.each<[string, ProjectRepoView | null, string]>([
+    ["not accepted", null, "project.repo.notAccepted"],
+    ["being created", makeRepo(1, { provisionStatus: "pending" }), "project.repo.provisioning"],
+    ["creation failed", makeRepo(1, { provisionStatus: "error" }), "project.repo.provisionFailed"],
+    ["frozen", frozenRepo(1), "project.frozen"],
+    ["freezing", makeRepo(1, { deadlineAppliedAt: PAST }), "project.frozen.provisional"],
+    ["locked", makeRepo(1, { locked: true }), "project.lock.locked"],
+    ["open", makeRepo(1), "project.lock.open"],
+  ])("repoStateBadge: %s", (_case, repo, key) => {
+    expect(repoStateBadge(repo).key).toBe(key);
+  });
+
+  describe("classPosition: the rank and the median of the class's final scores", () => {
+    const scored = (n: number, points: number | null, over: Partial<ProjectRepoView["scores"]["final"] & object> = {}) =>
+      makeRepo(n, {
+        scores: { ...makeRepo(n).scores, final: points === null ? null : { points, max: 10, source: "review", toVerify: false, grade: null, ...over } },
+      });
+    const place = (repos: ProjectRepoView[], gradingMode: "auto" | "criteria" = "auto", staff: number[] = []) =>
+      classPosition(makeProject({ gradingMode, rows: repos.map((r, i) => ({ ...row(i + 1, r), staff: staff.includes(i) })) }), repos[0]!.id);
+    it.each<[string, ReturnType<typeof place>, Partial<ClassPosition> | null]>([
+      ["a tie shares its rank", place([scored(1, 8), scored(2, 8), scored(3, 9), scored(4, 4)]), { rank: 2, total: 4, median: 0.8 }],
+      ["an even count's median is the mean of the two middle ones", place([scored(1, 6), scored(2, 9), scored(3, 4), scored(4, 8)]), { rank: 3, median: 0.7 }],
+      ["an odd count's median is the middle one", place([scored(1, 6), scored(2, 9), scored(3, 4)]), { rank: 2, total: 3, median: 0.6 }],
+      ["fewer than three scored: none", place([scored(1, 6), scored(2, 9), scored(3, null)]), null],
+      ["no final score of its own: none", place([scored(1, null), scored(2, 9), scored(3, 4), scored(4, 5)]), null],
+      [
+        "the CI's share under criteria takes no part",
+        place([scored(1, 6), scored(2, 9), scored(3, 4), scored(4, 2, { source: "ci" })], "criteria"),
+        { rank: 2, total: 3 },
+      ],
+      ["the staff's test repository takes no part", place([scored(1, 6), scored(2, 9), scored(3, 4), scored(4, 10)], "auto", [3]), { rank: 2, total: 3 }],
+    ])("%s", (_case, got, expected) => {
+      if (expected === null) expect(got).toBeNull();
+      else expect(got).toMatchObject(expected);
+    });
   });
 });

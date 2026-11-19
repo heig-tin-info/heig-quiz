@@ -88,7 +88,7 @@ export function RunHistory({ projectId, repoId }: { projectId: string; repoId: s
             const conclusion = CONCLUSION_KEY[run.conclusion];
             return (
               <tr key={run.id} className={T.row}>
-                <td className={`${T.td} pl-6 text-fg-muted`}>
+                <td className={`${T.td} whitespace-nowrap text-fg-muted`}>
                   <RelativeTime iso={run.completedAt} />
                 </td>
                 <td className={T.td}>
@@ -119,7 +119,7 @@ export function RunHistory({ projectId, repoId }: { projectId: string; repoId: s
                     ) : null}
                   </span>
                 </td>
-                <td className={`${T.td} pr-6`}>
+                <td className={T.td}>
                   <span className="flex flex-wrap gap-1">
                     {slot ? <Badge tone="accent">{t(SLOT_KEY[slot])}</Badge> : null}
                     {run.afterDeadline ? <Badge tone="zinc">{t("project.run.afterDeadline")}</Badge> : null}

@@ -1,4 +1,4 @@
-import { Lock, LockOpen, PenLine } from "lucide-react";
+import { Lock, LockOpen } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ProjectDetail, ProjectRepoView } from "@quiz/contracts";
@@ -9,8 +9,8 @@ import { useI18n, useT } from "../i18n";
 import { Button, Card, Dash, Fact, FieldError, fieldErrorProps, isoDateTime, percent, RelativeTime } from "../ui";
 import { CollectionFacts, SyncBadge } from "./parts";
 import { classPosition, teacherScoreBlock, type RepoEntry, type RepoPrimary } from "./projectPage";
-import type { RepoWrites } from "./RepoPage";
-import { ScoreFacts } from "./TeacherScoreForm";
+import { ScoreFacts, TeacherScoreButton } from "./TeacherScoreForm";
+import type { RepoWrites } from "./useRepoWrites";
 
 const OWN_DEADLINE_ID = "project-repo-deadline";
 
@@ -120,9 +120,7 @@ function ScoresSection({
           {block === "not_frozen" ? (
             <p className="text-[13px] text-fg-muted">{t("project.teacherScore.waitsFreeze")}</p>
           ) : primary !== "teacherScore" ? (
-            <Button variant="secondary" size="sm" onClick={onScore}>
-              <PenLine /> {t(repo.scores.teacher ? "project.teacherScore.edit" : "project.teacherScore.enter")}
-            </Button>
+            <TeacherScoreButton repo={repo} onClick={onScore} secondary />
           ) : null}
         </>
       )}

@@ -2358,15 +2358,16 @@ finds its row; it never waits for GitHub.
   freezing, frozen, not accepted, being created `zinc`; creation failed
   `red`) and the `zinc` "x/y joined" while some members are out; under
   it the repository in mono and the deadline, then the row's tags (review,
-  collection, sync, flags). At the right: ‹ n of N › (`IconButton`s, the
+  flags; the collection and the sync are the rail's, said once). At the right: ‹ n of N › (`IconButton`s, the
   position tabular), *Open in workspace* (secondary, its read-only fact in
   its tooltip), and the ONE primary by state — none during the project;
   frozen for good, Grade under criteria, the teacher's score under the CI's
   (its form in a `Modal`). Re-enable the protection is the `Menu`'s.
-- **Four `Stat` tiles**: two columns on a phone, four from `lg`. Commits
+- **`Stat` tiles**: two columns on a phone, one row from `lg`. Commits
   (the unattributed in the hint), last commit (the sha in mono), CI (the
-  checks, the status badge as hint), the final score (its source as hint)
-  or, ungraded, how many joined. None on a row not accepted.
+  checks, the status badge as hint), and, graded, the final score (its
+  source as hint): three tiles ungraded, who joined being the header's
+  badge. None on a row not accepted.
 - **Two columns from `lg`**: the main one (`minmax(0,1fr)`) and a 20 rem
   rail; below `lg` the rail stacks under it. A row with nothing for the
   rail (a student who has not accepted) is one column.
@@ -2375,13 +2376,17 @@ finds its row; it never waits for GitHub.
   action). The access tag only for a member not in. Commits: the figure
   bold and tabular, then a 6 px `SegmentedBar` of the share in `info` (a
   share, no verdict) over the repository's count, the unattributed
-  included; they are a last muted row when there are any. Resend
-  (secondary, sm) on a member pending or expired.
+  included; they are a last muted row when there are any. ONE Resend
+  (secondary, sm) in the section's heading while a member is pending or
+  expired: the repository's resend reaches all of them.
 - **Activity**: a `HeatTable` of members × weeks (Mondays, labelled
-  "Oct 5", one label every few weeks past twelve), the admin heatmap's ramp
-  and cell; a cell's `title` names the person, the week and the count.
+  "Oct 5"), the admin heatmap's ramp and cell, every column 40 px
+  (`fixed`: the table starts at the left and never stretches a few weeks
+  across the card). The weeks run from the project's start to its
+  deadline, the weeks to come empty, or to today once past it; a cell's
+  `title` names the person, the week and the count.
   `HeatLegend` without the off-hours part. No commit: one muted line.
-- **Runs**: `RunHistory` in a card.
+- **Runs**: `RunHistory` in a card, its time on one line.
 - **The rail** is one `Card` of sections parted by hairlines, each a 14 px
   semibold heading: the deadline and the lock (the effective deadline, the
   freeze, the state, the own deadline's `DateField`, Follow the project's

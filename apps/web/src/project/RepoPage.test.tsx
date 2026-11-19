@@ -155,43 +155,22 @@ describe("the one primary action, by state (ADR-137)", () => {
   });
 });
 
-describe("previous and next (ADR-137)", () => {
-  const staff = { ...row(9, makeRepo(9)), staff: true };
-  const rows = [row(1, makeRepo(1)), row(2, makeRepo(2, { ciStatus: "fail" })), row(3, null), staff, row(4, makeRepo(4, { ciStatus: "fail" }))];
-
-  it("walks the Repositories tab's rows, a row not accepted included, never the staff's test repository", async () => {
-    routes(makeProject({ rows }), runs(makeRepo(4)));
-    const { navigate } = renderPage(makeRepo(4).id);
-    expect(await screen.findByTestId("repo-position")).toHaveTextContent("4 of 4");
-    expect(screen.getByRole("button", { name: "Next repository" })).toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: "Previous repository" }));
-    // The row before it is the student who has not accepted, by their roster line; the test repository is skipped.
-    expect(navigate).toHaveBeenCalledWith(
-      { view: "projectRepo", id: PROJECT_ID, rowId: rows[2]!.student.enrollmentId },
-      { replace: true },
-    );
-  });
-
-  it("keeps the table's filter it was opened under", async () => {
-    routes(makeProject({ rows }), { ...runs(makeRepo(2)), ...runs(makeRepo(9)) });
+describe("previous and next (ADR-137; the walk itself is `repoSteps`'s, in projectPage.test.ts)", () => {
+  it("steps to the next row under the table's filter, replacing the history entry", async () => {
+    const rows = [row(1, makeRepo(1)), row(2, makeRepo(2, { ciStatus: "fail" })), row(3, null), row(4, makeRepo(4, { ciStatus: "fail" }))];
+    routes(makeProject({ rows }), runs(makeRepo(2)));
     const { navigate } = renderPage(makeRepo(2).id, { route: "/?filter=ciFail" });
     expect(await screen.findByTestId("repo-position")).toHaveTextContent("1 of 2");
+    expect(screen.getByRole("button", { name: "Previous repository" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Next repository" }));
     expect(navigate).toHaveBeenCalledWith({ view: "projectRepo", id: PROJECT_ID, rowId: makeRepo(4).id, filter: "ciFail" }, { replace: true });
-  });
-
-  it("draws no steps on the staff's test repository, still openable", async () => {
-    routes(makeProject({ rows }), runs(makeRepo(9)));
-    renderPage(makeRepo(9).id);
-    expect(await screen.findByRole("heading", { level: 1, name: /Teacher/ })).toBeInTheDocument();
-    expect(screen.queryByTestId("repo-position")).toBeNull();
   });
 });
 
 describe("the members (ADR-137, ADR-136, F-PROJ-07)", () => {
   const g1 = makeGroup(1);
 
-  it("lists a group's members with their access, their commits and their share, the unattributed last; Resend for the one out", async () => {
+  it("lists a group's members with their access, their commits and their share, the unattributed last; one Resend for those out", async () => {
     // 11 in all: Alice 6, Benoît 0 (no linked account), David 0 (expired), the unattributed 5.
     const repo = makeRepo(1, { fullName: "heig-tin-info/labo-2-groupe-1", unattributed: series(5) });
     const project = makeProject({
@@ -219,9 +198,9 @@ describe("the members (ADR-137, ADR-136, F-PROJ-07)", () => {
     expect(within(body[1]!).getAllByText("no GitHub account").length).toBeGreaterThan(0);
     expect(within(body[2]!).getAllByText("invitation expired").length).toBeGreaterThan(0);
     expect(within(body[3]!).getByText("5")).toBeInTheDocument();
-    // The one out of it can be invited again: the repository's resend.
-    expect(within(body[0]!).queryByRole("button", { name: "Resend" })).toBeNull();
-    await userEvent.click(within(body[2]!).getByRole("button", { name: "Resend" }));
+    // One Resend, the section's: the repository's resend reaches every member still out.
+    expect(within(members.getByRole("table")).queryByRole("button")).toBeNull();
+    await userEvent.click(members.getByRole("button", { name: "Resend" }));
     await waitFor(() => expect(write(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/repos/${repo.id}/invite` })]));
     expect(await screen.findByText(/already has access/)).toBeInTheDocument();
     // The group follows its set.
@@ -237,6 +216,9 @@ describe("the members (ADR-137, ADR-136, F-PROJ-07)", () => {
     expect(cells.find((c) => c.title === "Martin Benoît, week of Nov 9: 9 commits")).toBeDefined();
     expect(cells.find((c) => c.title === "Unattributed, week of Nov 2: 2 commits")).toBeDefined();
     expect(cells.find((c) => c.title === "Martin Benoît, week of Oct 26: 0 commits")).toBeDefined();
+    // The deadline is a fortnight ahead: its weeks are there, empty.
+    const heads = [...table.querySelectorAll("thead th")].map((th) => th.textContent);
+    expect(heads.length).toBeGreaterThan(4);
   });
 
   it("holds one person on an individual repository, and says a repository with no commit has none", async () => {

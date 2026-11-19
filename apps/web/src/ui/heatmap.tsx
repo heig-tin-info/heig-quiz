@@ -71,7 +71,9 @@ export interface HeatTableRow {
  * scrolling: no minimum width, short rows, and the figures printed only
  * where the box is wide enough to hold them (a container query); the title
  * and the screen reader keep every figure. Otherwise the table keeps
- * `minWidth` and scrolls inside its box; the page never does.
+ * `minWidth` and scrolls inside its box; the page never does. `fixed`
+ * gives every column one width, the table starting at the left instead of
+ * stretching its few columns across the box (a repository's weeks).
  */
 export function HeatTable({
   caption,
@@ -83,7 +85,7 @@ export function HeatTable({
   footer,
   compact = false,
   minWidth = "46rem",
-  rowHeaderWidth,
+  fixed,
 }: {
   caption: string;
   /** The (screen-reader) header of the rows' column. */
@@ -95,8 +97,8 @@ export function HeatTable({
   footer?: { label: string; title: (column: number, n: number) => string };
   compact?: boolean;
   minWidth?: string;
-  /** The rows' header column, a width class: `w-24` by default, `w-10` compact. */
-  rowHeaderWidth?: string;
+  /** One width per column, and the rows' header's (CSS lengths): the table is as wide as they add up to. */
+  fixed?: { rowHeader: string; column: string };
 }) {
   const top = Math.max(0, ...rows.flatMap((r) => r.values));
   const sums = columns.map((_, c) => rows.reduce((s, r) => s + (r.values[c] ?? 0), 0));
@@ -107,14 +109,20 @@ export function HeatTable({
     // box, so they scroll with it instead of widening the page.
     <div className={compact ? "@container relative overflow-x-auto" : "relative -mx-4 overflow-x-auto px-4"}>
       <table
-        className={cx("w-full table-fixed border-separate border-spacing-0.5 tabular-nums", compact ? "text-[10px]" : "text-[11px]")}
-        style={compact ? undefined : { minWidth }}
+        className={cx("table-fixed border-separate border-spacing-0.5 tabular-nums", !fixed && "w-full", compact ? "text-[10px]" : "text-[11px]")}
+        style={
+          fixed
+            ? { width: `calc(${fixed.rowHeader} + ${columns.length} * (${fixed.column} + 2px) + 2px)` }
+            : compact
+              ? undefined
+              : { minWidth }
+        }
       >
         <caption className="sr-only">{caption}</caption>
         <colgroup>
-          <col className={rowHeaderWidth ?? (compact ? "w-10" : "w-24")} />
+          <col className={fixed ? undefined : compact ? "w-10" : "w-24"} style={fixed ? { width: fixed.rowHeader } : undefined} />
           {columns.map((c) => (
-            <col key={c.key} />
+            <col key={c.key} style={fixed ? { width: fixed.column } : undefined} />
           ))}
         </colgroup>
         <thead>
