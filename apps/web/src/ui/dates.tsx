@@ -112,11 +112,6 @@ export function isoDateParts(iso: string): { date: string; time: string } {
   return datePartsAs(iso, dateFormat);
 }
 
-/**
- * A share, 0 to 1, as a whole percentage in the interface language: "85%",
- * "85 %". Beside the date formats because it is the same kind of thing — a
- * number written the way the reader's language writes it.
- */
 /** "Oct 5", in the interface language: a week by its Monday, a calendar date read in UTC (the drill's weeks, a repository's). */
 export function weekLabel(weekStart: string, locale: Locale): string {
   return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(
@@ -124,6 +119,11 @@ export function weekLabel(weekStart: string, locale: Locale): string {
   );
 }
 
+/**
+ * A share, 0 to 1, as a whole percentage in the interface language: "85%",
+ * "85 %". Beside the date formats because it is the same kind of thing — a
+ * number written the way the reader's language writes it.
+ */
 export function percent(rate: number, locale: Locale): string {
   return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }).format(rate);
 }
