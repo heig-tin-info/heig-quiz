@@ -117,6 +117,7 @@ const NEVER: ReadonlySet<Route["view"]> = new Set([
   "attempt",
   "questionPreview",
   "evaluationPreview",
+  "templatePreview",
   "join",
   "oauthConsent",
   "teamsLink",

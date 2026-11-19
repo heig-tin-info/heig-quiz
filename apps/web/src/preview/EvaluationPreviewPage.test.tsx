@@ -9,6 +9,7 @@ import type {
   EvaluationPreview,
   ItemRow,
   PreviewCorrection,
+  TemplateDetail,
 } from "@quiz/contracts";
 
 import { makeEvaluationDetail } from "../test/grading-fixtures";
@@ -608,5 +609,122 @@ describe("EvaluationPreviewPage — fixing a question", () => {
     });
     renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
     expect(await screen.findByText("Evaluation changed since this preview started")).toBeInTheDocument();
+  });
+});
+
+/*
+ * The same walk of a course's template (F-EVAL-25), opened from its editor:
+ * the template's own routes, its own way back and its own words.
+ */
+describe("EvaluationPreviewPage — a template", () => {
+  const TPL = "t1";
+  const TURL = `/app/api/templates/${TPL}/preview`;
+  const row = (id: string, questionId: string, over: Partial<ItemRow> = {}) => ({
+    id,
+    position: 0,
+    points: 1,
+    milestone: false,
+    counting: "normal" as const,
+    intro: null,
+    questionId,
+    questionVersionId: "00000000-0000-4000-8000-00000000000" + questionId.slice(-1),
+    type: "mcq",
+    internalName: questionId,
+    versionNumber: 1,
+    latestVersionNumber: 1,
+    difficulty: 2,
+    deprecated: false,
+    poolUnlinked: false,
+    ...over,
+  });
+  const templateOf = (items: TemplateDetail["items"]): TemplateDetail => {
+    const e = makeEvaluationDetail().evaluation;
+    return {
+      template: {
+        id: TPL,
+        courseId: "c1",
+        title: "Quiz 3 — Pointeurs",
+        mode: "exam",
+        revision: 1,
+        itemCount: items.length,
+        totalPoints: 3,
+        settings: e.settings,
+        gradingScale: e.gradingScale,
+        feedbackPolicy: e.feedbackPolicy,
+        mcqPolicy: e.mcqPolicy,
+        durationS: 1800,
+      },
+      items,
+      concepts: {},
+      totalPoints: 3,
+      staleItems: [],
+      editableQuestionIds: ["q1", "q2"],
+    };
+  };
+
+  it("walks the template through its own routes and leads back to its editor", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    const { calls } = mockFetch({
+      [`POST ${TURL}`]: () => ok(preview(7)),
+      [`GET /app/api/templates/${TPL}`]: () => ok(templateOf([row(I1, "q1"), row(I2, "q2")])),
+      [`POST ${TURL}/grade`]: (call) => ok(correction((call.body as { seed: number }).seed)),
+    });
+    renderWithProviders(<EvaluationPreviewPage kind="template" id={TPL} navigate={navigate} />);
+
+    expect(await screen.findByText("Quiz 3 — Pointeurs")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show the points" }));
+    await screen.findByText(/This question:/);
+    await user.click(screen.getByRole("button", { name: "Hand in" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Hand in" }));
+    await screen.findByRole("heading", { name: "Preview correction" });
+    // Nothing went to an evaluation's route.
+    expect(calls.map((c) => c.url).filter((u) => u.includes("/evaluations/"))).toEqual([]);
+    expect(calls.filter((c) => c.url === `${TURL}/grade`)).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: "Back to the template" }));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "template", id: TPL });
+  });
+
+  it("edits a question with the way back to this walk, and moves the template's item to its new version", async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    let detail = templateOf([row(I1, "q1", { latestVersionNumber: 2 }), row(I2, "q2")]);
+    const updated = preview(42);
+    updated.versions = { [I1]: 2, [I2]: 1 };
+    const { calls } = mockFetch({
+      [`POST ${TURL}`]: (call) => ok((call.body as { seed?: number } | null)?.seed === 42 ? updated : preview(42)),
+      [`GET /app/api/templates/${TPL}`]: () => ok(detail),
+      [`POST /app/api/templates/${TPL}/items/update-versions`]: () => {
+        detail = templateOf([row(I1, "q1", { versionNumber: 2, latestVersionNumber: 2 }), row(I2, "q2")]);
+        return ok(detail);
+      },
+    });
+    renderWithProviders(<EvaluationPreviewPage kind="template" id={TPL} navigate={() => {}} />);
+
+    await user.click(await screen.findByRole("button", { name: "Edit question" }));
+    expect(open).toHaveBeenCalledWith(`/questions/q1?fromTemplatePreview=${TPL}`, "_blank", "noopener");
+    expect(await screen.findByText(/The template still uses version 1/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Use the new version" }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url === TURL).map((c) => c.body)).toEqual([null, { seed: 42 }]),
+    );
+    expect(calls.find((c) => c.url.endsWith("/items/update-versions"))).toMatchObject({
+      url: `/app/api/templates/${TPL}/items/update-versions`,
+      body: { itemIds: [I1] },
+    });
+    await waitFor(() =>
+      expect(screen.queryByText("Version 2 of this question published")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText("Template changed since this preview started")).not.toBeInTheDocument();
+    open.mockRestore();
+  });
+
+  it("answers a template it cannot reach like a missing one", async () => {
+    mockFetch({ [`POST ${TURL}`]: fail(404, { error: "not_found" }) });
+    renderWithProviders(<EvaluationPreviewPage kind="template" id={TPL} navigate={() => {}} />);
+    expect(
+      await screen.findByRole("heading", { name: /This template does not exist/ }),
+    ).toBeInTheDocument();
   });
 });

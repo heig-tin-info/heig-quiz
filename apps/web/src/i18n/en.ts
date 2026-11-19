@@ -5002,6 +5002,14 @@ export const en = {
   "preview.correction.title": "Preview correction",
   "preview.correction.banner": "The full correction, whatever feedback the students will get.",
   "preview.backToEvaluation": "Back to the evaluation",
+  // F-EVAL-25: the same walk, of a course's template.
+  "preview.template.back": "Back to the template",
+  "preview.template.changed.title": "Template changed since this preview started",
+  "preview.template.changed.body":
+    "Questions were added, removed or moved to another version. Restart the preview to walk the template as it is now.",
+  "preview.template.newVersion.body": "The template still uses version {n}. With the new one, this question reloads without its answer. Your other answers stay.",
+  "preview.template.empty.title": "No question in this template yet",
+  "preview.template.empty.body": "Add questions to the template, then restart the preview.",
   "preview.ungraded.title": "Questions not graded",
   "preview.ungraded.bodyOne": "One question has no points yet: the grade will move once it is graded.",
   "preview.ungraded.body": "{n} questions have no points yet: the grade will move once they are graded.",

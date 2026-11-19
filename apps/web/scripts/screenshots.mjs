@@ -237,6 +237,13 @@ const scenes = [
   // with the advanced options open, a new (empty) one, and an unknown id.
   { name: "template-new", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => { await p.getByRole("button", { name: /^(new template|nouveau modèle)$/i }).first().click(); } },
   { name: "template-editor", role: "teacher", path: "/courses/c1/templates", act: openTemplate },
+  // The header's Preview opens the evaluation's full walk, of the template
+  // (its ids are the mock's sequence, so the reload finds it again).
+  { name: "template-preview", role: "teacher", path: "/courses/c1/templates", act: async (p) => {
+      await openTemplate(p);
+      await p.goto(`${p.url().split("?")[0]}/preview`);
+      await p.getByRole("button", { name: /^(back to the template|retour au modèle)$/i }).first().waitFor();
+    } },
   // A click on a row docks its student preview beside the list, which
   // drops its concepts, difficulty and version columns to make room.
   { name: "template-editor-preview", role: "teacher", path: "/courses/c1/templates", fold: true, act: async (p) => {

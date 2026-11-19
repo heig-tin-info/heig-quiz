@@ -25,6 +25,7 @@ import type {
   ItemPreview,
   PreviewCorrection,
   RunAccepted,
+  TemplateDetail,
 } from "@quiz/contracts";
 import type { AnyQuestionTypeServer, RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { RunnerUnavailable } from "@quiz/core/server";
@@ -836,5 +837,131 @@ describe("previewing one item", () => {
     const w = await world();
     await evaluationService.applyState(db, await reload(db, w.evaluationId), "running", server.clock.now());
     expect((await get(itemUrl(w, w.codeItemId), teacher.headers)).statusCode).toBe(200);
+  });
+});
+
+// --- A template's walk (F-EVAL-25) ----------------------------------------------------
+
+describe("previewing a template", () => {
+  /** The world's evaluation saved as a template of its course: the same four questions. */
+  async function templateWorld() {
+    const w = await world();
+    const made = await post(`/app/api/evaluations/${w.evaluationId}/template`, teacher.headers, {
+      title: "Exam template",
+    });
+    expect(made.statusCode).toBe(201);
+    const id = (made.json() as { id: string }).id;
+    const detail = (
+      await server.app.inject({ method: "GET", url: `/app/api/templates/${id}`, headers: teacher.headers })
+    ).json() as TemplateDetail;
+    const itemOf = (type: string) => detail.items.find((i) => i.type === type)!.id;
+    return {
+      w,
+      id,
+      url: `/app/api/templates/${id}/preview`,
+      mcqItemId: itemOf("mcq"),
+      codeItemId: itemOf("code"),
+      shortItemIds: detail.items.filter((i) => i.type !== "mcq" && i.type !== "code").map((i) => i.id),
+    };
+  }
+
+  it("walks, runs and grades it for the course's staff, and writes nothing", async () => {
+    const t = await templateWorld();
+    const fake = recorder();
+    setRunner(fake.runner);
+    const before = await footprint(t.id);
+
+    const res = await post(t.url, teacher.headers);
+    expect(res.statusCode).toBe(200);
+    const started = res.json() as EvaluationPreview;
+    expect(started.view.attempt.preview).toBe(true);
+    // A template keeps its clock: the 30 minutes of the exam it was saved from.
+    expect(started.durationS).toBe(1800);
+    expect(started.view.items.map((i) => i.id).sort()).toEqual(
+      [...t.shortItemIds, t.mcqItemId, t.codeItemId].sort(),
+    );
+
+    const ran = await post(`${t.url}/run`, teacher.headers, {
+      seed: started.seed,
+      itemId: t.codeItemId,
+      regions: [],
+    });
+    expect(ran.statusCode).toBe(200);
+    expect((ran.json() as RunAccepted).result).toBeTruthy();
+    expect(fake.requests.at(-1)!.cases.map((c) => c.name)).toEqual(["visible-1"]);
+
+    const graded = await post(`${t.url}/grade`, teacher.headers, {
+      seed: started.seed,
+      coordinates: "position",
+      answers: {
+        [t.shortItemIds[0]!]: shortAnswer(0),
+        [t.mcqItemId]: primesOf(started.view.items.find((i) => i.id === t.mcqItemId)!.student),
+        [t.codeItemId]: { regions: ["int x;"] },
+      },
+    });
+    expect(graded.statusCode).toBe(200);
+    const correction = graded.json() as PreviewCorrection;
+    expect(correction.items.map((i) => i.itemId)).toEqual(started.view.items.map((i) => i.id));
+    expect(correction).toMatchObject({ seed: started.seed, points: 4, totalPoints: 5, ungraded: 0 });
+    expect(correction.items.find((i) => i.itemId === t.mcqItemId)!.explanation).toBe(SECRETS.explanation);
+
+    expect(await footprint(t.id)).toEqual(before);
+  });
+
+  it("goes through toStudent: no key value and no forbidden key in the payload", async () => {
+    const t = await templateWorld();
+    const res = await post(t.url, teacher.headers);
+    expect(res.statusCode).toBe(200);
+    for (const marker of [...Object.values(SECRETS), shortAnswer(0), shortAnswer(1), '"correct"', '"policy"']) {
+      expect(res.body, marker).not.toContain(marker);
+    }
+    const keys = keysOf((res.json() as EvaluationPreview).view.items.map((i) => i.student));
+    for (const key of FORBIDDEN_STUDENT_KEYS) expect(keys.has(key), key).toBe(false);
+  });
+
+  it("answers 404 off the staff, and serves each kind on its own routes only", async () => {
+    const t = await templateWorld();
+    const bodies = {
+      "": {},
+      "/run": { seed: 1, itemId: t.codeItemId, regions: [] },
+      "/simulate": { seed: 1, itemId: t.codeItemId, answer: {} },
+      "/grade": { seed: 1, answers: {} },
+    };
+    for (const [tail, body] of Object.entries(bodies)) {
+      // Off the course's staff: the 404 of a template that does not exist.
+      const off = await post(`${t.url}${tail}`, stranger.headers, body);
+      const missing = await post(`/app/api/templates/${randomUUID()}/preview${tail}`, stranger.headers, body);
+      expect([tail, off.statusCode]).toEqual([tail, 404]);
+      expect(off.json()).toEqual(missing.json());
+      // A template is no evaluation, and an evaluation no template.
+      for (const url of [
+        `/app/api/evaluations/${t.id}/preview${tail}`,
+        `/app/api/templates/${t.w.evaluationId}/preview${tail}`,
+      ]) {
+        expect([url, (await post(url, teacher.headers, body)).statusCode]).toEqual([url, 404]);
+      }
+      expect([tail, (await post(`${t.url}${tail}`, student.headers, body)).statusCode]).toEqual([tail, 403]);
+    }
+  });
+
+  it("lets a colleague of the course walk it", async () => {
+    const t = await templateWorld();
+    const colleague = await server.signIn("teacher");
+    await db.insert(courseStaff).values({ courseId: t.w.courseId, userId: colleague.id });
+    expect((await post(t.url, colleague.headers)).statusCode).toBe(200);
+  });
+
+  it("has no clock to rehearse where its timing needs the dates a template never has", async () => {
+    const t = await templateWorld();
+    const row = await reload(db, t.id);
+    expect(row).toMatchObject({ opensAt: null, closesAt: null });
+    for (const timing of ["deadline", "manual"] as const) {
+      await db
+        .update(evaluations)
+        .set({ settings: { ...evaluationService.settingsOf(row), timing } })
+        .where(eq(evaluations.id, t.id));
+      const preview = (await post(t.url, teacher.headers)).json() as EvaluationPreview;
+      expect([timing, preview.durationS]).toEqual([timing, null]);
+    }
   });
 });

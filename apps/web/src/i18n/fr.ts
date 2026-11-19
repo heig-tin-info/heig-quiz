@@ -4975,6 +4975,14 @@ export const fr: Record<keyof Dict, string> = {
   "preview.correction.title": "Correction de l'aperçu",
   "preview.correction.banner": "La correction complète, indépendamment de ce que les étudiants verront.",
   "preview.backToEvaluation": "Retour à l'évaluation",
+  // F-EVAL-25 : le même parcours, d'un modèle du cours.
+  "preview.template.back": "Retour au modèle",
+  "preview.template.changed.title": "Modèle modifié depuis le début de l'aperçu",
+  "preview.template.changed.body":
+    "Des questions ont été ajoutées, retirées ou changées de version. Recommencez l'aperçu pour parcourir le modèle tel qu'il est maintenant.",
+  "preview.template.newVersion.body": "Le modèle utilise encore la version {n}. Avec la nouvelle, cette question est rechargée sans votre réponse. Les autres réponses sont conservées.",
+  "preview.template.empty.title": "Aucune question dans ce modèle",
+  "preview.template.empty.body": "Ajoutez des questions au modèle, puis recommencez l'aperçu.",
   "preview.ungraded.title": "Questions non corrigées",
   "preview.ungraded.bodyOne": "Une question est sans points pour l'instant : la note changera après sa correction.",
   "preview.ungraded.body": "{n} questions sont sans points pour l'instant : la note changera après leur correction.",

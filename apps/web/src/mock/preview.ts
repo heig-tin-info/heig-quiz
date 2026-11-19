@@ -116,8 +116,17 @@ export function viewOf(e: MockEvaluation, seed: number): AttemptView {
   };
 }
 
-on("POST", "/app/api/evaluations/:id/preview", (m, body): EvaluationPreview => {
-  const e = evaluationOr404(m.groups!.id!);
+/**
+ * The two homes of a previewed paper (F-EVAL-25): an evaluation, and a
+ * template through the evaluation-shaped shell it carries. A template has
+ * no dates, so its common deadline has no clock to rehearse.
+ */
+const HOMES: readonly (readonly [string, (id: string) => MockEvaluation])[] = [
+  ["evaluations", evaluationOr404],
+  ["templates", (id) => templateOr404(id).shell],
+];
+
+function startPreview(e: MockEvaluation, body: Record<string, unknown>): EvaluationPreview {
   // A seed given back reloads that walk (ADR-018, sixth addendum).
   const seed = typeof body.seed === "number" ? body.seed : (seeds += 7);
   return {
@@ -126,7 +135,7 @@ on("POST", "/app/api/evaluations/:id/preview", (m, body): EvaluationPreview => {
     view: viewOf(e, seed),
     versions: Object.fromEntries(e.items.map((i) => [i.id, i.versionNumber])),
   };
-});
+}
 
 /**
  * One item at the version its evaluation or template froze (issue #127,
@@ -147,12 +156,6 @@ function itemPreview(e: MockEvaluation, itemId: string): ItemPreview {
   };
 }
 
-on("GET", "/app/api/evaluations/:id/preview/items/:itemId", (m) =>
-  itemPreview(evaluationOr404(m.groups!.id!), m.groups!.itemId!),
-);
-on("GET", "/app/api/templates/:id/preview/items/:itemId", (m) =>
-  itemPreview(templateOr404(m.groups!.id!).shell, m.groups!.itemId!),
-);
 
 /** The key of that item preview, as a student reads it once shown (ADR-037). */
 function itemSolution(e: MockEvaluation, itemId: string): PreviewSolution {
@@ -165,24 +168,8 @@ function itemSolution(e: MockEvaluation, itemId: string): PreviewSolution {
   };
 }
 
-on("GET", "/app/api/evaluations/:id/preview/items/:itemId/solution", (m) =>
-  itemSolution(evaluationOr404(m.groups!.id!), m.groups!.itemId!),
-);
-on("GET", "/app/api/templates/:id/preview/items/:itemId/solution", (m) =>
-  itemSolution(templateOr404(m.groups!.id!).shell, m.groups!.itemId!),
-);
-
-on("POST", "/app/api/evaluations/:id/preview/run", () => {
-  throw new MockError(503, "runner_unavailable");
-});
-
-on("POST", "/app/api/evaluations/:id/preview/simulate", () => {
-  throw new MockError(503, "runner_unavailable");
-});
-
-on("POST", "/app/api/evaluations/:id/preview/grade", (m, body): PreviewCorrection => {
+function gradePreview(e: MockEvaluation, body: Record<string, unknown>): PreviewCorrection {
   if (flags.fail) throw new MockError(500, "Simulated failure");
-  const e = evaluationOr404(m.groups!.id!);
   const seed = Number(body.seed);
   const answers = (body.answers ?? {}) as Record<string, unknown>;
   const items: PreviewCorrectionItem[] = [];
@@ -255,4 +242,18 @@ on("POST", "/app/api/evaluations/:id/preview/grade", (m, body): PreviewCorrectio
     ungraded,
     items,
   };
-});
+}
+
+for (const [home, load] of HOMES) {
+  const base = `/app/api/${home}/:id/preview`;
+  on("POST", base, (m, body) => startPreview(load(m.groups!.id!), body));
+  on("GET", `${base}/items/:itemId`, (m) => itemPreview(load(m.groups!.id!), m.groups!.itemId!));
+  on("GET", `${base}/items/:itemId/solution`, (m) => itemSolution(load(m.groups!.id!), m.groups!.itemId!));
+  on("POST", `${base}/run`, () => {
+    throw new MockError(503, "runner_unavailable");
+  });
+  on("POST", `${base}/simulate`, () => {
+    throw new MockError(503, "runner_unavailable");
+  });
+  on("POST", `${base}/grade`, (m, body) => gradePreview(load(m.groups!.id!), body));
+}

@@ -19,19 +19,19 @@ import { useLocalPlayerSession } from "../attempt/useLocalPlayerSession";
 import type { PlayerSession } from "../student/Player";
 
 export function usePreviewSession({
-  evaluationId,
+  base,
   preview,
   startedAt,
   onSubmit,
 }: {
-  evaluationId: string;
+  /** `/app/api/<evaluations or templates>/:id/preview`: the routes of the paper walked. */
+  base: string;
   preview: EvaluationPreview;
   /** Epoch ms, taken by the page when the preview arrived. */
   startedAt: number;
   /** Hands the answers in: the page grades them and shows the correction. */
   onSubmit: (answers: Record<string, unknown>) => Promise<void>;
 }): PlayerSession {
-  const base = `/app/api/evaluations/${evaluationId}/preview`;
   const seed = preview.seed;
   const deadlineAt = preview.durationS === null ? null : startedAt + preview.durationS * 1000;
 

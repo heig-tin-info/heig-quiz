@@ -89,6 +89,15 @@ describe("routeToPath / parsePath", () => {
     expect(sectionOf({ view: "template", id: "t-1" })).toBe("home");
   });
 
+  it("parses a template's full preview, ahead of the editor's catch-all (F-EVAL-25)", () => {
+    expect(routeToPath({ view: "templatePreview", id: "t-1" })).toBe("/templates/t-1/preview");
+    expect(parsePath("/templates/t-1/preview")).toEqual({ view: "templatePreview", id: "t-1" });
+    expect(parsePath("/templates/t-1/nope")).toEqual({ view: "template", id: "t-1" });
+    // A teacher's tool, drawn on the whole screen: no sidebar row, no slot.
+    expect(sectionOf({ view: "templatePreview", id: "t-1" })).toBeNull();
+    expect(ROUTES.templatePreview.studentSafe).toBe(false);
+  });
+
   it("parses the pool routes, and /pools alone is the list", () => {
     expect(parsePath("/pools")).toEqual({ view: "pools" });
     expect(parsePath("/pools/p-1")).toEqual({ view: "pool", id: "p-1" });
@@ -185,6 +194,7 @@ describe("ROUTES", () => {
     admin: { view: "admin" },
     course: { view: "course", id: "k-1" },
     template: { view: "template", id: "t-1" },
+    templatePreview: { view: "templatePreview", id: "t-1" },
     classroom: { view: "classroom", id: "c-1" },
     classrooms: { view: "classrooms" },
     studentCourses: { view: "studentCourses" },
@@ -324,6 +334,7 @@ describe("ROUTES", () => {
         "drill",
         "evaluation",
         "evaluationPreview",
+        "templatePreview",
         "feedback",
         "paperEntry",
         "grading",

@@ -229,6 +229,11 @@ describe("previewDurationS", () => {
     ).toBeNull();
   });
 
+  it("has no countdown for a template's common deadline, which has no dates (F-EVAL-25)", () => {
+    expect(previewDurationS({ ...none, timing: "deadline" })).toBeNull();
+    expect(previewDurationS({ ...none, timing: "deadline", durationS: 1800 })).toBeNull();
+  });
+
   it("has no countdown in manual timing, whatever else is set", () => {
     expect(
       previewDurationS({ timing: "manual", durationS: 1800, opensAt, closesAt, closesAtShiftS: 0 }),

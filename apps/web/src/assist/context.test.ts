@@ -95,7 +95,7 @@ describe("assistVisible (ADR-080 §3)", () => {
       const confined = { role: "teacher", session: { ...portal!, kind } } as Pick<Me, "role" | "session">;
       expect(assistVisible({ teacherUi: true, me: confined, view: "home" })).toBe(false);
     }
-    for (const view of ["poll", "correction", "attempt", "evaluationPreview"] as const) {
+    for (const view of ["poll", "correction", "attempt", "evaluationPreview", "templatePreview"] as const) {
       expect(assistVisible({ teacherUi: true, me: teacher, view })).toBe(false);
     }
   });

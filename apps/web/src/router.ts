@@ -151,6 +151,11 @@ export type Route =
    */
   | { view: "evaluationPreview"; id: string }
   /**
+   * The same walk of a course's evaluation template (F-EVAL-25), opened in a
+   * new tab from the template's editor.
+   */
+  | { view: "templatePreview"; id: string }
+  /**
    * ADR-125: a staff member types in one student's paper copy, in the
    * player, and hands it in once. `user` and `date` travel as `?user=` and
    * `?date=`; the page reads them back from the address.
@@ -234,7 +239,14 @@ export type Route =
  * from, and on which item: one list, which the route writes in one loop and
  * the editor reads (`QuestionEditor`'s `ORIGINS`).
  */
-export const QUESTION_ORIGIN_PARAMS = ["from", "fromTemplate", "fromGrading", "fromPreview", "item"] as const;
+export const QUESTION_ORIGIN_PARAMS = [
+  "from",
+  "fromTemplate",
+  "fromGrading",
+  "fromPreview",
+  "fromTemplatePreview",
+  "item",
+] as const;
 export type QuestionOrigin = Partial<Record<(typeof QUESTION_ORIGIN_PARAMS)[number], string>>;
 
 /** The one member of `Route` whose `view` is `V`. */
@@ -350,7 +362,8 @@ function evaluationIdOf(route: RouteOf<EvaluationTailView | "evaluation">): stri
  * accepts ANY tail after the id — an unknown tail lands on the configuration screen
  * rather than on the home — so it comes after `live`, `poll`, `grading`,
  * `results` and `evaluationPreview`. The classroom's tabs and a group set
- * precede `classroom` for the same reason. `home`
+ * precede `classroom` for the same reason, and `templatePreview` precedes
+ * `template`. `home`
  * matches nothing: it is the fallback.
  */
 export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
@@ -394,6 +407,13 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: false,
     section: "home",
     bottomSlot: { teacher: "courses" },
+  },
+  // Before `template`, which takes any tail after the id.
+  templatePreview: {
+    path: (r) => `/templates/${r.id}/preview`,
+    match: ([head, id, tail]) =>
+      head === "templates" && id && tail === "preview" ? { view: "templatePreview", id } : null,
+    studentSafe: false,
   },
   template: {
     path: (r) => `/templates/${r.id}`,

@@ -36,6 +36,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  *   which opened the editor in a tab of its own. Its way back, and
  *   Publish, close that tab: the walk and its answers live in the preview's
  *   tab, which offers the new version when it regains focus.
+ * - `fromTemplatePreview`: the same preview, of a template (F-EVAL-25).
  * - `fromTemplate`: a template (F-EVAL-25).
  * - `from`: an evaluation (issue #127).
  *
@@ -45,6 +46,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 interface OriginSpec {
   param: Exclude<(typeof QUESTION_ORIGIN_PARAMS)[number], "item">;
   kind: "grading" | "preview" | "template" | "evaluation";
+  /** What the id names: the page's trail is that paper's. */
+  paper: "evaluation" | "template";
   back: (id: string, item: string | null) => Route;
   /** Publishing is the way back (from the grading screen and the preview). */
   returnOnPublish: boolean;
@@ -54,12 +57,38 @@ const ORIGINS: readonly OriginSpec[] = [
   {
     param: "fromGrading",
     kind: "grading",
+    paper: "evaluation",
     back: (id, item) => ({ view: "grading", evaluationId: id, ...(item ? { item } : {}) }),
     returnOnPublish: true,
   },
-  { param: "fromPreview", kind: "preview", back: (id) => ({ view: "evaluationPreview", id }), returnOnPublish: true },
-  { param: "fromTemplate", kind: "template", back: (id) => ({ view: "template", id }), returnOnPublish: false },
-  { param: "from", kind: "evaluation", back: (id) => ({ view: "evaluation", id }), returnOnPublish: false },
+  {
+    param: "fromPreview",
+    kind: "preview",
+    paper: "evaluation",
+    back: (id) => ({ view: "evaluationPreview", id }),
+    returnOnPublish: true,
+  },
+  {
+    param: "fromTemplatePreview",
+    kind: "preview",
+    paper: "template",
+    back: (id) => ({ view: "templatePreview", id }),
+    returnOnPublish: true,
+  },
+  {
+    param: "fromTemplate",
+    kind: "template",
+    paper: "template",
+    back: (id) => ({ view: "template", id }),
+    returnOnPublish: false,
+  },
+  {
+    param: "from",
+    kind: "evaluation",
+    paper: "evaluation",
+    back: (id) => ({ view: "evaluation", id }),
+    returnOnPublish: false,
+  },
 ];
 
 interface Origin {
@@ -67,8 +96,10 @@ interface Origin {
   /** The evaluation or template the page is about. */
   id: string;
   back: Route;
-  /** The evaluation to refresh after a publication, or null: any origin but a template. */
+  /** The evaluation to refresh after a publication, or null: an origin of a template. */
   evaluationId: string | null;
+  /** The template whose trail leads to the question, or null: an origin of an evaluation. */
+  templateId: string | null;
   returnOnPublish: boolean;
 }
 
@@ -80,12 +111,14 @@ function useOrigin(): Origin | null {
   const [fromTemplate] = useSearchParam("fromTemplate", "");
   const [fromGrading] = useSearchParam("fromGrading", "");
   const [fromPreview] = useSearchParam("fromPreview", "");
+  const [fromTemplatePreview] = useSearchParam("fromTemplatePreview", "");
   const [item] = useSearchParam("item", "");
   const params: Record<(typeof QUESTION_ORIGIN_PARAMS)[number], string> = {
     from,
     fromTemplate,
     fromGrading,
     fromPreview,
+    fromTemplatePreview,
     item,
   };
   const spec = ORIGINS.find((o) => UUID.test(params[o.param]));
@@ -95,7 +128,8 @@ function useOrigin(): Origin | null {
     kind: spec.kind,
     id,
     back: spec.back(id, UUID.test(params.item) ? params.item : null),
-    evaluationId: spec.kind === "template" ? null : id,
+    evaluationId: spec.paper === "evaluation" ? id : null,
+    templateId: spec.paper === "template" ? id : null,
     returnOnPublish: spec.returnOnPublish,
   };
 }
@@ -109,7 +143,7 @@ function useQuestionCrumbs(origin: Origin | null, poolId: string | undefined, po
   const t = useT();
   const pools = useRootCrumb("pools");
   const evaluation = useEvaluation(origin?.evaluationId ?? null, { retry: false });
-  const template = useTemplate(origin?.kind === "template" ? origin.id : null, { retry: false });
+  const template = useTemplate(origin?.templateId ?? null, { retry: false });
   const evaluationCrumbs = useEvaluationCrumbs(
     evaluation.data?.evaluation.classroomId,
     origin?.id ?? "",
@@ -120,10 +154,10 @@ function useQuestionCrumbs(origin: Origin | null, poolId: string | undefined, po
     origin?.id ?? "",
     template.data?.template.title,
   );
-  if (origin?.kind === "template") return templateCrumbs;
-  if (origin?.kind === "evaluation") return evaluationCrumbs;
-  if (origin?.kind === "grading") return [...evaluationCrumbs, { label: t("grading.title"), route: origin.back }];
-  if (origin?.kind === "preview") return [...evaluationCrumbs, { label: t("eval.preview"), route: origin.back }];
+  const paperCrumbs = origin?.templateId ? templateCrumbs : evaluationCrumbs;
+  if (origin?.kind === "template" || origin?.kind === "evaluation") return paperCrumbs;
+  if (origin?.kind === "grading") return [...paperCrumbs, { label: t("grading.title"), route: origin.back }];
+  if (origin?.kind === "preview") return [...paperCrumbs, { label: t("eval.preview"), route: origin.back }];
   return [pools, ...(poolName === undefined || poolId === undefined ? [] : [{ label: poolName, route: { view: "pool", id: poolId } as Route }])];
 }
 
