@@ -1,9 +1,11 @@
 /**
- * The hour heatmap (DESIGN.md, "The activity heatmap"): rows of 24 hourly
- * figures on one sequential hue, the hours outside class hatched, and its
- * legend. Drawn by the administrator's platform activity (ADR-107) and the
- * drill's hours of the week (ADR-041 §8); what a row is and what a figure
- * counts belong to the caller, who words the cells' sentences.
+ * The heatmap (DESIGN.md, "The activity heatmap"): rows of figures on one
+ * sequential hue, and its legend. `HourHeatmap` draws 24 hourly columns,
+ * the hours outside class hatched: the administrator's platform activity
+ * (ADR-107) and the drill's hours of the week (ADR-041 §8). `HeatTable`
+ * takes any columns: a repository's commits per member and per week
+ * (ADR-137). What a row is and what a figure counts belong to the caller,
+ * who words the cells' sentences.
  */
 import { CLASS_HOURS, SCHOOL_TIME_ZONE } from "@quiz/domain";
 
@@ -41,47 +43,63 @@ export function useClassHoursWindow(): string {
   });
 }
 
-export interface HeatRow {
+/** A column of a `HeatTable`: its visible head (null: none, a label every few columns) and what a screen reader hears. */
+export interface HeatColumn {
+  key: string;
+  label: string | null;
+  srLabel: string;
+}
+
+/** A row of a `HeatTable`: one figure per column. */
+export interface HeatTableRow {
   key: string;
   label: string;
   /** Set apart in `fg` and 600 (today, on a dated grid). */
   strong?: boolean;
-  /** Twenty-four figures, from 00:00. */
-  hours: readonly number[];
+  values: readonly number[];
 }
 
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
-
 /**
- * Rows of 24 hours: a real table, so a screen reader reads each figure under
- * its row and its hour; a cell's `title` says it in a sentence. With
- * `footer`, the sum per hour closes it as a row of bars on the same columns.
+ * Rows of figures on the heat ramp, one per column: a real table, so a
+ * screen reader reads each figure under its row and its column; a cell's
+ * `title` says it in a sentence. The step is the cell's share of the
+ * table's largest figure, rounded up; an empty cell is `surface-2`.
+ * `hatched` lays the off-hours texture over a cell; with `footer`, the sum
+ * per column closes it as a row of bars on the same columns.
  *
- * `compact` fits the 24 hours in a narrow box (a sheet) instead of scrolling:
- * no minimum width, short rows, an hour label every three hours, and the
- * figures printed only where the box is wide enough to hold them (a
- * container query); the title and the screen reader keep every figure.
+ * `compact` fits the columns in a narrow box (a sheet) instead of
+ * scrolling: no minimum width, short rows, and the figures printed only
+ * where the box is wide enough to hold them (a container query); the title
+ * and the screen reader keep every figure. Otherwise the table keeps
+ * `minWidth` and scrolls inside its box; the page never does.
  */
-export function HourHeatmap({
+export function HeatTable({
   caption,
   rowHeader,
+  columns,
   rows,
-  isClassHour,
   cellTitle,
+  hatched,
   footer,
   compact = false,
+  minWidth = "46rem",
+  rowHeaderWidth,
 }: {
   caption: string;
   /** The (screen-reader) header of the rows' column. */
   rowHeader: string;
-  rows: readonly HeatRow[];
-  isClassHour: (row: number, hour: number) => boolean;
-  cellTitle: (row: HeatRow, hour: number, n: number, off: boolean) => string;
-  footer?: { label: string; title: (hour: number, n: number) => string };
+  columns: readonly HeatColumn[];
+  rows: readonly HeatTableRow[];
+  cellTitle: (row: number, column: number, n: number) => string;
+  hatched?: (row: number, column: number) => boolean;
+  footer?: { label: string; title: (column: number, n: number) => string };
   compact?: boolean;
+  minWidth?: string;
+  /** The rows' header column, a width class: `w-24` by default, `w-10` compact. */
+  rowHeaderWidth?: string;
 }) {
-  const top = Math.max(0, ...rows.flatMap((r) => r.hours));
-  const sums = HOURS.map((h) => rows.reduce((s, r) => s + (r.hours[h] ?? 0), 0));
+  const top = Math.max(0, ...rows.flatMap((r) => r.values));
+  const sums = columns.map((_, c) => rows.reduce((s, r) => s + (r.values[c] ?? 0), 0));
   const topSum = Math.max(1, ...sums);
   return (
     // The grid scrolls inside its card on a phone; the page never does.
@@ -89,16 +107,14 @@ export function HourHeatmap({
     // box, so they scroll with it instead of widening the page.
     <div className={compact ? "@container relative overflow-x-auto" : "relative -mx-4 overflow-x-auto px-4"}>
       <table
-        className={cx(
-          "w-full table-fixed border-separate border-spacing-0.5 tabular-nums",
-          compact ? "text-[10px]" : "min-w-[46rem] text-[11px]",
-        )}
+        className={cx("w-full table-fixed border-separate border-spacing-0.5 tabular-nums", compact ? "text-[10px]" : "text-[11px]")}
+        style={compact ? undefined : { minWidth }}
       >
         <caption className="sr-only">{caption}</caption>
         <colgroup>
-          <col className={compact ? "w-10" : "w-24"} />
-          {HOURS.map((h) => (
-            <col key={h} />
+          <col className={rowHeaderWidth ?? (compact ? "w-10" : "w-24")} />
+          {columns.map((c) => (
+            <col key={c.key} />
           ))}
         </colgroup>
         <thead>
@@ -106,10 +122,10 @@ export function HourHeatmap({
             <th scope="col" className="sr-only">
               {rowHeader}
             </th>
-            {HOURS.map((h) => (
-              <th key={h} scope="col" className="pb-1 text-center font-normal text-fg-faint">
-                {compact && h % 3 !== 0 ? null : <span aria-hidden>{h}</span>}
-                <span className="sr-only">{`${padHour(h)}:00`}</span>
+            {columns.map((c) => (
+              <th key={c.key} scope="col" className="whitespace-nowrap pb-1 text-center font-normal text-fg-faint">
+                {c.label === null ? null : <span aria-hidden>{c.label}</span>}
+                <span className="sr-only">{c.srLabel}</span>
               </th>
             ))}
           </tr>
@@ -120,19 +136,19 @@ export function HourHeatmap({
               <th
                 scope="row"
                 className={cx(
-                  "whitespace-nowrap pr-2 text-left text-xs font-normal",
+                  "truncate whitespace-nowrap pr-2 text-left text-xs font-normal",
                   row.strong ? "font-semibold text-fg" : "text-fg-muted",
                 )}
               >
                 {row.label}
               </th>
-              {row.hours.map((value, h) => {
+              {row.values.map((value, c) => {
                 const step = heatStep(value, top);
-                const off = !isClassHour(r, h);
+                const off = hatched?.(r, c) ?? false;
                 return (
                   <td
-                    key={h}
-                    title={cellTitle(row, h, value, off)}
+                    key={c}
+                    title={cellTitle(r, c, value)}
                     data-off={off || undefined}
                     className={cx(
                       "rounded-[3px] p-0 text-center align-middle",
@@ -160,8 +176,8 @@ export function HourHeatmap({
               <th scope="row" className="pr-2 pt-2 text-left align-bottom text-xs font-normal text-fg-muted">
                 {footer.label}
               </th>
-              {sums.map((sum, h) => (
-                <td key={h} className="h-10 p-0 pt-2 align-bottom" title={footer.title(h, sum)}>
+              {sums.map((sum, c) => (
+                <td key={c} className="h-10 p-0 pt-2 align-bottom" title={footer.title(c, sum)}>
                   <div
                     aria-hidden
                     className={cx("mx-auto w-full rounded-t-[3px]", sum > 0 ? "bg-heat-4" : "bg-line")}
@@ -178,8 +194,55 @@ export function HourHeatmap({
   );
 }
 
-/** The ramp, from fewer to more, and what the hatch means. */
-export function HeatLegend() {
+export interface HeatRow {
+  key: string;
+  label: string;
+  /** Set apart in `fg` and 600 (today, on a dated grid). */
+  strong?: boolean;
+  /** Twenty-four figures, from 00:00. */
+  hours: readonly number[];
+}
+
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+
+/**
+ * Rows of 24 hours, a `HeatTable` whose hours outside class are hatched.
+ * `compact` labels every third hour only.
+ */
+export function HourHeatmap({
+  caption,
+  rowHeader,
+  rows,
+  isClassHour,
+  cellTitle,
+  footer,
+  compact = false,
+}: {
+  caption: string;
+  /** The (screen-reader) header of the rows' column. */
+  rowHeader: string;
+  rows: readonly HeatRow[];
+  isClassHour: (row: number, hour: number) => boolean;
+  cellTitle: (row: HeatRow, hour: number, n: number, off: boolean) => string;
+  footer?: { label: string; title: (hour: number, n: number) => string };
+  compact?: boolean;
+}) {
+  return (
+    <HeatTable
+      caption={caption}
+      rowHeader={rowHeader}
+      columns={HOURS.map((h) => ({ key: String(h), label: compact && h % 3 !== 0 ? null : String(h), srLabel: `${padHour(h)}:00` }))}
+      rows={rows.map((r) => ({ key: r.key, label: r.label, strong: r.strong, values: r.hours }))}
+      cellTitle={(r, h, n) => cellTitle(rows[r]!, h, n, !isClassHour(r, h))}
+      hatched={(r, h) => !isClassHour(r, h)}
+      footer={footer}
+      compact={compact}
+    />
+  );
+}
+
+/** The ramp, from fewer to more, and — unless `offHours` is false — what the hatch means. */
+export function HeatLegend({ offHours = true }: { offHours?: boolean }) {
   const t = useT();
   const window = useClassHoursWindow();
   const swatch = "inline-block size-3 rounded-[3px]";
@@ -194,10 +257,12 @@ export function HeatLegend() {
         </span>
         {t("heatmap.legend.more")}
       </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span aria-hidden className={cx(swatch, "border border-line bg-surface-2", OFF_HOURS)} />
-        {t("heatmap.legend.off", { window })}
-      </span>
+      {offHours ? (
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden className={cx(swatch, "border border-line bg-surface-2", OFF_HOURS)} />
+          {t("heatmap.legend.off", { window })}
+        </span>
+      ) : null}
     </div>
   );
 }

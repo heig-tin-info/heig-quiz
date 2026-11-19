@@ -446,14 +446,41 @@ const scenes = [
     act: (p) => p.getByRole("button", { name: /^(Sync|Synchroniser)$/ }).first().click(),
   })),
   { name: "project-synced-criteria", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1", settle: 2500, fold: true },
+  // ADR-137: a row opens its repository's page. The Repositories tab; a group's page during the project (no
+  // primary, Open in workspace secondary, a member whose invitation expired, unattributed commits); a
+  // frozen repository of the criteria project (Grade the primary); a student who has not accepted (members only).
+  { name: "project-repos", role: "teacher", path: "/projects/pj-published?projects=1&tab=repositories", settle: 2500 },
   {
-    name: "project-sheet",
+    name: "project-repo-open",
+    role: "teacher",
+    path: `/projects/${PJ_GROUP_LIVE}?projects=1&groups=1&codespace=1&tab=repositories`,
+    settle: 2500,
+    act: async (p) => {
+      await p.locator("tbody tr").filter({ hasText: /Groupe 7/ }).first().locator("td").first().click();
+      await p.getByRole("heading", { level: 1, name: /Groupe 7/ }).waitFor();
+      await p.waitForTimeout(800);
+    },
+  },
+  {
+    name: "project-repo-criteria",
+    role: "teacher",
+    path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=repositories",
+    settle: 2500,
+    act: async (p) => {
+      await p.locator("tbody tr").filter({ hasText: /\d+\/\d+/ }).first().locator("td").first().click();
+      await p.getByRole("region", { name: /^(Members|Membres)/ }).waitFor();
+      await p.waitForTimeout(800);
+    },
+  },
+  {
+    name: "project-repo-not-accepted",
     role: "teacher",
     path: "/projects/pj-published?projects=1&tab=repositories",
-    fold: true,
     settle: 2500,
-    // The first row with a score: a repository, not a student who has not accepted.
-    act: (p) => p.locator("tbody tr").filter({ hasText: /\d+\/\d+/ }).first().click(),
+    act: async (p) => {
+      await p.locator("tbody tr").filter({ hasText: /(not accepted|non accepté)/ }).first().locator("td").first().click();
+      await p.getByRole("region", { name: /^(Members|Membres)/ }).waitFor();
+    },
   },
   // ADR-127: the draft holds a date to come, so its one button is Schedule.
   { name: "project-draft", role: "teacher", path: "/projects/pj-draft?projects=1" },
@@ -573,22 +600,22 @@ const scenes = [
     },
   })),
   // ADR-129 §11 (`?codespace=1`): the staff's *Open in workspace* — the rows' last column (none on a repository
-  // being created or deleted) and the sheet's secondary button. The column is a desktop one: under `@2xl` it is
-  // dropped and the action is the sheet's, which a 390 px run of the table scene shows.
+  // being created or deleted) and the repository page's secondary button (ADR-137). The column is a desktop one:
+  // under `@2xl` it is dropped and the action is the page's, which a 390 px run of the table scene shows.
   { name: "project-open-in-workspace", role: "teacher", path: "/projects/pj-published?projects=1&codespace=1&tab=repositories", settle: 2500 },
   {
-    name: "project-open-in-workspace-sheet",
+    name: "project-open-in-workspace-page",
     role: "teacher",
     path: "/projects/pj-published?projects=1&codespace=1&tab=repositories",
     fold: true,
     settle: 2500,
     act: async (p) => {
-      await p.locator("tbody tr").first().click();
-      await p.getByRole("dialog").waitFor();
+      await p.locator("tbody tr").filter({ hasText: /\d+\/\d+/ }).first().locator("td").first().click();
+      await p.getByRole("region", { name: /^(Members|Membres)/ }).waitFor();
     },
   },
-  // M3-12b: the sheet of the repository whose score is the teacher's (its
-  // form filled, the final review received); M3-12c: the locked project not
+  // M3-12b: the page of the repository whose score is the teacher's (the
+  // final review received); M3-12c: the locked project not
   // yet released (`?unreleased=1`), Release its one action and its
   // confirmation, then the header once released.
   {
@@ -597,7 +624,7 @@ const scenes = [
     path: "/projects/pj-locked?projects=1&tab=repositories",
     fold: true,
     settle: 2500,
-    act: (p) => p.locator("tbody tr").filter({ hasText: /(teacher|enseignant)/ }).first().click(),
+    act: (p) => p.locator("tbody tr").filter({ hasText: /(teacher|enseignant)/ }).first().locator("td").first().click(),
   },
   {
     name: "project-release",

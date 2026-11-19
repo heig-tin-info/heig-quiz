@@ -14,8 +14,12 @@ définitif.
 Une ligne par étudiant ou par groupe : le dépôt, l'état de l'invitation, le
 dernier commit, la CI, les scores et les drapeaux (verrouillé, après
 l'échéance, à vérifier, supprimé sur GitHub, accès à retirer). Une ligne
-ouvre un panneau avec les exécutions, **Renvoyer** l'invitation, l'échéance
-propre au dépôt, **Verrouiller maintenant** et le score de l'enseignant.
+ouvre la page du dépôt : ses membres avec leurs commits et **Renvoyer**, ses
+commits semaine par semaine, ses exécutions, son échéance propre,
+**Verrouiller maintenant** et ses scores. Les flèches en haut passent à la
+ligne précédente ou suivante du tableau. Une fois le dépôt figé, le bouton
+principal de la page est **Corriger** (notation par critères) ou le score
+de l'enseignant.
 
 ## Scores
 
@@ -39,7 +43,7 @@ peut ajuster une note ou modifier le score de l'enseignant.
 
 L'échéance est appliquée sur l'horloge du serveur ; ce qui compte pour un
 push, c'est l'heure à laquelle Quiz l'a reçu. Pour un étudiant qui a droit
-à plus de temps, donnez à son dépôt une échéance propre depuis son panneau.
+à plus de temps, donnez à son dépôt une échéance propre depuis sa page.
 Repousser l'échéance après qu'elle est passée rouvre le projet, après
 confirmation.
 

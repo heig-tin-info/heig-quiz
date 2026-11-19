@@ -39,7 +39,7 @@ function slotOf(run: GradeRunView, list: GradeRunList): keyof typeof SLOT_KEY | 
 
 /**
  * The history of a repository's runs (`GET …/repos/:rid/runs`, F-PROJ-13),
- * the newest first, in the repository's sheet: when, what ran on which
+ * the newest first, on the repository's page: when, what ran on which
  * commit and how it ended, its score and tests, why it has no score, and
  * its marks — the slot it fills, after the deadline, to verify.
  */
@@ -72,14 +72,14 @@ export function RunHistory({ projectId, repoId }: { projectId: string; repoId: s
     );
   }
   return (
-    <div className={`${T.container} -mx-6 overflow-x-auto`}>
+    <div className={`${T.container} overflow-x-auto`}>
       <table className={T.table}>
         <TableHead
           columns={[
-            { key: "when", label: t("project.col.when"), className: "pl-6" },
+            { key: "when", label: t("project.col.when") },
             { key: "run", label: t("project.col.run") },
             { key: "result", label: t("project.col.result"), right: true },
-            { key: "state", label: t("project.col.state"), className: "pr-6" },
+            { key: "state", label: t("project.col.state") },
           ]}
         />
         <tbody>

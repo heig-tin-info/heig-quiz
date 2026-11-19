@@ -32,8 +32,8 @@
 //   people    a person as a disc, its card, and a row of them (PersonPill,
 //             PersonCard, PeopleStack), on actions, popover and identity.
 //   live      the live primitives (PLAN-MVP §6.4).
-//   heatmap   rows of 24 hours on the heat ramp, class hours apart
-//             (HourHeatmap, HeatLegend), on layers.
+//   heatmap   rows of figures on the heat ramp (HeatTable), 24 hours with
+//             class hours apart (HourHeatmap), HeatLegend, on layers.
 //   bar       a thin segmented bar of counts (SegmentedBar), vertical bars
 //             (Bars, StackedBars) and their legend, on layers.
 //   forms     the short form in a dialog (FormDialog) and its one-text-field

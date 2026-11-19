@@ -7,6 +7,9 @@ import { repoShortName } from "../ui";
 import { AHEAD, makeCheckpoint, makeGroup, makeProject, makeRepo, PAST, row } from "../test/project-fixtures";
 import {
   checkpointStatus,
+  commitWeeks,
+  entryOfRow,
+  repoFilterOf,
   commitTone,
   deadlinePassed,
   elapsedFraction,
@@ -762,5 +765,29 @@ describe("advancedCount", () => {
     expect(advancedCount(defaults)).toBe(0);
     expect(advancedCount({ ...defaults, graceMinutes: 0, deadlineStrategy: "commit" })).toBe(2);
     expect(advancedCount({ ...defaults, gradingMode: "none" })).toBe(1);
+  });
+});
+
+describe("a repository's page (ADR-137)", () => {
+  it("finds a row by its repository, else by its student's roster line, so a row accepted since keeps its address", () => {
+    const p = makeProject({ rows: [row(1, makeRepo(1)), row(2, null)] });
+    expect(entryOfRow(p, makeRepo(1).id)?.label).toBe("Martin Benoît");
+    expect(entryOfRow(p, p.rows[0]!.student.enrollmentId!)?.label).toBe("Martin Benoît");
+    expect(entryOfRow(p, p.rows[1]!.student.enrollmentId!)?.repo).toBeNull();
+    expect(entryOfRow(p, "nope")).toBeUndefined();
+  });
+
+  it("reads a filter off the address, or none", () => {
+    expect(repoFilterOf("ciFail")).toBe("ciFail");
+    expect(repoFilterOf("everything")).toBeNull();
+    expect(repoFilterOf(null)).toBeNull();
+  });
+
+  it("spans the weeks from the start to the deadline or now, widened to every week holding a commit", () => {
+    const p = { startAt: "2026-10-28T10:00:00.000Z", deadlineAt: "2026-11-20T22:00:00.000Z" };
+    const now = Date.parse("2026-11-10T12:00:00.000Z");
+    expect(commitWeeks([], p, now)).toEqual(["2026-10-26", "2026-11-02", "2026-11-09"]);
+    const late = [{ key: "a", label: "A", series: { n: 1, weeks: [{ weekStart: "2026-11-16", n: 1 }] } }];
+    expect(commitWeeks(late, p, now).at(-1)).toBe("2026-11-16");
   });
 });

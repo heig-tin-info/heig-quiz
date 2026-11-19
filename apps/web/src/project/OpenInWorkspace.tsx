@@ -7,7 +7,7 @@ import { useClassroom } from "../course/parts";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { usePortalLaunch } from "../portalLaunch";
-import { HeldButton, IconButton } from "../ui";
+import { HeldButton, IconButton, Tip } from "../ui";
 import { refusalMessage } from "./projectPage";
 import { useWorkspace } from "./ProjectWorkspace";
 
@@ -78,7 +78,7 @@ function useReviewLaunch(projectId: string, repoId: string) {
 /**
  * The row's control: an icon, the action's name in its tooltip; held with
  * the reason in its tooltip while the exam may run. Clicking it never also
- * opens the row's sheet.
+ * opens the row's page.
  */
 export function OpenInWorkspaceIcon({ projectId, repo, action }: { projectId: string; repo: ProjectRepoView; action: ReviewAction }) {
   const t = useT();
@@ -100,23 +100,24 @@ export function OpenInWorkspaceIcon({ projectId, repo, action }: { projectId: st
   );
 }
 
-/** The sheet's control: a secondary button and the one fact the teacher needs before clicking. */
+/**
+ * The repository page's control (ADR-137): a secondary button of its
+ * header, the one fact the teacher needs before clicking in its tooltip —
+ * or, held while the exam may run, the reason.
+ */
 export function OpenInWorkspaceButton({ projectId, repo, action }: { projectId: string; repo: ProjectRepoView; action: ReviewAction }) {
   const t = useT();
   const { busy, launch } = useReviewLaunch(projectId, repo.id);
   if (action === "absent") return null;
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      <HeldButton
-        variant="secondary"
-        size="sm"
-        loading={busy}
-        onClick={launch}
-        disabledReason={action === "examOpen" ? t("project.repo.openInWorkspace.examOpen") : null}
-      >
-        {busy ? null : <Laptop />} {t("project.repo.openInWorkspace")}
-      </HeldButton>
-      <p className="text-[13px] text-fg-muted">{t("project.repo.openInWorkspace.desc")}</p>
-    </div>
+  const button = (
+    <HeldButton
+      variant="secondary"
+      loading={busy}
+      onClick={launch}
+      disabledReason={action === "examOpen" ? t("project.repo.openInWorkspace.examOpen") : null}
+    >
+      {busy ? null : <Laptop />} {t("project.repo.openInWorkspace")}
+    </HeldButton>
   );
+  return action === "examOpen" ? button : <Tip label={t("project.repo.openInWorkspace.desc")}>{button}</Tip>;
 }

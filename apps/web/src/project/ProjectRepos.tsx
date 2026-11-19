@@ -26,6 +26,7 @@ import { OpenInWorkspaceIcon, useReviewAction } from "./OpenInWorkspace";
 import { AccessTag, CiBadge, CollectionBadge, MemberList, Score, StudentAccount, SyncBadge } from "./parts";
 import {
   commitTone,
+  entryRowId,
   filterEntries,
   joinedCount,
   repoEntries,
@@ -234,11 +235,12 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
  * scores once, its members under its name —, by name, then its students in
  * no group; "Student" sorts by the group's name. Seven
  * columns at most; the ones a phone drops (repository, last commit, CI, the
- * deadline) are in the row's sheet, which a row with a repository opens.
+ * deadline) are on the row's own page (ADR-137), which every row opens — by
+ * a click or Enter —, a row not accepted yet included.
  * A deleted repository stays, muted: it is a fact of the project.
  *
  * The staff's *Open in workspace* (ADR-129 §11, F-PROJ-27) is the last
- * column's icon, where the platform offers it; a phone drops the column and keeps the sheet's button.
+ * column's icon, where the platform offers it; a phone drops the column and keeps the page's button.
  *
  * Nothing here waits for GitHub: `live` only adds counters when the cache
  * had them, and `liveStale` is said on the heading while the next refetch
@@ -252,7 +254,8 @@ export function ProjectRepos({
   onFilter,
 }: {
   project: ProjectDetail;
-  onOpen: (repoId: string) => void;
+  /** Opens a row's page (ADR-137), by its id (`entryRowId`). */
+  onOpen: (rowId: string) => void;
   navigate: Navigate;
   /** The tile sub-figure in force, or `null` for all the rows. */
   filter: RepoFilter | null;
@@ -319,7 +322,7 @@ export function ProjectRepos({
       : []),
   ];
   const noneAccepted = project.state === "published" && entries.every((e) => e.repo === null);
-  /** The row the tour points at to say a row opens its sheet: the first one that has a repository. */
+  /** The row the tour points at to say a row opens its page: the first one that has a repository. */
   const firstOpenable = sorted.findIndex((e) => e.repo !== null);
 
   return (
@@ -340,7 +343,8 @@ export function ProjectRepos({
           <tbody>
             {sorted.map((entry, index) => {
               const { repo } = entry;
-              const opens = repo ? () => onOpen(repo.id) : undefined;
+              const rowId = entryRowId(entry);
+              const opens = rowId ? () => onOpen(rowId) : undefined;
               return (
                 <tr
                   key={entry.key}

@@ -8,7 +8,7 @@ import { useT } from "../i18n";
 import { FormError } from "../queryError";
 import { Badge, Button, Fact, Field, isoDateTime, Textarea } from "../ui";
 import { AdjustmentByline, AdjustmentMark, baseMovedText, Points, Score, signedTenth } from "./parts";
-import { gradeWriteRefusal, reviewView, shortSha, teacherScoreBlock } from "./projectPage";
+import { gradeWriteRefusal, reviewView, shortSha } from "./projectPage";
 
 const POINTS_ID = "project-teacher-points";
 const MAX_ID = "project-teacher-max";
@@ -31,11 +31,11 @@ export function scoreOverrideBody(points: string, max: string, comment: string, 
  * The teacher's score of a repository (F-PROJ-14, M3-12b): points, the
  * maximum when the server says the score is held to none (`scoreMax` null:
  * pass / fail only, malformed, several annotations, or a run to verify), a
- * comment, and Clear once a score exists. Save is the sheet's one primary
- * action. The refusals are worded under the fields; the answer is the
+ * comment, and Clear once a score exists, in the repository page's dialog
+ * (ADR-137). The refusals are worded under the fields; the answer is the
  * caller's to lay over the row.
  */
-function TeacherScoreForm({
+export function TeacherScoreForm({
   repo,
   score,
 }: {
@@ -163,7 +163,7 @@ function AdjustmentFact({ adjustment }: { adjustment: ProjectGradeAdjustment }) 
       ? t("project.adjust.fact.relative", { delta: signedTenth(adjustment.value), base })
       : t("project.adjust.fact.absolute", { grade: formatGrade(adjustment.value), base });
   return (
-    <dl className="border-t border-line pt-3" data-testid="sheet-adjustment">
+    <dl className="border-t border-line pt-3" data-testid="repo-adjustment">
       <Fact label={t("project.adjust.fact")}>
         <span className="flex flex-col gap-1">
           <span className="inline-flex items-center gap-1.5 tabular-nums">
@@ -180,25 +180,15 @@ function AdjustmentFact({ adjustment }: { adjustment: ProjectGradeAdjustment }) 
 }
 
 /**
- * The Scores section of the repository's sheet (F-PROJ-13, F-PROJ-14): the
- * five scores slot by slot with the final review's state beside them, then
- * the teacher's score form — or, where the form cannot apply, why: the
- * project is not graded, or the repository is not frozen for good yet.
+ * The scores of a repository's page (F-PROJ-13, F-PROJ-14; ADR-137): the
+ * five scores slot by slot with the final review's state beside them, and
+ * the grade's adjustment. The teacher's score is written in its dialog.
  */
-export function ScoreSection({
-  project,
-  repo,
-  score,
-}: {
-  project: Pick<ProjectDetail, "gradingMode">;
-  repo: ProjectRepoView;
-  score: UseMutationResult<ProjectRepoScores, unknown, ScoreOverride>;
-}) {
+export function ScoreFacts({ project, repo }: { project: Pick<ProjectDetail, "gradingMode">; repo: ProjectRepoView }) {
   const t = useT();
-  const block = teacherScoreBlock(repo, project);
   return (
     <>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
         <Fact label={t("project.score.current")}>
           <Points points={repo.scores.current?.points ?? null} max={repo.scores.current?.max ?? null} />
         </Fact>
@@ -217,16 +207,6 @@ export function ScoreSection({
         <ReviewState repo={repo} />
       </dl>
       {repo.scores.adjustment ? <AdjustmentFact adjustment={repo.scores.adjustment} /> : null}
-      <div className="space-y-3 border-t border-line pt-3">
-        <h4 className="text-[13px] font-medium">{t("project.teacherScore")}</h4>
-        {block === null ? (
-          <TeacherScoreForm key={repo.scores.teacher?.gradedAt ?? "none"} repo={repo} score={score} />
-        ) : (
-          <p className="text-[13px] text-fg-muted">
-            {t(block === "grading_none" ? "project.refusal.gradingNone" : "project.teacherScore.waitsFreeze")}
-          </p>
-        )}
-      </div>
     </>
   );
 }

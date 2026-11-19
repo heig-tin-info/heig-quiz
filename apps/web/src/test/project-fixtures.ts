@@ -157,6 +157,34 @@ export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
   };
 }
 
+/** A repository frozen for good a week ago, its frozen run the final score (the state the teacher's score and the release need). */
+export const frozenRepo = (n: number, over: Partial<ProjectRepoView> = {}): ProjectRepoView =>
+  makeRepo(n, {
+    deadlineAppliedAt: PAST,
+    frozenAt: PAST,
+    effectiveDeadlineAt: PAST,
+    locked: true,
+    scores: {
+      ...makeRepo(n).scores,
+      frozen: { runId: "run-2", points: 8, max: 10, grade: { grade: 5 } },
+    },
+    review: { status: "done", reason: null, askedAt: PAST, sha: "9a3f1c7e2b4d6f8a0c1e3b5d7f9a1c3e5b7d9f1a", runId: "run-9" },
+    ...over,
+  });
+
+/** A locked project past its deadline, one repository frozen for good, one student who never accepted. */
+export const frozenProject = (over: Partial<ProjectDetail> = {}): ProjectDetail =>
+  makeProject({
+    state: "locked",
+    phase: "graded",
+    deadlineAt: PAST,
+    deadlineAppliedAt: PAST,
+    rows: [row(1, frozenRepo(1)), row(2, null)],
+    counts: { live: 1, frozen: 1 },
+    editable: ["name", "deadlineAt", "protectedFiles"],
+    ...over,
+  });
+
 /** A draft: nothing accepted, Publish the primary action, everything editable. */
 export const makeDraft = (over: Partial<ProjectDetail> = {}): ProjectDetail =>
   makeProject({

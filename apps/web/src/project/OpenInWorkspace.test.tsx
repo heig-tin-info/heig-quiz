@@ -7,14 +7,14 @@ import type { ProjectDetail, ProjectWorkspace, WorkMode } from "@quiz/contracts"
 import { BASE, CLASSROOM_ID, makeProject, makeRepo, PAST, row } from "../test/project-fixtures";
 import { fail, mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
 import { ProjectRepos } from "./ProjectRepos";
-import { RepoSheet } from "./RepoSheet";
+import { RepoPage } from "./RepoPage";
 
 /*
  * The staff's *Open in workspace* (ADR-129 §11, F-PROJ-27): absent without
  * the portal or the holder's grant, absent on a repository that is not live,
  * held with its reason on a Safe Exam Browser repository whose deadline is
  * not applied, a POST then the portal's address, busy meanwhile, a refusal
- * worded by its code. The same rule on the row and on the sheet.
+ * worded by its code. The same rule on the row and on the repository's page.
  */
 
 const ROOM = `/app/api/classrooms/${CLASSROOM_ID}`;
@@ -53,8 +53,9 @@ const renderTable = (p: ProjectDetail) => {
   renderWithProviders(<ProjectRepos project={p} onOpen={onOpen} navigate={vi.fn()} filter={null} onFilter={vi.fn()} />);
   return { onOpen };
 };
-const renderSheet = (p: ProjectDetail, repoId = LIVE.id) =>
-  renderWithProviders(<RepoSheet project={p} repoId={repoId} onClose={vi.fn()} />);
+/** The repository's page (ADR-137), which reads its project as the project page does. */
+const renderRepoPage = (p: ProjectDetail, repoId = LIVE.id) =>
+  renderWithProviders(<RepoPage projectId={p.id} rowId={repoId} navigate={vi.fn()} />);
 
 const rowOf = (name: RegExp) => screen.getByText(name).closest("tr")!;
 const FIRST = /labo-2-student-1$/;
@@ -155,23 +156,28 @@ describe("Open in workspace, on the rows", () => {
   });
 });
 
-describe("Open in workspace, on the sheet", () => {
-  it("is a secondary button, with the read-only fact beside it", async () => {
+describe("Open in workspace, on the repository's page", () => {
+  it("is a secondary button of the header, the read-only fact in its tooltip", async () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign });
-    routes(ok(workspace()), { [reviewUrl(LIVE.id)]: ok({ url: LAUNCH }) });
-    renderSheet(project());
-    const dialog = await screen.findByRole("dialog");
-    const button = await within(dialog).findByRole("button", { name: /Open in workspace/ });
-    expect(within(dialog).getByText("Read-only. Opening another repository closes the previous one.")).toBeInTheDocument();
+    const p = project();
+    routes(ok(workspace()), { [`GET ${BASE}`]: ok(p), [reviewUrl(LIVE.id)]: ok({ url: LAUNCH }) });
+    renderRepoPage(p);
+    const header = (await screen.findByRole("heading", { level: 1 })).closest("header")!;
+    const button = await within(header).findByRole("button", { name: /Open in workspace/ });
+    // Secondary: the page's primary is none during the project (ADR-129 §11).
+    expect(button.className).not.toMatch(/bg-accent/);
+    fireEvent.mouseEnter(button.parentElement!);
+    expect(await screen.findByText("Read-only. Opening another repository closes the previous one.")).toBeInTheDocument();
     await userEvent.click(button);
     await waitFor(() => expect(assign).toHaveBeenCalledWith(LAUNCH));
   });
 
   it("is absent on a repository deleted on GitHub", async () => {
-    const { calls } = routes(ok(workspace()));
-    renderSheet(project(), DELETED.id);
-    await screen.findByRole("dialog");
+    const p = project();
+    const { calls } = routes(ok(workspace()), { [`GET ${BASE}`]: ok(p) });
+    renderRepoPage(p, DELETED.id);
+    await screen.findByRole("heading", { level: 1 });
     await waitFor(() => expect(calls.some((c) => c.url === `${BASE}/workspace`)).toBe(true));
     expect(screen.queryByRole("button", { name: /Open in workspace/ })).toBeNull();
   });

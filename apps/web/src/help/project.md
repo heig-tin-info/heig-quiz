@@ -13,9 +13,12 @@ final.
 
 One row per student or group: the repository, the invitation state, the
 last commit, the CI status, the scores and the flags (locked, after the
-deadline, to verify, deleted on GitHub, access to revoke). A row opens a
-sheet with the runs, **Resend** for the invitation, the repository's own
-deadline, **Lock now** and the teacher's score.
+deadline, to verify, deleted on GitHub, access to revoke). A row opens the
+repository's page: its members with their commits and **Resend**, its
+commits week by week, its runs, its own deadline, **Lock now** and its
+scores. Arrows at the top step to the previous or next row of the table.
+Once the repository is frozen, the page's main button is **Grade** (graded
+by criteria) or the teacher's score.
 
 ## Scores
 
@@ -36,7 +39,7 @@ the person who runs the course can adjust a grade or change the teacher's score.
 
 The deadline is applied on the server's clock; the time that counts for a
 push is when Quiz received it. Give one repository its own deadline from its
-sheet instead of extra time. Moving the deadline later after it passed
+page instead of extra time. Moving the deadline later after it passed
 reopens the project, after a confirmation.
 
 ## Protected files

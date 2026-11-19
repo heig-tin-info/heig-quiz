@@ -87,8 +87,21 @@ export type Route =
    * `parsePath` never sees it.
    */
   | { view: "groupSet"; classroomId: string; id: string; fromProject?: string }
-  /** One project, the staff's page (F-PROJ-13, M3-12; `project/ProjectPage`). */
-  | { view: "project"; id: string }
+  /**
+   * One project, the staff's page (F-PROJ-13, M3-12; `project/ProjectPage`).
+   * `tab` and `filter` (a tile's sub-figure, `RepoFilter`) are written into
+   * `?tab=` and `?filter=` only, the way back from a repository's page:
+   * `parsePath` never reads them back, the page reads them off the query.
+   */
+  | { view: "project"; id: string; tab?: "repositories"; filter?: string }
+  /**
+   * One row of a project's Repositories tab, its own page (ADR-137,
+   * `project/RepoPage`): `rowId` is its repository's id, else — a row not
+   * accepted yet — its group's or its student's roster line's. `filter`,
+   * the table's filter it was opened under, rides in `?filter=` for its
+   * previous and next.
+   */
+  | { view: "projectRepo"; id: string; rowId: string; filter?: string }
   /** The grading screen of a project graded by criteria (ADR-106 §8; `project/grading/ProjectGradingPage`); `?repo=` the repository on screen. */
   | { view: "projectGrading"; id: string }
   /**
@@ -517,12 +530,21 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // student view and an impersonation get the student's project, under the
   // Courses slot like the classroom's pages it hangs off.
   project: {
-    path: (r) => `/projects/${r.id}`,
+    path: (r) => withQuery(`/projects/${r.id}`, { ...(r.tab ? { tab: r.tab } : {}), ...(r.filter ? { filter: r.filter } : {}) }),
     match: ([head, id, tail]) =>
       head === "projects" && id && tail === undefined ? { view: "project", id } : null,
     studentSafe: true,
     section: "activities",
     bottomSlot: { student: "courses", teacher: "activities" },
+  },
+  // ADR-137: one repository of the project, the staff's page, a tail of the project.
+  projectRepo: {
+    path: (r) => withQuery(`/projects/${r.id}/repos/${r.rowId}`, r.filter ? { filter: r.filter } : undefined),
+    match: ([head, id, tail, rowId, rest]) =>
+      head === "projects" && id && tail === "repos" && rowId && rest === undefined ? { view: "projectRepo", id, rowId } : null,
+    studentSafe: false,
+    section: "activities",
+    bottomSlot: { teacher: "activities" },
   },
   // ADR-106 §8: the staff's grading screen of a project graded by criteria, a tail of the project.
   projectGrading: {

@@ -196,7 +196,7 @@ export function AccessTag({ member }: { member: RepoMember }) {
  * GitHub login, the commits they authored (ADR-136, right-aligned) and the
  * access tag in four columns from `@2xl` (the table's width), wrapping
  * below it — "No member" for a repository its group no longer holds anyone
- * in (R1). The table's row and the repository's sheet draw the same.
+ * in (R1). The table's row draws it; the repository's page draws its own table (`RepoMembers`).
  */
 export function MemberList({ members, className }: { members: RepoMember[]; className?: string }) {
   const t = useT();
@@ -294,7 +294,7 @@ const COLLECTION_SAID: Record<NonNullable<ProjectRepoCollection["outcome"]> | "p
   failed: "project.collection.failed",
 };
 
-/** What the collection was, in words, for the repository's sheet: when, or why not, and the files it could not read. */
+/** What the collection was, in words, for the repository's page: when, or why not, and the files it could not read. */
 export function CollectionFacts({ repo }: { repo: ProjectRepoView }) {
   const t = useT();
   const c = repo.collection;

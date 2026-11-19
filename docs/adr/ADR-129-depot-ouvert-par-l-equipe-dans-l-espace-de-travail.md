@@ -6,7 +6,8 @@ Accepted (2026-11-14: the product owner's four decisions, §1–§4 below; the
 technical rules settled by the orchestrator the same day after a spec
 challenge and two reviews). Issue [#1088](https://github.com/heig-tin-info/heig-quiz/issues/1088),
 spun off option C of [#922](https://github.com/heig-tin-info/heig-quiz/issues/922).
-Delivery progress lives in `changes/`.
+Delivery progress lives in `changes/`. §11's sheet is the repository's page since
+[ADR-137](ADR-137-page-du-depot.md) (2026-11-19), the action still secondary there.
 
 Scope: a course staff member's **review session** — the online workspace
 portal (`apps/codespace`) opened by the staff on one repository of a

@@ -33,7 +33,7 @@ The form asks for a **Name**, a **Source repository** (only a repository of the 
 
 These are the files a student must not change, ticked in the tree the students receive (a file reserved by `.studentignore` is not in it). A ticked directory protects its content: its files are restored, while a file a student adds under it stays. `criteria.yml`, `README.md` and `.github/workflows/grading.yml` are pre-checked when the source has them. Leaving `grading.yml` unprotected warns that students could then alter the grading. In grading by criteria, `.github/workflows/` and `criteria.yml` are always protected: ticked and held, at creation and in the settings.
 
-When a push by anyone but Quiz (a student, or a workflow's own commit) touches a protected file on a handed-out branch, Quiz answers with a **restore commit** that puts the distribution repository's current version back. The student's work is never rewritten, only covered, and they are told which files were restored. Beyond five restores in an hour on one repository, Quiz stops restoring and flags the repository **protected files in conflict**; scores captured meanwhile are marked **to verify**. You re-enable the protection by hand from the repository's sheet. A new list applies to the next pushes only.
+When a push by anyone but Quiz (a student, or a workflow's own commit) touches a protected file on a handed-out branch, Quiz answers with a **restore commit** that puts the distribution repository's current version back. The student's work is never rewritten, only covered, and they are told which files were restored. Beyond five restores in an hour on one repository, Quiz stops restoring and flags the repository **protected files in conflict**; scores captured meanwhile are marked **to verify**. You re-enable the protection by hand from the repository's page (its ⋯ menu). A new list applies to the next pushes only.
 
 ## Configure a draft
 
@@ -67,7 +67,7 @@ Once published, only these change: the name, the deadline (never to a past date)
 
 Once published, the page is a dashboard. Four tiles sit under the header: **Accepted** (a ring and "26 / 30"), **Deadline** (the date, how long is left, the strategy, the grace, how many repositories are frozen, and the field to move it), **Progress** (how many students pushed, with the figures to look at: no commit, CI failing, to verify, alerts) and **Source** (the repositories, the history, the sync). A figure in a tile is a button: it narrows the table below to the repositories it counts, and **Show all** brings the others back. Under the tiles, the lifecycle rail shows the review checkpoints between the publication and the deadline, then the freeze and the release.
 
-The table has one row per student (or group): the repository, the last commit with its count (**0 commits** is amber, and red once the deadline has passed with nothing received), the CI status, the score, and flags such as *locked*, *to verify*, *deleted on GitHub* or *access to revoke*. A repository with its own deadline says so in its State cell. A row opens a sheet with the runs, the invitation (with **Resend**) and the repository's own deadline. The page refreshes by itself and never waits for GitHub: the live state is cached and shown as stale when GitHub is slow.
+The table has one row per student (or group): the repository, the last commit with its count (**0 commits** is amber, and red once the deadline has passed with nothing received), the CI status, the score, and flags such as *locked*, *to verify*, *deleted on GitHub* or *access to revoke*. A repository with its own deadline says so in its State cell. A row opens the repository's own page (below). The page refreshes by itself and never waits for GitHub: the live state is cached and shown as stale when GitHub is slow.
 
 <figure markdown="span">
   ![The project page: four tiles, the lifecycle rail and one row per student](../assets/screenshots/mock-project-light.png#only-light)
@@ -75,10 +75,16 @@ The table has one row per student (or group): the repository, the last commit wi
   <figcaption>A published project: tiles, lifecycle rail and repositories. (Mock data.)</figcaption>
 </figure>
 
+### A repository's page
+
+Every row opens its repository's page, a student who has not accepted yet included (the page then lists who is expected, nothing more). At the top, the repository, its deadline and its state, the arrows to the previous and next row of the table (the filter in force kept; your own test repository is skipped), and one main button once the repository is frozen for good: **Grade**, which opens the grading screen on it, for a project graded by criteria, or the teacher's score for one graded by its CI. During the project there is none. Four figures follow: the commits, the last commit, the CI and the score.
+
+The **Members** table gives each member their access (a tag while they are not in the repository on GitHub, with **Resend** when the invitation waits or expired), the commits they authored and their share of the repository's, the commits nobody on the team authored on a last row. **Activity** draws those commits week by week, one row per member. **Runs** lists the CI's runs with their slot. On the right, the repository's own deadline and **Lock now**, its scores slot by slot, where its final score sits in the class, and its sync and group set. *(ADR-137.)*
+
 <figure markdown="span">
-  ![The sheet of one repository](../assets/screenshots/mock-project-sheet-light.png#only-light)
-  ![The sheet of one repository](../assets/screenshots/mock-project-sheet-dark.png#only-dark)
-  <figcaption>The sheet of a repository: scores, own deadline, lock, runs. (Mock data.)</figcaption>
+  ![A group's repository page during the project](../assets/screenshots/mock-project-repo-light.png#only-light)
+  ![A group's repository page during the project](../assets/screenshots/mock-project-repo-dark.png#only-dark)
+  <figcaption>A group's repository during the project: members, weekly commits, runs, deadline. (Mock data.)</figcaption>
 </figure>
 
 The single primary action follows the state: **Publish** or **Schedule** for a draft, none for a scheduled project, **Sync** when the source is ahead, **Grade** for a project graded by criteria while a repository is still to validate, **Release scores** once everything is final.
@@ -101,7 +107,7 @@ To test a project before your students do, open the classroom and press **Join a
 
 At the deadline, on the server's clock, Quiz applies the strategy within a minute, for every repository. The time that counts for a push is the time Quiz **received** it, never the commit's date.
 
-- **A repository's own deadline.** In a repository's sheet, give it an individual deadline (a date ahead of now), or **Follow the project's** again. That effective deadline is what every rule reads for the repository. It replaces extra time for projects.
+- **A repository's own deadline.** On a repository's page, give it an individual deadline (a date ahead of now), or **Follow the project's** again. That effective deadline is what every rule reads for the repository. It replaces extra time for projects.
 - **Lock now** and **Unlock** act on a single repository by hand.
 - **Close project** (header, the course's owner) ends a published project now: the deadline becomes now for every student, own deadlines included, then applies as usual, grace included.
 - **Moving the deadline later** after it passed **reopens** the project: locks lifted, freeze and final review undone, runs requalified. Teacher scores and a release already made are kept. Quiz asks you to confirm.
@@ -117,7 +123,7 @@ Each repository's `.github/workflows/grading.yml` reports its score as one annot
 | **Current** | The latest counted run received before the deadline. Marked *indicative* for the student. |
 | **Frozen** | The current score at the deadline, provisional, then definitive after the grace. |
 | **Review** | The LLM **final review**, dispatched once per repository when its freeze is definitive; its score fills this slot when the run succeeds. Review **checkpoints** (a name and a date, absolute or `D−n`) dispatch earlier reviews that never count. |
-| **Teacher's score** | Set by hand in the sheet, with a comment, once the repository is frozen for good. |
+| **Teacher's score** | Set by hand from the repository's page, with a comment, once the repository is frozen for good. |
 | **Final** | The teacher's score, else the review's, else the frozen score. |
 
 Only runs on a handed-out branch count, on a head commit that no bot pushed. A run with several `GRADE` annotations has no score and alerts you, because a student's code could print one. A repository without `grading.yml` gets a pass/fail CI status instead.
@@ -126,7 +132,7 @@ A score resting on a run **to verify** (protected files in conflict) blocks the 
 
 ### Adjust a grade
 
-After a talk with a student, or an explanation given afterwards, you can move the grade itself without touching the criteria or the points. On the **Grading** tab of a project graded by criteria, click the grade at the end of a row: choose **Relative** (a change such as +0.3, in tenths, at most ±5) or **Absolute** (the grade itself, 1.0 to 6.0), and write the justification, which is required. The dialog shows the grade before and after, and names every member of a group. The adjustment applies to the grade of the points, live: a relative change follows a regrade, while an absolute grade stays put and, when the grade of the points moves, the row says *base grade moved*; adjust again to keep it, or remove it. An adjusted grade wears a small mark; its justification is in its bubble and in the repository's sheet. Students read the justification under the teacher's comment once you release, never the change itself (though the points and the scale let one work it out). A teacher's mark in the gradebook still wins over it. Once the project is released, only the person who runs the course (its owner, not an assistant) can adjust a grade or change the teacher's score. *(ADR-135.)*
+After a talk with a student, or an explanation given afterwards, you can move the grade itself without touching the criteria or the points. On the **Grading** tab of a project graded by criteria, click the grade at the end of a row: choose **Relative** (a change such as +0.3, in tenths, at most ±5) or **Absolute** (the grade itself, 1.0 to 6.0), and write the justification, which is required. The dialog shows the grade before and after, and names every member of a group. The adjustment applies to the grade of the points, live: a relative change follows a regrade, while an absolute grade stays put and, when the grade of the points moves, the row says *base grade moved*; adjust again to keep it, or remove it. An adjusted grade wears a small mark; its justification is in its bubble and on the repository's page. Students read the justification under the teacher's comment once you release, never the change itself (though the points and the scale let one work it out). A teacher's mark in the gradebook still wins over it. Once the project is released, only the person who runs the course (its owner, not an assistant) can adjust a grade or change the teacher's score. *(ADR-135.)*
 
 ## Release
 
@@ -160,11 +166,11 @@ The workspace of a C or C++ project has `gcc`, `g++` (C++20 with GCC 14's standa
 
 ### Open a student's repository in the workspace
 
-Any member of the course's staff can open a student's (or a group's) repository in the online workspace, whatever the project's work mode, own tools included: **Open in workspace**, the laptop icon at the end of its row or the button of its sheet. You build, run and browse the code and its history there, read-only: nothing is ever pushed. It is offered as long as the repository exists on GitHub; on a project in Safe Exam Browser, only once that repository's deadline has passed. One repository at a time: opening another closes the previous one. It counts against the same owner's workspaces as the students' (at most two such sessions at once), and is not there when that owner's account is not enabled for the workspace. Every opening is recorded in the audit log; the student is not notified. *(ADR-129.)*
+Any member of the course's staff can open a student's (or a group's) repository in the online workspace, whatever the project's work mode, own tools included: **Open in workspace**, the laptop icon at the end of its row or the button of its page. You build, run and browse the code and its history there, read-only: nothing is ever pushed. It is offered as long as the repository exists on GitHub; on a project in Safe Exam Browser, only once that repository's deadline has passed. One repository at a time: opening another closes the previous one. It counts against the same owner's workspaces as the students' (at most two such sessions at once), and is not there when that owner's account is not enabled for the workspace. Every opening is recorded in the audit log; the student is not notified. *(ADR-129.)*
 
 <figure markdown="span">
-  ![A repository's sheet with Open in workspace, read-only](../assets/screenshots/mock-project-open-in-workspace-light.png#only-light)
-  ![A repository's sheet with Open in workspace, read-only](../assets/screenshots/mock-project-open-in-workspace-dark.png#only-dark)
+  ![A repository's page with Open in workspace, read-only](../assets/screenshots/mock-project-open-in-workspace-light.png#only-light)
+  ![A repository's page with Open in workspace, read-only](../assets/screenshots/mock-project-open-in-workspace-dark.png#only-dark)
   <figcaption>Opening a student's repository in the workspace. (Mock data.)</figcaption>
 </figure>
 
