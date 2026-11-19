@@ -123,19 +123,37 @@ function CommitCount({ repo }: { repo: ProjectRepoView }) {
 const COMMIT_INK: Record<CommitTone, string> = { plain: "text-fg-faint", warning: "text-warning", danger: "text-danger" };
 
 /**
- * The last-commit cell: `sha · relative time · n commits` in one. "0 commits"
- * is amber, and red only once the repository's deadline was applied with
+ * The last-commit cell: `sha · relative time · n commits` in one, and under
+ * it a group's unattributed commits (ADR-136). "0 commits" is amber, and red only once the repository's deadline was applied with
  * nothing received at all (`commitTone`); a repository that is not
  * provisioned has no history to speak of.
  */
-function CommitCell({ repo }: { repo: ProjectRepoView | null }) {
+function CommitCell({ repo, group }: { repo: ProjectRepoView | null; group: boolean }) {
   if (!repo || repo.provisionStatus !== "ok") return <>—</>;
   return (
-    <span className="inline-flex flex-wrap items-baseline gap-x-2">
-      {repo.lastCommit ? <span className="font-mono text-xs text-fg-muted">{shortSha(repo.lastCommit.sha)}</span> : null}
-      {repo.lastCommit?.at ? <RelativeTime iso={repo.lastCommit.at} className="text-xs text-fg-muted" /> : null}
-      <CommitCount repo={repo} />
+    <span className="flex flex-col gap-0.5">
+      <span className="inline-flex flex-wrap items-baseline gap-x-2">
+        {repo.lastCommit ? <span className="font-mono text-xs text-fg-muted">{shortSha(repo.lastCommit.sha)}</span> : null}
+        {repo.lastCommit?.at ? <RelativeTime iso={repo.lastCommit.at} className="text-xs text-fg-muted" /> : null}
+        <CommitCount repo={repo} />
+      </span>
+      {group ? <Unattributed n={repo.unattributed.n} /> : null}
     </span>
+  );
+}
+
+/**
+ * The part of a group's count no member authored (ADR-136), muted under it:
+ * nothing while every commit is a member's. The members' own counts are
+ * beside their names.
+ */
+function Unattributed({ n }: { n: number }) {
+  const t = useT();
+  if (n === 0) return null;
+  return (
+    <Tip label={t("project.repo.unattributedTip")}>
+      <span className="whitespace-nowrap text-xs text-fg-faint tabular-nums">{n === 1 ? t("project.repo.unattributed.one") : t("project.repo.unattributed", { n })}</span>
+    </Tip>
   );
 }
 
@@ -341,7 +359,7 @@ export function ProjectRepos({
                     <RepoCell repo={repo} />
                   </td>
                   <td className={`${T.td} ${T.colLow} text-fg-muted`}>
-                    <CommitCell repo={repo} />
+                    <CommitCell repo={repo} group={entry.kind === "group"} />
                   </td>
                   <td className={`${T.td} ${T.colMid}`}>
                     <CiBadge status={repo?.ciStatus ?? "none"} />

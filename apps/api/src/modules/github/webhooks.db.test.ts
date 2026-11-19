@@ -19,6 +19,7 @@ import {
   auditLog,
   classrooms,
   courseStaff,
+  githubAccounts,
   githubClassroomLinks,
   githubOrganizations,
   notifications,
@@ -275,6 +276,44 @@ describe("the push receipt (ADR-012)", () => {
     const rows = await receipts(TRACKED);
     expect(rows.find((r) => r.headSha === sha("e"))).toMatchObject({ commits: 2 });
     expect(rows.find((r) => r.headSha === sha("f"))).toMatchObject({ commits: null });
+  });
+
+  it("records who authored the counted commits, by their linked account's id, nothing of an unknown author (ADR-136)", async () => {
+    const [alice, bob, other] = await Promise.all([server.signIn("student"), server.signIn("student"), server.signIn("student")]);
+    await server.app.db.insert(githubAccounts).values([
+      { userId: alice.id, githubUserId: 7_100_001, login: "Alice-GH" },
+      { userId: bob.id, githubUserId: 7_100_002, login: "bob-gh" },
+      { userId: other.id, githubUserId: 7_100_003, login: "nobody-pushes" },
+    ]);
+    const commit = (username: string | null, distinct = true) => ({ distinct, author: { name: "x", email: "x@y", ...(username ? { username } : {}) } });
+    const commits = [
+      // GitHub's logins are case-insensitive: Alice's account, twice.
+      commit("alice-gh"),
+      commit("Alice-GH"),
+      commit("bob-gh"),
+      // Counted, attributed to nobody: no login, a login no linked account holds.
+      commit(null),
+      commit("stranger"),
+      // Not counted, so not attributed: already pushed, the App's, a workflow's.
+      commit("bob-gh", false),
+      commit("quiz-test[bot]"),
+      commit("github-actions[bot]"),
+    ];
+    // The pusher is not the author: the sender is the other student.
+    await deliver("push", push(TRACKED, sha("1"), { commits, sender: { login: "nobody-pushes" } }));
+    await deliver("push", push(TRACKED, sha("2"), { commits: [commit("stranger")] }));
+    await deliver("push", push(TRACKED, sha("3")));
+    const rows = await receipts(TRACKED);
+    const first = rows.find((r) => r.headSha === sha("1"))!;
+    expect(first.commits).toBe(5);
+    expect([...first.authors!].sort((a, b) => a.id - b.id)).toEqual([
+      { id: 7_100_001, n: 2 },
+      { id: 7_100_002, n: 1 },
+    ]);
+    expect(rows.find((r) => r.headSha === sha("2"))).toMatchObject({ commits: 1, authors: [] });
+    expect(rows.find((r) => r.headSha === sha("3"))).toMatchObject({ commits: null, authors: null });
+    // Nothing of an unknown author is stored.
+    expect(JSON.stringify(rows)).not.toContain("stranger");
   });
 
   it("is not written for an untracked repository, nor a deleted branch", async () => {

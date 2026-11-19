@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addZonedDays, zonedIso, zoneOffset } from "./zone.js";
+import { addZonedDays, isoWeek, zonedIso, zoneOffset } from "./zone.js";
 
 describe("addZonedDays", () => {
   it("keeps the local time across a change of the clocks, either way", () => {
@@ -40,5 +40,23 @@ describe("zoneOffset", () => {
     const at = new Date("2026-01-15T11:00:00Z");
     expect(zoneOffset(at, "UTC")).toBe(0);
     expect(zoneOffset(at, "America/St_Johns")).toBe(-(3 * 60 + 30) * 60_000);
+  });
+});
+
+describe("isoWeek", () => {
+  it("names the ISO week of the school's wall clock, Monday first", () => {
+    expect(isoWeek(new Date("2026-11-16T08:00:00Z"))).toBe("2026-W47");
+    expect(isoWeek(new Date("2026-11-22T20:00:00Z"))).toBe("2026-W47");
+    // Sunday 23:30 UTC is already Monday in Zurich: the next week.
+    expect(isoWeek(new Date("2026-11-22T23:30:00Z"))).toBe("2026-W48");
+    expect(isoWeek(new Date("2026-11-22T23:30:00Z"), "UTC")).toBe("2026-W47");
+  });
+
+  it("gives the days around the new year to the week of its Thursday", () => {
+    expect(isoWeek(new Date("2026-01-01T12:00:00Z"))).toBe("2026-W01");
+    expect(isoWeek(new Date("2026-12-31T12:00:00Z"))).toBe("2026-W53");
+    expect(isoWeek(new Date("2027-01-03T12:00:00Z"))).toBe("2026-W53");
+    expect(isoWeek(new Date("2027-01-04T12:00:00Z"))).toBe("2027-W01");
+    expect(isoWeek(new Date("2024-12-30T12:00:00Z"))).toBe("2025-W01");
   });
 });

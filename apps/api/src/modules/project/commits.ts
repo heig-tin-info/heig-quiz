@@ -8,8 +8,12 @@
  * the student's card and view (`studentView.ts`) and the staff page's rows
  * (`detail.ts`): the two numbers cannot drift. It reads `push_receipts`
  * alone, so it needs no GitHub call.
+ *
+ * The same receipts say who authored those commits (ADR-136):
+ * {@link repoCommitAttribution}, the staff's page alone — never a
+ * student's view.
  */
-import { effectiveDeadline, studentCommitCount, type CountedReceipt } from "@quiz/domain";
+import { commitAttribution, effectiveDeadline, studentCommitCount, type AttributedReceipt, type CommitSeries, type CountedReceipt } from "@quiz/domain";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Db } from "../../db/client.js";
@@ -18,11 +22,11 @@ import type { RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
 
 /** The receipts no bot pushed (`is_bot` false) and no collection wrote (`collected` false) of GitHub repositories `ids`, by id: one read, whatever the count. */
-export async function countedReceipts(db: Db, ids: readonly number[]): Promise<Map<number, CountedReceipt[]>> {
-  const receipts = new Map<number, CountedReceipt[]>();
+export async function countedReceipts(db: Db, ids: readonly number[]): Promise<Map<number, AttributedReceipt[]>> {
+  const receipts = new Map<number, AttributedReceipt[]>();
   if (ids.length === 0) return receipts;
   const rows = await db
-    .select({ githubRepoId: pushReceipts.githubRepoId, receivedAt: pushReceipts.receivedAt, commits: pushReceipts.commits })
+    .select({ githubRepoId: pushReceipts.githubRepoId, receivedAt: pushReceipts.receivedAt, commits: pushReceipts.commits, authors: pushReceipts.authors })
     .from(pushReceipts)
     .where(and(inArray(pushReceipts.githubRepoId, [...ids]), eq(pushReceipts.isBot, false), eq(pushReceipts.collected, false)));
   for (const { githubRepoId, ...r } of rows) {
@@ -34,7 +38,24 @@ export async function countedReceipts(db: Db, ids: readonly number[]): Promise<M
 }
 
 /** The student's commit count of `repo` (zero while it has no GitHub repository), from {@link countedReceipts}. */
-export function repoCommitCount(project: ProjectRow, repo: RepoRow, receipts: ReadonlyMap<number, CountedReceipt[]>): number {
+export function repoCommitCount(project: ProjectRow, repo: RepoRow, receipts: ReadonlyMap<number, readonly CountedReceipt[]>): number {
   if (repo.githubRepoId === null) return 0;
   return studentCommitCount(receipts.get(repo.githubRepoId) ?? [], effectiveDeadline(repo, project));
+}
+
+/**
+ * Who authored the commits {@link repoCommitCount} counts (ADR-136, STAFF
+ * ONLY): each of `members` — keyed as the caller likes, with their linked
+ * GitHub account's id, null without one — and the unattributed rest, by
+ * week (`commitAttribution` of `@quiz/domain`).
+ */
+export function repoCommitAttribution<K>(
+  project: ProjectRow,
+  repo: RepoRow,
+  receipts: ReadonlyMap<number, AttributedReceipt[]>,
+  members: ReadonlyMap<K, number | null>,
+): { members: Map<K, CommitSeries>; unattributed: CommitSeries } {
+  const ids = new Map([...members].map(([key, id]) => [key, id === null ? [] : [id]]));
+  const own = repo.githubRepoId === null ? [] : (receipts.get(repo.githubRepoId) ?? []);
+  return commitAttribution(own, effectiveDeadline(repo, project), ids);
 }

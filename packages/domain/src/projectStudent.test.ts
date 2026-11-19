@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { studentCiReading, studentCommitCount, studentProjectGroup, studentProjectStatus, studentScoreRun } from "./projectStudent.js";
+import { commitAttribution, studentCiReading, studentCommitCount, studentProjectGroup, studentProjectStatus, studentScoreRun } from "./projectStudent.js";
 
 const at = (iso: string) => new Date(iso);
 const base = {
@@ -113,5 +113,48 @@ describe("studentCommitCount (M3-14i, N-SEC-20)", () => {
     ];
     expect(studentCommitCount(receipts, base.deadlineAt)).toBe(6);
     expect(studentCommitCount([], base.deadlineAt)).toBe(0);
+  });
+});
+
+describe("commitAttribution (ADR-136)", () => {
+  const ALICE = 101;
+  const BOB = 102;
+  const STAFF = 900;
+  const members = new Map([
+    ["alice", [ALICE]],
+    ["bob", [BOB]],
+    ["carol", []],
+  ]);
+  // Week 41 of 2026: 5 to 11 October (Zurich); the deadline is Friday 9 October, 22:00 UTC.
+  const receipts = [
+    // Before the authors were recorded: all unattributed, one for a receipt without a count.
+    { receivedAt: at("2026-09-29T10:00:00Z"), commits: 2, authors: null },
+    { receivedAt: at("2026-09-30T10:00:00Z"), commits: null, authors: null },
+    // Alice 3, Bob 1, a staff member 1, an author with no linked account 1.
+    { receivedAt: at("2026-10-05T10:00:00Z"), commits: 6, authors: [{ id: ALICE, n: 3 }, { id: BOB, n: 1 }, { id: STAFF, n: 1 }] },
+    { receivedAt: base.deadlineAt, commits: 2, authors: [{ id: BOB, n: 2 }] },
+    // After the deadline: never counted, by anyone.
+    { receivedAt: at("2026-10-09T22:00:01Z"), commits: 4, authors: [{ id: ALICE, n: 4 }] },
+  ];
+
+  it("counts each member's commits by the week of the receipt, the rest unattributed, the deadline's rule", () => {
+    const got = commitAttribution(receipts, base.deadlineAt, members);
+    expect(got.members.get("alice")).toEqual({ n: 3, weeks: [{ week: "2026-W41", n: 3 }] });
+    expect(got.members.get("bob")).toEqual({ n: 3, weeks: [{ week: "2026-W41", n: 3 }] });
+    expect(got.members.get("carol")).toEqual({ n: 0, weeks: [] });
+    // Two pre-rollout pushes (2 + 1) in week 40, then the staff's and the unknown author's commits.
+    expect(got.unattributed).toEqual({ n: 5, weeks: [{ week: "2026-W40", n: 3 }, { week: "2026-W41", n: 2 }] });
+    const sum = [...got.members.values()].reduce((n, m) => n + m.n, got.unattributed.n);
+    expect(sum).toBe(studentCommitCount(receipts, base.deadlineAt));
+  });
+
+  it("counts an account two members claim once, for the first", () => {
+    const got = commitAttribution(receipts, base.deadlineAt, new Map([["alice", [ALICE]], ["twin", [ALICE]]]));
+    expect(got.members.get("alice")!.n).toBe(3);
+    expect(got.members.get("twin")!.n).toBe(0);
+  });
+
+  it("is all zeros with no receipt", () => {
+    expect(commitAttribution([], base.deadlineAt, members).unattributed).toEqual({ n: 0, weeks: [] });
   });
 });

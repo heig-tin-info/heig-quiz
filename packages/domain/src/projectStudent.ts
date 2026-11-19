@@ -6,6 +6,7 @@
  * reads the rows; these decide.
  */
 import type { DeadlineStrategyName } from "./projectRuns.js";
+import { isoWeek } from "./zone.js";
 
 /**
  * The spec's words (F-PROJ-04), plus `released` once the scores are out
@@ -126,6 +127,80 @@ export interface CountedReceipt {
  */
 export function studentCommitCount(receipts: readonly CountedReceipt[], deadlineAt: Date): number {
   let n = 0;
-  for (const r of receipts) if (r.receivedAt.getTime() <= deadlineAt.getTime()) n += r.commits ?? 1;
+  for (const r of countedBy(receipts, deadlineAt)) n += receiptCommits(r);
   return n;
+}
+
+/** The receipts {@link studentCommitCount} counts: received by the deadline (`receivedLate`'s rule). */
+const countedBy = <R extends CountedReceipt>(receipts: readonly R[], deadlineAt: Date): R[] =>
+  receipts.filter((r) => r.receivedAt.getTime() <= deadlineAt.getTime());
+
+/** What a receipt counts: its commits, one for a receipt from before they were counted. */
+const receiptCommits = (r: CountedReceipt): number => r.commits ?? 1;
+
+/** Commits of one push resolved to one linked GitHub account, by its immutable id (ADR-136). */
+export interface CommitAuthor {
+  id: number;
+  n: number;
+}
+
+/** A counted receipt with its commits' authors: null on a receipt written before they were recorded (ADR-136). */
+export interface AttributedReceipt extends CountedReceipt {
+  authors: readonly CommitAuthor[] | null;
+}
+
+/** Commits by ISO week of their receipt (`2026-W47`), the weeks in order, none empty. */
+export interface CommitWeek {
+  week: string;
+  n: number;
+}
+
+/** A count of commits and its weeks: `n` is the sum of `weeks`. */
+export interface CommitSeries {
+  n: number;
+  weeks: CommitWeek[];
+}
+
+/**
+ * Who authored the commits {@link studentCommitCount} counts (ADR-136,
+ * staff only): over the same receipts — no bot's, no collection's (the
+ * caller's), received by `deadlineAt` —, each member's commits, those
+ * attributed to one of their GitHub account ids (`members`: an id names the
+ * first member holding it), and the rest, unattributed: the total minus the
+ * members' — a receipt from before the authors were recorded, an author
+ * GitHub matched to no linked account, or one who is not a member (the
+ * staff included). Each series by the ISO week of the receipt
+ * (`isoWeek`, the server's clock), never the commit's own date. The
+ * members' and the unattributed counts sum to {@link studentCommitCount}.
+ */
+export function commitAttribution<K>(
+  receipts: readonly AttributedReceipt[],
+  deadlineAt: Date,
+  members: ReadonlyMap<K, readonly number[]>,
+): { members: Map<K, CommitSeries>; unattributed: CommitSeries } {
+  const owner = new Map<number, K>();
+  for (const [key, ids] of members) for (const id of ids) if (!owner.has(id)) owner.set(id, key);
+  const weeks = new Map<K | null, Map<string, number>>();
+  const add = (key: K | null, week: string, n: number) => {
+    if (n <= 0) return;
+    const of = weeks.get(key) ?? new Map<string, number>();
+    of.set(week, (of.get(week) ?? 0) + n);
+    weeks.set(key, of);
+  };
+  for (const r of countedBy(receipts, deadlineAt)) {
+    const week = isoWeek(r.receivedAt);
+    let attributed = 0;
+    for (const a of r.authors ?? []) {
+      const key = owner.get(a.id);
+      if (key === undefined) continue;
+      add(key, week, a.n);
+      attributed += a.n;
+    }
+    add(null, week, receiptCommits(r) - attributed);
+  }
+  const series = (key: K | null): CommitSeries => {
+    const list = [...(weeks.get(key) ?? [])].map(([week, n]) => ({ week, n })).sort((a, b) => a.week.localeCompare(b.week));
+    return { n: list.reduce((sum, w) => sum + w.n, 0), weeks: list };
+  };
+  return { members: new Map([...members.keys()].map((key) => [key, series(key)])), unattributed: series(null) };
 }

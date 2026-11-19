@@ -57,6 +57,7 @@ export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): Projec
     lastCommit: { sha: "9a3f1c7e2b4d6f8a0c1e3b5d7f9a1c3e5b7d9f1a", at: PAST },
     ciStatus: "pass",
     commits: 11,
+    unattributed: { n: 0, weeks: [] },
     live: { commitCount: 12, checksPassed: 1, checksTotal: 1, stale: false },
     scores: {
       current: { runId: "run-2", points: 8, max: 10, grade: { grade: 5 } },
@@ -91,11 +92,13 @@ export const row = (
   student: Partial<ProjectStudent> = {},
   group: ProjectDetailGroup | null = null,
   access: ProjectDetailRow["access"] = repo === null ? null : "joined",
+  authored: ProjectDetailRow["authored"] = repo === null ? null : { n: 0, weeks: [] },
 ): ProjectDetailRow => ({
   student: makeStudent(n, student),
   repo,
   group,
   access,
+  authored,
   staff: false,
 });
 

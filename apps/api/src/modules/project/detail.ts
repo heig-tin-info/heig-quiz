@@ -31,6 +31,7 @@ import {
   GRADE_RUN_LIST_LIMIT,
   type GradeRunList,
   type GradeRunView,
+  type ProjectCommitSeries,
   type ProjectDetail,
   type ProjectDetailGroup,
   type ProjectDetailRow,
@@ -65,7 +66,7 @@ import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, project
 import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
-import { countedReceipts, repoCommitCount } from "./commits.js";
+import { countedReceipts, repoCommitAttribution, repoCommitCount } from "./commits.js";
 import { unvalidatedRepos } from "./criterionGrades.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
 import { lastCollections } from "../codespace/service.js";
@@ -336,7 +337,7 @@ function repoView(
   dispatch: DispatchRow | undefined,
   sync: ProjectRepoSync,
   read: LiveRead | undefined,
-  commits: number,
+  commits: { n: number; unattributed: ProjectCommitSeries },
   toRevoke: ReadonlySet<string>,
   collection: ProjectRepoCollection | null,
 ): ProjectRepoView {
@@ -351,7 +352,8 @@ function repoView(
     acceptedAt: iso(repo.acceptedAt),
     lastCommit: repo.lastCommitSha === null ? null : { sha: repo.lastCommitSha, at: isoOrNull(repo.lastCommitAt) },
     ciStatus: repo.ciStatus,
-    commits,
+    commits: commits.n,
+    unattributed: commits.unattributed,
     live: liveView(read),
     scores,
     review: reviewView(project, repo, dispatch),
@@ -396,7 +398,8 @@ export interface DetailOptions {
  * then the repositories no student of the roster reads any more, a group's
  * with its group (R1's group kept with no member). Each student's row says
  * their own access to the repository on GitHub (`accessStates`, ADR-070's
- * amendment of 2026-11-19). A
+ * amendment of 2026-11-19), and the commits they authored there, by week
+ * (ADR-136), the rest the repository's `unattributed`. A
  * repository of a user who holds a STAFF seat of the classroom is a TEST
  * repository (ADR-077): a row of its own, `staff`, after the students' —
  * and in no count nor in the release's readiness (`studentRepos`,
@@ -421,6 +424,7 @@ export async function projectDetail(
       claimedAt: enrollments.claimedAt,
       staff: enrollments.staff,
       githubLogin: githubAccounts.login,
+      githubUserId: githubAccounts.githubUserId,
     })
     .from(enrollments)
     .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
@@ -454,10 +458,17 @@ export async function projectDetail(
 
   // The writers of the grade adjustments, named for the staff (ADR-135).
   const names = await adjusterNames(db, shownRepos);
+  // Who authored the counted commits (ADR-136): a repository's readers on the roster, by their linked account.
+  const readers = new Map<string, Map<string, number | null>>();
+  for (const s of roster) {
+    const repo = seats.of(project.id, s.enrollmentId);
+    if (repo !== null) readers.set(repo.id, (readers.get(repo.id) ?? new Map()).set(s.enrollmentId, s.githubUserId));
+  }
+  const authorship = new Map(shownRepos.map((repo) => [repo.id, repoCommitAttribution(project, repo, receipts, readers.get(repo.id) ?? new Map())]));
   const views = new Map(
     shownRepos.map((repo) => [
       repo.id,
-      repoView(project, repo, scored, names, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), repoCommitCount(project, repo, receipts), toRevoke, collections.get(repo.id) ?? null),
+      repoView(project, repo, scored, names, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), { n: repoCommitCount(project, repo, receipts), unattributed: authorship.get(repo.id)!.unattributed }, toRevoke, collections.get(repo.id) ?? null),
     ]),
   );
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));
@@ -491,6 +502,7 @@ export async function projectDetail(
         repo: view ?? null,
         // Nobody invited on the repository (`none`: an `online_seb` project's, every access revoked): no access to speak of.
         access: view && repo!.invitationStatus !== "none" ? access({ repoId: repo!.id, enrollmentId: s.enrollmentId }) : null,
+        authored: view ? authorship.get(repo!.id)!.members.get(s.enrollmentId)! : null,
         staff: s.staff,
       },
     ];
@@ -517,7 +529,7 @@ export async function projectDetail(
         claimed: false,
         githubLogin,
       };
-      rows.push({ student, repo: views.get(repo.id)!, group: groupOf(repo.groupId), access: null, staff: false });
+      rows.push({ student, repo: views.get(repo.id)!, group: groupOf(repo.groupId), access: null, authored: null, staff: false });
     }
   }
 

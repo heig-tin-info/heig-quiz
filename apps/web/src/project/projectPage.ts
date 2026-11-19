@@ -13,6 +13,7 @@ import {
   ProjectUnassigned,
   type ProjectAcceptErrorCode,
   type ProjectCheckpointErrorCode,
+  type ProjectCommitSeries,
   type ProjectDetail,
   type ProjectDetailGroup,
   type ProjectErrorCode,
@@ -447,8 +448,12 @@ export const groupSetPageOf = (p: Pick<ProjectSummary, "id" | "classroomId" | "g
  * repository whose student left the roster). `label` names the row: the
  * group's name, or the student's.
  */
-/** A group's member as the table draws them: the student and their own access to the group's repository (ADR-070, 2026-11-19). */
-export type RepoMember = ProjectStudent & { access: RepoAccessState | null };
+/**
+ * A group's member as the table draws them: the student, their own access to
+ * the group's repository (ADR-070, 2026-11-19) and the commits they authored
+ * there (ADR-136; null without a repository).
+ */
+export type RepoMember = ProjectStudent & { access: RepoAccessState | null; authored: ProjectCommitSeries | null };
 
 export type RepoEntry =
   | { kind: "group"; key: string; label: string; group: ProjectDetailGroup; members: RepoMember[]; repo: ProjectRepoView | null }
@@ -466,9 +471,9 @@ export type RepoEntry =
 export function repoEntries(p: Pick<ProjectDetail, "groupMode" | "rows">): RepoEntry[] {
   const students: RepoEntry[] = [];
   const groups = new Map<string, Extract<RepoEntry, { kind: "group" }>>();
-  for (const { student, repo, group, staff, access } of p.rows) {
+  for (const { student, repo, group, staff, access, authored } of p.rows) {
     if (!p.groupMode || group === null) {
-      students.push({ kind: "student", key: repo?.id ?? student.enrollmentId ?? student.email, label: studentName(student), student: { ...student, access }, repo, staff });
+      students.push({ kind: "student", key: repo?.id ?? student.enrollmentId ?? student.email, label: studentName(student), student: { ...student, access, authored }, repo, staff });
       continue;
     }
     let entry = groups.get(group.id);
@@ -476,7 +481,7 @@ export function repoEntries(p: Pick<ProjectDetail, "groupMode" | "rows">): RepoE
       entry = { kind: "group", key: group.id, label: group.name, group, members: [], repo: null };
       groups.set(group.id, entry);
     }
-    if (student.enrollmentId !== null) entry.members.push({ ...student, access });
+    if (student.enrollmentId !== null) entry.members.push({ ...student, access, authored });
     entry.repo ??= repo;
   }
   const byName = [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));

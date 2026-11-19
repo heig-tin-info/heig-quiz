@@ -773,7 +773,7 @@ describe("the repositories", () => {
       row(8, makeRepo(8, { deadlineAt: AHEAD, invitationStatus: "pending", lastCommit: null, ciStatus: "none" }), {}, null, "pending"),
       row(9, null),
       row(10, null, { claimed: false }),
-      { student: { ...makeProject().rows[0]!.student, enrollmentId: null, nom: "Ancien", prenom: "Élève" }, repo: makeRepo(11), group: null, access: null, staff: false },
+      { student: { ...makeProject().rows[0]!.student, enrollmentId: null, nom: "Ancien", prenom: "Élève" }, repo: makeRepo(11), group: null, access: null, authored: null, staff: false },
     ],
   });
 
@@ -999,6 +999,34 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
     [first] = within(table).getAllByRole("row").slice(1);
     expect(within(first!).getByText("1/2 ont rejoint")).toBeInTheDocument();
     expect(within(first!).getByText("invitation en attente")).toHaveClass("bg-warning-soft");
+  });
+
+  it("gives each member their commit count and the group's unattributed ones under its total (ADR-136)", async () => {
+    const series = (n: number) => ({ n, weeks: n === 0 ? [] : [{ week: "2026-W41", n }] });
+    // 11 in all: Alice 6, Benoît 0 (no linked account), the unattributed 5.
+    const repo = makeRepo(1, { fullName: "heig-tin-info/labo-2-groupe-1", unattributed: series(5) });
+    const rows = [row(0, repo, {}, g1, "joined", series(6)), row(1, repo, { githubLogin: null }, g1, "unlinked", series(0))];
+    routes(groupProject({ rows }), { [SETS]: ok([]) });
+    renderPage("en", "repositories");
+    let [first] = within(await screen.findByRole("table")).getAllByRole("row").slice(1);
+    const [alice, benoit] = first!.querySelectorAll("li");
+    expect(alice).toHaveTextContent(/6 commits/);
+    expect(benoit).toHaveTextContent(/0 commits/);
+    expect(within(first!).getByText("11 commits")).toBeInTheDocument();
+    expect(within(first!).getByText("5 unattributed")).toBeInTheDocument();
+    cleanup();
+
+    // Every commit a member's: no unattributed line. In French, one is singular.
+    routes(groupProject({ rows: [row(0, { ...repo, unattributed: series(1) }, {}, g1, "joined", series(10))] }), { [SETS]: ok([]) });
+    renderPage("fr", "repositories");
+    [first] = within(await screen.findByRole("table")).getAllByRole("row").slice(1);
+    expect(within(first!).getByText("1 non attribué")).toBeInTheDocument();
+    cleanup();
+    routes(groupProject({ rows: [row(0, { ...repo, unattributed: series(0) }, {}, g1, "joined", series(11))] }), { [SETS]: ok([]) });
+    renderPage("en", "repositories");
+    [first] = within(await screen.findByRole("table")).getAllByRole("row").slice(1);
+    expect(within(first!).queryByText(/unattributed/)).toBeNull();
+    expect(first!.querySelector("li")).toHaveTextContent(/11 commits/);
   });
 
   it("says the drift with Resync as a secondary, hidden once released or archived", async () => {

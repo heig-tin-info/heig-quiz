@@ -60,6 +60,7 @@ import {
   type GroupConsequence,
   type GradeRunView,
   type ProjectActivitySummary,
+  type ProjectCommitSeries,
   type ProjectCriteriaView,
   type CriterionCiLog,
   type ProjectCommit,
@@ -93,6 +94,7 @@ import {
 import {
   adjustGrade,
   awardedRange,
+  commitAttribution,
   changedAfterRelease,
   checkpointDueAt,
   checkpointRefusal,
@@ -1070,7 +1072,9 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
     lastCommit: r.lastCommit,
     ciStatus: r.ciStatus,
     // The student's count: GitHub's total less the App's initial commit (the mock keeps no receipts).
-    commits: r.live ? Math.max(0, r.live.commitCount - 1) : 0,
+    commits: commitsOf(r),
+    // Nobody reading it: all unattributed. `detailOf` gives the readers theirs.
+    unattributed: authorship(r, []).unattributed,
     live: p.read ? r.live : null,
     scores: {
       current: graded(slot(r, r.currentRunId), "ci"),
@@ -1129,6 +1133,27 @@ function accessOf(repo: MockRepo, student: { id: string; githubLogin: string | n
   return repo.memberAccess?.[student.id] ?? (repo.invitationStatus === "pending" ? "pending" : "joined");
 }
 
+/** The student's count: GitHub's total less the App's initial commit (the mock keeps no receipts). */
+const commitsOf = (r: MockRepo): number => (r.live ? Math.max(0, r.live.commitCount - 1) : 0);
+
+/**
+ * Who authored a repository's commits (ADR-136), through the server's own
+ * rule (`commitAttribution`) over invented receipts: one commit a push,
+ * spread over the four weeks before now, by the linked readers in turn —
+ * the first the most —, and on two repositories in three every fourth
+ * commit by an author GitHub matched to no linked account.
+ */
+function authorship(r: MockRepo, readers: readonly { line: string; githubLogin: string | null }[]): { members: Map<string, ProjectCommitSeries>; unattributed: ProjectCommitSeries } {
+  const linked = readers.flatMap((reader, k) => (reader.githubLogin === null ? [] : [k + 1]));
+  const turns = linked.flatMap((id, k) => Array<number>(linked.length - k).fill(id));
+  const unknown = [...r.fullName].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 3 !== 1;
+  const receipts = Array.from({ length: commitsOf(r) }, (_, i) => {
+    const id = turns.length === 0 || (unknown && i % 4 === 3) ? null : turns[i % turns.length]!;
+    return { receivedAt: new Date(now - ((i % 4) * 7 + 1) * D), commits: 1, authors: id === null ? [] : [{ id, n: 1 }] };
+  });
+  return commitAttribution(receipts, new Date(now + D), new Map(readers.map((reader, k) => [reader.line, [k + 1]])));
+}
+
 /** A teacher's test repository (ADR-077): the staff seat's row, modelled on `repo`'s state, badged by the page. */
 function staffTestRow(p: MockProject, repo: MockRepo): ProjectDetailRow {
   const view = repoView(p, repo);
@@ -1147,6 +1172,7 @@ function staffTestRow(p: MockProject, repo: MockRepo): ProjectDetailRow {
     },
     repo: { ...view, id: `${view.id}-staff`, fullName },
     access: "joined",
+    authored: null,
   };
 }
 
@@ -1178,6 +1204,7 @@ function detailOf(p: MockProject): ProjectDetail {
           },
           repo: repo ? repoView(p, repo) : null,
           access: repo ? accessOf(repo, s) : null,
+          authored: null as ProjectCommitSeries | null,
           staff: false,
         };
       }),
@@ -1197,9 +1224,17 @@ function detailOf(p: MockProject): ProjectDetail {
         },
         repo: repoView(p, r),
         access: null,
+        authored: null,
         staff: false,
       })),
   ];
+  // Who authored the commits (ADR-136): each repository's readers on the roster.
+  for (const repo of p.repos) {
+    const read = rows.filter((row) => row.repo?.id === repo.id && row.student.enrollmentId !== null);
+    if (read.length === 0) continue;
+    const { members, unattributed } = authorship(repo, read.map((row) => ({ line: row.student.enrollmentId!, githubLogin: row.student.githubLogin })));
+    for (const row of read) Object.assign(row, { authored: members.get(row.student.enrollmentId!)!, repo: { ...row.repo!, unattributed } });
+  }
   const drifted = p.copy !== null && p.summary.groupSetId !== null && copyKey(p.copy) !== copyKey(setGroupsOf(p.summary.groupSetId));
   const pending = p.resyncReads > 0;
   if (pending) p.resyncReads -= 1;

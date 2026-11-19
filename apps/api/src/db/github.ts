@@ -36,6 +36,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { GITHUB_ORG_STATUSES } from "@quiz/contracts";
+import type { CommitAuthor } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { classrooms, courses } from "./org.js";
@@ -217,6 +218,17 @@ export const pushReceipts = pgTable(
      * student's commit count sums. Null on a receipt written before.
      */
     commits: integer("commits"),
+    /**
+     * Who authored those `commits` (ADR-136): the linked GitHub accounts
+     * GitHub named as their authors (`author.username`), resolved to their
+     * immutable ids at receipt time through `github_accounts`, with the
+     * number of commits of each. A commit whose author has no login or no
+     * linked account is in `commits` and in no entry, and nothing of its
+     * author is kept — no login, no e-mail. Never the pusher, never a
+     * `Co-authored-by` trailer. Null on a receipt written before, and
+     * wherever `commits` is null. Read by the staff's views only.
+     */
+    authors: jsonb("authors").$type<CommitAuthor[]>(),
     /**
      * The commit with which the deadline job collected the online workspace
      * (ADR-130 §6): written by that job only, before the branch moves, its

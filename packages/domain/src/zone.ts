@@ -34,6 +34,20 @@ export function localDate(at: Date, timeZone: string = SCHOOL_TIME_ZONE): string
 }
 
 /**
+ * The ISO 8601 week (`YYYY-Www`, Monday first, the week of the year's first
+ * Thursday is week 1) of the instant `at` on `timeZone`'s wall clock: the
+ * school's weeks. `2026-12-31` is `2026-W53`, `2027-01-01` too.
+ */
+export function isoWeek(at: Date, timeZone: string = SCHOOL_TIME_ZONE): string {
+  const day = new Date(`${localDate(at, timeZone)}T00:00:00Z`);
+  // The Thursday of the same week names its year (ISO 8601).
+  day.setUTCDate(day.getUTCDate() + 3 - ((day.getUTCDay() + 6) % 7));
+  const year = day.getUTCFullYear();
+  const week = 1 + Math.floor((day.getTime() - Date.UTC(year, 0, 1)) / (7 * DAY_MS));
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+
+/**
  * `days` calendar days from `at` on `timeZone`'s wall clock (negative:
  * before), at the same local time: J−3 of a deadline at 23:59 is 23:59
  * three days earlier, 73 hours before it when the clocks went back in
