@@ -23,7 +23,7 @@ import {
   type Column,
 } from "../ui";
 import { OpenInWorkspaceIcon, useReviewAction } from "./OpenInWorkspace";
-import { CiBadge, CollectionBadge, MemberList, Score, StudentAccount, SyncBadge } from "./parts";
+import { AccessTag, CiBadge, CollectionBadge, MemberList, Score, StudentAccount, SyncBadge } from "./parts";
 import {
   commitTone,
   filterEntries,
@@ -82,12 +82,13 @@ function IdentityCell({ entry, groupMode }: { entry: RepoEntry; groupMode: boole
       ) : (
         <StudentAccount student={student} />
       )}
+      <AccessTag member={student} />
     </span>
   );
 }
 
-/** The repository's cell: its link, or why there is none yet; a group's invitations are its members' (their tags). */
-function RepoCell({ repo, group }: { repo: ProjectRepoView | null; group: boolean }) {
+/** The repository's cell: its link, or why there is none yet. Its readers' invitations are tags beside them. */
+function RepoCell({ repo }: { repo: ProjectRepoView | null }) {
   const t = useT();
   if (!repo) return <span className="text-fg-faint">{t("project.repo.notAccepted")}</span>;
   if (repo.provisionStatus === "pending") return <Badge tone="zinc">{t("project.repo.provisioning")}</Badge>;
@@ -98,12 +99,7 @@ function RepoCell({ repo, group }: { repo: ProjectRepoView | null; group: boolea
       </Tip>
     );
   }
-  return (
-    <span className="flex flex-wrap items-center gap-2">
-      {repo.fullName ? <RepoLink fullName={repo.fullName} icon /> : null}
-      {repo.invitationStatus === "pending" && !group ? <Badge tone="amber">{t("project.repo.invitationPending")}</Badge> : null}
-    </span>
-  );
+  return repo.fullName ? <RepoLink fullName={repo.fullName} icon /> : null;
 }
 
 /**
@@ -342,7 +338,7 @@ export function ProjectRepos({
                     <IdentityCell entry={entry} groupMode={project.groupMode} />
                   </td>
                   <td className={`${T.td} ${T.colMid}`}>
-                    <RepoCell repo={repo} group={entry.kind === "group"} />
+                    <RepoCell repo={repo} />
                   </td>
                   <td className={`${T.td} ${T.colLow} text-fg-muted`}>
                     <CommitCell repo={repo} />

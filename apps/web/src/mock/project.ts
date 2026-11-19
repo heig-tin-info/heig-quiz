@@ -1120,11 +1120,12 @@ function settleSync(p: MockProject): void {
 
 /**
  * A student's own access to the repository they read (ADR-070, 2026-11-19):
- * none without an invitation or a linked account, else what the mock seeded
- * for them, else the row's.
+ * none when nobody is invited on it, unlinked without a linked account, else
+ * what the mock seeded for them, else the row's.
  */
-function accessOf(repo: MockRepo, student: { id: string; githubLogin: string | null }): RepoAccessState {
-  if (repo.invitationStatus === "none" || student.githubLogin === null) return "unlinked";
+function accessOf(repo: MockRepo, student: { id: string; githubLogin: string | null }): RepoAccessState | null {
+  if (repo.invitationStatus === "none") return null;
+  if (student.githubLogin === null) return "unlinked";
   return repo.memberAccess?.[student.id] ?? (repo.invitationStatus === "pending" ? "pending" : "joined");
 }
 

@@ -119,16 +119,18 @@ const MemberEvent = z.object({
   action: z.string(),
   repository: z.object({ id: z.number().int() }),
   /** The account added or removed, by its immutable id. */
-  member: z.object({ id: z.number().int().optional() }).optional(),
+  member: z.object({ id: z.number().int() }),
 });
 
 /**
  * `member` added: an invitation was accepted (F-PROJ-07) — the account's
- * live grant is `accepted_at` (the receipt's time) and the repository's row
- * `accepted` (a group's once one member is in, ADR-070's amendment of
- * 2026-11-19). `removed`: the account is out again, its grant no longer
- * joined; the row, the group's aggregate, is left as it is. The daily
- * reconciliation is the fallback of both.
+ * live grant is `accepted_at` (the receipt's time, kept on a replay) and
+ * the repository's row `accepted` (a group's once one member is in,
+ * ADR-070's amendment of 2026-11-19), only when the account is one Quiz
+ * invited there: a collaborator the staff added on GitHub changes nothing.
+ * `removed`: the account is out again, its grant no longer joined; the row,
+ * the group's aggregate, is left as it is. The daily reconciliation is the
+ * fallback of both.
  */
 const member: WebhookHandler = async (app, _config, delivery) => {
   const event = MemberEvent.safeParse(delivery.payload);
@@ -136,23 +138,18 @@ const member: WebhookHandler = async (app, _config, delivery) => {
   const ctx = await repoContext(app.db, event.data.repository.id);
   if (!ctx) return;
   const added = event.data.action === "added";
-  const accountId = event.data.member?.id;
-  const grants =
-    accountId === undefined
-      ? []
-      : await app.db
-          .update(projectRepoAccess)
-          .set(added ? { acceptedAt: delivery.receivedAt, absentAt: null } : { acceptedAt: null })
-          .where(
-            and(
-              eq(projectRepoAccess.repoId, ctx.repo.id),
-              eq(projectRepoAccess.githubUserId, accountId),
-              isNull(projectRepoAccess.revokedAt),
-              added ? isNull(projectRepoAccess.acceptedAt) : isNotNull(projectRepoAccess.acceptedAt),
-            ),
-          )
-          .returning({ id: projectRepoAccess.id });
-  const row = added && ctx.repo.invitationStatus !== "accepted";
+  const grants = await app.db
+    .update(projectRepoAccess)
+    .set(added ? { acceptedAt: sql`coalesce(${projectRepoAccess.acceptedAt}, ${delivery.receivedAt.toISOString()}::timestamptz)`, absentAt: null } : { acceptedAt: null })
+    .where(
+      and(
+        eq(projectRepoAccess.repoId, ctx.repo.id),
+        eq(projectRepoAccess.githubUserId, event.data.member.id),
+        isNull(projectRepoAccess.revokedAt),
+      ),
+    )
+    .returning({ id: projectRepoAccess.id });
+  const row = added && grants.length > 0 && ctx.repo.invitationStatus !== "accepted";
   if (row) await app.db.update(projectRepos).set({ invitationStatus: "accepted" }).where(eq(projectRepos.id, ctx.repo.id));
   if (row || grants.length > 0) await hintRepo(app.db, ctx);
 };

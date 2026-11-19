@@ -6434,7 +6434,6 @@ export const en = {
   "project.repo.noMember": "No member",
   "project.repo.provisioning": "being created",
   "project.repo.provisionFailed": "creation failed",
-  "project.repo.invitationPending": "invitation pending",
   "project.access.pending": "invitation pending",
   "project.access.expired": "invitation expired",
   "project.access.unlinked": "no GitHub account",

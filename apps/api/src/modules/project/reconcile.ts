@@ -47,7 +47,7 @@
  * logged and the pass goes on to the next.
  */
 import type { FastifyInstance } from "fastify";
-import { and, asc, eq, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { effectiveDeadline, isQuiet, reconciles } from "@quiz/domain";
@@ -68,7 +68,7 @@ import { purgeEvidenceFiles } from "./evidence.js";
 import { ProjectError } from "./errors.js";
 import { aggregateCiStatus, completedRun, refreshScoreSelection } from "./grading.js";
 import { repoMembers } from "./groupRepos.js";
-import { checkGrants } from "./memberAccess.js";
+import { checkGrants, liveGrants } from "./memberAccess.js";
 import { followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, repoWithProject, type RepoContext } from "./repos.js";
 
 /** The completed runs read per repository (heig-classroom's figure): the lost webhooks of a quiet half hour fit in far fewer. */
@@ -81,7 +81,9 @@ type TaskKey = "reconcile.grades" | "reconcile.repos";
 /** What one pass changed: the audit's payload beside the repositories read, and the summary's figures. */
 interface Counts {
   runsIngested: number;
+  /** Members (grants) re-invited. */
   reinvited: number;
+  /** Members (grants) found in: by the check, or by a re-invite GitHub answered "already a collaborator". */
   accepted: number;
   heads: number;
   renamed: number;
@@ -269,8 +271,12 @@ export function reconcileGrades(app: FastifyInstance, config: AppConfig): Promis
 
 // ---------------------------------------------------------------- reconcile.repos
 
-/** The day's re-invite of one member claimed on their grant: live, not revoking, not known in, none for a day. */
-async function claimReinvite(db: Db, grantId: string, now: Date): Promise<boolean> {
+/**
+ * The day's re-invite of one member claimed on their grant: live, not
+ * revoking, not known in, none for a day, and its repository not frozen —
+ * read in the same write, never from the pass's snapshot.
+ */
+export async function claimReinvite(db: Db, grantId: string, now: Date): Promise<boolean> {
   const claimed = await db
     .update(projectRepoAccess)
     .set({ reinvitedAt: now })
@@ -281,6 +287,7 @@ async function claimReinvite(db: Db, grantId: string, now: Date): Promise<boolea
         isNull(projectRepoAccess.revokingAt),
         isNull(projectRepoAccess.acceptedAt),
         or(isNull(projectRepoAccess.reinvitedAt), lte(projectRepoAccess.reinvitedAt, new Date(now.getTime() - REINVITE_INTERVAL_MS))),
+        sql`EXISTS (SELECT 1 FROM ${projectRepos} WHERE ${projectRepos.id} = ${projectRepoAccess.repoId} AND ${projectRepos.frozenAt} IS NULL)`,
       ),
     )
     .returning({ id: projectRepoAccess.id });
@@ -309,18 +316,16 @@ async function claimReinvite(db: Db, grantId: string, now: Date): Promise<boolea
 async function reconcileInvitation({ app, octokit, ctx, located, counts, now }: Step): Promise<void> {
   const db = app.db;
   const { repo } = ctx;
-  const [revoking] = await db
-    .select({ id: projectRepoAccess.id })
-    .from(projectRepoAccess)
-    .where(and(eq(projectRepoAccess.repoId, repo.id), isNotNull(projectRepoAccess.revokingAt)))
-    .limit(1);
-  if (revoking) return;
-  const { joined, absent } = await checkGrants(db, octokit, repo.id, located.fullName, now);
-  let changed = joined.length > 0;
-  if (changed) {
+  const grants = await liveGrants(db, repo.id);
+  if (grants.some((g) => g.revokingAt !== null)) return;
+  const { joined, absent } = await checkGrants(db, octokit, located.fullName, grants, now);
+  // A member newly found gone changes the staff's page too.
+  let changed = joined.length > 0 || absent.length > 0;
+  if (joined.length > 0) {
     counts.accepted += joined.length;
     await followInvitation(db, repo, "accepted");
   }
+  // The freeze read here is the pass's snapshot, a shortcut: the claim reads it again.
   if (repo.frozenAt === null && absent.length > 0) {
     const members = await repoMembers(db, repo, ctx.project.classroomId);
     for (const grant of absent) {

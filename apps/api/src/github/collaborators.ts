@@ -88,17 +88,21 @@ export async function holdsAtLeast(
   return (PERMISSION_RANK[held ?? "none"] ?? 0) >= PERMISSION_RANK[least]!;
 }
 
-/** A GitHub account as a listing names it: its login, and its immutable id when GitHub gives one. */
+/** A GitHub account as a listing names it: its login and its immutable id. */
 export interface ListedAccount {
   login: string;
-  accountId?: number;
+  accountId: number;
 }
 
-/** The pending invitations of `owner/repo`: each one's id and its invitee. */
-export async function pendingInvitees(octokit: Octokit, owner: string, repo: string): Promise<({ id: number } & ListedAccount)[]> {
+/**
+ * The invitations of `owner/repo` GitHub still lists: each one's id, its
+ * invitee, and whether it expired (GitHub keeps listing an expired
+ * invitation, which can no longer be accepted, until it is cancelled).
+ */
+export async function pendingInvitees(octokit: Octokit, owner: string, repo: string): Promise<({ id: number; expired: boolean } & ListedAccount)[]> {
   const { data } = await octokit.request("GET /repos/{owner}/{repo}/invitations", { owner, repo, per_page: 100 });
-  return data.flatMap((i: { id: number | bigint; invitee?: { login?: string; id?: number | bigint } | null }) =>
-    i.invitee?.login ? [{ id: Number(i.id), login: i.invitee.login, ...(i.invitee.id === undefined ? {} : { accountId: Number(i.invitee.id) }) }] : [],
+  return data.flatMap((i: { id: number | bigint; expired?: boolean; invitee?: { login: string; id: number | bigint } | null }) =>
+    i.invitee ? [{ id: Number(i.id), login: i.invitee.login, accountId: Number(i.invitee.id), expired: i.expired === true }] : [],
   );
 }
 
@@ -114,7 +118,7 @@ export async function directCollaborators(octokit: Octokit, owner: string, repo:
     per_page: 100,
     request: { retries: 0 },
   });
-  return data.map((c: { login: string; id?: number | bigint }) => ({ login: c.login, ...(c.id === undefined ? {} : { accountId: Number(c.id) }) }));
+  return data.map((c: { login: string; id: number | bigint }) => ({ login: c.login, accountId: Number(c.id) }));
 }
 
 /**

@@ -8,11 +8,10 @@
  * - `joined`: GitHub said the account is a collaborator (the `member`
  *   webhook, the daily reconciliation, or an invitation GitHub answered
  *   "already a collaborator");
- * - `pending`: invited and not in yet, the invitation younger than GitHub's
- *   seven days, or never found gone;
- * - `expired`: invited seven days ago or more AND a check found the account
- *   neither a collaborator nor invited any more (`absentAt`): GitHub dropped
- *   or the member declined the invitation. Never without such a check;
+ * - `pending`: invited and not in yet, never found gone since;
+ * - `expired`: a check found the account neither a collaborator nor
+ *   invited any more since its last invitation (`absentAt`): GitHub dropped
+ *   the invitation, or the member declined it. Never without such a check;
  * - `unlinked`: no live grant (never invited, or no linked account to invite).
  */
 
@@ -20,27 +19,15 @@
 export const REPO_ACCESS_STATES = ["joined", "pending", "expired", "unlinked"] as const;
 export type RepoAccessState = (typeof REPO_ACCESS_STATES)[number];
 
-/** How long GitHub keeps a repository invitation before dropping it. */
-export const INVITATION_EXPIRY_MS = 7 * 24 * 3_600_000;
-
-/** What the rule reads of a member's live grant: the last invitation, GitHub's yes, a check that found it gone. */
+/** What the rule reads of a member's live grant: GitHub's yes, a check that found it gone. */
 export interface AccessGrant {
-  invitedAt: Date;
   acceptedAt: Date | null;
   absentAt: Date | null;
 }
 
-/** The state of a member whose latest live grant is `grant` (null: none), at `now` (the server's clock). */
-export function repoAccessState(grant: AccessGrant | null, now: Date): RepoAccessState {
+/** The state of a member whose latest live grant is `grant` (null: none). */
+export function repoAccessState(grant: AccessGrant | null): RepoAccessState {
   if (grant === null) return "unlinked";
   if (grant.acceptedAt !== null) return "joined";
-  const old = now.getTime() - grant.invitedAt.getTime() >= INVITATION_EXPIRY_MS;
-  return old && grant.absentAt !== null ? "expired" : "pending";
-}
-
-/** The latest of a member's live grants (the last invited), or null: the one {@link repoAccessState} reads. */
-export function latestGrant<G extends { invitedAt: Date }>(grants: readonly G[]): G | null {
-  let latest: G | null = null;
-  for (const g of grants) if (latest === null || g.invitedAt > latest.invitedAt) latest = g;
-  return latest;
+  return grant.absentAt !== null ? "expired" : "pending";
 }

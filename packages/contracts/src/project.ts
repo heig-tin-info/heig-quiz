@@ -675,8 +675,8 @@ export type SentInvitation = z.infer<typeof SentInvitation>;
 /**
  * A member's own access to a repository (F-PROJ-07, ADR-070's amendment of
  * 2026-11-19; `repoAccessState` of `@quiz/domain`): joined, an invitation
- * pending, one expired (GitHub dropped it, a check found), or no live grant
- * (`unlinked`). The staff's payload only.
+ * pending, one a check found gone (`expired`: dropped by GitHub, or
+ * declined), or no live grant (`unlinked`). The staff's payload only.
  */
 export const RepoAccessState = z.enum(REPO_ACCESS_STATES);
 export type RepoAccessState = z.infer<typeof RepoAccessState>;
@@ -1100,9 +1100,9 @@ export const ProjectDetailRow = z.object({
   group: ProjectDetailGroup.nullable(),
   /**
    * The student's own access to `repo` on GitHub (their latest live grant,
-   * ADR-070's amendment of 2026-11-19): what a group's row says of each
-   * member. Null without a repository, or for a repository no roster line
-   * reads any more.
+   * ADR-070's amendment of 2026-11-19), a group's member's or a student's
+   * own alike. Null without a repository, for one nobody is invited on
+   * (`invitationStatus` none), or for one no roster line reads any more.
    */
   access: RepoAccessState.nullable(),
   /**

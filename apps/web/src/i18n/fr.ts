@@ -6392,7 +6392,6 @@ export const fr: Record<keyof Dict, string> = {
   "project.repo.noMember": "Aucun membre",
   "project.repo.provisioning": "en création",
   "project.repo.provisionFailed": "création échouée",
-  "project.repo.invitationPending": "invitation en attente",
   "project.access.pending": "invitation en attente",
   "project.access.expired": "invitation expirée",
   "project.access.unlinked": "sans compte GitHub",

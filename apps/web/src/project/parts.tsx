@@ -179,28 +179,41 @@ const ACCESS: Record<Exclude<RepoAccessState, "joined">, { tone: Tone; key: keyo
 };
 
 /**
- * A group's current members (ADR-070 §4, M3-16b, B7), one per line, each by
- * name and GitHub login, and a tag for one not in the repository on GitHub
- * (an invitation pending or expired, no account; ADR-070, 2026-11-19) — an
- * unclaimed seat says that instead. "No member" for a repository its group no
- * longer holds anyone in (R1). The table's row and the repository's sheet
- * draw the same.
+ * A student's access to their repository on GitHub as a tag, a group's
+ * member's or a student's own alike: nothing once joined, nothing without a
+ * repository or an invitation, nothing for an unclaimed seat (which says
+ * that instead).
+ */
+export function AccessTag({ member }: { member: RepoMember }) {
+  const t = useT();
+  if (member.access === null || member.access === "joined" || !member.claimed) return null;
+  const { tone, key } = ACCESS[member.access];
+  return <Badge tone={tone}>{t(key)}</Badge>;
+}
+
+/**
+ * A group's current members (ADR-070 §4, M3-16b, B7), one per line: name,
+ * GitHub login and the access tag in three columns from `@2xl` (the
+ * table's width), wrapping below it — "No member" for a repository its
+ * group no longer holds anyone in (R1). The table's row and the
+ * repository's sheet draw the same.
  */
 export function MemberList({ members, className }: { members: RepoMember[]; className?: string }) {
   const t = useT();
   if (members.length === 0) return <span className={cx("text-fg-faint", className)}>{t("project.repo.noMember")}</span>;
   return (
-    <ul className={cx("flex flex-col gap-0.5", className)}>
-      {members.map((m) => {
-        const tag = m.access === null || m.access === "joined" || !m.claimed ? null : ACCESS[m.access];
-        return (
-          <li key={m.enrollmentId ?? m.email} className="flex flex-wrap items-center gap-x-1.5">
-            <span className="whitespace-nowrap">{studentName(m)}</span>
+    <ul className={cx("flex flex-col gap-0.5 @2xl:grid @2xl:grid-cols-[repeat(3,max-content)] @2xl:items-center @2xl:gap-x-2", className)}>
+      {members.map((m) => (
+        <li key={m.enrollmentId ?? m.email} className="flex flex-wrap items-center gap-x-1.5 @2xl:contents">
+          <span className="whitespace-nowrap">{studentName(m)}</span>
+          <span>
             <StudentAccount student={m} />
-            {tag ? <Badge tone={tag.tone}>{t(tag.key)}</Badge> : null}
-          </li>
-        );
-      })}
+          </span>
+          <span>
+            <AccessTag member={m} />
+          </span>
+        </li>
+      ))}
     </ul>
   );
 }

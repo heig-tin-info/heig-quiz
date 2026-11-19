@@ -45,22 +45,24 @@ import { inviteAccount, notRecorded } from "./access.js";
 import { liveRepoForUpdate } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { repoMembers, type RepoMember } from "./groupRepos.js";
-import { checkGrants } from "./memberAccess.js";
+import { checkGrants, liveGrants } from "./memberAccess.js";
 import type { RepoRow } from "./repos.js";
 
 /** The least time between two resends of one repository's invitation. */
 export const RESEND_INTERVAL_MS = 60_000;
 
 /**
- * The members of a group's repository still out of it: no account of theirs
- * recorded, or none GitHub lists among the collaborators today — invited
- * and waiting, or gone (expired or declined: GitHub lists the invitation no
- * more). Every live grant is looked at again (`checkGrants`, which records
- * what it found on each): a resend asks GitHub anyway.
+ * The members of a group's repository still out of it: no live grant of
+ * theirs known in (`accepted_at`, which the `member` webhook's `removed`
+ * clears), and none found in by the check of their other grants
+ * (`checkGrants`, which records what it found on each) — invited and
+ * waiting, or gone (expired or declined).
  */
 async function stillOut(db: Db, octokit: Octokit, repo: RepoRow, members: RepoMember[], now: Date): Promise<RepoMember[]> {
-  const { joined } = await checkGrants(db, octokit, repo.id, repo.fullName!, now, true);
-  return members.filter((m) => !joined.some((g) => g.enrollmentId === m.enrollmentId));
+  const grants = await liveGrants(db, repo.id);
+  const { joined } = await checkGrants(db, octokit, repo.fullName!, grants, now);
+  const inside = new Set([...grants.filter((g) => g.acceptedAt !== null), ...joined].map((g) => g.enrollmentId));
+  return members.filter((m) => !inside.has(m.enrollmentId));
 }
 
 /**

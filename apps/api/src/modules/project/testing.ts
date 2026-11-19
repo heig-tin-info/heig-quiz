@@ -15,8 +15,9 @@
  * M3-05a, a ruleset deleted and a repository archived (read-only until
  * un-archived). From M3-15b, a collaborator removed and the pending
  * invitations listed and cancelled (a revocation), or refused (`unrevokable`),
- * and a repository by its id; a login looked for among the collaborators,
- * and the collaborators listed (F-PROJ-07). From M3-07, a compare by refs with its
+ * and a repository by its id; the collaborators and the invitations listed
+ * with their accounts' ids (`accountIdOf`), an invitation GitHub reports
+ * expired (`expiredInvitations`; F-PROJ-07). From M3-07, a compare by refs with its
  * counts, and the pull requests (opened, listed by head, read, commented).
  * From L-02b, a commit's tarball: the API's redirect to `codeload`, whose
  * URL carries a `token=`, and the gzipped `git archive` it serves (past
@@ -105,6 +106,10 @@ export interface RepoWorld {
   uninvitable: Set<string>;
   /** The pending invitations of each repository, by `org/name`: invitation id → login. Accepted once removed from here. */
   invitations: Map<string, Map<number, string>>;
+  /** Invitation ids GitHub still lists but reports `expired` (no longer acceptable). */
+  expiredInvitations: Set<number>;
+  /** The immutable id GitHub gives the account `login` in its listings (the test world's accounts); 0 for one it does not know. */
+  accountIdOf: (login: string) => number;
   /** Repositories, by `org/name`, that refuse every collaborator removal (a 403). */
   unrevokable: Set<string>;
   /** The pull requests of each repository, by `org/name` (M3-07); a test merges or closes one by mutating it. */
@@ -387,6 +392,8 @@ export function repoWorld(): RepoWorld {
     collaborators: new Map(),
     uninvitable: new Set(),
     invitations: new Map(),
+    expiredInvitations: new Set(),
+    accountIdOf: () => 0,
     unrevokable: new Set(),
     pulls: new Map(),
     comments: new Map(),
@@ -515,19 +522,15 @@ export function repoWorld(): RepoWorld {
         return json(branches.filter((b) => b === m![1]).map((b) => ({ ref: `refs/heads/${b}` })));
       }
       if (rest === "/rulesets") return world.freePlan ? planRefusal() : json(world.rulesets.get(fullName) ?? []);
+      const account = (login: string) => ({ login, id: world.accountIdOf(login) });
       if (rest === "/invitations") {
-        return json([...(world.invitations.get(fullName) ?? new Map<number, string>())].map(([id, login]) => ({ id, invitee: { login } })));
+        const listed = [...(world.invitations.get(fullName) ?? new Map<number, string>())];
+        return json(listed.map(([id, login]) => ({ id, invitee: account(login), expired: world.expiredInvitations.has(id) })));
       }
       // The collaborators (ADR-070, 2026-11-19): those in, a pending invitee is none.
       if (rest === "/collaborators") {
         const pending = [...(world.invitations.get(fullName)?.values() ?? [])];
-        return json([...(world.collaborators.get(fullName)?.keys() ?? [])].filter((login) => !pending.includes(login)).map((login) => ({ login })));
-      }
-      // "Is this login a collaborator?": 204, or 404 for a stranger or a pending invitee.
-      if ((m = /^\/collaborators\/([^/]+)$/.exec(rest))) {
-        const login = m[1]!;
-        const pending = [...(world.invitations.get(fullName)?.values() ?? [])].includes(login);
-        return !pending && world.collaborators.get(fullName)?.has(login) ? new Response(null, { status: 204 }) : json({ message: "Not Found" }, 404);
+        return json([...(world.collaborators.get(fullName)?.keys() ?? [])].filter((login) => !pending.includes(login)).map(account));
       }
       // A collaborator's permission, in GitHub's legacy words; an invitee still pending, or nobody, is GitHub's 404.
       if ((m = /^\/collaborators\/([^/]+)\/permission$/.exec(rest))) {

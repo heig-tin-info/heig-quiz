@@ -90,7 +90,7 @@ import { countedReceipts, repoCommitCount } from "./commits.js";
 import { criteriaStandings } from "./criterionGrades.js";
 import { isLive } from "./deadline.js";
 import { lastCollections } from "../codespace/service.js";
-import { accessStates } from "./memberAccess.js";
+import { accessStates, seatAccess } from "./memberAccess.js";
 import { slotRuns } from "./scores.js";
 import { ProjectError } from "./errors.js";
 import { seatRepo, seatRepos } from "./groupRepos.js";
@@ -194,15 +194,15 @@ const liveRepo = (row: RepoRow | null, project: ProjectRow): ProvisionedRepo | n
 
 /**
  * The caller's OWN invitation on their repository (F-PROJ-07, ADR-070's
- * amendment of 2026-11-19): a student's own repository's row is theirs; on a
- * group's, the row is the group's (one member in: `accepted`), so theirs is
- * their grant's state — joined, an invitation to accept or to resend
- * (pending or expired), or none recorded. A teammate's is never read here.
+ * amendment of 2026-11-19), their grant's state, whatever the kind of
+ * repository (a group's row is the group's, one member in: `accepted`):
+ * joined, an invitation to accept or to resend (pending or expired), or none
+ * (nobody invited on the repository, no grant of theirs, no seat). A
+ * teammate's is never read here.
  */
-function ownInvitation(repo: RepoRow, access: RepoAccessState): SentInvitation | null {
-  if (repo.groupId === null) return repo.invitationStatus === "none" ? null : repo.invitationStatus;
-  if (repo.invitationStatus === "none") return null;
-  return access === "joined" ? "accepted" : access === "unlinked" ? null : "pending";
+function ownInvitation(repo: RepoRow, access: RepoAccessState | null): SentInvitation | null {
+  if (repo.invitationStatus === "none" || access === null || access === "unlinked") return null;
+  return access === "joined" ? "accepted" : "pending";
 }
 
 /**
@@ -217,7 +217,7 @@ function card(
   now: Date,
   read: Readings,
   codespace: boolean,
-  access: RepoAccessState,
+  access: RepoAccessState | null,
 ): { card: StudentProjectCard; group: StudentActivityGroup } {
   const { facts, group } = cardFacts(row, linked, now);
   const live = liveRepo(row.repo, row.project);
@@ -281,11 +281,11 @@ export async function studentProjectCards(
   const [linked, read, access] = await Promise.all([
     rows.length > 0 && githubLinked(db, userId),
     readings(db, cards.flatMap((row) => liveRepo(row.repo, row.project) ?? [])),
-    accessStates(db, cards.flatMap((row) => (row.repo === null ? [] : [{ repoId: row.repo.id, enrollmentId: row.seatId }])), now),
+    accessStates(db, cards.flatMap((row) => (row.repo === null ? [] : [{ repoId: row.repo.id, enrollmentId: row.seatId }]))),
   ]);
   const groups: StudentProjectCards = { open: [], upcoming: [], past: [] };
   for (const { seatId, ...row } of cards) {
-    const placed = card(row, linked, now, read, codespace, row.repo === null ? "unlinked" : access({ repoId: row.repo.id, enrollmentId: seatId }));
+    const placed = card(row, linked, now, read, codespace, row.repo === null ? null : access({ repoId: row.repo.id, enrollmentId: seatId }));
     groups[placed.group].push(placed.card);
   }
   return groups;
@@ -376,12 +376,11 @@ export async function studentProject(
   const seat = scope.seat === null ? null : scope.seat.staff ? ("staff" as const) : ("student" as const);
   const repo = provisioned(row);
   const live = liveRepo(row, project);
-  const seats = repo === null || scope.seat === null ? [] : [{ repoId: repo.id, enrollmentId: scope.seat.id }];
   const [linked, read, criteria, access] = await Promise.all([
     githubLinked(db, userId),
     readings(db, live === null ? [] : [live]),
     studentCriteria(db, project, repo),
-    accessStates(db, seats, now),
+    repo === null || scope.seat === null ? null : seatAccess(db, { repoId: repo.id, enrollmentId: scope.seat.id }),
   ]);
   const { facts } = cardFacts({ project, classroomName: scope.room.name, courseCode: scope.course.code, repo: row }, linked, now);
   return {
@@ -394,7 +393,7 @@ export async function studentProject(
         : {
             fullName: repo.fullName,
             url: htmlUrl(repo.fullName),
-            invitation: ownInvitation(repo, seats.length === 0 ? "unlinked" : access(seats[0]!)),
+            invitation: ownInvitation(repo, access),
             deleted: repo.deletedAt !== null,
             locked: repo.lockedAt !== null,
             ...(live === null

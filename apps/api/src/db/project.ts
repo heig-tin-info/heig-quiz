@@ -727,12 +727,12 @@ export const projectRepoAccess = pgTable(
      */
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
     /**
-     * The latest check found the account neither a collaborator nor invited
-     * (the invitation dropped by GitHub after seven days, or declined): what
-     * `repoAccessState` of `@quiz/domain` calls `expired` once the invitation
-     * is seven days old. A check finding it invited or in clears it, as does
-     * every new invitation. Null: never found gone — `pending`, never
-     * `expired`, until a check says otherwise.
+     * The latest check found the account neither a collaborator nor offered
+     * an invitation (dropped or reported expired by GitHub, or declined):
+     * what `repoAccessState` of `@quiz/domain` calls `expired`. A check
+     * finding it invited or in clears it, as does every new invitation.
+     * Null: never found gone — `pending`, never `expired`, until a check
+     * says otherwise.
      */
     absentAt: timestamp("absent_at", { withTimezone: true }),
     /**

@@ -56,6 +56,7 @@ import {
   gradeDispatches,
   projectEvidence,
   projectGradeRuns,
+  projectRepoAccess,
   projectRepos,
   projects,
   projectSyncPrs,
@@ -435,6 +436,8 @@ describe("the student's project (F-PROJ-15)", () => {
     const sha = "c".repeat(40);
     const current = await run(repo.id, { headSha: sha, workflowRunId: 4242, points: 7.5, max: 10 });
     await setRepo(repo.id, { invitationStatus: "accepted", currentGradeRunId: current, lastCommitSha: sha, lastCommitAt: at(NOW), ciStatus: "pass" });
+    // Accepted on GitHub: the student's own grant joined, as the `member` webhook writes it (ADR-070, 2026-11-19).
+    await server.app.db.update(projectRepoAccess).set({ acceptedAt: at(NOW) }).where(eq(projectRepoAccess.repoId, repo.id));
     const scored = await view(lab.id, student.headers);
     expect(scored.repo).toMatchObject({
       invitation: "accepted",

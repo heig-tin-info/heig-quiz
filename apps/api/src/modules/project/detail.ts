@@ -468,7 +468,6 @@ export async function projectDetail(
       const repo = seats.of(project.id, s.enrollmentId);
       return repo === null ? [] : [{ repoId: repo.id, enrollmentId: s.enrollmentId }];
     }),
-    now,
   );
   const shown = new Set<string>();
   const rows: ProjectDetailRow[] = roster.flatMap((s) => {
@@ -490,7 +489,8 @@ export async function projectDetail(
           githubLogin: s.githubLogin,
         },
         repo: view ?? null,
-        access: view ? access({ repoId: repo!.id, enrollmentId: s.enrollmentId }) : null,
+        // Nobody invited on the repository (`none`: an `online_seb` project's, every access revoked): no access to speak of.
+        access: view && repo!.invitationStatus !== "none" ? access({ repoId: repo!.id, enrollmentId: s.enrollmentId }) : null,
         staff: s.staff,
       },
     ];

@@ -6,8 +6,9 @@
  * - the `member` webhook: `added` joins the member's grant (and the group's
  *   row), `removed` takes it back, the row left as the aggregate;
  * - the daily reconciliation: a member found in is joined, one found gone
- *   after seven days is `expired` — never without that check — and is
- *   re-invited once a day per member, the claim on their grant;
+ *   (no invitation, or one GitHub reports expired) is `expired` — never
+ *   without that check — and is re-invited once a day per member, the claim
+ *   on their grant, which reads the freeze itself;
  * - the backfill of 0145, the group's grants pending until checked;
  * - the staff's page names each member's state; the student's view carries
  *   the caller's own invitation and nothing of a teammate's.
@@ -35,6 +36,7 @@ import {
   groupProject,
   newStudent,
   NOW,
+  on,
   repoRows,
   server,
   staff,
@@ -75,6 +77,9 @@ const backdate = (repoId: string, ms: number) =>
     .update(projectRepoAccess)
     .set({ invitedAt: sql`${projectRepoAccess.invitedAt} - make_interval(secs => ${ms / 1000})` })
     .where(eq(projectRepoAccess.repoId, repoId));
+/** The repository frozen for good an hour ago. */
+const freeze = (repoId: string) =>
+  server.app.db.update(projectRepos).set({ frozenAt: at(-HOUR), deadlineAppliedAt: at(-HOUR) }).where(eq(projectRepos.id, repoId));
 const puts = (fullName: string, before: number) => gh.calls.slice(before).filter((c) => c.startsWith(`PUT api.github.com/repos/${fullName}/collaborators/`));
 
 /** Each roster line's access, as the staff's page names it, by the member. */
@@ -117,6 +122,14 @@ describe("the member webhook", () => {
     expect((await repoRows(g.project.id))[0]!.invitationStatus).toBe("accepted");
     expect((await staffStates(g)).ben).toBe("pending");
   });
+
+  it("changes nothing for an account Quiz never invited there (a collaborator the staff added on GitHub)", async () => {
+    const g = await group();
+    const outsider = await newStudent();
+    await member(g, outsider, "added");
+    expect((await repoRows(g.project.id))[0]!.invitationStatus).toBe("pending");
+    expect(await staffStates(g)).toEqual({ ana: "pending", ben: "pending", cid: "pending", dan: "unlinked" });
+  });
 });
 
 describe("the daily reconciliation of a group's members", () => {
@@ -125,7 +138,7 @@ describe("the daily reconciliation of a group's members", () => {
     acceptInvitation(g.fullName, g.ana.login);
     gone(g.fullName, g.cid.login);
     await backdate(g.row.id, 8 * DAY);
-    // Seven days on, Cid's invitation gone from GitHub, but nobody looked: pending, never expired.
+    // Cid's invitation gone from GitHub, but nobody looked: pending, never expired.
     expect(await staffStates(g)).toEqual({ ana: "pending", ben: "pending", cid: "pending", dan: "unlinked" });
 
     let before = gh.calls.length;
@@ -146,9 +159,8 @@ describe("the daily reconciliation of a group's members", () => {
       { repo: g.fullName, enrollmentId: g.room.lines.get(g.cid.id), login: g.cid.login, invitation: "pending", via: "reconcile" },
     ]);
 
-    // Gone again the same day, its invitation older than a week: the day is claimed, so it says expired.
+    // Gone again the same day: the day is claimed, so it says expired until tomorrow's re-invite.
     gone(g.fullName, g.cid.login);
-    await backdate(g.row.id, 8 * DAY);
     server.clock.set(at(HOUR).toISOString());
     before = gh.calls.length;
     await reconcileRepos(server.app, config);
@@ -173,11 +185,35 @@ describe("the daily reconciliation of a group's members", () => {
     expect(gh.calls.slice(before).filter((c) => c.startsWith(`GET api.github.com/repos/${g.fullName}/`) && /collaborators|invitations/.test(c))).toEqual([]);
   });
 
+  it("takes an invitation GitHub still lists but reports expired for gone, and re-invites its member", async () => {
+    const g = await group();
+    const [id] = [...world.invitations.get(g.fullName)!].find(([, who]) => who === g.cid.login)!;
+    world.expiredInvitations.add(id);
+    const before = gh.calls.length;
+    await reconcileRepos(server.app, config);
+    expect(puts(g.fullName, before)).toEqual([`PUT api.github.com/repos/${g.fullName}/collaborators/${g.cid.login}`]);
+    expect((await grantOf(g.row.id, g.cid)).reinvitedAt?.toISOString()).toBe(NOW);
+    // Ben's invitation, still offered, is left alone.
+    expect((await grantOf(g.row.id, g.ben)).reinvitedAt).toBeNull();
+    world.expiredInvitations.delete(id);
+  });
+
+  it("re-invites nobody on a repository frozen while the pass ran: the claim reads the freeze, not the pass's snapshot", async () => {
+    const g = await group();
+    gone(g.fullName, g.cid.login);
+    // Frozen after the pass loaded its candidates, before it claims the day.
+    on({ match: (url, method) => method === "GET" && url.pathname === `/repos/${g.fullName}/invitations`, run: () => freeze(g.row.id).then(() => undefined) });
+    const before = gh.calls.length;
+    await reconcileRepos(server.app, config);
+    expect(puts(g.fullName, before)).toEqual([]);
+    expect((await grantOf(g.row.id, g.cid)).reinvitedAt).toBeNull();
+    expect((await staffStates(g)).cid).toBe("expired");
+  });
+
   it("re-invites nobody once the repository is frozen: the member stays expired", async () => {
     const g = await group();
     gone(g.fullName, g.cid.login);
-    await backdate(g.row.id, 8 * DAY);
-    await server.app.db.update(projectRepos).set({ frozenAt: at(-HOUR), deadlineAppliedAt: at(-HOUR) }).where(eq(projectRepos.id, g.row.id));
+    await freeze(g.row.id);
     const before = gh.calls.length;
     await reconcileRepos(server.app, config);
     expect(puts(g.fullName, before)).toEqual([]);
@@ -212,22 +248,20 @@ describe("the backfill of 0145", () => {
       githubLogin: solo!.login,
       invitedAt: at(-30 * DAY),
     });
-    await backdate(g.row.id, 30 * DAY);
 
     const migration = readFileSync(new URL("../../../drizzle/0145_project_member_access.sql", import.meta.url), "utf8");
     const backfill = migration.slice(migration.indexOf('UPDATE "project_repo_access" AS a SET "accepted_at"'));
     await server.app.db.execute(sql.raw(backfill.slice(0, backfill.indexOf("--> statement-breakpoint"))));
     expect((await grantsOf(soloRepo))[0]!.acceptedAt).not.toBeNull();
     expect((await grantsOf(g.row.id)).every((grant) => grant.acceptedAt === null)).toBe(true);
-    // Thirty days old and never checked: pending, never expired.
+    // Never checked: pending, never expired.
     expect(await staffStates(g)).toEqual({ ana: "pending", ben: "pending", cid: "pending", dan: "unlinked" });
 
     // The next daily pass checks them, one listing each for the repository.
     acceptInvitation(g.fullName, g.ana.login);
     acceptInvitation(g.fullName, g.ben.login);
     gone(g.fullName, g.cid.login);
-    const frozen = { frozenAt: at(-HOUR), deadlineAppliedAt: at(-HOUR) };
-    await server.app.db.update(projectRepos).set(frozen).where(eq(projectRepos.id, g.row.id));
+    await freeze(g.row.id);
     await reconcileRepos(server.app, config);
     expect(await staffStates(g)).toEqual({ ana: "joined", ben: "joined", cid: "expired", dan: "unlinked" });
   });
@@ -238,7 +272,6 @@ describe("the student's view of a group's repository", () => {
     const g = await group();
     acceptInvitation(g.fullName, g.ana.login);
     gone(g.fullName, g.cid.login);
-    await backdate(g.row.id, 8 * DAY);
     await member(g, g.ana, "added");
     // Cid's invitation found gone (the day already claimed): expired.
     await server.app.db.update(projectRepoAccess).set({ reinvitedAt: new Date(NOW) }).where(eq(projectRepoAccess.githubUserId, g.cid.githubUserId));

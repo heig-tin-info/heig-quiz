@@ -47,6 +47,8 @@ export const freshAccountId = () => nextAccount++;
 
 /** GitHub's accounts, by immutable id: today's login, or `down` for GitHub failing. Missing: deleted. */
 export const accounts = new Map<number, string>();
+// GitHub's listings name each account by its id: the one whose login it is today.
+world.accountIdOf = (login) => [...accounts].find(([, known]) => known.toLowerCase() === login.toLowerCase())?.[0] ?? 0;
 /** `GET /user/{id}`, answered from {@link accounts}. */
 export const usersRoute: Route = (url, req) => {
   const m = /^\/user\/(\d+)$/.exec(url.pathname);

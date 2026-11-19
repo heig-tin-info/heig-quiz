@@ -452,7 +452,7 @@ export type RepoMember = ProjectStudent & { access: RepoAccessState | null };
 
 export type RepoEntry =
   | { kind: "group"; key: string; label: string; group: ProjectDetailGroup; members: RepoMember[]; repo: ProjectRepoView | null }
-  | { kind: "student"; key: string; label: string; student: ProjectStudent; repo: ProjectRepoView | null; staff: boolean };
+  | { kind: "student"; key: string; label: string; student: RepoMember; repo: ProjectRepoView | null; staff: boolean };
 
 /**
  * The page's rows as the table draws them. Rows stay per student on the
@@ -468,7 +468,7 @@ export function repoEntries(p: Pick<ProjectDetail, "groupMode" | "rows">): RepoE
   const groups = new Map<string, Extract<RepoEntry, { kind: "group" }>>();
   for (const { student, repo, group, staff, access } of p.rows) {
     if (!p.groupMode || group === null) {
-      students.push({ kind: "student", key: repo?.id ?? student.enrollmentId ?? student.email, label: studentName(student), student, repo, staff });
+      students.push({ kind: "student", key: repo?.id ?? student.enrollmentId ?? student.email, label: studentName(student), student: { ...student, access }, repo, staff });
       continue;
     }
     let entry = groups.get(group.id);
@@ -490,7 +490,13 @@ export const joinedCount = (members: readonly RepoMember[]): { n: number; total:
 });
 
 /** A member whose invitation a resend can still reach: one waiting, or one GitHub dropped. */
-export const invitable = (m: RepoMember): boolean => m.access === "pending" || m.access === "expired";
+const invitable = (m: RepoMember): boolean => m.access === "pending" || m.access === "expired";
+
+/** The readers of a row's repository: a group's members, or its one student. */
+export const entryMembers = (e: RepoEntry): RepoMember[] => (e.kind === "group" ? e.members : [e.student]);
+
+/** A row whose Resend can reach someone: one of its readers is invited, or their invitation expired. */
+export const resendable = (e: RepoEntry): boolean => entryMembers(e).some(invitable);
 
 /** The row of the repository `repoId`, for its sheet. */
 export const repoEntryOf = (p: Pick<ProjectDetail, "groupMode" | "rows">, repoId: string): RepoEntry | undefined =>

@@ -43,30 +43,33 @@ grant (`project_repo_access`): `accepted_at` when GitHub says the account is
 a collaborator (the `member` webhook `added`, which `removed` clears; the
 daily reconciliation's check; an invitation GitHub answers "already a
 collaborator"), `absent_at` when a check found it neither a collaborator nor
-invited; every new invitation clears both. One pure rule of `@quiz/domain`
-(`repoAccessState`), over the member's latest live grant, names the state:
-*joined*, *pending* (invited under seven days ago, or never found gone),
-*expired* (invited seven days ago or more AND found gone by a check — never
-without one), *unlinked* (no live grant). A single nullable time (`absent_at`)
-records the check because only its negative outcome changes a state: a check
-finding the account invited is the default (*pending*), one finding it in
-is `accepted_at`. The daily reconciliation checks every live repository's
-grants not known in with one listing of the collaborators and one of the
-invitations per repository (N-PERF-07), individual and group alike, and
-re-invites a member found gone at most once a day per member (the claim
-`reinvited_at` moves from `project_repos` to the grant: one rule for both
-kinds), never once the repository is frozen, with the work mode's
+invited (an invitation GitHub still lists but reports `expired` counts as
+none); every new invitation clears both. Accounts are matched by their
+immutable id. One pure rule of `@quiz/domain` (`repoAccessState`), over the
+member's latest live grant, names the state: *joined*, *pending* (never
+found gone since the last invitation), *expired* (found gone by a check —
+never without one), *unlinked* (no live grant). A single nullable time
+(`absent_at`) records the check because only its negative outcome changes a
+state: a check finding the account invited is the default (*pending*), one
+finding it in is `accepted_at`. The daily reconciliation checks every live
+repository's grants not known in with one listing of the collaborators and
+one of the invitations per repository (N-PERF-07), individual and group
+alike, and re-invites a member found gone at most once a day per member
+(the claim `reinvited_at` moves from `project_repos` to the grant: one rule
+for both kinds), never once the repository is frozen (read by the claim
+itself), with the work mode's
 permission through the one invitation path, audited as before; a member
 still invited is never re-invited. The migration (0145) joins the live
 grants of an individual repository whose row says `accepted`; a group's
 are checked by that daily pass, *pending* until then. The repository's
 `invitation_status` stays the aggregate (`accepted` once one member is in,
 never brought back to `pending` by another's invitation), and nothing that
-reads it changes. The student's view carries the caller's OWN invitation
-(their grant on a group's repository; an expired one reads as pending,
-theirs to resend), never a teammate's, and the group's work whatever their
-own access; the staff's page names each member's state. The staff's
-per-member adjustment of a group's score stays later.
+reads it changes. The student's view carries the caller's OWN invitation,
+their grant's, for a student's own repository as for a group's (an expired
+one reads as pending, theirs to resend), never a teammate's, and the
+group's work whatever their own access; the staff's page names each
+member's state, the Resend offered while one is pending or expired. The
+staff's per-member adjustment of a group's score stays later.
 
 Scope: where a classroom's groups of students live, who forms them and how,
 and how a group project uses them, including the GitHub side of a group

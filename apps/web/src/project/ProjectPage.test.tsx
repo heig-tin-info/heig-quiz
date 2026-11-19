@@ -770,7 +770,7 @@ describe("the repositories", () => {
       row(5, makeRepo(5, { degraded: true, archived: true, locked: true })),
       row(6, makeRepo(6, { flags: { ...makeRepo(6).flags, changedAfterRelease: true, clamped: true } })),
       row(7, makeRepo(7, { flags: { ...makeRepo(7).flags, deleted: true } })),
-      row(8, makeRepo(8, { deadlineAt: AHEAD, invitationStatus: "pending", lastCommit: null, ciStatus: "none" })),
+      row(8, makeRepo(8, { deadlineAt: AHEAD, invitationStatus: "pending", lastCommit: null, ciStatus: "none" }), {}, null, "pending"),
       row(9, null),
       row(10, null, { claimed: false }),
       { student: { ...makeProject().rows[0]!.student, enrollmentId: null, nom: "Ancien", prenom: "Élève" }, repo: makeRepo(11), group: null, access: null, staff: false },
@@ -795,7 +795,8 @@ describe("the repositories", () => {
     expect(text(6)).toMatch(/deleted on GitHub/);
     expect(rows[6]!.className).toMatch(/text-fg-faint/);
     expect(text(7)).toMatch(/own deadline/);
-    expect(text(7)).toMatch(/invitation pending/);
+    // A student's own invitation is a tag beside them, as a group member's is (ADR-070, 2026-11-19).
+    expect(within(rows[7]!.querySelector("td")!).getByText("invitation pending")).toBeInTheDocument();
     expect(text(8)).toMatch(/not accepted/);
     expect(text(9)).toMatch(/seat not claimed/);
     expect(text(10)).toMatch(/left the roster/);
@@ -1253,7 +1254,7 @@ describe("the sheet's writes (M3-12b)", () => {
     const repo = makeRepo(1, { invitationStatus: "pending", lastCommit: null, ciStatus: "none" });
     let invitation: ProjectRepoView["invitationStatus"] = "pending";
     let reply = fail(429, { error: "resend_too_soon", message: "" });
-    const { calls } = routes(() => ok(makeProject({ rows: [row(1, { ...repo, invitationStatus: invitation }), row(2, null)] })), {
+    const { calls } = routes(() => ok(makeProject({ rows: [row(1, { ...repo, invitationStatus: invitation }, {}, null, invitation === "pending" ? "pending" : "joined"), row(2, null)] })), {
       ...runsRoute(repo),
       [`POST ${BASE}/repos/${repo.id}/invite`]: () => {
         if (reply.status === 200) invitation = (reply.body as { invitationStatus: typeof invitation }).invitationStatus;
