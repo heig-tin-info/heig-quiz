@@ -3,8 +3,9 @@
  * the project's situation, a repository's flags and the state of its final
  * review, whether a moved deadline reopens the project and how many
  * repositories it reaches, a checkpoint's status, the refetch cadence, the
- * teacher's score rules the sheet draws, and the words of each refusal the
- * page meets. `ProjectPage.tsx` and its sections draw them.
+ * teacher's score rules, a repository's page (its steps, its primary, its
+ * weeks, its place in the class), and the words of each refusal the page
+ * meets. `ProjectPage.tsx` and its sections draw them.
  */
 import {
   MINUTES_PER_DAY,
@@ -28,7 +29,19 @@ import {
   type WorkModeRefusal,
   type WorkspaceStartRefusal,
 } from "@quiz/contracts";
-import { closeRefusal, isVoidCheckpoint, projectBeforePublication, projectGraded, projectIsLive, reopens } from "@quiz/domain";
+import {
+  ciShareOnly,
+  closeRefusal,
+  drillWeekStarts,
+  isVoidCheckpoint,
+  localDate,
+  projectBeforePublication,
+  projectGraded,
+  projectIsLive,
+  quantile,
+  rateOf,
+  reopens,
+} from "@quiz/domain";
 
 import { ApiError, refusalCodeOf, wordedRefusal } from "../api";
 import { studentName } from "../group/groupRules";
@@ -178,7 +191,7 @@ export interface ReviewView {
 }
 
 /**
- * ONE table, read by the row's tag and the sheet's detail: a fact in zinc
+ * ONE table, read by the row's tag and the repository page's detail: a fact in zinc
  * (pending, asked, no review), done in green, a degraded "no review" in
  * amber (archived as its lock, or the protection suspended: re-enabling it
  * makes the review due again), and "not confirmed" in red — claimed,
@@ -222,7 +235,7 @@ export function reviewView(review: ProjectRepoReview, frozenAt: string | null): 
 /**
  * The review tag of a table row, or null when it would say nothing: a
  * repository not frozen yet is trivially pending, and a project graded
- * `none` has no review on any row. The sheet shows the state whatever it is.
+ * `none` has no review on any row. The repository's page shows the state whatever it is.
  */
 export function reviewTag(repo: ProjectRepoView): ReviewView | null {
   if (repo.review.status === "pending" && repo.frozenAt === null) return null;
@@ -231,7 +244,7 @@ export function reviewTag(repo: ProjectRepoView): ReviewView | null {
 }
 
 /**
- * The sync of a repository, as a tag of its row and a fact of its sheet
+ * The sync of a repository, as a tag of its row and a fact of its page
  * (F-PROJ-12, M3-07): a failed sync first (red), else the pull request of
  * its default branch — open (amber, linked), merged (green), closed (zinc)
  * —, else an outcome worth a word (up to date, skipped); null when the
@@ -262,7 +275,7 @@ export function syncTag(repo: ProjectRepoView): SyncView | null {
   return null;
 }
 
-/** Why the sheet offers no teacher's score form: the project is not graded, or the repository is not frozen for good. */
+/** Why the repository's page offers no teacher's score: the project is not graded, or the repository is not frozen for good. */
 export type TeacherScoreBlock = "grading_none" | "not_frozen" | null;
 
 export function teacherScoreBlock(repo: ProjectRepoView, project: Pick<ProjectDetail, "gradingMode">): TeacherScoreBlock {
@@ -495,7 +508,7 @@ export const joinedCount = (members: readonly RepoMember[]): { n: number; total:
 });
 
 /** A member whose invitation a resend can still reach: one waiting, or one GitHub dropped. */
-const invitable = (m: RepoMember): boolean => m.access === "pending" || m.access === "expired";
+export const invitable = (m: RepoMember): boolean => m.access === "pending" || m.access === "expired";
 
 /** The readers of a row's repository: a group's members, or its one student. */
 export const entryMembers = (e: RepoEntry): RepoMember[] => (e.kind === "group" ? e.members : [e.student]);
@@ -503,9 +516,140 @@ export const entryMembers = (e: RepoEntry): RepoMember[] => (e.kind === "group" 
 /** A row whose Resend can reach someone: one of its readers is invited, or their invitation expired. */
 export const resendable = (e: RepoEntry): boolean => entryMembers(e).some(invitable);
 
-/** The row of the repository `repoId`, for its sheet. */
-export const repoEntryOf = (p: Pick<ProjectDetail, "groupMode" | "rows">, repoId: string): RepoEntry | undefined =>
-  repoEntries(p).find((e) => e.repo?.id === repoId);
+/** A row's id on the roster: its group's, else its student's roster line (null for a student who left it). */
+const rosterId = (e: RepoEntry): string | null => (e.kind === "group" ? e.group.id : e.student.enrollmentId);
+
+/**
+ * The id of a row's own page (ADR-137, `/projects/:id/repos/:rowId`): its
+ * repository's, else — not accepted yet — its roster id, so every row of the
+ * table opens; null for none of them.
+ */
+export const entryRowId = (e: RepoEntry): string | null => e.repo?.id ?? rosterId(e);
+
+/** The row a page's `rowId` names: by its repository, else by its roster id (a row accepted since keeps its address). */
+export const entryOfRow = (p: Pick<ProjectDetail, "groupMode" | "rows">, rowId: string): RepoEntry | undefined =>
+  repoEntries(p).find((e) => e.repo?.id === rowId || rosterId(e) === rowId);
+
+/** The staff's test repository (ADR-077): a row of the table, counted nowhere, never a step of the walk. */
+export const isStaffTest = (e: RepoEntry): boolean => e.kind === "student" && e.staff;
+
+/** Where a repository's page stands among the others, and its previous and next rows' ids. */
+export interface RepoSteps {
+  n: number;
+  total: number;
+  prev: string | null;
+  next: string | null;
+}
+
+/**
+ * Previous and next on a repository's page (ADR-137): the rows in the
+ * Repositories tab's own order (`repoEntries`, never a column's sort),
+ * narrowed by the filter it was opened under, the staff's test repository
+ * excluded. A row the filter no longer keeps walks every row; the test
+ * repository's page has no steps (null).
+ */
+export function repoSteps(p: Pick<ProjectDetail, "groupMode" | "rows">, entry: RepoEntry, filter: RepoFilter | null): RepoSteps | null {
+  const walk = (f: RepoFilter | null) => filterEntries(repoEntries(p), f, p).filter((e) => !isStaffTest(e) && entryRowId(e) !== null);
+  let rows = walk(filter);
+  let index = rows.findIndex((e) => e.key === entry.key);
+  if (index < 0) {
+    rows = walk(null);
+    index = rows.findIndex((e) => e.key === entry.key);
+  }
+  if (index < 0) return null;
+  const idOf = (e: RepoEntry | undefined) => (e ? entryRowId(e) : null);
+  return { n: index + 1, total: rows.length, prev: idOf(rows[index - 1]), next: idOf(rows[index + 1]) };
+}
+
+/** The one primary action of a repository's page (ADR-137): none while it is not frozen for good. */
+export type RepoPrimary = "grade" | "teacherScore" | null;
+
+/**
+ * The primary of a repository's page follows its state (ADR-137): none
+ * during the project (*Open in workspace* stays secondary, ADR-129 §11) —
+ * none wherever the teacher's score cannot be written yet
+ * (`teacherScoreBlock`); once frozen for good, Grade — the grading screen
+ * on it — under criteria, the teacher's score under the CI's; none for the
+ * staff's test repository, never graded.
+ */
+export function repoPrimary(entry: RepoEntry, project: Pick<ProjectDetail, "gradingMode">): RepoPrimary {
+  if (!entry.repo || isStaffTest(entry) || teacherScoreBlock(entry.repo, project) !== null) return null;
+  return project.gradingMode === "criteria" ? "grade" : "teacherScore";
+}
+
+/** The state of a row's repository, as the header's one badge (ADR-104's grammar: green open, a fact zinc). */
+export interface RepoStateBadge {
+  key: keyof Dict;
+  tone: Tone;
+  icon?: "lock" | "frozen";
+}
+
+export function repoStateBadge(repo: ProjectRepoView | null): RepoStateBadge {
+  if (repo === null) return { key: "project.repo.notAccepted", tone: "zinc" };
+  if (repo.provisionStatus === "pending") return { key: "project.repo.provisioning", tone: "zinc" };
+  if (repo.provisionStatus === "error") return { key: "project.repo.provisionFailed", tone: "red" };
+  if (repo.frozenAt !== null) return { key: "project.frozen", tone: "zinc", icon: "frozen" };
+  if (repo.deadlineAppliedAt !== null) return { key: "project.frozen.provisional", tone: "zinc", icon: "frozen" };
+  if (repo.locked) return { key: "project.lock.locked", tone: "zinc", icon: "lock" };
+  return { key: "project.lock.open", tone: "green" };
+}
+
+/** One row of a repository's weekly commits: a member, or the commits none of them authored. */
+export interface CommitHeatRow {
+  key: string;
+  label: string;
+  series: ProjectCommitSeries;
+}
+
+/**
+ * The weeks a repository's heatmap spans (ADR-137): Mondays, from the
+ * project's start to its deadline, or to `now` once past it, widened to
+ * every week that holds a commit (a receipt before the start, a late one
+ * after the deadline): a project under way shows its weeks to come, empty.
+ * The dates are the school's days, as the series'.
+ */
+export function commitWeeks(rows: readonly CommitHeatRow[], p: Pick<ProjectDetail, "startAt" | "deadlineAt">, now: number): string[] {
+  const held = rows.flatMap((r) => r.series.weeks.map((w) => w.weekStart)).sort();
+  const days = [localDate(new Date(p.startAt)), localDate(new Date(Math.max(Date.parse(p.deadlineAt), now))), ...held].sort();
+  return drillWeekStarts(days[0]!, days.at(-1)!);
+}
+
+/** A row's commits in each of `weeks`, 0 for a week it holds none. */
+export const weekCounts = (series: ProjectCommitSeries, weeks: readonly string[]): number[] => {
+  const by = new Map(series.weeks.map((w) => [w.weekStart, w.n]));
+  return weeks.map((w) => by.get(w) ?? 0);
+};
+
+/** Where a repository's final score sits in the class. */
+export interface ClassPosition {
+  rank: number;
+  total: number;
+  rate: number;
+  median: number;
+  /** Every final score's share of its maximum, ascending. */
+  rates: number[];
+}
+
+/**
+ * Where a repository's final score sits in the class (ADR-137): its rank
+ * among the counted repositories' final scores, as a share of their
+ * maximum (1 the best; tied scores share a rank), the median share and
+ * every share for the strip. A CI's share under criteria (`ciShareOnly`) is
+ * no final score and takes no part, nor does the staff's test repository.
+ * Null without a final score of its own, or with fewer than three scored
+ * repositories.
+ */
+export function classPosition(p: Pick<ProjectDetail, "groupMode" | "rows" | "gradingMode">, repoId: string): ClassPosition | null {
+  const scored = repoEntries(p).flatMap((e) => {
+    const final = e.repo !== null && !isStaffTest(e) && exists(e.repo) ? e.repo.scores.final : null;
+    const rate = final && final.max !== null && !ciShareOnly(p.gradingMode, final.source) ? rateOf(final.points, final.max) : null;
+    return rate === null ? [] : [{ id: e.repo!.id, rate }];
+  });
+  const own = scored.find((s) => s.id === repoId);
+  if (!own || scored.length < 3) return null;
+  const rates = scored.map((s) => s.rate).sort((a, b) => a - b);
+  return { rank: 1 + rates.filter((r) => r > own.rate).length, total: rates.length, rate: own.rate, median: quantile(rates, 0.5), rates };
+}
 
 /**
  * *Resync with the set* is offered (ADR-070 §4, M3-15b-2b): the copy
@@ -518,10 +662,15 @@ export const offersResync = (p: Pick<ProjectDetail, "groupsDrifted" | "releasedA
 // ---------------------------------------------------------------- the dashboard (tiles, filter, rail)
 
 /** What a tile's sub-figure narrows the repositories' table to. `null` is "All". */
-export type RepoFilter = "pending" | "notAccepted" | "noCommit" | "ciFail" | "toVerify" | "alerts";
+export const REPO_FILTERS = ["pending", "notAccepted", "noCommit", "ciFail", "toVerify", "alerts"] as const;
+export type RepoFilter = (typeof REPO_FILTERS)[number];
+
+/** A filter read off the address (`?filter=`): one of the tiles', else none. */
+export const repoFilterOf = (value: string | null | undefined): RepoFilter | null =>
+  (REPO_FILTERS as readonly string[]).includes(value ?? "") ? (value as RepoFilter) : null;
 
 /** The staff's test repository (ADR-077) is a row of the table and is counted nowhere. */
-const counted = (e: RepoEntry): boolean => !(e.kind === "student" && e.staff);
+const counted = (e: RepoEntry): boolean => !isStaffTest(e);
 /** A group project's student in none of the copy's groups: a row with no repository to wait for. */
 const noGroup = (e: RepoEntry, groupMode: boolean): boolean =>
   groupMode && e.kind === "student" && e.student.enrollmentId !== null;
@@ -530,7 +679,7 @@ const leftRoster = (e: RepoEntry): boolean => e.kind === "student" && e.student.
 /**
  * The repository of a row that exists: provisioned and not deleted. The
  * figures describe the repositories, archived project or not (what can still
- * be acted on is `actionable`, which the sheet reads).
+ * be acted on is `actionable`, which the repository's page reads).
  */
 const existingRepo = (e: RepoEntry): ProjectRepoView | null =>
   e.repo !== null && exists(e.repo) ? e.repo : null;

@@ -204,6 +204,7 @@ describe("ROUTES", () => {
     classroomGrades: { view: "classroomGrades", id: "c-1" },
     project: { view: "project", id: "p-1" },
     projectGrading: { view: "projectGrading", id: "p-1" },
+    projectRepo: { view: "projectRepo", id: "p-1", rowId: "r-1" },
     projectStation: { view: "projectStation", id: "p-1" },
     classroomGroups: { view: "classroomGroups", id: "c-1" },
     groupSet: { view: "groupSet", classroomId: "c-1", id: "s-1" },
@@ -313,6 +314,7 @@ describe("ROUTES", () => {
       admin: "admin",
       project: "activities",
       projectGrading: "activities",
+      projectRepo: "activities",
       projectStation: "activities",
     });
     const unlit = ROUTE_VIEWS.filter((v) => lit[v] === null).sort();
@@ -395,6 +397,7 @@ describe("the classroom merge's routes", () => {
       [{ view: "classroomGrades", id: "c-1" }, "/classrooms/c-1/grades"],
       [{ view: "project", id: "p-1" }, "/projects/p-1"],
       [{ view: "projectGrading", id: "p-1" }, "/projects/p-1/grading"],
+      [{ view: "projectRepo", id: "p-1", rowId: "r-1" }, "/projects/p-1/repos/r-1"],
       [{ view: "projectStation", id: "p-1" }, "/projects/p-1/station"],
       [{ view: "classroomGroups", id: "c-1" }, "/classrooms/c-1/groups"],
       [{ view: "groupSet", classroomId: "c-1", id: "s-1" }, "/classrooms/c-1/groups/s-1"],

@@ -2343,8 +2343,59 @@ header, whatever the tab.
   wears a 14 px `SlidersHorizontal` in `fg-faint` after it, the
   justification in its `Tip`; a pin whose base moved wears `TriangleAlert`
   in `warning` instead, the move said first. The same mark follows the
-  grade in the repositories' table and the sheet, whose Scores section
-  shows the adjustment read-only.
+  grade in the repositories' table and the repository's page, whose Scores
+  card shows the adjustment read-only.
+
+## The repository page (staff)
+
+`/projects/:id/repos/:rowId` (`project/RepoPage.tsx`, ADR-137): what a row
+of the Repositories tab opens, by a click or Enter, in place of a sheet:
+every row, one not accepted yet included. It reads the project's detail and
+finds its row; it never waits for GitHub.
+
+- **Header**: the trail (the project's crumb back to its Repositories tab,
+  filter kept), the row's name with ONE state badge (open `green`; locked,
+  freezing, frozen, not accepted, being created `zinc`; creation failed
+  `red`) and the `zinc` "x/y joined" while some members are out; under
+  it the repository in mono and the deadline, then the row's tags (review,
+  flags; the collection and the sync are the rail's, said once). At the right: ‹ n of N › (`IconButton`s, the
+  position tabular), *Open in workspace* (secondary, its read-only fact in
+  its tooltip), and the ONE primary by state — none during the project;
+  frozen for good, Grade under criteria, the teacher's score under the CI's
+  (its form in a `Modal`). Re-enable the protection is the `Menu`'s.
+- **`Stat` tiles**: two columns on a phone, one row from `lg`. Commits
+  (the unattributed in the hint), last commit (the sha in mono), CI (the
+  checks, the status badge as hint), and, graded, the final score (its
+  source as hint): three tiles ungraded, who joined being the header's
+  badge. None on a row not accepted.
+- **Two columns from `lg`**: the main one (`minmax(0,1fr)`) and a 20 rem
+  rail; below `lg` the rail stacks under it. A row with nothing for the
+  rail (a student who has not accepted) is one column.
+- **Members**: a table (member bold with the login in mono under it; Access,
+  dropped under `@2xl` where the tag follows the login; Commits; the
+  action). The access tag only for a member not in. Commits: the figure
+  bold and tabular, then a 6 px `SegmentedBar` of the share in `info` (a
+  share, no verdict) over the repository's count, the unattributed
+  included; they are a last muted row when there are any. ONE Resend
+  (secondary, sm) in the section's heading while a member is pending or
+  expired: the repository's resend reaches all of them.
+- **Activity**: a `HeatTable` of members × weeks (Mondays, labelled
+  "Oct 5"), the admin heatmap's ramp and cell, every column 40 px
+  (`fixed`: the table starts at the left and never stretches a few weeks
+  across the card). The weeks run from the project's start to its
+  deadline, the weeks to come empty, or to today once past it; a cell's
+  `title` names the person, the week and the count.
+  `HeatLegend` without the off-hours part. No commit: one muted line.
+- **Runs**: `RunHistory` in a card, its time on one line.
+- **The rail** is one `Card` of sections parted by hairlines, each a 14 px
+  semibold heading: the deadline and the lock (the effective deadline, the
+  freeze, the state, the own deadline's `DateField`, Follow the project's
+  and Lock / Unlock, secondary sm — their one place on the page), the
+  scores (the slots as `Fact`s; the teacher's score as a secondary sm
+  button where it is not the header's primary), the class (the rank, a
+  24 px `surface-2` strip of every final score as a 2 px `fg-faint` tick,
+  this one's full-height in `fg`, the median), the repository's facts
+  (group set, sync, collection).
 
 ## The pool's concept map (Concepts tab, "Map")
 
@@ -2424,8 +2475,9 @@ written in its hint).
   same columns (`heat-4`, 40 px), so it aligns by construction.
 - **Narrow screens**: the table keeps a 46 rem minimum and scrolls inside
   its card; the page never scrolls sideways.
-- **One component** (`ui/heatmap.tsx`: `HourHeatmap`, `HeatLegend`) draws
-  it wherever it appears. The classroom's Drill tab uses it too (ADR-041 §8,
+- **One component** (`ui/heatmap.tsx`: `HeatTable` for any columns,
+  `HourHeatmap` its 24-hour case, `HeatLegend`) draws it wherever it
+  appears; a repository's weeks use `HeatTable` (ADR-137). The classroom's Drill tab uses it too (ADR-041 §8,
   amendment of 2026-10-14): seven weekday rows, Monday first, none set apart,
   the last 30 days folded on one week, no `tfoot`; under the table of
   students, and in a student's sheet below the weekly charts. Its

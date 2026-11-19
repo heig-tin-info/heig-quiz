@@ -409,7 +409,7 @@ function seedGroupRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, g
       acceptedAt: iso(seed.start + k * H),
       lastCommit: { sha: latest.headSha, at: latest.completedAt },
       ciStatus: k % 7 === 4 ? "fail" : "pass",
-      live: { commitCount: 4 + k, checksPassed: 1, checksTotal: 1, stale: false },
+      live: { commitCount: 14 + 3 * k, checksPassed: 1, checksTotal: 1, stale: false },
       deadlineAppliedAt: locked ? project.deadlineAt : null,
       frozenAt: locked ? iso(seed.deadline + 30 * 60_000) : null,
       locked,
@@ -1075,7 +1075,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
     // The student's count: GitHub's total less the App's initial commit (the mock keeps no receipts).
     commits: commitsOf(r),
     // Nobody reading it: all unattributed. `detailOf` gives the readers theirs.
-    unattributed: mockSeries(commitsOf(r)),
+    unattributed: mockSeries(commitsOf(r), Date.parse(p.summary.startAt), 3),
     live: p.read ? r.live : null,
     scores: {
       current: graded(slot(r, r.currentRunId), "ci"),
@@ -1137,19 +1137,29 @@ function accessOf(repo: MockRepo, student: { id: string; githubLogin: string | n
 /** The student's count: GitHub's total less the App's initial commit (the mock keeps no receipts). */
 const commitsOf = (r: MockRepo): number => (r.live ? Math.max(0, r.live.commitCount - 1) : 0);
 
-/** `n` commits as a series (ADR-136): half last week, the rest this one. */
-function mockSeries(n: number): ProjectCommitSeries {
+/**
+ * `n` commits as a series (ADR-136), spread over the weeks from `from` (the
+ * project's start) to this one: more of them as the deadline nears, a quiet
+ * week now and then, decided by `salt` so the screenshots never move.
+ */
+function mockSeries(n: number, from: number, salt = 0): ProjectCommitSeries {
+  const span = Math.max(1, Math.min(12, Math.floor((now - Math.min(from, now)) / (7 * D)) + 1));
+  const weights = Array.from({ length: span }, (_, i) => (span > 2 && (i + salt) % 4 === 3 ? 0 : 1 + i + ((i * 7 + salt) % 3)));
+  const total = weights.reduce((a, b) => a + b, 0);
+  const counts = weights.map((w) => Math.floor((n * w) / total));
+  // What the rounding left goes to the latest weeks that have any.
+  for (let left = n - counts.reduce((a, b) => a + b, 0), i = span - 1; left > 0; i = (i - 1 + span) % span) {
+    if (weights[i]! > 0) {
+      counts[i]! += 1;
+      left -= 1;
+    }
+  }
   const week = (ago: number) => weekOf(localDate(new Date(now - ago * 7 * D)));
-  const earlier = Math.floor(n / 2);
-  const weeks = [
-    { weekStart: week(1), n: earlier },
-    { weekStart: week(0), n: n - earlier },
-  ].filter((w) => w.n > 0);
-  return { n, weeks };
+  return { n, weeks: counts.flatMap((c, i) => (c > 0 ? [{ weekStart: week(span - 1 - i), n: c }] : [])) };
 }
 
-/** The commits each joined reader authored, in roster order (ADR-136); what they leave of the count is unattributed. */
-const AUTHORED = [9, 6, 3];
+/** Each joined reader's share of the count (ADR-136), in roster order: a student alone authors most of it, a group splits it; the rest is unattributed. */
+const AUTHORED = { alone: [0.9], group: [0.55, 0.35, 0.15] };
 
 /** A teacher's test repository (ADR-077): the staff seat's row, modelled on `repo`'s state, badged by the page. */
 function staffTestRow(p: MockProject, repo: MockRepo): ProjectDetailRow {
@@ -1230,11 +1240,15 @@ function detailOf(p: MockProject): ProjectDetail {
     const read = rows.filter((row) => row.repo?.id === repo.id && row.student.enrollmentId !== null);
     let left = commitsOf(repo);
     const authored = read.map((row, k) => {
-      const n = row.access === "joined" && row.student.claimed ? Math.min(AUTHORED[k] ?? 1, left) : 0;
+      const shares = read.length === 1 ? AUTHORED.alone : AUTHORED.group;
+      const n = row.access === "joined" && row.student.claimed ? Math.min(Math.round(commitsOf(repo) * (shares[k] ?? 0.1)), left) : 0;
       left -= n;
       return n;
     });
-    read.forEach((row, k) => Object.assign(row, { authored: mockSeries(authored[k]!), repo: { ...row.repo!, unattributed: mockSeries(left) } }));
+    const from = Date.parse(p.summary.startAt);
+    read.forEach((row, k) =>
+      Object.assign(row, { authored: mockSeries(authored[k]!, from, k), repo: { ...row.repo!, unattributed: mockSeries(left, from, 3) } }),
+    );
   }
   const drifted = p.copy !== null && p.summary.groupSetId !== null && copyKey(p.copy) !== copyKey(setGroupsOf(p.summary.groupSetId));
   const pending = p.resyncReads > 0;

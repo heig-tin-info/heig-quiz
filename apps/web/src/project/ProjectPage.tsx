@@ -73,6 +73,7 @@ import {
   projectRefetchInterval,
   projectStatus,
   refusalMessage,
+  repoFilterOf,
   releaseRefusal,
   groupSetPageOf,
   unassignedStudents,
@@ -80,7 +81,6 @@ import {
   type WriteProject,
   type UnassignedStudent,
 } from "./projectPage";
-import { RepoSheet } from "./RepoSheet";
 import { useProjectPatch, useProjectRefresh, useRenameProject } from "./useProjectPatch";
 
 /**
@@ -100,15 +100,16 @@ import { useProjectPatch, useProjectRefresh, useRenameProject } from "./useProje
  * four tiles (the acceptance as a ring, the deadline edited in place, the
  * progress, the source and its sync), the lifecycle rail with the review
  * checkpoints and the live workspace; a tile's sub-figure opens Repositories
- * filtered by it. Repositories: one row per student of the roster with their
+ * filtered by it (`?filter=`, so Back from a row's page finds it). Repositories:
+ * one row per student of the roster with their
  * repository (per group in a group project, M3-16b, with its drift and
  * *Resync*). Grading, in `criteria` mode only: the statistics of the
  * validated repositories and the read-only matrix of their criteria, a row
  * opening the grading screen (`grading/GradingTab`). Settings: what is
- * still open to change (F-PROJ-03). A row opens
- * its repository's sheet:
- * the history of its runs, its scores and the teacher's, its own deadline and
- * its lock. See DESIGN.md › The project page (staff).
+ * still open to change (F-PROJ-03). A row opens its repository's page
+ * (`RepoPage`, ADR-137): its members, its commits, its runs, its scores and
+ * the teacher's, its own deadline and its lock. See DESIGN.md › The project
+ * page (staff).
  *
  * The primary action is `primaryAction`, decided by the server and never
  * derived here: Publish (the start is now) or Schedule (a date to come,
@@ -141,10 +142,11 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
-  const [openRepo, setOpenRepo] = useState<string | null>(null);
   const [tabParam, setTab] = useSearchParam("tab", "summary");
   /** The tile sub-figure narrowing the repositories' table, or null for all of them. */
-  const [filter, setFilter] = useState<RepoFilter | null>(null);
+  const [filterParam, setFilterParam] = useSearchParam("filter", "");
+  const filter = repoFilterOf(filterParam);
+  const setFilter = (next: RepoFilter | null) => setFilterParam(next ?? "");
   const [unassigned, setUnassigned] = useState<UnassignedStudent[] | null>(null);
   /** Publish refused `409 no_group_set`: said above the page, pointing at the picker, until a set is chosen. */
   const [noSet, setNoSet] = useState(false);
@@ -581,7 +583,13 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
                 <ProjectWorkspace projectId={project.id} archived={archived} />
               </>
             ) : tab === "repositories" ? (
-              <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} filter={filter} onFilter={setFilter} />
+              <ProjectRepos
+                project={project}
+                onOpen={(rowId) => navigate({ view: "projectRepo", id: project.id, rowId, ...(filter ? { filter } : {}) })}
+                navigate={navigate}
+                filter={filter}
+                onFilter={setFilter}
+              />
             ) : tab === "grading" ? (
               <GradingTab project={project} navigate={navigate} />
             ) : (
@@ -591,7 +599,6 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         </>
       )}
 
-      {openRepo ? <RepoSheet project={project} repoId={openRepo} onClose={() => setOpenRepo(null)} /> : null}
       {syncOpen ? (
         <SyncDialog project={project} onSync={(message) => syncNow.mutate(message)} syncing={syncNow.isPending} onClose={() => setSyncOpen(false)} />
       ) : null}

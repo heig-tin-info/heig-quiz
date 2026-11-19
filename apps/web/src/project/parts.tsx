@@ -20,7 +20,7 @@ import { Grade } from "../Grade";
 import { studentName } from "../group/groupRules";
 import { useT, type Dict, type TFunction } from "../i18n";
 import { Badge, Button, cx, Dash, isoDateTime, RateRing, Tip, type Tone } from "../ui";
-import { syncTag, type RepoMember } from "./projectPage";
+import { repoFlags, reviewTag, syncTag, type RepoMember } from "./projectPage";
 
 /** A relative grade adjustment as written (ADR-135): signed, to the tenth ("+0.2", "−0.4"). */
 export const signedTenth = (n: number): string => `${n < 0 ? "−" : "+"}${formatGrade(Math.abs(n))}`;
@@ -151,6 +151,67 @@ export function SyncBadge({ repo }: { repo: ProjectRepoView }) {
   );
 }
 
+/** "3 unattributed" (ADR-136): a repository's commits no member authored, in words. */
+export const unattributedText = (t: TFunction, n: number): string =>
+  n === 1 ? t("project.repo.unattributed.one") : t("project.repo.unattributed", { n });
+
+/**
+ * What a repository's row says of it besides its lock and freeze, as tags:
+ * the final review's state (none while trivially pending), the collection
+ * and the sync (`facts`; the repository's page says them in its rail
+ * instead), and the flags — which `fold` gathers into one count where the
+ * table is narrow (`@2xl`). Nothing when there is nothing to say.
+ * `className` replaces the wrapper's own (`contents` inside a row of tags).
+ */
+export function RepoTags({
+  repo,
+  fold = false,
+  facts = true,
+  className,
+}: {
+  repo: ProjectRepoView;
+  fold?: boolean;
+  facts?: boolean;
+  className?: string;
+}) {
+  const t = useT();
+  const review = reviewTag(repo);
+  const flags = repoFlags(repo);
+  const hasFacts = facts && (repo.collection !== null || repo.sync.outcome !== null || repo.sync.pr !== null);
+  if (!review && flags.length === 0 && !hasFacts) return null;
+  const badges = flags.map((f) => (
+    <Badge key={f.key} tone={f.tone}>
+      {t(f.key)}
+    </Badge>
+  ));
+  return (
+    <span className={className ?? "flex flex-wrap items-center gap-1"} data-testid="repo-tags">
+      {review ? <Badge tone={review.tone}>{t(review.key)}</Badge> : null}
+      {facts ? (
+        <>
+          <CollectionBadge repo={repo} />
+          <SyncBadge repo={repo} />
+        </>
+      ) : null}
+      {!fold ? (
+        badges
+      ) : (
+        <>
+          {/* Wrappers, not classes on the badges: a badge's own `inline-flex` would win over `hidden`. */}
+          <span className="hidden @2xl:contents">{badges}</span>
+          {flags.length > 0 ? (
+            <span className="@2xl:hidden">
+              <Badge tone={flags.some((f) => f.tone === "red") ? "red" : flags[0]!.tone}>
+                {flags.length === 1 ? t("project.flags.one") : t("project.flags.count", { n: flags.length })}
+              </Badge>
+            </span>
+          ) : null}
+        </>
+      )}
+    </span>
+  );
+}
+
 /** A CI status as a tag: running, pass or fail; a dash while the repository has no run at all. */
 const CI: Record<Exclude<ProjectRepoView["ciStatus"], "none">, { tone: Tone; key: keyof Dict }> = {
   pending: { tone: "zinc", key: "project.ci.pending" },
@@ -196,7 +257,7 @@ export function AccessTag({ member }: { member: RepoMember }) {
  * GitHub login, the commits they authored (ADR-136, right-aligned) and the
  * access tag in four columns from `@2xl` (the table's width), wrapping
  * below it — "No member" for a repository its group no longer holds anyone
- * in (R1). The table's row and the repository's sheet draw the same.
+ * in (R1). The table's row draws it; the repository's page draws its own table (`RepoMembers`).
  */
 export function MemberList({ members, className }: { members: RepoMember[]; className?: string }) {
   const t = useT();
@@ -294,7 +355,7 @@ const COLLECTION_SAID: Record<NonNullable<ProjectRepoCollection["outcome"]> | "p
   failed: "project.collection.failed",
 };
 
-/** What the collection was, in words, for the repository's sheet: when, or why not, and the files it could not read. */
+/** What the collection was, in words, for the repository's page: when, or why not, and the files it could not read. */
 export function CollectionFacts({ repo }: { repo: ProjectRepoView }) {
   const t = useT();
   const c = repo.collection;

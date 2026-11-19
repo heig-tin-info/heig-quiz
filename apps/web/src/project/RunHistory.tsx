@@ -39,7 +39,7 @@ function slotOf(run: GradeRunView, list: GradeRunList): keyof typeof SLOT_KEY | 
 
 /**
  * The history of a repository's runs (`GET …/repos/:rid/runs`, F-PROJ-13),
- * the newest first, in the repository's sheet: when, what ran on which
+ * the newest first, on the repository's page: when, what ran on which
  * commit and how it ended, its score and tests, why it has no score, and
  * its marks — the slot it fills, after the deadline, to verify.
  */
@@ -72,14 +72,14 @@ export function RunHistory({ projectId, repoId }: { projectId: string; repoId: s
     );
   }
   return (
-    <div className={`${T.container} -mx-6 overflow-x-auto`}>
+    <div className={`${T.container} overflow-x-auto`}>
       <table className={T.table}>
         <TableHead
           columns={[
-            { key: "when", label: t("project.col.when"), className: "pl-6" },
+            { key: "when", label: t("project.col.when") },
             { key: "run", label: t("project.col.run") },
             { key: "result", label: t("project.col.result"), right: true },
-            { key: "state", label: t("project.col.state"), className: "pr-6" },
+            { key: "state", label: t("project.col.state") },
           ]}
         />
         <tbody>
@@ -88,7 +88,7 @@ export function RunHistory({ projectId, repoId }: { projectId: string; repoId: s
             const conclusion = CONCLUSION_KEY[run.conclusion];
             return (
               <tr key={run.id} className={T.row}>
-                <td className={`${T.td} pl-6 text-fg-muted`}>
+                <td className={`${T.td} whitespace-nowrap text-fg-muted`}>
                   <RelativeTime iso={run.completedAt} />
                 </td>
                 <td className={T.td}>
@@ -119,7 +119,7 @@ export function RunHistory({ projectId, repoId }: { projectId: string; repoId: s
                     ) : null}
                   </span>
                 </td>
-                <td className={`${T.td} pr-6`}>
+                <td className={T.td}>
                   <span className="flex flex-wrap gap-1">
                     {slot ? <Badge tone="accent">{t(SLOT_KEY[slot])}</Badge> : null}
                     {run.afterDeadline ? <Badge tone="zinc">{t("project.run.afterDeadline")}</Badge> : null}

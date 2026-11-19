@@ -79,6 +79,7 @@ const ProjectPage = lazyPage(() => import("./project/ProjectPage").then((m) => (
 const ProjectGradingPage = lazyPage(() =>
   import("./project/grading/ProjectGradingPage").then((m) => ({ default: m.ProjectGradingPage })),
 );
+const RepoPage = lazyPage(() => import("./project/RepoPage").then((m) => ({ default: m.RepoPage })));
 const GroupSetPage = lazyPage(() => import("./group/GroupSetPage").then((m) => ({ default: m.GroupSetPage })));
 const StudentProjectPage = lazyPage(() =>
   import("./student/StudentProjectPage").then((m) => ({ default: m.StudentProjectPage })),
@@ -405,6 +406,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // F-PROJ-01: "New ▾ › Project" (M3-10) leads here, M3-11's form.
   // ADR-106 §8: the grading screen of a project graded by criteria (staff only).
   projectGrading: (r, c) => <ProjectGradingPage id={r.id} navigate={c.navigate} />,
+  // ADR-137: one repository of a project (staff only), keyed so the next one starts a fresh page.
+  projectRepo: (r, c) => <RepoPage key={r.rowId} projectId={r.id} rowId={r.rowId} navigate={c.navigate} />,
   projectNew: (r, c) => <NewProjectPage classroomId={r.classroomId} navigate={c.navigate} />,
   activities: (_, c) => <ActivitiesPage navigate={c.navigate} />,
   polls: (_, c) => <PollLauncher navigate={c.navigate} />,
