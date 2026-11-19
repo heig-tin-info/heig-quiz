@@ -27,6 +27,11 @@ one. Students see a score as *indicative* until you **Release scores**. A
 score marked *to verify* rests on a run whose protected files were
 restored: it blocks the release until you set the teacher's score.
 
+To move a grade after a talk with a student, click the grade at the end
+of its row on the **Grading** tab: a relative change or an absolute grade,
+with a justification students read once released. After the release, only
+a teacher of the course can adjust a grade or change the teacher's score.
+
 ## Deadline
 
 The deadline is applied on the server's clock; the time that counts for a

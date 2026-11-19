@@ -13,6 +13,8 @@ const repo = (id: string, over: Partial<ProjectGradingRepo> = {}, validation: Pa
   table: [],
   evidence: null,
   total: null,
+  grade: null,
+  adjustment: null,
   pass: null,
   ...over,
 });

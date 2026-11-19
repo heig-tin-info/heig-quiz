@@ -34,6 +34,11 @@ Amended 2026-11-16 by [ADR-131](ADR-131-composantes-de-la-moyenne.md) (product o
 only — the writes to a course's components of the mean join the owner-only routes; reading
 them, and putting a column in one, stay every member's.
 
+Amended 2026-11-19 by [ADR-135](ADR-135-ajustement-de-la-note-d-un-projet.md) §9 (product owner): §3
+only — any write of a released project's grade, the teacher's score and the grade
+adjustment, joins the owner's acts, as an evaluation's grading after its release;
+before the release an owner or an assistant writes them.
+
 Scope: what a member of a course's staff may do on the course, its classrooms and
 its evaluations; who reaches them is unchanged (`staffAccess`, invariant 6).
 

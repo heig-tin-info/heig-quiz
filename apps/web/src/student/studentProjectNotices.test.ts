@@ -138,7 +138,7 @@ describe("studentProjectNotices", () => {
   it("says nothing of a release: the bell does", () => {
     const released = project({
       status: "released",
-      release: { at: at(0), points: 34, max: 40, grade: null, comment: null },
+      release: { at: at(0), points: 34, max: 40, grade: null, comment: null, adjustmentComment: null },
       repo: repo({ locked: true, score: { points: 34, max: 40, grade: null, frozen: true } }),
     });
     const lockedBefore = project({ status: "locked", repo: released.repo });

@@ -70,6 +70,7 @@ import {
   DEADLINE_STRATEGIES,
   DEVICE_LEVEL_IDS,
   EVIDENCE_STATUSES,
+  GRADE_ADJUSTMENT_KINDS,
   GRADING_SOURCES,
   GRADING_STATES,
   GRADE_RUN_KINDS,
@@ -582,6 +583,21 @@ export const projectRepos = pgTable(
     teacherGradedBy: uuid("teacher_graded_by").references(() => users.id),
     teacherGradedAt: timestamp("teacher_graded_at", { withTimezone: true }),
     /**
+     * The grade adjustment (ADR-135), applied to the final score's grade,
+     * live: `relative` a delta, `absolute` the pinned grade
+     * (`adjustGrade`, `@quiz/domain`). `grade_adjust_base` the base grade
+     * it was written over, which tells an absolute pin that its base moved.
+     * The comment, required, is the student's to read once released
+     * (`released_adjustment_comment`). Written and cleared together;
+     * after the repository's definitive freeze only.
+     */
+    gradeAdjustKind: text("grade_adjust_kind", { enum: GRADE_ADJUSTMENT_KINDS }),
+    gradeAdjustValue: doublePrecision("grade_adjust_value"),
+    gradeAdjustBase: doublePrecision("grade_adjust_base"),
+    gradeAdjustComment: text("grade_adjust_comment"),
+    gradeAdjustedBy: uuid("grade_adjusted_by").references(() => users.id),
+    gradeAdjustedAt: timestamp("grade_adjusted_at", { withTimezone: true }),
+    /**
      * The final score as the release wrote it (product owner, 2026-10-01):
      * any later difference with the final score is "changed after release"
      * (F-PROJ-14). Null before the release, or without a score then.
@@ -603,6 +619,13 @@ export const projectRepos = pgTable(
      * until the next release.
      */
     releasedComment: text("released_comment"),
+    /**
+     * The grade adjustment's comment as the release wrote it (ADR-135),
+     * beside the teacher's (`released_comment`, which it never overwrites):
+     * what the student reads under their released grade. Null without an
+     * adjustment applied at the release.
+     */
+    releasedAdjustmentComment: text("released_adjustment_comment"),
     /**
      * Restoring protected files stopped: five restores in an hour
      * (F-PROJ-08). The staff re-enable it by hand, which clears it.

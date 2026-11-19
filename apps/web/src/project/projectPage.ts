@@ -362,6 +362,8 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   score_max_required: "project.refusal.scoreMaxRequired",
   score_max_mismatch: "project.refusal.scoreMaxMismatch",
   score_above_max: "project.refusal.scoreAboveMax",
+  // ADR-135: a grade adjustment with no grade to adjust.
+  no_grade: "project.refusal.noGrade",
   invitation_not_pending: "project.refusal.invitationNotPending",
   resend_too_soon: "project.refusal.resendTooSoon",
   invite_failed: "project.refusal.inviteFailed",
@@ -418,6 +420,15 @@ export function refusalKey(error: unknown): keyof Dict | null {
 
 /** What a failed write says: the refusal worded when the page knows it, else the server's message, else `error.save`. */
 export const refusalMessage = (error: unknown, t: TFunction): string => wordedRefusal(error, REFUSAL_KEY, t);
+
+/**
+ * What a refused write of a repository's grade says — the teacher's score,
+ * the grade adjustment: `owner_required` is the released project's grade,
+ * the owner's alone (ADR-068 as amended by ADR-135); the rest as the page
+ * words them.
+ */
+export const gradeWriteRefusal = (error: unknown, t: TFunction): string =>
+  refusalCodeOf(error) === "owner_required" ? t("project.refusal.gradeOwnerRequired") : refusalMessage(error, t);
 
 /**
  * The page of the group set a group project follows, coming back to the

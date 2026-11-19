@@ -7,6 +7,7 @@ import { formatPoints, formatScore, type GradeBand } from "@quiz/domain";
 
 import { api } from "../../api";
 import { AppLink } from "../../AppLink";
+import { studentName } from "../../group/groupRules";
 import { Grade } from "../../Grade";
 import { useT } from "../../i18n";
 import { projectGradingKey } from "../../queryKeys";
@@ -36,7 +37,6 @@ import {
   criteriaTree,
   headerRows,
   markStats,
-  repoMark,
   rowsById,
   validatedRepos,
   visibleColumns,
@@ -45,6 +45,8 @@ import {
   type MatrixColumn,
   type MatrixGroup,
 } from "./matrix";
+import { AdjustmentMark } from "../parts";
+import { GradeAdjustDialog } from "./GradeAdjustDialog";
 
 /**
  * The Grading tab of a project graded by criteria (ADR-106 §8 as amended
@@ -164,6 +166,7 @@ function Matrix({
   const rows = headerRows(columns);
   const height = rows.length;
   const open = (repo: ProjectGradingRepo) => navigate({ view: "projectGrading", id: project.id }, { query: { repo: repo.id } });
+  const [adjusting, setAdjusting] = useState<ProjectGradingRepo | null>(null);
   return (
     <Card className={cx(T.container, "overflow-x-auto")}>
       <table className={cx(T.table, "min-w-max")}>
@@ -207,7 +210,6 @@ function Matrix({
         <tbody>
           {repos.map((repo) => {
             const byId = rowsById(repo);
-            const mark = repo.validation.validated ? repoMark(repo, project.gradingScale) : null;
             return (
               <tr
                 key={repo.id}
@@ -232,14 +234,55 @@ function Matrix({
                   )}
                 </td>
                 <td className={cx(T.td, "text-right font-semibold tabular-nums", PIN_MARK, "@2xl:group-hover:bg-surface-2")}>
-                  {mark === null ? <Dash /> : <Grade value={mark} />}
+                  <MarkCell repo={repo} onAdjust={() => setAdjusting(repo)} />
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      {adjusting ? (
+        <GradeAdjustDialog
+          projectId={project.id}
+          repo={adjusting}
+          members={membersOf(project, adjusting.id)}
+          onClose={() => setAdjusting(null)}
+        />
+      ) : null}
     </Card>
+  );
+}
+
+/** The students whose grade a repository's is (a group's members, or its student), by name, from the page's rows. */
+const membersOf = (project: ProjectDetail, repoId: string): string[] =>
+  project.rows.filter((r) => r.repo?.id === repoId).map((r) => studentName(r.student));
+
+/**
+ * A row's mark (ADR-135): the server's grade, adjusted, with its mark. On
+ * a repository frozen for good that has a grade (or an adjustment), it is
+ * the button that opens the grade adjustment — never the row's own click.
+ */
+function MarkCell({ repo, onAdjust }: { repo: ProjectGradingRepo; onAdjust: () => void }) {
+  const t = useT();
+  const mark = repo.grade === null ? <Dash /> : <Grade value={repo.grade} />;
+  if (!repo.frozen || (repo.grade === null && repo.adjustment === null)) return mark;
+  return (
+    <button
+      type="button"
+      aria-haspopup="dialog"
+      onClick={(e) => {
+        // The mark is not the row: adjusting never opens the grading screen.
+        e.stopPropagation();
+        onAdjust();
+      }}
+      onKeyDown={(e) => e.stopPropagation()}
+      className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 underline decoration-line-strong decoration-dotted underline-offset-4 transition-colors duration-150 hover:bg-surface-3 hover:decoration-fg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      data-testid="matrix-mark"
+    >
+      <span className="sr-only">{t("project.adjust.open", { name: repo.label })}: </span>
+      {mark}
+      <AdjustmentMark adjustment={repo.adjustment} />
+    </button>
   );
 }
 
@@ -379,7 +422,7 @@ function GradingStats({
   navigate: Navigate;
 }) {
   const t = useT();
-  const marks = markStats(repos, project.gradingScale);
+  const marks = markStats(repos);
   const criteria = criteriaStats(columns, repos);
   const { count } = marks.description;
   const detail = (bucket: number) => (

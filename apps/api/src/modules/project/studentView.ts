@@ -15,8 +15,9 @@
  * frozen one once their deadline is applied), the number of commits their
  * repository received from no bot by their deadline (M3-14i; the card
  * carries these too, as the state of their work) — and, once released, the
- * final score's snapshot, its grade and the teacher's comment as the
- * release wrote it. On a project graded by `criteria` (ADR-106 §9), the
+ * final score's snapshot, its grade (adjusted, ADR-135), the teacher's
+ * comment and the grade adjustment's comment as the release wrote them. On
+ * a project graded by `criteria` (ADR-106 §9), the
  * criteria table of their OWN repository, the domain's `student` audience
  * of `criteriaTable`: obtained empty until graded, indicative until
  * validated and released, the lock of a milestone; the rationales only
@@ -28,7 +29,8 @@
  * and the CI state shown are the SELECTED run's, not the row's, which the
  * webhooks keep moving on an open repository), the review's or the
  * teacher's score before the release, the staff's flags (`to_verify`,
- * `multiple`, `malformed`, the suspended protection), a draft or an
+ * `multiple`, `malformed`, the suspended protection), a grade adjustment's
+ * kind, value or base, or its comment before a release wrote it, a draft or an
  * archived project; of the criteria rows, a row's source, reason, model,
  * pass or checkpoint, a superseded row, an evidence file, a rationale
  * before the definitive freeze (a milestone's included), another
@@ -386,6 +388,8 @@ export async function studentProject(
             max: repo?.releasedMax ?? null,
             grade: repo?.releasedGrade == null ? null : { grade: repo.releasedGrade },
             comment: repo?.releasedComment ?? null,
+            // ADR-135: the justification as the release wrote it; never the adjustment's kind, value nor base.
+            adjustmentComment: repo?.releasedAdjustmentComment ?? null,
           },
     criteria,
     // ADR-132 §10: the latest sync's message and its date, nothing else of the sync (N-SEC-20).

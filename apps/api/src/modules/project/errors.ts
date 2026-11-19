@@ -60,6 +60,8 @@ const STATUS: Record<Code, number> = {
   score_max_required: 422,
   score_max_mismatch: 422,
   score_above_max: 422,
+  // ADR-135: a grade adjustment on a repository with no grade to adjust.
+  no_grade: 409,
   invitation_not_pending: 409,
   resend_too_soon: 429,
   invite_failed: 502,

@@ -2321,7 +2321,21 @@ header, whatever the tab.
   borderline, whatever the project's scale; `*-soft`; a penalty applied is `danger-soft`, a
   bonus never tinted); a proposed point is italic `fg-muted`; a repository
   not frozen yet is `fg-faint` with no tint; no points is `Dash`. A row is
-  `pressable` and opens the grading screen on it (`?repo=`).
+  `pressable` and opens the grading screen on it (`?repo=`). The mark is
+  the server's grade, adjusted (ADR-135): on a repository frozen for good
+  that has one, it is a button of its own (a dotted underline in
+  `line-strong`, `surface-3` on hover; its click never reaches the row)
+  that opens the grade adjustment — a `FormDialog`: the members of a group,
+  a warning `Alert` when a pinned grade's base moved, a `Segmented`
+  Relative / Absolute, the value with its range under it, the preview
+  "base → result" in two `Grade`s (16 px semibold), the justification, and,
+  under a hairline, who adjusted it with **Remove the adjustment**
+  (`danger-quiet`, sm: the fill is the primary's, Adjust). An adjusted grade
+  wears a 14 px `SlidersHorizontal` in `fg-faint` after it, the
+  justification in its `Tip`; a pin whose base moved wears `TriangleAlert`
+  in `warning` instead, the move said first. The same mark follows the
+  grade in the repositories' table and the sheet, whose Scores section
+  shows the adjustment read-only.
 
 ## The pool's concept map (Concepts tab, "Map")
 

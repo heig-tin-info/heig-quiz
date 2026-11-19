@@ -1,9 +1,11 @@
 /**
  * What the gradebook reads of a project (F-GBOOK, D06, ADR-074; merge task
  * M5-03a). It never recomputes: the final score is the page's own
- * (`repoScores`, `releasableScore`), the grade `scoreGrade` by the project's
- * scale, the snapshot what the release wrote, its stored grade included
- * (`released_grade`, ADR-119 §11; decision 3 of `grades.ts`).
+ * (`repoScores`, `releaseOf`), the grade `scoreGrade` by the project's
+ * scale through the grade adjustment (ADR-135), the snapshot what the
+ * release wrote, its stored — adjusted — grade included (`released_grade`,
+ * ADR-119 §11; decision 3 of `grades.ts`). A teacher's stored mark still
+ * wins over either (`resolveCell`).
  *
  * - The STAFF read the LIVE final score of each seat's repository
  *   ({@link projectLiveScores}), with its source (I42) and whether it moved
@@ -33,7 +35,7 @@ import {
   projects,
 } from "../../db/schema.js";
 import { liveProject } from "../guards.js";
-import { repoScores, releasableScore } from "./detail.js";
+import { releaseOf, repoScores } from "./detail.js";
 import { scoreFacts } from "./scores.js";
 import { seatRepos } from "./groupRepos.js";
 import type { RepoRow } from "./repos.js";
@@ -104,9 +106,10 @@ export async function projectLiveScores(
   const cells = new Map<string, ProjectGradeCell>();
   for (const { id, repo } of held) {
     const { scores, changedAfterRelease } = repoScores(project, repo, facts);
-    const final = releasableScore(project, repo, scores.final);
-    if (final?.max != null && final.grade !== null) {
-      cells.set(id, { points: final.points, max: final.max, grade: final.grade.grade, source: final.source, changedAfterRelease });
+    // The grade the release would write: the adjusted one (ADR-135).
+    const { final, grade } = releaseOf(project, repo, scores);
+    if (final?.max != null && grade !== null) {
+      cells.set(id, { points: final.points, max: final.max, grade, source: final.source, changedAfterRelease });
     }
   }
   return cells;

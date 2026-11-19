@@ -325,6 +325,26 @@ describe("the staff's table (F-GBOOK-01)", () => {
     await db().update(projectRepos).set({ teacherPoints: 9, teacherMax: 10 }).where(eq(projectRepos.id, repo!.id));
   });
 
+  it("reads a project's adjusted grade, and a teacher's mark still wins over it (ADR-135)", async () => {
+    const [repo] = await db().select().from(projectRepos).where(and(eq(projectRepos.projectId, col["P1"]!), eq(projectRepos.userId, students[0]!.id)));
+    await db()
+      .update(projectRepos)
+      .set({ gradeAdjustKind: "relative", gradeAdjustValue: -0.5, gradeAdjustBase: 5.5, gradeAdjustComment: SECRET, gradeAdjustedBy: teacher.id, gradeAdjustedAt: server.clock.now() })
+      .where(eq(projectRepos.id, repo!.id));
+    try {
+      expect(cellOf(await staffTable(), 0, "P1")).toMatchObject({ kind: "grade", grade: 5, points: 9, max: 10, source: "teacher", changedAfterRelease: true });
+      const res = await call("PUT", markUrl("project", "P1", seats[0]!), teacher.headers, { kind: "score", points: 15, max: 20, override: true });
+      expect(res.statusCode, res.body).toBe(200);
+      expect(cellOf(GradebookStaff.parse(res.json()), 0, "P1")).toMatchObject({ kind: "grade", grade: 4.8, source: "mark" });
+      await call("DELETE", markUrl("project", "P1", seats[0]!), teacher.headers);
+    } finally {
+      await db()
+        .update(projectRepos)
+        .set({ gradeAdjustKind: null, gradeAdjustValue: null, gradeAdjustBase: null, gradeAdjustComment: null, gradeAdjustedBy: null, gradeAdjustedAt: null })
+        .where(eq(projectRepos.id, repo!.id));
+    }
+  });
+
   it("drops an archived project's column for the staff and the students, refuses its marks, and brings it back once restored", async () => {
     const titles = async () => ({
       staff: (await staffTable()).columns.map((c) => c.title),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { CriteriaTableRow, ProjectGradingRepo } from "@quiz/contracts";
+import { gradeFromPoints } from "@quiz/domain";
 
 import {
   cellHeat,
@@ -51,6 +52,9 @@ const repo = (id: string, rows: CriteriaTableRow[], total: { points: number; max
   table: rows,
   evidence: null,
   total,
+  // The server's grade (ADR-135): the total's by the linear scale, no adjustment.
+  grade: total === null ? null : gradeFromPoints(total.points, total.max, { rounding: "nearest" }),
+  adjustment: null,
   pass: null,
 });
 
@@ -155,8 +159,15 @@ describe("statistics over the validated repositories", () => {
     repo("c", table({ "rendu.tests": 0, "code.memoire": 0 }, "proposed"), null),
   ];
 
+  it("reads the server's grade, adjusted (ADR-135), never the total again", () => {
+    const adjusted = [{ ...repos[0]!, grade: 5.5 }, repos[1]!, repos[2]!];
+    expect(markStats(adjusted).description).toMatchObject({ count: 2, mean: 5 });
+    // A validated repository with no grade (none left to adjust) is on no bar.
+    expect(markStats([{ ...repos[0]!, grade: null }, repos[1]!]).description).toMatchObject({ count: 1 });
+  });
+
   it("describes the marks by the project's scale", () => {
-    const stats = markStats(repos, { kind: "linear", rounding: "nearest" });
+    const stats = markStats(repos);
     expect(stats.description).toMatchObject({ count: 2, mean: 5.25, median: 5.25 });
     expect(stats.histogram.find((b) => b.bucket === 6)!.count).toBe(1);
     expect(stats.histogram.find((b) => b.bucket === 4.5)!.count).toBe(1);
@@ -164,7 +175,6 @@ describe("statistics over the validated repositories", () => {
   });
 
   describe("who is under each bar", () => {
-    const linear = { kind: "linear", rounding: "nearest" } as const;
     const named = (id: string, label: string, points: number | null): ProjectGradingRepo => ({
       ...repo(id, table(), points === null ? null : { points, max: 20 }),
       label,
@@ -183,7 +193,7 @@ describe("statistics over the validated repositories", () => {
     ];
 
     it("lists under each bar exactly the repositories its count says, and none under an empty one", () => {
-      const stats = markStats(class_, linear);
+      const stats = markStats(class_);
       for (const { bucket, count } of stats.histogram) {
         expect(stats.members.get(bucket)?.length ?? 0).toBe(count);
       }
@@ -193,7 +203,7 @@ describe("statistics over the validated repositories", () => {
     });
 
     it("orders a bar's list by mark, the best first, then by name", () => {
-      const stats = markStats(class_, linear);
+      const stats = markStats(class_);
       // 15/20 and 14/20 both fall in [4.5, 5.0); the two 14/20 share their mark.
       expect(stats.members.get(4.5)!.map((m) => m.repo.label)).toEqual(["Luc Rochat", "Ana Bovet", "Zoé Martin"]);
       const marks = stats.members.get(4.5)!.map((m) => m.mark);

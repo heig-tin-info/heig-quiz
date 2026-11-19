@@ -42,31 +42,29 @@ describe("projectScoreGrade (product owner, 2026-11-18)", () => {
   });
 });
 
-describe("changedAfterRelease", () => {
-  const snap = { points: 8, max: 10 };
-  it("is false before the release, whatever the score", () => {
-    expect(changedAfterRelease(false, { points: 3, max: 10 }, { points: null, max: null })).toBe(false);
+describe("changedAfterRelease (ADR-135: grade-based)", () => {
+  const snap = { grade: 4.5, adjustmentComment: null };
+  it("is false before the release, whatever the grade", () => {
+    expect(changedAfterRelease(false, { grade: 3, adjustmentComment: "x" }, { grade: null, adjustmentComment: null })).toBe(false);
   });
 
-  it("compares points and maximum with the snapshot", () => {
-    expect(changedAfterRelease(true, { points: 8, max: 10 }, snap)).toBe(false);
-    expect(changedAfterRelease(true, { points: 9, max: 10 }, snap)).toBe(true);
-    expect(changedAfterRelease(true, { points: 8, max: 12 }, snap)).toBe(true);
+  it("compares the grade with the snapshot's, at the tenth: a float hair is no change (#1144)", () => {
+    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: null }, snap)).toBe(false);
+    expect(changedAfterRelease(true, { grade: 4.6, adjustmentComment: null }, snap)).toBe(true);
+    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: null }, { grade: 4.499999999999, adjustmentComment: null })).toBe(false);
   });
 
-  it("reads both sides at the hundredth: a float artefact of an older snapshot is no change (#1144)", () => {
-    expect(changedAfterRelease(true, { points: 6.19, max: 26 }, { points: 6.1899999999999995, max: 26 })).toBe(false);
-    expect(changedAfterRelease(true, { points: 5.21, max: 26 }, { points: 5.210000000000001, max: 26 })).toBe(false);
-    expect(changedAfterRelease(true, { points: 35.2, max: 44 }, { points: 35.19999999999999, max: 43.999999999999986 })).toBe(false);
-    expect(changedAfterRelease(true, { points: 6.2, max: 26 }, { points: 6.1899999999999995, max: 26 })).toBe(true);
-    expect(changedAfterRelease(true, { points: 6.19, max: 26.01 }, { points: 6.19, max: 26 })).toBe(true);
-    expect(changedAfterRelease(true, { points: 6.19, max: null }, { points: 6.19, max: 26 })).toBe(true);
+  it("sees a grade that appeared or vanished since", () => {
+    expect(changedAfterRelease(true, { grade: null, adjustmentComment: null }, snap)).toBe(true);
+    expect(changedAfterRelease(true, { grade: 4, adjustmentComment: null }, { grade: null, adjustmentComment: null })).toBe(true);
+    expect(changedAfterRelease(true, { grade: null, adjustmentComment: null }, { grade: null, adjustmentComment: null })).toBe(false);
   });
 
-  it("sees a score that appeared or vanished since", () => {
-    expect(changedAfterRelease(true, null, snap)).toBe(true);
-    expect(changedAfterRelease(true, { points: 1, max: 6 }, { points: null, max: null })).toBe(true);
-    expect(changedAfterRelease(true, null, { points: null, max: null })).toBe(false);
+  it("sees an adjustment's comment that appeared, vanished or changed, the grade unchanged", () => {
+    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: "Oral" }, snap)).toBe(true);
+    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: null }, { grade: 4.5, adjustmentComment: "Oral" })).toBe(true);
+    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: "Oral 2" }, { grade: 4.5, adjustmentComment: "Oral" })).toBe(true);
+    expect(changedAfterRelease(true, { grade: 4.5, adjustmentComment: "Oral" }, { grade: 4.5, adjustmentComment: "Oral" })).toBe(false);
   });
 });
 

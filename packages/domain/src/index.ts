@@ -126,6 +126,7 @@ export * from "./pollTally.js";
 export * from "./poolRole.js";
 export * from "./catalogue.js";
 export * from "./projectGrade.js";
+export * from "./gradeAdjustment.js";
 export * from "./projectAccept.js";
 export * from "./projectRuns.js";
 export * from "./projectStudent.js";

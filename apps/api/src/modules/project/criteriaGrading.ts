@@ -46,8 +46,10 @@ import { gradeDispatches, projectCiResults, projectCriteria, projectEvidence, pr
 import { notFoundError } from "../http.js";
 import { criteriaStandings, type CriteriaStanding, validateProposals, writeCriterionGrades } from "./criterionGrades.js";
 import { isLive } from "./deadline.js";
+import { repoScores } from "./detail.js";
 import { ProjectError } from "./errors.js";
 import { studentRepos, type RepoRow } from "./repos.js";
+import { scoreFacts } from "./scores.js";
 import type { ProjectRow } from "./views.js";
 
 /** The project's snapshot; `409 not_criteria` off the `criteria` mode. */
@@ -172,8 +174,8 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
   if (repos.length === 0) return [];
   const groupIds = repos.flatMap((r) => (r.groupId === null ? [] : [r.groupId]));
   const userIds = repos.filter((r) => r.groupId === null).map((r) => r.userId);
-  const [standings, evidence, passes, groups, people] = await Promise.all([
-    criteriaStandings(db, repos),
+  const [facts, evidence, passes, groups, people] = await Promise.all([
+    scoreFacts(db, repos),
     evidenceSummaries(db, repos.map((r) => r.id)),
     passTraces(db, repos.map((r) => r.id)),
     groupIds.length === 0
@@ -183,6 +185,7 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
       ? []
       : db.select({ id: users.id, given: users.givenName, family: users.familyName }).from(users).where(inArray(users.id, userIds)),
   ]);
+  const standings = facts.criteria;
   const logged = await loggedCriteria(db, standings);
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
   const personName = new Map(people.map((p) => [p.id, `${p.family} ${p.given}`.trim()]));
@@ -193,6 +196,8 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
       if (!standing) return [];
       const own = logged.get(repo.id);
       const table = criteriaTable(standing.snapshot, standing.rows, { audience: "staff", frozen: repo.frozenAt !== null, released });
+      // The grade every view shows, through the adjustment (ADR-135): the page's own computation.
+      const { scores } = repoScores(project, repo, facts);
       return [
         {
           id: repo.id,
@@ -203,6 +208,8 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
           table: table.map((row): TableRowContract => (own?.has(row.criterionId) ? { ...row, ciLog: true } : row)),
           evidence: evidence.get(repo.id) ?? null,
           total: standing.score,
+          grade: scores.final?.grade?.grade ?? null,
+          adjustment: scores.adjustment,
           pass: passes.get(repo.id) ?? null,
         },
       ];

@@ -3,16 +3,26 @@
  * points out of their maximum, the final score with its grade and source, a
  * CI status as a tag.
  */
-import type { ProjectGradingMode, ProjectRepoCollection, ProjectRepoView, ProjectStudent, ProjectSyncState } from "@quiz/contracts";
-import { ciShareOnly, formatScore, rateOf, WORKSPACE_PUSH_MAX_BYTES } from "@quiz/domain";
+import type {
+  ProjectGradeAdjustment,
+  ProjectGradingMode,
+  ProjectRepoCollection,
+  ProjectRepoView,
+  ProjectStudent,
+  ProjectSyncState,
+} from "@quiz/contracts";
+import { ciShareOnly, formatGrade, formatScore, rateOf, WORKSPACE_PUSH_MAX_BYTES } from "@quiz/domain";
 
-import { GitPullRequest, PackageCheck, RefreshCw } from "lucide-react";
+import { GitPullRequest, PackageCheck, RefreshCw, SlidersHorizontal, TriangleAlert } from "lucide-react";
 
 import { Grade } from "../Grade";
 import { studentName } from "../group/groupRules";
 import { useT, type Dict } from "../i18n";
-import { Badge, Button, cx, Dash, isoDateTime, RateRing, type Tone } from "../ui";
+import { Badge, Button, cx, Dash, isoDateTime, RateRing, Tip, type Tone } from "../ui";
 import { syncTag } from "./projectPage";
+
+/** A relative grade adjustment as written (ADR-135): signed, to the tenth ("+0.2", "−0.4"). */
+export const signedTenth = (n: number): string => `${n < 0 ? "−" : "+"}${formatGrade(Math.abs(n))}`;
 
 /** A score out of its maximum, to the tenth ("8/10", "7.2/26", "9" without one), or a dash without points. */
 export function Points({ points, max }: { points: number | null; max: number | null }) {
@@ -44,7 +54,16 @@ export const SCORE_SOURCE_KEY: Record<NonNullable<ProjectRepoView["scores"]["fin
  * rest later. The server sends no grade for it; a small ring of the CI's
  * rate on the red-to-green ramp stands before the points, still written.
  */
-export function Score({ score, gradingMode }: { score: ProjectRepoView["scores"]["final"]; gradingMode: ProjectGradingMode }) {
+export function Score({
+  score,
+  gradingMode,
+  adjustment = null,
+}: {
+  score: ProjectRepoView["scores"]["final"];
+  gradingMode: ProjectGradingMode;
+  /** The grade's adjustment (ADR-135): its mark beside the grade, which is already the adjusted one. */
+  adjustment?: ProjectGradeAdjustment | null;
+}) {
   const t = useT();
   if (!score) return <Dash />;
   const { max } = score;
@@ -62,13 +81,41 @@ export function Score({ score, gradingMode }: { score: ProjectRepoView["scores"]
           <Points points={score.points} max={max} />
         </span>
         {score.grade ? (
-          <span className="tabular-nums text-fg-muted">
+          <span className="inline-flex items-center gap-1 tabular-nums text-fg-muted">
             <Grade value={score.grade.grade} />
+            <AdjustmentMark adjustment={adjustment} />
           </span>
         ) : null}
       </span>
       <span className="text-xs text-fg-faint">{t(SCORE_SOURCE_KEY[score.source])}</span>
     </span>
+  );
+}
+
+/**
+ * The mark of an adjusted grade (ADR-135), after the grade it marks: a
+ * small faint icon whose bubble holds the justification — the warning icon
+ * instead when an absolute pin's base grade moved since it was written,
+ * the move said first. Its words are also in the text for a screen reader.
+ * Nothing without an adjustment.
+ */
+export function AdjustmentMark({ adjustment }: { adjustment: ProjectGradeAdjustment | null }) {
+  const t = useT();
+  if (!adjustment) return null;
+  const moved = adjustment.baseMoved && adjustment.baseAtWrite !== null && adjustment.base !== null;
+  const label = moved
+    ? `${t("project.adjust.baseMoved", { from: formatGrade(adjustment.baseAtWrite!), to: formatGrade(adjustment.base!) })}. ${adjustment.comment}`
+    : adjustment.comment;
+  const Icon = moved ? TriangleAlert : SlidersHorizontal;
+  return (
+    <Tip label={label}>
+      <span className={cx("inline-flex", moved ? "text-warning" : "text-fg-faint")} data-testid="grade-adjusted">
+        <Icon aria-hidden className="size-3.5" />
+        <span className="sr-only">
+          {t("project.adjust.mark")}: {label}
+        </span>
+      </span>
+    </Tip>
   );
 }
 

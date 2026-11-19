@@ -138,6 +138,8 @@ const auditOf = (subjectId: string, action: string) =>
 const score = (w: World, repo: string, body: object, headers = teacher.headers) =>
   call("PATCH", `/app/api/projects/${w.projectId}/repos/${repo}/score`, headers, body);
 const release = (w: World, headers = teacher.headers) => call("POST", `/app/api/projects/${w.projectId}/release`, headers);
+const adjust = (w: World, repo: string, body: object, headers = teacher.headers) =>
+  call("PUT", `/app/api/projects/${w.projectId}/repos/${repo}/grade-adjustment`, headers, body);
 async function detail(w: World): Promise<ProjectDetail> {
   const res = await call("GET", `/app/api/projects/${w.projectId}`, teacher.headers);
   expect(res.statusCode, res.body).toBe(200);
@@ -491,6 +493,189 @@ describe("the gradebook's live cell (product owner, 2026-11-18)", () => {
   });
 });
 
+describe("the grade adjustment (ADR-135)", () => {
+  const assistantOf = async (w: World) => {
+    const assistant = await server.signIn("teacher");
+    await server.app.db.insert(courseStaff).values({ courseId: w.courseId, userId: assistant.id, role: "assistant" });
+    return assistant;
+  };
+  /** A frozen repository scored 7 / 10 by its frozen CI run: grade 4.5. */
+  const scoredRepo = async (w: World) => {
+    const repo = await repoOf(w, w.students[0]!.id);
+    await setRepo(repo, { frozenGradeRunId: await run(repo) });
+    return repo;
+  };
+
+  it("sets a relative delta over the live grade, names its writer, and clears it; audited before and after", async () => {
+    const w = await world();
+    const repo = await scoredRepo(w);
+    const res = await adjust(w, repo, { kind: "relative", value: 0.2, comment: "  Oral defence  " });
+    expect(res.statusCode, res.body).toBe(200);
+    const set = ProjectRepoScores.parse(res.json());
+    expect(set.scores.final).toMatchObject({ points: 7, max: 10, source: "ci", grade: { grade: 4.7 } });
+    expect(set.scores.adjustment).toEqual({
+      kind: "relative",
+      value: 0.2,
+      comment: "Oral defence",
+      by: expect.any(String),
+      at: NOW,
+      baseAtWrite: 4.5,
+      base: 4.5,
+      baseMoved: false,
+    });
+    expect(set.scores.adjustment!.by).not.toBe("");
+    // The page reads the same.
+    expect(rowOf(await detail(w), w.students[0]!.id).scores).toMatchObject({ final: { grade: { grade: 4.7 } }, adjustment: { kind: "relative" } });
+
+    const cleared = await call("DELETE", `/app/api/projects/${w.projectId}/repos/${repo}/grade-adjustment`, teacher.headers);
+    expect(cleared.statusCode, cleared.body).toBe(200);
+    const after = ProjectRepoScores.parse(cleared.json());
+    expect(after.scores.adjustment).toBeNull();
+    expect(after.scores.final?.grade).toEqual({ grade: 4.5 });
+    expect(await repoRow(repo)).toMatchObject({ gradeAdjustKind: null, gradeAdjustValue: null, gradeAdjustBase: null, gradeAdjustComment: null, gradeAdjustedBy: null, gradeAdjustedAt: null });
+
+    const entries = await auditOf(repo, "project_repo.grade_adjust");
+    expect(entries.map((e) => e.payload)).toEqual([
+      { before: null, after: { kind: "relative", value: 0.2, comment: "Oral defence", base: 4.5, grade: 4.7 }, cleared: false },
+      { before: { kind: "relative", value: 0.2, comment: "Oral defence", base: 4.5, grade: 4.7 }, after: null, cleared: true },
+    ]);
+    expect(entries[0]!.actorUserId).toBe(teacher.id);
+  });
+
+  it("is refused before the definitive freeze, on an ungraded project, and without a grade to adjust", async () => {
+    const w = await world();
+    const unscored = await repoOf(w, w.students[0]!.id, { frozenAt: null });
+    const body = { kind: "relative", value: 0.5, comment: "Talk" };
+    const early = await adjust(w, unscored, body);
+    expect([early.statusCode, early.json().error]).toEqual([409, "not_frozen"]);
+    await setRepo(unscored, { frozenAt: at(FROZEN_AT) });
+    const none = await adjust(w, unscored, { kind: "absolute", value: 5, comment: "Talk" });
+    expect([none.statusCode, none.json().error]).toEqual([409, "no_grade"]);
+    await server.app.db.update(projects).set({ gradingMode: "none" }).where(eq(projects.id, w.projectId));
+    const ungraded = await adjust(w, unscored, body);
+    expect([ungraded.statusCode, ungraded.json().error]).toEqual([409, "grading_none"]);
+    expect(await repoRow(unscored)).toMatchObject({ gradeAdjustKind: null });
+  });
+
+  it("refuses a delta of 0, off the tenth or past ±5, a grade outside 1 … 6, and a missing justification", async () => {
+    const w = await world();
+    const repo = await scoredRepo(w);
+    for (const body of [
+      { kind: "relative", value: 0, comment: "x" },
+      { kind: "relative", value: 0.15, comment: "x" },
+      { kind: "relative", value: 5.5, comment: "x" },
+      { kind: "absolute", value: 6.5, comment: "x" },
+      { kind: "absolute", value: 0.5, comment: "x" },
+      { kind: "absolute", value: 4, comment: "   " },
+      { kind: "absolute", value: 4 },
+      { kind: "absolute", value: 4, comment: "x".repeat(2001) },
+    ]) {
+      const res = await adjust(w, repo, body);
+      expect(res.statusCode, JSON.stringify(body)).toBe(400);
+    }
+    expect(await auditOf(repo, "project_repo.grade_adjust")).toHaveLength(0);
+  });
+
+  it("pins an absolute grade, says when its base moved, and is kept by writing it again; a relative delta follows the base", async () => {
+    const w = await world();
+    const repo = await scoredRepo(w);
+    expect((await adjust(w, repo, { kind: "absolute", value: 5, comment: "Explained after" })).statusCode).toBe(200);
+    // The teacher's score moves the base to 5.5: the pin holds, flagged.
+    const moved = ProjectRepoScores.parse((await score(w, repo, { points: 9 })).json());
+    expect(moved.scores.final?.grade).toEqual({ grade: 5 });
+    expect(moved.scores.adjustment).toMatchObject({ kind: "absolute", value: 5, baseAtWrite: 4.5, base: 5.5, baseMoved: true });
+    // Kept: written again over the base of now.
+    const kept = ProjectRepoScores.parse((await adjust(w, repo, { kind: "absolute", value: 5, comment: "Explained after" })).json());
+    expect(kept.scores.adjustment).toMatchObject({ baseAtWrite: 5.5, base: 5.5, baseMoved: false });
+
+    // A relative delta survives the base's move: 5.5 + 0.3, then 4.5 + 0.3 once the teacher's score is cleared.
+    expect(ProjectRepoScores.parse((await adjust(w, repo, { kind: "relative", value: 0.3, comment: "Oral" })).json()).scores.final?.grade).toEqual({ grade: 5.8 });
+    const back = ProjectRepoScores.parse((await score(w, repo, { points: null })).json());
+    expect(back.scores.final?.grade).toEqual({ grade: 4.8 });
+    expect(back.scores.adjustment).toMatchObject({ kind: "relative", base: 4.5, baseMoved: false });
+  });
+
+  it("is an assistant's before the release, the owner's alone after it — the teacher's score too (ADR-068 as amended)", async () => {
+    const w = await world();
+    const repo = await scoredRepo(w);
+    const assistant = await assistantOf(w);
+    expect((await adjust(w, repo, { kind: "relative", value: 0.1, comment: "Before" }, assistant.headers)).statusCode).toBe(200);
+    expect((await score(w, repo, { points: 8 }, assistant.headers)).statusCode).toBe(200);
+    expect((await release(w)).statusCode).toBe(200);
+
+    const refusals = [
+      await adjust(w, repo, { kind: "relative", value: 0.2, comment: "After" }, assistant.headers),
+      await call("DELETE", `/app/api/projects/${w.projectId}/repos/${repo}/grade-adjustment`, assistant.headers),
+      await score(w, repo, { points: 9 }, assistant.headers),
+      await score(w, repo, { points: null }, assistant.headers),
+    ];
+    for (const res of refusals) expect([res.statusCode, res.json().error]).toEqual([403, "owner_required"]);
+    expect(await repoRow(repo)).toMatchObject({ teacherPoints: 8, gradeAdjustValue: 0.1, gradeAdjustComment: "Before" });
+
+    expect((await adjust(w, repo, { kind: "relative", value: 0.2, comment: "After" })).statusCode).toBe(200);
+    expect((await score(w, repo, { points: 9 })).statusCode).toBe(200);
+  });
+
+  it("is released as the adjusted grade with its own comment, beside the teacher's; a later change shows as changed after release", async () => {
+    const w = await world();
+    const student = w.students[0]!;
+    const repo = await scoredRepo(w);
+    expect((await score(w, repo, { points: 7, comment: "Teacher note" })).statusCode).toBe(200);
+    expect((await adjust(w, repo, { kind: "relative", value: -0.5, comment: "Copied part" })).statusCode).toBe(200);
+    expect((await release(w)).statusCode).toBe(200);
+    expect(await repoRow(repo)).toMatchObject({
+      releasedPoints: 7,
+      releasedMax: 10,
+      releasedGrade: 4,
+      releasedComment: "Teacher note",
+      releasedAdjustmentComment: "Copied part",
+    });
+    expect(rowOf(await detail(w), student.id).flags.changedAfterRelease).toBe(false);
+
+    // The comment alone changes: changed after release, the grade the same.
+    const reworded = ProjectRepoScores.parse((await adjust(w, repo, { kind: "relative", value: -0.5, comment: "Copied part, admitted" })).json());
+    expect(reworded).toMatchObject({ changedAfterRelease: true, scores: { final: { grade: { grade: 4 } } } });
+    // Back as released: no change.
+    expect(ProjectRepoScores.parse((await adjust(w, repo, { kind: "relative", value: -0.5, comment: "Copied part" })).json()).changedAfterRelease).toBe(false);
+    // Cleared: the grade moves back to 4.5, changed; a release again writes it and clears the comment.
+    expect(ProjectRepoScores.parse((await call("DELETE", `/app/api/projects/${w.projectId}/repos/${repo}/grade-adjustment`, teacher.headers)).json()).changedAfterRelease).toBe(true);
+    expect((await detail(w)).primaryAction).toBe("release");
+    expect((await release(w)).statusCode).toBe(200);
+    expect(await repoRow(repo)).toMatchObject({ releasedGrade: 4.5, releasedComment: "Teacher note", releasedAdjustmentComment: null });
+  });
+
+  it("moves points without moving the grade: no change after release", async () => {
+    const w = await world();
+    const student = w.students[0]!;
+    const repo = await scoredRepo(w);
+    expect((await score(w, repo, { points: 7 })).statusCode).toBe(200);
+    expect((await release(w)).statusCode).toBe(200);
+    // 7.01 / 10 is 4.505, still 4.5 at the tenth.
+    expect(ProjectRepoScores.parse((await score(w, repo, { points: 7.01 })).json()).changedAfterRelease).toBe(false);
+    expect(rowOf(await detail(w), student.id).flags.changedAfterRelease).toBe(false);
+  });
+
+  it("gives the gradebook's live cell the adjusted grade", async () => {
+    const w = await world();
+    const student = w.students[0]!;
+    const repo = await scoredRepo(w);
+    expect((await adjust(w, repo, { kind: "absolute", value: 5.2, comment: "Oral" })).statusCode).toBe(200);
+    const [seat] = await server.app.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.classroomId, w.classroomId), eq(enrollments.userId, student.id)));
+    const cells = await projectLiveScores(server.app.db, await projectRow(w.projectId), [seat!.id]);
+    expect(cells.get(seat!.id)).toEqual({ points: 7, max: 10, grade: 5.2, source: "ci", changedAfterRelease: false });
+  });
+
+  it("adjusts the grade of the CI's share of a criteria project: none, refused no_grade", async () => {
+    const w = await world({ gradingMode: "criteria" });
+    const repo = await scoredRepo(w);
+    const res = await adjust(w, repo, { kind: "relative", value: 0.5, comment: "x" });
+    expect([res.statusCode, res.json().error]).toEqual([409, "no_grade"]);
+  });
+});
+
 describe("staff only (invariant 6)", () => {
   it("answers a student, another teacher, an impersonation and a token as nobody", async () => {
     const w = await world();
@@ -515,6 +700,8 @@ describe("staff only (invariant 6)", () => {
     for (const [who, headers, expected] of callers) {
       const scored = await score(w, repo, { points: 8 }, headers);
       expect([scored.statusCode, scored.json().error], `${who} score`).toEqual(expected);
+      const adjusted = await adjust(w, repo, { kind: "relative", value: 0.5, comment: "x" }, headers);
+      expect([adjusted.statusCode, adjusted.json().error], `${who} adjust`).toEqual(expected);
       const released = await release(w, headers);
       expect([released.statusCode, released.json().error], `${who} release`).toEqual(expected);
     }

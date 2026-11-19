@@ -4,7 +4,6 @@
  * the release, and the page's one primary action. The `project` module
  * reads the rows; these decide.
  */
-import { roundPoints } from "./criteria.js";
 import { ciShareOnly, type FinalScoreSource } from "./finalScore.js";
 import { projectGrade, type ProjectGrade, type ProjectScale } from "./projectGrade.js";
 import type { DeadlineStrategyName } from "./projectRuns.js";
@@ -100,21 +99,29 @@ export function projectScoreGrade(
   return ciShareOnly(project.gradingMode, source) ? null : scoreGrade(points, max, project.gradingScale);
 }
 
+/** What the release writes of a repository's grade, and what "changed after release" reads of it since. */
+export interface ReleasedGrade {
+  /** The ADJUSTED grade (`adjustGrade`, ADR-135); null without a released score or without a grade. */
+  grade: number | null;
+  /** The adjustment's comment, the student's to read beside the grade; null without an adjustment. */
+  adjustmentComment: string | null;
+}
+
 /**
- * Whether a final score differs from what the release wrote (D05 addendum,
- * F-PROJ-14): only once the project was released; a score that appeared,
- * vanished, or changed its points or its maximum since then. Both sides are
- * read at the hundredth ({@link roundPoints}): a snapshot written before the
- * totals were rounded (`6.1899999999999995`) is the same score as `6.19`.
+ * Whether a repository's grade differs from what the release wrote (D05
+ * addendum, F-PROJ-14 as amended by ADR-135): only once the project was
+ * released; a grade that appeared, vanished or moved — read at the tenth,
+ * as it is written, so a float hair of an older snapshot is no change — or
+ * an adjustment's comment that changed. Points that moved without moving
+ * the grade are no change for the student.
  */
-export function changedAfterRelease(
-  released: boolean,
-  final: { points: number; max: number | null } | null,
-  snapshot: { points: number | null; max: number | null },
-): boolean {
+export function changedAfterRelease(released: boolean, live: ReleasedGrade, snapshot: ReleasedGrade): boolean {
   if (!released) return false;
-  const same = (a: number | null, b: number | null) => (a === null || b === null ? a === b : roundPoints(a) === roundPoints(b));
-  return !same(final?.points ?? null, snapshot.points) || !same(final?.max ?? null, snapshot.max);
+  const sameGrade =
+    live.grade === null || snapshot.grade === null
+      ? live.grade === snapshot.grade
+      : Math.round(live.grade * 10) === Math.round(snapshot.grade * 10);
+  return !sameGrade || live.adjustmentComment !== snapshot.adjustmentComment;
 }
 
 /** The one primary action of the staff's project page (F-PROJ-13). */

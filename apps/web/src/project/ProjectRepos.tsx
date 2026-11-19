@@ -344,7 +344,7 @@ export function ProjectRepos({
                   </td>
                   {graded ? (
                     <td className={`${T.td} text-right`}>
-                      <Score score={repo?.scores.final ?? null} gradingMode={project.gradingMode} />
+                      <Score score={repo?.scores.final ?? null} gradingMode={project.gradingMode} adjustment={repo?.scores.adjustment ?? null} />
                     </td>
                   ) : null}
                   <td className={T.td}>{repo ? <StateCell repo={repo} /> : null}</td>

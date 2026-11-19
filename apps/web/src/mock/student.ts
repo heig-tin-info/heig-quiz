@@ -977,7 +977,7 @@ const studentProjectView = (card: CardFacts): StudentProject => {
     gradingMode: criteria === null ? "auto" : "criteria",
     repo,
     release: released
-      ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5 }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste." }
+      ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5 }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste.", adjustmentComment: null }
       : null,
     criteria,
     // ADR-132 §10: the teacher wrote with their last sync, on the open project and on the frozen one (skipped, told all the same).

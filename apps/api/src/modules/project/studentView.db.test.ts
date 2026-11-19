@@ -490,6 +490,7 @@ describe("the student's project (F-PROJ-15)", () => {
       max: 10,
       grade: { grade: 5.1 },
       comment: "Own-note",
+      adjustmentComment: null,
     });
     // The indicative score stays what it was: the release is the one that counts.
     expect(after.repo!.score).toMatchObject({ points: 7.5, frozen: true });
@@ -668,6 +669,13 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         teacherMax: 100,
         teacherComment: "Hidden-note-two",
         lastCommitSha: "d".repeat(40),
+        // A grade adjustment of theirs (ADR-135).
+        gradeAdjustKind: "absolute",
+        gradeAdjustValue: 5.7,
+        gradeAdjustBase: 1.6,
+        gradeAdjustComment: "Hidden-adjust-two",
+        gradeAdjustedBy: teacher.id,
+        gradeAdjustedAt: at(NOW),
       });
       // The second student's pushes, and the first's own after the deadline (M3-14i): never in a count of theirs.
       await receipt(theirs.githubRepoId!, at(NOW), 864200000);
@@ -681,6 +689,13 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         teacherMax: 10,
         teacherComment: "Own-note-one",
         protectionSuspendedAt: at(NOW),
+        // Their own grade adjustment (ADR-135): 8.5 / 10 is 5.3, less 0.4. Its comment once released, never its kind, value nor base.
+        gradeAdjustKind: "relative",
+        gradeAdjustValue: -0.4,
+        gradeAdjustBase: 5.3,
+        gradeAdjustComment: "Own-adjust-one",
+        gradeAdjustedBy: teacher.id,
+        gradeAdjustedAt: at(NOW),
       });
       await run(mine.id, { parseStatus: "multiple", points: null, max: null });
       // A negative CI score counted 0 (M3-14n): the student sees 0, never the flag nor what the CI printed.
@@ -725,16 +740,16 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
       await read();
       // Before the release, not even the student's own teacher score and comment.
       for (const body of studentBodies.slice(from)) {
-        expect(body).not.toMatch(/8\.5|Own-note-one/);
+        expect(body).not.toMatch(/8\.5|Own-note-one|Own-adjust-one/);
       }
       // The teacher's score settles the flagged run (M3-08b): the release goes through.
       const released = await call("POST", `/app/api/projects/${lab.id}/release`, teacher.headers);
       expect(released.statusCode, released.body).toBe(200);
-      // A comment rewritten after the release stays the staff's until the next one.
-      await setRepo(mine.id, { teacherComment: "Rewritten-after-release" });
+      // A comment rewritten after the release stays the staff's until the next one; the adjustment's too.
+      await setRepo(mine.id, { teacherComment: "Rewritten-after-release", gradeAdjustComment: "Rewritten-adjust-after" });
       await read();
       const after = await view(lab.id, first.headers);
-      expect(after.release).toMatchObject({ points: 8.5, comment: "Own-note-one" });
+      expect(after.release).toMatchObject({ points: 8.5, comment: "Own-note-one", grade: { grade: 4.9 }, adjustmentComment: "Own-adjust-one" });
 
       const forbidden = [
         theirs.fullName!,
@@ -775,6 +790,15 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         "sync_message",
         "gradedBefore", // the staff's notice (ADR-132 §10)
         "protectedGraded",
+        // A grade adjustment (ADR-135): another's comment, one rewritten since the release, and the staff's fields.
+        "Hidden-adjust-two",
+        "Rewritten-adjust-after",
+        "gradeAdjust",
+        "baseAtWrite",
+        "baseMoved",
+        '"relative"',
+        '"absolute"',
+        "-0.4",
       ];
       expect(studentBodies.length).toBeGreaterThan(from + 30);
       for (const body of studentBodies.slice(from)) {

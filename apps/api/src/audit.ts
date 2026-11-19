@@ -671,6 +671,13 @@ export type AuditAction =
    * `invitationStatus` as GitHub answered.
    */
   | "project_repo.grade_override"
+  /**
+   * The grade adjustment of a repository set, replaced or cleared (ADR-135),
+   * subject the `project_repos` row: `payload.before` and `after` (`kind`,
+   * `value`, `comment`, `base` the grade it applied to, `grade` the grade
+   * it gave; null when none) and `cleared`. The adjustment's only history.
+   */
+  | "project_repo.grade_adjust"
   | "project_repo.protection_reenabled"
   | "project_repo.invite_resent"
   /**
