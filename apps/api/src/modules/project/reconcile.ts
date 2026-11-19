@@ -276,7 +276,7 @@ export function reconcileGrades(app: FastifyInstance, config: AppConfig): Promis
  * revoking, not known in, none for a day, and its repository not frozen —
  * read in the same write, never from the pass's snapshot.
  */
-export async function claimReinvite(db: Db, grantId: string, now: Date): Promise<boolean> {
+async function claimReinvite(db: Db, grantId: string, now: Date): Promise<boolean> {
   const claimed = await db
     .update(projectRepoAccess)
     .set({ reinvitedAt: now })

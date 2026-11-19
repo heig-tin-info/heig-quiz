@@ -22,7 +22,7 @@ import { repoAccessState, type RepoAccessState } from "@quiz/domain";
 import type { Db } from "../../db/client.js";
 import { projectRepoAccess } from "../../db/schema.js";
 import { ownerRepo } from "../../github/app.js";
-import { directCollaborators, pendingInvitees } from "../../github/collaborators.js";
+import { cancelInvitation, directCollaborators, pendingInvitees } from "../../github/collaborators.js";
 import type { GrantRow } from "./access.js";
 
 /** The live grants of repository `repoId` (not revoked; one a revocation is asking about included). */
@@ -39,7 +39,10 @@ export const liveGrants = (db: Db, repoId: string): Promise<GrantRow[]> =>
  * what was found written on each: a collaborator is `accepted_at` (now); an
  * invitee whose invitation GitHub still offers clears `absent_at`; anyone
  * else — no invitation, or one GitHub reports `expired` — is `absent_at`
- * (now). Each write holds only while the grant is the one read (a new
+ * (now). An expired invitation is cancelled here, before any re-invite, so
+ * that the next invitation is a fresh one rather than the expired one GitHub
+ * could hand back; a cancellation that fails (404: already gone) is let go,
+ * the re-invite proceeds. Each write holds only while the grant is the one read (a new
  * invitation since starts over) and is still not known in (a `member`
  * webhook joining it meanwhile wins). No grant to look at: no request.
  */
@@ -52,6 +55,10 @@ export async function checkGrants(db: Db, octokit: Octokit, fullName: string, gr
   const { owner, repo } = ownerRepo(fullName);
   const [collaborators, invitees] = await Promise.all([directCollaborators(octokit, owner, repo), pendingInvitees(octokit, owner, repo)]);
   const offered = new Set(invitees.filter((i) => !i.expired).map((i) => i.accountId));
+  const mine = new Set(open.map((g) => g.githubUserId));
+  for (const stale of invitees.filter((i) => i.expired && mine.has(i.accountId))) {
+    await cancelInvitation(octokit, owner, repo, stale.id).catch(() => undefined);
+  }
   const collaborating = new Set(collaborators.map((c) => c.accountId));
   for (const grant of open) {
     // An invitation GitHub still offers wins: GitHub may list its invitee among the collaborators already.

@@ -371,6 +371,7 @@ export function repoWorld(): RepoWorld {
       const login = pending?.get(Number(m[1]));
       if (login === undefined) return json({ message: "Not Found" }, 404);
       pending!.delete(Number(m[1]));
+      world.expiredInvitations.delete(Number(m[1]));
       world.collaborators.get(fullName)?.delete(login);
       return new Response(null, { status: 204 });
     }

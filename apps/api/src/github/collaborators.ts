@@ -121,6 +121,11 @@ export async function directCollaborators(octokit: Octokit, owner: string, repo:
   return data.map((c: { login: string; id: number | bigint }) => ({ login: c.login, accountId: Number(c.id) }));
 }
 
+/** Cancels the invitation `invitationId` of `owner/repo`. */
+export async function cancelInvitation(octokit: Octokit, owner: string, repo: string, invitationId: number): Promise<void> {
+  await octokit.request("DELETE /repos/{owner}/{repo}/invitations/{invitation_id}", { owner, repo, invitation_id: invitationId });
+}
+
 /**
  * Takes every access of `login` away from `owner/repo`: a pending
  * invitation first — cancelled before the seat, so that it cannot be
@@ -135,13 +140,7 @@ export async function revokeCollaborator(
   login: string,
 ): Promise<{ invitationsCancelled: number }> {
   const mine = (await pendingInvitees(octokit, owner, repo)).filter((i) => i.login.toLowerCase() === login.toLowerCase());
-  for (const invitation of mine) {
-    await octokit.request("DELETE /repos/{owner}/{repo}/invitations/{invitation_id}", {
-      owner,
-      repo,
-      invitation_id: invitation.id,
-    });
-  }
+  for (const invitation of mine) await cancelInvitation(octokit, owner, repo, invitation.id);
   try {
     await octokit.request("DELETE /repos/{owner}/{repo}/collaborators/{username}", {
       owner,

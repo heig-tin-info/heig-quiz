@@ -80,6 +80,15 @@ const backdate = (repoId: string, ms: number) =>
 /** The repository frozen for good an hour ago. */
 const freeze = (repoId: string) =>
   server.app.db.update(projectRepos).set({ frozenAt: at(-HOUR), deadlineAppliedAt: at(-HOUR) }).where(eq(projectRepos.id, repoId));
+/** `who`'s invitation, still listed, reported expired by GitHub: its id. */
+function expire(g: Group, who: Student): number {
+  const [id] = [...world.invitations.get(g.fullName)!].find(([, login]) => login === who.login)!;
+  world.expiredInvitations.add(id);
+  return id;
+}
+/** `who` holds a new invitation, not `old` and not expired. */
+const fresh = (g: Group, who: Student, old: number) =>
+  [...world.invitations.get(g.fullName)!].some(([id, login]) => login === who.login && id !== old && !world.expiredInvitations.has(id));
 const puts = (fullName: string, before: number) => gh.calls.slice(before).filter((c) => c.startsWith(`PUT api.github.com/repos/${fullName}/collaborators/`));
 
 /** Each roster line's access, as the staff's page names it, by the member. */
@@ -185,17 +194,31 @@ describe("the daily reconciliation of a group's members", () => {
     expect(gh.calls.slice(before).filter((c) => c.startsWith(`GET api.github.com/repos/${g.fullName}/`) && /collaborators|invitations/.test(c))).toEqual([]);
   });
 
-  it("takes an invitation GitHub still lists but reports expired for gone, and re-invites its member", async () => {
+  it("takes an invitation GitHub still lists but reports expired for gone: cancels it, then re-invites its member afresh", async () => {
     const g = await group();
-    const [id] = [...world.invitations.get(g.fullName)!].find(([, who]) => who === g.cid.login)!;
-    world.expiredInvitations.add(id);
+    const id = expire(g, g.cid);
     const before = gh.calls.length;
     await reconcileRepos(server.app, config);
-    expect(puts(g.fullName, before)).toEqual([`PUT api.github.com/repos/${g.fullName}/collaborators/${g.cid.login}`]);
+    // The expired invitation cancelled before the new one is asked for.
+    const writes = gh.calls.slice(before).filter((c) => c.startsWith("DELETE") || c.startsWith("PUT"));
+    expect(writes).toEqual([
+      `DELETE api.github.com/repos/${g.fullName}/invitations/${id}`,
+      `PUT api.github.com/repos/${g.fullName}/collaborators/${g.cid.login}`,
+    ]);
+    expect(fresh(g, g.cid, id)).toBe(true);
     expect((await grantOf(g.row.id, g.cid)).reinvitedAt?.toISOString()).toBe(NOW);
     // Ben's invitation, still offered, is left alone.
     expect((await grantOf(g.row.id, g.ben)).reinvitedAt).toBeNull();
-    world.expiredInvitations.delete(id);
+  });
+
+  it("the staff's resend cancels a member's expired invitation too, and sends a fresh one", async () => {
+    const g = await group();
+    const id = expire(g, g.cid);
+    const before = gh.calls.length;
+    const res = await staff("POST", `/app/api/projects/${g.project.id}/repos/${g.row.id}/invite`);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(gh.calls.slice(before)).toContain(`DELETE api.github.com/repos/${g.fullName}/invitations/${id}`);
+    expect(fresh(g, g.cid, id)).toBe(true);
   });
 
   it("re-invites nobody on a repository frozen while the pass ran: the claim reads the freeze, not the pass's snapshot", async () => {

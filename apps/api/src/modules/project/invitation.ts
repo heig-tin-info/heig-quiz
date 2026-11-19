@@ -52,7 +52,7 @@ import type { RepoRow } from "./repos.js";
 export const RESEND_INTERVAL_MS = 60_000;
 
 /**
- * The members of a group's repository still out of it: no live grant of
+ * The members of a repository still out of it: no live grant of
  * theirs known in (`accepted_at`, which the `member` webhook's `removed`
  * clears), and none found in by the check of their other grants
  * (`checkGrants`, which records what it found on each) — invited and
@@ -107,7 +107,9 @@ export async function resendInvitation(
     const members = await repoMembers(db, repo, project.classroomId);
     const readers = only === undefined ? members : members.filter((m) => m.enrollmentId === only);
     if (readers.length === 0) throw new ProjectError("repo_unavailable", "The repository has no student on the roster to invite");
-    const targets = repo.groupId === null ? readers : await stillOut(db, octokit, repo, readers, now);
+    // Checked for both kinds (an expired invitation cancelled first); a student's own repository re-invites its reader whatever the check found.
+    const out = await stillOut(db, octokit, repo, readers, now);
+    const targets = repo.groupId === null ? readers : out;
     if (targets.length === 0) throw new ProjectError("invitation_not_pending", only === undefined ? "Every member of the group is in" : "You already are in");
     const group = repo.groupId !== null && only === undefined;
     const stale = new ProjectError("github_account_stale", "The student's GitHub account is gone or renamed: they must relink it");
