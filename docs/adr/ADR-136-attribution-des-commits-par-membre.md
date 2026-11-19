@@ -95,7 +95,16 @@ push by a staff member never counts as a student's work.
   `github_accounts` and `project_repo_access`, so the real id leaves the
   receipts and the member is still matched, by the new negative id; the
   staging copy's numbering (`scripts/staging-pseudonymize.sql`) covers the
-  authors too, an account unlinked since included.
+  authors too, an account unlinked since included. In production the
+  function finds the person's ids through their linked account and their
+  grants (`project_repo_access`), which every Accept and invitation writes,
+  for an individual, a group or a test repository alike, and which a
+  revocation keeps; a person who unlinked is still found through them. One
+  limit stands: once their roster line is removed, its grants go with it,
+  and an id they had unlinked before is no longer theirs to find, so it
+  stays in the receipts' authors as GitHub's public numeric id, unattributed
+  and naming no one in Quiz. A new pseudonymous id is chosen below every id
+  in use, the authors' included.
 - The detail payload grows by one small series per row (a semester has some
   fifteen weeks). A page of a hundred repositories stays within tens of
   kilobytes.

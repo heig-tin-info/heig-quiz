@@ -257,6 +257,26 @@ describe("pseudonymizeUser", () => {
     await expect(pseudonymizeUser(db, alice, ctx("self"))).rejects.toMatchObject({ code: "already_anonymized" });
   });
 
+  it("renumbers the commits of an account unlinked before, found through its grant, never onto an id the authors still hold (ADR-136)", async () => {
+    const seed = await seedLive(db, { students: 1, questions: 0 });
+    const [carol] = seed.studentIds as [string];
+    const { githubId } = await identify(seed, carol, "Carol");
+    // She unlinked her account since: her grant and her commits still name it.
+    await exec(`DELETE FROM github_accounts WHERE user_id = $1`, [carol]);
+    // A pseudonymous id that survives only in the authors of another receipt.
+    const lowest = Number((await exec(`SELECT least(0, min(github_user_id))::text AS id FROM (SELECT github_user_id FROM github_accounts UNION ALL SELECT github_user_id FROM project_repo_access) ids`)).rows.map((r) => (r as { id: string }).id)[0]);
+    await exec(
+      `INSERT INTO push_receipts (id, github_repo_id, branch, head_sha, received_at, commits, authors) VALUES ($1, 9999, 'main', $2, now(), 1, $3)`,
+      [randomUUID(), "f".repeat(40), JSON.stringify([{ id: lowest - 1, n: 1 }])],
+    );
+    await pseudonymizeUser(db, carol, ctx("self"));
+    const [grant] = (await exec(`SELECT github_user_id::text AS id FROM project_repo_access r JOIN enrollments e ON e.id = r.enrollment_id WHERE e.user_id = $1`, [carol])).rows as { id: string }[];
+    expect(Number(grant!.id)).toBe(lowest - 2);
+    const receipts = (await exec(`SELECT authors FROM push_receipts WHERE github_repo_id = $1`, ["C".charCodeAt(0)])).rows;
+    expect(receipts).toEqual([{ authors: [{ id: lowest - 2, n: 2 }, { id: 7, n: 1 }] }]);
+    expect(JSON.stringify((await exec(`SELECT authors FROM push_receipts`)).rows)).not.toContain(githubId!);
+  });
+
   it("refuses an account with an exam attempt in progress, or with a seat in a classroom still running", async () => {
     const seed = await seedLive(db, { students: 2 });
     const [busy, seated] = seed.studentIds as [string, string];

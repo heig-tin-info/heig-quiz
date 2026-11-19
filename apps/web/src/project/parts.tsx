@@ -209,12 +209,14 @@ export function MemberList({ members, className }: { members: RepoMember[]; clas
           <span>
             <StudentAccount student={m} />
           </span>
-          {/* The commits they authored: the figure, its unit said to a screen reader. */}
+          {/* The commits they authored: "3 commits" where the line wraps, the figure alone in its aligned column from `@2xl`. */}
           <span className="text-right tabular-nums">
             {m.authored ? (
               <>
-                <span aria-hidden>{m.authored.n}</span>
-                <span className="sr-only">{m.authored.n === 1 ? t("sproj.commits.one") : t("sproj.commits", { n: m.authored.n })}</span>
+                <span className="@2xl:sr-only">{m.authored.n === 1 ? t("sproj.commits.one") : t("sproj.commits", { n: m.authored.n })}</span>
+                <span aria-hidden className="hidden @2xl:inline">
+                  {m.authored.n}
+                </span>
               </>
             ) : null}
           </span>

@@ -75,6 +75,8 @@ BEGIN
   LOOP
     SELECT least(0, coalesce(min(all_ids.id), 0)) - 1 INTO new_id FROM (
       SELECT github_user_id AS id FROM github_accounts UNION ALL SELECT github_user_id FROM project_repo_access
+      -- An id that survives only in the commits' authors is never handed out again (ADR-136).
+      UNION ALL SELECT (e->>'id')::bigint FROM push_receipts, jsonb_array_elements(coalesce(authors, '[]'::jsonb)) e
     ) all_ids;
     UPDATE github_accounts SET github_user_id = new_id, login = 'github-user-' || -new_id WHERE github_user_id = old_id;
     UPDATE project_repo_access SET github_user_id = new_id, github_login = 'github-user-' || -new_id
