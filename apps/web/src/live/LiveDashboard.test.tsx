@@ -663,6 +663,109 @@ describe("LiveDashboard — states", () => {
 });
 
 /*
+ * F-LIVE-11, ADR-086 amendment 2026-11-19: "Until a date…" is in the Extend
+ * menu exactly where `extendUntilRefusal` allows it, and sends `{ until }`.
+ */
+describe("LiveDashboard — extend until a date", () => {
+  const withTiming = (timing: "deadline" | "duration" | "manual") => {
+    const detail = makeEvaluationDetail();
+    detail.evaluation.settings.timing = timing;
+    return { [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) };
+  };
+  /** Opens the Extend menu once the timing is known, and says whether the item is there. */
+  const offered = async () => {
+    const user = userEvent.setup();
+    await screen.findByRole("heading", { name: /quiz 3 — pointers/i });
+    await user.click(screen.getByRole("button", { name: /^extend$/i }));
+    await screen.findByRole("menuitem", { name: /\+10 minutes/i });
+    return screen.queryByRole("menuitem", { name: /until a date/i }) !== null;
+  };
+
+  it("is offered on a running evaluation hanging off its end", async () => {
+    setup(makeDashboard(2, 2), withTiming("deadline"));
+    expect(await offered()).toBe(true);
+  });
+
+  it("is not offered in `duration` timing", async () => {
+    setup(makeDashboard(2, 2), withTiming("duration"));
+    expect(await offered()).toBe(false);
+  });
+
+  it("is not offered in `manual` timing without a safety deadline", async () => {
+    const view = makeDashboard(2, 2);
+    view.evaluation.closesAt = null;
+    setup(view, withTiming("manual"));
+    expect(await offered()).toBe(false);
+  });
+
+  it("is not offered while paused", async () => {
+    const view = makeDashboard(2, 2);
+    view.evaluation.state = "paused";
+    setup(view, withTiming("deadline"));
+    expect(await offered()).toBe(false);
+  });
+
+  it("asks for a later time, then sends it as an instant", async () => {
+    const user = userEvent.setup();
+    const view = makeDashboard(2, 2);
+    const { calls } = setup(view, {
+      ...withTiming("deadline"),
+      [`POST /app/api/evaluations/${EVALUATION_ID}/extend`]: ok({ updated: 2, serverNow: LIVE_NOW.toISOString() }),
+    });
+    expect(await offered()).toBe(true);
+    await user.click(screen.getByRole("menuitem", { name: /until a date/i }));
+    const dialog = await screen.findByRole("dialog", { name: /extend until a date/i });
+    const field = within(dialog).getByLabelText(/new end/i);
+    const submit = within(dialog).getByRole("button", { name: /^extend$/i });
+    // It opens on the current end, which is no extension.
+    expect(submit).toBeDisabled();
+
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const local = (ms: number) => {
+      const d = new Date(ms);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    const end = Date.parse(view.evaluation.closesAt!);
+    await user.clear(field);
+    await user.type(field, local(end - 60 * 60_000));
+    expect(within(dialog).getByText(/pick a time after/i)).toBeInTheDocument();
+    expect(submit).toBeDisabled();
+
+    const target = local(end + 60 * 60_000);
+    await user.clear(field);
+    await user.type(field, target);
+    expect(within(dialog).queryByText(/pick a time after/i)).toBeNull();
+    await user.click(submit);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const sent = calls.find((c) => c.method === "POST" && c.url.endsWith("/extend"));
+    expect(sent?.body).toEqual({ until: new Date(target).toISOString(), scope: "all" });
+  });
+
+  it("says the server's refusal in the dialog", async () => {
+    const user = userEvent.setup();
+    const view = makeDashboard(2, 2);
+    setup(view, {
+      ...withTiming("deadline"),
+      [`POST /app/api/evaluations/${EVALUATION_ID}/extend`]: fail(409, {
+        error: "extend_until_refused",
+        message: "extend until a date refused: not_running",
+        reason: "not_running",
+      }),
+    });
+    expect(await offered()).toBe(true);
+    await user.click(screen.getByRole("menuitem", { name: /until a date/i }));
+    const dialog = await screen.findByRole("dialog", { name: /extend until a date/i });
+    const field = within(dialog).getByLabelText(/new end/i);
+    const later = new Date(Date.parse(view.evaluation.closesAt!) + 60 * 60_000);
+    later.setMinutes(later.getMinutes() - later.getTimezoneOffset());
+    await user.clear(field);
+    await user.type(field, later.toISOString().slice(0, 16));
+    await user.click(within(dialog).getByRole("button", { name: /^extend$/i }));
+    expect(await within(dialog).findByText(/only a running evaluation extends to a date/i)).toBeInTheDocument();
+  });
+});
+
+/*
  * FC-03 / FF-12: the dashboard lends its six commands to the palette while it
  * is mounted, FIRST within their group (the screen's actions outrank the
  * generic ones). The assertion is the WHOLE flat list in palette order, so a

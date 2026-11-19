@@ -15,12 +15,17 @@ Amended 2026-10-14 (product owner, #857): the names of §1 — the Scheduled
 mode is labelled "Automatic" / « Automatique » on screen
 ([amendment](#amendment-2026-10-14-the-scheduled-mode-is-labelled-automatic)).
 
+Amended 2026-11-19 (product owner): the live controls may move `closesAt`
+to a chosen date as well, later only, on a running evaluation whose attempts
+hang off it
+([amendment](#amendment-2026-11-19-extend-until-a-date)).
+
 Scope: the time part of the configuration screen of an evaluation and of a
 template (step 2, "Format"), the action of the launch step, the
 stored `timing` × `lobby` × `opensAt` / `closesAt` / `durationS` they map
 to, the attempt deadline (`attemptDeadline`), the readiness and past-time
 rules (`missingTimingFields`, `pastTiming`), and the live controls that move
-`closesAt` (`extendTime`, `resumeEvaluation`).
+`closesAt` (`extendTime`, `extendUntil`, `resumeEvaluation`).
 
 Amended 2026-10-27 (product owner): the presentation setting is withdrawn
 (F-EVAL-08, one question per screen always), so what §1 says a mode change
@@ -195,3 +200,39 @@ One word named the mode, the state and the action.
    (`ClockMode`, `clockChoiceOf`), as do the i18n keys, the contracts and
    the stored settings; the identifiers and this record's prose keep
    "Scheduled" for the mode.
+
+## Amendment 2026-11-19: extend until a date
+
+Decided by the product owner on 2026-11-19: once an evaluation runs, its
+timing is locked (F-EVAL-03, #86), and "+1 / +5 / +10 min" was the only way
+to push the end of an exercise series by days. The Extend menu of the live
+dashboard offers **Until a date…** / « Jusqu'à une date… » as well
+(F-LIVE-11).
+
+1. **Where.** `running` only: not paused (a pause has its own shift), not
+   in the waiting room, and never on a `closed` or `released` evaluation
+   (`409 evaluation_finished`): no extension reopens. Only where the
+   attempts hang off `closesAt` (`anchoredOnClosesAt`, §2): `deadline`
+   timing, or `manual` with a safety deadline, and `closesAt` set. One rule,
+   `@quiz/domain#extendUntilRefusal`, hides the item and refuses the
+   request (`409 extend_until_refused`, with its `reason`).
+2. **`duration` timing is a known limit.** Each attempt there ends at its
+   own start plus the limit, cut at `closesAt` (§3); moving the end to a
+   date would need every attempt's deadline recomputed. Not offered.
+3. **Later only, for the whole class.** The date must be strictly later than
+   the current end and than now (`isLaterEnd`), else `422 until_not_later`;
+   there is no date for one attempt.
+4. **The target is absolute, computed at the commit.** The evaluation's row
+   is locked, the rule and the target are checked on it, `closes_at` is set
+   to exactly the date and the distance from the locked end is the one the
+   `in_progress` attempts move by (`moveClosesAtTo`): a "+5 min" landing
+   between the request and the write cannot make it overshoot.
+5. **The accommodation base is unchanged.** The distance is added to
+   `closes_at_shift_s`, as for "+N min", so the announced window (decision
+   D8, #253) does not grow.
+6. **No notification.** A moved end does not resend the deadline reminder
+   (F-NOTIF-06); the connected screens read the new end from the usual
+   frames (`stateChanged`, `deadlineChanged`). Audited as
+   `evaluation.extend` with `{ until, previousClosesAt, seconds, scope,
+   updated }`; each attempt's journal gets `time_added` with `{ seconds,
+   until }` (`{ seconds, minutes }` for the minutes).

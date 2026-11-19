@@ -4,7 +4,9 @@ import {
   announcedWindowS,
   attemptDeadline,
   bonusSeconds,
+  extendUntilRefusal,
   GRACE_MS,
+  isLaterEnd,
   isWritable,
   previewDurationS,
 } from "./deadline.js";
@@ -229,5 +231,43 @@ describe("previewDurationS", () => {
     expect(
       previewDurationS({ timing: "manual", durationS: 1800, opensAt, closesAt, closesAtShiftS: 0 }),
     ).toBeNull();
+  });
+});
+
+describe("extendUntilRefusal (F-LIVE-11, ADR-086 amendment 2026-11-19)", () => {
+  const offered = { state: "running", timing: "deadline", closesAt } as const;
+
+  it("offers a date on a running evaluation whose attempts hang off closesAt", () => {
+    expect(extendUntilRefusal(offered)).toBeNull();
+    // `manual` with a safety deadline, as an ISO string from the wire.
+    expect(extendUntilRefusal({ ...offered, timing: "manual", closesAt: closesAt.toISOString() })).toBeNull();
+  });
+
+  it("refuses anything but running: no pause, no lobby, no reopen", () => {
+    for (const state of ["draft", "scheduled", "lobby", "paused", "closed", "grading", "released"] as const) {
+      expect(extendUntilRefusal({ ...offered, state })).toBe("not_running");
+    }
+  });
+
+  it("refuses `duration` timing, and `manual` without a safety deadline", () => {
+    expect(extendUntilRefusal({ ...offered, timing: "duration" })).toBe("not_anchored");
+    expect(extendUntilRefusal({ ...offered, timing: "manual", closesAt: null })).toBe("no_closes_at");
+    expect(extendUntilRefusal({ ...offered, closesAt: null })).toBe("no_closes_at");
+  });
+});
+
+describe("isLaterEnd", () => {
+  const now = new Date("2026-09-20T08:30:00Z");
+
+  it("takes an instant strictly later than the end and than now", () => {
+    expect(isLaterEnd(new Date(closesAt.getTime() + 1000), closesAt, now)).toBe(true);
+  });
+
+  it("refuses the current end, an earlier one, and the past", () => {
+    expect(isLaterEnd(closesAt, closesAt, now)).toBe(false);
+    expect(isLaterEnd(new Date(closesAt.getTime() - 60_000), closesAt, now)).toBe(false);
+    // An end already gone by (the grace): later than it, still in the past.
+    const past = new Date("2026-09-20T08:00:00Z");
+    expect(isLaterEnd(new Date("2026-09-20T08:10:00Z"), past, now)).toBe(false);
   });
 });

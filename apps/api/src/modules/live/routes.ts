@@ -604,6 +604,19 @@ export async function livePlugin(
     teacher(
       { params: IdParam, body: ExtendBody, load: staffEvaluation },
       async ({ req, reply, now, body, scope }) => {
+        if ("until" in body) {
+          // ADR-086 amendment 2026-11-19: the class's end, to a chosen instant.
+          const until = new Date(body.until);
+          const moved = await service.extendUntil(app.db, scope.evaluation, until, now);
+          await trace(req, "evaluation.extend", "evaluation", scope.evaluation.id, {
+            until: until.toISOString(),
+            previousClosesAt: iso(moved.previousClosesAt),
+            seconds: moved.seconds,
+            scope: "all",
+            updated: moved.updated,
+          });
+          return { updated: moved.updated, serverNow: iso(now) } satisfies ExtendResponse;
+        }
         if (body.scope === "attempt") {
           const target = await staffAttempt(app, req, reply, { evaluationId: scope.evaluation.id, attemptId: body.attemptId! });
           if (!target) return reply;

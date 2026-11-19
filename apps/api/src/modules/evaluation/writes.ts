@@ -432,6 +432,47 @@ export async function extendClosesAt(
   return row ?? null;
 }
 
+/**
+ * `live.extendUntil` (F-LIVE-11, ADR-086 amendment 2026-11-19): `closes_at`
+ * set to EXACTLY `until`, the distance it moved added to `closes_at_shift_s`
+ * as {@link extendClosesAt} does, so the announced window (D8, #253) does not
+ * grow. The row is locked `FOR UPDATE` first: `check` (the caller's rule,
+ * which throws to refuse) and the distance both read it as it stands at the
+ * commit, never as the request loaded it, so a "+5 min" landing in between
+ * can never make the target overshoot. The UPDATE keeps its own guard
+ * (`running`, an end earlier than `until`). Null when the row is gone.
+ */
+export async function moveClosesAtTo(
+  db: DbOrTx,
+  id: string,
+  until: Date,
+  now: Date,
+  check: (locked: EvaluationRecord) => void,
+): Promise<{ row: EvaluationRecord; previousClosesAt: Date } | null> {
+  return db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, id)).for("update");
+    if (!locked) return null;
+    check(locked);
+    const untilSql = sql`${until.toISOString()}::timestamptz`;
+    const [row] = await tx
+      .update(evaluations)
+      .set({
+        closesAt: until,
+        closesAtShiftS: sql`${evaluations.closesAtShiftS} + round(extract(epoch from ${untilSql} - ${evaluations.closesAt}))::int`,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(evaluations.id, id),
+          eq(evaluations.state, "running"),
+          sql`${evaluations.closesAt} < ${untilSql}`,
+        ),
+      )
+      .returning();
+    return row && locked.closesAt ? { row, previousClosesAt: locked.closesAt } : null;
+  });
+}
+
 /** `poll.setDisplay`: the poll switches and the feedback policy, moved together. */
 export async function setPollSettings(
   db: DbOrTx,

@@ -43,6 +43,12 @@ export interface LiveControls {
   resume: () => void;
   close: () => void;
   extend: (minutes: 1 | 5 | 10) => void;
+  /**
+   * "Until a date…": opens the dialog that moves the class's end to a chosen
+   * instant (ADR-086 amendment 2026-11-19); null wherever
+   * `@quiz/domain#extendUntilRefusal` refuses it, and the menu has no item.
+   */
+  extendUntil: (() => void) | null;
   busy: boolean;
   /**
    * Whether this evaluation may be paused at all: only an exam can
@@ -120,6 +126,7 @@ export function LiveHeader({
           label: t("live.extendMinutes", { n: 10 }),
           onSelect: () => controls.extend(10),
         },
+        ...(controls.extendUntil ? [{ label: t("live.extendUntil"), onSelect: controls.extendUntil }] : []),
       ]}
     />
   );

@@ -7,7 +7,7 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { ClosedBy, EvaluationClosedBy } from "@quiz/contracts";
-import { anchoredOnClosesAt } from "@quiz/domain";
+import { anchoredOnClosesAt, extendUntilRefusal, isLaterEnd } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { attempts, enrollments, officialAttempt } from "../../db/schema.js";
@@ -16,6 +16,7 @@ import {
   applyState,
   byId as evaluationById,
   extendClosesAt,
+  moveClosesAtTo,
   seatsOf,
   settingsOf,
   tryApplyState,
@@ -26,7 +27,7 @@ import { endKioskSessions } from "../../auth/session.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import type { AttemptRecord } from "./access.js";
-import { LiveError } from "./failures.js";
+import { ExtendUntilRefused, LiveError } from "./failures.js";
 import { beginAttempt } from "./lifecycle.js";
 import { logAttemptEvent, logAttemptEvents } from "./autosave.js";
 
@@ -246,9 +247,7 @@ export async function extendTime(
   input: { minutes: number; attemptId?: string | undefined },
   now: Date,
 ): Promise<number> {
-  if (evaluation.state === "closed" || evaluation.state === "released") {
-    throw new LiveError("evaluation_finished");
-  }
+  refuseFinished(evaluation);
   const seconds = input.minutes * 60;
   const target = input.attemptId;
   // In `deadline` timing, and in `manual` timing with a safety deadline
@@ -273,21 +272,94 @@ export async function extendTime(
     // may have outdated since this request loaded it.
     if (committed) events.stateChanged(committed, now);
   }
-  // Once `closes_at` has moved, the minutes are there and nowhere else: a
+  return shiftAttempts(
+    db,
+    evaluation,
+    { seconds, movedEnd: movesEnd, attemptId: target },
+    { seconds, minutes: input.minutes },
+    now,
+  );
+}
+
+/**
+ * F-LIVE-11 (ADR-086 amendment 2026-11-19): the class's end moved to
+ * `until`, a chosen instant. Running only, on a timing whose attempts hang
+ * off `closes_at` (`extendUntilRefusal`), later than the current end and
+ * than now (`isLaterEnd`): both read on the row locked for the write, and
+ * the distance too, so a concurrent "+N min" never makes it overshoot. The
+ * attempts then move by that distance, exactly as after "+N min" to
+ * everybody. No notification: a moved end does not resend the reminder
+ * (F-NOTIF-06).
+ */
+export async function extendUntil(
+  db: Db,
+  evaluation: EvaluationRecord,
+  until: Date,
+  now: Date,
+): Promise<{ updated: number; previousClosesAt: Date; seconds: number }> {
+  const moved = await moveClosesAtTo(db, evaluation.id, until, now, (locked) => {
+    refuseFinished(locked);
+    const refusal = extendUntilRefusal({
+      state: locked.state,
+      timing: settingsOf(locked).timing,
+      closesAt: locked.closesAt,
+    });
+    if (refusal !== null) throw new ExtendUntilRefused(refusal);
+    if (!isLaterEnd(until, locked.closesAt!, now)) throw new LiveError("until_not_later");
+  });
+  if (!moved) throw new LiveError("not_found");
+  // The row as committed, as after "+N min": the frame the players read.
+  events.stateChanged(moved.row, now);
+  const seconds = (until.getTime() - moved.previousClosesAt.getTime()) / 1000;
+  const updated = await shiftAttempts(
+    db,
+    evaluation,
+    { seconds, movedEnd: true },
+    { seconds, until: until.toISOString() },
+    now,
+  );
+  return { updated, previousClosesAt: moved.previousClosesAt, seconds };
+}
+
+/**
+ * Extra time on a finished evaluation (`closed`, `released`) moves a
+ * deadline nobody can use any more: no extension reopens it.
+ */
+function refuseFinished(evaluation: EvaluationRecord): void {
+  if (evaluation.state === "closed" || evaluation.state === "released") {
+    throw new LiveError("evaluation_finished");
+  }
+}
+
+/**
+ * The attempts' side of an extension, the minutes' and the date's alike:
+ * `seconds` more on their deadlines, a `time_added` row in their journal
+ * (`details`: `seconds` always, beside the `minutes` or the `until` the
+ * teacher chose), a `deadlineChanged` frame each.
+ */
+async function shiftAttempts(
+  db: Db,
+  evaluation: EvaluationRecord,
+  shift: { seconds: number; movedEnd: boolean; attemptId?: string | undefined },
+  details: { seconds: number } & ({ minutes: number } | { until: string }),
+  now: Date,
+): Promise<number> {
+  const { seconds, movedEnd, attemptId } = shift;
+  // Once `closes_at` has moved, the time is there and nowhere else: a
   // `not_started` attempt takes its deadline from it when it begins, and a
   // reopened one recomputes from it (#252). Extra time on the attempt as well
-  // would count them twice; an `in_progress` one only has its deadline moved.
+  // would count it twice; an `in_progress` one only has its deadline moved.
   const where =
-    target === undefined
+    attemptId === undefined
       ? and(
           eq(attempts.evaluationId, evaluation.id),
-          inArray(attempts.state, movesEnd ? ["in_progress"] : ["not_started", "in_progress"]),
+          inArray(attempts.state, movedEnd ? ["in_progress"] : ["not_started", "in_progress"]),
         )
-      : and(eq(attempts.id, target), eq(attempts.evaluationId, evaluation.id));
+      : and(eq(attempts.id, attemptId), eq(attempts.evaluationId, evaluation.id));
   const updated = await db
     .update(attempts)
     .set({
-      ...(movesEnd ? {} : { extraS: sql`${attempts.extraS} + ${seconds}` }),
+      ...(movedEnd ? {} : { extraS: sql`${attempts.extraS} + ${seconds}` }),
       // A `manual` attempt without a safety deadline has no deadline to
       // move; the extra time is still recorded, so a later switch of timing
       // mode is consistent.
@@ -300,7 +372,7 @@ export async function extendTime(
     db,
     updated.map((attempt) => attempt.id),
     "time_added",
-    { minutes: input.minutes },
+    details,
     now,
   );
   for (const attempt of updated) events.deadlineChanged(evaluation, attempt, "teacher_extend", now);

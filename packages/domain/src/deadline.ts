@@ -7,6 +7,8 @@
  * must use the SAME rule, so `GRACE_MS` lives here once.
  */
 
+import type { EvaluationStateName } from "./itemList.js";
+
 /** A write arriving later than `deadline + GRACE_MS` is refused with 410 attempt_closed. */
 export const GRACE_MS = 3000;
 
@@ -96,6 +98,36 @@ export function bonusSeconds(input: BonusInput): number {
  */
 export function anchoredOnClosesAt(timing: EvaluationTiming): boolean {
   return timing !== "duration";
+}
+
+/**
+ * Why "extend until a date" is not offered (F-LIVE-11, ADR-086 amendment
+ * 2026-11-19): the evaluation is not `running` (a pause has its own clock, a
+ * closed one is not reopened), its attempts do not hang off `closesAt`
+ * (`duration` timing: each attempt would need its own end recomputed), or
+ * there is no `closesAt` to move (`manual` without a safety deadline).
+ */
+export type ExtendUntilRefusal = "not_running" | "not_anchored" | "no_closes_at";
+
+/**
+ * THE rule for "extend until a date", shared by the API guard and the live
+ * dashboard's menu; null when the class's end may be moved to a chosen
+ * instant. The target itself is {@link isLaterEnd}'s.
+ */
+export function extendUntilRefusal(input: {
+  state: EvaluationStateName;
+  timing: EvaluationTiming;
+  closesAt: Date | string | null;
+}): ExtendUntilRefusal | null {
+  if (input.state !== "running") return "not_running";
+  if (!anchoredOnClosesAt(input.timing)) return "not_anchored";
+  if (input.closesAt === null) return "no_closes_at";
+  return null;
+}
+
+/** Whether a chosen end extends: strictly later than the current end, and than now. Never earlier: no shortening. */
+export function isLaterEnd(until: Date, closesAt: Date, now: Date): boolean {
+  return until.getTime() > closesAt.getTime() && until.getTime() > now.getTime();
 }
 
 /**

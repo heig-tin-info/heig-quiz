@@ -13,7 +13,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { LobbyView, type AttemptOrLobby } from "@quiz/contracts";
 import type { RunnerOutcome } from "@quiz/core/server";
-import { COMPILE_BUDGET_FLOOR, compilesPerMinute, GRACE_MS } from "@quiz/domain";
+import { announcedWindowS, COMPILE_BUDGET_FLOOR, compilesPerMinute, GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import { TestClock } from "../../clock.js";
@@ -900,7 +900,7 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     // One journal line and one frame per attempt, each with its NEW deadline.
     for (const attempt of started) {
       const journal = await db.select().from(attemptEvents).where(eq(attemptEvents.attemptId, attempt!.id));
-      expect(journal.filter((e) => e.kind === "time_added").map((e) => e.details)).toEqual([{ minutes: 5 }]);
+      expect(journal.filter((e) => e.kind === "time_added").map((e) => e.details)).toEqual([{ minutes: 5, seconds: 300 }]);
       const moved = (await service.attemptById(db, attempt!.id))!;
       expect(frames.filter((f) => f.attemptId === attempt!.id)).toEqual([
         expect.objectContaining({
@@ -1123,6 +1123,140 @@ describe.each([
     const { row: reopened } = await service.reopenAttempt(db, current, submitted, clock.now());
     expect(reopened.state).toBe("in_progress");
     expect(reopened.deadlineAt!.getTime()).toBe(shifted.deadlineAt!.getTime());
+  });
+});
+
+/*
+ * F-LIVE-11, ADR-086 amendment 2026-11-19: the class's end moved to a chosen
+ * instant. The end lands EXACTLY on it, the distance is computed on the row
+ * at the commit, and the attempts move by that distance as after "+N min".
+ */
+describe("extending until a date (F-LIVE-11)", () => {
+  const hour = 3_600_000;
+
+  /** A running `deadline` evaluation, its first student working, its second handed in. */
+  async function sitting(options: Parameters<typeof seedLive>[1] = {}) {
+    const opensAt = clock.now();
+    const closesAt = new Date(opensAt.getTime() + hour);
+    const seed = await seedLive(db, {
+      settings: { timing: "deadline" },
+      durationS: null,
+      opensAt,
+      closesAt,
+      timeBonusPercent: 25,
+      ...options,
+    });
+    const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
+    const started = [];
+    for (const userId of seed.studentIds) {
+      const participant = (await service.participantOf(db, row, userId))!;
+      const created = await service.ensureAttempt(db, row, participant, clock.now());
+      started.push(await service.beginAttempt(db, row, created, participant, clock.now()));
+    }
+    const [working, done] = started;
+    const handedIn = await service.submitAttempt(db, row, done!, clock.now());
+    return { seed, row, closesAt, working: working!, handedIn };
+  }
+
+  it("sets closes_at to the date, and moves the working attempts by the distance", async () => {
+    const { row, closesAt, working, handedIn } = await sitting();
+    const until = new Date(closesAt.getTime() + 25 * 60_000);
+
+    const moved = await service.extendUntil(db, row, until, clock.now());
+    expect(moved).toEqual({ updated: 1, previousClosesAt: closesAt, seconds: 25 * 60 });
+
+    const after = await reload(db, row.id);
+    expect(after.closesAt!.getTime()).toBe(until.getTime());
+    expect(after.closesAtShiftS).toBe(25 * 60);
+    // The base of the accommodation does not grow (D8, #253).
+    expect(announcedWindowS(after)).toBe(hour / 1000);
+
+    const workingNow = (await service.attemptById(db, working.id))!;
+    expect(workingNow.deadlineAt!.getTime()).toBe(working.deadlineAt!.getTime() + 25 * 60_000);
+    // On the end, never on the attempt as well (#252).
+    expect(workingNow.extraS).toBe(working.extraS);
+    const handedInNow = (await service.attemptById(db, handedIn.id))!;
+    expect(handedInNow.deadlineAt?.getTime()).toBe(handedIn.deadlineAt?.getTime());
+
+    const journal = await db.select().from(attemptEvents).where(eq(attemptEvents.attemptId, working.id));
+    expect(journal.filter((e) => e.kind === "time_added").map((e) => e.details)).toEqual([
+      { seconds: 25 * 60, until: until.toISOString() },
+    ]);
+  });
+
+  it("lands on the date even after a \"+5 min\" the request did not see", async () => {
+    const { row, closesAt, working } = await sitting();
+    // `row` is the record as this request loaded it; another one adds 5 min.
+    await service.extendTime(db, row, { minutes: 5 }, clock.now());
+    const until = new Date(closesAt.getTime() + 20 * 60_000);
+
+    const moved = await service.extendUntil(db, row, until, clock.now());
+    expect(moved.seconds).toBe(15 * 60);
+    expect(moved.previousClosesAt.getTime()).toBe(closesAt.getTime() + 5 * 60_000);
+    const after = await reload(db, row.id);
+    expect(after.closesAt!.getTime()).toBe(until.getTime());
+    expect(after.closesAtShiftS).toBe(20 * 60);
+    const workingNow = (await service.attemptById(db, working.id))!;
+    expect(workingNow.deadlineAt!.getTime()).toBe(working.deadlineAt!.getTime() + 20 * 60_000);
+  });
+
+  it("refuses an end that is not later, and leaves everything as it was", async () => {
+    const { row, closesAt, working } = await sitting();
+    for (const until of [closesAt, new Date(closesAt.getTime() - 60_000)]) {
+      await expect(service.extendUntil(db, row, until, clock.now())).rejects.toMatchObject({
+        code: "until_not_later",
+        status: 422,
+      });
+    }
+    const after = await reload(db, row.id);
+    expect(after.closesAt!.getTime()).toBe(closesAt.getTime());
+    expect(after.closesAtShiftS).toBe(0);
+    expect((await service.attemptById(db, working.id))!.deadlineAt!.getTime()).toBe(working.deadlineAt!.getTime());
+  });
+
+  it("refuses a date already past, even later than an end gone by", async () => {
+    const { row, closesAt } = await sitting();
+    // The accommodated student is still working: the evaluation still runs.
+    clock.set(new Date(closesAt.getTime() + 10 * 60_000));
+    const until = new Date(closesAt.getTime() + 5 * 60_000);
+    await expect(service.extendUntil(db, row, until, clock.now())).rejects.toMatchObject({
+      code: "until_not_later",
+    });
+  });
+
+  it("is offered on a running evaluation hanging off closes_at only", async () => {
+    const until = (closesAt: Date | null) => new Date((closesAt ?? clock.now()).getTime() + hour);
+
+    const { row } = await sitting();
+    const paused = await service.pauseEvaluation(db, row, clock.now());
+    await expect(service.extendUntil(db, paused, until(row.closesAt), clock.now())).rejects.toMatchObject({
+      code: "extend_until_refused",
+      status: 409,
+      details: { reason: "not_running" },
+    });
+
+    const timed = await sitting({ settings: { timing: "duration" }, durationS: 1800 });
+    await expect(service.extendUntil(db, timed.row, until(timed.row.closesAt), clock.now())).rejects.toMatchObject({
+      code: "extend_until_refused",
+      details: { reason: "not_anchored" },
+    });
+
+    const open = await sitting({ settings: { timing: "manual" }, opensAt: null, closesAt: null });
+    await expect(service.extendUntil(db, open.row, until(null), clock.now())).rejects.toMatchObject({
+      code: "extend_until_refused",
+      details: { reason: "no_closes_at" },
+    });
+
+    // `manual` with a safety deadline hangs off it (ADR-086 §2).
+    const safety = await sitting({ settings: { timing: "manual" }, opensAt: null });
+    await expect(service.extendUntil(db, safety.row, until(safety.closesAt), clock.now())).resolves.toMatchObject({
+      updated: 1,
+    });
+
+    const closed = await service.closeEvaluation(db, await reload(db, safety.row.id), clock.now(), "teacher");
+    await expect(service.extendUntil(db, closed, until(closed.closesAt), clock.now())).rejects.toMatchObject({
+      code: "evaluation_finished",
+    });
   });
 });
 

@@ -141,6 +141,7 @@ export {
   closeEvaluation,
   tryCloseEvaluation,
   extendTime,
+  extendUntil,
 } from "./control.js";
 export {
   dashboardView,
