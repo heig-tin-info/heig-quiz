@@ -22,7 +22,8 @@ pseudonym.
 ## Controls
 
 **Pause** freezes every countdown; **Extend** adds 1, 5 or 10 minutes to
-the whole class. A row's menu extends one student by 5 minutes, or closes
+the whole class. While it runs with a common end, **Until a date…** moves
+that end to a later date and time. A row's menu extends one student by 5 minutes, or closes
 and reopens that one attempt; reopening only works while the evaluation is
 running or paused. **Close** ends it for everybody and asks first. Once it
 is closed, the only thing left here is going to the grading.

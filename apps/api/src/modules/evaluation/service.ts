@@ -95,6 +95,7 @@ export {
   patchEvaluation,
   deleteEvaluation,
   extendClosesAt,
+  moveClosesAtTo,
   setPollSettings,
   setRelease,
   clearRelease,

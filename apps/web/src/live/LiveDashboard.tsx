@@ -3,7 +3,7 @@ import { ScrollText, Users, Wifi, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { TransitionRefusal, type DashboardAlertEvent, type DashboardRow } from "@quiz/contracts";
-import { isLiveState, pausableMode, trustedClientsOf } from "@quiz/domain";
+import { extendUntilRefusal, isLiveState, pausableMode, trustedClientsOf } from "@quiz/domain";
 
 import { ApiError, api, usePublicConfig } from "../api";
 import { useConfirm } from "../confirm";
@@ -28,6 +28,7 @@ import {
 } from "../ui";
 import { PaperEntryDialog } from "../paper/PaperEntryDialog";
 import { AssignStationDialog } from "./AssignStation";
+import { ExtendUntilDialog } from "./ExtendUntilDialog";
 import { anonymousNumbers, commonDeadline } from "./cells";
 import { AnswerModal } from "./AnswerModal";
 import { IncidentsModal } from "./Incidents";
@@ -216,6 +217,13 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   // Only an exam pauses (§1 glossary); unknown until the detail has loaded.
   const canPause = detail.data !== undefined && pausableMode(detail.data.evaluation.mode);
   const pausable = live && (canPause || evaluationState === "paused");
+  // The evaluation's timing: unknown until the detail has loaded.
+  const timing = detail.data?.evaluation.settings.timing;
+  // "Until a date…" (ADR-086 amendment 2026-11-19): the one rule, as the server's.
+  const closesAt = state?.view.evaluation.closesAt ?? null;
+  const [extendingUntil, setExtendingUntil] = useState(false);
+  const untilOffered =
+    timing !== undefined && extendUntilRefusal({ state: evaluationState, timing, closesAt }) === null;
 
   /**
    * What a row is called, once (F-DASH-02). With the names off it is
@@ -257,6 +265,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     pause: () => control.mutate({ path: "pause" }),
     resume: () => control.mutate({ path: "resume" }),
     extend: (minutes) => control.mutate({ path: "extend", body: { minutes, scope: "all" } }),
+    extendUntil: untilOffered ? () => setExtendingUntil(true) : null,
     close: () => {
       void (async () => {
         if (
@@ -386,7 +395,6 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   // compares its own deadline against it. No clock while the evaluation's
   // timing is unknown: without it a `duration` quiz would show its leftover
   // close for a moment (#574).
-  const timing = detail.data?.evaluation.settings.timing;
   const deadline = timing === undefined ? null : commonDeadline(view.evaluation.closesAt, view.rows, timing);
 
   const body = (
@@ -411,6 +419,15 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         onGoToGrading={() => navigate(gradingLinks(id).grading)}
         correction={correction}
       />
+      {extendingUntil && untilOffered && closesAt !== null ? (
+        <ExtendUntilDialog
+          evaluationId={id}
+          closesAt={closesAt}
+          clock={serverNow}
+          onDone={refresh}
+          onClose={() => setExtendingUntil(false)}
+        />
+      ) : null}
 
       {/* The switches on the left, what the connection says on the right,
           under the header's actions (#227): two different things, and the

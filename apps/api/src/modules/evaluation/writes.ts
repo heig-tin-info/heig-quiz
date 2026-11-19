@@ -41,7 +41,7 @@ import {
   retakeScopeFits,
 } from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import {
   attempts,
   evaluationItems,
@@ -430,6 +430,30 @@ export async function extendClosesAt(
     .where(and(eq(evaluations.id, id), isNotNull(evaluations.closesAt)))
     .returning();
   return row ?? null;
+}
+
+/**
+ * `live.extendUntil` (F-LIVE-11, ADR-086 amendment 2026-11-19): `closes_at`
+ * moved to EXACTLY `until` by {@link extendClosesAt}, which adds the distance
+ * to `closes_at_shift_s` (the announced window, D8, #253, does not grow).
+ * Inside the caller's transaction: the row is locked `FOR UPDATE` until it
+ * commits, and `check` (the caller's rule, which throws to refuse and returns
+ * the end it validated) and the distance both read it as it stands then,
+ * never as the request loaded it, so a "+5 min" landing in between can never
+ * make the target overshoot.
+ */
+export async function moveClosesAtTo(
+  tx: Tx,
+  id: string,
+  until: Date,
+  now: Date,
+  check: (locked: EvaluationRecord) => Date,
+): Promise<{ row: EvaluationRecord | null; previousClosesAt: Date }> {
+  const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, id)).for("update");
+  if (!locked) throw new EvaluationError("not_found");
+  const previousClosesAt = check(locked);
+  const seconds = (until.getTime() - previousClosesAt.getTime()) / 1000;
+  return { row: await extendClosesAt(tx, id, seconds, now), previousClosesAt };
 }
 
 /** `poll.setDisplay`: the poll switches and the feedback policy, moved together. */

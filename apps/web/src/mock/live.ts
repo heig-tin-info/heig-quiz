@@ -6,6 +6,7 @@ import {
   iso,
   MockError,
   on,
+  refuse,
 } from "./runtime";
 import {
   attemptInspect,
@@ -58,7 +59,12 @@ on("POST", "/app/api/evaluations/:id/extend", (m, body) => {
   if (e.state === "closed" || e.state === "released") {
     throw new MockError(409, "the evaluation is already closed");
   }
-  const ms = Number(body.minutes ?? 5) * 60_000;
+  // "Until a date…" (ADR-086 amendment 2026-11-19): the distance to the date.
+  const until = typeof body.until === "string" ? Date.parse(body.until) : null;
+  if (until !== null && (e.closesAt === null || until <= Math.max(Date.parse(e.closesAt), Date.now()))) {
+    throw refuse(422, "until_not_later", "the new end must be later than the current end and than now");
+  }
+  const ms = until !== null ? until - Date.parse(e.closesAt!) : Number(body.minutes ?? 5) * 60_000;
   const target = body.scope === "attempt" ? String(body.attemptId) : null;
   let updated = 0;
   for (const row of e.rows) {

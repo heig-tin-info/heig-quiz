@@ -24,7 +24,8 @@ stable.
 ## Commandes
 
 **Pause** gèle tous les comptes à rebours ; **Prolonger** ajoute 1, 5 ou 10
-minutes à toute la classe. Le menu d'une ligne prolonge un seul étudiant de
+minutes à toute la classe. En cours, avec une fin commune, **Jusqu'à une
+date…** repousse cette fin à une date et une heure plus tardives. Le menu d'une ligne prolonge un seul étudiant de
 5 minutes, ou clôture et rouvre cette tentative ; rouvrir n'est possible que
 tant que l'évaluation est en cours ou en pause. **Clôturer** termine pour
 tout le monde et demande confirmation. Une fois clôturée, il ne reste ici

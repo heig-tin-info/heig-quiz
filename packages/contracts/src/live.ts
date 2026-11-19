@@ -912,7 +912,7 @@ export const StartBody = z.object({ confirm: z.literal(true) });
 export type StartBody = z.infer<typeof StartBody>;
 
 /** F-LIVE-11: +1, +5 or +10 minutes, to everybody or to one student. */
-export const ExtendBody = z
+export const ExtendMinutesBody = z
   .object({
     minutes: z.union([z.literal(1), z.literal(5), z.literal(10)]),
     scope: z.enum(["all", "attempt"]).default("all"),
@@ -921,6 +921,21 @@ export const ExtendBody = z
   .refine((b) => b.scope === "all" || b.attemptId !== undefined, {
     message: "attemptId is required when scope is 'attempt'",
   });
+export type ExtendMinutesBody = z.infer<typeof ExtendMinutesBody>;
+
+/**
+ * F-LIVE-11 (ADR-086 amendment 2026-11-19): the class's end moved to a
+ * chosen instant, later than the current one, on a running evaluation whose
+ * attempts hang off `closesAt` (`@quiz/domain#extendUntilRefusal`). The
+ * whole class only: there is no per-attempt date.
+ */
+export const ExtendUntilBody = z.strictObject({
+  until: z.iso.datetime({ offset: true }),
+});
+export type ExtendUntilBody = z.infer<typeof ExtendUntilBody>;
+
+/** `POST /evaluations/:id/extend`: a number of minutes, or a date. */
+export const ExtendBody = z.union([ExtendUntilBody, ExtendMinutesBody]);
 export type ExtendBody = z.infer<typeof ExtendBody>;
 
 export const ExtendResponse = z.object({

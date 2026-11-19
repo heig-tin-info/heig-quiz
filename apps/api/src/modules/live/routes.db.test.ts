@@ -993,3 +993,87 @@ describe("reopening once the key was shown (ADR-068 §3, ADR-124)", () => {
     });
   });
 });
+
+/*
+ * F-LIVE-11, ADR-086 amendment 2026-11-19: "Until a date…" moves the class's
+ * end to a chosen instant, later only, on a running evaluation hanging off
+ * `closes_at`; audited under `evaluation.extend`.
+ */
+describe("extending until a date (F-LIVE-11)", () => {
+  const hour = 3_600_000;
+
+  /** A running evaluation of `teacher`, in the timing given, ending in an hour unless said otherwise. */
+  async function runningEvaluation(timing: "deadline" | "duration" | "manual", closesAt: Date | null = null) {
+    const now = server.clock.now();
+    const own = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      settings: { timing },
+      durationS: timing === "duration" ? 1800 : null,
+      opensAt: now,
+      closesAt,
+    });
+    await applyState(server.app.db, await reload(server.app.db, own.evaluationId), "running", now);
+    return own.evaluationId;
+  }
+  const extend = (id: string, payload: Payload) =>
+    post(`/app/api/evaluations/${id}/extend`, teacher.headers, payload);
+
+  it("moves the end to the date, and audits where it stood", async () => {
+    const closesAt = new Date(server.clock.now().getTime() + hour);
+    const id = await runningEvaluation("deadline", closesAt);
+    // A date as the dialog sends it: local time with its offset.
+    const until = new Date(closesAt.getTime() + 30 * 60_000);
+    const offset = until.toISOString().replace("Z", "+00:00");
+
+    const res = await extend(id, { until: offset });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ updated: 0 });
+    expect((await reload(server.app.db, id)).closesAt!.toISOString()).toBe(until.toISOString());
+
+    const [audit] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "evaluation.extend"), eq(auditLog.subjectId, id)));
+    expect(audit!.payload).toEqual({
+      until: until.toISOString(),
+      previousClosesAt: closesAt.toISOString(),
+      seconds: 30 * 60,
+      scope: "all",
+      updated: 0,
+    });
+  });
+
+  it("refuses an end that is not later, or too far ahead, with a 422", async () => {
+    const closesAt = new Date(server.clock.now().getTime() + hour);
+    const id = await runningEvaluation("deadline", closesAt);
+    for (const [until, error] of [
+      [closesAt, "until_not_later"],
+      [new Date(closesAt.getTime() - 60_000), "until_not_later"],
+      // A century's typo: refused, never a 500 from the stored shift.
+      [new Date("2126-11-19T12:00:00Z"), "until_too_far"],
+    ] as const) {
+      const res = await extend(id, { until: until.toISOString() });
+      expect([res.statusCode, res.json().error]).toEqual([422, error]);
+    }
+    // No date for one attempt: the whole class only.
+    const one = await extend(id, { until: new Date(closesAt.getTime() + hour).toISOString(), scope: "attempt" });
+    expect(one.statusCode).toBe(400);
+  });
+
+  it("refuses with the rule's reason, and never reopens a closed evaluation", async () => {
+    const later = () => new Date(server.clock.now().getTime() + 2 * hour).toISOString();
+    const closesAt = () => new Date(server.clock.now().getTime() + hour);
+
+    const timed = await runningEvaluation("duration", closesAt());
+    const refused = await extend(timed, { until: later() });
+    expect([refused.statusCode, refused.json()]).toEqual([
+      409,
+      expect.objectContaining({ error: "extend_until_refused", reason: "not_anchored" }),
+    ]);
+
+    const closed = await runningEvaluation("manual", closesAt());
+    expect((await post(`/app/api/evaluations/${closed}/close`, teacher.headers)).statusCode).toBe(200);
+    const res = await extend(closed, { until: later() });
+    expect([res.statusCode, res.json().error]).toEqual([409, "evaluation_finished"]);
+  });
+});

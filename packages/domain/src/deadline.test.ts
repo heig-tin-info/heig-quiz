@@ -4,9 +4,13 @@ import {
   announcedWindowS,
   attemptDeadline,
   bonusSeconds,
+  extendUntilRefusal,
+  extendUntilWindow,
+  EXTEND_UNTIL_HORIZON_DAYS,
   GRACE_MS,
   isWritable,
   previewDurationS,
+  untilRefusal,
 } from "./deadline.js";
 
 const startedAt = new Date("2026-09-20T08:00:00Z");
@@ -229,5 +233,57 @@ describe("previewDurationS", () => {
     expect(
       previewDurationS({ timing: "manual", durationS: 1800, opensAt, closesAt, closesAtShiftS: 0 }),
     ).toBeNull();
+  });
+});
+
+describe("extendUntilRefusal (F-LIVE-11, ADR-086 amendment 2026-11-19)", () => {
+  const offered = { state: "running", timing: "deadline", closesAt } as const;
+
+  it("offers a date on a running evaluation whose attempts hang off closesAt", () => {
+    expect(extendUntilRefusal(offered)).toBeNull();
+    // `manual` with a safety deadline, as an ISO string from the wire.
+    expect(extendUntilRefusal({ ...offered, timing: "manual", closesAt: closesAt.toISOString() })).toBeNull();
+  });
+
+  it("refuses anything but running: no pause, no lobby, no reopen", () => {
+    for (const state of ["draft", "scheduled", "lobby", "paused", "closed", "grading", "released"] as const) {
+      expect(extendUntilRefusal({ ...offered, state })).toBe("not_running");
+    }
+  });
+
+  it("refuses `duration` timing, and `manual` without a safety deadline", () => {
+    expect(extendUntilRefusal({ ...offered, timing: "duration" })).toBe("not_anchored");
+    expect(extendUntilRefusal({ ...offered, timing: "manual", closesAt: null })).toBe("no_closes_at");
+    expect(extendUntilRefusal({ ...offered, closesAt: null })).toBe("no_closes_at");
+  });
+});
+
+describe("untilRefusal", () => {
+  const now = new Date("2026-09-20T08:30:00Z");
+  const day = 86_400_000;
+
+  it("takes an instant strictly later than the end and than now, up to the horizon", () => {
+    expect(untilRefusal(new Date(closesAt.getTime() + 1000), closesAt, now)).toBeNull();
+    const latest = closesAt.getTime() + EXTEND_UNTIL_HORIZON_DAYS * day;
+    expect(untilRefusal(new Date(latest), closesAt, now)).toBeNull();
+    expect(extendUntilWindow(closesAt, now)).toEqual({ after: closesAt, latest: new Date(latest) });
+  });
+
+  it("refuses the current end, an earlier one, and the past", () => {
+    expect(untilRefusal(closesAt, closesAt, now)).toBe("not_later");
+    expect(untilRefusal(new Date(closesAt.getTime() - 60_000), closesAt, now)).toBe("not_later");
+    // An end already gone by (the grace): later than it, still in the past.
+    const past = new Date("2026-09-20T08:00:00Z");
+    expect(untilRefusal(new Date("2026-09-20T08:10:00Z"), past, now)).toBe("not_later");
+  });
+
+  it("refuses a date past the horizon, counted from now once the end has gone by", () => {
+    expect(untilRefusal(new Date(closesAt.getTime() + EXTEND_UNTIL_HORIZON_DAYS * day + 1), closesAt, now)).toBe(
+      "too_far",
+    );
+    // A typo of a century: refused here, never an overflow of the stored shift.
+    expect(untilRefusal(new Date("2126-09-20T08:00:00Z"), closesAt, now)).toBe("too_far");
+    const past = new Date("2026-09-20T08:00:00Z");
+    expect(extendUntilWindow(past, now).latest).toEqual(new Date(now.getTime() + EXTEND_UNTIL_HORIZON_DAYS * day));
   });
 });

@@ -14,7 +14,7 @@ import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer, type StudentV
 import { itemPoints, mayValidate, progressStatus, rateOf } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { answers, attemptEvents, attempts, evaluations } from "../../db/schema.js";
 import { typeOf } from "../pool/config.js";
 import { configPerAttempt, type InstanceAttempt } from "../pool/service.js";
@@ -730,7 +730,7 @@ export async function logAttemptEvent(
 
 /** {@link logAttemptEvent} for many attempts at once: one multi-row insert. */
 export async function logAttemptEvents(
-  db: Db,
+  db: Db | Tx,
   attemptIds: readonly string[],
   kind: typeof attemptEvents.$inferInsert["kind"],
   details: unknown,

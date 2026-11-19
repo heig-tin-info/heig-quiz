@@ -4,7 +4,7 @@
  * (the 410 of §4.7). Imported through `./service.ts`.
  */
 import type { AttemptClosed } from "@quiz/contracts";
-import type { PracticeRefusal, RetakeRefusal } from "@quiz/domain";
+import type { ExtendUntilRefusal, PracticeRefusal, RetakeRefusal } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import { refusalClass, type FailureArms, type Refusal } from "../http.js";
@@ -23,6 +23,16 @@ const REFUSALS = {
   // Extra time on a finished evaluation (`closed`, `released`) moves a
   // deadline nobody can use any more; the dashboard offers no `+N min` there.
   evaluation_finished: [409, "the evaluation is already closed"],
+  // `ExtendUntilRefused`: "until a date" on an evaluation that is not
+  // running, or whose attempts do not hang off `closes_at` (ADR-086
+  // amendment 2026-11-19, `@quiz/domain#extendUntilRefusal`).
+  extend_until_refused: [409],
+  // An end chosen earlier than, or equal to, the current one, or past: an
+  // extension never shortens.
+  until_not_later: [422, "the new end must be later than the current end and than now"],
+  // An end past the horizon (`EXTEND_UNTIL_HORIZON_DAYS`): a typo, never a
+  // shift the stored `closes_at_shift_s` cannot hold.
+  until_too_far: [422, "the new end is too far ahead"],
   // `RetakeRefused`.
   retake_refused: [409],
   // `PracticeRefused` (ADR-122).
@@ -108,6 +118,16 @@ export class RetakeRefused extends LiveError {
 export class PracticeRefused extends LiveError {
   constructor(readonly reason: PracticeRefusal) {
     super("practice_refused", `practice refused: ${reason}`, { reason });
+  }
+}
+
+/**
+ * "Extend until a date" where the rule refuses it
+ * (`@quiz/domain#extendUntilRefusal`): the reason travels in the body.
+ */
+export class ExtendUntilRefused extends LiveError {
+  constructor(readonly reason: ExtendUntilRefusal) {
+    super("extend_until_refused", `extend until a date refused: ${reason}`, { reason });
   }
 }
 
