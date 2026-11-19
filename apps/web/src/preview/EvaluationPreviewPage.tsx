@@ -3,6 +3,9 @@
  * student would, and gets the full correction at the end (issue #75, ADR-018
  * fourth addendum). Opened in a new tab from the evaluation page, so the
  * configuration stays where it was and can be edited meanwhile.
+ * `/templates/:id/preview` is the same walk of a course's template, opened
+ * from its editor (F-EVAL-25): `kind` picks the routes, the way back and the
+ * words that name the paper (`subject.ts`), nothing else.
  *
  * It is stateless, and it says so: the server draws a seed and hands back
  * the student's view of it; the answers stay in this tab; "Hand in" (or the
@@ -28,7 +31,7 @@
  */
 import { useMutation } from "@tanstack/react-query";
 import { Eye, Loader2, UserX } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   PreviewGradeBody,
@@ -49,6 +52,7 @@ import { PreviewCorrectionView } from "./PreviewCorrection";
 import { usePreviewEdit } from "./usePreviewEdit";
 import { PreviewPoints } from "./PreviewPoints";
 import { usePreviewSession } from "./usePreviewSession";
+import { previewSubject, type PreviewKind, type PreviewSubject } from "./subject";
 
 interface Walk {
   preview: EvaluationPreview;
@@ -57,13 +61,16 @@ interface Walk {
 }
 
 export function EvaluationPreviewPage({
+  kind = "evaluation",
   id,
   navigate,
 }: {
+  kind?: PreviewKind;
   id: string;
   navigate: (r: Route) => void;
 }) {
   const t = useT();
+  const subject = useMemo(() => previewSubject(kind, id), [kind, id]);
   const [walk, setWalk] = useState<Walk | null>(null);
   const [correction, setCorrection] = useState<PreviewCorrection | null>(null);
   /*
@@ -76,7 +83,7 @@ export function EvaluationPreviewPage({
 
   const start = useMutation({
     mutationFn: () =>
-      api<EvaluationPreview>(`/app/api/evaluations/${id}/preview`, { method: "POST" }),
+      api<EvaluationPreview>(subject.preview, { method: "POST" }),
     onSuccess: (preview) => {
       setCorrection(null);
       setWalk({ preview, startedAt: Date.now() });
@@ -95,7 +102,7 @@ export function EvaluationPreviewPage({
 
   const grade = useMutation({
     mutationFn: (input: { seed: number; answers: Record<string, unknown> }) =>
-      api<PreviewCorrection>(`/app/api/evaluations/${id}/preview/grade`, {
+      api<PreviewCorrection>(`${subject.preview}/grade`, {
         method: "POST",
         body: JSON.stringify(PreviewGradeBody.parse({ ...input, coordinates: ANSWER_COORDINATES })),
       }),
@@ -111,7 +118,7 @@ export function EvaluationPreviewPage({
     [gradeAsync, seed],
   );
 
-  const back = () => navigate({ view: "evaluation", id });
+  const back = () => navigate(subject.back);
   const restart = () => {
     setRestarting(true);
     grade.reset();
@@ -123,7 +130,7 @@ export function EvaluationPreviewPage({
       <PreviewWalk
         // A new seed is a new paper: nothing of the previous walk survives.
         key={walk.preview.seed}
-        evaluationId={id}
+        subject={subject}
         walk={walk}
         grading={grade.isPending}
         gradeFailed={grade.isError}
@@ -143,6 +150,7 @@ export function EvaluationPreviewPage({
       <PreviewCorrectionView
         title={walk.preview.view.evaluation.title}
         correction={correction}
+        backLabel={t(subject.copy.back)}
         restarting={restarting}
         onRestart={restart}
         onBack={back}
@@ -157,7 +165,7 @@ export function EvaluationPreviewPage({
             <EmptyState
               icon={UserX}
               titleAs="h1"
-              title={t("preview.notFound")}
+              title={t(subject.copy.notFound)}
               action={
                 <Button variant="primary" onClick={() => navigate({ view: "home" })}>
                   {t("player.closed.home")}
@@ -214,7 +222,7 @@ function PreviewMode({
 
 /** The player, driven by the preview's own session, under the preview's strip. */
 function PreviewWalk({
-  evaluationId,
+  subject,
   walk,
   grading,
   gradeFailed,
@@ -223,7 +231,7 @@ function PreviewWalk({
   onRestart,
   onBack,
 }: {
-  evaluationId: string;
+  subject: PreviewSubject;
   walk: Walk;
   grading: boolean;
   gradeFailed: boolean;
@@ -235,7 +243,7 @@ function PreviewWalk({
   const t = useT();
   const confirm = useConfirm();
   const session = usePreviewSession({
-    evaluationId,
+    base: subject.preview,
     preview: walk.preview,
     startedAt: walk.startedAt,
     onSubmit: onHandIn,
@@ -259,11 +267,11 @@ function PreviewWalk({
     const ok = await mayDiscard(
       t("preview.leave.title"),
       t("preview.leave.message"),
-      t("preview.backToEvaluation"),
+      t(subject.copy.back),
     );
     if (ok) onBack();
   };
-  const edit = usePreviewEdit({ evaluationId, preview: walk.preview, session, askRestart });
+  const edit = usePreviewEdit({ subject, preview: walk.preview, session, askRestart });
 
   return (
     // No Restart while the grading runs: it would land on the new walk.
@@ -272,7 +280,7 @@ function PreviewWalk({
         initial={walk.preview.view}
         session={session}
         onHome={() => void askLeave()}
-        homeLabel={t("preview.backToEvaluation")}
+        homeLabel={t(subject.copy.back)}
         banner={
           // Only what applies now: nothing stands over the question otherwise.
           <div className="space-y-3">
@@ -297,7 +305,7 @@ function PreviewWalk({
               <PreviewPoints
                 // A new question, a clean slate: no points of another one linger.
                 key={`${current.id}:${current.generation ?? 0}`}
-                evaluationId={evaluationId}
+                base={subject.preview}
                 seed={walk.preview.seed}
                 itemId={current.id}
                 answer={session.state.answers[current.id]}

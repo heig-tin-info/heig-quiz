@@ -39,12 +39,15 @@ export function PreviewCorrectionView({
   restarting,
   onRestart,
   onBack,
+  backLabel,
 }: {
   title: string;
   correction: PreviewCorrection;
   restarting: boolean;
   onRestart: () => void;
   onBack: () => void;
+  /** Back to the evaluation, or to the template: the page that opened the walk. */
+  backLabel: string;
 }) {
   const t = useT();
   const manual = correction.items.filter((i) => i.status === "manual").length;
@@ -63,7 +66,7 @@ export function PreviewCorrectionView({
             <RotateCcw /> {t("preview.restart")}
           </Button>
           <Button variant="secondary" onClick={onBack}>
-            <ArrowLeft /> {t("preview.backToEvaluation")}
+            <ArrowLeft /> {backLabel}
           </Button>
         </div>
       </header>

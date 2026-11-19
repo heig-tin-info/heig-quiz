@@ -36,12 +36,13 @@ type Graded = { answer: unknown } & ({ correction: PreviewCorrection } | { error
 const NONE = Symbol("none");
 
 export function PreviewPoints({
-  evaluationId,
+  base,
   seed,
   itemId,
   answer,
 }: {
-  evaluationId: string;
+  /** `/app/api/<evaluations or templates>/:id/preview`: the routes of the paper walked. */
+  base: string;
   seed: number;
   itemId: string;
   /** `undefined` for a question never opened: it is worth zero. */
@@ -53,7 +54,7 @@ export function PreviewPoints({
   const grade = useMutation({
     mutationFn: (input: unknown) => {
       const answers = input === undefined ? {} : { [itemId]: input };
-      return api<PreviewCorrection>(`/app/api/evaluations/${evaluationId}/preview/grade`, {
+      return api<PreviewCorrection>(`${base}/grade`, {
         method: "POST",
         body: JSON.stringify(PreviewGradeBody.parse({ seed, answers, coordinates: ANSWER_COORDINATES })),
       });

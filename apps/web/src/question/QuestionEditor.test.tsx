@@ -1001,6 +1001,34 @@ describe("QuestionEditor — opened from an evaluation (#127)", () => {
       // jsdom keeps the window open: the fallback leads to the preview.
       await waitFor(() => expect(navigate).toHaveBeenCalledWith(PREVIEW));
     });
+
+    it("does the same from a template's preview, under the template in the trail (F-EVAL-25)", async () => {
+      const user = flowingClock();
+      const TEMPLATE = "4b3c2d1e-0f0e-4d0c-8b0a-090807060504";
+      mockFetch(
+        routes(mcqDetail(), {
+          [`GET /app/api/templates/${TEMPLATE}`]: ok({
+            template: { id: TEMPLATE, title: "Examen final" },
+            items: [],
+          }),
+        }),
+      );
+      const navigate = vi.fn();
+      renderWithProviders(<QuestionEditor id="q1" navigate={navigate} />, {
+        route: `/questions/q1?fromTemplatePreview=${TEMPLATE}`,
+      });
+      const trail = await screen.findByRole("navigation", { name: "Breadcrumb" });
+      await within(trail).findByRole("link", { name: "Examen final" });
+      expect(within(trail).getByRole("link", { name: "Preview" })).toHaveAttribute(
+        "href",
+        `/templates/${TEMPLATE}/preview`,
+      );
+      // jsdom keeps the window open: after trying to close, the fallback leads to the walk.
+      await user.click(screen.getByRole("button", { name: "Back to the preview" }));
+      await elapse(1000);
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(navigate).toHaveBeenCalledWith({ view: "templatePreview", id: TEMPLATE });
+    });
   });
 
   it("stays in the editor once published from anywhere else", async () => {

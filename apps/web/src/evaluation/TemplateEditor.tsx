@@ -1,4 +1,4 @@
-import { CopyPlus, FileStack, Settings2, Unlink } from "lucide-react";
+import { CopyPlus, Eye, FileStack, Settings2, Unlink } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { TemplatePatch, type TemplateDetail } from "@quiz/contracts";
@@ -10,9 +10,8 @@ import { useColumnSettingsRefresh } from "../gradebook/api";
 import { GradebookSettingRow } from "../gradebook/GradebookSettingRow";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
-import type { Route } from "../router";
+import { routeToPath, useSearchParam, type Route } from "../router";
 import { Trail, useTemplateCrumbs } from "../Trail";
-import { useSearchParam } from "../router";
 import {
   Actions,
   Alert,
@@ -64,7 +63,10 @@ import { useTemplate } from "./api";
  * questions is the Questions section's own action, one step down — except
  * while the template holds none, where "Use in a classroom" would copy an
  * empty paper: then it is absent, and "Add questions" in the empty list is
- * the primary, as on a new evaluation.
+ * the primary, as on a new evaluation. Beside it, secondary, "Preview" walks
+ * the whole template as a student, like an evaluation's (issue #75): in a
+ * new tab, so the editor stays open to fix what the walk shows; absent too
+ * while there is nothing to walk.
  *
  * A wide route (`WIDE` in App.tsx) that draws its own box (`pageBox`), so
  * that the preview docked beside the question list widens the page by its
@@ -136,6 +138,11 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
     });
   };
 
+  // `noopener`, like the evaluation's: the walk needs nothing from this page.
+  const openPreview = () => {
+    window.open(routeToPath({ view: "templatePreview", id: template.id }), "_blank", "noopener");
+  };
+
   const pane = useItemPane();
   const unlinked = data.items.filter((i) => i.poolUnlinked).length;
   const filled = data.items.length > 0;
@@ -164,10 +171,17 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
           </span>
         }
         actions={
-          filled && actions.canUse ? (
-            <Button onClick={() => actions.use(template)}>
-              <CopyPlus /> {t("templates.use")}
-            </Button>
+          filled ? (
+            <>
+              <Button variant="secondary" onClick={openPreview}>
+                <Eye /> {t("eval.preview")}
+              </Button>
+              {actions.canUse ? (
+                <Button onClick={() => actions.use(template)}>
+                  <CopyPlus /> {t("templates.use")}
+                </Button>
+              ) : null}
+            </>
           ) : null
         }
         menu={<Actions label={t("common.actions")} items={[actions.deleteItem(template)]} />}

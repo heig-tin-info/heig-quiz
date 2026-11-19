@@ -159,6 +159,22 @@ describe("TemplateEditor", () => {
     const add = await screen.findByRole("button", { name: "Add questions" });
     expect(add.className).toMatch(/bg-accent/);
     expect(screen.queryByRole("button", { name: "Use in a classroom" })).toBeNull();
+    // Nothing to walk either.
+    expect(screen.queryByRole("button", { name: "Preview" })).toBeNull();
+  });
+
+  it("opens the full preview of the template in a new tab, beside the primary", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    mockFetch(world());
+    renderWithProviders(<TemplateEditor id={T} navigate={vi.fn()} />);
+
+    // Secondary: the accent stays on Use in a classroom.
+    expect((await screen.findByRole("button", { name: "Use in a classroom" })).className).toMatch(/bg-accent/);
+    const preview = screen.getByRole("button", { name: "Preview" });
+    expect(preview.className).not.toMatch(/bg-accent/);
+    await userEvent.click(preview);
+    expect(open).toHaveBeenCalledWith(`/templates/${T}/preview`, "_blank", "noopener");
+    open.mockRestore();
   });
 
   it("writes through the template's own routes: an item update, and a clock mode without dates", async () => {

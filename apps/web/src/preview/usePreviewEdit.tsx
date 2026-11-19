@@ -1,43 +1,43 @@
 /**
- * Fixing a question from the evaluation preview (ADR-018, sixth addendum).
+ * Fixing a question from the preview (ADR-018, sixth addendum), of an
+ * evaluation or of a template (F-EVAL-25): the `PreviewSubject` says which.
  *
- * The teacher walks the evaluation, finds a wrong question, and must be able
+ * The teacher walks the paper, finds a wrong question, and must be able
  * to fix it WITHOUT losing the walk: its answers live in this tab only. So
  *   - "Edit question" opens the question's editor in ANOTHER tab — its draft,
- *     like the Edit of the evaluation's item list; the walk stays here;
+ *     like the Edit of the paper's item list; the walk stays here;
  *   - once a newer version is published, the question offers "Use the new
  *     version": the item moves to it (F-EVAL-03, the item list's own route),
  *     the walk is rebuilt from ITS seed, and only that question is swapped
  *     in, its answer dropped. The other questions keep order, shuffles and
  *     answers;
  *   - where the item list is frozen (`itemListLock`), the notice says why and
- *     what is left, and offers nothing that would be refused;
- *   - an evaluation that changed otherwise under the walk (an item added,
+ *     what is left, and offers nothing that would be refused. A template is
+ *     never frozen: it has no attempt and is never opened;
+ *   - a paper that changed otherwise under the walk (an item added,
  *     removed, or moved to another version) is graded as it is NOW, which is
  *     not what the teacher answered: the preview offers to restart.
  *
- * What the evaluation holds is its detail query, the one the configuration
- * page reads: refetched when the tab regains focus and on the refresh hints
- * a publish or an update sends, so coming back from the editor is enough.
+ * What the paper holds is its detail query, the one its editor reads:
+ * refetched when the tab regains focus and on the refresh hints a publish or
+ * an update sends, so coming back from the editor is enough.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, RefreshCw, TriangleAlert } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
 
 import { PreviewStartBody, UpdateVersions, type EvaluationPreview, type ItemRow } from "@quiz/contracts";
-import { itemListLock } from "@quiz/domain";
 
 import { api } from "../api";
 import { currentItem } from "../attempt/playerReducer";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
-import { evaluationKey } from "../queryKeys";
 import { routeToPath } from "../router";
 import type { PlayerSession } from "../student/Player";
 import { Alert, Button } from "../ui";
-import { useEvaluation } from "../evaluation/api";
+import type { PreviewSubject } from "./subject";
 
-/** Every item of the evaluation, and only those, on the version the walk shows. */
+/** Every item of the paper, and only those, on the version the walk shows. */
 function walkMatches(items: readonly ItemRow[], versions: Record<string, number>): boolean {
   return (
     items.length === Object.keys(versions).length &&
@@ -46,12 +46,12 @@ function walkMatches(items: readonly ItemRow[], versions: Record<string, number>
 }
 
 export function usePreviewEdit({
-  evaluationId,
+  subject,
   preview,
   session,
   askRestart,
 }: {
-  evaluationId: string;
+  subject: PreviewSubject;
   preview: EvaluationPreview;
   session: PlayerSession;
   /** The strip's Restart, confirmation included: answers are never dropped silently. */
@@ -63,23 +63,23 @@ export function usePreviewEdit({
   // The versions the walk shows, moved by "Use the new version" alone.
   const [versions, setVersions] = useState(preview.versions);
 
-  const detail = useEvaluation(evaluationId);
+  const data = subject.usePaper();
 
   const { dispatch } = session;
   const seed = preview.seed;
   const adopt = useMutation({
     mutationFn: async (itemId: string) => {
-      await api(`/app/api/evaluations/${evaluationId}/items/update-versions`, {
+      await api(`${subject.base}/items/update-versions`, {
         method: "POST",
         body: JSON.stringify(UpdateVersions.parse({ itemIds: [itemId] })),
       });
-      const fresh = await api<EvaluationPreview>(`/app/api/evaluations/${evaluationId}/preview`, {
+      const fresh = await api<EvaluationPreview>(subject.preview, {
         method: "POST",
         body: JSON.stringify(PreviewStartBody.parse({ seed })),
       });
       // The detail catches up BEFORE the walk moves, so the two never
-      // disagree on screen and nothing reads as "the evaluation changed".
-      await qc.refetchQueries({ queryKey: evaluationKey(evaluationId) });
+      // disagree on screen and nothing reads as "the paper changed".
+      await qc.refetchQueries({ queryKey: subject.detailKey });
       return fresh;
     },
     onSuccess: (fresh, itemId) => {
@@ -91,19 +91,16 @@ export function usePreviewEdit({
   });
 
   const itemId = currentItem(session.state)?.id;
-  const data = detail.data;
   const row = data?.items.find((r) => r.id === itemId);
 
+  const { questionFrom } = subject;
   const openEditor = useCallback(() => {
     if (!row) return;
     // `noopener`, like every other `target="_blank"`; the walk stays in this
-    // tab. `fromPreview`: the editor's way back closes its own tab (#959).
-    window.open(
-      routeToPath({ view: "question", id: row.questionId, fromPreview: evaluationId }),
-      "_blank",
-      "noopener",
-    );
-  }, [row, evaluationId]);
+    // tab. `fromPreview` (`fromTemplatePreview`): the editor's way back
+    // closes its own tab (#959).
+    window.open(routeToPath({ view: "question", id: row.questionId, ...questionFrom }), "_blank", "noopener");
+  }, [row, questionFrom]);
 
   if (!data || !row) return { editButton: null, notice: null };
 
@@ -137,7 +134,7 @@ export function usePreviewEdit({
   const latest = row.latestVersionNumber;
   if (latest === null || latest <= row.versionNumber) return { editButton, notice: null };
 
-  const lock = itemListLock(data.evaluation.state, data.attemptCount);
+  const { lock } = data;
   return {
     editButton,
     notice: (

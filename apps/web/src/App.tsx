@@ -427,6 +427,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // The whole evaluation as a student gets it, statelessly (issue #75): the
   // player, and therefore the whole screen, like the question preview.
   evaluationPreview: (r, c) => <EvaluationPreviewPage id={r.id} navigate={c.navigate} />,
+  // The same walk of a course's template (F-EVAL-25), from the template's editor.
+  templatePreview: (r, c) => <EvaluationPreviewPage kind="template" id={r.id} navigate={c.navigate} />,
   // ADR-125: one student's paper copy typed in, in the player — the whole screen, like the preview.
   paperEntry: (r, c) => <PaperEntryPage evaluationId={r.evaluationId} navigate={c.navigate} />,
   // WP10: grading + results
@@ -452,6 +454,7 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
   "attempt",
   "questionPreview",
   "evaluationPreview",
+  "templatePreview",
   "paperEntry",
   "poll",
   "correction",
