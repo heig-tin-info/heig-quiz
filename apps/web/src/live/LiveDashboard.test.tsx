@@ -681,27 +681,8 @@ describe("LiveDashboard — extend until a date", () => {
     return screen.queryByRole("menuitem", { name: /until a date/i }) !== null;
   };
 
-  it("is offered on a running evaluation hanging off its end", async () => {
-    setup(makeDashboard(2, 2), withTiming("deadline"));
-    expect(await offered()).toBe(true);
-  });
-
-  it("is not offered in `duration` timing", async () => {
+  it("is not offered where the rule refuses it (`duration` timing)", async () => {
     setup(makeDashboard(2, 2), withTiming("duration"));
-    expect(await offered()).toBe(false);
-  });
-
-  it("is not offered in `manual` timing without a safety deadline", async () => {
-    const view = makeDashboard(2, 2);
-    view.evaluation.closesAt = null;
-    setup(view, withTiming("manual"));
-    expect(await offered()).toBe(false);
-  });
-
-  it("is not offered while paused", async () => {
-    const view = makeDashboard(2, 2);
-    view.evaluation.state = "paused";
-    setup(view, withTiming("deadline"));
     expect(await offered()).toBe(false);
   });
 
@@ -717,8 +698,9 @@ describe("LiveDashboard — extend until a date", () => {
     const dialog = await screen.findByRole("dialog", { name: /extend until a date/i });
     const field = within(dialog).getByLabelText(/new end/i);
     const submit = within(dialog).getByRole("button", { name: /^extend$/i });
-    // It opens on the current end, which is no extension.
+    // It opens on the current end, which is no extension, and is no error either.
     expect(submit).toBeDisabled();
+    expect(field).not.toHaveAttribute("aria-invalid");
 
     const pad = (n: number) => String(n).padStart(2, "0");
     const local = (ms: number) => {
@@ -738,7 +720,7 @@ describe("LiveDashboard — extend until a date", () => {
     await user.click(submit);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     const sent = calls.find((c) => c.method === "POST" && c.url.endsWith("/extend"));
-    expect(sent?.body).toEqual({ until: new Date(target).toISOString(), scope: "all" });
+    expect(sent?.body).toEqual({ until: new Date(target).toISOString() });
   });
 
   it("says the server's refusal in the dialog", async () => {
@@ -761,7 +743,7 @@ describe("LiveDashboard — extend until a date", () => {
     await user.clear(field);
     await user.type(field, later.toISOString().slice(0, 16));
     await user.click(within(dialog).getByRole("button", { name: /^extend$/i }));
-    expect(await within(dialog).findByText(/only a running evaluation extends to a date/i)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/can no longer be extended to a date/i)).toBeInTheDocument();
   });
 });
 

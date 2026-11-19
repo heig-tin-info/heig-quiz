@@ -931,7 +931,6 @@ export type ExtendMinutesBody = z.infer<typeof ExtendMinutesBody>;
  */
 export const ExtendUntilBody = z.strictObject({
   until: z.iso.datetime({ offset: true }),
-  scope: z.literal("all").default("all"),
 });
 export type ExtendUntilBody = z.infer<typeof ExtendUntilBody>;
 

@@ -112,7 +112,7 @@ export type ExtendUntilRefusal = "not_running" | "not_anchored" | "no_closes_at"
 /**
  * THE rule for "extend until a date", shared by the API guard and the live
  * dashboard's menu; null when the class's end may be moved to a chosen
- * instant. The target itself is {@link isLaterEnd}'s.
+ * instant. The target itself is {@link untilRefusal}'s.
  */
 export function extendUntilRefusal(input: {
   state: EvaluationStateName;
@@ -125,9 +125,29 @@ export function extendUntilRefusal(input: {
   return null;
 }
 
-/** Whether a chosen end extends: strictly later than the current end, and than now. Never earlier: no shortening. */
-export function isLaterEnd(until: Date, closesAt: Date, now: Date): boolean {
-  return until.getTime() > closesAt.getTime() && until.getTime() > now.getTime();
+/** How far past the current end (or now) "until a date" may go: a school year and a day, never a typo of 2126. */
+export const EXTEND_UNTIL_HORIZON_DAYS = 366;
+
+/**
+ * The instants a chosen end must fall between: strictly after `after` (the
+ * current end, or now once it has gone by), at most `latest`
+ * ({@link EXTEND_UNTIL_HORIZON_DAYS} later).
+ */
+export function extendUntilWindow(closesAt: Date, now: Date): { after: Date; latest: Date } {
+  const after = Math.max(closesAt.getTime(), now.getTime());
+  return { after: new Date(after), latest: new Date(after + EXTEND_UNTIL_HORIZON_DAYS * 86_400_000) };
+}
+
+/**
+ * Why a chosen end is refused, null when it extends: `not_later` when it is
+ * not strictly later than the current end and than now (no shortening),
+ * `too_far` past the horizon of {@link extendUntilWindow}.
+ */
+export function untilRefusal(until: Date, closesAt: Date, now: Date): "not_later" | "too_far" | null {
+  const { after, latest } = extendUntilWindow(closesAt, now);
+  if (until.getTime() <= after.getTime()) return "not_later";
+  if (until.getTime() > latest.getTime()) return "too_far";
+  return null;
 }
 
 /**

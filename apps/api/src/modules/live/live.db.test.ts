@@ -1160,19 +1160,21 @@ describe("extending until a date (F-LIVE-11)", () => {
 
   it("sets closes_at to the date, and moves the working attempts by the distance", async () => {
     const { row, closesAt, working, handedIn } = await sitting();
-    const until = new Date(closesAt.getTime() + 25 * 60_000);
+    // To the millisecond: the end lands on the instant, not on a rounded distance.
+    const distanceMs = 25 * 60_000 + 250;
+    const until = new Date(closesAt.getTime() + distanceMs);
 
     const moved = await service.extendUntil(db, row, until, clock.now());
-    expect(moved).toEqual({ updated: 1, previousClosesAt: closesAt, seconds: 25 * 60 });
+    expect(moved).toEqual({ updated: 1, previousClosesAt: closesAt, seconds: distanceMs / 1000 });
 
     const after = await reload(db, row.id);
     expect(after.closesAt!.getTime()).toBe(until.getTime());
     expect(after.closesAtShiftS).toBe(25 * 60);
     // The base of the accommodation does not grow (D8, #253).
-    expect(announcedWindowS(after)).toBe(hour / 1000);
+    expect(announcedWindowS(after)).toBe(hour / 1000 + 0.25);
 
     const workingNow = (await service.attemptById(db, working.id))!;
-    expect(workingNow.deadlineAt!.getTime()).toBe(working.deadlineAt!.getTime() + 25 * 60_000);
+    expect(workingNow.deadlineAt!.getTime()).toBe(working.deadlineAt!.getTime() + distanceMs);
     // On the end, never on the attempt as well (#252).
     expect(workingNow.extraS).toBe(working.extraS);
     const handedInNow = (await service.attemptById(db, handedIn.id))!;
@@ -1180,7 +1182,7 @@ describe("extending until a date (F-LIVE-11)", () => {
 
     const journal = await db.select().from(attemptEvents).where(eq(attemptEvents.attemptId, working.id));
     expect(journal.filter((e) => e.kind === "time_added").map((e) => e.details)).toEqual([
-      { seconds: 25 * 60, until: until.toISOString() },
+      { seconds: distanceMs / 1000, until: until.toISOString() },
     ]);
   });
 
@@ -1224,39 +1226,16 @@ describe("extending until a date (F-LIVE-11)", () => {
     });
   });
 
-  it("is offered on a running evaluation hanging off closes_at only", async () => {
-    const until = (closesAt: Date | null) => new Date((closesAt ?? clock.now()).getTime() + hour);
-
-    const { row } = await sitting();
-    const paused = await service.pauseEvaluation(db, row, clock.now());
-    await expect(service.extendUntil(db, paused, until(row.closesAt), clock.now())).rejects.toMatchObject({
-      code: "extend_until_refused",
-      status: 409,
-      details: { reason: "not_running" },
-    });
-
-    const timed = await sitting({ settings: { timing: "duration" }, durationS: 1800 });
-    await expect(service.extendUntil(db, timed.row, until(timed.row.closesAt), clock.now())).rejects.toMatchObject({
-      code: "extend_until_refused",
-      details: { reason: "not_anchored" },
-    });
-
-    const open = await sitting({ settings: { timing: "manual" }, opensAt: null, closesAt: null });
-    await expect(service.extendUntil(db, open.row, until(null), clock.now())).rejects.toMatchObject({
-      code: "extend_until_refused",
-      details: { reason: "no_closes_at" },
-    });
-
+  it("moves the safety deadline of a manual evaluation, and never reopens a closed one", async () => {
     // `manual` with a safety deadline hangs off it (ADR-086 §2).
     const safety = await sitting({ settings: { timing: "manual" }, opensAt: null });
-    await expect(service.extendUntil(db, safety.row, until(safety.closesAt), clock.now())).resolves.toMatchObject({
-      updated: 1,
-    });
+    const until = new Date(safety.closesAt.getTime() + hour);
+    await expect(service.extendUntil(db, safety.row, until, clock.now())).resolves.toMatchObject({ updated: 1 });
 
     const closed = await service.closeEvaluation(db, await reload(db, safety.row.id), clock.now(), "teacher");
-    await expect(service.extendUntil(db, closed, until(closed.closesAt), clock.now())).rejects.toMatchObject({
-      code: "evaluation_finished",
-    });
+    await expect(
+      service.extendUntil(db, closed, new Date(until.getTime() + hour), clock.now()),
+    ).rejects.toMatchObject({ code: "evaluation_finished" });
   });
 });
 

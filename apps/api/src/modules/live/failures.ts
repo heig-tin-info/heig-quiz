@@ -30,6 +30,9 @@ const REFUSALS = {
   // An end chosen earlier than, or equal to, the current one, or past: an
   // extension never shortens.
   until_not_later: [422, "the new end must be later than the current end and than now"],
+  // An end past the horizon (`EXTEND_UNTIL_HORIZON_DAYS`): a typo, never a
+  // shift the stored `closes_at_shift_s` cannot hold.
+  until_too_far: [422, "the new end is too far ahead"],
   // `RetakeRefused`.
   retake_refused: [409],
   // `PracticeRefused` (ADR-122).

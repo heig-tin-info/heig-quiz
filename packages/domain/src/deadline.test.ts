@@ -5,10 +5,12 @@ import {
   attemptDeadline,
   bonusSeconds,
   extendUntilRefusal,
+  extendUntilWindow,
+  EXTEND_UNTIL_HORIZON_DAYS,
   GRACE_MS,
-  isLaterEnd,
   isWritable,
   previewDurationS,
+  untilRefusal,
 } from "./deadline.js";
 
 const startedAt = new Date("2026-09-20T08:00:00Z");
@@ -256,18 +258,32 @@ describe("extendUntilRefusal (F-LIVE-11, ADR-086 amendment 2026-11-19)", () => {
   });
 });
 
-describe("isLaterEnd", () => {
+describe("untilRefusal", () => {
   const now = new Date("2026-09-20T08:30:00Z");
+  const day = 86_400_000;
 
-  it("takes an instant strictly later than the end and than now", () => {
-    expect(isLaterEnd(new Date(closesAt.getTime() + 1000), closesAt, now)).toBe(true);
+  it("takes an instant strictly later than the end and than now, up to the horizon", () => {
+    expect(untilRefusal(new Date(closesAt.getTime() + 1000), closesAt, now)).toBeNull();
+    const latest = closesAt.getTime() + EXTEND_UNTIL_HORIZON_DAYS * day;
+    expect(untilRefusal(new Date(latest), closesAt, now)).toBeNull();
+    expect(extendUntilWindow(closesAt, now)).toEqual({ after: closesAt, latest: new Date(latest) });
   });
 
   it("refuses the current end, an earlier one, and the past", () => {
-    expect(isLaterEnd(closesAt, closesAt, now)).toBe(false);
-    expect(isLaterEnd(new Date(closesAt.getTime() - 60_000), closesAt, now)).toBe(false);
+    expect(untilRefusal(closesAt, closesAt, now)).toBe("not_later");
+    expect(untilRefusal(new Date(closesAt.getTime() - 60_000), closesAt, now)).toBe("not_later");
     // An end already gone by (the grace): later than it, still in the past.
     const past = new Date("2026-09-20T08:00:00Z");
-    expect(isLaterEnd(new Date("2026-09-20T08:10:00Z"), past, now)).toBe(false);
+    expect(untilRefusal(new Date("2026-09-20T08:10:00Z"), past, now)).toBe("not_later");
+  });
+
+  it("refuses a date past the horizon, counted from now once the end has gone by", () => {
+    expect(untilRefusal(new Date(closesAt.getTime() + EXTEND_UNTIL_HORIZON_DAYS * day + 1), closesAt, now)).toBe(
+      "too_far",
+    );
+    // A typo of a century: refused here, never an overflow of the stored shift.
+    expect(untilRefusal(new Date("2126-09-20T08:00:00Z"), closesAt, now)).toBe("too_far");
+    const past = new Date("2026-09-20T08:00:00Z");
+    expect(extendUntilWindow(past, now).latest).toEqual(new Date(now.getTime() + EXTEND_UNTIL_HORIZON_DAYS * day));
   });
 });

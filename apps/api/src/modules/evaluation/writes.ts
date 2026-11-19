@@ -41,7 +41,7 @@ import {
   retakeScopeFits,
 } from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import {
   attempts,
   evaluationItems,
@@ -434,43 +434,26 @@ export async function extendClosesAt(
 
 /**
  * `live.extendUntil` (F-LIVE-11, ADR-086 amendment 2026-11-19): `closes_at`
- * set to EXACTLY `until`, the distance it moved added to `closes_at_shift_s`
- * as {@link extendClosesAt} does, so the announced window (D8, #253) does not
- * grow. The row is locked `FOR UPDATE` first: `check` (the caller's rule,
- * which throws to refuse) and the distance both read it as it stands at the
- * commit, never as the request loaded it, so a "+5 min" landing in between
- * can never make the target overshoot. The UPDATE keeps its own guard
- * (`running`, an end earlier than `until`). Null when the row is gone.
+ * moved to EXACTLY `until` by {@link extendClosesAt}, which adds the distance
+ * to `closes_at_shift_s` (the announced window, D8, #253, does not grow).
+ * Inside the caller's transaction: the row is locked `FOR UPDATE` until it
+ * commits, and `check` (the caller's rule, which throws to refuse and returns
+ * the end it validated) and the distance both read it as it stands then,
+ * never as the request loaded it, so a "+5 min" landing in between can never
+ * make the target overshoot.
  */
 export async function moveClosesAtTo(
-  db: DbOrTx,
+  tx: Tx,
   id: string,
   until: Date,
   now: Date,
-  check: (locked: EvaluationRecord) => void,
-): Promise<{ row: EvaluationRecord; previousClosesAt: Date } | null> {
-  return db.transaction(async (tx) => {
-    const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, id)).for("update");
-    if (!locked) return null;
-    check(locked);
-    const untilSql = sql`${until.toISOString()}::timestamptz`;
-    const [row] = await tx
-      .update(evaluations)
-      .set({
-        closesAt: until,
-        closesAtShiftS: sql`${evaluations.closesAtShiftS} + round(extract(epoch from ${untilSql} - ${evaluations.closesAt}))::int`,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(evaluations.id, id),
-          eq(evaluations.state, "running"),
-          sql`${evaluations.closesAt} < ${untilSql}`,
-        ),
-      )
-      .returning();
-    return row && locked.closesAt ? { row, previousClosesAt: locked.closesAt } : null;
-  });
+  check: (locked: EvaluationRecord) => Date,
+): Promise<{ row: EvaluationRecord | null; previousClosesAt: Date }> {
+  const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, id)).for("update");
+  if (!locked) throw new EvaluationError("not_found");
+  const previousClosesAt = check(locked);
+  const seconds = (until.getTime() - previousClosesAt.getTime()) / 1000;
+  return { row: await extendClosesAt(tx, id, seconds, now), previousClosesAt };
 }
 
 /** `poll.setDisplay`: the poll switches and the feedback policy, moved together. */

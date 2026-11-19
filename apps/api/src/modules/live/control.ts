@@ -7,9 +7,9 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { ClosedBy, EvaluationClosedBy } from "@quiz/contracts";
-import { anchoredOnClosesAt, extendUntilRefusal, isLaterEnd } from "@quiz/domain";
+import { anchoredOnClosesAt, extendUntilRefusal, untilRefusal } from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { attempts, enrollments, officialAttempt } from "../../db/schema.js";
 import {
   announceMove,
@@ -272,23 +272,25 @@ export async function extendTime(
     // may have outdated since this request loaded it.
     if (committed) events.stateChanged(committed, now);
   }
-  return shiftAttempts(
+  const shifted = await shiftAttempts(
     db,
     evaluation,
     { seconds, movedEnd: movesEnd, attemptId: target },
     { seconds, minutes: input.minutes },
     now,
   );
+  return announceDeadlines(evaluation, shifted, now);
 }
 
 /**
  * F-LIVE-11 (ADR-086 amendment 2026-11-19): the class's end moved to
  * `until`, a chosen instant. Running only, on a timing whose attempts hang
  * off `closes_at` (`extendUntilRefusal`), later than the current end and
- * than now (`isLaterEnd`): both read on the row locked for the write, and
- * the distance too, so a concurrent "+N min" never makes it overshoot. The
- * attempts then move by that distance, exactly as after "+N min" to
- * everybody. No notification: a moved end does not resend the reminder
+ * than now, within the horizon (`untilRefusal`): both read on the row
+ * locked for the write, and the distance too, so a concurrent "+N min"
+ * never makes it overshoot. The attempts then move by that distance, as
+ * after "+N min" to everybody, in the same transaction: the end never moves
+ * without them. No notification: a moved end does not resend the reminder
  * (F-NOTIF-06).
  */
 export async function extendUntil(
@@ -297,28 +299,26 @@ export async function extendUntil(
   until: Date,
   now: Date,
 ): Promise<{ updated: number; previousClosesAt: Date; seconds: number }> {
-  const moved = await moveClosesAtTo(db, evaluation.id, until, now, (locked) => {
-    refuseFinished(locked);
-    const refusal = extendUntilRefusal({
-      state: locked.state,
-      timing: settingsOf(locked).timing,
-      closesAt: locked.closesAt,
+  const { moved, seconds, shifted } = await db.transaction(async (tx) => {
+    const moved = await moveClosesAtTo(tx, evaluation.id, until, now, (locked) => {
+      refuseFinished(locked);
+      const refusal = extendUntilRefusal({
+        state: locked.state,
+        timing: settingsOf(locked).timing,
+        closesAt: locked.closesAt,
+      });
+      if (refusal !== null || locked.closesAt === null) throw new ExtendUntilRefused(refusal ?? "no_closes_at");
+      const target = untilRefusal(until, locked.closesAt, now);
+      if (target !== null) throw new LiveError(`until_${target}`);
+      return locked.closesAt;
     });
-    if (refusal !== null) throw new ExtendUntilRefused(refusal);
-    if (!isLaterEnd(until, locked.closesAt!, now)) throw new LiveError("until_not_later");
+    const seconds = (until.getTime() - moved.previousClosesAt.getTime()) / 1000;
+    const details = { seconds, until: until.toISOString() };
+    return { moved, seconds, shifted: await shiftAttempts(tx, evaluation, { seconds, movedEnd: true }, details, now) };
   });
-  if (!moved) throw new LiveError("not_found");
-  // The row as committed, as after "+N min": the frame the players read.
-  events.stateChanged(moved.row, now);
-  const seconds = (until.getTime() - moved.previousClosesAt.getTime()) / 1000;
-  const updated = await shiftAttempts(
-    db,
-    evaluation,
-    { seconds, movedEnd: true },
-    { seconds, until: until.toISOString() },
-    now,
-  );
-  return { updated, previousClosesAt: moved.previousClosesAt, seconds };
+  // The frames once committed; the row as committed, as after "+N min".
+  if (moved.row) events.stateChanged(moved.row, now);
+  return { updated: announceDeadlines(evaluation, shifted, now), previousClosesAt: moved.previousClosesAt, seconds };
 }
 
 /**
@@ -335,15 +335,16 @@ function refuseFinished(evaluation: EvaluationRecord): void {
  * The attempts' side of an extension, the minutes' and the date's alike:
  * `seconds` more on their deadlines, a `time_added` row in their journal
  * (`details`: `seconds` always, beside the `minutes` or the `until` the
- * teacher chose), a `deadlineChanged` frame each.
+ * teacher chose). The moved attempts are returned for
+ * {@link announceDeadlines}, once the write is committed.
  */
 async function shiftAttempts(
-  db: Db,
+  db: Db | Tx,
   evaluation: EvaluationRecord,
   shift: { seconds: number; movedEnd: boolean; attemptId?: string | undefined },
   details: { seconds: number } & ({ minutes: number } | { until: string }),
   now: Date,
-): Promise<number> {
+): Promise<AttemptRecord[]> {
   const { seconds, movedEnd, attemptId } = shift;
   // Once `closes_at` has moved, the time is there and nowhere else: a
   // `not_started` attempt takes its deadline from it when it begins, and a
@@ -375,6 +376,11 @@ async function shiftAttempts(
     details,
     now,
   );
-  for (const attempt of updated) events.deadlineChanged(evaluation, attempt, "teacher_extend", now);
-  return updated.length;
+  return updated;
+}
+
+/** A `deadlineChanged` frame for each attempt an extension moved; their count. */
+function announceDeadlines(evaluation: EvaluationRecord, moved: readonly AttemptRecord[], now: Date): number {
+  for (const attempt of moved) events.deadlineChanged(evaluation, attempt, "teacher_extend", now);
+  return moved.length;
 }

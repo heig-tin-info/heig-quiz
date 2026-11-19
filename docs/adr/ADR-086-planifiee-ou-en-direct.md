@@ -219,14 +219,18 @@ dashboard offers **Until a date…** / « Jusqu'à une date… » as well
 2. **`duration` timing is a known limit.** Each attempt there ends at its
    own start plus the limit, cut at `closesAt` (§3); moving the end to a
    date would need every attempt's deadline recomputed. Not offered.
-3. **Later only, for the whole class.** The date must be strictly later than
-   the current end and than now (`isLaterEnd`), else `422 until_not_later`;
-   there is no date for one attempt.
-4. **The target is absolute, computed at the commit.** The evaluation's row
-   is locked, the rule and the target are checked on it, `closes_at` is set
-   to exactly the date and the distance from the locked end is the one the
-   `in_progress` attempts move by (`moveClosesAtTo`): a "+5 min" landing
-   between the request and the write cannot make it overshoot.
+3. **Later only, within a horizon, for the whole class.** The date must be
+   strictly later than the current end and than now, else
+   `422 until_not_later`, and at most 366 days after the later of the two
+   (`EXTEND_UNTIL_HORIZON_DAYS`), else `422 until_too_far`: a typo of a
+   century never reaches the stored shift. One rule, `untilRefusal`, for the
+   field and the request. There is no date for one attempt.
+4. **The target is absolute, computed at the commit.** In one transaction,
+   the evaluation's row is locked, the rule and the target are checked on
+   it, `closes_at` is moved by the distance from the locked end to exactly
+   the date, and the `in_progress` attempts move by that same distance
+   (`moveClosesAtTo`): a "+5 min" landing between the request and the write
+   cannot make it overshoot, and the end never moves without the attempts.
 5. **The accommodation base is unchanged.** The distance is added to
    `closes_at_shift_s`, as for "+N min", so the announced window (decision
    D8, #253) does not grow.

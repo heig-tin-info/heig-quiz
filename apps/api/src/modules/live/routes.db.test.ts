@@ -1043,33 +1043,33 @@ describe("extending until a date (F-LIVE-11)", () => {
     });
   });
 
-  it("refuses an end that is not later with a 422", async () => {
+  it("refuses an end that is not later, or too far ahead, with a 422", async () => {
     const closesAt = new Date(server.clock.now().getTime() + hour);
     const id = await runningEvaluation("deadline", closesAt);
-    for (const until of [closesAt, new Date(closesAt.getTime() - 60_000)]) {
+    for (const [until, error] of [
+      [closesAt, "until_not_later"],
+      [new Date(closesAt.getTime() - 60_000), "until_not_later"],
+      // A century's typo: refused, never a 500 from the stored shift.
+      [new Date("2126-11-19T12:00:00Z"), "until_too_far"],
+    ] as const) {
       const res = await extend(id, { until: until.toISOString() });
-      expect([res.statusCode, res.json().error]).toEqual([422, "until_not_later"]);
+      expect([res.statusCode, res.json().error]).toEqual([422, error]);
     }
     // No date for one attempt: the whole class only.
     const one = await extend(id, { until: new Date(closesAt.getTime() + hour).toISOString(), scope: "attempt" });
     expect(one.statusCode).toBe(400);
   });
 
-  it("refuses a paused evaluation, a `duration` timing, a manual one without end, a closed one", async () => {
+  it("refuses with the rule's reason, and never reopens a closed evaluation", async () => {
     const later = () => new Date(server.clock.now().getTime() + 2 * hour).toISOString();
     const closesAt = () => new Date(server.clock.now().getTime() + hour);
 
-    const paused = await runningEvaluation("deadline", closesAt());
-    expect((await post(`/app/api/evaluations/${paused}/pause`, teacher.headers)).statusCode).toBe(200);
-    const refusals = [
-      [paused, "not_running"],
-      [await runningEvaluation("duration", closesAt()), "not_anchored"],
-      [await runningEvaluation("manual", null), "no_closes_at"],
-    ] as const;
-    for (const [id, reason] of refusals) {
-      const res = await extend(id, { until: later() });
-      expect([res.statusCode, res.json()]).toEqual([409, expect.objectContaining({ error: "extend_until_refused", reason })]);
-    }
+    const timed = await runningEvaluation("duration", closesAt());
+    const refused = await extend(timed, { until: later() });
+    expect([refused.statusCode, refused.json()]).toEqual([
+      409,
+      expect.objectContaining({ error: "extend_until_refused", reason: "not_anchored" }),
+    ]);
 
     const closed = await runningEvaluation("manual", closesAt());
     expect((await post(`/app/api/evaluations/${closed}/close`, teacher.headers)).statusCode).toBe(200);
