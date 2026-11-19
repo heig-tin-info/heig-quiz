@@ -15,7 +15,8 @@
  * M3-05a, a ruleset deleted and a repository archived (read-only until
  * un-archived). From M3-15b, a collaborator removed and the pending
  * invitations listed and cancelled (a revocation), or refused (`unrevokable`),
- * and a repository by its id. From M3-07, a compare by refs with its
+ * and a repository by its id; a login looked for among the collaborators
+ * (F-PROJ-07). From M3-07, a compare by refs with its
  * counts, and the pull requests (opened, listed by head, read, commented).
  * From L-02b, a commit's tarball: the API's redirect to `codeload`, whose
  * URL carries a `token=`, and the gzipped `git archive` it serves (past
@@ -516,6 +517,12 @@ export function repoWorld(): RepoWorld {
       if (rest === "/rulesets") return world.freePlan ? planRefusal() : json(world.rulesets.get(fullName) ?? []);
       if (rest === "/invitations") {
         return json([...(world.invitations.get(fullName) ?? new Map<number, string>())].map(([id, login]) => ({ id, invitee: { login } })));
+      }
+      // "Is this login a collaborator?": 204, or 404 for a stranger or a pending invitee.
+      if ((m = /^\/collaborators\/([^/]+)$/.exec(rest))) {
+        const login = m[1]!;
+        const pending = [...(world.invitations.get(fullName)?.values() ?? [])].includes(login);
+        return !pending && world.collaborators.get(fullName)?.has(login) ? new Response(null, { status: 204 }) : json({ message: "Not Found" }, 404);
       }
       // A collaborator's permission, in GitHub's legacy words; an invitee still pending, or nobody, is GitHub's 404.
       if ((m = /^\/collaborators\/([^/]+)\/permission$/.exec(rest))) {

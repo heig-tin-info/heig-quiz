@@ -21,6 +21,18 @@ name, and the Groups tab's button reads *Nouveau groupe*. The interface
 glossary (`docs/spec/01-glossaire-et-domaine.md` §1.5) owns the wording; the
 English *group set* and the code's `group_set` are unchanged.
 
+Amended 2026-11-19 (fix of a group member's expired invitation), scope:
+decision 12's *Later* bullet. A group repository's invitation state is the
+group's, `accepted` once one member is in, while another member's
+invitation may have expired (GitHub drops it from the pending list after
+seven days). The resend (F-PROJ-07) therefore asks GitHub about each
+member, whatever that state says: a member is out with no account recorded,
+an invitation pending, or an account recorded that is neither a
+collaborator nor invited; the staff's resend re-invites every member out, a
+student's own resend re-invites them while they are out. Nothing per member
+is stored, and the daily re-invite still serves individual repositories
+only: the stored per-member follow-up stays later.
+
 Scope: where a classroom's groups of students live, who forms them and how,
 and how a group project uses them, including the GitHub side of a group
 repository (decision 12, folded from [ADR-048](ADR-048-projets-de-groupe.md)'s
@@ -463,7 +475,8 @@ were settled by the product owner on 2026-10-04.
       repository. Quiz's own Accept never makes one.
     - **Later** (heig-classroom's lot 3, unchanged): a per-member follow-up
       of the invitations, and the staff's per-member adjustment of a group's
-      score.
+      score. (2026-11-19: the resend already looks at each member on
+      GitHub, see the Status; nothing per member is stored.)
 
 ## Consequences
 

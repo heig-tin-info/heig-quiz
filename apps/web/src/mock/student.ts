@@ -953,6 +953,7 @@ const studentProjectView = (card: CardFacts): StudentProject => {
           url,
           // The SEB project of `?codespace=1` invites nobody (ADR-047 §2): no invitation at all.
           invitation: flags.codespace && card.id === STUDENT_PROJECT_INVITED ? null : (invitation ?? "accepted"),
+          group: false,
           deleted,
           locked: released || card.status === "locked",
           lastCommit: graded || deleted ? { sha: sha(`${card.id.slice(-2)}${pushes}`), at } : null,

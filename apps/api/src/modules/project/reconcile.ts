@@ -58,7 +58,8 @@ import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { botCommits, classrooms, gradeDispatches, projectGradeRuns, projectRepoAccess, projectRepos, projects, pushReceipts } from "../../db/schema.js";
-import { failFast, githubApp, githubStatus, ownerRepo, rateLimitReset, unless404 } from "../../github/app.js";
+import { failFast, githubApp, githubStatus, ownerRepo, rateLimitReset } from "../../github/app.js";
+import { isCollaborator } from "../../github/collaborators.js";
 import { forgetRepoLiveState } from "../../github/metrics.js";
 import { protectStudentRepo } from "../../github/provision.js";
 import type { ScheduledTask } from "../../ticker.js";
@@ -293,15 +294,6 @@ async function claimReinvite(db: Db, repoId: string, now: Date): Promise<boolean
   return claimed.length > 0;
 }
 
-/** Whether `login` is a collaborator of the repository today (GitHub's 204; a pending invitation is not one, 404). */
-async function isCollaborator(octokit: Octokit, fullName: string, login: string): Promise<boolean> {
-  const { owner, repo } = ownerRepo(fullName);
-  const answered = await unless404(() =>
-    octokit.request("GET /repos/{owner}/{repo}/collaborators/{username}", { owner, repo, username: login, request: { retries: 0 } }),
-  );
-  return answered !== null;
-}
-
 /**
  * A pending invitation of a student's own repository (F-PROJ-07): re-invited
  * when the day's claim is taken — the student named by the login GitHub
@@ -348,8 +340,9 @@ async function reconcileInvitation({ app, octokit, ctx, located, counts, now }: 
     .select({ login: projectRepoAccess.githubLogin })
     .from(projectRepoAccess)
     .where(and(eq(projectRepoAccess.repoId, repo.id), isNull(projectRepoAccess.revokedAt), isNull(projectRepoAccess.revokingAt)));
+  const { owner, repo: name } = ownerRepo(located.fullName);
   for (const { login } of grants) {
-    if (!(await isCollaborator(octokit, located.fullName, login))) continue;
+    if (!(await isCollaborator(octokit, owner, name, login))) continue;
     counts.accepted += 1;
     await followInvitation(db, repo, "accepted");
     await hintRepo(db, ctx);

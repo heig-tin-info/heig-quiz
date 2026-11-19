@@ -45,6 +45,7 @@ const project = (over: Partial<StudentProject> = {}): StudentProject => ({
     fullName: "heig/labo-1-lea",
     url: "https://github.com/heig/labo-1-lea",
     invitation: "accepted",
+    group: false,
     deleted: false,
     locked: false,
     lastCommit: { sha: SHA, at: at(-0.1) },
@@ -270,7 +271,7 @@ describe("the invitation", () => {
     await waitFor(() => expect(reads(calls)).toBe(2));
   });
 
-  it("words a resend asked too soon, and re-reads when the invitation is no longer pending", async () => {
+  it("words a resend asked too soon, and re-reads when the student already has access", async () => {
     mockFetch({ [URL]: ok(pending()), [INVITE]: fail(429, { error: "resend_too_soon", message: "x" }) });
     const { unmount } = render();
     await userEvent.click(await screen.findByRole("button", { name: "Resend the invitation" }));
@@ -280,8 +281,28 @@ describe("the invitation", () => {
     const { calls } = mockFetch({ [URL]: ok(pending()), [INVITE]: fail(409, { error: "invitation_not_pending", message: "x" }) });
     render();
     await userEvent.click(await screen.findByRole("button", { name: "Resend the invitation" }));
-    expect(await screen.findByText("This invitation is no longer pending.")).toBeInTheDocument();
+    expect(await screen.findByText("You already have access to the repository.")).toBeInTheDocument();
     await waitFor(() => expect(reads(calls)).toBe(2));
+  });
+
+  it("offers a group's member the Resend once the group's invitation is accepted (theirs may have expired), an individual repository's student never", async () => {
+    const { calls } = mockFetch({
+      [URL]: ok(project({ repo: { ...project().repo!, group: true } })),
+      [INVITE]: ok({ invitationStatus: "pending", resentAt: at(0) }),
+    });
+    const { unmount } = render();
+    expect(await screen.findByText("No access to the repository on GitHub?")).toBeInTheDocument();
+    expect(screen.queryByText("Invitation pending on GitHub")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Resend the invitation" }));
+    expect(await screen.findByText(/Invitation sent again/)).toBeInTheDocument();
+    await waitFor(() => expect(reads(calls)).toBe(2));
+    unmount();
+
+    mockFetch({ [URL]: ok(project()) });
+    render();
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByText("No access to the repository on GitHub?")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
   });
 });
 

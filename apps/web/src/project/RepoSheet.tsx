@@ -41,7 +41,8 @@ function Section({ title, children }: { title: ReactNode; children: ReactNode })
  * student and the repository, its scores slot by slot with the teacher's own
  * (F-PROJ-14, M3-12b), the state of its final review, its deadline and lock
  * — an own deadline set or taken back, a lock or an unlock by hand (F-PROJ-09,
- * M3-05a) —, the resend of a pending invitation (F-PROJ-07) and the
+ * M3-05a) —, the resend of a pending invitation, or of a group's to its
+ * members still out (F-PROJ-07), and the
  * re-enable of its protected files (F-PROJ-08), each written at once, and
  * the history of its runs, and the staff's *Open in workspace* (ADR-129
  * §11) where the platform offers it. The row is read from the page's own data, so a
@@ -176,7 +177,8 @@ export function RepoSheet({
             <Fact label={t("project.sheet.invitation")}>
               <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 {t(`project.invitation.${repo.invitationStatus}`)}
-                {repo.invitationStatus === "pending" ? (
+                {/* A group's row says `accepted` once one member is in: another's may have expired (F-PROJ-07). */}
+                {repo.invitationStatus === "pending" || (entry.kind === "group" && repo.invitationStatus === "accepted") ? (
                   <Button variant="secondary" size="sm" disabled={!can} loading={resend.isPending} onClick={() => resend.mutate()}>
                     <Mail /> {t("project.invitation.resend")}
                   </Button>

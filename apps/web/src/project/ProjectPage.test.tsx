@@ -967,6 +967,8 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
     const sheet = await screen.findByRole("dialog", { name: "Groupe 1" });
     expect(within(sheet).getByText("Members")).toBeInTheDocument();
     expect(within(sheet).getByText("Follows the group set")).toBeInTheDocument();
+    // Accepted by one member, the group's row still offers the Resend: another's invitation may have expired.
+    expect(within(sheet).getByRole("button", { name: "Resend" })).toBeInTheDocument();
   });
 
   it("says the drift with Resync as a secondary, hidden once released or archived", async () => {

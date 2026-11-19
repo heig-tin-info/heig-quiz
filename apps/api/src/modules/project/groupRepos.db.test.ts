@@ -282,6 +282,72 @@ describe("a group's repository is a student's through the copy only (N-SEC-20)",
   });
 });
 
+describe("a group member whose invitation expired (F-PROJ-07)", () => {
+  /**
+   * Three members invited; two accept, the third's invitation expires: GitHub
+   * lists it no more and she is no collaborator, while the group's row says
+   * `accepted` (the `member` webhook of the first acceptance).
+   */
+  const expired = async () => {
+    const [ana, ben, cid] = [await newStudent(), await newStudent(), await newStudent()];
+    const { project, room } = await groupProject([ana!, ben!, cid!], [[0, 1, 2]]);
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    const fullName = `${room.login}/lab-1-group-1`;
+    for (const who of [ana!, ben!, cid!]) acceptInvitation(fullName, who.login);
+    world.collaborators.get(fullName)!.delete(cid!.login);
+    const [row] = await repoRows(project.id);
+    await server.app.db.update(projectRepos).set({ invitationStatus: "accepted" }).where(eq(projectRepos.id, row!.id));
+    return { project, fullName, row: row!, ana: ana!, ben: ben!, cid: cid! };
+  };
+  const puts = (before: number) => gh.calls.slice(before).filter((c) => c.startsWith("PUT"));
+
+  it("is re-invited by the staff's resend whatever the row says, the row pending again; once every member is in, 409 invitation_not_pending and the minute given back", async () => {
+    const { project, fullName, row, cid } = await expired();
+    const before = gh.calls.length;
+    const res = await staff("POST", `/app/api/projects/${project.id}/repos/${row.id}/invite`);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({ invitationStatus: "pending" });
+    expect(puts(before)).toEqual([`PUT api.github.com/repos/${fullName}/collaborators/${cid.login}`]);
+    expect(pendingInvitations(fullName)).toEqual([cid.login]);
+    expect(seats(fullName)[cid.login]).toBe("push");
+    // A group's row is pending while any member's invitation is.
+    expect((await repoRows(project.id))[0]!.invitationStatus).toBe("pending");
+    const [entry] = await auditsOf(row.id, "project_repo.invite_resent");
+    expect(entry!.payload).toEqual({ logins: [cid.login], invitationStatus: "pending" });
+
+    // She accepts: every member is in, nothing to resend — and nothing sent.
+    acceptInvitation(fullName, cid.login);
+    server.clock.advance(60_000);
+    const again = gh.calls.length;
+    const done = await staff("POST", `/app/api/projects/${project.id}/repos/${row.id}/invite`);
+    expect([done.statusCode, done.json().error]).toEqual([409, "invitation_not_pending"]);
+    expect(puts(again)).toEqual([]);
+    // The minute claimed for nothing is given back.
+    expect((await repoRows(project.id))[0]!.invitationResentAt?.toISOString()).toBe(NOW);
+    expect(await auditsOf(row.id, "project_repo.invite_resent")).toHaveLength(1);
+  });
+
+  it("may resend her own while the group's row says accepted (the view says the repository is the group's); a member already in may not", async () => {
+    const { project, fullName, ben, cid } = await expired();
+    const view = StudentProject.parse((await call("GET", `/app/api/student/projects/${project.id}`, cid.headers)).json());
+    expect(view.repo).toMatchObject({ invitation: "accepted", group: true });
+
+    const before = gh.calls.length;
+    const own = await call("POST", `/app/api/student/projects/${project.id}/invite`, cid.headers);
+    expect(own.statusCode, own.body).toBe(200);
+    expect(own.json()).toMatchObject({ invitationStatus: "pending" });
+    expect(puts(before)).toEqual([`PUT api.github.com/repos/${fullName}/collaborators/${cid.login}`]);
+    expect((await repoRows(project.id))[0]!.invitationStatus).toBe("pending");
+
+    // Ben is in: his own resend sends nothing, whatever the group's row says.
+    server.clock.advance(60_000);
+    const again = gh.calls.length;
+    const his = await call("POST", `/app/api/student/projects/${project.id}/invite`, ben.headers);
+    expect([his.statusCode, his.json().error]).toEqual([409, "invitation_not_pending"]);
+    expect(puts(again)).toEqual([]);
+  });
+});
+
 // ---------------------------------------------------------------- the set
 
 describe("a set's write reaching a group with a repository", () => {
