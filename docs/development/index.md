@@ -355,8 +355,9 @@ so that each package starts with its margin; none is lowered again. The floors a
 measure coverage (`vitest.shared.ts`), except in `packages/domain`, whose own
 config requires 100 % of its lines on every plain `pnpm test`.
 
-`.github/workflows/coverage.yml` does the same on every pull request, on
-every push to `main` and nightly, apart from `checks`. The API's and the
+`.github/workflows/coverage.yml` does the same on every push to `main` and
+nightly, apart from `checks`; not on pull requests, where it repeated every
+suite `ci.yml` runs (2026-11-20). The API's and the
 SPA's suites run sharded as in `ci.yml`, each shard writing a blob report
 (`--reporter=blob`) that one `report` job merges per package
 (`vitest run --merge-reports --coverage`) before the single floors check;
