@@ -118,13 +118,16 @@ const GUIDES: Record<string, TypeGuide> = {
       "`{{#3.14:0.01}}` is a number with an absolute tolerance, `{{#3.14:1%}}` a relative one.",
       "`{{/^regex$/i}}` is a regular expression (RE2 syntax: no backreference, no lookaround); `{{2*answer}}` weighs the blank twice.",
       "`\\{{` writes literal braces. The text needs at least one blank.",
+      'Optional `presentation: "labels"` shows the dropdowns as labels the student drags from a tray into the text (ADR-138); leave it out for ordinary dropdowns. Dropdowns offering the same options, in any order, share one row of labels: write the same options in each. Labels need a dropdown, distinct options within a blank, at most six distinct option sets, and no `[[…]]` inside an option.',
     ],
     example: {
       configVersion: 2,
       caseSensitive: false,
+      presentation: "labels",
       text:
-        "Dans *Les Fleurs du mal*, {{Baudelaire|Charles Baudelaire}} emploie souvent " +
-        "l'{{=alexandrin|octosyllabe|décasyllabe}}, un vers de {{#12}} syllabes.",
+        "Dans *Les Fleurs du mal*, {{Baudelaire|Charles Baudelaire}} emploie surtout " +
+        "l'{{=alexandrin|octosyllabe|décasyllabe}}, un vers de {{#12}} syllabes. " +
+        "Le vers du *Cimetière marin* de Valéry est le {{alexandrin|octosyllabe|=décasyllabe}}.",
     },
   },
   code: {

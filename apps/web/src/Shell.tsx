@@ -679,6 +679,8 @@ export function Shell({
           style={pageColumnVars}
           className={cx(
             "mx-auto w-full px-4 py-6 sm:px-(--page-gutter) lg:py-8",
+            // What the page pins sits under the phone's top bar too (`--sticky-top`, style.css).
+            "max-lg:[--sticky-top:calc(var(--banner-h)+var(--topbar-h))]",
             wide ? "max-w-none" : "max-w-(--page-cap)",
           )}
         >
@@ -806,7 +808,16 @@ export function ModeBanner({
     // element is a cycle: the outer one reads the offset above, the inner one
     // adds this banner to it.
     <div style={{ "--banner-top": "var(--banner-h)" } as CSSProperties}>
-    <div style={{ "--banner-h": `calc(var(--banner-top) + ${BANNER_HEIGHT})` } as CSSProperties}>
+    <div
+      style={
+        {
+          "--banner-h": `calc(var(--banner-top) + ${BANNER_HEIGHT})`,
+          // What the frame pins sits under this banner too (`--sticky-top`,
+          // style.css): worked out again here, where `--banner-h` changes.
+          "--sticky-top": "calc(var(--banner-h) + var(--bar-h))",
+        } as CSSProperties
+      }
+    >
       <div
         role="region"
         aria-label={message}

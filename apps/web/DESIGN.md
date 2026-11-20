@@ -1472,6 +1472,40 @@ line or two long; the code and circuit reviews open with it as a
 `sectionTitle`, runner badges beside it, over a long review. Both go
 through `pointsOrDash`: an answer nobody graded reads `—`, never `0`.
 
+## The cloze labels (`qt-cloze`, ADR-138)
+
+Origin: `mockups/cloze-labels.html`. ADR-138 owns the behaviour; the values:
+
+- **Tray**: a recessed panel (`surface-2`, hairline, card radius), `sticky`
+  at `--sticky-top` (`style.css`: banners plus the player's bar, the Shell
+  adds its phone top bar under `lg`), at most `33dvh` with its own scroll,
+  not pinned under 640 px of window height (N-A11Y-04).
+- **Label**: 14 px chip, `field` radius, hairline, `select-none`
+  `touch-none`, grab cursor; selected, the categorize card's `info` border
+  and `info-soft` ring; mono when its group has a gap in a code fence.
+- **Gap**: 1.5 px dashed on `surface-2`, solid once filled; the target
+  group turns `info` / `info-soft`, the others drop to 40 %; with the key,
+  the expected answer in mono `success`.
+- **Groups**: one group is neutral (`line-strong`, `surface`, no shape);
+  several get a hue AND a shape each, in order of first appearance:
+
+  | Group | Hue | Shape |
+  | --- | --- | --- |
+  | 1 | `--chart-1` (blue) | disc |
+  | 2 | `--chart-2` (orange) | square |
+  | 3 | `--chart-7` (violet) | triangle |
+  | 4 | `--chart-5` (magenta) | diamond |
+  | 5 | `--chart-4` (yellow) | ring |
+  | 6 | `--chart-3` (aqua) | star |
+
+  The product's one categorical palette (Projection, the donut), without
+  `--chart-6` and `--chart-8`, green and red, the verdict's. A hue only
+  tints: border 45 % of it over `line-strong`, fill 9 % over `surface`,
+  text `fg`. The 10 px shape is inked with the hue pulled 30 % toward `fg`,
+  so the yellow holds 3:1 on the light surface.
+- The copy under the pointer during a drag is the one shadow (a floating
+  layer).
+
 ## The blocks workspace (`qt-blocks`, ADR-103)
 
 The `blocks` question is the one surface drawn by a library we do not

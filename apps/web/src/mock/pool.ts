@@ -14,7 +14,6 @@ import {
   type ZodIssueLite,
 } from "@quiz/contracts";
 import {
-  clozeStudentTemplate,
   conceptMap,
   describeBlank,
   displayName,
@@ -105,6 +104,7 @@ import type { RichConfig } from "@quiz/qt-rich/client";
 import type { MathConfig } from "@quiz/qt-math/client";
 /* `categorize` likewise: its `toStudent` drops the key, its grade is the real one. */
 import { categorizeServer } from "@quiz/qt-categorize/server";
+import { clozeServer } from "@quiz/qt-cloze/server";
 import { brainstormServer } from "@quiz/qt-brainstorm/server";
 import type { BrainstormConfig } from "@quiz/qt-brainstorm/client";
 import type { CategorizeAnswer, CategorizeConfig } from "@quiz/qt-categorize/client";
@@ -853,6 +853,21 @@ export const RICH_LEGACY_CONFIG: Record<string, unknown> = {
  * (`string`, which C does not have). The ids are opaque, as the editor mints them.
  */
 /**
+ * ADR-138: a cloze whose dropdowns are shown as LABELS, in the pool
+ * (`q-labels`) and in the student's attempt (item 13). Two groups, the types
+ * and the formats, in a code fence, and a typed blank after it.
+ */
+export const CLOZE_LABELS_TEXT =
+  "Complétez les déclarations et l'affichage.\n\n" +
+  "```c\n" +
+  "{{=int|char|double}} n = 42;\n" +
+  "{{int|=char|double}} c = 'A';\n" +
+  "{{int|char|=double}} x = 0.5;\n" +
+  'printf("{{=%d|%c|%f}} {{%d|=%c|%f}} {{%d|%c|=%f}}\\n", n, c, x);\n' +
+  "```\n\n" +
+  "La fonction d'affichage est déclarée dans l'en-tête {{stdio.h|<stdio.h>}}.";
+
+/**
  * Eight cards: the most the grading table gives a column each
  * (`CATEGORIZE_GRADING_MAX_COLUMNS`), so the mock's table shows them.
  */
@@ -1230,6 +1245,26 @@ export const questions: MockQuestion[] = [
     },
     explanation: "`malloc` renvoie `void *` ; en C la conversion est implicite et le cast est inutile.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 12 }],
+  }),
+  // ADR-138: the dropdowns shown as LABELS (`CLOZE_LABELS_TEXT`).
+  makeQuestion({
+    id: "q-labels",
+    poolId: "p1",
+    type: "cloze",
+    internalName: "types-et-formats",
+    categoryId: "k1",
+    difficulty: 2,
+    randomizable: false,
+    concepts: seedConceptIds(["Types"]),
+    config: {
+      configVersion: 2,
+      text: CLOZE_LABELS_TEXT,
+      caseSensitive: false,
+      shuffleOptions: true,
+      presentation: "labels",
+    },
+    explanation: "`%d` affiche un `int`, `%c` un `char` et `%f` un `double`.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 5 }],
   }),
   makeQuestion({
     poolId: "p1",
@@ -2261,10 +2296,9 @@ export function studentView(q: MockQuestion, config: Record<string, unknown>): u
         constraints: shortConstraints(config),
         ...(config.placeholder === undefined ? {} : { placeholder: config.placeholder }),
       };
-    case "cloze": {
-      const parse = parseCloze(String(config.text ?? ""));
-      return clozeStudentTemplate(parse, 0, q.id, false);
-    }
+    case "cloze":
+      // The type's own `toStudent`: it adds the labels presentation (ADR-138).
+      return clozeServer.toStudent(clozeServer.configSchema.parse(config), { seed: 0, itemId: q.id, shuffle: false });
     case "circuit": {
       const stimuli = (config.stimuli ?? []) as CircuitStimulusLike[];
       const visible = stimuli.filter((st) => st.visible !== false);

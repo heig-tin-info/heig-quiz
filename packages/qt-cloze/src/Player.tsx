@@ -1,19 +1,24 @@
 /**
  * The `cloze` player (in `apps/web/src/student/Player.tsx`): the text as the
- * teacher wrote it, with a field or a dropdown at each blank.
+ * teacher wrote it, with a field or a dropdown at each blank — or, when the
+ * question shows its dropdowns as labels (ADR-138), a gap the student drops a
+ * label into from a tray above the text (`Labels.tsx`).
  *
  * Controlled — the host owns the answer and autosaves it. A dropdown stores the
  * CANONICAL option index as a decimal string (decision D4), so the shuffled
- * order on screen never changes what was stored.
+ * order on screen never changes what was stored; a label stores what picking
+ * it in the dropdown would.
  *
  * With an `answerKey` (a teacher's preview, "Show answers", #554) each blank
  * shows its expected answer inside its own field, in the success tone: as the
- * placeholder of a text field, as the empty option of a dropdown. Nothing is
- * added around the field, so the text (a table above all) keeps the layout it
- * has without the key.
+ * placeholder of a text field, as the empty option of a dropdown, as the
+ * content of an empty gap. Nothing is added around the field, so the text (a
+ * table above all) keeps the layout it has without the key.
  */
+import type { ReactNode } from "react";
 import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
+import { LabelsPlayer } from "./Labels.js";
 import type { ClozeAnswer, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozePlayerStrings, type ClozePlayerStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
@@ -28,14 +33,13 @@ type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer, ClozeSolution> & 
 };
 
 /** The stored answer always has one slot per blank, so an index never shifts. */
-function withBlank(
+function withBlanks(
   blanks: readonly (string | null)[],
   count: number,
-  index: number,
-  value: string,
+  changes: readonly (readonly [index: number, value: string])[],
 ): ClozeAnswer {
   const next = Array.from({ length: count }, (_, i) => blanks[i] ?? null);
-  next[index] = value;
+  for (const [index, value] of changes) next[index] = value;
   return { blanks: next };
 }
 
@@ -54,6 +58,7 @@ export function ClozePlayer({
   const given = answer?.blanks ?? [];
   const count = student.blanks.length;
   const expected = new Map(answerKey?.blanks.map((blank) => [blank.index, blank.expected]) ?? []);
+  const write = (changes: readonly (readonly [number, string])[]) => onChange(withBlanks(given, count, changes));
 
   const renderField = (index: number) => {
     const blank = student.blanks.find((b) => b.index === index);
@@ -75,7 +80,7 @@ export function ClozePlayer({
           className={cx(keyClass, key !== undefined && value === "" && "font-mono !text-success")}
           value={value}
           disabled={locked}
-          onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}
+          onChange={(e) => write([[index, e.target.value]])}
         >
           <option value="">{key ?? s.choose}</option>
           {blank.options.map((option) => (
@@ -102,19 +107,40 @@ export function ClozePlayer({
         className={cx("mx-0.5 align-middle", keyClass)}
         value={value}
         disabled={locked}
-        onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}
+        onChange={(e) => write([[index, e.target.value]])}
       />
     );
   };
 
   const Text = renderText ?? ClozeFallbackText;
+  const labels = student.presentation === "labels" && student.blanks.some((blank) => blank.kind === "select");
+  const text = (renderBlank: (index: number) => ReactNode) => (
+    <div className="flex flex-col gap-3">
+      <Text template={student.template} renderBlank={renderBlank} />
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3">
-        <Text template={student.template} renderBlank={renderField} />
-      </div>
-      <p className={caption}>{s.hint}</p>
+      {labels ? (
+        <LabelsPlayer
+          student={student}
+          given={given}
+          locked={locked}
+          expected={expected}
+          s={s}
+          write={write}
+          renderText={(renderGap) =>
+            text((index) => {
+              const blank = student.blanks.find((b) => b.index === index);
+              return blank?.kind === "select" ? renderGap(blank) : renderField(index);
+            })
+          }
+        />
+      ) : (
+        text(renderField)
+      )}
+      <p className={caption}>{labels ? s.hintLabels : s.hint}</p>
     </div>
   );
 }

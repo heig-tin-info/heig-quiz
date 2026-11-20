@@ -29,6 +29,11 @@ const KNOWN: Record<string, keyof Dict> = {
   "regex.too_complex": "issue.regex.too_complex",
   "regex.config_too_complex": "issue.regex.config_too_complex",
   "cloze.computed_regex_key": "issue.cloze.computed_regex_key",
+  // The labels presentation (ADR-138).
+  "cloze.labels_no_dropdown": "issue.cloze.labels_no_dropdown",
+  "cloze.labels_duplicate_option": "issue.cloze.labels_duplicate_option",
+  "cloze.labels_too_many_groups": "issue.cloze.labels_too_many_groups",
+  "cloze.computed_label": "issue.cloze.computed_label",
   "short.integer_expected": "issue.short.integer_expected",
   "short.length_range": "issue.short.length_range",
   "short.number_range": "issue.short.number_range",

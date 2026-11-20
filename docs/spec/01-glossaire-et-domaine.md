@@ -278,6 +278,7 @@ by the product owner on 2026-10-20.
 | Journal | journal | journal | carnet |
 | Gradebook | gradebook | carnet de notes | — |
 | Component of the mean (a course's weighted share of the gradebook's mean, ADR-131) | component | composante | groupe, group, catégorie |
+| Label of a cloze shown as labels (an option of a dropdown blank, dragged from the tray into a gap of the text, ADR-138; not a diagram's label nor a kiosk station's) | label; the dropdown presentation is *dropdowns* | étiquette; the dropdown presentation is *listes* | — |
 | Correct / wrong (a verdict) | correct / wrong | juste / faux | correct, bon |
 | Not answered | unanswered | sans réponse | pas répondu, non répondue |
 | Default | default | par défaut | défaut |

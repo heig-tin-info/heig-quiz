@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CLOZE_SENTINEL_CLOSE,
   CLOZE_SENTINEL_OPEN,
+  clozeLabelGroups,
   clozeSentinel,
   clozeStudentTemplate,
   describeBlank,
@@ -350,5 +351,48 @@ describe("matchClozeHole — what the rich editor tokenizes", () => {
     const first = matchClozeHole(source)!;
     expect(first.raw).toBe("{{a}}");
     expect(matchClozeHole(source.slice(first.raw.length))?.body).toBe("b");
+  });
+});
+
+describe("clozeLabelGroups — the tray of the labels presentation (ADR-138)", () => {
+  const groups = (text: string) => clozeLabelGroups(parseCloze(text).blanks);
+
+  it("puts blanks offering the same set, in another order, in one group", () => {
+    expect(groups("{{=ohm|farad|henry}} {{farad|=henry|ohm}} {{henry|ohm|=farad}}")).toEqual([
+      { blanks: [0, 1, 2], labels: ["ohm", "farad", "henry"] },
+    ]);
+  });
+
+  it("keeps overlapping sets apart, a shared label appearing in each", () => {
+    expect(groups("{{=ohm|farad}} {{=Ω|F}} {{ohm|=farad|henry}} {{Ω|=F}}")).toEqual([
+      { blanks: [0], labels: ["ohm", "farad"] },
+      { blanks: [1, 3], labels: ["Ω", "F"] },
+      { blanks: [2], labels: ["ohm", "farad", "henry"] },
+    ]);
+  });
+
+  it("orders the groups by first appearance and the labels by the first blank's options", () => {
+    const [first, second] = groups("{{b|=a}} {{=y|x}} {{=a|b}}");
+    expect(first).toEqual({ blanks: [0, 2], labels: ["b", "a"] });
+    expect(second).toEqual({ blanks: [1], labels: ["y", "x"] });
+  });
+
+  it("ignores every blank that is not a dropdown, and finds no group without one", () => {
+    expect(groups("{{text}} {{#3}} {{/^a$/}}")).toEqual([]);
+    expect(groups("{{text}} {{=a|b}} {{#3}}")).toEqual([{ blanks: [1], labels: ["a", "b"] }]);
+  });
+
+  it("reads the served view the same way, in the order the student was served", () => {
+    const parse = parseCloze("{{=ohm|farad|henry}} {{text}} {{farad|=henry|ohm}}");
+    const served = clozeStudentTemplate(parse, 5, "item", true);
+    const first = served.blanks[0];
+    if (first?.kind !== "select") throw new Error("blank 0 is a dropdown");
+    expect(clozeLabelGroups(served.blanks)).toEqual([
+      { blanks: [0, 2], labels: first.options.map((option) => option.label) },
+    ]);
+  });
+
+  it("lists a label a blank repeats once", () => {
+    expect(groups("{{=a|a|b}} {{a|=b}}")).toEqual([{ blanks: [0, 1], labels: ["a", "b"] }]);
   });
 });

@@ -49,6 +49,7 @@ import {
   LOGIC_SEQ_ANSWER,
   LOGIC_SEQ_CONFIG,
   CATEGORIZE_CONFIG,
+  CLOZE_LABELS_TEXT,
   DIAGRAM_CONFIG,
   RC_STUDENT,
   RICH_CONFIG,
@@ -155,6 +156,7 @@ const STUDENT_TYPES = [
   "blocks",
   "logic",
   "logic",
+  "cloze",
 ] as const;
 
 /**
@@ -224,6 +226,15 @@ const STUDENT_KEYED: Partial<Record<number, StudentKeyed>> = {
   10: { server: blocksServer, config: BLOCKS_CONFIG, view: { seed: 0, itemId: "10", shuffle: false } },
   11: { server: logicServer, config: logicServer.configSchema.parse(LOGIC_CONFIG), view: { seed: 0, itemId: "11", shuffle: false } },
   12: { server: logicServer, config: logicServer.configSchema.parse(LOGIC_SEQ_CONFIG), view: { seed: 0, itemId: "12", shuffle: false } },
+  /*
+   * ADR-138: the cloze shown as LABELS, shuffled: the tray shows each group
+   * in its first blank's served order.
+   */
+  13: {
+    server: clozeServer,
+    config: clozeServer.configSchema.parse({ configVersion: 2, text: CLOZE_LABELS_TEXT, presentation: "labels" }),
+    view: { seed: 5, itemId: "student-item-13", shuffle: true },
+  },
 };
 
 /** Question n's student view, by its type's own `toStudent`. */
@@ -385,6 +396,8 @@ const studentPayloads: Record<number, unknown> = {
   11: keyedStudent(11),
   // The sequential `logic` item (§4.18, phase 2): never a vector.
   12: keyedStudent(12),
+  // The cloze shown as labels (ADR-138).
+  13: keyedStudent(13),
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */

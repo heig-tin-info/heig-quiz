@@ -778,6 +778,9 @@ importers:
 
   packages/qt-cloze:
     dependencies:
+      '@dnd-kit/core':
+        specifier: 6.3.1
+        version: 6.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@quiz/core':
         specifier: workspace:*
         version: link:../core

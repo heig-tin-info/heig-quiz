@@ -407,6 +407,52 @@ export function selectOptionOrder(
 }
 
 // ---------------------------------------------------------------------------
+// Labels presentation (ADR-138)
+// ---------------------------------------------------------------------------
+
+/**
+ * At most this many label groups in a question shown as labels: each group
+ * has a hue and a shape of its own, and the design system defines six.
+ */
+export const CLOZE_MAX_LABEL_GROUPS = 6;
+
+/** One group of the tray: the dropdown blanks offering the same labels. */
+export interface ClozeLabelGroup {
+  /** The blanks of the group, by index, in the order of the text. */
+  blanks: number[];
+  /** The group's labels, in the order of its first blank's options, each once. */
+  labels: string[];
+}
+
+/**
+ * The label groups of a cloze shown as labels (ADR-138): dropdown blanks that
+ * offer the same SET of labels, order ignored, form one group; the groups come
+ * in order of first appearance. Derived, never declared — the teacher writes
+ * ordinary dropdowns.
+ *
+ * Takes the editor's parsed blanks (`options` are strings) and the player's
+ * served ones (`options` are `{ id, label }`), so both read the same groups;
+ * every other kind of blank is ignored. A group's labels keep the order of its
+ * first blank's options: on the player that is the order the student was
+ * served, already shuffled when shuffling is on.
+ */
+export function clozeLabelGroups(blanks: readonly (ClozeBlank | ClozeStudentBlank)[]): ClozeLabelGroup[] {
+  const groups = new Map<string, ClozeLabelGroup>();
+  for (const blank of blanks) {
+    if (blank.kind !== "select") continue;
+    const labels = [
+      ...new Set(blank.options.map((option: string | { label: string }) => (typeof option === "string" ? option : option.label))),
+    ];
+    // The set's key: its labels sorted, joined by a character no label holds.
+    const key = [...labels].sort().join("\u0000");
+    const group = groups.get(key);
+    if (group === undefined) groups.set(key, { blanks: [blank.index], labels });
+    else group.blanks.push(blank.index);
+  }
+  return [...groups.values()];
+}
+
+// ---------------------------------------------------------------------------
 // Grading
 // ---------------------------------------------------------------------------
 

@@ -10,6 +10,12 @@ export const clozeEditorStrings = {
     "Type {{ where an answer goes, or press the blank button: a card opens on the possible answers, a dropdown, a number or a regex. The raw {{…}} syntax still works in the Markdown source.",
   caseSensitive: "Case sensitive",
   shuffleOptions: "Shuffle the dropdown options",
+  /** The control of the presentation of the dropdown blanks (ADR-138). */
+  presentation: "Choices shown as",
+  presentationDropdown: "Dropdowns",
+  presentationLabels: "Labels",
+  /** The blank table's column of the label group, in the labels presentation. */
+  group: "Group",
   blanks: "Blanks",
   blanksHint: "What the parser understood, in order of appearance.",
   noBlank: "No blank yet.",
@@ -28,6 +34,22 @@ export const clozePlayerStrings = {
   hint: "Fill every blank. Your answers are saved as you type.",
   /** The accessible name of a blank's expected answer, shown with the key (`answerKey`, #554). */
   expected: "Expected",
+  /*
+   * The labels presentation (ADR-138): the tray and the gaps. The hint is
+   * also what a screen reader hears of a label (dnd-kit's own words are
+   * English).
+   */
+  hintLabels: "Drag a label into a blank, or click the label, then the blank.",
+  /** The tray's name with one group; with several, each row is named by `group`. */
+  labels: "Labels",
+  group: "Group {n}",
+  gapEmpty: "Blank {n}, empty",
+  gapFilled: "Blank {n}: {label}",
+  /** A gap's name when the text has several groups: it says which one it takes. */
+  gapEmptyGroup: "Blank {n}, group {g}, empty",
+  gapFilledGroup: "Blank {n}, group {g}: {label}",
+  /** What a label and a filled gap are, for a screen reader (dnd-kit's `aria-roledescription`). */
+  dragRole: "movable label",
 } as const;
 
 export type ClozePlayerStringKey = keyof typeof clozePlayerStrings;
