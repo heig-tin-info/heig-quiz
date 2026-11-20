@@ -42,6 +42,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import {
   attempts,
+  contestations,
   courseConditions,
   courseStaff,
   enrollments,
@@ -51,6 +52,7 @@ import {
   paperSheets,
   poolMembers,
   projectCheckpoints,
+  projectContestations,
   projectCriteria,
   projectRepos,
   projects,
@@ -103,7 +105,11 @@ const NOT_STAFF = new Set(["DELETE /app/api/courses/:id/github/grants/:orgId"]);
 interface World {
   /** The object each family names; the poll routes act on a poll (`polls`). */
   ids: Record<string, string>;
-  /** By name, or `<family>:<name>` where two families name different things alike (`:cid`). */
+  /**
+   * By name, or `<family>:<name>` where two families name different things
+   * alike, or `<segment>:<name>` where one family does (`:cid`: a project's
+   * checkpoint, `checkpoints:cid`… and its contestation, `contestations:cid`).
+   */
   params: Record<string, string>;
 }
 
@@ -138,9 +144,10 @@ function sweptRoutes(s: Sweep) {
     // A poll route on an exam is a 404 for its mode, whoever asks.
     const family = path.startsWith("/app/api/evaluations/:id/poll") ? "polls" : found;
     const url = (w: World, id: string) =>
-      path.replace(/:(\w+)/g, (_, name: string) => {
+      path.replace(/:(\w+)/g, (_, name: string, at: number) => {
         if (name === "id") return id;
-        const value = w.params[`${found}:${name}`] ?? w.params[name];
+        const segment = path.slice(0, at).split("/").filter(Boolean).at(-1);
+        const value = w.params[`${segment}:${name}`] ?? w.params[`${found}:${name}`] ?? w.params[name];
         // A new inner parameter needs a real value in `world()`.
         if (value === undefined) throw new Error(`${method} ${path}: no value for :${name}`);
         return value;
@@ -279,6 +286,18 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
   await db.insert(questionReports).values({ id: reportId, questionId: seed.questionIds[0]!, reporterId: owner.id, message: "Swept" });
   const attemptId = randomUUID();
   await db.insert(attempts).values({ id: attemptId, evaluationId: seed.evaluationId, userId: enrolled.id, seed: 1 });
+  // A contestation of that attempt, an assistant's proposal standing on it (ADR-139 §14): the `/contestations/:id` family.
+  const contestationId = randomUUID();
+  await db.insert(contestations).values({
+    id: contestationId,
+    attemptId,
+    itemId: seed.itemIds[0]!,
+    reason: "Swept",
+    filedAt: new Date(),
+    proposedVerdict: "accepted",
+    proposedReply: "",
+    proposedAt: new Date(),
+  });
   // A paper sheet with its scan (ADR-125): the `…/paper` and `…/paper/scan` routes of the attempt.
   const scan = Buffer.from("%PDF-1.4\n%%EOF\n", "latin1");
   const sha = sha256Of(scan);
@@ -309,6 +328,7 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
       questions: seed.questionIds[0]!,
       polls: poll.evaluationId,
       "group-sets": setId,
+      contestations: contestationId,
     },
     params: {
       itemId: seed.itemIds[0]!,
@@ -334,7 +354,7 @@ beforeAll(async () => {
   const who = await callers(server);
   main = {
     server,
-    families: ["courses", "classrooms", "evaluations", "pools", "questions", "group-sets"],
+    families: ["courses", "classrooms", "evaluations", "pools", "questions", "group-sets", "contestations"],
     ...who,
     shared: await world(server, who.owner, who.enrolled),
     world: () => world(server, who.owner, who.enrolled),
@@ -435,9 +455,31 @@ describe("every staff route of a project, and of the App (invariant 6, N-SEC-20)
     });
     const checkpointId = randomUUID();
     await db.insert(projectCheckpoints).values({ id: checkpointId, projectId, name: "m1", dueAt: new Date("2026-11-20T22:00:00Z") });
+    // A contestation of the repository's criterion, an assistant's proposal standing on it (ADR-139 §13, §14).
+    const contestationId = randomUUID();
+    await db.insert(projectContestations).values({
+      id: contestationId,
+      repoId,
+      criterionId: "code.tests",
+      criterionDescription: "Tests",
+      pointsAtFiling: 0,
+      maxAtFiling: 10,
+      reason: "Swept",
+      filedAt: new Date(),
+      proposedVerdict: "refused",
+      proposedReply: "Non.",
+      proposedAt: new Date(),
+    });
     return {
       ids: { ...base.ids, projects: projectId },
-      params: { ...base.params, rid: repoId, "projects:cid": checkpointId, criterionId: "code.tests", repo: "template" },
+      params: {
+        ...base.params,
+        rid: repoId,
+        "projects:cid": checkpointId,
+        "contestations:cid": contestationId,
+        criterionId: "code.tests",
+        repo: "template",
+      },
     };
   }
 

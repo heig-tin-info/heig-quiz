@@ -38,6 +38,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
+  AssistantProjectContestations,
+  ContestationConfirmBody,
+  ContestationProposed,
+  OpenContestationsQuery,
   ContestationFileBody,
   ContestationWindow,
   ContestationWindowBody,
@@ -80,6 +84,7 @@ import { iso } from "../../clock.js";
 import { PROJECT_CONFINED } from "../../auth/session.js";
 import type { AppConfig } from "../../config.js";
 import {
+  ASSISTANT_REACH,
   accessibleProject,
   accessibleProjectRepo,
   callerOf,
@@ -97,6 +102,7 @@ import {
 import { codespaceOn, requestCodespaceSync } from "../codespace/service.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
 import { ownHints } from "../realtime/bus.js";
+import { ProjectError } from "./errors.js";
 import * as service from "./service.js";
 import { registerProjectHandlers } from "./webhooks.js";
 
@@ -344,28 +350,139 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     teacher(
       { params: ProjectContestationParams, body: ProjectContestationResolveBody, load: onOwnedProject.load },
       async ({ req, now, params, body, scope }) => {
+        const found = await service.contestationOfProject(app.db, scope.project, params.cid);
+        return answerProjectContestation(req, now, scope, found, body);
+      },
+    ),
+  );
+
+  /**
+   * The owner's answer to a criterion's contestation and what follows it,
+   * shared by the answer above and a proposal's confirmation (`expect`,
+   * ADR-139 §14): the write, the audit (the caller the actor — the owner,
+   * whoever proposed), every member told.
+   */
+  async function answerProjectContestation(
+    req: FastifyRequest,
+    now: Date,
+    scope: { project: service.ProjectRow; course: { id: string } },
+    { contestation, repo }: Awaited<ReturnType<typeof service.contestationOfProject>>,
+    body: ProjectContestationResolveBody,
+    expect?: { proposedAt: Date; grade: string | null },
+  ) {
+    const writer = await gradeWriter(req, now, scope.course.id);
+    const outcome = await service.resolveProjectContestation(app.db, {
+      project: scope.project,
+      contestation,
+      repo,
+      body,
+      writer,
+      ...(expect ? { expect } : {}),
+    });
+    await audit(app.db, {
+      ...actorOf(req),
+      action: "project_contestation.resolve",
+      subjectType: "project_contestation",
+      subjectId: contestation.id,
+      payload: {
+        projectId: scope.project.id,
+        repoId: repo.id,
+        criterionId: contestation.criterionId,
+        verdict: body.verdict,
+        points: outcome.graded !== null,
+        gradeBefore: outcome.before,
+        gradeAfter: outcome.row.gradeAtResolutionId,
+        ...(expect ? { proposal: true } : {}),
+      },
+    });
+    await service.tellResolved(app.db, scope.project, repo, scope.course.id);
+    return ProjectContestationResolution.parse({ contestation: outcome.contestation, repo: outcome.graded });
+  }
+
+  // ADR-139 §14, an assistant's proposals --------------------------------------
+
+  const assistantReach = { ...session, config: ASSISTANT_REACH };
+
+  /**
+   * The project's OPEN contestations as an assistant reads them, masked as
+   * ADR-106 §4 and ADR-119 §7 mask and capped, a page from `offset`. The
+   * staff's own `GET …/contestations` stays portal-only and unmasked.
+   */
+  app.get(
+    "/app/api/projects/:id/contestations/open",
+    assistantReach,
+    teacher({ params: IdParam, query: OpenContestationsQuery, load: gradingProject.bind(null, app) }, async ({ query, scope }) =>
+      AssistantProjectContestations.parse(await service.assistantProjectContestations(app.db, scope.project, query.offset)),
+    ),
+  );
+
+  /**
+   * An assistant's proposal of the owner's answer to a criterion's
+   * contestation (the answer's own body): a member of the course's staff,
+   * an assistant role included, by a token or the portal. Stored on the
+   * contestation, never applied; the members are told nothing. Audited
+   * `contestation.propose` (`api_key` through a token), never a text.
+   */
+  app.put(
+    "/app/api/projects/:id/contestations/:cid/proposal",
+    assistantReach,
+    teacher(
+      { params: ProjectContestationParams, body: ProjectContestationResolveBody, load: gradingProject.bind(null, app) },
+      async ({ req, now, params, body, scope }) => {
         const { contestation, repo } = await service.contestationOfProject(app.db, scope.project, params.cid);
-        const writer = await gradeWriter(req, now, scope.course.id);
-        const outcome = await service.resolveProjectContestation(app.db, { project: scope.project, contestation, repo, body, writer });
+        const row = await service.proposeProjectResolution(app.db, { project: scope.project, contestation, repo, body, userId: callerOf(req).id, now });
         await audit(app.db, {
           ...actorOf(req),
-          action: "project_contestation.resolve",
+          action: "contestation.propose",
           subjectType: "project_contestation",
           subjectId: contestation.id,
           payload: {
+            kind: "project",
             projectId: scope.project.id,
             repoId: repo.id,
             criterionId: contestation.criterionId,
             verdict: body.verdict,
-            points: outcome.graded !== null,
-            gradeBefore: outcome.before,
-            gradeAfter: outcome.row.gradeAtResolutionId,
+            points: body.points !== undefined,
+            accepted: false,
           },
+          at: now,
         });
-        await service.tellResolved(app.db, scope.project, repo, scope.course.id);
-        return ProjectContestationResolution.parse({ contestation: outcome.contestation, repo: outcome.graded });
+        service.projectsChanged([scope.course.id]);
+        return ContestationProposed.parse({ id: row.id, proposal: service.projectProposalViewOf(row, row.gradeAtProposalId) });
       },
     ),
+  );
+
+  /**
+   * The owner confirms the proposal they read (`proposedAt`): the answer
+   * above with the stored values (`409 not_open`, `409 proposal_stale` once
+   * replaced or once the criterion's row in force moved, `404
+   * no_proposal`), by their own portal session.
+   */
+  app.post(
+    "/app/api/projects/:id/contestations/:cid/proposal/confirm",
+    session,
+    teacher(
+      { params: ProjectContestationParams, body: ContestationConfirmBody, load: onOwnedProject.load },
+      async ({ req, now, params, body, scope }) => {
+        const found = await service.contestationOfProject(app.db, scope.project, params.cid);
+        const grade = await service.assertProjectConfirmable(app.db, found.contestation, found.repo, body.proposedAt);
+        const expect = { proposedAt: found.contestation.proposedAt!, grade };
+        return answerProjectContestation(req, now, scope, found, service.confirmationBody(found.contestation), expect);
+      },
+    ),
+  );
+
+  /** A proposal discarded from the portal by a member of the course's staff (`404 no_proposal` when none stands). */
+  app.delete(
+    "/app/api/projects/:id/contestations/:cid/proposal",
+    session,
+    teacher({ params: ProjectContestationParams, load: accessibleProject.bind(null, app) }, async ({ reply, params, scope }) => {
+      const { contestation } = await service.contestationOfProject(app.db, scope.project, params.cid);
+      await service.discardProjectProposal(app.db, contestation.id);
+      service.projectsChanged([scope.course.id]);
+      return reply.code(204).send();
+    }),
   );
 
   /** The caller's own `pull` on the distribution repository (ADR-062, amendment of 2026-10-26). */
@@ -593,10 +710,19 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     session,
     teacher(
       { params: ProjectCriterionParams, body: CriterionGradeWrite, load: onGradingRepo.load },
-      async ({ req, now, params, body, scope }) =>
-        ProjectGradingRepo.parse(
+      async ({ req, now, params, body, scope }) => {
+        // ADR-139 §14 (product owner, 2026-11-20): through a token, never on a contested criterion — the
+        // student sees this write at once, and their reason reaches the model; the assistant proposes instead.
+        if (req.authVia === "token" && (await service.contestedCriterion(app.db, scope.repo.id, params.criterionId))) {
+          throw new ProjectError(
+            "criterion_contested",
+            "A student contests this criterion: propose its answer with propose_contestation_resolution; the course owner confirms it",
+          );
+        }
+        return ProjectGradingRepo.parse(
           await service.gradeCriterion(app.db, scope.project, scope.repo, params.criterionId, body, await gradeWriter(req, now, scope.courseId)),
-        ),
+        );
+      },
     ),
   );
 

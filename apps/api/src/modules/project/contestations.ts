@@ -27,9 +27,10 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
 
 import type {
+  ContestationProposalView,
   ContestationWindowBody,
   NotContestable,
   ProjectContestationResolveBody,
@@ -45,6 +46,7 @@ import {
   contestedUnit,
   criterionInForce,
   currentCriterionRows,
+  proposalStale,
   unitRefusal,
   windowExtendRefusal,
   type ContestedUnit,
@@ -53,8 +55,8 @@ import {
   type CriterionGradeLike,
 } from "@quiz/domain";
 
-import { isoOrNull } from "../../clock.js";
-import type { Db } from "../../db/client.js";
+import { iso, isoOrNull } from "../../clock.js";
+import type { Db, Tx } from "../../db/client.js";
 import {
   classrooms,
   projectContestations,
@@ -63,7 +65,7 @@ import {
   projectRepos,
   projects,
 } from "../../db/schema.js";
-import { studentContestationOf } from "../grading/service.js";
+import { proposalBase, studentContestationOf } from "../grading/service.js";
 import { classroomStaffIds } from "../guards.js";
 import { notFoundError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
@@ -134,16 +136,83 @@ export const studentProjectContestationOf = (row: ProjectContestationRecord): Pr
   bonusAtFiling: row.bonusAtFiling,
 });
 
-/** What the staff read: the same, its id, its repository, whether that repository is live and its criterion still in the snapshot. */
+/**
+ * What the staff read: the same, its id, its repository, whether that
+ * repository is live and its criterion still in the snapshot, and the
+ * assistant's proposal standing on it (ADR-139 §14), `stale` once the
+ * criterion's row in force is not the one it recorded.
+ */
 export const staffProjectContestationOf = (
   row: ProjectContestationRecord,
-  facts: { counted: boolean; inSnapshot: boolean },
+  facts: { counted: boolean; inSnapshot: boolean; currentGradeId?: string | null },
 ): ProjectStaffContestation => ({
   ...studentProjectContestationOf(row),
   id: row.id,
   repoId: row.repoId,
-  ...facts,
+  counted: facts.counted,
+  inSnapshot: facts.inSnapshot,
+  proposal: projectProposalViewOf(row, facts.currentGradeId ?? null),
 });
+
+/** `409 not_open`: the contestation was answered already. */
+export const answered = () => new ProjectError("not_open", "This contestation was answered already");
+
+/** `409 proposal_stale` (ADR-139 §14): the proposal was replaced, or the criterion's grading moved, since it was read or made. */
+export const stale = () =>
+  new ProjectError("proposal_stale", "The proposal was replaced, or the criterion's grading changed, since it was read: read it again, or propose again");
+
+/** The columns of a proposal, all cleared: what an answer and a discard write (ADR-139 §14). */
+export const NO_PROJECT_PROPOSAL = {
+  proposedVerdict: null,
+  proposedReply: null,
+  proposedPoints: null,
+  proposedRationale: null,
+  proposedBy: null,
+  proposedAt: null,
+  gradeAtProposalId: null,
+} as const;
+
+/** The proposal standing on `row`, as the staff read it, against the criterion's row in force now; null when none stands. */
+export function projectProposalViewOf(row: ProjectContestationRecord, currentGradeId: string | null): ContestationProposalView | null {
+  const base = proposalBase(row);
+  if (base === null) return null;
+  return { ...base, rationale: row.proposedRationale, accepted: null, stale: proposalStale(row.gradeAtProposalId, currentGradeId), affected: null };
+}
+
+/** The id of a criterion's current row on a repository (`currentCriterionRows`), null without one. */
+export async function currentGradeId(db: Db, repo: RepoRow, criterionId: string): Promise<string | null> {
+  const standing = (await criteriaStandings(db, [repo])).get(repo.id);
+  return (standing && currentCriterionRows(standing.rows).get(criterionId)?.id) ?? null;
+}
+
+/**
+ * What an answer of `verdict` may give a criterion, an owner's or a
+ * proposal of it: an acceptance only while the criterion is in the snapshot
+ * (`409 criterion_removed`: it can only be refused), new points within its
+ * awarded range (`422 points_out_of_range`).
+ */
+export function assertAcceptable(leaf: Pick<CriteriaLeaf, "maxPoints" | "bonusPoints"> | undefined, verdict: string, points: number | undefined): void {
+  if (!leaf && verdict === "accepted") {
+    throw new ProjectError("criterion_removed", "The criterion left the project's criteria: this contestation can only be refused");
+  }
+  if (!leaf || points === undefined) return;
+  const [min, max] = awardedRange(leaf);
+  if (points < min || points > max) throw new ProjectError("points_out_of_range", `The points of this criterion lie within [${min}, ${max}]`, { min, max });
+}
+
+/**
+ * Whether a criterion of a repository has an OPEN contestation (ADR-139
+ * §14): an MCP client's `grade_criterion` is refused there (`409
+ * criterion_contested`), its write being what the student sees at once.
+ */
+export async function contestedCriterion(db: Db, repoId: string, criterionId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: projectContestations.id })
+    .from(projectContestations)
+    .where(and(eq(projectContestations.repoId, repoId), eq(projectContestations.criterionId, criterionId), eq(projectContestations.state, "open")))
+    .limit(1);
+  return row !== undefined;
+}
 
 /** The contestations of one repository, by criterion: its members' project page. */
 export async function repoContestations(db: Db, repoId: string): Promise<Map<string, ProjectContestationRecord>> {
@@ -169,7 +238,7 @@ export async function openProjectContestations(db: Db, projectIds: readonly stri
 }
 
 /** The leaves of the project's snapshot, by id; empty without one. */
-async function snapshotLeaves(db: Db, projectId: string): Promise<Map<string, CriteriaLeaf>> {
+export async function snapshotLeaves(db: Db, projectId: string): Promise<Map<string, CriteriaLeaf>> {
   const [row] = await db.select({ criteria: projectCriteria.criteria }).from(projectCriteria).where(eq(projectCriteria.projectId, projectId));
   return new Map((row?.criteria.leaves ?? []).map((leaf) => [leaf.id, leaf]));
 }
@@ -189,8 +258,13 @@ export async function projectContestationsView(db: Db, project: ProjectRow): Pro
       .orderBy(sql`${projectContestations.state} = 'open' desc`, desc(projectContestations.filedAt)),
     snapshotLeaves(db, project.id),
   ]);
+  const standings = await criteriaStandings(db, [...new Map(rows.filter((r) => r.contestation.proposedAt !== null).map((r) => [r.repo.id, r.repo])).values()]);
   const contestations = rows.map(({ contestation, repo }) =>
-    staffProjectContestationOf(contestation, { counted: isLive(repo, project), inSnapshot: leaves.has(contestation.criterionId) }),
+    staffProjectContestationOf(contestation, {
+      counted: isLive(repo, project),
+      inSnapshot: leaves.has(contestation.criterionId),
+      currentGradeId: currentCriterionRows(standings.get(repo.id)?.rows ?? []).get(contestation.criterionId)?.id ?? null,
+    }),
   );
   const openByRepo: Record<string, number> = {};
   for (const c of contestations) if (c.state === "open" && c.counted) openByRepo[c.repoId] = (openByRepo[c.repoId] ?? 0) + 1;
@@ -254,7 +328,8 @@ export async function fileProjectContestation(
     .select(
       sql`select ${randomUUID()}::uuid, ${repo.id}::uuid, ${criterionId}, ${leaf.description},
         ${projectCriterionGrades.points}, ${leaf.maxPoints}::numeric, ${leaf.bonusPoints ?? null}::numeric, ${projectCriterionGrades.id},
-        ${input.reason}, ${seat.userId}::uuid, now(), 'open', '', null::uuid, null::timestamptz, null::uuid
+        ${input.reason}, ${seat.userId}::uuid, now(), 'open', '', null::uuid, null::timestamptz, null::uuid,
+        null, null, null::numeric, null, null::uuid, null::timestamptz, null::uuid
       from ${projectCriterionGrades}
       inner join ${projectRepos} on ${projectRepos.id} = ${projectCriterionGrades.repoId}
       inner join ${projects} on ${projects.id} = ${projectRepos.projectId}
@@ -355,26 +430,45 @@ export async function resolveProjectContestation(
     repo: RepoRow;
     body: ProjectContestationResolveBody;
     writer: GradeWriter;
+    /**
+     * A proposal's confirmation (ADR-139 §14): the proposal confirmed is
+     * still the one standing (`proposedAt`), and the criterion's row in
+     * force the one it recorded (`grade`), checked by the write itself.
+     */
+    expect?: { proposedAt: Date; grade: string | null };
   },
 ): Promise<{ row: ProjectContestationRecord; contestation: ProjectStaffContestation; graded: ProjectGradingRepo | null; before: string | null }> {
-  const { project, contestation, repo, body, writer } = input;
-  const inSnapshot = (await snapshotLeaves(db, project.id)).has(contestation.criterionId);
-  if (!inSnapshot && body.verdict === "accepted") {
-    throw new ProjectError("criterion_removed", "The criterion left the project's criteria: this contestation can only be refused");
-  }
-  const standing = (await criteriaStandings(db, [repo])).get(repo.id);
-  const beforeId = (standing && currentCriterionRows(standing.rows).get(contestation.criterionId)?.id) ?? null;
+  const { project, contestation, repo, body, writer, expect } = input;
+  const leaf = (await snapshotLeaves(db, project.id)).get(contestation.criterionId);
+  const inSnapshot = leaf !== undefined;
+  assertAcceptable(leaf, body.verdict, undefined);
+  const beforeId = await currentGradeId(db, repo, contestation.criterionId);
   const staffOf = (row: ProjectContestationRecord) => staffProjectContestationOf(row, { counted: isLive(repo, project), inSnapshot });
-  const answer = (tx: Pick<Db, "update">, gradeId: string | null) =>
+  const answer = (tx: Pick<Db, "update">, gradeId: string | null, still?: SQL) =>
     tx
       .update(projectContestations)
-      .set({ state: body.verdict, reply: body.reply, resolvedBy: writer.userId, resolvedAt: writer.now, gradeAtResolutionId: gradeId })
-      .where(and(eq(projectContestations.id, contestation.id), eq(projectContestations.state, "open")))
+      // An answer clears the proposal standing on it, confirmed or not.
+      .set({ state: body.verdict, reply: body.reply, resolvedBy: writer.userId, resolvedAt: writer.now, gradeAtResolutionId: gradeId, ...NO_PROJECT_PROPOSAL })
+      .where(
+        and(
+          eq(projectContestations.id, contestation.id),
+          eq(projectContestations.state, "open"),
+          expect ? eq(projectContestations.proposedAt, expect.proposedAt) : undefined,
+          still,
+        ),
+      )
       .returning();
+  const missed = async (tx: Pick<Db, "select">) => {
+    if (!expect) return answered();
+    const [now] = await tx.select({ state: projectContestations.state }).from(projectContestations).where(eq(projectContestations.id, contestation.id));
+    return now?.state === "open"
+      ? stale()
+      : answered();
+  };
 
   if (body.points === undefined) {
-    const [row] = await answer(db, beforeId);
-    if (!row) throw new ProjectError("not_open", "This contestation was answered already");
+    const [row] = await answer(db, beforeId, expect ? gradeStillInForce(repo.id, contestation.criterionId, expect.grade) : undefined);
+    if (!row) throw await missed(db);
     return { row, contestation: staffOf(row), graded: null, before: beforeId };
   }
   let row: ProjectContestationRecord | undefined;
@@ -386,11 +480,27 @@ export async function resolveProjectContestation(
     { points: body.points, ...(body.rationale === undefined ? {} : { rationale: body.rationale }) },
     writer,
     async (tx, written) => {
+      // A confirmation: the row this write replaced, under the criterion's lock, must be the one the proposal read.
+      if (expect && (written[0]!.supersedesId ?? null) !== expect.grade) {
+        throw stale();
+      }
       [row] = await answer(tx, written[0]!.id);
-      if (!row) throw new ProjectError("not_open", "This contestation was answered already");
+      if (!row) throw await missed(tx);
     },
   );
   return { row: row!, contestation: staffOf(row!), graded, before: beforeId };
+}
+
+/**
+ * The SQL that holds while the criterion's row in force is still `recorded`
+ * (not superseded; no row standing when null): what an answer without
+ * points adds to its conditional UPDATE when it confirms a proposal.
+ */
+function gradeStillInForce(repoId: string, criterionId: string, recorded: string | null): SQL {
+  const g = projectCriterionGrades;
+  return recorded === null
+    ? sql`not exists (select 1 from ${g} where ${g.repoId} = ${repoId}::uuid and ${g.criterionId} = ${criterionId} and ${g.state} <> 'superseded')`
+    : sql`exists (select 1 from ${g} where ${g.id} = ${recorded}::uuid and ${g.state} <> 'superseded')`;
 }
 
 // --- Who is told ---------------------------------------------------------------

@@ -11,6 +11,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
   AnswerAcceptanceBody,
+  AssistantExamContestations,
+  ContestationConfirmBody,
+  ContestationProposalBody,
+  ContestationProposed,
+  OpenContestationsQuery,
   type AnswerAcceptanceResult,
   AnswerIdParam,
   BatchValidateBody,
@@ -35,16 +40,22 @@ import { evaluationGradingRole } from "@quiz/domain";
 import { tracer, type AuditAction } from "../../audit.js";
 import { EXPORT_FORMATS, sendExport } from "../../documents/files.js";
 import {
+  ASSISTANT_REACH,
+  assistantEvaluation,
   callerOf,
   loadEvaluation,
+  portalContestation,
+  proposingContestation,
   staffAnswer,
   staffContestation,
   staffGrading,
   teacherGuard,
   withCourseRole,
 } from "../guards.js";
-import { notFound, readerLang, teacherRoute } from "../http.js";
-import { joinedItem, joinedItems, staffAttemptIds, type JoinedItem } from "../evaluation/service.js";
+import type { Tx } from "../../db/client.js";
+import type { attempts } from "../../db/schema.js";
+import { notFound, notFoundError, readerLang, teacherRoute } from "../http.js";
+import { joinedItem, joinedItems, staffAttemptIds, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
 import { notifyUsers } from "../notifications/service.js";
 import { listVersions } from "../pool/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
@@ -52,7 +63,16 @@ import * as events from "./events.js";
 import { changeAcceptance } from "./acceptance.js";
 import { itemAnswers, itemAnswersDocument } from "./itemAnswers.js";
 import { enqueueEvaluationGrading } from "./jobs.js";
+import { GradingError } from "./records.js";
 import * as service from "./service.js";
+
+/** A contestation as its owner's loaders hand it over (`staffContestation`'s scope). */
+interface OwnedContestation {
+  contestation: service.ContestationRecord;
+  attempt: typeof attempts.$inferSelect;
+  evaluation: EvaluationRecord;
+  courseId: string;
+}
 
 export async function gradingPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
@@ -426,28 +446,40 @@ export async function gradingPlugin(app: FastifyInstance) {
         async ({ req, reply, now, params, body, scope }): Promise<AnswerAcceptanceResult | FastifyReply> => {
           const item = await joinedItem(app.db, scope.evaluation.id, params.itemId);
           if (!item) return notFound(reply);
-          const accepted = method === "PUT";
-          const outcome = await changeAcceptance(app, scope.evaluation, item, body, accepted, callerOf(req).id, now);
-          if (outcome === null) return notFound(reply);
-          const result = {
-            accepted,
-            regraded: outcome.regraded,
-            unchanged: outcome.unchanged,
-            modifiedAfterRelease: outcome.modifiedAfterRelease,
-          };
-          // A rule changed, or a repeated act healed gradings it had left undone.
-          if (outcome.changed || outcome.regraded > 0) {
-            await trace(req, "evaluation.answer_accepted", "evaluation", scope.evaluation.id, {
-              itemId: item.item.id,
-              ...body,
-              ...result,
-            });
-            events.gradingChanged(scope.evaluation);
-          }
-          return result;
+          return (await acceptAnswer(req, scope.evaluation, item, body, method === "PUT", now)) ?? notFound(reply);
         },
       ),
     });
+  }
+
+  /**
+   * The act of ADR-128 and what follows it — audited when a rule changed or
+   * a repeated act healed gradings it had left undone — shared by the
+   * route above and a proposal's confirmation (ADR-139 §14). Null when the
+   * rule's attempt is not an official attempt of the evaluation.
+   */
+  async function acceptAnswer(
+    req: FastifyRequest,
+    evaluation: EvaluationRecord,
+    item: JoinedItem,
+    body: AnswerAcceptanceBody,
+    accepted: boolean,
+    now: Date,
+    after?: (tx: Tx) => Promise<void>,
+  ): Promise<AnswerAcceptanceResult | null> {
+    const outcome = await changeAcceptance(app, evaluation, item, body, accepted, callerOf(req).id, now, { after });
+    if (outcome === null) return null;
+    const result = {
+      accepted,
+      regraded: outcome.regraded,
+      unchanged: outcome.unchanged,
+      modifiedAfterRelease: outcome.modifiedAfterRelease,
+    };
+    if (outcome.changed || outcome.regraded > 0) {
+      await trace(req, "evaluation.answer_accepted", "evaluation", evaluation.id, { itemId: item.item.id, ...body, ...result });
+      events.gradingChanged(evaluation);
+    }
+    return result;
   }
 
   // --- Contestations (ADR-139) --------------------------------------------
@@ -473,41 +505,192 @@ export async function gradingPlugin(app: FastifyInstance) {
     { preHandler: requireTeacher },
     teacher(
       { params: IdParam, body: ContestationResolveBody, load: ownedContestation },
-      async ({ req, reply, now, body, scope }): Promise<ContestationResolution | FastifyReply> => {
-        const { contestation, evaluation } = scope;
+      async ({ req, now, body, scope }): Promise<ContestationResolution> => answerContestation(req, scope, body, now),
+    ),
+  );
+
+  /**
+   * The owner's answer and what follows it, shared by the answer above and
+   * a proposal's confirmation (`expect`, ADR-139 §14).
+   */
+  async function answerContestation(
+    req: FastifyRequest,
+    scope: OwnedContestation,
+    body: ContestationResolveBody,
+    now: Date,
+    expect?: service.Expected,
+  ): Promise<ContestationResolution> {
+    const { contestation, evaluation } = scope;
+    const item = await joinedItem(app.db, evaluation.id, contestation.itemId);
+    if (!item) throw notFoundError("contestation");
+    const outcome = await service.resolveContestation(app.db, {
+      contestation,
+      evaluation,
+      item,
+      body,
+      userId: callerOf(req).id,
+      now,
+      ...(expect ? { expect } : {}),
+    });
+    if (outcome.grading) await afterCorrection(req, evaluation, outcome.grading, "grading.override");
+    return afterAnswer(req, scope, outcome, body.verdict, expect !== undefined);
+  }
+
+  /**
+   * What follows an answer: the audit (the caller the actor — the owner,
+   * whoever proposed), the refresh hints, and the student told — not a
+   * teacher's own test walk (ADR-018), which tells nobody.
+   */
+  async function afterAnswer(
+    req: FastifyRequest,
+    scope: OwnedContestation,
+    outcome: { row: service.ContestationRecord; grading: service.GradingRecord | null; before: string | null },
+    verdict: ContestationResolveBody["verdict"],
+    proposal: boolean,
+  ): Promise<ContestationResolution> {
+    const { contestation, evaluation } = scope;
+    await trace(req, "contestation.resolve", "contestation", contestation.id, {
+      evaluationId: evaluation.id,
+      verdict,
+      points: outcome.grading !== null,
+      gradingBefore: outcome.before,
+      gradingAfter: outcome.row.gradingAtResolutionId,
+      ...(proposal ? { proposal: true } : {}),
+    });
+    await events.contestationChanged(app.db, evaluation, scope.attempt.userId === null ? [] : [scope.attempt.userId]);
+    const staff = (await staffAttemptIds(app.db, evaluation)).has(contestation.attemptId);
+    if (!staff && scope.attempt.userId !== null) {
+      await notifyUsers(app.db, [scope.attempt.userId], {
+        kind: "contestation_resolved",
+        evaluationId: evaluation.id,
+        evaluationTitle: evaluation.title,
+        attemptId: contestation.attemptId,
+      });
+    }
+    return {
+      contestation: service.staffContestationOf(outcome.row, await service.attemptCounts(app.db, evaluation, scope.attempt)),
+      grading: outcome.grading ? service.toGrading(outcome.grading) : null,
+      modifiedAfterRelease: outcome.grading !== null && evaluation.releasedAt !== null,
+    };
+  }
+
+  // --- An assistant's proposals (ADR-139 §14) --------------------------------
+
+  /**
+   * The class's OPEN contestations as an assistant reads them, masked and
+   * capped, a page from `offset`: a member of the course's staff, by a
+   * token of the assistant's reach or their own portal session. The
+   * staff's own payloads of the panel stay unmasked and never reach a
+   * `quiz` token.
+   */
+  app.get(
+    "/app/api/evaluations/:id/contestations/open",
+    { preHandler: requireTeacher, config: ASSISTANT_REACH },
+    teacher(
+      { params: IdParam, query: OpenContestationsQuery, load: (req, reply, p) => assistantEvaluation(app, req, reply, p.id) },
+      async ({ query, scope }) => AssistantExamContestations.parse(await service.assistantContestations(app.db, scope.evaluation, query.offset)),
+    ),
+  );
+
+  /**
+   * An assistant's proposal of the owner's answer: a member of the course's
+   * staff — an assistant role may propose — by a token or the portal.
+   * Stored on the contestation, never applied; the staff's screens re-read,
+   * the student is told nothing. Audited `contestation.propose` (`api_key`
+   * through a token), never a text.
+   */
+  app.put(
+    "/app/api/contestations/:id/proposal",
+    { preHandler: requireTeacher, config: ASSISTANT_REACH },
+    teacher(
+      {
+        params: IdParam,
+        body: ContestationProposalBody,
+        load: (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => proposingContestation(app, req, reply, p.id),
+      },
+      async ({ req, now, body, scope }) => {
+        const { contestation, evaluation, attempt } = scope;
         const item = await joinedItem(app.db, evaluation.id, contestation.itemId);
-        if (!item) return notFound(reply);
-        const outcome = await service.resolveContestation(app.db, {
-          contestation,
-          evaluation,
-          item,
-          body,
-          userId: callerOf(req).id,
-          now,
-        });
-        if (outcome.grading) await afterCorrection(req, evaluation, outcome.grading, "grading.override");
-        await trace(req, "contestation.resolve", "contestation", contestation.id, {
+        if (!item) throw notFoundError("contestation");
+        const row = await service.propose(app.db, { contestation, attempt, evaluation, item, body, userId: callerOf(req).id, now });
+        await trace(req, "contestation.propose", "contestation", contestation.id, {
+          kind: "exam",
           evaluationId: evaluation.id,
           verdict: body.verdict,
-          points: outcome.grading !== null,
-          gradingBefore: outcome.before,
-          gradingAfter: outcome.row.gradingAtResolutionId,
+          points: body.points !== undefined,
+          accepted: body.accepted !== undefined,
         });
-        await events.contestationChanged(app.db, evaluation, scope.attempt.userId === null ? [] : [scope.attempt.userId]);
-        const staff = (await staffAttemptIds(app.db, evaluation)).has(contestation.attemptId);
-        if (!staff && scope.attempt.userId !== null) {
-          await notifyUsers(app.db, [scope.attempt.userId], {
-            kind: "contestation_resolved",
-            evaluationId: evaluation.id,
-            evaluationTitle: evaluation.title,
-            attemptId: contestation.attemptId,
-          });
-        }
-        return {
-          contestation: service.staffContestationOf(outcome.row, await service.attemptCounts(app.db, evaluation, scope.attempt)),
-          grading: outcome.grading ? service.toGrading(outcome.grading) : null,
-          modifiedAfterRelease: outcome.grading !== null && evaluation.releasedAt !== null,
-        };
+        await events.contestationChanged(app.db, evaluation, []);
+        const proposal = (await service.proposalViews(app.db, evaluation, [row], [item], await service.validatedOfCells(app.db, [row]))).get(row.id)!;
+        return ContestationProposed.parse({ id: row.id, evaluationId: evaluation.id, proposal });
+      },
+    ),
+  );
+
+  /**
+   * The owner confirms the proposal they read (`proposedAt`): the resolve
+   * path above with the stored values; for an accepted answer, ADR-128's
+   * act with the answer `accepted` written inside its rule's transaction —
+   * a refused answer rolls the acceptance back. Refused `409 not_open`,
+   * `409 proposal_stale` (replaced since it was read, or the grading in
+   * force moved), `404 no_proposal`. The owner's own portal session.
+   */
+  app.post(
+    "/app/api/contestations/:id/proposal/confirm",
+    { preHandler: requireTeacher },
+    teacher(
+      {
+        params: IdParam,
+        body: ContestationConfirmBody,
+        load: withCourseRole(
+          app,
+          (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => portalContestation(app, req, reply, p.id),
+          (s) => s.courseId,
+          "owner",
+        ),
+      },
+      async ({ req, now, body, scope }): Promise<ContestationResolution> => {
+        const { contestation, evaluation } = scope;
+        await service.assertConfirmable(app.db, contestation, body.proposedAt);
+        const expect = { proposedAt: contestation.proposedAt!, grading: contestation.gradingAtProposalId };
+        if (!contestation.proposedAcceptance) return answerContestation(req, scope, service.confirmationBody(contestation), now, expect);
+        const item = await joinedItem(app.db, evaluation.id, contestation.itemId);
+        if (!item) throw notFoundError("contestation");
+        const rule = service.proposedRule(contestation.proposedAcceptance, contestation.attemptId);
+        const answer = { verdict: "accepted" as const, reply: contestation.proposedReply ?? "", userId: callerOf(req).id, now, gradingId: null };
+        let answered: service.ContestationRecord | undefined;
+        let regradeFailure: unknown = undefined;
+        const accepted = await acceptAnswer(req, evaluation, item, rule, true, now, async (tx) => {
+          answered = await service.answerRow(tx, contestation, answer, { ...expect, still: true });
+        }).catch(async (error: unknown) => {
+          // Nothing committed: the refusal is the act's or the answer's, and the rule rolled back with it.
+          if (answered === undefined || (await service.contestationById(app.db, contestation.id))?.state !== "accepted") throw error;
+          // The rule and the answer committed, the re-grade after them failed: what the
+          // student now reads is answered, so its audit and its notification follow anyway.
+          regradeFailure = error;
+          req.log.error({ err: error }, "the re-grade after a confirmed accepted answer failed");
+          await trace(req, "evaluation.answer_accepted", "evaluation", evaluation.id, { itemId: item.item.id, ...rule, accepted: true, regradeFailed: true });
+          return undefined;
+        });
+        if (accepted === null) throw notFoundError("contestation");
+        const row = await service.recordResolutionGrading(app.db, answered!);
+        const resolution = await afterAnswer(req, scope, { row, grading: null, before: expect.grading }, "accepted", true);
+        if (regradeFailure !== undefined) throw new GradingError("regrade_failed");
+        return resolution;
+      },
+    ),
+  );
+
+  /** A proposal discarded, from the portal, by a member of the course's staff (`404 no_proposal` when none stands). */
+  app.delete(
+    "/app/api/contestations/:id/proposal",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, load: (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => portalContestation(app, req, reply, p.id) },
+      async ({ reply, scope }) => {
+        if (!(await service.discardProposal(app.db, scope.contestation.id))) throw new GradingError("no_proposal");
+        await events.contestationChanged(app.db, scope.evaluation, []);
+        return reply.code(204).send();
       },
     ),
   );

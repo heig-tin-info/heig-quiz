@@ -12,11 +12,12 @@ import {
 import { formatPoints } from "@quiz/domain";
 
 import { api } from "../../api";
-import { ContestationRecord, ContestationReply, ContestedCriterionHeading } from "../../contestation/Contestation";
+import { ContestationRecord, contestationStateId, ContestedCriterionHeading } from "../../contestation/Contestation";
+import { ContestationResponse, type ProposedContestation } from "../../contestation/Proposal";
 import { useT, type Dict } from "../../i18n";
 import { projectContestationsKey, projectKey } from "../../queryKeys";
 import { ContestationLine, type WindowWords } from "../../contestation/ContestationLine";
-import { numberOf, PointsField, pointsBounds, pointsRange, SectionHeading, Textarea } from "../../ui";
+import { numberOf, PointsField, pointsBounds, pointsMax, pointsRange, SectionHeading, Textarea } from "../../ui";
 import type { MatrixColumn } from "./matrix";
 
 /*
@@ -95,8 +96,8 @@ export function ProjectContestationLine({
   );
 }
 
-/** The owner's answer's refusals a project words, over the shared ones. */
-const ANSWER_REFUSAL: Partial<Record<string, keyof Dict>> = {
+/** The owner's answer's refusals a project words, over the shared ones; a proposal's confirmation's too. */
+export const ANSWER_REFUSAL: Partial<Record<string, keyof Dict>> = {
   points_out_of_range: "project.contest.answer.refusal.points",
   criterion_removed: "project.contest.answer.refusal.removed",
 };
@@ -151,8 +152,9 @@ function CriterionContestation({
   isOwner: boolean | null;
 }) {
   const t = useT();
-  const qc = useQueryClient();
+  const refresh = useProjectRefresh(projectId);
   const open = contestation.state === "open";
+  const points = useNewPoints(contestation.inSnapshot ? row : undefined);
   return (
     <section
       id={`contest-${contestation.criterionId}`}
@@ -163,19 +165,22 @@ function CriterionContestation({
         contestation={contestation}
         detail={<span className="font-mono text-xs text-fg-faint">{contestation.criterionId}</span>}
       />
-      <ContestationRecord contestation={contestation} audience="teacher">
+      <ContestationRecord contestation={contestation} audience="teacher" stateId={contestationStateId(contestation.id)}>
         {contestation.inSnapshot ? null : <p className="text-xs text-fg-muted">{t("project.contest.removed")}</p>}
         {contestation.counted ? null : <p className="text-xs text-fg-muted">{t("project.contest.notCounted")}</p>}
         {open && isOwner === false ? <p className="text-xs text-fg-muted">{t("grading.contest.ownerAnswers")}</p> : null}
       </ContestationRecord>
-      {open && isOwner === true ? (
-        <ProjectContestationAnswer
-          resolvePath={`/app/api/projects/${projectId}/contestations/${contestation.id}/resolve`}
-          row={contestation.inSnapshot ? row : undefined}
-          acceptable={contestation.inSnapshot}
-          onChanged={() => void qc.invalidateQueries({ queryKey: projectKey(projectId) })}
-        />
-      ) : null}
+      <ContestationResponse
+        contestation={contestation}
+        isOwner={isOwner}
+        path={projectContestationPath(projectId)(contestation)}
+        onChanged={refresh}
+        schema={ProjectContestationResolveBody}
+        acceptable={contestation.inSnapshot}
+        refusals={ANSWER_REFUSAL}
+        points={points}
+        outOf={pointsMax(pointsBounds({ max: contestation.maxAtFiling, bonus: contestation.bonusAtFiling ?? undefined }))}
+      />
     </section>
   );
 }
@@ -199,6 +204,11 @@ function useNewPoints(row: CriteriaTableRow | undefined) {
   return {
     invalid,
     body: () => ({ points: value, ...(rationale !== (row.rationale ?? "") ? { rationale } : {}) }),
+    // Edit (ADR-139 §14): a proposal's points, and its rationale when it gave one.
+    fill: (proposed: number, why: string | null) => {
+      setPoints(formatPoints(proposed));
+      if (why !== null) setRationale(why);
+    },
     fields: (
       <div className="space-y-3">
         <PointsField
@@ -221,30 +231,14 @@ function useNewPoints(row: CriteriaTableRow | undefined) {
   };
 }
 
-/** The owner's answer on a criterion: the shared answer, with the criterion's new points. */
-function ProjectContestationAnswer({
-  resolvePath,
-  row,
-  acceptable,
-  onChanged,
-}: {
-  resolvePath: string;
-  /** The criterion's row in force; none when the criterion left the snapshot (no new points then). */
-  row: CriteriaTableRow | undefined;
-  acceptable: boolean;
-  onChanged: () => void;
-}) {
-  const points = useNewPoints(row);
-  return (
-    <ContestationReply
-      resolvePath={resolvePath}
-      onChanged={onChanged}
-      schema={ProjectContestationResolveBody}
-      acceptable={acceptable}
-      refusals={ANSWER_REFUSAL}
-      points={points}
-    />
-  );
+/** A project's contestation's base path: its answer, its proposal and the proposal's confirmation under it. */
+export const projectContestationPath = (projectId: string) => (c: Pick<ProposedContestation, "id">) =>
+  `/app/api/projects/${projectId}/contestations/${c.id}`;
+
+/** What every write on a project's contestation makes stale: the project's reads, its grading and contestations included. */
+export function useProjectRefresh(projectId: string): () => void {
+  const qc = useQueryClient();
+  return () => void qc.invalidateQueries({ queryKey: projectKey(projectId) });
 }
 
 /** The project's open contestations: the sum of its live repositories' (`openByRepo`). */

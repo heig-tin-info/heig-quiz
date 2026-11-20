@@ -7,6 +7,8 @@
  */
 import { z } from "zod";
 
+import { ConsentRevision } from "./tokens.js";
+
 /** The one scope this server grants: author on the teacher's behalf through MCP. */
 export const OAUTH_SCOPE = "quiz";
 export const OAUTH_SCOPES_SUPPORTED = [OAUTH_SCOPE, "offline_access"] as const;
@@ -84,7 +86,11 @@ export const OAuthRequestView = z.object({
 export type OAuthRequestView = z.infer<typeof OAuthRequestView>;
 
 /** `POST /app/api/oauth/requests/:id/decision` */
-export const OAuthDecision = z.object({ approve: z.boolean() });
+export const OAuthDecision = z.object({
+  approve: z.boolean(),
+  /** The consent revision the screen showed (ADR-139 §14); absent, an old page: 1. Never recorded above the current one. */
+  consentRevision: ConsentRevision.optional(),
+});
 export type OAuthDecision = z.infer<typeof OAuthDecision>;
 
 export const OAuthDecisionResult = z.object({ redirectTo: z.string() });
@@ -97,5 +103,7 @@ export const OAuthConnection = z.object({
   redirectHost: z.string(),
   createdAt: z.iso.datetime(),
   lastUsedAt: z.iso.datetime().nullable(),
+  /** The consent it was granted under: below `CONTESTATIONS_CONSENT`, reconnecting the assistant asks again. */
+  consentRevision: ConsentRevision,
 });
 export type OAuthConnection = z.infer<typeof OAuthConnection>;

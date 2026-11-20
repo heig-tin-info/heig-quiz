@@ -46,6 +46,11 @@ The answer is given on the grading screen, under the criteria: **Refuse**
 with a reply, or **Accept**, possibly with new points (then a reply). New points wait for the validation and the next release of the scores. Once the scores are released, the
 criteria's points, the validations and the Regrades are the owner's.
 
+An AI assistant connected over MCP may propose an answer, with new points
+and their rationale: a robot marks the cell and the repository, and the
+proposal stands above the answer. **Confirm**, **Edit** or **Discard** it;
+**Confirm the proposals (n)**, in **Contested**, confirms the project's.
+
 ## Deadline
 
 The deadline is applied on the server's clock; the time that counts for a

@@ -2209,6 +2209,7 @@ describe("the Grading tab's contestations (ADR-139 §13)", () => {
     resolvedAt: state === "open" ? null : PAST,
     counted: true,
     inSnapshot: true,
+    proposal: null,
   });
   const contested: ProjectContestations = {
     applies: true,
@@ -2262,6 +2263,44 @@ describe("the Grading tab's contestations (ADR-139 §13)", () => {
     open("/?tab=grading&filter=contested");
     expect(await screen.findByText("No contested repository")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Contested" })).toBeChecked();
+  });
+
+  it("marks where an assistant prepared an answer, and offers the owner the project's proposals that count (ADR-139 §14)", async () => {
+    const offer = (stale = false) => ({
+      verdict: "accepted" as const,
+      reply: "Because.",
+      points: 2,
+      rationale: null,
+      accepted: null,
+      proposedAt: "2026-11-16T09:00:00.000Z",
+      stale,
+      affected: null,
+    });
+    const withProposals: ProjectContestations = {
+      ...contested,
+      openByRepo: { [alice.id]: 1, [bob.id]: 2, [chloe.id]: 1 },
+      contestations: [
+        { ...contestation(alice, "rendu.tests", "open", 1), proposal: offer() },
+        { ...contestation(bob, "code.memoire", "open", 2), proposal: offer() },
+        // Left out: a stale one, counted apart, and one on a repository that no longer counts.
+        { ...contestation(chloe, "code.style", "open", 3), proposal: offer(true) },
+        { ...contestation(bob, "code.nommage", "open", 4), proposal: offer(), counted: false },
+      ],
+    };
+    routes(released(), { [`GET ${BASE}/grading`]: ok(gradingView([alice, bob, chloe])), [`GET ${BASE}/contestations`]: ok(withProposals) });
+    open("/?tab=grading");
+    const table = await matrix();
+    const [a] = within(table).getAllByTestId("matrix-row");
+    // The cell's mark and the repository's open count both carry the sign.
+    expect(within(a!).getAllByTestId("proposal-mark")).toHaveLength(2);
+    expect(within(a!).getAllByText("proposal ready").length).toBe(2);
+    // Offered in the contested filter only.
+    expect(screen.queryByRole("button", { name: /Confirm the proposals/ })).toBeNull();
+    await userEvent.click(screen.getByRole("radio", { name: "Contested · 3" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm the proposals (2)" }));
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the proposals" });
+    expect(within(dialog).getByText("The open contestations of this project that carry a proposal.")).toBeVisible();
+    expect(within(dialog).getByText("1 out-of-date proposal is left out.")).toBeVisible();
   });
 
   it("gives an assistant the line without its acts, and no grade adjustment once released", async () => {

@@ -15,10 +15,18 @@ import { z } from "zod";
 import type { AcceptablePart as TypeAcceptablePart, AcceptedAnswer } from "@quiz/core/server";
 import { LLM_CONFIDENCES } from "@quiz/core/llm";
 import { CRITERION_ID_PATTERN } from "@quiz/core/reasons";
-import { ACCEPTANCE_SCOPES, answerExplained, GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
+import { ACCEPTANCE_SCOPES, GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
 
 import { IdParam, StaffItemRef } from "./common.js";
-import { ContestationReply, ContestationVerdict, StaffContestation } from "./contestation.js";
+import {
+  AcceptanceAnswer,
+  AcceptancePart,
+  ContestationProposalView,
+  ProposedAcceptance,
+  refineAnswer,
+  AnswerFields,
+  StaffContestation,
+} from "./contestation.js";
 import { ItemCounting } from "./evaluation.js";
 import { AiAgreement } from "./gradingFigures.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
@@ -113,10 +121,6 @@ export type GradingHistoryEntry = z.infer<typeof GradingHistoryEntry>;
 export const AcceptanceScope = z.enum(ACCEPTANCE_SCOPES);
 export type AcceptanceScope = z.infer<typeof AcceptanceScope>;
 
-/** A part of a question, as its type names it (`b2`, a cloze blank). */
-const AcceptancePart = z.string().min(1).max(64);
-/** The type's identity of an answer at a part: a cloze blank's normalised text, a dropdown's canonical option. */
-const AcceptanceAnswer = z.string().min(1).max(1000);
 
 /**
  * `PUT` (accept) and `DELETE` (stop accepting)
@@ -415,21 +419,25 @@ export type ManualGradingBody = z.infer<typeof ManualGradingBody>;
  * comment, so then the reply is mandatory too.
  */
 export const ContestationResolveBody = z
-  .object({
-    verdict: ContestationVerdict,
-    reply: ContestationReply.default(""),
-    points: ManualGradingBody.shape.points,
-    criteria: ManualGradingBody.shape.criteria,
-  })
+  .object({ ...AnswerFields, points: ManualGradingBody.shape.points, criteria: ManualGradingBody.shape.criteria })
   .refine(notBoth, { message: "points and criteria are exclusive" })
-  .refine((b) => b.verdict === "accepted" || (b.points === undefined && b.criteria === undefined), {
-    message: "a refusal gives no points",
-  })
-  .refine((b) => answerExplained({ ...b, points: b.points !== undefined || b.criteria !== undefined }), {
-    message: "a refusal, or new points, needs a reply",
-    path: ["reply"],
-  });
+  .superRefine((b, ctx) =>
+    refineAnswer(ctx, { ...b, points: b.points !== undefined || b.criteria !== undefined, accepted: false }),
+  );
 export type ContestationResolveBody = z.infer<typeof ContestationResolveBody>;
+
+/**
+ * `PUT /contestations/:id/proposal` (ADR-139 §14): an assistant's proposal
+ * of the owner's answer, through an MCP token or the portal — applied only
+ * when the owner confirms it. Either new `points` (never on an essay graded
+ * by criteria: `422 proposal_points_unsupported`) or an `accepted` answer
+ * (ADR-128's gesture, its own validation), never both; a refusal carries a
+ * reply, and so do new points (`proposalRefusal` of `@quiz/domain`).
+ */
+export const ContestationProposalBody = z
+  .strictObject({ ...AnswerFields, points: ManualGradingBody.shape.points, accepted: ProposedAcceptance.optional() })
+  .superRefine((b, ctx) => refineAnswer(ctx, { ...b, points: b.points !== undefined, accepted: b.accepted !== undefined }));
+export type ContestationProposalBody = z.infer<typeof ContestationProposalBody>;
 
 /** What the answer did: the contestation as it now stands, and the override it wrote, if any. */
 export const ContestationResolution = z.object({
@@ -440,6 +448,63 @@ export const ContestationResolution = z.object({
   modifiedAfterRelease: z.boolean(),
 });
 export type ContestationResolution = z.infer<typeof ContestationResolution>;
+
+/**
+ * A question of an exam's open contestations, as an assistant reads it
+ * (ADR-139 §14): the staff's own reading — its type, its points, its
+ * statement and its key as text, each capped (`clipText`); null when the
+ * type does not write itself as text.
+ */
+export const AssistantContestedItem = z.object({
+  id: z.uuid(),
+  position: z.number().int(),
+  type: z.string(),
+  points: z.number(),
+  statement: z.string().nullable(),
+  key: z.string().nullable(),
+});
+export type AssistantContestedItem = z.infer<typeof AssistantContestedItem>;
+
+/**
+ * One OPEN contestation of an exam as an assistant reads it (ADR-139 §14):
+ * an opaque `id`, never a name, an e-mail address nor an attempt — the
+ * roster's names and addresses masked in the `reason`, the `answer` and the
+ * grading's `comment` (`maskNames`, ADR-063 §4), each capped. `answer`:
+ * the answer as text (the type's export text, or its JSON), null when the
+ * student gave none. `acceptance`: what ADR-128 lets the owner accept on
+ * this item — the scopes and the parts of this answer — or null.
+ */
+export const AssistantExamContestation = z.object({
+  id: z.uuid(),
+  itemId: z.uuid(),
+  filedAt: z.iso.datetime(),
+  reason: z.string(),
+  answer: z.string().nullable(),
+  grading: z
+    .object({ points: z.number(), maxPoints: z.number(), source: GradingSource, comment: z.string().nullable() })
+    .nullable(),
+  acceptance: z.object({ scopes: z.array(AcceptanceScope), parts: z.array(AcceptablePart) }).nullable(),
+  proposal: ContestationProposalView.nullable(),
+});
+export type AssistantExamContestation = z.infer<typeof AssistantExamContestation>;
+
+/**
+ * `GET /evaluations/:id/contestations/open?offset=` (ADR-139 §14), the read
+ * the MCP tool `list_contestations` forwards to: the class's OPEN
+ * contestations, oldest first, one page (`contestationPage`: at most ten, within
+ * the characters) from `offset`, the questions they contest, `total` and
+ * the `next` page's offset (null on the last).
+ */
+export const AssistantExamContestations = z.object({
+  evaluationId: z.uuid(),
+  title: z.string(),
+  total: z.number().int().nonnegative(),
+  offset: z.number().int().nonnegative(),
+  next: z.number().int().positive().nullable(),
+  items: z.array(AssistantContestedItem),
+  contestations: z.array(AssistantExamContestation),
+});
+export type AssistantExamContestations = z.infer<typeof AssistantExamContestations>;
 
 /** F-GRADE-04: validate a proposal, possibly adjusting it on the way. */
 export const ValidateGradingBody = z

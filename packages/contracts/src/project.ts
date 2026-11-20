@@ -25,7 +25,6 @@ import {
   CONTESTATION_DAYS_DEFAULT,
   CRITERIA_TABLE_STATES,
   CRITERION_REASONS,
-  answerExplained,
   EVIDENCE_STATUSES,
   GRADING_SOURCES,
   CRITERIA_PARSE_ERROR_CODES,
@@ -57,7 +56,14 @@ import {
 } from "@quiz/domain";
 
 import { ProjectRepoCollection, StudentProjectWorkspace } from "./codespace.js";
-import { ContestationDays, ContestationReply, ContestationVerdict, StaffContestation, StudentContestation } from "./contestation.js";
+import {
+  ContestationDays,
+  ContestationProposalView,
+  refineAnswer,
+  AnswerFields,
+  StaffContestation,
+  StudentContestation,
+} from "./contestation.js";
 import { BranchName, ProtectedPath, RepoName } from "./gitNames.js";
 import { MessageText, SyncMessage } from "./message.js";
 import { Rounding } from "./evaluation.js";
@@ -651,6 +657,15 @@ export const PROJECT_REFUSALS = [
   "window_unavailable",
   "window_instant",
   "criterion_removed",
+  // ADR-139 §14, an assistant's proposal: its confirmation when the
+  // criterion's row in force moved since it was made (409); a confirmation
+  // or a discard where none stands (404).
+  "proposal_stale",
+  "no_proposal",
+  // ADR-139 §14 (product owner, 2026-11-20): a teacher's points for a
+  // criterion with an open contestation, written through a token (an MCP
+  // client's `grade_criterion`), are refused (409): the assistant proposes.
+  "criterion_contested",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;
@@ -2072,6 +2087,8 @@ export const ProjectStaffContestation = ProjectStudentContestation.extend({
   counted: StaffContestation.shape.counted,
   repoId: z.uuid(),
   inSnapshot: z.boolean(),
+  /** The assistant's proposal standing on it (ADR-139 §14), or null; never in a student payload. */
+  proposal: StaffContestation.shape.proposal,
 });
 export type ProjectStaffContestation = z.infer<typeof ProjectStaffContestation>;
 
@@ -2112,21 +2129,14 @@ export type ProjectStudentCriterionParams = z.infer<typeof ProjectStudentCriteri
  * teacher's criterion write in the same transaction — a `manual` row, still
  * proposed: the members read the new points as indicative, and the grade
  * moves at the owner's next release, after the validation. A refusal or new
- * points carry a reply (`answerExplained` of `@quiz/domain`).
+ * points carry a reply (`proposalRefusal` of `@quiz/domain`). An assistant's
+ * proposal (`PUT …/contestations/:cid/proposal`, ADR-139 §14) is the same
+ * body, stored until the owner confirms it.
  */
 export const ProjectContestationResolveBody = z
-  .strictObject({
-    verdict: ContestationVerdict,
-    reply: ContestationReply.default(""),
-    points: CriterionGradeWrite.shape.points.optional(),
-    rationale: CriterionGradeWrite.shape.rationale,
-  })
-  .refine((b) => b.verdict === "accepted" || b.points === undefined, { message: "a refusal gives no points" })
+  .strictObject({ ...AnswerFields, points: CriterionGradeWrite.shape.points.optional(), rationale: CriterionGradeWrite.shape.rationale })
   .refine((b) => b.points !== undefined || b.rationale === undefined, { message: "a rationale goes with new points", path: ["rationale"] })
-  .refine((b) => answerExplained({ ...b, points: b.points !== undefined }), {
-    message: "a refusal, or new points, needs a reply",
-    path: ["reply"],
-  });
+  .superRefine((b, ctx) => refineAnswer(ctx, { ...b, points: b.points !== undefined, accepted: false }));
 export type ProjectContestationResolveBody = z.infer<typeof ProjectContestationResolveBody>;
 
 /** What the answer did: the contestation as it now stands, and the repository's grading entry when new points were written. */
@@ -2135,6 +2145,59 @@ export const ProjectContestationResolution = z.object({
   repo: ProjectGradingRepo.nullable(),
 });
 export type ProjectContestationResolution = z.infer<typeof ProjectContestationResolution>;
+
+/**
+ * One OPEN contestation of a project's criterion as an assistant reads it
+ * (ADR-139 §14): an opaque `id` — never a name, an address, a login, the
+ * repository nor its id — the criterion as the snapshot holds it (its
+ * description, maximum, bonus and `prompt`, the key of an llm criterion),
+ * its row in force (points, state, source, rationale and reason, masked as
+ * ADR-106 §4 and ADR-119 §7 mask: the roster's and the members' names,
+ * addresses and GitHub logins, the organization's login, the repository's
+ * name), the points at the filing and the masked `reason`, each capped.
+ */
+export const AssistantProjectContestation = z.object({
+  id: z.uuid(),
+  filedAt: z.iso.datetime(),
+  reason: z.string(),
+  criterion: z.object({
+    id: z.string(),
+    description: z.string(),
+    section: z.array(z.string()),
+    max: z.number(),
+    bonus: z.number().nullable(),
+    prompt: z.string().nullable(),
+    inSnapshot: z.boolean(),
+  }),
+  pointsAtFiling: z.number(),
+  grading: z
+    .object({
+      points: z.number(),
+      state: z.string(),
+      source: z.string(),
+      rationale: z.string().nullable(),
+      reason: z.string().nullable(),
+    })
+    .nullable(),
+  proposal: ContestationProposalView.nullable(),
+});
+export type AssistantProjectContestation = z.infer<typeof AssistantProjectContestation>;
+
+/**
+ * `GET /app/api/projects/:id/contestations/open?offset=` (ADR-139 §14), the
+ * read `list_contestations` forwards to for a project: its OPEN
+ * contestations on live repositories, oldest first, one page from
+ * `offset`, `total` and the `next` page's offset (null on the last).
+ */
+export const AssistantProjectContestations = z.object({
+  projectId: z.uuid(),
+  name: z.string(),
+  total: z.number().int().nonnegative(),
+  offset: z.number().int().nonnegative(),
+  next: z.number().int().positive().nullable(),
+  contestations: z.array(AssistantProjectContestation),
+});
+export type AssistantProjectContestations = z.infer<typeof AssistantProjectContestations>;
 
 /**
  * `GET /app/api/projects/:id/repos/:rid/criteria/:criterionId/ci-log`

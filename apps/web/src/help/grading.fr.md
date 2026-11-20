@@ -82,3 +82,10 @@ seule fois, est réservée au rôle Enseignant du cours, sous la réponse de
 l'étudiant ou de l'étudiante : **Refuser** avec une réponse, ou
 **Accepter**, avec ou sans nouveaux points (la réponse est alors
 obligatoire et devient le commentaire de la modification).
+
+Un assistant IA relié par MCP peut proposer une réponse : un robot marque
+la ligne, et **Proposition d'un assistant IA** s'affiche au-dessus de votre
+réponse. Son texte est celui de l'IA. **Confirmer** répond tel que proposé,
+**Modifier** le copie dans votre réponse, **Écarter** le retire.
+**Confirmer les propositions (n)**, dans **Contestées**, confirme celles de
+cette question l'une après l'autre.

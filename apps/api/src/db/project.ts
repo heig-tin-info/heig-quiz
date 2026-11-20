@@ -70,6 +70,7 @@ import {
   CONTESTATION_DAYS_DEFAULT,
   CONTESTATION_DAYS_MAX,
   CONTESTATION_STATES,
+  CONTESTATION_VERDICTS,
   DEADLINE_STRATEGIES,
   DEVICE_LEVEL_IDS,
   EVIDENCE_STATUSES,
@@ -1126,8 +1127,22 @@ export const projectContestations = pgTable(
     resolvedBy: uuid("resolved_by").references(() => users.id, { onDelete: "set null" }),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     gradeAtResolutionId: uuid("grade_at_resolution_id").references(() => projectCriterionGrades.id, { onDelete: "set null" }),
+    /*
+     * ADR-139 §14: the ONE proposal of an assistant standing on it, as on an
+     * exam's contestation (`contestations`), applied only when the owner
+     * confirms it; never read by a student payload. `proposed_at` null: none.
+     */
+    proposedVerdict: text("proposed_verdict", { enum: CONTESTATION_VERDICTS }),
+    proposedReply: text("proposed_reply"),
+    proposedPoints: numeric("proposed_points", { precision: 6, scale: 2, mode: "number" }),
+    proposedRationale: text("proposed_rationale"),
+    proposedBy: uuid("proposed_by").references(() => users.id, { onDelete: "set null" }),
+    proposedAt: timestamp("proposed_at", { withTimezone: true }),
+    /** The criterion's row in force when it was proposed; its confirmation is refused once another is (`proposal_stale`). */
+    gradeAtProposalId: uuid("grade_at_proposal_id").references(() => projectCriterionGrades.id, { onDelete: "set null" }),
   },
   (t) => [
+    check("project_contestations_proposal_ck", sql`(${t.proposedAt} is null) = (${t.proposedVerdict} is null)`),
     uniqueIndex("project_contestations_criterion_uq").on(t.repoId, t.criterionId),
     // The open ones of a repository: the staff's counts.
     index("project_contestations_open_idx")

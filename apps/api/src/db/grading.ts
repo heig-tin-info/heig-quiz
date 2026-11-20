@@ -22,6 +22,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   jsonb,
   numeric,
@@ -34,7 +35,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { LLM_CONFIDENCES } from "@quiz/core/server";
-import { CONTESTATION_STATES, GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
+import { CONTESTATION_STATES, CONTESTATION_VERDICTS, GRADING_SOURCES, GRADING_STATES, type ProposedAcceptance } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { evaluationItems } from "./evaluation.js";
@@ -154,8 +155,25 @@ export const contestations = pgTable(
     resolvedBy: uuid("resolved_by").references(() => users.id, { onDelete: "set null" }),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     gradingAtResolutionId: uuid("grading_at_resolution_id").references(() => gradings.id, { onDelete: "set null" }),
+    /*
+     * ADR-139 §14: the ONE proposal of an assistant standing on it, made over
+     * MCP (or the portal), applied only when the owner confirms it;
+     * overwritten by a later one, cleared when the contestation is answered.
+     * Never read by a student payload. `proposed_at` null: none.
+     */
+    proposedVerdict: text("proposed_verdict", { enum: CONTESTATION_VERDICTS }),
+    /** The proposed reply; empty for none. */
+    proposedReply: text("proposed_reply"),
+    proposedPoints: numeric("proposed_points", { precision: 6, scale: 2, mode: "number" }),
+    /** An accepted answer (ADR-128): its part, its answer, its scope. */
+    proposedAcceptance: jsonb("proposed_acceptance").$type<ProposedAcceptance>(),
+    proposedBy: uuid("proposed_by").references(() => users.id, { onDelete: "set null" }),
+    proposedAt: timestamp("proposed_at", { withTimezone: true }),
+    /** The validated grading in force when it was proposed; its confirmation is refused once another is (`proposal_stale`). */
+    gradingAtProposalId: uuid("grading_at_proposal_id").references(() => gradings.id, { onDelete: "set null" }),
   },
   (t) => [
+    check("contestations_proposal_ck", sql`(${t.proposedAt} is null) = (${t.proposedVerdict} is null)`),
     uniqueIndex("contestations_cell_uq").on(t.attemptId, t.itemId),
     // "The open contestations of an evaluation", by its items.
     index("contestations_open_idx")

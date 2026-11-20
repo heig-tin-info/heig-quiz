@@ -7,6 +7,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type {
   AiAgreement,
+  ContestationProposalView,
   GradingEntry,
   GradingHistoryEntry,
   GradingQuery,
@@ -40,6 +41,7 @@ import { aiAgreementByItem } from "./agreement.js";
 import { acceptanceHook, acceptancesOf, itemScopes, ruleLabel, type AcceptanceHook, type ItemRules } from "./acceptanceRules.js";
 import { contestationsOfItems, openContestationCounts, staffContestationOf, type ContestationRecord } from "./contestations.js";
 import { keptAttempts } from "./kept.js";
+import { proposalViews, validatedOfCells } from "./proposals.js";
 import {
   criteriaOf,
   gradingsIn,
@@ -181,6 +183,8 @@ interface QueueContext {
   acceptances: ItemRules;
   /** The contestations of the selected items, by cell (ADR-139). */
   contestations: Map<PairKey, ContestationRecord>;
+  /** The assistants' proposals standing on them, by contestation (ADR-139 §14). */
+  proposals: Map<string, ContestationProposalView>;
   /** The AI's agreement with the teacher on each selected item (ADR-139 §15). */
   agreement: Map<string, AiAgreement | null>;
 }
@@ -225,6 +229,8 @@ async function loadQueueContext(
     contestationsOfItems(db, itemIds),
     aiAgreementByItem(db, evaluation.id, itemIds),
   ]);
+  const proposed = [...contested.values()].filter((c) => c.proposedAt !== null);
+  const proposals = await proposalViews(db, evaluation, proposed, selection.items, await validatedOfCells(db, proposed));
   return {
     answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
     standing,
@@ -244,6 +250,7 @@ async function loadQueueContext(
     ),
     acceptances,
     contestations: contested,
+    proposals,
     agreement,
   };
 }
@@ -306,7 +313,7 @@ function entryOf(
 /** A cell's contestation as the staff read it, flagged when its attempt no longer counts (ADR-139). */
 function contestationOf(context: QueueContext, key: PairKey, attemptId: string) {
   const row = context.contestations.get(key);
-  return row ? staffContestationOf(row, context.kept.has(attemptId)) : null;
+  return row ? staffContestationOf(row, context.kept.has(attemptId), context.proposals.get(row.id) ?? null) : null;
 }
 
 /**

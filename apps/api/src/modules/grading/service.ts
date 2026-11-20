@@ -57,14 +57,30 @@ export { changeItemCounting } from "./counting.js";
 export {
   cellUnit,
   contestationsOfAttempt,
+  answerRow,
+  contestationById,
+  type Expected,
   attemptCounts,
   fileContestation,
+  recordResolutionGrading,
   openContestationCounts,
+  proposalBase,
   resolveContestation,
   staffContestationOf,
   studentContestationOf,
   type ContestationRecord,
 } from "./contestations.js";
+// An assistant's proposals on them (ADR-139 §14), in `./proposals.ts`.
+export {
+  assertConfirmable,
+  assistantContestations,
+  confirmationBody,
+  discardProposal,
+  propose,
+  proposalViews,
+  validatedOfCells,
+  proposedRule,
+} from "./proposals.js";
 // The agreement figures of the grading (ADR-139 §15), in `./agreement.ts`.
 export { gradingFigures } from "./agreement.js";
 // The kept attempt of each student (F-EVAL-15, ADR-025), in `./kept.ts`.

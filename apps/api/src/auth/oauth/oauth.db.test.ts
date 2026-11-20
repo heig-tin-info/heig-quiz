@@ -10,6 +10,8 @@ import { eq, like } from "drizzle-orm";
 import type { InjectOptions } from "fastify";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { MCP_CONSENT_REVISION } from "@quiz/contracts";
+
 import { auditLog, oauthClients, oauthGrants, oauthRequests } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { AUTHORIZATIONS_PER_HOUR } from "./routes.js";
@@ -50,7 +52,11 @@ function authorizeUrl(params: Record<string, string>) {
 }
 
 /** Authorize → consent (approved by `headers`) → the redirect back, parsed. */
-async function consent(clientId: string, challenge: string, opts: { redirect?: string; approve?: boolean; headers?: Record<string, string> } = {}) {
+async function consent(
+  clientId: string,
+  challenge: string,
+  opts: { redirect?: string; approve?: boolean; headers?: Record<string, string>; consentRevision?: number } = {},
+) {
   const start = await inject({
     method: "GET",
     url: authorizeUrl({
@@ -72,7 +78,7 @@ async function consent(clientId: string, challenge: string, opts: { redirect?: s
     method: "POST",
     url: `/app/api/oauth/requests/${id}/decision`,
     headers: opts.headers ?? teacher.headers,
-    payload: { approve: opts.approve ?? true },
+    payload: { approve: opts.approve ?? true, ...(opts.consentRevision === undefined ? {} : { consentRevision: opts.consentRevision }) },
   });
   return { id, decision, back: decision.statusCode === 200 ? new URL(decision.json().redirectTo) : null };
 }
@@ -176,11 +182,11 @@ describe("the whole flow, with a registered client", () => {
     expect(afterRevoke.body.error).toBe("invalid_grant");
   });
 
-  /** Registers, consents and exchanges: a live grant and its first tokens. */
-  async function freshGrant() {
+  /** Registers, consents and exchanges: a live grant and its first tokens; `consentRevision`, what the screen says it showed. */
+  async function freshGrant(consentRevision?: number) {
     const { body: client } = await register();
     const { verifier, challenge } = pkce();
-    const { back } = await consent(client.client_id, challenge);
+    const { back } = await consent(client.client_id, challenge, consentRevision === undefined ? {} : { consentRevision });
     const exchanged = await token({
       grant_type: "authorization_code",
       code: back!.searchParams.get("code")!,
@@ -211,6 +217,40 @@ describe("the whole flow, with a registered client", () => {
       .from(auditLog)
       .where(eq(auditLog.action, "oauth.refresh_replay"));
     expect(row).toMatchObject({ actorType: "system", subjectType: "oauth_grant" });
+  });
+
+  it("records the consent shown (ADR-139 §14): an older grant is asked again for contestations, a refresh never raises it, a new consent does", async () => {
+    // An approval that does not say it showed the new line (a page cached from before), or names an older one, records 1.
+    const contested = async (access: string) => {
+      const res = await mcp(access, "tools/call", { name: "list_contestations", arguments: { evaluationId: randomUUID() } });
+      return JSON.parse(res.json().result.content[0].text);
+    };
+    for (const shown of [undefined, 1]) {
+      const { clientId, tokens: unshown } = await freshGrant(shown);
+      const [grant] = await server.app.db.select().from(oauthGrants).where(eq(oauthGrants.clientId, clientId));
+      expect(grant!.consentRevision, String(shown)).toBe(1);
+      expect(await contested(unshown.access_token!)).toMatchObject({ status: 403, body: { error: "consent_required" } });
+    }
+    const { clientId, tokens } = await freshGrant(MCP_CONSENT_REVISION + 3);
+    const [grant] = await server.app.db.select().from(oauthGrants).where(eq(oauthGrants.clientId, clientId));
+    expect(grant!.consentRevision).toBe(MCP_CONSENT_REVISION);
+    // A grant made before the contestations' line: what every existing grant is.
+    await server.app.db.update(oauthGrants).set({ consentRevision: 1 }).where(eq(oauthGrants.id, grant!.id));
+    const connections = await inject({ method: "GET", url: "/app/api/me/connections", headers: teacher.headers });
+    expect((connections.json() as { id: string; consentRevision: number }[]).find((c) => c.id === grant!.id)).toMatchObject({ consentRevision: 1 });
+    expect(await contested(tokens.access_token!)).toMatchObject({ status: 403, body: { error: "consent_required" } });
+    // Its other tools keep working.
+    const pools = await mcp(tokens.access_token!, "tools/call", { name: "list_pools", arguments: {} });
+    expect(pools.json().result.isError).toBe(false);
+    // A refresh rotates the tokens, never the consent.
+    const rotated = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token!, client_id: clientId });
+    expect(rotated.status).toBe(200);
+    expect(await contested(rotated.body.access_token!)).toMatchObject({ status: 403, body: { error: "consent_required" } });
+    const [after] = await server.app.db.select().from(oauthGrants).where(eq(oauthGrants.id, grant!.id));
+    expect(after!.consentRevision).toBe(1);
+    // A new consent is a new grant, at the current revision: past the consent, the evaluation is simply not found.
+    const again = await freshGrant(MCP_CONSENT_REVISION);
+    expect(await contested(again.tokens.access_token!)).toMatchObject({ status: 404 });
   });
 
   it("requires the client_id to refresh, and only the client's own", async () => {

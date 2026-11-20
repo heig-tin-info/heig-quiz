@@ -1991,6 +1991,9 @@ One question's answers as a table (`src/grading/`, origin
   takes a full-width row under its criterion, no rule between them (the
   card's foot on a phone), and "Contest" is a small `secondary` button
   under the criterion's description.
+  An AI assistant's proposal (ADR-139 §14) is a draft box above the owner's
+  form: `surface-2`, a dashed `line-strong` edge, the `Bot` in its head, its
+  acts below the screen's primary; the marks carry the `Bot` after their icon.
 - **The agreement figures** (ADR-139 §15) are readings, never actions:
   a `zinc` badge with the `Sparkles` icon, "AI: 12 of 15 unchanged", before
   the contested badge in the question bar, its mean difference and its split

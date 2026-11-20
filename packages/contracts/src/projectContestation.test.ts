@@ -36,7 +36,7 @@ const member = {
   maxAtFiling: 10,
   bonusAtFiling: null,
 } as const;
-const staff = { ...member, id: ID, repoId: REPO, counted: true, inSnapshot: true };
+const staff = { ...member, id: ID, repoId: REPO, counted: true, inSnapshot: true, proposal: null };
 
 describe("the window's days (ADR-139 §13)", () => {
   it("lie within 0 and 60, whole, and a patch may carry them alone", () => {

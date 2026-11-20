@@ -245,6 +245,14 @@ export const apiTokens = pgTable(
      * omission.
      */
     scope: text("scope", { enum: TOKEN_SCOPES }),
+    /**
+     * The revision of the consent a PERSONAL token was made under (ADR-139
+     * §14, `MCP_CONSENT_REVISION`): the token form's lines its owner read.
+     * Every token made before is 1 (the default); a new one records the
+     * current revision. An OAuth access token's is its grant's, read with
+     * it; the help assistant's is never read.
+     */
+    consentRevision: integer("consent_revision").notNull().default(1),
   },
   (t) => [
     index("api_tokens_user_idx").on(t.userId),
@@ -294,6 +302,8 @@ export const oauthRequests = pgTable(
     codeHash: char("code_hash", { length: 64 }).unique(),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     usedAt: timestamp("used_at", { withTimezone: true }),
+    /** The consent revision the screen said it showed, recorded at the approval and copied to the grant (ADR-139 §14). */
+    consentRevision: integer("consent_revision").notNull().default(1),
   },
   (t) => [index("oauth_requests_expires_idx").on(t.expiresAt)],
 );
@@ -322,6 +332,13 @@ export const oauthGrants = pgTable(
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    /**
+     * The revision of the consent screen the teacher approved (ADR-139 §14,
+     * `MCP_CONSENT_REVISION`): every grant made before is 1 (the default),
+     * a new grant records the current revision. A refresh never moves it:
+     * only a new consent, a new grant, does.
+     */
+    consentRevision: integer("consent_revision").notNull().default(1),
   },
   (t) => [index("oauth_grants_user_idx").on(t.userId)],
 );

@@ -73,6 +73,9 @@ const liveAllOn = (evaluationId) => ({
 
 /** The mock's running exam that prints (ADR-125, `mock/paper.ts`): the paper copy's scenes. */
 const PAPER_EXAM = "eeeeeeee-0000-4000-8000-000000000125";
+/** ADR-139 §14: the categorize question of the released exam, where a proposal accepts an answer for everyone. */
+const CATEGORIZE_ITEM = "00000000-0000-4000-8000-000000000067";
+
 /** ADR-139 §13: the released criteria project of the mock (`?pjcriteria=1`). */
 const PJ_RELEASED = "0190d3c4-0000-7000-8000-0000000000c3";
 /** The mock's evaluation, taken by the student persona (WP9). */
@@ -560,6 +563,10 @@ const scenes = [
   { name: "project-contest-answer-fr", role: "teacher", lang: "fr", path: `/projects/${PJ_RELEASED}/grading?projects=1&pjcriteria=1`, settle: 2500, fold: true, act: (p) => answerProjectContestation(p) },
   { name: "project-contest-removed", role: "teacher", path: `/projects/${PJ_RELEASED}/grading?projects=1&pjcriteria=1`, settle: 2500, fold: true, act: (p) => scrollToContestations(p) },
   { name: "project-contest-assistant", role: "teacher", path: `/projects/${PJ_RELEASED}/grading?projects=1&pjcriteria=1&assistant=1`, settle: 2500, act: (p) => walkToContestation(p, () => p.getByText(/(Teacher role's|rôle Enseignant)/).first()) },
+  // ADR-139 §14: an AI assistant's proposal on a criterion (points and rationale), and the batch's dialog.
+  { name: "project-contest-proposal", role: "teacher", path: `/projects/${PJ_RELEASED}/grading?projects=1&pjcriteria=1`, settle: 2500, fold: true, act: (p) => walkToProposal(p) },
+  { name: "project-contest-proposal-fr", role: "teacher", lang: "fr", path: `/projects/${PJ_RELEASED}/grading?projects=1&pjcriteria=1`, settle: 2500, fold: true, act: (p) => walkToProposal(p) },
+  { name: "project-contest-batch", role: "teacher", path: `/projects/${PJ_RELEASED}?projects=1&pjcriteria=1&tab=grading&filter=contested`, settle: 2500, fold: true, act: (p) => p.getByRole("button", { name: /^(Confirm the proposals|Confirmer les propositions)/ }).click() },
   { name: "project-contest-settings", role: "teacher", path: `/projects/${PJ_RELEASED}?projects=1&pjcriteria=1&tab=settings`, settle: 2500, fold: true },
   { name: "project-contest-draft-days", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c2?projects=1&pjcriteria=1&tab=settings", settle: 2500, fold: true },
   {
@@ -2040,6 +2047,17 @@ const scenes = [
   { name: "contest-grading-answer", role: "teacher", path: "/evaluations/released/grading?filter=contested", fold: true, settle: 2500, act: (p) => answerContestation(p) },
   { name: "contest-grading-answer-fr", role: "teacher", lang: "fr", path: "/evaluations/released/grading?filter=contested", fold: true, settle: 2500, act: (p) => answerContestation(p) },
   { name: "contest-grading-assistant", role: "teacher", path: "/evaluations/released/grading?filter=contested&assistant=1", fold: true, settle: 2500, act: (p) => openOpenContested(p) },
+  // ADR-139 §14: an AI assistant's proposals — the block above the owner's answer (new points, a
+  // refusal, a stale one, an answer accepted for everyone on the categorize question), the batch's
+  // dialog in the contested filter, and an assistant of the course who may only discard.
+  { name: "contest-proposal", role: "teacher", path: "/evaluations/released/grading?filter=contested", fold: true, settle: 2500, act: (p) => openProposal(p, /Le point retiré/) },
+  { name: "contest-proposal-fr", role: "teacher", lang: "fr", path: "/evaluations/released/grading?filter=contested", fold: true, settle: 2500, act: (p) => openProposal(p, /Le point retiré/) },
+  { name: "contest-proposal-refusal", role: "teacher", path: "/evaluations/released/grading?filter=contested", fold: true, settle: 2500, act: (p) => openProposal(p, /^(Refuse the contestation|Refuser la contestation)$/) },
+  { name: "contest-proposal-stale", role: "teacher", path: "/evaluations/released/grading?filter=contested", fold: true, settle: 2500, act: (p) => openProposal(p, /(cannot be confirmed|ne peut pas être confirmée)/) },
+  { name: "contest-proposal-accepted", role: "teacher", path: `/evaluations/released/grading?filter=contested&item=${CATEGORIZE_ITEM}`, fold: true, settle: 2500, act: (p) => openProposal(p, /(Also changes|Modifie aussi)/) },
+  { name: "contest-proposal-edit", role: "teacher", path: "/evaluations/released/grading?filter=contested", fold: true, settle: 2500, act: (p) => editProposal(p) },
+  { name: "contest-proposal-batch", role: "teacher", path: "/evaluations/released/grading?filter=contested", settle: 2500, fold: true, act: (p) => p.getByRole("button", { name: /^(Confirm the proposals|Confirmer les propositions)/ }).click() },
+  { name: "contest-proposal-assistant", role: "teacher", path: "/evaluations/released/grading?filter=contested&assistant=1", fold: true, settle: 2500, act: (p) => openProposal(p, /Le point retiré/) },
   { name: "contest-results", role: "teacher", path: "/evaluations/released/results" },
   { name: "contest-results-extend", role: "teacher", path: "/evaluations/released/results", fold: true, act: (p) => p.getByRole("button", { name: /^(Extend|Prolonger)$/ }).click() },
   { name: "contest-gradebook", role: "teacher", path: "/classrooms/r1/grades" },
@@ -2162,6 +2180,10 @@ const scenes = [
   { name: "settings-tokens-empty", role: "teacher", path: "/settings?empty=1" },
   // ADR-023: the consent page an assistant sends the teacher to.
   { name: "oauth-consent", role: "teacher", path: "/oauth/authorize/0190d3c4-0000-7000-8000-000000000001" },
+  { name: "oauth-consent-fr", role: "teacher", lang: "fr", path: "/oauth/authorize/0190d3c4-0000-7000-8000-000000000001" },
+  // ADR-139 §14: a connection and a token made before the contestations' consent say so.
+  { name: "settings-consent-older", role: "teacher", path: "/settings", fold: true, act: (p) => p.getByRole("heading", { name: /^(API tokens|Jetons d'API)$/ }).scrollIntoViewIfNeeded() },
+  { name: "settings-consent-older-fr", role: "teacher", lang: "fr", path: "/settings", fold: true, act: (p) => p.getByRole("heading", { name: /^(API tokens|Jetons d'API)$/ }).scrollIntoViewIfNeeded() },
   { name: "oauth-consent-loopback", role: "teacher", path: "/oauth/authorize/0190d3c4-0000-7000-8000-000000000001?loopback=1" },
   { name: "oauth-invalid", role: "teacher", path: "/oauth/authorize/invalid?reason=invalid_redirect_uri" },
   // ADR-030: the page the HEIG Quiz tab in Teams opens in the browser; a
@@ -2725,6 +2747,38 @@ async function answerContestation(page) {
     while (box && !["auto", "scroll"].includes(getComputedStyle(box).overflowY)) box = box.parentElement;
     if (box) box.scrollTop = box.scrollHeight;
   });
+}
+
+/** ADR-139 §14: opens each row an assistant prepared until its proposal shows `text`, the block scrolled into view. */
+async function openProposal(page, text) {
+  const rows = page.locator("tr[data-row]:visible", { has: page.getByTestId("proposal-mark") });
+  await rows.first().waitFor();
+  const n = await rows.count();
+  for (let i = 0; i < n; i += 1) {
+    await rows.nth(i).focus();
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(400);
+    const block = page.getByTestId("contestation-proposal");
+    if ((await block.count()) > 0 && (await block.getByText(text).count()) > 0) {
+      await block.evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(300);
+      return;
+    }
+  }
+}
+
+/** ADR-139 §14: Edit copies the proposal into the owner's answer. */
+async function editProposal(page) {
+  await openProposal(page, /Le point retiré/);
+  await page.getByTestId("contestation-proposal").getByRole("button", { name: /^(Edit|Modifier)$/ }).click();
+  await page.waitForTimeout(300);
+}
+
+/** ADR-139 §14: walks the repositories to the one whose contestation carries a proposal with points. */
+async function walkToProposal(page) {
+  await walkToContestation(page, () => page.getByTestId("contestation-proposal").getByText(/(New points|Nouveaux points)/).first());
+  await page.getByTestId("contestation-proposal").first().evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(300);
 }
 
 /** Opens the first row whose contestation is open (the anonymised order is drawn per visit). */

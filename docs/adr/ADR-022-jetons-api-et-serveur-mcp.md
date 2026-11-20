@@ -82,6 +82,12 @@ question through the pool's own multipart upload route, and
 `create_question` and `update_question` refuse an image that is not an
 uploaded asset.
 
+**Amended 2026-11-20 by [ADR-139](ADR-139-contestation-d-une-correction.md)
+§14 (product owner), scope: §C and the Consequences.** `list_contestations`,
+`propose_contestation_resolution` and `propose_accepted_answer` join the
+closed list, under a consent revision that asks existing grants again; see
+the addendum at the end of §C and ADR-139 §14.
+
 ## Context
 
 A teacher wants to ask an assistant — Claude Desktop, Claude Code, ChatGPT,
@@ -156,7 +162,7 @@ Reading: `list_courses`, `get_course`, `list_pools`, `get_pool`,
 `get_question`, `list_evaluations`, `get_evaluation`,
 `describe_question_types`, `list_templates`, `get_template`, `get_journal`,
 `get_journal_page`, `list_projects`, `list_project_sources`,
-`get_project_grading`.
+`get_project_grading`, `list_contestations` (of scope `quiz`, ADR-139 §14).
 
 Writing: `create_course`, `create_classroom`, `create_pool`,
 `link_pool_to_course`, `create_category`, `create_question`,
@@ -166,7 +172,8 @@ Writing: `create_course`, `create_classroom`, `create_pool`,
 `remove_question_from_evaluation`, `remove_question_from_template`,
 `update_evaluation_item_versions`, `update_template_item_versions`,
 `update_evaluation_item`, `update_template_item`, `grade_criterion`,
-`upload_asset` (ADR-134).
+`upload_asset` (ADR-134), `propose_contestation_resolution`,
+`propose_accepted_answer` (ADR-139 §14).
 
 - `describe_question_types` hands the model the JSON Schema of the type's
   `configSchema` — generated, so it cannot drift from the publication gate —
@@ -404,6 +411,10 @@ screen.
   client may read a project's grading by criteria and propose points.
   Tokens granted before are not asked again, as for `create_project`
   (#788).
+
+**Addendum of 2026-11-20 — the contestation tools.** Their rules, their
+consent and `grade_criterion`'s refusal on a contested criterion are
+[ADR-139](ADR-139-contestation-d-une-correction.md) §14's.
 
 ## Consequences
 

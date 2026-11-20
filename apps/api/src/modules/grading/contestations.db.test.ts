@@ -527,6 +527,7 @@ describe("answering (ADR-139)", () => {
 describe("the student exit (invariant 4)", () => {
   const REASON = "SENTINEL-REASON-7f3c";
   const REPLY = "SENTINEL-REPLY-9a1d";
+  const PROPOSED = "SENTINEL-PROPOSED-3b7e";
 
   it("carries a contestation in its own student's feedback only", async () => {
     // Two students with no other history, so that every response of B's may be searched by key.
@@ -534,6 +535,22 @@ describe("the student exit (invariant 4)", () => {
     b = await server.signIn("student");
     const w = await world();
     const row = await filed(w, a, w.attempt.a, 0, REASON);
+    // An assistant's proposal (ADR-139 §14) reaches no student while it stands: its reply and its points.
+    const proposed = await send("PUT", `/app/api/contestations/${row.id}/proposal`, { verdict: "accepted", points: 0.75, reply: PROPOSED });
+    expect(proposed.statusCode, proposed.body).toBe(200);
+    for (const [url, who] of [
+      [`/app/api/attempts/${w.attempt.a}/feedback`, a],
+      [`/app/api/attempts/${w.attempt.a}/copy.json`, a],
+      ["/app/api/student/results", a],
+      ["/app/api/notifications", a],
+      ["/app/api/me/export", a],
+      [`/app/api/attempts/${w.attempt.b}/feedback`, b],
+    ] as const) {
+      const res = await get(url, who);
+      expect(res.statusCode, `${url} ${res.body}`).toBe(200);
+      expect(res.body, url).not.toContain(PROPOSED);
+      expect(res.body, url).not.toMatch(/"proposal"|"proposedAt"|"points":0\.75[,}]/);
+    }
     expect((await resolve(row.id, { verdict: "refused", reply: REPLY })).statusCode).toBe(200);
 
     // A reads their own, and nowhere else.
@@ -602,6 +619,7 @@ describe("the student exit (invariant 4)", () => {
         expect(res.statusCode, `${who} ${url} ${res.body}`).toBe(status);
         expect(res.body, `${who} ${url}`).not.toContain(REASON);
         expect(res.body, `${who} ${url}`).not.toContain(REPLY);
+        expect(res.body, `${who} ${url}`).not.toContain(PROPOSED);
         // By key too: no contestation of anyone's travels to these readers (none filed one).
         expect(res.body, `${who} ${url}`).not.toMatch(/"(filedAt|resolvedAt)"|"contestation":\{/);
       }

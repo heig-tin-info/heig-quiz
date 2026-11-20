@@ -2,9 +2,9 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { ApiToken } from "@quiz/contracts";
+import { MCP_CONSENT_REVISION, type ApiToken, type OAuthConnection } from "@quiz/contracts";
 
-import { ApiTokensCard } from "./ApiTokensCard";
+import { ApiTokensCard, ConnectionsCard } from "./ApiTokensCard";
 import { makeMe } from "./test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "./test/render";
 
@@ -17,6 +17,7 @@ const token = (over: Partial<ApiToken> = {}): ApiToken => ({
   expiresAt: "2099-01-01T00:00:00.000Z",
   revokedAt: null,
   scope: "quiz",
+  consentRevision: 2,
   ...over,
 });
 
@@ -63,7 +64,7 @@ describe("ApiTokensCard", () => {
     await user.click(within(dialog).getByRole("button", { name: /create token/i }));
 
     await waitFor(() =>
-      expect(calls.find((c) => c.method === "POST")?.body).toEqual({ name: "Claude", scope: "quiz", expiresInDays: 90 }),
+      expect(calls.find((c) => c.method === "POST")?.body).toEqual({ name: "Claude", scope: "quiz", expiresInDays: 90, consentRevision: MCP_CONSENT_REVISION }),
     );
     const reveal = await screen.findByRole("dialog", { name: /token created/i });
     expect(within(reveal).getByRole("textbox", { name: /^token$/i })).toHaveValue("quiz_pat_SECRETSECRET");
@@ -92,7 +93,7 @@ describe("ApiTokensCard", () => {
     await user.click(within(dialog).getByRole("button", { name: /create token/i }));
 
     await waitFor(() =>
-      expect(calls.find((c) => c.method === "POST")?.body).toEqual({ name: "Script", scope: "api", expiresInDays: 90 }),
+      expect(calls.find((c) => c.method === "POST")?.body).toEqual({ name: "Script", scope: "api", expiresInDays: 90, consentRevision: MCP_CONSENT_REVISION }),
     );
     const reveal = await screen.findByRole("dialog", { name: /token created/i });
     expect(within(reveal).getByRole("textbox", { name: /command line/i })).toHaveValue(
@@ -116,5 +117,45 @@ describe("ApiTokensCard", () => {
     };
     expect(await lifetimes("teacher")).toContain("Never");
     expect(await lifetimes("admin")).not.toContain("Never");
+  });
+
+  it("says which active token made before the contestations' consent cannot read them (ADR-139 §14)", async () => {
+    mockFetch({
+      "GET /app/api/me/tokens": ok([
+        token({ consentRevision: 1 }),
+        token({ id: "0190d3c4-0000-7000-8000-000000000002", name: "Reader", scope: "quiz:read", consentRevision: 1 }),
+        token({ id: "0190d3c4-0000-7000-8000-000000000003", name: "Fresh", consentRevision: 2 }),
+        token({ id: "0190d3c4-0000-7000-8000-000000000004", name: "Gone", consentRevision: 1, revokedAt: "2026-09-02T08:00:00.000Z" }),
+        // A Full API token reads the contestations through the API whatever its revision: no note.
+        token({ id: "0190d3c4-0000-7000-8000-000000000005", name: "Script", scope: "api", consentRevision: 1 }),
+      ]),
+    });
+    renderWithProviders(<ApiTokensCard />);
+    await screen.findByText("Fresh");
+    // A read-only token never reaches them, a revoked one nothing, a Full API one reads them anyway: no note on any.
+    expect(screen.getAllByText("Does not read contestations. Create a new token to allow it.")).toHaveLength(1);
+    expect(within(screen.getByText("Claude Desktop").closest("td")!).getByTestId("consent-older")).toBeVisible();
+  });
+});
+
+describe("ConnectionsCard", () => {
+  const connection = (over: Partial<OAuthConnection> = {}): OAuthConnection => ({
+    id: "0190d3c4-0000-7000-8000-00000000c1a0",
+    clientName: "Claude",
+    redirectHost: "claude.ai",
+    createdAt: "2026-09-01T08:00:00.000Z",
+    lastUsedAt: null,
+    consentRevision: 2,
+    ...over,
+  });
+
+  it("says which connection was granted before the contestations' consent", async () => {
+    mockFetch({
+      "GET /app/api/me/connections": ok([connection({ consentRevision: 1 }), connection({ id: "0190d3c4-0000-7000-8000-00000000c1a1", clientName: "ChatGPT" })]),
+    });
+    renderWithProviders(<ConnectionsCard />);
+    await screen.findByText("ChatGPT");
+    expect(screen.getAllByText("Does not read contestations. Reconnect the assistant to allow it.")).toHaveLength(1);
+    expect(within(screen.getByText("Claude").closest("td")!).getByTestId("consent-older")).toBeVisible();
   });
 });

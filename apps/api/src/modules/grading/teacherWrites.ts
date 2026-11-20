@@ -61,8 +61,12 @@ export async function manualOverride(
   input: { points?: number | undefined; criteria?: readonly CriterionPointsBody[] | undefined; comment: string },
   userId: string,
   now: Date,
-  /** `after`: a write that commits with the override or not at all (a contestation's answer, ADR-139). */
-  { after }: { after?: WriteAfter } = {},
+  /**
+   * `after`: a write that commits with the override or not at all (a
+   * contestation's answer, ADR-139). `before`: a check run once the cell is
+   * locked, before anything is written (a proposal's confirmation, §14).
+   */
+  { after, before }: { after?: WriteAfter; before?: ((tx: Tx) => Promise<void>) | undefined } = {},
 ): Promise<GradingRecord> {
   if (input.comment.trim().length === 0) throw new GradingError("comment_required");
   const graded = criteriaOutcome(target.criteria, target.maxPoints, input, null);
@@ -83,7 +87,14 @@ export async function manualOverride(
     now,
   };
   if (!graded.breakdown) {
-    const [row] = await writeGradings(db, [write], { guard: (tx, inputs) => lockCell(tx, write).then(() => inputs), after });
+    const [row] = await writeGradings(db, [write], {
+      guard: async (tx, inputs) => {
+        await lockCell(tx, write);
+        await before?.(tx);
+        return inputs;
+      },
+      after,
+    });
     return row!;
   }
   // The details kept are read inside the write's transaction, the row locked
@@ -94,6 +105,7 @@ export async function manualOverride(
   const [row] = await writeGradings(db, [write], {
     guard: async (tx, inputs) => {
       await lockCell(tx, write);
+      await before?.(tx);
       const previous = await gradingInForce(tx, write.attemptId, write.itemId);
       return inputs.map((i) => ({ ...i, details: { ...teacherKept(previous?.details), ...(i.details as object) } }));
     },

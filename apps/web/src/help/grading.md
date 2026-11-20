@@ -73,3 +73,9 @@ reason is folded: read the answer first. The course's teacher answers
 once, under the answer: **Refuse** with a reply, or **Accept**, with or
 without new points (then the reply is mandatory and becomes the
 adjustment's comment).
+
+An AI assistant connected over MCP may propose an answer: a robot marks
+the row, and **AI assistant's proposal** stands above your answer. Its text
+is the model's. **Confirm** answers as proposed, **Edit** copies it into
+your answer, **Discard** removes it. **Confirm the proposals (n)**, in
+**Contested**, confirms those of this question one after the other.

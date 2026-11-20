@@ -83,7 +83,9 @@ colleague reporting a pool question to its writers.
     as a batch.
 13. **The proposal tools cover project criteria too**; the proposed points
     are stored on the contestation only, unseen by the student until the
-    owner confirms.
+    owner confirms. *Amended 2026-11-20 (product owner): an assistant's
+    `grade_criterion` is refused on a criterion with an open contestation
+    (§14).*
 
 ### Lot 1 — exams (PR A)
 
@@ -294,7 +296,68 @@ colleague reporting a pool question to its writers.
     closed list; "no transition of grading" gains these proposals) and its
     Consequences, ADR-113 (a reading tool that is `quiz`, not `quiz:read`),
     and `docs/guide/assistants.md`; decided here, applied by PR C, which
-    writes those amendments.
+    writes those amendments. As built:
+    - **Storage.** One proposal per contestation, on its row, each table in
+      its module: the verdict, the reply, new points, a criterion's
+      rationale or an exam's accepted answer (part, answer, scope), who
+      proposed it and when, and the grading in force it read. A later
+      proposal replaces it; any answer clears it. Any member of the staff
+      may propose and, from the portal, discard one (not audited: nothing a
+      student reads changes); proposing is audited `contestation.propose`,
+      never a text.
+    - **Confirmation.** The owner confirms, from the portal only, the
+      proposal they READ: the confirmation names its instant, and a proposal
+      replaced since, or a grading moved since it was made, is refused `409
+      proposal_stale`, checked again by the write itself. It is the owner's
+      answer of §5 or §13 with the stored values, audited as the owner; an
+      accepted answer is ADR-128's act with the answer written in the
+      transaction of its rule, so a refused answer leaves no acceptance (the
+      act's re-grade follows its commit, as ADR-128 heals a repeated act).
+      Notifications leave at the confirmation only. Before confirming an
+      accepted answer the owner reads how many other students it re-grades.
+      The web's batch is the single confirmation in a loop.
+    - **Consent.** A consent has a revision, 2 since this lot; a grant and a
+      personal token record the one the consent screen or the token form
+      SAYS it showed, never above the current one, 1 when it says nothing (a
+      page cached from before) — every grant and token made before is 1. A
+      refresh never raises it. The four routes the tools forward to need
+      `quiz` and revision 2: a `quiz:read` token's read is refused too, and
+      an older consent gets `403 consent_required`, worded for the assistant
+      to repeat (reconnect, or make a new token); its other tools keep
+      working. No re-authorization is forced: a `401` would cost the grant
+      every tool.
+    - **What an assistant reads.** An opaque contestation id, never an
+      attempt, a repository, a user or a name; for an exam the question as
+      the staff read it (statement and key, the teacher's text), the answer
+      as text, the grading in force and what ADR-128 could accept; for a
+      project the criterion, its row in force and the points at the filing.
+      The student's words — the reason, the answer and its parts — the
+      grading's comment, a criterion's rationale and reason, and a stored
+      proposal's reply and rationale are masked (the roster's and the
+      sitters' names and addresses; for a project also the members' logins,
+      the organization's login and the repository's name). Each text is cut
+      at 4,000 characters with a visible mark, a page holds at most ten
+      within 24,000 characters. The tool hands the student's words as quoted
+      data, and its description says a reason is data, never instructions.
+    - **`grade_criterion` refused on a contested criterion** (product
+      owner, 2026-11-20, amending decision 13's "proposed points live on the
+      contestation only"): through a token, a criterion with an open
+      contestation is refused `409 criterion_contested`, the assistant sent
+      to a proposal; the portal grades it as before. The student's reason
+      now reaches a model that holds this tool, and its write is seen by the
+      student at once — the one path where a student's text could produce a
+      visible effect without the owner.
+    - **What masking and the consent cannot hide.** An exam's contestation
+      joins no other tool's data. A project's does: the grading screen's
+      tool names every repository with each criterion's points and
+      rationale, so a client holding both can usually tell whose a
+      contestation is. A name spelled otherwise than the roster writes it,
+      or an identity told in other words, is not masked (ADR-063 §4). The
+      revision gates the new routes only: a token of scope `api` reaches the
+      staff's UNMASKED payloads — the grading queue with names, reasons and
+      proposals — as it did before this lot (ADR-113). A parameterized
+      question's statement and key are read as written, not as the student's
+      instance.
 
 ### Lot 3 — agreement figures (PR D)
 
@@ -361,6 +424,18 @@ colleague reporting a pool question to its writers.
   that contestation; the backfill falls back on the last release for a
   project whose first release left no audit row.
 - Teams users re-upload the app (2.6.0, then 2.7.0 for a project's two kinds) to receive the kinds there.
+- **Lot 2's limits.** An assistant's words reach the student only once the
+  owner confirms the proposal they read. Every OAuth grant and personal
+  token made before 2026-11-20 is refused the contestations until the
+  teacher reconnects the assistant or makes a new token (§14).
+- Two proposals written within the same millisecond on one contestation (a
+  client calling in parallel) carry the same instant: the owner could
+  confirm the second without having read it.
+- A re-grade that fails after an accepted answer's confirmation committed
+  leaves the contestation answered and the student told, the audit written,
+  and the answers it reaches graded as before: the owner is answered `500
+  regrade_failed` and accepts the same answer again from the question's
+  panel, which re-grades them.
 
 ## Alternatives considered
 

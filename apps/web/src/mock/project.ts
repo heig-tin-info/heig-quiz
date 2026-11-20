@@ -44,6 +44,7 @@
  */
 import {
   ContestationWindowBody,
+  type ContestationProposalView,
   CriteriaIncomplete,
   CriterionGradeWrite,
   criterionConflict,
@@ -2134,8 +2135,20 @@ on("DELETE", "/app/api/projects/:id/repos/:rid/grade-adjustment", (m) => adjustR
 
 // ---------------------------------------------------------------- contestations (ADR-139 §13)
 
-/** A criterion's contestation as the mock keeps it: the staff's reading less what is read off the project at each request. */
-type MockContestation = Omit<ProjectStaffContestation, "counted" | "inSnapshot">;
+/**
+ * A criterion's contestation as the mock keeps it: the staff's reading less
+ * what is read off the project at each request, and an AI assistant's
+ * proposal (ADR-139 §14) with the criterion's row in force it read.
+ */
+type MockContestation = Omit<ProjectStaffContestation, "counted" | "inSnapshot" | "proposal"> & {
+  proposal?: (Omit<ContestationProposalView, "stale"> & { rowAt: number | null }) | null;
+};
+
+/** The criterion's row in force of a contestation, by its write's instant: what a proposal read. */
+function rowAtOf(p: MockProject, c: Pick<MockContestation, "repoId" | "criterionId">): number | null {
+  const r = p.repos.find((x) => x.id === c.repoId);
+  return r ? (currentCriterionRows(CRITERION_ROWS.get(r.id) ?? []).get(c.criterionId)?.createdAt.getTime() ?? null) : null;
+}
 
 /** The contestations of each project, by project id. */
 const CONTESTATIONS = new Map<string, MockContestation[]>();
@@ -2210,13 +2223,46 @@ function seedContestations(p: MockProject): void {
       resolvedAt: c.resolved === null ? null : at(c.resolved),
     });
   });
+  // ADR-139 §14: an AI assistant's proposals on the two open contestations of criteria still in the snapshot.
+  const proposed = (criterionId: string, proposal: Omit<ContestationProposalView, "stale" | "proposedAt" | "accepted" | "affected">, hours: number) => {
+    const c = list.find((x) => x.criterionId === criterionId && x.state === "open");
+    if (c) c.proposal = { ...proposal, accepted: null, affected: null, proposedAt: iso(-hours * H), rowAt: rowAtOf(p, c) };
+  };
+  proposed(
+    "rapport.reponses",
+    {
+      verdict: "accepted",
+      reply: "La question 6 est bien traitée page 3, avec les deux cas demandés.\nLe critère passe à 2 points.",
+      points: 2,
+      rationale: "Les neuf points de l'énoncé ont une réponse. La question 6 cite les deux cas de portée demandés.",
+    },
+    3,
+  );
+  proposed(
+    "code.memoire",
+    {
+      verdict: "refused",
+      reply: "Le tampon est libéré dans main, mais pas sur le chemin d'erreur de lire_ligne.\nLa fuite reste, le point aussi.",
+      points: null,
+      rationale: null,
+    },
+    6,
+  );
   CONTESTATIONS.set(p.summary.id, list);
 }
 
 /** The staff's reading: whether its repository is live, its criterion still in the snapshot. */
 function staffContestation(p: MockProject, c: MockContestation): ProjectStaffContestation {
   const r = p.repos.find((x) => x.id === c.repoId);
-  return { ...c, counted: r !== undefined && isLive(p, r), inSnapshot: SAMPLE_LEAVES.some((l) => l.id === c.criterionId) };
+  const { proposal, ...rest } = c;
+  return { ...rest, counted: r !== undefined && isLive(p, r), inSnapshot: SAMPLE_LEAVES.some((l) => l.id === c.criterionId), proposal: proposalOf(p, c) };
+}
+
+/** The proposal as the staff read it: stale once the criterion's row in force moved (ADR-139 §14). */
+function proposalOf(p: MockProject, c: MockContestation): ContestationProposalView | null {
+  if (!c.proposal || c.state !== "open") return null;
+  const { rowAt, ...view } = c.proposal;
+  return { ...view, stale: rowAt !== rowAtOf(p, c) };
 }
 
 /** A released project graded by criteria: where a window applies and the owner's acts are offered. */
@@ -2255,8 +2301,49 @@ on("POST", "/app/api/projects/:id/contestations/:cid/resolve", (m, raw): Project
     gradeCriterion(r, leaf, { points: body.points, rationale: body.rationale });
     repo = gradingRepoOf(p, r);
   }
-  Object.assign(c, { state: body.verdict, reply: body.reply === "" ? null : body.reply, resolvedAt: iso(0) });
+  Object.assign(c, { state: body.verdict, reply: body.reply === "" ? null : body.reply, resolvedAt: iso(0), proposal: null });
   return { contestation: staffContestation(p, c), repo };
+});
+
+/** A project's contestation, or the 404 of a missing one. */
+function projectContestationOr404(m: RegExpMatchArray): [MockProject, MockContestation] {
+  const p = projectOr404(m.groups!.id!);
+  const c = (CONTESTATIONS.get(p.summary.id) ?? []).find((x) => x.id === m.groups!.cid);
+  if (!c) throw new MockError(404, "Not found");
+  return [p, c];
+}
+
+/**
+ * The owner's confirmation of the proposal the screen showed (`proposedAt`,
+ * ADR-139 §14): `404 no_proposal`, `409 not_open`, `409 proposal_stale`
+ * (another proposal, or the criterion's row moved), then the resolve path
+ * with its values.
+ */
+on("POST", "/app/api/projects/:id/contestations/:cid/proposal/confirm", (m, raw): ProjectContestationResolution => {
+  const [p, c] = projectContestationOr404(m);
+  ownerOnly();
+  if (c.state !== "open") throw refuse(409, "not_open", "The contestation already has its answer");
+  const view = proposalOf(p, c);
+  if (!view || !c.proposal) throw refuse(404, "no_proposal", "No proposal stands");
+  if (view.stale || raw.proposedAt !== view.proposedAt) throw refuse(409, "proposal_stale", "The proposal or the criterion's grading changed");
+  const leaf = SAMPLE_LEAVES.find((l) => l.id === c.criterionId);
+  if (view.verdict === "accepted" && !leaf) throw refuse(409, "criterion_removed", "The criterion left the snapshot: refuse it");
+  const r = p.repos.find((x) => x.id === c.repoId);
+  let repo: ProjectGradingRepo | null = null;
+  if (view.points !== null && leaf && r) {
+    gradeCriterion(r, leaf, { points: view.points, ...(view.rationale === null ? {} : { rationale: view.rationale }) });
+    repo = gradingRepoOf(p, r);
+  }
+  Object.assign(c, { state: view.verdict, reply: view.reply === "" ? null : view.reply, resolvedAt: iso(0), proposal: null });
+  return { contestation: staffContestation(p, c), repo };
+});
+
+/** A discard, by any member of the staff: `404 no_proposal` where none stands. */
+on("DELETE", "/app/api/projects/:id/contestations/:cid/proposal", (m) => {
+  const [, c] = projectContestationOr404(m);
+  if (!c.proposal || c.state !== "open") throw refuse(404, "no_proposal", "No proposal stands");
+  c.proposal = null;
+  return undefined;
 });
 
 /** The owner's two acts on the window: close it now, or move its end ahead (`422 window_instant`), on a released criteria project only. */

@@ -267,6 +267,7 @@ describe("contestations and the owner's writes on a released project (ADR-139 §
     resolvedAt: null,
     counted: true,
     inSnapshot: true,
+    proposal: null,
     ...over,
   });
   const OPEN = "0190d3c4-0000-7000-8000-0000000cc001";
@@ -376,6 +377,22 @@ describe("contestations and the owner's writes on a released project (ADR-139 §
     const card = await screen.findByRole("region", { name: "Contestation of “Answers”" });
     expect(within(card).queryByRole("button", { name: "Refuse" })).toBeNull();
     expect(within(card).queryByText("The answer is the course's Teacher role's.")).toBeNull();
+  });
+
+  it("shows an assistant's proposal with its rationale over the criterion's range, and Edit copies the points and the rationale (ADR-139 §14)", async () => {
+    const proposal = { verdict: "accepted" as const, reply: "Page 3 answers it.", points: 3.5, rationale: "Question 6 is answered.", accepted: null, proposedAt: "2026-11-16T09:00:00.000Z", stale: false, affected: null };
+    routes(ok(view([validated()], RELEASED)), {
+      [`GET ${BASE}/contestations`]: ok(list(contestation({ id: OPEN, criterionId: "rapport.reponses", criterionDescription: "Answers", proposal }))),
+    });
+    renderPage();
+    const card = await screen.findByRole("region", { name: "Contestation of “Answers”" });
+    const block = within(card).getByRole("region", { name: "AI assistant's proposal" });
+    expect(within(block).getByText("New points: 3.5 / 4")).toBeVisible();
+    expect(within(block).getByText("Question 6 is answered.")).toBeVisible();
+    await userEvent.click(within(block).getByRole("button", { name: "Edit" }));
+    expect(within(card).getByRole("textbox", { name: "Reply" })).toHaveValue("Page 3 answers it.");
+    expect(within(card).getByRole("spinbutton", { name: "Points" })).toHaveValue(3.5);
+    expect(within(card).getByRole("textbox", { name: "Rationale" })).toHaveValue("Question 6 is answered.");
   });
 
   it("holds every criterion write of a released project for an assistant, who reads the contestation and who answers it", async () => {

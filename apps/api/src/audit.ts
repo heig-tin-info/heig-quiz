@@ -114,6 +114,20 @@ export type AuditAction =
    */
   | "contestation.file"
   /**
+   * ADR-139 §14: an assistant's proposal of the owner's answer to a
+   * contestation was stored (actor: `api_key` through an MCP token, the
+   * staff member through the portal); subject the contestation
+   * (`payload.kind` `exam`, with `evaluationId`) or the project's (`kind`
+   * `project`, with `projectId`, `repoId`, `criterionId`), `verdict`,
+   * `points` (whether new points were proposed) and `accepted` (an accepted
+   * answer, exams only). Never
+   * the reply nor the rationale. Its confirmation is the owner's
+   * `contestation.resolve` / `project_contestation.resolve`, with
+   * `payload.proposal: true`. A discard is not audited: nothing a student
+   * reads changes.
+   */
+  | "contestation.propose"
+  /**
    * ADR-139: the course owner answered a contestation; subject the
    * contestation, `payload.evaluationId`, `payload.verdict` (`accepted` |
    * `refused`), `payload.points` (whether new points were written, as a

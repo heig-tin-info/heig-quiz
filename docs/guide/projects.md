@@ -166,6 +166,14 @@ On a project graded by criteria, once you release the scores, a student may cont
   <figcaption>Answering a criterion's contestation with new points. (Mock data.)</figcaption>
 </figure>
 
+**Proposals from an AI assistant.** An assistant connected over MCP may propose an answer to a criterion's contestation, with new points and their rationale; you confirm, edit or discard it on the grading screen, or confirm the project's in one go from the matrix's **Contested** filter, as on an exam ([Proposals from an AI assistant](grading.md#contestations)).
+
+<figure markdown="span">
+  ![The grading screen: an AI assistant's proposal on a criterion, with new points, the proposed reply and rationale, above the answer form](../assets/screenshots/mock-project-contest-proposal-light.png#only-light)
+  ![The grading screen: an AI assistant's proposal on a criterion, with new points, the proposed reply and rationale, above the answer form](../assets/screenshots/mock-project-contest-proposal-dark.png#only-dark)
+  <figcaption>A criterion's proposal, with its rationale. (Mock data.)</figcaption>
+</figure>
+
 **After the release of the scores, the criteria are the owner's.** Once a project's scores are released, every criterion write is the course's Teacher role's: a criterion's points, **Validate**, *Validate the rest as proposed* and both Regrades, as well as the grade adjustment. An assistant sees the grading screen with these held, and the sentence saying why. *(ADR-139 §13.)*
 
 ## Keep the source up to date

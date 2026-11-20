@@ -14,6 +14,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, gt, isNotNull, isNull, lt, notExists, or } from "drizzle-orm";
 
 import { OAUTH_SCOPE, OAUTH_SCOPES_SUPPORTED, type OAuthConnection, type OAuthRequestView } from "@quiz/contracts";
+import { consentRecorded } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
 import type { Db } from "../../db/client.js";
@@ -140,7 +141,7 @@ export async function requestView(db: Db, id: string, now: Date): Promise<OAuthR
  */
 export async function decide(
   db: Db,
-  input: { id: string; userId: string; approve: boolean; issuer: string; now: Date },
+  input: { id: string; userId: string; approve: boolean; issuer: string; now: Date; consentRevision?: number | undefined },
 ): Promise<{ redirectTo: string; clientId: string } | null> {
   const row = await pendingRequest(db, input.id, input.now);
   if (!row) return null;
@@ -164,6 +165,8 @@ export async function decide(
       codeHash: hashToken(code),
       approvedAt: input.now,
       expiresAt: new Date(input.now.getTime() + CODE_TTL_MS),
+      // What the consent screen says it showed, never above the current consent (ADR-139 §14).
+      consentRevision: consentRecorded(input.consentRevision),
     })
     .where(and(eq(oauthRequests.id, request.id), isNull(oauthRequests.approvedAt)))
     .returning({ id: oauthRequests.id });
@@ -234,6 +237,8 @@ export async function exchangeCode(
       createdAt: input.now,
       lastUsedAt: input.now,
       expiresAt: new Date(input.now.getTime() + REFRESH_TTL_MS),
+      // The consent the teacher gave (ADR-139 §14); a refresh below never moves it.
+      consentRevision: request.consentRevision,
     })
     .returning();
   const access = await issueAccess(db, grant!, client?.name ?? "MCP client", input.now);
@@ -324,6 +329,7 @@ export async function listConnections(db: Db, userId: string, now: Date): Promis
     redirectHost: hostOf(client.redirectUris[0] ?? ""),
     createdAt: grant.createdAt.toISOString(),
     lastUsedAt: grant.lastUsedAt?.toISOString() ?? null,
+    consentRevision: grant.consentRevision,
   }));
 }
 

@@ -20,6 +20,12 @@ consequence "No scopes beyond `quiz`"; amends the promise of
 leaves its help assistant's token under its own audience rule; adds N-SEC-22 to
 [03 §3.3](../spec/03-exigences-non-fonctionnelles.md).
 
+**Amended 2026-11-20 by [ADR-139](ADR-139-contestation-d-une-correction.md)
+§14, scope: §2–§4.** A route or a tool may name a scope above its method's
+or its `readOnlyHint` (`list_contestations` needs `quiz`), and a token
+carries the revision of the consent it was made under, which a route may
+require (`403 consent_required`); ADR-139 §14 owns both rules.
+
 ## Context
 
 A personal token resolves to its owner and, once resolved in the bearer
@@ -132,7 +138,8 @@ A tool's scope is its `readOnlyHint`, declared server-side
 `quiz` for any other (`toolScope`). There is no second field to keep in
 step with the annotation. A test asserts that a `quiz:read` token runs
 every reading tool without one scope refusal — the reading tools issue
-`GET`s only.
+`GET`s only. *Amended 2026-11-20: `list_contestations` names `quiz`
+(ADR-139 §14).*
 
 The scope serves the client, not the security: `tools/list` lists only
 the tools the caller's scope covers, and `tools/call` of a tool above it
