@@ -9,6 +9,7 @@ import {
   listInstalledOrgs,
   orgExistsOnGithub,
   ThrottledOctokit,
+  unpacedGithubForTests,
 } from "./app.js";
 import { appKey, fakeGithub, json, on } from "./testing.js";
 
@@ -62,6 +63,31 @@ describe("ThrottledOctokit", () => {
     ]);
     expect(raced).toBe("waiting");
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("Request quota exhausted"));
+  });
+
+  // Last of this block: the seam is process-wide, and the clients above are paced.
+  it("sends writes at once for a test server, retries as many times, and still fails at once on an opted-out rate limit", async () => {
+    unpacedGithubForTests();
+    const ok = vi.fn(async () => new Response("{}", { status: 201, headers: { "content-type": "application/json" } }));
+    const octokit = new ThrottledOctokit({ request: { fetch: ok }, log });
+    const started = Date.now();
+    // Paced, the second write waits a second and each invitation three.
+    for (const path of ["/repos/o/r/git/blobs", "/repos/o/r/git/blobs", "/repos/o/r/collaborators/a", "/repos/o/r/collaborators/b"]) {
+      await octokit.request(`POST ${path}`);
+    }
+    expect(ok).toHaveBeenCalledTimes(4);
+    // Three retries of a 500, 14 s apart in all when paced.
+    const down = vi.fn(async () => new Response("{}", { status: 500, headers: { "content-type": "application/json" } }));
+    await expect(new ThrottledOctokit({ request: { fetch: down }, log }).request("GET /repos/o/r")).rejects.toMatchObject({ status: 500 });
+    expect(down).toHaveBeenCalledTimes(4);
+    expect(Date.now() - started).toBeLessThan(900);
+
+    const fetch = quotaFetch();
+    const limited = new ThrottledOctokit({ request: { fetch }, log });
+    await expect(
+      limited.request("GET /repos/{owner}/{repo}/commits", { owner: "o", repo: "r", request: { retries: 0, noRateLimitWait: true } }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 
