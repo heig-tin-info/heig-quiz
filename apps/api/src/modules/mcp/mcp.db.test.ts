@@ -166,6 +166,9 @@ describe("the transport", () => {
         "create_project",
         "get_project_grading",
         "grade_criterion",
+        "list_contestations",
+        "propose_contestation_resolution",
+        "propose_accepted_answer",
       ].sort(),
     );
     // …and its reading half, the one set annotated read-only.
@@ -190,6 +193,8 @@ describe("the transport", () => {
         "list_projects",
         "list_project_sources",
         "get_project_grading",
+        // Read-only, yet of scope `quiz`: it sends students' words out (ADR-139 §14).
+        "list_contestations",
       ].sort(),
     );
     for (const t of result.tools) expect(t.inputSchema.type, t.name).toBe("object");

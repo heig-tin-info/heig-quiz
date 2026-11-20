@@ -376,8 +376,9 @@ function EntryPanel({
           audience="teacher"
         />
         {acceptance?.change ? <AcceptSection acceptance={acceptance} columns={columns} entry={entry} /> : null}
-        {/* The owner's one answer, its own block under the answer read. */}
-        {entry.contestation?.state === "open" && resolver ? (
+        {/* An assistant's proposal, then the owner's one answer, each its own block under the answer read. */}
+        {/* Kept once answered: a confirmed accepted answer whose re-grade failed says so there (ADR-139 §14). */}
+        {entry.contestation && (resolver || entry.contestation.proposal) ? (
           <ContestationAnswer
             key={entry.contestation.id}
             evaluationId={evaluationId}
@@ -386,6 +387,7 @@ function EntryPanel({
             criteria={criteria}
             maxPoints={grading?.maxPoints ?? item.points}
             minPoints={item.minPoints ?? 0}
+            resolver={resolver}
           />
         ) : null}
         {entry.values ? <ValuesSection values={entry.values} /> : null}

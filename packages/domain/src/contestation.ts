@@ -12,8 +12,14 @@
  * the views read them to offer the control, the write decides the window
  * again on the database's clock (invariant 5).
  *
+ * An assistant connected over MCP (Lot 2, §14) PROPOSES an answer
+ * ({@link proposalRefusal}) that the owner confirms, unless the grading it
+ * read moved since ({@link proposalStale}); what it reads of a contestation
+ * is capped ({@link clipText}, {@link contestationPage}).
+ *
  * Pure: no clock is read here, every instant is the caller's.
  */
+import type { AcceptanceScope } from "./acceptance.js";
 
 /** Where a contestation stands: filed and waiting, or answered for good. */
 export const CONTESTATION_STATES = ["open", "accepted", "refused"] as const;
@@ -155,4 +161,96 @@ export function windowExtendRefusal(closesAt: Date, now: Date): WindowExtendRefu
   if (closesAt.getTime() <= now.getTime()) return "not_future";
   if (closesAt.getTime() > windowExtendLatest(now).getTime()) return "too_far";
   return null;
+}
+
+// --- Proposals (Lot 2, §14) ----------------------------------------------------
+
+/**
+ * The ADR-128 gesture an assistant may propose on an exam's contestation:
+ * `answer` accepted at `part`, for everyone who gave it or for this
+ * contestation's student only. The item's own validation applies.
+ */
+export interface ProposedAcceptance {
+  part: string;
+  answer: string;
+  scope: AcceptanceScope;
+}
+
+/**
+ * The shape of an answer to a contestation, the owner's or an assistant's
+ * proposal of it (ADR-139 §14): its verdict, its reply, and whether it
+ * gives new points (or an essay's criteria) or accepts an answer (an exam's
+ * question only).
+ */
+export interface AnswerShape {
+  verdict: ContestationVerdict;
+  reply: string;
+  points: boolean;
+  accepted: boolean;
+}
+
+/**
+ * Why an answer's body is refused, the first in this order: a refusal that
+ * gives points or accepts an answer, points beside an accepted answer, or
+ * an answer that does not explain itself ({@link answerExplained}: a
+ * refusal, or new points, carries a reply; an accepted answer may go bare,
+ * as an acceptance without points). The ONE rule of every answer's and
+ * proposal's contract, an exam's and a project's.
+ */
+export const PROPOSAL_REFUSALS = ["refusal_with_points", "refusal_with_acceptance", "points_and_acceptance", "unexplained"] as const;
+export type ProposalRefusal = (typeof PROPOSAL_REFUSALS)[number];
+
+export function proposalRefusal(answer: AnswerShape): ProposalRefusal | null {
+  if (answer.verdict === "refused" && answer.points) return "refusal_with_points";
+  if (answer.verdict === "refused" && answer.accepted) return "refusal_with_acceptance";
+  if (answer.points && answer.accepted) return "points_and_acceptance";
+  return answerExplained(answer) ? null : "unexplained";
+}
+
+/**
+ * Whether a proposal is stale: the grading in force when it was made (its
+ * id; null when none was) is not the one in force now — a regrade, an
+ * override, a validation, a criterion's write moved it. Its confirmation
+ * is then refused (`409 proposal_stale`): the owner reads it again, or the
+ * assistant proposes again.
+ */
+export function proposalStale(recorded: string | null, inForce: string | null): boolean {
+  return recorded !== inForce;
+}
+
+/** The longest text of one contestation an assistant reads — a statement, an answer, a key, a comment — in characters. */
+export const CONTESTATION_EXPORT_FIELD_CHARS = 4000;
+/** The most contestations one read hands an assistant. */
+export const CONTESTATION_EXPORT_PAGE = 10;
+/** The characters one read hands an assistant at most, past its first contestation (ADR-080 caps a tool's result likewise). */
+export const CONTESTATION_EXPORT_PAGE_CHARS = 24_000;
+/** What ends a text {@link clipText} cut. */
+export const CLIPPED_MARK = "[… cut: the text goes on]";
+
+/** `text`, at most `max` characters, a cut one ending with {@link CLIPPED_MARK}. */
+export function clipText(text: string, max: number = CONTESTATION_EXPORT_FIELD_CHARS): string {
+  return text.length <= max ? text : `${text.slice(0, Math.max(0, max - CLIPPED_MARK.length - 1))} ${CLIPPED_MARK}`;
+}
+
+/**
+ * One page of an assistant's read (ADR-139 §14): of the next rows, at most
+ * {@link CONTESTATION_EXPORT_PAGE}, how many it consumes (`take`) within
+ * {@link CONTESTATION_EXPORT_PAGE_CHARS} — always at least one, so a read
+ * moves on whatever its size — and the offset of the page after it (null
+ * on the last). `sizes` are the serialized rows, null for a row the read
+ * leaves out: consumed, never repeated on the next page.
+ */
+export function contestationPage(sizes: readonly (number | null)[], offset: number, total: number): { take: number; next: number | null } {
+  let used = 0;
+  let shown = 0;
+  let take = 0;
+  for (const size of sizes.slice(0, CONTESTATION_EXPORT_PAGE)) {
+    if (size !== null && shown > 0 && used + size > CONTESTATION_EXPORT_PAGE_CHARS) break;
+    take += 1;
+    if (size === null) continue;
+    used += size;
+    shown += 1;
+  }
+  const next = offset + take;
+  return { take, next: next < total ? next : null };
 }

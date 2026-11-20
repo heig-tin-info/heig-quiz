@@ -300,3 +300,13 @@ After the results of an exam are published, a student may contest the grading of
 - **Accept**, with or without a reply. An acceptance may leave the points as they are (the comment was wrong, or you changed how the question counts). Switch **Change the points** on to give new points in the same act: they are written as an adjustment whose comment is the reply, which is then mandatory.
 
 The answer is final. The student is told, and reads the verdict and your reply on their results page. To correct every student at once, use the panel's own tools before a bare acceptance: accept an answer, re-grade, or change how the question counts.
+
+**Proposals from an AI assistant.** An assistant you connected over MCP may read the open contestations, names masked, and store a proposed answer on each ([AI assistants](assistants.md#contestations)). A contested row with a proposal carries a small robot after its `contested` mark. In the open answer, **AI assistant's proposal** stands above **Answer to the contestation**, in a dashed box: the proposed verdict, the reply, the new points, or the answer to accept, its scope and how many other students it would change. Its text is the model's, never yours until you confirm it. **Confirm** answers the contestation exactly as proposed, as if you had answered it (the student is told at once); **Edit** restarts your answer from the proposal's reply and points, where you choose Refuse or Accept yourself (an accepted answer has no Edit: confirm or discard it); **Discard** removes it (any member of the staff may). A proposal made before the grading changed says so and cannot be confirmed. If an assistant replaces a proposal while you read it, the panel shows the new one with a warning, and **Confirm** waits until you click **I have read it**.
+
+<figure markdown="span">
+  ![An open contestation with an AI assistant's proposal above the answer form: accept, new points, the proposed reply, Discard, Edit and Confirm](../assets/screenshots/mock-contest-proposal-light.png#only-light)
+  ![An open contestation with an AI assistant's proposal above the answer form: accept, new points, the proposed reply, Discard, Edit and Confirm](../assets/screenshots/mock-contest-proposal-dark.png#only-dark)
+  <figcaption>An assistant's proposal, applied only when you confirm it. (Mock data.)</figcaption>
+</figure>
+
+On the **Contested** filter, **Confirm the proposals (n)** confirms the proposals of the question on screen in one go (those of attempts that still count). Its dialog counts what will happen (accepted, refused, points changed, other students re-graded by an accepted answer) and leaves out the stale ones; each proposal is then confirmed on its own, and the summary says which could not be, and why.

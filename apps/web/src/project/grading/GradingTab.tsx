@@ -50,11 +50,15 @@ import {
   type MatrixGroup,
 } from "./matrix";
 import { AdjustmentMark } from "../parts";
+import { ProposalBatch, ProposalSign } from "../../contestation/Proposal";
 import {
+  ANSWER_REFUSAL,
   cellContestation,
   contestationsByCell,
   ProjectContestationLine,
+  projectContestationPath,
   useProjectContestations,
+  useProjectRefresh,
 } from "./Contestations";
 import { GradeAdjustDialog } from "./GradeAdjustDialog";
 import { openContestationsWords } from "../../contestation/ContestationLine";
@@ -98,6 +102,7 @@ export function GradingTab({
     queryFn: () => api(`/app/api/projects/${project.id}/grading`),
   });
   const contestations = useProjectContestations(project.id);
+  const refresh = useProjectRefresh(project.id);
   const [filterParam, setFilterParam] = useSearchParam("filter", "");
   const asked = filterParam === "contested";
   // The filter applies once the contestations are read: never "none contested" on a read pending or failed.
@@ -182,22 +187,36 @@ export function GradingTab({
           />
         ) : null}
         {list.length > 0 || contestedOnly ? (
-          <Segmented<"all" | "contested">
-            name="matrix-filter"
-            label={t("project.matrix.filter")}
-            value={contestedOnly ? "contested" : "all"}
-            options={[
-              { value: "all", label: t("project.matrix.filter.all") },
-              {
-                value: "contested",
-                label:
-                  contested.length > 0
-                    ? t("project.matrix.filter.contested", { n: contested.length })
-                    : t("project.matrix.filter.contested.none"),
-              },
-            ]}
-            onChange={(next) => setFilterParam(next === "contested" ? "contested" : "")}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <Segmented<"all" | "contested">
+              name="matrix-filter"
+              label={t("project.matrix.filter")}
+              value={contestedOnly ? "contested" : "all"}
+              options={[
+                { value: "all", label: t("project.matrix.filter.all") },
+                {
+                  value: "contested",
+                  label:
+                    contested.length > 0
+                      ? t("project.matrix.filter.contested", { n: contested.length })
+                      : t("project.matrix.filter.contested.none"),
+                },
+              ]}
+              onChange={(next) => setFilterParam(next === "contested" ? "contested" : "")}
+            />
+            {/* ADR-139 §14: the owner confirms the assistant's proposals of the whole project in one go. */}
+            {contestedOnly && owner === true ? (
+              <ProposalBatch
+                items={list}
+                contestationOf={(c) => c}
+                pathOf={projectContestationPath(project.id)}
+                labelOf={(c) => `${repos.find((r) => r.id === c.repoId)?.label ?? ""}, ${c.criterionDescription}`}
+                scope={t("contest.batch.scope.project")}
+                refusals={ANSWER_REFUSAL}
+                onChanged={refresh}
+              />
+            ) : null}
+          </div>
         ) : null}
         {shown.length === 0 ? (
           <Card>
@@ -311,7 +330,11 @@ function Matrix({
                 {...pressable(() => open(repo), "row")}
               >
                 <th scope="row" className={cx(T.td, "sticky left-0 z-10 bg-surface text-left font-normal group-hover:bg-surface-2")}>
-                  <RepoLabel repo={repo} open={openByRepo[repo.id] ?? 0} />
+                  <RepoLabel
+                    repo={repo}
+                    open={openByRepo[repo.id] ?? 0}
+                    prepared={contestations.some((c) => c.repoId === repo.id && c.state === "open" && c.proposal !== null)}
+                  />
                 </th>
                 {columns.map((column) => (
                   <MatrixCell
@@ -400,8 +423,12 @@ function MarkCell({ repo, held, onAdjust }: { repo: ProjectGradingRepo; held: bo
   );
 }
 
-/** The name, where the repository stands — validated, to validate, or not frozen yet (dimmed) — and its open contestations (ADR-139 §13). */
-function RepoLabel({ repo, open }: { repo: ProjectGradingRepo; open: number }) {
+/**
+ * The name, where the repository stands — validated, to validate, or not
+ * frozen yet (dimmed) — and its open contestations (ADR-139 §13), with the
+ * `Bot` when an AI assistant prepared an answer to one (§14).
+ */
+function RepoLabel({ repo, open, prepared }: { repo: ProjectGradingRepo; open: number; prepared: boolean }) {
   const t = useT();
   const contested = openContestationsWords(open, t);
   const state = repo.validation.validated ? "validated" : repo.frozen ? "toValidate" : "notFrozen";
@@ -418,6 +445,7 @@ function RepoLabel({ repo, open }: { repo: ProjectGradingRepo; open: number }) {
           <MessageSquareWarning aria-hidden className="size-3" />
           <span aria-hidden>{open}</span>
           <span className="sr-only">{contested}</span>
+          {prepared ? <ProposalSign className="ml-0.5 size-3" /> : null}
         </Tip>
       ) : null}
     </span>

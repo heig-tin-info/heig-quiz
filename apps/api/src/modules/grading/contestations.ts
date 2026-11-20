@@ -19,8 +19,14 @@ import { randomUUID } from "node:crypto";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { ContestationResolveBody, NotContestable, StaffContestation, StudentContestation } from "@quiz/contracts";
-import { contestedUnit, countsForStudent, unitRefusal, type ContestedUnit, type ContestRefusal } from "@quiz/domain";
+import type {
+  ContestationProposalView,
+  ContestationResolveBody,
+  NotContestable,
+  StaffContestation,
+  StudentContestation,
+} from "@quiz/contracts";
+import { contestedUnit, countsForStudent, proposalStale, unitRefusal, type ContestedUnit, type ContestRefusal } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
@@ -54,12 +60,64 @@ export const studentContestationOf = (row: Pick<ContestationRecord, "state" | "r
   resolvedAt: isoOrNull(row.resolvedAt),
 });
 
-/** What the staff read: the same, its id, and whether its attempt still counts. Never a name. */
-export const staffContestationOf = (row: ContestationRecord, counted: boolean): StaffContestation => ({
+/**
+ * What the staff read: the same, its id, whether its attempt still counts,
+ * and the assistant's proposal standing on it (ADR-139 §14, read by
+ * `proposalViews`). Never a name.
+ */
+export const staffContestationOf = (
+  row: ContestationRecord,
+  counted: boolean,
+  proposal: ContestationProposalView | null = null,
+): StaffContestation => ({
   ...studentContestationOf(row),
   id: row.id,
   counted,
+  proposal,
 });
+
+/**
+ * The fields of a proposal's staff reading both tables hold alike (ADR-139
+ * §14), an exam's contestation's and a project's; null when none stands.
+ */
+export function proposalBase(
+  row: Pick<ContestationRecord, "proposedVerdict" | "proposedReply" | "proposedPoints" | "proposedAt">,
+): Pick<ContestationProposalView, "verdict" | "reply" | "points" | "proposedAt"> | null {
+  if (row.proposedAt === null || row.proposedVerdict === null) return null;
+  return { verdict: row.proposedVerdict, reply: row.proposedReply ?? "", points: row.proposedPoints, proposedAt: iso(row.proposedAt) };
+}
+
+/** The columns of a proposal, all cleared: what an answer and a discard write. */
+export const NO_PROPOSAL = {
+  proposedVerdict: null,
+  proposedReply: null,
+  proposedPoints: null,
+  proposedAcceptance: null,
+  proposedBy: null,
+  proposedAt: null,
+  gradingAtProposalId: null,
+} as const;
+
+/**
+ * Why a confirmation's conditional write found nothing: the contestation
+ * was answered meanwhile (`not_open`), or its proposal changed or its
+ * grading moved (`proposal_stale`).
+ */
+async function confirmationMiss(db: Db | Tx, contestationId: string): Promise<GradingError> {
+  const [row] = await db.select({ state: contestations.state }).from(contestations).where(eq(contestations.id, contestationId));
+  return new GradingError(row?.state === "open" ? "proposal_stale" : "not_open");
+}
+
+/**
+ * The SQL that holds while the grading in force is still `recorded` (its
+ * row validated; none validated on the cell when null): what an answer
+ * without points adds to its conditional UPDATE when it confirms a proposal.
+ */
+function gradingStillInForce(contestation: Pick<ContestationRecord, "attemptId" | "itemId">, recorded: string | null) {
+  return recorded === null
+    ? sql`not exists (select 1 from ${gradings} where ${gradings.attemptId} = ${contestation.attemptId}::uuid and ${gradings.itemId} = ${contestation.itemId}::uuid and ${gradings.state} = 'validated')`
+    : sql`exists (select 1 from ${gradings} where ${gradings.id} = ${recorded}::uuid and ${gradings.state} = 'validated')`;
+}
 
 /** The contestations of one attempt, by item: the student's feedback page. */
 export async function contestationsOfAttempt(db: Db, attemptId: string): Promise<Map<string, ContestationRecord>> {
@@ -200,7 +258,8 @@ export async function fileContestation(
     .insert(contestations)
     .select(
       sql`select ${randomUUID()}::uuid, ${attempt.id}::uuid, ${item.item.id}::uuid, ${input.reason}, ${input.userId}::uuid,
-        now(), ${gradings.id}, 'open', '', null::uuid, null::timestamptz, null::uuid
+        now(), ${gradings.id}, 'open', '', null::uuid, null::timestamptz, null::uuid,
+        null, null, null::numeric, null::jsonb, null::uuid, null::timestamptz, null::uuid
       from ${gradings}
       inner join ${attempts} on ${attempts.id} = ${gradings.attemptId}
       inner join ${evaluations} on ${evaluations.id} = ${attempts.evaluationId}
@@ -246,22 +305,22 @@ export async function resolveContestation(
     body: ContestationResolveBody;
     userId: string;
     now: Date;
+    /**
+     * A proposal's confirmation (ADR-139 §14): the proposal confirmed is
+     * still the one standing (`proposedAt`), and the grading in force is the
+     * one it recorded (`grading`), checked by the write itself.
+     */
+    expect?: Expected;
   },
 ): Promise<{ row: ContestationRecord; grading: GradingRecord | null; before: string | null }> {
-  const { contestation, evaluation, item, body, userId, now } = input;
+  const { contestation, evaluation, item, body, userId, now, expect } = input;
   const cell = { attemptId: contestation.attemptId, itemId: contestation.itemId };
   const inForce = await validatedOfCell(db, cell.attemptId, cell.itemId);
   const before = inForce?.id ?? null;
-  const answer = (tx: Db | Tx, gradingId: string | null) =>
-    tx
-      .update(contestations)
-      .set({ state: body.verdict, reply: body.reply, resolvedBy: userId, resolvedAt: now, gradingAtResolutionId: gradingId })
-      .where(and(eq(contestations.id, contestation.id), eq(contestations.state, "open")))
-      .returning();
+  const answer = { verdict: body.verdict, reply: body.reply, userId, now };
 
   if (body.points === undefined && body.criteria === undefined) {
-    const [row] = await answer(db, before);
-    if (!row) throw new GradingError("not_open");
+    const row = await answerRow(db, contestation, { ...answer, gradingId: before }, expect && { ...expect, still: true });
     return { row, grading: null, before };
   }
 
@@ -276,13 +335,83 @@ export async function resolveContestation(
     userId,
     now,
     {
+      // A confirmation: the cell locked, the grading in force must still be the one the proposal read.
+      before:
+        expect &&
+        (async (tx) => {
+          const held = await validatedOfCell(tx, cell.attemptId, cell.itemId);
+          if (proposalStale(expect.grading, held?.id ?? null)) throw new GradingError("proposal_stale");
+        }),
+      // The grading it read was checked under the lock, before this override replaced it.
       after: async (tx, written) => {
-        [row] = await answer(tx, written[0]!.id);
-        if (!row) throw new GradingError("not_open");
+        row = await answerRow(tx, contestation, { ...answer, gradingId: written[0]!.id }, expect && { ...expect, still: false });
       },
     },
   );
   return { row: row!, grading, before };
+}
+
+/** What a proposal's confirmation expects still to stand (ADR-139 §14): the proposal read, and the grading in force it recorded. */
+export interface Expected {
+  proposedAt: Date;
+  grading: string | null;
+}
+
+/**
+ * THE write of an answer (ADR-139): one conditional UPDATE on an open
+ * contestation (`409 not_open` otherwise), the proposal standing cleared,
+ * confirmed or not. A confirmation (`expect`) also requires the proposal
+ * read, and — `still` — the grading it recorded still in force (else `409
+ * proposal_stale`). Used by the owner's answer, with or without new points,
+ * and by an accepted answer's confirmation inside ADR-128's rule
+ * transaction (`changeAcceptance`'s `after`), so a refused answer rolls the
+ * acceptance back; the act's re-grade is recorded after its commit
+ * ({@link recordResolutionGrading}).
+ */
+export async function answerRow(
+  tx: Db | Tx,
+  contestation: ContestationRecord,
+  answer: { verdict: ContestationResolveBody["verdict"]; reply: string; userId: string; now: Date; gradingId: string | null },
+  expect?: Expected & { still: boolean },
+): Promise<ContestationRecord> {
+  const [row] = await tx
+    .update(contestations)
+    .set({
+      state: answer.verdict,
+      reply: answer.reply,
+      resolvedBy: answer.userId,
+      resolvedAt: answer.now,
+      gradingAtResolutionId: answer.gradingId,
+      ...NO_PROPOSAL,
+    })
+    .where(
+      and(
+        eq(contestations.id, contestation.id),
+        eq(contestations.state, "open"),
+        expect && eq(contestations.proposedAt, expect.proposedAt),
+        expect?.still ? gradingStillInForce(contestation, expect.grading) : undefined,
+      ),
+    )
+    .returning();
+  if (row) return row;
+  throw expect ? await confirmationMiss(tx, contestation.id) : new GradingError("not_open");
+}
+
+/** A contestation by its id; undefined when none. */
+export async function contestationById(db: Db, id: string): Promise<ContestationRecord | undefined> {
+  const [row] = await db.select().from(contestations).where(eq(contestations.id, id));
+  return row;
+}
+
+/** The validated grading in force on an answered contestation's cell, recorded as the one after its answer. */
+export async function recordResolutionGrading(db: Db, row: ContestationRecord): Promise<ContestationRecord> {
+  const inForce = await validatedOfCell(db, row.attemptId, row.itemId);
+  const [updated] = await db
+    .update(contestations)
+    .set({ gradingAtResolutionId: inForce?.id ?? null })
+    .where(eq(contestations.id, row.id))
+    .returning();
+  return updated ?? row;
 }
 
 /** The answer row of a cell, if the student wrote one. */

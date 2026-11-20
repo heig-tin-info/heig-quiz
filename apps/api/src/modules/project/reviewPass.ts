@@ -89,9 +89,10 @@ export const REVIEW_CONCURRENCY = 2;
  * roster, as written on it and as its accounts say (names, e-mail, GitHub
  * login), the repository's own student (a staff seat's test repository
  * included), the accounts ever let into it, and the repository's owner and
- * name.
+ * name — its organization's login and its own (ADR-119 §7). An assistant's
+ * read of a contestation masks with it too (ADR-139 §14).
  */
-async function masker(db: Db, repo: RepoRow, project: ProjectRow): Promise<(text: string) => string> {
+export async function masker(db: Db, repo: RepoRow, project: ProjectRow): Promise<(text: string) => string> {
   const roster = await db
     .select({
       prenom: enrollments.prenom,

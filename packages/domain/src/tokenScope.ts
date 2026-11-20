@@ -32,15 +32,19 @@ export type ScopeTarget = "mcp" | "internal" | "elsewhere";
 export const SAFE_METHODS: readonly string[] = ["GET", "HEAD", "OPTIONS"];
 
 /**
- * Null when the scope admits the request; otherwise the narrowest scope that
+ * Null when the scope admits the request (`needs`: the scope a route names
+ * for itself, beyond its method's); otherwise the narrowest scope that
  * would (the `scope` of the `insufficient_scope` answer). `quiz:read` lets
  * the MCP envelope through — a `POST`, whatever the tool — and refuses the
  * writes of the tools' own calls.
  */
 export function scopeAdmits(
   scope: TokenScope,
-  request: { target: ScopeTarget; method: string },
+  request: { target: ScopeTarget; method: string; needs?: TokenScope | undefined },
 ): TokenScope | null {
+  // A route that names its own scope (ADR-139 §14: a read that sends
+  // students' words out needs `quiz`, safe method or not) is refused below it.
+  if (request.needs !== undefined && request.target !== "mcp" && !scopeCovers(scope, request.needs)) return request.needs;
   if (scope === "api" || request.target === "mcp") return null;
   if (request.target === "elsewhere") return "api";
   if (scope === "quiz" || SAFE_METHODS.includes(request.method.toUpperCase())) return null;
@@ -55,4 +59,30 @@ export function scopeAdmits(
  */
 export function scopeOfGrant(grantScope: string): TokenScope {
   return grantScope.split(/\s+/).includes("quiz") ? "quiz" : "quiz:read";
+}
+
+/**
+ * The consent a token was granted under (ADR-139 §14): the revision of the
+ * consent screen, or of the token form, its owner agreed to. A reach that
+ * needs a later revision is refused (`403 consent_required`) until the
+ * owner consents again — a new OAuth grant, or a new personal token. A
+ * refresh never raises it: only a new consent does.
+ *
+ *   1  the catalogue until 2026-11-20 (every grant and token made before)
+ *   2  students' contestations: their answers and words sent to the
+ *      assistant, names masked, and resolutions it may propose
+ */
+export const MCP_CONSENT_REVISION = 2;
+
+/** The consent revision that lets a token read and propose on students' contestations (ADR-139 §14). */
+export const CONTESTATIONS_CONSENT = 2;
+
+/**
+ * The revision a new consent records: the one the screen or the form says
+ * it showed, never above the current one, and 1 when it says nothing (a
+ * page cached from before, an old client) — so only a consent that showed
+ * the new line reaches what it names.
+ */
+export function consentRecorded(shown: number | undefined): number {
+  return Math.min(shown ?? 1, MCP_CONSENT_REVISION);
 }

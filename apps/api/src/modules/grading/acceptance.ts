@@ -15,6 +15,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import type { AcceptablePart } from "@quiz/contracts";
+import type { AcceptedAnswer } from "@quiz/core/server";
 import {
   acceptanceReach,
   itemListLock,
@@ -23,17 +24,18 @@ import {
   type AcceptanceRule,
 } from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { answerAcceptances, answers, attempts, officialAttempt } from "../../db/schema.js";
 import {
   attemptCount,
   joinedItem,
+  staffAttemptIds,
   type DbOrTx,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
 import { typeOf } from "../pool/config.js";
-import { configPerAttempt, isParameterized, writtenConfig } from "../pool/service.js";
+import { configPerAttempt, isParameterized, writtenConfig, type InstanceAttempt } from "../pool/service.js";
 import {
   acceptanceGuard,
   acceptanceHook,
@@ -113,13 +115,11 @@ export async function changeAcceptance(
   accept: boolean,
   actorId: string,
   now: Date,
+  /** `after`: a write that commits with the rule or not at all (a proposal's confirmation, ADR-139 §14). */
+  { after }: { after?: ((tx: Tx) => Promise<void>) | undefined } = {},
 ): Promise<AcceptanceChange | null> {
   const db = app.db;
-  const hook = acceptanceHook(item.question.type, evaluation.mode);
-  if (!hook) throw new GradingError("acceptance_unavailable");
-  if (itemListLock(evaluation.state, await attemptCount(db, evaluation.id)) === null) {
-    throw new GradingError("acceptance_not_frozen");
-  }
+  const hook = await acceptanceGate(db, evaluation, item);
   const attemptRows = await db
     .select()
     .from(attempts)
@@ -138,15 +138,11 @@ export async function changeAcceptance(
     const held = (await joinedItem(tx, evaluation.id, item.item.id)) ?? item;
     // A static question's config is every attempt's; a single student's
     // rule is read on that student's instance.
-    const sample = attemptRows[0] ?? NO_ATTEMPT;
-    const config = () => configPerAttempt(held)(sample);
-    // The one rule of the scopes, on the version in force.
-    const scope = rule.attemptId === null ? "everyone" : "student";
-    if (!itemScopes(hook, isParameterized(held.version), config).includes(scope)) throw new GradingError("acceptance_scope");
-    if (ruleLabel(hook, config, rule) === null) throw new GradingError("acceptance_invalid");
+    assertRuleHolds(hook, held, rule, attemptRows[0] ?? NO_ATTEMPT);
     const changed = accept
       ? await insertRule(tx, item.item.id, rule, actorId, now)
       : await deleteRule(tx, item.item.id, rule);
+    await after?.(tx);
     return { held, changed };
   });
 
@@ -162,6 +158,68 @@ export async function changeAcceptance(
     unchanged,
     modifiedAfterRelease: evaluation.releasedAt !== null && written.some((w) => w.state === "validated"),
   };
+}
+
+/**
+ * The gate of an acceptance on `item` (ADR-128), the act's and an
+ * assistant's proposal's (ADR-139 §14): the type's hook — none on a poll
+ * nor for a type without acceptances (`409 acceptance_unavailable`) — once
+ * the item list is frozen (`409 acceptance_not_frozen`).
+ */
+export async function acceptanceGate(db: DbOrTx, evaluation: EvaluationRecord, item: JoinedItem): Promise<AcceptanceHook> {
+  const hook = acceptanceHook(item.question.type, evaluation.mode);
+  if (!hook) throw new GradingError("acceptance_unavailable");
+  if (itemListLock(evaluation.state, await attemptCount(db, evaluation.id)) === null) {
+    throw new GradingError("acceptance_not_frozen");
+  }
+  return hook;
+}
+
+/**
+ * Whether `rule` holds on `held`, read on `sample`'s instance (ADR-128):
+ * the one rule of the scopes (`422 acceptance_scope`: one student only on a
+ * parameterized question or a single-answer config), and an answer the part
+ * can hold (`422 acceptance_invalid`). The act's, under the item's lock, and
+ * an assistant's proposal's.
+ */
+export function assertRuleHolds(hook: AcceptanceHook, held: JoinedItem, rule: AcceptanceRule, sample: InstanceAttempt): void {
+  const config = () => configPerAttempt(held)(sample);
+  const scope = rule.attemptId === null ? "everyone" : "student";
+  if (!itemScopes(hook, isParameterized(held.version), config).includes(scope)) throw new GradingError("acceptance_scope");
+  if (ruleLabel(hook, config, rule) === null) throw new GradingError("acceptance_invalid");
+}
+
+/**
+ * The official attempts of the class, the staff's test walks left out
+ * (ADR-018), an acceptance for everyone of `rule` would re-grade (F-GRADE-11,
+ * ADR-139 §14): those that gave its answer at its part, a manual override
+ * left alone (ADR-128 §5) — the reach the act computes (`acceptanceReach`).
+ * What the owner reads before confirming a proposal, less its own student.
+ */
+export async function acceptanceReached(db: Db, evaluation: EvaluationRecord, item: JoinedItem, rule: AcceptedAnswer): Promise<Set<string>> {
+  const hook = acceptanceHook(item.question.type, evaluation.mode);
+  if (!hook) return new Set();
+  const [attemptRows, staff, answerRows, standing] = await Promise.all([
+    db.select().from(attempts).where(and(eq(attempts.evaluationId, evaluation.id), officialAttempt)),
+    staffAttemptIds(db, evaluation),
+    db.select().from(answers).where(eq(answers.itemId, item.item.id)),
+    standingGradings(db, evaluation.id, { itemId: item.item.id }),
+  ]);
+  const answerOf = new Map(answerRows.map((a) => [a.attemptId, a]));
+  const read = configPerAttempt(item);
+  const cells: AcceptanceCell[] = attemptRows.flatMap((attempt) => {
+    const answer = answerOf.get(attempt.id);
+    if (!answer || staff.has(attempt.id)) return [];
+    let config: unknown;
+    try {
+      config = read(attempt);
+    } catch {
+      return [];
+    }
+    const grading = standing.get(pairKey(attempt.id, item.item.id));
+    return [{ attemptId: attempt.id, given: partsOf(hook, item.question.type, config, answer.payload), manual: grading?.source === "manual" }];
+  });
+  return new Set(acceptanceReach(cells, { ...rule, attemptId: null }).reached);
 }
 
 async function insertRule(db: DbOrTx, itemId: string, rule: AcceptanceRule, actorId: string, now: Date): Promise<boolean> {

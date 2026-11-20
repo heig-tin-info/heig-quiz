@@ -16,7 +16,7 @@ import {
 } from "../test/grading-fixtures";
 import { elapse, flowingClock } from "../test/clock";
 import { makeCourseSummary } from "../test/fixtures";
-import { mockFetch, ok, publicConfig, renderWithProviders } from "../test/render";
+import { fail, mockFetch, noContent, ok, publicConfig, renderWithProviders } from "../test/render";
 
 /*
  * The grading screen (ADR-044): one question as a table, the key pinned on
@@ -861,6 +861,33 @@ describe("GradingPanel — an essay graded by criteria (ADR-118 §6)", () => {
       ...over,
     });
 
+  it("restarts the answer from an assistant's proposal on Edit, the points switch off: an essay graded by criteria takes none (ADR-139 §14)", async () => {
+    const entry = {
+      ...essay({ points: 1, state: "validated", source: "manual" }),
+      contestation: {
+        id: "c-a1",
+        state: "open" as const,
+        reason: "My thesis is stated.",
+        filedAt: "2026-09-03T08:00:00.000Z",
+        reply: null,
+        resolvedAt: null,
+        counted: true,
+        proposal: { verdict: "accepted" as const, reply: "Right.", points: 3, rationale: null, accepted: null, proposedAt: "2026-09-05T10:00:00.000Z", stale: false, affected: null },
+      },
+    };
+    mockFetch(essayRoutes(entry));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await screen.findByRole("table", { name: "Answers to question 1" });
+    await userEvent.click(rowOf("a1"));
+    const panel = await screen.findByRole("dialog");
+    const answer = within(panel).getByRole("region", { name: "Answer to the contestation" });
+    await userEvent.click(within(answer).getByRole("switch", { name: "Change the points" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Edit" }));
+    const fresh = within(panel).getByRole("region", { name: "Answer to the contestation" });
+    expect(within(fresh).getByLabelText("Reply")).toHaveValue("Right.");
+    expect(within(fresh).getByRole("switch", { name: "Change the points" })).not.toBeChecked();
+  });
+
   it("edits each criterion within its maximum, derives the total, and sends the criteria", async () => {
     const entry = essay({
       points: 2,
@@ -1378,6 +1405,7 @@ describe("GradingPanel — contestations", () => {
       reply: state === "open" ? null : "Read the statement again.",
       resolvedAt: state === "open" ? null : "2026-09-04T08:00:00.000Z",
       counted: true,
+      proposal: null,
     },
   });
   const entries = () => [contested("a1", "open"), contested("a2", "refused"), validated("a3", 3)];
@@ -1521,5 +1549,270 @@ describe("GradingPanel — contestations", () => {
     expect(await within(panel).findByText("The answer is the course's Teacher role's.")).toBeVisible();
     expect(within(panel).queryByRole("button", { name: "Refuse" })).toBeNull();
     expect(within(panel).queryByRole("button", { name: "Accept" })).toBeNull();
+  });
+});
+
+/*
+ * ADR-139 §14: an AI assistant's proposal on an open contestation, above the
+ * owner's answer — read escaped, confirmed as it was READ, copied into the
+ * answer, discarded — and the owner's batch of the question's proposals,
+ * one confirmation after the other.
+ */
+describe("GradingPanel — an assistant's proposals", () => {
+  const PROPOSED_AT = "2026-09-05T10:00:00.000Z";
+  const offered = (over: Record<string, unknown> = {}) => ({
+    verdict: "accepted" as const,
+    reply: "<b>Right</b>, 0x1F is 31.",
+    points: 3,
+    rationale: null,
+    accepted: null,
+    proposedAt: PROPOSED_AT,
+    stale: false,
+    affected: null,
+    ...over,
+  });
+  const contested = (attemptId: string, proposalOf: ReturnType<typeof offered> | null, over: Record<string, unknown> = {}) => ({
+    ...validated(attemptId, 1),
+    contestation: {
+      id: `c-${attemptId}`,
+      state: "open" as const,
+      reason: "I wrote 31.",
+      filedAt: "2026-09-03T08:00:00.000Z",
+      reply: null,
+      resolvedAt: null,
+      counted: true,
+      proposal: proposalOf,
+      ...over,
+    },
+  });
+  const steps = { [`GET ${EVAL}/grading/steps`]: ok(makeSteps([{ key: "i1", total: 3, validated: 3, contested: 3 }, { key: "i2" }])) };
+  const openAnswer = async (attemptId: string) => {
+    await userEvent.click(rowOf(attemptId));
+    return screen.findByRole("dialog", { name: "Anonymous answer" });
+  };
+  const blockOf = (panel: HTMLElement) => within(panel).getByRole("region", { name: "AI assistant's proposal" });
+
+  it("shows the proposal above the answer, escaped, and confirms the one it showed", async () => {
+    const { calls } = mockFetch(
+      routes([contested("a1", offered())], {
+        ...steps,
+        "POST /app/api/contestations/c-a1/proposal/confirm": ok({ contestation: contested("a1", null).contestation, grading: null, modifiedAfterRelease: false }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    // The row says an assistant prepared it.
+    expect(within(rowOf("a1")).getByTestId("proposal-mark")).toBeInTheDocument();
+    const block = blockOf(await openAnswer("a1"));
+    expect(within(block).getByText("Acceptance proposed")).toBeVisible();
+    expect(within(block).getByText(/^New points: 3 \/ /)).toBeVisible();
+    // The model's text is data: drawn as written, never as markup.
+    expect(within(block).getByText("<b>Right</b>, 0x1F is 31.")).toBeVisible();
+    expect(block.querySelector("b")).toBeNull();
+    await userEvent.click(within(block).getByRole("button", { name: "Confirm" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "POST")).toMatchObject({
+        url: "/app/api/contestations/c-a1/proposal/confirm",
+        body: { proposedAt: PROPOSED_AT },
+      }),
+    );
+  });
+
+  it("never confirms a proposal a refetch brought unread: the owner reads it first", async () => {
+    let entries = [contested("a1", offered())];
+    const { calls } = mockFetch(
+      routes(() => entries, {
+        ...steps,
+        "POST /app/api/contestations/c-a1/proposal/confirm": ok({ contestation: contested("a1", null).contestation, grading: null, modifiedAfterRelease: false }),
+      }),
+    );
+    const { queryClient } = renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    const panel = await openAnswer("a1");
+    // An assistant rewrites the proposal; a refetch (a window's focus, another write) brings it.
+    const NEWER = "2026-09-05T11:00:00.000Z";
+    entries = [contested("a1", offered({ proposedAt: NEWER, verdict: "refused", points: null, reply: "No." }))];
+    await queryClient.invalidateQueries();
+    expect(await within(panel).findByText("An assistant wrote this proposal while you were on this page.")).toBeVisible();
+    const block = blockOf(panel);
+    expect(within(block).getByRole("button", { name: "Confirm" })).toBeDisabled();
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+    await userEvent.click(within(block).getByRole("button", { name: "I have read it" }));
+    await userEvent.click(within(block).getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "POST")?.body).toEqual({ proposedAt: NEWER }));
+  });
+
+  it("holds Confirm on a proposal written after a discard, until the owner reads it", async () => {
+    let entries = [contested("a1", offered())];
+    const { calls } = mockFetch(
+      routes(() => entries, {
+        ...steps,
+        "DELETE /app/api/contestations/c-a1/proposal": () => {
+          entries = [contested("a1", null)];
+          return noContent();
+        },
+        "POST /app/api/contestations/c-a1/proposal/confirm": ok({ contestation: contested("a1", null).contestation, grading: null, modifiedAfterRelease: false }),
+      }),
+    );
+    const { queryClient } = renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    const panel = await openAnswer("a1");
+    await userEvent.click(within(blockOf(panel)).getByRole("button", { name: "Discard" }));
+    await waitFor(() => expect(within(panel).queryByRole("region", { name: "AI assistant's proposal" })).toBeNull());
+    // An assistant writes another one; a refetch brings it to the same screen.
+    const LATER = "2026-09-05T12:00:00.000Z";
+    entries = [contested("a1", offered({ proposedAt: LATER }))];
+    await queryClient.invalidateQueries();
+    const block = await within(panel).findByRole("region", { name: "AI assistant's proposal" });
+    expect(within(block).getByText("An assistant wrote this proposal while you were on this page.")).toBeVisible();
+    expect(within(block).getByRole("button", { name: "Confirm" })).toBeDisabled();
+    await userEvent.click(within(block).getByRole("button", { name: "I have read it" }));
+    await userEvent.click(within(block).getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "POST")?.body).toEqual({ proposedAt: LATER }));
+  });
+
+  it("says an accepted answer was confirmed but the other copies not re-graded, where the answer now stands", async () => {
+    const acceptance = offered({ points: null, accepted: { part: "b1", answer: "31", scope: "everyone", label: "31" }, affected: 2 });
+    let entries = [contested("a1", acceptance)];
+    mockFetch(
+      routes(() => entries, {
+        ...steps,
+        "POST /app/api/contestations/c-a1/proposal/confirm": () => {
+          entries = [contested("a1", null, { state: "accepted", reply: "Right.", resolvedAt: "2026-09-05T12:00:00.000Z" })];
+          return fail(500, { error: "regrade_failed", message: "re-grade failed" });
+        },
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    const panel = await openAnswer("a1");
+    await userEvent.click(within(blockOf(panel)).getByRole("button", { name: "Confirm" }));
+    // The reads come back answered; the warning stays under the record.
+    expect(await within(panel).findByText("Contestation accepted")).toBeVisible();
+    expect(
+      within(panel).getByText(
+        "Contestation accepted and the reply sent. Re-grading the other copies failed: accept the same answer again in the question's panel.",
+      ),
+    ).toBeVisible();
+    expect(within(panel).queryByText("The answer could not be saved.")).toBeNull();
+  });
+
+  it("restarts the answer from the proposal on Edit, the verdict left to the owner", async () => {
+    mockFetch(routes([contested("a1", offered())], steps));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    const panel = await openAnswer("a1");
+    await userEvent.click(within(panel).getByRole("button", { name: "Edit" }));
+    const answer = within(panel).getByRole("region", { name: "Answer to the contestation" });
+    await waitFor(() => expect(within(answer).getByLabelText("Reply")).toHaveFocus());
+    expect(within(answer).getByLabelText("Reply")).toHaveValue("<b>Right</b>, 0x1F is 31.");
+    expect(within(answer).getByRole("switch", { name: "Change the points" })).toBeChecked();
+    expect(within(answer).getByLabelText("Points")).toHaveValue(3);
+    // The proposal stays until the answer or a discard.
+    expect(blockOf(panel)).toBeVisible();
+  });
+
+  it("offers no Edit on an accepted answer, which the reply form cannot carry", async () => {
+    mockFetch(
+      routes([contested("a1", offered({ points: null, accepted: { part: "b1", answer: "31", scope: "everyone", label: "31" }, affected: 2 }))], steps),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    const block = blockOf(await openAnswer("a1"));
+    expect(within(block).getByText("Also changes 2 other students")).toBeVisible();
+    expect(within(block).queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(within(block).getByRole("button", { name: "Confirm" })).toBeEnabled();
+  });
+
+  it("holds Confirm on a stale proposal; a refusal that says it moved words it and reads again", async () => {
+    const { calls } = mockFetch(
+      routes([contested("a1", offered({ stale: true })), contested("a2", offered({ verdict: "refused", points: null, reply: "No." })), contested("a3", offered())], {
+        ...steps,
+        "POST /app/api/contestations/c-a2/proposal/confirm": fail(409, { error: "proposal_stale", message: "stale" }),
+        "POST /app/api/contestations/c-a3/proposal/confirm": fail(409, { error: "not_open", message: "answered" }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    let panel = await openAnswer("a1");
+    expect(within(panel).getByText("The grading changed since this proposal. It cannot be confirmed as it stands.")).toBeVisible();
+    expect(within(panel).getByRole("button", { name: "Confirm" })).toBeDisabled();
+    const reads = () => calls.filter((c) => c.method === "GET" && c.url === QUEUE("i1")).length;
+    for (const [attemptId, words] of [
+      ["a2", "The proposal or the grading changed since you read it. Read it again."],
+      ["a3", "This contestation already has its answer."],
+    ] as const) {
+      await userEvent.click(rowOf(attemptId));
+      panel = await screen.findByRole("dialog", { name: "Anonymous answer" });
+      const before = reads();
+      await userEvent.click(within(panel).getByRole("button", { name: "Confirm" }));
+      expect(await within(panel).findByText(words)).toBeVisible();
+      await waitFor(() => expect(reads()).toBeGreaterThan(before));
+    }
+  });
+
+  it("lets an assistant of the course read and discard a proposal, never confirm it", async () => {
+    const { calls } = mockFetch(
+      routes([contested("a1", offered())], {
+        ...steps,
+        "GET /app/api/courses": ok([makeCourseSummary({ myRole: "assistant" })]),
+        "DELETE /app/api/contestations/c-a1/proposal": noContent(),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    const panel = await openAnswer("a1");
+    const block = await within(panel).findByRole("region", { name: "AI assistant's proposal" });
+    expect(within(block).queryByRole("button", { name: "Confirm" })).toBeNull();
+    expect(within(block).queryByRole("button", { name: "Edit" })).toBeNull();
+    await userEvent.click(within(block).getByRole("button", { name: "Discard" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url === "/app/api/contestations/c-a1/proposal")).toBe(true));
+    expect(await screen.findByText("Proposal discarded.")).toBeVisible();
+  });
+
+  it("confirms the question's proposals one after the other, a refusal never stopping the rest", async () => {
+    const { calls } = mockFetch(
+      routes(
+        [
+          contested("a1", offered()),
+          contested("a2", offered({ verdict: "refused", points: null, reply: "No." })),
+          contested("a3", offered({ points: null, accepted: { part: "b1", answer: "31", scope: "everyone", label: "31" }, affected: 2 })),
+          contested("a4", offered({ stale: true })),
+          // An attempt that no longer counts is answered by hand.
+          contested("a5", offered(), { counted: false }),
+        ],
+        {
+          ...steps,
+          "POST /app/api/contestations/c-a1/proposal/confirm": ok({}),
+          "POST /app/api/contestations/c-a2/proposal/confirm": fail(409, { error: "not_open", message: "answered" }),
+          "POST /app/api/contestations/c-a3/proposal/confirm": fail(500, { error: "regrade_failed", message: "re-grade failed" }),
+        },
+      ),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />, { route: "/evaluations/e1/grading?filter=contested" });
+    await answerRows();
+    await userEvent.click(screen.getByRole("button", { name: "Confirm the proposals (3)" }));
+    const dialog = await screen.findByRole("dialog", { name: "Confirm the proposals" });
+    expect(within(dialog).getByText("The open contestations of question 1 that carry a proposal.")).toBeVisible();
+    expect(within(dialog).getByText("2 accepted")).toBeVisible();
+    expect(within(dialog).getByText("1 refused")).toBeVisible();
+    expect(within(dialog).getByText("1 changes the points")).toBeVisible();
+    expect(within(dialog).getByText("Also changes 2 other students")).toBeVisible();
+    expect(within(dialog).getByText("1 out-of-date proposal is left out.")).toBeVisible();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Confirm 3" }));
+    const summary = await within(dialog).findByTestId("proposal-batch-summary");
+    // The accepted answer whose re-grade failed is confirmed, said apart.
+    expect(within(summary).getByText("2 confirmed")).toBeVisible();
+    expect(within(summary).getByText("1 confirmed, other copies not re-graded")).toBeVisible();
+    expect(within(summary).getByText(/Re-grading the other copies failed/)).toBeVisible();
+    expect(within(summary).getByText("1 not confirmed")).toBeVisible();
+    expect(within(summary).getByText(/This contestation already has its answer\./)).toBeVisible();
+    const posts = calls.filter((c) => c.method === "POST");
+    expect(posts.map((c) => c.url)).toEqual([
+      "/app/api/contestations/c-a1/proposal/confirm",
+      "/app/api/contestations/c-a2/proposal/confirm",
+      "/app/api/contestations/c-a3/proposal/confirm",
+    ]);
+    expect(posts.every((c) => (c.body as { proposedAt: string }).proposedAt === PROPOSED_AT)).toBe(true);
   });
 });

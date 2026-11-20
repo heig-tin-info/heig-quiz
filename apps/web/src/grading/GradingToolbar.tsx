@@ -52,6 +52,7 @@ export function GradingToolbar({
   onAnonymise,
   exports,
   staffRows,
+  batch,
   primary,
 }: {
   view: GradingView;
@@ -70,6 +71,8 @@ export function GradingToolbar({
   exports?: ReactNode;
   /** "Show test attempts" (ADR-018, amended 2026-11-17), which draws nothing while no answer is a staff one. */
   staffRows?: ReactNode;
+  /** ADR-139 §14: the owner's "Confirm the proposals (n)" while the contested answers show, secondary. */
+  batch?: ReactNode;
   primary: ReactNode;
 }) {
   const t = useT();
@@ -138,6 +141,7 @@ export function GradingToolbar({
       {/* The actions wrap as one group, held to the right: the primary
           closes the filters' row and never stands alone at the start of a line. */}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2.5">
+        {batch}
         {exports}
         {staffRows}
         <label className="flex items-center gap-2 text-[13px] font-medium text-fg-muted">

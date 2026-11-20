@@ -34,7 +34,7 @@ import {
   type DeclaredCriterion,
 } from "@quiz/domain";
 import { AI_KEY, aiOf, BREAKDOWN_KEY, FeedbackPolicy, JUSTIFICATION_KEY, TEACHER_ONLY_DETAIL_KEYS } from "@quiz/contracts";
-import type { GradingConfidence, GradingSource, GradingState, ItemCounting } from "@quiz/contracts";
+import type { ContestationProposalView, GradingConfidence, GradingSource, GradingState, ItemCounting } from "@quiz/contracts";
 import type { AnyQuestionTypeServer, ItemAggregate, StudentDetailsPolicy } from "@quiz/core/server";
 import { blocksServer } from "@quiz/qt-blocks/server";
 import { categorizeServer } from "@quiz/qt-categorize/server";
@@ -200,6 +200,13 @@ interface MockContestation {
   filedAt: string;
   reply: string | null;
   resolvedAt: string | null;
+  /** An AI assistant's proposal standing on it (ADR-139 §14), and the grading in force it read; null: none. */
+  proposal?: MockProposal | null;
+}
+
+/** A proposal as the mock keeps it: the staff's reading less `stale`, read off the grading in force at each request. */
+interface MockProposal extends Omit<ContestationProposalView, "stale"> {
+  gradingId: string | null;
 }
 
 const cellKey = (attemptId: string, itemId: string) => `${attemptId}:${itemId}`;
@@ -1077,7 +1084,7 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
     solution,
     grading,
     ...(MOCK_SERVERS[q.type]?.acceptance ? { parts: partsOf(q, config, answer) } : {}),
-    contestation: staffContestationOf(e.contestations.get(key)),
+    contestation: staffContestationOf(e, e.contestations.get(key)),
     history: [...chain]
       .reverse()
       .map((g) => ({
@@ -1995,6 +2002,61 @@ function seedContestations(e: MockGradingWorld) {
   const others = e.attempts.filter((a) => !a.staff && a.id !== STUDENT_PAST_ATTEMPT && below(a.id).some((i) => i.id === open.id));
   if (others[0]) file(others[0].id, open.id, "open", null);
   if (others[1]) file(others[1].id, open.id, "refused", "Le corrigé demande les deux conditions.");
+  if (others[2]) file(others[2].id, open.id, "open", null);
+  seedProposals(e, open.id, [STUDENT_PAST_ATTEMPT, others[0]?.id, others[2]?.id]);
+}
+
+/**
+ * ADR-139 §14: what an AI assistant proposed on the open contestations of
+ * the released exam — an acceptance with new points (the persona's), a
+ * refusal with its reply, one the grading moved under since (stale), and,
+ * on the categorize question, an answer accepted for everyone that would
+ * change two other students.
+ */
+function seedProposals(e: MockGradingWorld, itemId: string, [mine, other, moved]: (string | undefined)[]) {
+  const at = (attemptId: string | undefined, id: string) => (attemptId ? e.contestations.get(cellKey(attemptId, id)) : undefined);
+  const propose = (c: MockContestation | undefined, p: Omit<MockProposal, "proposedAt" | "gradingId" | "rationale" | "accepted" | "affected"> & Partial<MockProposal>, hours: number) => {
+    if (!c) return;
+    c.proposal = {
+      rationale: null,
+      accepted: null,
+      affected: null,
+      gradingId: standingGrading(e, c.attemptId, c.itemId)?.id ?? null,
+      proposedAt: iso(-hours * H),
+      ...p,
+    };
+  };
+  const max = e.items.find((i) => i.id === itemId)?.points ?? 3;
+  propose(at(mine, itemId), { verdict: "accepted", reply: "La boucle traite bien le cas n = 0, la sortie est juste.\nLe point retiré pour ce cas est rendu.", points: max }, 5);
+  propose(at(other, itemId), { verdict: "refused", reply: "Aucun code n'a été rendu pour cette question.\nLa note reste à 0.", points: null }, 4);
+  propose(at(moved, itemId), { verdict: "accepted", reply: "L'erreur d'arrondi vient de l'énoncé.", points: max, gradingId: "a-grading-replaced-since" }, 30);
+  // The categorize question: a classmate contests the sort of `string`, the proposal accepts it for everyone.
+  const sort = e.items.find((i) => i.type === "categorize");
+  const student = e.attempts.find((a) => !a.staff && a.id !== STUDENT_PAST_ATTEMPT && a.id !== other && a.id !== moved && standingGrading(e, a.id, sort?.id ?? "") !== null);
+  if (!sort || !student) return;
+  const n = e.contestations.size + 1;
+  const c: MockContestation = {
+    id: `cccccccc-0000-4000-8000-${String(n).padStart(12, "0")}`,
+    attemptId: student.id,
+    itemId: sort.id,
+    state: "open",
+    reason: "En C, une chaîne est un tableau de char, manipulé par un pointeur.\nClasser string parmi les pointeurs devrait compter juste.",
+    filedAt: iso(-D),
+    reply: null,
+    resolvedAt: null,
+  };
+  e.contestations.set(cellKey(student.id, sort.id), c);
+  propose(
+    c,
+    {
+      verdict: "accepted",
+      reply: "Vous avez raison : en C, une chaîne se manipule par un pointeur sur char. Ce classement compte désormais juste.",
+      points: null,
+      accepted: { part: "m5p2l6ak", answer: "r5j8g1h4", scope: "everyone", label: "string → Pointeur" },
+      affected: 2,
+    },
+    2,
+  );
 }
 
 /** The window's closing instant as the server reads it: released only. */
@@ -2023,8 +2085,15 @@ function contestableNow(e: MockGradingWorld, attemptId: string, itemId: string):
 const studentContestationOf = (c: MockContestation | undefined) =>
   c ? { state: c.state, reason: c.reason, filedAt: c.filedAt, reply: c.reply, resolvedAt: c.resolvedAt } : null;
 
-const staffContestationOf = (c: MockContestation | undefined) =>
-  c ? { ...studentContestationOf(c)!, id: c.id, counted: true } : null;
+/** A proposal as the staff read it: stale once the grading in force is no longer the one it read (ADR-139 §14). */
+function proposalView(e: MockGradingWorld, c: MockContestation): ContestationProposalView | null {
+  if (!c.proposal || c.state !== "open") return null;
+  const { gradingId, ...view } = c.proposal;
+  return { ...view, stale: gradingId !== (standingGrading(e, c.attemptId, c.itemId)?.id ?? null) };
+}
+
+const staffContestationOf = (e: MockGradingWorld, c: MockContestation | undefined) =>
+  c ? { ...studentContestationOf(c)!, id: c.id, counted: true, proposal: proposalView(e, c) } : null;
 
 /** The open contestations of the class (a teacher's walk left out) that `which` keeps. */
 function openContestations(e: MockGradingWorld, which: (c: MockContestation) => boolean): number {
@@ -2073,16 +2142,67 @@ on("POST", "/app/api/contestations/:id/resolve", (m, body) => {
       if (!g) throw new MockError(404, "Grading not found");
       grading = overrideCell(e, g, { ...body, comment: reply });
     }
-    c.state = body.verdict === "accepted" ? "accepted" : "refused";
-    c.reply = reply === "" ? null : reply;
-    c.resolvedAt = iso(0);
-    return {
-      contestation: staffContestationOf(c),
-      grading,
-      modifiedAfterRelease: grading !== null && e.evaluation.releasedAt !== null,
-    };
+    return answerContestation(e, c, body.verdict === "accepted" ? "accepted" : "refused", reply, grading);
   }
   throw new MockError(404, "Contestation not found");
+});
+
+/** The one answer, as the resolve path writes it: every answer clears the proposal (ADR-139 §14). */
+function answerContestation(e: MockGradingWorld, c: MockContestation, verdict: "accepted" | "refused", reply: string, grading: MockGrading | null) {
+  c.state = verdict;
+  c.reply = reply === "" ? null : reply;
+  c.resolvedAt = iso(0);
+  c.proposal = null;
+  return {
+    contestation: staffContestationOf(e, c),
+    grading,
+    modifiedAfterRelease: grading !== null && e.evaluation.releasedAt !== null,
+  };
+}
+
+/** The contestation `id` and its world, or the 404 of a missing one. */
+function contestationOr404(id: string): { e: MockGradingWorld; c: MockContestation } {
+  for (const e of gradingWorlds) {
+    const c = [...e.contestations.values()].find((x) => x.id === id);
+    if (c) return { e, c };
+  }
+  throw new MockError(404, "Contestation not found");
+}
+
+/**
+ * The owner's confirmation of the proposal the screen showed (`proposedAt`,
+ * ADR-139 §14): refused `404 no_proposal` without one, `409 not_open` once
+ * answered, `409 proposal_stale` when it is another proposal or the grading
+ * moved since; else the resolve path with its values — an accepted answer
+ * first (ADR-128's act), then the answer.
+ */
+on("POST", "/app/api/contestations/:id/proposal/confirm", (m, body) => {
+  const { e, c } = contestationOr404(m.groups!.id!);
+  if (c.state !== "open") throw refuse(409, "not_open", "already answered");
+  const view = proposalView(e, c);
+  if (!view || !c.proposal) throw refuse(404, "no_proposal", "no proposal stands");
+  if (view.stale || body.proposedAt !== view.proposedAt) throw refuse(409, "proposal_stale", "the proposal or the grading changed");
+  const p = c.proposal;
+  if (p.accepted) {
+    const rules = e.acceptances.get(c.itemId) ?? [];
+    const rule: AcceptanceRule = { part: p.accepted.part, answer: p.accepted.answer, attemptId: p.accepted.scope === "student" ? c.attemptId : null };
+    e.acceptances.set(c.itemId, [...rules, rule]);
+  }
+  let grading: MockGrading | null = null;
+  if (p.points !== null) {
+    const g = standingGrading(e, c.attemptId, c.itemId);
+    if (!g) throw new MockError(404, "Grading not found");
+    grading = overrideCell(e, g, { points: p.points, comment: p.reply });
+  }
+  return answerContestation(e, c, p.verdict, p.reply, grading);
+});
+
+/** A discard, by any member of the staff: `404 no_proposal` where none stands. */
+on("DELETE", "/app/api/contestations/:id/proposal", (m) => {
+  const { c } = contestationOr404(m.groups!.id!);
+  if (!c.proposal || c.state !== "open") throw refuse(404, "no_proposal", "no proposal stands");
+  c.proposal = null;
+  return undefined;
 });
 
 on("PUT", "/app/api/evaluations/:id/contestation-window", (m, body) => {

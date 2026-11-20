@@ -19,7 +19,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, isNull, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { PgSelect } from "drizzle-orm/pg-core";
 
-import { EvaluationSettings, type CourseRole, type PoolRole, type StudentSeat } from "@quiz/contracts";
+import { CONTESTATIONS_CONSENT, EvaluationSettings, type CourseRole, type PoolRole, type StudentSeat } from "@quiz/contracts";
 import {
   type CoursePoolMode,
   courseRoleAllows,
@@ -1163,11 +1163,29 @@ interface EvaluationScope {
 }
 
 /** Loads an evaluation by id for a member of its course's teaching staff. */
-export const loadEvaluation = routeLoader((app, req, evaluationId: string): Promise<EvaluationScope | null> => {
+const findStaffEvaluation = (app: FastifyInstance, req: FastifyRequest, evaluationId: string): Promise<EvaluationScope | null> => {
   const query = app.db.select({ evaluation: evaluations, classroom: classrooms }).from(evaluations)
     .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id));
   return staffScoped(callerOf(req), query, eq(evaluations.id, evaluationId), classrooms.courseId);
-});
+};
+
+export const loadEvaluation = routeLoader(findStaffEvaluation);
+
+/**
+ * {@link loadEvaluation} for the read an MCP client's `list_contestations`
+ * forwards to (ADR-139 §14): the caller's own portal session or a personal
+ * or OAuth token; never the help assistant's (ADR-080 §8).
+ */
+export const assistantEvaluation = routeLoader(findStaffEvaluation, { admit: "portalOrToken" });
+
+/**
+ * What the routes of an MCP client's contestation tools reach (ADR-139 §14),
+ * declared on each: a token of scope `quiz` — a `quiz:read` token's GET is
+ * refused too, it sends students' words out — granted under the consent
+ * that names contestations (`403 consent_required` below it). A portal
+ * session is never asked.
+ */
+export const ASSISTANT_REACH = { tokenScope: "quiz", tokenConsent: CONTESTATIONS_CONSENT } as const;
 
 /**
  * An evaluation TEMPLATE (ADR-031) and its course, for a member of that
@@ -1440,8 +1458,7 @@ interface ContestationScope {
   courseId: string;
 }
 
-/** `/contestations/:id/…` (ADR-139) — the same motif, from the contestation's attempt. */
-export const staffContestation = routeLoader((app, req, contestationId: string): Promise<ContestationScope | null> => {
+const findStaffContestation = (app: FastifyInstance, req: FastifyRequest, contestationId: string): Promise<ContestationScope | null> => {
   const query = app.db
     .select({ contestation: contestations, attempt: attempts, evaluation: evaluations, courseId: classrooms.courseId })
     .from(contestations)
@@ -1449,4 +1466,17 @@ export const staffContestation = routeLoader((app, req, contestationId: string):
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
     .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id));
   return staffScoped(callerOf(req), query, eq(contestations.id, contestationId), classrooms.courseId);
-});
+};
+
+/** `/contestations/:id/…` (ADR-139) — the same motif, from the contestation's attempt. */
+export const staffContestation = routeLoader(findStaffContestation);
+
+/**
+ * {@link staffContestation} for an assistant's proposal (ADR-139 §14): the
+ * caller's own portal session or a personal or OAuth token — the MCP
+ * server's; never the help assistant's (ADR-080 §8), never a `seb` session.
+ */
+export const proposingContestation = routeLoader(findStaffContestation, { admit: "portalOrToken" });
+
+/** {@link staffContestation} for the owner's confirmation of a proposal and its discard: the caller's own portal session only, never a token. */
+export const portalContestation = routeLoader(findStaffContestation, { admit: "portal" });

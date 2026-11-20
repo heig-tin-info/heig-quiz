@@ -13,6 +13,7 @@ import type {
   PublicConfig,
   SuperPowersState,
 } from "@quiz/contracts";
+import { MCP_CONSENT_REVISION } from "@quiz/contracts";
 import {
   D,
   H,
@@ -215,6 +216,7 @@ const tokens: ApiToken[] = flags.empty
         expiresAt: iso(78 * D),
         revokedAt: null,
         scope: "quiz",
+        consentRevision: 2,
       },
       {
         id: "t-reader",
@@ -225,6 +227,7 @@ const tokens: ApiToken[] = flags.empty
         expiresAt: null,
         revokedAt: null,
         scope: "quiz:read",
+        consentRevision: 2,
       },
       {
         // Issued before the scopes (ADR-113 §6): the whole API.
@@ -236,6 +239,20 @@ const tokens: ApiToken[] = flags.empty
         expiresAt: iso(-30 * D),
         revokedAt: null,
         scope: "api",
+        // Made before contestations reached a token (ADR-139 §14): asked again.
+        consentRevision: 1,
+      },
+      {
+        // An MCP token made before contestations reached a token (ADR-139 §14): it reads none until a new one is made.
+        id: "t-cursor",
+        name: "Cursor",
+        prefix: "quiz_pat_Cu8wN5",
+        createdAt: iso(-40 * D),
+        lastUsedAt: iso(-3 * D),
+        expiresAt: iso(50 * D),
+        revokedAt: null,
+        scope: "quiz",
+        consentRevision: 1,
       },
     ];
 
@@ -252,6 +269,8 @@ on("POST", "/app/api/me/tokens", (_m, body): ApiTokenCreated => {
     expiresAt: days === null ? null : iso(days * D),
     revokedAt: null,
     scope: (body.scope as ApiToken["scope"] | undefined) ?? "quiz",
+    // The revision the form showed, never above the current one (ADR-139 §14).
+    consentRevision: Math.min(Number(body.consentRevision ?? 1), MCP_CONSENT_REVISION),
   };
   tokens.unshift(token);
   return { ...token, token: secret };
@@ -274,6 +293,7 @@ const connections: OAuthConnection[] = flags.empty
         redirectHost: "claude.ai",
         createdAt: iso(-5 * D),
         lastUsedAt: iso(-1 * H),
+        consentRevision: 1,
       },
     ];
 
@@ -297,7 +317,20 @@ on("GET", "/app/api/oauth/requests/:id", (m, _b, url): OAuthRequestView => {
     expiresAt: iso(10 * 60_000),
   };
 });
-on("POST", "/app/api/oauth/requests/:id/decision", () => ({ redirectTo: "/settings" }));
+/** An approval records a connection under the consent the page showed, never above the current one (ADR-139 §14). */
+on("POST", "/app/api/oauth/requests/:id/decision", (_m, body) => {
+  if (body.approve === true) {
+    connections.unshift({
+      id: `0190d3c4-0000-7000-8000-${String(connections.length + 1).padStart(12, "0")}`,
+      clientName: "Claude",
+      redirectHost: "claude.ai",
+      createdAt: iso(0),
+      lastUsedAt: null,
+      consentRevision: Math.min(Number(body.consentRevision ?? 1), MCP_CONSENT_REVISION),
+    });
+  }
+  return { redirectTo: "/settings" };
+});
 
 on("POST", "/app/auth/logout", () => {
   me = null;

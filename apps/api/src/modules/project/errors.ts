@@ -103,6 +103,10 @@ const STATUS: Record<Code, number> = {
   window_unavailable: 409,
   window_instant: 422,
   criterion_removed: 409,
+  // ADR-139 §14: a proposal's confirmation once the criterion's row in force moved since.
+  proposal_stale: 409,
+  no_proposal: 404,
+  criterion_contested: 409,
   // Access to the distribution repository (#899): only a staff seat asks.
   staff_seat_required: 403,
   invite_refused: 422,

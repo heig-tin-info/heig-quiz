@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 
-import { TOKEN_SCOPES, type TokenScope as DomainTokenScope } from "@quiz/domain";
+import { CONTESTATIONS_CONSENT, MCP_CONSENT_REVISION, TOKEN_SCOPES, type TokenScope as DomainTokenScope } from "@quiz/domain";
 
 import type { UserRole } from "./admin.js";
 
@@ -30,6 +30,17 @@ export const TokenScope = z.enum(TOKEN_SCOPES);
 export type TokenScope = DomainTokenScope;
 
 /**
+ * The revision of the consent a token or an OAuth grant was made under
+ * (ADR-139 §14; `@quiz/domain`'s): the current one is
+ * {@link MCP_CONSENT_REVISION}, and what a reach needs (students'
+ * contestations: {@link CONTESTATIONS_CONSENT}) is refused below it, `403
+ * consent_required`, until the teacher consents again — a new token, or the
+ * assistant reconnected.
+ */
+export { CONTESTATIONS_CONSENT, MCP_CONSENT_REVISION };
+export const ConsentRevision = z.number().int().positive();
+
+/**
  * A token that may not be endless (`token_expiry_required`): an
  * administrator's, which must expire to reach the administration routes
  * (audit L6), and one with the whole API (ADR-113 §1).
@@ -44,6 +55,8 @@ export const ApiTokenCreate = z.object({
   expiresInDays: z.literal(API_TOKEN_TTL_DAYS).nullable().default(90),
   /** The product's default: the MCP endpoint, read and write. */
   scope: TokenScope.default("quiz"),
+  /** The consent revision the form showed (ADR-139 §14); absent, an old form: 1. Never recorded above the current one. */
+  consentRevision: ConsentRevision.optional(),
 });
 export type ApiTokenCreate = z.infer<typeof ApiTokenCreate>;
 
@@ -57,6 +70,8 @@ export const ApiToken = z.object({
   expiresAt: z.iso.datetime().nullable(),
   revokedAt: z.iso.datetime().nullable(),
   scope: TokenScope,
+  /** The consent it was made under: below {@link CONTESTATIONS_CONSENT}, it reads no contestation (a new token does). */
+  consentRevision: ConsentRevision,
 });
 export type ApiToken = z.infer<typeof ApiToken>;
 

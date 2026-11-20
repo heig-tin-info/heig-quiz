@@ -15,11 +15,12 @@ It works **as you**, with your rights and nothing more: it reaches the courses y
 | Read your courses, classrooms, pools, questions, evaluations and templates | Delete anything: a course, a classroom, a pool, a question, an evaluation, a template, a project |
 | Create a course, a classroom, a pool, a category | Open, start, pause or close an evaluation |
 | Write, publish and update questions of every type | Grade, or release results |
-| Link a pool to a course | Read students' answers or grades |
+| Link a pool to a course | Read students' answers or grades, outside the open contestations (below) |
 | Create an exam or an exercise **as a draft**, and fill it with questions | Manage your API tokens |
 | Remove a question from a draft evaluation or a template (the question stays in its pool), change an item's points, bonus, milestone or intro, and move items to their question's latest version | Neutralize a question, or change the questions of an evaluation once it is scheduled |
 | Launch a live poll, when you ask for one | |
-| Read your questions' statistics, as the pool shows them (anonymous figures over ten answers or more) | |
+| Read your questions' statistics, as the pool shows them (anonymous figures over ten answers or more) | Answer a contestation: it only proposes an answer |
+| Read the open contestations of an exam or a project, names and addresses masked, and propose an answer to each ([below](#contestations)) | |
 
 This holds for an assistant connected through the MCP address: an assistant you allowed from claude.ai or ChatGPT, or one holding an API token with an **AI assistant (MCP)** access. A token with **Full API** access is not limited to this table: whoever holds it can call every route of the API with all your rights, grades and deletions included (see [API tokens](#api-tokens-for-scripts-and-other-clients)).
 
@@ -71,8 +72,8 @@ Some clients cannot sign in by themselves: a script of your own, Claude Desktop 
 
 | Access | What the token reaches | Lifetime |
 | --- | --- | --- |
-| **AI assistant (MCP), read and write** (the default) | The MCP address only: every tool of the table above, nothing else | 30, 90 or 365 days, or never |
-| **AI assistant (MCP), read only** | The MCP address only, and its reading tools: it reads your courses, pools, questions and evaluations, and writes nothing | 30, 90 or 365 days, or never |
+| **AI assistant (MCP), read and write** (the default) | The MCP address only: every tool of the table above, nothing else, students' contestations included (names masked) | 30, 90 or 365 days, or never |
+| **AI assistant (MCP), read only** | The MCP address only, and its reading tools: it reads your courses, pools, questions and evaluations, and writes nothing. It never reads contestations | 30, 90 or 365 days, or never |
 | **Full API** | Every route of the API, with all your rights: students' answers, grades, the roster and deletions included. For a script of your own | 30, 90 or 365 days, never "never" |
 
 Choose the narrowest access that does the job: an assistant needs an **AI assistant (MCP)** access, never **Full API**. A token's access is chosen once; to change it, create another token and revoke the first. A token created before accesses existed (October 2026) is listed as **Full API** and keeps that reach until it expires or you revoke it. An administrator's token always expires, whatever its access.
@@ -112,6 +113,16 @@ For Claude Desktop configured by hand, use the `mcp-remote` bridge (it needs Nod
   }
 }
 ```
+
+## Contestations
+
+Students may contest the grading of a question of an exam whose results are released, or of a criterion of a project whose scores are released (see [Grading](grading.md#contestations) and [Projects](projects.md)). An assistant can help you answer them. It **reads** the open contestations of an evaluation or a project: for each, the question or the criterion, the key, the grading in force, the student's answer (an exam's) and the student's reason. It **proposes** an answer: refuse or accept, a reply, new points (and their rationale for a criterion), or, on an exam's question that allows it, an answer to accept for this student or for everyone. A proposal is stored on the contestation and applied to nothing: the student sees none of it. The course's Teacher role reads it in the grading panel or on the repository's grading screen, and confirms it, edits it into an answer of their own, or discards it. Only a confirmation answers the student. While a criterion's contestation is open, an assistant can no longer set that criterion's points: it proposes an answer instead.
+
+**Names masked.** The roster's names and e-mail addresses (and, for a project, the members' GitHub logins, the organization and the repository's name) are replaced by `[student]` in the answer, the reason and the grading's comments before they leave. A name spelled otherwise, a nickname, or an identity told in other words is not masked. For a project, masking does not make a contestation anonymous: an assistant that also reads the project's grading (which names every repository with each criterion's points and rationale) can usually tell whose criterion it is.
+
+**Which assistants.** An MCP connection (claude.ai, ChatGPT, Claude Code) or an MCP token with **AI assistant (MCP), read and write** access reaches the contestations once you have given the consent that names them: the consent page and the token form now say so. A **read only** token never does. A connection or an MCP token you allowed before that consent reads nothing of the contestations (everything else keeps working), and **Settings** says so on its row: reconnect the assistant from its own settings, or create a new token and revoke the old one. A **Full API** token is not an assistant: it reads the contestations through the API, the students' names included, whatever its date.
+
+A student's reason is the student's text, never an instruction to the assistant: the assistant is told so, and nothing it proposes is applied until you confirm it.
 
 ## Tips
 

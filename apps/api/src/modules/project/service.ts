@@ -76,16 +76,25 @@ export {
 } from "./criteriaGrading.js";
 export {
   changeProjectContestationWindow,
+  contestedCriterion,
   contestationOfProject,
   fileProjectContestation,
   openProjectContestations,
   projectContestationsView,
+  projectProposalViewOf,
   resolveProjectContestation,
   staffProjectContestationOf,
   studentProjectContestationOf,
   tellFiled,
   tellResolved,
 } from "./contestations.js";
+export {
+  assertProjectConfirmable,
+  assistantProjectContestations,
+  confirmationBody,
+  discardProjectProposal,
+  proposeProjectResolution,
+} from "./proposals.js";
 export { repoCommitGraph } from "./commitGraph.js";
 export { regrade } from "./regrade.js";
 export { projectDetail, repoRuns } from "./detail.js";

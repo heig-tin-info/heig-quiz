@@ -27,6 +27,8 @@ import {
   PROJECT_ACCEPT_REFUSALS,
   ProjectAcceptance,
   ProjectContestationResolution,
+  ContestationResolution,
+  type StaffContestation,
   ProjectContestations,
   ProjectCreate,
   ProjectStudentContestation,
@@ -158,6 +160,15 @@ describe("the mock's grading by criteria (?pjcriteria=1)", () => {
     };
     const before = await read();
     expect(before.applies).toBe(true);
+    // ADR-139 §14: an assistant's proposals, confirmed as they were read, a discard where none stands refused.
+    const proposed = before.contestations.filter((c) => c.proposal !== null);
+    expect(proposed.map((c) => c.proposal!.verdict).sort()).toEqual(["accepted", "refused"]);
+    const acceptance = proposed.find((c) => c.proposal!.verdict === "accepted")!;
+    const proposal = `/app/api/projects/${id}/contestations/${acceptance.id}/proposal`;
+    expect((await send(`${proposal}/confirm`, "POST", { proposedAt: "2000-01-01T00:00:00.000Z" })).body).toMatchObject({ error: "proposal_stale" });
+    const confirmed = await send(`${proposal}/confirm`, "POST", { proposedAt: acceptance.proposal!.proposedAt });
+    expect(ProjectContestationResolution.parse(confirmed.body).contestation).toMatchObject({ state: "accepted", proposal: null });
+    expect((await send(proposal, "DELETE")).body).toMatchObject({ error: "no_proposal" });
     expect(Object.values(before.openByRepo).reduce((sum, n) => sum + n, 0)).toBe(3);
     expect(before.contestations.map((c) => c.state)).toEqual(["open", "open", "open", "refused", "accepted"]);
     const gone = before.contestations.find((c) => !c.inSnapshot)!;
@@ -168,7 +179,8 @@ describe("the mock's grading by criteria (?pjcriteria=1)", () => {
     const answered = await send(`/app/api/projects/${id}/contestations/${open.id}/resolve`, "POST", { verdict: "accepted", reply: "Right.", points: 1 });
     expect(ProjectContestationResolution.parse(answered.body).contestation.state).toBe("accepted");
     expect((await send(`/app/api/projects/${id}/contestations/${open.id}/resolve`, "POST", { verdict: "refused", reply: "No." })).body).toMatchObject({ error: "not_open" });
-    expect(Object.values((await read()).openByRepo).reduce((sum, n) => sum + n, 0)).toBe(2);
+    // Three open, less the proposal confirmed above and this answer.
+    expect(Object.values((await read()).openByRepo).reduce((sum, n) => sum + n, 0)).toBe(1);
     // The window: an instant behind now refused, then closed now.
     const past = await send(`/app/api/projects/${id}/contestation-window`, "PUT", { action: "extend", closesAt: new Date(Date.now() - 60_000).toISOString() });
     expect([past.status, past.body]).toMatchObject([422, { error: "window_instant", reason: "not_future" }]);
@@ -823,5 +835,29 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     const removed = await call("DELETE", `${url}/pointers`);
     expect(removed.status).toBe(200);
     expect((removed.body as Concept).aliases).not.toContain("pointers");
+  });
+});
+
+// ADR-139 §14: the released exam's contestations carry an assistant's proposals.
+describe("the mock's proposals on an exam's contestations", () => {
+  const send = async (path: string, method: string, body?: unknown) => {
+    const res = await fetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: res.status, body: res.status === 204 ? null : ((await res.json()) as unknown) };
+  };
+
+  it("proposes a refusal, new points, an answer accepted for everyone and a stale one; confirms as read, discards", async () => {
+    type Queue = { entries: { itemId: string; contestation: StaffContestation | null }[] };
+    const items = ((await get("/app/api/evaluations/released/grading")) as Queue).entries;
+    const proposals = items.flatMap((e) => (e.contestation?.proposal ? [e.contestation] : []));
+    expect(proposals).toHaveLength(4);
+    expect(proposals.filter((c) => c.proposal!.stale)).toHaveLength(1);
+    expect(proposals.find((c) => c.proposal!.accepted)?.proposal).toMatchObject({ affected: 2, accepted: { scope: "everyone" } });
+    const stale = proposals.find((c) => c.proposal!.stale)!;
+    expect((await send(`/app/api/contestations/${stale.id}/proposal/confirm`, "POST", { proposedAt: stale.proposal!.proposedAt })).body).toMatchObject({ error: "proposal_stale" });
+    const refusal = proposals.find((c) => c.proposal!.verdict === "refused")!;
+    const confirmed = await send(`/app/api/contestations/${refusal.id}/proposal/confirm`, "POST", { proposedAt: refusal.proposal!.proposedAt });
+    expect(ContestationResolution.parse(confirmed.body).contestation).toMatchObject({ state: "refused", proposal: null });
+    expect((await send(`/app/api/contestations/${stale.id}/proposal`, "DELETE")).status).toBe(204);
+    expect((await send(`/app/api/contestations/${stale.id}/proposal`, "DELETE")).body).toMatchObject({ error: "no_proposal" });
   });
 });

@@ -131,6 +131,19 @@ declare module "fastify" {
      * stream. A request to such a route is never counted as activity.
      */
     background?: boolean;
+    /**
+     * The token scope this route needs beyond its method's (ADR-113 §2): a
+     * read that sends students' words out needs `quiz` (ADR-139 §14), so a
+     * `quiz:read` token's GET is refused `403 insufficient_scope`.
+     */
+    tokenScope?: TokenScope;
+    /**
+     * The consent revision a token needs here (ADR-139 §14,
+     * `CONTESTATIONS_CONSENT`): one granted under an older consent is
+     * refused `403 consent_required` — its other routes keep working. A
+     * session is never asked.
+     */
+    tokenConsent?: number;
   }
 }
 
@@ -156,6 +169,11 @@ export const INTERNAL_CALL_HEADER = "x-quiz-internal-call";
  */
 export const ASSIST_TOOL_HEADER = "x-quiz-assist-tool";
 const TOOL_NAME = /^[a-z_]{1,64}$/;
+
+/** What a token granted under an older consent is told (ADR-139 §14), for its assistant to repeat. */
+const CONSENT_REQUIRED =
+  "This assistant's access was granted before it could read students' contestations. Ask the teacher to " +
+  "reconnect the assistant (it asks for consent again), or to create a new token in the settings. Its other tools keep working.";
 
 async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
@@ -244,14 +262,20 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       // is loaded: a known caller asking for more than its token reaches is
       // a 403, unlike an OAuth token off its audience above (anonymous, so a
       // 401). The help assistant's token has no scope: its audience is all.
+      const route = req.routeOptions.config;
       if (found.scope !== null) {
-        const needed = scopeAdmits(found.scope, { target, method: req.method });
+        const needed = scopeAdmits(found.scope, { target, method: req.method, needs: route.tokenScope });
         if (needed !== null) {
           return reply
             .code(403)
             .header("www-authenticate", `Bearer error="insufficient_scope", scope="${needed}"`)
             .send({ error: "insufficient_scope", message: `This token's scope is ${found.scope}; this call needs ${needed}` });
         }
+      }
+      // Then its consent (ADR-139 §14): a reach the teacher has not
+      // consented to yet — they reconnect the assistant, or make a new token.
+      if (route.tokenConsent !== undefined && found.consent < route.tokenConsent) {
+        return reply.code(403).send({ error: "consent_required", message: CONSENT_REQUIRED });
       }
       req.user = found.user;
       req.tokenScope = found.scope;

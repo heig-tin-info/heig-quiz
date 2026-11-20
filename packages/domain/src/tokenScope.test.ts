@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { scopeAdmits, scopeCovers, scopeOfGrant, TOKEN_SCOPES, type ScopeTarget } from "./tokenScope.js";
+import {
+  consentRecorded,
+  CONTESTATIONS_CONSENT,
+  MCP_CONSENT_REVISION,
+  scopeAdmits,
+  scopeCovers,
+  scopeOfGrant,
+  TOKEN_SCOPES,
+  type ScopeTarget,
+} from "./tokenScope.js";
 
 describe("scopeCovers", () => {
   it("orders quiz:read ⊂ quiz ⊂ api", () => {
@@ -37,6 +46,31 @@ describe("scopeAdmits", () => {
       expect(scopeAdmits("quiz:read", at("internal", method))).toBe("quiz");
     }
     expect(scopeAdmits("quiz:read", at("elsewhere", "GET"))).toBe("api");
+  });
+});
+
+describe("a route that names its own scope (ADR-139 §14)", () => {
+  it("refuses a quiz:read token's GET of a route that needs quiz, and admits quiz and api", () => {
+    const needs = { target: "internal" as const, method: "GET", needs: "quiz" as const };
+    expect(scopeAdmits("quiz:read", needs)).toBe("quiz");
+    expect(scopeAdmits("quiz", needs)).toBeNull();
+    expect(scopeAdmits("api", needs)).toBeNull();
+    expect(scopeAdmits("api", { ...needs, target: "elsewhere" })).toBeNull();
+    expect(scopeAdmits("quiz", { ...needs, target: "elsewhere" })).toBe("api");
+  });
+
+  it("never applies to the MCP envelope itself", () => {
+    expect(scopeAdmits("quiz:read", { target: "mcp", method: "POST", needs: "quiz" })).toBeNull();
+  });
+});
+
+describe("the consent revision (ADR-139 §14)", () => {
+  it("records what the consent showed, never above the current revision, and 1 when it says nothing", () => {
+    expect(MCP_CONSENT_REVISION).toBeGreaterThanOrEqual(CONTESTATIONS_CONSENT);
+    expect(consentRecorded(MCP_CONSENT_REVISION)).toBe(MCP_CONSENT_REVISION);
+    expect(consentRecorded(MCP_CONSENT_REVISION + 5)).toBe(MCP_CONSENT_REVISION);
+    expect(consentRecorded(1)).toBe(1);
+    expect(consentRecorded(undefined)).toBe(1);
   });
 });
 

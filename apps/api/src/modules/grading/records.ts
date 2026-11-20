@@ -70,6 +70,25 @@ const REFUSALS = {
   not_contestable: [409, "this question cannot be contested"],
   classroom_archived: [409, "the classroom is archived"],
   not_open: [409, "this contestation was answered already"],
+  // ADR-139 §14, an assistant's proposal: v1 proposes no split per
+  // criterion, so no points on an essay graded by criteria (422); a
+  // confirmation or a discard where no proposal stands (404); a confirmation
+  // once the grading in force moved since the proposal, or the proposal
+  // changed under it (409).
+  proposal_points_unsupported: [
+    422,
+    "this question is graded criterion by criterion: a proposal carries no points here; propose the verdict and the reply, the teacher grades the criteria",
+  ],
+  no_proposal: [404, "no proposal stands on this contestation"],
+  proposal_stale: [409, "the grading changed since this proposal was made: read it again, or propose again"],
+  // ADR-139 §14: an accepted answer's confirmation committed — the
+  // contestation is answered, the answer accepted, the student told — but
+  // the re-grade of the answers it reaches failed after it (500): the owner
+  // accepts the answer again from the question's panel, which re-grades.
+  regrade_failed: [
+    500,
+    "the contestation is answered and the answer accepted, but re-grading the answers it reaches failed: accept the same answer again from the question's grading panel to re-grade them",
+  ],
 } satisfies Record<string, Refusal>;
 
 export class GradingError extends refusalClass("GradingError", REFUSALS) {}

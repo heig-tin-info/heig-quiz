@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   API_TOKEN_TTL_DAYS,
+  CONTESTATIONS_CONSENT,
+  MCP_CONSENT_REVISION,
   TOKEN_SCOPES,
   tokenMustExpire,
   type ApiToken,
@@ -83,6 +85,25 @@ function statusOf(token: ApiToken): "active" | "expired" | "revoked" {
 }
 
 const STATUS_TONE = { active: "green", expired: "amber", revoked: "zinc" } as const;
+
+/**
+ * An active MCP token of scope `quiz` made before the contestations' consent
+ * existed (ADR-139 §14): the assistant's contestation routes refuse it,
+ * everything else works. A `quiz:read` token never reaches them; a `Full
+ * API` token reads the staff's contestations through the API whatever its
+ * revision, so neither says anything here.
+ */
+const olderConsent = (token: ApiToken, status: ReturnType<typeof statusOf>) =>
+  status === "active" && token.scope === "quiz" && token.consentRevision < CONTESTATIONS_CONSENT;
+
+/** The quiet line under a connection or a token made before the contestations' consent. */
+function OlderConsent({ children }: { children: string }) {
+  return (
+    <p className="mt-0.5 text-xs text-fg-muted" data-testid="consent-older">
+      {children}
+    </p>
+  );
+}
 
 /**
  * What a scope is called in the list and in the access choice, and the line
@@ -173,6 +194,8 @@ function NewTokenDialog({ onClose }: { onClose: () => void }) {
           name: name.trim(),
           scope,
           expiresInDays: ttl === "never" ? null : (Number(ttl) as ApiTokenCreate["expiresInDays"]),
+          // The consent this form showed (ADR-139 §14): the bundle's revision, an old cached page an old one.
+          consentRevision: MCP_CONSENT_REVISION,
         })
       }
       submitLabel={t("tokens.create")}
@@ -258,6 +281,7 @@ export function ConnectionsCard() {
                 <td className={T.td}>
                   <p className="font-semibold">{c.clientName}</p>
                   <p className="font-mono text-xs text-fg-faint">{c.redirectHost}</p>
+                  {c.consentRevision < CONTESTATIONS_CONSENT ? <OlderConsent>{t("connections.olderConsent")}</OlderConsent> : null}
                 </td>
                 <td className={cx(T.td, T.colHigh, "tabular-nums text-fg-muted")}>{isoDateTime(c.createdAt)}</td>
                 <td className={cx(T.td, T.colMid, "tabular-nums text-fg-muted")}>
@@ -375,6 +399,7 @@ export function ApiTokensCard() {
                   <td className={T.td}>
                     <p className="font-semibold">{token.name}</p>
                     <p className="font-mono text-xs text-fg-faint">{token.prefix}…</p>
+                    {olderConsent(token, status) ? <OlderConsent>{t("tokens.olderConsent")}</OlderConsent> : null}
                   </td>
                   <td className={cx(T.td, "text-fg-muted")}>{t(`tokens.scope.${SCOPE_KEY[token.scope]}`)}</td>
                   <td className={cx(T.td, T.colHigh, "tabular-nums text-fg-muted")}>

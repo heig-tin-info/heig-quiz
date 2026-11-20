@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bot, Check, KeyRound, TriangleAlert, X } from "lucide-react";
 
-import type { Me, OAuthDecisionResult, OAuthRequestView } from "@quiz/contracts";
+import { MCP_CONSENT_REVISION, type Me, type OAuthDecision, type OAuthDecisionResult, type OAuthRequestView } from "@quiz/contracts";
 
 import { api, isNotFound } from "../api";
 import { DICTS, useT, type Dict } from "../i18n";
@@ -65,7 +65,8 @@ function Consent({ id, me }: { id: string; me: Me }) {
     mutationFn: (approve: boolean) =>
       api<OAuthDecisionResult>(`/app/api/oauth/requests/${id}/decision`, {
         method: "POST",
-        body: JSON.stringify({ approve }),
+        // The consent this page showed (ADR-139 §14): the bundle's revision, an old cached page an old one.
+        body: JSON.stringify({ approve, consentRevision: MCP_CONSENT_REVISION } satisfies OAuthDecision),
       }),
     // The client's own page takes over from here: a full navigation, not a route.
     onSuccess: (result) => window.location.assign(result.redirectTo),
@@ -99,7 +100,7 @@ function Consent({ id, me }: { id: string; me: Me }) {
         <div className="mt-6 space-y-2 text-sm">
           <p className="font-semibold">{t("oauth.consent.can")}</p>
           <ul className="space-y-1.5">
-            {(["read", "write", "draft", "items", "criteria"] as const).map((k) => (
+            {(["read", "write", "draft", "items", "criteria", "contestations", "propose"] as const).map((k) => (
               <li key={k} className="flex gap-2">
                 <Check className="mt-0.5 size-4 shrink-0 text-success" />
                 <span>{t(`oauth.consent.can.${k}`)}</span>
@@ -108,7 +109,7 @@ function Consent({ id, me }: { id: string; me: Me }) {
           </ul>
           <p className="pt-2 font-semibold">{t("oauth.consent.cannot")}</p>
           <ul className="space-y-1.5">
-            {(["delete", "run", "grades"] as const).map((k) => (
+            {(["delete", "run", "grades", "answer"] as const).map((k) => (
               <li key={k} className="flex gap-2 text-fg-muted">
                 <X className="mt-0.5 size-4 shrink-0" />
                 <span>{t(`oauth.consent.cannot.${k}`)}</span>

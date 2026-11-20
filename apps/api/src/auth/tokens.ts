@@ -13,7 +13,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 
 import { API_TOKEN_PREFIX, type ApiToken, type ApiTokenCreated, type TokenScope } from "@quiz/contracts";
-import { scopeOfGrant } from "@quiz/domain";
+import { consentRecorded, scopeOfGrant } from "@quiz/domain";
 
 import type { Db } from "../db/client.js";
 import { apiTokens, oauthGrants, users } from "../db/schema.js";
@@ -39,6 +39,7 @@ function toApiToken(row: TokenRow): ApiToken {
     // A personal row always holds one (`api_tokens_scope_personal_ck`); only
     // personal rows are ever turned into an `ApiToken`.
     scope: row.scope!,
+    consentRevision: row.consentRevision,
   };
 }
 
@@ -71,7 +72,7 @@ export function isApiToken(value: string): boolean {
 export async function createApiToken(
   db: Db,
   userId: string,
-  input: { name: string; expiresInDays: number | null; scope: TokenScope },
+  input: { name: string; expiresInDays: number | null; scope: TokenScope; consentRevision?: number | undefined },
   now: Date = new Date(),
 ): Promise<ApiTokenCreated> {
   const token = `${API_TOKEN_PREFIX}${newToken()}`;
@@ -87,6 +88,8 @@ export async function createApiToken(
       expiresAt:
         input.expiresInDays === null ? null : new Date(now.getTime() + input.expiresInDays * 86_400_000),
       scope: input.scope,
+      // What the token form says it showed, never above the current consent (ADR-139 §14).
+      consentRevision: consentRecorded(input.consentRevision),
     })
     .returning();
   return { ...toApiToken(row!), token };
@@ -182,6 +185,10 @@ export async function purgeAssistTokens(db: Db, now: Date): Promise<number> {
  * `scope` is the token's effective scope (ADR-113 §3): a personal token's
  * own; an OAuth access token's grant's, as a token scope (`quiz` today);
  * null for the help assistant's, which its audience alone confines.
+ *
+ * `consent` is the revision of the consent it acts under (ADR-139 §14): a
+ * personal token's own, an OAuth access token's grant's — which a refresh
+ * never moves.
  */
 export async function findTokenUser(db: Db, token: string, now: Date = new Date()) {
   const [row] = await db
@@ -193,6 +200,8 @@ export async function findTokenUser(db: Db, token: string, now: Date = new Date(
       audience: apiTokens.audience,
       ownScope: apiTokens.scope,
       grantScope: oauthGrants.scope,
+      ownConsent: apiTokens.consentRevision,
+      grantConsent: oauthGrants.consentRevision,
     })
     .from(apiTokens)
     .innerJoin(users, eq(apiTokens.userId, users.id))
@@ -214,5 +223,6 @@ export async function findTokenUser(db: Db, token: string, now: Date = new Date(
       ),
     );
   const scope: TokenScope | null = row.ownScope ?? (row.grantScope === null ? null : scopeOfGrant(row.grantScope));
-  return { user: row.user, tokenId: row.tokenId, audience: row.audience, expiresAt: row.expiresAt, scope };
+  const consent = row.grantConsent ?? row.ownConsent;
+  return { user: row.user, tokenId: row.tokenId, audience: row.audience, expiresAt: row.expiresAt, scope, consent };
 }

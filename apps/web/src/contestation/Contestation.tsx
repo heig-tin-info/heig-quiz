@@ -53,6 +53,9 @@ import {
  * words (a question, a criterion).
  */
 
+/** The id of a contestation's state line (`ContestationRecord`'s `stateId`): where the focus lands after an act on its proposal. */
+export const contestationStateId = (id: string) => `contestation-state-${id}`;
+
 export const CONTESTATION_STATE: Record<ContestationState, { icon: LucideIcon; label: keyof Dict; badge: keyof Dict; text: string }> = {
   open: { icon: Hourglass, label: "contest.state.waiting", badge: "contest.badge.open", text: "text-warning" },
   accepted: { icon: CheckCircle2, label: "contest.state.accepted", badge: "contest.badge.accepted", text: "text-success" },
@@ -69,6 +72,7 @@ export function ContestationRecord({
   audience,
   folded = false,
   focus = false,
+  stateId,
   children,
 }: {
   contestation: StudentContestation;
@@ -78,6 +82,8 @@ export function ContestationRecord({
   folded?: boolean;
   /** Takes the focus once shown: the record replaced the button that was focused. */
   focus?: boolean;
+  /** The state line's id: where the focus lands after an act on the contestation (a proposal confirmed or discarded). */
+  stateId?: string;
   /** Under the record: what the reader may do, or why they may not. */
   children?: ReactNode;
 }) {
@@ -95,7 +101,7 @@ export function ContestationRecord({
   const Icon = state.icon;
   return (
     <div className="space-y-3">
-      <p ref={stateRef} tabIndex={-1} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 outline-none">
+      <p ref={stateRef} id={stateId} tabIndex={-1} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 outline-none">
         <span className={cx("inline-flex items-center gap-1.5 text-sm font-semibold", state.text)}>
           <Icon aria-hidden className="size-4 self-center" />
           {t(state.label)}
@@ -366,7 +372,26 @@ export type AnswerPoints =
   | Pick<ProjectContestationResolveBody, "points" | "rationale">;
 
 /** The answer's body, by the unit's contract (invariant 7): an exam's, or a project criterion's. */
-type ResolveSchema = typeof ContestationResolveBody | typeof ProjectContestationResolveBody;
+export type ResolveSchema = typeof ContestationResolveBody | typeof ProjectContestationResolveBody;
+
+/**
+ * New points of an answer: the unit's fields (shown once "Change the
+ * points" is on), whether they are valid, as the wire writes them, and how
+ * a proposal's points (and a criterion's rationale) are copied into them.
+ */
+export interface ReplyPoints {
+  fields: ReactNode;
+  invalid: boolean;
+  body: () => AnswerPoints;
+  fill?: (points: number, rationale: string | null) => void;
+}
+
+/** A proposal copied into the answer (Edit): its reply, and whether its points were; `n` keys the form's remount, one per Edit. */
+export interface ReplySeed {
+  reply: string;
+  givePoints: boolean;
+  n: number;
+}
 
 /** The refusals of the owner's answer this block words; `owner_required` and `criteria_invalid` are the app's. */
 const ANSWER_REFUSAL: Partial<Record<string, keyof Dict>> = {
@@ -390,26 +415,29 @@ export function ContestationReply({
   schema = ContestationResolveBody,
   acceptable = true,
   refusals,
+  initial = null,
 }: {
   resolvePath: string;
   onChanged: () => void;
-  /** New points: the unit's fields (shown once "Change the points" is on), whether they are valid, and as the wire writes them. */
-  points?: { fields: ReactNode; invalid: boolean; body: () => AnswerPoints };
+  /** New points: the unit's fields, offered by the switch. */
+  points?: ReplyPoints | undefined;
   /** The body's contract; an exam's by default. */
   schema?: ResolveSchema;
   /** Accept is offered (a criterion that left the project's snapshot may only be refused). */
   acceptable?: boolean;
   /** The unit's words for refusals, over the shared ones. */
   refusals?: Partial<Record<string, keyof Dict>>;
+  /** Where the form starts (Edit, which remounts it): the proposal's reply and whether its points were copied; the focus goes to the reply. */
+  initial?: ReplySeed | null;
 }) {
   const t = useT();
   const toast = useToast();
   const headingId = useId();
-  const [reply, setReply] = useState("");
+  const [reply, setReply] = useState(initial?.reply ?? "");
   /** The verdict last asked for: its checks show, and its button spins. */
   const [asked, setAsked] = useState<ContestationVerdict | null>(null);
   /** New points are given: the switch, offered with the unit's fields. */
-  const [switched, setSwitched] = useState(false);
+  const [switched, setSwitched] = useState(initial?.givePoints ?? false);
   const given = points !== undefined && switched;
   useHoldChanged({ reply, given });
 
@@ -445,6 +473,7 @@ export function ContestationReply({
         placeholder={t("contest.reply.placeholder")}
         value={reply}
         onChange={setReply}
+        autoFocus={initial != null}
         help={t("contest.reply.help")}
         error={asked !== null && replyNeeded(asked) ? t("contest.reply.help") : null}
       />

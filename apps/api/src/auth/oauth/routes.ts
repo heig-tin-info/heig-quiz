@@ -259,6 +259,7 @@ export async function oauthRoutes(app: FastifyInstance, config: AppConfig) {
       id: params.data.id,
       userId: callerOf(req).id,
       approve: body.data.approve,
+      consentRevision: body.data.consentRevision,
       issuer,
       now: app.clock.now(),
     });

@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   answerExplained,
+  CLIPPED_MARK,
+  clipText,
+  CONTESTATION_EXPORT_FIELD_CHARS,
+  CONTESTATION_EXPORT_PAGE,
+  CONTESTATION_EXPORT_PAGE_CHARS,
+  contestationPage,
+  proposalRefusal,
+  proposalStale,
+  type AnswerShape,
   CONTESTATION_DAYS_DEFAULT,
   contestationClosesAt,
   contestationDaysOf,
@@ -84,5 +93,57 @@ describe("windowExtendRefusal", () => {
     expect(windowExtendRefusal(at("2026-11-19T10:00:00.000Z"), RELEASE)).toBe("not_future");
     expect(windowExtendRefusal(at("2027-02-18T10:00:00.000Z"), RELEASE)).toBeNull();
     expect(windowExtendRefusal(at("2027-02-18T10:00:00.001Z"), RELEASE)).toBe("too_far");
+  });
+});
+
+describe("an answer's shape (ADR-139 §14)", () => {
+  const base: AnswerShape = { verdict: "accepted", reply: "", points: false, accepted: false };
+
+  it("takes a bare acceptance, an acceptance with points and a reply, an accepted answer, a refusal with a reply", () => {
+    expect(proposalRefusal(base)).toBeNull();
+    expect(proposalRefusal({ ...base, points: true, reply: "Vous avez raison." })).toBeNull();
+    expect(proposalRefusal({ ...base, accepted: true })).toBeNull();
+    expect(proposalRefusal({ ...base, verdict: "refused", reply: "La clé est juste." })).toBeNull();
+  });
+
+  it("refuses, in order: a refusal with points or an accepted answer, both, and an unexplained one", () => {
+    expect(proposalRefusal({ ...base, verdict: "refused", reply: "Non.", points: true })).toBe("refusal_with_points");
+    expect(proposalRefusal({ ...base, verdict: "refused", reply: "Non.", accepted: true })).toBe("refusal_with_acceptance");
+    expect(proposalRefusal({ ...base, reply: "Oui.", points: true, accepted: true })).toBe("points_and_acceptance");
+    expect(proposalRefusal({ ...base, verdict: "refused" })).toBe("unexplained");
+    expect(proposalRefusal({ ...base, points: true, reply: "  " })).toBe("unexplained");
+  });
+
+  it("is stale when the grading in force is not the one it recorded", () => {
+    expect(proposalStale("g1", "g1")).toBe(false);
+    expect(proposalStale(null, null)).toBe(false);
+    expect(proposalStale("g1", "g2")).toBe(true);
+    expect(proposalStale("g1", null)).toBe(true);
+    expect(proposalStale(null, "g2")).toBe(true);
+  });
+});
+
+describe("what an assistant reads, capped (ADR-139 §14)", () => {
+  it("keeps a short text and cuts a long one with a visible mark, within the bound", () => {
+    expect(clipText("court")).toBe("court");
+    const cut = clipText("x".repeat(CONTESTATION_EXPORT_FIELD_CHARS + 50));
+    expect(cut.length).toBeLessThanOrEqual(CONTESTATION_EXPORT_FIELD_CHARS);
+    expect(cut.endsWith(CLIPPED_MARK)).toBe(true);
+    expect(clipText("abcdefghij".repeat(10), 40)).toHaveLength(40);
+  });
+
+  it("takes at most a page within the characters, always one, and says where the next page starts", () => {
+    expect(contestationPage([], 0, 0)).toEqual({ take: 0, next: null });
+    expect(contestationPage(Array(30).fill(10), 0, 30)).toEqual({ take: CONTESTATION_EXPORT_PAGE, next: CONTESTATION_EXPORT_PAGE });
+    const half = CONTESTATION_EXPORT_PAGE_CHARS / 2;
+    expect(contestationPage([half, half, 1], 5, 8)).toEqual({ take: 2, next: 7 });
+    expect(contestationPage([half, half + 1, 1], 0, 3)).toEqual({ take: 1, next: 1 });
+    expect(contestationPage([CONTESTATION_EXPORT_PAGE_CHARS * 3, 1], 0, 2)).toEqual({ take: 1, next: 1 });
+    expect(contestationPage([1, 1], 8, 10)).toEqual({ take: 2, next: null });
+  });
+
+  it("consumes a row it leaves out, so the next page never repeats one", () => {
+    expect(contestationPage([null, 10, null], 0, 3)).toEqual({ take: 3, next: null });
+    expect(contestationPage([null, CONTESTATION_EXPORT_PAGE_CHARS, null, 5], 0, 6)).toEqual({ take: 3, next: 3 });
   });
 });

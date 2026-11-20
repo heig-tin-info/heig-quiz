@@ -52,6 +52,12 @@ correction, sous les critères : **Refuser** avec une réponse, ou
 réponse). Les nouveaux points attendent la validation et la publication suivante des scores. Une fois les scores publiés, les points des critères, les
 validations et les recorrections reviennent au rôle Enseignant du cours.
 
+Un assistant IA relié par MCP peut proposer une réponse, avec de nouveaux
+points et leur justification : un robot marque la cellule et le dépôt, et
+la proposition s'affiche au-dessus de la réponse. **Confirmer**,
+**Modifier** ou **Écarter** ; **Confirmer les propositions (n)**, dans
+**Contestés**, confirme celles du projet.
+
 ## Échéance
 
 L'échéance est appliquée sur l'horloge du serveur ; ce qui compte pour un

@@ -23,6 +23,12 @@ anybody signs in: `AUTHORIZATIONS_PER_HOUR` per address
 per address, so a campus behind one NAT address shares it: a matter of
 availability only.
 
+**Amended 2026-11-20 by [ADR-139](ADR-139-contestation-d-une-correction.md)
+§14, scope: the consent and the grant.** A grant records the consent
+revision the screen says it showed (1 when it says nothing); a refresh never
+raises it, and a route that needs a later one refuses its tokens `403
+consent_required` until the teacher reconnects (ADR-139 §14).
+
 **Amended 2026-10-15 by [ADR-113](ADR-113-portee-des-jetons-personnels.md)
 (issue #871), scope: §C and the consequence "No scopes beyond `quiz`".** An
 access token resolves to its grant's scope, `quiz`, through the check that

@@ -14,12 +14,16 @@
 import { z } from "zod";
 
 import {
+  ACCEPTANCE_SCOPES,
   CONTEST_REFUSALS,
   CONTESTATION_DAYS_MAX,
   CONTESTATION_STATES,
   CONTESTATION_TEXT_MAX,
   CONTESTATION_VERDICTS,
+  PROPOSAL_REFUSALS,
+  proposalRefusal,
   WINDOW_EXTEND_REFUSALS,
+  type AnswerShape,
 } from "@quiz/domain";
 
 export { CONTESTATION_TEXT_MAX };
@@ -79,6 +83,87 @@ export const StudentContestation = z.object({
 });
 export type StudentContestation = z.infer<typeof StudentContestation>;
 
+// --- Proposals (ADR-139 §14) -------------------------------------------------
+
+/** Why a proposal's body is refused (`proposalRefusal` of `@quiz/domain`): the 400's issue message. */
+export const ProposalRefusal = z.enum(PROPOSAL_REFUSALS);
+export type ProposalRefusal = z.infer<typeof ProposalRefusal>;
+
+/** A part of a question, as its type names it (`b2`, a cloze blank): ADR-128's. */
+export const AcceptancePart = z.string().min(1).max(64);
+/** The type's identity of an answer at a part: a cloze blank's normalised text, a dropdown's canonical option. */
+export const AcceptanceAnswer = z.string().min(1).max(1000);
+
+/**
+ * The ADR-128 gesture an assistant proposes on an exam's contestation: the
+ * answer `answer` at `part` counts right, for `everyone` who gave it or for
+ * this contestation's `student` only.
+ */
+export const ProposedAcceptance = z.strictObject({
+  part: AcceptancePart,
+  answer: AcceptanceAnswer,
+  scope: z.enum(ACCEPTANCE_SCOPES),
+});
+export type ProposedAcceptance = z.infer<typeof ProposedAcceptance>;
+
+/**
+ * The fields every answer to a contestation shares, the owner's and an
+ * assistant's proposal of it, an exam's and a project's: the verdict and the
+ * reply (empty for none).
+ */
+export const AnswerFields = { verdict: ContestationVerdict, reply: ContestationReply.default("") };
+
+/**
+ * The one refinement of every answer's and proposal's body (`proposalRefusal`
+ * of `@quiz/domain`): a refusal gives nothing, points need a reply. The
+ * issue's message is the refusal's code (`unexplained` on `reply`).
+ */
+export function refineAnswer(ctx: z.RefinementCtx, answer: AnswerShape): void {
+  const refusal = proposalRefusal(answer);
+  if (refusal !== null) ctx.addIssue({ code: "custom", message: refusal, path: refusal === "unexplained" ? ["reply"] : [] });
+}
+
+/**
+ * What the staff read of the one proposal standing on a contestation
+ * (ADR-139 §14), made by an assistant over MCP and applied only when the
+ * course owner confirms it. `reply` empty: none. `points`: new points (an
+ * exam's question, a project's criterion); `rationale`: a criterion's,
+ * with its points; `accepted`: an accepted answer (an exam's question
+ * only), with its `label` as the item reads it (null when it no longer
+ * reads). `stale`: the grading in force moved since the proposal — a
+ * confirmation is refused (`409 proposal_stale`). `affected`: how many
+ * OTHER students' answers an accepted answer would re-grade (F-GRADE-11),
+ * null for any other proposal.
+ */
+export const ContestationProposalView = z.object({
+  verdict: ContestationVerdict,
+  reply: z.string(),
+  points: z.number().nullable(),
+  rationale: z.string().nullable(),
+  accepted: ProposedAcceptance.extend({ label: z.string().nullable() }).nullable(),
+  proposedAt: z.iso.datetime(),
+  stale: z.boolean(),
+  affected: z.number().int().nonnegative().nullable(),
+});
+export type ContestationProposalView = z.infer<typeof ContestationProposalView>;
+
+/**
+ * The owner's confirmation of a proposal (`POST …/proposal/confirm`): the
+ * `proposedAt` of the proposal the screen showed. A proposal replaced since
+ * is not confirmed (`409 proposal_stale`): the owner applies only what they
+ * read.
+ */
+export const ContestationConfirmBody = z.strictObject({ proposedAt: z.iso.datetime() });
+export type ContestationConfirmBody = z.infer<typeof ContestationConfirmBody>;
+
+/** The answer of a proposal's write (`PUT …/proposal`): the contestation, its exam's evaluation (absent for a project's), and its proposal as the staff now read it. */
+export const ContestationProposed = z.object({ id: z.uuid(), evaluationId: z.uuid().optional(), proposal: ContestationProposalView });
+export type ContestationProposed = z.infer<typeof ContestationProposed>;
+
+/** The page of a read for an assistant: the offset of the first contestation (`GET …/contestations/open?offset=`). */
+export const OpenContestationsQuery = z.strictObject({ offset: z.coerce.number().int().min(0).max(100_000).default(0) });
+export type OpenContestationsQuery = z.infer<typeof OpenContestationsQuery>;
+
 /**
  * One contestation as the staff read it on the grading panel: never a
  * name, whatever Anonymise says — the entry it sits on names the student
@@ -91,6 +176,8 @@ export type StudentContestation = z.infer<typeof StudentContestation>;
 export const StaffContestation = StudentContestation.extend({
   id: z.uuid(),
   counted: z.boolean(),
+  /** The assistant's proposal standing on it (ADR-139 §14), or null; never in a student payload. */
+  proposal: ContestationProposalView.nullable(),
 });
 export type StaffContestation = z.infer<typeof StaffContestation>;
 

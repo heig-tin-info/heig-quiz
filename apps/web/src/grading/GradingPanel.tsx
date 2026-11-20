@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { courseRoleAllows, evaluationGradingRole } from "@quiz/domain";
 
+import { ProposalBatch } from "../contestation/Proposal";
 import { useCourseRole } from "../course/parts";
 import { useT } from "../i18n";
 import { useSearchParam, type Route } from "../router";
@@ -53,6 +54,8 @@ import {
 import { useGradingActions, type BatchScope } from "./useGradingActions";
 import { useGradingData } from "./useGradingData";
 import { useItemCounting } from "./useItemCounting";
+import { examContestationPath } from "./Contestation";
+import { useGradingInvalidate } from "./useGradingInvalidate";
 import { useGradingKeys } from "./useGradingKeys";
 import { useGradingView, type GradingView } from "./view";
 import { StaffRowsSwitch, useStaffRows } from "../staffRows";
@@ -152,6 +155,7 @@ export function GradingPanel({
     onRegrade: item ? regrade : undefined,
   });
   const changeAcceptance = useAnswerAcceptance(evaluationId, item?.id);
+  const invalidate = useGradingInvalidate(evaluationId);
   // ADR-128: the counting act's gate (a frozen list, never a poll, the
   // owner's once released); the accepted answers show whoever reads.
   const acceptance = useMemo<Acceptance | undefined>(
@@ -401,6 +405,19 @@ export function GradingPanel({
         }}
         exports={item && data.exportable ? <AnswersExport evaluationId={evaluationId} itemId={item.id} /> : null}
         staffRows={<StaffRowsSwitch rows={staffRows} />}
+        // ADR-139 §14: the question's proposals, confirmed in one go by the owner — the question on screen, the ids its queue holds.
+        batch={
+          resolver && stateFilter === "contested" ? (
+            <ProposalBatch
+              items={entries}
+              contestationOf={(e) => e.contestation}
+              pathOf={examContestationPath}
+              labelOf={(e) => whoOf(t, e)}
+              scope={t("contest.batch.scope.question", { n: index + 1 })}
+              onChanged={invalidate}
+            />
+          ) : null
+        }
         primary={
           <PrimaryButton
             // Read-only, the screen's one action walks the questions.
