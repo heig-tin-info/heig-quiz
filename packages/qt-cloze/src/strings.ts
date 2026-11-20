@@ -35,8 +35,9 @@ export const clozePlayerStrings = {
   /** The accessible name of a blank's expected answer, shown with the key (`answerKey`, #554). */
   expected: "Expected",
   /*
-   * The labels presentation (ADR-138): the tray, the gaps and what a screen
-   * reader hears of a drag (dnd-kit's own words are English).
+   * The labels presentation (ADR-138): the tray and the gaps. The hint is
+   * also what a screen reader hears of a label (dnd-kit's own words are
+   * English).
    */
   hintLabels: "Drag a label into a blank, or click the label, then the blank.",
   /** The tray's name with one group; with several, each row is named by `group`. */
@@ -44,14 +45,11 @@ export const clozePlayerStrings = {
   group: "Group {n}",
   gapEmpty: "Blank {n}, empty",
   gapFilled: "Blank {n}: {label}",
+  /** A gap's name when the text has several groups: it says which one it takes. */
+  gapEmptyGroup: "Blank {n}, group {g}, empty",
+  gapFilledGroup: "Blank {n}, group {g}: {label}",
+  /** What a label and a filled gap are, for a screen reader (dnd-kit's `aria-roledescription`). */
   dragRole: "movable label",
-  dragHelp:
-    "Space picks up a label, the arrow keys go from blank to blank, Space drops it, Escape cancels. Enter selects a label, then Enter on a blank places it.",
-  dragStart: "{label} picked up.",
-  dragOver: "{label} over blank {n}.",
-  dragEnd: "{label} placed in blank {n}.",
-  dragEmptied: "Blank {n} emptied.",
-  dragCancel: "{label} put back.",
 } as const;
 
 export type ClozePlayerStringKey = keyof typeof clozePlayerStrings;

@@ -70,13 +70,14 @@ the statistics, the acceptance at grading time and the paper export of
    once" switch, a "same choices as blank N" helper in the editor, a word
    bank on paper and a student switch back to dropdowns are not part of
    this decision.
-7. **Gestures.** Click a label, then a gap of its group (Enter likewise);
-   Escape lets go; a filled gap activated with nothing selected empties. On
-   top, a drag with dnd-kit — the pointer, or the keyboard (Space picks up,
-   the arrows go from gap to gap of the group, Space drops) — never a native
-   HTML5 drag, so the integrity journal of ADR-088 records none. Every gap
-   of a group is as wide as its widest label, so a width never hints at the
-   answer.
+7. **Gestures.** Click a label, then a gap of its group — Enter or Space
+   likewise, the one keyboard path; Escape lets go; a filled gap activated
+   with nothing selected empties. On top, a drag with dnd-kit's pointer
+   sensor, never a native HTML5 drag, so the integrity journal of ADR-088
+   records none. With several groups a gap's name says its group, and while
+   a label is selected the gaps of the other groups are `aria-disabled`.
+   Every gap of a group is as wide as its widest label, so a width never
+   hints at the answer.
 
 ## Consequences
 
@@ -86,9 +87,16 @@ the statistics, the acceptance at grading time and the paper export of
   teacher makes on purpose, and the hash is what tells a changed question.
 - A teacher who wants two blanks in one group writes the same options in
   both; a typo splits the group, which the editor's Group column shows.
-- The tray is pinned under the host's sticky bars through one CSS variable
-  (`--cloze-tray-top`), capped at a third of the window and not pinned on a
-  low one (N-A11Y-04).
+- The tray is pinned under the host's sticky bars through the generic
+  `--sticky-top` of `apps/web/src/style.css`, capped at a third of the
+  window and not pinned on a low one (N-A11Y-04).
+- **Known limit.** A text variable used outside any blank can expand into a
+  whole dropdown (`w = choice(["{{=a|a|b}}", …])`): `cloze.computed_label`
+  reads the template's blanks and does not see it, so only the draws of the
+  publication gate catch a repeated option. The hole predates this decision
+  (dropdowns and regex keys have it too). `distinctTexts` is not the fix: one
+  flat list would refuse two blanks sharing their labels, which is what a
+  group is.
 
 ## Alternatives considered
 

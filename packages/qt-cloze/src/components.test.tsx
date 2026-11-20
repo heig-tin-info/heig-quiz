@@ -1,9 +1,9 @@
 /** Smoke tests: the components render, report every change and keep no state. */
 import { useEffect } from "react";
 import type { RichTextProps } from "@quiz/core/client";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ClozeEditor } from "./Editor.js";
 import { ClozePlayer } from "./Player.js";
 import { ClozeReview } from "./Review.js";
@@ -188,26 +188,6 @@ const labelsStudent = clozeServer.toStudent(config(LABELS_TEXT, { presentation: 
   shuffle: false,
 });
 
-/**
- * jsdom lays nothing out, and dnd-kit finds its drop targets by their boxes:
- * this stub puts the gaps on a row, 80 px apart in the order of the text, and
- * every other box at the origin. Geometry only — the sensor, the collision
- * detection and the player's drop are the real ones.
- */
-function stubLabelsLayout() {
-  const real = Element.prototype.getBoundingClientRect;
-  beforeEach(() => {
-    Element.prototype.getBoundingClientRect = function (this: Element) {
-      const gap = /^Blank (\d+)/.exec(this.getAttribute("aria-label") ?? "");
-      const [left, top, width, height] = gap ? [Number(gap[1]) * 80, 200, 60, 20] : [0, 0, 60, 20];
-      return { x: left, y: top, top, left, right: left + width, bottom: top + height, width, height, toJSON: () => ({}) } as DOMRect;
-    };
-  });
-  afterEach(() => {
-    Element.prototype.getBoundingClientRect = real;
-  });
-}
-
 describe("ClozePlayer, labels (ADR-138)", () => {
   const play = (answer: { blanks: (string | null)[] } | null = null, extra: Partial<Parameters<typeof ClozePlayer>[0]> = {}) => {
     const onChange = vi.fn();
@@ -217,23 +197,45 @@ describe("ClozePlayer, labels (ADR-138)", () => {
     return { onChange, ...view };
   };
   const label = (name: string) => screen.getByRole("button", { name });
+  const gap = (name: string) => screen.getByRole("button", { name });
 
   it("shows a tray row per group, a gap per dropdown, and the other blanks as fields", () => {
     play();
     expect(screen.getByRole("group", { name: "Group 1" })).toHaveTextContent("ohmfaradhenry");
     expect(screen.getByRole("group", { name: "Group 2" })).toHaveTextContent("ΩF");
-    expect(screen.getByRole("button", { name: "Blank 1, empty" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Blank 3, empty" })).toBeInTheDocument();
+    expect(gap("Blank 1, group 1, empty")).toBeInTheDocument();
+    expect(gap("Blank 3, group 2, empty")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Blank 4" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.getByText("Drag a label into a blank, or click the label, then the blank.")).toBeInTheDocument();
+    // The caption, and what dnd-kit tells a screen reader of a label: never its English defaults.
+    const hint = "Drag a label into a blank, or click the label, then the blank.";
+    expect(screen.getAllByText(hint)).toHaveLength(2);
+    const described = document.getElementById(label("ohm").getAttribute("aria-describedby") ?? "");
+    expect(described).toHaveTextContent(hint);
+    expect(label("ohm")).toHaveAttribute("aria-roledescription", "movable label");
+  });
+
+  it("names a gap by its number and what it holds, its group too when there are several", () => {
+    const { unmount } = play({ blanks: ["0", null, "1", null] });
+    expect(gap("Blank 1, group 1: ohm")).toBeInTheDocument();
+    expect(gap("Blank 3, group 2: F")).toBeInTheDocument();
+    unmount();
+    const one = clozeServer.toStudent(config("{{=a|b}} and {{b|=a}}", { presentation: "labels" }), {
+      seed: 3,
+      itemId: "i",
+      shuffle: false,
+    });
+    render(<ClozePlayer student={one} answer={{ blanks: ["0", null] }} onChange={() => {}} readOnly={false} />);
+    expect(gap("Blank 1: a")).toBeInTheDocument();
+    expect(gap("Blank 2, empty")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Labels" })).toBeInTheDocument();
   });
 
   it("places a label by a click on it, then on a gap of its group", async () => {
     const { onChange } = play();
     await userEvent.click(label("farad"));
     expect(label("farad")).toHaveAttribute("aria-pressed", "true");
-    await userEvent.click(screen.getByRole("button", { name: "Blank 2, empty" }));
+    await userEvent.click(gap("Blank 2, group 1, empty"));
     expect(onChange).toHaveBeenCalledWith({ blanks: [null, "1", null, null] });
     // A label is reusable and the selection is spent.
     expect(label("farad")).toHaveAttribute("aria-pressed", "false");
@@ -242,7 +244,7 @@ describe("ClozePlayer, labels (ADR-138)", () => {
   it("stores exactly what the dropdown stores for the same choice", async () => {
     const { onChange, unmount } = play();
     await userEvent.click(label("henry"));
-    await userEvent.click(screen.getByRole("button", { name: "Blank 1, empty" }));
+    await userEvent.click(gap("Blank 1, group 1, empty"));
     unmount();
     const dropdown = vi.fn();
     const { presentation: _labels, ...served } = labelsStudent;
@@ -253,39 +255,72 @@ describe("ClozePlayer, labels (ADR-138)", () => {
     expect(onChange.mock.calls[0]?.[0]).toEqual(dropdown.mock.calls[0]?.[0]);
   });
 
-  it("works from the keyboard: Enter selects, Enter places, Escape lets go", async () => {
+  it("sends each gap its own option's position when the group is shuffled (ADR-097)", async () => {
+    const shuffled = config(LABELS_TEXT, { presentation: "labels" });
+    const order = (blank: (typeof labelsStudent)["blanks"][number] | undefined) =>
+      blank?.kind === "select" ? blank.options.map((option) => option.label) : [];
+    // A view whose two unit blanks are served in different orders.
+    const student = Array.from({ length: 50 }, (_, seed) =>
+      clozeServer.toStudent(shuffled, { seed, itemId: "i", shuffle: true }),
+    ).find((view) => order(view.blanks[0]).join() !== order(view.blanks[1]).join())!;
+    const [first, second] = [order(student.blanks[0]), order(student.blanks[1])];
+    const moved = first.find((name, position) => second.indexOf(name) !== position)!;
+    const onChange = vi.fn();
+    render(<ClozePlayer student={student} answer={null} onChange={onChange} readOnly={false} />);
+    // The tray shows the first blank's served order.
+    expect(screen.getByRole("group", { name: "Group 1" })).toHaveTextContent(first.join(""));
+    await userEvent.click(label(moved));
+    await userEvent.click(gap("Blank 1, group 1, empty"));
+    await userEvent.click(label(moved));
+    await userEvent.click(gap("Blank 2, group 1, empty"));
+    expect(onChange.mock.calls[0]?.[0].blanks[0]).toBe(String(first.indexOf(moved)));
+    expect(onChange.mock.calls[1]?.[0].blanks[1]).toBe(String(second.indexOf(moved)));
+    expect(first.indexOf(moved)).not.toBe(second.indexOf(moved));
+  });
+
+  it("works from the keyboard: Enter or Space selects and places, Escape lets go", async () => {
     const { onChange } = play();
     label("ohm").focus();
     await userEvent.keyboard("{Enter}");
     expect(label("ohm")).toHaveAttribute("aria-pressed", "true");
     await userEvent.keyboard("{Escape}");
     expect(label("ohm")).toHaveAttribute("aria-pressed", "false");
-    await userEvent.keyboard("{Enter}");
-    screen.getByRole("button", { name: "Blank 1, empty" }).focus();
-    await userEvent.keyboard("{Enter}");
+    await userEvent.keyboard(" ");
+    expect(label("ohm")).toHaveAttribute("aria-pressed", "true");
+    gap("Blank 1, group 1, empty").focus();
+    await userEvent.keyboard(" ");
     expect(onChange).toHaveBeenCalledWith({ blanks: ["0", null, null, null] });
+    label("henry").focus();
+    await userEvent.keyboard("{Enter}");
+    gap("Blank 2, group 1, empty").focus();
+    await userEvent.keyboard("{Enter}");
+    expect(onChange).toHaveBeenLastCalledWith({ blanks: [null, "2", null, null] });
   });
 
-  it("refuses a label in a gap of another group, and shows it", async () => {
+  it("refuses a label in a gap of another group, and shows and says it", async () => {
     const { onChange } = play();
     await userEvent.click(label("Ω"));
-    const other = screen.getByRole("button", { name: "Blank 1, empty" });
+    const other = gap("Blank 1, group 1, empty");
     expect(other.className).toContain("opacity-40");
-    expect(screen.getByRole("button", { name: "Blank 3, empty" }).className).not.toContain("opacity-40");
+    expect(other).toHaveAttribute("aria-disabled", "true");
+    // Refusing, not gone: it stays in the tab order.
+    expect(other).not.toBeDisabled();
+    const own = gap("Blank 3, group 2, empty");
+    expect(own.className).not.toContain("opacity-40");
+    expect(own).not.toHaveAttribute("aria-disabled");
     await userEvent.click(other);
     expect(onChange).not.toHaveBeenCalled();
   });
 
   it("empties a filled gap activated with nothing selected", async () => {
     const { onChange } = play({ blanks: ["0", null, "1", null] });
-    expect(screen.getByRole("button", { name: "Blank 3: F" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Blank 1: ohm" }));
+    await userEvent.click(gap("Blank 1, group 1: ohm"));
     expect(onChange).toHaveBeenCalledWith({ blanks: ["", null, "1", null] });
   });
 
   it("is locked once the attempt is closed", () => {
     play({ blanks: ["0", null, null, null] }, { readOnly: true });
-    for (const name of ["ohm", "farad", "henry", "Ω", "F", "Blank 1: ohm", "Blank 2, empty"]) {
+    for (const name of ["ohm", "farad", "henry", "Ω", "F", "Blank 1, group 1: ohm", "Blank 2, group 1, empty"]) {
       expect(screen.getByRole("button", { name })).toBeDisabled();
     }
     expect(screen.getByRole("textbox", { name: "Blank 4" })).toBeDisabled();
@@ -293,20 +328,19 @@ describe("ClozePlayer, labels (ADR-138)", () => {
 
   it("shows the expected label inside an empty gap, given a key (#554)", () => {
     play(null, { answerKey: { blanks: [{ index: 0, expected: "ohm" }] } });
-    const gap = screen.getByRole("button", { name: "Blank 1, empty" });
-    expect(gap).toHaveAttribute("title", "Expected: ohm");
-    const shown = Array.from(gap.children).find((child) => !child.classList.contains("invisible"));
+    const empty = gap("Blank 1, group 1, empty");
+    expect(empty).toHaveAttribute("title", "Expected: ohm");
+    const shown = Array.from(empty.children).find((child) => !child.classList.contains("invisible"));
     expect(shown).toHaveTextContent("ohm");
     expect(shown?.className).toContain("text-success");
   });
 
   it("sizes every gap of a group for its widest label, whatever it holds", () => {
     play({ blanks: ["0", null, null, null] });
-    const sizers = (name: string) =>
-      Array.from(screen.getByRole("button", { name }).querySelectorAll(".invisible")).map((el) => el.textContent);
-    expect(sizers("Blank 1: ohm")).toEqual(["ohm", "farad", "henry"]);
-    expect(sizers("Blank 2, empty")).toEqual(["ohm", "farad", "henry"]);
-    expect(sizers("Blank 3, empty")).toEqual(["Ω", "F"]);
+    const sizers = (name: string) => Array.from(gap(name).querySelectorAll(".invisible")).map((el) => el.textContent);
+    expect(sizers("Blank 1, group 1: ohm")).toEqual(["ohm", "farad", "henry"]);
+    expect(sizers("Blank 2, group 1, empty")).toEqual(["ohm", "farad", "henry"]);
+    expect(sizers("Blank 3, group 2, empty")).toEqual(["Ω", "F"]);
   });
 
   it("never starts a native drag: nothing is draggable, nothing the integrity journal hears", async () => {
@@ -315,35 +349,12 @@ describe("ClozePlayer, labels (ADR-138)", () => {
     document.addEventListener("drop", heard, true);
     const { container } = play();
     await userEvent.click(label("farad"));
-    await userEvent.click(screen.getByRole("button", { name: "Blank 1, empty" }));
+    await userEvent.click(gap("Blank 1, group 1, empty"));
     document.removeEventListener("dragstart", heard, true);
     document.removeEventListener("drop", heard, true);
     expect(heard).not.toHaveBeenCalled();
     expect(container.querySelector("[draggable]")).toBeNull();
     expect(label("farad").className).toContain("select-none");
-  });
-
-  describe("dragged with the keyboard", () => {
-    stubLabelsLayout();
-
-    it("carries a label from the tray to the gap the arrows reach", async () => {
-      const { onChange } = play();
-      label("farad").focus();
-      await userEvent.keyboard(" ");
-      await userEvent.keyboard("{ArrowRight}");
-      await userEvent.keyboard("{ArrowRight}");
-      await userEvent.keyboard(" ");
-      await waitFor(() => expect(onChange).toHaveBeenCalledWith({ blanks: [null, "1", null, null] }));
-    });
-
-    it("moves a placed label to another gap of its group, emptying the first", async () => {
-      const { onChange } = play({ blanks: ["0", null, null, null] });
-      screen.getByRole("button", { name: "Blank 1: ohm" }).focus();
-      await userEvent.keyboard(" ");
-      await userEvent.keyboard("{ArrowRight}");
-      await userEvent.keyboard(" ");
-      await waitFor(() => expect(onChange).toHaveBeenCalledWith({ blanks: ["", "0", null, null] }));
-    });
   });
 });
 

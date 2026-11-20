@@ -81,6 +81,7 @@ describe("ClozeConfigSchema", () => {
     const config = ClozeConfigSchema.parse(base("{{=a|b}}"));
     expect(config).not.toHaveProperty("presentation");
     expect(isLabels(config)).toBe(false);
+    expect(emptyClozeDraft()).not.toHaveProperty("presentation");
   });
 
   it("reads the labels presentation, and refuses an unknown one", () => {
@@ -90,10 +91,6 @@ describe("ClozeConfigSchema", () => {
     expect(isLabels({ ...base("{{=a|b}}"), presentation: "labels" })).toBe(true);
     expect(isLabels(null)).toBe(false);
     expect(ClozeConfigSchema.safeParse({ ...base("{{=a|b}}"), presentation: "tiles" }).success).toBe(false);
-  });
-
-  it("keeps the empty draft without a presentation", () => {
-    expect(emptyClozeDraft()).not.toHaveProperty("presentation");
   });
 
   /*

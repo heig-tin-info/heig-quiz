@@ -15,6 +15,7 @@
  * content of an empty gap. Nothing is added around the field, so the text (a
  * table above all) keeps the layout it has without the key.
  */
+import type { ReactNode } from "react";
 import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
 import { LabelsPlayer } from "./Labels.js";
@@ -113,6 +114,11 @@ export function ClozePlayer({
 
   const Text = renderText ?? ClozeFallbackText;
   const labels = student.presentation === "labels" && student.blanks.some((blank) => blank.kind === "select");
+  const text = (renderBlank: (index: number) => ReactNode) => (
+    <div className="flex flex-col gap-3">
+      <Text template={student.template} renderBlank={renderBlank} />
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -124,22 +130,15 @@ export function ClozePlayer({
           expected={expected}
           s={s}
           write={write}
-          renderText={(renderGap) => (
-            <div className="flex flex-col gap-3">
-              <Text
-                template={student.template}
-                renderBlank={(index) => {
-                  const blank = student.blanks.find((b) => b.index === index);
-                  return blank?.kind === "select" ? renderGap(blank) : renderField(index);
-                }}
-              />
-            </div>
-          )}
+          renderText={(renderGap) =>
+            text((index) => {
+              const blank = student.blanks.find((b) => b.index === index);
+              return blank?.kind === "select" ? renderGap(blank) : renderField(index);
+            })
+          }
         />
       ) : (
-        <div className="flex flex-col gap-3">
-          <Text template={student.template} renderBlank={renderField} />
-        </div>
+        text(renderField)
       )}
       <p className={caption}>{labels ? s.hintLabels : s.hint}</p>
     </div>

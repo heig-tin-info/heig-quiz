@@ -49,6 +49,7 @@ import {
   LOGIC_SEQ_ANSWER,
   LOGIC_SEQ_CONFIG,
   CATEGORIZE_CONFIG,
+  CLOZE_LABELS_TEXT,
   DIAGRAM_CONFIG,
   RC_STUDENT,
   RICH_CONFIG,
@@ -226,25 +227,12 @@ const STUDENT_KEYED: Partial<Record<number, StudentKeyed>> = {
   11: { server: logicServer, config: logicServer.configSchema.parse(LOGIC_CONFIG), view: { seed: 0, itemId: "11", shuffle: false } },
   12: { server: logicServer, config: logicServer.configSchema.parse(LOGIC_SEQ_CONFIG), view: { seed: 0, itemId: "12", shuffle: false } },
   /*
-   * ADR-138: a cloze whose dropdowns are shown as LABELS, two groups (the
-   * types, the formats) in a code fence and a typed blank after it,
-   * shuffled: the tray shows each group in its first blank's served order.
+   * ADR-138: the cloze shown as LABELS, shuffled: the tray shows each group
+   * in its first blank's served order.
    */
   13: {
     server: clozeServer,
-    config: clozeServer.configSchema.parse({
-      configVersion: 2,
-      text:
-        "Complétez les déclarations et l'affichage.\n\n" +
-        "```c\n" +
-        "{{=int|char|double}} n = 42;\n" +
-        "{{int|=char|double}} c = 'A';\n" +
-        "{{int|char|=double}} x = 0.5;\n" +
-        'printf("{{=%d|%c|%f}} {{%d|=%c|%f}} {{%d|%c|=%f}}\\n", n, c, x);\n' +
-        "```\n\n" +
-        "La fonction d'affichage est déclarée dans l'en-tête {{stdio.h|<stdio.h>}}.",
-      presentation: "labels",
-    }),
+    config: clozeServer.configSchema.parse({ configVersion: 2, text: CLOZE_LABELS_TEXT, presentation: "labels" }),
     view: { seed: 5, itemId: "student-item-13", shuffle: true },
   },
 };

@@ -1474,35 +1474,20 @@ through `pointsOrDash`: an answer nobody graded reads `—`, never `0`.
 
 ## The cloze labels (`qt-cloze`, ADR-138)
 
-A cloze whose dropdowns are shown as labels (`Labels.tsx`; the mock it was
-tried on is `mockups/cloze-labels.html`) has two parts: a TRAY of labels
-above the text, one row per group, and a GAP where each dropdown was.
+Origin: `mockups/cloze-labels.html`. ADR-138 owns the behaviour; the values:
 
-- **The tray** is a recessed panel (`surface-2`, hairline, card radius),
-  like the categorize board's. It stays in sight while the text scrolls:
-  `sticky`, its top the host's `--cloze-tray-top` (0 when unset). The
-  student player's frame sets it under its bar
-  (`--banner-h` + `--bar-h`, `PlayerShell.tsx`), the Shell's page under the
-  phone's top bar and the banners (`Shell.tsx`); a sheet or a pane, outside
-  both, leaves it at 0. It takes at most a third of the window and scrolls
-  on its own, and under 640 px of window height it is not pinned at all:
-  the bars, the tray, the footer and a phone's keyboard must never fill
-  the screen (N-A11Y-04).
-- **A label** is a chip: 14 px, `field` radius, a hairline, `select-none`
-  and `touch-none`, the grab cursor. Selected (click-then-click), it wears
-  the categorize card's selection: `info` border, `info-soft` ring. Set in
-  the mono face when a gap of its group sits in a code fence.
-- **A gap** is a dashed 1.5 px box on `surface-2`, solid once it holds a
-  label. While a label is selected or dragged, the gaps of its group turn
-  `info` / `info-soft` and the others drop to 40 % — the refusal is shown
-  before it is tried. Every gap of a group is as wide as the group's widest
-  label: the labels are laid, invisible, in the gap's one grid cell, so a
-  width never hints at the answer. With the key (a teacher's preview), an
-  empty gap shows the expected answer in mono `success`, like the
-  dropdown's empty option.
-- **Groups.** One group is neutral: `line-strong` and `surface`, no shape.
-  Several get a hue AND a shape each, colour never the only cue, in order
-  of first appearance:
+- **Tray**: a recessed panel (`surface-2`, hairline, card radius), `sticky`
+  at `--sticky-top` (`style.css`: banners plus the player's bar, the Shell
+  adds its phone top bar under `lg`), at most `33dvh` with its own scroll,
+  not pinned under 640 px of window height (N-A11Y-04).
+- **Label**: 14 px chip, `field` radius, hairline, `select-none`
+  `touch-none`, grab cursor; selected, the categorize card's `info` border
+  and `info-soft` ring; mono when its group has a gap in a code fence.
+- **Gap**: 1.5 px dashed on `surface-2`, solid once filled; the target
+  group turns `info` / `info-soft`, the others drop to 40 %; with the key,
+  the expected answer in mono `success`.
+- **Groups**: one group is neutral (`line-strong`, `surface`, no shape);
+  several get a hue AND a shape each, in order of first appearance:
 
   | Group | Hue | Shape |
   | --- | --- | --- |
@@ -1513,17 +1498,13 @@ above the text, one row per group, and a GAP where each dropdown was.
   | 5 | `--chart-4` (yellow) | ring |
   | 6 | `--chart-3` (aqua) | star |
 
-  The hues are the product's one categorical palette (Projection, the
-  donut), the most distinct first; `--chart-6` and `--chart-8`, green and
-  red, are left out, being the verdict's. A hue only tints: the border is
-  45 % of it over `line-strong`, the fill 9 % over `surface`, and the text
-  stays `fg`. The shape, 10 px before the label, is inked with the hue
-  pulled 30 % toward `fg`, so a yellow still holds 3:1 on the light
-  surface. Six groups is the cap (`CLOZE_MAX_LABEL_GROUPS`): a seventh
-  would need a hue and a shape the table does not have.
-- **Never a native drag.** dnd-kit's pointer (4 px of slop) and keyboard
-  sensors only, its copy under the pointer the one shadow (a floating
-  layer). Nothing is `draggable`, so the integrity journal hears nothing.
+  The product's one categorical palette (Projection, the donut), without
+  `--chart-6` and `--chart-8`, green and red, the verdict's. A hue only
+  tints: border 45 % of it over `line-strong`, fill 9 % over `surface`,
+  text `fg`. The 10 px shape is inked with the hue pulled 30 % toward `fg`,
+  so the yellow holds 3:1 on the light surface.
+- The copy under the pointer during a drag is the one shadow (a floating
+  layer).
 
 ## The blocks workspace (`qt-blocks`, ADR-103)
 

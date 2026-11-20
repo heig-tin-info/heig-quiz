@@ -220,13 +220,7 @@ export function PlayerShell({
   return (
     <div
       className="flex min-h-[calc(100dvh-var(--banner-h))] flex-col bg-canvas"
-      style={
-        {
-          "--player-footer-h": `${footerHeight}px`,
-          // What a question pins under the bar (the cloze's tray of labels, ADR-138).
-          "--cloze-tray-top": "calc(var(--banner-h) + var(--bar-h))",
-        } as CSSProperties
-      }
+      style={{ "--player-footer-h": `${footerHeight}px` } as CSSProperties}
     >
       <header ref={setBar} className="sticky top-(--banner-h) z-20 border-b border-line bg-surface">
         <div
