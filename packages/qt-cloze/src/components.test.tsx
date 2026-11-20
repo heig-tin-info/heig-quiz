@@ -1,9 +1,9 @@
 /** Smoke tests: the components render, report every change and keep no state. */
 import { useEffect } from "react";
 import type { RichTextProps } from "@quiz/core/client";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ClozeEditor } from "./Editor.js";
 import { ClozePlayer } from "./Player.js";
 import { ClozeReview } from "./Review.js";
@@ -66,6 +66,33 @@ describe("ClozeEditor", () => {
       <ClozeEditor config={SECRET_CONFIG} onChange={() => {}} strings={{ text: "Texte à trous" }} />,
     );
     expect(screen.getByLabelText("Texte à trous")).toBeInTheDocument();
+  });
+
+  /*
+   * ADR-138: Labels writes the key, Dropdowns REMOVES it, so a question
+   * nobody switched keeps the stored JSON it had.
+   */
+  it("writes the labels presentation, and removes the key going back to dropdowns", async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ClozeEditor config={SECRET_CONFIG} onChange={onChange} />);
+    const group = screen.getByRole("radiogroup", { name: "Choices shown as" });
+    expect(group).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Labels" }));
+    expect(onChange).toHaveBeenLastCalledWith({ ...SECRET_CONFIG, presentation: "labels" });
+    rerender(<ClozeEditor config={{ ...SECRET_CONFIG, presentation: "labels" }} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("radio", { name: "Dropdowns" }));
+    expect(onChange.mock.lastCall?.[0]).toEqual(SECRET_CONFIG);
+    expect(onChange.mock.lastCall?.[0]).not.toHaveProperty("presentation");
+  });
+
+  it("numbers the label groups in the blank table, in labels mode only", () => {
+    const text = "{{=ohm|farad}} {{=Ω|F}} {{farad|=ohm}} {{word}}";
+    const { rerender } = render(<ClozeEditor config={config(text)} onChange={() => {}} />);
+    expect(screen.queryByRole("columnheader", { name: "Group" })).toBeNull();
+    rerender(<ClozeEditor config={config(text, { presentation: "labels" })} onChange={() => {}} />);
+    expect(screen.getByRole("columnheader", { name: "Group" })).toBeInTheDocument();
+    const groups = screen.getAllByRole("row").slice(1).map((row) => row.querySelectorAll("td")[3]?.textContent);
+    expect(groups).toEqual(["1", "2", "1", "—"]);
   });
 });
 
@@ -147,6 +174,176 @@ describe("ClozePlayer", () => {
     );
     expect(screen.getByTestId("host")).toBeInTheDocument();
     expect(screen.getAllByRole("textbox")).toHaveLength(1);
+  });
+});
+
+/*
+ * ADR-138: the dropdowns shown as labels. Two groups (the units, the
+ * symbols) and a text blank, unshuffled, so an option's id is its position.
+ */
+const LABELS_TEXT = "R in {{=ohm|farad|henry}}, C in {{ohm|=farad|henry}}, R as {{=Ω|F}}, named after {{Ohm}}.";
+const labelsStudent = clozeServer.toStudent(config(LABELS_TEXT, { presentation: "labels" }), {
+  seed: 3,
+  itemId: "i",
+  shuffle: false,
+});
+
+/**
+ * jsdom lays nothing out, and dnd-kit finds its drop targets by their boxes:
+ * this stub puts the gaps on a row, 80 px apart in the order of the text, and
+ * every other box at the origin. Geometry only — the sensor, the collision
+ * detection and the player's drop are the real ones.
+ */
+function stubLabelsLayout() {
+  const real = Element.prototype.getBoundingClientRect;
+  beforeEach(() => {
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      const gap = /^Blank (\d+)/.exec(this.getAttribute("aria-label") ?? "");
+      const [left, top, width, height] = gap ? [Number(gap[1]) * 80, 200, 60, 20] : [0, 0, 60, 20];
+      return { x: left, y: top, top, left, right: left + width, bottom: top + height, width, height, toJSON: () => ({}) } as DOMRect;
+    };
+  });
+  afterEach(() => {
+    Element.prototype.getBoundingClientRect = real;
+  });
+}
+
+describe("ClozePlayer, labels (ADR-138)", () => {
+  const play = (answer: { blanks: (string | null)[] } | null = null, extra: Partial<Parameters<typeof ClozePlayer>[0]> = {}) => {
+    const onChange = vi.fn();
+    const view = render(
+      <ClozePlayer student={labelsStudent} answer={answer} onChange={onChange} readOnly={false} {...extra} />,
+    );
+    return { onChange, ...view };
+  };
+  const label = (name: string) => screen.getByRole("button", { name });
+
+  it("shows a tray row per group, a gap per dropdown, and the other blanks as fields", () => {
+    play();
+    expect(screen.getByRole("group", { name: "Group 1" })).toHaveTextContent("ohmfaradhenry");
+    expect(screen.getByRole("group", { name: "Group 2" })).toHaveTextContent("ΩF");
+    expect(screen.getByRole("button", { name: "Blank 1, empty" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Blank 3, empty" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Blank 4" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getByText("Drag a label into a blank, or click the label, then the blank.")).toBeInTheDocument();
+  });
+
+  it("places a label by a click on it, then on a gap of its group", async () => {
+    const { onChange } = play();
+    await userEvent.click(label("farad"));
+    expect(label("farad")).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Blank 2, empty" }));
+    expect(onChange).toHaveBeenCalledWith({ blanks: [null, "1", null, null] });
+    // A label is reusable and the selection is spent.
+    expect(label("farad")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("stores exactly what the dropdown stores for the same choice", async () => {
+    const { onChange, unmount } = play();
+    await userEvent.click(label("henry"));
+    await userEvent.click(screen.getByRole("button", { name: "Blank 1, empty" }));
+    unmount();
+    const dropdown = vi.fn();
+    const { presentation: _labels, ...served } = labelsStudent;
+    render(<ClozePlayer student={served} answer={null} onChange={dropdown} readOnly={false} />);
+    const select = screen.getByRole("combobox", { name: "Blank 1" });
+    const henry = Array.from(select.querySelectorAll("option")).find((option) => option.textContent === "henry")!;
+    await userEvent.selectOptions(select, henry);
+    expect(onChange.mock.calls[0]?.[0]).toEqual(dropdown.mock.calls[0]?.[0]);
+  });
+
+  it("works from the keyboard: Enter selects, Enter places, Escape lets go", async () => {
+    const { onChange } = play();
+    label("ohm").focus();
+    await userEvent.keyboard("{Enter}");
+    expect(label("ohm")).toHaveAttribute("aria-pressed", "true");
+    await userEvent.keyboard("{Escape}");
+    expect(label("ohm")).toHaveAttribute("aria-pressed", "false");
+    await userEvent.keyboard("{Enter}");
+    screen.getByRole("button", { name: "Blank 1, empty" }).focus();
+    await userEvent.keyboard("{Enter}");
+    expect(onChange).toHaveBeenCalledWith({ blanks: ["0", null, null, null] });
+  });
+
+  it("refuses a label in a gap of another group, and shows it", async () => {
+    const { onChange } = play();
+    await userEvent.click(label("Ω"));
+    const other = screen.getByRole("button", { name: "Blank 1, empty" });
+    expect(other.className).toContain("opacity-40");
+    expect(screen.getByRole("button", { name: "Blank 3, empty" }).className).not.toContain("opacity-40");
+    await userEvent.click(other);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("empties a filled gap activated with nothing selected", async () => {
+    const { onChange } = play({ blanks: ["0", null, "1", null] });
+    expect(screen.getByRole("button", { name: "Blank 3: F" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Blank 1: ohm" }));
+    expect(onChange).toHaveBeenCalledWith({ blanks: ["", null, "1", null] });
+  });
+
+  it("is locked once the attempt is closed", () => {
+    play({ blanks: ["0", null, null, null] }, { readOnly: true });
+    for (const name of ["ohm", "farad", "henry", "Ω", "F", "Blank 1: ohm", "Blank 2, empty"]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    }
+    expect(screen.getByRole("textbox", { name: "Blank 4" })).toBeDisabled();
+  });
+
+  it("shows the expected label inside an empty gap, given a key (#554)", () => {
+    play(null, { answerKey: { blanks: [{ index: 0, expected: "ohm" }] } });
+    const gap = screen.getByRole("button", { name: "Blank 1, empty" });
+    expect(gap).toHaveAttribute("title", "Expected: ohm");
+    const shown = Array.from(gap.children).find((child) => !child.classList.contains("invisible"));
+    expect(shown).toHaveTextContent("ohm");
+    expect(shown?.className).toContain("text-success");
+  });
+
+  it("sizes every gap of a group for its widest label, whatever it holds", () => {
+    play({ blanks: ["0", null, null, null] });
+    const sizers = (name: string) =>
+      Array.from(screen.getByRole("button", { name }).querySelectorAll(".invisible")).map((el) => el.textContent);
+    expect(sizers("Blank 1: ohm")).toEqual(["ohm", "farad", "henry"]);
+    expect(sizers("Blank 2, empty")).toEqual(["ohm", "farad", "henry"]);
+    expect(sizers("Blank 3, empty")).toEqual(["Ω", "F"]);
+  });
+
+  it("never starts a native drag: nothing is draggable, nothing the integrity journal hears", async () => {
+    const heard = vi.fn();
+    document.addEventListener("dragstart", heard, true);
+    document.addEventListener("drop", heard, true);
+    const { container } = play();
+    await userEvent.click(label("farad"));
+    await userEvent.click(screen.getByRole("button", { name: "Blank 1, empty" }));
+    document.removeEventListener("dragstart", heard, true);
+    document.removeEventListener("drop", heard, true);
+    expect(heard).not.toHaveBeenCalled();
+    expect(container.querySelector("[draggable]")).toBeNull();
+    expect(label("farad").className).toContain("select-none");
+  });
+
+  describe("dragged with the keyboard", () => {
+    stubLabelsLayout();
+
+    it("carries a label from the tray to the gap the arrows reach", async () => {
+      const { onChange } = play();
+      label("farad").focus();
+      await userEvent.keyboard(" ");
+      await userEvent.keyboard("{ArrowRight}");
+      await userEvent.keyboard("{ArrowRight}");
+      await userEvent.keyboard(" ");
+      await waitFor(() => expect(onChange).toHaveBeenCalledWith({ blanks: [null, "1", null, null] }));
+    });
+
+    it("moves a placed label to another gap of its group, emptying the first", async () => {
+      const { onChange } = play({ blanks: ["0", null, null, null] });
+      screen.getByRole("button", { name: "Blank 1: ohm" }).focus();
+      await userEvent.keyboard(" ");
+      await userEvent.keyboard("{ArrowRight}");
+      await userEvent.keyboard(" ");
+      await waitFor(() => expect(onChange).toHaveBeenCalledWith({ blanks: ["", "0", null, null] }));
+    });
   });
 });
 

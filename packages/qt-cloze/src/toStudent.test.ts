@@ -4,8 +4,8 @@
  * for every forbidden key and secret value — is the registry's contract test.
  */
 import { describe, expect, it } from "vitest";
-import { testGradeContext } from "@quiz/core/testing";
-import { config, SECRET_CONFIG } from "./test/fixtures.js";
+import { findStudentLeaks, testGradeContext } from "@quiz/core/testing";
+import { clozeLeakFixture, config, SECRET_CONFIG } from "./test/fixtures.js";
 import { clozeServer } from "./server.js";
 
 const view = { seed: 7, itemId: "i", shuffle: true };
@@ -100,6 +100,34 @@ describe("toStudent", () => {
       if (select?.kind !== "select") throw new Error("the fixture must hold a dropdown");
       expect(select.options.map((option) => option.id)).toEqual(canonical);
     }
+  });
+});
+
+/*
+ * ADR-138: the labels presentation adds ONE word to the view and nothing
+ * else — the tray is built in the browser from the options already served.
+ */
+describe("toStudent, shown as labels", () => {
+  const LABELS = config(SECRET_CONFIG.text, { presentation: "labels" });
+
+  it.each(VIEWS)("leaks no key and no answer (seed $seed, shuffle $shuffle)", (at) => {
+    const student = clozeServer.toStudent(LABELS, at);
+    expect(findStudentLeaks(student, clozeLeakFixture)).toEqual([]);
+  });
+
+  it("says labels, and is otherwise the dropdowns' view", () => {
+    const labels = clozeServer.toStudent(LABELS, view);
+    const dropdowns = clozeServer.toStudent(SECRET_CONFIG, view);
+    expect(labels.presentation).toBe("labels");
+    const { presentation: _presentation, ...rest } = labels;
+    expect(rest).toEqual(dropdowns);
+  });
+
+  it("sends no presentation for dropdowns, written or absent", () => {
+    expect(clozeServer.toStudent(SECRET_CONFIG, view)).not.toHaveProperty("presentation");
+    expect(clozeServer.toStudent(config(SECRET_CONFIG.text, { presentation: "dropdown" }), view)).not.toHaveProperty(
+      "presentation",
+    );
   });
 });
 

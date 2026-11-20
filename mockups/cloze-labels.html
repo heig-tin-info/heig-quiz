@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Texte à trous à étiquettes</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+html,body{margin:0}
+[hidden]{display:none!important}
+
+/* Layout: the student's question on the left (tray pinned over the text), the
+   editor's settings, source and blank table on the right; one column on a phone.
+   Tokens are Quiz's own (apps/web/DESIGN.md); g1..g4 are the label groups. */
+:root{
+  --canvas:#f6f5f2; --surface:#fff; --surface-2:#f3f1ed; --surface-3:#eae7e1;
+  --line:#e7e4de; --line-strong:#d3cfc7; --fg:#1a1917; --fg-muted:#67635b; --fg-faint:#726d64;
+  --accent:#b41f24; --on-fill:#fff;
+  --success:#1f7a4d; --success-soft:#e7f4ec; --warning:#a35810; --warning-soft:#fdf1e2;
+  --danger:#c2242a; --danger-soft:#fbe9e9; --info:#1268a0; --info-soft:#e8f2f9;
+  --g1:#1268a0; --g2:#8a3ce6; --g3:#00868e; --g4:#a35810;
+  --shadow:0 10px 30px rgb(0 0 0 / .14), 0 2px 6px rgb(0 0 0 / .08);
+  --sans:Manrope,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --canvas:#131211; --surface:#1b1a18; --surface-2:#232220; --surface-3:#2c2a27;
+    --line:#2a2825; --line-strong:#3a3733; --fg:#ecebe7; --fg-muted:#a39e94; --fg-faint:#8d887f;
+    --accent:#e85f64; --on-fill:#131211;
+    --success:#4cc38a; --success-soft:rgb(76 195 138 / .14); --warning:#f0a04b; --warning-soft:rgb(240 160 75 / .14);
+    --danger:#f26d72; --danger-soft:rgb(242 109 114 / .14); --info:#58a9e0; --info-soft:rgb(88 169 224 / .14);
+    --g1:#58a9e0; --g2:#c490f0; --g3:#2dd4bf; --g4:#f0a04b;
+    --shadow:0 10px 30px rgb(0 0 0 / .5); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --canvas:#131211; --surface:#1b1a18; --surface-2:#232220; --surface-3:#2c2a27;
+  --line:#2a2825; --line-strong:#3a3733; --fg:#ecebe7; --fg-muted:#a39e94; --fg-faint:#8d887f;
+  --accent:#e85f64; --on-fill:#131211;
+  --success:#4cc38a; --success-soft:rgb(76 195 138 / .14); --warning:#f0a04b; --warning-soft:rgb(240 160 75 / .14);
+  --danger:#f26d72; --danger-soft:rgb(242 109 114 / .14); --info:#58a9e0; --info-soft:rgb(88 169 224 / .14);
+  --g1:#58a9e0; --g2:#c490f0; --g3:#2dd4bf; --g4:#f0a04b;
+  --shadow:0 10px 30px rgb(0 0 0 / .5); color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--canvas);color:var(--fg);font:400 14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code{font-family:var(--mono);font-size:.92em}
+
+.wrap{max-width:1160px;margin:0 auto;padding-block:24px 64px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 24px;justify-content:space-between;margin-bottom:20px}
+.bar h1{margin:0;font-size:26px;font-weight:700;letter-spacing:-.02em;text-wrap:balance}
+.bar p{margin:2px 0 0;color:var(--fg-muted);max-width:60ch}
+.bar .tools{display:flex;gap:8px;flex-wrap:wrap}
+.seg{display:inline-flex;background:var(--surface-3);border-radius:999px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;border-radius:999px;padding:6px 14px;font-size:13px;font-weight:500;color:var(--fg-muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgb(0 0 0 / .08)}
+
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:24px;align-items:start}
+@media (max-width:960px){.cols{grid-template-columns:minmax(0,1fr)}}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;min-width:0}
+.card-h{padding:12px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.card-h h2{margin:0;font-size:15px;font-weight:600}
+.card-b{padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+.eyebrow{color:var(--fg-faint);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.hint{color:var(--fg-faint);font-size:12px;margin:0}
+.btn{border:1px solid transparent;background:transparent;color:var(--fg-muted);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:500;cursor:pointer}
+.btn:hover{background:var(--surface-2);color:var(--fg)}
+.score{font-weight:700;font-variant-numeric:tabular-nums}
+
+/* ---- groups: one hue and one shape each; g0 is the lone group, neutral ---- */
+.g0{--g:var(--fg-faint)} .g1{--g:var(--g1)} .g2{--g:var(--g2)} .g3{--g:var(--g3)} .g4{--g:var(--g4)}
+.gl{font-style:normal;font-size:9px;line-height:1;color:var(--g);flex:none}
+.g1 .gl::before,.gl.g1::before{content:"●"} .g2 .gl::before,.gl.g2::before{content:"■"}
+.g3 .gl::before,.gl.g3::before{content:"▲"} .g4 .gl::before,.gl.g4::before{content:"◆"}
+.g0 .gl{display:none}
+
+/* ---- tray ---- */
+.tray{position:sticky;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:5;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.tray-h{display:flex;align-items:baseline;gap:8px 12px;flex-wrap:wrap}
+.tray-h b{font-size:13px;font-weight:600}
+.tray-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:4px 10px;font-size:14px;line-height:1.35;
+  border:1px solid color-mix(in srgb,var(--g) 45%,var(--line-strong));
+  background:color-mix(in srgb,var(--g) 9%,var(--surface));color:var(--fg);
+  cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;max-width:100%;overflow-wrap:anywhere;text-align:left}
+.g0.chip,.g0 .chip{border-color:var(--line-strong);background:var(--surface)}
+.chip:hover{border-color:var(--g)}
+.chip.sel{border-color:var(--info);box-shadow:0 0 0 2px var(--info-soft)}
+.chip.spent{visibility:hidden}
+.chip.src{opacity:.35}
+.dragging,.dragging *{user-select:none;-webkit-user-select:none;cursor:grabbing!important}
+.chip.fly{position:fixed;left:0;top:0;z-index:50;pointer-events:none;box-shadow:var(--shadow);cursor:grabbing;margin:0}
+.mono .chip,.chip.mono{font-family:var(--mono);font-size:13px}
+
+/* ---- the text ---- */
+.text{display:flex;flex-direction:column;gap:12px;min-width:0}
+.text p{margin:0;font-size:16px;line-height:2.4}
+.text pre{margin:0;overflow-x:auto;border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:12px;
+  font-family:var(--mono);font-size:13px;line-height:2.5}
+.text pre code{font-size:inherit}
+.text .tbl{overflow-x:auto}
+.text table{border-collapse:collapse;width:100%;font-size:14px}
+.text th,.text td{border-bottom:1px solid var(--line);padding:7px 10px;text-align:left}
+.text th{font-weight:600;color:var(--fg-muted)}
+.text p code,.text td code{background:var(--surface-3);border-radius:4px;padding:1px 4px}
+
+/* A gap is as wide as the widest label of its group: the hidden sizers share its one grid cell. */
+.gap{display:inline-grid;vertical-align:middle;margin:0 2px;border-radius:8px;padding:3px 10px;font-size:14px;line-height:1.35;
+  min-width:44px;border:1.5px dashed color-mix(in srgb,var(--g) 55%,var(--line-strong));background:var(--surface-2);
+  cursor:pointer;touch-action:manipulation;transition:background .12s,border-color .12s,opacity .12s}
+pre .gap{font-family:var(--mono);font-size:13px}
+.gap > *{grid-area:1/1;white-space:nowrap}
+.gap .sizer{visibility:hidden;display:inline-flex;gap:6px;align-items:center}
+.gap .in{display:inline-flex;gap:6px;align-items:center;justify-content:center}
+.gap.full{border-style:solid;border-width:1px;padding:3.5px 10.5px;cursor:grab;touch-action:none;
+  border-color:color-mix(in srgb,var(--g) 45%,var(--line-strong));background:color-mix(in srgb,var(--g) 9%,var(--surface))}
+.g0.gap.full{border-color:var(--line-strong);background:var(--surface)}
+.gap.can{border-color:var(--info);background:var(--info-soft)}
+.gap.over{border-style:solid;box-shadow:0 0 0 3px var(--info-soft);border-color:var(--info)}
+.gap.cannot{opacity:.4}
+.gap.src .in{opacity:.3}
+.gap[disabled]{cursor:default}
+@media (prefers-reduced-motion:reduce){.gap{transition:none}}
+
+.in-text,.in-sel{border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:3px 12px;font-size:14px;margin:0 2px;vertical-align:middle;max-width:100%}
+.in-text{width:11ch}
+pre .in-text,pre .in-sel{font-family:var(--mono);font-size:13px}
+
+/* ---- review ---- */
+.verdict{display:inline-flex;align-items:center;gap:6px;vertical-align:middle;margin:0 2px;border-radius:8px;padding:3px 10px;font-size:14px;line-height:1.35;border:1px solid;white-space:nowrap}
+.verdict.ok{border-color:var(--success);background:var(--success-soft)}
+.verdict.ko{border-color:var(--danger);background:var(--danger-soft)}
+.verdict .mark{font-weight:700} .verdict.ok .mark{color:var(--success)} .verdict.ko .mark{color:var(--danger)}
+.verdict .exp{color:var(--success);font-weight:600}
+pre .verdict{font-family:var(--mono);font-size:13px}
+
+/* ---- right column ---- */
+.row{display:flex;align-items:flex-start;gap:12px;justify-content:space-between}
+.row .t b{display:block;font-weight:500}
+.row .t{min-width:0}
+.row .seg{flex:none;flex-wrap:nowrap}
+.switch{appearance:none;-webkit-appearance:none;width:34px;height:20px;border-radius:999px;background:var(--line-strong);position:relative;cursor:pointer;flex:none;margin:2px 0 0;transition:background .15s}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+.switch:checked{background:var(--success)}
+.switch:checked::after{transform:translateX(14px)}
+.switch:disabled{opacity:.45;cursor:default}
+textarea.src-text{width:100%;min-height:150px;resize:vertical;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:8px 10px;font-family:var(--mono);font-size:12.5px;line-height:1.55}
+.issue{border:1px solid var(--warning);background:var(--warning-soft);color:var(--fg);border-radius:10px;padding:8px 12px;font-size:13px}
+.issue b{color:var(--warning)}
+table.blanks{width:100%;border-collapse:collapse;font-size:13px}
+table.blanks th{font-weight:500;color:var(--fg-faint);text-align:left;padding:4px 8px 4px 0}
+table.blanks td{border-top:1px solid var(--line);padding:5px 8px 5px 0;vertical-align:top;color:var(--fg-muted)}
+table.blanks td.key{font-family:var(--mono);color:var(--fg);overflow-wrap:anywhere}
+table.blanks .n{font-variant-numeric:tabular-nums}
+.stored{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;overflow-wrap:anywhere;margin:0}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="bar">
+    <div>
+      <h1>Texte à trous à étiquettes</h1>
+      <p>Maquette interactive. Glissez une étiquette dans un trou, ou cliquez l'étiquette puis le trou. Un clic sur un trou rempli le vide.</p>
+    </div>
+    <div class="tools">
+      <div class="seg" role="group" aria-label="Exemple" id="exSeg"></div>
+      <div class="seg" role="group" aria-label="Vue" id="viewSeg">
+        <button type="button" data-view="student" aria-pressed="true">Étudiant</button>
+        <button type="button" data-view="review" aria-pressed="false">Correction</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="stack">
+      <section class="card" id="question">
+        <div class="card-h">
+          <div><span class="eyebrow">Question 3</span></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="score" id="score" hidden></span>
+            <button type="button" class="btn" id="reset">Tout effacer</button>
+          </div>
+        </div>
+        <div class="card-b">
+          <div class="tray" id="tray"></div>
+          <div class="text" id="text"></div>
+          <p class="hint" id="playerHint"></p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-h"><h2>Réponse enregistrée</h2></div>
+        <div class="card-b">
+          <pre class="stored" id="stored"></pre>
+          <p class="hint">Chaque trou garde l'indice de l'option choisie, exactement comme une liste déroulante. Changez la présentation à droite : la réponse reste la même.</p>
+        </div>
+      </section>
+    </div>
+
+    <div class="stack">
+      <section class="card">
+        <div class="card-h"><h2>Réglages de la question</h2><span class="eyebrow">Éditeur</span></div>
+        <div class="card-b">
+          <div class="row">
+            <div class="t"><b>Présentation des choix</b><span class="hint">Un réglage par question.</span></div>
+            <div class="seg" role="group" aria-label="Présentation des choix" id="presSeg">
+              <button type="button" data-pres="dropdown" aria-pressed="false">Listes</button>
+              <button type="button" data-pres="labels" aria-pressed="true">Étiquettes</button>
+            </div>
+          </div>
+          <div class="row">
+            <label class="t" for="once"><b>Chaque étiquette ne sert qu'une fois</b><span class="hint">Placée, elle quitte la réserve. Sinon elle y reste et peut resservir.</span></label>
+            <input type="checkbox" class="switch" id="once">
+          </div>
+          <div id="issues" class="stack" style="gap:8px"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-h"><h2>Texte de la question</h2></div>
+        <div class="card-b">
+          <textarea class="src-text" id="source" spellcheck="false" aria-label="Texte de la question, avec ses trous"></textarea>
+          <p class="hint">Syntaxe actuelle, inchangée : <code>{{=bonne|autre|autre}}</code> pour un choix, <code>{{réponse}}</code> pour un champ. Modifiez le texte pour essayer le vôtre.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-h"><h2>Trous</h2></div>
+        <div class="card-b">
+          <table class="blanks" id="blankTable"></table>
+          <p class="hint">Les trous qui proposent les mêmes choix forment un groupe : une couleur, une forme, une ligne de la réserve.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+const EXAMPLES = [
+  { name: "Phrase", text:
+"Un pointeur déclaré `int *p` contient une {{=adresse|valeur|taille|copie}}. L'expression `*p` donne la {{adresse|=valeur|taille|copie}} pointée, et `sizeof(p)` renvoie la {{adresse|valeur|=taille|copie}} du pointeur lui-même." },
+  { name: "Code", text:
+"Complétez le programme.\n\n```c\n{{=int|void|char|return|break}} main({{int|=void|char|return|break}})\n{\n    {{int|void|=char|return|break}} c = 'A';\n    printf(\"%c\\n\", c);\n    {{int|void|char|=return|break}} 0;\n}\n```" },
+  { name: "Deux groupes", text:
+"Associez à chaque grandeur son unité et le symbole de cette unité.\n\n| Grandeur | Unité | Symbole |\n|---|---|---|\n| Résistance | {{=ohm|farad|henry|siemens}} | {{=Ω|F|H|S}} |\n| Capacité | {{ohm|=farad|henry|siemens}} | {{Ω|=F|H|S}} |\n| Inductance | {{ohm|farad|=henry|siemens}} | {{Ω|F|=H|S}} |" },
+  { name: "Mixte", text:
+"Sur x86-64 sous Linux, `sizeof(char)` vaut {{=1|2|4|8}}, `sizeof(int)` vaut {{1|2|=4|8}} et `sizeof(double)` vaut {{1|2|4|=8}}, tout comme `sizeof(long)` qui vaut {{1|2|4|=8}}.\n\nLe type du résultat de `sizeof` s'appelle {{size_t}}." },
+];
+
+const OPEN = "⸢", CLOSE = "⸣";
+const state = { ex: 0, view: "student", pres: "labels", once: false, answer: [], armed: null };
+let parsed = { template: "", blanks: [] };
+let groups = [];
+
+const $ = (id) => document.getElementById(id);
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v === false || v == null) continue;
+    if (k === "class") el.className = v;
+    else if (k === "data") for (const [dk, dv] of Object.entries(v)) el.dataset[dk] = dv;
+    else if (k in el && k !== "list") el[k] = v;
+    else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
+  return el;
+}
+
+/* ---------- a small reading of the cloze grammar (the real one is @quiz/domain/cloze) ---------- */
+function splitAlternatives(s) {
+  const out = []; let cur = "";
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === "\\" && i + 1 < s.length) { cur += s[i + 1]; i++; continue; }
+    if (s[i] === "|") { out.push(cur); cur = ""; continue; }
+    cur += s[i];
+  }
+  out.push(cur);
+  return out;
+}
+function parseBody(body, index) {
+  const rest = body.replace(/^\d+(?:\.\d+)?\*/, "");
+  if (rest.trim() === "") return null;
+  if (rest.startsWith("#")) return { index, kind: "input", numeric: true, answers: [rest.slice(1).split(":")[0].trim()] };
+  if (/^\/[\s\S]*\/[A-Za-z]*$/.test(rest)) return { index, kind: "input", numeric: false, answers: [rest] };
+  const raw = [];
+  { let cur = ""; for (let i = 0; i < rest.length; i++) {
+      if (rest[i] === "\\" && i + 1 < rest.length) { cur += rest[i] + rest[i + 1]; i++; continue; }
+      if (rest[i] === "|") { raw.push(cur); cur = ""; continue; }
+      cur += rest[i];
+    } raw.push(cur); }
+  if (raw.some((a) => a.startsWith("="))) {
+    const options = [], correct = [];
+    for (const a of raw) {
+      const ok = a.startsWith("=");
+      const label = splitAlternatives(ok ? a.slice(1) : a).join("|").trim();
+      if (label === "") return null;
+      if (ok) correct.push(options.length);
+      options.push(label);
+    }
+    return { index, kind: "select", options, correct };
+  }
+  const answers = splitAlternatives(rest).map((a) => a.trim()).filter((a) => a !== "");
+  return answers.length ? { index, kind: "input", numeric: false, answers } : null;
+}
+function parseCloze(src) {
+  let template = ""; const blanks = []; let i = 0;
+  while (i < src.length) {
+    if (src.startsWith("\\{{", i)) { template += "{{"; i += 3; continue; }
+    if (src.startsWith("{{", i)) {
+      const end = src.indexOf("}}", i + 2);
+      const blank = end === -1 ? null : parseBody(src.slice(i + 2, end), blanks.length);
+      if (blank === null) { template += "{{"; i += 2; continue; }
+      blanks.push(blank); template += OPEN + blank.index + CLOSE; i = end + 2; continue;
+    }
+    template += src[i++];
+  }
+  return { template, blanks };
+}
+
+/* ---------- groups: blanks offering the same set of labels ---------- */
+function hash(s) { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return x >>> 0; }
+function shuffled(list, seed) {
+  let a = hash(seed); const out = list.slice();
+  const rnd = () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+  return out;
+}
+function groupsOf(blanks) {
+  const map = new Map();
+  for (const b of blanks) {
+    if (b.kind !== "select") continue;
+    const labels = [...new Set(b.options)];
+    const key = labels.slice().sort().join("\u0001");
+    let g = map.get(key);
+    if (!g) { g = { n: map.size + 1, labels: shuffled(labels, key), blanks: [] }; map.set(key, g); }
+    g.blanks.push(b.index); b.g = g.n;
+  }
+  return [...map.values()];
+}
+const gClass = (n) => (groups.length > 1 ? "g" + (((n - 1) % 4) + 1) : "g0");
+const labelOf = (b) => { const v = state.answer[b.index]; return v == null || v === "" ? null : (b.options[Number(v)] ?? null); };
+const inCode = (el) => el.closest("pre") !== null;
+
+function isRight(b) {
+  const v = state.answer[b.index];
+  if (v == null || String(v).trim() === "") return false;
+  if (b.kind === "select") return b.correct.includes(Number(v));
+  const given = String(v).trim().toLowerCase();
+  return b.answers.some((a) => (b.numeric ? Number(a.replace(",", ".")) === Number(given.replace(",", ".")) : a.toLowerCase() === given));
+}
+const expectedOf = (b) => (b.kind === "select" ? b.correct.map((i) => b.options[i]).join(" | ") : b.answers.join(" | "));
+
+/* ---------- placing ---------- */
+function place(index, label) {
+  const b = parsed.blanks[index];
+  const at = b.options.indexOf(label);
+  if (at === -1) return;
+  if (state.once) {
+    for (const other of groups.find((g) => g.n === b.g).blanks) {
+      if (other !== index && labelOf(parsed.blanks[other]) === label) state.answer[other] = null;
+    }
+  }
+  state.answer[index] = String(at);
+  state.armed = null;
+}
+
+/* ---------- markdown, just enough: fences, GFM tables, paragraphs, `code`, **bold** ---------- */
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const slots = (s) => s.replace(new RegExp(OPEN + "(\\d+)" + CLOSE, "g"), '<span data-slot="$1"></span>');
+const inline = (s) => slots(esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>"));
+const cells = (line) => { const c = line.trim().split("|"); if (c[0].trim() === "") c.shift(); if (c.length && c[c.length - 1].trim() === "") c.pop(); return c.map((x) => x.trim()); };
+function markdown(src) {
+  const out = []; const lines = src.split("\n"); let buf = []; let fenced = false;
+  const flushText = () => {
+    const text = buf.join("\n"); buf = [];
+    const ls = text.split("\n"); let para = [];
+    const flushPara = () => { if (para.join("").trim() !== "") out.push("<p>" + inline(para.join("\n")) + "</p>"); para = []; };
+    for (let i = 0; i < ls.length; i++) {
+      const row = (l) => l !== undefined && l.trimStart().startsWith("|");
+      if (row(ls[i]) && row(ls[i + 1]) && /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(ls[i + 1])) {
+        flushPara();
+        let html = '<div class="tbl"><table><thead><tr>' + cells(ls[i]).map((c) => "<th>" + inline(c) + "</th>").join("") + "</tr></thead><tbody>";
+        let j = i + 2;
+        for (; row(ls[j]); j++) html += "<tr>" + cells(ls[j]).map((c) => "<td>" + inline(c) + "</td>").join("") + "</tr>";
+        out.push(html + "</tbody></table></div>"); i = j - 1; continue;
+      }
+      if (ls[i].trim() === "") flushPara(); else para.push(ls[i]);
+    }
+    flushPara();
+  };
+  for (const line of lines) {
+    if (line.trimStart().startsWith("```")) {
+      if (fenced) { out.push("<pre><code>" + slots(esc(buf.join("\n"))) + "</code></pre>"); buf = []; } else flushText();
+      fenced = !fenced; continue;
+    }
+    buf.push(line);
+  }
+  if (fenced) out.push("<pre><code>" + slots(esc(buf.join("\n"))) + "</code></pre>"); else flushText();
+  return out.join("");
+}
+
+/* ---------- rendering ---------- */
+function blankControl(b, mono) {
+  const n = b.index + 1;
+  if (state.view === "review") {
+    const ok = isRight(b);
+    const given = b.kind === "select" ? labelOf(b) : (state.answer[b.index] || null);
+    return h("span", { class: "verdict " + (ok ? "ok" : "ko") },
+      h("span", { class: "mark", "aria-hidden": "true" }, ok ? "✓" : "✗"),
+      h("span", { "aria-label": `Trou ${n}, ${ok ? "juste" : "faux"}` }, given ?? "—"),
+      ok ? null : h("span", { class: "exp", title: "Réponse attendue" }, expectedOf(b)));
+  }
+  if (b.kind === "input") {
+    return h("input", { class: "in-text", type: "text", id: "blank-" + b.index, "aria-label": `Trou ${n}`, autocomplete: "off",
+      inputMode: b.numeric ? "decimal" : null, value: state.answer[b.index] ?? "",
+      oninput: (e) => { state.answer[b.index] = e.target.value === "" ? null : e.target.value; renderStored(); } });
+  }
+  const g = groups.find((x) => x.n === b.g);
+  if (state.pres === "dropdown") {
+    return h("select", { class: "in-sel", id: "blank-" + b.index, "aria-label": `Trou ${n}`,
+      onchange: (e) => { state.answer[b.index] = e.target.value === "" ? null : e.target.value; render("blank-" + b.index); } },
+      h("option", { value: "" }, "Choisir…"),
+      g.labels.map((label) => { const at = String(b.options.indexOf(label)); return h("option", { value: at, selected: state.answer[b.index] === at }, label); }));
+  }
+  const label = labelOf(b);
+  const armedHere = state.armed !== null && state.armed.g === b.g;
+  const gap = h("button", { type: "button", id: "blank-" + b.index,
+    class: ["gap", gClass(b.g), label !== null && "full", armedHere && "can", state.armed !== null && !armedHere && "cannot"].filter(Boolean).join(" "),
+    "aria-label": label === null ? `Trou ${n}, vide` : `Trou ${n} : ${label}. Activer pour le vider.`,
+    data: label === null ? { gap: b.index, g: b.g } : { gap: b.index, g: b.g, drag: "1", label } },
+    g.labels.map((l) => h("span", { class: "sizer", "aria-hidden": "true" }, h("i", { class: "gl" }), l)),
+    h("span", { class: "in" }, h("i", { class: "gl" }), label ?? " "));
+  return gap;
+}
+
+function renderTray() {
+  const tray = $("tray");
+  tray.replaceChildren();
+  const shown = state.view === "student" && state.pres === "labels" && groups.length > 0;
+  tray.hidden = !shown;
+  if (!shown) return;
+  const mono = parsed.blanks.some((b) => b.kind === "select") && /```/.test($("source").value);
+  tray.append(h("div", { class: "tray-h" }, h("b", {}, "Étiquettes"),
+    h("span", { class: "hint" }, state.once ? "Chacune ne sert qu'une fois." : "Chacune peut servir plusieurs fois.")));
+  for (const g of groups) {
+    const used = new Set(g.blanks.map((i) => labelOf(parsed.blanks[i])).filter((l) => l !== null));
+    tray.append(h("div", { class: "tray-row " + gClass(g.n) + (mono ? " mono" : ""), role: "group", "aria-label": groups.length > 1 ? `Groupe ${g.n}` : "Étiquettes" },
+      g.labels.map((label, i) => {
+        const spent = state.once && used.has(label);
+        const sel = state.armed !== null && state.armed.g === g.n && state.armed.label === label;
+        return h("button", { type: "button", id: `tray-${g.n}-${i}`, class: "chip" + (spent ? " spent" : "") + (sel ? " sel" : ""),
+          disabled: spent, "aria-pressed": sel ? "true" : "false", "aria-hidden": spent ? "true" : null,
+          data: { tray: "1", drag: "1", g: g.n, label } }, h("i", { class: "gl" }), label);
+      })));
+  }
+}
+
+function renderText() {
+  const text = $("text");
+  text.innerHTML = markdown(parsed.template);
+  for (const slot of text.querySelectorAll("[data-slot]")) {
+    const b = parsed.blanks[Number(slot.dataset.slot)];
+    if (b) slot.replaceWith(blankControl(b, inCode(slot)));
+  }
+}
+
+function renderStored() {
+  $("stored").textContent = JSON.stringify({ blanks: parsed.blanks.map((b) => state.answer[b.index] ?? null) });
+}
+
+function renderSide() {
+  const issues = $("issues"); issues.replaceChildren();
+  if (state.pres === "labels" && state.once) {
+    for (const g of groups) {
+      const count = new Map();
+      for (const i of g.blanks) for (const c of parsed.blanks[i].correct) { const l = parsed.blanks[i].options[c]; count.set(l, (count.get(l) ?? 0) + 1); }
+      for (const [label, n] of count) if (n > 1 && g.blanks.every((i) => parsed.blanks[i].correct.length === 1)) {
+        issues.append(h("div", { class: "issue", role: "status" }, h("b", {}, "Publication refusée. "), `« ${label} » est la bonne réponse de ${n} trous, et chaque étiquette ne sert qu'une fois.`));
+      }
+    }
+  }
+  if (state.pres === "labels" && groups.length === 0) issues.append(h("div", { class: "issue", role: "status" }, "Aucun trou à choix dans ce texte : il n'y a pas d'étiquette à afficher."));
+  $("once").disabled = state.pres !== "labels";
+
+  const table = $("blankTable"); table.replaceChildren(
+    h("thead", {}, h("tr", {}, h("th", {}, "Trou"), h("th", {}, "Forme"), h("th", {}, "Groupe"), h("th", {}, "Attendu"))),
+    h("tbody", {}, parsed.blanks.map((b) => h("tr", {},
+      h("td", { class: "n" }, String(b.index + 1)),
+      h("td", {}, b.kind === "select" ? (state.pres === "labels" ? "étiquette" : "liste") : (b.numeric ? "nombre" : "texte")),
+      h("td", {}, b.kind === "select" ? [h("i", { class: "gl g" + (((b.g - 1) % 4) + 1), style: "margin-right:6px" }), String(b.g)] : "—"),
+      h("td", { class: "key" }, expectedOf(b))))));
+}
+
+function render(focusId) {
+  const keep = focusId ?? document.activeElement?.id;
+  renderTray(); renderText(); renderStored(); renderSide();
+  const total = parsed.blanks.length, right = parsed.blanks.filter(isRight).length;
+  $("score").hidden = state.view !== "review";
+  $("score").textContent = `${right} / ${total}`;
+  $("reset").hidden = state.view !== "student";
+  $("playerHint").textContent = state.view === "review" ? "Correction : la réponse attendue suit chaque trou faux."
+    : state.pres === "labels" && groups.length ? "Glissez une étiquette, ou cliquez-la puis cliquez un trou." : "Remplissez chaque trou.";
+  if (keep) { const el = document.getElementById(keep); if (el && !el.disabled) el.focus({ preventScroll: true }); }
+}
+
+function load(text, keepSource) {
+  parsed = parseCloze(text);
+  groups = groupsOf(parsed.blanks);
+  state.answer = parsed.blanks.map(() => null);
+  state.armed = null;
+  if (!keepSource) $("source").value = text;
+  render();
+}
+
+/* ---------- click, and click then click ---------- */
+let justDragged = false;
+$("question").addEventListener("click", (e) => {
+  if (justDragged || state.view !== "student" || state.pres !== "labels") return;
+  const chip = e.target.closest("[data-tray]");
+  if (chip) {
+    const g = Number(chip.dataset.g), label = chip.dataset.label;
+    state.armed = state.armed && state.armed.g === g && state.armed.label === label ? null : { g, label };
+    render(chip.id); return;
+  }
+  const gap = e.target.closest("[data-gap]");
+  if (!gap) return;
+  const index = Number(gap.dataset.gap);
+  if (state.armed !== null) { if (state.armed.g === Number(gap.dataset.g)) { place(index, state.armed.label); render(gap.id); } return; }
+  if (state.answer[index] != null) { state.answer[index] = null; render(gap.id); }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.armed !== null) { state.armed = null; render(); } });
+
+/* ---------- drag, with the pointer (mouse, pen, finger) ---------- */
+let drag = null;
+$("question").addEventListener("pointerdown", (e) => {
+  if (state.view !== "student" || state.pres !== "labels" || e.button > 0) return;
+  const src = e.target.closest("[data-drag]");
+  if (!src || src.disabled) return;
+  drag = { id: e.pointerId, src, label: src.dataset.label, g: Number(src.dataset.g),
+    from: src.dataset.gap === undefined ? null : Number(src.dataset.gap), x: e.clientX, y: e.clientY, fly: null, over: null };
+});
+function overGap(x, y) {
+  const gap = document.elementFromPoint(x, y)?.closest("[data-gap]");
+  return gap && Number(gap.dataset.g) === drag.g ? gap : null;
+}
+window.addEventListener("pointermove", (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  if (!drag.fly) {
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 5) return;
+    state.armed = null;
+    const mono = inCode(drag.src) || drag.src.closest(".mono") !== null;
+    drag.fly = h("div", { class: `chip fly ${gClass(drag.g)}${mono ? " mono" : ""}` }, h("i", { class: "gl" }), drag.label);
+    document.body.append(drag.fly);
+    drag.src.classList.add("src");
+    document.documentElement.classList.add("dragging");
+    for (const gap of document.querySelectorAll("[data-gap]")) gap.classList.add(Number(gap.dataset.g) === drag.g ? "can" : "cannot");
+    for (const chip of document.querySelectorAll("[data-tray].sel")) chip.classList.remove("sel");
+  }
+  drag.fly.style.transform = `translate(${e.clientX + 10}px, ${e.clientY + 10}px)`;
+  const over = overGap(e.clientX, e.clientY);
+  if (over !== drag.over) { drag.over?.classList.remove("over"); over?.classList.add("over"); drag.over = over; }
+  if (e.clientY < 64) window.scrollBy(0, -14); else if (e.clientY > window.innerHeight - 64) window.scrollBy(0, 14);
+  e.preventDefault();
+});
+function endDrag(e, cancelled) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const d = drag; drag = null;
+  if (!d.fly) return; // a plain click: the click handler has it
+  d.fly.remove();
+  document.documentElement.classList.remove("dragging");
+  justDragged = true; setTimeout(() => { justDragged = false; }, 0);
+  let focus = null;
+  if (!cancelled) {
+    const target = d.over;
+    if (target) {
+      const index = Number(target.dataset.gap);
+      if (d.from !== null && d.from !== index) state.answer[d.from] = null;
+      place(index, d.label); focus = target.id;
+    } else if (d.from !== null) state.answer[d.from] = null; // dropped outside: back to the tray
+  }
+  render(focus);
+}
+window.addEventListener("pointerup", (e) => endDrag(e, false));
+window.addEventListener("pointercancel", (e) => endDrag(e, true));
+
+/* ---------- the mock's own controls ---------- */
+const pressed = (seg, attr, value) => { for (const b of seg.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset[attr] === String(value))); };
+EXAMPLES.forEach((ex, i) => $("exSeg").append(h("button", { type: "button", "aria-pressed": String(i === 0), data: { ex: i } }, ex.name)));
+$("exSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; state.ex = Number(b.dataset.ex); pressed($("exSeg"), "ex", state.ex); load(EXAMPLES[state.ex].text); });
+$("viewSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; state.view = b.dataset.view; state.armed = null; pressed($("viewSeg"), "view", state.view); render(); });
+$("presSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; state.pres = b.dataset.pres; state.armed = null; pressed($("presSeg"), "pres", state.pres); render(); });
+$("once").addEventListener("change", (e) => {
+  state.once = e.target.checked;
+  if (state.once) { // a label already placed twice keeps its first place
+    for (const g of groups) { const seen = new Set(); for (const i of g.blanks) { const l = labelOf(parsed.blanks[i]); if (l === null) continue; if (seen.has(l)) state.answer[i] = null; else seen.add(l); } }
+  }
+  render("once");
+});
+$("reset").addEventListener("click", () => { state.answer = parsed.blanks.map(() => null); state.armed = null; render("reset"); });
+$("source").addEventListener("input", (e) => { pressed($("exSeg"), "ex", -1); load(e.target.value, true); });
+
+load(EXAMPLES[0].text);
+})();
+</script>
+</body>
+</html>

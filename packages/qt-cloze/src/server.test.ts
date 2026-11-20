@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { ConfigMigrationError } from "@quiz/core/server";
 import { testGradeContext } from "@quiz/core/testing";
+import { CLOZE_MAX_LABEL_GROUPS } from "@quiz/domain/cloze";
 import { buildClock } from "@quiz/domain/regex";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { toCanonical } from "./canonical.js";
@@ -138,10 +139,60 @@ describe("regex blanks RE2 refuses (ADR-099)", () => {
   });
 });
 
+describe("the labels presentation (ADR-138)", () => {
+  const messages = (text: string, presentation?: "labels" | "dropdown") =>
+    clozeServer.publicationIssues!(config(text, presentation === undefined ? {} : { presentation })).map(
+      (issue) => issue.message,
+    );
+
+  it("publishes a text whose dropdowns make distinct labels", () => {
+    expect(messages("{{=ohm|farad}} {{ohm|=farad}} {{=Ω|F}} {{text}} {{#3}}", "labels")).toEqual([]);
+  });
+
+  it("needs a dropdown to make labels of", () => {
+    expect(messages("{{text}} and {{#3}}", "labels")).toEqual(["cloze.labels_no_dropdown"]);
+    expect(messages("{{text}} and {{#3}}", "dropdown")).toEqual([]);
+    expect(messages("{{text}} and {{#3}}")).toEqual([]);
+  });
+
+  it("refuses two options of one blank with the same text", () => {
+    expect(messages("{{=ohm|ohm|farad}}", "labels")).toEqual(["cloze.labels_duplicate_option"]);
+    expect(messages("{{=ohm|ohm|farad}}")).toEqual([]);
+  });
+
+  it(`refuses more than ${CLOZE_MAX_LABEL_GROUPS} groups`, () => {
+    const sets = (n: number) => Array.from({ length: n }, (_, i) => `{{=a${i}|b${i}}}`).join(" ");
+    expect(messages(sets(CLOZE_MAX_LABEL_GROUPS), "labels")).toEqual([]);
+    expect(messages(sets(CLOZE_MAX_LABEL_GROUPS + 1), "labels")).toEqual(["cloze.labels_too_many_groups"]);
+    expect(messages(sets(CLOZE_MAX_LABEL_GROUPS + 1))).toEqual([]);
+  });
+
+  it("refuses a [[…]] reference in a dropdown option of a parameterized question", () => {
+    const issues = (text: string, presentation?: string) =>
+      clozeServer.parameterIssues!({ text, ...(presentation === undefined ? {} : { presentation }) });
+    expect(issues("{{=[[a]]|[[b]]}} {{#[[a]]}}", "labels")).toEqual([{ path: ["text"], message: "cloze.computed_label" }]);
+    // A number blank stays parameterizable, and so does a dropdown shown as a dropdown.
+    expect(issues("{{=a|b}} {{#[[a]]}}", "labels")).toEqual([]);
+    expect(issues("{{=[[a]]|[[b]]}}")).toEqual([]);
+    expect(issues("{{/x[[a]]/}} {{=[[a]]|b}}", "labels")).toEqual([
+      { path: ["text"], message: "cloze.computed_regex_key" },
+      { path: ["text"], message: "cloze.computed_label" },
+    ]);
+  });
+});
+
 describe("the canonical mapping", () => {
   it("round-trips a full config", () => {
     const cfg = config("{{=a|b}} {{k}}", { caseSensitive: true, shuffleOptions: false });
     expect(ClozeConfigSchema.parse(toCanonical(cfg))).toEqual(cfg);
+  });
+
+  it("writes the presentation only when it is labels (ADR-138)", () => {
+    const labels = config("{{=a|b}}", { presentation: "labels" });
+    expect(toCanonical(labels)).toEqual({ configVersion: CLOZE_CONFIG_VERSION, text: "{{=a|b}}", presentation: "labels" });
+    expect(ClozeConfigSchema.parse(toCanonical(labels))).toEqual(labels);
+    expect(toCanonical(config("{{=a|b}}", { presentation: "dropdown" }))).not.toHaveProperty("presentation");
+    expect(toCanonical(config("{{=a|b}}"))).not.toHaveProperty("presentation");
   });
 
   it("omits the defaults", () => {

@@ -31,6 +31,16 @@ export const ClozeConfigSchema = z
     text: z.string().min(1).max(20_000),
     caseSensitive: z.boolean().default(false),
     shuffleOptions: z.boolean().default(true),
+    /**
+     * How the dropdown blanks are shown (ADR-138): as dropdowns, or as labels
+     * the student drags from a tray into the text. Absent means dropdowns, and
+     * there is deliberately no `.default`: a question saved again must keep
+     * its stored JSON byte for byte (the drill keys a parameterized question
+     * on the hash of its raw template, and raw reads apply no default), and a
+     * rollback must still read it — hence no version bump either. The editor
+     * writes `"labels"` or removes the key; read it through {@link isLabels}.
+     */
+    presentation: z.enum(["dropdown", "labels"]).optional(),
   })
   .superRefine((config, ctx) => {
     /*
@@ -49,6 +59,14 @@ export const ClozeConfigSchema = z
     }
   });
 export type ClozeConfig = z.infer<typeof ClozeConfigSchema>;
+
+/**
+ * Whether a config shows its dropdown blanks as labels (ADR-138). Takes a
+ * parsed config as well as raw JSON (a parameterized question's template).
+ */
+export function isLabels(config: unknown): boolean {
+  return (config as { presentation?: unknown } | null)?.presentation === "labels";
+}
 
 /**
  * One entry per blank, in order of appearance; `null` means untouched.
@@ -78,6 +96,11 @@ export function isClozeAnswered(answer: ClozeAnswer): boolean {
 export const ClozeStudentSchema = z.object({
   /** Markdown carrying the sentinel `⸢<index>⸣` at each blank (decision D5). */
   template: z.string(),
+  /**
+   * Present only when the dropdowns are shown as labels (ADR-138). The tray
+   * is built in the browser from the options below: nothing else is sent.
+   */
+  presentation: z.literal("labels").optional(),
   blanks: z.array(
     z.discriminatedUnion("kind", [
       z.object({

@@ -679,6 +679,9 @@ export function Shell({
           style={pageColumnVars}
           className={cx(
             "mx-auto w-full px-4 py-6 sm:px-(--page-gutter) lg:py-8",
+            // What a page pins under the sticky bars: the phone's top bar
+            // under `lg`, the banners always (the cloze's tray of labels, ADR-138).
+            "[--cloze-tray-top:calc(var(--banner-h)+var(--topbar-h))] lg:[--cloze-tray-top:var(--banner-h)]",
             wide ? "max-w-none" : "max-w-(--page-cap)",
           )}
         >

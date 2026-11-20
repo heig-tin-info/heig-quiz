@@ -5,6 +5,7 @@ import {
   ClozeAnswerSchema,
   ClozeConfigSchema,
   emptyClozeDraft,
+  isLabels,
 } from "./schema.js";
 
 function base(text: string): Record<string, unknown> {
@@ -69,6 +70,30 @@ describe("ClozeConfigSchema", () => {
     const config = ClozeConfigSchema.parse(base("{{Newton}}"));
     expect(config.caseSensitive).toBe(false);
     expect(config.shuffleOptions).toBe(true);
+  });
+
+  /*
+   * ADR-138: no default is WRITTEN for the presentation. A question saved
+   * again keeps its stored JSON as it was, and the drill's hash of a
+   * parameterized template with it.
+   */
+  it("leaves the presentation out of a config that has none", () => {
+    const config = ClozeConfigSchema.parse(base("{{=a|b}}"));
+    expect(config).not.toHaveProperty("presentation");
+    expect(isLabels(config)).toBe(false);
+  });
+
+  it("reads the labels presentation, and refuses an unknown one", () => {
+    const config = ClozeConfigSchema.parse({ ...base("{{=a|b}}"), presentation: "labels" });
+    expect(config.presentation).toBe("labels");
+    expect(isLabels(config)).toBe(true);
+    expect(isLabels({ ...base("{{=a|b}}"), presentation: "labels" })).toBe(true);
+    expect(isLabels(null)).toBe(false);
+    expect(ClozeConfigSchema.safeParse({ ...base("{{=a|b}}"), presentation: "tiles" }).success).toBe(false);
+  });
+
+  it("keeps the empty draft without a presentation", () => {
+    expect(emptyClozeDraft()).not.toHaveProperty("presentation");
   });
 
   /*

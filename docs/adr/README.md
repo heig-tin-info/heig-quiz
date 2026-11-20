@@ -101,6 +101,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-103 — Blocks: a block-programming question type, a warehouse robot graded by a pure interpreter](ADR-103-type-blocs.md)
 - [ADR-109 — Each question type draws its own answer key for the debrief](ADR-109-cle-de-correction-par-type.md)
 - [ADR-134 — SVG in questions: a strict check that refuses, an MCP upload tool](ADR-134-svg-dans-les-questions.md)
+- [ADR-138 — Cloze labels: the dropdown blanks shown as labels dragged into the text](ADR-138-etiquettes-du-texte-a-trous.md)
 
 ### Evaluations, grading and practice
 

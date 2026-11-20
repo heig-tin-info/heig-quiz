@@ -6,13 +6,16 @@
 import {
   versionedMigrate,
   tallyKeys,
+  type PublicationIssue,
   type QuestionTypeServer,
   type StudentView,
   type TallyEntry,
 } from "@quiz/core/server";
 import {
+  CLOZE_MAX_LABEL_GROUPS,
   clozeAcceptedLabel,
   clozeAnswerIdentity,
+  clozeLabelGroups,
   clozePart,
   clozePartIndex,
   clozeStudentTemplate,
@@ -20,6 +23,7 @@ import {
   matchBlank,
   parseCloze,
   selectOptionOrder,
+  type ClozeBlank,
 } from "@quiz/domain/cloze";
 import { CONFIG_TOO_COMPLEX_KEY, configPatternProblems, PATTERN_PROBLEM_KEY } from "@quiz/domain/regex";
 import { toCanonical } from "./canonical.js";
@@ -34,6 +38,7 @@ import {
   ClozeSolutionSchema,
   ClozeStudentSchema,
   emptyClozeDraft,
+  isLabels,
   type ClozeAnswer,
   type ClozeConfig,
   type ClozeDetails,
@@ -45,6 +50,22 @@ import { isClozeAnswered } from "./schema.js";
 /** Does this text hold at least one dropdown, the only shuffleable thing here? */
 export function hasSelectBlank(config: ClozeConfig): boolean {
   return parseCloze(config.text).blanks.some((blank) => blank.kind === "select");
+}
+
+/**
+ * What the labels presentation needs of a text (ADR-138): a dropdown to make
+ * labels of, labels a tray can tell apart inside a blank (a drop looks its
+ * label up by text), and no more groups than there are hues and shapes.
+ */
+function labelIssues(blanks: readonly ClozeBlank[]): PublicationIssue[] {
+  const issue = (message: string): PublicationIssue => ({ path: ["text"], message });
+  const issues: PublicationIssue[] = [];
+  if (!blanks.some((blank) => blank.kind === "select")) issues.push(issue("cloze.labels_no_dropdown"));
+  if (blanks.some((blank) => blank.kind === "select" && new Set(blank.options).size < blank.options.length)) {
+    issues.push(issue("cloze.labels_duplicate_option"));
+  }
+  if (clozeLabelGroups(blanks).length > CLOZE_MAX_LABEL_GROUPS) issues.push(issue("cloze.labels_too_many_groups"));
+  return issues;
 }
 
 /** Whether `view` shuffles this config's dropdowns: the view's switch AND the question's own. */
@@ -120,7 +141,9 @@ export const clozeServer: QuestionTypeServer<
    * collapses to an opaque input: no answer, no pattern, no tolerance.
    */
   toStudent(config, view): ClozeStudent {
-    return clozeStudentTemplate(parseCloze(config.text), view.seed, view.itemId, shufflesOptions(config, view));
+    const student = clozeStudentTemplate(parseCloze(config.text), view.seed, view.itemId, shufflesOptions(config, view));
+    // ADR-138: the labels presentation adds this one word and nothing else.
+    return isLabels(config) ? { ...student, presentation: "labels" } : student;
   },
 
   /**
@@ -197,12 +220,15 @@ export const clozeServer: QuestionTypeServer<
    * {@link CLOZE_MAX_BLANKS}; the slice keeps the work bounded whoever calls.
    */
   publicationIssues(config) {
-    const regexes = parseCloze(config.text)
-      .blanks.slice(0, CLOZE_MAX_BLANKS)
-      .flatMap((blank) => (blank.kind === "regex" ? [blank] : []));
+    const blanks = parseCloze(config.text).blanks.slice(0, CLOZE_MAX_BLANKS);
+    const regexes = blanks.flatMap((blank) => (blank.kind === "regex" ? [blank] : []));
     const problems = configPatternProblems(regexes);
-    if (problems === "too_costly") return [{ path: ["text"], message: CONFIG_TOO_COMPLEX_KEY }];
-    return problems.flatMap((problem) => (problem ? [{ path: ["text"], message: PATTERN_PROBLEM_KEY[problem] }] : []));
+    const labels = isLabels(config) ? labelIssues(blanks) : [];
+    if (problems === "too_costly") return [{ path: ["text"], message: CONFIG_TOO_COMPLEX_KEY }, ...labels];
+    return [
+      ...problems.flatMap((problem) => (problem ? [{ path: ["text"], message: PATTERN_PROBLEM_KEY[problem] }] : [])),
+      ...labels,
+    ];
   },
 
   /**
@@ -210,13 +236,23 @@ export const clozeServer: QuestionTypeServer<
    * A `[[…]]` inside a regex blank would make every student's instance a
    * pattern of its own — one more build per student, and a text compared
    * with a formatted number. The number blank (`{{#[[x]]}}`) is the way.
+   *
+   * Shown as labels (ADR-138), a dropdown option holds no `[[…]]` either: a
+   * label is looked up by its text, and two options could render alike on
+   * some draws.
    */
   parameterIssues(template) {
     const text = (template as { text?: unknown } | null)?.text;
     if (typeof text !== "string") return [];
-    return parseCloze(text).blanks.some((blank) => blank.kind === "regex" && blank.pattern.includes("[["))
-      ? [{ path: ["text"], message: "cloze.computed_regex_key" }]
-      : [];
+    const blanks = parseCloze(text).blanks;
+    const issues: PublicationIssue[] = [];
+    if (blanks.some((blank) => blank.kind === "regex" && blank.pattern.includes("[["))) {
+      issues.push({ path: ["text"], message: "cloze.computed_regex_key" });
+    }
+    if (isLabels(template) && blanks.some((blank) => blank.kind === "select" && blank.options.some((option) => option.includes("[[")))) {
+      issues.push({ path: ["text"], message: "cloze.computed_label" });
+    }
+    return issues;
   },
 
   /**

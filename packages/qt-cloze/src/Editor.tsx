@@ -1,6 +1,6 @@
 /**
- * The `cloze` editor: the authoring text, the two switches, and what the
- * parser understood.
+ * The `cloze` editor: the authoring text, the two switches and the
+ * presentation of the dropdowns (ADR-138), and what the parser understood.
  *
  * Controlled and offline. The blank table is still the spine of the screen:
  * the `{{…}}` grammar is terse, so the teacher must SEE how each hole was read
@@ -15,8 +15,8 @@ import type {
   StringOverrides,
 } from "@quiz/core/client";
 import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
-import { describeBlank, parseCloze } from "@quiz/domain/cloze";
-import { type ClozeConfig } from "./schema.js";
+import { clozeLabelGroups, describeBlank, parseCloze } from "@quiz/domain/cloze";
+import { isLabels, type ClozeConfig } from "./schema.js";
 import { clozeEditorStrings, type ClozeEditorStringKey } from "./strings.js";
 import {
   CheckboxField,
@@ -26,6 +26,7 @@ import {
   label,
   PromptField,
   sectionClass,
+  Segmented,
 } from "@quiz/ui";
 
 type ClozeEditorProps = EditorProps<ClozeConfig> & {
@@ -51,6 +52,11 @@ export function ClozeEditor({
   // the blanks the student will actually get.
   const parse = parseCloze(config.text);
   const patch = (next: Partial<ClozeConfig>) => onChange({ ...config, ...next });
+  const labels = isLabels(config);
+  // Numbered from 1, in order of first appearance: the player's tray rows.
+  const groupOf = new Map(
+    clozeLabelGroups(parse.blanks).flatMap((group, g) => group.blanks.map((index) => [index, g + 1] as const)),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,7 +86,7 @@ export function ClozeEditor({
         ) : null}
       </section>
 
-      <section className={cx(sectionClass, "flex-row flex-wrap gap-4")}>
+      <section className={cx(sectionClass, "flex-row flex-wrap items-center gap-4")}>
         <CheckboxField
           className={CHECKBOX}
           label={s.caseSensitive}
@@ -95,6 +101,28 @@ export function ClozeEditor({
           disabled={disabled}
           onChange={(shuffleOptions) => patch({ shuffleOptions })}
         />
+        {/* ADR-138: how the dropdowns are shown. Dropdowns REMOVE the key, so
+            a question nobody switched keeps its stored JSON as it was. */}
+        <div className="inline-flex flex-wrap items-center gap-2">
+          <span id="cloze-presentation-label" className="text-sm text-fg-muted">
+            {s.presentation}
+          </span>
+          <Segmented
+            name="cloze-presentation"
+            labelledBy="cloze-presentation-label"
+            size="sm"
+            value={labels ? "labels" : "dropdown"}
+            disabled={disabled}
+            options={[
+              { value: "dropdown", label: s.presentationDropdown },
+              { value: "labels", label: s.presentationLabels },
+            ]}
+            onChange={(presentation) => {
+              const { presentation: _dropped, ...rest } = config;
+              onChange(presentation === "labels" ? { ...rest, presentation } : rest);
+            }}
+          />
+        </div>
       </section>
 
       <section className={sectionClass}>
@@ -109,6 +137,7 @@ export function ClozeEditor({
                 <th className="py-1 pr-3 font-medium">{s.blank}</th>
                 <th className="py-1 pr-3 font-medium">{s.kind}</th>
                 <th className="py-1 pr-3 text-right font-medium">{s.weight}</th>
+                {labels ? <th className="py-1 pr-3 text-right font-medium">{s.group}</th> : null}
                 <th className="py-1 font-medium">{s.expected}</th>
               </tr>
             </thead>
@@ -118,6 +147,10 @@ export function ClozeEditor({
                   <td className="py-1 pr-3 tabular-nums text-fg-muted">{blank.index + 1}</td>
                   <td className="py-1 pr-3 text-fg-muted">{blank.kind}</td>
                   <td className="py-1 pr-3 text-right tabular-nums text-fg-muted">{blank.weight}</td>
+                  {labels ? (
+                    // The group a dropdown's labels fall in: a typo that splits a group shows here.
+                    <td className="py-1 pr-3 text-right tabular-nums text-fg-muted">{groupOf.get(blank.index) ?? "—"}</td>
+                  ) : null}
                   <td className="py-1 font-mono text-fg">{describeBlank(blank)}</td>
                 </tr>
               ))}
