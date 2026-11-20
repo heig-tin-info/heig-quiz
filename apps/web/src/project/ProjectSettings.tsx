@@ -9,7 +9,7 @@ import { useT } from "../i18n";
 import { Card, repoShortName, SettingRow, Skeleton } from "../ui";
 import { sourceDetailQuery } from "./newProject";
 import type { WriteProject } from "./projectPage";
-import { CriteriaRows, CriteriaSwitchRow } from "./ProjectCriteria";
+import { ContestationDaysSetting, CriteriaRows, CriteriaSwitchRow } from "./ProjectCriteria";
 import { DeadlineStrategyRow, GradingModeRow } from "./ProjectSettingRows";
 import { ProtectedFiles } from "./ProtectedFiles";
 import { WorkModeSetting } from "./ProjectWorkspace";
@@ -96,7 +96,8 @@ export function projectGradebookRow(project: ProjectDetail): ReactNode {
  * decides, the screen follows (`projectFieldRefusal`). The deadline itself is
  * edited in its tile (`ProjectOverview`), the name in the header. A draft has
  * its own form (`ProjectDraftForm`). Grading by criteria (ADR-106): its
- * settings and the snapshot of `criteria.yml` in that mode; before it, on a
+ * settings, the contestation window's days (ADR-139 §13) and the snapshot
+ * of `criteria.yml` in that mode; before it, on a
  * locked project not yet released, the one switch to it.
  */
 export function ProjectSettings({
@@ -133,6 +134,7 @@ export function ProjectSettings({
           {project.editable.includes("gradingMode") ? (
             <GradingModeRow modes={PROJECT_GRADING_MODES} value={project.gradingMode} disabled={busy} onChange={(gradingMode) => write({ gradingMode })} />
           ) : null}
+          <ContestationDaysSetting project={project} disabled={busy} write={write} />
           <CriteriaRows project={project} disabled={busy} write={write} />
         </>
       ) : project.editable.includes("gradingMode") ? (

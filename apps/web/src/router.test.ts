@@ -413,6 +413,12 @@ describe("the classroom merge's routes", () => {
     expect(routeToPath({ view: "classroomSettings", id: "c-1", connect: true })).toBe("/classrooms/c-1/settings?connect=1");
   });
 
+  // ADR-139 §13: the contestations' links, query-only (the pages read them; `parsePath` never does).
+  it("writes a project's contested filter and a student's criteria into the query", () => {
+    expect(routeToPath({ view: "project", id: "p-1", tab: "grading", filter: "contested" })).toBe("/projects/p-1?tab=grading&filter=contested");
+    expect(routeToPath({ view: "project", id: "p-1", at: "criteria" })).toBe("/projects/p-1?at=criteria");
+  });
+
   it("tells /courses (the student's) from /courses/:id (one course)", () => {
     expect(parsePath("/courses/")).toEqual({ view: "studentCourses" });
     expect(parsePath("/courses/k-1")).toEqual({ view: "course", id: "k-1" });

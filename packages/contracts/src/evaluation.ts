@@ -35,9 +35,10 @@ import {
   TIMINGS,
   TRUSTED_CLIENTS,
 } from "@quiz/domain";
-import { CONTESTATION_DAYS_MAX, contestationDaysOf } from "@quiz/domain";
+import { contestationDaysOf } from "@quiz/domain";
 
 import { CourseRole } from "./common.js";
+import { ContestationDays } from "./contestation.js";
 import { ConceptRef } from "./concept.js";
 import { EvaluationExports } from "./exports.js";
 
@@ -410,7 +411,7 @@ export const FeedbackPolicy = z.object({
    * nor under `when: none`. Copied with the policy. Absent means seven
    * days: read it through {@link contestationDaysOf}, never raw.
    */
-  contestationDays: z.number().int().min(0).max(CONTESTATION_DAYS_MAX).optional(),
+  contestationDays: ContestationDays.optional(),
 });
 export type FeedbackPolicy = z.infer<typeof FeedbackPolicy>;
 

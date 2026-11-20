@@ -4,7 +4,7 @@ import { useId, useState, type InputHTMLAttributes } from "react";
 
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
-import { FieldError, fieldErrorProps } from "./controls";
+import { FieldError, fieldErrorProps, FieldLabel } from "./controls";
 import { cx } from "./layers";
 import { useNumberDraft } from "./useNumberDraft";
 
@@ -33,11 +33,18 @@ export function pointsRange({ max, bonus }: PointsBounds): [number, number] {
   return awardedRange({ maxPoints: max, ...(bonus === undefined ? {} : { bonusPoints: bonus }) });
 }
 
-/** "/ 4", a penalty "/ −3" (a real minus sign), a bonus "/ +1". */
-export function pointsSuffix(bounds: PointsBounds): string {
+/** A criterion's bounds as a row carries them (`max`, and a bonus criterion's `bonus` or none). */
+export const pointsBounds = ({ max, bonus }: { max: number; bonus?: number | undefined }): PointsBounds =>
+  bonus === undefined ? { max } : { max, bonus };
+
+/** The maximum as it reads: "4", a penalty "−3" (a real minus sign), a bonus "+1". */
+export function pointsMax(bounds: PointsBounds): string {
   const kind = KIND[pointsKind(bounds)];
-  return `/ ${kind.sign}${formatPoints(kind.n(bounds))}`;
+  return `${kind.sign}${formatPoints(kind.n(bounds))}`;
 }
+
+/** "/ 4", a penalty "/ −3", a bonus "/ +1": the pill's suffix. */
+export const pointsSuffix = (bounds: PointsBounds): string => `/ ${pointsMax(bounds)}`;
 
 /**
  * The pill of a points field: the input, bare, and the maximum after it,
@@ -95,6 +102,43 @@ export function PointsPill({
         {t(kind.key, { n: formatPoints(kind.n(bounds)) })}
       </span>
     </span>
+  );
+}
+
+/**
+ * A points field being typed, its label above the pill and its error tied
+ * under it: the manual override's and a contestation's new points. The
+ * caller holds the text and says what is wrong; `PointsInput` is the one
+ * that commits by itself.
+ */
+export function PointsField({
+  label,
+  hint,
+  bounds,
+  value,
+  onChange,
+  error,
+  autoFocus,
+}: {
+  label: string;
+  /** Beside the label: the range, when the pill's suffix does not say it. */
+  hint?: string | undefined;
+  bounds: PointsBounds;
+  value: string;
+  onChange: (text: string) => void;
+  /** Shown under the pill, the field then marked invalid; null while it is not. */
+  error: string | null;
+  autoFocus?: boolean;
+}) {
+  const id = useId();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <FieldLabel htmlFor={id} hint={hint}>
+        {label}
+      </FieldLabel>
+      <PointsPill id={id} bounds={bounds} autoFocus={autoFocus} value={value} onChange={(e) => onChange(e.target.value)} {...fieldErrorProps(id, error)} />
+      <FieldError id={id}>{error}</FieldError>
+    </div>
   );
 }
 

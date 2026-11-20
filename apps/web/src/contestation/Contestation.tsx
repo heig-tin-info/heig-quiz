@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
-import { Check, CheckCircle2, Eye, Hourglass, X, XCircle, type LucideIcon } from "lucide-react";
+import { Check, CheckCircle2, Eye, Hourglass, MessageSquareWarning, X, XCircle, type LucideIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import {
@@ -7,19 +7,35 @@ import {
   ContestationFileBody,
   ContestationResolveBody,
   NotContestable,
-  type ContestationResolution,
+  ProjectContestationResolveBody,
   type ContestationState,
   type ContestationVerdict,
   type ContestRefusal,
+  type ProjectStudentContestation,
   type StudentContestation,
 } from "@quiz/contracts";
-import { answerExplained } from "@quiz/domain";
+import { answerExplained, formatPoints } from "@quiz/domain";
 
-import { api, refusalCodeOf, refusalReasonOf, wordedRefusal } from "./api";
-import { useHoldChanged } from "./build";
-import { useT, type Dict } from "./i18n";
-import { useToast } from "./notify";
-import { Button, cx, FieldError, fieldErrorProps, FormDialog, FormError, HeldButton, isoDateTime, NotePanel, Textarea } from "./ui";
+import { api, refusalCodeOf, refusalReasonOf, wordedRefusal } from "../api";
+import { useHoldChanged } from "../build";
+import { useT, type Dict } from "../i18n";
+import { useToast } from "../notify";
+import {
+  Button,
+  cx,
+  FieldError,
+  fieldErrorProps,
+  FormDialog,
+  FormError,
+  HeldButton,
+  isoDateTime,
+  NotePanel,
+  pointsBounds,
+  pointsMax,
+  Switch,
+  Textarea,
+  useNow,
+} from "../ui";
 
 /**
  * A contestation as its readers see it (ADR-139): the student on their
@@ -29,9 +45,12 @@ import { Button, cx, FieldError, fieldErrorProps, FormDialog, FormError, HeldBut
  * (decision 6). An acceptance may come with no reply and no change of
  * points (decision 7): nothing here promises points.
  *
- * Shared by every unit a student contests: an exam's question here, a
- * project's criterion next (Lot 1b) — the record, the field, the dialog
- * and the refusals' words.
+ * Shared by every unit a student contests — an exam's question, a
+ * project's criterion (Lot 1b) —: the record, the field, the dialog, the
+ * window's line and the owner's answer (the days' setting is
+ * `ContestationDays.tsx`). What differs per
+ * unit is the caller's: the route, the body's schema, and the refusals'
+ * words (a question, a criterion).
  */
 
 export const CONTESTATION_STATE: Record<ContestationState, { icon: LucideIcon; label: keyof Dict; badge: keyof Dict; text: string }> = {
@@ -124,6 +143,34 @@ export function ContestationRecord({
 }
 
 /**
+ * A criterion's contestation under its heading (ADR-139 §13): the criterion
+ * as it read when contested — its description, `detail` under it (the
+ * staff's id) — and its points then over its maximum. A criterion may have
+ * left the snapshot since: the heading is the contestation's own.
+ */
+export function ContestedCriterionHeading({
+  contestation,
+  detail,
+}: {
+  contestation: Pick<ProjectStudentContestation, "criterionDescription" | "pointsAtFiling" | "maxAtFiling" | "bonusAtFiling">;
+  detail?: ReactNode;
+}) {
+  const t = useT();
+  const bounds = pointsBounds({ max: contestation.maxAtFiling, bonus: contestation.bonusAtFiling ?? undefined });
+  return (
+    <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold leading-snug">{contestation.criterionDescription}</span>
+        {detail}
+      </span>
+      <span className="text-[13px] tabular-nums text-fg-muted">
+        {t("contest.atFiling", { points: formatPoints(contestation.pointsAtFiling), max: pointsMax(bounds) })}
+      </span>
+    </p>
+  );
+}
+
+/**
  * A reason or a reply being written: plain text, at most 2,000 characters
  * (`maxLength`), the help line turned into the error when there is one —
  * tied to the field — and the count beside it.
@@ -173,20 +220,51 @@ export function ContestationField({
   );
 }
 
-/** The refusals of a student's contestation (ADR-139 §4), in their words. */
-const REFUSAL: Partial<Record<string, keyof Dict>> = {
-  contestation_closed: "contest.refusal.closed",
-  contestation_exists: "contest.refusal.exists",
-  classroom_archived: "contest.refusal.archived",
-};
+/**
+ * ADR-139: the window, a quiet line under the score. While it runs (the
+ * closing instant against the clock), until when — if a unit may still be
+ * contested or is; once it closed, that it did — if one was contested. A
+ * student with nothing to contest reads nothing about it.
+ */
+export function ContestWindowLine({ closesAt, contested, offered }: { closesAt: string | null; contested: boolean; offered: boolean }) {
+  const t = useT();
+  const now = useNow(60_000);
+  if (closesAt === null) return null;
+  const running = Date.parse(closesAt) > now;
+  if (running ? !(contested || offered) : !contested) return null;
+  return (
+    <p className="flex items-center gap-1.5 text-[13px] text-fg-muted">
+      <MessageSquareWarning aria-hidden className="size-3.5 shrink-0" />
+      {running ? t("contest.until", { when: isoDateTime(closesAt) }) : t("contest.closed")}
+    </p>
+  );
+}
 
-/** `409 not_contestable`'s reasons: a new reason in the contract is a compile error here. */
-const NOT_CONTESTABLE: Record<ContestRefusal, keyof Dict> = {
-  not_shown: "contest.refusal.not_shown",
-  not_counted: "contest.refusal.not_counted",
-  not_counting: "contest.refusal.not_counting",
-  pending: "contest.refusal.pending",
-  full_points: "contest.refusal.full_points",
+/**
+ * The words of a student's refused filing (ADR-139 §4), per unit: the
+ * codes (`contestation_closed`, `contestation_exists`, `classroom_archived`)
+ * and `409 not_contestable`'s reasons — a new reason in the contract is a
+ * compile error in every table.
+ */
+export interface FilingRefusals {
+  codes: Partial<Record<string, keyof Dict>>;
+  notContestable: Record<ContestRefusal, keyof Dict>;
+}
+
+/** An exam's question (Lot 1). */
+export const QUESTION_REFUSALS: FilingRefusals = {
+  codes: {
+    contestation_closed: "contest.refusal.closed",
+    contestation_exists: "contest.refusal.exists",
+    classroom_archived: "contest.refusal.archived",
+  },
+  notContestable: {
+    not_shown: "contest.refusal.not_shown",
+    not_counted: "contest.refusal.not_counted",
+    not_counting: "contest.refusal.not_counting",
+    pending: "contest.refusal.pending",
+    full_points: "contest.refusal.full_points",
+  },
 };
 
 /**
@@ -197,11 +275,13 @@ const NOT_CONTESTABLE: Record<ContestRefusal, keyof Dict> = {
  * is read again whatever the answer, so a window closed since the page
  * loaded stops offering the act.
  */
-export function ContestDialog({
+export function ContestDialog<C extends StudentContestation = StudentContestation>({
   title,
   closesAt,
   path,
   invalidate,
+  refusals = QUESTION_REFUSALS,
+  note,
   onFiled,
   onClose,
 }: {
@@ -212,8 +292,12 @@ export function ContestDialog({
   path: string;
   /** The reads that show the contestation, refreshed after the answer. */
   invalidate: readonly QueryKey[];
+  /** The refusals' words for the unit; an exam's question's by default. */
+  refusals?: FilingRefusals;
+  /** A line under the window's: what else the student should know before sending (a group's repository). */
+  note?: ReactNode;
   /** The contestation as filed, before the reads come back. */
-  onFiled?: (contestation: StudentContestation) => void;
+  onFiled?: (contestation: C) => void;
   onClose: () => void;
 }) {
   const t = useT();
@@ -224,7 +308,7 @@ export function ContestDialog({
     for (const queryKey of invalidate) void qc.invalidateQueries({ queryKey });
   };
 
-  const file = useMutation<StudentContestation, unknown, ContestationFileBody>({
+  const file = useMutation<C, unknown, ContestationFileBody>({
     mutationFn: (body) => api(path, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: (contestation) => {
       onFiled?.(contestation);
@@ -251,7 +335,7 @@ export function ContestDialog({
           error={file.error}
           describe={(e) => {
             const reason = refusalReasonOf(e, NotContestable);
-            return reason ? t(NOT_CONTESTABLE[reason]) : wordedRefusal(e, REFUSAL, t);
+            return reason ? t(refusals.notContestable[reason]) : wordedRefusal(e, refusals.codes, t);
           }}
         />
       }
@@ -266,12 +350,23 @@ export function ContestDialog({
         rows={6}
       />
       {closesAt ? <p className="text-[13px] text-fg-muted">{t("contest.until", { when: isoDateTime(closesAt) })}</p> : null}
+      {note ? <p className="text-[13px] text-fg-muted">{note}</p> : null}
     </FormDialog>
   );
 }
 
-/** The points an answer gives: a grading's (`points`, or an essay's `criteria`), as the manual override writes them. */
-export type AnswerPoints = Pick<ContestationResolveBody, "points" | "criteria">;
+/**
+ * The points an answer gives, as the unit's write takes them: an exam
+ * cell's (`points`, or an essay's `criteria`, the manual override's), or a
+ * project criterion's (`points` and its `rationale`, the teacher's
+ * criterion write).
+ */
+export type AnswerPoints =
+  | Pick<ContestationResolveBody, "points" | "criteria">
+  | Pick<ProjectContestationResolveBody, "points" | "rationale">;
+
+/** The answer's body, by the unit's contract (invariant 7): an exam's, or a project criterion's. */
+type ResolveSchema = typeof ContestationResolveBody | typeof ProjectContestationResolveBody;
 
 /** The refusals of the owner's answer this block words; `owner_required` and `criteria_invalid` are the app's. */
 const ANSWER_REFUSAL: Partial<Record<string, keyof Dict>> = {
@@ -292,11 +387,20 @@ export function ContestationReply({
   resolvePath,
   onChanged,
   points,
+  schema = ContestationResolveBody,
+  acceptable = true,
+  refusals,
 }: {
   resolvePath: string;
   onChanged: () => void;
-  /** New points: the fields (the switch that offers them included), whether any are given, valid, and as the wire writes them. */
-  points?: { fields: ReactNode; given: boolean; invalid: boolean; body: () => AnswerPoints };
+  /** New points: the unit's fields (shown once "Change the points" is on), whether they are valid, and as the wire writes them. */
+  points?: { fields: ReactNode; invalid: boolean; body: () => AnswerPoints };
+  /** The body's contract; an exam's by default. */
+  schema?: ResolveSchema;
+  /** Accept is offered (a criterion that left the project's snapshot may only be refused). */
+  acceptable?: boolean;
+  /** The unit's words for refusals, over the shared ones. */
+  refusals?: Partial<Record<string, keyof Dict>>;
 }) {
   const t = useT();
   const toast = useToast();
@@ -304,10 +408,12 @@ export function ContestationReply({
   const [reply, setReply] = useState("");
   /** The verdict last asked for: its checks show, and its button spins. */
   const [asked, setAsked] = useState<ContestationVerdict | null>(null);
-  const given = points?.given === true;
+  /** New points are given: the switch, offered with the unit's fields. */
+  const [switched, setSwitched] = useState(false);
+  const given = points !== undefined && switched;
   useHoldChanged({ reply, given });
 
-  const resolve = useMutation<ContestationResolution, unknown, ContestationResolveBody>({
+  const resolve = useMutation<unknown, unknown, { verdict: ContestationVerdict }>({
     mutationFn: (body) => api(resolvePath, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: (_data, body) => {
       onChanged();
@@ -322,7 +428,7 @@ export function ContestationReply({
   const send = (verdict: ContestationVerdict) => {
     setAsked(verdict);
     if (replyNeeded(verdict) || (verdict === "accepted" && given && points.invalid)) return;
-    const body = ContestationResolveBody.safeParse({ verdict, reply, ...(verdict === "accepted" && given ? points.body() : {}) });
+    const body = schema.safeParse({ verdict, reply, ...(verdict === "accepted" && given ? points.body() : {}) });
     if (body.success) resolve.mutate(body.data);
   };
 
@@ -342,8 +448,20 @@ export function ContestationReply({
         help={t("contest.reply.help")}
         error={asked !== null && replyNeeded(asked) ? t("contest.reply.help") : null}
       />
-      {points?.fields}
-      <FormError error={resolve.error} title={t("contest.answer.failed")} describe={(e) => wordedRefusal(e, ANSWER_REFUSAL, t)} />
+      {points ? (
+        <>
+          <label className="flex items-center gap-2 text-[13px] font-medium">
+            <Switch checked={switched} onChange={setSwitched} label={t("grading.contest.givePoints")} />
+            <span aria-hidden>{t("grading.contest.givePoints")}</span>
+          </label>
+          {given ? points.fields : null}
+        </>
+      ) : null}
+      <FormError
+        error={resolve.error}
+        title={t("contest.answer.failed")}
+        describe={(e) => wordedRefusal(e, { ...ANSWER_REFUSAL, ...refusals }, t)}
+      />
       <div className="flex flex-wrap justify-end gap-2">
         {/* A refusal gives no points: the contract refuses the pair. */}
         <HeldButton
@@ -355,14 +473,16 @@ export function ContestationReply({
         >
           <X /> {t("contest.answer.refuse")}
         </HeldButton>
-        <Button
-          variant="secondary"
-          loading={resolve.isPending && asked === "accepted"}
-          disabled={resolve.isPending}
-          onClick={() => send("accepted")}
-        >
-          <Check /> {t("contest.answer.accept")}
-        </Button>
+        {acceptable ? (
+          <Button
+            variant="secondary"
+            loading={resolve.isPending && asked === "accepted"}
+            disabled={resolve.isPending}
+            onClick={() => send("accepted")}
+          >
+            <Check /> {t("contest.answer.accept")}
+          </Button>
+        ) : null}
       </div>
     </section>
   );

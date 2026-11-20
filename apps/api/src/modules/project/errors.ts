@@ -96,6 +96,13 @@ const STATUS: Record<Code, number> = {
   criteria_incomplete: 409,
   not_validated: 409,
   owner_required: 403,
+  // A criterion's contestation (ADR-139 §13): Lot 1's codes and statuses.
+  contestation_closed: 409,
+  contestation_exists: 409,
+  not_contestable: 409,
+  window_unavailable: 409,
+  window_instant: 422,
+  criterion_removed: 409,
   // Access to the distribution repository (#899): only a staff seat asks.
   staff_seat_required: 403,
   invite_refused: 422,
@@ -110,5 +117,19 @@ export class ProjectError extends DomainError {
   constructor(code: Code, message?: string, details?: Readonly<Record<string, unknown>>) {
     super(code, STATUS[code], message ?? code, details);
     this.name = "ProjectError";
+  }
+}
+
+/**
+ * THE owner rule of a grading write (ADR-135 §9, as amended by ADR-139 §13):
+ * on a released project — the teacher's score, the grade adjustment, a
+ * criterion's points, a validation, a Regrade — the course owner's alone,
+ * `403 owner_required`. Each writer calls it on the project's `released_at`
+ * re-read under the lock the release takes too; the route's loader asked
+ * the same before the body.
+ */
+export function requireReleasedOwner(project: { releasedAt: Date | null } | undefined, writer: { owner: boolean }): void {
+  if (project?.releasedAt != null && !writer.owner) {
+    throw new ProjectError("owner_required", "Only an owner of this course may change the grading of a released project");
   }
 }

@@ -53,6 +53,7 @@ export async function projectSummary(db: Db, row: ProjectRow, now: Date): Promis
     buildCommand: row.buildCommand,
     testCommand: row.testCommand,
     evidenceOutputs: row.evidenceOutputs,
+    contestationDays: row.contestationDays,
     source: { fullName: row.sourceFullName },
     distribution: row.distributionFullName === null ? null : { fullName: row.distributionFullName },
     deadlineAppliedAt: isoOrNull(row.deadlineAppliedAt),

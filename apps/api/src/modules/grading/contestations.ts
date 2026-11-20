@@ -45,8 +45,8 @@ export type ContestationRecord = typeof contestations.$inferSelect;
 
 // --- The two readings of a row --------------------------------------------
 
-/** What the student reads of their own contestation; an empty reply is none. */
-export const studentContestationOf = (row: ContestationRecord): StudentContestation => ({
+/** What the student reads of their own contestation; an empty reply is none. A project's criterion reads its row the same way (ADR-139 §13). */
+export const studentContestationOf = (row: Pick<ContestationRecord, "state" | "reason" | "filedAt" | "reply" | "resolvedAt">): StudentContestation => ({
   state: row.state,
   reason: row.reason,
   filedAt: iso(row.filedAt),

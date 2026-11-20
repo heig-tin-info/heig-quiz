@@ -37,7 +37,7 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { ProjectRegradeAccepted, ProjectRegradeRequest } from "@quiz/contracts";
 import { PROJECT_REGRADES_PER_DAY, SCHOOL_TIME_ZONE } from "@quiz/domain";
 
-import { audit, type AuditActor } from "../../audit.js";
+import { audit } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { auditLog, projectCriteria, projectRepos, projects } from "../../db/schema.js";
@@ -45,6 +45,7 @@ import { PROJECT_EVIDENCE_QUEUE } from "../../jobs.js";
 import { claimRegrades, sendCiPasses } from "./ci.js";
 import { isLive, LIVE } from "./deadline.js";
 import { ProjectError } from "./errors.js";
+import type { GradeWriter } from "./grades.js";
 import type { EvidenceJob } from "./evidence.js";
 import type { RepoRow } from "./repos.js";
 import { runEvidencePass } from "./reviewPass.js";
@@ -76,7 +77,9 @@ async function regradesToday(db: Db, projectId: string, action: RegradeAction, r
 
 /**
  * `POST …/regrade` (`repo` null) and `POST …/repos/:rid/regrade`: refused
- * with `409 not_criteria` off the `criteria` mode, `409 regrade_released`
+ * with `409 not_criteria` off the `criteria` mode, `403 owner_required` to
+ * an assistant once released (ADR-139 §13: the route's loader, and for a
+ * schema-3 snapshot again under the claim's lock), `409 regrade_released`
  * for a released schema-3 project without `releasedAcknowledged`, `409
  * not_frozen` when the repository (or every repository) is not frozen for
  * good, `429 regrade_limit` past the day's three; audited, then each
@@ -88,11 +91,11 @@ export async function regrade(
   config: AppConfig,
   project: ProjectRow,
   repo: RepoRow | null,
-  actor: AuditActor,
-  now: Date,
+  writer: GradeWriter,
   body: ProjectRegradeRequest = {},
 ): Promise<ProjectRegradeAccepted> {
   const db = app.db;
+  const { actor, now } = writer;
   const [snapshot] = await db.select().from(projectCriteria).where(eq(projectCriteria.projectId, project.id));
   if (project.gradingMode !== "criteria" || !snapshot) throw new ProjectError("not_criteria", "The project is not graded by criteria");
   const ci = snapshot.criteria.schemaVersion === 3;
@@ -114,7 +117,7 @@ export async function regrade(
   // A schema-3 snapshot: each repository's CI graded run dispatched anew, a new nonce each (ADR-119 §6); it can
   // replace validated rows (ADR-132 §5), so after the release only acknowledged, decided under the project's lock.
   const { passIds, afterRelease } = ci
-    ? await claimRegrades(db, project.id, repos.map((r) => r.id), app.clock, body.releasedAcknowledged === true)
+    ? await claimRegrades(db, project.id, repos.map((r) => r.id), app.clock, body.releasedAcknowledged === true, writer)
     : { passIds: [randomUUID()], afterRelease: false };
   const passId = passIds[0]!;
   // Both on the project; the repository's in the payload, which its own day's cap counts.

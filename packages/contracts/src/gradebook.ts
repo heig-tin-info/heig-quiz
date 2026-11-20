@@ -221,8 +221,8 @@ export const GradebookColumn = z.object({
   classMean: z.number().nullable(),
   /**
    * ADR-139: an exam's OPEN contestations, the class's (a teacher's test
-   * walk left out); 0 for any other column. Staff only: no student column
-   * carries it.
+   * walk left out), or a project's (§13, on its live repositories); 0 for
+   * any other column. Staff only: no student column carries it.
    */
   openContestations: z.number().int().nonnegative(),
 });

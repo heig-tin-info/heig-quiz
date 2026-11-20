@@ -29,11 +29,13 @@ describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", ()
       project_deadline_reminder: on,
       project_repo_invited: on,
       project_grade_final: on,
+      project_contestation_resolved: on,
       impersonation_ended: appOnly,
       student_joined: appOnly,
       roster_conflict: on,
       grading_ready: on,
       contestation_filed: appOnly,
+      project_contestation_filed: appOnly,
       project_deadline_applied: appOnly,
       project_provision_failed: on,
       github_org_lost: on,
@@ -130,6 +132,7 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
     "project_deadline_reminder",
     "project_repo_invited",
     "project_grade_final",
+    "project_contestation_resolved",
     "impersonation_ended",
   ];
   const COURSE_KINDS = [
@@ -137,6 +140,7 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
     "roster_conflict",
     "grading_ready",
     "contestation_filed",
+    "project_contestation_filed",
     "project_deadline_applied",
     "project_provision_failed",
     "github_org_lost",
@@ -201,7 +205,7 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
       if (kind.startsWith("project_")) expect(gated, kind).toContain(kind);
     }
     expect(gated).toContain("github_org_lost");
-    expect(GITHUB_KINDS).toHaveLength(8);
+    expect(GITHUB_KINDS).toHaveLength(10);
   });
 });
 

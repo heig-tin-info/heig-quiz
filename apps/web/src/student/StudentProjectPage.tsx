@@ -12,8 +12,10 @@
  * once released, the final score, the grade and the teacher's comment; on a
  * project graded by criteria, the criteria table under the score
  * (`ProjectCriteria.tsx`, ADR-106 §9), indicative until the release; the
- * teacher's message of the latest sync under the header (ADR-132 §10). The
- * clock is the server's (invariant 5): the payload's `serverNow` is sampled
+ * teacher's message of the latest sync under the header (ADR-132 §10); once
+ * released, a criterion's contestation (ADR-139 §13): "Contest" on the rows
+ * the server offers, a dialog, the record under its row — the bell's answer
+ * lands on the criteria (`?at=criteria`). The clock is the server's (invariant 5): the payload's `serverNow` is sampled
  * into `useServerClock`, and every countdown and gate reads its offset.
  *
  * It is the shell's width, like the classroom page it hangs from, and the
@@ -32,7 +34,7 @@
  *     12 inside a card.
  *   - Finish: cards on the canvas, hairlines, no shadow.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ExternalLink, FolderGit2, Laptop, Lock } from "lucide-react";
 
@@ -41,12 +43,15 @@ import {
   workspaceStartPath,
   WorkspaceStartRefusal,
   type ProjectInvitationResent,
+  type ProjectStudentContestation,
+  type StudentCriteriaRow,
   type StudentProject,
   type StudentProjectRepo,
 } from "@quiz/contracts";
 import { ciShare, ciShareOnly, criteriaTotals, formatScore } from "@quiz/domain";
 
 import { api, apiErrorMessage, isNotFound, refusalCodeOf, useMe } from "../api";
+import { ContestDialog, type FilingRefusals } from "../contestation/Contestation";
 import { usePortalLaunch } from "../portalLaunch";
 import { Grade } from "../Grade";
 import { useT } from "../i18n";
@@ -76,7 +81,7 @@ import {
   type BarPart,
 } from "../ui";
 import { RowActionControl, StatusBadge } from "./ActivityRow";
-import { CriteriaSection } from "./ProjectCriteria";
+import { CriteriaSection, type CriteriaContest } from "./ProjectCriteria";
 import { notStarted, ProjectCommitMeta, ProjectTimingMeta, projectStatus, useProjectAction, useStudentReadOnly } from "./ProjectRow";
 import {
   factsOfProject,
@@ -235,8 +240,82 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
         <ScoreSection repo={live} project={project} />
       ) : null}
 
-      {project.criteria ? <CriteriaSection rows={project.criteria} /> : null}
+      {project.criteria ? <ContestedCriteria project={project} rows={project.criteria} readOnly={readOnly} /> : null}
     </div>
+  );
+}
+
+/** ADR-139 §13: a criterion's refusals, in a project's words (the archived classroom's are the exams'). */
+const CRITERION_REFUSALS: FilingRefusals = {
+  codes: {
+    contestation_closed: "sproj.contest.refusal.closed",
+    contestation_exists: "sproj.contest.refusal.exists",
+    classroom_archived: "contest.refusal.archived",
+  },
+  notContestable: {
+    not_shown: "sproj.contest.refusal.not_shown",
+    not_counted: "project.contest.notCounted",
+    not_counting: "sproj.contest.refusal.not_counting",
+    pending: "sproj.contest.refusal.pending",
+    full_points: "sproj.contest.refusal.full_points",
+  },
+};
+
+/**
+ * The criteria table with its contestations (ADR-139 §13): "Contest" on a
+ * row the server offers (`contestable`, the write decides again), the
+ * shared dialog, and the filed contestation shown at once under its row,
+ * which takes the focus the button had; the read confirms it. A reader who
+ * may not write (a teacher in the student view, an impersonation) reads
+ * the records and is offered nothing. Opened from the answer's bell
+ * (`?at=criteria`), the page scrolls to the table once.
+ */
+function ContestedCriteria({ project, rows, readOnly }: { project: StudentProject; rows: StudentCriteriaRow[]; readOnly: boolean }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const [contesting, setContesting] = useState<StudentCriteriaRow | null>(null);
+  const [filed, setFiled] = useState<string | null>(null);
+  const [at, setAt] = useSearchParam("at", "");
+  const landed = useRef(false);
+  useEffect(() => {
+    if (at !== "criteria" || landed.current) return;
+    landed.current = true;
+    document.getElementById("criteria")?.scrollIntoView?.({ block: "start" });
+    setAt("");
+  }, [at, setAt]);
+  const contest: CriteriaContest = {
+    contestations: project.contestations,
+    closesAt: project.contestationClosesAt,
+    onContest: readOnly ? null : setContesting,
+    filed,
+  };
+  return (
+    <>
+      <CriteriaSection rows={rows} contest={contest} />
+      {contesting ? (
+        <ContestDialog<ProjectStudentContestation>
+          title={t("sproj.contest.title", { criterion: contesting.description })}
+          closesAt={project.contestationClosesAt}
+          path={`/app/api/student/projects/${project.id}/criteria/${encodeURIComponent(contesting.criterionId)}/contestation`}
+          invalidate={[studentProjectKey(project.id)]}
+          refusals={CRITERION_REFUSALS}
+          note={project.repo?.group ? t("sproj.contest.group") : undefined}
+          onFiled={(contestation) => {
+            qc.setQueryData<StudentProject>(studentProjectKey(project.id), (page) =>
+              page
+                ? {
+                    ...page,
+                    contestations: [contestation, ...page.contestations.filter((c) => c.criterionId !== contestation.criterionId)],
+                    criteria: page.criteria?.map((row) => (row.criterionId === contestation.criterionId ? { ...row, contestable: false } : row)) ?? null,
+                  }
+                : page,
+            );
+            setFiled(contestation.criterionId);
+          }}
+          onClose={() => setContesting(null)}
+        />
+      ) : null}
+    </>
   );
 }
 

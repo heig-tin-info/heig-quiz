@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCheck, ChevronRight, RefreshCw, Send, Snowflake } from "lucide-react";
+import { AlertTriangle, CheckCheck, ChevronRight, Lock, RefreshCw, Send, Snowflake } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import {
@@ -34,12 +34,15 @@ import {
   Menu,
   PageError,
   PageHeader,
+  QueryError,
   RelativeTime,
   Skeleton,
   type MenuItem,
 } from "../../ui";
-import { refusalMessage, shortSha } from "../projectPage";
+import { refusalMessage, releasedWriteHeld, shortSha } from "../projectPage";
 import { CommitGraphPanel } from "./CommitGraphPanel";
+import { useClassroomOwner } from "../../course/parts";
+import { useProjectContestations, RepoContestations } from "./Contestations";
 import { CriteriaTable, type GradeWrite } from "./CriteriaTable";
 import { gradingPrimary, toValidate, type GradingPrimary } from "./gradingModel";
 import { RationaleFold } from "./RationaleFold";
@@ -68,6 +71,14 @@ import { RepoBar } from "./RepoBar";
  * release itself is the project page's (its confirmation, its refusals):
  * Release leads there.
  *
+ * ADR-139 §13: once released, every criterion write — the points, Validate,
+ * *Validate the rest*, a Regrade — is the course owner's: anyone else reads
+ * the screen with those controls held, saying why. Under the table, the
+ * repository's contestations (`RepoContestations`), a second read joined on
+ * (repository, criterion): the reason, and the owner's one answer; a mark
+ * on each contested criterion's row, and on the rail a repository holding
+ * an open one.
+ *
  * The repository on screen lives in `?repo=`, so a reload lands on it.
  */
 export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Navigate }) {
@@ -86,6 +97,8 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
     queryFn: () => api(`/app/api/projects/${id}/grading`),
   });
   const crumbs = useClassroomCrumbs(view.data?.project.classroomId);
+  const contestations = useProjectContestations(id);
+  const owner = useClassroomOwner(view.data?.project.classroomId);
   const repos = view.data?.repos ?? [];
   const found = repos.findIndex((r) => r.id === repoParam);
   // Unnamed (or gone): the first repository still to validate, else the first.
@@ -189,6 +202,10 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
   const data = view.data!;
 
   const left = repos.filter(toValidate).length;
+  // ADR-139 §13: a released project's criterion writes are the owner's; anyone else reads why.
+  const ownerOnly = releasedWriteHeld(data.project.released, owner);
+  const heldWhy = t("project.refusal.gradeOwnerRequired");
+  const held = ownerOnly ? { disabled: true, description: heldWhy } : {};
   const onValidateRest = async () => {
     if (
       await confirm({
@@ -229,9 +246,9 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
     }
   };
   const menuItems: MenuItem[] = [
-    { label: t("project.grading.validateRest"), icon: CheckCheck, onSelect: () => void onValidateRest(), disabled: left === 0 },
-    ...(repo?.frozen ? [{ label: t("project.grading.regrade"), icon: RefreshCw, onSelect: () => void onRegrade(repo) }] : []),
-    ...(repos.some((r) => r.frozen) ? [{ label: t("project.grading.regradeAll"), icon: RefreshCw, onSelect: () => void onRegradeAll() }] : []),
+    { label: t("project.grading.validateRest"), icon: CheckCheck, onSelect: () => void onValidateRest(), disabled: left === 0, ...held },
+    ...(repo?.frozen ? [{ label: t("project.grading.regrade"), icon: RefreshCw, onSelect: () => void onRegrade(repo), ...held }] : []),
+    ...(repos.some((r) => r.frozen) ? [{ label: t("project.grading.regradeAll"), icon: RefreshCw, onSelect: () => void onRegradeAll(), ...held }] : []),
   ];
 
   const header = (
@@ -273,10 +290,13 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
   // A criterion's words, from any repository's table: every one lists the snapshot's criteria.
   const describe = (criterionId: string) => repo.table.find((c) => c.criterionId === criterionId)?.description ?? criterionId;
   const onGrade: GradeWrite = (criterionId, body) => grade.mutate({ repoId: repo.id, criterionId, body });
+  const contested = (contestations.data?.contestations ?? []).filter((c) => c.repoId === repo.id);
+  const openByRepo = contestations.data?.openByRepo ?? {};
 
   return (
     <div className="space-y-5">
       {header}
+      {ownerOnly ? <Alert icon={Lock} title={heldWhy} /> : null}
       {incomplete ? (
         <Alert tone="danger" icon={AlertTriangle} title={t("project.grading.validateRest.incomplete")}>
           <ul className="mt-1 space-y-0.5">
@@ -290,12 +310,13 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
           </ul>
         </Alert>
       ) : null}
-      <RepoBar repos={repos} index={index} onJump={jump} />
+      <RepoBar repos={repos} index={index} onJump={jump} openByRepo={openByRepo} />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
         <EvidenceLine repo={repo} />
         <span className="flex-1" />
         <PrimaryButton
           action={primary}
+          held={ownerOnly ? heldWhy : null}
           busy={validate.isPending}
           onValidate={() => validate.mutate(repo.id)}
           onNext={jump}
@@ -316,11 +337,17 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
         <CriteriaTable
           rows={repo.table}
           label={t("project.grading.table", { name: repo.label })}
-          writable={repo.frozen}
+          writable={repo.frozen && !ownerOnly}
           onGrade={onGrade}
           repoPath={`/app/api/projects/${id}/repos/${repo.id}`}
+          contestations={contested}
         />
       </Card>
+      {contestations.isError ? (
+        <QueryError title={t("project.contest.loadFailed")} query={contestations} />
+      ) : (
+        <RepoContestations projectId={id} repo={repo} contestations={contested} isOwner={owner} />
+      )}
       <CommitGraphPanel projectId={id} repoId={repo.id} open={graphOpen} onOpenChange={setGraphOpen} />
       <p className="hidden text-xs text-fg-faint sm:block">{t("project.grading.keys")}</p>
     </div>
@@ -423,12 +450,15 @@ function PassLine({ pass, describe }: { pass: ProjectGradingPass | null; describ
  */
 function PrimaryButton({
   action,
+  held,
   busy,
   onValidate,
   onNext,
   onRelease,
 }: {
   action: GradingPrimary;
+  /** Why Validate is held for this reader (a released project's, the owner's: ADR-139 §13), or null. */
+  held: string | null;
   busy: boolean;
   onValidate: () => void;
   onNext: (index: number) => void;
@@ -437,7 +467,11 @@ function PrimaryButton({
   const t = useT();
   switch (action.kind) {
     case "validate":
-      return (
+      return held ? (
+        <HeldButton disabledReason={held}>
+          <CheckCheck /> {t("project.grading.validate")}
+        </HeldButton>
+      ) : (
         <Button loading={busy} onClick={onValidate}>
           <CheckCheck /> {t("project.grading.validate")}
         </Button>

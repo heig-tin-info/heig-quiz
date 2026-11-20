@@ -102,7 +102,8 @@ import { buildGradedCommit, type Graft } from "../../github/graft.js";
 import { referenceBlob } from "../../github/revert.js";
 import { PROJECT_CI_QUEUE, PROJECT_REVIEW_QUEUE } from "../../jobs.js";
 import { ciGraded } from "./criteria.js";
-import { ProjectError } from "./errors.js";
+import { ProjectError, requireReleasedOwner } from "./errors.js";
+import type { GradeWriter } from "./grades.js";
 import { writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
 import { projectClient } from "./evidence.js";
 import { ingestCompletedRun, type CompletedRun } from "./grading.js";
@@ -161,7 +162,8 @@ async function loadPass(db: Db | Tx, passId: string): Promise<LoadedPass | null>
  * one `regrade` row per repository, each closing the open final pass or
  * earlier Regrade of its repository (a milestone's stays). Under the
  * project's row, share-locked first (a release's order), its `released_at`
- * re-read: released, the claim needs the acknowledgement (`409
+ * re-read: released, the claim is the course owner's (`403
+ * owner_required`, ADR-139 §13) and needs the acknowledgement (`409
  * regrade_released`, ADR-132 §5); its `created_at` read from `clock` once
  * the lock is held, so a release is stamped before it or after it commits.
  * The pass ids, and whether the project was released.
@@ -172,9 +174,12 @@ export async function claimRegrades(
   repoIds: readonly string[],
   clock: Clock,
   acknowledged: boolean,
+  staff: Pick<GradeWriter, "owner">,
 ): Promise<{ passIds: string[]; afterRelease: boolean }> {
   return db.transaction(async (tx) => {
     const [project] = await tx.select({ releasedAt: projects.releasedAt }).from(projects).where(eq(projects.id, projectId)).for("share");
+    // Released, a Regrade replaces validated rows: the owner's alone (ADR-139 §13), read again here under the lock.
+    requireReleasedOwner(project, staff);
     const afterRelease = project?.releasedAt != null;
     if (afterRelease && !acknowledged) {
       throw new ProjectError("regrade_released", "The project is released: a regrade replaces validated rows, confirm it");

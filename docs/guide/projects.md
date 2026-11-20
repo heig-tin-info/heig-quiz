@@ -144,6 +144,30 @@ After a talk with a student, or an explanation given afterwards, you can move th
   <figcaption>Releasing the scores. (Mock data.)</figcaption>
 </figure>
 
+### Contestations
+
+On a project graded by criteria, once you release the scores, a student may contest the grading of one criterion of their repository, once, with a reason in plain text, as on an exam (see [Contestations](grading.md#contestations)). On a group repository the contestation is the group's: any member files it, every member reads it and its answer, and nobody is told who filed it.
+
+**The window.** **Contestations**, in the project's **Settings** beside the grading mode (and in a draft's advanced options), sets how many days after the scores are first released a criterion may be contested: 7 by default, 0 for none, at most 60. It is locked once you release the scores: that release fixes the closing instant, and releasing again never moves it. From then on the **Grading** tab shows **Contestations open until** the date, or **Contestations closed**, above the matrix; the course's Teacher role can **Close now** or **Extend** (which reopens a closed window), or **Open a window** where none was set.
+
+<figure markdown="span">
+  ![The Grading tab on its Contested filter: 3 open contestations, the window's end, Extend and Close now, a mark on each contested cell](../assets/screenshots/mock-project-contest-matrix-light.png#only-light)
+  ![The Grading tab on its Contested filter: 3 open contestations, the window's end, Extend and Close now, a mark on each contested cell](../assets/screenshots/mock-project-contest-matrix-dark.png#only-dark)
+  <figcaption>The contested repositories, a mark on each contested criterion. (Mock data.)</figcaption>
+</figure>
+
+**Where they show.** The open count leads to the **Contested** filter of the matrix (`?filter=contested`), which keeps the repositories holding a contestation, open or answered. A contested cell carries a small bubble, amber while open; a repository's row carries its open count, and the gradebook flags the project's column. You are told in the bell (**Project contestation filed**), which opens that filter. Nothing is suspended: the grade stays released.
+
+**Answering.** On the grading screen, the contested criterion is marked `contested`, the rail flags the repository, and the contestations are listed under the criteria: the criterion as it read and its points when contested, the reason and its date. Answering is the course's Teacher role's, once: **Refuse**, with a reply, or **Accept**, with or without one. Switch **Change the points** on to give the criterion new points and, if you wish, a new rationale in the same act; the reply is then mandatory. Those points are a teacher's row, still to validate: validate the repository, then **Release again** for the grade to move. The student reads the answer at once, the new points as indicative until then. A contestation on a criterion that left `criteria.yml` since can only be refused, and says so. An assistant reads the contestations and the sentence saying who answers.
+
+<figure markdown="span">
+  ![The grading screen: a contestation's reason, and the answer with new points and a reply](../assets/screenshots/mock-project-contest-answer-light.png#only-light)
+  ![The grading screen: a contestation's reason, and the answer with new points and a reply](../assets/screenshots/mock-project-contest-answer-dark.png#only-dark)
+  <figcaption>Answering a criterion's contestation with new points. (Mock data.)</figcaption>
+</figure>
+
+**After the release of the scores, the criteria are the owner's.** Once a project's scores are released, every criterion write is the course's Teacher role's: a criterion's points, **Validate**, *Validate the rest as proposed* and both Regrades, as well as the grade adjustment. An assistant sees the grading screen with these held, and the sentence saying why. *(ADR-139 §13.)*
+
 ## Keep the source up to date
 
 When the source repository gets new commits, the page says it is ahead and offers **Sync**. Nothing reaches students until you click. Sync updates the distribution repository, then, for every unlocked repository, pushes the update to a `sync/<branch>` branch and opens **one pull request per handed-out branch** (or updates the one already open). The student merges it and resolves conflicts; Quiz never merges. Repositories already identical get none, and repositories past their deadline are skipped. A summary tells how many were opened, updated, up to date, failed or skipped.
@@ -180,4 +204,4 @@ Any member of the course's staff can open a student's (or a group's) repository 
 
 ## Notifications
 
-You are told when a deadline was applied (with the number of repositories locked), when a student's repository could not be made, and when the organization or the App is lost. Students are told when a project is scheduled (with its start), when it is published, a day before the deadline, when an invitation awaits them, and when scores are released. On the project page, short notices summarise what changed between two refreshes: acceptances, pushes, scores captured.
+You are told when a deadline was applied (with the number of repositories locked), when a student's repository could not be made, when a criterion of a project whose scores are released is contested (folded per project, off by e-mail by default), and when the organization or the App is lost. Students are told when a project is scheduled (with its start), when it is published, a day before the deadline, when an invitation awaits them, and when scores are released. On the project page, short notices summarise what changed between two refreshes: acceptances, pushes, scores captured.

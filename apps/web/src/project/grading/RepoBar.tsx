@@ -3,6 +3,7 @@ import { Check, Users } from "lucide-react";
 import type { ProjectGradingRepo } from "@quiz/contracts";
 
 import { StepBar } from "../../grading/StepBar";
+import { openContestationsWords } from "../../contestation/ContestationLine";
 import { useT, type TFunction } from "../../i18n";
 import { Badge } from "../../ui";
 
@@ -27,8 +28,28 @@ export function standingWords(repo: ProjectGradingRepo, t: TFunction): string {
  * repository is "done"; its name after the counter, the count validated
  * and its standing before the last chevron.
  */
-export function RepoBar({ repos, index, onJump }: { repos: ProjectGradingRepo[]; index: number; onJump: (index: number) => void }) {
+export function RepoBar({
+  repos,
+  index,
+  onJump,
+  openByRepo = {},
+}: {
+  repos: ProjectGradingRepo[];
+  index: number;
+  onJump: (index: number) => void;
+  /** ADR-139 §13: the open contestations per repository, flagged on the rail. */
+  openByRepo?: Readonly<Record<string, number>>;
+}) {
   const t = useT();
+  const flagOf = (r: ProjectGradingRepo): string | undefined => {
+    const open = openByRepo[r.id] ?? 0;
+    const words = [
+      // Its latest pass left earlier rows standing for lack of a result (ADR-132 §5).
+      r.pass && r.pass.kept.length > 0 ? t("project.grading.pass.keptFlag") : null,
+      open > 0 ? openContestationsWords(open, t) : null,
+    ].filter((w) => w !== null);
+    return words.length > 0 ? words.join(" · ") : undefined;
+  };
   const repo = repos[index];
   if (!repo) return null;
   return (
@@ -44,8 +65,7 @@ export function RepoBar({ repos, index, onJump }: { repos: ProjectGradingRepo[];
         label: r.label,
         description: standingWords(r, t),
         done: r.validation.validated,
-        // Its latest pass left earlier rows standing for lack of a result (ADR-132 §5): flagged on the rail.
-        flag: r.pass && r.pass.kept.length > 0 ? t("project.grading.pass.keptFlag") : undefined,
+        flag: flagOf(r),
       }))}
       lead={
         <span className="flex min-w-0 items-center gap-2">

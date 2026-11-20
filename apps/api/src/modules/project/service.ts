@@ -57,12 +57,35 @@
  * (`criteriaGrading.ts`), the release waiting for it (`grades.ts`).
  * From #899: a staff member's own read access to the distribution
  * repository, on demand (`distributionAccess.ts`).
+ * From ADR-139 §13: a criterion's contestation — the members' filing, the
+ * owner's answer and window acts, the staff's reading
+ * (`contestations.ts`); its table, `project_contestations`, is this
+ * module's.
  */
 export { acceptProject } from "./accept.js";
 export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";
 export { requestDistributionAccess } from "./distributionAccess.js";
 export { criteriaForSwitch, criteriaView, refreshCriteria, reloadCriteria } from "./criteria.js";
-export { criterionCiLog, gradeCriterion, gradingRepo, gradingView, validateProject, validateRepo } from "./criteriaGrading.js";
+export {
+  criterionCiLog,
+  gradeCriterion,
+  gradingRepo,
+  gradingView,
+  validateProject,
+  validateRepo,
+} from "./criteriaGrading.js";
+export {
+  changeProjectContestationWindow,
+  contestationOfProject,
+  fileProjectContestation,
+  openProjectContestations,
+  projectContestationsView,
+  resolveProjectContestation,
+  staffProjectContestationOf,
+  studentProjectContestationOf,
+  tellFiled,
+  tellResolved,
+} from "./contestations.js";
 export { repoCommitGraph } from "./commitGraph.js";
 export { regrade } from "./regrade.js";
 export { projectDetail, repoRuns } from "./detail.js";
@@ -78,6 +101,7 @@ export {
 export { projectsChanged } from "./events.js";
 export { ConfirmationNeeded, copiesBefore, followingCopies, RepoGroupTouched, setFrozen, stepCopies, stopProjects } from "./groupCopy.js";
 export { requestGroupSync } from "./groupSync.js";
+export { seatRepo } from "./groupRepos.js";
 export { resyncGroups } from "./groupResync.js";
 export { inviteOnGithubLink, releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "./access.js";
 export { resendInvitation } from "./invitation.js";

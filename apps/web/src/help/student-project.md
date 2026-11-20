@@ -38,3 +38,10 @@ in time may still finish. The clock is the server's, not your computer's.
 
 Once your teacher releases the scores, the page shows your final score, your
 grade and the teacher's comment. You get a notification.
+
+## Contesting a criterion
+
+Once its scores are released, a project graded by criteria may be contested for a few days:
+**Contest**, under a criterion, sends your reason once. On a group
+repository the contestation is the group's: every member reads it and its
+answer. New points stay indicative until the scores are released again.

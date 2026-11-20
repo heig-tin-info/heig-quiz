@@ -18,12 +18,14 @@ import { criteriaScore, currentCriterionRows, holdsCriterion, regradePower, repo
 
 import type { Db, Tx } from "../../db/client.js";
 import { gradeDispatches, projectCriteria, projectCriterionGrades, projectRepos, projects } from "../../db/schema.js";
-import { ProjectError } from "./errors.js";
+import { ProjectError, requireReleasedOwner } from "./errors.js";
+import type { GradeWriter } from "./grades.js";
 
 export type CriterionGradeRow = typeof projectCriterionGrades.$inferSelect;
 
 /** What a standing reads of a row: the domain's `CriterionGradeLike`. */
 const STANDING_COLUMNS = {
+  id: projectCriterionGrades.id,
   repoId: projectCriterionGrades.repoId,
   criterionId: projectCriterionGrades.criterionId,
   points: projectCriterionGrades.points,
@@ -214,12 +216,20 @@ export interface CriterionGradeInput {
  * supersedes (§5): a teacher's correction or a validation of a locked row
  * stays locked. A criterion appears at most once per call. The rows written
  * come back in the order of `inputs`.
+ *
+ * `staff`: a staff member's write — on a released project, the course
+ * owner's alone (ADR-139 §13, closing ADR-135 §9's follow-up), read again
+ * here under the project's share lock, which the release's update waits
+ * for (`403 owner_required`: the route's loader chose the role from the
+ * project as it read it). `after` runs in the same transaction once the
+ * rows are written: what a contestation's answer records beside them.
  */
 export async function writeCriterionGrades(
   db: Db,
   repoId: string,
   all: readonly CriterionGradeInput[],
   now: Date,
+  options: { staff?: Pick<GradeWriter, "owner">; after?: ((tx: Tx, rows: CriterionGradeRow[]) => Promise<void>) | undefined } = {},
 ): Promise<CriterionGradeRow[]> {
   if (new Set(all.map((i) => i.criterionId)).size !== all.length) {
     throw new Error("writeCriterionGrades: a criterion appears twice in one call");
@@ -227,10 +237,31 @@ export async function writeCriterionGrades(
   if (all.length === 0) return [];
   return db.transaction(async (tx) => {
     // The project's row first, then the repository's: a release's order.
+    if (options.staff) await assertReleasedOwner(tx, [repoId], options.staff);
     const power = await regradePass(tx, repoId);
     await lockRepos(tx, [repoId]);
-    return writeLocked(tx, repoId, all, now, power);
+    const rows = await writeLocked(tx, repoId, all, now, power);
+    await options.after?.(tx, rows);
+    return rows;
   });
+}
+
+/**
+ * Every criterion write of a staff member on a RELEASED project is the
+ * course owner's (ADR-139 §13, ADR-135 §9 as amended): the projects of
+ * `repoIds` share-locked — before any repository, a release's order — and
+ * read again, so a release committed since the route's loader is seen.
+ */
+async function assertReleasedOwner(tx: Tx, repoIds: readonly string[], staff: Pick<GradeWriter, "owner">): Promise<void> {
+  if (staff.owner) return;
+  // No filter on the release here: a row a release holds is waited for, then read as it committed.
+  const rows = await tx
+    .select({ releasedAt: projects.releasedAt })
+    .from(projects)
+    .innerJoin(projectRepos, eq(projectRepos.projectId, projects.id))
+    .where(inArray(projectRepos.id, [...repoIds]))
+    .for("share", { of: projects });
+  for (const row of rows) requireReleasedOwner(row, staff);
 }
 
 /** The repositories' rows locked, in a stable order (two writers never wait on each other crosswise). */
@@ -315,16 +346,19 @@ async function writeLocked(tx: Tx, repoId: string, all: readonly CriterionGradeI
  * criteria_incomplete` naming every repository and criterion without one:
  * nothing is validated) — then each current proposal superseded by a
  * validated copy (its points, source, rationale, reason and pass) through
- * the same supersede-and-insert. Answers, by repository, how many rows it
- * validated (0: nothing was left to validate).
+ * the same supersede-and-insert; on a released project, the owner's alone
+ * (`staff`, {@link assertReleasedOwner}). Answers, by repository, how many
+ * rows it validated (0: nothing was left to validate).
  */
 export async function validateProposals(
   db: Db,
   repoIds: readonly string[],
   snapshot: Pick<ParsedCriteria, "leaves">,
   now: Date,
+  staff: Pick<GradeWriter, "owner">,
 ): Promise<Map<string, number>> {
   return db.transaction(async (tx) => {
+    await assertReleasedOwner(tx, repoIds, staff);
     const locked = await lockRepos(tx, repoIds);
     if (locked.length < repoIds.length || locked.some((r) => r.frozenAt === null)) {
       throw new ProjectError("not_frozen", "A repository is validated once its deadline and grace have passed");

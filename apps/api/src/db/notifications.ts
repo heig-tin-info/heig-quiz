@@ -48,6 +48,8 @@ export const NOTIFICATION_FOLD_TARGETS = {
   // The staff's project kinds (F-NOTIF-13, M3-09b): one unread entry per project.
   project_deadline_applied: "projectId",
   project_provision_failed: "projectId",
+  // A project's contestations (ADR-139 §13): one unread entry per staff member and project.
+  project_contestation_filed: "projectId",
 } as const satisfies Partial<Record<NotificationKind, "classroomId" | "poolId" | "evaluationId" | "projectId" | "questionId">>;
 
 export type FoldedKind = keyof typeof NOTIFICATION_FOLD_TARGETS;

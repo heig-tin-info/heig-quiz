@@ -41,12 +41,15 @@ const project = (over: Partial<StudentProject> = {}): StudentProject => ({
   githubLinked: true,
   gradingMode: "auto",
   criteria: null,
+  contestationClosesAt: null,
+  contestations: [],
   repo: {
     fullName: "heig/labo-1-lea",
     url: "https://github.com/heig/labo-1-lea",
     invitation: "accepted",
     deleted: false,
     locked: false,
+    group: false,
     lastCommit: { sha: SHA, at: at(-0.1) },
     commits: 3,
     collected: false,
@@ -604,6 +607,7 @@ describe("the criteria table (ADR-106 §9, L-02f)", () => {
     points: null,
     state: "empty",
     locked: false,
+    contestable: false,
     ...over,
   });
   const criteria = (final: boolean): Row[] => [
@@ -675,4 +679,161 @@ describe("the criteria table (ADR-106 §9, L-02f)", () => {
     const table = screen.getByRole("table", { name: "Criteria" });
     expect(within(table).queryByText("indicative")).toBeNull();
   });
+});
+
+describe("a criterion's contestation (ADR-139 §13)", () => {
+  type Row = NonNullable<StudentProject["criteria"]>[number];
+  type Filed = StudentProject["contestations"][number];
+  const FILE = "POST /app/api/student/projects/p1/criteria/rendu.tests/contestation";
+  const row = (over: Partial<Row> & Pick<Row, "criterionId" | "description">): Row => ({
+    section: "rendu",
+    max: 4,
+    points: 3,
+    state: "validated",
+    locked: false,
+    contestable: false,
+    ...over,
+  });
+  const filed = (over: Partial<Filed> & Pick<Filed, "criterionId" | "criterionDescription">): Filed => ({
+    pointsAtFiling: 3,
+    maxAtFiling: 4,
+    bonusAtFiling: null,
+    state: "open",
+    reason: "My reason",
+    filedAt: at(-2),
+    reply: null,
+    resolvedAt: null,
+    ...over,
+  });
+  const released = (over: Partial<StudentProject> = {}): StudentProject =>
+    project({
+      gradingMode: "criteria",
+      status: "released",
+      release: { at: at(-5), points: 12, max: 16, grade: { grade: 4.5 }, comment: null, adjustmentComment: null },
+      criteria: [
+        row({ criterionId: "rendu.tests", description: "Tests pass", contestable: true }),
+        row({ criterionId: "code.memoire", description: "Memory freed" }),
+        row({ criterionId: "code.style", description: "Readable code" }),
+        row({ criterionId: "rapport.analyse", description: "Design explained" }),
+      ],
+      contestationClosesAt: at(2),
+      contestations: [
+        filed({ criterionId: "code.memoire", criterionDescription: "Memory freed", reason: "The buffer is freed in main." }),
+        filed({ criterionId: "code.style", criterionDescription: "Readable code", state: "accepted", reply: "Right, the names are fine.", resolvedAt: at(-1) }),
+        filed({ criterionId: "rapport.analyse", criterionDescription: "Design explained", state: "refused", reply: "The conclusion names it only.", resolvedAt: at(-1) }),
+        filed({ criterionId: "rapport.ortho", criterionDescription: "Spelling", pointsAtFiling: 0.5, maxAtFiling: 1 }),
+      ],
+      ...over,
+    });
+
+  it("offers Contest on a contestable criterion only, and files the reason with the group's sentence", async () => {
+    const answer = filed({ criterionId: "rendu.tests", criterionDescription: "Tests pass", reason: "Test 3 expects the wrong rounding." });
+    let sent = false;
+    // A group's repository (ADR-139 §13): the dialog says the contestation is the group's.
+    const after = released({ repo: { ...project().repo!, group: true } });
+    const { calls } = mockFetch({
+      // The read after the filing holds it, as the server's would.
+      [URL]: () => ok(sent ? { ...after, contestations: [answer, ...after.contestations], criteria: after.criteria!.map((r) => ({ ...r, contestable: false })) } : after),
+      [FILE]: () => {
+        sent = true;
+        return ok(answer);
+      },
+    });
+    render();
+    const table = await screen.findByRole("table", { name: "Criteria" });
+    expect(screen.getByText(/^Contestations open until/)).toBeInTheDocument();
+    // One offer, named after its criterion; the contested ones have none.
+    const buttons = within(table).getAllByRole("button", { name: /^Contest criterion/ });
+    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["Contest criterion “Tests pass”"]);
+    await userEvent.click(buttons[0]!);
+    const dialog = await screen.findByRole("dialog", { name: "Contest criterion “Tests pass”" });
+    expect(within(dialog).getByText("This contestation is your group's: every member reads it and its reply.")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Send" })).toBeDisabled();
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Reason" }), "Test 3 expects the wrong rounding.");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({ reason: "Test 3 expects the wrong rounding." });
+    // The record replaced the button at once, and holds the focus the button had.
+    await waitFor(() => expect(within(table).queryByRole("button", { name: /^Contest criterion/ })).toBeNull());
+    // (The phone's list draws the same record, hidden on a desktop: either one holds it here, jsdom showing both.)
+    expect(document.activeElement?.textContent).toBe("Contestation awaiting an answer");
+    expect(within(table).getByText("Test 3 expects the wrong rounding.")).toBeInTheDocument();
+  });
+
+  it("shows each record: awaiting, accepted with its reply and no promise of a grade, refused, and one on a criterion removed since", async () => {
+    mockFetch({ [URL]: ok(released()) });
+    render();
+    const table = await screen.findByRole("table", { name: "Criteria" });
+    expect(within(table).getByText("The buffer is freed in main.")).toBeInTheDocument();
+    expect(within(table).getByText("Contestation accepted")).toBeInTheDocument();
+    expect(within(table).getByText("Right, the names are fine.")).toBeInTheDocument();
+    expect(within(table).getByText("Any new points stay indicative until the scores are released again.")).toBeInTheDocument();
+    expect(within(table).getByText("Contestation refused")).toBeInTheDocument();
+    expect(within(table).getByText("The conclusion names it only.")).toBeInTheDocument();
+    // The removed criterion is not a row: listed after the table, as it read when contested.
+    const removed = screen.getByTestId("sproj-contest-removed");
+    expect(within(removed).getByText("Criteria no longer graded")).toBeInTheDocument();
+    expect(within(removed).getByText("Spelling")).toBeInTheDocument();
+    expect(within(removed).getByText("When contested: 0.5 / 1")).toBeInTheDocument();
+    expect(within(table).queryByText("Spelling")).toBeNull();
+  });
+
+  it("words the refusals in a criterion's terms", async () => {
+    mockFetch({
+      [URL]: ok(released()),
+      [FILE]: fail(409, { error: "not_contestable", message: "x", reason: "pending" }),
+    });
+    render();
+    const table = await screen.findByRole("table", { name: "Criteria" });
+    await userEvent.click(within(table).getByRole("button", { name: "Contest criterion “Tests pass”" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Reason" }), "Why");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Send" }));
+    expect(await within(dialog).findByText("This criterion is being graded again.")).toBeInTheDocument();
+  });
+
+  it("words a closed window in a project's terms", async () => {
+    mockFetch({ [URL]: ok(released()), [FILE]: fail(409, { error: "contestation_closed", message: "x" }) });
+    render();
+    const table = await screen.findByRole("table", { name: "Criteria" });
+    await userEvent.click(within(table).getByRole("button", { name: "Contest criterion “Tests pass”" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Reason" }), "Why");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Send" }));
+    expect(await within(dialog).findByText("Contestations are closed for this project.")).toBeInTheDocument();
+  });
+
+  it("offers nothing to an impersonation, which reads the records", async () => {
+    const me = makeMe({
+      role: "student",
+      session: { kind: "impersonation", evaluationId: null, projectId: null, readOnly: true, superPowersUntil: null, superPowersAvailable: false },
+    });
+    mockFetch({ [URL]: ok(released()) });
+    render({ me });
+    const table = await screen.findByRole("table", { name: "Criteria" });
+    expect(within(table).getByText("The buffer is freed in main.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Contest criterion/ })).toBeNull();
+  });
+
+  it("lands on the criteria from the answer's bell (?at=criteria), once", async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    mockFetch({ [URL]: ok(released()) });
+    const queryClient = makeQueryClient();
+    queryClient.setQueryData(meKey, student);
+    renderWithProviders(<StudentProjectPage id="p1" navigate={vi.fn()} />, { route: "/projects/p1?at=criteria", queryClient });
+    await screen.findByRole("table", { name: "Criteria" });
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+    expect(window.location.search).toBe("");
+  });
+
+  it("says nothing of a group on an individual repository", async () => {
+    mockFetch({ [URL]: ok(released()) });
+    render();
+    const table = await screen.findByRole("table", { name: "Criteria" });
+    await userEvent.click(within(table).getByRole("button", { name: /^Contest criterion/ }));
+    const dialog = await screen.findByRole("dialog", { name: /^Contest criterion/ });
+    expect(within(dialog).queryByText(/your group/)).toBeNull();
+  });
+
 });

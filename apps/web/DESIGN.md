@@ -1984,6 +1984,13 @@ One question's answers as a table (`src/grading/`, origin
   reason" until unfolded. The owner's answer is its own `line-strong` box
   under the review, two `secondary` buttons (Refuse, Accept) at its end:
   the panel's footer keeps the validation, the screen's primary.
+  A project's criterion (ADR-139 §13): in the Grading tab's matrix the
+  mark is the icon alone after the points (`compact`, its verdict the
+  accessible name), a repository's open count an amber `MessageSquareWarning`
+  and figure after its name; on the student's criteria table the record
+  takes a full-width row under its criterion, no rule between them (the
+  card's foot on a phone), and "Contest" is a small `secondary` button
+  under the criterion's description.
 - **The agreement figures** (ADR-139 §15) are readings, never actions:
   a `zinc` badge with the `Sparkles` icon, "AI: 12 of 15 unchanged", before
   the contested badge in the question bar, its mean difference and its split

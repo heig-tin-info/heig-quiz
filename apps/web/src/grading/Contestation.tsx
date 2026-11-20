@@ -1,11 +1,10 @@
 import { MessageSquare, MessageSquareWarning } from "lucide-react";
-import { useState } from "react";
 
 import type { GradingEntry, GradingQueueItem, StaffContestation } from "@quiz/contracts";
 
-import { CONTESTATION_STATE, ContestationRecord, ContestationReply } from "../Contestation";
+import { CONTESTATION_STATE, ContestationRecord, ContestationReply } from "../contestation/Contestation";
 import { useT } from "../i18n";
-import { Badge, Switch, Tip } from "../ui";
+import { Badge, cx, Tip } from "../ui";
 import { PointsFields, usePointsDraft } from "./PointsDraft";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 
@@ -15,11 +14,23 @@ import { useGradingInvalidate } from "./useGradingInvalidate";
  * answer below it.
  */
 
-/** A row's mark: an open contestation in amber, an answered one quiet; the verdict in the tooltip. */
-export function ContestationMark({ contestation }: { contestation: StaffContestation | null }) {
+/**
+ * A row's mark: an open contestation in amber, an answered one quiet; the
+ * verdict in the tooltip. `compact`, the icon alone (a matrix's cell, ADR-139
+ * §13), the verdict its accessible name.
+ */
+export function ContestationMark({ contestation, compact = false }: { contestation: Pick<StaffContestation, "state"> | null; compact?: boolean }) {
   const t = useT();
   if (!contestation) return null;
   const open = contestation.state === "open";
+  if (compact) {
+    const Icon = open ? MessageSquareWarning : MessageSquare;
+    return (
+      <Tip label={t(CONTESTATION_STATE[contestation.state].label)} className="inline-flex align-middle">
+        <Icon role="img" aria-label={t(CONTESTATION_STATE[contestation.state].label)} className={cx("size-3.5", open ? "text-warning" : "text-fg-faint")} />
+      </Tip>
+    );
+  }
   return (
     <Tip label={t(CONTESTATION_STATE[contestation.state].label)}>
       <Badge tone={open ? "amber" : "zinc"} icon={open ? MessageSquareWarning : MessageSquare}>
@@ -60,7 +71,7 @@ export function ContestationReason({
 
 /**
  * Under the answer, for the course's owner: the shared answer, its new
- * points the adjustment's own fields (F-GRADE-05), offered by a switch.
+ * points the adjustment's own fields (F-GRADE-05), offered by its switch.
  */
 export function ContestationAnswer({
   evaluationId,
@@ -77,28 +88,13 @@ export function ContestationAnswer({
   maxPoints: number;
   minPoints: number;
 }) {
-  const t = useT();
   const invalidate = useGradingInvalidate(evaluationId);
-  const [given, setGiven] = useState(false);
   const draft = usePointsDraft({ entry, criteria, maxPoints, minPoints });
   return (
     <ContestationReply
       resolvePath={`/app/api/contestations/${contestation.id}/resolve`}
       onChanged={invalidate}
-      points={{
-        given,
-        invalid: draft.invalid,
-        body: draft.body,
-        fields: (
-          <>
-            <label className="flex items-center gap-2 text-[13px] font-medium">
-              <Switch checked={given} onChange={setGiven} label={t("grading.contest.givePoints")} />
-              <span aria-hidden>{t("grading.contest.givePoints")}</span>
-            </label>
-            {given ? <PointsFields draft={draft} showErrors={draft.invalid} /> : null}
-          </>
-        ),
-      }}
+      points={{ invalid: draft.invalid, body: draft.body, fields: <PointsFields draft={draft} showErrors={draft.invalid} /> }}
     />
   );
 }

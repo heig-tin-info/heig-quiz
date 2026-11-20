@@ -35,6 +35,17 @@ of its row on the **Grading** tab: a relative change or an absolute grade,
 with a justification students read once released. After the release, only
 the person who runs the course can adjust a grade or change the teacher's score.
 
+## Contestations
+
+Graded by criteria, a project whose scores are released may be contested, one criterion of a
+repository at a time, for the days set in **Settings** (7 by default, 0 for
+none). The **Grading** tab shows the open count and the window above the
+matrix, where the course's Teacher role closes or extends it; **Contested**
+keeps the contested repositories, and a bubble marks each contested cell.
+The answer is given on the grading screen, under the criteria: **Refuse**
+with a reply, or **Accept**, possibly with new points (then a reply). New points wait for the validation and the next release of the scores. Once the scores are released, the
+criteria's points, the validations and the Regrades are the owner's.
+
 ## Deadline
 
 The deadline is applied on the server's clock; the time that counts for a

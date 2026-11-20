@@ -76,6 +76,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["projectCheckpointsKey", keys.projectCheckpointsKey("p1"), ["project", "p1", "checkpoints"]],
     ["projectCriteriaKey", keys.projectCriteriaKey("p1"), ["project", "p1", "criteria"]],
     ["projectGradingKey", keys.projectGradingKey("p1"), ["project", "p1", "grading"]],
+    ["projectContestationsKey", keys.projectContestationsKey("p1"), ["project", "p1", "contestations"]],
     ["projectSyncPreviewKey", keys.projectSyncPreviewKey("p1"), ["projectSyncPreview", "p1"]],
     ["projectCommitsKey", keys.projectCommitsKey("p1", "r1"), ["project", "p1", "commits", "r1"]],
     ["projectCiLogKey", keys.projectCiLogKey("/x"), ["projectCiLog", "/x"]],

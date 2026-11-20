@@ -25,16 +25,14 @@ import {
   PageSkeleton,
   QueryError,
   Button,
-  isoDateTime,
   RelativeTime,
   Stat,
-  useNow,
   type Tone,
 } from "../ui";
 import { attemptFeedbackKey } from "../queryKeys";
 import { leaveStudentView } from "../studentView";
 import { useEvaluation } from "../evaluation/api";
-import { ContestationRecord, ContestDialog } from "../Contestation";
+import { ContestationRecord, ContestDialog, ContestWindowLine } from "../contestation/Contestation";
 import { CopyItem } from "../CopyItem";
 import { PendingLine } from "./cards";
 import { useRetake } from "./retake";
@@ -262,27 +260,6 @@ function ReviewList({ review }: { review: readonly ReviewItem[] }) {
 /** ADR-139: the item may be contested now, and is not yet (the server's offer; the write decides again). */
 const offersContest = (item: StudentFeedbackItem) => item.contestable && item.contestation === null;
 
-/**
- * ADR-139: the window, a quiet line under the score. While it runs (the
- * closing instant against the clock), until when — if a question may still
- * be contested or is; once it closed, that it did — if one was contested.
- * A student with nothing to contest reads nothing about it.
- */
-function ContestWindowLine({ items, closesAt }: { items: readonly StudentFeedbackItem[]; closesAt: string | null }) {
-  const t = useT();
-  const now = useNow(60_000);
-  if (closesAt === null) return null;
-  const running = Date.parse(closesAt) > now;
-  const contested = items.some((i) => i.contestation !== null);
-  if (running ? !(contested || items.some(offersContest)) : !contested) return null;
-  return (
-    <p className="flex items-center gap-1.5 text-[13px] text-fg-muted">
-      <MessageSquareWarning aria-hidden className="size-3.5 shrink-0" />
-      {running ? t("contest.until", { when: isoDateTime(closesAt) }) : t("contest.closed")}
-    </p>
-  );
-}
-
 export function Feedback({
   attemptId,
   navigate,
@@ -403,7 +380,11 @@ export function Feedback({
           />
         </div>
         {practice ? <PracticePendingLine count={data.pendingCount} /> : <PendingLine count={data.pendingCount} />}
-        <ContestWindowLine items={data.items} closesAt={data.contestationClosesAt} />
+        <ContestWindowLine
+          closesAt={data.contestationClosesAt}
+          contested={data.items.some((i) => i.contestation !== null)}
+          offered={data.items.some(offersContest)}
+        />
         {/* "Download my copy" (F-EXP-06): this page as a file, a quiet row
             under the score, never the page's action. ADR-122 §10: a
             practice attempt has no copy. */}

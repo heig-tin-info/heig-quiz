@@ -83,6 +83,7 @@ describe("the student's project card (F-PROJ-04)", () => {
         invitation: "accepted",
         deleted: false,
         locked: false,
+        group: false,
         lastCommit: { sha: "a".repeat(40), at: START },
         commits: 4,
         ciStatus: "pass",
@@ -93,6 +94,8 @@ describe("the student's project card (F-PROJ-04)", () => {
       release: null,
       criteria: null,
       projectUpdate: { text: "Test 3 fixed.", at: START },
+      contestationClosesAt: null,
+      contestations: [],
       serverNow: START,
     };
     expect(StudentProject.parse(view)).toEqual(view);
@@ -184,6 +187,8 @@ describe("ProjectCreate and ProjectPatch (F-PROJ-01, F-PROJ-03, M3-02)", () => {
       gradingMode: PROJECT_DEFAULTS.gradingMode,
       protectedFiles: [],
       groupMode: false,
+      // ADR-139 §13: the contestation window, seven days after the first release.
+      contestationDays: 7,
     });
     expect(PROJECT_DEFAULTS).toEqual({ graceMinutes: 30, sourceStrategy: "squash", deadlineStrategy: "lock", gradingMode: "auto", publishMode: "manual" });
   });

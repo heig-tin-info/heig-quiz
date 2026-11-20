@@ -17,11 +17,13 @@ import { formatPoints } from "@quiz/domain";
 
 import { api, ApiError, refusedWith } from "../api";
 import { useConfirm } from "../confirm";
+import { ContestationDaysRow } from "../contestation/ContestationDays";
+import { useClassroomOwner } from "../course/parts";
 import { useT, type Dict } from "../i18n";
 import { useToast } from "../notify";
 import { projectCriteriaKey, projectKey } from "../queryKeys";
 import { Alert, Badge, Button, cx, FieldError, QueryError, Select, SettingRow, Skeleton, T, TableHead, TextInput, type Tone } from "../ui";
-import { refusalMessage, type WriteProject } from "./projectPage";
+import { refusalMessage, releasedWriteHeld, type WriteProject } from "./projectPage";
 
 /*
  * Grading by criteria (ADR-106 §2), for the project's staff: the mode
@@ -176,6 +178,26 @@ function ListRow({
   );
 }
 
+/**
+ * ADR-139 §13: how many days after its first release a criterion of the
+ * project may be contested, 0 for none, beside the grading mode — only in
+ * `criteria` mode, the one with a unit to contest. Editable until that
+ * release (the server's `editable`); then the window is set, and the
+ * Grading tab closes or extends it.
+ */
+export function ContestationDaysSetting({ project, disabled, write }: { project: ProjectDetail; disabled: boolean; write: WriteProject }) {
+  const t = useT();
+  const open = project.editable.includes("contestationDays");
+  return (
+    <ContestationDaysRow
+      days={project.contestationDays}
+      desc={t(open ? "project.contest.days.desc" : "project.contest.days.set")}
+      disabled={disabled || !open}
+      onChange={(contestationDays) => write({ contestationDays })}
+    />
+  );
+}
+
 /** The settings naming one of the snapshot's criteria. */
 type CriterionSetting = "testsCriterion" | "identityCriterion";
 /** The refusals of a criterion setting shown under its select, beside `unknown_criterion` (worded per setting). */
@@ -192,6 +214,8 @@ export function CriteriaRows({ project, disabled, write }: { project: ProjectDet
   const toast = useToast();
   const [reloadErrors, setReloadErrors] = useState<CriteriaError[] | null>(null);
   const [refused, setRefused] = useState<{ field: CriterionSetting; message: string } | null>(null);
+  // A reload may take a contested criterion out: on a released project, the owner's (ADR-139 §13).
+  const reloadHeld = releasedWriteHeld(project.releasedAt !== null, useClassroomOwner(project.classroomId));
   const view = useQuery<ProjectCriteriaView>({
     queryKey: projectCriteriaKey(project.id),
     queryFn: () => api(`/app/api/projects/${project.id}/criteria`),
@@ -309,10 +333,11 @@ export function CriteriaRows({ project, disabled, write }: { project: ProjectDet
         }
       >
         <div>
-          <Button variant="secondary" size="sm" loading={reload.isPending} disabled={disabled} onClick={() => reload.mutate()}>
+          <Button variant="secondary" size="sm" loading={reload.isPending} disabled={disabled || reloadHeld} onClick={() => reload.mutate()}>
             {reload.isPending ? null : <RefreshCw />}
             {t("project.criteria.reload")}
           </Button>
+          {reloadHeld ? <p className="mt-1 text-[13px] text-fg-muted">{t("project.refusal.gradeOwnerRequired")}</p> : null}
         </div>
         <CriteriaErrors errors={reloadErrors} />
         {snapshot === null ? null : <CriteriaTable leaves={snapshot.leaves} />}

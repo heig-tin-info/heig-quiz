@@ -855,7 +855,7 @@ export const studentGroupSet = routeLoader((app, req, params: { id: string }) =>
  */
 export async function findStudentProject(db: Db, userId: string, projectId: string) {
   return first(db
-    .select({ project: projects, seat: enrollments })
+    .select({ project: projects, seat: enrollments, courseId: classrooms.courseId })
     .from(projects)
     .innerJoin(
       enrollments,

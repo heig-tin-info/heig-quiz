@@ -101,6 +101,7 @@ import {
   PollTeacherView,
   PollIdeaBoard,
   ProjectActivitySummary,
+  ProjectContestations,
   ProjectCriteriaView,
   ProjectSyncPreview,
   ProjectDetail,
@@ -571,6 +572,8 @@ const CHECKED: Case[] = [
   ),
   // Grading by criteria (ADR-106 §2): each project's settings and snapshot.
   ...projectIds.map((id) => one("/app/api/projects/:id/criteria", `/app/api/projects/${id}/criteria`, ProjectCriteriaView)),
+  // ADR-139 §13: the staff's contestations of every project (none off `?pjcriteria=1`, where the behaviour test reads them).
+  ...projectIds.map((id) => one("/app/api/projects/:id/contestations", `/app/api/projects/${id}/contestations`, ProjectContestations)),
   // The sync's preview (ADR-132 §10).
   ...projectIds.map((id) => one("/app/api/projects/:id/sync/preview", `/app/api/projects/${id}/sync/preview`, ProjectSyncPreview)),
   // The online workspace (M6-06, `?codespace=1`): each project's, and its open workspaces.

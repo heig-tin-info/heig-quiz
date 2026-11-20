@@ -102,6 +102,18 @@ When your teacher publishes the scores, a **Result** block replaces the indicati
 
 The final score can differ from the indicative one: your teacher may have adjusted it after reading your work.
 
+### Contesting a criterion
+
+On a project graded by criteria, once the scores are released, you may contest the grading of a criterion for a few days, 7 unless your teacher chose otherwise: the page says until when, above the criteria. **Contest**, under a criterion, opens a short form: write your reason in plain text and **Send**. You contest a criterion once, and the reason cannot be changed afterwards. A criterion at its best value, one that no longer counts, or one being graded again cannot be contested.
+
+<figure markdown="span">
+  ![The Contest criterion form: the reason, Sent once, it cannot be changed, until when, and the group's sentence](../assets/screenshots/mock-student-project-contest-light.png#only-light)
+  ![The Contest criterion form: the reason, Sent once, it cannot be changed, until when, and the group's sentence](../assets/screenshots/mock-student-project-contest-dark.png#only-dark)
+  <figcaption>One reason per criterion, sent once. (Mock data.)</figcaption>
+</figure>
+
+The criterion then shows **Contestation awaiting an answer** with your reason. On a group repository the contestation is the group's: every member reads it and its answer, and the page names nobody. A teacher of the course answers once, **Contestation accepted** or **Contestation refused**, with a reply when there is one, and you are told. New points stay indicative until your teacher releases the scores again: only then does your grade move. A contestation of a criterion your teacher removed since stays listed under **Criteria no longer graded**, with its points when you contested it. If you still disagree after the answer, the school's formal procedure is the next step.
+
 ## Notifications
 
 You receive a notification, and an e-mail for the ones you must not miss, when:
@@ -109,7 +121,8 @@ You receive a notification, and an e-mail for the ones you must not miss, when:
 - a project of your classroom is published (notification only; if you have not linked your GitHub account yet, it reminds you to link it before accepting);
 - your repository is ready and its invitation waits for you;
 - your deadline is within 24 hours;
-- the scores are released.
+- the scores are released;
+- your contestation of a criterion is answered (it opens the page at the criteria).
 
 Each one opens the project's page. You choose the channels (bell, e-mail, Teams) for each kind in **Settings**. Meanwhile, the page updates without a reload, and a short message tells you, for instance, that your push was received or that a new score is in.
 

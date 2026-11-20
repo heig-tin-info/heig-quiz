@@ -29,7 +29,7 @@ import { projectBeforePublication } from "@quiz/domain";
 import { api, isNotFound, refusedWith } from "../api";
 import { AppLink } from "../AppLink";
 import { useConfirm } from "../confirm";
-import { useClassroom, useIsCourseOwner } from "../course/parts";
+import { useClassroomOwner } from "../course/parts";
 import { useT } from "../i18n";
 import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
@@ -162,8 +162,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   });
   const classroomId = detail.data?.classroomId ?? null;
   const crumbs = useClassroomCrumbs(classroomId);
-  /** Close project is the course owner's (#1147), like the release: the course read from the crumbs' classroom. */
-  const isOwner = useIsCourseOwner(useClassroom(classroomId, { retry: false }).data?.course.id);
+  /** Close project is the course owner's (#1147), like the release: null while the role is not known yet. */
+  const owner = useClassroomOwner(classroomId);
   const now = useNow();
   // F-PROJ-21 (M3-09c): what each re-read found changed, counted per kind.
   useNoticeToasts(detail, (prev, next) => projectNotices(prev, next).map((n) => projectNoticeToast(n, t)));
@@ -449,7 +449,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
               </>
             ) : null}
             {/* #1147: the evaluation's Close, mirrored in red ink: the fill is its confirmation's, never beside the primary. */}
-            {isOwner && offersClose(project, now) ? (
+            {owner === true && offersClose(project, now) ? (
               <Button variant="danger-quiet" onClick={() => void onCloseNow()} loading={closeNow.isPending}>
                 {closeNow.isPending ? null : <Square />} {t("project.close")}
               </Button>
@@ -591,7 +591,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
                 onFilter={setFilter}
               />
             ) : tab === "grading" ? (
-              <GradingTab project={project} navigate={navigate} />
+              <GradingTab project={project} navigate={navigate} owner={owner} />
             ) : (
               <ProjectSettings project={project} pending={patch.isPending} write={write} />
             )}

@@ -1,6 +1,6 @@
 /** Section 4 of the mock — see `index.ts` for the layout. */
 import { studentProjectGroup, type StudentActivityGroup } from "@quiz/domain";
-import { evaluationConditionsOf } from "@quiz/contracts";
+import { ContestationFileBody, evaluationConditionsOf } from "@quiz/contracts";
 import type {
   AttemptView,
   AutosaveResponse,
@@ -23,6 +23,7 @@ import type {
   StudentProject,
   StudentProjectCard,
   StudentCriteriaRow,
+  ProjectStudentContestation,
 } from "@quiz/contracts";
 import {
   D,
@@ -887,7 +888,11 @@ const cardFacts = (): CardFacts[] => {
  * in each state — before the definitive freeze (points indicative, the llm
  * criteria not graded yet, no rationale), after it (the provisional
  * rationales; the teacher-only criterion still empty), and released (every
- * row validated, the rationales final; 18 / 20 as the release says).
+ * row validated, the rationales final; 18 / 20 as the release says). On the
+ * released one (ADR-139 §13) the tests' criterion may still be contested,
+ * three are (awaiting, accepted with its reply, refused), and a fourth was
+ * before a reload took it out of the criteria; the window holds two more
+ * days, and a reason sent here is kept for the page's life.
  */
 const studentCriteria = (card: CardFacts): StudentCriteriaRow[] | null => {
   if (!flags.pjcriteria) return null;
@@ -904,12 +909,14 @@ const studentCriteria = (card: CardFacts): StudentCriteriaRow[] | null => {
       points: obtained,
       state: obtained === null ? ("empty" as const) : final ? ("validated" as const) : ("indicative" as const),
       locked,
+      // ADR-139 §13: below the top of its range, released, not contested yet, the window open.
+      contestable: final && obtained !== null && obtained < max && !studentContestations().some((c) => c.criterionId === criterionId),
       ...(rationale !== undefined && state !== "open" && obtained !== null ? { rationale } : {}),
     };
   };
   return [
     leaf("rendu.compile", "Le programme compile sans avertissement", 2, { open: 2, frozen: 2, released: 2 }),
-    leaf("rendu.tests", "Les tests fournis passent", 6, { open: 4, frozen: 5, released: 6 }),
+    leaf("rendu.tests", "Les tests fournis passent", 6, { open: 4, frozen: 5, released: 5.5 }),
     leaf(
       "code.pointeurs",
       "Utilisation correcte des pointeurs et de l'arithmétique des pointeurs",
@@ -922,7 +929,7 @@ const studentCriteria = (card: CardFacts): StudentCriteriaRow[] | null => {
       "code.memoire",
       "Toute mémoire allouée est libérée",
       4,
-      { open: null, frozen: 2.5, released: 3 },
+      { open: null, frozen: 2.5, released: 3.5 },
       "La liste est libérée, mais le tampon de lecture de lire_ligne ne l'est jamais.",
     ),
     leaf(
@@ -935,6 +942,69 @@ const studentCriteria = (card: CardFacts): StudentCriteriaRow[] | null => {
     leaf("git.commits", "Historique de commits lisible et régulier", 1, { open: null, frozen: null, released: 1 }),
   ];
 };
+
+/** The reasons sent from the released project's page in this page's life (ADR-139 §13). */
+const filedHere = new Map<string, ProjectStudentContestation>();
+
+/** The released project's contestations (`?pjcriteria=1`): three on its criteria, one on a criterion removed since, and those sent here. */
+const studentContestations = (): ProjectStudentContestation[] => {
+  if (!flags.pjcriteria) return [];
+  const at = (hours: number) => iso(-5 * D + hours * H);
+  return [
+    ...filedHere.values(),
+    {
+      criterionId: "code.memoire",
+      criterionDescription: "Toute mémoire allouée est libérée",
+      pointsAtFiling: 3.5,
+      maxAtFiling: 4,
+      bonusAtFiling: null,
+      state: "open",
+      reason: "Le tampon de lire_ligne est libéré dans main, ligne 84, après la boucle de lecture.",
+      filedAt: at(40),
+      reply: null,
+      resolvedAt: null,
+    },
+    {
+      criterionId: "code.pointeurs",
+      criterionDescription: "Utilisation correcte des pointeurs et de l'arithmétique des pointeurs",
+      pointsAtFiling: 3.5,
+      maxAtFiling: 4,
+      bonusAtFiling: null,
+      state: "accepted",
+      reason: "Avec n pair, la boucle s'arrête à n / 2 - 1 : l'indice n - i ne sort jamais du tableau.",
+      filedAt: at(20),
+      reply: "Vous avez raison, la justification était fausse sur ce point. Les points restent : la fonction inverser ne traite pas le tableau vide.",
+      resolvedAt: at(46),
+    },
+    {
+      criterionId: "rapport.analyse",
+      criterionDescription: "Le rapport justifie les choix de conception",
+      pointsAtFiling: 2.5,
+      maxAtFiling: 3,
+      bonusAtFiling: null,
+      state: "refused",
+      reason: "La complexité de l'insertion est discutée dans la conclusion.",
+      filedAt: at(22),
+      reply: "La conclusion la nomme sans la justifier. Les points restent.",
+      resolvedAt: at(50),
+    },
+    {
+      criterionId: "rapport.orthographe",
+      criterionDescription: "L'orthographe est soignée",
+      pointsAtFiling: 0.5,
+      maxAtFiling: 1,
+      bonusAtFiling: null,
+      state: "open",
+      reason: "Le correcteur signale deux fautes, pas huit.",
+      filedAt: at(30),
+      reply: null,
+      resolvedAt: null,
+    },
+  ];
+};
+
+/** The released project graded by criteria: its window, two days left of the seven after its release. */
+const contestedHere = (card: CardFacts) => flags.pjcriteria && card.id === STUDENT_PROJECT_PAST;
 
 /**
  * The view of one of the cards above: its repository as the card names it
@@ -968,6 +1038,8 @@ const studentProjectView = (card: CardFacts): StudentProject => {
           invitation: flags.codespace && card.id === STUDENT_PROJECT_INVITED ? null : (invitation ?? "accepted"),
           deleted,
           locked: released || card.status === "locked",
+          // ADR-139 §13: the released project of `?pjcriteria=1` is a group's repository, whose contestations the group shares.
+          group: contestedHere(card),
           lastCommit: graded || deleted ? { sha: sha(`${card.id.slice(-2)}${pushes}`), at } : null,
           commits: graded ? (released ? 23 : 11 + pushes) : 0,
           ciStatus: graded ? "pass" : "none",
@@ -993,6 +1065,8 @@ const studentProjectView = (card: CardFacts): StudentProject => {
       ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5 }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste.", adjustmentComment: null }
       : null,
     criteria,
+    contestationClosesAt: contestedHere(card) ? iso(2 * D) : null,
+    contestations: contestedHere(card) ? studentContestations() : [],
     // ADR-132 §10: the teacher wrote with their last sync, on the open project and on the frozen one (skipped, told all the same).
     projectUpdate:
       card.id === STUDENT_PROJECT_OPEN || card.id === STUDENT_PROJECT_FROZEN
@@ -1140,6 +1214,39 @@ const studentProjectOr404 = (id: string | undefined): StudentProjectCard => {
 };
 
 on("GET", "/app/api/student/projects/:id", (m): StudentProject => studentProjectView(studentProjectOr404(m.groups!.id)));
+
+/**
+ * ADR-139 §13: a member contests one criterion of the released project,
+ * once, while the window holds — the server's refusals: closed, already
+ * contested, not contestable with the domain's reason, an unknown criterion.
+ */
+on("POST", "/app/api/student/projects/:id/criteria/:criterionId/contestation", (m, raw): ProjectStudentContestation => {
+  const view = studentProjectView(studentProjectOr404(m.groups!.id));
+  const body = ContestationFileBody.safeParse(raw);
+  if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
+  if (view.contestationClosesAt === null || Date.parse(view.contestationClosesAt) <= Date.now()) {
+    throw refuse(409, "contestation_closed", "Contestations are closed");
+  }
+  const criterionId = decodeURIComponent(m.groups!.criterionId!);
+  const row = view.criteria?.find((r) => r.criterionId === criterionId);
+  if (!row) throw new MockError(404, "Not found");
+  if (view.contestations.some((c) => c.criterionId === criterionId)) throw refuse(409, "contestation_exists", "Already contested");
+  if (!row.contestable) throw refuse(409, "not_contestable", "Not contestable", { reason: "full_points" });
+  const filed: ProjectStudentContestation = {
+    criterionId,
+    criterionDescription: row.description,
+    pointsAtFiling: row.points ?? 0,
+    maxAtFiling: row.max,
+    bonusAtFiling: row.bonus ?? null,
+    state: "open",
+    reason: body.data.reason,
+    filedAt: new Date().toISOString(),
+    reply: null,
+    resolvedAt: null,
+  };
+  filedHere.set(criterionId, filed);
+  return filed;
+});
 
 /** A refusal of Accept or Resend as the API words it: `{ error, message }`, 502 for GitHub failing, 429 for too soon, 409 otherwise. */
 const projectRefusal = (code: string) =>

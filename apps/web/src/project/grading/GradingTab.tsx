@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, CheckCheck, ChevronDown, ChevronRight, ClipboardCheck, Clock, Table2 } from "lucide-react";
+import { BarChart3, CheckCheck, ChevronDown, ChevronRight, ClipboardCheck, Clock, MessageSquareWarning, Table2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import type { ProjectDetail, ProjectGradingRepo, ProjectGradingView } from "@quiz/contracts";
+import type { ProjectDetail, ProjectGradingRepo, ProjectGradingView, ProjectStaffContestation } from "@quiz/contracts";
 import { formatPoints, formatScore, type GradeBand } from "@quiz/domain";
 
 import { api } from "../../api";
@@ -14,7 +14,8 @@ import { projectGradingKey } from "../../queryKeys";
 import { GradeStats } from "../../charts/GradeStats";
 import { bucketLabel, bucketTone, GRADE_BAND_BAR, Histogram } from "../../charts/Histogram";
 import { Summary } from "../../charts/Summary";
-import type { Navigate } from "../../router";
+import { useSearchParam, type Navigate } from "../../router";
+import { ContestationMark } from "../../grading/Contestation";
 import {
   BAR_TONES,
   buttonClass,
@@ -22,12 +23,15 @@ import {
   cx,
   Dash,
   EmptyState,
+  HeldButton,
   pressable,
   QueryError,
   SectionHeading,
+  Segmented,
   SegmentedBar,
   Skeleton,
   T,
+  Tip,
 } from "../../ui";
 import {
   cellHeat,
@@ -46,7 +50,15 @@ import {
   type MatrixGroup,
 } from "./matrix";
 import { AdjustmentMark } from "../parts";
+import {
+  cellContestation,
+  contestationsByCell,
+  ProjectContestationLine,
+  useProjectContestations,
+} from "./Contestations";
 import { GradeAdjustDialog } from "./GradeAdjustDialog";
+import { openContestationsWords } from "../../contestation/ContestationLine";
+import { releasedWriteHeld } from "../projectPage";
 
 /**
  * The Grading tab of a project graded by criteria (ADR-106 §8 as amended
@@ -61,13 +73,35 @@ import { GradeAdjustDialog } from "./GradeAdjustDialog";
  * the right. A row opens the grading screen on its repository. No primary
  * action here: the header's is the page's; the way to the grading screen is
  * a ghost link. The pure rules are `matrix.ts`.
+ *
+ * ADR-139 §13: the contestations are a second read (`Contestations.tsx`),
+ * joined on (repository, criterion): above the matrix the shared window
+ * line, its open count leading to the contested filter (`?filter=contested`,
+ * the bell's link), the filter itself beside the matrix while any
+ * repository is contested, a mark on a contested cell and the open count on
+ * its repository's row. Once released, the grade adjustment is the owner's:
+ * a mark's button is held for anyone else, saying why (`releasedWriteHeld`).
  */
-export function GradingTab({ project, navigate }: { project: ProjectDetail; navigate: Navigate }) {
+export function GradingTab({
+  project,
+  navigate,
+  owner,
+}: {
+  project: ProjectDetail;
+  navigate: Navigate;
+  /** The reader owns the course; null while the role is not known (nothing held, no owner's act offered). */
+  owner: boolean | null;
+}) {
   const t = useT();
   const view = useQuery<ProjectGradingView>({
     queryKey: projectGradingKey(project.id),
     queryFn: () => api(`/app/api/projects/${project.id}/grading`),
   });
+  const contestations = useProjectContestations(project.id);
+  const [filterParam, setFilterParam] = useSearchParam("filter", "");
+  const asked = filterParam === "contested";
+  // The filter applies once the contestations are read: never "none contested" on a read pending or failed.
+  const contestedOnly = asked && contestations.data !== undefined;
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
   const repos = view.data?.repos ?? [];
   const tree = useMemo(() => criteriaTree(repos[0]?.table ?? []), [repos]);
@@ -86,7 +120,7 @@ export function GradingTab({ project, navigate }: { project: ProjectDetail; navi
     </AppLink>
   );
 
-  if (view.isLoading) {
+  if (view.isLoading || (asked && contestations.isLoading)) {
     return (
       <div className="space-y-3" role="status" aria-label={t("common.loading")}>
         <Skeleton className="h-48 w-full" />
@@ -106,6 +140,11 @@ export function GradingTab({ project, navigate }: { project: ProjectDetail; navi
   }
 
   const validated = validatedRepos(repos).length;
+  const list = contestations.data?.contestations ?? [];
+  // The repositories holding a contestation, open or answered: the filter keeps these, and counts them.
+  const contestedIds = new Set(list.map((c) => c.repoId));
+  const contested = repos.filter((r) => contestedIds.has(r.id));
+  const shown = contestedOnly ? contested : repos;
   return (
     <div className="space-y-8">
       <section aria-labelledby="grading-stats" className="space-y-3">
@@ -132,7 +171,50 @@ export function GradingTab({ project, navigate }: { project: ProjectDetail; navi
           count={repos.length}
           actions={link}
         />
-        <Matrix project={project} repos={repos} columns={columns} onToggle={toggle} navigate={navigate} />
+        {contestations.isError ? (
+          <QueryError title={t("project.contest.loadFailed")} query={contestations} />
+        ) : contestations.data ? (
+          <ProjectContestationLine
+            projectId={project.id}
+            data={contestations.data}
+            isOwner={owner}
+            onOpenContested={() => setFilterParam("contested")}
+          />
+        ) : null}
+        {list.length > 0 || contestedOnly ? (
+          <Segmented<"all" | "contested">
+            name="matrix-filter"
+            label={t("project.matrix.filter")}
+            value={contestedOnly ? "contested" : "all"}
+            options={[
+              { value: "all", label: t("project.matrix.filter.all") },
+              {
+                value: "contested",
+                label:
+                  contested.length > 0
+                    ? t("project.matrix.filter.contested", { n: contested.length })
+                    : t("project.matrix.filter.contested.none"),
+              },
+            ]}
+            onChange={(next) => setFilterParam(next === "contested" ? "contested" : "")}
+          />
+        ) : null}
+        {shown.length === 0 ? (
+          <Card>
+            <EmptyState icon={MessageSquareWarning} title={t("project.matrix.contested.none")} className="py-10" />
+          </Card>
+        ) : (
+          <Matrix
+            project={project}
+            repos={shown}
+            columns={columns}
+            onToggle={toggle}
+            navigate={navigate}
+            contestations={list}
+            openByRepo={contestations.data?.openByRepo ?? {}}
+            adjustHeld={releasedWriteHeld(project.releasedAt !== null, owner)}
+          />
+        )}
         <p className="text-xs text-fg-faint">{t("project.matrix.legend")}</p>
       </section>
     </div>
@@ -155,14 +237,24 @@ function Matrix({
   columns,
   onToggle,
   navigate,
+  contestations,
+  openByRepo,
+  adjustHeld,
 }: {
   project: ProjectDetail;
   repos: readonly ProjectGradingRepo[];
   columns: readonly MatrixColumn[];
   onToggle: (key: string) => void;
   navigate: Navigate;
+  /** ADR-139 §13: every contestation of the project, marked on its cell. */
+  contestations: readonly ProjectStaffContestation[];
+  /** The open contestations per repository, on its row. */
+  openByRepo: Readonly<Record<string, number>>;
+  /** The grade adjustment is held for this reader (ADR-135: the owner's once released). */
+  adjustHeld: boolean;
 }) {
   const t = useT();
+  const byCell = useMemo(() => contestationsByCell(contestations), [contestations]);
   const rows = headerRows(columns);
   const height = rows.length;
   const open = (repo: ProjectGradingRepo) => navigate({ view: "projectGrading", id: project.id }, { query: { repo: repo.id } });
@@ -219,10 +311,15 @@ function Matrix({
                 {...pressable(() => open(repo), "row")}
               >
                 <th scope="row" className={cx(T.td, "sticky left-0 z-10 bg-surface text-left font-normal group-hover:bg-surface-2")}>
-                  <RepoLabel repo={repo} />
+                  <RepoLabel repo={repo} open={openByRepo[repo.id] ?? 0} />
                 </th>
                 {columns.map((column) => (
-                  <MatrixCell key={columnKey(column)} cell={cellValue(column, byId)} frozen={repo.frozen} />
+                  <MatrixCell
+                    key={columnKey(column)}
+                    cell={cellValue(column, byId)}
+                    frozen={repo.frozen}
+                    contestation={cellContestation(byCell, repo.id, column)}
+                  />
                 ))}
                 <td className={cx(T.td, "text-right tabular-nums", PIN_TOTAL, "@2xl:group-hover:bg-surface-2")}>
                   {repo.total ? (
@@ -234,7 +331,7 @@ function Matrix({
                   )}
                 </td>
                 <td className={cx(T.td, "text-right font-semibold tabular-nums", PIN_MARK, "@2xl:group-hover:bg-surface-2")}>
-                  <MarkCell repo={repo} onAdjust={() => setAdjusting(repo)} />
+                  <MarkCell repo={repo} held={adjustHeld} onAdjust={() => setAdjusting(repo)} />
                 </td>
               </tr>
             );
@@ -260,12 +357,29 @@ const membersOf = (project: ProjectDetail, repoId: string): string[] =>
 /**
  * A row's mark (ADR-135): the server's grade, adjusted, with its mark. On
  * a repository frozen for good that has a grade (or an adjustment), it is
- * the button that opens the grade adjustment — never the row's own click.
+ * the button that opens the grade adjustment — never the row's own click;
+ * `held` for a reader who may not adjust it (a released project, not the
+ * owner: ADR-139 §13), saying why.
  */
-function MarkCell({ repo, onAdjust }: { repo: ProjectGradingRepo; onAdjust: () => void }) {
+function MarkCell({ repo, held, onAdjust }: { repo: ProjectGradingRepo; held: boolean; onAdjust: () => void }) {
   const t = useT();
   const mark = repo.grade === null ? <Dash /> : <Grade value={repo.grade} />;
   if (!repo.frozen || (repo.grade === null && repo.adjustment === null)) return mark;
+  if (held) {
+    return (
+      <HeldButton
+        variant="ghost"
+        size="sm"
+        className="-mx-1 h-auto gap-1 px-1 py-0.5 font-semibold"
+        disabledReason={t("project.refusal.gradeOwnerRequired")}
+        data-testid="matrix-mark-held"
+      >
+        <span className="sr-only">{t("project.adjust.open", { name: repo.label })}: </span>
+        {mark}
+        <AdjustmentMark adjustment={repo.adjustment} />
+      </HeldButton>
+    );
+  }
   return (
     <button
       type="button"
@@ -286,9 +400,10 @@ function MarkCell({ repo, onAdjust }: { repo: ProjectGradingRepo; onAdjust: () =
   );
 }
 
-/** The name, and where the repository stands: validated, to validate, or not frozen yet (dimmed). */
-function RepoLabel({ repo }: { repo: ProjectGradingRepo }) {
+/** The name, where the repository stands — validated, to validate, or not frozen yet (dimmed) — and its open contestations (ADR-139 §13). */
+function RepoLabel({ repo, open }: { repo: ProjectGradingRepo; open: number }) {
   const t = useT();
+  const contested = openContestationsWords(open, t);
   const state = repo.validation.validated ? "validated" : repo.frozen ? "toValidate" : "notFrozen";
   const Icon = state === "validated" ? CheckCheck : state === "notFrozen" ? Clock : null;
   return (
@@ -298,6 +413,13 @@ function RepoLabel({ repo }: { repo: ProjectGradingRepo }) {
         <Icon aria-hidden className={cx("size-3.5 shrink-0", state === "validated" ? "text-success" : "text-fg-faint")} />
       ) : null}
       <span className="sr-only">{t(`project.matrix.repo.${state}`)}</span>
+      {open > 0 ? (
+        <Tip label={contested} className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold tabular-nums text-warning">
+          <MessageSquareWarning aria-hidden className="size-3" />
+          <span aria-hidden>{open}</span>
+          <span className="sr-only">{contested}</span>
+        </Tip>
+      ) : null}
     </span>
   );
 }
@@ -338,8 +460,8 @@ function SectionToggle({ group, expanded, onToggle }: { group: MatrixGroup; expa
   );
 }
 
-/** Points tinted by their band on a frozen repository; a proposal in italics; nothing given, a dash. */
-function MatrixCell({ cell, frozen }: { cell: CellValue; frozen: boolean }) {
+/** Points tinted by their band on a frozen repository; a proposal in italics; nothing given, a dash; a contestation's mark after them. */
+function MatrixCell({ cell, frozen, contestation }: { cell: CellValue; frozen: boolean; contestation: ProjectStaffContestation | null }) {
   const t = useT();
   const heat = frozen ? cellHeat(cell) : null;
   const pending = cell.state !== "validated";
@@ -349,6 +471,11 @@ function MatrixCell({ cell, frozen }: { cell: CellValue; frozen: boolean }) {
       {...(cell.points !== null && pending ? { title: t("project.grading.state.proposed") } : {})}
     >
       {cell.points === null ? <Dash /> : formatPoints(cell.points)}
+      {contestation ? (
+        <span className="ml-1">
+          <ContestationMark contestation={contestation} compact />
+        </span>
+      ) : null}
     </td>
   );
 }

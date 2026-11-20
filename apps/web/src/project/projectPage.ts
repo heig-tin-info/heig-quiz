@@ -446,6 +446,16 @@ export const gradeWriteRefusal = (error: unknown, t: TFunction): string =>
   refusalCodeOf(error) === "owner_required" ? t("project.refusal.gradeOwnerRequired") : refusalMessage(error, t);
 
 /**
+ * ADR-139 §13 (closing ADR-135 §9): once released, a project's criterion
+ * writes — points, validations, Regrades, the reload — and its grade
+ * adjustment are the course owner's. Held for a reader KNOWN not to own the
+ * course (`owner === false`); while the role is unknown nothing is held,
+ * the server judging. The sentence that says why is
+ * `project.refusal.gradeOwnerRequired`.
+ */
+export const releasedWriteHeld = (released: boolean, owner: boolean | null): boolean => released && owner === false;
+
+/**
  * The page of the group set a group project follows, coming back to the
  * project (`fromProject`, W9); null while it names none.
  */

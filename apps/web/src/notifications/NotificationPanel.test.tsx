@@ -362,6 +362,26 @@ describe("the inbox in the account menu", () => {
     expect(navigate).toHaveBeenLastCalledWith({ view: "classroomSettings", id: "c7" });
   });
 
+  // ADR-139 §13: a project's contestations open where they are read: the member's criteria, the staff's contested repositories.
+  it("opens a project's contestation on the student's criteria, a filing on the Grading tab's contested filter", async () => {
+    const at = new Date(Date.now() - 60_000).toISOString();
+    const resolved: Notification = { id: "c1", payload: { kind: "project_contestation_resolved", projectId: "pj1", projectTitle: "Lab 1" }, createdAt: at, readAt: null };
+    const filed: Notification = { id: "c2", payload: { kind: "project_contestation_filed", projectId: "pj1", projectTitle: "Lab 1", count: 2 }, createdAt: at, readAt: null };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [resolved, filed], unread: 2 }),
+      "POST /app/api/notifications/c1/read": { status: 204 },
+      "POST /app/api/notifications/c2/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderMenu(navigate);
+    await openInbox();
+    await userEvent.click(screen.getByText("Answer to the contestation on “Lab 1”."));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "project", id: "pj1", at: "criteria" });
+    await openInbox();
+    await userEvent.click(screen.getByText("2 contestations on “Lab 1”."));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "project", id: "pj1", tab: "grading", filter: "contested" });
+  });
+
   it("names the failing health checks to an administrator, and opens the System status", async () => {
     const alert: Notification = {
       id: "n10",

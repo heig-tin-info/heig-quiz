@@ -67,6 +67,9 @@ import {
 import type { ProjectStep } from "@quiz/core/server";
 import {
   CI_STATUSES,
+  CONTESTATION_DAYS_DEFAULT,
+  CONTESTATION_DAYS_MAX,
+  CONTESTATION_STATES,
   DEADLINE_STRATEGIES,
   DEVICE_LEVEL_IDS,
   EVIDENCE_STATUSES,
@@ -305,6 +308,19 @@ export const projects = pgTable(
     /** The final scores made the students' and the gradebook's (F-PROJ-14). */
     releasedAt: timestamp("released_at", { withTimezone: true }),
     releasedBy: uuid("released_by").references(() => users.id),
+    /**
+     * The contestation window of a project graded by criteria (ADR-139 §13),
+     * in days after its first release: 0 to 60, 0 for none (`ContestationDays`
+     * of `@quiz/contracts`); editable until that release.
+     */
+    contestationDays: integer("contestation_days").notNull().default(CONTESTATION_DAYS_DEFAULT),
+    /**
+     * When that window closes: set by the release that finds it null, in
+     * `criteria` mode with days above 0, to its own instant plus the days —
+     * never moved by a release again (a release rewrites `released_at` each
+     * time); moved only by the owner's close and extend. Null: no window.
+     */
+    contestationClosesAt: timestamp("contestation_closes_at", { withTimezone: true }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdBy: uuid("created_by")
       .notNull()
@@ -337,6 +353,8 @@ export const projects = pgTable(
       .where(sql`${t.state} = 'scheduled' AND ${t.archivedAt} IS NULL`),
     // `any` exactly with the unsupervised modes (ADR-089 point 2).
     check("projects_devices_supervised", sql`(${t.workMode} = 'online_seb') = (${t.devices} <> 'any')`),
+    // A literal in the DDL, the contract's bound (`ContestationDays`): a bind parameter has no place in a CHECK.
+    check("projects_contestation_days_range", sql`${t.contestationDays} between 0 and ${sql.raw(String(CONTESTATION_DAYS_MAX))}`),
   ],
 );
 
@@ -1069,5 +1087,51 @@ export const projectCriterionGrades = pgTable(
       .on(t.repoId, t.criterionId)
       .where(sql`${t.state} = 'validated'`),
     index("project_criterion_grades_repo_idx").on(t.repoId, t.criterionId),
+  ],
+);
+
+/**
+ * A criterion's contestation (ADR-139 §13): one per (repository,
+ * criterion), filed by any member of the repository with a reason, answered
+ * once by the course owner — `accepted` or `refused` — with a reply (empty
+ * for none). Plain text both, never Markdown.
+ *
+ * A criterion id is text inside a snapshot a reload may replace: no foreign
+ * key on it. The row keeps what reads it when the criterion leaves the
+ * snapshot — its description, its points at the filing, its maximum and
+ * bonus (`*_at_filing`) — and can then only be refused. `grade_at_filing_id`
+ * is the validated row in force at the filing, `grade_at_resolution_id` the
+ * row in force after the answer (the new one when it gave points). Deleted
+ * with its repository; never copied. The account pseudonymization keeps the
+ * texts (ADR-139 §11's known limit).
+ */
+export const projectContestations = pgTable(
+  "project_contestations",
+  {
+    id: uuid("id").primaryKey(),
+    repoId: uuid("repo_id")
+      .notNull()
+      .references(() => projectRepos.id, { onDelete: "cascade" }),
+    criterionId: text("criterion_id").notNull(),
+    criterionDescription: text("criterion_description").notNull(),
+    pointsAtFiling: numeric("points_at_filing", { precision: 6, scale: 2, mode: "number" }).notNull(),
+    maxAtFiling: numeric("max_at_filing", { precision: 6, scale: 2, mode: "number" }).notNull(),
+    bonusAtFiling: numeric("bonus_at_filing", { precision: 6, scale: 2, mode: "number" }),
+    gradeAtFilingId: uuid("grade_at_filing_id").references(() => projectCriterionGrades.id, { onDelete: "set null" }),
+    reason: text("reason").notNull(),
+    filedBy: uuid("filed_by").references(() => users.id, { onDelete: "set null" }),
+    filedAt: timestamp("filed_at", { withTimezone: true }).notNull(),
+    state: text("state", { enum: CONTESTATION_STATES }).notNull().default("open"),
+    reply: text("reply").notNull().default(""),
+    resolvedBy: uuid("resolved_by").references(() => users.id, { onDelete: "set null" }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    gradeAtResolutionId: uuid("grade_at_resolution_id").references(() => projectCriterionGrades.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    uniqueIndex("project_contestations_criterion_uq").on(t.repoId, t.criterionId),
+    // The open ones of a repository: the staff's counts.
+    index("project_contestations_open_idx")
+      .on(t.repoId)
+      .where(sql`${t.state} = 'open'`),
   ],
 );

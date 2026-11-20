@@ -511,6 +511,12 @@ export type AuditAction =
    */
   | "project.release"
   /**
+   * ADR-139 §13: the owner closed the contestation window of a released
+   * project graded by criteria now, or extended it; subject the project,
+   * `payload.action` (`close` | `extend`) and `payload.closesAt`.
+   */
+  | "project.contestation_window"
+  /**
    * *Resync with the set* (ADR-070 §4, §6; merge task M3-15b-2b), subject
    * the project: `payload.digest` of the consequences confirmed (null when
    * none needed it), `consequences` (their count), `frozenRepos` (the
@@ -612,6 +618,18 @@ export type AuditAction =
    */
   | "project_repo.criterion_graded"
   | "project_repo.validated"
+  /**
+   * ADR-139 §13, a criterion's contestation, subject the contestation:
+   * `file` — a member of the repository contested a criterion (actor: the
+   * student), `payload.projectId`, `repoId`, `criterionId`; `resolve` — the
+   * course owner answered it, `payload.projectId`, `repoId`, `criterionId`,
+   * `verdict` (`accepted` | `refused`), `points` (whether new points were
+   * written, audited beside it as `project_repo.criterion_graded`),
+   * `gradeBefore` and `gradeAfter` (the criterion's rows in force before
+   * and after the act). Never the reason nor the reply.
+   */
+  | "project_contestation.file"
+  | "project_contestation.resolve"
   /**
    * A review checkpoint authored or removed by the staff (F-PROJ-11; merge
    * task M3-05b), subject the checkpoint: `payload.projectId`, `name`,

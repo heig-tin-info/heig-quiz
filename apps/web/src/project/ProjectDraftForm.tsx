@@ -16,7 +16,7 @@ import { Alert, Badge, Card, Disclosure, RepoLink, SectionHeading, SettingRow, S
 import { Facts } from "./ProjectOverview";
 import { ProjectDraftPublication, publicationKey, type PlacedRefusal } from "./ProjectDraftPublication";
 import { GroupSetBody } from "./ProjectGroupSet";
-import { CriteriaErrors, CriteriaRows, useGradingModeWrite } from "./ProjectCriteria";
+import { ContestationDaysSetting, CriteriaErrors, CriteriaRows, useGradingModeWrite } from "./ProjectCriteria";
 import { ProjectRail } from "./ProjectRail";
 import { DeadlineStrategyRow, GraceMinutesRow, GradingModeRow } from "./ProjectSettingRows";
 import { projectGradebookRow, ProtectedFilesRow, useHandoutTree } from "./ProjectSettings";
@@ -190,7 +190,12 @@ export function ProjectDraftForm({
           onChange={grading.writeMode}
         />
         <CriteriaErrors errors={grading.errors} />
-        {project.gradingMode === "criteria" ? <CriteriaRows project={project} disabled={disabled} write={write} /> : null}
+        {project.gradingMode === "criteria" ? (
+          <>
+            <ContestationDaysSetting project={project} disabled={disabled} write={write} />
+            <CriteriaRows project={project} disabled={disabled} write={write} />
+          </>
+        ) : null}
         <ProtectedFilesRow
           project={project}
           disabled={disabled}

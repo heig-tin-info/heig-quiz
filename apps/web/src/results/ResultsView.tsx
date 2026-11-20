@@ -45,7 +45,7 @@ import {
   type MenuItem,
 } from "../ui";
 import { ByQuestionView, isNotOver } from "./ByQuestionView";
-import { ContestationLine } from "./ContestationLine";
+import { ContestationLine } from "../contestation/ContestationLine";
 import { ExportButton } from "./ExportButton";
 import { GradeTable, useGradeSort } from "./GradeTable";
 import { bucketLabel, Histogram } from "../charts/Histogram";

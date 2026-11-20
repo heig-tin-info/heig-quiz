@@ -69,6 +69,21 @@ export function useIsCourseOwner(courseId: string | null | undefined): boolean {
 }
 
 /**
+ * Whether the caller owns the course of a classroom (its staff's page:
+ * a project's, ADR-068): `null` while the classroom or the course list is
+ * not read yet, or failed — unknown, never a guess either way. An owner's
+ * action is offered on `true` only; a write is held for a non-owner on
+ * `false` only, the server judging the rest.
+ */
+export function useClassroomOwner(classroomId: string | null | undefined): boolean | null {
+  const classroom = useClassroom(classroomId ?? null, { retry: false });
+  const courses = useCourses();
+  if (!classroom.data || !courses.data) return null;
+  const courseId = classroom.data.course.id;
+  return courseRoleAllows(courses.data.find((c) => c.id === courseId)?.myRole ?? null, "owner");
+}
+
+/**
  * The caller's role on the course, from the same list (null while it loads
  * or without a seat): for an action whose needed role depends on its target
  * (`courseRoleAllows(role, row.deletionRole)`, ADR-068 §3).
