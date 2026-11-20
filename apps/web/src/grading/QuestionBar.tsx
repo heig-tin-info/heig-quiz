@@ -1,6 +1,6 @@
-import { Check, MessageSquareWarning } from "lucide-react";
+import { Check } from "lucide-react";
 
-import type { ItemCounting } from "@quiz/contracts";
+import type { AiAgreement, ItemCounting } from "@quiz/contracts";
 import { ITEM_COUNTINGS } from "@quiz/domain";
 
 import { CountingLabel } from "../CountingLabel";
@@ -8,6 +8,7 @@ import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { typeLabel } from "../questionTypes";
 import { Badge, Menu } from "../ui";
+import { AgreementBadge, ContestedBadge } from "./GradingFigures";
 import { StepBar } from "./StepBar";
 import type { GradingItem, StepState } from "./useGradingData";
 
@@ -39,7 +40,9 @@ const leftOf = (state: StepState | undefined) =>
  * when not normally) and its internal name after the counter, what it
  * still asks for before the last chevron. A question holding open
  * contestations (ADR-139) carries their count: a flag over its step, a
- * line in the menu and a quiet badge before its state.
+ * line in the menu and a quiet badge before its state. A question whose
+ * AI proposals the teacher validated carries how many were left unchanged,
+ * quiet too, its detail in the tooltip (ADR-139 §15).
  *
  * Once the evaluation has run, the ⋯ menu changes how the question counts
  * — normally, as a bonus, or not at all (ADR-108): a secondary act, so a
@@ -50,6 +53,7 @@ export function QuestionBar({
   items,
   index,
   states,
+  agreement,
   onJump,
   onOpenStatement,
   counting,
@@ -57,6 +61,8 @@ export function QuestionBar({
   items: GradingItem[];
   index: number;
   states: ReadonlyMap<string, StepState>;
+  /** The current question's agreement with the AI (ADR-139 §15); null when nothing was compared, undefined while it loads. */
+  agreement: AiAgreement | null | undefined;
   onJump: (index: number) => void;
   /** Opens the panel on the key's row: the statement and the expected answer. */
   onOpenStatement: () => void;
@@ -111,11 +117,8 @@ export function QuestionBar({
       status={
         <>
           {/* ADR-139: quiet beside the state, which stays the step's word. */}
-          {contested > 0 ? (
-            <Badge tone="zinc" icon={MessageSquareWarning}>
-              {contestedWords(contested)}
-            </Badge>
-          ) : null}
+          <AgreementBadge agreement={agreement} />
+          <ContestedBadge n={contested} />
           {left === null ? null : (
             <Badge tone={left > 0 ? "amber" : "green"} icon={left > 0 ? undefined : Check}>
               {stateWords(left)}

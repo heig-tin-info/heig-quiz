@@ -232,3 +232,43 @@ describe("the head of the Questions tab", () => {
     expect(screen.getByText("No answer").parentElement).toHaveTextContent("2 / 9");
   });
 });
+
+describe("the agreement figures of the Questions tab (ADR-139 §15)", () => {
+  const agreement = {
+    compared: 4,
+    unchanged: 3,
+    changed: 1,
+    meanAbsDelta: 0.5,
+    byConfidence: { high: { compared: 4, unchanged: 3, changed: 1, meanAbsDelta: 0.5 }, medium: null, low: null },
+  };
+  const contestations = {
+    filed: 2,
+    accepted: 0,
+    graded: 9,
+    open: 1,
+    refused: 1,
+    bySource: { auto: { filed: 2, accepted: 0 }, llm: { filed: 0, accepted: 0 }, manual: { filed: 0, accepted: 0 } },
+  };
+
+  it("puts each question's beside its success rate, and the evaluation's under the summary", () => {
+    const total = { agreement, contestations };
+    renderWithProviders(
+      <ByQuestionView
+        questions={[
+          { ...MCQ, figures: { agreement: null, contestations }, totalFigures: total },
+          { ...SHORT_UNANSWERED, figures: { agreement, contestations: null }, totalFigures: total },
+        ]}
+      />,
+    );
+    expect(screen.getByText("2 contested")).toBeInTheDocument();
+    expect(screen.getByText("AI: 3 of 4 unchanged")).toBeInTheDocument();
+    expect(screen.getByText("AI proposals unchanged").parentElement).toHaveTextContent("of 4 compared");
+    expect(screen.getByText("Contested answers").parentElement).toHaveTextContent("of 9 graded");
+  });
+
+  it("draws nothing of them where nothing was compared nor contested", () => {
+    renderWithProviders(<ByQuestionView questions={[MCQ, CLOZE]} />);
+    expect(screen.queryByText(/unchanged/)).toBeNull();
+    expect(screen.queryByText(/contested/i)).toBeNull();
+  });
+});

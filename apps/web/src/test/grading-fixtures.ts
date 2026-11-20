@@ -4,6 +4,7 @@ import type {
   Grading,
   GradingEntry,
   GradingQueue,
+  GradingQueueItem,
   GradingSteps,
   ResultsView,
   StudentFeedback,
@@ -83,12 +84,21 @@ export function makeEntry(over: Partial<GradingEntry> = {}): GradingEntry {
   };
 }
 
-export function makeQueue(entries: GradingEntry[], over: Partial<GradingQueue> = {}): GradingQueue {
+/** A queue's item as a test writes it: no agreement figures unless it says so (ADR-139 §15). */
+type QueueItemFixture = Omit<GradingQueueItem, "agreement"> & Partial<Pick<GradingQueueItem, "agreement">>;
+
+export function makeQueue(
+  entries: GradingEntry[],
+  { items, ...over }: Partial<Omit<GradingQueue, "items">> & { items?: QueueItemFixture[] } = {},
+): GradingQueue {
   const proposed = entries.filter((e) => e.grading?.state === "proposed").length;
   const validated = entries.filter((e) => e.grading?.state === "validated").length;
   return {
     // `position` is 0-based, exactly as the API stores and serves it.
-    items: [{ id: "i1", position: 0, internalName: "sizeof-ptr", type: "mcq", points: 2 }],
+    items: (items ?? [{ id: "i1", position: 0, internalName: "sizeof-ptr", type: "mcq", points: 2 }]).map((item) => ({
+      agreement: null,
+      ...item,
+    })),
     entries,
     counts: {
       total: entries.length,
@@ -327,9 +337,14 @@ export function makeByQuestion(over: Partial<ByQuestion> & Pick<ByQuestion, "ite
     casePassRate: [],
     successRate: null,
     avgMs: null,
+    figures: NO_FIGURES,
+    totalFigures: NO_FIGURES,
     ...over,
   };
 }
+
+/** A question nobody's grading was compared nor contested on (ADR-139 §15). */
+export const NO_FIGURES: ByQuestion["figures"] = { agreement: null, contestations: null };
 
 /** The `item` of a `ByQuestion`: one point, named `q-<position>` unless told otherwise. */
 export const byQuestionItem = (

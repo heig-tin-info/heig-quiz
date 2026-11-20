@@ -59,6 +59,13 @@ them modified after publication; the sheet says so first.
 `←` `→` change the question, `↑` `↓` the row, `Enter` opens it, `V`
 validates it, `A` adjusts it, `Esc` closes it. The sidebar lists them.
 
+## Agreement with the AI
+
+**AI: 12 of 15 unchanged**, in the question bar: of the answers holding an
+AI proposal and a validated grade, how many kept the proposal's points. The
+tooltip gives the mean difference where you changed them, and the count for
+each confidence. Your test run is left out.
+
 ## Contestations
 
 **Contested** shows the answers a student contested. Under Anonymise the

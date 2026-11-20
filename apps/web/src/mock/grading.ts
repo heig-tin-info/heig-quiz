@@ -3,6 +3,7 @@ import {
   acceptanceReach,
   acceptanceScopes,
   attemptTotal,
+  evaluationFigures,
   clozePart,
   debrief,
   describe,
@@ -663,6 +664,48 @@ const halfPoints = (n: number) => Math.round(n * 2) / 2;
 let gradingSeq = 0;
 
 /**
+ * An essay the model proposed for and a teacher then validated (ADR-118,
+ * ADR-139 §15): the proposal stays in the history, superseded, and the
+ * validation is either its copy (`llm`, the teacher's `gradedBy`) or, one
+ * cell in four, the teacher's points — a criterion moved by half a point,
+ * `manual`. Decided by the attempt's index, never by `rand()`, so nothing
+ * else the mock draws moves.
+ */
+function validatedProposal(
+  base: MockGrading,
+  criteria: DeclaredCriterion[],
+  itemPoints: number,
+  attemptIndex: number,
+): MockGrading[] {
+  const confidence: GradingConfidence =
+    base.confidence ?? (attemptIndex % 5 === 0 ? "low" : attemptIndex % 2 === 0 ? "medium" : "high");
+  const { [BREAKDOWN_KEY]: _validated, ...proposed } = base.details as Record<string, unknown>;
+  const proposal: MockGrading = { ...base, state: "superseded", confidence, details: proposed };
+  const scored = aiOf(proposed)?.criteria.map((c) => ({ id: c.id ?? "", points: c.points })) ?? [];
+  const first = scored[0];
+  const max = criteria[0] ? (validatedBreakdown(criteria, itemPoints, scored)?.breakdown[0]?.maxPoints ?? 0) : 0;
+  const changed = attemptIndex % 4 === 1 && first !== undefined;
+  const given = changed
+    ? [{ ...first, points: first.points + 0.5 <= max ? first.points + 0.5 : Math.max(0, first.points - 0.5) }, ...scored.slice(1)]
+    : scored;
+  const split = validatedBreakdown(criteria, itemPoints, given);
+  return [
+    proposal,
+    {
+      ...proposal,
+      id: `g${(gradingSeq += 1)}`,
+      points: changed && split ? split.total : base.points,
+      source: changed ? "manual" : "llm",
+      state: "validated",
+      details: { ...proposed, [BREAKDOWN_KEY]: split?.breakdown },
+      gradedBy: "u-me",
+      gradedAt: iso(-45 * 60_000 + attemptIndex * 1000),
+      supersedesId: proposal.id,
+    },
+  ];
+}
+
+/**
  * The grading world of one evaluation of section 3.
  *
  * It is DERIVED from that evaluation, never parallel to it: the items are its
@@ -863,6 +906,9 @@ function buildGradingWorld(
           gradedAt: iso(-30 * 60_000 + attemptIndex * 1000),
           supersedesId: id0,
         });
+      } else if (source === "llm" && !blank && (options.allValidated || attemptIndex % 3 === 0)) {
+        // Released, every essay; closed, one in three already validated.
+        history.push(...validatedProposal(base, criteria, item.points, attemptIndex));
       } else {
         history.push(base);
       }
@@ -1077,6 +1123,7 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
   const anonymous = url.searchParams.get("anonymous") !== "0";
   const items = itemId ? e.items.filter((i) => i.id === itemId) : e.items;
   const pairs = items.flatMap((i) => e.attempts.map((a) => ({ a, i })));
+  const figures = mockFigures(e, items.map((i) => i.id)).byItem;
 
   const entries = pairs.map(({ a, i }) => gradingEntry(e, a, i, anonymous));
 
@@ -1100,6 +1147,7 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       // The server's rule (`exportsText`): the types with export hooks, never a parameterized item.
       exportable: i.type === "code" && !(FALL && i.questionId === FALL.id),
       ...itemAcceptance(e, i),
+      agreement: figures.get(i.id)!.agreement,
       ...(FALL && i.questionId === FALL.id
         ? {
             parameters: {
@@ -1119,6 +1167,34 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
     },
   };
 });
+
+/**
+ * The rows of the agreement figures (ADR-139 §15), read as the API reads
+ * them — per cell of the class (a staff seat left out), the model's latest
+ * proposal (`llm`, no `gradedBy`) against the validated grading in force;
+ * the contestations, each by the source of the grading standing now (the
+ * mock keeps no grading at filing) — and assembled by the domain.
+ */
+function mockFigures(e: MockGradingWorld, itemIds: readonly string[]) {
+  const cls = e.attempts.filter((a) => !a.staff);
+  const compared = cls.flatMap((a) =>
+    itemIds.flatMap((itemId) => {
+      const chain = e.gradings.get(cellKey(a.id, itemId)) ?? [];
+      const inForce = chain.find((g) => g.state === "validated");
+      const proposal = chain.filter((g) => g.source === "llm" && g.gradedBy === null).at(-1);
+      return inForce && proposal?.confidence
+        ? [{ itemId, proposal: proposal.points, inForce: inForce.points, confidence: proposal.confidence }]
+        : [];
+    }),
+  );
+  const filed = [...e.contestations.values()]
+    .filter((c) => cls.some((a) => a.id === c.attemptId))
+    .map((c) => ({ itemId: c.itemId, state: c.state, source: standingGrading(e, c.attemptId, c.itemId)?.source ?? null }));
+  const graded = new Map(
+    itemIds.map((itemId) => [itemId, cls.filter((a) => standingGrading(e, a.id, itemId)?.state === "validated").length]),
+  );
+  return evaluationFigures(itemIds, compared, filed, graded);
+}
 
 /** Every question with its state (#107): two counters per question. */
 on("GET", "/app/api/evaluations/:id/grading/steps", (m) => {
@@ -1561,6 +1637,7 @@ on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
   }
   const view = resultsView(e);
   const papers = e.attempts.filter((a) => !a.staff).length;
+  const figures = mockFigures(e, e.items.map((i) => i.id));
   return e.items.map((item, index) => {
     const q = questions.find((x) => x.id === item.questionId)!;
     // A parameterized question projects its example instance (ADR-056 §9).
@@ -1597,6 +1674,8 @@ on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
       casePassRate,
       successRate,
       avgMs: null,
+      figures: figures.byItem.get(item.id)!,
+      totalFigures: figures.total,
     };
   });
 });

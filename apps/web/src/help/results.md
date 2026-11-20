@@ -19,6 +19,11 @@ the explanation, how the answers were spread and the success rate — per
 choice for a multiple choice, per test case for a code question. It is meant
 to be scrolled through while going over the paper in class.
 
+For you alone, never projected: beside the success rate, how many of the
+AI's proposals you left unchanged and how many answers were contested. Under
+the summary, the same for the whole evaluation, contestations counted over
+the graded answers.
+
 ## Export
 
 **Export CSV** gives one line per student with the points of each item, the

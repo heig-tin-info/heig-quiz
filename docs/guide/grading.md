@@ -118,6 +118,14 @@ A proposal is asked once: closing again, or a retake, keeps it; a **Re-grade** a
   <figcaption>An AI proposal opened: the answer beside the criteria and the model answer, then the model's justification, for your eyes only.</figcaption>
 </figure> Under the points the row then reads `AI · High`, `AI · Medium` or `AI · Low`, beside a wand that stays once you validate it; the **Graded by** filter set to **AI** adds a **Confidence** filter, so you can validate the confident proposals together and read the others one by one. A proposal is never final until you validate it. No model is called while an evaluation is running.
 
+**How often you agreed with the AI.** Once you have validated some of a question's AI proposals, the question bar reads **AI: 12 of 15 unchanged**: of the answers that hold both a proposal and a validated grade, how many kept the proposal's points. Its tooltip gives the mean difference, in points, where you changed them, and the same count for each confidence the model stated. A validation that only moves points between an essay's criteria, the total unchanged, counts as unchanged; after a re-grade, the comparison is with the new proposal. Your own test run is left out. It is a reading for you and your colleagues of the course, shown nowhere else.
+
+<figure markdown="span">
+  ![The question bar of an essay: AI: 4 of 6 unchanged, its tooltip open](../assets/screenshots/mock-agreement-grading-light.png#only-light)
+  ![The question bar of an essay: AI: 4 of 6 unchanged, its tooltip open](../assets/screenshots/mock-agreement-grading-dark.png#only-dark)
+  <figcaption>The AI's agreement with you on this question, the detail in the tooltip.</figcaption>
+</figure>
+
 !!! note
     The screenshots on this page come from the demo world, graded by a development stand-in that proposes a grade from the rubric's words and says so in every justification.
 
@@ -217,6 +225,14 @@ It is computed from the validated gradings, never typed in: adjust one grading i
 ### Questions
 
 The **Questions** tab lists one block per item in quiz order, headed by its type, its number of answers and its **Success rate**. Each block shows **Question and answer key** drawn as the projection draws it, answers revealed: for a multiple choice every choice with a bar of the papers that ticked it (green on a right choice, red on a wrong one) and their count; for a short answer the values the class typed; for a cloze each blank with its key and a right / wrong bar. Any other type shows the question as the student saw it, followed by what the class answered when the type groups answers (the accuracy of a code image, for instance). A code question adds its reference solution and each test case with the number of papers that passed it; every question adds its explanation.
+
+Beside the success rate, a question shows **AI: n of m unchanged** where you validated AI proposals, and **n contested** where students contested its grading; hover either for the detail. Under the summary, the same for the whole evaluation: **AI proposals unchanged** over those compared, with the mean difference and each confidence, and **Contested answers** over the graded answers, with how many are open, accepted and refused, and for each source of the contested grades (automatic, AI, manual) how many were contested and how many accepted. Neither appears when there is nothing to count, and neither is ever shown to a student nor projected.
+
+<figure markdown="span">
+  ![The Questions tab of a published exam: the AI's agreement and the contestations under the summary](../assets/screenshots/mock-agreement-results-light.png#only-light)
+  ![The Questions tab of a published exam: the AI's agreement and the contestations under the summary](../assets/screenshots/mock-agreement-results-dark.png#only-dark)
+  <figcaption>The whole exam's figures under the summary, and each question's beside its success rate.</figcaption>
+</figure>
 
 **Present**, in the header of the page, opens the same questions full screen, dark, one screen per question, for the beamer. It appears once the evaluation is closed — or, for an exercise, once you have published its correction from the live dashboard; while the exercise is still running it counts only the papers handed in, and its header says how many (**Handed in so far**). Each question shows how the class fared in one bar — full marks, partial, wrong, no answer — and its success rate; a multiple choice gives a bar per choice with the number of papers that ticked it, a short answer the answers the class wrote, a cloze each blank, a code question each test case. The answers and their colours stay hidden until you press **R** (or **Reveal the answers**), so the room can think first — the choices' bars already show, in grey, how the class voted; **E** shows the explanation, **↓** and **↑** move between questions, **F** goes full screen. Hover a bar for its exact figures. Only validated gradings count: an answer still waiting for your validation is not on the wall.
 

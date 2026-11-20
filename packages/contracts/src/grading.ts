@@ -20,6 +20,7 @@ import { ACCEPTANCE_SCOPES, answerExplained, GRADING_SOURCES, GRADING_STATES } f
 import { IdParam, StaffItemRef } from "./common.js";
 import { ContestationReply, ContestationVerdict, StaffContestation } from "./contestation.js";
 import { ItemCounting } from "./evaluation.js";
+import { AiAgreement } from "./gradingFigures.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
 import { VersionRow } from "./pool.js";
 
@@ -218,6 +219,11 @@ export const GradingQueueItem = StaffItemRef.extend({
       accepted: z.array(ItemAcceptance),
     })
     .optional(),
+  /**
+   * ADR-139 §15: how the teacher's validated gradings of this question
+   * agree with the AI's proposals; `null` when no cell holds both.
+   */
+  agreement: AiAgreement.nullable(),
 });
 export type GradingQueueItem = z.infer<typeof GradingQueueItem>;
 

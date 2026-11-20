@@ -2027,6 +2027,20 @@ const scenes = [
   { name: "contest-results", role: "teacher", path: "/evaluations/released/results" },
   { name: "contest-results-extend", role: "teacher", path: "/evaluations/released/results", fold: true, act: (p) => p.getByRole("button", { name: /^(Extend|Prolonger)$/ }).click() },
   { name: "contest-gradebook", role: "teacher", path: "/classrooms/r1/grades" },
+  // ADR-139 §15: the AI's agreement on the question bar (the essay, a third
+  // of its proposals validated, some changed), its detail in the tooltip; the
+  // released exam's Questions tab with the agreement and the contestations.
+  { name: "agreement-grading", role: "teacher", path: "/evaluations/closed/grading", fold: true, settle: 2500, act: async (p) => {
+      await nextQuestion(p, 4);
+      await p.getByText(/^(AI: |IA\u202f: )\d+ (of|sur) \d+/).first().hover();
+      await p.waitForTimeout(900);
+    } },
+  { name: "agreement-results", role: "teacher", path: "/evaluations/released/results?tab=questions", fold: true, settle: 2500, act: async (p) => {
+      await p.getByText(/^(AI proposals unchanged|Propositions de l'IA inchangées)/).first().evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await p.evaluate(() => window.scrollBy(0, -260));
+      await p.waitForTimeout(400);
+    } },
+  { name: "agreement-results-fr", role: "teacher", lang: "fr", path: "/evaluations/released/results?tab=questions", fold: true, settle: 2500 },
   { name: "contest-config", role: "teacher", path: "/evaluations/draft?step=timing", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^(advanced options|options avancées)$/i }).first().click();
       const row = p.getByRole("spinbutton", { name: /^Contestations$/ });

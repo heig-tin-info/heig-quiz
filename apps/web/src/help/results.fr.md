@@ -20,6 +20,11 @@ l'explication, la répartition des réponses et le taux de réussite — par
 choix pour un choix multiple, par cas de test pour une question code. C'est
 fait pour être déroulé pendant la correction en classe.
 
+Pour l'équipe enseignante seulement, jamais projeté : à côté du taux de
+réussite, les propositions de l'IA gardées telles quelles et les réponses
+contestées. Sous le résumé, la même chose pour toute l'évaluation, les
+contestations comptées sur les réponses corrigées.
+
 ## Export
 
 **Exporter en CSV** donne une ligne par étudiant avec les points de chaque

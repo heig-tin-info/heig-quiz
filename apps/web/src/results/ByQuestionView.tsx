@@ -4,6 +4,7 @@ import type { ByQuestion } from "@quiz/contracts";
 import { displayedRate } from "@quiz/domain";
 
 import { refusedWith } from "../api";
+import { AgreementBadge, ContestationsBadge, GradingFiguresStats } from "../grading/GradingFigures";
 import { useI18n, useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { typeLabel, QuestionReviewHost } from "../questionTypes";
@@ -22,7 +23,10 @@ export const isNotOver = (error: unknown): boolean => refusedWith(error, "not_ov
  * F-RES-03: the linear walk through the questions, for the correction in
  * front of the class. Statement, key and distribution, explanation, success
  * rate — one card per question, scrolled from top to bottom, under the
- * class's distribution over all of them (`QuestionSummary`).
+ * class's distribution over all of them (`QuestionSummary`). For the staff
+ * alone, the AI's agreement and the contestations, per question beside the
+ * success rate and for the whole evaluation under the summary (ADR-139 §15);
+ * the projection draws none.
  *
  * The pieces are the correction projection's, at the page's density and
  * always revealed: this is the teacher's reading of the projection. A type
@@ -48,6 +52,8 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
   return (
     <div className="space-y-5">
       <QuestionSummary questions={questions} />
+      {/* ADR-139 §15: the AI's agreement and the contestations, the whole evaluation's. */}
+      <GradingFiguresStats figures={questions[0]!.totalFigures} />
       {questions.map((q) => {
         const answered = q.outcomes.correct + q.outcomes.partial + q.outcomes.wrong;
         const keyed = drawsKey(q.item.type);
@@ -66,6 +72,8 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
                     {/* Clamped for display (ADR-026): negative marking can push a mean below 0. */}
                     {q.successRate === null ? "—" : percent(displayedRate(q.successRate), locale)}
                   </Badge>
+                  <AgreementBadge agreement={q.figures.agreement} />
+                  <ContestationsBadge tally={q.figures.contestations} />
                 </div>
               }
             />

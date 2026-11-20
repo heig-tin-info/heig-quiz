@@ -10,8 +10,8 @@ import { gradingQueueKey, gradingStepsKey } from "../queryKeys";
 import { useGradingProgress } from "./progress";
 import { useEvaluation } from "../evaluation/api";
 
-/** A question of the evaluation as the grading screen needs it. */
-export interface GradingItem extends GradingQueueItem {
+/** A question of the evaluation as the grading screen needs it; its agreement figures come with the queue. */
+export interface GradingItem extends Omit<GradingQueueItem, "agreement"> {
   /** The pool question behind the item: what "Edit question" opens. */
   questionId: string;
   /**
@@ -128,6 +128,8 @@ export function useGradingData(evaluationId: string, itemId: string | null, name
     criteria: queue.data?.items[0]?.criteria ?? NO_CRITERIA,
     /** The answers accepted at grading time and the scopes offered (ADR-128); null when the item takes none. */
     acceptance: queue.data?.items[0]?.acceptance ?? null,
+    /** How the teacher's gradings agree with the AI's proposals (ADR-139 §15); null when nothing was compared, undefined while the queue loads. */
+    agreement: queue.data?.items[0]?.agreement,
     progress: useGradingProgress(evaluationId),
   };
 }

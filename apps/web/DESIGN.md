@@ -1984,6 +1984,15 @@ One question's answers as a table (`src/grading/`, origin
   reason" until unfolded. The owner's answer is its own `line-strong` box
   under the review, two `secondary` buttons (Refuse, Accept) at its end:
   the panel's footer keeps the validation, the screen's primary.
+- **The agreement figures** (ADR-139 §15) are readings, never actions:
+  a `zinc` badge with the `Sparkles` icon, "AI: 12 of 15 unchanged", before
+  the contested badge in the question bar, its mean difference and its split
+  by confidence in the tooltip. The results' Questions tab carries the same
+  badge and a `zinc` "n contested" beside each question's success rate, and
+  two `Stat`s under its summary for the whole evaluation: the count, its
+  total as the `aside` ("of 21 compared", "of 176 graded"), the detail as
+  hint lines. Counts with their total, never a bare percentage, and nothing
+  where there is nothing to count; no chart.
 
 ## The gradebook (ADR-074, M5-04)
 
