@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 import { useHold } from "../build";
 import { useT } from "../i18n";
-import { Button, Field } from "./controls";
+import { Button, Field, FieldError, fieldErrorProps } from "./controls";
+import { fromLocalInput, toLocalInput } from "./dates";
 import { Modal } from "./layers";
 
 /**
@@ -139,6 +140,81 @@ export function TextFieldDialog({
           if (e.key === "Enter" && !e.nativeEvent.isComposing) submit();
         }}
       />
+    </FormDialog>
+  );
+}
+
+/**
+ * A dialog of ONE instant to choose (a `datetime-local` field in the
+ * reader's own time): the live "Extend until a date" (F-LIVE-11) and a
+ * contestation window's end (ADR-139). It opens on `initial`, bounds the
+ * field with `min` and `max`, and keeps the submit off while `refusal`
+ * words the typed instant — said under the field once it changed from what
+ * it opened on, so the value it opens on is never a mistake. The server
+ * decides again: its refusal is `error`.
+ */
+export function InstantDialog({
+  title,
+  submitLabel,
+  fieldLabel,
+  description,
+  initial,
+  min,
+  max,
+  refusal,
+  pending,
+  error,
+  onSubmit,
+  onClose,
+}: {
+  title: string;
+  /** The verb of the action ("Extend"). */
+  submitLabel: string;
+  fieldLabel: string;
+  /** Under the label: what stands now ("Current end: …"). */
+  description: string;
+  /** ISO instants. */
+  initial: string;
+  min: string;
+  max: string;
+  /** Why the chosen instant cannot be taken, in the reader's words; null when it can. */
+  refusal: (iso: string) => string | null;
+  pending: boolean;
+  error: ReactNode;
+  onSubmit: (iso: string) => void;
+  onClose: () => void;
+}) {
+  const id = useId();
+  const [opened] = useState(() => toLocalInput(initial));
+  const [local, setLocal] = useState(opened);
+  const chosen = fromLocalInput(local);
+  const refused = chosen === null ? null : refusal(chosen);
+  const shown = local === opened ? null : refused;
+  return (
+    <FormDialog
+      title={title}
+      onClose={onClose}
+      submitLabel={submitLabel}
+      submitting={pending}
+      canSubmit={chosen !== null && refused === null}
+      onSubmit={() => chosen !== null && refused === null && onSubmit(chosen)}
+      error={error}
+    >
+      <div className="flex flex-col gap-1">
+        <Field
+          id={id}
+          type="datetime-local"
+          label={fieldLabel}
+          description={description}
+          value={local}
+          min={toLocalInput(min)}
+          max={toLocalInput(max)}
+          required
+          onChange={(e) => setLocal(e.target.value)}
+          {...fieldErrorProps(id, shown)}
+        />
+        <FieldError id={id}>{shown}</FieldError>
+      </div>
     </FormDialog>
   );
 }

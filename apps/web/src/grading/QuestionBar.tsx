@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, MessageSquareWarning } from "lucide-react";
 
 import type { ItemCounting } from "@quiz/contracts";
 import { ITEM_COUNTINGS } from "@quiz/domain";
@@ -37,7 +37,9 @@ const leftOf = (state: StepState | undefined) =>
  * (ADR-044), on the shared `StepBar`: a question is "done" once every one
  * of its answers is validated; its type, its points (and how it counts,
  * when not normally) and its internal name after the counter, what it
- * still asks for before the last chevron.
+ * still asks for before the last chevron. A question holding open
+ * contestations (ADR-139) carries their count: a flag over its step, a
+ * line in the menu and a quiet badge before its state.
  *
  * Once the evaluation has run, the ⋯ menu changes how the question counts
  * — normally, as a bonus, or not at all (ADR-108): a secondary act, so a
@@ -65,8 +67,12 @@ export function QuestionBar({
   const item = items[index];
   if (!item) return null;
   const left = leftOf(states.get(item.id));
+  const contested = states.get(item.id)?.contested ?? 0;
   const stateWords = (n: number | null) =>
     n === null ? undefined : n > 0 ? t("grading.steps.toValidate", { n }) : t("grading.steps.done");
+  /** ADR-139: the open contestations' words, the step's flag and its line in the menu. */
+  const contestedWords = (n: number) =>
+    n === 0 ? undefined : t(n === 1 ? "grading.steps.contested.one" : "grading.steps.contested", { n });
 
   return (
     <StepBar
@@ -78,7 +84,9 @@ export function QuestionBar({
       onJump={onJump}
       steps={items.map((it, i) => {
         const n = leftOf(states.get(it.id));
-        return { id: it.id, label: `${i + 1}. ${it.internalName}`, description: stateWords(n), done: n === 0 };
+        const open = contestedWords(states.get(it.id)?.contested ?? 0);
+        const description = [stateWords(n), open].filter(Boolean).join(" · ") || undefined;
+        return { id: it.id, label: `${i + 1}. ${it.internalName}`, description, done: n === 0, flag: open };
       })}
       lead={
         <>
@@ -101,11 +109,19 @@ export function QuestionBar({
         </>
       }
       status={
-        left === null ? null : (
-          <Badge tone={left > 0 ? "amber" : "green"} icon={left > 0 ? undefined : Check}>
-            {stateWords(left)}
-          </Badge>
-        )
+        <>
+          {/* ADR-139: quiet beside the state, which stays the step's word. */}
+          {contested > 0 ? (
+            <Badge tone="zinc" icon={MessageSquareWarning}>
+              {contestedWords(contested)}
+            </Badge>
+          ) : null}
+          {left === null ? null : (
+            <Badge tone={left > 0 ? "amber" : "green"} icon={left > 0 ? undefined : Check}>
+              {stateWords(left)}
+            </Badge>
+          )}
+        </>
       }
       trailing={
         counting ? (

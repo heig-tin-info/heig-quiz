@@ -22,7 +22,7 @@ import { joinedItems, type DbOrTx, type EvaluationRecord, type JoinedItem } from
 import { lockItems } from "./acceptanceRules.js";
 import { criteriaOf, pointsRangeOf } from "./reads.js";
 import { GradingError, NEWEST_FIRST, type GradingRecord } from "./records.js";
-import { writeGrading, writeGradings, type WriteGradingInput } from "./writer.js";
+import { writeGrading, writeGradings, type WriteAfter, type WriteGradingInput } from "./writer.js";
 
 // --- Teacher writes -------------------------------------------------------
 
@@ -61,6 +61,8 @@ export async function manualOverride(
   input: { points?: number | undefined; criteria?: readonly CriterionPointsBody[] | undefined; comment: string },
   userId: string,
   now: Date,
+  /** `after`: a write that commits with the override or not at all (a contestation's answer, ADR-139). */
+  { after }: { after?: WriteAfter } = {},
 ): Promise<GradingRecord> {
   if (input.comment.trim().length === 0) throw new GradingError("comment_required");
   const graded = criteriaOutcome(target.criteria, target.maxPoints, input, null);
@@ -81,7 +83,7 @@ export async function manualOverride(
     now,
   };
   if (!graded.breakdown) {
-    const [row] = await writeGradings(db, [write], (tx, inputs) => lockCell(tx, write).then(() => inputs));
+    const [row] = await writeGradings(db, [write], { guard: (tx, inputs) => lockCell(tx, write).then(() => inputs), after });
     return row!;
   }
   // The details kept are read inside the write's transaction, the row locked
@@ -89,10 +91,13 @@ export async function manualOverride(
   // waits for this one, or this one reads after it. At worst, a correction
   // that supersedes the read row first leaves this override without the
   // proposal's `ai`; the override itself still wins (F-GRADE-05).
-  const [row] = await writeGradings(db, [write], async (tx, inputs) => {
-    await lockCell(tx, write);
-    const previous = await gradingInForce(tx, write.attemptId, write.itemId);
-    return inputs.map((i) => ({ ...i, details: { ...teacherKept(previous?.details), ...(i.details as object) } }));
+  const [row] = await writeGradings(db, [write], {
+    guard: async (tx, inputs) => {
+      await lockCell(tx, write);
+      const previous = await gradingInForce(tx, write.attemptId, write.itemId);
+      return inputs.map((i) => ({ ...i, details: { ...teacherKept(previous?.details), ...(i.details as object) } }));
+    },
+    after,
   });
   return row!;
 }

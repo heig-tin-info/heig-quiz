@@ -22,6 +22,7 @@ import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { Disclosure, Section, Segmented, Select, SettingRow, Switch } from "../ui";
 import { EvaluationDevices } from "./AllowedDevices";
+import { ContestationSetting } from "./ContestationSetting";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 
 /** The choice of the multiple-answer select that stands for negative marking. */
@@ -46,6 +47,7 @@ export function AdvancedDisclosure({
   feedbackDisabled,
   holdsCategorize = false,
   feedbackExtra,
+  windowSet = false,
 }: {
   config: ConfigView;
   patch: ConfigPatch;
@@ -69,6 +71,8 @@ export function AdvancedDisclosure({
    * until the release): a template has none.
    */
   feedbackExtra?: ReactNode;
+  /** A release stored the contestation window's closing instant: its row is locked (ADR-139). */
+  windowSet?: boolean;
 }) {
   const t = useT();
   const { settings, feedbackPolicy, mode, mcqPolicy } = config;
@@ -269,6 +273,16 @@ export function AdvancedDisclosure({
                 onChange={(showExplanation) => feedback({ showExplanation })}
               />
             </SettingRow>
+            {/* ADR-139: an exam's results may be contested, never an
+                exercise's nor a poll's; nothing to contest under `none`. */}
+            {mode === "exam" && feedbackPolicy.when !== "none" ? (
+              <ContestationSetting
+                policy={feedbackPolicy}
+                disabled={feedbackDisabled}
+                windowSet={windowSet}
+                onChange={(contestationDays) => feedback({ contestationDays })}
+              />
+            ) : null}
           </>
         )}
 

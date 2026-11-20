@@ -219,6 +219,12 @@ export const GradebookColumn = z.object({
   componentId: z.uuid().nullable(),
   /** The class's mean of the column: its released cells' grades (an absence 1.0, an empty or excused cell left out); null before the release or with none. */
   classMean: z.number().nullable(),
+  /**
+   * ADR-139: an exam's OPEN contestations, the class's (a teacher's test
+   * walk left out); 0 for any other column. Staff only: no student column
+   * carries it.
+   */
+  openContestations: z.number().int().nonnegative(),
 });
 export type GradebookColumn = z.infer<typeof GradebookColumn>;
 

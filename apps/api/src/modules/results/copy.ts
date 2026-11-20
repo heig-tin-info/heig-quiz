@@ -103,6 +103,8 @@ export async function studentCopyRecord(
   if (!feedback.available) throw new ResultsError("feedback_pending", undefined, { reason: feedback.reason });
   // The page's actions (`retake`, `review`) are left out of the file by the
   // contract's `.omit` (`StudentCopyRecord`), which `sendExport` parses through.
+  // So are its contestations (ADR-139): the contract's items are the copy's,
+  // without them, and the PDF draws only the fields it names.
   const { available: _available, ...copy } = feedback;
   return {
     record: { kind: "student-copy", version: 1, generatedAt: iso(options.now), ...copy },

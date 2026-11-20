@@ -35,9 +35,9 @@ function makeTable(over: Partial<GradebookStaff> = {}): GradebookStaff {
     meanPublished: false,
     components: [],
     columns: [
-      { kind: "evaluation", activityId: TEST, mode: "exam", title: "Test 1", date: "2026-09-10T08:00:00.000Z", released: true, weight: 100, counts: true, position: null, componentId: null, classMean: 3.3 },
-      { kind: "evaluation", activityId: EXERCISE, mode: "exercise", title: "Exercises", date: "2026-09-20T08:00:00.000Z", released: true, weight: 100, counts: false, position: null, componentId: null, classMean: null },
-      { kind: "evaluation", activityId: LATER, mode: "exam", title: "Test 2", date: "2026-10-01T08:00:00.000Z", released: false, weight: 40, counts: true, position: null, componentId: null, classMean: null },
+      { kind: "evaluation", activityId: TEST, mode: "exam", title: "Test 1", date: "2026-09-10T08:00:00.000Z", released: true, weight: 100, counts: true, position: null, componentId: null, classMean: 3.3, openContestations: 0 },
+      { kind: "evaluation", activityId: EXERCISE, mode: "exercise", title: "Exercises", date: "2026-09-20T08:00:00.000Z", released: true, weight: 100, counts: false, position: null, componentId: null, classMean: null, openContestations: 0 },
+      { kind: "evaluation", activityId: LATER, mode: "exam", title: "Test 2", date: "2026-10-01T08:00:00.000Z", released: false, weight: 40, counts: true, position: null, componentId: null, classMean: null, openContestations: 0 },
     ],
     rows: [
       {
@@ -116,6 +116,16 @@ describe("the matrix", () => {
     expect(within(later).getByText(/40 %/)).toBeInTheDocument();
     expect(within(screen.getByRole("columnheader", { name: /Exercises/ })).getByText(/Not counted/)).toBeInTheDocument();
     expect(within(screen.getByRole("columnheader", { name: /Test 1/ })).queryByText("Not released")).toBeNull();
+  });
+
+  // ADR-139: open contestations on a released exam: a grade may still move.
+  it("flags a released exam's open contestations on its head, and only there", async () => {
+    const table = makeTable();
+    renderTab({ ...table, columns: table.columns.map((c, i) => (i === 0 ? { ...c, openContestations: 2 } : { ...c, openContestations: 0 })) });
+    await cell("Alice Dupont", "Test 1");
+    const test = screen.getByRole("columnheader", { name: /Test 1/ });
+    expect(within(test).getByText("2 open contestations. The grade may still change.")).toBeInTheDocument();
+    expect(within(screen.getByRole("columnheader", { name: /Test 2/ })).queryByText(/contestation/)).toBeNull();
   });
 
   it("hides the exercises left out of the mean until asked, keeps one that counts, and leaves the mean alone", async () => {

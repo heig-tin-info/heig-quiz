@@ -25,6 +25,7 @@ import { and, asc, countDistinct, eq, inArray, notExists, sql } from "drizzle-or
 import type {
   ByQuestion,
   CardResults,
+  ContestationWindowBody,
   FeedbackPolicy,
   GradingScale,
   ItemCorrection,
@@ -36,10 +37,18 @@ import type {
   ReviewItem,
   StaffCopy,
   StudentFeedback,
+  StudentFeedbackItem,
   StudentResultItem,
+  WindowInstantRefused,
 } from "@quiz/contracts";
 import { BREAKDOWN_KEY, TEACHER_ONLY_DETAIL_KEYS } from "@quiz/contracts";
 import {
+  contestationClosesAt,
+  contestationDaysOf,
+  contestationWindowApplies,
+  contestationWindowOpen,
+  unitRefusal,
+  windowExtendRefusal,
   evaluationTotal,
   attemptTotal,
   countsForStudent,
@@ -95,10 +104,12 @@ import {
   retakesEnabled,
   scaleOf,
   seatsOf,
+  setContestationWindow,
   setCorrectionPublished,
   setModifiedAfterRelease,
   setRelease,
   settingsOf,
+  storedFeedbackOf,
   staffAttemptIds,
   staffRosterWithAttempt,
   studentEvaluationRows,
@@ -109,8 +120,13 @@ import {
 } from "../evaluation/service.js";
 import { notifyMany, withdrawResultsNotifications } from "../notifications/service.js";
 import {
+  attemptCounts,
+  cellUnit,
+  contestationsOfAttempt,
   keptAttempts,
+  openContestationCounts,
   pairKey,
+  studentContestationOf,
   pointsByAttempt,
   standingsOf,
   studentAttempts,
@@ -157,6 +173,10 @@ const REFUSALS = {
   // the feedback page shows (`reason`, its refusal), never of a practice attempt.
   feedback_pending: [409, "the feedback page shows nothing of this attempt yet"],
   practice_attempt: [409, "a practice attempt has no copy"],
+  // ADR-139: the owner's window acts, on a released exam whose results the
+  // students read; an extension lies ahead, at most 90 days (`reason`).
+  window_unavailable: [409, "this evaluation has no contestation window to change"],
+  window_instant: [422, "the window closes at a later instant, at most 90 days ahead"],
 } satisfies Record<string, Refusal>;
 
 export class ResultsError extends refusalClass("ResultsError", REFUSALS) {}
@@ -177,11 +197,14 @@ const correctionPublished = (evaluation: EvaluationRecord): boolean =>
 
 // --- The grade table ------------------------------------------------------
 
+/** A row as computed, before the view adds its open contestations (ADR-139); the CSV reads it so. */
+type ComputedRow = Omit<ResultRow, "openContestations">;
+
 interface ComputedResults {
   totalPoints: number;
   scale: GradingScale;
   items: ResultsItem[];
-  rows: ResultRow[];
+  rows: ComputedRow[];
 }
 
 /**
@@ -224,7 +247,7 @@ async function computeResults(
   const validated = await validatedGradings(db, evaluation.id);
   const excused = await excusedSeats(db, evaluation.id);
 
-  const rows: ResultRow[] = [];
+  const rows: ComputedRow[] = [];
   const seats = [
     ...roster.map((entry) => ({ ...entry, staff: false })),
     ...staffSeats.map((entry) => ({ ...entry, staff: true })),
@@ -347,7 +370,11 @@ function itemViews(
 }
 
 export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise<ResultsView> {
-  const [computed, practisedCount] = await Promise.all([computeResults(db, evaluation), practisedCountOf(db, evaluation)]);
+  const [computed, practisedCount, contested] = await Promise.all([
+    computeResults(db, evaluation),
+    practisedCountOf(db, evaluation),
+    openContestationCounts(db, [evaluation.id]),
+  ]);
   // Absent students count in the mean: a 1.0 that is not in the statistics
   // would flatter every class average (F-RES-01). A teacher's own test does
   // NOT: it is not a member of the class (ADR-018); nor does an excused
@@ -366,9 +393,16 @@ export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise
     releasedAt: isoOrNull(evaluation.releasedAt),
     modifiedAfterRelease: evaluation.modifiedAfterRelease,
     items: computed.items,
-    rows: computed.rows,
+    // ADR-139: the open contestations of each row's counted attempt; never in the CSV.
+    rows: computed.rows.map((row) => ({
+      ...row,
+      openContestations: row.attemptId === null ? 0 : (contested.byAttempt.get(row.attemptId) ?? 0),
+    })),
     stats: { ...stats, histogram: histogram(grades) },
     practisedCount,
+    openContestations: contested.byEvaluation.get(evaluation.id) ?? 0,
+    contestationClosesAt: isoOrNull(evaluation.contestationClosesAt),
+    contestationApplies: windowApplies(evaluation, evaluation.releasedAt !== null),
   };
 }
 
@@ -441,7 +475,12 @@ export async function releaseResults(
   // ADR-088: the integrity journal has served the correction; it goes with
   // the release, in its transaction. A re-release finds nothing left.
   const journalPurged = await db.transaction(async (tx) => {
-    await setRelease(tx, evaluation.id, { releasedAt, releasedGrades: snapshot }, now);
+    await setRelease(
+      tx,
+      evaluation.id,
+      { releasedAt, releasedGrades: snapshot, contestationClosesAt: contestationWindowOf(evaluation, now) },
+      now,
+    );
     return purgeIntegrityJournal(tx, evaluation.id);
   });
   // ADR-041 §1: an exam's questions become drill cards at the release, never
@@ -489,6 +528,55 @@ export async function releaseResults(
     }
   }
   return { releasedAt, rows: snapshot.rows.length, journalPurged };
+}
+
+/**
+ * ADR-139: whether a contestation window applies to `evaluation`, released
+ * or about to be (`released`) — the one predicate of `@quiz/domain`,
+ * `contestationWindowApplies`, on its policy parsed once (an exam's
+ * effective policy is its stored one, ADR-124).
+ */
+function windowApplies(evaluation: EvaluationRecord, released: boolean, policy = storedFeedbackOf(evaluation)): boolean {
+  return contestationWindowApplies({ exam: evaluation.mode === "exam", released, when: policy.when });
+}
+
+/**
+ * ADR-139: the closing instant of the contestation window a release at
+ * `now` opens — where a window applies and its days are > 0 — or null.
+ * Written only where none is stored (`setRelease`), so a re-release, or a
+ * release after an unrelease, never moves it.
+ */
+function contestationWindowOf(evaluation: EvaluationRecord, now: Date): Date | null {
+  const policy = storedFeedbackOf(evaluation);
+  return windowApplies(evaluation, true, policy) ? contestationClosesAt(now, contestationDaysOf(policy)) : null;
+}
+
+/**
+ * ADR-139: the owner's two acts on the contestation window of a released
+ * exam whose students read results — close it now (the server's clock), or
+ * move its closing instant to a later one, at most 90 days ahead (`422
+ * window_instant` with the domain's `reason`); extending may reopen a
+ * closed window, or open one where the release opened none. Anything else
+ * is `409 window_unavailable`. The open contestations are left as they
+ * are: closing stops new ones only.
+ */
+export async function changeContestationWindow(
+  db: Db,
+  evaluation: EvaluationRecord,
+  body: ContestationWindowBody,
+  now: Date,
+): Promise<Date> {
+  if (!windowApplies(evaluation, evaluation.releasedAt !== null)) throw new ResultsError("window_unavailable");
+  const closesAt = body.action === "close" ? now : new Date(body.closesAt);
+  if (body.action === "extend") {
+    const refusal = windowExtendRefusal(closesAt, now);
+    if (refusal !== null) {
+      throw new ResultsError("window_instant", undefined, { reason: refusal } satisfies Pick<WindowInstantRefused, "reason">);
+    }
+  }
+  // The UPDATE says "a released exam" again: an unrelease committing in between is seen.
+  if (!(await setContestationWindow(db, evaluation.id, closesAt, now))) throw new ResultsError("window_unavailable");
+  return closesAt;
 }
 
 /**
@@ -1020,6 +1108,7 @@ export async function studentFeedback(
       : { retake: offer.retake, ...(offer.review === undefined ? {} : { review: offer.review }) };
 
   const copy = await reviewedItems(db, evaluation, attempt, policy);
+  const items = await withContestations(db, evaluation, attempt, copy.items, now);
   // No grade before the release, nor while a cell is pending, nor ever on a
   // practice attempt after the due date, which is labelled practice (ADR-122 §7).
   const gradeShown =
@@ -1037,10 +1126,47 @@ export async function studentFeedback(
     },
     attemptId: attempt.id,
     ...copy,
+    items,
     grade: gradeShown ? copy.grade : null,
+    contestationClosesAt: isoOrNull(evaluation.contestationClosesAt),
     ...retake,
     ...(attempt.afterDue ? { practice: true as const } : {}),
   };
+}
+
+/**
+ * ADR-139: each question of the student's feedback page with their OWN
+ * contestation of it and whether it may be contested now: the window holds
+ * on the server's clock and the domain's `unitRefusal` finds nothing, on
+ * the facts the write reads too — `cellUnit` fed with the VALIDATED
+ * grading in force — so the page never offers what the write refuses (the
+ * write decides the window again, on the database's clock). The page shows
+ * results here (`shown`). Nothing here reads another attempt's row: only
+ * `attempt`'s own.
+ */
+async function withContestations(
+  db: Db,
+  evaluation: EvaluationRecord,
+  attempt: typeof attempts.$inferSelect,
+  items: readonly StudentResultItem[],
+  now: Date,
+): Promise<StudentFeedbackItem[]> {
+  const open = contestationWindowOpen({ released: evaluation.releasedAt !== null, closesAt: evaluation.contestationClosesAt }, now);
+  const [contested, counted, validated] = await Promise.all([
+    contestationsOfAttempt(db, attempt.id),
+    open ? attemptCounts(db, evaluation, attempt) : false,
+    open ? validatedOfAttempt(db, attempt.id) : [],
+  ]);
+  const inForce = new Map(validated.map((g) => [g.itemId, g]));
+  return items.map((item) => {
+    const row = contested.get(item.itemId);
+    const unit = cellUnit({ shown: true, counted, counting: item.counting, validated: inForce.get(item.itemId) ?? null });
+    return {
+      ...item,
+      contestation: row ? studentContestationOf(row) : null,
+      contestable: open && !row && unitRefusal(unit) === null,
+    };
+  });
 }
 
 /** The policy that shows everything: the teacher's reading of a copy. */

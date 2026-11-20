@@ -42,6 +42,7 @@ import {
   attempts,
   categories,
   classrooms,
+  contestations,
   coursePools,
   courseStaff,
   courses,
@@ -1429,4 +1430,23 @@ export const staffGrading = routeLoader((app, req, gradingId: string): Promise<G
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
     .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id));
   return staffScoped(callerOf(req), query, eq(gradings.id, gradingId), classrooms.courseId);
+});
+
+interface ContestationScope {
+  contestation: typeof contestations.$inferSelect;
+  attempt: typeof attempts.$inferSelect;
+  evaluation: typeof evaluations.$inferSelect;
+  /** As {@link AnswerScope}. */
+  courseId: string;
+}
+
+/** `/contestations/:id/…` (ADR-139) — the same motif, from the contestation's attempt. */
+export const staffContestation = routeLoader((app, req, contestationId: string): Promise<ContestationScope | null> => {
+  const query = app.db
+    .select({ contestation: contestations, attempt: attempts, evaluation: evaluations, courseId: classrooms.courseId })
+    .from(contestations)
+    .innerJoin(attempts, eq(contestations.attemptId, attempts.id))
+    .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id));
+  return staffScoped(callerOf(req), query, eq(contestations.id, contestationId), classrooms.courseId);
 });

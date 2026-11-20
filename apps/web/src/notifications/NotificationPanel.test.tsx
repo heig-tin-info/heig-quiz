@@ -178,6 +178,25 @@ describe("the inbox in the account menu", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "grading", evaluationId: "e2" });
   });
 
+  // ADR-139 §10: the e-mail's link, `?filter=contested`, in the bell too.
+  it("announces contestations and opens the grading panel on its contested filter", async () => {
+    const FILED: Notification = {
+      id: "n4c",
+      payload: { kind: "contestation_filed", evaluationId: "e2", evaluationTitle: "Test 1 — pointeurs", count: 2 },
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+      readAt: null,
+    };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [FILED], unread: 1 }),
+      "POST /app/api/notifications/n4c/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderMenu(navigate);
+    await openInbox();
+    await userEvent.click(screen.getByText(/2 contestations on “Test 1 — pointeurs”\./));
+    expect(navigate).toHaveBeenCalledWith({ view: "grading", evaluationId: "e2", filter: "contested" });
+  });
+
   it("counts the questions published in a shared pool, and opens that pool", async () => {
     const one: Notification = {
       id: "n5",

@@ -21,6 +21,7 @@ export function CopyItem({
   audience,
   subtitle,
   actions,
+  footer,
 }: {
   item: StudentResultItem;
   audience: "student" | "teacher";
@@ -28,6 +29,8 @@ export function CopyItem({
   subtitle?: ReactNode;
   /** After the points: what the reader may do with this question. */
   actions?: ReactNode;
+  /** At the card's foot, under a hairline: the student's contestation of it (ADR-139). */
+  footer?: ReactNode;
 }) {
   const t = useT();
   return (
@@ -78,6 +81,8 @@ export function CopyItem({
           <p className="text-sm">{item.comment}</p>
         </NotePanel>
       ) : null}
+
+      {footer ? <div className="border-t border-line pt-4">{footer}</div> : null}
     </Card>
   );
 }

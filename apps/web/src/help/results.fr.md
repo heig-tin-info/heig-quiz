@@ -34,3 +34,11 @@ politique de retour de cette évaluation autorise — sa réponse, la clé,
 l'explication, votre commentaire. Si une correction change ensuite, la page
 le signale et vous demande de publier à nouveau. **Retirer la publication**
 soustrait les notes à leur vue jusque-là.
+
+## Contestations
+
+Sur un examen publié, une ligne compte les contestations ouvertes et mène
+au panneau de correction filtré sur elles, et dit jusqu'à quand une
+question peut être contestée. Le rôle Enseignant du cours permet de
+**Clore maintenant** ou de **Prolonger** le délai, ou d'**Ouvrir un délai**
+là où il n'y en a pas. Prolonger rouvre un délai clos.

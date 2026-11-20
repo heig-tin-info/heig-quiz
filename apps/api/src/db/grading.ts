@@ -34,7 +34,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { LLM_CONFIDENCES } from "@quiz/core/server";
-import { GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
+import { CONTESTATION_STATES, GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { evaluationItems } from "./evaluation.js";
@@ -117,5 +117,49 @@ export const answerAcceptances = pgTable(
     uniqueIndex("answer_acceptances_attempt_uq")
       .on(t.itemId, t.part, t.answer, t.attemptId)
       .where(sql`${t.attemptId} is not null`),
+  ],
+);
+
+/**
+ * A student's contestation of the grading of one question of a released
+ * exam (ADR-139, F-GRADE-08): ONE per (attempt, item), filed once with its
+ * reason, answered once by the course owner. Owned by the `grading`
+ * module; the gradebook and the results read it by join. Never copied with
+ * the evaluation; deleted with its attempt or its item. Exams only — a
+ * project's criterion has its own table in the `project` module, under the
+ * same rule of `@quiz/domain` (`contestation.ts`).
+ *
+ * `grading_at_filing_id` and `grading_at_resolution_id` name the gradings in
+ * force at the two acts: the answer's trace in the `gradings` history.
+ */
+export const contestations = pgTable(
+  "contestations",
+  {
+    id: uuid("id").primaryKey(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => evaluationItems.id, { onDelete: "cascade" }),
+    /** Plain text, trimmed, at most 2,000 characters (`contestationText`). */
+    reason: text("reason").notNull(),
+    filedBy: uuid("filed_by").references(() => users.id, { onDelete: "set null" }),
+    /** The database's clock: the filing's own `now()`. */
+    filedAt: timestamp("filed_at", { withTimezone: true }).notNull(),
+    gradingAtFilingId: uuid("grading_at_filing_id").references(() => gradings.id, { onDelete: "set null" }),
+    state: text("state", { enum: CONTESTATION_STATES }).notNull().default("open"),
+    /** The owner's reply; empty for none (a bare acceptance, or still open). */
+    reply: text("reply").notNull().default(""),
+    resolvedBy: uuid("resolved_by").references(() => users.id, { onDelete: "set null" }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    gradingAtResolutionId: uuid("grading_at_resolution_id").references(() => gradings.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    uniqueIndex("contestations_cell_uq").on(t.attemptId, t.itemId),
+    // "The open contestations of an evaluation", by its items.
+    index("contestations_open_idx")
+      .on(t.itemId)
+      .where(sql`${t.state} = 'open'`),
   ],
 );

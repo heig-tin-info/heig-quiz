@@ -88,6 +88,7 @@ export {
   listEvaluations,
   byId,
   peopleOf,
+  classroomArchived,
 } from "./reads.js";
 export {
   createEvaluation,
@@ -98,6 +99,7 @@ export {
   moveClosesAtTo,
   setPollSettings,
   setRelease,
+  setContestationWindow,
   clearRelease,
   setCorrectionPublished,
   cachedGrade,

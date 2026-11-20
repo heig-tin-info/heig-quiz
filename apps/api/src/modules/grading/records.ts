@@ -58,6 +58,18 @@ const REFUSALS = {
   acceptance_not_frozen: [409, "an answer is accepted once the item list is frozen"],
   acceptance_scope: [422, "this answer is accepted for one student only"],
   acceptance_invalid: [422, "this part of the question cannot hold this answer"],
+  // ADR-139: a contestation is filed while the window holds, on the
+  // database's clock (no window, a closed one, results not released); once
+  // per question; only where the feedback page shows a validated result of
+  // the attempt that counts, below full points, on a question that counts
+  // (`reason`: `unitRefusal` of `@quiz/domain`); never in an archived
+  // classroom. It is answered once (a refusal or new points carry a reply:
+  // the contract's `answerExplained`).
+  contestation_closed: [409, "the window to contest this evaluation is closed"],
+  contestation_exists: [409, "this question was contested already"],
+  not_contestable: [409, "this question cannot be contested"],
+  classroom_archived: [409, "the classroom is archived"],
+  not_open: [409, "this contestation was answered already"],
 } satisfies Record<string, Refusal>;
 
 export class GradingError extends refusalClass("GradingError", REFUSALS) {}

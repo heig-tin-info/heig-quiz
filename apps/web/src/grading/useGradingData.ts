@@ -33,10 +33,11 @@ export interface GradingItem extends GradingQueueItem {
 /** A parameterized question's table and the question as written (ADR-056 §9). */
 export type GradingParameters = NonNullable<GradingQueueItem["parameters"]>;
 
-/** Where a question stands: its answers, and how many are validated. */
+/** Where a question stands: its answers, how many are validated, and its open contestations (ADR-139). */
 export interface StepState {
   total: number;
   validated: number;
+  contested: number;
 }
 
 const NO_CRITERIA: NonNullable<GradingQueueItem["criteria"]> = [];

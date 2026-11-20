@@ -48,9 +48,10 @@ import {
  * it). 2.2.0: the seven project kinds of F-NOTIF-13, declared in one go
  * (merge task M3-09b). 2.3.0: the two kinds of the reports on a question
  * (issue #680). 2.4.0: `pool_unpublished` (ADR-095). 2.5.0:
- * `project_scheduled` (ADR-127).
+ * `project_scheduled` (ADR-127). 2.6.0: the two kinds of the
+ * contestations (ADR-139).
  */
-export const TEAMS_APP_VERSION = "2.5.0";
+export const TEAMS_APP_VERSION = "2.6.0";
 const MANIFEST_VERSION = "1.17";
 const SCHEMAS = `https://developer.microsoft.com/en-us/json-schemas/teams/v${MANIFEST_VERSION}`;
 /** The red of the logo, as the icons use it. */
@@ -93,6 +94,9 @@ export const TEAMS_ACTIVITY_KINDS = [
   "pool_unpublished",
   // A project announced with its opening date (ADR-127), the bump to 2.5.0.
   "project_scheduled",
+  // The contestations of an exam (ADR-139), the bump to 2.6.0.
+  "contestation_filed",
+  "contestation_resolved",
 ] as const;
 type TeamsActivityKind = (typeof TEAMS_ACTIVITY_KINDS)[number];
 
@@ -124,6 +128,8 @@ export const TEAMS_ACTIVITY_TYPES: Record<TeamsActivityKind, string> = {
   project_deadline_applied: "projectDeadlineApplied",
   project_provision_failed: "projectProvisionFailed",
   github_org_lost: "githubOrgLost",
+  contestation_filed: "contestationFiled",
+  contestation_resolved: "contestationResolved",
 };
 
 interface AppOptions {

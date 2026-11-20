@@ -151,11 +151,13 @@ interface Spec {
   withheld?: boolean;
   /** Its component under `?components=1`; none by default. */
   component?: string;
+  /** ADR-139: an exam's open contestations, the column's flag. */
+  openContestations?: number;
 }
 
 const SPECS: Spec[] = [
   { n: 1, title: "Examen 1 : numération, types et outils", mode: "exam", kind: "evaluation", daysAgo: 42, released: true, weight: 50, component: COURS },
-  { n: 2, title: "Test 2 — Pointeurs", mode: "exam", kind: "evaluation", daysAgo: 28, released: true, weight: 100, component: COURS },
+  { n: 2, title: "Test 2 — Pointeurs", mode: "exam", kind: "evaluation", daysAgo: 28, released: true, weight: 100, component: COURS, openContestations: 3 },
   { n: 3, title: "Exercices — Boucles", mode: "exercise", kind: "evaluation", daysAgo: 21, released: true, weight: 100 },
   { n: 4, title: "Labo 1 — Calculatrice", mode: "project", kind: "project", daysAgo: 14, released: true, weight: 40, component: LABO },
   { n: 5, title: "Test 3 — Tableaux", mode: "exam", kind: "evaluation", daysAgo: 3, released: false, weight: 100, component: COURS },
@@ -214,6 +216,7 @@ function buildBook(roomId: string): MockBook | null {
     position: null,
     componentId: flags.components ? (spec.component ?? null) : null,
     withheld: spec.withheld ?? false,
+    openContestations: spec.openContestations ?? 0,
     beneath: new Map([...students.map((s, i): [string, Beneath] => [s.id, beneathOf(spec, i, me)]), ...staffSeatsOf(roomId).map((s): [string, Beneath] => [s.id, staffBeneath(spec)])]),
   }));
   const book: MockBook = { meanPublished: roomId === "r1" && !flags.unpublished, columns, marks: new Map() };

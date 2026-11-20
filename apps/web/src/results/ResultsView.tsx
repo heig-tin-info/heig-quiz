@@ -45,6 +45,7 @@ import {
   type MenuItem,
 } from "../ui";
 import { ByQuestionView, isNotOver } from "./ByQuestionView";
+import { ContestationLine } from "./ContestationLine";
 import { ExportButton } from "./ExportButton";
 import { GradeTable, useGradeSort } from "./GradeTable";
 import { bucketLabel, Histogram } from "../charts/Histogram";
@@ -303,6 +304,20 @@ export function ResultsView({
             />
           ) : null
         }
+      />
+
+      {/* ADR-139: the open contestations (they outlive an unrelease), and a released exam's window. */}
+      <ContestationLine
+        path={`/app/api/evaluations/${evaluationId}/contestation-window`}
+        closesAt={view.contestationClosesAt}
+        applies={view.contestationApplies}
+        open={view.openContestations}
+        isOwner={isOwner}
+        onChanged={() => {
+          void qc.invalidateQueries({ queryKey: resultsKey(evaluationId) });
+          void qc.invalidateQueries({ queryKey: evaluationKey(evaluationId) });
+        }}
+        onOpenContested={() => navigate({ view: "grading", evaluationId, filter: "contested" })}
       />
 
       {view.modifiedAfterRelease ? (

@@ -197,6 +197,8 @@ describe("student feedback", () => {
       explanation: null,
       details,
       comment: null,
+      contestation: null,
+      contestable: false,
     });
     const breakdown = [
       { id: "thesis", title: "Thesis", points: 2, maxPoints: 2.5 },
@@ -262,5 +264,122 @@ describe("a teacher in the student view (ADR-018, amended 2026-11-17)", () => {
     expect(await screen.findByRole("heading", { name: "Your results" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "See the class results" })).toBeNull();
     expect(calls.some((c) => c.url.startsWith("/app/api/evaluations/"))).toBe(false);
+  });
+});
+
+/*
+ * ADR-139: a question of a released exam is contested from its card, once,
+ * with a reason; the card then shows where the contestation stands, with the
+ * student's reason and the teacher's reply, line breaks kept.
+ */
+describe("contesting a question", () => {
+  const DAY = 86_400_000;
+  const AHEAD = new Date(Date.now() + 5 * DAY).toISOString();
+  const PAST = new Date(Date.now() - DAY).toISOString();
+  const POST = "POST /app/api/attempts/a1/items/i1/contestation";
+  const page = (over: Record<string, unknown> = {}, closesAt = AHEAD) => {
+    const feedback = makeFeedback();
+    return {
+      ...feedback,
+      contestationClosesAt: closesAt,
+      items: [{ ...feedback.items[0]!, points: 1, verdict: "partial" as const, contestation: null, contestable: true, ...over }],
+    };
+  };
+  const filed = (state: "open" | "accepted" | "refused", reply: string | null) => ({
+    state,
+    reason: "I wrote 31.\nThe key accepts 0x1F.",
+    filedAt: "2026-09-11T08:00:00.000Z",
+    reply,
+    resolvedAt: state === "open" ? null : "2026-09-12T08:00:00.000Z",
+  });
+  const send = async (reason: string) => {
+    await userEvent.click(await screen.findByRole("button", { name: "Contest question 1" }));
+    const dialog = await screen.findByRole("dialog", { name: "Contest question 1" });
+    await userEvent.type(within(dialog).getByLabelText("Reason"), reason);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Send" }));
+    return dialog;
+  };
+
+  it("sends a reason once, then shows the question as contested, the focus on its state", async () => {
+    let current = page();
+    const { calls } = mockFetch({
+      [`GET ${URL}`]: () => ok(current),
+      [POST]: () => {
+        current = page({ contestation: filed("open", null), contestable: false });
+        return ok(filed("open", null));
+      },
+    });
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+
+    // Until when, discreetly, while a question may be contested.
+    expect(await screen.findByText(/Contestations open until/)).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Contest question 1" }));
+    const dialog = await screen.findByRole("dialog", { name: "Contest question 1" });
+    expect(within(dialog).getByText("Sent once, it cannot be changed.")).toBeVisible();
+    expect(within(dialog).getByText(/Contestations open until/)).toBeVisible();
+    const button = within(dialog).getByRole("button", { name: "Send" });
+    // A blank reason is no reason: the contract's own check.
+    await userEvent.type(within(dialog).getByLabelText("Reason"), "   ");
+    expect(button).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("Reason"), "I wrote 31.");
+    expect(within(dialog).getByText("14 / 2000 characters")).toBeVisible();
+    await userEvent.click(button);
+
+    const state = await screen.findByText("Contestation awaiting an answer");
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({ reason: "I wrote 31." });
+    expect(screen.queryByRole("button", { name: "Contest question 1" })).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(state.closest("p")).toHaveFocus());
+  });
+
+  it("says why a contestation is refused, and reads the page again", async () => {
+    const { calls } = mockFetch({ [`GET ${URL}`]: ok(page()), [POST]: fail(409, { error: "contestation_closed" }) });
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+    const dialog = await send("Late.");
+    expect(await within(dialog).findByText("Contestations are closed for this evaluation.")).toBeVisible();
+    await waitFor(() => expect(calls.filter((c) => c.url === URL).length).toBe(2));
+  });
+
+  it("words the reason a question may not be contested, else the server's message", async () => {
+    mockFetch({
+      [`GET ${URL}`]: ok(page()),
+      [POST]: fail(409, { error: "not_contestable", message: "this question cannot be contested", reason: "full_points" }),
+    });
+    const { unmount } = renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+    expect(await within(await send("More points.")).findByText("This question already has all its points.")).toBeVisible();
+    unmount();
+
+    mockFetch({ [`GET ${URL}`]: ok(page()), [POST]: fail(500, { error: "boom", message: "Something broke." }) });
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+    expect(await within(await send("More points.")).findByText("Something broke.")).toBeVisible();
+  });
+
+  it.each([
+    ["open", null, "Contestation awaiting an answer"],
+    ["accepted", null, "Contestation accepted"],
+    ["refused", "Read the statement again.\nIt asks for bits.", "Contestation refused"],
+  ] as const)("shows a %s contestation with its reason and its reply", async (state, reply, words) => {
+    mockFetch({ [`GET ${URL}`]: ok(page({ contestation: filed(state, reply), contestable: false })) });
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+    expect(await screen.findByText(words)).toBeVisible();
+    // Plain text, line breaks kept: one paragraph, never Markdown.
+    expect(screen.getByText(/I wrote 31\.\s+The key accepts 0x1F\./)).toBeVisible();
+    if (reply) expect(screen.getByText(/Read the statement again\.\s+It asks for bits\./)).toBeVisible();
+    else expect(screen.queryByText("Reply")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Contest/ })).toBeNull();
+  });
+
+  it("says the window closed once it has, beside a contestation; nothing while nothing is or may be contested", async () => {
+    mockFetch({ [`GET ${URL}`]: ok(page({ contestation: filed("open", null), contestable: false }, PAST)) });
+    const { unmount } = renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+    expect(await screen.findByText("Contestations closed")).toBeVisible();
+    unmount();
+
+    // Open, but nothing to contest (full points) and nothing contested.
+    mockFetch({ [`GET ${URL}`]: ok({ ...makeFeedback(), contestationClosesAt: AHEAD }) });
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+    expect(await screen.findByRole("heading", { name: "Question 1" })).toBeVisible();
+    expect(screen.queryByText(/Contestations/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Contest/ })).toBeNull();
   });
 });

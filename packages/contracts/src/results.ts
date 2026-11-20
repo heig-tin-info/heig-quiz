@@ -14,6 +14,7 @@ import { z } from "zod";
 import { FEEDBACK_REFUSALS, ITEM_STANDINGS } from "@quiz/domain";
 
 import { StaffItemRef } from "./common.js";
+import { StudentContestation } from "./contestation.js";
 import { EvaluationMode, GradingScale, ItemCounting, RetakeKeep, RetakeScope } from "./evaluation.js";
 import { AttemptOrigin, AttemptState, RetakeRefusalReason } from "./live.js";
 import { Verdict } from "./grading.js";
@@ -52,6 +53,11 @@ export const ResultRow = z.object({
   excused: z.object({ comment: z.string().nullable() }).nullable(),
   /** ADR-125: the counted attempt is a paper copy (`digital` without one); the row's Paper badge. */
   origin: AttemptOrigin,
+  /**
+   * ADR-139: the OPEN contestations of the row's counted attempt. Never in
+   * the CSV.
+   */
+  openContestations: z.number().int().nonnegative(),
 });
 export type ResultRow = z.infer<typeof ResultRow>;
 
@@ -91,6 +97,22 @@ export const ResultsView = z.object({
    * date. Counted apart: a practice attempt is in no row, no figure above.
    */
   practisedCount: z.number().int().nonnegative().optional(),
+  /**
+   * ADR-139: the OPEN contestations of the class (the rows' counted
+   * attempts, a teacher's test walk left out), and the instant the window
+   * closes — null without one (an exercise, the policy `none`, a window of
+   * 0 days, not released yet).
+   */
+  openContestations: z.number().int().nonnegative(),
+  contestationClosesAt: z.iso.datetime().nullable(),
+  /**
+   * ADR-139: whether a contestation window applies here — a released exam
+   * whose feedback policy shows results (`contestationWindowApplies`) —
+   * so that the owner may close or extend one, or open one by extending
+   * where `contestationClosesAt` is null (a window of 0 days, a policy
+   * changed after the release). Always sent.
+   */
+  contestationApplies: z.boolean(),
 });
 export type ResultsView = z.infer<typeof ResultsView>;
 
@@ -260,6 +282,20 @@ export const StudentResultItem = z.object({
 export type StudentResultItem = z.infer<typeof StudentResultItem>;
 
 /**
+ * One question of the student's FEEDBACK page: the copy's item, plus what
+ * ADR-139 adds there and nowhere else — the student's own contestation of
+ * it (`null`: none) and whether it may be contested now (`contestable`, the
+ * window and the domain's `unitRefusal`; the write decides again on the
+ * database's clock). Never in a copy file, a staff copy or any other
+ * student's view.
+ */
+export const StudentFeedbackItem = StudentResultItem.extend({
+  contestation: StudentContestation.nullable(),
+  contestable: z.boolean(),
+});
+export type StudentFeedbackItem = z.infer<typeof StudentFeedbackItem>;
+
+/**
  * The student's retake standing on an exercise that allows several attempts
  * (F-EVAL-15, ADR-025), as the results page offers it. `refusal` is the
  * server's rule (`retakeRefusal`) evaluated now: `null` means a retake may
@@ -316,7 +352,12 @@ const StudentResults = z.object({
   grade: z.number().nullable(),
   /** How many questions still wait for a validated grading. */
   pendingCount: z.number().int().nonnegative(),
-  items: z.array(StudentResultItem),
+  items: z.array(StudentFeedbackItem),
+  /**
+   * ADR-139: when the window to contest a question closes, on the server's
+   * clock; null without one.
+   */
+  contestationClosesAt: z.iso.datetime().nullable(),
   /**
    * While an exercise with retakes is open: whether another attempt may
    * start now, and why not — the correction does not end the retakes.
@@ -417,7 +458,10 @@ export const StudentCopyRecord = StudentResults.omit({
   retake: true,
   review: true,
   practice: true,
+  // The page's contestations (ADR-139) are an act on the page, not the copy.
+  contestationClosesAt: true,
 }).extend({
+  items: z.array(StudentResultItem),
   kind: z.literal("student-copy"),
   version: z.literal(1),
   /** The server's clock. */

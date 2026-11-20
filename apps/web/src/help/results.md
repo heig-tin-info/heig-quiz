@@ -32,3 +32,11 @@ feedback policy of this evaluation allows — their answer, the key, the
 explanation, your comment. If a grading changes afterwards, the page says so
 and asks you to publish again. **Withdraw** takes the grades back out of
 sight until you do.
+
+## Contestations
+
+On a published exam, a line counts the open contestations and leads to
+the grading panel on them, and says until when students may contest a
+question. The course's Teacher role may **Close now** or **Extend** the
+window, or **Open a window** where there is none. Extending reopens a
+closed one.

@@ -19,9 +19,9 @@
  * `records.ts` (row type, refusals, cell keys), `writer.ts` (the single
  * writer), `reads.ts` (the grid's reads), `panel.ts` (F-GRADE-03),
  * `teacherWrites.ts` (overrides and validations), `regrade.ts`
- * (F-GRADE-06), `counting.ts` (ADR-108), `kept.ts` (ADR-025) and
- * `partialRetake.ts` (ADR-091). Files of the module import each other
- * directly, never through this one.
+ * (F-GRADE-06), `counting.ts` (ADR-108), `kept.ts` (ADR-025),
+ * `partialRetake.ts` (ADR-091) and `contestations.ts` (ADR-139). Files of
+ * the module import each other directly, never through this one.
  */
 export {
   pairKey,
@@ -52,6 +52,18 @@ export {
 } from "./teacherWrites.js";
 export { checkLlmRegradeBudget, pointsAcrossRegrade, regradeItem, RegradeAudit } from "./regrade.js";
 export { changeItemCounting } from "./counting.js";
+// Contestations of an exam's grading (ADR-139), in `./contestations.ts`.
+export {
+  cellUnit,
+  contestationsOfAttempt,
+  attemptCounts,
+  fileContestation,
+  openContestationCounts,
+  resolveContestation,
+  staffContestationOf,
+  studentContestationOf,
+  type ContestationRecord,
+} from "./contestations.js";
 // The kept attempt of each student (F-EVAL-15, ADR-025), in `./kept.ts`.
 export {
   keptAttempts,

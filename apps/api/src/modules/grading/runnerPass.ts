@@ -80,7 +80,7 @@ async function gradeWithRunner(
     ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
   };
   const write = (grading: Omit<WriteGradingInput, keyof typeof base>) =>
-    writeGradings(db, [{ ...base, ...grading }], runnerGuard(job));
+    writeGradings(db, [{ ...base, ...grading }], { guard: runnerGuard(job) });
 
   const type = typeOf(item.question.type);
   if (!type.finalizeRunner) {

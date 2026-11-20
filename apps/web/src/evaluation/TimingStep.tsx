@@ -231,6 +231,7 @@ export function ConfigSettings({
   closesAt = null,
   holdsCategorize = false,
   feedbackExtra,
+  windowSet = false,
   gradebook,
 }: {
   config: ConfigView;
@@ -250,6 +251,8 @@ export function ConfigSettings({
   holdsCategorize?: boolean;
   /** Passed to the advanced options' feedback group (an evaluation's "Allow drill"). */
   feedbackExtra?: ReactNode;
+  /** A release stored the contestation window's closing instant (ADR-139); a template never has one. */
+  windowSet?: boolean;
   /**
    * The Gradebook row (ADR-131 §13): in a card of its own under the time and
    * the retakes, in sight while the teacher configures, never folded with
@@ -372,6 +375,7 @@ export function ConfigSettings({
         feedbackDisabled={feedbackDisabled}
         holdsCategorize={holdsCategorize}
         feedbackExtra={feedbackExtra}
+        windowSet={windowSet}
       />
     </>
   );
@@ -534,6 +538,7 @@ export function TimingStep({
         disabled={locked}
         feedbackDisabled={!isConfigFieldWritable(lock, "feedbackPolicy")}
         holdsCategorize={detail.items.some((i) => i.type === "categorize")}
+        windowSet={detail.evaluation.contestationClosesAt !== null}
         missing={missing}
         closesAt={closesAt}
         dates={dates}

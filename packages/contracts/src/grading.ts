@@ -15,9 +15,10 @@ import { z } from "zod";
 import type { AcceptablePart as TypeAcceptablePart, AcceptedAnswer } from "@quiz/core/server";
 import { LLM_CONFIDENCES } from "@quiz/core/llm";
 import { CRITERION_ID_PATTERN } from "@quiz/core/reasons";
-import { ACCEPTANCE_SCOPES, GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
+import { ACCEPTANCE_SCOPES, answerExplained, GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
 
 import { IdParam, StaffItemRef } from "./common.js";
+import { ContestationReply, ContestationVerdict, StaffContestation } from "./contestation.js";
 import { ItemCounting } from "./evaluation.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
 import { VersionRow } from "./pool.js";
@@ -284,6 +285,11 @@ export const GradingEntry = z.object({
    * (`GradingQueueItem.acceptance`). Absent otherwise.
    */
   parts: z.array(AcceptablePart).optional(),
+  /**
+   * ADR-139: the student's contestation of this cell, open or answered;
+   * `null` without one. Sent under Anonymise too: it names nobody.
+   */
+  contestation: StaffContestation.nullable(),
 });
 export type GradingEntry = z.infer<typeof GradingEntry>;
 
@@ -325,6 +331,11 @@ const GradingStepSummary = z.object({
   key: z.uuid(),
   total: z.number().int(),
   validated: z.number().int(),
+  /**
+   * ADR-139: the OPEN contestations of the question, on the attempts that
+   * count, a teacher's test walk left out.
+   */
+  contested: z.number().int().nonnegative(),
 });
 
 export const GradingSteps = z.object({
@@ -388,6 +399,41 @@ export const ManualGradingBody = z
     message: "either points or criteria",
   });
 export type ManualGradingBody = z.infer<typeof ManualGradingBody>;
+
+/**
+ * `POST /contestations/:id/resolve` (ADR-139): the course owner's one answer
+ * to a contestation. A refusal carries a reply; an acceptance may leave the
+ * points as they are (a bare acceptance, the reply optional) or give new
+ * ones — `points`, or an essay's `criteria`, as {@link ManualGradingBody}
+ * — written as a manual override in the same transaction, the reply as its
+ * comment, so then the reply is mandatory too.
+ */
+export const ContestationResolveBody = z
+  .object({
+    verdict: ContestationVerdict,
+    reply: ContestationReply.default(""),
+    points: ManualGradingBody.shape.points,
+    criteria: ManualGradingBody.shape.criteria,
+  })
+  .refine(notBoth, { message: "points and criteria are exclusive" })
+  .refine((b) => b.verdict === "accepted" || (b.points === undefined && b.criteria === undefined), {
+    message: "a refusal gives no points",
+  })
+  .refine((b) => answerExplained({ ...b, points: b.points !== undefined || b.criteria !== undefined }), {
+    message: "a refusal, or new points, needs a reply",
+    path: ["reply"],
+  });
+export type ContestationResolveBody = z.infer<typeof ContestationResolveBody>;
+
+/** What the answer did: the contestation as it now stands, and the override it wrote, if any. */
+export const ContestationResolution = z.object({
+  contestation: StaffContestation,
+  /** The manual override the answer wrote; null for an answer without points. */
+  grading: Grading.nullable(),
+  /** The evaluation was released: a new grade marks it "modified after publication" (F-GRADE-09). */
+  modifiedAfterRelease: z.boolean(),
+});
+export type ContestationResolution = z.infer<typeof ContestationResolution>;
 
 /** F-GRADE-04: validate a proposal, possibly adjusting it on the way. */
 export const ValidateGradingBody = z

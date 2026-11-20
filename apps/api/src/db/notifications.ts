@@ -43,6 +43,8 @@ export const NOTIFICATION_FOLD_TARGETS = {
   // The reports on a question (issue #680): one unread entry per writer and question.
   question_reported: "questionId",
   results_updated: "evaluationId",
+  // The contestations of an exam (ADR-139): one unread entry per staff member and evaluation.
+  contestation_filed: "evaluationId",
   // The staff's project kinds (F-NOTIF-13, M3-09b): one unread entry per project.
   project_deadline_applied: "projectId",
   project_provision_failed: "projectId",
@@ -87,7 +89,7 @@ export const notifications = pgTable(
     poolId: uuid("pool_id").references(() => pools.id, { onDelete: "cascade" }),
     /** Same rule for a kind about a question (`question_reported`, `question_report_resolved`). */
     questionId: uuid("question_id").references(() => questions.id, { onDelete: "cascade" }),
-    /** Same rule for a kind about an evaluation (`results_released`, `results_updated`, …). */
+    /** Same rule for a kind about an evaluation (`results_released`, `results_updated`, `contestation_filed`, …). */
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
     /** Same rule for a kind about a classroom (`student_joined`, `roster_conflict`, `activity_scheduled`, `github_org_lost`). */
     classroomId: uuid("classroom_id").references(() => classrooms.id, { onDelete: "cascade" }),

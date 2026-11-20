@@ -11,16 +11,29 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { AttemptParam, IdParam, PublishCorrectionBody, ReleaseBody, StaffCopyRecord } from "@quiz/contracts";
+import {
+  AttemptParam,
+  ContestationFileBody,
+  type ContestationWindow,
+  ContestationWindowBody,
+  IdParam,
+  ItemParam,
+  PublishCorrectionBody,
+  ReleaseBody,
+  StaffCopyRecord,
+  type StudentContestation,
+} from "@quiz/contracts";
 
 import { readTracer, tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
 import { sendExport } from "../../documents/files.js";
 import { callerOf, loadEvaluation, loadEvaluationAttempt, ownAttempt, teacherGuard, withCourseRole } from "../guards.js";
-import { readerLang, sendCsv, studentRoute, teacherRoute } from "../http.js";
-import { byId } from "../evaluation/service.js";
+import { notFound, readerLang, sendCsv, studentRoute, teacherRoute } from "../http.js";
+import { byId, joinedItem, staffAttemptIds } from "../evaluation/service.js";
 import * as gradingEvents from "../grading/events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
+import { fileContestation, studentContestationOf } from "../grading/service.js";
+import { notifyUsers } from "../notifications/service.js";
 import { studentGrades } from "../live/service.js";
 import * as bus from "../realtime/bus.js";
 import { staffCopyDocument, staffCopyRecord } from "./copy.js";
@@ -213,6 +226,74 @@ export async function resultsPlugin(app: FastifyInstance) {
     { preHandler: requireSession },
     student({ params: IdParam, load: own }, ({ scope, now }) =>
       service.studentFeedback(app.db, scope.evaluation, scope.attempt, now),
+    ),
+  );
+
+  /**
+   * ADR-139: the student contests the grading of ONE question of their
+   * attempt, once, with a reason. The caller's own attempt or the 404 of a
+   * missing one (`ownAttempt`); portal sessions only (no `sessions` listed:
+   * a `seb` or `kiosk` session is nobody here, ADR-027), and an
+   * impersonation stays read-only in production (ADR-034). The service
+   * decides on the database's clock and answers every refusal
+   * (`contestation_closed`, `contestation_exists`, `not_contestable`,
+   * `classroom_archived`). The course's staff are told, folded per
+   * evaluation — not of a teacher's own test walk (ADR-018).
+   */
+  app.post(
+    "/app/api/attempts/:id/items/:itemId/contestation",
+    { preHandler: requireSession },
+    student(
+      { params: ItemParam, body: ContestationFileBody, load: own },
+      async ({ req, reply, params, body, scope }): Promise<StudentContestation | FastifyReply> => {
+        const { evaluation, attempt } = scope;
+        const item = await joinedItem(app.db, evaluation.id, params.itemId);
+        if (!item) return notFound(reply);
+        const row = await fileContestation(app.db, {
+          evaluation,
+          attempt,
+          item,
+          reason: body.reason,
+          userId: callerOf(req).id,
+        });
+        await trace(req, "contestation.file", "contestation", row.id, {
+          evaluationId: evaluation.id,
+          attemptId: attempt.id,
+          itemId: item.item.id,
+        });
+        // The staff alone re-read (N-SEC-20): the student has this reply.
+        await gradingEvents.contestationChanged(app.db, evaluation, []);
+        if (!(await staffAttemptIds(app.db, evaluation)).has(attempt.id)) {
+          await notifyUsers(app.db, await gradingEvents.staffOf(app.db, evaluation), {
+            kind: "contestation_filed",
+            evaluationId: evaluation.id,
+            evaluationTitle: evaluation.title,
+            count: 1,
+          });
+        }
+        return studentContestationOf(row);
+      },
+    ),
+  );
+
+  /**
+   * ADR-139: the owner closes the contestation window of a released exam
+   * now, or extends it to a later instant (which may reopen it). Audited
+   * with the act and the instant.
+   */
+  app.put(
+    "/app/api/evaluations/:id/contestation-window",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: ContestationWindowBody, load: ownerEvaluation },
+      async ({ req, now, body, scope }): Promise<ContestationWindow> => {
+        const closesAt = await service.changeContestationWindow(app.db, scope.evaluation, body, now);
+        await trace(req, "evaluation.contestation_window", "evaluation", scope.evaluation.id, {
+          action: body.action,
+          closesAt: iso(closesAt),
+        });
+        return { closesAt: iso(closesAt) };
+      },
     ),
   );
 

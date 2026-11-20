@@ -36,6 +36,7 @@ import {
 } from "../pool/service.js";
 import { partsOf } from "./acceptance.js";
 import { acceptanceHook, acceptancesOf, itemScopes, ruleLabel, type AcceptanceHook, type ItemRules } from "./acceptanceRules.js";
+import { contestationsOfItems, openContestationCounts, staffContestationOf, type ContestationRecord } from "./contestations.js";
 import { keptAttempts } from "./kept.js";
 import {
   criteriaOf,
@@ -176,6 +177,8 @@ interface QueueContext {
   readings: Map<string, (attempt: AttemptRecord) => Reading>;
   /** The answers accepted at grading time on the selected items (ADR-128). */
   acceptances: ItemRules;
+  /** The contestations of the selected items, by cell (ADR-139). */
+  contestations: Map<PairKey, ContestationRecord>;
 }
 
 /**
@@ -190,7 +193,8 @@ async function loadQueueContext(
   selection: { items: readonly JoinedItem[]; scope: CellScope },
 ): Promise<QueueContext> {
   const { scope } = selection;
-  const [answerRows, standing, history, roster, staffAttempts, kept, acceptances] = await Promise.all([
+  const itemIds = selection.items.map((i) => i.item.id);
+  const [answerRows, standing, history, roster, staffAttempts, kept, acceptances, contested] = await Promise.all([
     attemptRows.length === 0 || selection.items.length === 0
       ? []
       : db
@@ -213,10 +217,8 @@ async function loadQueueContext(
     staffAttemptIds(db, evaluation),
     // Only worth a read when somebody retook: otherwise every attempt counts.
     attemptRows.some((a) => a.attemptNumber > 1) ? keptAttempts(db, evaluation) : null,
-    acceptancesOf(
-      db,
-      selection.items.map((i) => i.item.id),
-    ),
+    acceptancesOf(db, itemIds),
+    contestationsOfItems(db, itemIds),
   ]);
   return {
     answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
@@ -236,6 +238,7 @@ async function loadQueueContext(
       ]),
     ),
     acceptances,
+    contestations: contested,
   };
 }
 
@@ -289,7 +292,15 @@ function entryOf(
     history: context.history.get(key) ?? [],
     // ADR-128: what of this answer an acceptance can name, where the item takes one.
     ...(hook ? { parts: partsOf(hook, item.question.type, config, answer?.payload ?? null) } : {}),
+    // ADR-139: the student's contestation of this cell; it names nobody, Anonymise or not.
+    contestation: contestationOf(context, key, attempt.id),
   };
+}
+
+/** A cell's contestation as the staff read it, flagged when its attempt no longer counts (ADR-139). */
+function contestationOf(context: QueueContext, key: PairKey, attemptId: string) {
+  const row = context.contestations.get(key);
+  return row ? staffContestationOf(row, context.kept.has(attemptId)) : null;
 }
 
 /**
@@ -431,12 +442,15 @@ export async function gradingSteps(db: Db, evaluation: EvaluationRecord): Promis
     .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
     .where(and(eq(attempts.evaluationId, evaluation.id), officialAttempt, eq(gradings.state, "validated")));
   const validated = new Set(rows.map((row) => pairKey(row.attemptId, row.itemId)));
+  // ADR-139: the open contestations of each question, a teacher's test walk left out.
+  const { byItem: contested } = await openContestationCounts(db, [evaluation.id]);
 
   return {
     steps: items.map((item) => ({
       key: item.item.id,
       total: attemptRows.length,
       validated: attemptRows.filter((a) => validated.has(pairKey(a.id, item.item.id))).length,
+      contested: contested.get(item.item.id) ?? 0,
     })),
   };
 }

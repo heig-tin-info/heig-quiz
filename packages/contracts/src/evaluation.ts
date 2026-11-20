@@ -35,6 +35,7 @@ import {
   TIMINGS,
   TRUSTED_CLIENTS,
 } from "@quiz/domain";
+import { CONTESTATION_DAYS_MAX, contestationDaysOf } from "@quiz/domain";
 
 import { CourseRole } from "./common.js";
 import { ConceptRef } from "./concept.js";
@@ -401,8 +402,20 @@ export const FeedbackPolicy = z.object({
   /** docs/06 Q8: the names of the hidden test cases of a `code` question. */
   showHiddenCaseNames: z.boolean().default(true),
   showTeacherComment: z.boolean().default(true),
+  /**
+   * ADR-139: how many days after the release a student may contest the
+   * grading of a question of this EXAM, 0 for none. The release that opens
+   * the window stores its closing instant (`contestationClosesAt`), so a
+   * change after it moves nothing; never read on an exercise nor a poll,
+   * nor under `when: none`. Copied with the policy. Absent means seven
+   * days: read it through {@link contestationDaysOf}, never raw.
+   */
+  contestationDays: z.number().int().min(0).max(CONTESTATION_DAYS_MAX).optional(),
 });
 export type FeedbackPolicy = z.infer<typeof FeedbackPolicy>;
+
+/** The contestation window of a feedback policy, in days (ADR-139): `@quiz/domain`'s rule, re-exported. */
+export { contestationDaysOf };
 
 export const defaultFeedbackPolicy = (): FeedbackPolicy => FeedbackPolicy.parse({});
 
@@ -437,6 +450,13 @@ export const Evaluation = z.object({
   closedAt: z.iso.datetime().nullable(),
   releasedAt: z.iso.datetime().nullable(),
   modifiedAfterRelease: z.boolean(),
+  /**
+   * ADR-139: the stored closing instant of the contestation window, set by
+   * the release that opened one and moved only by the owner's two acts;
+   * null while none was ever set. An unrelease leaves it: the configuration
+   * locks the days once it is set.
+   */
+  contestationClosesAt: z.iso.datetime().nullable(),
   /**
    * When the correction of this exercise was published while it ran
    * (ADR-050, `POST /evaluations/:id/publish-correction`); null otherwise.
@@ -653,6 +673,7 @@ const FeedbackPolicyPatch = z.object({
   showExplanation: z.boolean().optional(),
   showHiddenCaseNames: z.boolean().optional(),
   showTeacherComment: z.boolean().optional(),
+  contestationDays: FeedbackPolicy.shape.contestationDays,
 });
 type FeedbackPolicyPatch = z.infer<typeof FeedbackPolicyPatch>;
 

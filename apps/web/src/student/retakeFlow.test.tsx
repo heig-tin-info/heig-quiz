@@ -182,6 +182,7 @@ function feedback(
     grade: null,
     pendingCount: 0,
     items: [],
+    contestationClosesAt: null,
     retake: {
       evaluationId: EVAL,
       keep: over.keep ?? "best",
@@ -407,6 +408,7 @@ describe("retakes on an exercise (issues #120, #121)", () => {
       grade: 6,
       pendingCount: 0,
       items: [],
+      contestationClosesAt: null,
     });
     await userEvent.click(await screen.findByRole("button", { name: "Voir mes résultats" }));
     expect(routes).toContainEqual({ view: "feedback", attemptId: FIRST });

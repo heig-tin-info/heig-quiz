@@ -452,6 +452,8 @@ export interface MockEvaluation {
   /** ADR-050: an exercise's correction published while it runs. */
   correctionPublishedAt: string | null;
   modifiedAfterRelease: boolean;
+  /** ADR-139: the stored closing instant of the contestation window; null while none was set. */
+  contestationClosesAt: string | null;
   createdAt: string;
   /** The template it was made from, and the revision its questions came from (ADR-031). */
   originTemplateId: string | null;
@@ -639,6 +641,7 @@ export function makeEvaluation(
     releasedAt: null,
     correctionPublishedAt: null,
     modifiedAfterRelease: false,
+    contestationClosesAt: null,
     createdAt: iso(-10 * D),
     originTemplateId: null,
     originRevision: null,
@@ -970,6 +973,7 @@ export const toEvaluation = (e: MockEvaluation) => ({
   releasedAt: e.releasedAt,
   correctionPublishedAt: e.correctionPublishedAt,
   modifiedAfterRelease: e.modifiedAfterRelease,
+  contestationClosesAt: e.contestationClosesAt,
   createdAt: e.createdAt,
   originRevision: e.originRevision,
 });

@@ -8,8 +8,8 @@ import type { AttemptView, ReadyView } from "@quiz/contracts";
 import { isFinishedAttempt, practiceCooldownS, practiceDeadline, practiceRefusal } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { attempts, classrooms, evaluations } from "../../db/schema.js";
-import { practiceOpen, settingsOf, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
+import { attempts, evaluations } from "../../db/schema.js";
+import { classroomArchived, practiceOpen, settingsOf, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
 import type { AttemptRecord, Participant } from "./access.js";
 import { PracticeRefused, RateLimited } from "./failures.js";
 import { drawInstances, drawSeed, insertAttempt } from "./lifecycle.js";
@@ -36,22 +36,6 @@ async function practiceState(tx: DbOrTx, evaluationId: string, userId: string) {
   };
 }
 
-/**
- * Whether the evaluation's classroom is archived: it takes no writes
- * (ADR-122 §1). The student's loader read it with their seat; the staff's
- * did not (`archived: null`), and it is read here then.
- */
-async function classroomArchived(db: DbOrTx, evaluation: EvaluationRecord, archived: boolean | null): Promise<boolean> {
-  if (archived !== null) return archived;
-  if (evaluation.classroomId === null) return false;
-  const [row] = await db
-    .select({ archivedAt: classrooms.archivedAt })
-    .from(classrooms)
-    .where(eq(classrooms.id, evaluation.classroomId))
-    .limit(1);
-  return row?.archivedAt != null;
-}
-
 /** The practice rule for this student now, refused as `409 practice_refused`. */
 async function assertPractice(
   db: DbOrTx,
@@ -62,7 +46,8 @@ async function assertPractice(
   const refusal = practiceRefusal({
     open: practiceOpen(evaluation),
     evaluationState: evaluation.state,
-    archived: await classroomArchived(db, evaluation, archived),
+    // The student's loader read it with their seat; the staff's did not (`null`).
+    archived: archived ?? (await classroomArchived(db, evaluation)),
     unfinishedOfficial,
   });
   if (refusal !== null) throw new PracticeRefused(refusal);

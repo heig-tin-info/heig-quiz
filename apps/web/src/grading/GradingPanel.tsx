@@ -38,6 +38,7 @@ import {
   entryKey,
   EXPECTED,
   filterRows,
+  isContested,
   moveSelection,
   needsPass,
   nextSort,
@@ -47,12 +48,13 @@ import {
   shuffled,
   sortRows,
   type Sort,
+  type StateFilter,
 } from "./rows";
 import { useGradingActions, type BatchScope } from "./useGradingActions";
 import { useGradingData } from "./useGradingData";
 import { useItemCounting } from "./useItemCounting";
 import { useGradingKeys } from "./useGradingKeys";
-import { useGradingView } from "./view";
+import { useGradingView, type GradingView } from "./view";
 import { StaffRowsSwitch, useStaffRows } from "../staffRows";
 
 /**
@@ -76,7 +78,9 @@ import { StaffRowsSwitch, useStaffRows } from "../staffRows";
  * request (`?anonymous=0`), never a client-side unmasking.
  *
  * The question on screen lives in `?item=`, so a reload, and the question
- * editor's way back (ADR-044, addendum), land on the same question.
+ * editor's way back (ADR-044, addendum), land on the same question; the
+ * contested filter in `?filter=contested` (ADR-139), the link of the
+ * notification that tells the staff a contestation was filed.
  */
 export function GradingPanel({
   evaluationId,
@@ -88,6 +92,14 @@ export function GradingPanel({
   const t = useT();
   const [view, setView] = useGradingView();
   const [itemParam, setItemParam] = useSearchParam("item", "");
+  /** ADR-139: the contested answers only, in the URL (the notification's link), never in the stored habit. */
+  const [filterParam, setFilterParam] = useSearchParam("filter", "");
+  const stateFilter: StateFilter = filterParam === "contested" ? "contested" : view.stateFilter;
+  const changeView = (patch: Partial<GradingView>) => {
+    const { stateFilter: next, ...rest } = patch;
+    if (next !== undefined) setFilterParam(next === "contested" ? "contested" : "");
+    setView(next === "contested" ? rest : patch);
+  };
   const [anonymise, setAnonymise] = useState(true);
   /** The visit's shuffle: drawn once, so no row moves until the page is left. */
   const [seed] = useState(() => Math.floor(Math.random() * 0x100000000));
@@ -102,6 +114,18 @@ export function GradingPanel({
   const pane = useMinWidth(ASIDE_MIN_WIDTH) ? ANSWER_PANE_WIDTH : null;
 
   const data = useGradingData(evaluationId, itemParam || null, !anonymise);
+  /*
+   * ADR-139: the contested filter without a question (the notification's
+   * link, the results' count) opens on the first question holding an open
+   * contestation, once the steps say which — never on whatever loads first.
+   */
+  const landed = useRef(itemParam !== "" || filterParam !== "contested");
+  useEffect(() => {
+    if (landed.current || data.states.size === 0) return;
+    landed.current = true;
+    const first = data.items.find((i) => (data.states.get(i.id)?.contested ?? 0) > 0);
+    if (first) setItemParam(first.id);
+  }, [data.states, data.items, setItemParam]);
   const { items, item, index, entries, parameters } = data;
   const crumbs = useEvaluationCrumbs(
     data.evaluation.data?.evaluation.classroomId,
@@ -118,6 +142,8 @@ export function GradingPanel({
   const needed = evaluationGradingRole({ released });
   const myRole = useCourseRole(data.evaluation.data?.courseId);
   const readOnly = needed === "owner" && !courseRoleAllows(myRole, needed);
+  // ADR-139: a contestation is answered by the owner, released or not.
+  const resolver = courseRoleAllows(myRole, "owner");
   const regrade = readOnly ? undefined : () => setRegrading(true);
   const countingAct = useItemCounting(evaluationId, data.evaluation.data);
   const actions = useGradingActions({
@@ -160,11 +186,11 @@ export function GradingPanel({
   const visible = useMemo(
     () =>
       filterRows(base, {
-        state: view.stateFilter,
+        state: stateFilter,
         source: view.source,
         confidence: view.confidence,
       }),
-    [base, view],
+    [base, view, stateFilter],
   );
   /*
    * A teacher's own walk is drawn while the switch shows it, shown by
@@ -321,6 +347,7 @@ export function GradingPanel({
       parameters={parameters}
       explanation={data.explanation}
       criteria={data.criteria}
+      resolver={resolver}
       onClose={close}
       onMove={move}
       onAdjust={readOnly ? undefined : (on) => setPanel((p) => (p ? { ...p, adjust: on } : p))}
@@ -359,9 +386,12 @@ export function GradingPanel({
         }
       />
       <GradingToolbar
-        view={view}
-        onView={setView}
+        view={{ ...view, stateFilter }}
+        onView={changeView}
         toValidate={state ? state.total - state.validated : null}
+        // The third choice while the question holds a contestation, open or
+        // answered — or while the URL asks for it, so the choice it names shows.
+        contested={entries.some(isContested) || stateFilter === "contested" ? (state?.contested ?? 0) : null}
         anonymise={anonymise}
         onAnonymise={(on) => {
           setAnonymise(on);
@@ -431,7 +461,7 @@ export function GradingPanel({
               newVersion={item.stale}
               onEdit={onEdit}
               empty={
-                view.stateFilter === "todo" && view.source === ANY
+                stateFilter === "todo" && view.source === ANY
                   ? t("grading.empty.body")
                   : t("grading.empty.filtered")
               }

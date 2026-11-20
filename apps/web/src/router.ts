@@ -232,9 +232,11 @@ export type Route =
   // WP10: grading + results
   /**
    * The teacher's grading panel for one evaluation; `item`, the question it
-   * opens on, travels in `?item=` (the panel reads and keeps it there).
+   * opens on, travels in `?item=` (the panel reads and keeps it there), and
+   * `filter`, the contested answers only (ADR-139), in `?filter=contested`
+   * — the link of the `contestation_filed` notification and its e-mail.
    */
-  | { view: "grading"; evaluationId: string; item?: string }
+  | { view: "grading"; evaluationId: string; item?: string; filter?: "contested" }
   /** The teacher's results table for one evaluation. */
   | { view: "results"; evaluationId: string }
   /** The correction of a graded evaluation, projected in class (F-RES-03, ADR-033). */
@@ -741,8 +743,13 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     ...evaluationTail("grading", (evaluationId) => ({ view: "grading", evaluationId }), {
       evaluationId: evaluationIdOf,
     }),
-    path: (r) =>
-      `/evaluations/${r.evaluationId}/grading${r.item ? `?item=${encodeURIComponent(r.item)}` : ""}`,
+    path: (r) => {
+      const query = new URLSearchParams({
+        ...(r.item ? { item: r.item } : {}),
+        ...(r.filter ? { filter: r.filter } : {}),
+      }).toString();
+      return `/evaluations/${r.evaluationId}/grading${query ? `?${query}` : ""}`;
+    },
   },
   results: evaluationTail("results", (evaluationId) => ({ view: "results", evaluationId }), {
     evaluationId: evaluationIdOf,
