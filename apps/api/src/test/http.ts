@@ -19,6 +19,7 @@ import { SESSION_COOKIE, createSession } from "../auth/session.js";
 import { loadConfig } from "../config.js";
 import type { Db } from "../db/client.js";
 import { users } from "../db/schema.js";
+import { unpacedGithubForTests } from "../github/app.js";
 import { migratedPglite } from "./template.js";
 
 /**
@@ -83,6 +84,8 @@ export async function testServer(
   // per test run and copied into this server's directory (test/template.ts).
   await (await migratedPglite(join(dir, "db"))).close();
 
+  // Octokit's spacing of writes (a second each) is only waiting against the fake GitHub.
+  unpacedGithubForTests();
   const app = await buildApp({ config, clock });
   await app.ready();
 

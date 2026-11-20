@@ -46,14 +46,45 @@ function waitOutRateLimit(
   octokit.log.warn(`${kind} for request ${method} ${url} (retry after ${retryAfter} s)`);
   return !request.noRateLimitWait && request.retryCount === 0;
 }
-export const ThrottledOctokit: typeof Octokit = Octokit.defaults({
+
+/**
+ * A limiter that runs every job at once, in the one shape the throttling
+ * plugin calls on its `write`, `notifications` and `search` groups:
+ * `group.key(id).schedule(options, job)`.
+ */
+const AT_ONCE = {
+  key: () => ({ schedule: (_options: unknown, job: (...args: unknown[]) => unknown, ...args: unknown[]) => job(...args) }),
+};
+let paced = true;
+
+/**
+ * Test seam: Octokit spaces GitHub's writes one second apart, process-wide
+ * (three seconds for a write that notifies, an invitation; two for a
+ * search), as GitHub asks of a client, and waits 1, 4 then 9 s before
+ * retrying a 5xx or a 409. Against the fake GitHub of a test server that is
+ * only wall-clock waiting: an accepted repository spent about five seconds
+ * in the spacing, a restore of a protected file four, a GitHub "down" 14 s
+ * in the retries. Once called, every client created afterwards sends its
+ * writes at once and retries as many times, milliseconds apart; the
+ * rate-limit handling above (`onRateLimit`, `noRateLimitWait`) stays as it is.
+ */
+export function unpacedGithubForTests(): void {
+  if (process.env.NODE_ENV === "production") throw new Error("unpacedGithubForTests: never in production");
+  paced = false;
+}
+
+export const ThrottledOctokit: typeof Octokit = Octokit.defaults((options: object) => ({
   throttle: {
     onRateLimit: (retryAfter: number, options: ThrottleOptions, octokit: Octokit) =>
       waitOutRateLimit(retryAfter, options, octokit, "Request quota exhausted"),
     onSecondaryRateLimit: (retryAfter: number, options: ThrottleOptions, octokit: Octokit) =>
       waitOutRateLimit(retryAfter, options, octokit, "SecondaryRateLimit detected"),
+    ...(paced ? {} : { write: AT_ONCE, notifications: AT_ONCE, search: AT_ONCE }),
   },
-});
+  // plugin-retry waits (n + 1)² × this base before its n-th retry: 1 s by default.
+  ...(paced ? {} : { retry: { retryAfterBaseValue: 1 } }),
+  ...options,
+}));
 
 /**
  * The App, or null when it is not configured: no App id, or no key file on
