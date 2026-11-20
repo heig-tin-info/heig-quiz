@@ -1,7 +1,7 @@
 # The test coverage of every workspace package, INFORMATIVE: the `main`
 # ruleset requires ci.yml's `checks` alone, so this workflow never holds up a
 # merge or a deploy. It runs the suites with V8 coverage on, sharded like
-# ci.yml's test-app (the API in eight, the SPA in three): unsharded, one job
+# ci.yml's test-app (the API in four, the SPA in three): unsharded, one job
 # took 15 to 18 minutes. Each shard writes a blob report (`--reporter=blob`,
 # `.vitest-reports/blob-<i>-<n>.json`, its coverage inside), `report` merges
 # them per package (`vitest run --merge-reports --coverage` regenerates the
@@ -42,14 +42,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { pkg: api, shard: 1, shards: 8 }
-          - { pkg: api, shard: 2, shards: 8 }
-          - { pkg: api, shard: 3, shards: 8 }
-          - { pkg: api, shard: 4, shards: 8 }
-          - { pkg: api, shard: 5, shards: 8 }
-          - { pkg: api, shard: 6, shards: 8 }
-          - { pkg: api, shard: 7, shards: 8 }
-          - { pkg: api, shard: 8, shards: 8 }
+          - { pkg: api, shard: 1, shards: 4 }
+          - { pkg: api, shard: 2, shards: 4 }
+          - { pkg: api, shard: 3, shards: 4 }
+          - { pkg: api, shard: 4, shards: 4 }
           - { pkg: web, shard: 1, shards: 3 }
           - { pkg: web, shard: 2, shards: 3 }
           - { pkg: web, shard: 3, shards: 3 }

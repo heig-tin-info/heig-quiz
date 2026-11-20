@@ -23,7 +23,10 @@ jobs:
   # jobs below are skipped and `checks` still reports success, so a docs PR
   # is never blocked. On a push to main everything always runs: nothing is
   # deployed that the full suite did not pass. The Markdown under a `src/`
-  # is code: apps/web imports its help pages (help.tsx).
+  # is code: apps/web imports its help pages (help.tsx). A pull request whose
+  # code changes all sit in one app skips the other app's suite (`api`,
+  # `web`): neither app imports the other, and both read the packages, so a
+  # change under packages/ or at the root runs both (2026-11-20).
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -31,6 +34,8 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' || steps.filter.outputs.src-prose == 'true' }}
+      api: ${{ github.event_name != 'pull_request' || steps.filter.outputs.beyond-web == 'true' || steps.filter.outputs.src-prose == 'true' }}
+      web: ${{ github.event_name != 'pull_request' || steps.filter.outputs.beyond-api == 'true' || steps.filter.outputs.src-prose == 'true' }}
     steps:
       - id: filter
         if: github.event_name == 'pull_request'
@@ -46,6 +51,18 @@ jobs:
               - '!**/*.md'
             src-prose:
               - '{apps,packages}/*/src/**/*.md'
+            beyond-web:
+              - '**'
+              - '!apps/web/**'
+              - '!docs/**'
+              - '!mockups/**'
+              - '!**/*.md'
+            beyond-api:
+              - '**'
+              - '!apps/api/**'
+              - '!docs/**'
+              - '!mockups/**'
+              - '!**/*.md'
 
   # The whole build (the SPA and the API included) and the typecheck: what
   # the image will be made of must compile, whatever the tests say.
@@ -69,12 +86,13 @@ jobs:
 
   # The API's and the SPA's suites, sharded, run side by side: in one job,
   # the API's db tests (each loading a PGlite, src/test/template.ts) and the
-  # SPA's jsdom tests took six minutes. The API gets eight shards, the SPA
+  # SPA's jsdom tests took six minutes. The API gets four shards, the SPA
   # three: with three each, the API shard holding the big db suites was the
-  # critical path at 6.5 minutes against 3 to 4 for every other job; with four
-  # (2026-11), the project module's db suites (each 2 to 8 minutes) made
-  # shards of 6 to 14 minutes. vitest shards by file, so the floor is the
-  # slowest file (ingest.db.test.ts, about 8 minutes). Each
+  # critical path at 6.5 minutes against 3 to 4 for every other job. (Eight
+  # for a day in 2026-11, while Octokit's pacing of writes made the project
+  # suites wait seconds per test; test servers no longer pace, #1169.) A
+  # shard of the app a pull request leaves alone skips its steps (`RUN`,
+  # from `changes`) and passes. Each
   # shard builds only the workspace packages its app imports (the tests
   # resolve them through dist/), which costs less than waiting for `build`.
   test-app:
@@ -86,25 +104,29 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { pkg: api, shard: 1, shards: 8 }
-          - { pkg: api, shard: 2, shards: 8 }
-          - { pkg: api, shard: 3, shards: 8 }
-          - { pkg: api, shard: 4, shards: 8 }
-          - { pkg: api, shard: 5, shards: 8 }
-          - { pkg: api, shard: 6, shards: 8 }
-          - { pkg: api, shard: 7, shards: 8 }
-          - { pkg: api, shard: 8, shards: 8 }
+          - { pkg: api, shard: 1, shards: 4 }
+          - { pkg: api, shard: 2, shards: 4 }
+          - { pkg: api, shard: 3, shards: 4 }
+          - { pkg: api, shard: 4, shards: 4 }
           - { pkg: web, shard: 1, shards: 3 }
           - { pkg: web, shard: 2, shards: 3 }
           - { pkg: web, shard: 3, shards: 3 }
+    env:
+      RUN: ${{ matrix.pkg == 'api' && needs.changes.outputs.api || needs.changes.outputs.web }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-      - run: pnpm --filter "@quiz/${{ matrix.pkg }}^..." build
+      - if: env.RUN != 'true'
+        run: echo "This pull request changes no code that ${{ matrix.pkg }} depends on; its suite is skipped."
+      - if: env.RUN == 'true'
+        uses: actions/checkout@v7
+      - if: env.RUN == 'true'
+        uses: ./.github/actions/setup
+      - if: env.RUN == 'true'
+        run: pnpm --filter "@quiz/${{ matrix.pkg }}^..." build
       # The PDF exports' tools, so the API's PDF tests run here (ADR-125 §3).
-      - if: matrix.pkg == 'api'
+      - if: env.RUN == 'true' && matrix.pkg == 'api'
         run: bash scripts/ci-pdf-tools.sh
-      - run: pnpm --filter "@quiz/${{ matrix.pkg }}" test --shard=${{ matrix.shard }}/${{ matrix.shards }}
+      - if: env.RUN == 'true'
+        run: pnpm --filter "@quiz/${{ matrix.pkg }}" test --shard=${{ matrix.shard }}/${{ matrix.shards }}
 
   # Every other package's `test`: the question types, domain, contracts, ui,
   # diagram, docrender, registry, the runner's and the codespace portal's

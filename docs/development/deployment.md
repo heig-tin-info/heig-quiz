@@ -509,7 +509,8 @@ workspace serves a real class.
 
 1. **checks**, on every push and pull request: parallel jobs run
    `pnpm build` with `pnpm typecheck` (`build-typecheck`), the API's tests
-   in eight shards and the SPA's in three (`test-app`), and every other
+   in four shards and the SPA's in three (`test-app`; a pull request whose
+   code changes all sit in one app skips the other app's shards), and every other
    package's, the runner's unit suite and the kiosk extension's included
    (`test-rest`). The `checks` job aggregates them: it is the one required
    status; the separate `Coverage` workflow (`coverage.yml`), on `main` and
