@@ -410,6 +410,9 @@ describe("the student's project (F-PROJ-15)", () => {
       workspace: null,
       // No sync carried a message (ADR-132 §10).
       projectUpdate: null,
+      // Not graded by criteria: no contestation window (ADR-139 §13).
+      contestationClosesAt: null,
+      contestations: [],
       serverNow: NOW,
     });
 
@@ -424,6 +427,7 @@ describe("the student's project (F-PROJ-15)", () => {
       invitation: "pending",
       deleted: false,
       locked: false,
+      group: false,
       lastCommit: null,
       commits: 0,
       ciStatus: "none",
@@ -1047,12 +1051,12 @@ describe("the criteria table (ADR-106 §9, N-SEC-20, L-02f)", () => {
       const open = await read();
       expect(open.criteria!.map((r) => r.criterionId)).toEqual(["rendu.tests", "rendu.build", "rapport.analyse", "rapport.jalon", "rapport.style", "git.commits"]);
       expect(rowsOf(open)).toEqual({
-        "rendu.tests": { criterionId: "rendu.tests", section: "rendu", description: "Tests pass", max: 4, points: 2.5, state: "indicative", locked: false },
-        "rendu.build": { criterionId: "rendu.build", section: "rendu", description: "It builds", max: 4, points: 2.75, state: "indicative", locked: false },
-        "rapport.analyse": { criterionId: "rapport.analyse", section: "rapport", description: "Analysis", max: 4, points: 3.25, state: "indicative", locked: false },
-        "rapport.jalon": { criterionId: "rapport.jalon", section: "rapport", description: "Milestone", max: 4, points: 1.5, state: "indicative", locked: true },
-        "rapport.style": { criterionId: "rapport.style", section: "rapport", description: "Style", max: 4, points: null, state: "empty", locked: false },
-        "git.commits": { criterionId: "git.commits", section: "git", description: "Commits", max: 4, points: null, state: "empty", locked: false },
+        "rendu.tests": { criterionId: "rendu.tests", section: "rendu", description: "Tests pass", max: 4, points: 2.5, state: "indicative", locked: false, contestable: false },
+        "rendu.build": { criterionId: "rendu.build", section: "rendu", description: "It builds", max: 4, points: 2.75, state: "indicative", locked: false, contestable: false },
+        "rapport.analyse": { criterionId: "rapport.analyse", section: "rapport", description: "Analysis", max: 4, points: 3.25, state: "indicative", locked: false, contestable: false },
+        "rapport.jalon": { criterionId: "rapport.jalon", section: "rapport", description: "Milestone", max: 4, points: 1.5, state: "indicative", locked: true, contestable: false },
+        "rapport.style": { criterionId: "rapport.style", section: "rapport", description: "Style", max: 4, points: null, state: "empty", locked: false, contestable: false },
+        "git.commits": { criterionId: "git.commits", section: "git", description: "Commits", max: 4, points: null, state: "empty", locked: false, contestable: false },
       });
       const beforeFreeze = studentBodies.slice(from);
       for (const body of beforeFreeze) {

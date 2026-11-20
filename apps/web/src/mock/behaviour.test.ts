@@ -26,7 +26,10 @@ import {
   NotificationSettings,
   PROJECT_ACCEPT_REFUSALS,
   ProjectAcceptance,
+  ProjectContestationResolution,
+  ProjectContestations,
   ProjectCreate,
+  ProjectStudentContestation,
   ProjectDetail,
   ProjectDistributionAccess,
   ProjectGradingRepo,
@@ -143,6 +146,49 @@ describe("the mock's grading by criteria (?pjcriteria=1)", () => {
     // The rest, as proposed: each still lacks its teacher-only criterion, named.
     const rest = await send(`/app/api/projects/${id}/validate`, "POST");
     expect([rest.status, (rest.body as { error: string }).error]).toEqual([409, "criteria_incomplete"]);
+  });
+
+  it("contests a released project's criteria (ADR-139 §13): the staff's read, the owner's answer and window, a member's filing", async () => {
+    const own = (await get(`/app/api/classrooms/${classroomId}/projects`)) as { id: string; title: string }[];
+    const id = own.find((p) => p.title === "Labo 02 — par critères, publié")!.id;
+    const read = async () => {
+      const raw = await get(`/app/api/projects/${id}/contestations`);
+      expect(issuesOf(ProjectContestations, raw)).toEqual([]);
+      return raw as ProjectContestations;
+    };
+    const before = await read();
+    expect(before.applies).toBe(true);
+    expect(Object.values(before.openByRepo).reduce((sum, n) => sum + n, 0)).toBe(3);
+    expect(before.contestations.map((c) => c.state)).toEqual(["open", "open", "open", "refused", "accepted"]);
+    const gone = before.contestations.find((c) => !c.inSnapshot)!;
+    const open = before.contestations.find((c) => c.state === "open" && c.inSnapshot)!;
+    // A criterion out of the snapshot is only refused; points need a reply; then accepted with new points.
+    expect((await send(`/app/api/projects/${id}/contestations/${gone.id}/resolve`, "POST", { verdict: "accepted" })).body).toMatchObject({ error: "criterion_removed" });
+    expect((await send(`/app/api/projects/${id}/contestations/${open.id}/resolve`, "POST", { verdict: "accepted", points: 1 })).status).toBe(400);
+    const answered = await send(`/app/api/projects/${id}/contestations/${open.id}/resolve`, "POST", { verdict: "accepted", reply: "Right.", points: 1 });
+    expect(ProjectContestationResolution.parse(answered.body).contestation.state).toBe("accepted");
+    expect((await send(`/app/api/projects/${id}/contestations/${open.id}/resolve`, "POST", { verdict: "refused", reply: "No." })).body).toMatchObject({ error: "not_open" });
+    expect(Object.values((await read()).openByRepo).reduce((sum, n) => sum + n, 0)).toBe(2);
+    // The window: an instant behind now refused, then closed now.
+    const past = await send(`/app/api/projects/${id}/contestation-window`, "PUT", { action: "extend", closesAt: new Date(Date.now() - 60_000).toISOString() });
+    expect([past.status, past.body]).toMatchObject([422, { error: "window_instant", reason: "not_future" }]);
+    expect((await send(`/app/api/projects/${id}/contestation-window`, "PUT", { action: "close" })).status).toBe(200);
+    // Not released: no window to act on.
+    const unreleased = own.find((p) => p.title === "Labo 00 — par critères")!.id;
+    expect((await send(`/app/api/projects/${unreleased}/contestation-window`, "PUT", { action: "close" })).body).toMatchObject({ error: "window_unavailable" });
+
+    // A member of the released project contests the one criterion still offered, once.
+    const view = (await get(`/app/api/student/projects/${STUDENT_PROJECT_PAST}`)) as StudentProject;
+    expect(view.contestations).toHaveLength(4);
+    const offered = view.criteria!.filter((r) => r.contestable).map((r) => r.criterionId);
+    expect(offered).toEqual(["rendu.tests"]);
+    const path = (criterionId: string) => `/app/api/student/projects/${STUDENT_PROJECT_PAST}/criteria/${criterionId}/contestation`;
+    expect((await send(path("rendu.compile"), "POST", { reason: "Why" })).body).toMatchObject({ error: "not_contestable", reason: "full_points" });
+    const filed = await send(path("rendu.tests"), "POST", { reason: "Test 3 is wrong." });
+    expect(ProjectStudentContestation.parse(filed.body).state).toBe("open");
+    expect((await send(path("rendu.tests"), "POST", { reason: "Again" })).body).toMatchObject({ error: "contestation_exists" });
+    const after = (await get(`/app/api/student/projects/${STUDENT_PROJECT_PAST}`)) as StudentProject;
+    expect([after.contestations.length, after.criteria!.some((r) => r.contestable)]).toEqual([5, false]);
   });
 
   it("gives the student's open, frozen and released projects their criteria table (ADR-106 §9)", async () => {

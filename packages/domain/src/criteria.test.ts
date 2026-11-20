@@ -12,6 +12,7 @@ import {
   untaggedCheckpoints,
   workflowTestsCriterion,
   type ParsedCriteria,
+  criterionInForce,
 } from "./criteria.js";
 import { parseCriteria, type CriteriaParse } from "./criteriaParse.js";
 
@@ -190,6 +191,22 @@ describe("criteriaTotals and clampAwarded", () => {
       bonusMax: 0.3,
       missing: ["b", "d"],
     });
+  });
+});
+
+describe("criterionInForce (ADR-139 §13)", () => {
+  const validated = (points: number) => ({ points, state: "validated" });
+  it("reads a criterion's points against its maximum, a penalty's against 0, a bonus's against its bonus", () => {
+    expect(criterionInForce({ maxPoints: 10 }, validated(8))).toEqual({ points: 8, maxPoints: 10 });
+    expect(criterionInForce({ maxPoints: -2 }, validated(-2))).toEqual({ points: -2, maxPoints: 0 });
+    expect(criterionInForce({ maxPoints: -2 }, validated(0))).toEqual({ points: 0, maxPoints: 0 });
+    expect(criterionInForce({ maxPoints: 0, bonusPoints: 1 }, validated(0))).toEqual({ points: 0, maxPoints: 1 });
+  });
+
+  it("is pending without a validated row, and nothing for a criterion the snapshot lost", () => {
+    expect(criterionInForce({ maxPoints: 10 }, { points: 9, state: "proposed" })).toBeNull();
+    expect(criterionInForce({ maxPoints: 10 }, undefined)).toBeNull();
+    expect(criterionInForce(undefined, validated(8))).toBeNull();
   });
 });
 

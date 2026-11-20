@@ -39,6 +39,19 @@ note absolue, avec une justification que les étudiants lisent une fois la
 note publiée. Après la publication, seule la personne responsable du cours
 peut ajuster une note ou modifier le score de l'enseignant.
 
+## Contestations
+
+Noté par critères, un projet dont les scores sont publiés peut être contesté, un critère d'un
+dépôt à la fois, pendant les jours réglés dans **Réglages** (7 par défaut,
+0 pour aucun). L'onglet **Correction** affiche le nombre de contestations
+ouvertes et le délai au-dessus de la matrice, où le rôle Enseignant du cours
+le clôt ou le prolonge ; **Contestés** garde les dépôts contestés, et une
+bulle marque chaque cellule contestée. La réponse se donne sur l'écran de
+correction, sous les critères : **Refuser** avec une réponse, ou
+**Accepter**, éventuellement avec de nouveaux points (alors avec une
+réponse). Les nouveaux points attendent la validation et la publication suivante des scores. Une fois les scores publiés, les points des critères, les
+validations et les recorrections reviennent au rôle Enseignant du cours.
+
 ## Échéance
 
 L'échéance est appliquée sur l'horloge du serveur ; ce qui compte pour un

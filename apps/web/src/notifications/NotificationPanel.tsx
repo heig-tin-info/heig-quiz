@@ -161,6 +161,13 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
       return t("notif.projectRepoInvited", { projectTitle: payload.projectTitle });
     case "project_grade_final":
       return t("notif.projectGradeFinal", { projectTitle: payload.projectTitle });
+    case "project_contestation_resolved":
+      return t("notif.projectContestationResolved", { projectTitle: payload.projectTitle });
+    case "project_contestation_filed":
+      return t(payload.count === 1 ? "notif.projectContestationFiled.one" : "notif.projectContestationFiled", {
+        n: payload.count,
+        projectTitle: payload.projectTitle,
+      });
     case "project_deadline_applied":
       return t(payload.count === 1 ? "notif.projectDeadlineApplied.one" : "notif.projectDeadlineApplied", {
         n: payload.count,
@@ -232,6 +239,11 @@ function notificationRoute(payload: NotificationPayload): Route {
     case "project_deadline_applied":
     case "project_provision_failed":
       return { view: "project", id: payload.projectId };
+    // ADR-139 §13: the answer on the member's criteria; a filing on the Grading tab's contested repositories.
+    case "project_contestation_resolved":
+      return { view: "project", id: payload.projectId, at: "criteria" };
+    case "project_contestation_filed":
+      return { view: "project", id: payload.projectId, tab: "grading", filter: "contested" };
     case "github_org_lost":
       return { view: "classroomSettings", id: payload.classroomId };
     case "activity_available":

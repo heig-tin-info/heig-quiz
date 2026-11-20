@@ -253,6 +253,7 @@ on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSu
     buildCommand: null,
     testCommand: null,
     evidenceOutputs: null,
+    contestationDays: 7,
     source: { fullName: `${org.login}/${source.repo.name}` },
     distribution: { fullName: `${org.login}/${slug}-squashed` },
     deadlineAppliedAt: null,

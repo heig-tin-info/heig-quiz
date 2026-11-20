@@ -49,9 +49,10 @@ import {
  * (merge task M3-09b). 2.3.0: the two kinds of the reports on a question
  * (issue #680). 2.4.0: `pool_unpublished` (ADR-095). 2.5.0:
  * `project_scheduled` (ADR-127). 2.6.0: the two kinds of the
- * contestations (ADR-139).
+ * contestations (ADR-139). 2.7.0: the two kinds of a project's
+ * contestations (ADR-139 §13).
  */
-export const TEAMS_APP_VERSION = "2.6.0";
+export const TEAMS_APP_VERSION = "2.7.0";
 const MANIFEST_VERSION = "1.17";
 const SCHEMAS = `https://developer.microsoft.com/en-us/json-schemas/teams/v${MANIFEST_VERSION}`;
 /** The red of the logo, as the icons use it. */
@@ -97,6 +98,9 @@ export const TEAMS_ACTIVITY_KINDS = [
   // The contestations of an exam (ADR-139), the bump to 2.6.0.
   "contestation_filed",
   "contestation_resolved",
+  // The contestations of a project's criterion (ADR-139 §13), the bump to 2.7.0.
+  "project_contestation_filed",
+  "project_contestation_resolved",
 ] as const;
 type TeamsActivityKind = (typeof TEAMS_ACTIVITY_KINDS)[number];
 
@@ -130,6 +134,8 @@ export const TEAMS_ACTIVITY_TYPES: Record<TeamsActivityKind, string> = {
   github_org_lost: "githubOrgLost",
   contestation_filed: "contestationFiled",
   contestation_resolved: "contestationResolved",
+  project_contestation_filed: "projectContestationFiled",
+  project_contestation_resolved: "projectContestationResolved",
 };
 
 interface AppOptions {

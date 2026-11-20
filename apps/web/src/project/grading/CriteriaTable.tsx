@@ -2,14 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Check, FlaskConical, Lock, Sparkles, UserRound } from "lucide-react";
 import { useState } from "react";
 
-import { CriterionCiLog, type CriteriaTableRow, type CriterionGradeWrite, type CriterionReason } from "@quiz/contracts";
+import { CRITERION_RATIONALE_MAX, CriterionCiLog, type CriteriaTableRow, type CriterionGradeWrite, type CriterionReason, type ProjectStaffContestation } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { api } from "../../api";
+import { ContestationMark } from "../../grading/Contestation";
 import { useHold } from "../../build";
 import { useT, type Dict } from "../../i18n";
 import { projectCiLogKey } from "../../queryKeys";
-import { Badge, Button, cx, PointsInput, pointsSuffix, QueryError, Skeleton, T, TableHead, Textarea, Tip, type Column } from "../../ui";
+import { Badge, Button, cx, PointsInput, pointsBounds, pointsSuffix, QueryError, Skeleton, T, TableHead, Textarea, Tip, type Column } from "../../ui";
 import { RationaleFold, RationaleText } from "./RationaleFold";
 
 type Source = NonNullable<CriteriaTableRow["source"]>;
@@ -54,7 +55,9 @@ export type GradeWrite = (criterionId: string, body: CriterionGradeWrite) => voi
  * pass. A rationale is plain text: rendered
  * as a text node, never as markup (N-SEC-14). Under a 28 rem container the
  * rows turn into cards (`T.stack`): the criterion and its input on the
- * first line, the rest under them.
+ * first line, the rest under them. A contested criterion (ADR-139 §13)
+ * carries the contestation's mark after its id; the record and the answer
+ * are under the table.
  */
 export function CriteriaTable({
   rows,
@@ -62,6 +65,7 @@ export function CriteriaTable({
   writable,
   onGrade,
   repoPath,
+  contestations = [],
 }: {
   rows: CriteriaTableRow[];
   label: string;
@@ -70,6 +74,8 @@ export function CriteriaTable({
   onGrade: GradeWrite;
   /** The repository's API path (`/app/api/projects/:id/repos/:rid`): where a criterion's CI log is read. */
   repoPath: string;
+  /** The repository's contestations, marked on their criteria. */
+  contestations?: readonly ProjectStaffContestation[];
 }) {
   const t = useT();
   const columns: Column<string>[] = [
@@ -84,7 +90,14 @@ export function CriteriaTable({
         <TableHead columns={columns} />
         <tbody role="rowgroup">
           {rows.map((row) => (
-            <CriterionRow key={row.criterionId} row={row} writable={writable} onGrade={onGrade} repoPath={repoPath} />
+            <CriterionRow
+              key={row.criterionId}
+              row={row}
+              writable={writable}
+              onGrade={onGrade}
+              repoPath={repoPath}
+              contestation={contestations.find((c) => c.criterionId === row.criterionId) ?? null}
+            />
           ))}
         </tbody>
       </table>
@@ -92,7 +105,19 @@ export function CriteriaTable({
   );
 }
 
-function CriterionRow({ row, writable, onGrade, repoPath }: { row: CriteriaTableRow; writable: boolean; onGrade: GradeWrite; repoPath: string }) {
+function CriterionRow({
+  row,
+  writable,
+  onGrade,
+  repoPath,
+  contestation,
+}: {
+  row: CriteriaTableRow;
+  writable: boolean;
+  onGrade: GradeWrite;
+  repoPath: string;
+  contestation: ProjectStaffContestation | null;
+}) {
   const t = useT();
   return (
     <tr role="row" className={cx(T.row, T.stack.row, "align-top")}>
@@ -103,6 +128,7 @@ function CriterionRow({ row, writable, onGrade, repoPath }: { row: CriteriaTable
             <span className="font-mono">{row.criterionId}</span>
             {row.bonus !== undefined ? <Badge tone="green">{t("project.grading.bonus", { n: row.bonus })}</Badge> : null}
             {row.max < 0 ? <Badge tone="amber">{t("project.grading.penalty")}</Badge> : null}
+            <ContestationMark contestation={contestation} />
           </span>
           {row.rationale !== undefined || (writable && row.points !== null) ? (
             <RationaleFold>
@@ -141,7 +167,7 @@ function CriterionRow({ row, writable, onGrade, repoPath }: { row: CriteriaTable
  * leaves it, or the same figures as text before the row can be written.
  */
 function AwardedPoints({ row, writable, onGrade }: { row: CriteriaTableRow; writable: boolean; onGrade: GradeWrite }) {
-  const bounds = { max: row.max, ...(row.bonus === undefined ? {} : { bonus: row.bonus }) };
+  const bounds = pointsBounds(row);
   if (!writable) {
     return (
       <span className="whitespace-nowrap tabular-nums">
@@ -229,7 +255,7 @@ function Rationale({ row, writable, onGrade }: { row: CriteriaTableRow; writable
         <Textarea
           aria-label={t("project.grading.rationale")}
           value={text}
-          maxLength={4000}
+          maxLength={CRITERION_RATIONALE_MAX}
           onChange={(e) => setText(e.target.value)}
           className="min-h-20 text-[13px]"
         />

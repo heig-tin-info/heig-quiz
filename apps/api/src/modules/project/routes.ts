@@ -38,8 +38,17 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
+  ContestationFileBody,
+  ContestationWindow,
+  ContestationWindowBody,
   IdParam,
   ProjectAcceptance,
+  ProjectContestationParams,
+  ProjectContestationResolution,
+  ProjectContestationResolveBody,
+  ProjectContestations,
+  ProjectStudentContestation,
+  ProjectStudentCriterionParams,
   ProjectCheckpointParams,
   CriterionCiLog,
   CriterionGradeWrite,
@@ -66,7 +75,8 @@ import {
   ScoreOverride,
 } from "@quiz/contracts";
 
-import { actorOf } from "../../audit.js";
+import { actorOf, audit } from "../../audit.js";
+import { iso } from "../../clock.js";
 import { PROJECT_CONFINED } from "../../auth/session.js";
 import type { AppConfig } from "../../config.js";
 import {
@@ -122,11 +132,26 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       return false;
     }),
   };
-  // A grading write by criteria (ADR-106 §8, 05 §5.11): an owner or an assistant of the course.
+  // A write of the settings (ADR-068): an owner or an assistant of the course.
   const onStaffedProject = {
     params: IdParam,
     load: withCourseRole(app, accessibleProject.bind(null, app), (scope) => scope.course.id, "assistant"),
   };
+  // A grading write by criteria (ADR-106 §8, 05 §5.11) — a validation, a
+  // Regrade: an owner or an assistant of the course, the owner alone once
+  // the project is released (ADR-139 §13, closing ADR-135 §9's follow-up).
+  const releasedOwner = (project: { releasedAt: Date | null }) => (project.releasedAt === null ? "assistant" : "owner");
+  const onGradingProject = {
+    params: IdParam,
+    load: withCourseRole(app, accessibleProject.bind(null, app), (scope) => scope.course.id, (scope) => releasedOwner(scope.project)),
+  };
+  /** The writer of a grading, and whether they own the course: the writers read the release again under their lock (ADR-135 §9). */
+  const gradeWriter = async (req: FastifyRequest, now: Date, courseId: string): Promise<service.GradeWriter> => ({
+    actor: actorOf(req),
+    userId: callerOf(req).id,
+    now,
+    owner: await isCourseOwner(app.db, courseId, callerOf(req)),
+  });
 
   // ------------------------------------------------------------ a classroom's projects
 
@@ -213,7 +238,10 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
    * Grading by criteria (ADR-106 §2): the snapshot of the source's
    * `criteria.yml` and the settings, and its reload from the distribution
    * repository's head (`409 criteria_invalid` keeps the last snapshot).
-   * The project's staff, like its settings.
+   * The project's staff, like its settings; the reload of a released
+   * project is the course owner's (`403 owner_required`, ADR-139 §13: it
+   * may take a contested criterion out; a released project's mode is
+   * frozen, so in another mode its snapshot grades nothing).
    */
   app.get(
     "/app/api/projects/:id/criteria",
@@ -224,7 +252,8 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   app.post(
     "/app/api/projects/:id/criteria/reload",
     session,
-    teacher(onProject, async ({ req, now, scope }) => service.reloadCriteria(app.db, config, scope.project, actorOf(req), now)),
+    // A reload may take a criterion out of the snapshot: on a released project, the owner's (ADR-139 §13).
+    teacher(onGradingProject, async ({ req, now, scope }) => service.reloadCriteria(app.db, config, scope.project, actorOf(req), now)),
   );
 
   /**
@@ -232,13 +261,14 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
    * the counts the confirmation priced; `409 not_criteria`, `409
    * regrade_released` (ADR-132 §5: a released schema-3 project without the
    * acknowledgement), `409 not_frozen`, `429 regrade_limit`. A write: the
-   * course role (`requireCourseRole`, owner or assistant).
+   * course role (`requireCourseRole`, owner or assistant; the owner alone
+   * once released, ADR-139 §13).
    */
   app.post(
     "/app/api/projects/:id/regrade",
     session,
-    teacher({ ...onStaffedProject, body: ProjectRegradeRequest, optionalBody: true }, async ({ req, reply, now, body, scope }) =>
-      reply.code(202).send(ProjectRegradeAccepted.parse(await service.regrade(app, config, scope.project, null, actorOf(req), now, body))),
+    teacher({ ...onGradingProject, body: ProjectRegradeRequest, optionalBody: true }, async ({ req, reply, now, body, scope }) =>
+      reply.code(202).send(ProjectRegradeAccepted.parse(await service.regrade(app, config, scope.project, null, await gradeWriter(req, now, scope.course.id), body))),
     ),
   );
 
@@ -247,7 +277,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
    * off the mode), and *Validate the rest as proposed* — 202 with the
    * repositories validated, `409 criteria_incomplete` naming each
    * repository and criterion without a row, `409 not_frozen`. The write:
-   * the course role.
+   * the course role, the owner's alone once released (ADR-139 §13).
    */
   app.get(
     "/app/api/projects/:id/grading",
@@ -258,8 +288,83 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   app.post(
     "/app/api/projects/:id/validate",
     session,
-    teacher(onStaffedProject, async ({ req, reply, now, scope }) =>
-      reply.code(202).send(ProjectValidated.parse(await service.validateProject(app.db, scope.project, actorOf(req), now))),
+    teacher(onGradingProject, async ({ req, reply, now, scope }) =>
+      reply.code(202).send(ProjectValidated.parse(await service.validateProject(app.db, scope.project, await gradeWriter(req, now, scope.course.id)))),
+    ),
+  );
+
+  /**
+   * ADR-139 §13: the contestations of the project's criteria for its staff
+   * — the window, the open counts, every contestation. Portal sessions
+   * only (`accessibleProject`): no token reaches a student's words before
+   * Lot 2's consent (§14), unlike the grading screen.
+   */
+  app.get(
+    "/app/api/projects/:id/contestations",
+    session,
+    teacher(onProject, async ({ scope }) => ProjectContestations.parse(await service.projectContestationsView(app.db, scope.project))),
+  );
+
+  /**
+   * ADR-139 §13: the owner closes the contestation window of a released
+   * project graded by criteria now, or extends it (which may reopen it);
+   * `409 window_unavailable`, `422 window_instant`. Audited with the act
+   * and the instant.
+   */
+  app.put(
+    "/app/api/projects/:id/contestation-window",
+    session,
+    teacher({ ...onOwnedProject, body: ContestationWindowBody }, async ({ req, now, body, scope }) => {
+      const closesAt = await service.changeProjectContestationWindow(app.db, scope.project, body, now);
+      await audit(app.db, {
+        ...actorOf(req),
+        action: "project.contestation_window",
+        subjectType: "project",
+        subjectId: scope.project.id,
+        payload: { action: body.action, closesAt: iso(closesAt) },
+      });
+      service.projectsChanged([scope.course.id]);
+      return ContestationWindow.parse({ closesAt: iso(closesAt) });
+    }),
+  );
+
+  /**
+   * ADR-139 §13, decision 9: the owner's one answer to a contestation of a
+   * repository of the project (`403 owner_required` for an assistant,
+   * before the body; a 404 for a contestation of another project). Once
+   * (`409 not_open`); a refusal or new points carry a reply (a 400); an
+   * acceptance of a criterion that left the snapshot is `409
+   * criterion_removed`. New points are the teacher's criterion write, in
+   * the same transaction. Every member of the repository is told. Audited
+   * `project_contestation.resolve` — never a text.
+   */
+  app.post(
+    "/app/api/projects/:id/contestations/:cid/resolve",
+    session,
+    teacher(
+      { params: ProjectContestationParams, body: ProjectContestationResolveBody, load: onOwnedProject.load },
+      async ({ req, now, params, body, scope }) => {
+        const { contestation, repo } = await service.contestationOfProject(app.db, scope.project, params.cid);
+        const writer = await gradeWriter(req, now, scope.course.id);
+        const outcome = await service.resolveProjectContestation(app.db, { project: scope.project, contestation, repo, body, writer });
+        await audit(app.db, {
+          ...actorOf(req),
+          action: "project_contestation.resolve",
+          subjectType: "project_contestation",
+          subjectId: contestation.id,
+          payload: {
+            projectId: scope.project.id,
+            repoId: repo.id,
+            criterionId: contestation.criterionId,
+            verdict: body.verdict,
+            points: outcome.graded !== null,
+            gradeBefore: outcome.before,
+            gradeAfter: outcome.row.gradeAtResolutionId,
+          },
+        });
+        await service.tellResolved(app.db, scope.project, repo, scope.course.id);
+        return ProjectContestationResolution.parse({ contestation: outcome.contestation, repo: outcome.graded });
+      },
     ),
   );
 
@@ -423,15 +528,21 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   // ------------------------------------------------------------ one repository (M3-05a)
 
   const onRepo = { params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) };
-  const onStaffedRepo = {
-    params: ProjectRepoParams,
-    load: withCourseRole(app, accessibleProjectRepo.bind(null, app), (scope) => scope.courseId, "assistant"),
-  };
   // The criteria table and a criterion's points also take a token (ADR-022, addendum of 2026-11-10).
   const onGradedRepo = { params: ProjectRepoParams, load: gradingProjectRepo.bind(null, app) };
+  // A criterion's points: the course role, the owner's alone once released (ADR-139 §13).
   const onGradingRepo = {
     params: ProjectRepoParams,
-    load: withCourseRole(app, gradingProjectRepo.bind(null, app), (scope) => scope.courseId, "assistant"),
+    load: withCourseRole(app, gradingProjectRepo.bind(null, app), (scope) => scope.courseId, (scope) => releasedOwner(scope.project)),
+  };
+  // A write of a repository's grade — the teacher's score, the grade
+  // adjustment (ADR-135), a validation and a Regrade of its criteria
+  // (ADR-139 §13): an owner or an assistant of the course, the owner alone
+  // once the project is released (ADR-068 as amended by ADR-135, as an
+  // evaluation's grading after its release).
+  const onGradeRepo = {
+    params: ProjectRepoParams,
+    load: withCourseRole(app, accessibleProjectRepo.bind(null, app), (scope) => scope.courseId, (scope) => releasedOwner(scope.project)),
   };
 
   /**
@@ -472,7 +583,9 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
    * still proposed (`422 points_out_of_range`, a 404 for an unknown
    * criterion, `409 not_criteria`, `409 not_frozen`); and the validation of
    * the repository's proposals (`409 criteria_incomplete` while a criterion
-   * has no row). Writes: the course role. Both answer the repository's
+   * has no row). Writes: the course role, the owner's alone once the
+   * project is released (ADR-139 §13; `403 owner_required`, read again by
+   * the writer under the project's lock). Both answer the repository's
    * entry of the grading screen.
    */
   app.put(
@@ -482,7 +595,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       { params: ProjectCriterionParams, body: CriterionGradeWrite, load: onGradingRepo.load },
       async ({ req, now, params, body, scope }) =>
         ProjectGradingRepo.parse(
-          await service.gradeCriterion(app.db, scope.project, scope.repo, params.criterionId, body, actorOf(req), callerOf(req).id, now),
+          await service.gradeCriterion(app.db, scope.project, scope.repo, params.criterionId, body, await gradeWriter(req, now, scope.courseId)),
         ),
     ),
   );
@@ -490,8 +603,8 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   app.post(
     "/app/api/projects/:id/repos/:rid/validate",
     session,
-    teacher(onStaffedRepo, async ({ req, now, scope }) =>
-      ProjectGradingRepo.parse(await service.validateRepo(app.db, scope.project, scope.repo, actorOf(req), now)),
+    teacher(onGradeRepo, async ({ req, now, scope }) =>
+      ProjectGradingRepo.parse(await service.validateRepo(app.db, scope.project, scope.repo, await gradeWriter(req, now, scope.courseId))),
     ),
   );
 
@@ -499,8 +612,8 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   app.post(
     "/app/api/projects/:id/repos/:rid/regrade",
     session,
-    teacher({ ...onStaffedRepo, body: ProjectRegradeRequest, optionalBody: true }, async ({ req, reply, now, body, scope }) =>
-      reply.code(202).send(ProjectRegradeAccepted.parse(await service.regrade(app, config, scope.project, scope.repo, actorOf(req), now, body))),
+    teacher({ ...onGradeRepo, body: ProjectRegradeRequest, optionalBody: true }, async ({ req, reply, now, body, scope }) =>
+      reply.code(202).send(ProjectRegradeAccepted.parse(await service.regrade(app, config, scope.project, scope.repo, await gradeWriter(req, now, scope.courseId), body))),
     ),
   );
 
@@ -537,24 +650,6 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   }
 
   // ------------------------------------------------------------ one repository's writes (M3-08b)
-
-  // A write of a repository's grade — the teacher's score, the grade
-  // adjustment (ADR-135): an owner or an assistant of the course, the owner
-  // alone once the project is released (ADR-068 as amended by ADR-135, as
-  // an evaluation's grading after its release).
-  const onGradeRepo = {
-    params: ProjectRepoParams,
-    load: withCourseRole(app, accessibleProjectRepo.bind(null, app), (scope) => scope.courseId, (scope) =>
-      scope.project.releasedAt === null ? "assistant" : "owner",
-    ),
-  };
-  /** The writer of a grade, and whether they own the course: the service reads the release again under its lock. */
-  const gradeWriter = async (req: FastifyRequest, now: Date, courseId: string): Promise<service.GradeWriter> => ({
-    actor: actorOf(req),
-    userId: callerOf(req).id,
-    now,
-    owner: await isCourseOwner(app.db, courseId, callerOf(req)),
-  });
 
   /** F-PROJ-14: the teacher's score, after the repository's definitive freeze; null clears it. */
   app.patch(
@@ -665,6 +760,41 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
         }),
       ),
     ),
+  );
+
+  /**
+   * ADR-139 §13: a member contests ONE criterion of their repository, once
+   * per repository and criterion, with a reason — on a group's, for the
+   * group. A claimed seat, by its own portal session only
+   * (`studentProject`: an impersonation, a token, a `seb` or `kiosk`
+   * session never file). The service decides on the database's clock and
+   * answers every refusal (`contestation_closed`, `contestation_exists`,
+   * `not_contestable`, `classroom_archived`, a 404 for an unknown
+   * criterion). The course's staff are told, folded per project. Audited
+   * `project_contestation.file`, never the reason.
+   */
+  app.post(
+    "/app/api/student/projects/:id/criteria/:criterionId/contestation",
+    session,
+    student({ params: ProjectStudentCriterionParams, body: ContestationFileBody, load: studentProject.bind(null, app) }, async ({ req, params, body, scope }) => {
+      const userId = callerOf(req).id;
+      const row = await service.fileProjectContestation(app.db, {
+        project: scope.project,
+        repo: await service.seatRepo(app.db, scope.project, scope.seat.id),
+        seat: { id: scope.seat.id, userId },
+        criterionId: params.criterionId,
+        reason: body.reason,
+      });
+      await audit(app.db, {
+        ...actorOf(req),
+        action: "project_contestation.file",
+        subjectType: "project_contestation",
+        subjectId: row.id,
+        payload: { projectId: scope.project.id, repoId: row.repoId, criterionId: row.criterionId },
+      });
+      await service.tellFiled(app.db, scope.project, scope.courseId);
+      return ProjectStudentContestation.parse(service.studentProjectContestationOf(row));
+    }),
   );
 
   /**

@@ -129,6 +129,14 @@ const en = {
   "project_grade_final.subject": "Scores released: {projectTitle}",
   "project_grade_final.body": "The scores of the project “{projectTitle}” are released.",
   "project_grade_final.action": "See my score",
+  "project_contestation_resolved.subject": "Your contestation was answered: {projectTitle}",
+  "project_contestation_resolved.body": "The contestation of a criterion of the project “{projectTitle}” was answered.",
+  "project_contestation_resolved.action": "Open the project",
+  "project_contestation_filed.subject": "{count} contestations: {projectTitle}",
+  "project_contestation_filed.subject.one": "A contestation: {projectTitle}",
+  "project_contestation_filed.body": "{count} contestations were filed on criteria of “{projectTitle}”.",
+  "project_contestation_filed.body.one": "The grading of a criterion of “{projectTitle}” was contested.",
+  "project_contestation_filed.action": "Open the project",
   "project_deadline_applied.subject": "Deadline applied to {count} repositories: {projectTitle}",
   "project_deadline_applied.subject.one": "Deadline applied to a repository: {projectTitle}",
   "project_deadline_applied.body": "The deadline of “{projectTitle}” was applied to {count} repositories.",
@@ -258,6 +266,11 @@ const en = {
   "activity.contestation_resolved.template": "Contestation answered: {evaluationTitle}",
   "activity.contestation_filed.description": "The grading of a question of a released exam is contested",
   "activity.contestation_filed.template": "{evaluationTitle}: {count} contestation(s)",
+  // A project's criterion contested (ADR-139 §13), the bump to 2.7.0.
+  "activity.project_contestation_resolved.description": "Your contestation of a project criterion is answered",
+  "activity.project_contestation_resolved.template": "Contestation answered: {projectTitle}",
+  "activity.project_contestation_filed.description": "The grading of a criterion of a released project is contested",
+  "activity.project_contestation_filed.template": "{projectTitle}: {count} contestation(s)",
 } as const;
 
 type Key = keyof typeof en;
@@ -346,6 +359,14 @@ const fr: Record<Key, string> = {
   "project_grade_final.subject": "Notes publiées : {projectTitle}",
   "project_grade_final.body": "Les notes du projet « {projectTitle} » sont publiées.",
   "project_grade_final.action": "Voir ma note",
+  "project_contestation_resolved.subject": "Réponse à votre contestation : {projectTitle}",
+  "project_contestation_resolved.body": "La contestation d'un critère du projet « {projectTitle} » a reçu une réponse.",
+  "project_contestation_resolved.action": "Ouvrir le projet",
+  "project_contestation_filed.subject": "{count} contestations : {projectTitle}",
+  "project_contestation_filed.subject.one": "Une contestation : {projectTitle}",
+  "project_contestation_filed.body": "{count} contestations ont été déposées sur des critères de « {projectTitle} ».",
+  "project_contestation_filed.body.one": "La correction d'un critère de « {projectTitle} » a été contestée.",
+  "project_contestation_filed.action": "Ouvrir le projet",
   "project_deadline_applied.subject": "Échéance appliquée à {count} dépôts : {projectTitle}",
   "project_deadline_applied.subject.one": "Échéance appliquée à un dépôt : {projectTitle}",
   "project_deadline_applied.body": "L'échéance de « {projectTitle} » a été appliquée à {count} dépôts.",
@@ -461,6 +482,10 @@ const fr: Record<Key, string> = {
   "activity.contestation_resolved.template": "Contestation traitée : {evaluationTitle}",
   "activity.contestation_filed.description": "La correction d'une question d'un examen publié est contestée",
   "activity.contestation_filed.template": "{evaluationTitle} : {count} contestation(s)",
+  "activity.project_contestation_resolved.description": "Votre contestation d'un critère de projet reçoit une réponse",
+  "activity.project_contestation_resolved.template": "Contestation traitée : {projectTitle}",
+  "activity.project_contestation_filed.description": "La correction d'un critère d'un projet publié est contestée",
+  "activity.project_contestation_filed.template": "{projectTitle} : {count} contestation(s)",
 };
 
 const DICTS: Record<Locale, Record<Key, string>> = { en, fr };
@@ -547,8 +572,10 @@ function varsOf(payload: OutboundPayload, locale: Locale): Record<string, string
     case "project_deadline_reminder":
     case "project_repo_invited":
     case "project_grade_final":
+    case "project_contestation_resolved":
       return { projectTitle: payload.projectTitle };
     case "project_deadline_applied":
+    case "project_contestation_filed":
       return { projectTitle: payload.projectTitle, count: String(payload.count) };
     case "project_provision_failed":
       return { projectTitle: payload.projectTitle, count: String(payload.count), reason: t[`reason.${payload.reason}`] };
@@ -627,8 +654,10 @@ export function notificationPath(payload: OutboundPayload): string {
     case "project_deadline_reminder":
     case "project_repo_invited":
     case "project_grade_final":
+    case "project_contestation_resolved":
     case "project_deadline_applied":
     case "project_provision_failed":
+    case "project_contestation_filed":
       return `/projects/${payload.projectId}`;
     case "github_org_lost":
       return `/classrooms/${payload.classroomId}/settings`;

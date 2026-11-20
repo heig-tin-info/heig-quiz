@@ -15,6 +15,7 @@ import { z } from "zod";
 
 import {
   CONTEST_REFUSALS,
+  CONTESTATION_DAYS_MAX,
   CONTESTATION_STATES,
   CONTESTATION_TEXT_MAX,
   CONTESTATION_VERDICTS,
@@ -28,6 +29,14 @@ export type ContestationState = z.infer<typeof ContestationState>;
 
 export const ContestationVerdict = z.enum(CONTESTATION_VERDICTS);
 export type ContestationVerdict = z.infer<typeof ContestationVerdict>;
+
+/**
+ * A contestation window, in days after the release that opens it: 0 to
+ * {@link CONTESTATION_DAYS_MAX}, 0 for none — an exam's feedback policy's
+ * `contestationDays` and a project's (ADR-139 §1, §13).
+ */
+export const ContestationDays = z.number().int().min(0).max(CONTESTATION_DAYS_MAX);
+export type ContestationDays = z.infer<typeof ContestationDays>;
 
 /** A reason: mandatory, trimmed, plain text. */
 export const ContestationReason = z.string().trim().min(1).max(CONTESTATION_TEXT_MAX);

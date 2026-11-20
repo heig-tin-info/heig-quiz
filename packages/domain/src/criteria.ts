@@ -284,6 +284,24 @@ export function awardedRange(leaf: Pick<CriteriaLeaf, "maxPoints" | "bonusPoints
   return top >= 0 ? [0, top] : [top, 0];
 }
 
+/**
+ * A criterion's grading in force as a contestation reads it (ADR-139 §13,
+ * `contestedUnit` of `contestation.ts`): its VALIDATED current row's points
+ * against the BEST value it can take — the top of {@link awardedRange}: a
+ * criterion's maximum, a bonus criterion's bonus, a penalty's 0 — so "below
+ * full points" means a penalty that took points or a bonus not given, never
+ * a criterion at its best. Null while nothing validated is in force (a
+ * proposal, a teacher's edit still to validate: pending), or for a criterion
+ * the snapshot no longer holds.
+ */
+export function criterionInForce(
+  leaf: Pick<CriteriaLeaf, "maxPoints" | "bonusPoints"> | undefined,
+  current: { points: number; state: string } | undefined,
+): { points: number; maxPoints: number } | null {
+  if (leaf === undefined || current?.state !== "validated") return null;
+  return { points: current.points, maxPoints: awardedRange(leaf)[1] };
+}
+
 export interface CriteriaTotals {
   /** The points, clamped to `[0, max + bonusMax]`. */
   points: number;

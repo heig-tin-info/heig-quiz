@@ -41,7 +41,7 @@
 import { eq } from "drizzle-orm";
 
 import type { GradeAdjustmentWrite, ProjectReleaseResult, ProjectRepoScores, ScoreOverride } from "@quiz/contracts";
-import { projectGraded, scoresFinal, teacherScoreMax } from "@quiz/domain";
+import { contestationClosesAt, projectGraded, scoresFinal, teacherScoreMax } from "@quiz/domain";
 
 import { audit, type AuditAction, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
@@ -53,7 +53,7 @@ import { notifyUsers } from "../notifications/service.js";
 import { unvalidatedRepos } from "./criterionGrades.js";
 import { isLive, releaseCounts, repoForUpdate } from "./deadline.js";
 import { baseGrade, releaseOf, repoScores, teacherRunMax } from "./detail.js";
-import { ProjectError } from "./errors.js";
+import { ProjectError, requireReleasedOwner } from "./errors.js";
 import { repoMembers } from "./groupRepos.js";
 import { groupSyncOwed } from "./groupResync.js";
 import { studentRepos, type RepoRow } from "./repos.js";
@@ -94,7 +94,7 @@ interface GradeWrite {
 async function writeRepoGrade(db: Db, projectId: string, repoId: string, writer: GradeWriter, write: GradeWrite): Promise<ProjectRepoScores> {
   return db.transaction(async (tx) => {
     const { project, repo } = await repoForUpdate(tx, projectId, repoId);
-    if (project.releasedAt !== null && !writer.owner) throw new ProjectError("owner_required", "Only an owner of this course may change a released grade");
+    requireReleasedOwner(project, writer);
     if (!projectGraded(project.gradingMode)) throw new ProjectError("grading_none", "The project is not graded");
     if (repo.frozenAt === null) throw new ProjectError("not_frozen", "A grade is written once the repository's deadline and grace have passed");
     const facts = await scoreFacts(tx, [repo]);
@@ -185,7 +185,10 @@ export function adjustRepoGrade(db: Db, projectId: string, repoId: string, body:
  * repository never freezes, so its score to verify is released as no score
  * (`releasableScore`) rather than deadlocking the release. The student repositories
  * (`studentRepos`) and the counts (`releaseCounts`) are the page's. Writes
- * every repository's snapshot and the project's `released_at`; idempotent
+ * every repository's snapshot and the project's `released_at` — and, in
+ * `criteria` mode, the contestation window's closing instant when none is
+ * set yet (ADR-139 §13: its days after this release, none at 0; never moved
+ * by a release again); idempotent
  * in effect, audited each time. `released_at` is read from `clock` once the
  * project's row is held: a Regrade claimed meanwhile (`claimRegrades`,
  * under its share lock) is stamped before it or sees it (ADR-132 §5).
@@ -238,7 +241,11 @@ export async function releaseProject(db: Db, projectId: string, actor: AuditActo
         })
         .where(eq(projectRepos.id, repo.id));
     }
-    await tx.update(projects).set({ releasedAt: now, releasedBy: userId }).where(eq(projects.id, project.id));
+    // ADR-139 §13: the release that finds no window, in `criteria` mode, opens one — the days later — once;
+    // a release again rewrites `released_at` and never moves it.
+    const opens = project.gradingMode === "criteria" && project.contestationClosesAt === null;
+    const closesAt = opens ? contestationClosesAt(now, project.contestationDays) : project.contestationClosesAt;
+    await tx.update(projects).set({ releasedAt: now, releasedBy: userId, contestationClosesAt: closesAt }).where(eq(projects.id, project.id));
     await audit(tx, {
       ...actor,
       action: "project.release",

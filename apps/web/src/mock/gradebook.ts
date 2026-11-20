@@ -151,7 +151,7 @@ interface Spec {
   withheld?: boolean;
   /** Its component under `?components=1`; none by default. */
   component?: string;
-  /** ADR-139: an exam's open contestations, the column's flag. */
+  /** ADR-139: an exam's or a project's open contestations, the column's flag. */
   openContestations?: number;
 }
 
@@ -159,7 +159,8 @@ const SPECS: Spec[] = [
   { n: 1, title: "Examen 1 : numération, types et outils", mode: "exam", kind: "evaluation", daysAgo: 42, released: true, weight: 50, component: COURS },
   { n: 2, title: "Test 2 — Pointeurs", mode: "exam", kind: "evaluation", daysAgo: 28, released: true, weight: 100, component: COURS, openContestations: 3 },
   { n: 3, title: "Exercices — Boucles", mode: "exercise", kind: "evaluation", daysAgo: 21, released: true, weight: 100 },
-  { n: 4, title: "Labo 1 — Calculatrice", mode: "project", kind: "project", daysAgo: 14, released: true, weight: 40, component: LABO },
+  // ADR-139 §13: a project's column carries its open contestations too.
+  { n: 4, title: "Labo 1 — Calculatrice", mode: "project", kind: "project", daysAgo: 14, released: true, weight: 40, component: LABO, openContestations: 2 },
   { n: 5, title: "Test 3 — Tableaux", mode: "exam", kind: "evaluation", daysAgo: 3, released: false, weight: 100, component: COURS },
   // Counted, and left in no component: in no mean once the course has components.
   { n: 6, title: "Test éclair — Révision", mode: "exam", kind: "evaluation", daysAgo: 35, released: true, weight: 10, withheld: true },

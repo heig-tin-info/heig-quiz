@@ -59,9 +59,9 @@ export function GradingToolbar({
   /** The answers of this question not validated yet (the steps' count); null before it lands. */
   toValidate: number | null;
   /**
-   * ADR-139: the question's open contestations, for the third choice
-   * "Contested (n)"; null hides the choice — the question holds none, open
-   * or answered, and the table is not filtered on them.
+   * ADR-139: the question's contested answers, open or answered — what the
+   * third choice "Contested (n)" keeps; null hides the choice — the
+   * question holds none, and the table is not filtered on them.
    */
   contested: number | null;
   anonymise: boolean;

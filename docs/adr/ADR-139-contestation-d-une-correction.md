@@ -21,8 +21,9 @@ the release consequences, the instruments a contestation leads to),
 [ADR-018](ADR-018-vue-etudiant-reelle.md) (amended 2026-11-17: a staff seat
 lives the student flow) and [ADR-027](ADR-027-tickets-de-lancement-et-sessions-typees.md)
 (portal sessions only); amends [ADR-030](ADR-030-canaux-de-notification.md)
-rule 12 (two kinds); PR B closes the follow-up of
-[ADR-135](ADR-135-ajustement-de-la-note-d-un-projet.md) §9; PR C amends
+rule 12 (two kinds, and two for a project's criterion, §13); PR B closes
+the follow-up of [ADR-135](ADR-135-ajustement-de-la-note-d-un-projet.md) §9
+(amended in place); PR C amends
 [ADR-022](ADR-022-jetons-api-et-serveur-mcp.md) §C and its Consequences,
 [ADR-113](ADR-113-portee-des-jetons-personnels.md) and the assistants guide
 when it lands (§14).
@@ -219,19 +220,55 @@ colleague reporting a pool question to its writers.
 13. On a released project GRADED BY CRITERIA (a project without criteria has
     no unit to contest), the student contests ONE criterion — its points and
     its rationale — from the project page, under the same rule of
-    `@quiz/domain`, unchanged. One contestation per (repository, criterion);
+    `@quiz/domain`, unchanged; one contestation per (repository, criterion);
     on a group repository it is the repository's: any member files it, every
-    member reads it and its answer. Its own table, owned by the `project`
-    module, beside the criteria it contests. The window is a stored closing
-    instant set at the project's FIRST release, the same seven days by
-    default and the same backfill for the projects already released, moved by
-    the same two acts of the owner. Accepting is the owner correcting the
-    criterion and validating the repository: the contestation is resolved and
-    the students told, the new points read as indicative, and the grade moves
-    at the owner's next release (decision 9); there is no per-repository
-    release. The grade adjustment (ADR-135) stays its own gesture. With this
-    lot, every criterion write on a released project becomes the owner's,
-    which closes the follow-up of ADR-135 §9.
+    member reads it and its answer, and none is told who filed it (the
+    project page names no teammate). Accepting is the owner correcting the
+    criterion and validating the repository: the grade moves at the owner's
+    next release (decision 9); no per-repository release; the grade
+    adjustment (ADR-135) stays its own gesture. As built, the decisions:
+    - **The unit.** A criterion is graded by its VALIDATED current row (a
+      teacher's edit since, still proposed, is `pending`) and is full at
+      the top of its awarded range: a criterion's maximum, a bonus
+      criterion's bonus, a penalty's 0 (`criterionInForce`, `@quiz/domain`).
+      So a penalty that took points and a bonus not given are contestable,
+      a criterion at its best is not, whoever graded it.
+    - **The window** opens at the project's FIRST release
+      (`projects.contestation_closes_at`, its `contestation_days`, 7 by
+      default, 0 for none, editable until then); a release again, which
+      rewrites `released_at`, never moves it; the owner's two acts move it
+      (`PUT /app/api/projects/:id/contestation-window`, Lot 1's bounds).
+      Migration `0149_project_contestations` backfills the criteria
+      projects already released from their first release — the earliest
+      `project.release` audit row, else `released_at` — plus seven days.
+    - **One table per module**: `project_contestations`, the `project`
+      module's, one row per (repository, criterion); a criterion id has no
+      foreign key (a reload may replace the snapshot), so the row keeps the
+      criterion as it read at the filing, and one whose criterion left the
+      snapshot can only be refused (`409 criterion_removed`).
+    - **The members** are ONE rule, the readers of `repoMembers`
+      (`groupRepos.ts`) through a student seat: its student, or its copy
+      group's members whose departure is NOT pending. That rule decides
+      who may file (checked before the `INSERT … SELECT`, which keeps the
+      window on the database's clock, the release, the mode, the classroom,
+      a live repository and the validated row), who reads the repository's
+      contestations in the student project payload (with `contestable` per
+      criterion and the window's instant), and who is told of an answer. A seat with no repository gets the 404 of an
+      unknown criterion, so the criteria's ids cannot be probed.
+    - **The staff's own route**, `GET /app/api/projects/:id/contestations`,
+      portal sessions only: the grading screen, which the MCP tools
+      `get_project_grading` and `grade_criterion` forward, carries no
+      contestation, so no token reads a student's words before §14's
+      consent.
+    - **Two notification kinds of their own**, `project_contestation_filed`
+      (the staff, folded per project) and `project_contestation_resolved`
+      (the members): Lot 1's fold on `evaluationId`, and a fold target is
+      one column per kind (Teams app 2.7.0).
+    - **The owner's writes**: every criterion write on a released project —
+      and the explicit reload of its criteria, which can take a contested
+      criterion out — is the owner's; [ADR-135](ADR-135-ajustement-de-la-note-d-un-projet.md)
+      §9 owns that rule and names the one path left open, a sync's
+      automatic refresh.
 
 ### Lot 2 — MCP proposals (PR C)
 
@@ -316,8 +353,14 @@ colleague reporting a pool question to its writers.
   stays, answerable by its id, and counts in no open figure. The
   `contestation_resolved` bell is not withdrawn by an unrelease, unlike
   `results_released`: the page it opens may then show nothing until the
-  release.
-- Teams users re-upload the app (2.6.0) to receive the two kinds there.
+  release. On a project (§13): a member whose departure from a group
+  is pending still reads the group's repository on the project page
+  (`seatRepos`), but none of its contestations, and may not file; a sync's
+  automatic refresh of the criteria (ADR-132) may take a contested
+  criterion out of the snapshot, after which the owner can only refuse
+  that contestation; the backfill falls back on the last release for a
+  project whose first release left no audit row.
+- Teams users re-upload the app (2.6.0, then 2.7.0 for a project's two kinds) to receive the kinds there.
 
 ## Alternatives considered
 

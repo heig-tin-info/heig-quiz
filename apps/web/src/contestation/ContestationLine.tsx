@@ -11,10 +11,25 @@ import { useT, type Dict, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import { Button, FormError, InstantDialog, isoDateTime, useNow } from "../ui";
 
-/** The refusals of the owner's two acts (ADR-139 §2) this screen words; `owner_required` is the app's. */
-const REFUSAL: Partial<Record<string, keyof Dict>> = {
-  window_unavailable: "results.contest.refusal.unavailable",
+/**
+ * What the line words per unit: `window_unavailable` (the owner's acts
+ * refused, ADR-139 §2; `owner_required` is the app's) and the close's
+ * confirmation. An exam's question by default; a project's criterion has
+ * its own (§13).
+ */
+export interface WindowWords {
+  unavailable: keyof Dict;
+  closeBody: keyof Dict;
+}
+
+const QUESTION_WORDS: WindowWords = {
+  unavailable: "results.contest.refusal.unavailable",
+  closeBody: "results.contest.close.confirm.body",
 };
+
+/** "1 open contestation", "n open contestations": the count of the line, a repository's row and a step's flag. */
+export const openContestationsWords = (n: number, t: TFunction): string =>
+  n === 1 ? t("results.contest.open.one") : t("results.contest.open", { n });
 
 /** An instant refused, the field's and the server's (`422 window_instant`) alike. */
 function instantWords(reason: WindowExtendRefusal, now: Date, t: TFunction): string {
@@ -32,7 +47,7 @@ function instantWords(reason: WindowExtendRefusal, now: Date, t: TFunction): str
  * close it now or move its end (which may reopen it), or open one where
  * none was set (a window of 0 days, a policy changed after the release);
  * everyone else reads the line. Nothing when no window applies and nothing
- * is open. Shared by the exams' results and, next, a project's.
+ * is open. Shared by the exams' results and a project's Grading tab.
  */
 export function ContestationLine({
   path,
@@ -42,6 +57,7 @@ export function ContestationLine({
   isOwner,
   onChanged,
   onOpenContested,
+  words = QUESTION_WORDS,
 }: {
   /** `PUT …/contestation-window` of the unit. */
   path: string;
@@ -55,8 +71,10 @@ export function ContestationLine({
   /** The window moved: refresh what shows it. */
   onChanged: () => void;
   onOpenContested: () => void;
+  words?: WindowWords;
 }) {
   const t = useT();
+  const refusal: Partial<Record<string, keyof Dict>> = { window_unavailable: words.unavailable };
   const toast = useToast();
   const confirm = useConfirm();
   const [choosing, setChoosing] = useState(false);
@@ -75,14 +93,14 @@ export function ContestationLine({
   const close = async () => {
     const ok = await confirm({
       title: t("results.contest.close.confirm.title"),
-      message: t("results.contest.close.confirm.body"),
+      message: t(words.closeBody),
       confirmLabel: t("results.contest.close"),
       danger: true,
     });
-    if (ok) act.mutate({ action: "close" }, { onError: (e) => toast(wordedRefusal(e, REFUSAL, t), "error") });
+    if (ok) act.mutate({ action: "close" }, { onError: (e) => toast(wordedRefusal(e, refusal, t), "error") });
   };
 
-  const words = applies
+  const windowText = applies
     ? closesAt === null
       ? t("results.contest.none")
       : running
@@ -99,14 +117,14 @@ export function ContestationLine({
           className="inline-flex items-center gap-1.5 rounded-sm text-sm font-semibold text-warning underline-offset-4 hover:underline"
         >
           <MessageSquareWarning aria-hidden className="size-4" />
-          {open === 1 ? t("results.contest.open.one") : t("results.contest.open", { n: open })}
+          {openContestationsWords(open, t)}
           <ChevronRight aria-hidden className="size-4" />
         </button>
       ) : null}
-      {words ? (
+      {windowText ? (
         <span className="inline-flex items-center gap-1.5 text-[13px] text-fg-muted">
           {running ? <CalendarClock aria-hidden className="size-3.5" /> : <Lock aria-hidden className="size-3.5" />}
-          {words}
+          {windowText}
         </span>
       ) : null}
       {isOwner && applies ? (
@@ -148,7 +166,7 @@ export function ContestationLine({
               error={act.error}
               describe={(e) => {
                 const reason = refusalReasonOf(e, WindowInstantRefused);
-                return reason ? instantWords(reason, now, t) : wordedRefusal(e, REFUSAL, t);
+                return reason ? instantWords(reason, now, t) : wordedRefusal(e, refusal, t);
               }}
             />
           }

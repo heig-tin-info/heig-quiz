@@ -2,7 +2,17 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-libra
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { CriteriaTableRow, ProjectDetail, ProjectGradingRepo, ProjectGradingView, ProjectRepoScores, ProjectRepoView } from "@quiz/contracts";
+import type {
+  CourseRole,
+  CriteriaTableRow,
+  ProjectContestations,
+  ProjectDetail,
+  ProjectGradingRepo,
+  ProjectGradingView,
+  ProjectRepoScores,
+  ProjectRepoView,
+  ProjectStaffContestation,
+} from "@quiz/contracts";
 import { gradeFromPoints } from "@quiz/domain";
 
 import {
@@ -84,9 +94,14 @@ function routes(project: ProjectDetail | RouteHandler, extra: Record<string, Rou
     }),
     [`GET ${BASE}/checkpoints`]: ok([]),
     [`GET ${COLUMN}`]: columnSettings,
+    // ADR-139 §13: the Grading tab's second read; none by default.
+    [`GET ${BASE}/contestations`]: ok(NO_CONTESTATIONS),
     ...extra,
   });
 }
+
+/** The Grading tab's contestations, none (ADR-139 §13). */
+const NO_CONTESTATIONS: ProjectContestations = { applies: false, closesAt: null, openByRepo: {}, contestations: [] };
 
 /** The page, opened on `tab` (`?tab=`, F-PROJ-13 as amended 2026-10-13); the Summary by default. */
 function renderPage(locale: "en" | "fr" = "en", tab?: "repositories" | "grading" | "settings") {
@@ -2170,5 +2185,162 @@ describe("the Grading tab", () => {
     expect(await screen.findByTestId("grading-validated")).toHaveTextContent("Dépôts validés : 1 sur 1.");
     const table = within(screen.getByRole("region", { name: /Critères par dépôt/ })).getByRole("table");
     expect(within(table).getByRole("columnheader", { name: "Note" })).toBeInTheDocument();
+  });
+});
+
+describe("the Grading tab's contestations (ADR-139 §13)", () => {
+  const released = (over: Partial<ProjectDetail> = {}) => frozenProject({ gradingMode: "criteria", phase: "released", releasedAt: PAST, ...over });
+  const matrix = async () => within(await screen.findByRole("region", { name: /Criteria by repository/ })).getByRole("table");
+  const alice = gradingRepo(1, "Alice", [6, 2, 1, 0]);
+  const bob = gradingRepo(2, "Bob", [8, 1, 0, -3]);
+  const chloe = gradingRepo(3, "Chloé", [8, 2, 2, 0]);
+  const contestation = (repo: ProjectGradingRepo, criterionId: string, state: ProjectStaffContestation["state"], n: number): ProjectStaffContestation => ({
+    id: `0190d3c4-0000-7000-8000-0000000cc${String(n).padStart(3, "0")}`,
+    repoId: repo.id,
+    criterionId,
+    criterionDescription: `About ${criterionId}`,
+    pointsAtFiling: 1,
+    maxAtFiling: 2,
+    bonusAtFiling: null,
+    state,
+    reason: "Why",
+    filedAt: PAST,
+    reply: state === "open" ? null : "Because",
+    resolvedAt: state === "open" ? null : PAST,
+    counted: true,
+    inSnapshot: true,
+  });
+  const contested: ProjectContestations = {
+    applies: true,
+    closesAt: "2030-01-01T00:00:00.000Z",
+    openByRepo: { [alice.id]: 1 },
+    contestations: [contestation(alice, "rendu.tests", "open", 1), contestation(bob, "code.memoire", "refused", 2)],
+  };
+  /** The tab, its reader's role on the course read already — or, `null`, not known (the course list fails). */
+  function open(route: string, role: CourseRole | null = "owner") {
+    const queryClient = makeQueryClient();
+    if (role) queryClient.setQueryData(coursesKey, [makeCourseSummary({ id: "c1", myRole: role })]);
+    renderWithProviders(<ProjectPage id={makeProject().id} navigate={vi.fn()} />, { queryClient, route });
+  }
+  /** The rows' names (the header cell also holds its state and its count for a screen reader). */
+  const names = (table: HTMLElement) =>
+    within(table)
+      .getAllByTestId("matrix-row")
+      .map((r) => within(r).getByRole("rowheader").textContent?.match(/^(Alice|Bob|Chloé)/)?.[0]);
+
+  it("marks the contested cells, counts a repository's open ones, and filters on the contested", async () => {
+    routes(released(), { [`GET ${BASE}/grading`]: ok(gradingView([alice, bob, chloe])), [`GET ${BASE}/contestations`]: ok(contested) });
+    open("/?tab=grading");
+    const table = await matrix();
+    const [a, b, c] = within(table).getAllByTestId("matrix-row");
+    expect(within(a!).getByRole("img", { name: "Contestation awaiting an answer" })).toBeInTheDocument();
+    expect(within(a!).getByText("1 open contestation")).toBeInTheDocument();
+    // A folded section carries its criteria's mark.
+    expect(within(b!).getByRole("img", { name: "Contestation refused" })).toBeInTheDocument();
+    expect(within(c!).queryByRole("img", { name: /^Contestation/ })).toBeNull();
+    // The window line: the open count, the window, the owner's acts.
+    expect(screen.getByText(/^Contestations open until/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Extend/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Close now/ })).toBeInTheDocument();
+    // The filter: the contested repositories, open or answered, counted, in the address.
+    await userEvent.click(screen.getByRole("radio", { name: "Contested · 2" }));
+    expect(names(await matrix())).toEqual(["Alice", "Bob"]);
+    expect(window.location.search).toContain("filter=contested");
+    await userEvent.click(screen.getByRole("radio", { name: "All" }));
+    expect(names(await matrix())).toHaveLength(3);
+    // The open count leads to the filter too.
+    await userEvent.click(screen.getByRole("button", { name: /1 open contestation/ }));
+    expect(names(await matrix())).toEqual(["Alice", "Bob"]);
+  });
+
+  it("opens on the contested filter from the bell's address, and says when none is contested", async () => {
+    routes(released(), { [`GET ${BASE}/grading`]: ok(gradingView([alice, bob, chloe])), [`GET ${BASE}/contestations`]: ok(contested) });
+    open("/?tab=grading&filter=contested");
+    expect(names(await matrix())).toEqual(["Alice", "Bob"]);
+    cleanup();
+    routes(released(), { [`GET ${BASE}/grading`]: ok(gradingView([alice, bob])) });
+    open("/?tab=grading&filter=contested");
+    expect(await screen.findByText("No contested repository")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Contested" })).toBeChecked();
+  });
+
+  it("gives an assistant the line without its acts, and no grade adjustment once released", async () => {
+    routes(released(), { [`GET ${BASE}/grading`]: ok(gradingView([alice])), [`GET ${BASE}/contestations`]: ok(contested) });
+    open("/?tab=grading", "assistant");
+    const table = await matrix();
+    expect(screen.getByRole("button", { name: /1 open contestation/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Close now/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Extend/ })).toBeNull();
+    // The adjustment is held, and says why.
+    const held = within(table).getByRole("button", { name: /Adjust the grade of Alice/ });
+    expect(held).toBeDisabled();
+    expect(held.closest("[data-testid=matrix-mark-held]") ?? held).toBeTruthy();
+  });
+
+  it("holds nothing while the reader's role is not known, and offers no owner's act", async () => {
+    routes(released(), { [`GET ${BASE}/grading`]: ok(gradingView([alice])), [`GET ${BASE}/contestations`]: ok(contested) });
+    open("/?tab=grading", null);
+    const table = await matrix();
+    expect(within(table).getByRole("button", { name: /Adjust the grade of Alice/ })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /Close now/ })).toBeNull();
+  });
+
+  it("keeps every repository while the contestations load, never saying none is contested", async () => {
+    const { fetchMock } = routes(released(), { [`GET ${BASE}/grading`]: ok(gradingView([alice, bob, chloe])) });
+    const answer = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => (String(input).endsWith("/contestations") ? new Promise<Response>(() => {}) : answer(input, init)));
+    open("/?tab=grading&filter=contested");
+    expect(await screen.findByRole("status", { name: /^Loading/ })).toBeInTheDocument();
+    expect(screen.queryByText("No contested repository")).toBeNull();
+  });
+
+  it("names a failed read of the contestations, the bell's filter showing the whole matrix under it", async () => {
+    routes(released(), { [`GET ${BASE}/grading`]: ok(gradingView([alice, bob])), [`GET ${BASE}/contestations`]: fail(500, { message: "boom" }) });
+    open("/?tab=grading&filter=contested");
+    expect(await screen.findByText("The contestations could not be loaded.")).toBeInTheDocument();
+    expect(names(await matrix())).toEqual(["Alice", "Bob"]);
+    expect(screen.queryByText("No contested repository")).toBeNull();
+  });
+});
+
+describe("the contestation window's days (ADR-139 §13)", () => {
+  const criteriaRoutes = (project: ProjectDetail) =>
+    routes(project, { [`GET ${BASE}/criteria`]: ok({ snapshot: null }), [`PATCH ${BASE}`]: ok({}) });
+
+  it("sets the days beside the grading mode until the release, checked by the contract", async () => {
+    const { calls } = criteriaRoutes(makeProject({ gradingMode: "criteria", contestationDays: 7, editable: ["name", "contestationDays"] }));
+    renderPage("en", "settings");
+    const settings = await screen.findByTestId("project-settings");
+    const field = within(settings).getByRole("spinbutton", { name: "Contestations" });
+    expect(field).toHaveValue(7);
+    expect(within(settings).getByText(/^Days after the scores are first released to contest a criterion/)).toBeInTheDocument();
+    fireEvent.change(field, { target: { value: "61" } });
+    fireEvent.blur(field);
+    expect(within(settings).getByText("From 0 to 60 days.")).toBeInTheDocument();
+    expect(writes(calls)).toEqual([]);
+    fireEvent.change(field, { target: { value: "0" } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "PATCH", body: { contestationDays: 0 } })]));
+  });
+
+  it("locks them once the release set the window, and shows none outside criteria mode", async () => {
+    criteriaRoutes(frozenProject({ gradingMode: "criteria", phase: "released", releasedAt: PAST, editable: ["name"] }));
+    renderPage("en", "settings");
+    const settings = await screen.findByTestId("project-settings");
+    expect(within(settings).getByRole("spinbutton", { name: "Contestations" })).toBeDisabled();
+    expect(within(settings).getByText("Releasing the scores set the window. The Grading tab closes or extends it.")).toBeInTheDocument();
+    cleanup();
+    routes(makeProject());
+    renderPage("en", "settings");
+    await screen.findByTestId("project-settings");
+    expect(screen.queryByRole("spinbutton", { name: "Contestations" })).toBeNull();
+  });
+
+  it("is on a draft's form too", async () => {
+    criteriaRoutes(makeDraft({ gradingMode: "criteria" }));
+    renderPage();
+    const form = await screen.findByTestId("project-draft-form");
+    await userEvent.click(within(form).getByRole("button", { name: /Advanced options/ }));
+    expect(await screen.findByRole("spinbutton", { name: "Contestations" })).toBeEnabled();
   });
 });

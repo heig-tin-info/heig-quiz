@@ -1119,7 +1119,8 @@ export const TOOLS: Tool[] = [
       "student sees it AT ONCE on their project page, as indicative points with the `rationale` (like the CI's " +
       "and the LLM's proposals): plain text, factual, addressed to them with \"vous\" in French; none given " +
       "keeps the current one. On a released project it replaces a validated row until the teacher releases again. `409 not_frozen` before the repository's " +
-      "definitive freeze. Needs the owner or assistant role on the course. Answers the repository's criteria.",
+      "definitive freeze. Needs the owner or assistant role on the course, the owner's alone once the project is released (`403 owner_required`). " +
+      "Answers the repository's criteria.",
     input: z
       .object({ projectId: Id, repoId: Id, criterionId: z.string().min(1).max(300), ...CriterionGradeWrite.shape })
       .strict(),

@@ -309,7 +309,8 @@ describe("the student's view of a group's repository", () => {
     // Ana is in: accepted, and the group's work (its commits, its CI state) is hers to read.
     const ana = await viewOf(g.ana);
     expect(ana.view.repo).toMatchObject({ fullName: g.fullName, invitation: "accepted" });
-    expect(ana.view.repo).not.toHaveProperty("group");
+    // Whether it is a group's (ADR-139 §13): a boolean, never the group's name nor its members.
+    expect(ana.view.repo!.group).toBe(true);
     // Cid's own invitation expired: hers to resend, said pending; the same repository, the same work.
     const cid = await viewOf(g.cid);
     expect(cid.view.repo).toMatchObject({ fullName: g.fullName, invitation: "pending" });

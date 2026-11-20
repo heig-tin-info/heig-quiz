@@ -4,6 +4,9 @@
 
 Proposed (2026-11-19). The request and decisions 1 to 17 below are the product
 owner's (2026-11-19), the defaults the spec challenger proposed included.
+Amended 2026-11-20 by [ADR-139](ADR-139-contestation-d-une-correction.md) §13
+(§9 only): the follow-up is done — every criterion write on a released
+project, and the explicit reload of its criteria, is the owner's.
 
 Scope: a project repository's grade after its points; the role needed for a
 grading write on a released project; the release's snapshot of a grade.
@@ -69,10 +72,25 @@ what the criteria said, and does not say why the grade moved.
    teacher's score and the adjustment are the owner's. Checked in the
    route's loader, before the body, and again in the write's transaction,
    under the project's lock that the release takes too (a release committed
-   between the two is seen). **Follow-up:** the criteria's writes (ADR-106
-   §8: a criterion's points, a validation) on a released project stay open
-   to assistants; the owner wants every grading write aligned, which a
-   follow-up pull request does.
+   between the two is seen). *Amended 2026-11-20 (ADR-139 §13, the
+   follow-up this point announced):* the criteria's writes on a released
+   project are the owner's too — a criterion's points (`PUT
+   …/repos/:rid/criteria/:criterionId`, the MCP `grade_criterion`
+   included), a repository's and the project's validation (`POST
+   …/repos/:rid/validate`, `POST …/validate`) and a Regrade (`POST
+   …/regrade`, `POST …/repos/:rid/regrade`, whose results replace validated
+   rows, ADR-132 §5): checked in the loader, and, for the points and the
+   validations, again by the writer under the project's share lock, before
+   any repository's (`writeCriterionGrades`, `validateProposals`), and for
+   a schema-3 Regrade by its claim (`claimRegrades` under its share lock;
+   a schema-2 Regrade claims nothing, the loader decides); one refusal, `requireReleasedOwner`, for
+   every grading write. The explicit reload of a released project's
+   snapshot (`POST …/criteria/reload`) is the owner's too: it can
+   take a contested criterion out (ADR-139 §13). **The one path left
+   open** is a sync's automatic refresh of the criteria (ADR-132, any staff
+   member's sync): it may replace the snapshot after the release — a
+   contested criterion it removes leaves its contestation to be refused
+   only, a changed maximum moves the criterion's best value.
 10. **The release** writes the ADJUSTED grade into `released_grade` and the
     adjustment's comment into `released_adjustment_comment`. "Changed after
     release" (`changedAfterRelease`) becomes grade-based: the live adjusted

@@ -91,10 +91,13 @@ export type Route =
   /**
    * One project, the staff's page (F-PROJ-13, M3-12; `project/ProjectPage`).
    * `tab` and `filter` (a tile's sub-figure, `RepoFilter`) are written into
-   * `?tab=` and `?filter=` only, the way back from a repository's page:
+   * `?tab=` and `?filter=` only, the way back from a repository's page —
+   * and the Grading tab on its contested repositories (`contested`, ADR-139
+   * §13), the `project_contestation_filed` notification's link; `at`, the
+   * student's page scrolled to its criteria (`?at=criteria`), the answer's.
    * `parsePath` never reads them back, the page reads them off the query.
    */
-  | { view: "project"; id: string; tab?: "repositories"; filter?: RepoFilter }
+  | { view: "project"; id: string; tab?: "repositories" | "grading"; filter?: RepoFilter | "contested"; at?: "criteria" }
   /**
    * One row of a project's Repositories tab, its own page (ADR-137,
    * `project/RepoPage`): `rowId` is its repository's id, else — a row not
@@ -533,7 +536,8 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // student view and an impersonation get the student's project, under the
   // Courses slot like the classroom's pages it hangs off.
   project: {
-    path: (r) => withQuery(`/projects/${r.id}`, { ...(r.tab ? { tab: r.tab } : {}), ...(r.filter ? { filter: r.filter } : {}) }),
+    path: (r) =>
+      withQuery(`/projects/${r.id}`, { ...(r.tab ? { tab: r.tab } : {}), ...(r.filter ? { filter: r.filter } : {}), ...(r.at ? { at: r.at } : {}) }),
     match: ([head, id, tail]) =>
       head === "projects" && id && tail === undefined ? { view: "project", id } : null,
     studentSafe: true,

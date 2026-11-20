@@ -37,7 +37,12 @@ describe("projectFieldRefusal (F-PROJ-03)", () => {
   });
 
   it("keeps the name, the protected files, the deadline and its strategy open once published", () => {
-    expect(editableProjectFields(project(), NOW)).toEqual(["name", "deadlineAt", "deadlineStrategy", "protectedFiles", "testsCriterion", "identityCriterion", "buildCommand", "testCommand", "evidenceOutputs"]);
+    expect(editableProjectFields(project(), NOW)).toEqual(["name", "deadlineAt", "deadlineStrategy", "protectedFiles", "testsCriterion", "identityCriterion", "buildCommand", "testCommand", "evidenceOutputs", "contestationDays"]);
+  });
+
+  it("keeps the contestation window's days open until the first release (ADR-139 §13)", () => {
+    expect(projectFieldRefusal(project({ state: "locked" }), "contestationDays", NOW)).toBeNull();
+    expect(projectFieldRefusal(project({ state: "locked", released: true }), "contestationDays", NOW)).toBe("released");
   });
 
   it("freezes the publication mode and its duration at publication", () => {

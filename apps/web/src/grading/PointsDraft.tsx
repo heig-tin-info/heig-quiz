@@ -1,10 +1,10 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 
 import type { GradingEntry, GradingQueueItem, ManualGradingBody } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { FieldError, fieldErrorProps, FieldLabel, PointsPill } from "../ui";
+import { numberOf, PointsField } from "../ui";
 import { CriteriaFields, criteriaBody, initialCriteriaPoints, invalidCriteria } from "./EssayCriteria";
 
 type Criteria = NonNullable<GradingQueueItem["criteria"]>;
@@ -49,10 +49,8 @@ export function usePointsDraft({
   const details = entry.grading?.details ?? null;
   const [values, setValues] = useState(() => initialCriteriaPoints(criteria, details));
   const [points, setPoints] = useState(() => (entry.grading ? formatPoints(entry.grading.points) : "0"));
-  const value = Number(points.replace(",", "."));
-  const invalid = graded
-    ? invalidCriteria(criteria, maxPoints, values).size > 0
-    : points.trim() === "" || !Number.isFinite(value) || value < minPoints || value > maxPoints;
+  const value = numberOf(points);
+  const invalid = graded ? invalidCriteria(criteria, maxPoints, values).size > 0 : !(value >= minPoints && value <= maxPoints);
   return {
     graded,
     values,
@@ -82,9 +80,7 @@ export function PointsFields({
   autoFocus?: boolean;
 }) {
   const t = useT();
-  const pointsId = useId();
   const range = { min: formatPoints(draft.minPoints), max: formatPoints(draft.maxPoints) };
-  const showPointsError = showErrors && draft.invalid;
   // The points over their maximum, one pill (F-PROJ-25 as amended): the
   // maximum is its suffix, so the label line says the range only when the
   // floor is not 0 (negative marking).
@@ -101,19 +97,14 @@ export function PointsFields({
     );
   }
   return (
-    <div className="flex flex-col gap-1.5">
-      <FieldLabel htmlFor={pointsId} hint={draft.minPoints < 0 ? t("grading.override.range", range) : undefined}>
-        {t("grading.override.points")}
-      </FieldLabel>
-      <PointsPill
-        id={pointsId}
-        bounds={{ max: draft.maxPoints }}
-        autoFocus={autoFocus}
-        value={draft.points}
-        onChange={(e) => draft.setPoints(e.target.value)}
-        {...fieldErrorProps(pointsId, showPointsError)}
-      />
-      <FieldError id={pointsId}>{showPointsError ? t("grading.override.pointsInvalid", range) : null}</FieldError>
-    </div>
+    <PointsField
+      label={t("grading.override.points")}
+      hint={draft.minPoints < 0 ? t("grading.override.range", range) : undefined}
+      bounds={{ max: draft.maxPoints }}
+      autoFocus={autoFocus}
+      value={draft.points}
+      onChange={draft.setPoints}
+      error={showErrors && draft.invalid ? t("grading.override.pointsInvalid", range) : null}
+    />
   );
 }

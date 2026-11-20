@@ -23,7 +23,9 @@
  * Grading starts at a repository's definitive freeze (`409 not_frozen`).
  * STAFF ONLY (N-SEC-20): the routes load the project (and repository)
  * through `staffAccess`, every write also behind `requireCourseRole`
- * (invariant 6); nothing here is a student's view.
+ * (invariant 6) — an owner or an assistant before the release, the owner
+ * alone after it (ADR-139 §13, ADR-135 §9 as amended), read again under
+ * the project's lock by the writer; nothing here is a student's view.
  */
 import { and, desc, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 
@@ -41,13 +43,20 @@ import { awardedRange, criteriaTable, currentCriterionRows, type CriteriaTableRo
 
 import { audit, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { gradeDispatches, projectCiResults, projectCriteria, projectEvidence, projectGroups, users } from "../../db/schema.js";
 import { notFoundError } from "../http.js";
-import { criteriaStandings, type CriteriaStanding, validateProposals, writeCriterionGrades } from "./criterionGrades.js";
+import {
+  criteriaStandings,
+  type CriteriaStanding,
+  type CriterionGradeRow,
+  validateProposals,
+  writeCriterionGrades,
+} from "./criterionGrades.js";
 import { isLive } from "./deadline.js";
 import { repoScores } from "./detail.js";
 import { ProjectError } from "./errors.js";
+import type { GradeWriter } from "./grades.js";
 import { studentRepos, type RepoRow } from "./repos.js";
 import { adjusterNames, scoreFacts } from "./scores.js";
 import type { ProjectRow } from "./views.js";
@@ -270,8 +279,10 @@ export async function criterionCiLog(db: Db, project: ProjectRow, repo: RepoRow,
  * `manual` row still `proposed` (a teacher's edit is not a validation,
  * ADR-106 §8), its rationale the one given or, when none is, the one of
  * the row it replaces. `404` for a criterion the snapshot lacks, `422
- * points_out_of_range` (with the range) outside `awardedRange`. Audited
- * `project_repo.criterion_graded`.
+ * points_out_of_range` (with the range) outside `awardedRange`; on a
+ * released project, the course owner's alone (`403 owner_required`,
+ * ADR-139 §13). Audited `project_repo.criterion_graded`. `after` runs in
+ * the write's transaction (a contestation's answer, ADR-139 §13).
  */
 export async function gradeCriterion(
   db: Db,
@@ -279,10 +290,10 @@ export async function gradeCriterion(
   repo: RepoRow,
   criterionId: string,
   body: CriterionGradeWrite,
-  actor: AuditActor,
-  userId: string,
-  now: Date,
+  writer: GradeWriter,
+  after?: (tx: Tx, rows: CriterionGradeRow[]) => Promise<void>,
 ): Promise<ProjectGradingRepo> {
+  const { actor, userId, now } = writer;
   const snapshot = await snapshotOf(db, project);
   const leaf = snapshot.leaves.find((l) => l.id === criterionId);
   if (!leaf) throw notFoundError("criterion");
@@ -310,6 +321,7 @@ export async function gradeCriterion(
       },
     ],
     now,
+    { staff: writer, after },
   );
   await audit(db, {
     ...actor,
@@ -323,8 +335,9 @@ export async function gradeCriterion(
 }
 
 /** Validates `repoIds` as one (`validateProposals`) and audits each repository that had something to validate. */
-async function validate(db: Db, project: ProjectRow, repoIds: readonly string[], bulk: boolean, actor: AuditActor, now: Date): Promise<number> {
-  const counts = await validateProposals(db, repoIds, await snapshotOf(db, project), now);
+async function validate(db: Db, project: ProjectRow, repoIds: readonly string[], bulk: boolean, writer: GradeWriter): Promise<number> {
+  const { actor, now } = writer;
+  const counts = await validateProposals(db, repoIds, await snapshotOf(db, project), now, writer);
   let validated = 0;
   for (const [repoId, criteria] of counts) {
     if (criteria === 0) continue;
@@ -347,8 +360,8 @@ async function validate(db: Db, project: ProjectRow, repoIds: readonly string[],
  * not_frozen` before its definitive freeze. Idempotent: a validated
  * repository writes and audits nothing.
  */
-export async function validateRepo(db: Db, project: ProjectRow, repo: RepoRow, actor: AuditActor, now: Date): Promise<ProjectGradingRepo> {
-  await validate(db, project, [repo.id], false, actor, now);
+export async function validateRepo(db: Db, project: ProjectRow, repo: RepoRow, writer: GradeWriter): Promise<ProjectGradingRepo> {
+  await validate(db, project, [repo.id], false, writer);
   return gradingRepo(db, project, repo);
 }
 
@@ -359,11 +372,11 @@ export async function validateRepo(db: Db, project: ProjectRow, repo: RepoRow, a
  * while a criterion of one has no row; `409 not_frozen` when none is
  * frozen. Answers how many it validated.
  */
-export async function validateProject(db: Db, project: ProjectRow, actor: AuditActor, now: Date): Promise<ProjectValidated> {
+export async function validateProject(db: Db, project: ProjectRow, writer: GradeWriter): Promise<ProjectValidated> {
   await snapshotOf(db, project);
   const repos = (await gradedRepos(db, project)).filter((repo) => repo.frozenAt !== null);
   if (repos.length === 0) throw new ProjectError("not_frozen", "No repository is frozen for good");
-  return { validated: await validate(db, project, repos.map((r) => r.id), true, actor, now) };
+  return { validated: await validate(db, project, repos.map((r) => r.id), true, writer) };
 }
 
 /** The domain's table line and the contract's are one shape: either drifting breaks the build. */

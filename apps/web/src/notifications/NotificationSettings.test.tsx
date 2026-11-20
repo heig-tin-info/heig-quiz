@@ -56,6 +56,8 @@ function settings(
       results_updated: { bell: true, email: false, teams: false },
       contestation_resolved: ALL_ON,
       contestation_filed: { bell: true, email: false, teams: false },
+      project_contestation_resolved: ALL_ON,
+      project_contestation_filed: { bell: true, email: false, teams: false },
       pool_shared: { ...ALL_ON, email: false },
       pool_ownership: ALL_ON,
       student_joined: { bell: true, email: false, teams: false },

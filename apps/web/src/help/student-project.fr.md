@@ -40,3 +40,10 @@ ordinateur.
 Dès que votre enseignant publie les scores, la page affiche votre score
 final, votre note et le commentaire de l'enseignant. Vous recevez une
 notification.
+
+## Contester un critère
+
+Une fois ses scores publiés, un projet noté par critères peut être contesté pendant quelques jours : **Contester**, sous un critère, envoie votre motif une seule fois.
+Sur un dépôt de groupe, la contestation est celle du groupe : chaque membre
+la lit, avec sa réponse. Des points modifiés restent indicatifs jusqu'à la
+prochaine publication des scores.

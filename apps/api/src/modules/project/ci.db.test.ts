@@ -815,7 +815,7 @@ describe("the 24 h and a Regrade", () => {
     const [project] = await server.app.db.select().from(projects).where(eq(projects.id, l.projectId));
     const [row] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repo.id));
     const count = dispatched.length;
-    expect(await regrade(server.app, config, project!, row!, SYSTEM_ACTOR, server.clock.now())).toEqual({ repos: 1 });
+    expect(await regrade(server.app, config, project!, row!, { actor: SYSTEM_ACTOR, userId: teacher.id, now: server.clock.now(), owner: true })).toEqual({ repos: 1 });
     // Without a queue nothing is sent: the job's own call, as `project.ci` would run it.
     expect(dispatched.length).toBe(count);
     const [fresh0] = await server.app.db.select().from(gradeDispatches).where(and(eq(gradeDispatches.repoId, repo.id), eq(gradeDispatches.trigger, "regrade")));
@@ -885,7 +885,7 @@ describe("a Regrade redoes the machine's correction (ADR-132 §5)", () => {
   async function regradePass(lab_: Lab, repoId: string, outcome: "dispatched" | "settled" = "dispatched") {
     const [project] = await server.app.db.select().from(projects).where(eq(projects.id, lab_.projectId));
     const [row] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repoId));
-    expect(await regrade(server.app, config, project!, row!, SYSTEM_ACTOR, server.clock.now(), { releasedAcknowledged: true })).toEqual({ repos: 1 });
+    expect(await regrade(server.app, config, project!, row!, { actor: SYSTEM_ACTOR, userId: teacher.id, now: server.clock.now(), owner: true }, { releasedAcknowledged: true })).toEqual({ repos: 1 });
     const [pass] = await server.app.db.select().from(gradeDispatches).where(and(eq(gradeDispatches.repoId, repoId), eq(gradeDispatches.trigger, "regrade")));
     expect(await runCiDispatch(server.app, config, { passId: pass!.id })).toBe(outcome);
     return passRow(pass!.id);
@@ -1011,7 +1011,7 @@ describe("a Regrade redoes the machine's correction (ADR-132 §5)", () => {
     const [repoRow] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repo.id));
     const released = await release();
     expect(released.statusCode, released.body).toBe(200);
-    await expect(regrade(server.app, config, stale!, repoRow!, SYSTEM_ACTOR, server.clock.now())).rejects.toMatchObject({ code: "regrade_released" });
+    await expect(regrade(server.app, config, stale!, repoRow!, { actor: SYSTEM_ACTOR, userId: teacher.id, now: server.clock.now(), owner: true })).rejects.toMatchObject({ code: "regrade_released" });
     const first = await read();
     expect(first.release?.points).not.toBeNull();
 
@@ -1350,7 +1350,7 @@ describe("the LLM pass of a schema-3 pass (ADR-119 §7)", () => {
     server.clock.set(at);
     const [project] = await server.app.db.select().from(projects).where(eq(projects.id, l.projectId));
     const [row] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repoId));
-    await regrade(server.app, config, project!, row!, SYSTEM_ACTOR, at, { releasedAcknowledged: true });
+    await regrade(server.app, config, project!, row!, { actor: SYSTEM_ACTOR, userId: teacher.id, now: at, owner: true }, { releasedAcknowledged: true });
     const [pass] = await server.app.db
       .select()
       .from(gradeDispatches)

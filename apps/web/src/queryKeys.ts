@@ -159,6 +159,8 @@ export const projectCheckpointsKey = (id: string) => [...projectKey(id), "checkp
 /** The snapshot of the source's `criteria.yml` (ADR-106 §2): under the project's key, so a write re-reads it. */
 export const projectCriteriaKey = (id: string) => [...projectKey(id), "criteria"] as const;
 export const projectGradingKey = (id: string) => [...projectKey(id), "grading"] as const;
+/** Its contestations (ADR-139 §13): the staff's own read, under the project's key so the page's hints and writes re-read it. */
+export const projectContestationsKey = (id: string) => [...projectKey(id), "contestations"] as const;
 /** A repository's commit graph on the grading screen (ADR-119 §8). */
 export const projectCommitsKey = (id: string, repoId: string) => [...projectKey(id), "commits", repoId] as const;
 /** A criterion's CI log on the grading screen, by its route's path (ADR-119 §8). */

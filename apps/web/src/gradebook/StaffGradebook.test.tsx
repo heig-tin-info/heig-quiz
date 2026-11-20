@@ -128,6 +128,18 @@ describe("the matrix", () => {
     expect(within(screen.getByRole("columnheader", { name: /Test 2/ })).queryByText(/contestation/)).toBeNull();
   });
 
+  // ADR-139 §13: a released project graded by criteria carries its open contestations the same way.
+  it("flags a released project's open contestations on its head", async () => {
+    const table = makeTable();
+    renderTab({
+      ...table,
+      columns: table.columns.map((c, i) => (i === 0 ? { ...c, kind: "project", mode: "project", title: "Labo 1", openContestations: 1 } : c)),
+    });
+    await cell("Alice Dupont", "Labo 1");
+    const lab = screen.getByRole("columnheader", { name: /Labo 1/ });
+    expect(within(lab).getByText("1 open contestation. The grade may still change.")).toBeInTheDocument();
+  });
+
   it("hides the exercises left out of the mean until asked, keeps one that counts, and leaves the mean alone", async () => {
     renderTab(makeTable());
     await cell("Alice Dupont", "Test 1");

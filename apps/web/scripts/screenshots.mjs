@@ -73,6 +73,8 @@ const liveAllOn = (evaluationId) => ({
 
 /** The mock's running exam that prints (ADR-125, `mock/paper.ts`): the paper copy's scenes. */
 const PAPER_EXAM = "eeeeeeee-0000-4000-8000-000000000125";
+/** ADR-139 §13: the released criteria project of the mock (`?pjcriteria=1`). */
+const PJ_RELEASED = "0190d3c4-0000-7000-8000-0000000000c3";
 /** The mock's evaluation, taken by the student persona (WP9). */
 const TAKE = "/take/11111111-1111-4111-8111-111111111111";
 /**
@@ -550,6 +552,16 @@ const scenes = [
     act: (p) => p.getByTestId("matrix-mark").filter({ has: p.getByTestId("grade-adjusted") }).nth(n).click(),
   })),
   { name: "project-criteria-settings", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=settings", settle: 2500 },
+  // ADR-139 §13: a released project graded by criteria, contested — the Grading tab's window line, the
+  // contested filter and the marks; the grading screen on a contested repository, the owner's answer
+  // with new points (and in French, not kept), an assistant's held writes; the window's days in Settings.
+  { name: "project-contest-matrix", role: "teacher", path: `/projects/${PJ_RELEASED}?projects=1&pjcriteria=1&tab=grading&filter=contested`, settle: 2500 },
+  { name: "project-contest-answer", role: "teacher", path: `/projects/${PJ_RELEASED}/grading?projects=1&pjcriteria=1`, settle: 2500, fold: true, act: (p) => answerProjectContestation(p) },
+  { name: "project-contest-answer-fr", role: "teacher", lang: "fr", path: `/projects/${PJ_RELEASED}/grading?projects=1&pjcriteria=1`, settle: 2500, fold: true, act: (p) => answerProjectContestation(p) },
+  { name: "project-contest-removed", role: "teacher", path: `/projects/${PJ_RELEASED}/grading?projects=1&pjcriteria=1`, settle: 2500, fold: true, act: (p) => scrollToContestations(p) },
+  { name: "project-contest-assistant", role: "teacher", path: `/projects/${PJ_RELEASED}/grading?projects=1&pjcriteria=1&assistant=1`, settle: 2500, act: (p) => walkToContestation(p, () => p.getByText(/(Teacher role's|rôle Enseignant)/).first()) },
+  { name: "project-contest-settings", role: "teacher", path: `/projects/${PJ_RELEASED}?projects=1&pjcriteria=1&tab=settings`, settle: 2500, fold: true },
+  { name: "project-contest-draft-days", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c2?projects=1&pjcriteria=1&tab=settings", settle: 2500, fold: true },
   {
     name: "project-unassigned",
     role: "teacher",
@@ -1228,6 +1240,10 @@ const scenes = [
     act: (p) => p.getByRole("button", { name: /^(rationale|justification)$/i }).locator("visible=true").first().click(),
   },
   { name: "student-project-criteria-released", role: "student", path: `/projects/${SPROJ.past}?projects=1&pjcriteria=1` },
+  // ADR-139 §13: the released project's contestations (awaiting, accepted, refused, one on a removed
+  // criterion) and the form on the one criterion still offered; the French form in place (not kept).
+  { name: "student-project-contest-dialog", role: "student", path: `/projects/${SPROJ.past}?projects=1&pjcriteria=1`, fold: true, act: (p) => openProjectContestDialog(p) },
+  { name: "student-project-contest-dialog-fr", role: "student", lang: "fr", path: `/projects/${SPROJ.past}?projects=1&pjcriteria=1`, fold: true, act: (p) => openProjectContestDialog(p) },
   // The CI's share before the release (owner, 2026-11-18): awarded, missed, graded by the AI or the teacher; no grade.
   { name: "student-project-criteria-share", role: "student", path: `/projects/${SPROJ.open}?projects=1&pjcriteria=1` },
   // ADR-077: a teacher on a staff seat tests the project: the real actions, their own repository.
@@ -2649,6 +2665,44 @@ async function nextQuestion(page, n) {
     await page.getByRole("button", { name: /^(next question|question suivante)$/i }).first().click();
     await page.waitForTimeout(400);
   }
+}
+
+
+/** ADR-139 §13: the member's form on the criterion still offered, a reason typed. */
+async function openProjectContestDialog(page) {
+  await page.getByRole("button", { name: /^(Contest criterion|Contester le critère)/ }).locator("visible=true").first().click();
+  await page.getByRole("dialog").getByRole("textbox").fill("Le test 3 attend un arrondi vers le bas ; l'énoncé demande l'arrondi au plus proche.");
+}
+
+/**
+ * ADR-139 §13: walks the grading screen's repositories (→) to the first one
+ * `found` holds, its contestations scrolled into view (the mock's repository
+ * ids hang on its flags: the walk does not).
+ */
+async function walkToContestation(page, found) {
+  await page.getByRole("table").first().waitFor();
+  for (let i = 0; i < 30 && !(await found().isVisible()); i += 1) {
+    await page.keyboard.press("ArrowRight");
+    await page.waitForTimeout(250);
+  }
+  await page.getByTestId("repo-contestations").evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(300);
+}
+
+/** ADR-139 §13: a contestation on a criterion that left the snapshot. */
+async function scrollToContestations(page) {
+  await walkToContestation(page, () => page.getByText(/(left the project's criteria|ne fait plus partie des critères)/).first());
+}
+
+/** ADR-139 §13: the owner's answer on a criterion, new points and a reply typed. */
+async function answerProjectContestation(page) {
+  const answer = page.getByRole("region", { name: /^(Answer to the contestation|Réponse à la contestation)$/ }).first();
+  await walkToContestation(page, () => answer.getByRole("switch"));
+  await answer.getByRole("switch").click();
+  await answer.getByRole("spinbutton").fill("2.5");
+  await answer.getByRole("textbox", { name: /^(Reply|Réponse)$/ }).fill("Vous avez raison : la question 6 est traitée page 3.");
+  await answer.evaluate((el) => el.scrollIntoView({ block: "end" }));
+  await page.waitForTimeout(300);
 }
 
 /** ADR-139: the student's form on the first contestable question, a reason typed. */

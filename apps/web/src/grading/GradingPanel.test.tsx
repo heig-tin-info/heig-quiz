@@ -1402,7 +1402,8 @@ describe("GradingPanel — contestations", () => {
     expect(within(rowOf("a1")).getByText("contested")).toBeVisible();
     expect(within(rowOf("a2")).getByText("refused")).toBeVisible();
 
-    await userEvent.click(screen.getByRole("radio", { name: "Contested · 1" }));
+    // The choice counts the answers it keeps, open or answered.
+    await userEvent.click(screen.getByRole("radio", { name: "Contested · 2" }));
     expect(await answerRows()).toHaveLength(2);
     expect(new URLSearchParams(window.location.search).get("filter")).toBe("contested");
     // Never the stored habit: a next visit without the link shows every answer.
@@ -1426,7 +1427,7 @@ describe("GradingPanel — contestations", () => {
     const second = await screen.findByRole("table", { name: "Answers to question 2" });
     // The header and the key's row, then the two contested answers.
     await waitFor(() => expect(within(second).getAllByRole("row")).toHaveLength(4));
-    expect(screen.getByRole("radio", { name: "Contested · 1" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Contested · 2" })).toBeChecked();
     expect(new URLSearchParams(window.location.search).get("item")).toBe("i2");
   });
 

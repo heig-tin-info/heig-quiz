@@ -391,8 +391,9 @@ export function GradingPanel({
         onView={changeView}
         toValidate={state ? state.total - state.validated : null}
         // The third choice while the question holds a contestation, open or
-        // answered — or while the URL asks for it, so the choice it names shows.
-        contested={entries.some(isContested) || stateFilter === "contested" ? (state?.contested ?? 0) : null}
+        // answered — or while the URL asks for it, so the choice it names shows —
+        // counting the answers it keeps (the open ones are the step's figure).
+        contested={entries.some(isContested) || stateFilter === "contested" ? entries.filter(isContested).length : null}
         anonymise={anonymise}
         onAnonymise={(on) => {
           setAnonymise(on);

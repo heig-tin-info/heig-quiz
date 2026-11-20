@@ -43,12 +43,14 @@
  * can be seen (`arriveProjectActivity`).
  */
 import {
+  ContestationWindowBody,
   CriteriaIncomplete,
   CriterionGradeWrite,
   criterionConflict,
   GradeAdjustmentWrite,
   snapshotSettings,
   PROJECT_DEFAULTS,
+  ProjectContestationResolveBody,
   ProjectGroupResync,
   ProjectPatch,
   ProjectRegradeRequest,
@@ -62,6 +64,10 @@ import {
   type ProjectActivitySummary,
   type ProjectCommitSeries,
   type ProjectCriteriaView,
+  type ProjectContestationResolution,
+  type ProjectContestations,
+  type ProjectStaffContestation,
+  type ContestationWindow,
   type CriterionCiLog,
   type ProjectCommit,
   type ProjectCommitGraph,
@@ -125,6 +131,7 @@ import {
   teacherScoreMax,
   staffReviewRefusal,
   weekOf,
+  windowExtendRefusal,
   withForcedProtected,
   type CriterionGradeLike,
   type FinalScoreSource,
@@ -217,6 +224,8 @@ interface MockProject {
   summary: ProjectSummary;
   classroom: { id: string; name: string; courseCode: string };
   releasedAt: string | null;
+  /** ADR-139 §13: the contestation window's closing instant, set by the first release of a criteria project. */
+  contestationClosesAt: string | null;
   repos: MockRepo[];
   checkpoints: ReviewCheckpoint[];
   /** The page read it once already: the live state is warm. */
@@ -241,9 +250,10 @@ const PJ_GROUP = "0190d3c4-0000-7000-8000-0000000000b4";
 /** The published group projects on the pairs (M3-16b): one following them, one stopped at its deadline. */
 const PJ_GROUP_LIVE = "0190d3c4-0000-7000-8000-0000000000b5";
 const PJ_GROUP_STOPPED = "0190d3c4-0000-7000-8000-0000000000b6";
-/** `?pjcriteria=1`: the projects graded by criteria (ADR-106), frozen and open. */
+/** `?pjcriteria=1`: the projects graded by criteria (ADR-106), frozen and open — and released, contested (ADR-139 §13). */
 const PJ_CRITERIA = "0190d3c4-0000-7000-8000-0000000000c1";
 const PJ_CRITERIA_OPEN = "0190d3c4-0000-7000-8000-0000000000c2";
+const PJ_CRITERIA_RELEASED = "0190d3c4-0000-7000-8000-0000000000c3";
 
 const SEEDS: {
   id: string;
@@ -292,12 +302,17 @@ const SEEDS: {
 
 /**
  * `?pjcriteria=1` (ADR-106 §8): graded by criteria — one frozen and awaiting
- * its validation, one still open. Read at each seeding, not at import, so a
- * test may turn the flag on for its own scenes only.
+ * its validation, one still open, and one released five days ago whose
+ * criteria are contested (ADR-139 §13: open contestations on two
+ * repositories, an accepted and a refused one, one on a criterion a reload
+ * took out of the snapshot; the window open two more days). Read at each
+ * seeding, not at import, so a test may turn the flag on for its own scenes
+ * only.
  */
 const CRITERIA_SEEDS: (typeof SEEDS)[number][] = [
   { id: PJ_CRITERIA, title: "Labo 00 — par critères", state: "locked", start: -21 * D, deadline: -3 * D, unreleased: true, summary: { gradingMode: "criteria", gradingScale: { kind: "linear", rounding: "nearest" } } },
   { id: PJ_CRITERIA_OPEN, title: "Labo 01 — par critères", state: "published", start: -3 * D, deadline: 9 * D, summary: { gradingMode: "criteria" } },
+  { id: PJ_CRITERIA_RELEASED, title: "Labo 02 — par critères, publié", state: "locked", start: -30 * D, deadline: -12 * D, summary: { gradingMode: "criteria" } },
 ];
 /** The seeds in force: the criteria ones with their flag. */
 const seedsNow = () => [...SEEDS, ...(flags.pjcriteria ? CRITERIA_SEEDS : [])];
@@ -708,6 +723,7 @@ function seeded(): MockProject[] {
       buildCommand: null,
       testCommand: null,
       evidenceOutputs: null,
+    contestationDays: 7,
       source: { fullName: `${ORG}/${name.replace(/^labo-(\d)-.*$/, "prg1-labo-0$1")}-${name.split("-").slice(2).join("-")}` },
       distribution: { fullName: `${ORG}/${name}-squashed` },
       deadlineAppliedAt: seed.state === "locked" ? iso(seed.deadline) : null,
@@ -730,6 +746,7 @@ function seeded(): MockProject[] {
       classroom: { id: room.id, name: room.name, courseCode: course?.code ?? "" },
       // The stopped group project waits for its release: the resync is still allowed (M3-16b).
       releasedAt,
+      contestationClosesAt: null,
       repos: seed.groupSet
         ? seedGroupRepos(seed, summary, copy ?? following, classroomRoster(room.id))
         : seed.noRepos
@@ -765,6 +782,7 @@ function seeded(): MockProject[] {
     PROJECTS.set(seed.id, project);
     // Graded by criteria (ADR-106): the snapshot, and the passes' rows of every frozen repository.
     if (summary.gradingMode === "criteria") seedCriteria(project);
+    if (seed.id === PJ_CRITERIA_RELEASED) seedContestations(project);
     // The locked one was synced with a message after its grading (ADR-132 §10): its frozen repositories were graded before.
     if (seed.id === PJ_CRITERIA) {
       Object.assign(project.sync, {
@@ -788,6 +806,7 @@ export function addMockProject(summary: ProjectSummary, classroom: MockProject["
     summary,
     classroom,
     releasedAt: null,
+    contestationClosesAt: null,
     repos: [],
     checkpoints: [],
     read: false,
@@ -1452,6 +1471,7 @@ on("PATCH", "/app/api/projects/:id", (m, raw) => {
   if (body.deadlineStrategy !== undefined) s.deadlineStrategy = body.deadlineStrategy;
   if (body.protectedFiles !== undefined) s.protectedFiles = body.protectedFiles;
   if (body.graceMinutes !== undefined) s.graceMinutes = body.graceMinutes;
+  if (body.contestationDays !== undefined) s.contestationDays = body.contestationDays;
   if (body.gradingMode === "criteria" && s.gradingMode !== "criteria") {
     // ADR-106 §1: the switch reads the source's file; `?criteriafail=1` stands for one missing.
     if (flags.criteriafail) throw criteriaMissing();
@@ -1545,6 +1565,8 @@ on("GET", "/app/api/projects/:id/criteria", (m) => criteriaViewOf(projectOr404(m
 
 on("POST", "/app/api/projects/:id/criteria/reload", (m) => {
   const p = projectOr404(m.groups!.id!);
+  // ADR-139 §13: a released project's reload is the owner's.
+  ownerOnReleased(p);
   if (flags.criteriafail) throw criteriaMissing();
   CRITERIA.set(p.summary.id, sampleSnapshot(iso(0)));
   return criteriaViewOf(p);
@@ -1586,8 +1608,9 @@ function seedCriteria(p: MockProject): void {
   p.repos.forEach((r, i) => {
     if (r.frozenAt === null || !isLive(p, r)) return;
     const at = new Date(Date.parse(r.frozenAt) + 20 * 60_000);
-    const validated = i % 3 === 0;
-    const failed = i === 4;
+    // Released, every repository was validated first (the release's gate).
+    const validated = i % 3 === 0 || p.releasedAt !== null;
+    const failed = i === 4 && p.releasedAt === null;
     const rows: MockCriterionRow[] = [];
     const add = (criterionId: string, points: number, source: MockCriterionRow["source"], rationale: string | null = null) => {
       const leaf = SAMPLE_LEAVES.find((l) => l.id === criterionId)!;
@@ -1754,6 +1777,16 @@ function criteriaProjectOr409(id: string): MockProject {
   return p;
 }
 
+/** The course owner's act: an assistant (`?assistant=1`) is refused `403 owner_required`. */
+function ownerOnly(): void {
+  if (flags.assistant) throw refuse(403, "owner_required", "Only an owner of this course may do that");
+}
+
+/** ADR-139 §13: on a released project every criterion write is the course owner's. */
+function ownerOnReleased(p: MockProject): void {
+  if (p.releasedAt !== null) ownerOnly();
+}
+
 /** A repository of `p` frozen for good, or the refusal the server answers. */
 function frozenRepoOr409(p: MockProject, rid: string): MockRepo {
   const r = p.repos.find((x) => x.id === rid);
@@ -1824,8 +1857,14 @@ on("PUT", "/app/api/projects/:id/repos/:rid/criteria/:criterionId", (m, raw): Pr
   const p = criteriaProjectOr409(m.groups!.id!);
   const leaf = SAMPLE_LEAVES.find((l) => l.id === decodeURIComponent(m.groups!.criterionId!));
   if (!leaf) throw new MockError(404, "Not found");
+  ownerOnReleased(p);
   const r = frozenRepoOr409(p, m.groups!.rid!);
-  const body = CriterionGradeWrite.parse(raw);
+  gradeCriterion(r, leaf, CriterionGradeWrite.parse(raw));
+  return gradingRepoOf(p, r);
+});
+
+/** The teacher's criterion write (`gradeCriterion`): within its range, a `manual` row still proposed, its rationale kept when none is given. */
+function gradeCriterion(r: MockRepo, leaf: (typeof SAMPLE_LEAVES)[number], body: { points: number; rationale?: string | undefined }): void {
   const [min, max] = awardedRange(leaf);
   if (body.points < min || body.points > max) throw refuse(422, "points_out_of_range", "The points lie outside the criterion's range", { min, max });
   const before = currentCriterionRows(CRITERION_ROWS.get(r.id) ?? []).get(leaf.id);
@@ -1840,11 +1879,11 @@ on("PUT", "/app/api/projects/:id/repos/:rid/criteria/:criterionId", (m, raw): Pr
     createdAt: new Date(),
     lockedAt: null,
   });
-  return gradingRepoOf(p, r);
-});
+}
 
 on("POST", "/app/api/projects/:id/repos/:rid/validate", (m): ProjectGradingRepo => {
   const p = criteriaProjectOr409(m.groups!.id!);
+  ownerOnReleased(p);
   const r = frozenRepoOr409(p, m.groups!.rid!);
   refuseIncomplete(p, [r]);
   validateRepo(r);
@@ -1853,6 +1892,7 @@ on("POST", "/app/api/projects/:id/repos/:rid/validate", (m): ProjectGradingRepo 
 
 on("POST", "/app/api/projects/:id/validate", (m): ProjectValidated => {
   const p = criteriaProjectOr409(m.groups!.id!);
+  ownerOnReleased(p);
   const repos = p.repos.filter((r) => isLive(p, r) && r.frozenAt !== null);
   if (repos.length === 0) throw refuse(409, "not_frozen", "No repository is frozen for good");
   refuseIncomplete(p, repos);
@@ -1868,6 +1908,7 @@ function refuseUnacknowledged(p: MockProject, raw: unknown): void {
 
 on("POST", "/app/api/projects/:id/repos/:rid/regrade", (m, raw): ProjectRegradeAccepted => {
   const p = criteriaProjectOr409(m.groups!.id!);
+  ownerOnReleased(p);
   frozenRepoOr409(p, m.groups!.rid!);
   refuseUnacknowledged(p, raw);
   return { repos: 1 };
@@ -1875,6 +1916,7 @@ on("POST", "/app/api/projects/:id/repos/:rid/regrade", (m, raw): ProjectRegradeA
 
 on("POST", "/app/api/projects/:id/regrade", (m, raw): ProjectRegradeAccepted => {
   const p = criteriaProjectOr409(m.groups!.id!);
+  ownerOnReleased(p);
   refuseUnacknowledged(p, raw);
   return { repos: p.repos.filter((r) => isLive(p, r) && r.frozenAt !== null).length };
 });
@@ -2074,7 +2116,7 @@ function adjustRepoGrade(m: { groups?: Record<string, string | undefined> }, raw
   if (!r) throw new MockError(404, "Not found");
   const parsed = clear ? null : GradeAdjustmentWrite.safeParse(raw);
   if (parsed && !parsed.success) throw new MockPayload(400, { error: "validation", message: parsed.error.message });
-  if (flags.assistant && p.releasedAt !== null) throw refuse(403, "owner_required", "Only an owner of this course may do that");
+  ownerOnReleased(p);
   if (p.summary.gradingMode === "none") throw refuse(409, "grading_none", "The project is not graded");
   if (r.frozenAt === null) throw refuse(409, "not_frozen", "The repository is not frozen yet");
   if (parsed) {
@@ -2089,6 +2131,148 @@ function adjustRepoGrade(m: { groups?: Record<string, string | undefined> }, raw
 }
 on("PUT", "/app/api/projects/:id/repos/:rid/grade-adjustment", (m, raw) => adjustRepoGrade(m, raw, false));
 on("DELETE", "/app/api/projects/:id/repos/:rid/grade-adjustment", (m) => adjustRepoGrade(m, null, true));
+
+// ---------------------------------------------------------------- contestations (ADR-139 §13)
+
+/** A criterion's contestation as the mock keeps it: the staff's reading less what is read off the project at each request. */
+type MockContestation = Omit<ProjectStaffContestation, "counted" | "inSnapshot">;
+
+/** The contestations of each project, by project id. */
+const CONTESTATIONS = new Map<string, MockContestation[]>();
+
+/** A criterion a reload took out of the snapshot after it was contested. */
+const REMOVED_CRITERION = { id: "rapport.orthographe", description: "L'orthographe est soignée", maxPoints: 1 };
+
+/**
+ * Labo 02's contestations, its release five days ago and its window open two
+ * more days: two open (a report's answers, the memory), an accepted one with
+ * its reply, a refused penalty, and one on a criterion no longer in the
+ * snapshot, which can only be refused.
+ */
+function seedContestations(p: MockProject): void {
+  p.contestationClosesAt = iso(2 * D);
+  // Released at each repository's validated score.
+  for (const r of p.repos) {
+    const final = finalOf(r);
+    r.released = { points: final?.points ?? null, max: final?.max ?? null };
+    r.releasedGrade = final ? gradeOf(p, r).releasable : { grade: null, adjustmentComment: null, points: null, max: null };
+  }
+  const at = (hours: number) => iso(-5 * D + hours * H);
+  const seeds: { i: number; criterionId: string; state: MockContestation["state"]; reason: string; reply: string | null; filed: number; resolved: number | null }[] = [
+    {
+      i: 1,
+      criterionId: "rapport.reponses",
+      state: "open",
+      reason: "La question 6 est traitée à la page 3 du rapport, dans la section « Portée ».\nLa justification dit qu'elle est vague, mais elle cite les deux cas demandés.",
+      reply: null,
+      filed: 30,
+      resolved: null,
+    },
+    { i: 2, criterionId: "code.memoire", state: "open", reason: "Le tampon de lire_ligne est libéré dans main, ligne 84.", reply: null, filed: 52, resolved: null },
+    {
+      i: 3,
+      criterionId: "code.style.nommage",
+      state: "accepted",
+      reason: "Les noms courts (i, n) sont des indices de boucle, comme le demande la convention du cours.",
+      reply: "Vous avez raison : la convention admet ces noms. Le point est rendu.",
+      filed: 20,
+      resolved: 44,
+    },
+    {
+      i: 5,
+      criterionId: "rapport.cle-privee",
+      state: "refused",
+      reason: "La clé a été supprimée dans un commit après l'échéance.",
+      reply: "La clé était dans le commit corrigé, celui de l'échéance. La pénalité reste.",
+      filed: 26,
+      resolved: 50,
+    },
+    { i: 0, criterionId: REMOVED_CRITERION.id, state: "open", reason: "Le correcteur orthographique signale deux fautes, pas huit.", reply: null, filed: 60, resolved: null },
+  ];
+  const list: MockContestation[] = [];
+  seeds.forEach((c, n) => {
+    const r = p.repos[c.i];
+    if (!r || r.frozenAt === null || !isLive(p, r)) return;
+    const leaf = SAMPLE_LEAVES.find((l) => l.id === c.criterionId);
+    const row = currentCriterionRows(CRITERION_ROWS.get(r.id) ?? []).get(c.criterionId);
+    list.push({
+      id: `0190d3c4-0000-7000-8000-0000000cc${String(n + 1).padStart(3, "0")}`,
+      repoId: r.id,
+      criterionId: c.criterionId,
+      criterionDescription: leaf?.description ?? REMOVED_CRITERION.description,
+      pointsAtFiling: row?.points ?? 0.5,
+      maxAtFiling: leaf?.maxPoints ?? REMOVED_CRITERION.maxPoints,
+      bonusAtFiling: leaf?.bonusPoints ?? null,
+      state: c.state,
+      reason: c.reason,
+      filedAt: at(c.filed),
+      reply: c.reply,
+      resolvedAt: c.resolved === null ? null : at(c.resolved),
+    });
+  });
+  CONTESTATIONS.set(p.summary.id, list);
+}
+
+/** The staff's reading: whether its repository is live, its criterion still in the snapshot. */
+function staffContestation(p: MockProject, c: MockContestation): ProjectStaffContestation {
+  const r = p.repos.find((x) => x.id === c.repoId);
+  return { ...c, counted: r !== undefined && isLive(p, r), inSnapshot: SAMPLE_LEAVES.some((l) => l.id === c.criterionId) };
+}
+
+/** A released project graded by criteria: where a window applies and the owner's acts are offered. */
+const windowApplies = (p: MockProject) => p.summary.gradingMode === "criteria" && p.releasedAt !== null;
+
+on("GET", "/app/api/projects/:id/contestations", (m): ProjectContestations => {
+  const p = projectOr404(m.groups!.id!);
+  const list = (CONTESTATIONS.get(p.summary.id) ?? [])
+    .map((c) => staffContestation(p, c))
+    .sort((a, b) => Number(b.state === "open") - Number(a.state === "open") || b.filedAt.localeCompare(a.filedAt));
+  const openByRepo: Record<string, number> = {};
+  for (const c of list) if (c.state === "open" && c.counted) openByRepo[c.repoId] = (openByRepo[c.repoId] ?? 0) + 1;
+  return {
+    applies: windowApplies(p),
+    closesAt: p.contestationClosesAt,
+    openByRepo,
+    contestations: list,
+  };
+});
+
+/** The owner's one answer: once (`409 not_open`), never an acceptance of a criterion gone (`409 criterion_removed`); new points through the criterion write. */
+on("POST", "/app/api/projects/:id/contestations/:cid/resolve", (m, raw): ProjectContestationResolution => {
+  const p = projectOr404(m.groups!.id!);
+  const c = (CONTESTATIONS.get(p.summary.id) ?? []).find((x) => x.id === m.groups!.cid);
+  if (!c) throw new MockError(404, "Not found");
+  ownerOnly();
+  const parsed = ProjectContestationResolveBody.safeParse(raw);
+  if (!parsed.success) throw new MockPayload(400, { error: "validation", message: parsed.error.message });
+  const body = parsed.data;
+  if (c.state !== "open") throw refuse(409, "not_open", "The contestation already has its answer");
+  const leaf = SAMPLE_LEAVES.find((l) => l.id === c.criterionId);
+  if (body.verdict === "accepted" && !leaf) throw refuse(409, "criterion_removed", "The criterion left the snapshot: refuse it");
+  const r = p.repos.find((x) => x.id === c.repoId);
+  let repo: ProjectGradingRepo | null = null;
+  if (body.points !== undefined && leaf && r) {
+    gradeCriterion(r, leaf, { points: body.points, rationale: body.rationale });
+    repo = gradingRepoOf(p, r);
+  }
+  Object.assign(c, { state: body.verdict, reply: body.reply === "" ? null : body.reply, resolvedAt: iso(0) });
+  return { contestation: staffContestation(p, c), repo };
+});
+
+/** The owner's two acts on the window: close it now, or move its end ahead (`422 window_instant`), on a released criteria project only. */
+on("PUT", "/app/api/projects/:id/contestation-window", (m, raw): ContestationWindow => {
+  const p = projectOr404(m.groups!.id!);
+  ownerOnly();
+  if (!windowApplies(p)) throw refuse(409, "window_unavailable", "The project takes no contestations");
+  const body = ContestationWindowBody.parse(raw);
+  if (body.action === "close") p.contestationClosesAt = iso(0);
+  else {
+    const reason = windowExtendRefusal(new Date(body.closesAt), new Date());
+    if (reason) throw refuse(422, "window_instant", "The instant is refused", { reason });
+    p.contestationClosesAt = new Date(body.closesAt).toISOString();
+  }
+  return { closesAt: p.contestationClosesAt };
+});
 
 /**
  * The release (F-PROJ-14, D05): every live repository frozen for good, no
@@ -2126,6 +2310,10 @@ on("POST", "/app/api/projects/:id/release", (m) => {
     if (final) scored += 1;
   }
   p.releasedAt = iso(0);
+  // ADR-139 §13: the first release of a criteria project stores the window's end, its days after now; a release again never moves it.
+  if (p.summary.gradingMode === "criteria" && p.contestationClosesAt === null && p.summary.contestationDays > 0) {
+    p.contestationClosesAt = iso(p.summary.contestationDays * D);
+  }
   const result: ProjectReleaseResult = { releasedAt: p.releasedAt, first, repos: p.repos.length, scored };
   return result;
 });

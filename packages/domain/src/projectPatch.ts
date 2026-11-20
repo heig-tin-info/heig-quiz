@@ -6,7 +6,8 @@
  *   (ADR-127 §4), its start choice locked to "a date": back to a manual
  *   publication is refused (`publish_mode_frozen`; Publish now is the way);
  * - once published, only the name, the protected files, the deadline and
- *   the deadline strategy (until the deadline) change;
+ *   the deadline strategy (until the deadline) change, and the contestation
+ *   window's days until the first release (`released`, ADR-139 §13);
  * - the publication mode and its duration freeze at publication
  *   (`publish_mode_frozen`); the deadline strategy at the deadline
  *   (`strategy_frozen`); everything else at publication (`not_draft`): the
@@ -45,6 +46,8 @@ export const PROJECT_PATCH_FIELDS = [
   "buildCommand",
   "testCommand",
   "evidenceOutputs",
+  // The contestation window, in days after the first release (ADR-139 §13): editable in any state until then.
+  "contestationDays",
 ] as const;
 export type ProjectPatchField = (typeof PROJECT_PATCH_FIELDS)[number];
 
@@ -86,6 +89,8 @@ export function projectFieldRefusal(
     case "testCommand":
     case "evidenceOutputs":
       return null;
+    case "contestationDays":
+      return project.released ? "released" : null;
     case "deadlineStrategy":
       return applied || now.getTime() >= project.deadlineAt.getTime() ? "strategy_frozen" : null;
     case "publishMode":

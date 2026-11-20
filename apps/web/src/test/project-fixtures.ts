@@ -136,6 +136,7 @@ export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
     buildCommand: null,
     testCommand: null,
     evidenceOutputs: null,
+    contestationDays: 7,
     source: { fullName: "heig-tin-info/prg1-labo-02-pointeurs" },
     distribution: { fullName: "heig-tin-info/labo-2-pointeurs-squashed" },
     deadlineAppliedAt: null,
@@ -206,6 +207,7 @@ export const makeDraft = (over: Partial<ProjectDetail> = {}): ProjectDetail =>
       "protectedFiles",
       "groupMode",
       "groupSetId",
+      "contestationDays",
     ],
     ...over,
   });

@@ -22,7 +22,10 @@
  * criteria table of their OWN repository, the domain's `student` audience
  * of `criteriaTable`: obtained empty until graded, indicative until
  * validated and released, the lock of a milestone; the rationales only
- * after the repository's definitive freeze, provisional until the release.
+ * after the repository's definitive freeze, provisional until the release;
+ * once released, the repository's contestations of its criteria — every
+ * member's alike, never who filed one — and the window's closing instant
+ * (ADR-139 §13).
  *
  * What it never carries: the source or distribution repository (not even
  * their existence), another student's repository or score, a teammate's
@@ -52,6 +55,7 @@ import type { FastifyBaseLogger } from "fastify";
 
 import type {
   ProjectInvitationResent,
+  ProjectStudentContestation,
   SentInvitation,
   StudentProject,
   ProjectSeatKind,
@@ -87,6 +91,7 @@ import { classrooms, courses, enrollments, githubAccounts, projectGradeRuns, pro
 import { htmlUrl } from "../../github/git.js";
 import type { StudentProjectScope } from "../guards.js";
 import { countedReceipts, repoCommitCount } from "./commits.js";
+import { membersContestations } from "./contestations.js";
 import { criteriaStandings } from "./criterionGrades.js";
 import { isLive } from "./deadline.js";
 import { lastCollections } from "../codespace/service.js";
@@ -343,17 +348,27 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts, c
  * The criteria table of `repo` (ADR-106 §9): null unless its project is
  * graded by `criteria` with a snapshot (`criteriaStandings` reads none
  * otherwise). Frozen and released by the server's columns: the
- * repository's definitive freeze, the project's release.
+ * repository's definitive freeze, the project's release. With it, the
+ * repository's contestations, every member's alike, and whether each
+ * criterion may be contested now (ADR-139 §13, `membersContestations`).
  */
-async function studentCriteria(db: Db, project: ProjectRow, repo: ProvisionedRepo | null): Promise<StudentCriteriaRow[] | null> {
-  if (repo === null || project.gradingMode !== "criteria") return null;
+async function studentCriteria(
+  db: Db,
+  project: ProjectRow,
+  repo: ProvisionedRepo | null,
+  seat: { id: string } | null,
+  now: Date,
+): Promise<{ criteria: StudentCriteriaRow[] | null; contestations: ProjectStudentContestation[] }> {
+  if (repo === null || project.gradingMode !== "criteria") return { criteria: null, contestations: [] };
   const standing = (await criteriaStandings(db, [repo])).get(repo.id);
-  if (!standing) return null;
-  return criteriaTable(standing.snapshot, standing.rows, {
+  const { contestations, contestable } = await membersContestations(db, project, repo, seat, standing, now);
+  if (!standing) return { criteria: null, contestations };
+  const table = criteriaTable(standing.snapshot, standing.rows, {
     audience: "student",
     frozen: repo.frozenAt !== null,
     released: project.releasedAt !== null,
   });
+  return { criteria: table.map((row) => ({ ...row, contestable: contestable(row.criterionId) })), contestations };
 }
 
 /**
@@ -376,10 +391,10 @@ export async function studentProject(
   const seat = scope.seat === null ? null : scope.seat.staff ? ("staff" as const) : ("student" as const);
   const repo = provisioned(row);
   const live = liveRepo(row, project);
-  const [linked, read, criteria, access] = await Promise.all([
+  const [linked, read, { criteria, contestations }, access] = await Promise.all([
     githubLinked(db, userId),
     readings(db, live === null ? [] : [live]),
-    studentCriteria(db, project, repo),
+    studentCriteria(db, project, repo, scope.seat, now),
     repo === null || scope.seat === null ? null : seatAccess(db, { repoId: repo.id, enrollmentId: scope.seat.id }),
   ]);
   const { facts } = cardFacts({ project, classroomName: scope.room.name, courseCode: scope.course.code, repo: row }, linked, now);
@@ -395,6 +410,8 @@ export async function studentProject(
             url: htmlUrl(repo.fullName),
             invitation: ownInvitation(repo, access),
             deleted: repo.deletedAt !== null,
+            // A group's repository (ADR-048): its contestations are the group's (ADR-139 §13).
+            group: repo.groupId !== null,
             locked: repo.lockedAt !== null,
             ...(live === null
               ? { lastCommit: null, commits: 0, ciStatus: "none" as const, run: null, score: null, collected: false }
@@ -415,6 +432,9 @@ export async function studentProject(
     criteria,
     // ADR-132 §10: the latest sync's message and its date, nothing else of the sync (N-SEC-20).
     projectUpdate: syncMessage(project),
+    // ADR-139 §13: the window's instant in `criteria` mode only, and the repository's own contestations.
+    contestationClosesAt: project.gradingMode === "criteria" ? isoOrNull(project.contestationClosesAt) : null,
+    contestations,
     workspace: studentWorkspace(project, codespace),
     serverNow: iso(now),
   };

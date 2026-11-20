@@ -259,6 +259,26 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
   }),
   z.object({
     /**
+     * The course owner answered a contestation of the recipient's repository
+     * (ADR-139 §13): every member of a group's repository is told. Ids and
+     * the title only: neither the verdict, the reply, nor the criterion.
+     */
+    kind: z.literal("project_contestation_resolved"),
+    ...projectRef,
+  }),
+  z.object({
+    /**
+     * Members of repositories contested criteria of a released project the
+     * recipient teaches (ADR-139 §13), folded per project: `count` the
+     * contestations folded into the entry. How many, never whose, which
+     * criterion nor why.
+     */
+    kind: z.literal("project_contestation_filed"),
+    ...projectRef,
+    count: z.number().int().positive(),
+  }),
+  z.object({
+    /**
      * The deadline job locked (or committed on) repositories of a project
      * (staff): folded per project, `count` the repositories settled.
      */
@@ -365,11 +385,13 @@ export const NOTIFICATION_KINDS = [
   "project_deadline_reminder",
   "project_repo_invited",
   "project_grade_final",
+  "project_contestation_resolved",
   "impersonation_ended",
   "student_joined",
   "roster_conflict",
   "grading_ready",
   "contestation_filed",
+  "project_contestation_filed",
   "project_deadline_applied",
   "project_provision_failed",
   "github_org_lost",
@@ -430,6 +452,9 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   project_deadline_reminder: { bell: true, email: true, teams: true },
   project_repo_invited: { bell: true, email: true, teams: true },
   project_grade_final: { bell: true, email: true, teams: true },
+  // A project's criterion contested and answered (ADR-139 §13), as an exam's question.
+  project_contestation_resolved: { bell: true, email: true, teams: true },
+  project_contestation_filed: { bell: true, email: false, teams: false },
   // In the app only, on by default, and the student may switch it off
   // (ADR-034 §6, amended 2026-10-15); `KIND_CHANNELS` keeps it there.
   impersonation_ended: { bell: true, email: false, teams: false },
@@ -522,11 +547,13 @@ export const NOTIFICATION_AUDIENCE: Readonly<
   project_deadline_reminder: "seat",
   project_repo_invited: "seat",
   project_grade_final: "seat",
+  project_contestation_resolved: "seat",
   impersonation_ended: "seat",
   student_joined: "course",
   roster_conflict: "course",
   grading_ready: "course",
   contestation_filed: "course",
+  project_contestation_filed: "course",
   project_deadline_applied: "course",
   project_provision_failed: "course",
   github_org_lost: "course",
@@ -562,6 +589,8 @@ export const GITHUB_KINDS = [
   "project_deadline_reminder",
   "project_repo_invited",
   "project_grade_final",
+  "project_contestation_resolved",
+  "project_contestation_filed",
   "project_deadline_applied",
   "project_provision_failed",
   "github_org_lost",

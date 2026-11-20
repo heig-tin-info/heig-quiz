@@ -228,6 +228,7 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
     branches,
     protectedFiles: withForcedProtected(body.protectedFiles, body.gradingMode),
     gradingScale: body.gradingScale ?? defaultProjectGradingScale(),
+    contestationDays: body.contestationDays,
     createdBy: input.caller.id,
     createdAt: now,
   };
