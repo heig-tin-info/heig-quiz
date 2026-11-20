@@ -50,25 +50,25 @@ import { splitBlocks } from "./text.js";
 type Strings = { [K in keyof typeof clozePlayerStrings]: string };
 type SelectBlank = Extract<ClozeStudent["blanks"][number], { kind: "select" }>;
 
-/** `N` values of `T`: a table of one entry per group, its length checked against the cap. */
-type PerGroup<T, R extends T[] = []> = R["length"] extends typeof CLOZE_MAX_LABEL_GROUPS ? Readonly<R> : PerGroup<T, [...R, T]>;
+/** A table of one entry per group: its length is checked against the cap. */
+type PerGroup<T> = readonly T[] & { length: typeof CLOZE_MAX_LABEL_GROUPS };
 
 /**
  * The hue of each group, in order of first appearance (DESIGN.md, "The cloze
  * labels"): the categorical `--chart-*` slots, never the verdict's green and
  * red (`chart-6`, `chart-8`), the most distinct first.
  */
-const GROUP_HUES: PerGroup<string> = ["--chart-1", "--chart-2", "--chart-7", "--chart-5", "--chart-4", "--chart-3"];
+const GROUP_HUES = ["--chart-1", "--chart-2", "--chart-7", "--chart-5", "--chart-4", "--chart-3"] as const satisfies PerGroup<string>;
 
 /** The shape of each group, beside its hue: colour is never the only cue. */
-const GROUP_SHAPES: PerGroup<ReactNode> = [
+const GROUP_SHAPES = [
   <circle key="circle" cx="5" cy="5" r="4.5" />,
   <rect key="square" x="0.75" y="0.75" width="8.5" height="8.5" rx="1" />,
   <path key="triangle" d="M5 0.5 9.75 9.25H.25z" />,
   <path key="diamond" d="M5 0 10 5 5 10 0 5z" />,
   <circle key="ring" cx="5" cy="5" r="3.6" fill="none" stroke="currentColor" strokeWidth="2" />,
   <path key="star" d="m5 .2 1.45 3.1 3.35.35-2.5 2.3.7 3.35L5 7.6 2 9.3l.7-3.35-2.5-2.3 3.35-.35z" />,
-];
+] as const satisfies PerGroup<ReactNode>;
 
 /**
  * A group's look, classes included: border and fill apart, since `cx` merges
@@ -184,6 +184,23 @@ const valueOf = (blank: SelectBlank, label: string): string | null => {
   return option === undefined ? null : String(option.id);
 };
 
+/** The blanks a drop writes at once, each to its new value: one answer, never two. */
+export type DropChanges = readonly (readonly [index: number, value: string])[];
+
+/**
+ * What dropping `label` writes (exported for its test). `target` is the gap
+ * it lands in, `undefined` outside every gap; `from` the gap it left, `null`
+ * from the tray. Into a gap: the option of THAT blank showing the label, and
+ * the gap it left empties in the same answer. Outside: the gap it left
+ * empties. Back into its own gap, or into a gap with no such option: nothing.
+ */
+export function dropChanges(target: SelectBlank | undefined, label: string, from: number | null): DropChanges {
+  if (target === undefined) return from === null ? [] : [[from, ""]];
+  const value = valueOf(target, label);
+  if (value === null || from === target.index) return [];
+  return from === null ? [[target.index, value]] : [[from, ""], [target.index, value]];
+}
+
 export function LabelsPlayer({ student, given, locked, expected, s, write, renderText }: LabelsPlayerProps) {
   const groups = clozeLabelGroups(student.blanks);
   const groupOf = new Map(groups.flatMap((group, g) => group.blanks.map((index) => [index, g] as const)));
@@ -200,19 +217,18 @@ export function LabelsPlayer({ student, given, locked, expected, s, write, rende
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  const blankAt = (index: number) => student.blanks.find((b): b is SelectBlank => b.index === index && b.kind === "select");
-  const place = (index: number, label: string, from: number | null) => {
-    const blank = blankAt(index);
-    const value = blank === undefined ? null : valueOf(blank, label);
-    if (value === null || from === index) return;
-    write(from === null ? [[index, value]] : [[from, ""], [index, value]]);
+  const blankAt = (index: number | null) =>
+    student.blanks.find((b): b is SelectBlank => b.index === index && b.kind === "select");
+  const drop = (target: SelectBlank | undefined, label: string, from: number | null) => {
+    const changes = dropChanges(target, label, from);
+    if (changes.length > 0) write(changes);
   };
 
   const onGap = (blank: SelectBlank) => {
     if (locked) return;
     if (selected !== null) {
       if (groupOf.get(blank.index) !== selected.group) return;
-      place(blank.index, selected.label, null);
+      drop(blank, selected.label, null);
       setPicked(null);
       return;
     }
@@ -223,10 +239,7 @@ export function LabelsPlayer({ student, given, locked, expected, s, write, rende
     const moving = carried;
     setCarried(null);
     setOver(null);
-    if (moving === null) return;
-    const target = gapIndexOf(event.over?.id);
-    if (target !== null) place(target, moving.label, moving.from);
-    else if (moving.from !== null) write([[moving.from, ""]]);
+    if (moving !== null) drop(blankAt(gapIndexOf(event.over?.id)), moving.label, moving.from);
   }
 
   const renderGap = (blank: SelectBlank): ReactNode => {
@@ -235,7 +248,7 @@ export function LabelsPlayer({ student, given, locked, expected, s, write, rende
       <Gap
         index={blank.index}
         group={group}
-        groupName={groups.length > 1 ? group + 1 : null}
+        groupCount={groups.length}
         sizes={groups[group]?.labels ?? []}
         label={labelIn(blank, given[blank.index])}
         expected={expected.get(blank.index)}
@@ -384,7 +397,7 @@ const GAP_BORDER: Record<Exclude<GapState, "rest">, string> = { target: "border-
 function Gap({
   index,
   group,
-  groupName,
+  groupCount,
   sizes,
   label,
   expected,
@@ -398,8 +411,8 @@ function Gap({
 }: {
   index: number;
   group: number;
-  /** The group's number in the gap's name, when there are several. */
-  groupName: number | null;
+  /** How many groups the text has: with several, the gap's name says its own. */
+  groupCount: number;
   /** Every label of the group, laid in the gap's one grid cell so it is as wide as the widest. */
   sizes: readonly string[];
   label: string | null;
@@ -422,11 +435,11 @@ function Gap({
     attributes: { roleDescription: s.dragRole },
   });
   const drop = useDroppable({ id: gapId(index), disabled: locked || armed === false });
-  const vars = { n: index + 1, g: groupName ?? "", label: label ?? "" };
+  const vars = { n: index + 1, g: group + 1, label: label ?? "" };
   const name =
-    groupName === null
-      ? fmt(filled ? s.gapFilled : s.gapEmpty, vars)
-      : fmt(filled ? s.gapFilledGroup : s.gapEmptyGroup, vars);
+    groupCount > 1
+      ? fmt(filled ? s.gapFilledGroup : s.gapEmptyGroup, vars)
+      : fmt(filled ? s.gapFilled : s.gapEmpty, vars);
   // With the key, the expected answer sits in the gap like the dropdown's
   // empty option, and the gap is sized for it too.
   const cells = expected === undefined ? sizes : [...sizes, expected];

@@ -5,6 +5,7 @@ import { render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ClozeEditor } from "./Editor.js";
+import { dropChanges } from "./Labels.js";
 import { ClozePlayer } from "./Player.js";
 import { ClozeReview } from "./Review.js";
 import { config, SECRET_CONFIG } from "./test/fixtures.js";
@@ -355,6 +356,40 @@ describe("ClozePlayer, labels (ADR-138)", () => {
     expect(heard).not.toHaveBeenCalled();
     expect(container.querySelector("[draggable]")).toBeNull();
     expect(label("farad").className).toContain("select-none");
+  });
+});
+
+/*
+ * The drop rule of the labels (ADR-138), the one the click and the pointer
+ * drag both write through: tested directly, since jsdom lays nothing out for
+ * a drag to land on.
+ */
+describe("dropChanges", () => {
+  const select = (index: number) => {
+    const blank = labelsStudent.blanks[index];
+    if (blank?.kind !== "select") throw new Error(`blank ${index} is a dropdown`);
+    return blank;
+  };
+
+  it("writes a label from the tray into a gap: that blank's own option", () => {
+    expect(dropChanges(select(1), "henry", null)).toEqual([[1, "2"]]);
+  });
+
+  it("moves a placed label to another gap: the source empties in the same answer", () => {
+    expect(dropChanges(select(1), "ohm", 0)).toEqual([
+      [0, ""],
+      [1, "0"],
+    ]);
+  });
+
+  it("empties the gap a label is dragged out of, and does nothing for a tray label dropped nowhere", () => {
+    expect(dropChanges(undefined, "ohm", 0)).toEqual([[0, ""]]);
+    expect(dropChanges(undefined, "ohm", null)).toEqual([]);
+  });
+
+  it("changes nothing for a label dropped back into its own gap, or into a gap without it", () => {
+    expect(dropChanges(select(0), "ohm", 0)).toEqual([]);
+    expect(dropChanges(select(2), "ohm", 0)).toEqual([]);
   });
 });
 

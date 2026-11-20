@@ -106,7 +106,9 @@
   --bar-h: 0px;
   /* Where something pinned inside the page sits: under the banners and the
      player's bar (the cloze's tray of labels, ADR-138). The Shell adds its
-     phone top bar under `lg`; a sheet or a pane outside both reads 0. */
+     phone top bar under `lg`, and `ModeBanner` works it out again on the
+     frame it wraps, since a custom property resolves its `var()`s where it
+     is declared; a sheet or a pane outside both reads 0. */
   --sticky-top: calc(var(--banner-h) + var(--bar-h));
   /* The phone top bar's height (`Shell.tsx`), and the bottom bar's
      (`BottomNav.tsx`, #191): zero unless that bar is in the page under `lg`.
@@ -123,12 +125,6 @@
      1 rem of air: the toasts, the docked tools and the page's end spacer
      rise by it. Zero unless a FAB is up. */
   --fab-h: 0px;
-}
-/* A banner sets `--banner-h` on the frame it wraps (`Shell.tsx`): the offset is
-   worked out again there, since a custom property resolves its `var()`s where
-   it is declared. */
-[style*="--banner-h:"] {
-  --sticky-top: calc(var(--banner-h) + var(--bar-h));
 }
 :root:has([data-tool-dock]) {
   --tool-dock-h: 4rem;

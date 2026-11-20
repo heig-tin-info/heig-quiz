@@ -808,7 +808,16 @@ export function ModeBanner({
     // element is a cycle: the outer one reads the offset above, the inner one
     // adds this banner to it.
     <div style={{ "--banner-top": "var(--banner-h)" } as CSSProperties}>
-    <div style={{ "--banner-h": `calc(var(--banner-top) + ${BANNER_HEIGHT})` } as CSSProperties}>
+    <div
+      style={
+        {
+          "--banner-h": `calc(var(--banner-top) + ${BANNER_HEIGHT})`,
+          // What the frame pins sits under this banner too (`--sticky-top`,
+          // style.css): worked out again here, where `--banner-h` changes.
+          "--sticky-top": "calc(var(--banner-h) + var(--bar-h))",
+        } as CSSProperties
+      }
+    >
       <div
         role="region"
         aria-label={message}
