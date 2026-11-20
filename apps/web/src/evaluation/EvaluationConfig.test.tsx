@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { GradebookColumnSettings } from "@quiz/contracts";
+import type { EvaluationDetail, GradebookColumnSettings } from "@quiz/contracts";
 
 import { PAGE_SIZE } from "../pool/filters";
 import { makeClassroomDetail } from "../test/fixtures";
@@ -397,6 +397,67 @@ describe("EvaluationConfig", () => {
     expect(screen.getByText(/not available for an exam/i)).toBeInTheDocument();
   });
 
+  // ADR-139: an exam's contestation window, beside the feedback it belongs to.
+  describe("the contestation window (ADR-139)", () => {
+    const exam = (over: Partial<EvaluationDetail["evaluation"]> = {}) =>
+      makeEvaluationDetail({ evaluation: { ...makeEvaluationDetail().evaluation, mode: "exam", ...over } });
+
+    it("offers an exam its days, 7 when never chosen, and saves a new value on leaving the field", async () => {
+      const user = userEvent.setup();
+      const detail = exam();
+      const { calls } = mockFetch(routes(detail, { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) }));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      const days = await screen.findByRole("spinbutton", { name: "Contestations" });
+      expect(days).toHaveValue(7);
+      await user.clear(days);
+      await user.type(days, "0");
+      await user.tab();
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ feedbackPolicy: { contestationDays: 0 } }),
+      );
+    });
+
+    it("hides it when the results are never shown", async () => {
+      const user = userEvent.setup();
+      mockFetch(routes(exam({ feedbackPolicy: { ...makeEvaluationDetail().evaluation.feedbackPolicy, when: "none" } })));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeInTheDocument();
+      expect(screen.queryByRole("spinbutton", { name: "Contestations" })).toBeNull();
+    });
+
+    it("says a value out of range under the field, and saves nothing", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(routes(exam(), { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(exam()) }));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      const days = await screen.findByRole("spinbutton", { name: "Contestations" });
+      await user.clear(days);
+      await user.type(days, "99{Enter}");
+      expect(days).toHaveAccessibleDescription("From 0 to 60 days.");
+      expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+    });
+
+    // An unrelease leaves the stored instant: the row stays locked on it, not on the release.
+    it("locks it once a window was set, released or not", async () => {
+      const user = userEvent.setup();
+      mockFetch(routes(exam({ state: "closed", releasedAt: null, contestationClosesAt: "2026-09-17T08:00:00.000Z" })));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      expect(await screen.findByRole("spinbutton", { name: "Contestations" })).toBeDisabled();
+      expect(screen.getByText("The publication set the window. The results page closes or extends it.")).toBeInTheDocument();
+    });
+  });
+
   /*
    * ADR-124: an exercise has no feedback choice — each student sees the
    * whole correction at the hand-in. The row says so, with no control, and a
@@ -426,6 +487,8 @@ describe("EvaluationConfig", () => {
       expect(screen.queryByRole("radio", { name: /^right away$/i })).toBeNull();
       expect(screen.queryByRole("switch", { name: /^show the expected answer$/i })).toBeNull();
       expect(screen.queryByRole("switch", { name: /^show the explanation$/i })).toBeNull();
+      // Never contested (ADR-139 decision 11).
+      expect(screen.queryByRole("spinbutton", { name: "Contestations" })).toBeNull();
     });
 
     it("leaves the stored policy alone when a waiting room comes, immediate included", async () => {

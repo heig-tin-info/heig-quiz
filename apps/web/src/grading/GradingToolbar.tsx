@@ -47,6 +47,7 @@ export function GradingToolbar({
   view,
   onView,
   toValidate,
+  contested,
   anonymise,
   onAnonymise,
   exports,
@@ -57,6 +58,12 @@ export function GradingToolbar({
   onView: (patch: Partial<GradingView>) => void;
   /** The answers of this question not validated yet (the steps' count); null before it lands. */
   toValidate: number | null;
+  /**
+   * ADR-139: the question's open contestations, for the third choice
+   * "Contested (n)"; null hides the choice — the question holds none, open
+   * or answered, and the table is not filtered on them.
+   */
+  contested: number | null;
   anonymise: boolean;
   onAnonymise: (on: boolean) => void;
   /** The question's Export menu (F-EXP-01), when its type renders as text. */
@@ -84,6 +91,17 @@ export function GradingToolbar({
                 ? t("grading.filter.todo", { n: toValidate })
                 : t("grading.filter.proposed"),
           },
+          ...(contested === null
+            ? []
+            : [
+                {
+                  value: "contested" as const,
+                  label:
+                    contested > 0
+                      ? t("grading.filter.contested", { n: contested })
+                      : t("grading.filter.contested.none"),
+                },
+              ]),
         ]}
         onChange={(stateFilter) => onView({ stateFilter })}
       />

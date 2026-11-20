@@ -58,3 +58,11 @@ them modified after publication; the sheet says so first.
 
 `←` `→` change the question, `↑` `↓` the row, `Enter` opens it, `V`
 validates it, `A` adjusts it, `Esc` closes it. The sidebar lists them.
+
+## Contestations
+
+**Contested** shows the answers a student contested. Under Anonymise the
+reason is folded: read the answer first. The course's teacher answers
+once, under the answer: **Refuse** with a reply, or **Accept**, with or
+without new points (then the reply is mandatory and becomes the
+adjustment's comment).

@@ -1015,7 +1015,8 @@ export function Pane({
       <LayerColumn
         {...{ title, subtitle, onClose, footer, leading, actions, titleId }}
         headerClass={SHEET_HEADER}
-        bodyClass={cx(SHEET_BODY, "px-6 py-5")}
+        // Its end clears a docked tool (the help assistant's button), as every page's end spacer does (`Shell.tsx`).
+        bodyClass={cx(SHEET_BODY, "px-6 pt-5 pb-[calc(1.25rem+var(--tool-dock-h))]")}
         footerClass={SHEET_FOOTER}
       >
         {children}

@@ -2010,6 +2010,29 @@ const scenes = [
   { name: "results-error", role: "teacher", path: "/evaluations/closed/results?fail=1", settle: 2500 },
 
   { name: "feedback", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback` },
+  // ADR-139: the released exam's contestations — the student's cards (one
+  // open, one accepted, one refused, one still contestable: the `feedback`
+  // scene above) and the form;
+  // the grading screen on its contested filter, the reason folded under
+  // Anonymise, the owner's answer; the results' line, its Extend dialog;
+  // the gradebook's flag; the window's setting beside the feedback.
+  { name: "contest-dialog", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback`, fold: true, act: (p) => openContestDialog(p) },
+  // The French copy in place (not kept in the guide).
+  { name: "contest-dialog-fr", role: "student", lang: "fr", path: `/attempts/${ATTEMPT_PAST}/feedback`, fold: true, act: (p) => openContestDialog(p) },
+  { name: "contest-grading", role: "teacher", path: "/evaluations/released/grading?filter=contested", settle: 2500 },
+  { name: "contest-grading-folded", role: "teacher", path: "/evaluations/released/grading?filter=contested", fold: true, settle: 2500, act: (p) => openOpenContested(p) },
+  { name: "contest-grading-answer", role: "teacher", path: "/evaluations/released/grading?filter=contested", fold: true, settle: 2500, act: (p) => answerContestation(p) },
+  { name: "contest-grading-answer-fr", role: "teacher", lang: "fr", path: "/evaluations/released/grading?filter=contested", fold: true, settle: 2500, act: (p) => answerContestation(p) },
+  { name: "contest-grading-assistant", role: "teacher", path: "/evaluations/released/grading?filter=contested&assistant=1", fold: true, settle: 2500, act: (p) => openOpenContested(p) },
+  { name: "contest-results", role: "teacher", path: "/evaluations/released/results" },
+  { name: "contest-results-extend", role: "teacher", path: "/evaluations/released/results", fold: true, act: (p) => p.getByRole("button", { name: /^(Extend|Prolonger)$/ }).click() },
+  { name: "contest-gradebook", role: "teacher", path: "/classrooms/r1/grades" },
+  { name: "contest-config", role: "teacher", path: "/evaluations/draft?step=timing", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(advanced options|options avancées)$/i }).first().click();
+      const row = p.getByRole("spinbutton", { name: /^Contestations$/ });
+      await row.waitFor();
+      await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    } },
   // F-EXP-06: the student's own copy, PDF or JSON, from a quiet row under the score.
   { name: "feedback-download", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback`, fold: true, act: async (p) => { await p.getByRole("button", { name: /^(Download my copy|Télécharger ma copie)$/ }).click(); await p.getByRole("menuitem").first().waitFor(); } },
   // ADR-118 §5: the key published, an essay's validated points per criterion under the answer.
@@ -2612,6 +2635,36 @@ async function nextQuestion(page, n) {
     await page.getByRole("button", { name: /^(next question|question suivante)$/i }).first().click();
     await page.waitForTimeout(400);
   }
+}
+
+/** ADR-139: the student's form on the first contestable question, a reason typed. */
+async function openContestDialog(page) {
+  await page.getByRole("button", { name: /^(Contest|Contester la) question/ }).first().click();
+  await page.getByRole("dialog").getByRole("textbox").fill("J'ai écrit 31, le corrigé accepte 0x1F.\nC'est la même valeur.");
+}
+
+/** ADR-139: an open contestation's reason unfolded, and the owner's answer with new points, scrolled to its end. */
+async function answerContestation(page) {
+  await openOpenContested(page);
+  await page.getByRole("button", { name: /^(Show the reason|Afficher le motif)$/ }).click();
+  const answer = page.getByRole("region", { name: /^(Answer to the contestation|Réponse à la contestation)$/ });
+  await answer.getByRole("switch").click();
+  await answer.getByRole("textbox").fill("Vous avez raison : 0x1F vaut 31.");
+  // The page to its end (the pane sticks), then the pane's own scroll to its end: what a teacher sees there.
+  await answer.evaluate((el) => {
+    window.scrollTo(0, document.body.scrollHeight);
+    let box = el.parentElement;
+    while (box && !["auto", "scroll"].includes(getComputedStyle(box).overflowY)) box = box.parentElement;
+    if (box) box.scrollTop = box.scrollHeight;
+  });
+}
+
+/** Opens the first row whose contestation is open (the anonymised order is drawn per visit). */
+async function openOpenContested(page) {
+  // Focus and Enter, the table's own "Open": a click on a program unfolds it instead.
+  await page.locator("tr[data-row]:visible", { hasText: /(contested|contestée)/ }).first().focus();
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(400);
 }
 
 /** Walks the correction projection forward `n` questions with J, as a clicker would. */

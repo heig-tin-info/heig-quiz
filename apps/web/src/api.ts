@@ -1,5 +1,6 @@
 /** Portal API client: session cookies + double-submit CSRF header. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { z } from "zod";
 
 import { BUILD_HEADER, CSRF_COOKIE, CSRF_HEADER, IDLE_HEADER, cookieName, type Me, type MePatch, type PublicConfig } from "@quiz/contracts";
 
@@ -50,6 +51,17 @@ export function refusalCodeOf(error: unknown): string | null {
   if (!(error instanceof ApiError)) return null;
   const code = (error.body as { error?: unknown } | null)?.error;
   return typeof code === "string" ? code : null;
+}
+
+/**
+ * The `reason` of a refusal whose body is `schema`'s (`NotContestable`,
+ * `WindowInstantRefused`…), or null for any other error: the reason a
+ * screen words is the contract's, never a string read off a raw body.
+ */
+export function refusalReasonOf<R extends string>(error: unknown, schema: z.ZodType<{ reason: R }>): R | null {
+  if (!(error instanceof ApiError)) return null;
+  const parsed = schema.safeParse(error.body);
+  return parsed.success ? parsed.data.reason : null;
 }
 
 /** Whether `error` is the API's refusal `code`. */

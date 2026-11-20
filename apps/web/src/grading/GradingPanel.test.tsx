@@ -1361,3 +1361,164 @@ describe("GradingPanel — a teacher's own walk (ADR-018, amended 2026-11-17)", 
     expect(screen.queryByRole("switch", { name: "Show test attempts" })).toBeNull();
   });
 });
+
+/*
+ * ADR-139: the contestations of a question on its grading screen — their
+ * filter, which lives in the URL, the reason folded under Anonymise, and the
+ * owner's one answer; an assistant reads them.
+ */
+describe("GradingPanel — contestations", () => {
+  const contested = (attemptId: string, state: "open" | "accepted" | "refused", points = 1) => ({
+    ...validated(attemptId, points),
+    contestation: {
+      id: `c-${attemptId}`,
+      state,
+      reason: "I wrote 31.\nThe key accepts 0x1F.",
+      filedAt: "2026-09-03T08:00:00.000Z",
+      reply: state === "open" ? null : "Read the statement again.",
+      resolvedAt: state === "open" ? null : "2026-09-04T08:00:00.000Z",
+      counted: true,
+    },
+  });
+  const entries = () => [contested("a1", "open"), contested("a2", "refused"), validated("a3", 3)];
+  const withSteps = (over: Record<string, unknown> = {}) =>
+    routes(entries(), {
+      [`GET ${EVAL}/grading/steps`]: ok(
+        makeSteps([{ key: "i1", total: 3, validated: 3, contested: 1 }, { key: "i2" }]),
+      ),
+      ...over,
+    });
+  const openAnswer = async (attemptId: string) => {
+    await userEvent.click(rowOf(attemptId));
+    return screen.findByRole("dialog", { name: "Anonymous answer" });
+  };
+
+  it("filters on the contested answers, in the URL, and marks the question and the rows", async () => {
+    mockFetch(withSteps());
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    expect(await answerRows()).toHaveLength(3);
+    // The question's open contestations, beside its state.
+    expect(screen.getAllByText("1 contested").length).toBeGreaterThan(0);
+    expect(within(rowOf("a1")).getByText("contested")).toBeVisible();
+    expect(within(rowOf("a2")).getByText("refused")).toBeVisible();
+
+    await userEvent.click(screen.getByRole("radio", { name: "Contested · 1" }));
+    expect(await answerRows()).toHaveLength(2);
+    expect(new URLSearchParams(window.location.search).get("filter")).toBe("contested");
+    // Never the stored habit: a next visit without the link shows every answer.
+    expect(localStorage.getItem(GRADING_VIEW_KEY) ?? "").not.toContain("contested");
+
+    await userEvent.click(screen.getByRole("radio", { name: "All" }));
+    expect(await answerRows()).toHaveLength(3);
+    expect(window.location.search).not.toContain("filter");
+  });
+
+  it("opens the notification's link on the first question holding an open contestation", async () => {
+    mockFetch(
+      routes([validated("a3", 3)], {
+        [`GET ${QUEUE("i2")}`]: ok(makeQueue(entries())),
+        [`GET ${EVAL}/grading/steps`]: ok(makeSteps([{ key: "i1", total: 3, validated: 3 }, { key: "i2", contested: 1 }])),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />, {
+      route: "/evaluations/e1/grading?filter=contested",
+    });
+    const second = await screen.findByRole("table", { name: "Answers to question 2" });
+    // The header and the key's row, then the two contested answers.
+    await waitFor(() => expect(within(second).getAllByRole("row")).toHaveLength(4));
+    expect(screen.getByRole("radio", { name: "Contested · 1" })).toBeChecked();
+    expect(new URLSearchParams(window.location.search).get("item")).toBe("i2");
+  });
+
+  it("offers no contested choice on a question without a contestation", async () => {
+    mockFetch(routes([validated("a3", 3)]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    expect(screen.queryByRole("radio", { name: /Contested/ })).toBeNull();
+  });
+
+  it("folds the reason under Anonymise, a disclosure; the names unfold it", async () => {
+    mockFetch(
+      withSteps({
+        [`GET ${QUEUE("i1", "0")}`]: ok(makeQueue(entries().map((e) => ({ ...e, label: `Student ${e.attemptId}` })))),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    const panel = await openAnswer("a1");
+    expect(within(panel).getByText("Contestation awaiting an answer")).toBeVisible();
+    expect(within(panel).queryByText(/I wrote 31/)).toBeNull();
+    const show = within(panel).getByRole("button", { name: "Show the reason" });
+    expect(show).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(show);
+    const reason = within(panel).getByText(/I wrote 31\.\s+The key accepts 0x1F\./);
+    expect(reason).toBeVisible();
+    // The focus follows to what the button revealed, never to the page.
+    await waitFor(() => expect(reason.parentElement).toHaveFocus());
+
+    // With the names, the reason reads at once.
+    await userEvent.click(screen.getByRole("switch", { name: "Anonymise" }));
+    const named = await screen.findByRole("dialog", { name: "Student a1" });
+    expect(within(named).getByText(/I wrote 31/)).toBeVisible();
+    expect(within(named).queryByRole("button", { name: "Show the reason" })).toBeNull();
+  });
+
+  it("lets the owner answer once: a refusal needs a reply, an acceptance may give points", async () => {
+    const { calls } = mockFetch(
+      withSteps({
+        "POST /app/api/contestations/c-a1/resolve": ok({
+          contestation: { ...contested("a1", "accepted").contestation },
+          grading: null,
+          modifiedAfterRelease: false,
+        }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    const panel = await openAnswer("a1");
+    const answer = within(panel).getByRole("region", { name: "Answer to the contestation" });
+
+    await userEvent.click(within(answer).getByRole("button", { name: "Refuse" }));
+    // The help line turns into the error, tied to the field.
+    expect(within(answer).getByLabelText("Reply")).toHaveAccessibleDescription("Required to refuse or to change the points.");
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+
+    // New points: a refusal is then held, and the reply becomes the override's comment.
+    await userEvent.click(within(answer).getByRole("switch", { name: "Change the points" }));
+    expect(within(answer).getByRole("button", { name: "Refuse" })).toBeDisabled();
+    const points = within(answer).getByLabelText("Points");
+    await userEvent.clear(points);
+    await userEvent.type(points, "2");
+    await userEvent.type(within(answer).getByLabelText("Reply"), "Right, 0x1F is 31.");
+    await userEvent.click(within(answer).getByRole("button", { name: "Accept" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+        verdict: "accepted",
+        reply: "Right, 0x1F is 31.",
+        points: 2,
+      }),
+    );
+  });
+
+  it("shows an answered contestation's verdict and reply, with no answer to give", async () => {
+    mockFetch(withSteps());
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />, {
+      route: "/evaluations/e1/grading?filter=contested",
+    });
+    await answerRows();
+    const panel = await openAnswer("a2");
+    expect(within(panel).getByText("Contestation refused")).toBeVisible();
+    expect(within(panel).getByText("Read the statement again.")).toBeVisible();
+    expect(within(panel).queryByRole("region", { name: "Answer to the contestation" })).toBeNull();
+  });
+
+  it("lets an assistant read a contestation, never answer it", async () => {
+    mockFetch(withSteps({ "GET /app/api/courses": ok([makeCourseSummary({ myRole: "assistant" })]) }));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await answerRows();
+    const panel = await openAnswer("a1");
+    expect(await within(panel).findByText("The answer is the course's Teacher role's.")).toBeVisible();
+    expect(within(panel).queryByRole("button", { name: "Refuse" })).toBeNull();
+    expect(within(panel).queryByRole("button", { name: "Accept" })).toBeNull();
+  });
+});

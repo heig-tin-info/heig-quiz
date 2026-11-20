@@ -347,7 +347,7 @@ describe("the act's serialization", () => {
     const { write, bound } = await stale(evaluation.id, sat[0]!.id, [INVALID]);
     const [answer] = await db().select().from(answers).where(eq(answers.attemptId, sat[0]!.id));
     expect((await send("POST", `/app/api/answers/${answer!.id}/gradings`, { points: 1.5, comment: "mine" })).statusCode).toBe(200);
-    const written = await writeGradings(db(), [write], acceptanceGuard(passGuard(), bound, { leaveManual: true }));
+    const written = await writeGradings(db(), [write], { guard: acceptanceGuard(passGuard(), bound, { leaveManual: true }) });
     expect(written).toEqual([]);
     expect(await validated(sat[0]!.id, itemId)).toMatchObject({ source: "manual", points: 1.5 });
   });
@@ -361,7 +361,7 @@ describe("the act's serialization", () => {
     expect(write.points).toBe(1);
     expect((await send("PUT", url(evaluation.id, itemId), ZORG)).json()).toMatchObject({ regraded: 1 });
     expect((await validated(sat[0]!.id, itemId)).points).toBe(2);
-    const [written] = await writeGradings(db(), [write], acceptanceGuard(passGuard(), bound));
+    const [written] = await writeGradings(db(), [write], { guard: acceptanceGuard(passGuard(), bound) });
     expect(written!.points).toBe(2);
     expect((await validated(sat[0]!.id, itemId)).points).toBe(2);
   });
@@ -412,7 +412,7 @@ describe("the act's serialization", () => {
     });
     expect(regrade.statusCode).toBe(202);
     const after = await validated(sat[0]!.id, itemId);
-    expect(await writeGradings(db(), [write], acceptanceGuard(passGuard(), bound))).toEqual([]);
+    expect(await writeGradings(db(), [write], { guard: acceptanceGuard(passGuard(), bound) })).toEqual([]);
     expect((await validated(sat[0]!.id, itemId)).id).toBe(after.id);
   });
 });

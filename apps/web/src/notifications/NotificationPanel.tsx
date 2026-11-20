@@ -96,6 +96,13 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
       return t("notif.deadlineApproaching", { evaluationTitle: payload.evaluationTitle });
     case "results_updated":
       return t("notif.resultsUpdated", { evaluationTitle: payload.evaluationTitle });
+    case "contestation_resolved":
+      return t("notif.contestationResolved", { evaluationTitle: payload.evaluationTitle });
+    case "contestation_filed":
+      return t(payload.count === 1 ? "notif.contestationFiled.one" : "notif.contestationFiled", {
+        n: payload.count,
+        evaluationTitle: payload.evaluationTitle,
+      });
     case "student_joined":
       return t(payload.count === 1 ? "notif.studentJoined.one" : "notif.studentJoined", {
         n: payload.count,
@@ -197,12 +204,16 @@ function notificationRoute(payload: NotificationPayload): Route {
       return { view: "question", id: payload.questionId };
     case "results_released":
     case "results_updated":
+    case "contestation_resolved":
       return { view: "feedback", attemptId: payload.attemptId };
     case "student_joined":
     case "roster_conflict":
       return { view: "classroom", id: payload.classroomId, tab: "roster" };
     case "grading_ready":
       return { view: "grading", evaluationId: payload.evaluationId };
+    // ADR-139 §10: on the contested answers, as the e-mail's link.
+    case "contestation_filed":
+      return { view: "grading", evaluationId: payload.evaluationId, filter: "contested" };
     case "activity_scheduled":
       return { view: "home" };
     case "deadline_approaching":

@@ -14,6 +14,8 @@ import {
   type AnswerAcceptanceResult,
   AnswerIdParam,
   BatchValidateBody,
+  ContestationResolveBody,
+  type ContestationResolution,
   GradingIdParam,
   GradingQuery,
   GradingRunBody,
@@ -32,9 +34,18 @@ import { evaluationGradingRole } from "@quiz/domain";
 
 import { tracer, type AuditAction } from "../../audit.js";
 import { EXPORT_FORMATS, sendExport } from "../../documents/files.js";
-import { callerOf, loadEvaluation, staffAnswer, staffGrading, teacherGuard, withCourseRole } from "../guards.js";
+import {
+  callerOf,
+  loadEvaluation,
+  staffAnswer,
+  staffContestation,
+  staffGrading,
+  teacherGuard,
+  withCourseRole,
+} from "../guards.js";
 import { notFound, readerLang, teacherRoute } from "../http.js";
-import { joinedItem, joinedItems, type JoinedItem } from "../evaluation/service.js";
+import { joinedItem, joinedItems, staffAttemptIds, type JoinedItem } from "../evaluation/service.js";
+import { notifyUsers } from "../notifications/service.js";
 import { listVersions } from "../pool/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
@@ -438,6 +449,68 @@ export async function gradingPlugin(app: FastifyInstance) {
       ),
     });
   }
+
+  // --- Contestations (ADR-139) --------------------------------------------
+
+  /**
+   * The answer to a student's contestation: the course owner's alone, as
+   * every grading write after a release (ADR-068 §3) — and still after an
+   * unrelease, which a contestation survives (`403 owner_required` for an
+   * assistant, before the body). Once (`409 not_open`); a refusal or new
+   * points carry a reply (the contract's `answerExplained`, a 400). New
+   * points are a manual override, written with the answer in one
+   * transaction and followed by what every correction does. The student is
+   * told — not a teacher's own test walk (ADR-018), which tells nobody.
+   */
+  const ownedContestation = withCourseRole(
+    app,
+    (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => staffContestation(app, req, reply, p.id),
+    (s) => s.courseId,
+    "owner",
+  );
+  app.post(
+    "/app/api/contestations/:id/resolve",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: ContestationResolveBody, load: ownedContestation },
+      async ({ req, reply, now, body, scope }): Promise<ContestationResolution | FastifyReply> => {
+        const { contestation, evaluation } = scope;
+        const item = await joinedItem(app.db, evaluation.id, contestation.itemId);
+        if (!item) return notFound(reply);
+        const outcome = await service.resolveContestation(app.db, {
+          contestation,
+          evaluation,
+          item,
+          body,
+          userId: callerOf(req).id,
+          now,
+        });
+        if (outcome.grading) await afterCorrection(req, evaluation, outcome.grading, "grading.override");
+        await trace(req, "contestation.resolve", "contestation", contestation.id, {
+          evaluationId: evaluation.id,
+          verdict: body.verdict,
+          points: outcome.grading !== null,
+          gradingBefore: outcome.before,
+          gradingAfter: outcome.row.gradingAtResolutionId,
+        });
+        await events.contestationChanged(app.db, evaluation, scope.attempt.userId === null ? [] : [scope.attempt.userId]);
+        const staff = (await staffAttemptIds(app.db, evaluation)).has(contestation.attemptId);
+        if (!staff && scope.attempt.userId !== null) {
+          await notifyUsers(app.db, [scope.attempt.userId], {
+            kind: "contestation_resolved",
+            evaluationId: evaluation.id,
+            evaluationTitle: evaluation.title,
+            attemptId: contestation.attemptId,
+          });
+        }
+        return {
+          contestation: service.staffContestationOf(outcome.row, await service.attemptCounts(app.db, evaluation, scope.attempt)),
+          grading: outcome.grading ? service.toGrading(outcome.grading) : null,
+          modifiedAfterRelease: outcome.grading !== null && evaluation.releasedAt !== null,
+        };
+      },
+    ),
+  );
 
   /** What every single-cell correction does afterwards, in one place. */
   async function afterCorrection(

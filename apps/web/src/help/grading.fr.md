@@ -65,3 +65,12 @@ le panneau le dit d'abord.
 
 `←` `→` changent de question, `↑` `↓` de ligne, `Entrée` l'ouvre, `V` la
 valide, `A` la modifie, `Échap` la ferme. La barre latérale les liste.
+
+## Contestations
+
+**Contestées** montre les réponses contestées par les étudiants. En mode
+anonyme, le motif est replié : lisez d'abord la réponse. La réponse, une
+seule fois, est réservée au rôle Enseignant du cours, sous la réponse de
+l'étudiant ou de l'étudiante : **Refuser** avec une réponse, ou
+**Accepter**, avec ou sans nouveaux points (la réponse est alors
+obligatoire et devient le commentaire de la modification).

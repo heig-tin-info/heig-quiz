@@ -7,6 +7,7 @@ import type {
   GradingSteps,
   ResultsView,
   StudentFeedback,
+  StudentFeedbackItem,
 } from "@quiz/contracts";
 
 /**
@@ -76,6 +77,7 @@ export function makeEntry(over: Partial<GradingEntry> = {}): GradingEntry {
     student: MCQ_STUDENT,
     solution: MCQ_SOLUTION,
     history: [],
+    contestation: null,
     ...over,
     grading,
   };
@@ -109,7 +111,7 @@ export function makeSteps(
   return {
     steps: steps.map((s) => {
       const validated = s.validated ?? 0;
-      return { ...s, validated, total: s.total ?? validated };
+      return { ...s, validated, total: s.total ?? validated, contested: s.contested ?? 0 };
     }),
   };
 }
@@ -151,6 +153,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
       closedAt: "2026-09-01T09:00:00.000Z",
       releasedAt: null,
       modifiedAfterRelease: false,
+      contestationClosesAt: null,
       correctionPublishedAt: null,
       createdAt: "2026-09-01T08:00:00.000Z",
       originRevision: null,
@@ -227,6 +230,7 @@ function row(displayName: string, points: number, grade: number, over: Partial<R
     staff: false,
     excused: null as ResultsView["rows"][number]["excused"],
     origin: "digital" as const,
+    openContestations: 0,
     ...over,
   };
 }
@@ -247,6 +251,9 @@ export function makeResultsView(over: Partial<ResultsView> = {}): ResultsView {
     released: false,
     releasedAt: null,
     modifiedAfterRelease: false,
+    contestationApplies: false,
+    openContestations: 0,
+    contestationClosesAt: null,
     items: [
       { id: "i1", position: 0, internalName: "sizeof-ptr", type: "mcq", points: 5, counting: "normal", successRate: 0.6 },
     ],
@@ -299,8 +306,11 @@ export function makeFeedback(over: Partial<Extract<StudentFeedback, { available:
         explanation: "An address is 64 bits wide.",
         details: MCQ_DETAILS,
         comment: "Clean answer.",
+        contestation: null as StudentFeedbackItem["contestation"],
+        contestable: false,
       },
     ],
+    contestationClosesAt: null as string | null,
     ...over,
   };
 }

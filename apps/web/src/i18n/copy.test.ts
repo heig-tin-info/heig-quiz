@@ -116,6 +116,8 @@ const RULES: Rule[] = [
   { name: "word-account-deleted", langs: EN, fix: "anonymized: the results stay, only the identity leaves", test: (t, k) => ACCOUNT_KEY.test(k) && has(/\bdelet/i)(t) },
   { name: "word-account-archived", langs: FR, fix: "en sommeil (a dormant account); archivé is a classroom's", test: (t, k) => ACCOUNT_KEY.test(k) && has(/archiv/i)(t) },
   { name: "word-account-archived", langs: EN, fix: "dormant; archived is a classroom's", test: (t, k) => ACCOUNT_KEY.test(k) && has(/archiv/i)(t) },
+  // A student's request on a graded question (ADR-139): a contestation, never a claim nor an appeal.
+  { name: "word-contestation", langs: FR, fix: "contestation, contester", test: has(/\b(réclamations?|recours)\b/i) },
   // Ceilings (both).
   { name: "button-over-24", langs: BOTH, fix: "a verb, at most 24 characters", test: (t, k) => BUTTON.includes(suffix(k)) && !isSentence(t) && longerThan(24)(t) },
   { name: "tab-over-18", langs: BOTH, fix: "at most 18 characters", test: (t, k) => /\.tab\.[^.]+$/.test(k) && longerThan(18)(t) },

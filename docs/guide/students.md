@@ -223,6 +223,18 @@ For a graded quiz, nothing shows until your teacher publishes the results: the p
 
 Once published, the page shows your **Grade** and your **Points**, then one card per question with your answer and its score. According to the feedback policy of the evaluation, a card may also show the expected answer, an **Explanation** written by the teacher, and **Your teacher's comment** on your answer. When the expected answer is shown, an essay graded by criteria also lists **Points per criterion**: the name of each criterion and the points your teacher gave it. The question's score is the one that counts; its parts are rounded, so their sum may differ by 0.01. If your teacher adjusts a grading afterwards and publishes again, the page updates.
 
+### Contesting a question
+
+After an exam's results are published, you may contest the grading of a question for a few days, 7 unless your teacher chose otherwise: the page says until when, under your points. **Contest**, on a question's card, opens a short form: write your reason in plain text and **Send**. You contest a question once, and the reason cannot be changed afterwards. A question with full points, one that no longer counts, or one still being graded cannot be contested.
+
+<figure markdown="span">
+  ![The Contest question 8 form: the reason, Sent once, it cannot be changed, and until when contestations are accepted](../assets/screenshots/mock-contest-dialog-light.png#only-light)
+  ![The Contest question 8 form: the reason, Sent once, it cannot be changed, and until when contestations are accepted](../assets/screenshots/mock-contest-dialog-dark.png#only-dark)
+  <figcaption>One reason per question, sent once.</figcaption>
+</figure>
+
+The card then shows **Contestation awaiting an answer** with your reason. A teacher of the course answers once, **Contestation accepted** or **Contestation refused**, with a reply when there is one, and you are told. An accepted contestation does not always change your points: the reply says what was done. Your grade stays published while you wait. If you still disagree after the answer, the school's formal procedure is the next step.
+
 ## Projects
 
 A project is graded work in your own GitHub repository. It shows on your home and on your classroom's page like a quiz, and its one button follows where you are: **Link GitHub** (once), **Accept**, **Open the invitation**, then **Open repository**. The page of the project shows your repository, the indicative score while you work, and the final score and grade once your teacher releases them. The whole path, step by step, is in [Projects, groups and the journal](student-projects.md).

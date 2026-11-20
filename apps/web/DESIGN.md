@@ -1973,6 +1973,17 @@ One question's answers as a table (`src/grading/`, origin
 - **The answer panel** is a `Sheet` with two optional slots added for it:
   `leading` (the verdict glyph before the title) and `actions` (↑ / ↓
   before the close button).
+- **A contestation** (ADR-139). A contested row carries a badge after its
+  marks: `amber` with the `MessageSquareWarning` icon while open, `zinc`
+  with `MessageSquare` once answered, the verdict in its tooltip; a
+  question holding open ones carries their count as a `zinc` badge before
+  its state in the question bar, and the flag of its segment. In the open
+  answer, the record (state in its tone, the reason in an outlined
+  `NotePanel` with its date, the reply in a soft one) sits in a hairline
+  box ABOVE the review; under Anonymise the reason is a ghost "Show the
+  reason" until unfolded. The owner's answer is its own `line-strong` box
+  under the review, two `secondary` buttons (Refuse, Accept) at its end:
+  the panel's footer keeps the validation, the screen's primary.
 
 ## The gradebook (ADR-074, M5-04)
 

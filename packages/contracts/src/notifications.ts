@@ -124,6 +124,19 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     attemptId: z.uuid(),
     count: z.number().int().positive(),
   }),
+  z.object({
+    /**
+     * The course owner answered the recipient's contestation of a question
+     * (ADR-139). Ids and the title only: neither the verdict nor the reply,
+     * which are read on the feedback page behind the student's own session —
+     * a notification also leaves the platform by e-mail and Teams.
+     */
+    kind: z.literal("contestation_resolved"),
+    evaluationId: z.uuid(),
+    evaluationTitle: z.string(),
+    /** The contested attempt, whose feedback page the notification opens. */
+    attemptId: z.uuid(),
+  }),
   /** Students took their seat in a classroom (a roster line claimed at sign-in). */
   z.object({ kind: z.literal("student_joined"), ...classroomCount }),
   /** Roster lines of a classroom were flagged for the teacher's decision (AU-21). */
@@ -135,6 +148,19 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
      * whose, and never a grade.
      */
     kind: z.literal("grading_ready"),
+    evaluationId: z.uuid(),
+    evaluationTitle: z.string(),
+    count: z.number().int().positive(),
+  }),
+  z.object({
+    /**
+     * Students contested the grading of questions of a released exam the
+     * recipient teaches (ADR-139), folded per evaluation (§e): `count` the
+     * contestations folded into the entry. How many, never whose, which
+     * question nor why: the grading panel's contested filter, which the
+     * entry opens, shows them.
+     */
+    kind: z.literal("contestation_filed"),
     evaluationId: z.uuid(),
     evaluationTitle: z.string(),
     count: z.number().int().positive(),
@@ -333,6 +359,7 @@ export const NOTIFICATION_KINDS = [
   "activity_available",
   "deadline_approaching",
   "results_updated",
+  "contestation_resolved",
   "project_scheduled",
   "project_published",
   "project_deadline_reminder",
@@ -342,6 +369,7 @@ export const NOTIFICATION_KINDS = [
   "student_joined",
   "roster_conflict",
   "grading_ready",
+  "contestation_filed",
   "project_deadline_applied",
   "project_provision_failed",
   "github_org_lost",
@@ -390,6 +418,10 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   // A correction after the release: the bell, folded per evaluation; the
   // student already had the e-mail of the release (§h.5).
   results_updated: { bell: true, email: false, teams: false },
+  // The answer to one's own contestation is worth an e-mail; a contestation
+  // filed is news for the next visit, like a report on a question (ADR-139).
+  contestation_resolved: { bell: true, email: true, teams: true },
+  contestation_filed: { bell: true, email: false, teams: false },
   // The project kinds (F-NOTIF-13, ADR-030): on everywhere for what a
   // student or a teacher must not miss, off outside the app for the news
   // that can wait for the next visit.
@@ -484,6 +516,7 @@ export const NOTIFICATION_AUDIENCE: Readonly<
   activity_available: "seat",
   deadline_approaching: "seat",
   results_updated: "seat",
+  contestation_resolved: "seat",
   project_scheduled: "seat",
   project_published: "seat",
   project_deadline_reminder: "seat",
@@ -493,6 +526,7 @@ export const NOTIFICATION_AUDIENCE: Readonly<
   student_joined: "course",
   roster_conflict: "course",
   grading_ready: "course",
+  contestation_filed: "course",
   project_deadline_applied: "course",
   project_provision_failed: "course",
   github_org_lost: "course",

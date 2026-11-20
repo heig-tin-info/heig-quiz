@@ -255,3 +255,32 @@ The two-step freeze is inherited from the sibling classroom project, where it se
 
 !!! tip
     Keep the CSV. A grade in the platform can change with a re-grade; the file you exported on the day of the publication is the record you announced to the class.
+
+## Contestations
+
+After the results of an exam are published, a student may contest the grading of one question, once, with a reason in plain text (at most 2,000 characters). An exercise and a poll are never contested.
+
+**The window.** In the advanced options of an exam, beside the feedback, **Contestations** sets how many days after the publication a question may be contested: 7 by default, 0 for none, at most 60. It is hidden when the feedback is **None**, and locked once the results are published: the publication fixes the closing instant. From then on the results page shows **Contestations open until** the date, or **Contestations closed**. The course's Teacher role can **Close now** (the open contestations stay to answer) or **Extend** to a later date, at most 90 days ahead, which reopens a closed window. Where the publication set none (0 days, or the feedback changed afterwards), the line reads **No contestation window** and offers **Open a window**.
+
+<figure markdown="span">
+  ![The results page of a published exam: 2 open contestations, the window's end, Extend and Close now](../assets/screenshots/mock-contest-results-light.png#only-light)
+  ![The results page of a published exam: 2 open contestations, the window's end, Extend and Close now](../assets/screenshots/mock-contest-results-dark.png#only-dark)
+  <figcaption>The open contestations lead to the grading panel; the window line carries the owner's two acts.</figcaption>
+</figure>
+
+**Where they show.** The results page counts the **open contestations** and leads to the grading panel on them; a student's row carries their count. The gradebook flags the exam's column with the same count, so a grade is not sent on while it may still move. Nothing is suspended: the grade stays published and exported. You are told in the bell (**Contestation filed**, off by e-mail by default), and the notification opens the grading panel on its **Contested** filter.
+
+<figure markdown="span">
+  ![The grading panel on the Contested filter, an answer open with its reason and the form to answer it](../assets/screenshots/mock-contest-grading-light.png#only-light)
+  ![The grading panel on the Contested filter, an answer open with its reason and the form to answer it](../assets/screenshots/mock-contest-grading-dark.png#only-dark)
+  <figcaption>Answering a contestation: a reply, and new points if you accept with a correction.</figcaption>
+</figure>
+
+**In the grading panel.** A question holding open contestations is marked in the question bar with their count, and the state filter gains **Contested**, which shows the contested answers, open or answered. The address `?filter=contested` opens it directly, on the first question holding an open contestation. A contested row carries a small `contested` mark, or `accepted` / `refused` once answered. The open answer shows the contestation above the student's answer, with its date. While **Anonymise** is on, the reason is folded behind **Show the reason**: read the answer first.
+
+**Answering** is the course's Teacher role's alone, once; an assistant reads the contestation, and the panel says who answers. Under the answer, **Answer to the contestation** offers:
+
+- **Refuse**, with a reply, which is mandatory;
+- **Accept**, with or without a reply. An acceptance may leave the points as they are (the comment was wrong, or you changed how the question counts). Switch **Change the points** on to give new points in the same act: they are written as an adjustment whose comment is the reply, which is then mandatory.
+
+The answer is final. The student is told, and reads the verdict and your reply on their results page. To correct every student at once, use the panel's own tools before a bare acceptance: accept an answer, re-grade, or change how the question counts.

@@ -38,6 +38,10 @@ describe("WP10 routes", () => {
     );
     expect(grading.pathname + grading.search).toBe("/evaluations/e1/grading?item=i2");
     expect(parsePath(grading.pathname)).toEqual({ view: "grading", evaluationId: "e1" });
+    // ADR-139: the contested answers only, the notification's and the e-mail's link.
+    expect(routeToPath({ view: "grading", evaluationId: "e1", filter: "contested" })).toBe(
+      "/evaluations/e1/grading?filter=contested",
+    );
 
     const editor = new URL(
       routeToPath({ view: "question", id: "q1", fromGrading: "e1", item: "i2" }),

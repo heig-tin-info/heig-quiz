@@ -154,7 +154,7 @@ export async function changeAcceptance(
   const written = await writeGradings(
     db,
     writes,
-    acceptanceGuard(passGuard(new Map(attemptRows.map((a) => [a.id, endOf(a.closedAt)]))), bound, { leaveManual: true }),
+    { guard: acceptanceGuard(passGuard(new Map(attemptRows.map((a) => [a.id, endOf(a.closedAt)]))), bound, { leaveManual: true }) },
   );
   return {
     changed,

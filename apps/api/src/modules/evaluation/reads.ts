@@ -157,6 +157,7 @@ export function toEvaluation(row: EvaluationRecord): Evaluation {
     closedAt: isoOrNull(row.closedAt),
     releasedAt: isoOrNull(row.releasedAt),
     modifiedAfterRelease: row.modifiedAfterRelease,
+    contestationClosesAt: isoOrNull(row.contestationClosesAt),
     correctionPublishedAt: isoOrNull(row.correctionPublishedAt),
     createdAt: iso(row.createdAt),
     originRevision: row.originRevision,
@@ -882,4 +883,19 @@ export async function peopleOf(db: Db, evaluation: EvaluationRecord): Promise<Ma
     .from(enrollments)
     .where(eq(enrollments.classroomId, evaluation.classroomId));
   return [...sat, ...roster];
+}
+
+/**
+ * Whether the evaluation's classroom is archived: it takes no student write
+ * — a practice attempt (ADR-122 §1), a contestation (ADR-139). An evaluation
+ * with no classroom (an anonymous poll) never is.
+ */
+export async function classroomArchived(db: DbOrTx, evaluation: Pick<EvaluationRecord, "classroomId">): Promise<boolean> {
+  if (evaluation.classroomId === null) return false;
+  const [row] = await db
+    .select({ archivedAt: classrooms.archivedAt })
+    .from(classrooms)
+    .where(eq(classrooms.id, evaluation.classroomId))
+    .limit(1);
+  return row?.archivedAt != null;
 }

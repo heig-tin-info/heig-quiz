@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { BarChart3, CheckCircle2, Hourglass, RotateCcw, type LucideIcon } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { BarChart3, CheckCircle2, Hourglass, MessageSquareWarning, RotateCcw, type LucideIcon } from "lucide-react";
+import { useState } from "react";
 
 import type {
   FeedbackPending,
@@ -8,6 +9,7 @@ import type {
   RetakeStatus,
   ReviewItem,
   StudentFeedback,
+  StudentFeedbackItem,
 } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
@@ -23,13 +25,16 @@ import {
   PageSkeleton,
   QueryError,
   Button,
+  isoDateTime,
   RelativeTime,
   Stat,
+  useNow,
   type Tone,
 } from "../ui";
 import { attemptFeedbackKey } from "../queryKeys";
 import { leaveStudentView } from "../studentView";
 import { useEvaluation } from "../evaluation/api";
+import { ContestationRecord, ContestDialog } from "../Contestation";
 import { CopyItem } from "../CopyItem";
 import { PendingLine } from "./cards";
 import { useRetake } from "./retake";
@@ -53,6 +58,11 @@ import { useRetake } from "./retake";
  * branch the answer, the key, the explanation and the teacher's comment are
  * each present only when the feedback policy let them through. This page
  * never reconstructs one from another.
+ *
+ * ADR-139: a question of a released exam may be contested, once, while the
+ * window holds — the server's `contestable`. "Contest" is a secondary button
+ * on that question's card, never the page's action; the contestation and its
+ * answer then stand at the card's foot.
  */
 
 const PENDING_TITLE: Record<FeedbackPending["reason"], keyof Dict> = {
@@ -249,6 +259,30 @@ function ReviewList({ review }: { review: readonly ReviewItem[] }) {
   );
 }
 
+/** ADR-139: the item may be contested now, and is not yet (the server's offer; the write decides again). */
+const offersContest = (item: StudentFeedbackItem) => item.contestable && item.contestation === null;
+
+/**
+ * ADR-139: the window, a quiet line under the score. While it runs (the
+ * closing instant against the clock), until when — if a question may still
+ * be contested or is; once it closed, that it did — if one was contested.
+ * A student with nothing to contest reads nothing about it.
+ */
+function ContestWindowLine({ items, closesAt }: { items: readonly StudentFeedbackItem[]; closesAt: string | null }) {
+  const t = useT();
+  const now = useNow(60_000);
+  if (closesAt === null) return null;
+  const running = Date.parse(closesAt) > now;
+  const contested = items.some((i) => i.contestation !== null);
+  if (running ? !(contested || items.some(offersContest)) : !contested) return null;
+  return (
+    <p className="flex items-center gap-1.5 text-[13px] text-fg-muted">
+      <MessageSquareWarning aria-hidden className="size-3.5 shrink-0" />
+      {running ? t("contest.until", { when: isoDateTime(closesAt) }) : t("contest.closed")}
+    </p>
+  );
+}
+
 export function Feedback({
   attemptId,
   navigate,
@@ -260,6 +294,10 @@ export function Feedback({
   studentView?: boolean;
 }) {
   const t = useT();
+  const qc = useQueryClient();
+  /** ADR-139: the question whose contestation is being written, and the one just filed (its record takes the focus). */
+  const [contesting, setContesting] = useState<StudentFeedbackItem | null>(null);
+  const [filed, setFiled] = useState<string | null>(null);
   const feedback = useQuery<StudentFeedback>({
     queryKey: attemptFeedbackKey(attemptId),
     queryFn: () => api(`/app/api/attempts/${attemptId}/feedback`),
@@ -365,6 +403,7 @@ export function Feedback({
           />
         </div>
         {practice ? <PracticePendingLine count={data.pendingCount} /> : <PendingLine count={data.pendingCount} />}
+        <ContestWindowLine items={data.items} closesAt={data.contestationClosesAt} />
         {/* "Download my copy" (F-EXP-06): this page as a file, a quiet row
             under the score, never the page's action. ADR-122 §10: a
             practice attempt has no copy. */}
@@ -400,10 +439,53 @@ export function Feedback({
       ) : (
         <div className="space-y-5">
           {data.items.map((item) => (
-            <CopyItem key={item.itemId} item={item} audience="student" />
+            <CopyItem
+              key={item.itemId}
+              item={item}
+              audience="student"
+              // ADR-139: secondary, never the page's action.
+              actions={
+                offersContest(item) ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    aria-label={t("contest.dialog.title", { n: item.position + 1 })}
+                    onClick={() => setContesting(item)}
+                  >
+                    <MessageSquareWarning /> {t("contest.action")}
+                  </Button>
+                ) : null
+              }
+              footer={
+                item.contestation ? (
+                  <ContestationRecord contestation={item.contestation} audience="student" focus={filed === item.itemId} />
+                ) : null
+              }
+            />
           ))}
         </div>
       )}
+      {contesting ? (
+        <ContestDialog
+          title={t("contest.dialog.title", { n: contesting.position + 1 })}
+          closesAt={data.contestationClosesAt}
+          path={`/app/api/attempts/${data.attemptId}/items/${contesting.itemId}/contestation`}
+          invalidate={[attemptFeedbackKey(attemptId)]}
+          // The card shows its state at once, and takes the focus the button had; the read confirms it.
+          onFiled={(contestation) => {
+            qc.setQueryData<StudentFeedback>(attemptFeedbackKey(attemptId), (page) =>
+              page?.available
+                ? {
+                    ...page,
+                    items: page.items.map((i) => (i.itemId === contesting.itemId ? { ...i, contestation, contestable: false } : i)),
+                  }
+                : page,
+            );
+            setFiled(contesting.itemId);
+          }}
+          onClose={() => setContesting(null)}
+        />
+      ) : null}
     </div>
   );
 }

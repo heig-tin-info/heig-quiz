@@ -9,8 +9,10 @@
  */
 import type { GradingProgressEvent } from "@quiz/contracts";
 
+import { eq } from "drizzle-orm";
+
 import type { Db } from "../../db/client.js";
-import { isOwnedPoll } from "../../db/schema.js";
+import { classrooms, isOwnedPoll } from "../../db/schema.js";
 import { classroomIdOf, type EvaluationRecord } from "../evaluation/service.js";
 import { classroomStaffIds } from "../guards.js";
 import * as bus from "../realtime/bus.js";
@@ -56,4 +58,19 @@ export function resultsChanged(evaluation: EvaluationRecord, userIds: readonly s
     ...bus.homeTopic(evaluation),
     ...userIds.map((id) => `user:${id}` as const),
   ]);
+}
+
+/**
+ * A contestation was filed or answered (ADR-139): the course's staff
+ * (`course:<id>`) and the students it concerns (`user:<id>`) re-read —
+ * NEVER `classroom:<id>`, where every classmate listens (N-SEC-20). A
+ * filing tells the staff alone: its student has the POST's reply.
+ */
+export async function contestationChanged(db: Db, evaluation: EvaluationRecord, userIds: readonly string[]): Promise<void> {
+  const [room] = await db
+    .select({ courseId: classrooms.courseId })
+    .from(classrooms)
+    .where(eq(classrooms.id, classroomIdOf(evaluation)))
+    .limit(1);
+  if (room) bus.staffAndStudentsHint("grading", room.courseId, userIds);
 }

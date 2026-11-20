@@ -10,6 +10,7 @@ import { useT } from "../i18n";
 import { Badge, Button, cx, IconButton, pressable, TableHead, T, Tip, type Column } from "../ui";
 import { AcceptControl, AcceptedAnswers, type Acceptance } from "./AcceptAnswer";
 import type { SortColumn } from "./columns";
+import { ContestationMark } from "./Contestation";
 import { confidenceLabelShort, whoOf } from "./labels";
 import { entryKey, EXPECTED, isMissing, rowAction, type Sort } from "./rows";
 import type { GradingParameters } from "./useGradingData";
@@ -421,7 +422,7 @@ function AnswerRow({
   );
 }
 
-/** A retake's number (ADR-025) and a teacher's own run (ADR-018): never a name. */
+/** A retake's number (ADR-025), a teacher's own run (ADR-018) and a contestation (ADR-139): never a name. */
 export function RowMarks({ entry }: { entry: GradingEntry }) {
   const t = useT();
   const n = entry.attemptNumber;
@@ -443,6 +444,7 @@ export function RowMarks({ entry }: { entry: GradingEntry }) {
           </Badge>
         </Tip>
       ) : null}
+      <ContestationMark contestation={entry.contestation} />
     </>
   );
 }

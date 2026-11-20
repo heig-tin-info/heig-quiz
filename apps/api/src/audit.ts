@@ -107,6 +107,21 @@ export type AuditAction =
   | "concept.relation_add"
   | "concept.relation_remove"
   | "concept.validate"
+  /**
+   * ADR-139: a student contested the grading of a question (actor: the
+   * student); subject the contestation, `payload.evaluationId`,
+   * `payload.attemptId`, `payload.itemId`. Never the reason.
+   */
+  | "contestation.file"
+  /**
+   * ADR-139: the course owner answered a contestation; subject the
+   * contestation, `payload.evaluationId`, `payload.verdict` (`accepted` |
+   * `refused`), `payload.points` (whether new points were written, as a
+   * manual override audited beside it as `grading.override`),
+   * `payload.gradingBefore` and `payload.gradingAfter` (the gradings in
+   * force before and after the act). Never the reason nor the reply.
+   */
+  | "contestation.resolve"
   | "course.create"
   | "course.delete"
   | "course.staff_add"
@@ -176,6 +191,12 @@ export type AuditAction =
   /** ADR-122: the "practice after the due date" switch set (`payload.afterDue`). */
   | "evaluation.after_due"
   | "evaluation.close"
+  /**
+   * ADR-139: the owner closed the contestation window of a released exam
+   * now, or extended it; subject the evaluation, `payload.action`
+   * (`close` | `extend`) and `payload.closesAt`.
+   */
+  | "evaluation.contestation_window"
   /** The correction of an open exercise published, irreversibly (ADR-050). */
   | "evaluation.correction_publish"
   | "evaluation.create"

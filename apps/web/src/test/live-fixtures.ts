@@ -186,6 +186,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
       closedAt: null,
       releasedAt: null,
       modifiedAfterRelease: false,
+      contestationClosesAt: null,
       correctionPublishedAt: null,
       createdAt: liveAt(-HOUR),
       originRevision: null,

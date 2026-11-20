@@ -538,17 +538,46 @@ export async function setAfterDue(
   return updated;
 }
 
-/** `results.releaseResults`: the frozen grades (docs/05 §5.3) and the state they imply. */
+/**
+ * `results.releaseResults`: the frozen grades (docs/05 §5.3) and the state
+ * they imply. `contestationClosesAt` (ADR-139) is written only where none
+ * is stored yet: the release that opens a window sets its instant once, and
+ * a re-release never moves it.
+ */
 export async function setRelease(
   db: DbOrTx,
   id: string,
-  release: { releasedAt: Date; releasedGrades: ReleasedGrades },
+  release: { releasedAt: Date; releasedGrades: ReleasedGrades; contestationClosesAt: Date | null },
   now: Date,
 ): Promise<void> {
+  const { contestationClosesAt, ...rest } = release;
   await db
     .update(evaluations)
-    .set({ ...release, modifiedAfterRelease: false, state: "released", updatedAt: now })
+    .set({
+      ...rest,
+      modifiedAfterRelease: false,
+      state: "released",
+      updatedAt: now,
+      ...(contestationClosesAt === null
+        ? {}
+        : { contestationClosesAt: sql`coalesce(${evaluations.contestationClosesAt}, ${contestationClosesAt.toISOString()}::timestamptz)` }),
+    })
     .where(eq(evaluations.id, id));
+}
+
+/**
+ * ADR-139: the owner's two acts on a contestation window — close it now, or
+ * move its closing instant to `closesAt` — on a RELEASED exam only, which
+ * the UPDATE says again: `false` when no such row matched (the caller
+ * refuses). The caller checked the policy and the instant.
+ */
+export async function setContestationWindow(db: DbOrTx, id: string, closesAt: Date, now: Date): Promise<boolean> {
+  const rows = await db
+    .update(evaluations)
+    .set({ contestationClosesAt: closesAt, updatedAt: now })
+    .where(and(eq(evaluations.id, id), eq(evaluations.mode, "exam"), isNotNull(evaluations.releasedAt)))
+    .returning({ id: evaluations.id });
+  return rows.length > 0;
 }
 
 /** `results.unreleaseResults`: the release pair, cleared (the state moves separately). */

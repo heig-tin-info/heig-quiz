@@ -19,7 +19,12 @@ export const EXPECTED = "expected";
 export const ANY = "any";
 export type Any = typeof ANY;
 
-export type StateFilter = "all" | "todo";
+/**
+ * Which answers the table shows: all, those not validated yet, or those a
+ * student contested (ADR-139), open or answered — the last one lives in the
+ * URL (`?filter=contested`), never in the stored habit (`view.ts`).
+ */
+export type StateFilter = "all" | "todo" | "contested";
 
 export interface RowFilters {
   state: StateFilter;
@@ -130,10 +135,16 @@ export function byName(entries: readonly GradingEntry[]): GradingEntry[] {
   );
 }
 
+/** ADR-139: the cell holds a contestation, open or answered. */
+export const isContested = (e: Pick<GradingEntry, "contestation">) => e.contestation !== null;
+
+const stateKeeps = (state: StateFilter, e: GradingEntry) =>
+  state === "all" || (state === "todo" ? !isValidated(e) : isContested(e));
+
 export function filterRows(entries: readonly GradingEntry[], f: RowFilters): GradingEntry[] {
   return entries.filter(
     (e) =>
-      (f.state === "all" || !isValidated(e)) &&
+      stateKeeps(f.state, e) &&
       (f.source === ANY || e.grading?.source === f.source) &&
       (f.source !== "llm" || f.confidence === ANY || e.grading?.confidence === f.confidence),
   );

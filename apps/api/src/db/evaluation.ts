@@ -148,6 +148,16 @@ export const evaluations = pgTable(
     correctionPublishedAt: timestamp("correction_published_at", { withTimezone: true }),
     /** Frozen grades at release (docs/05 §5.3, F-RES-04); written by WP6, never recomputed. */
     releasedGrades: jsonb("released_grades"),
+    /**
+     * ADR-139: when the window to contest a question of this released exam
+     * closes. Set ONCE, by the release that opens it — when null, the
+     * feedback policy shows results and gives a window of days > 0: that
+     * release's instant plus the days — and moved only by the owner's two
+     * acts, close now and extend (`setContestationWindow`). A re-release or
+     * an unrelease never moves it; filing compares it with the database's
+     * clock (invariant 5). Null: no window, ever opened. Never copied.
+     */
+    contestationClosesAt: timestamp("contestation_closes_at", { withTimezone: true }),
     modifiedAfterRelease: boolean("modified_after_release").notNull().default(false),
     /**
      * The seed of the printed paper (ADR-125 §8): the order and the shuffles

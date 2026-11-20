@@ -36,6 +36,7 @@ import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { gradebookColumns, type classrooms } from "../../db/schema.js";
 import { gradebookEntries, studentGradebookEntries } from "../activity/service.js";
+import { openContestationCounts } from "../grading/service.js";
 import type { GradebookBeneath } from "../activity/kind.js";
 import type { ReadableClassroom } from "../guards.js";
 import {
@@ -119,6 +120,13 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
       columns.map(async ({ entry }) => [entry.activityId, entry.released ? await entry.staffCells(db, seats) : new Map<string, GradebookBeneath>()] as const),
     ),
   );
+  // ADR-139: an exam's open contestations, the class's, read by join (the grading module owns the table).
+  const contested = (
+    await openContestationCounts(
+      db,
+      entries.filter((entry) => entry.kind === "evaluation").map((entry) => entry.activityId),
+    )
+  ).byEvaluation;
   const rows = seats.map((seat) => {
     const cells: GradebookStaff["rows"][number]["cells"] = {};
     const counted: MeanColumn[] = [];
@@ -166,6 +174,7 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
       componentId: settings.componentId,
       // The released grades only, as the screen shows them: a mark in a column not released is not one yet.
       classMean: entry.released ? classMean(classRows.map((row) => row.cells[entry.activityId]!.grade)) : null,
+      openContestations: entry.kind === "evaluation" ? (contested.get(entry.activityId) ?? 0) : 0,
     })),
     rows,
     classMean: classMean(classRows.map((row) => row.mean)),

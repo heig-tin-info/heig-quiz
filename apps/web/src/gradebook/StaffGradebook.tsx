@@ -47,6 +47,7 @@ import {
   Eraser,
   EyeOff,
   GraduationCap,
+  MessageSquareWarning,
   Pencil,
   Scale,
   Table2,
@@ -535,7 +536,12 @@ function ColumnHead({
   return (
     <div className={cx("pointer-events-auto flex h-14 flex-col items-center justify-end gap-0.5 border-l border-line px-0.5 pb-1.5", fill)}>
       {column.released ? (
-        <span aria-hidden className="h-3.5" />
+        // ADR-139: open contestations, so a grade is not sent on too early.
+        column.openContestations > 0 ? (
+          <OpenContestationsFlag n={column.openContestations} />
+        ) : (
+          <span aria-hidden className="h-3.5" />
+        )
       ) : (
         <Tip label={t("gbook.unreleased.help")} className="inline-flex text-fg-muted">
           <EyeOff aria-hidden className="size-3.5" />
@@ -561,6 +567,19 @@ function ColumnHead({
         </button>
       )}
     </div>
+  );
+}
+
+/** ADR-139: an exam column's open contestations: a grade may still move, so it is not sent on yet. */
+function OpenContestationsFlag({ n }: { n: number }) {
+  const t = useT();
+  const label = t(n === 1 ? "gbook.contest.help.one" : "gbook.contest.help", { n });
+  return (
+    <Tip label={label} className="inline-flex h-3.5 items-center gap-0.5 text-[11px] font-semibold tabular-nums text-warning">
+      <MessageSquareWarning aria-hidden className="size-3" />
+      <span aria-hidden>{n}</span>
+      <span className="sr-only">{label}</span>
+    </Tip>
   );
 }
 

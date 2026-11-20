@@ -2,9 +2,11 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import type { ResultsView as ResultsPayload } from "@quiz/contracts";
+
 import { makeClassroomDetail, makeCourseSummary } from "../test/fixtures";
 import { makeEvaluationDetail, makeFeedback, makeResultsView } from "../test/grading-fixtures";
-import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { ResultsView } from "./ResultsView";
 
 /*
@@ -417,5 +419,129 @@ describe("ResultsView", () => {
       await screen.findByRole("heading", { name: "Results" });
       expect(screen.queryByRole("switch", { name: "Show test attempts" })).toBeNull();
     });
+  });
+});
+
+/*
+ * ADR-139: a released exam's contestations on its results — how many are
+ * open, a link to the grading panel on them, and the window, which the
+ * course's owner closes, extends, or opens where none was set.
+ */
+describe("ResultsView — contestations", () => {
+  const DAY = 86_400_000;
+  const ahead = new Date(Date.now() + 5 * DAY).toISOString();
+  const released = (over: Partial<ResultsPayload> = {}) => {
+    const view = makeResultsView();
+    return makeResultsView({
+      released: true,
+      releasedAt: "2026-09-10T08:00:00.000Z",
+      contestationApplies: true,
+      openContestations: 2,
+      contestationClosesAt: ahead,
+      rows: view.rows.map((r, i) => (i === 0 ? { ...r, openContestations: 2 } : r)),
+      ...over,
+    });
+  };
+  const routesFor = (role: "owner" | "assistant", over: Record<string, unknown> = {}) => ({
+    [`GET ${VIEW}`]: ok(released()),
+    "GET /app/api/evaluations/e1": ok(makeEvaluationDetail()),
+    "GET /app/api/courses": ok([makeCourseSummary({ myRole: role })]),
+    ...over,
+  });
+  const WINDOW = "PUT /app/api/evaluations/e1/contestation-window";
+
+  it("flags the open contestations, leading to the grading panel on them, and marks the row", async () => {
+    mockFetch(routesFor("owner"));
+    const navigate = vi.fn();
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={navigate} />);
+    await userEvent.click(await screen.findByRole("button", { name: "2 open contestations" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "grading", evaluationId: "e1", filter: "contested" });
+    expect(screen.getByText(/Contestations open until/)).toBeVisible();
+    // The row's mark: the count, its words for a screen reader.
+    const zoe = screen.getAllByRole("row").find((r) => r.textContent?.includes("Zoe Blanc"))!;
+    expect(within(zoe).getByText("2 open contestations")).toHaveClass("sr-only");
+  });
+
+  it("lets the owner close the window, after a confirmation", async () => {
+    const { calls } = mockFetch(routesFor("owner", { [WINDOW]: ok({ closesAt: new Date().toISOString() }) }));
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Close now" }));
+    const dialog = await screen.findByRole("dialog", { name: "Close contestations" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Close now" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ action: "close" }));
+  });
+
+  it("lets the owner extend the window, a closed one included", async () => {
+    const { calls } = mockFetch(
+      routesFor("owner", {
+        [`GET ${VIEW}`]: ok(released({ contestationClosesAt: "2026-09-17T08:00:00.000Z", openContestations: 0 })),
+        [WINDOW]: ok({ closesAt: ahead }),
+      }),
+    );
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+    expect(await screen.findByText("Contestations closed")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Close now" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Extend" }));
+    const dialog = await screen.findByRole("dialog", { name: "Extend contestations" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Extend" }));
+    await waitFor(() => {
+      const body = calls.find((c) => c.method === "PUT")?.body as { action: string; closesAt: string } | undefined;
+      expect(body?.action).toBe("extend");
+      expect(new Date(body!.closesAt).getTime()).toBeGreaterThan(Date.now());
+    });
+  });
+
+  it("refuses an end in the past before asking the server, and words the server's refusal", async () => {
+    const { calls } = mockFetch(
+      routesFor("owner", {
+        [WINDOW]: fail(422, { error: "window_instant", message: "the window closes later", reason: "too_far" }),
+      }),
+    );
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Extend" }));
+    const dialog = await screen.findByRole("dialog", { name: "Extend contestations" });
+    const field = within(dialog).getByLabelText("New end");
+    await userEvent.clear(field);
+    await userEvent.type(field, "2020-01-01T08:00");
+    expect(within(dialog).getByText(/^Pick a time after/)).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Extend" })).toBeDisabled();
+    expect(calls.some((c) => c.method === "PUT")).toBe(false);
+
+    await userEvent.clear(field);
+    await userEvent.type(field, new Date(Date.now() + 10 * DAY).toISOString().slice(0, 16));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Extend" }));
+    expect(await within(dialog).findByText(/^Pick a time no later than/)).toBeVisible();
+  });
+
+  it("offers the owner to open a window where none was set; others read that there is none", async () => {
+    const none = { [`GET ${VIEW}`]: ok(released({ contestationClosesAt: null, openContestations: 0 })) };
+    const { calls } = mockFetch(routesFor("owner", { ...none, [WINDOW]: ok({ closesAt: ahead }) }));
+    const { unmount } = renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+    expect(await screen.findByText("No contestation window")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Open a window" }));
+    const dialog = await screen.findByRole("dialog", { name: "Open contestations" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Open a window" }));
+    await waitFor(() => expect((calls.find((c) => c.method === "PUT")?.body as { action: string }).action).toBe("extend"));
+    unmount();
+
+    mockFetch(routesFor("assistant", none));
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+    expect(await screen.findByText("No contestation window")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Open a window" })).toBeNull();
+  });
+
+  it("gives an assistant the line, without the owner's two acts", async () => {
+    mockFetch(routesFor("assistant"));
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+    expect(await screen.findByText(/Contestations open until/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Close now" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Extend" })).toBeNull();
+  });
+
+  it("says nothing where no window applies and nothing is open", async () => {
+    mockFetch(routesFor("owner", { [`GET ${VIEW}`]: ok(released({ contestationApplies: false, contestationClosesAt: null, openContestations: 0, rows: makeResultsView().rows })) }));
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+    expect(await screen.findByRole("heading", { name: "Results" })).toBeVisible();
+    expect(screen.queryByText(/contestation/i)).toBeNull();
   });
 });

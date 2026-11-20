@@ -24,27 +24,19 @@ import { emptyAnswerOf, QuestionHost } from "../student/QuestionHost";
 import {
   Button,
   ErrorText,
-  FieldError,
-  fieldErrorProps,
-  FieldLabel,
   FormError,
   IconButton,
   NotePanel,
   PaneOrSheet,
-  PointsPill,
   Textarea,
   Section,
 } from "../ui";
 import { AcceptControl, AcceptedAnswers, offeredPart, type Acceptance } from "./AcceptAnswer";
 import { AiJustification } from "./AiJustification";
-import {
-  CriteriaFields,
-  criteriaBody,
-  initialCriteriaPoints,
-  invalidCriteria,
-} from "./EssayCriteria";
+import { ContestationAnswer, ContestationReason } from "./Contestation";
 import { RowMarks } from "./GradingTable";
 import { GradingHistory } from "./GradingHistory";
+import { PointsFields, usePointsDraft } from "./PointsDraft";
 import { gradingStateLabel, machineReason, sourceLabel, whoOf } from "./labels";
 import { isMissing, rowAction, type PanelTarget } from "./rows";
 import { useGradingInvalidate } from "./useGradingInvalidate";
@@ -76,6 +68,11 @@ interface PanelProps {
   explanation: string | null;
   /** The essay's criteria, from the queue's item (ADR-118 §6); none for every other question. */
   criteria: NonNullable<GradingQueueItem["criteria"]>;
+  /**
+   * ADR-139: the reader answers contestations — the course's owner, after
+   * the release as before it (ADR-068 §3). Anyone else reads them.
+   */
+  resolver: boolean;
   onClose: () => void;
   /** One row up or down the table, the expected row included (↑ / ↓). */
   onMove: (delta: number) => void;
@@ -268,6 +265,7 @@ function EntryPanel({
   acceptance,
   explanation,
   criteria,
+  resolver,
   onClose,
   onAdjust,
   onValidate,
@@ -355,6 +353,15 @@ function EntryPanel({
       }
     >
       <div className="space-y-6">
+        {/* ADR-139: what the student contests, before the answer it is about. */}
+        {entry.contestation ? (
+          <ContestationReason
+            key={`${entry.attemptId}:${entry.itemId}`}
+            contestation={entry.contestation}
+            named={named}
+            resolver={resolver}
+          />
+        ) : null}
         {isMissing(entry) ? (
           <p className="text-sm italic text-fg-faint">{t("grading.noAnswer")}</p>
         ) : null}
@@ -369,6 +376,18 @@ function EntryPanel({
           audience="teacher"
         />
         {acceptance?.change ? <AcceptSection acceptance={acceptance} columns={columns} entry={entry} /> : null}
+        {/* The owner's one answer, its own block under the answer read. */}
+        {entry.contestation?.state === "open" && resolver ? (
+          <ContestationAnswer
+            key={entry.contestation.id}
+            evaluationId={evaluationId}
+            contestation={entry.contestation}
+            entry={entry}
+            criteria={criteria}
+            maxPoints={grading?.maxPoints ?? item.points}
+            minPoints={item.minPoints ?? 0}
+          />
+        ) : null}
         {entry.values ? <ValuesSection values={entry.values} /> : null}
         {/* A comment is the teacher's only when the grading is: an automatic
             pass puts its own note here ("runner unavailable"), and labelling
@@ -493,26 +512,15 @@ function AdjustForm({
   error: ReactNode;
 }) {
   const t = useT();
-  const graded = criteria.length > 0;
-  const [values, setValues] = useState(() => initialCriteriaPoints(criteria, entry.grading?.details ?? null));
-  const [points, setPoints] = useState(() =>
-    entry.grading ? formatPoints(entry.grading.points) : "0",
-  );
+  const draft = usePointsDraft({ entry, criteria, maxPoints, minPoints });
   const [comment, setComment] = useState(
     entry.grading?.source === "manual" ? (entry.grading.comment ?? "") : "",
   );
   const [touched, setTouched] = useState(false);
   // ADR-110: a typed grade holds the tab on its build until it is saved
   // (docked as a pane, it has no sheet to hold it).
-  useHoldChanged({ points, values, comment });
-  const value = Number(points.replace(",", "."));
-  const pointsInvalid = graded
-    ? invalidCriteria(criteria, maxPoints, values).size > 0
-    : points.trim() === "" || !Number.isFinite(value) || value < minPoints || value > maxPoints;
+  useHoldChanged({ points: draft.points, values: draft.values, comment });
   const commentInvalid = comment.trim() === "";
-  const range = { min: formatPoints(minPoints), max: formatPoints(maxPoints) };
-  const pointsId = useId();
-  const showPointsError = touched && pointsInvalid;
 
   return (
     <form
@@ -524,42 +532,11 @@ function AdjustForm({
       onSubmit={(e) => {
         e.preventDefault();
         setTouched(true);
-        if (pointsInvalid || commentInvalid) return;
-        onSave(
-          graded
-            ? { criteria: criteriaBody(criteria, values), comment: comment.trim() }
-            : { points: value, comment: comment.trim() },
-        );
+        if (draft.invalid || commentInvalid) return;
+        onSave({ ...draft.body(), comment: comment.trim() });
       }}
     >
-      {/* The points over their maximum, one pill (F-PROJ-25 as amended):
-          the maximum is its suffix, so the label line says the range only
-          when the floor is not 0 (negative marking). */}
-      {graded ? (
-        <CriteriaFields
-          criteria={criteria}
-          itemPoints={maxPoints}
-          values={values}
-          onChange={(id, text) => setValues((v) => ({ ...v, [id]: text }))}
-          details={entry.grading?.details ?? null}
-          showErrors={touched}
-        />
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          <FieldLabel htmlFor={pointsId} hint={minPoints < 0 ? t("grading.override.range", range) : undefined}>
-            {t("grading.override.points")}
-          </FieldLabel>
-          <PointsPill
-            id={pointsId}
-            bounds={{ max: maxPoints }}
-            autoFocus
-            value={points}
-            onChange={(e) => setPoints(e.target.value)}
-            {...fieldErrorProps(pointsId, showPointsError)}
-          />
-          <FieldError id={pointsId}>{showPointsError ? t("grading.override.pointsInvalid", range) : null}</FieldError>
-        </div>
-      )}
+      <PointsFields draft={draft} showErrors={touched} autoFocus />
       <div className="space-y-1.5">
         <Textarea
           label={t("grading.override.comment")}

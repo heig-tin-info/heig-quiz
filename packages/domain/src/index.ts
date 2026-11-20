@@ -52,6 +52,7 @@ export * from "./conceptRelations.js";
 export * from "./concepts.js";
 export * from "./conceptWrites.js";
 export * from "./compareOutput.js";
+export * from "./contestation.js";
 export * from "./outputDiff.js";
 export * from "./cooldown.js";
 export * from "./correction.js";

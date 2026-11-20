@@ -20,6 +20,10 @@ implementation, and this record wins wherever both speak.
 Amended 2026-11-06 by [ADR-127](ADR-127-etat-planifie-des-projets.md)
 (rule 12 only): a new kind, `project_scheduled`, its row in the table.
 
+Amended 2026-11-20 by [ADR-139](ADR-139-contestation-d-une-correction.md)
+(rule 12 only): two new kinds, `contestation_filed` and
+`contestation_resolved`, their rows in the table.
+
 Amended 2026-10-28 (rule 25 only): an e-mail no longer goes to the login
 address (`users.email`), which Switch edu-ID lets the person choose and is
 often a private mailbox, but to the account's notification address: the
@@ -167,6 +171,8 @@ ported independently, and its `grade.final` mail on the final review is dropped
 | `project_deadline_applied` (2026-10-04, M3-09b) | A `project.deadline` job pass that locked or committed on at least one repository; the course staff; folded per project with the count | Off |
 | `project_provision_failed` (2026-10-04, M3-09b) | A row's FIRST provisioning failure, never an invitation GitHub refused; the course staff; folded per project, `reason` the latest (`repo_name_taken`, `github_error`) | On |
 | `github_org_lost` (2026-10-04, M3-09b) | The installation an organization held forgotten — uninstalled, deleted with it, or a 404 the healing met —; the course staff of each non-archived linked classroom, one entry per classroom; not folded; a suspension tells nobody | On |
+| `contestation_filed` (2026-11-20, ADR-139) | A student's contestation of a question committed; the course staff (`classroomStaffIds`); folded per evaluation with the count; a staff seat's test contestation tells nobody | Off |
+| `contestation_resolved` (2026-11-20, ADR-139) | The owner's answer committed; the attempt's student, never a staff seat's test; ids and the title, never the verdict nor the reply; not folded; a grade it moves also sends `results_updated` | On |
 
 **13.** `activity_scheduled` claims `scheduled_announced_at` before sending. The
 marker is never cleared by rescheduling or returning to draft, and never copied

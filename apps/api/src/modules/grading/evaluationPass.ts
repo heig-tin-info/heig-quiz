@@ -401,7 +401,7 @@ export async function runEvaluationGrading(
   await writeGradings(
     app.db,
     writes,
-    acceptanceGuard(passGuard(new Map(pass.attempts.map((a) => [a.id, endOf(a.closedAt)]))), bound),
+    { guard: acceptanceGuard(passGuard(new Map(pass.attempts.map((a) => [a.id, endOf(a.closedAt)]))), bound) },
   );
   progress.finish(runnerJobs.length + llmJobs.length > 0 ? "pending" : "done");
   for (const runnerJob of runnerJobs) {
@@ -471,7 +471,7 @@ export async function writeCheckGrading(
   { write, bound }: { write: WriteGradingInput; bound: RuleBound | null },
 ): Promise<GradingRecord | null> {
   const cells = new Map(bound ? [[pairKey(write.attemptId, write.itemId), bound]] : []);
-  const [written] = await writeGradings(app.db, [write], acceptanceGuard(passGuard(), cells));
+  const [written] = await writeGradings(app.db, [write], { guard: acceptanceGuard(passGuard(), cells) });
   return written ?? null;
 }
 

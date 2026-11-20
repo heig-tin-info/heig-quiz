@@ -1037,6 +1037,13 @@
       "when": 1795120950458,
       "tag": "0147_pseudonymize_commit_authors",
       "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1795175478798,
+      "tag": "0148_contestations",
+      "breakpoints": true
     }
   ]
 }

@@ -67,7 +67,7 @@ const WRITE_CHUNK = 500;
  *
  * The rows come back in the order of `inputs`.
  *
- * `guard`, when given, runs first inside each chunk's transaction and returns
+ * `hooks.guard`, when given, runs first inside each chunk's transaction and returns
  * the inputs to write: it may drop an input or amend its `details`, never its
  * cell or state (`results_updated` reads the cells before it). The grading
  * jobs lock the attempts there and drop the cells of one reopened meanwhile
@@ -78,11 +78,14 @@ const WRITE_CHUNK = 500;
  * moved before the write; the "after" of `results_updated` is read after
  * the commit, so it sees the points written.
  * The rows of the dropped inputs are simply not returned.
+ *
+ * `hooks.after`, when given, runs last inside each chunk's transaction, with the
+ * rows written ({@link WriteAfter}).
  */
 export async function writeGradings(
   db: Db,
   inputs: readonly WriteGradingInput[],
-  guard?: WriteGuard,
+  hooks: WriteHooks = {},
 ): Promise<GradingRecord[]> {
   const seen = new Set<PairKey>();
   for (const input of inputs) {
@@ -102,7 +105,7 @@ export async function writeGradings(
   );
   const out: GradingRecord[] = [];
   for (let start = 0; start < inputs.length; start += WRITE_CHUNK) {
-    out.push(...(await writeChunk(db, inputs.slice(start, start + WRITE_CHUNK), guard)));
+    out.push(...(await writeChunk(db, inputs.slice(start, start + WRITE_CHUNK), hooks)));
   }
   await watch.announce();
   return out;
@@ -118,10 +121,23 @@ export type WriteGuard = (
   inputs: readonly WriteGradingInput[],
 ) => Promise<readonly WriteGradingInput[]>;
 
+/**
+ * What runs after a chunk's rows are written, inside its transaction: a
+ * write of another table that must commit with the gradings or not at all
+ * (a contestation's answer, ADR-139). Throwing rolls the chunk back.
+ */
+export type WriteAfter = (tx: Tx, rows: readonly GradingRecord[]) => Promise<void>;
+
+/** What a write runs inside each chunk's transaction: first its guard, last its `after`. */
+export interface WriteHooks {
+  guard?: WriteGuard | undefined;
+  after?: WriteAfter | undefined;
+}
+
 async function writeChunk(
   db: Db,
   chunk: readonly WriteGradingInput[],
-  guard: WriteGuard | undefined,
+  { guard, after }: WriteHooks,
 ): Promise<GradingRecord[]> {
   return db.transaction(async (tx) => {
     const inputs = guard ? await guard(tx, chunk) : chunk;
@@ -190,6 +206,8 @@ async function writeChunk(
     }
     // RETURNING order is not promised by SQL: put the rows back in input order.
     const byId = new Map(rows.map((r) => [r.id, r]));
-    return values.map((v) => byId.get(v.id)!);
+    const ordered = values.map((v) => byId.get(v.id)!);
+    await after?.(tx, ordered);
+    return ordered;
   });
 }

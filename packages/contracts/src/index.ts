@@ -10,6 +10,7 @@ export * from "./activity.js";
 export * from "./integrity.js";
 export * from "./live.js";
 export * from "./student.js";
+export * from "./contestation.js";
 export * from "./grading.js";
 export * from "./exports.js";
 export * from "./results.js";

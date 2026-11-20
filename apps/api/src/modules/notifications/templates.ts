@@ -60,6 +60,14 @@ const en = {
   "results_updated.subject": "Results updated: {evaluationTitle}",
   "results_updated.body": "Your grade for “{evaluationTitle}” changed after a correction.",
   "results_updated.action": "See my results",
+  "contestation_resolved.subject": "Your contestation was answered: {evaluationTitle}",
+  "contestation_resolved.body": "Your contestation on “{evaluationTitle}” was answered.",
+  "contestation_resolved.action": "See my results",
+  "contestation_filed.subject": "{count} contestations: {evaluationTitle}",
+  "contestation_filed.subject.one": "A contestation: {evaluationTitle}",
+  "contestation_filed.body": "{count} contestations were filed on “{evaluationTitle}”.",
+  "contestation_filed.body.one": "The grading of a question of “{evaluationTitle}” was contested.",
+  "contestation_filed.action": "Open the grading",
   "pool_shared.subject": "A pool was shared with you: {poolName}",
   "pool_shared.body": "{byName} shared the pool “{poolName}” with you as {role}.",
   "pool_shared.action": "Open the pool",
@@ -245,6 +253,11 @@ const en = {
   "activity.project_provision_failed.template": "{projectTitle}: {count} repository(ies) could not be created",
   "activity.github_org_lost.description": "The GitHub organization of one of your classrooms was deleted or the app uninstalled",
   "activity.github_org_lost.template": "GitHub organization lost: {classroomName}",
+  // The contestations (ADR-139), the bump to 2.6.0.
+  "activity.contestation_resolved.description": "Your contestation of a question is answered",
+  "activity.contestation_resolved.template": "Contestation answered: {evaluationTitle}",
+  "activity.contestation_filed.description": "The grading of a question of a released exam is contested",
+  "activity.contestation_filed.template": "{evaluationTitle}: {count} contestation(s)",
 } as const;
 
 type Key = keyof typeof en;
@@ -267,6 +280,14 @@ const fr: Record<Key, string> = {
   "results_updated.subject": "Résultats mis à jour : {evaluationTitle}",
   "results_updated.body": "Votre note de « {evaluationTitle} » a changé après une correction.",
   "results_updated.action": "Voir mes résultats",
+  "contestation_resolved.subject": "Réponse à votre contestation : {evaluationTitle}",
+  "contestation_resolved.body": "Votre contestation sur « {evaluationTitle} » a reçu une réponse.",
+  "contestation_resolved.action": "Voir mes résultats",
+  "contestation_filed.subject": "{count} contestations : {evaluationTitle}",
+  "contestation_filed.subject.one": "Une contestation : {evaluationTitle}",
+  "contestation_filed.body": "{count} contestations ont été déposées sur « {evaluationTitle} ».",
+  "contestation_filed.body.one": "La correction d'une question de « {evaluationTitle} » a été contestée.",
+  "contestation_filed.action": "Ouvrir la correction",
   "pool_shared.subject": "Une banque a été partagée avec vous : {poolName}",
   "pool_shared.body": "{byName} a partagé la banque « {poolName} » avec vous comme {role}.",
   "pool_shared.action": "Ouvrir la banque",
@@ -436,6 +457,10 @@ const fr: Record<Key, string> = {
   "activity.project_provision_failed.template": "{projectTitle} : {count} dépôt(s) n'ont pas pu être créés",
   "activity.github_org_lost.description": "L'organisation GitHub d'une de vos classes a été supprimée ou l'application désinstallée",
   "activity.github_org_lost.template": "Organisation GitHub perdue : {classroomName}",
+  "activity.contestation_resolved.description": "Votre contestation d'une question reçoit une réponse",
+  "activity.contestation_resolved.template": "Contestation traitée : {evaluationTitle}",
+  "activity.contestation_filed.description": "La correction d'une question d'un examen publié est contestée",
+  "activity.contestation_filed.template": "{evaluationTitle} : {count} contestation(s)",
 };
 
 const DICTS: Record<Locale, Record<Key, string>> = { en, fr };
@@ -503,8 +528,10 @@ function varsOf(payload: OutboundPayload, locale: Locale): Record<string, string
       return { evaluationTitle: payload.activityTitle };
     case "deadline_approaching":
     case "results_updated":
+    case "contestation_resolved":
       return { evaluationTitle: payload.evaluationTitle };
     case "grading_ready":
+    case "contestation_filed":
       return { evaluationTitle: payload.evaluationTitle, count: String(payload.count) };
     case "pool_question_added":
       return { poolName: payload.poolName, count: String(payload.count) };
@@ -564,6 +591,7 @@ export function notificationPath(payload: OutboundPayload): string {
   switch (payload.kind) {
     case "results_released":
     case "results_updated":
+    case "contestation_resolved":
       return `/attempts/${payload.attemptId}/feedback`;
     case "pool_shared":
     case "pool_ownership":
@@ -579,6 +607,9 @@ export function notificationPath(payload: OutboundPayload): string {
       return `/classrooms/${payload.classroomId}?tab=roster`;
     case "grading_ready":
       return `/evaluations/${payload.evaluationId}/grading`;
+    // The grading panel on its contested filter (ADR-139).
+    case "contestation_filed":
+      return `/evaluations/${payload.evaluationId}/grading?filter=contested`;
     // The student home lists what is coming; the page of an attempt lets the
     // student in (the server decides between the lobby and the player).
     case "activity_scheduled":

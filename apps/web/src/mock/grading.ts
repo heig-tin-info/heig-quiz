@@ -21,7 +21,13 @@ import {
   scaleCriteria,
   scoresNegatively,
   rulesForAttempt,
+  contestationDaysOf,
+  contestationWindowApplies,
+  contestationWindowOpen,
+  contestedUnit,
+  unitRefusal,
   validatedBreakdown,
+  windowExtendRefusal,
   type AcceptanceRule,
   type AttemptTally,
   type DeclaredCriterion,
@@ -39,6 +45,7 @@ import type {
   CircuitStudent,
 } from "@quiz/qt-circuit/client";
 import {
+  D,
   H,
   MockError,
   MockPayload,
@@ -178,6 +185,20 @@ interface MockGradingWorld {
   gradings: Map<string, MockGrading[]>;
   /** Item id -> the answers accepted at grading time (ADR-128). */
   acceptances: Map<string, AcceptanceRule[]>;
+  /** `attemptId:itemId` -> the student's contestation of the cell (ADR-139). */
+  contestations: Map<string, MockContestation>;
+}
+
+/** ADR-139: one student's contestation of one cell, open or answered. */
+interface MockContestation {
+  id: string;
+  attemptId: string;
+  itemId: string;
+  state: "open" | "accepted" | "refused";
+  reason: string;
+  filedAt: string;
+  reply: string | null;
+  resolvedAt: string | null;
 }
 
 const cellKey = (attemptId: string, itemId: string) => `${attemptId}:${itemId}`;
@@ -894,7 +915,7 @@ function buildGradingWorld(
     }
   }
 
-  return { evaluation, items, attempts, answers, gradings, acceptances };
+  return { evaluation, items, attempts, answers, gradings, acceptances, contestations: new Map() };
 }
 
 /**
@@ -929,10 +950,11 @@ const gradingWorlds: MockGradingWorld[] = [];
     gradingWorlds.push(
       buildGradingWorld(closed, { allValidated: false, pinnedAttemptId: STUDENT_ATTEMPT }),
     );
-  if (released)
-    gradingWorlds.push(
-      buildGradingWorld(released, { allValidated: true, pinnedAttemptId: STUDENT_PAST_ATTEMPT }),
-    );
+  if (released) {
+    const world = buildGradingWorld(released, { allValidated: true, pinnedAttemptId: STUDENT_PAST_ATTEMPT });
+    seedContestations(world);
+    gradingWorlds.push(world);
+  }
 }
 
 /** Resolves an id OR a state alias (section 3), then its grading world. */
@@ -1009,6 +1031,7 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
     solution,
     grading,
     ...(MOCK_SERVERS[q.type]?.acceptance ? { parts: partsOf(q, config, answer) } : {}),
+    contestation: staffContestationOf(e.contestations.get(key)),
     history: [...chain]
       .reverse()
       .map((g) => ({
@@ -1106,6 +1129,7 @@ on("GET", "/app/api/evaluations/:id/grading/steps", (m) => {
       total: e.attempts.length,
       validated: e.attempts.filter((a) => standingGrading(e, a.id, i.id)?.state === "validated")
         .length,
+      contested: openContestations(e, (c) => c.itemId === i.id),
     })),
   };
 });
@@ -1443,6 +1467,7 @@ function resultsView(e: MockGradingWorld) {
       enrollmentId: seatOf(a.userId),
       excused: excusedOf(e, a.userId),
       origin: e.evaluation.rows.find((r) => r.userId === a.userId)?.origin ?? ("digital" as const),
+      openContestations: openContestations(e, (c) => c.attemptId === a.id),
     };
   });
   // The students who never opened it: a 1.0 that belongs in the table and in
@@ -1466,6 +1491,7 @@ function resultsView(e: MockGradingWorld) {
       enrollmentId: seatOf(row.userId),
       excused: excusedOf(e, row.userId),
       origin: "digital" as const,
+      openContestations: 0,
     });
   });
   // The class, and only the class: a teacher's own test is a row of the
@@ -1503,6 +1529,14 @@ function resultsView(e: MockGradingWorld) {
     // ADR-122: an exercise over and open to practice shows who practised since.
     // `?practised=1` shows the line on the mock's graded evaluations, exams in the fiction.
     practisedCount: flags.practised || e.evaluation.mode === "exercise" ? 3 : 0,
+    // ADR-139: the class's open contestations, and the window of a released exam.
+    openContestations: openContestations(e, () => true),
+    contestationClosesAt: e.evaluation.releasedAt === null ? null : e.evaluation.contestationClosesAt,
+    contestationApplies: contestationWindowApplies({
+      exam: e.evaluation.mode === "exam",
+      released: e.evaluation.releasedAt !== null,
+      when: FeedbackPolicy.parse(e.evaluation.feedbackPolicy).when,
+    }),
   };
 }
 
@@ -1574,6 +1608,15 @@ on("POST", "/app/api/evaluations/:id/release", (m) => {
   // configuration header and the student's home all agree one call later.
   e.evaluation.state = "released";
   e.evaluation.modifiedAfterRelease = false;
+  // ADR-139 §1: the release that finds no window opens one, if one applies; a re-release keeps it.
+  const policy = FeedbackPolicy.parse(e.evaluation.feedbackPolicy);
+  if (
+    e.evaluation.contestationClosesAt === null &&
+    contestationWindowApplies({ exam: e.evaluation.mode === "exam", released: true, when: policy.when }) &&
+    contestationDaysOf(policy) > 0
+  ) {
+    e.evaluation.contestationClosesAt = iso(contestationDaysOf(policy) * D);
+  }
   return {
     releasedAt: e.evaluation.releasedAt,
     rows: e.attempts.filter((a) => !a.staff).length,
@@ -1691,7 +1734,9 @@ on("GET", "/app/api/attempts/:id/feedback", (m) => {
       points: items.reduce((sum, item) => sum + (item.points ?? 0), 0),
       grade: null,
       pendingCount: page.pending,
-      items,
+      // An exercise is never contested (ADR-139 decision 11).
+      items: items.map((item) => ({ ...item, contestation: null, contestable: false })),
+      contestationClosesAt: null,
       ...page.extra,
       ...review,
     };
@@ -1713,11 +1758,19 @@ function feedbackPage(attemptId: string) {
   }
   const copy = copyOf(e, attempt);
   const shown = { showKey: policy.showKey, showHiddenCaseNames: policy.showHiddenCaseNames };
+  const closesAt = contestationWindowOf(e);
   return {
     available: true as const,
     evaluation: { id: e.evaluation.id, title: e.evaluation.title, releasedAt: e.evaluation.releasedAt },
     ...copy,
-    items: copy.items.map((item) => ({ ...item, details: studentDetailsOf(item.type, item.details, shown) })),
+    items: copy.items.map((item) => ({
+      ...item,
+      details: studentDetailsOf(item.type, item.details, shown),
+      // ADR-139 §7: the student's own contestation, and whether the question may be contested now.
+      contestation: studentContestationOf(e.contestations.get(cellKey(attempt.id, item.itemId))),
+      contestable: contestableNow(e, attempt.id, item.itemId),
+    })),
+    contestationClosesAt: closesAt,
     // The server's rule (F-RES-04): released, and no question pending.
     grade: feedbackGradeShown({ released, pendingCount: copy.pendingCount }) ? copy.grade : null,
   };
@@ -1814,4 +1867,157 @@ on("DELETE", "/app/api/evaluations/:id/attempt", (m) => {
   const world = gradingWorlds.find((w) => w.evaluation.id === e.id);
   if (world) world.attempts = world.attempts.filter((a) => a.id !== mine.attemptId);
   return { deleted: true };
+});
+
+
+// --- ADR-139: contestations -------------------------------------------------
+//
+// The released exam is contested: the student persona's copy holds one open
+// contestation, one accepted with a reply, one refused, and a fourth question
+// still open to one; two classmates contested the persona's open question too
+// (one open, one refused), so its grading screen shows both kinds. The window
+// closes in five days.
+
+
+function seedContestations(e: MockGradingWorld) {
+  // Inside: the seed runs at import, before a module-level constant would exist.
+  const REASONS = [
+    "J'ai donné la bonne valeur, seulement avec une autre notation.\nLe corrigé accepte 0x1F, j'ai écrit 31.",
+    "La consigne ne précisait pas l'unité attendue.",
+    "Mon raisonnement est juste, seule l'étape finale contient une faute de frappe.",
+    "Je pense que ma réponse couvre les deux cas demandés.",
+  ];
+  e.evaluation.contestationClosesAt = iso(5 * D);
+  const below = (attemptId: string) =>
+    e.items.filter((item) => {
+      const g = standingGrading(e, attemptId, item.id);
+      return item.counting !== "neutralized" && g?.state === "validated" && g.points < item.points;
+    });
+  const mine = below(STUDENT_PAST_ATTEMPT);
+  let n = 0;
+  const file = (attemptId: string, itemId: string, state: MockContestation["state"], reply: string | null) => {
+    n += 1;
+    e.contestations.set(cellKey(attemptId, itemId), {
+      id: `cccccccc-0000-4000-8000-${String(n).padStart(12, "0")}`,
+      attemptId,
+      itemId,
+      state,
+      reason: REASONS[(n - 1) % REASONS.length]!,
+      filedAt: iso(-2 * D + n * H),
+      reply,
+      resolvedAt: state === "open" ? null : iso(-D + n * H),
+    });
+  };
+  const [open, accepted, refused] = mine;
+  if (open) file(STUDENT_PAST_ATTEMPT, open.id, "open", null);
+  if (accepted) file(STUDENT_PAST_ATTEMPT, accepted.id, "accepted", "Vous avez raison, la notation hexadécimale est correcte. Les points sont corrigés.");
+  if (refused) file(STUDENT_PAST_ATTEMPT, refused.id, "refused", "La réponse attendue est le nombre de bits, pas d'octets.\nRelisez l'énoncé.");
+  if (!open) return;
+  const others = e.attempts.filter((a) => !a.staff && a.id !== STUDENT_PAST_ATTEMPT && below(a.id).some((i) => i.id === open.id));
+  if (others[0]) file(others[0].id, open.id, "open", null);
+  if (others[1]) file(others[1].id, open.id, "refused", "Le corrigé demande les deux conditions.");
+}
+
+/** The window's closing instant as the server reads it: released only. */
+const contestationWindowOf = (e: MockGradingWorld) =>
+  e.evaluation.releasedAt === null || e.evaluation.mode !== "exam" ? null : e.evaluation.contestationClosesAt;
+
+/** The facts the domain's rule reads (`ContestedUnit`) for one cell, from its validated grading in force, as the server's. */
+function unitOf(e: MockGradingWorld, attemptId: string, itemId: string) {
+  const item = e.items.find((i) => i.id === itemId);
+  const g = standingGrading(e, attemptId, itemId);
+  return contestedUnit({
+    shown: true,
+    counted: true,
+    counting: item?.counting !== "neutralized",
+    grading: g?.state === "validated" ? g : null,
+  });
+}
+
+function contestableNow(e: MockGradingWorld, attemptId: string, itemId: string): boolean {
+  if (e.contestations.has(cellKey(attemptId, itemId))) return false;
+  const closesAt = contestationWindowOf(e);
+  const window = { released: e.evaluation.releasedAt !== null, closesAt: closesAt === null ? null : new Date(closesAt) };
+  return contestationWindowOpen(window, new Date()) && unitRefusal(unitOf(e, attemptId, itemId)) === null;
+}
+
+const studentContestationOf = (c: MockContestation | undefined) =>
+  c ? { state: c.state, reason: c.reason, filedAt: c.filedAt, reply: c.reply, resolvedAt: c.resolvedAt } : null;
+
+const staffContestationOf = (c: MockContestation | undefined) =>
+  c ? { ...studentContestationOf(c)!, id: c.id, counted: true } : null;
+
+/** The open contestations of the class (a teacher's walk left out) that `which` keeps. */
+function openContestations(e: MockGradingWorld, which: (c: MockContestation) => boolean): number {
+  const staff = new Set(e.attempts.filter((a) => a.staff).map((a) => a.id));
+  return [...e.contestations.values()].filter((c) => c.state === "open" && !staff.has(c.attemptId) && which(c)).length;
+}
+
+on("POST", "/app/api/attempts/:id/items/:itemId/contestation", (m, body) => {
+  const { e, attempt } = attemptWorldOr404(String(m.groups!.id));
+  const itemId = String(m.groups!.itemId);
+  if (!e.items.some((i) => i.id === itemId)) throw new MockError(404, "Item not found");
+  const key = cellKey(attempt.id, itemId);
+  if (e.contestations.has(key)) throw refuse(409, "contestation_exists", "already contested");
+  const closesAt = contestationWindowOf(e);
+  if (closesAt === null || new Date(closesAt).getTime() <= Date.now()) {
+    throw refuse(409, "contestation_closed", "the window is closed");
+  }
+  const reason = unitRefusal(unitOf(e, attempt.id, itemId));
+  if (reason !== null) throw refuse(409, "not_contestable", "not contestable", { reason });
+  const c: MockContestation = {
+    id: `cccccccc-0000-4000-9000-${String(e.contestations.size + 1).padStart(12, "0")}`,
+    attemptId: attempt.id,
+    itemId,
+    state: "open",
+    reason: String(body.reason ?? "").trim(),
+    filedAt: iso(0),
+    reply: null,
+    resolvedAt: null,
+  };
+  e.contestations.set(key, c);
+  return studentContestationOf(c);
+});
+
+on("POST", "/app/api/contestations/:id/resolve", (m, body) => {
+  for (const e of gradingWorlds) {
+    const c = [...e.contestations.values()].find((x) => x.id === m.groups!.id);
+    if (!c) continue;
+    if (c.state !== "open") throw refuse(409, "not_open", "already answered");
+    const reply = String(body.reply ?? "").trim();
+    const withPoints = body.points !== undefined || body.criteria !== undefined;
+    // The contract's rule (`answerExplained`): the server answers it as a 400.
+    if ((body.verdict === "refused" || withPoints) && reply === "") throw refuse(400, "validation", "a reply is required");
+    let grading: MockGrading | null = null;
+    if (withPoints) {
+      const g = standingGrading(e, c.attemptId, c.itemId);
+      if (!g) throw new MockError(404, "Grading not found");
+      grading = overrideCell(e, g, { ...body, comment: reply });
+    }
+    c.state = body.verdict === "accepted" ? "accepted" : "refused";
+    c.reply = reply === "" ? null : reply;
+    c.resolvedAt = iso(0);
+    return {
+      contestation: staffContestationOf(c),
+      grading,
+      modifiedAfterRelease: grading !== null && e.evaluation.releasedAt !== null,
+    };
+  }
+  throw new MockError(404, "Contestation not found");
+});
+
+on("PUT", "/app/api/evaluations/:id/contestation-window", (m, body) => {
+  const e = gradingWorldOr404(m.groups!.id!);
+  if (e.evaluation.releasedAt === null || e.evaluation.mode !== "exam") {
+    throw refuse(409, "window_unavailable", "no window on this evaluation");
+  }
+  if (body.action === "close") {
+    e.evaluation.contestationClosesAt = iso(0);
+  } else {
+    const until = new Date(String(body.closesAt));
+    const reason = windowExtendRefusal(until, new Date());
+    if (reason !== null) throw refuse(422, "window_instant", "refused instant", { reason });
+    e.evaluation.contestationClosesAt = until.toISOString();
+  }
+  return { closesAt: e.evaluation.contestationClosesAt };
 });

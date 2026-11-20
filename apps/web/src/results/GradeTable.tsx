@@ -1,4 +1,4 @@
-import { GraduationCap, UserCheck } from "lucide-react";
+import { GraduationCap, MessageSquareWarning, UserCheck } from "lucide-react";
 
 import type { ResultRow, ResultRowState } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
@@ -56,6 +56,7 @@ export type GradeSort = ReturnType<typeof useGradeSort>;
  * them is not the class. A teacher's own test walk is a row too, badged
  * `staff`, and it is in none of the two (ADR-018). So is an excused student
  * (#969): listed, badged `Excused`, the grade in the ink, in no statistic.
+ * A copy holding open contestations carries their count (ADR-139).
  *
  * Six columns and, when the page offers them (`actions`), a seventh for a
  * row's menu: the seven DESIGN.md allows. The name is the identity
@@ -131,6 +132,10 @@ export function GradeTable({
                       </Badge>
                     </Tip>
                   ) : null}
+                  {/* ADR-139: the copy holds open contestations; the copy says which. */}
+                  {row.openContestations > 0 ? (
+                    <OpenContestations n={row.openContestations} />
+                  ) : null}
                 </span>
               </td>
               <td className={cx(T.td, "text-fg-muted", T.colHigh)}>{row.email}</td>
@@ -158,5 +163,19 @@ export function GradeTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** ADR-139: a copy's open contestations, the count on the row and its words for a screen reader. */
+function OpenContestations({ n }: { n: number }) {
+  const t = useT();
+  const label = n === 1 ? t("results.contest.open.one") : t("results.contest.open", { n });
+  return (
+    <Tip label={label}>
+      <Badge tone="amber" icon={MessageSquareWarning} className="tabular-nums">
+        <span aria-hidden>{n}</span>
+        <span className="sr-only">{label}</span>
+      </Badge>
+    </Tip>
   );
 }
