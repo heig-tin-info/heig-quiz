@@ -6,6 +6,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type {
+  AiAgreement,
   GradingEntry,
   GradingHistoryEntry,
   GradingQuery,
@@ -35,6 +36,7 @@ import {
   type Reading,
 } from "../pool/service.js";
 import { partsOf } from "./acceptance.js";
+import { aiAgreementByItem } from "./agreement.js";
 import { acceptanceHook, acceptancesOf, itemScopes, ruleLabel, type AcceptanceHook, type ItemRules } from "./acceptanceRules.js";
 import { contestationsOfItems, openContestationCounts, staffContestationOf, type ContestationRecord } from "./contestations.js";
 import { keptAttempts } from "./kept.js";
@@ -179,6 +181,8 @@ interface QueueContext {
   acceptances: ItemRules;
   /** The contestations of the selected items, by cell (ADR-139). */
   contestations: Map<PairKey, ContestationRecord>;
+  /** The AI's agreement with the teacher on each selected item (ADR-139 §15). */
+  agreement: Map<string, AiAgreement | null>;
 }
 
 /**
@@ -194,7 +198,7 @@ async function loadQueueContext(
 ): Promise<QueueContext> {
   const { scope } = selection;
   const itemIds = selection.items.map((i) => i.item.id);
-  const [answerRows, standing, history, roster, staffAttempts, kept, acceptances, contested] = await Promise.all([
+  const [answerRows, standing, history, roster, staffAttempts, kept, acceptances, contested, agreement] = await Promise.all([
     attemptRows.length === 0 || selection.items.length === 0
       ? []
       : db
@@ -219,6 +223,7 @@ async function loadQueueContext(
     attemptRows.some((a) => a.attemptNumber > 1) ? keptAttempts(db, evaluation) : null,
     acceptancesOf(db, itemIds),
     contestationsOfItems(db, itemIds),
+    aiAgreementByItem(db, evaluation.id, itemIds),
   ]);
   return {
     answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
@@ -239,6 +244,7 @@ async function loadQueueContext(
     ),
     acceptances,
     contestations: contested,
+    agreement,
   };
 }
 
@@ -366,6 +372,7 @@ export async function gradingQueue(
       exportable: exportsText(i.question.type, i.version),
       ...(isParameterized(i.version) ? { parameters: writtenOf(i) } : {}),
       ...acceptanceOf(hooks.get(i.item.id), i, context, attemptRows),
+      agreement: context.agreement.get(i.item.id) ?? null,
     })),
     entries,
     counts: { total, validated, proposed, missing: total - validated - proposed },

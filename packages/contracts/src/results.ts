@@ -18,6 +18,7 @@ import { StudentContestation } from "./contestation.js";
 import { EvaluationMode, GradingScale, ItemCounting, RetakeKeep, RetakeScope } from "./evaluation.js";
 import { AttemptOrigin, AttemptState, RetakeRefusalReason } from "./live.js";
 import { Verdict } from "./grading.js";
+import { GradingFigures } from "./gradingFigures.js";
 
 /** A student with no attempt at all still gets a row, and a 1.0 (F-RES-02). */
 export const ResultRowState = z.union([z.literal("absent"), AttemptState]);
@@ -197,6 +198,10 @@ export const ByQuestion = z.object({
   /** Mean of `points / maxPoints` over the attempts of `outcomes`, a blank at 0. */
   successRate: z.number().nullable(),
   avgMs: z.number().nullable(),
+  /** ADR-139 §15: this question's agreement figures, for the staff's reading (the projection draws none). */
+  figures: GradingFigures,
+  /** The same over the whole evaluation, carried on every item like `papers`. */
+  totalFigures: GradingFigures,
 });
 export type ByQuestion = z.infer<typeof ByQuestion>;
 

@@ -12,6 +12,7 @@ export * from "./live.js";
 export * from "./student.js";
 export * from "./contestation.js";
 export * from "./grading.js";
+export * from "./gradingFigures.js";
 export * from "./exports.js";
 export * from "./results.js";
 export * from "./realtime.js";

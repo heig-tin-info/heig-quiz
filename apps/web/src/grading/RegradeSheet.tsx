@@ -45,7 +45,7 @@ export function RegradeSheet({
   onClose,
 }: {
   evaluationId: string;
-  item: GradingQueueItem;
+  item: Omit<GradingQueueItem, "agreement">;
   /** The evaluation's results are released: the re-grade will change them. */
   released: boolean;
   onClose: () => void;

@@ -123,6 +123,7 @@ import {
   attemptCounts,
   cellUnit,
   contestationsOfAttempt,
+  gradingFigures,
   keptAttempts,
   openContestationCounts,
   pairKey,
@@ -681,6 +682,13 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
   }
   const items = await joinedItems(db, evaluation.id);
   const validated = await validatedGradings(db, evaluation.id);
+  // ADR-139 §15: the AI's agreement and the contestations, for the staff's
+  // reading (the projection draws none); the class's official attempts.
+  const figures = await gradingFigures(
+    db,
+    evaluation.id,
+    items.map((i) => i.item.id),
+  );
   // The class debrief is about the CLASS: the teacher's own rehearsal is not
   // in the success rates and not in the answer distributions (ADR-018).
   const staffAttempts = await staffAttemptIds(db, evaluation);
@@ -763,6 +771,8 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
       casePassRate,
       successRate,
       avgMs: null,
+      figures: figures.byItem.get(item.item.id)!,
+      totalFigures: figures.total,
     };
   });
 }

@@ -374,6 +374,7 @@ export function GradingPanel({
         items={items}
         index={index}
         states={data.states}
+        agreement={data.agreement}
         onJump={goTo}
         onOpenStatement={() => open(EXPECTED)}
         counting={

@@ -17,7 +17,7 @@ import { RegradeSheet } from "./RegradeSheet";
  * the shared version still has to do.
  */
 
-const ITEM: GradingQueueItem = {
+const ITEM: Omit<GradingQueueItem, "agreement"> = {
   id: "i1",
   position: 0,
   internalName: "sizeof-ptr",

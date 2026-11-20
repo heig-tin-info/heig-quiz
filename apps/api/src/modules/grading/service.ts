@@ -20,7 +20,8 @@
  * writer), `reads.ts` (the grid's reads), `panel.ts` (F-GRADE-03),
  * `teacherWrites.ts` (overrides and validations), `regrade.ts`
  * (F-GRADE-06), `counting.ts` (ADR-108), `kept.ts` (ADR-025),
- * `partialRetake.ts` (ADR-091) and `contestations.ts` (ADR-139). Files of
+ * `partialRetake.ts` (ADR-091), `contestations.ts` (ADR-139) and
+ * `agreement.ts` (ADR-139 §15, its figures). Files of
  * the module import each other directly, never through this one.
  */
 export {
@@ -64,6 +65,8 @@ export {
   studentContestationOf,
   type ContestationRecord,
 } from "./contestations.js";
+// The agreement figures of the grading (ADR-139 §15), in `./agreement.ts`.
+export { gradingFigures } from "./agreement.js";
 // The kept attempt of each student (F-EVAL-15, ADR-025), in `./kept.ts`.
 export {
   keptAttempts,

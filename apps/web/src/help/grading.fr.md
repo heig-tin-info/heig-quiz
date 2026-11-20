@@ -66,6 +66,14 @@ le panneau le dit d'abord.
 `←` `→` changent de question, `↑` `↓` de ligne, `Entrée` l'ouvre, `V` la
 valide, `A` la modifie, `Échap` la ferme. La barre latérale les liste.
 
+## Accord avec l'IA
+
+**IA : 12 sur 15 inchangées**, dans la barre de la question : parmi les
+réponses qui ont une proposition de l'IA et une note validée, celles qui ont
+gardé les points proposés. L'infobulle donne l'écart moyen là où les points
+ont été modifiés, et le compte pour chaque niveau de confiance. Votre propre
+passage de test n'est pas compté.
+
 ## Contestations
 
 **Contestées** montre les réponses contestées par les étudiants. En mode

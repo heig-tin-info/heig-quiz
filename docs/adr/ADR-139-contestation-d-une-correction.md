@@ -267,6 +267,36 @@ colleague reporting a pool question to its writers.
     confidence; and the contestation rate and the share accepted, per
     question and per grading source. Shown on the grading panel's question
     bar and the evaluation's statistics only, never on the pool screen.
+    As built, staff only, aggregates only, over the class's official
+    attempts as the open contestations are counted (never a practice
+    attempt, an attempt a paper copy replaced, nor a staff seat's walk):
+    - **The AI and the teacher.** A cell is *compared* when it holds a
+      validated grading in force and an AI proposal, a grading `llm` that no
+      person wrote (`graded_by` null). Its LATEST proposal is the one
+      compared (a regrade's, after a regrade, which stands the old
+      validation down); a cell whose latest proposal is a failed call (no
+      confidence) is compared to nothing. *Unchanged* means the points in
+      force are the proposal's, whoever wrote them: a validation as is
+      (`llm`), an essay's criteria re-split to the same total (`manual`,
+      ADR-118 §6), or an override back to the proposal's points count
+      unchanged; an adjusted validation and a later override with other
+      points count *changed*. A cell still waiting as a proposal is in
+      none. Shown as counts with their total ("12 of 15 unchanged"), the
+      mean difference and the counts per confidence beside them.
+    - **Contestations.** Filed over the *graded* cells (a validated grading
+      in force), the denominator the screens name; open, accepted and
+      refused; and per source (`auto`, `llm`, `manual`) of the grading in
+      force at filing (`grading_at_filing_id`), filed and accepted.
+    - **Where.** The grading queue's item (`agreement`), drawn on the
+      question bar; the per-question results (`figures`, `totalFigures`),
+      drawn in the Questions tab per question and under its summary. Never
+      on the pool screen (other classes' figures there fall under ADR-038's
+      threshold), the projection, a student payload, an export or an MCP
+      tool: none of these reads the two staff routes that carry them.
+    - **Limits.** "Unchanged" reads points, not words: a proposal validated
+      with the same total but a different comment counts unchanged. A
+      contestation whose grading at filing was deleted (never, but for a
+      cascade) counts in no source.
 
 ## Consequences
 
