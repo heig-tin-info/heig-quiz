@@ -54,6 +54,7 @@ import {
 import { json, orgsRoute, type Route } from "../../github/testing.js";
 import { PROJECT_CRITERIA_QUEUE, PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
 import { seedLive } from "../../test/live.js";
+import { repoGradesRow, setRepoGrades } from "../../test/project.js";
 import { GITHUB_TASKS } from "../github/jobs.js";
 import { accessibleProjectRepo } from "../guards.js";
 import { refreshScoreSelection, ingestCompletedRun } from "./grading.js";
@@ -642,10 +643,7 @@ describe("the reopen (F-PROJ-09)", () => {
     const late = await scoredRun(repo!, 6, at(DEADLINE, 5 * MINUTE), true);
     server.clock.set(at(DEADLINE, 31 * MINUTE));
     await tick();
-    await server.app.db
-      .update(projectRepos)
-      .set({ teacherPoints: 5, releasedPoints: 3, releasedMax: 6 })
-      .where(eq(projectRepos.id, repo!.id));
+    await setRepoGrades(server.app.db, repo!.id, { teacherPoints: 5, releasedPoints: 3, releasedMax: 6 });
     expect(await repoRow(repo!.id)).toMatchObject({ currentGradeRunId: inTime, frozenGradeRunId: inTime });
 
     server.clock.set("2026-10-10T08:00:00Z");
@@ -661,9 +659,8 @@ describe("the reopen (F-PROJ-09)", () => {
       frozenAt: null,
       deadlineAppliedAt: null,
       lockedAt: null,
-      teacherPoints: 5,
-      releasedPoints: 3,
     });
+    expect(await repoGradesRow(server.app.db, repo!.id)).toMatchObject({ teacherPoints: 5, releasedPoints: 3 });
     expect(lockRuleset(repo!.fullName!)).toBe(false);
     const [entry] = await auditOf(p.id, "project.deadline_reopened");
     expect(entry!.payload).toMatchObject({ deadlineAt: "2026-10-12T22:00:00.000Z", previous: DEADLINE, repos: 1 });

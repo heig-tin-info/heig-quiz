@@ -65,6 +65,7 @@ import {
 import { subscribe, type BusMessage } from "../../events.js";
 import { orgsRoute } from "../../github/testing.js";
 import { seedLive, type Seeded } from "../../test/live.js";
+import { patchRepo, type RepoPatch } from "../../test/project.js";
 import { studentHome as activityHome } from "../activity/service.js";
 import { findStudentProjectView } from "../guards.js";
 import { writeCriterionGrades } from "./criterionGrades.js";
@@ -119,10 +120,9 @@ async function project(room: Room, name: string, opts: { publish?: boolean; body
   return summary;
 }
 
-type RepoPatch = Partial<typeof projectRepos.$inferInsert>;
 const repoOf = async (projectId: string, userId: string) =>
   (await server.app.db.select().from(projectRepos).where(and(eq(projectRepos.projectId, projectId), eq(projectRepos.userId, userId))))[0]!;
-const setRepo = (id: string, patch: RepoPatch) => server.app.db.update(projectRepos).set(patch).where(eq(projectRepos.id, id));
+const setRepo = (id: string, patch: RepoPatch) => patchRepo(server.app.db, id, patch);
 const setProject = (id: string, patch: Partial<typeof projects.$inferInsert>) =>
   server.app.db.update(projects).set(patch).where(eq(projects.id, id));
 

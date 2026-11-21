@@ -53,6 +53,7 @@ import { ApiError, injectedApi } from "../mcp/service.js";
 import { resetLiveStateCache } from "../../github/metrics.js";
 import { orgsRoute } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
+import { repoGradesRow } from "../../test/project.js";
 import { writeCriterionGrades } from "./criterionGrades.js";
 import { newOrg, server, teacher, useProjectWorld, type Headers } from "../../test/projectWorld.js";
 
@@ -415,7 +416,7 @@ describe("the release gate and Validate the rest (ADR-106 §8, F-PROJ-26)", () =
     const released = await call("POST", `/app/api/projects/${w.projectId}/release`);
     expect(released.statusCode, released.body).toBe(200);
     // The released snapshot stores the criteria total like any other source.
-    const [row] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, first));
+    const row = await repoGradesRow(server.app.db, first);
     expect([row!.releasedPoints, row!.releasedMax]).toEqual([14, 16]);
   });
 
