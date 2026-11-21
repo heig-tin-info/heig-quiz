@@ -166,8 +166,10 @@ export function useT(): TFunction {
   return useContext(I18nContext).t;
 }
 
-/** The `Intl` tag `locale`'s dates, times and numbers are formatted with (ADR-140 §10):
-    every `Intl` formatter and `toLocale*String` of the interface takes it, never `locale`. */
+/**
+ * The `Intl` tag `locale`'s dates, times and numbers are formatted with (ADR-140 §10):
+ * every `Intl` formatter and `toLocale*String` of the interface takes it, never `locale`.
+ */
 export const intlTag = (locale: Locale): string => LOCALE_INFO[locale].intl;
 
 /** A number with exactly `digits` decimals, in the notation of `locale`: "0.42", "0,42". */
