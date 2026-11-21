@@ -52,7 +52,6 @@ import { journalPlugin } from "./modules/journal/routes.js";
 import { createKioskAttestor } from "./modules/kiosk/attestation.js";
 import { registerKioskJobs } from "./modules/kiosk/jobs.js";
 import { kioskPlugin } from "./modules/kiosk/routes.js";
-import { legacyPlugin } from "./modules/legacy/routes.js";
 import { livePlugin } from "./modules/live/routes.js";
 import { assistPlugin } from "./modules/assist/routes.js";
 import { bundledChangelog } from "./modules/changelog/bundle.js";
@@ -271,7 +270,6 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(activityPlugin, { config });
   // The journal: a Quiz-mode one needs no App (ADR-057); its GitHub routes do.
   await app.register(journalPlugin, { config });
-  await app.register(legacyPlugin);
   await app.register(livePlugin, { config });
   await app.register(previewPlugin);
   await app.register(gradingPlugin);
@@ -353,6 +351,11 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // serves them. A database down at boot dates them at the next restart.
   await step("changelog sync", () => syncChangelog(app.db, bundledChangelog(), config.COMMIT_SHA || null));
   if (runWorkers) startTicker(app, config);
+
+  // The legacy URL resolver is retired (database remediation plan §6.4), but
+  // browsers cached the permanent 308s that sent classroom.chevallier.io's old
+  // links here: they land on the home, not on the SPA's not-found page.
+  app.get("/legacy/classroom/*", (_req, reply) => reply.redirect("/", 302));
 
   // Built SPA served by the monolith (ADR-009: single image, frontend included).
   if (config.STATIC_DIR && existsSync(config.STATIC_DIR)) {

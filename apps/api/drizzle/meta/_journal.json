@@ -1072,6 +1072,13 @@
       "when": 1795287392150,
       "tag": "0152_integrity_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "7",
+      "when": 1795303259283,
+      "tag": "0153_drop_import_classroom",
+      "breakpoints": true
     }
   ]
 }

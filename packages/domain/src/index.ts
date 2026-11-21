@@ -164,7 +164,6 @@ export * from "./tokenScope.js";
 export * from "./typedName.js";
 export * from "./zone.js";
 export * from "./hs256.js";
-export * from "./legacyClassroom.js";
 export * from "./workMode.js";
 // `./drillSchedule.js` is NOT re-exported: it pulls `ts-fsrs`, which the web
 // bundle would then carry. The server imports `@quiz/domain/drillSchedule`.

@@ -4,21 +4,26 @@
 #   cp infra/caddy/classroom-redirect.caddy /etc/caddy/conf.d/classroom.caddy \
 #     && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
 #     && sudo systemctl reload caddy
-# Checked by infra/caddy/check-classroom-redirects.sh.
+# Checked by infra/caddy/check-classroom-redirects.sh. This file is the
+# repository's copy: a change reaches production only when the owner copies
+# it to /etc/caddy/conf.d and reloads Caddy, as above.
 #
-# Caddy answers the machines; every row a human clicks (§6.6) is Quiz's
-# resolver's (`GET /legacy/classroom/*`, `legacyRule` in @quiz/domain),
-# never repeated here. The redirect is a 308 since the point of no return
-# (M9-01, 2026-10-14; it was a 302 during the observation, D, because
-# browsers cache 301 and 308): 308 keeps the method, 301 may not.
-# `legacyRule`'s own redirects depend on the identity and stay 302.
+# Caddy answers the machines with a 410, and sends every path a human
+# clicks to Quiz's home. Until 2026-11-21 those paths went to Quiz's legacy
+# URL resolver (`/legacy/classroom/*`, now a 302 home for browsers that
+# cached this fragment's earlier 308), which led an old link to the
+# matching Quiz page; the product owner retired it (heig-classroom migrated,
+# old URLs no longer served; docs/audits/2026-11-21-database-remediation.md
+# §6.4). The redirect is a 308 since the point of no return (M9-01,
+# 2026-10-14; it was a 302 during the observation, D, because browsers
+# cache 301 and 308): 308 keeps the method, 301 may not.
 # CLASSROOM_SITE only exists to test the fragment on a local port; production
 # leaves it unset.
 {$CLASSROOM_SITE:classroom.chevallier.io} {
 	# Dead machine paths: GitHub's webhook, any method (classroom's App is
 	# idle, Quiz's has its own URL; GitHub follows no redirect), the old API,
 	# journal assets included (journal ids are not kept, D03), the SSE stream,
-	# Keycloak, the probes. The avatar is a human's and goes to the resolver.
+	# Keycloak, the probes. The avatar is a human's and goes to Quiz's home.
 	@gone {
 		path /webhooks/github /app/api/* /app/events /kc/* /healthz /metrics
 		not path /app/api/users/*/avatar
@@ -28,11 +33,10 @@
 		respond `{"error":"moved","to":"https://quiz.chevallier.io/"}` 410
 	}
 
-	# Everything else, to the resolver: the path as sent (percent-encoding
-	# kept, `{path}` would decode it), the query dropped (classroom's OAuth
-	# `code`, an unsubscribe token: nothing of it may reach Quiz).
-	@any vars_regexp raw {uri} ^([^?]*)
-	handle @any {
-		redir https://quiz.chevallier.io/legacy/classroom{re.raw.1} 308
+	# Everything else, to Quiz's home: neither the path nor the query is
+	# carried (classroom's OAuth `code`, an unsubscribe token: nothing of it
+	# may reach Quiz).
+	handle {
+		redir https://quiz.chevallier.io/ 308
 	}
 }

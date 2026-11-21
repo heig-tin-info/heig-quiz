@@ -1,11 +1,13 @@
 /**
- * Identity, sessions and the audit log (`auth` + the platform-wide log).
+ * Identity, sessions and the audit log (`auth` + the platform-wide log, and
+ * heig-classroom's imported one beside it).
  *
  * Inherited from heig-classroom as-is (PLAN-MVP §3.1): the SQL of these
  * tables is the one `drizzle/0000_init.sql` created and must not move.
  */
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   bigserial,
   boolean,
   char,
@@ -489,4 +491,40 @@ export const auditLog = pgTable(
     index("audit_log_created_idx").on(t.createdAt.desc()),
     index("audit_log_subject_idx").on(t.subjectType, t.subjectId),
   ],
+);
+
+/**
+ * heig-classroom's `audit_log`, kept as it was (D11, settled 2026-10-01;
+ * migration 0076): a history nothing in Quiz writes since the import, so
+ * Quiz's own closed audit union stays clean. Under `audit_log`'s rule
+ * (ADR-003 §5, amended 2026-11-05): the trigger
+ * `legacy_classroom_audit_log_immutable` (migration 0133) refuses every
+ * UPDATE and the DELETE of a row younger than three years, and `audit.purge`
+ * deletes the older ones, by their original `created_at` (classroom's, not
+ * the import's). No route reads it: like `audit_log`, it is forensics, read
+ * by an admin with `psql`.
+ *
+ * `source_id` is classroom's `audit_log.id`, the idempotency key the import
+ * used. The actor is remapped best-effort: `actor_user_id` is the Quiz
+ * account when the import reached the person, null otherwise;
+ * `source_actor_user_id` keeps classroom's id either way. The import's id
+ * map (`import_classroom.id_map`) was dropped on 2026-11-21 with the legacy
+ * URL resolver; its dump is archived outside the repository. No foreign
+ * key, on purpose.
+ */
+export const legacyClassroomAuditLog = pgTable(
+  "legacy_classroom_audit_log",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    sourceId: bigint("source_id", { mode: "number" }).notNull().unique(),
+    actorUserId: uuid("actor_user_id"),
+    sourceActorUserId: uuid("source_actor_user_id"),
+    actorType: text("actor_type").notNull(),
+    action: text("action").notNull(),
+    subjectType: text("subject_type").notNull(),
+    subjectId: text("subject_id").notNull(),
+    payload: jsonb("payload"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("legacy_classroom_audit_subject_idx").on(t.subjectType, t.subjectId)],
 );
