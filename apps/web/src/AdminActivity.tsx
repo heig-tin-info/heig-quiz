@@ -6,7 +6,7 @@ import type { ActivityCount, AdminActivity } from "@quiz/contracts";
 import { isClassHour, SCHOOL_TIME_ZONE, type Locale } from "@quiz/domain";
 
 import { api } from "./api";
-import { useI18n, useT } from "./i18n";
+import { intlTag, useI18n, useT } from "./i18n";
 import { adminActivityKey } from "./queryKeys";
 import {
   Card,
@@ -29,7 +29,7 @@ const valueOf = (cell: ActivityCount, who: ActivityWho): number =>
   who === "all" ? cell.students + cell.staff : cell[who];
 
 const dayLabel = (date: string, locale: Locale) =>
-  new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(
+  new Intl.DateTimeFormat(intlTag(locale), { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(
     new Date(`${date}T00:00:00Z`),
   );
 
@@ -78,7 +78,7 @@ export function ActivitySection() {
   const data = activity.data;
   const total = (c: ActivityCount) => c.students + c.staff;
   const split = (c: ActivityCount) => t("admin.activity.split", { students: c.students, staff: c.staff });
-  const percent = new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 });
+  const percent = new Intl.NumberFormat(intlTag(locale), { style: "percent", maximumFractionDigits: 0 });
 
   return (
     <section className="space-y-3">

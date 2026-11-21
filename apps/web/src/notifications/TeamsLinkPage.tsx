@@ -6,7 +6,7 @@ import { TeamsLinkToken, type Me, type NotificationSettings, type TeamsLinkPrevi
 import { displayName } from "@quiz/domain";
 
 import { api, isNotFound } from "../api";
-import { useT } from "../i18n";
+import { intlTag, useI18n, useT } from "../i18n";
 import { notificationSettingsKey, teamsLinkKey } from "../queryKeys";
 import { routeToPath } from "../router";
 import { SignInGate } from "../SignInGate";
@@ -57,6 +57,7 @@ function Invalid() {
 
 function Confirm({ token, me, onSettings }: { token: string; me: Me; onSettings?: (() => void) | undefined }) {
   const t = useT();
+  const { locale } = useI18n();
   const qc = useQueryClient();
   const preview = useQuery({
     queryKey: teamsLinkKey(token),
@@ -106,7 +107,7 @@ function Confirm({ token, me, onSettings }: { token: string; me: Me; onSettings?
   const p = preview.data;
   const name = displayName(me);
   const account = name === me.email ? me.email : `${name} (${me.email})`;
-  const until = new Date(p.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const until = new Date(p.expiresAt).toLocaleTimeString(intlTag(locale), { hour: "2-digit", minute: "2-digit" });
   const rows: [string, string][] = [
     [t("teamsLink.teams"), p.teamsName],
     // The Microsoft account's sign-in name: shown so a person can tell their

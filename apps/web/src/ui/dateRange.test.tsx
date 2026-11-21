@@ -30,7 +30,7 @@ function setup(value: { start: string | null; end: string | null } = { start: OP
   return { onCommit };
 }
 
-const day = (n: number) => screen.getByRole("button", { name: new RegExp(`October ${n}, 2026`) });
+const day = (n: number) => screen.getByRole("button", { name: new RegExp(`\\b${n} October 2026`) });
 
 describe("calendar arithmetic", () => {
   it("moves by days and by months, clamping to the month's last day", () => {
@@ -149,7 +149,7 @@ describe("DateRangeField", () => {
     await user.keyboard("{Enter}");
     await user.keyboard("{PageDown}");
     expect(screen.getByRole("grid", { name: /november 2026/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /November 12, 2026/ })).toHaveFocus();
+    expect(screen.getByRole("button", { name: /\b12 November 2026/ })).toHaveFocus();
   });
 
   it("opens on the end whose button had the keyboard focus", async () => {

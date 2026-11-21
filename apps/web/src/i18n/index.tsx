@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { FALLBACK_LOCALE, isLocale, type Locale, matchLocale } from "@quiz/domain";
+import { FALLBACK_LOCALE, isLocale, type Locale, LOCALE_INFO, matchLocale } from "@quiz/domain";
 
 import { api } from "../api";
 import { readStored, writeStored } from "../ui/state";
@@ -166,9 +166,15 @@ export function useT(): TFunction {
   return useContext(I18nContext).t;
 }
 
+/**
+ * The `Intl` tag `locale`'s dates, times and numbers are formatted with (ADR-140 §10):
+ * every `Intl` formatter and `toLocale*String` of the interface takes it, never `locale`.
+ */
+export const intlTag = (locale: Locale): string => LOCALE_INFO[locale].intl;
+
 /** A number with exactly `digits` decimals, in the notation of `locale`: "0.42", "0,42". */
 export function formatDecimal(value: number, digits: number, locale: Locale): string {
-  return new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+  return new Intl.NumberFormat(intlTag(locale), { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
 }
 
 /**
@@ -206,7 +212,7 @@ export function formatBytes(bytes: number, locale: Locale): string {
     n /= 1000;
     i++;
   }
-  return new Intl.NumberFormat(locale, {
+  return new Intl.NumberFormat(intlTag(locale), {
     style: "unit",
     unit: units[i],
     unitDisplay: "short",

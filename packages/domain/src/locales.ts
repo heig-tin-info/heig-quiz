@@ -18,10 +18,13 @@ export type Locale = (typeof LOCALES)[number];
  */
 export const FALLBACK_LOCALE = "en" satisfies Locale;
 
-/** Each language named in itself, as a picker offers it. */
-export const LOCALE_INFO: Readonly<Record<Locale, { endonym: string }>> = {
-  en: { endonym: "English" },
-  fr: { endonym: "Français" },
+/**
+ * Each language's name in itself, as a picker offers it, and the `Intl` tag
+ * the interface formats its dates, times and numbers with (ADR-140 §10).
+ */
+export const LOCALE_INFO: Readonly<Record<Locale, { endonym: string; intl: string }>> = {
+  en: { endonym: "English", intl: "en-GB" },
+  fr: { endonym: "Français", intl: "fr" },
 };
 
 export function isLocale(value: unknown): value is Locale {

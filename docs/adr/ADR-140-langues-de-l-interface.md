@@ -8,7 +8,9 @@ documentation stays English and the voice of the translated languages
 (settled by the product owner on 2026-11-21, question 77). The registry and
 its code rule (§4), the review tracking (§7), §8 and the rollout order are
 the orchestrator's design. §7 amended in place on 2026-11-21 by the `de`
-pull request, with the mechanism as built.
+pull request, with the mechanism as built. §10 (regional formats) added
+2026-11-21 by the product owner, settling question 75; it supersedes the
+sentence of §9 that no English or French output changes.
 
 Scope: the list of interface languages, how a language's copy is made and
 released, the run-time fallback, and the code rule that makes a language
@@ -20,9 +22,9 @@ of [ADR-081](ADR-081-vocabulaire-de-notions.md) (concept labels),
 [ADR-095](ADR-095-catalogue-des-banques-publiques.md) §7 (pool domains)
 and [ADR-087](ADR-087-nouveautes-de-la-plateforme.md) (What's new); the
 printed words of [ADR-125](ADR-125-copies-papier-pdf-typst.md) §7 follow
-§4 below. Open questions 75 (regional `Intl` tags) and 76 (the workspace
-portal's fallback); question 77 (the voice of German and Italian) is
-settled.
+§4 below. Open question 76 (the workspace portal's fallback); questions
+75 (regional `Intl` tags, §10) and 77 (the voice of German and Italian)
+are settled.
 
 ## Context
 
@@ -56,7 +58,7 @@ third language would have been a hunt rather than a list of compile errors.
 
 4. **One list, one registry.** `LOCALES` in `packages/domain/src/locales.ts`
    is the list of the platform's interface languages; the contracts read it
-   (`z.enum(LOCALES)`). Beside it: `LOCALE_INFO` (each language's endonym),
+   (`z.enum(LOCALES)`). Beside it: `LOCALE_INFO` (each language's endonym and `Intl` tag, §10),
    `FALLBACK_LOCALE` (English), `isLocale`, `matchLocale` (the first
    supported base language of a list of BCP-47 tags: `navigator.languages`,
    `Accept-Language`) and `dataLanguage` (§6). The written/translated
@@ -124,12 +126,32 @@ third language would have been a hunt rather than a list of compile errors.
    files may follow a language later: the help drawer and the assistant's
    corpus fall back to the English topic. No English or French output
    changes: dates and numbers keep their current `Intl` tags (open
-   question 75). The voice (product owner, 2026-11-21, question 77): German
+   question 75) *(superseded by §10, 2026-11-21)*. The voice (product owner, 2026-11-21, question 77): German
    addresses the reader as *Sie*, with Swiss spelling (*ss*, never *ß*) and
    guillemets «…»; Italian uses the formal *Lei* where an address is
    needed, and guillemets «…». The glossary of spec 01 §1.5 gains a column
    per translated language in that language's pull request. Project
    documentation stays English.
+
+10. **Regional formats** (product owner, 2026-11-21; settles open question 75).
+    The interface formats each language's dates, times and numbers with the
+    `Intl` tag the registry gives it, the `intl` field of `LOCALE_INFO`
+    (§4): a regional tag where the Swiss or British convention is wanted,
+    English `en-GB` (the British English of `apps/web/DESIGN.md`), German
+    `de-CH` and Italian `it-CH` when they come; the bare `fr` for French,
+    whose readers keep today's output, since `fr-CH` would only have
+    dropped the space before "%", added a comma to long dates and written
+    money with a decimal point. The web app reads the tag through
+    `intlTag(locale)` beside its i18n machinery, at every `Intl` formatter
+    and `toLocale*String`. The mails and Teams parameters keep their own
+    date tags (`fr-CH`, `en-GB`, in `notifications/templates.ts`): their
+    French numeric date with dots is production output, so for French the
+    two are different facts. The bare code stays everything else: the
+    page's `<html lang>`, the account's `locale`, the dictionaries' key, a
+    collation (`localeCompare`). The absolute dates of the account's date
+    format (`iso`, `eu`, `uk`, `us`) are written by hand and do not change.
+    This supersedes the sentence of §9 that no English or French output
+    changes.
 
 ## Consequences
 
@@ -152,6 +174,10 @@ third language would have been a hunt rather than a list of compile errors.
   readers get machine-drafted copy without a label saying so (§3).
 - A German or Italian reader reads concepts, pool domains, What's new and
   the privacy page in English (or French where the data has only French).
+- Readers of the English interface see British formats (§10): the day
+  before the month ("6 Nov", "Sun 25 Oct", "6 March 2030") and "hr ago"
+  for "hr. ago"; French output is unchanged. A new language adds its
+  `intl` tag beside its endonym.
 
 ## Alternatives considered
 

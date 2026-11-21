@@ -4,7 +4,7 @@
  */
 import type { DrillSession, DrillSessionCard } from "@quiz/contracts";
 
-import type { Dict, Locale, TFunction } from "../i18n";
+import { type Dict, intlTag, type Locale, type TFunction } from "../i18n";
 
 /** The confidence scale in the student's words, 0 No idea to 4 Certain (ADR-085). */
 export const CONFIDENCE = [
@@ -39,5 +39,5 @@ export function dueIn(iso: string, now: number, locale: Locale): string {
     return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000;
   };
   const days = Math.max(0, Math.round(day(Date.parse(iso)) - day(now)));
-  return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(days, "day");
+  return new Intl.RelativeTimeFormat(intlTag(locale), { numeric: "auto" }).format(days, "day");
 }

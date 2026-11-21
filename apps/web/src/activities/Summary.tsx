@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import type { ActivityStats, ActivitySummary, ProjectActivitySummary } from "@quiz/contracts";
 
 import { api } from "../api";
-import { useI18n, useT, type Locale, type TFunction } from "../i18n";
+import { intlTag, useI18n, useT, type Locale, type TFunction } from "../i18n";
 import { activityStatsKey } from "../queryKeys";
 import { cx, percent, relativeTime, SegmentedBar, Stat } from "../ui";
 import {
@@ -247,7 +247,7 @@ const STRIP_PX = 30;
 
 function DayStrip({ days, next, locale }: { days: SummaryDay[]; next: SummaryDay | null; locale: Locale }) {
   const most = Math.max(1, ...days.map((d) => d.events.length));
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: "narrow" });
+  const weekday = new Intl.DateTimeFormat(intlTag(locale), { weekday: "narrow" });
   return (
     <span aria-hidden className="mt-1 grid grid-cols-7 items-end gap-1">
       {days.map((day, i) => (
@@ -284,7 +284,7 @@ function ProjectsTile({ projects, now, onClick }: TileProps & { projects: NonNul
   const next = projects.next;
   const row = next?.row as ProjectActivitySummary | undefined;
   const progress = row ? projectProgress(row.startAt, row.deadlineAt, now) : null;
-  const date = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "short" });
+  const date = new Intl.DateTimeFormat(intlTag(locale), { weekday: "long", day: "numeric", month: "short" });
   return (
     <Stat
       icon={FolderGit2}
