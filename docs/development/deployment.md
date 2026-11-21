@@ -1004,9 +1004,12 @@ first (§6); when in doubt, restore it anyway. A rollback holds until the next a
   database has not applied (the journal's largest `when` against the newest
   `created_at` of `drizzle.__drizzle_migrations`), the deploy dumps the
   database to `backups/pre-<sha>-<UTC time>.dump` and reads the dump back
-  whole before the app is pulled or restarted. A database found stopped is
-  started alone first. Any failure refuses the deploy (exit 4, the checkout
-  back to the running commit); a check that cannot run counts as pending.
+  whole before the app is pulled or restarted. The `backup` container writes
+  it: under rootless Docker `backups/` belongs to a uid of the containers'
+  user namespace, which `srv` on the host cannot write. A database or a
+  backup service found stopped is started first (never recreated). Any
+  failure refuses the deploy (exit 4, the checkout back to the running
+  commit); a check that cannot run counts as pending.
   The ten newest `pre-*.dump` are kept; the off-site copy takes them at its
   next nightly run, so until then the dump lives on the VM only. It is the
   state just before the migration, the one a rollback past a non-additive
@@ -1014,8 +1017,8 @@ first (§6); when in doubt, restore it anyway. A rollback holds until the next a
   a deploy (named `manual-`, so the deploy's rotation never removes it):
 
 ```bash
-cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod \
-  exec -T postgres pg_dump -Fc -U quiz quiz > "backups/manual-<migration>-$(date +%F-%H%M).dump"
+cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image \
+  exec -T backup sh -c 'pg_dump -Fc -h postgres -U quiz quiz > "/backups/$1"' sh "manual-<migration>-$(date +%F-%H%M).dump"
 ```
 
 - **The fingerprint and the restore drill.** `scripts/db-fingerprint.sql`
