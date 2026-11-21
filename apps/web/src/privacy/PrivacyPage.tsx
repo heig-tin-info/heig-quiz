@@ -1,3 +1,5 @@
+import { FALLBACK_LOCALE, isWrittenLocale, type WrittenLocale } from "@quiz/domain";
+
 import { Logo } from "../Header";
 import { type Locale, useI18n } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
@@ -23,13 +25,19 @@ import fr from "./privacy.fr.md?raw";
  * this browser only, as on `/discover`: a signed-out reader has no account
  * to persist it to.
  *
- * A legal text: a translated language maps to the English file until a
- * human-reviewed translation exists (ADR-140 §5).
+ * A legal text: it exists in each written language, and a reader of a
+ * translated language reads the English file (ADR-140 §5).
  */
-export const PRIVACY_SOURCES: Record<Locale, string> = { en, fr };
+export const PRIVACY_SOURCES: Record<WrittenLocale, string> = { en, fr };
+
+/** The language a reader of `locale` reads the page in: their own when it is written, English otherwise. */
+export function privacyLocale(locale: Locale): WrittenLocale {
+  return isWrittenLocale(locale) ? locale : FALLBACK_LOCALE;
+}
 
 export function PrivacyPage() {
   const { t, locale } = useI18n();
+  const source = privacyLocale(locale);
   useDocumentTitle(`${t("privacy.title")} · Quiz`);
   return (
     <div className="min-h-dvh bg-canvas text-fg">
@@ -43,8 +51,11 @@ export function PrivacyPage() {
       </header>
       <main className="mx-auto max-w-3xl px-4 pt-6 pb-12 sm:px-8">
         <PageHeader title={t("privacy.title")} description={t("privacy.lead")} />
-        <article className="mt-6 rounded-card border border-line bg-surface px-5 py-6 sm:px-10 sm:py-8">
-          <MarkdownView source={PRIVACY_SOURCES[locale]} className="md-doc" />
+        <article
+          lang={source === locale ? undefined : source}
+          className="mt-6 rounded-card border border-line bg-surface px-5 py-6 sm:px-10 sm:py-8"
+        >
+          <MarkdownView source={PRIVACY_SOURCES[source]} className="md-doc" />
         </article>
       </main>
       <footer className="pb-10 text-center text-xs text-fg-faint">{t("landing.footer")}</footer>

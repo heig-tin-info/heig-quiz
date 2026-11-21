@@ -18,7 +18,7 @@ import {
   type Block,
   type Document,
 } from "./document.js";
-import { EN_LABELS, FR_LABELS, type Lang } from "./labels.js";
+import { EN_LABELS, FR_LABELS, LABELS, type Lang } from "./labels.js";
 import { createHash } from "node:crypto";
 
 import { fenceFor, markdownBody, renderMarkdown } from "./markdown.js";
@@ -192,10 +192,12 @@ describe("labels", () => {
     );
   });
 
-  it("has every word in both languages", () => {
-    expect(Object.keys(FR_LABELS).sort()).toEqual(Object.keys(EN_LABELS).sort());
-    for (const value of [...Object.values(EN_LABELS), ...Object.values(FR_LABELS)]) expect(value.trim()).not.toBe("");
-    expect([EN_LABELS.lang, FR_LABELS.lang]).toEqual(["en", "fr"]);
+  it("has every word in every language, each dictionary naming its own", () => {
+    for (const [lang, labels] of Object.entries(LABELS)) {
+      expect(Object.keys(labels).sort(), lang).toEqual(Object.keys(EN_LABELS).sort());
+      for (const value of Object.values(labels)) expect(value.trim()).not.toBe("");
+      expect(labels.lang).toBe(lang);
+    }
   });
 
   it("writes points with two decimals at most, and an answer only when there is one", () => {

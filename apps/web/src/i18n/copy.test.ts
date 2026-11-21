@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { EN_LABELS, FR_LABELS } from "@quiz/docexport";
+import { LABELS } from "@quiz/docexport";
+import { type Locale, LOCALES } from "@quiz/domain";
 
 import { de } from "./de";
 import { en } from "./en";
@@ -26,13 +27,17 @@ import { fr } from "./fr";
  * show in the JSON diff.
  */
 
-/** The dictionaries the lint reads: the written English and French, the translated German (ADR-140). */
-const DICTS = { fr, en, de };
-type Lang = keyof typeof DICTS;
-const DICT: Record<Lang, Record<string, string>> = DICTS;
+/**
+ * The dictionaries the lint reads, one per interface language: the written
+ * English and French, the translated German (ADR-140). Keyed by the
+ * registry: a language added there is a compile error here until its
+ * dictionary is.
+ */
+const DICTS: Record<Locale, Record<keyof typeof en, string>> = { en, fr, de };
+const DICT: Record<Locale, Record<string, string>> = DICTS;
 type Rule = {
   name: string;
-  langs: Lang[];
+  langs: Locale[];
   /** Why, and what to write instead: the message of a failure. */
   fix: string;
   test: (text: string, key: string) => boolean;
@@ -70,10 +75,10 @@ const COMPONENT_KEY = /^(courses\.(settings\.)?components|gbook\.(settings|head|
 const REPARTITION = /\brépartitions?\b(?! (des (notes|réponses|points|scores)|par question)\b)/i;
 
 /** Every language of the dictionary. */
-const ALL = Object.keys(DICT) as Lang[];
-const FR: Lang[] = ["fr"];
-const EN: Lang[] = ["en"];
-const DE: Lang[] = ["de"];
+const ALL = Object.keys(DICT) as Locale[];
+const FR: Locale[] = ["fr"];
+const EN: Locale[] = ["en"];
+const DE: Locale[] = ["de"];
 
 /** German prose with its placeholders and inline code taken out: `dir` in backticks is a command, not an address. */
 const prose = (re: RegExp) => (text: string) => has(re)(text.replace(/`[^`]*`/g, "x"));
@@ -217,14 +222,11 @@ describe("copy lint of the French help pages (N-I18N-04)", () => {
  * exception, and every word is short — a label, or one sentence of a toast's
  * length at most.
  */
-const DOCUMENT_WORDS: Partial<Record<Lang, Record<string, string>>> = {
-  fr: Object.fromEntries(Object.entries(FR_LABELS)),
-  en: Object.fromEntries(Object.entries(EN_LABELS)),
-};
+const DOCUMENT_WORDS = Object.fromEntries(LOCALES.map((lang): [Locale, Record<string, string>] => [lang, { ...LABELS[lang] }]));
 const DOCUMENT_WORD_MAX = 80;
 
 describe("copy lint of a document's fixed words (N-I18N-04, ADR-125)", () => {
-  it.each(Object.keys(DOCUMENT_WORDS) as Lang[])("%s: every rule holds, every word is short", (lang) => {
+  it.each(LOCALES)("%s: every rule holds, every word is short", (lang) => {
     const words = DOCUMENT_WORDS[lang]!;
     const offenders = RULES.filter((rule) => rule.langs.includes(lang)).flatMap((rule) =>
       Object.keys(words)

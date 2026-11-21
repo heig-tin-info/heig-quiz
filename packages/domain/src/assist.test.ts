@@ -140,10 +140,11 @@ describe("visiblePages", () => {
 });
 
 describe("assistSystem", () => {
-  it("states the scope, the refusal in both languages and the index", () => {
+  it("states the scope, the refusal in every language and the index", () => {
     const system = assistSystem(corpus, "teacher");
-    expect(system).toContain(ASSIST_REFUSAL.fr);
-    expect(system).toContain(ASSIST_REFUSAL.en);
+    expect(system).toContain(`   - French (fr): ${ASSIST_REFUSAL.fr}`);
+    expect(system).toContain(`   - English (en): ${ASSIST_REFUSAL.en}`);
+    expect(system).toContain(`   - German (de): ${ASSIST_REFUSAL.de}`);
     expect(system).toContain("teacher's questions");
     expect(system).toContain("- guide/pools — Question pools: A pool is where your questions live.");
     expect(system).toContain("  - guide/pools#sharing-a-pool — Sharing a pool: Share it with a colleague.");
@@ -172,6 +173,14 @@ describe("assistScreen", () => {
     expect(screen).toContain("Route: /pools/:id");
     expect(screen).toContain("# Les questions d'une banque");
     expect(screen).toContain("## Recherche et filtres");
+  });
+
+  it("gives a German screen the English help: no help file is translated to German (ADR-140 §9)", () => {
+    const screen = assistScreen(corpus, "teacher", { route: "/pools/:id", helpTopic: "pool", locale: "de" });
+    expect(screen).toContain("German (de)");
+    expect(screen).toContain("# The questions of a pool");
+    expect(corpus.pages.every((p) => p.texts.de === undefined)).toBe(true);
+    expect(readGuide(corpus, "teacher", "de", { page: "pool" })).toContain("# The questions of a pool");
   });
 
   it("says when the screen has no topic, or one the corpus lacks", () => {
@@ -307,6 +316,7 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
   it("asks the results reader only for a question about results, in either language", () => {
     expect(wantsResults("Quelle est la moyenne de la classe ?")).toBe(true);
     expect(wantsResults("Show me the results")).toBe(true);
+    expect(wantsResults("Wie ist der Durchschnitt der Klasse?")).toBe(true);
     expect(wantsResults("How do I share a pool?")).toBe(false);
   });
 
@@ -351,6 +361,9 @@ describe("stubAnswer", () => {
     const fr = stubAnswer(corpus, "teacher", "recherche du champ", { route: "/", helpTopic: null, locale: "fr" });
     expect(fr).toContain("Réponse de développement");
     expect(fr).toContain("(`help/pool#search-and-filters`)");
+    const de = stubAnswer(corpus, "teacher", "share a pool", { route: "/pools/:id", helpTopic: "pool", locale: "de" });
+    expect(de).toContain("Entwicklungsantwort, keine KI");
+    expect(de).toContain("Die Hilfe zu dieser Seite ist **The questions of a pool**.");
     const none = stubAnswer(corpus, "teacher", "zzz", { route: "/", helpTopic: null, locale: "en" });
     expect(none).toContain("No section of the documentation matches the question.");
   });

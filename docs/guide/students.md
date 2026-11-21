@@ -249,7 +249,7 @@ If your teacher keeps a journal for the course, your classroom page has a **Jour
 
 ## Settings
 
-**Settings**, in the menu under your name, holds your profile as the platform knows it and your preferences: **Language** (English or French, saved on your account so it follows you across devices), **Appearance** (**Light**, **Dark** or **System**) and the date format. Your linked GitHub account, if any, and the channels of your notifications are there too.
+**Settings**, in the menu under your name, holds your profile as the platform knows it and your preferences: **Language** (English, French or German, saved on your account so it follows you across devices), **Appearance** (**Light**, **Dark** or **System**) and the date format. Your linked GitHub account, if any, and the channels of your notifications are there too.
 
 <figure markdown="span">
   ![The settings of a student: profile with name, e-mail and last sign-in, then Language, Appearance and Date format](../assets/screenshots/student-settings-light.png#only-light)

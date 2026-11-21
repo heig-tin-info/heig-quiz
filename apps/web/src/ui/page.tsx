@@ -504,9 +504,9 @@ export function Stat({
   const body = (
     <>
       <span className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
-        {Icon ? <Icon className="size-3.5 text-fg-faint" /> : null}
+        {Icon ? <Icon className="size-3.5 shrink-0 text-fg-faint" /> : null}
         {label}
-        {aside ? <span className="ml-auto pl-2 tabular-nums text-fg-faint">{aside}</span> : null}
+        {aside ? <span className="ml-auto shrink-0 whitespace-nowrap pl-2 tabular-nums text-fg-faint">{aside}</span> : null}
       </span>
       <span className={cx("block", visual ? "mt-1.5 flex items-center justify-between gap-3" : "mt-1")}>
         <span className="block text-[22px] font-bold leading-none tabular-nums tracking-tight">{value}</span>

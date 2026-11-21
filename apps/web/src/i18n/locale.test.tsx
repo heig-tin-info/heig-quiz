@@ -2,7 +2,8 @@ import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CrashBoundary } from "../CrashBoundary";
-import { browserLocale, I18nProvider, storedChoice, storedLocale, useI18n } from "./index";
+import { de } from "./de";
+import { browserLocale, I18nProvider, loadLocale, storedChoice, storedLocale, useI18n } from "./index";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -63,6 +64,33 @@ describe("the browser's language (#228)", () => {
     expect(i18n.locale).toBe("en");
     expect(localStorage.getItem("quiz-locale")).toBe("browser");
   });
+});
+
+describe("German, a translated language (ADR-140)", () => {
+  function probe() {
+    let i18n!: ReturnType<typeof useI18n>;
+    function Probe() {
+      i18n = useI18n();
+      return null;
+    }
+    render(
+      <I18nProvider>
+        <Probe />
+      </I18nProvider>,
+    );
+    return () => i18n;
+  }
+
+  it("paints German from the first frame once main.tsx has loaded it, never English first", async () => {
+    prefer("en-GB");
+    localStorage.setItem("quiz-locale", "de");
+    await loadLocale(storedLocale());
+    const i18n = probe();
+    expect(i18n().locale).toBe("de");
+    expect(i18n().t("whatsNew.title")).toBe(de["whatsNew.title"]);
+    expect(document.documentElement.lang).toBe("de");
+  });
+
 });
 
 describe("CrashBoundary", () => {

@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { LABELS, labelled, scopeZones, type Block, type Lang } from "@quiz/docexport";
+import { LABELS, LANGS, labelled, scopeZones, type Block, type Lang } from "@quiz/docexport";
 import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
 import type { QuestionTypeServer } from "@quiz/core/server";
@@ -30,7 +30,6 @@ import {
 
 const view = { seed: 0, itemId: "item-1", shuffle: false };
 const PROVENANCE = { kind: "test", version: 1, source: {}, attempts: [], generatedAt: "2026-11-04T10:00:00.000Z", app: null };
-const LANGS: readonly Lang[] = ["en", "fr"];
 
 /**
  * The three forms of a list of blocks: its tree, its Typst body (escapes

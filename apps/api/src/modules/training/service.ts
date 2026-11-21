@@ -214,6 +214,7 @@ export async function install(
 const WORDS: Record<Locale, { course: string; autumn: string; spring: string }> = {
   fr: { course: "Prise en main de Quiz", autumn: "Automne", spring: "Printemps" },
   en: { course: "Getting started with Quiz", autumn: "Autumn", spring: "Spring" },
+  de: { course: "Erste Schritte mit Quiz", autumn: "Herbst", spring: "Frühling" },
 };
 
 /** The classroom of the training course (§1): one, named so whatever the language. */

@@ -30,9 +30,9 @@ async function boot() {
   // A reload in place toward a newer build comes back where the reader was.
   build.restoreScroll();
   applyTheme(getThemeChoice());
-  // French is a chunk of its own: when it is the stored choice, the first
-  // paint waits for it rather than flashing English. A failed load paints
-  // English, the fallback.
+  // A language other than English is a chunk of its own: when it is the
+  // stored choice, the first paint waits for it rather than flashing
+  // English. A failed load paints English, the fallback.
   await loadLocale(storedLocale()).catch(() => {});
 
   // One retry, and none on a 4xx: the default three retries kept an error

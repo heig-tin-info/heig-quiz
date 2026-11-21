@@ -17,6 +17,7 @@ import { findStudentLeaks } from "@quiz/core/testing";
 import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
 import { splitFrontMatter } from "@quiz/docrender/frontMatter";
+import { LOCALES } from "@quiz/domain";
 
 import { evaluations, questions } from "../../db/schema.js";
 import { sessionOf, type TestServer, testServer } from "../../test/http.js";
@@ -231,7 +232,7 @@ describe("the hand-out (ADR-125)", () => {
   it("builds a document tree with no secret, the third form searched (ADR-125 §19)", async () => {
     const evaluation = await exam();
     const found = await handout(server.app.db, evaluation, { now: server.clock.now() });
-    for (const lang of ["en", "fr"] as const) {
+    for (const lang of LOCALES) {
       const tree = handoutTree(found, lang);
       expect(findStudentLeaks(tree, { forbiddenKeys: live.FORBIDDEN_STUDENT_KEYS, secrets: SECRETS })).toEqual([]);
       // No box ticked on a hand-out: in the tree, its Markdown and its Typst source (invariant 4).

@@ -265,8 +265,7 @@ segment to, and `domains.test.ts` refuses it anywhere else. The `qt-*`
 packages carry their own strings in `src/strings.ts`, which the host merges.
 
 German is a translated language (ADR-140): `src/i18n/de/<domain>.ts`,
-typed like the French, is drafted from the English, not written, and is
-not selectable yet. A new key, or a key whose English changed, therefore
+typed like the French, is drafted from the English, not written. A new key, or a key whose English changed, therefore
 takes three steps: write its English in `en/<domain>.ts` and its French in
 `fr/<domain>.ts`, draft its German from that English in `de/<domain>.ts`
 (the same placeholders, Swiss spelling, *Sie*, the German column of the
@@ -278,6 +277,24 @@ files. A person who reviews German records it with
 `I18N_STATUS=review=de:pool,qt.mcq.,qt.mcq.r.score` (a domain, a key
 prefix ending in a dot, or one key). What is left to review:
 `jq '[.[] | select(startswith("r:") | not)] | length' apps/web/src/i18n/de.status.json`.
+
+Adding a language (German was the first, ADR-140 §4) starts with its entry
+in `LOCALES` and `LOCALE_INFO` (`packages/domain/src/locales.ts`: its
+endonym, and `origin: "translated"` unless the team writes it), then
+follows the compile errors, each a `Record<Locale, …>` to fill: the web
+dictionary (`src/i18n/<lang>.ts`, its lazy loader in `index.tsx`, its
+`<lang>.status.json` stamped as above), the server's mails and Teams
+strings and their date tag (`notifications/templates.ts`; bump
+`TEAMS_APP_VERSION`), the printed labels (`Lang` and `LABELS` of
+`@quiz/docexport`), the blocks' printed words and Blockly's message pack
+(`qt-blocks`), the group names (`domain/groupSets.ts`), the training
+course's words, the assistant's fixed replies (`domain/assist.ts`) and the
+copy lint's and status test's tables. A written language also needs its
+privacy page (`src/privacy/`); a translated one reads the English. The
+picker, the command palette, the Teams package's language files, the help
+drawer and the assistant's corpus follow the list on their own; the
+workspace portal (`apps/codespace`) does not, and is widened in its own
+pull request.
 
 Everything else, code, identifiers, comments, commit messages, ADRs and
 this documentation, is in English.

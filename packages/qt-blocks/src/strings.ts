@@ -258,8 +258,42 @@ const blocksPaperWordsFr: Readonly<Record<keyof BlocksPaperWords, string>> = {
   hidden: "Caché",
 };
 
+/** German, a translated language (ADR-140): the drafted `qt.blocks.c.*` of the web app's German, word for word. */
+const blocksPaperWordsDe: Readonly<Record<keyof BlocksPaperWords, string>> = {
+  forward: "vorwärts fahren",
+  turn: "nach {dir} drehen",
+  turnLeft: "links",
+  turnRight: "rechts",
+  repeat: "{n}-mal wiederholen",
+  repeatUntilDock: "wiederholen bis zur Laderampe",
+  ifSensor: "falls {where} {sensor}",
+  else: "sonst",
+  sensorFree: "frei",
+  sensorBlocked: "blockiert",
+  whereFront: "vorne",
+  whereLeft: "links",
+  whereRight: "rechts",
+  kindForward: "Vorwärts fahren",
+  kindTurn: "Drehen",
+  kindRepeat: "n-mal wiederholen",
+  kindRepeatUntilDock: "Wiederholen bis zur Laderampe",
+  kindIfSensor: "Falls ein Sensor meldet",
+  battery: "Batterie",
+  map: "Plan des Lagers",
+  dock: "RAMPE",
+  reasonDock: "Laderampe erreicht",
+  reasonCollision: "Kollision",
+  reasonBattery: "Batterie leer",
+  reasonLoop: "Endlosschleife",
+  reasonShort: "Vor der Laderampe gestoppt",
+  colWarehouse: "Lager",
+  colResult: "Ergebnis",
+  hidden: "Verborgen",
+};
+
 /** The printed words of each language, as a document's `labels.lang` picks them. */
 export const BLOCKS_PAPER_WORDS: Readonly<Record<Lang, BlocksPaperWords>> = {
   en: blocksPaperWordsEn,
   fr: blocksPaperWordsFr,
+  de: blocksPaperWordsDe,
 };

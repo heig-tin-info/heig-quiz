@@ -371,15 +371,129 @@ export const FR_LABELS: Labels = {
 };
 
 /**
+ * German, a translated language (ADR-140 §2): drafted from the English, in
+ * the words of the web app's German dictionary (Swiss spelling, «Sie»).
+ */
+export const DE_LABELS: Labels = {
+  lang: "de",
+  question: "Frage",
+  statement: "Aufgabenstellung",
+  answerKey: "Musterlösung",
+  explanation: "Erklärung",
+  yourAnswer: "Ihre Antwort",
+  points: "Punkte",
+  pointsShort: "Pkt.",
+  notGraded: "noch nicht korrigiert",
+  noAnswer: "Keine Antwort.",
+  name: "Name",
+  firstName: "Vorname",
+  blank: "Lücke",
+  expected: "Erwartet",
+  result: "Ergebnis",
+  right: "richtig",
+  wrong: "falsch",
+  severalAnswers: "Mehrere Antworten können richtig sein.",
+  negativeMarking: "Eine falsche Antwort kostet Punkte. Keine Antwort kostet nichts.",
+  expectNumber: "Antworten Sie mit einer Zahl.",
+  expectDate: "Antworten Sie mit einem Datum.",
+  expectTime: "Antworten Sie mit einer Uhrzeit.",
+  symbols: "Symbole",
+  lengthLimit: "Maximale Länge",
+  characters: "Zeichen",
+  circuitParts: "Bauteile",
+  circuitMaxParts: "Maximale Anzahl Bauteile",
+  circuitSupplies: "Versorgungen",
+  circuitCommonGround: "in− und out− sind die Masse.",
+  circuitSeparateGround: "in− und out− sind zwei freie Knoten. Ein Massesymbol benennt Knoten 0.",
+  circuitStimuli: "So wird Ihre Schaltung getestet",
+  circuitSource: "Quelle",
+  circuitLoad: "Last",
+  circuitAnalysis: "Analyse",
+  circuitDc: "Gleichspannung",
+  circuitSine: "Sinus",
+  circuitPulse: "Puls",
+  circuitStep: "Sprung",
+  circuitOpen: "Offener Ausgang",
+  circuitBias: "Arbeitspunkt",
+  circuitHidden: "Verborgene Stimuli",
+  schematic: "Schaltplan",
+  logicInputs: "Eingänge",
+  logicOutputs: "Ausgänge",
+  logicGates: "Gatter",
+  logicMaxGates: "Maximale Anzahl Gatter",
+  logicVectors: "Testvektoren",
+  diagramNotation: "Notation",
+  diagramStarter: "Startdiagramm",
+  diagramClass: "UML-Klassendiagramm",
+  diagramUsecase: "UML-Anwendungsfalldiagramm",
+  diagramState: "Zustandsautomat",
+  diagramEr: "Entity-Relationship-Diagramm",
+  diagramFlow: "Flussdiagramm",
+  diagramAutomaton: "Endlicher Automat",
+  diagramGraph: "Graph",
+  diagramFree: "Freies Zeichnen",
+  grade: "Note",
+  awaitingGrading: "Noch zu korrigierende Fragen",
+  comment: "Kommentar der Lehrperson",
+  bonus: "Bonus",
+  notCounted: "nicht gewertet",
+  notPrintable: "Nicht druckbar: in Quiz ansehen.",
+  answer: "Antwort",
+  staffComment: "Kommentar",
+  attempt: "Versuch",
+  state: "Status",
+  stateNotStarted: "Nicht begonnen",
+  stateInProgress: "In Bearbeitung",
+  stateSubmitted: "Abgegeben",
+  stateExpired: "Abgelaufen",
+  noAttempt: "Kein Versuch.",
+  unreadableAnswer: "Die gespeicherte Antwort ist nicht lesbar.",
+  policy: "Bewertungsregel",
+  fraction: "Anteil",
+  rightTicks: "Richtige Kreuze",
+  wrongTicks: "Falsche Kreuze",
+  rightChoices: "Richtige Optionen",
+  wrongChoices: "Falsche Optionen",
+  negativeMarkingShort: "Minuspunkte",
+  given: "Gegebene Antwort",
+  test: "Test",
+  visibility: "Sichtbarkeit",
+  arguments: "Argumente",
+  visible: "sichtbar",
+  hidden: "verborgen",
+  passed: "bestanden",
+  failed: "nicht bestanden",
+  noTests: "Keine Tests.",
+  testsPassed: "Bestandene Tests",
+  compileFailed: "Kompilierung fehlgeschlagen.",
+  answerMisfit: "Die Antwort passt nicht mehr zum Startcode der Frage.",
+  rubric: "Korrekturanweisungen",
+  criterion: "Kriterium",
+  weight: "Gewichtung",
+  graderNote: "Korrektur-Prompt",
+  noMatch: "Keine akzeptierte Antwort passt.",
+  matchedAnswer: "Passende akzeptierte Antwort",
+  notRead: "Nicht lesbar",
+  colon: ": ",
+  blocksMapLegend: "Grau: Regale. Schwarz: Roboter, Pfeil in Fahrtrichtung. Gestrichelt: Laderampe.",
+  blocksHiddenWarehouses: "Verborgene Lager, bei der Korrektur getestet",
+  blocksAllOrNothing: "Punkte nur, wenn der Roboter in jedem Lager die Laderampe erreicht.",
+  blocksToolbox: "Verfügbare Blöcke",
+  blocksStarter: "Startcode",
+  blocksAnswerHint: "Schreiben Sie Pseudocode: ein Block pro Zeile, sein Inhalt eingerückt.",
+};
+
+/**
  * The languages a document is worded in: the interface languages, `LOCALES`
  * of `@quiz/domain`, which this package sits below and cannot import. The
  * API hands it a `Locale`, so a language added there is a compile error
  * there until it is added here, with its labels (ADR-140).
  */
-export type Lang = "en" | "fr";
+export const LANGS = ["en", "fr", "de"] as const;
+export type Lang = (typeof LANGS)[number];
 
 /** The words of each language, as a document's `lang` picks them. */
-export const LABELS: Readonly<Record<Lang, Labels>> = { en: EN_LABELS, fr: FR_LABELS };
+export const LABELS: Readonly<Record<Lang, Labels>> = { en: EN_LABELS, fr: FR_LABELS, de: DE_LABELS };
 
 /** `Label: value`, with the language's own colon. */
 export const labelled = (labels: Labels, label: string, value: string): string => `${label}${labels.colon}${value}`;

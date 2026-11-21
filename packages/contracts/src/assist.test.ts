@@ -21,10 +21,11 @@ describe("AssistContext — a route pattern, never an entity (ADR-080 §2)", () 
     expect(ok("pools")).toBe(false);
   });
 
-  it("takes a help topic slug and the two UI languages only", () => {
+  it("takes a help topic slug and the UI languages of the registry only", () => {
     expect(AssistContext.safeParse({ route: "/", helpTopic: "question-editor", locale: "fr" }).success).toBe(true);
     expect(AssistContext.safeParse({ route: "/", helpTopic: "../x", locale: "fr" }).success).toBe(false);
-    expect(AssistContext.safeParse({ route: "/", helpTopic: null, locale: "de" }).success).toBe(false);
+    expect(AssistContext.safeParse({ route: "/", helpTopic: null, locale: "de" }).success).toBe(true);
+    expect(AssistContext.safeParse({ route: "/", helpTopic: null, locale: "it" }).success).toBe(false);
     expect(AssistContext.safeParse({ route: "/", helpTopic: null, locale: "en", title: "x" }).success).toBe(false);
   });
 });

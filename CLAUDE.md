@@ -55,20 +55,22 @@ Never work around these, not even "temporarily".
 
 1. **English everywhere except UI strings.** Code, identifiers, comments,
    documentation, commit messages, ADRs: English. Only what a user reads is
-   translated, and it goes through `t()` in `apps/web/src/i18n/` (one file per
-   domain in `en/` and `fr/`, assigned by `domains.ts`; `index.tsx`) with an
-   entry in every language of `LOCALES`
+   translated, and it goes through `t()` in `apps/web/src/i18n/` (one file
+   per domain in `en/`, `fr/` and `de/`, assigned by `domains.ts`;
+   `index.tsx`) with an entry in every language of `LOCALES`
    (`packages/domain/src/locales.ts`) — teacher surfaces included (N-I18N-01).
    Every dictionary but English is typed `Record<keyof Dict, string>`, so a
    missing key is a compile error. Keep it that way. English and French are
-   written, never translated, short, by the Voice rules of `apps/web/DESIGN.md` and the
-   glossary of `docs/spec/01-glossaire-et-domaine.md` §1.5 (N-I18N-04);
-   the copy lint of `apps/web/src/i18n/` refuses what it can detect. A
-   translated language (German, Italian) and the rule that no code compares
-   a locale to a literal: ADR-140. A new key, or a key whose English
-   changed, also gets its German draft in `de/<domain>.ts` and the re-stamp
-   of `de.status.json` (`I18N_STATUS=stamp`, `src/i18n/status.test.ts`); a
-   French-only change needs neither.
+   written, never translated, short, by the Voice rules of
+   `apps/web/DESIGN.md` and the glossary of
+   `docs/spec/01-glossaire-et-domaine.md` §1.5 (N-I18N-04); the copy lint of
+   `apps/web/src/i18n/` refuses what it can detect. German is live and
+   *translated* (`LOCALE_INFO[…].origin`), machine-drafted from the English;
+   the rule that no code compares a locale to a literal: ADR-140. A new key,
+   or a key whose English changed, also gets its German draft in
+   `de/<domain>.ts` and the re-stamp of `de.status.json`
+   (`I18N_STATUS=stamp`, `src/i18n/status.test.ts`); a French-only change
+   needs neither.
 2. **One primary action per screen.** If you cannot name the single thing a
    screen is for, the flow is wrong, not the styling. See
    `.claude/skills/quiz-ui/SKILL.md` and `apps/web/DESIGN.md`.

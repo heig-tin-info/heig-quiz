@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { NotificationPayload } from "@quiz/contracts";
 import { escapeHtml } from "@quiz/docrender/highlight";
+import { FALLBACK_LOCALE, LOCALES } from "@quiz/domain";
 
 import {
   activityParameters,
@@ -9,6 +10,7 @@ import {
   notificationPath,
   renderNotification,
   renderTestMail,
+  serverText,
   type OutboundPayload,
 } from "./templates.js";
 
@@ -49,9 +51,17 @@ describe("renderNotification", () => {
     const role = renderNotification(shared, "fr", "https://quiz.test");
     expect(role.text).toContain("avec vous comme contributeur");
     expect(role.text).toContain("https://quiz.test/pools/" + POOL);
+
+    // German, a translated language (ADR-140): a German account gets German mail.
+    const de = renderNotification(released, "de", "https://quiz.test");
+    expect(de.subject).toBe("Ergebnisse verfügbar: Test 0 — bases du C");
+    expect(de.html).toContain("Meine Ergebnisse ansehen");
+    expect(de.html).toContain("Benachrichtigungseinstellungen");
+    expect(de.preview).toBe("Die Ergebnisse von «Test 0 — bases du C» sind verfügbar.");
+    expect(renderNotification(shared, "de", "https://quiz.test").text).toContain("mit Ihnen geteilt (Rolle: Mitarbeit)");
   });
 
-  it("covers every kind in both languages", () => {
+  it("covers every kind in every language", () => {
     const ownership: NotificationPayload = {
       kind: "pool_ownership",
       poolId: POOL,
@@ -105,7 +115,7 @@ describe("renderNotification", () => {
       { kind: "project_provision_failed", ...project, count: 1, reason: "repo_name_taken" },
       { kind: "github_org_lost", classroomId: CLASSROOM, classroomName: "PRG1-2026", orgLogin: "heig-prg1" },
     ] satisfies NotificationPayload[]) {
-      for (const locale of ["en", "fr"] as const) {
+      for (const locale of LOCALES) {
         const out = renderNotification(payload, locale, "https://quiz.test");
         for (const part of [out.subject, out.text, out.html, out.preview]) {
           expect(part).not.toMatch(/\{\w+\}/);
@@ -120,6 +130,7 @@ describe("renderNotification", () => {
     const url = "https://quiz.test";
     expect(renderNotification(scheduled, "fr", url).text).toContain("ouvre le 06.11.2026 16:30.");
     expect(renderNotification(scheduled, "en", url).text).toContain("opens on 06/11/2026, 16:30.");
+    expect(renderNotification(scheduled, "de", url).text).toContain("beginnt am 06.11.2026, 16:30.");
     expect(renderNotification({ ...scheduled, githubLinked: false }, "fr", url).text).toContain("Liez votre compte GitHub");
     expect(notificationPath(scheduled)).toBe(`/projects/${PROJECT}`);
   });
@@ -143,6 +154,9 @@ describe("renderNotification", () => {
     );
     expect(renderNotification({ ...joined, count: 1 }, "fr", "https://quiz.test").subject).toBe(
       "Un étudiant a rejoint PRG1-2026",
+    );
+    expect(renderNotification({ ...joined, count: 1 }, "de", "https://quiz.test").subject).toBe(
+      "Eine Person ist PRG1-2026 beigetreten",
     );
     const conflict = renderNotification(
       { ...joined, kind: "roster_conflict", count: 2 },
@@ -191,8 +205,9 @@ describe("helpers", () => {
   it("falls back to English for an unset or unknown locale", () => {
     expect(mailLocale("fr")).toBe("fr");
     expect(mailLocale("en")).toBe("en");
+    expect(mailLocale("de")).toBe("de");
     expect(mailLocale(null)).toBe("en");
-    expect(mailLocale("de")).toBe("en");
+    expect(mailLocale("it")).toBe("en");
   });
 
   it("opens the same page as the bell", () => {
@@ -323,11 +338,15 @@ describe("system_alert (ADR-055 §5)", () => {
     expect(fr.subject).toBe("quiz.heig-vd.ch : contrôles de santé en échec");
     expect(fr.text).toContain("Espace disque, Exécuteur de code");
     expect(fr.text).toContain("Ouvrir l'état du système");
+
+    const de = renderNotification(failing, "de", "https://quiz.heig-vd.ch");
+    expect(de.subject).toBe("quiz.heig-vd.ch: Systemchecks schlagen fehl");
+    expect(de.text).toContain("Speicherplatz, Code-Runner");
   });
 
-  it("has a sentence per state, in both languages", () => {
+  it("has a sentence per state, in every language", () => {
     for (const state of ["failing", "still_failing", "recovered"] as const) {
-      for (const locale of ["en", "fr"] as const) {
+      for (const locale of LOCALES) {
         const out = renderNotification({ kind: "system_alert", state, checks: ["backup"] }, locale, "https://quiz.test");
         for (const part of [out.subject, out.text, out.html]) expect(part).not.toMatch(/\{\w+\}/);
       }
@@ -351,18 +370,21 @@ describe("account_dormant (ADR-117 §4)", () => {
     expect(fr.subject).toBe("Votre compte HEIG Quiz sera anonymisé dans trois mois");
     expect(fr.text).toContain("Connectez-vous d'ici trois mois");
     expect(fr.text).toContain("Télécharger mes données: https://quiz.test/settings");
+    const de = renderNotification({ kind: "account_dormant", state: "notice" }, "de", "https://quiz.test");
+    expect(de.subject).toBe("Ihr Konto bei HEIG Quiz wurde seit zwei Jahren nicht benutzt");
+    expect(de.text).toContain("Sonst wird es anonymisiert");
   });
 
   it("never says deleted, and points at no notification settings: nobody can turn it off", () => {
     for (const state of ["notice", "reminder"] as const) {
-      for (const locale of ["en", "fr"] as const) {
+      for (const locale of LOCALES) {
         const out = renderNotification({ kind: "account_dormant", state }, locale, "https://quiz.test");
         for (const part of [out.subject, out.text, out.html]) {
           expect(part).not.toMatch(/\{\w+\}/);
-          expect(part).not.toMatch(/delet|supprim/i);
+          expect(part).not.toMatch(/delet|supprim|lösch/i);
         }
         expect(out.text).not.toContain("--");
-        expect(out.html).not.toMatch(/notification settings|Réglages des notifications/i);
+        expect(out.html).not.toMatch(/notification settings|Réglages des notifications|Benachrichtigungseinstellungen/i);
       }
     }
   });
@@ -370,7 +392,7 @@ describe("account_dormant (ADR-117 §4)", () => {
 
 describe("the test e-mail (ADR-055 §6)", () => {
   it("names the platform, links back to the System status, and has no notification footer", () => {
-    for (const locale of ["en", "fr"] as const) {
+    for (const locale of LOCALES) {
       const mail = renderTestMail(locale, "https://quiz.heig-vd.ch");
       expect(mail.subject).toContain("quiz.heig-vd.ch");
       expect(mail.text).toContain("https://quiz.heig-vd.ch/admin?tab=system");
@@ -380,5 +402,32 @@ describe("the test e-mail (ADR-055 §6)", () => {
       expect(mail.html).not.toContain("/settings");
     }
     expect(renderTestMail("fr", "https://quiz.test").text).toContain("Retour à l'état du système");
+  });
+});
+
+/*
+ * The German of the mails and the Teams app is drafted, not written
+ * (ADR-140 §2): the machine-checkable rules of the web app's copy lint
+ * hold here too (Swiss spelling, guillemets, «Sie», no semicolon chain nor
+ * em-dash aside), and every value keeps the English placeholders.
+ */
+describe("the dictionaries of the other languages", () => {
+  const en: Record<string, string> = serverText("en");
+  const names = (text: string) => (text.match(/\{\w+\}/g) ?? []).sort().join(" ");
+
+  it.each(LOCALES.filter((l) => l !== FALLBACK_LOCALE))("%s keeps exactly the placeholders of the English", (locale) => {
+    const text: Record<string, string> = serverText(locale);
+    expect(Object.keys(text).filter((k) => names(text[k]!) !== names(en[k]!))).toEqual([]);
+  });
+
+  // The German rules of the web app's copy lint (`apps/web/src/i18n/copy.test.ts`:
+  // eszett, quotation-marks, informal-address, semicolon, em-dash-aside), restated
+  // here because that lint reads the web dictionaries only.
+  it("writes Swiss German, addresses the reader as Sie, and uses guillemets", () => {
+    const de: Record<string, string> = serverText("de");
+    const offenders = Object.entries(de).filter(([, text]) =>
+      /ß|[„“”]|; | — |\b([Dd]u|[Dd]ein(e|em|en|er|es)?|[Dd]ir|[Dd]ich|[Ee]uch)\b/.test(text.replace(/\{\w+\}/g, "x")),
+    );
+    expect(offenders).toEqual([]);
   });
 });

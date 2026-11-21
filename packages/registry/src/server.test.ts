@@ -1,6 +1,6 @@
 import { ConfigMigrationError, isGraded, UnknownQuestionType, type StudentView } from "@quiz/core/server";
 import { findStudentLeaks, testGradeContext, type StudentLeakFixture } from "@quiz/core/testing";
-import { LABELS, scopeZones, type Block, type Lang } from "@quiz/docexport";
+import { LABELS, LANGS, scopeZones, type Block, type Lang } from "@quiz/docexport";
 import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
 import { blocksLeakFixture } from "@quiz/qt-blocks/testing";
@@ -93,9 +93,6 @@ const LEAK_FIXTURES: Record<RegisteredId, StudentLeakFixture> = {
  * is a runtime change, not a test's to make.
  */
 const CROSS_TYPE_FORBIDDEN_KEYS = ["policy", "tolerance"];
-
-/** The languages a student document is worded in (ADR-125). */
-const LANGS: readonly Lang[] = ["en", "fr"];
 
 /** The provenance of a rendered test document: ids only, none of a fixture. */
 const PROVENANCE = { kind: "test", version: 1, source: {}, attempts: [], generatedAt: "2026-11-04T10:00:00.000Z", app: null };

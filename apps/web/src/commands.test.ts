@@ -27,6 +27,7 @@ import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures
  */
 
 await loadLocale("fr");
+await loadLocale("de");
 
 /** The real dictionaries, so a missing `fr` string fails a test instead of
  *  falling back silently. */
@@ -247,6 +248,18 @@ describe("buildCommands: the theme and language actions", () => {
 
     const fr = need(buildCommands(makeContext({ locale: "fr" })), "action:locale:en");
     expect(fr.label).toBe("Passer en English");
+  });
+
+  it("offers every other language of the registry, German included (ADR-140)", () => {
+    const setLocale = vi.fn();
+    const ids = (locale: Locale) =>
+      buildCommands(makeContext({ locale })).flatMap((c) => (c.id.startsWith("action:locale:") ? [c.id] : []));
+    expect(ids("en")).toEqual(["action:locale:fr", "action:locale:de"]);
+    expect(ids("de")).toEqual(["action:locale:en", "action:locale:fr"]);
+    const de = need(buildCommands(makeContext({ setLocale })), "action:locale:de");
+    expect(de.label).toBe("Switch to Deutsch");
+    de.run();
+    expect(setLocale).toHaveBeenCalledWith("de");
   });
 });
 

@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import type { GradedResult } from "@quiz/core/server";
 import { testGradeContext } from "@quiz/core/testing";
-import { EN_LABELS, FR_LABELS, LABELS, toSvg, type Block, type Drawing, type DrawingBlock, type Lang } from "@quiz/docexport";
+import { EN_LABELS, FR_LABELS, LABELS, LANGS, toSvg, type Block, type Drawing, type DrawingBlock, type Lang } from "@quiz/docexport";
 import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
 
@@ -61,7 +61,7 @@ function graded(): BlocksDetails {
 }
 
 describe("the hand-out of a blocks question (ADR-126 §8, §9)", () => {
-  for (const lang of ["en", "fr"] as const) {
+  for (const lang of LANGS) {
     const labels = LABELS[lang];
     const handout = [...blocksServer.statementDoc!(student, labels), ...blocksServer.answerZone!(student)];
 
@@ -81,7 +81,7 @@ describe("the hand-out of a blocks question (ADR-126 §8, §9)", () => {
       const [, typst, markdown] = forms(handout, lang);
       const words = BLOCKS_PAPER_WORDS[lang];
       for (const form of [typst!, markdown!]) {
-        expect(form).toContain(`${labels.blocksHiddenWarehouses}${labels.colon}2 · 5 pt`);
+        expect(form).toContain(`${labels.blocksHiddenWarehouses}${labels.colon}2 · 5 ${labels.pointsShort}`);
         expect(form).toContain(words.kindRepeatUntilDock);
         expect(form).toContain(pseudoCode(SECRET_CONFIG.starter, words));
         for (const c of visible) expect(form).toContain(c.name);
@@ -138,11 +138,14 @@ describe("the student's own answer", () => {
 
   it("prints their program and each warehouse's verdict, a hidden one by its number unless the names are open", () => {
     const closed = blocksServer.studentDetails!(graded(), { showKey: false, showHiddenCaseNames: false });
-    const body = forms(blocksServer.studentAnswerDoc!(student, { program }, closed, FR_LABELS), "fr")[2]!;
-    expect(body).toContain(pseudoCode(program, BLOCKS_PAPER_WORDS.fr));
-    expect(body).toContain("| Clear aisle | Quai atteint | 1 / 1 |");
-    expect(body).toContain("| #3 | Quai atteint | 2 / 2 |");
-    for (const c of hidden) expect(body).not.toContain(c.name);
+    for (const lang of LANGS) {
+      const words = BLOCKS_PAPER_WORDS[lang];
+      const body = forms(blocksServer.studentAnswerDoc!(student, { program }, closed, LABELS[lang]), lang)[2]!;
+      expect(body).toContain(pseudoCode(program, words));
+      expect(body).toContain(`| Clear aisle | ${words.reasonDock} | 1 / 1 |`);
+      expect(body).toContain(`| #3 | ${words.reasonDock} | 2 / 2 |`);
+      for (const c of hidden) expect(body).not.toContain(c.name);
+    }
     const open = blocksServer.studentDetails!(graded(), { showKey: false, showHiddenCaseNames: true });
     expect(forms(blocksServer.studentAnswerDoc!(student, { program }, open, EN_LABELS), "en")[2]).toContain("| Hidden north-east |");
   });

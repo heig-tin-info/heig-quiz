@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import type { TranslatedLocale } from "@quiz/domain";
+
 import { de } from "./de";
 import { DOMAINS } from "./domains";
 import { en } from "./en";
@@ -33,8 +35,9 @@ import { en } from "./en";
  *   a dot (`qt.mcq.`), or one key. A mark that matches no key fails.
  */
 
-const TRANSLATED = { de } satisfies Record<string, Record<keyof typeof en, string>>;
-type Lang = keyof typeof TRANSLATED;
+/** Every translated language of the registry (`LOCALE_INFO`): one added there is a compile error here until its dictionary is. */
+const TRANSLATED: Record<TranslatedLocale, Record<keyof typeof en, string>> = { de };
+type Lang = TranslatedLocale;
 type Key = keyof typeof en;
 
 const DIR = dirname(fileURLToPath(import.meta.url));
