@@ -65,7 +65,9 @@ Never work around these, not even "temporarily".
    glossary of `docs/spec/01-glossaire-et-domaine.md` §1.5 (N-I18N-04);
    the copy lint of `apps/web/src/i18n/` refuses what it can detect. A
    translated language (German, Italian) and the rule that no code compares
-   a locale to a literal: ADR-140.
+   a locale to a literal: ADR-140. A new or changed key also gets its German
+   draft in `de/<domain>.ts` and the re-stamp of `de.status.json`
+   (`I18N_STATUS=stamp`, `src/i18n/status.test.ts`).
 2. **One primary action per screen.** If you cannot name the single thing a
    screen is for, the flow is wrong, not the styling. See
    `.claude/skills/quiz-ui/SKILL.md` and `apps/web/DESIGN.md`.

@@ -3,11 +3,12 @@
 ## Status
 
 Accepted (2026-11-21, decided by the product owner on issue #543): §1–§3,
-§5, §6, and in §9 that no English or French output changes and that the
-documentation stays English. The registry and its code rule (§4), the
-review tracking (§7), §8 and the rollout order are the orchestrator's
-design; the voice of the translated languages (§9) is an assumption
-(open question 77).
+§5, §6, and in §9 that no English or French output changes, that the
+documentation stays English and the voice of the translated languages
+(settled by the product owner on 2026-11-21, question 77). The registry and
+its code rule (§4), the review tracking (§7), §8 and the rollout order are
+the orchestrator's design. §7 amended in place on 2026-11-21 by the `de`
+pull request, with the mechanism as built.
 
 Scope: the list of interface languages, how a language's copy is made and
 released, the run-time fallback, and the code rule that makes a language
@@ -19,8 +20,9 @@ of [ADR-081](ADR-081-vocabulaire-de-notions.md) (concept labels),
 [ADR-095](ADR-095-catalogue-des-banques-publiques.md) §7 (pool domains)
 and [ADR-087](ADR-087-nouveautes-de-la-plateforme.md) (What's new); the
 printed words of [ADR-125](ADR-125-copies-papier-pdf-typst.md) §7 follow
-§4 below. Open questions 75 (regional `Intl` tags), 76 (the workspace
-portal's fallback) and 77 (the voice of German and Italian).
+§4 below. Open questions 75 (regional `Intl` tags) and 76 (the workspace
+portal's fallback); question 77 (the voice of German and Italian) is
+settled.
 
 ## Context
 
@@ -93,7 +95,22 @@ third language would have been a hunt rather than a list of compile errors.
 
 7. **Review tracking.** Each translated value is tracked against the
    English it was drafted from, and a human review is recorded per key.
-   The mechanism lands with the `de` pull request.
+   *As built (2026-11-21, the `de` pull request):* one file per translated
+   language beside the dictionaries, `apps/web/src/i18n/<lang>.status.json`,
+   one line per key, sorted: `drafted` holds, for every key, a short hash
+   of the English the value was drafted from; `reviewed` holds the keys a
+   person has read, each with a hash of the English and the translation as
+   read (empty for German: nobody has reviewed it). The test
+   `i18n/status.test.ts` fails on a key whose English changed since its
+   draft, naming it: its value is re-drafted, then re-stamped
+   (`I18N_STATUS=stamp`, the rewrite pattern of the copy lint); a review
+   whose English or translation changed since is stale, and the re-stamp
+   drops it. `I18N_STATUS=review=<lang>:<domain or key prefix>,…` records a
+   review, `I18N_STATUS=report` counts what is left per domain. The same
+   test holds a translated value to exactly the English placeholders, and
+   the copy lint (`copy.test.ts`) applies the Voice rules to it, with the
+   German rules of §9. The stamp records a claim, it does not check the
+   translation: a re-stamp without a re-draft shows only in the diff.
 
 8. **No i18n library.** Dictionaries stay hand-typed TypeScript next to
    their owner (the web app, the server's mail and Teams texts, the
@@ -106,7 +123,7 @@ third language would have been a hunt rather than a list of compile errors.
    files may follow a language later: the help drawer and the assistant's
    corpus fall back to the English topic. No English or French output
    changes: dates and numbers keep their current `Intl` tags (open
-   question 75). Assumed voice, not decided (open question 77): German
+   question 75). The voice (product owner, 2026-11-21, question 77): German
    addresses the reader as *Sie*, with Swiss spelling (*ss*, never *ß*) and
    guillemets «…»; Italian uses the formal *Lei* where an address is
    needed, and guillemets «…». The glossary of spec 01 §1.5 gains a column
@@ -127,7 +144,9 @@ third language would have been a hunt rather than a list of compile errors.
   cannot proofread. Tracking a draft against its English keeps a stale
   draft from shipping silently; it does not make the draft good.
 - German runs about 30 % longer than English: the length ceilings of the
-  copy lint (`copy.test.ts`) and narrow layouts will flag or clip it.
+  copy lint (`copy.test.ts`) and narrow layouts will flag or clip it. The
+  German draft keeps four labels over the button ceiling, listed in
+  `copy.exceptions.json` under `de-`.
 - Nobody reviews German or Italian today; until someone does, those
   readers get machine-drafted copy without a label saying so (§3).
 - A German or Italian reader reads concepts, pool domains, What's new and

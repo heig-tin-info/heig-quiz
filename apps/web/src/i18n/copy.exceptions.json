@@ -6,5 +6,11 @@
   ],
   "en-button-over-24": [
     "oauth.signIn.action"
+  ],
+  "de-button-over-24": [
+    "oauth.signIn.action",
+    "calc.close",
+    "live.correction.publish",
+    "share.publish"
   ]
 }

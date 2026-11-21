@@ -1,11 +1,11 @@
 /**
  * Where a key of the dictionaries lives. Each entry names a domain file, the
- * same in `en/` and `fr/`, and the first segments of the keys it holds: a
+ * same in `en/`, `fr/` and `de/`, and the first segments of the keys it holds: a
  * key goes to the one file that lists its first segment (`pool.col.name` is
  * in `pool.ts`, `pools.empty.title` too). A key with a new first segment adds it
  * here, to one file only: to the surface it belongs to, else to `common`.
- * `domains.test.ts` enforces the table; `en.ts` and `fr.ts` spread the files
- * back into the two dictionaries the app imports.
+ * `domains.test.ts` enforces the table; `en.ts`, `fr.ts` and `de.ts` spread
+ * the files back into the dictionaries.
  */
 export const DOMAINS = {
   common: [

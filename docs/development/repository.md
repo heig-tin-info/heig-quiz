@@ -264,6 +264,19 @@ them. A key goes to the file that `src/i18n/domains.ts` assigns its first
 segment to, and `domains.test.ts` refuses it anywhere else. The `qt-*`
 packages carry their own strings in `src/strings.ts`, which the host merges.
 
+German is a translated language (ADR-140): `src/i18n/de/<domain>.ts`,
+typed like the French, is drafted from the English, not written, and is
+not selectable yet. A new or changed key therefore takes three steps: write
+its English in `en/<domain>.ts` and its French in `fr/<domain>.ts`, draft
+its German from that English in `de/<domain>.ts` (the same placeholders,
+Swiss spelling, *Sie*, the German column of the glossary, spec 01 §1.5),
+then re-stamp `de.status.json` from `apps/web`:
+`I18N_STATUS=stamp pnpm exec vitest run src/i18n/status.test.ts`. Without
+the stamp, `status.test.ts` names the keys whose English changed since
+their German draft. A person who reviews German records it with
+`I18N_STATUS=review=de:<domain or key prefix>,…`; `I18N_STATUS=report`
+(with `--reporter=default`) counts what is left per domain.
+
 Everything else, code, identifiers, comments, commit messages, ADRs and
 this documentation, is in English.
 

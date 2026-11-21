@@ -60,7 +60,9 @@ is the flow, not the styling. Stop and ask.
    a noun phrase, a button a verb, a sub-text only when it adds a fact, no
    filler, no reassurance, no em-dash aside, no generic masculine. Run
    `pnpm --filter @quiz/web test -- src/i18n` before the PR: the copy lint
-   refuses the rest.
+   refuses the rest. Then draft the key's German from its English in
+   `src/i18n/de/<domain>.ts` and re-stamp (`I18N_STATUS=stamp`, see
+   `src/i18n/status.test.ts`).
 8. Question content reaches a student only through `toStudent` (invariant 4
    of `CLAUDE.md`). A component that renders a question renders what the
    server sent it; it never reconstructs an answer key, a tag or an
