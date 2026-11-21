@@ -18,7 +18,9 @@
  *     in one statement, with no read-modify-write (§4.7);
  *   - `attempts_shown_ck` ties the question on screen to the instant it was
  *     shown: the dwell (ADR-039) has either an open interval or none, never
- *     half of one.
+ *     half of one;
+ *   - `attempts_state_ck` holds `state` to `ATTEMPT_STATES`, the list the
+ *     column's type reads: a new state needs a migration.
  */
 import { and, eq, isNull, sql } from "drizzle-orm";
 
@@ -34,12 +36,13 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
 import { users } from "./auth.js";
-import type { StoredInstance } from "./columns.js";
+import { oneOf, type StoredInstance } from "./columns.js";
 import { evaluationItems, evaluations } from "./evaluation.js";
 import { enrollments } from "./org.js";
 
@@ -127,14 +130,21 @@ export const attempts = pgTable(
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     closedAt: timestamp("closed_at", { withTimezone: true }),
     closedBy: text("closed_by", { enum: ATTEMPT_CLOSERS }),
-    /** Where the student was, restored on reload (F-LIVE-06). */
-    lastItemId: uuid("last_item_id"),
+    /**
+     * Where the student was, restored on reload (F-LIVE-06). `set null` with
+     * its item: an item is deleted only while its evaluation has no attempt
+     * (`assertItemListEditable`), or with the evaluation itself, and a null
+     * bookmark reads like an unknown one, the first question.
+     */
+    lastItemId: uuid("last_item_id").references(() => evaluationItems.id, { onDelete: "set null" }),
     /** Last sign of life; the presence map is in memory, this survives a restart. */
     presentAt: timestamp("present_at", { withTimezone: true }),
     /**
      * The open interval of the dwell (ADR-039): the item on the student's
      * screen since `shown_since`, on the server's clock. Null when no
-     * question is on screen. No foreign key, like `last_item_id`.
+     * question is on screen. No foreign key, unlike `last_item_id`: a `set
+     * null` of the item alone would break `attempts_shown_ck`, which ties it
+     * to `shown_since`; the dwell closes the interval itself.
      */
     shownItemId: uuid("shown_item_id"),
     shownSince: timestamp("shown_since", { withTimezone: true }),
@@ -195,6 +205,12 @@ export const attempts = pgTable(
     index("attempts_deadline_idx")
       .on(t.deadlineAt)
       .where(sql`${t.state} = 'in_progress'`),
+    // The unique index above leads with the evaluation: a student's own
+    // attempts across evaluations are read by account alone.
+    index("attempts_user_idx").on(t.userId),
+    // The `set null` of a deleted item finds its bookmarks without a scan.
+    index("attempts_last_item_idx").on(t.lastItemId),
+    check("attempts_state_ck", oneOf(t.state, ATTEMPT_STATES)),
   ],
 );
 
@@ -281,6 +297,9 @@ export const answers = pgTable(
   (t) => [
     uniqueIndex("answers_attempt_item_uq").on(t.attemptId, t.itemId),
     index("answers_item_idx").on(t.itemId),
+    // Not a second identity: the target of `gradings`' composite foreign key,
+    // which makes a grading's attempt and item those of its answer.
+    unique("answers_id_attempt_item_uq").on(t.id, t.attemptId, t.itemId),
   ],
 );
 

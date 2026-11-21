@@ -34,6 +34,7 @@ import { POOL_COLORS } from "@quiz/contracts";
 import { COURSE_POOL_MODES, POOL_DESCRIPTION_SOURCES, POOL_ROLES } from "@quiz/domain";
 
 import { users } from "./auth.js";
+import { oneOf } from "./columns.js";
 import { courses } from "./org.js";
 
 /**
@@ -122,7 +123,12 @@ export const poolMembers = pgTable(
       .default("reader"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.poolId, t.userId] }), index("pool_members_user_idx").on(t.userId)],
+  (t) => [
+    primaryKey({ columns: [t.poolId, t.userId] }),
+    index("pool_members_user_idx").on(t.userId),
+    // `poolAccess` grants on it: an unknown role must not exist.
+    check("pool_members_role_ck", oneOf(t.role, POOL_ROLES)),
+  ],
 );
 
 /**
@@ -150,6 +156,7 @@ export const coursePools = pgTable(
   (t) => [
     primaryKey({ columns: [t.courseId, t.poolId] }),
     index("course_pools_pool_idx").on(t.poolId),
+    check("course_pools_mode_ck", oneOf(t.mode, COURSE_POOL_MODES)),
   ],
 );
 

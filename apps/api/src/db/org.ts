@@ -21,6 +21,7 @@ import { POOL_COLORS } from "@quiz/contracts";
 import { CONDITION_KINDS, COURSE_ROLES } from "@quiz/domain";
 
 import { users } from "./auth.js";
+import { oneOf } from "./columns.js";
 import { qualified } from "./qualified.js";
 
 /**
@@ -87,6 +88,8 @@ export const courseStaff = pgTable(
   (t) => [
     primaryKey({ columns: [t.courseId, t.userId] }),
     index("course_staff_user_idx").on(t.userId),
+    // `requireCourseRole` grants on it: an unknown role must not exist.
+    check("course_staff_role_ck", oneOf(t.role, COURSE_ROLES)),
   ],
 );
 
@@ -140,7 +143,7 @@ export const enrollments = pgTable(
       .references(() => classrooms.id, { onDelete: "cascade" }),
     nom: text("nom").notNull(),
     prenom: text("prenom").notNull(),
-    /** Normalized (trim + lowercase) at import time. */
+    /** Normalized (trim + lowercase) by every writer; the check below holds it. */
     email: text("email").notNull(),
     userId: uuid("user_id").references(() => users.id),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
@@ -169,6 +172,9 @@ export const enrollments = pgTable(
     // SSE connect): the unique index above leads with the classroom.
     index("enrollments_user_idx").on(t.userId),
     index("enrollments_email_idx").on(sql`lower(${t.email})`),
+    // The claim matches a line by its address as stored, and the UNIQUE
+    // above compares it as stored: `A@x` beside `a@x` would be two lines.
+    check("enrollments_email_normalized_ck", sql`${t.email} = lower(btrim(${t.email}))`),
   ],
 );
 

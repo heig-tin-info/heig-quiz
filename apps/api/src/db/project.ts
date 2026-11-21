@@ -38,6 +38,7 @@ import {
   boolean,
   check,
   doublePrecision,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -89,6 +90,7 @@ import type { EvidenceCommit, JunitCase } from "@quiz/domain/evidence";
 import type { CriterionReason } from "@quiz/domain/criteriaTable";
 
 import { users } from "./auth.js";
+import { oneOf } from "./columns.js";
 import { githubOrganizations } from "./github.js";
 import { groupSets, studentGroups } from "./group.js";
 import { classrooms, enrollments } from "./org.js";
@@ -356,6 +358,7 @@ export const projects = pgTable(
     check("projects_devices_supervised", sql`(${t.workMode} = 'online_seb') = (${t.devices} <> 'any')`),
     // A literal in the DDL, the contract's bound (`ContestationDays`): a bind parameter has no place in a CHECK.
     check("projects_contestation_days_range", sql`${t.contestationDays} between 0 and ${sql.raw(String(CONTESTATION_DAYS_MAX))}`),
+    check("projects_state_ck", oneOf(t.state, PROJECT_STATES)),
   ],
 );
 
@@ -437,6 +440,10 @@ export const projectGroups = pgTable(
     uniqueIndex("project_groups_project_name_uq").on(t.projectId, t.name),
     uniqueIndex("project_groups_project_slug_uq").on(t.projectId, t.slug),
     index("project_groups_source_idx").on(t.sourceGroupId),
+    // Not a second identity: the target of the composite foreign keys of
+    // `project_group_members` and `project_repos`, which make the project
+    // they denormalize the group's own.
+    unique("project_groups_id_project_uq").on(t.id, t.projectId),
   ],
 );
 
@@ -472,6 +479,13 @@ export const projectGroupMembers = pgTable(
     uniqueIndex("project_group_members_project_enrollment_uq").on(t.projectId, t.enrollmentId),
     index("project_group_members_group_idx").on(t.groupId),
     index("project_group_members_enrollment_idx").on(t.enrollmentId),
+    // The denormalized `project_id` is the group's: without it, the UNIQUE
+    // above would hold the rule for a project the group is not in.
+    foreignKey({
+      name: "project_group_members_group_project_fk",
+      columns: [t.groupId, t.projectId],
+      foreignColumns: [projectGroups.id, projectGroups.projectId],
+    }).onDelete("cascade"),
   ],
 );
 
@@ -572,13 +586,21 @@ export const projectRepos = pgTable(
     syncOutcome: text("sync_outcome", { enum: SYNC_OUTCOMES }),
     syncOutcomeAt: timestamp("sync_outcome_at", { withTimezone: true }),
     /**
-     * The runs that fill the three CI slots, by id, with no foreign key (as
-     * heig-classroom): the current score's run, the frozen one, the final
-     * review's.
+     * The runs that fill the three CI slots: the current score's run, the
+     * frozen one, the final review's. heig-classroom kept them without a
+     * foreign key; `set null` since migration 0151. A run is never deleted
+     * but with its repository (`repo_id` cascades), so the slot that empties
+     * is on a row that goes in the same statement.
      */
-    currentGradeRunId: uuid("current_grade_run_id"),
-    frozenGradeRunId: uuid("frozen_grade_run_id"),
-    reviewGradeRunId: uuid("review_grade_run_id"),
+    currentGradeRunId: uuid("current_grade_run_id").references((): AnyPgColumn => projectGradeRuns.id, {
+      onDelete: "set null",
+    }),
+    frozenGradeRunId: uuid("frozen_grade_run_id").references((): AnyPgColumn => projectGradeRuns.id, {
+      onDelete: "set null",
+    }),
+    reviewGradeRunId: uuid("review_grade_run_id").references((): AnyPgColumn => projectGradeRuns.id, {
+      onDelete: "set null",
+    }),
     /**
      * The teacher's score (F-PROJ-14), written after the definitive freeze:
      * `teacher_points` out of `teacher_max` — the scored run's maximum when
@@ -664,6 +686,26 @@ export const projectRepos = pgTable(
     index("project_repos_group_idx").on(t.groupId),
     // The student side reads its repositories by account.
     index("project_repos_user_idx").on(t.userId),
+    // A project's repositories: the unique index above is partial on
+    // solo rows and the ticker's on the grace, so neither serves every read.
+    index("project_repos_project_idx").on(t.projectId),
+    // The `set null` of a run deleted with its repository finds the slots
+    // without a scan of the table.
+    index("project_repos_current_run_idx").on(t.currentGradeRunId),
+    index("project_repos_frozen_run_idx").on(t.frozenGradeRunId),
+    index("project_repos_review_run_idx").on(t.reviewGradeRunId),
+    // A group's repository is in the group's project. Deleting the group
+    // empties `group_id` alone: the foreign key is `ON DELETE SET NULL
+    // ("group_id")`, written by hand in migration 0151 (drizzle cannot
+    // express the column list, PostgreSQL 15+); a plain `set null` would
+    // empty `project_id` too, which is not null. The single-column key on
+    // `group_id` stays beside it.
+    foreignKey({
+      name: "project_repos_group_project_fk",
+      columns: [t.groupId, t.projectId],
+      foreignColumns: [projectGroups.id, projectGroups.projectId],
+    }).onDelete("set null"),
+    check("project_repos_provision_status_ck", oneOf(t.provisionStatus, PROVISION_STATUSES)),
     // The ticker's scan of the repositories in their grace (M3-05a).
     index("project_repos_freeze_due_idx")
       .on(t.projectId)
@@ -916,6 +958,9 @@ export const gradeDispatches = pgTable(
       .on(t.repoId, t.trigger, sql`coalesce(${t.checkpointId}, '00000000-0000-0000-0000-000000000000'::uuid)`)
       .where(sql`${t.trigger} <> 'regrade'`),
     uniqueIndex("grade_dispatches_nonce_uq").on(t.nonce),
+    // The unique index above is partial and on an expression: a repository's
+    // rows, and their deletion with it, need a plain one.
+    index("grade_dispatches_repo_idx").on(t.repoId),
     // The 24 h sweep's scan of the CI passes still waiting (ADR-119 §6).
     index("grade_dispatches_ci_waiting_idx")
       .on(t.createdAt)
@@ -1074,6 +1119,11 @@ export const projectCriterionGrades = pgTable(
     rationale: text("rationale"),
     /** Why a 0-point row has no evidence: an evidence status, or an LLM failure (L-02c). */
     reason: text("reason").$type<CriterionReason>(),
+    /**
+     * The trace of the pass that wrote the row, not a reference to keep
+     * alive: no foreign key. It names a grade dispatch or an evidence row,
+     * and many name a pass since forgotten (a reopen forgets its passes).
+     */
     passId: uuid("pass_id"),
     supersedesId: uuid("supersedes_id").references((): AnyPgColumn => projectCriterionGrades.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
@@ -1088,6 +1138,8 @@ export const projectCriterionGrades = pgTable(
       .on(t.repoId, t.criterionId)
       .where(sql`${t.state} = 'validated'`),
     index("project_criterion_grades_repo_idx").on(t.repoId, t.criterionId),
+    check("project_criterion_grades_source_ck", oneOf(t.source, GRADING_SOURCES)),
+    check("project_criterion_grades_state_ck", oneOf(t.state, GRADING_STATES)),
   ],
 );
 
@@ -1143,6 +1195,7 @@ export const projectContestations = pgTable(
   },
   (t) => [
     check("project_contestations_proposal_ck", sql`(${t.proposedAt} is null) = (${t.proposedVerdict} is null)`),
+    check("project_contestations_state_ck", oneOf(t.state, CONTESTATION_STATES)),
     uniqueIndex("project_contestations_criterion_uq").on(t.repoId, t.criterionId),
     // The open ones of a repository: the staff's counts.
     index("project_contestations_open_idx")
