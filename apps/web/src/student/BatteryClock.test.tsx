@@ -44,7 +44,7 @@ describe("BatteryClock (issue #1151)", () => {
     installBattery({ level: 0.15, charging: true, chargingTime: 1800, dischargingTime: Infinity });
     renderWithProviders(<BatteryClock />, { locale: "fr" });
     const button = await pill();
-    expect(button).toHaveAccessibleName(/^Batterie 15%, en charge$/);
+    expect(button).toHaveAccessibleName(/^Batterie 15\s%, en charge$/);
     // Charging, a low level is no warning.
     expect(button.className).not.toMatch(/warning|danger/);
   });

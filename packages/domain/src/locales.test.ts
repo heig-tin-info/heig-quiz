@@ -9,15 +9,14 @@ describe("the locale registry (ADR-140)", () => {
     expect(LOCALES).toContain(FALLBACK_LOCALE);
   });
 
-  it("formats each language with a regional tag of that language (ADR-140 §10)", () => {
+  it("formats each language with a tag of that language (ADR-140 §10)", () => {
     for (const locale of LOCALES) {
       const { intl } = LOCALE_INFO[locale];
       expect(Intl.getCanonicalLocales(intl)).toEqual([intl]);
-      expect(new Intl.Locale(intl).region).toBeTruthy();
       expect(matchLocale([intl])).toBe(locale);
     }
-    expect(LOCALE_INFO.fr.intl).toBe("fr-CH");
     expect(LOCALE_INFO.en.intl).toBe("en-GB");
+    expect(LOCALE_INFO.fr.intl).toBe("fr");
   });
 
   it("knows a locale from any other value", () => {

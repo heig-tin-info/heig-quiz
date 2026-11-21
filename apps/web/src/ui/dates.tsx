@@ -112,7 +112,7 @@ export function isoDateParts(iso: string): { date: string; time: string } {
   return datePartsAs(iso, dateFormat);
 }
 
-/** "Oct 5", in the interface language: a week by its Monday, a calendar date read in UTC (the drill's weeks, a repository's). */
+/** "5 Oct", "5 oct.", in the interface language: a week by its Monday, a calendar date read in UTC (the drill's weeks, a repository's). */
 export function weekLabel(weekStart: string, locale: Locale): string {
   return new Intl.DateTimeFormat(intlTag(locale), { day: "numeric", month: "short", timeZone: "UTC" }).format(
     new Date(`${weekStart}T00:00:00Z`),
