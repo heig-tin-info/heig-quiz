@@ -33,6 +33,40 @@ interface DbHandle {
 /** Just enough of `app.log` to report a pool failure; `console` also fits. */
 type PoolLogger = { error: (obj: object, msg: string) => void };
 
+/** The two events of a pg.Pool this file listens to, so a test can pass a plain emitter. */
+interface ErrorSource {
+  on(event: "error", listener: (err: Error) => void): unknown;
+}
+interface PoolEvents {
+  on(event: "error", listener: (err: Error) => void): unknown;
+  on(event: "connect", listener: (client: ErrorSource) => void): unknown;
+}
+
+/**
+ * Keeps a database client's death from killing the process. Node turns an
+ * `error` event nobody listens to into an uncaught exception, and pg-pool
+ * listens only half the time:
+ * - an IDLE client that dies (Postgres restart, OOM kill, network reset) has
+ *   no pending query to reject: pg-pool drops it and emits `error` on the
+ *   pool, which the first listener takes;
+ * - a CHECKED-OUT client is no longer watched (pg-pool removes its idle
+ *   listener when it hands the client out), so a session the server ends
+ *   between two statements — `idle_in_transaction_session_timeout` on a
+ *   transaction left open, a terminated backend — emits `error` on the client
+ *   itself: the second listener, set once per physical connection, takes it.
+ *   The transaction's next statement then fails, and that request alone.
+ */
+export function guardPoolErrors(pool: PoolEvents, log: PoolLogger): void {
+  pool.on("error", (err) => {
+    log.error({ err, cause: err.cause }, "idle database client error");
+  });
+  pool.on("connect", (client) => {
+    client.on("error", (err) => {
+      log.error({ err, cause: err.cause }, "database client error");
+    });
+  });
+}
+
 export function createDb(databaseUrl: string, log: PoolLogger = console): DbHandle {
   const dir = pgliteDir(databaseUrl);
   if (dir) {
@@ -57,14 +91,7 @@ export function createDb(databaseUrl: string, log: PoolLogger = console): DbHand
     // latency, so we fail fast and /healthz turns degraded.
     connectionTimeoutMillis: 2000,
   });
-  // pg.Pool is an EventEmitter, and an *idle* client that dies (Postgres
-  // restart, OOM kill, network reset) has no pending query to reject: pg-pool
-  // drops the client and emits `error` on the pool. Node turns an unhandled
-  // `error` event into an uncaught exception, so this listener is what keeps
-  // the process alive, not just diagnostics.
-  pool.on("error", (err) => {
-    log.error({ err, cause: err.cause }, "idle database client error");
-  });
+  guardPoolErrors(pool, log);
   const db = drizzle(pool, { schema });
   return {
     db,

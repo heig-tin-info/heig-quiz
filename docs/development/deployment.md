@@ -115,8 +115,13 @@ The `postgres` service is tuned for the VM's 4 GB, shared with staging,
 evaluation-tb and the RAD portal (`shared_buffers=256MB`, `max_connections=40`,
 no parallel query), and it records its statements: `pg_stat_statements`,
 statements over 500 ms and lock waits in its log (`docker compose logs
-postgres`). The extension is created once per database, by hand, after the
-first start with the library loaded (PGlite has none, so no migration can):
+postgres`; bind parameters stay out, but a constraint violation still
+prints its key or row: the log holds personal data). A transaction left
+open and idle for 5 minutes is ended (`idle_in_transaction_session_timeout`),
+an interactive `psql` after `BEGIN` included: run a hand fix-up as one
+script, never typed step by step. The extension is created once per
+database, by hand, after the first start with the library loaded (PGlite
+has none, so no migration can):
 
 ```bash
 cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image \

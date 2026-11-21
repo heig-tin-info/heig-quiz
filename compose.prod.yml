@@ -88,9 +88,11 @@ services:
     # Observability: pg_stat_statements (its extension is created once by hand,
     # see the deployment guide: PGlite has none, so no migration can), statements
     # over 500 ms (their text only: bind parameters, which carry names,
-    # addresses and answers, never reach the log) and lock waits in the log,
-    # and an idle transaction left open
-    # by a crashed client ended after 5 minutes. No server-wide
+    # addresses and answers, stay out) and lock waits in the log. The log is
+    # still NOT free of personal data: a constraint violation's DETAIL prints
+    # the key or the whole failing row, as before. A transaction a live client
+    # leaves open and idle is ended after 5 minutes (the app survives it:
+    # `guardPoolErrors`, apps/api/src/db/client.ts). No server-wide
     # statement_timeout: the backup and the migrations share this role.
     command:
       - postgres
