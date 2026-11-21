@@ -69,11 +69,17 @@ describe("the translated languages (ADR-140 §7)", () => {
       const matches = (mark: string, k: string) =>
         mark === k || (mark.endsWith(".") && k.startsWith(mark)) || domainOf(k) === mark;
       it(`${lang}: records the review of ${marks.join(", ")}`, () => {
+        const marked = new Set(KEYS.filter((k) => marks.some((m) => matches(m, k))));
         expect(
           marks.filter((m) => !KEYS.some((k) => matches(m, k))),
           "marks that match no key (a key, a prefix ending in a dot, or a domain): nothing written",
         ).toEqual([]);
-        write((k) => (marks.some((m) => matches(m, k)) ? reviewed(k) : (status[k] ?? drafted(k))));
+        // A review never stands in for a stamp: a draft older than its English is re-drafted first.
+        expect(
+          byFile(lang, [...marked].filter((k) => status[k] !== drafted(k) && status[k] !== reviewed(k))),
+          `The English of these keys changed since their ${lang} draft: re-draft them, re-stamp (from apps/web: ${STAMP}), then review. Nothing written`,
+        ).toEqual([]);
+        write((k) => (marked.has(k) ? reviewed(k) : status[k]!));
       });
       continue;
     }
