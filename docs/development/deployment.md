@@ -831,7 +831,11 @@ VM's SSH host keys, copied over, so `DEPLOY_HOST_KEY` did not change with the
 
 `DEPLOY_HOST` is `classroom.chevallier.io`: the name and its redirect
 fragment are kept for at least a year (the cutover runbook's §5 step 8), and it is still a CNAME to
-the application VM. Moving it to `portal.heig.chevallier.io` before the name
+the application VM. The fragment (`infra/caddy/classroom-redirect.caddy`,
+since 2026-11-21 a 308 to Quiz's home for every path a human clicks) is
+not deployed by CI: after a change to it is merged, the owner copies it to
+`/etc/caddy/conf.d/classroom.caddy` and reloads Caddy by hand, with the
+command in its header. Moving it to `portal.heig.chevallier.io` before the name
 goes means setting `DEPLOY_HOST` and re-scanning `DEPLOY_HOST_KEY` (the same
 host key).
 
