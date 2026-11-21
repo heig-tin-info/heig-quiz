@@ -1,6 +1,8 @@
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+
+import { LOCALE_INFO, LOCALES } from "@quiz/domain";
 
 import { SettingsPage } from "./SettingsPage";
 import { makeMe } from "./test/fixtures";
@@ -245,19 +247,22 @@ describe("SettingsPage — anonymize my account", () => {
 });
 
 /*
- * The language picker lists the registry (ADR-140): German is offered,
- * named in itself, and the choice goes to the account.
+ * The language picker lists the registry (ADR-140): every language is
+ * offered, named in itself, and the choice goes to the account.
  */
 describe("SettingsPage — language", () => {
-  it("offers German, named in itself, and saves it on the account", async () => {
+  it("offers every language, named in itself, and saves the choice on the account", async () => {
     const user = userEvent.setup();
     const { calls } = mockFetch({ "PATCH /app/api/me": ok({}) });
     renderWithProviders(<SettingsPage me={makeMe()} />);
-    for (const name of ["English", "Français", "Deutsch"]) expect(screen.getByRole("radio", { name })).toBeInTheDocument();
-    await user.click(screen.getByRole("radio", { name: "Deutsch" }));
+    const picker = screen.getByRole("combobox", { name: "Language" });
+    for (const code of LOCALES) {
+      expect(within(picker).getByRole("option", { name: LOCALE_INFO[code].endonym })).toBeInTheDocument();
+    }
+    await user.selectOptions(picker, "de");
     await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ locale: "de" }));
     // Shown once its chunk has loaded, never a mixed frame.
     await waitFor(() => expect(document.documentElement.lang).toBe("de"));
-    expect(screen.getByRole("radio", { name: "Deutsch" })).toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Sprache" })).toHaveValue("de");
   });
 });
