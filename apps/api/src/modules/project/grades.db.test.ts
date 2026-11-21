@@ -29,9 +29,11 @@ import { auditLog, courseStaff, enrollments, projectCriteria, projectCriterionGr
 import { resetLiveStateCache } from "../../github/metrics.js";
 import { json, orgsRoute, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
+import { patchRepo, repoGradesRow, setRepoGrades, splitRepoPatch, type RepoPatch } from "../../test/project.js";
 import { accessibleProject, accessibleProjectRepo } from "../guards.js";
 import { projectLiveScores } from "./gradebook.js";
 import { adjustRepoGrade, overrideScore } from "./grades.js";
+import { NO_GRADES } from "./repoGrades.js";
 import { call, newOrg, server, teacher, useProjectWorld, type Headers } from "../../test/projectWorld.js";
 
 const NOW = "2026-10-10T08:00:00.000Z";
@@ -87,11 +89,11 @@ async function world(opts: { students?: number; gradingMode?: "auto" | "none" | 
   return { projectId, classroomId: seeded.classroomId, courseId: seeded.courseId, students };
 }
 
-type RepoPatch = Partial<typeof projectRepos.$inferInsert>;
 /** The student's repository, provisioned and frozen for good unless `patch` says otherwise. */
 async function repoOf(w: World, userId: string, patch: RepoPatch = {}): Promise<string> {
   const id = randomUUID();
   const n = nextRepo++;
+  const { repo, grades } = splitRepoPatch(patch);
   await server.app.db.insert(projectRepos).values({
     id,
     projectId: w.projectId,
@@ -105,8 +107,9 @@ async function repoOf(w: World, userId: string, patch: RepoPatch = {}): Promise<
     rulesetId: n,
     deadlineAppliedAt: at(DEADLINE),
     frozenAt: at(FROZEN_AT),
-    ...patch,
+    ...repo,
   });
+  await setRepoGrades(server.app.db, id, grades);
   return id;
 }
 
@@ -130,8 +133,13 @@ async function run(repoId: string, patch: RunPatch = {}): Promise<string> {
   return id;
 }
 
-const setRepo = (id: string, patch: RepoPatch) => server.app.db.update(projectRepos).set(patch).where(eq(projectRepos.id, id));
-const repoRow = async (id: string) => (await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, id)))[0]!;
+const setRepo = (id: string, patch: RepoPatch) => patchRepo(server.app.db, id, patch);
+/** The repository's row with its grading's columns, read from `project_repo_grades` (all null without a row). */
+const repoRow = async (id: string) => {
+  const [repo] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, id));
+  const { repoId: _, ...grades } = (await repoGradesRow(server.app.db, id)) ?? { repoId: id, ...NO_GRADES };
+  return { ...repo!, ...grades };
+};
 const projectRow = async (id: string) => (await server.app.db.select().from(projects).where(eq(projects.id, id)))[0]!;
 const auditOf = (subjectId: string, action: string) =>
   server.app.db.select().from(auditLog).where(and(eq(auditLog.subjectId, subjectId), eq(auditLog.action, action)));

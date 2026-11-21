@@ -1014,14 +1014,37 @@ first (§6); when in doubt, restore it anyway. A rollback holds until the next a
   the same VM do: their SQLite and volumes are pulled daily onto this VM, 14 archives
   in `/srv/quiz-engine-backups` (§3, Backup and restore of the codespace
   data).
-- **Before any migration**, take a fresh dump rather than trusting the daily
-  one:
+- **Before any migration, a fresh dump, taken by `deploy.sh`.** When the
+  commit being deployed to production carries a migration the running
+  database has not applied (the journal's largest `when` against the newest
+  `created_at` of `drizzle.__drizzle_migrations`), the deploy dumps the
+  database to `backups/pre-<sha>-<UTC time>.dump` and reads the dump back
+  whole before the app is pulled or restarted. The `backup` container writes
+  it: under rootless Docker `backups/` belongs to a uid of the containers'
+  user namespace, which `srv` on the host cannot write. A database or a
+  backup service found stopped is started first (never recreated). Any
+  failure refuses the deploy (exit 4, the checkout back to the running
+  commit); a check that cannot run counts as pending.
+  The ten newest `pre-*.dump` are kept; the off-site copy takes them at its
+  next nightly run, so until then the dump lives on the VM only. It is the
+  state just before the migration, the one a rollback past a non-additive
+  migration restores (§5, *Rollback*). By hand, for a migration run outside
+  a deploy (named `manual-`, so the deploy's rotation never removes it):
 
 ```bash
-cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod \
-  exec -T postgres pg_dump -Fc -U quiz quiz > "backups/pre-<migration>-$(date +%F-%H%M).dump"
+cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image \
+  exec -T backup sh -c 'pg_dump -Fc -h postgres -U quiz quiz > "/backups/$1"' sh "manual-<migration>-$(date +%F-%H%M).dump"
 ```
 
+- **The fingerprint and the restore drill.** `scripts/db-fingerprint.sql`
+  (read-only, a few seconds) prints each table's row count and content
+  digest, then the totals a migration that moves data must keep: diff it
+  before and after a risky migration. `scripts/restore-drill.sh`, run as
+  `srv` from `/srv/quiz`, dumps production, restores the dump into a
+  throwaway container (production's database is never written) and checks
+  that every table that did not move during the dump comes back identical.
+  On 2026-11-21: a 24 MB dump in 5 s, restored in 7 s, 129 of 130 lines
+  identical, the odd one `scheduled_tasks`, which moved meanwhile.
 - Restore a full dump into a freshly recreated database, the app stopped:
   `pg_restore --clean` into the existing one fails on pg-boss's partitioned
   tables (`cannot drop inherited constraint … job_common`), as the

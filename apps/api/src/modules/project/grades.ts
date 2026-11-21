@@ -47,7 +47,7 @@ import { audit, type AuditAction, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
 import type { Clock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { projectRepos, projects } from "../../db/schema.js";
+import { projects } from "../../db/schema.js";
 import { notFoundError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
 import { unvalidatedRepos } from "./criterionGrades.js";
@@ -56,8 +56,9 @@ import { baseGrade, releaseOf, repoScores, teacherRunMax } from "./detail.js";
 import { ProjectError, requireReleasedOwner } from "./errors.js";
 import { repoMembers } from "./groupRepos.js";
 import { groupSyncOwed } from "./groupResync.js";
+import { writeGrades, type RepoGrades } from "./repoGrades.js";
 import { studentRepos, type RepoRow } from "./repos.js";
-import { adjusterNames, finalOf, scoreFacts, type ScoreFacts } from "./scores.js";
+import { adjusterNames, finalOf, gradesOf, scoreFacts, type ScoreFacts } from "./scores.js";
 import type { ProjectRow } from "./views.js";
 
 /**
@@ -72,11 +73,11 @@ export interface GradeWriter {
   owner: boolean;
 }
 
-/** One write of a repository's grade: its audit action, the columns it writes, and what the audit records of the row before and after. */
+/** One write of a repository's grade: its audit action, the columns it writes, and what the audit records of the grading before and after. */
 interface GradeWrite {
   action: Extract<AuditAction, "project_repo.grade_override" | "project_repo.grade_adjust">;
-  values: (project: ProjectRow, repo: RepoRow, facts: ScoreFacts) => Partial<RepoRow>;
-  record: (repo: RepoRow, scores: ProjectRepoScores["scores"]) => unknown;
+  values: (project: ProjectRow, repo: RepoRow, facts: ScoreFacts) => Partial<RepoGrades>;
+  record: (grades: RepoGrades, scores: ProjectRepoScores["scores"]) => unknown;
   payload?: Record<string, unknown>;
 }
 
@@ -98,15 +99,16 @@ async function writeRepoGrade(db: Db, projectId: string, repoId: string, writer:
     if (!projectGraded(project.gradingMode)) throw new ProjectError("grading_none", "The project is not graded");
     if (repo.frozenAt === null) throw new ProjectError("not_frozen", "A grade is written once the repository's deadline and grace have passed");
     const facts = await scoreFacts(tx, [repo]);
-    const [updated] = await tx.update(projectRepos).set(write.values(project, repo, facts)).where(eq(projectRepos.id, repo.id)).returning();
+    // One upsert, in the transaction that holds the repository's lock: the columns of the write land together.
+    const updated = await writeGrades(tx, repo.id, write.values(project, repo, facts));
     const before = repoScores(project, repo, facts);
-    const after = repoScores(project, updated!, facts, await adjusterNames(tx, [updated!]));
+    const after = repoScores(project, repo, { ...facts, grades: new Map([[repo.id, updated]]) }, await adjusterNames(tx, [repo]));
     await audit(tx, {
       ...writer.actor,
       action: write.action,
       subjectType: "project_repo",
       subjectId: repo.id,
-      payload: { before: write.record(repo, before.scores), after: write.record(updated!, after.scores), ...write.payload },
+      payload: { before: write.record(gradesOf(facts, repo.id), before.scores), after: write.record(updated, after.scores), ...write.payload },
     });
     return after;
   });
@@ -120,7 +122,7 @@ async function writeRepoGrade(db: Db, projectId: string, repoId: string, writer:
 export function overrideScore(db: Db, projectId: string, repoId: string, body: ScoreOverride, writer: GradeWriter): Promise<ProjectRepoScores> {
   return writeRepoGrade(db, projectId, repoId, writer, {
     action: "project_repo.grade_override",
-    record: (repo) => (repo.teacherPoints === null ? null : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment }),
+    record: (grades) => (grades.teacherPoints === null ? null : { points: grades.teacherPoints, max: grades.teacherMax, comment: grades.teacherComment }),
     values: (_project, repo, facts) => {
       if (body.points === null) return { teacherPoints: null, teacherMax: null, teacherComment: null, teacherGradedBy: null, teacherGradedAt: null };
       // The scored run's maximum is the score's; none (a run to verify
@@ -229,17 +231,14 @@ export async function releaseProject(db: Db, projectId: string, actor: AuditActo
       // The ADJUSTED grade and the adjustment's comment (ADR-135), beside the teacher's comment.
       const { final, grade, adjustmentComment } = releaseOf(project, repo, scores);
       if (final) scored += 1;
-      await tx
-        .update(projectRepos)
-        // The comment travels with the score (M3-09a): the student reads the pair the release wrote.
-        .set({
-          releasedPoints: final?.points ?? null,
-          releasedMax: final?.max ?? null,
-          releasedGrade: grade,
-          releasedComment: final ? repo.teacherComment : null,
-          releasedAdjustmentComment: adjustmentComment,
-        })
-        .where(eq(projectRepos.id, repo.id));
+      // The comment travels with the score (M3-09a): the student reads the pair the release wrote.
+      await writeGrades(tx, repo.id, {
+        releasedPoints: final?.points ?? null,
+        releasedMax: final?.max ?? null,
+        releasedGrade: grade,
+        releasedComment: final ? gradesOf(facts, repo.id).teacherComment : null,
+        releasedAdjustmentComment: adjustmentComment,
+      });
     }
     // ADR-139 §13: the release that finds no window, in `criteria` mode, opens one — the days later — once;
     // a release again rewrites `released_at` and never moves it.

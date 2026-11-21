@@ -64,7 +64,7 @@ import {
 import { fakeShort } from "../../test/fakeType.js";
 import { evaluationRows } from "../../test/grades.js";
 import { kioskStation } from "../../test/kiosk.js";
-import { gradedProject, projectRepo } from "../../test/project.js";
+import { gradedProject, projectRepo, setRepoGrades } from "../../test/project.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
@@ -319,18 +319,22 @@ describe("the staff's table (F-GBOOK-01)", () => {
 
   it("follows its activity: a project score changed after the release changes the cell, flagged", async () => {
     const [repo] = await db().select().from(projectRepos).where(and(eq(projectRepos.projectId, col["P1"]!), eq(projectRepos.userId, students[0]!.id)));
-    await db().update(projectRepos).set({ teacherPoints: 10, teacherMax: 10 }).where(eq(projectRepos.id, repo!.id));
+    await setRepoGrades(db(), repo!.id, { teacherPoints: 10, teacherMax: 10 });
     const table = await staffTable();
     expect(cellOf(table, 0, "P1")).toMatchObject({ grade: 6, changedAfterRelease: true });
-    await db().update(projectRepos).set({ teacherPoints: 9, teacherMax: 10 }).where(eq(projectRepos.id, repo!.id));
+    await setRepoGrades(db(), repo!.id, { teacherPoints: 9, teacherMax: 10 });
   });
 
   it("reads a project's adjusted grade, and a teacher's mark still wins over it (ADR-135)", async () => {
     const [repo] = await db().select().from(projectRepos).where(and(eq(projectRepos.projectId, col["P1"]!), eq(projectRepos.userId, students[0]!.id)));
-    await db()
-      .update(projectRepos)
-      .set({ gradeAdjustKind: "relative", gradeAdjustValue: -0.5, gradeAdjustBase: 5.5, gradeAdjustComment: SECRET, gradeAdjustedBy: teacher.id, gradeAdjustedAt: server.clock.now() })
-      .where(eq(projectRepos.id, repo!.id));
+    await setRepoGrades(db(), repo!.id, {
+      gradeAdjustKind: "relative",
+      gradeAdjustValue: -0.5,
+      gradeAdjustBase: 5.5,
+      gradeAdjustComment: SECRET,
+      gradeAdjustedBy: teacher.id,
+      gradeAdjustedAt: server.clock.now(),
+    });
     try {
       expect(cellOf(await staffTable(), 0, "P1")).toMatchObject({ kind: "grade", grade: 5, points: 9, max: 10, source: "teacher", changedAfterRelease: true });
       const res = await call("PUT", markUrl("project", "P1", seats[0]!), teacher.headers, { kind: "score", points: 15, max: 20, override: true });
@@ -338,10 +342,14 @@ describe("the staff's table (F-GBOOK-01)", () => {
       expect(cellOf(GradebookStaff.parse(res.json()), 0, "P1")).toMatchObject({ kind: "grade", grade: 4.8, source: "mark" });
       await call("DELETE", markUrl("project", "P1", seats[0]!), teacher.headers);
     } finally {
-      await db()
-        .update(projectRepos)
-        .set({ gradeAdjustKind: null, gradeAdjustValue: null, gradeAdjustBase: null, gradeAdjustComment: null, gradeAdjustedBy: null, gradeAdjustedAt: null })
-        .where(eq(projectRepos.id, repo!.id));
+      await setRepoGrades(db(), repo!.id, {
+        gradeAdjustKind: null,
+        gradeAdjustValue: null,
+        gradeAdjustBase: null,
+        gradeAdjustComment: null,
+        gradeAdjustedBy: null,
+        gradeAdjustedAt: null,
+      });
     }
   });
 

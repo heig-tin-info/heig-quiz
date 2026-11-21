@@ -101,6 +101,7 @@ import { ProjectError } from "./errors.js";
 import { seatRepo, seatRepos } from "./groupRepos.js";
 import { syncMessage } from "./sync.js";
 import { resendInvitation } from "./invitation.js";
+import { gradesIn, repoGrades } from "./repoGrades.js";
 import type { RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
 
@@ -391,12 +392,15 @@ export async function studentProject(
   const seat = scope.seat === null ? null : scope.seat.staff ? ("staff" as const) : ("student" as const);
   const repo = provisioned(row);
   const live = liveRepo(row, project);
-  const [linked, read, { criteria, contestations }, access] = await Promise.all([
+  const [linked, read, { criteria, contestations }, access, grades] = await Promise.all([
     githubLinked(db, userId),
     readings(db, live === null ? [] : [live]),
     studentCriteria(db, project, repo, scope.seat, now),
     repo === null || scope.seat === null ? null : seatAccess(db, { repoId: repo.id, enrollmentId: scope.seat.id }),
+    // The release's snapshot only, below: never the teacher's score nor the adjustment of now.
+    repoGrades(db, repo === null || project.releasedAt === null ? [] : [repo.id]),
   ]);
+  const snapshot = repo === null ? null : gradesIn(grades, repo.id);
   const { facts } = cardFacts({ project, classroomName: scope.room.name, courseCode: scope.course.code, repo: row }, linked, now);
   return {
     ...facts,
@@ -422,12 +426,12 @@ export async function studentProject(
         ? null
         : {
             at: iso(project.releasedAt),
-            points: repo?.releasedPoints ?? null,
-            max: repo?.releasedMax ?? null,
-            grade: repo?.releasedGrade == null ? null : { grade: repo.releasedGrade },
-            comment: repo?.releasedComment ?? null,
+            points: snapshot?.releasedPoints ?? null,
+            max: snapshot?.releasedMax ?? null,
+            grade: snapshot?.releasedGrade == null ? null : { grade: snapshot.releasedGrade },
+            comment: snapshot?.releasedComment ?? null,
             // ADR-135: the justification as the release wrote it; never the adjustment's kind, value nor base.
-            adjustmentComment: repo?.releasedAdjustmentComment ?? null,
+            adjustmentComment: snapshot?.releasedAdjustmentComment ?? null,
           },
     criteria,
     // ADR-132 §10: the latest sync's message and its date, nothing else of the sync (N-SEC-20).

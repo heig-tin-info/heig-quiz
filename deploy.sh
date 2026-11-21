@@ -114,6 +114,20 @@ if [ "$before" != "$(git rev-parse HEAD)" ] && [ -z "${QUIZ_DEPLOY_REEXEC:-}" ];
   QUIZ_DEPLOY_REEXEC=1 SSH_ORIGINAL_COMMAND='' exec "$0" "$@"
 fi
 
+# Back to the commit actually running, after a refusal: .env.image names it
+# (`<sha>` or `<sha>@sha256:…`), whichever copy of this script (old or new)
+# did the checkout. Only a full sha reaches git: never an option-like value.
+back_to_running() {
+  local running
+  running=$(sed -n 's/^IMAGE_TAG=//p' .env.image)
+  running="${running%%@*}"
+  if [[ "$running" =~ ^[0-9a-f]{40}$ ]]; then
+    git checkout --quiet --detach "$running"
+  else
+    echo "deploy: warning: .env.image names no sha ('$running'), checkout left at $(git rev-parse --short HEAD)." >&2
+  fi
+}
+
 # The guard (docs/spec/05-architecture.md §5.9): production is never restarted
 # under a live evaluation. scripts/live-evaluations.sql says what "live"
 # means; it runs in the RUNNING database, before anything is pulled or
@@ -142,19 +156,56 @@ if [ "$environment" = production ] && [ -f .env.image ]; then
     } >&2
     if [ -z "${QUIZ_DEPLOY_FORCE:-}" ]; then
       echo "deploy: REFUSED. Re-run the deploy job once it has closed, or force it (docs/development/deployment.md §5)." >&2
-      # Back to the commit actually running: .env.image names it (`<sha>`
-      # or `<sha>@sha256:…`), whichever copy of this script (old or new) did
-      # the checkout. Only a full sha reaches git: never an option-like value.
-      running=$(sed -n 's/^IMAGE_TAG=//p' .env.image)
-      running="${running%%@*}"
-      if [[ "$running" =~ ^[0-9a-f]{40}$ ]]; then
-        git checkout --quiet --detach "$running"
-      else
-        echo "deploy: warning: .env.image names no sha ('$running'), checkout left at $(git rev-parse --short HEAD)." >&2
-      fi
+      back_to_running
       exit 3
     fi
     echo "deploy: FORCED, restarting anyway." >&2
+  fi
+
+  # A dump before every migration (docs/development/deployment.md §6). The
+  # app migrates at start in one transaction, so a migration that fails rolls
+  # back whole; the dangerous one succeeds and changes data wrongly, and this
+  # dump is the state just before it. Taken only when the commit carries a
+  # migration the running database has not applied: drizzle applies every
+  # journal entry whose `when` is above the newest `created_at` of its own
+  # table, so a migration is pending iff the journal's largest `when` is.
+  # A check that cannot run counts as pending (fail closed). A database not
+  # running is started alone first: the app would otherwise migrate it with
+  # no dump. The dump is read back whole (`pg_restore` to /dev/null), since
+  # a custom-format dump written to a pipe does not notice a short write.
+  # Any failure refuses the deploy before anything is pulled or the app
+  # restarted (exit 4). The ten newest `pre-*.dump` are kept; the off-site
+  # copy takes them at its next nightly run; the daily `quiz-*.dump` are the
+  # backup service's.
+  # The dump is written BY the `backup` container, into its /backups: under
+  # rootless Docker that directory belongs to a uid of the container's user
+  # namespace, which this script, running as the host user, cannot write
+  # (the first deploy carrying a migration was refused on exactly that,
+  # 2026-11-21). The names travel as arguments, never inside the script text.
+  dump=
+  backup_sh() { "${COMPOSE[@]}" exec -T backup sh -c "$1" sh "${@:2}" < /dev/null; }
+  refuse_dump() {
+    [ -z "$dump" ] || backup_sh 'rm -f "/backups/$1.tmp"' "$dump" || true
+    echo "deploy: REFUSED, $1; the app was neither pulled nor restarted." >&2
+    back_to_running
+    exit 4
+  }
+  # Start what is stopped, never recreate what runs (a recreated database
+  # before its dump is not what this step promises).
+  "${COMPOSE[@]}" up -d --no-recreate --wait --wait-timeout 60 postgres backup < /dev/null \
+    || refuse_dump "PostgreSQL or the backup service did not start for the pre-migration check"
+  journal=$(sed -n 's/.*"when": *\([0-9]*\).*/\1/p' apps/api/drizzle/meta/_journal.json | sort -n | tail -n 1) || journal=
+  applied=$("${COMPOSE[@]}" exec -T postgres psql -XAtq -v ON_ERROR_STOP=1 -U quiz -d quiz \
+    -c 'SELECT coalesce(max(created_at), 0) FROM drizzle.__drizzle_migrations' < /dev/null) || applied=
+  if ! [[ "$journal" =~ ^[0-9]+$ && "$applied" =~ ^[0-9]+$ ]] || [ "$journal" -gt "$applied" ]; then
+    dump="pre-$(git rev-parse --short=8 HEAD)-$(date -u +%Y%m%dT%H%M%SZ).dump"
+    backup_sh 'pg_dump -Fc -h postgres -U quiz quiz > "/backups/$1.tmp"' "$dump" \
+      || refuse_dump "the pre-migration dump failed"
+    backup_sh 'pg_restore -f /dev/null "/backups/$1.tmp" && mv "/backups/$1.tmp" "/backups/$1"' "$dump" \
+      || refuse_dump "the pre-migration dump does not read back whole"
+    size=$(backup_sh 'wc -c < "/backups/$1"' "$dump") || size='?'
+    echo "deploy: a migration is pending; database dumped to backups/$dump ($size bytes, read back whole)."
+    backup_sh 'ls -1t /backups/pre-*.dump 2>/dev/null | tail -n +11 | xargs -r rm --' || true
   fi
 fi
 
