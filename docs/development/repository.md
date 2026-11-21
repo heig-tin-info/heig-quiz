@@ -257,7 +257,11 @@ package's own `toStudent.test.ts` keeps what is specific to the type.
 Everything a user reads goes through `t()` from `apps/web/src/i18n/index.tsx`,
 teacher screens included. The dictionary is flat: `en` is the source of
 truth, and `fr` is declared as `Record<keyof Dict, string>`, so a key added
-in English without its French twin fails `pnpm typecheck`. The `qt-*`
+in English without its French twin fails `pnpm typecheck`. The keys are
+written in one file per domain, `src/i18n/en/<domain>.ts` and its twin
+`src/i18n/fr/<domain>.ts`, typed by it; `en.ts` and `fr.ts` only spread
+them. A key goes to the file that `src/i18n/domains.ts` assigns its first
+segment to, and `domains.test.ts` refuses it anywhere else. The `qt-*`
 packages carry their own strings in `src/strings.ts`, which the host merges.
 
 Everything else, code, identifiers, comments, commit messages, ADRs and

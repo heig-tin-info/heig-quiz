@@ -53,7 +53,8 @@ is the flow, not the styling. Stop and ask.
    (bold), numbers right-aligned and tabular, status as a `Badge`, actions in
    the last column, `—` for empty cells, hover on clickable rows.
 7. **Every** user-facing string follows invariant 1 of `CLAUDE.md`: `t()`,
-   with both an `en` and a `fr` entry in `src/i18n/{en,fr}.ts`. Both are
+   with both an `en` and a `fr` entry in `src/i18n/{en,fr}/<domain>.ts` (the
+   file `src/i18n/domains.ts` assigns the key's first segment to). Both are
    WRITTEN in their language, short, by the Voice rules of `DESIGN.md` and
    the glossary of `docs/spec/01-glossaire-et-domaine.md` §1.5: a label is
    a noun phrase, a button a verb, a sub-text only when it adds a fact, no
