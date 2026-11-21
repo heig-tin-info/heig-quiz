@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { NotificationPayload } from "@quiz/contracts";
 import { escapeHtml } from "@quiz/docrender/highlight";
-import { LOCALES } from "@quiz/domain";
+import { FALLBACK_LOCALE, LOCALES } from "@quiz/domain";
 
 import {
   activityParameters,
@@ -411,16 +411,20 @@ describe("the test e-mail (ADR-055 §6)", () => {
  * hold here too (Swiss spelling, guillemets, «Sie», no semicolon chain nor
  * em-dash aside), and every value keeps the English placeholders.
  */
-describe("the German dictionary", () => {
-  const de: Record<string, string> = serverText("de");
+describe("the dictionaries of the other languages", () => {
   const en: Record<string, string> = serverText("en");
   const names = (text: string) => (text.match(/\{\w+\}/g) ?? []).sort().join(" ");
 
-  it("keeps exactly the placeholders of the English", () => {
-    expect(Object.keys(de).filter((k) => names(de[k]!) !== names(en[k]!))).toEqual([]);
+  it.each(LOCALES.filter((l) => l !== FALLBACK_LOCALE))("%s keeps exactly the placeholders of the English", (locale) => {
+    const text: Record<string, string> = serverText(locale);
+    expect(Object.keys(text).filter((k) => names(text[k]!) !== names(en[k]!))).toEqual([]);
   });
 
+  // The German rules of the web app's copy lint (`apps/web/src/i18n/copy.test.ts`:
+  // eszett, quotation-marks, informal-address, semicolon, em-dash-aside), restated
+  // here because that lint reads the web dictionaries only.
   it("writes Swiss German, addresses the reader as Sie, and uses guillemets", () => {
+    const de: Record<string, string> = serverText("de");
     const offenders = Object.entries(de).filter(([, text]) =>
       /ß|[„“”]|; | — |\b([Dd]u|[Dd]ein(e|em|en|er|es)?|[Dd]ir|[Dd]ich|[Ee]uch)\b/.test(text.replace(/\{\w+\}/g, "x")),
     );

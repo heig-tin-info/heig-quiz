@@ -10,7 +10,7 @@ import { unzipSync } from "fflate";
 import { describe, expect, it, vi } from "vitest";
 
 import { kindChannels, NOTIFICATION_KINDS } from "@quiz/contracts";
-import { LOCALES } from "@quiz/domain";
+import { FALLBACK_LOCALE, LOCALES } from "@quiz/domain";
 
 import {
   TEAMS_ACTIVITY_KINDS,
@@ -56,16 +56,19 @@ const PAYLOADS: TeamsPayload[] = [
   { kind: "github_org_lost", classroomId: CLASSROOM, classroomName: "PRG1-2026", orgLogin: "heig-prg1" },
 ];
 
+/** The languages beside the English manifest, each its `<locale>.json`, as `teamsApp.ts` lists them. */
+const ADDITIONAL = LOCALES.filter((locale) => locale !== FALLBACK_LOCALE);
+
 function unpack() {
   const files = unzipSync(teamsAppPackage(OPTS));
   const read = (name: string) => JSON.parse(Buffer.from(files[name]!).toString("utf8")) as Record<string, any>;
-  return { files, manifest: read("manifest.json"), fr: read("fr.json"), de: read("de.json") };
+  return { files, manifest: read("manifest.json"), localized: (locale: string) => read(`${locale}.json`) };
 }
 
 describe("the Teams app package", () => {
   it("holds a manifest for a personal tab and activity feed notifications, and no bot", () => {
     const { files, manifest } = unpack();
-    expect(Object.keys(files)).toEqual(["manifest.json", "fr.json", "de.json", "color.png", "outline.png"]);
+    expect(Object.keys(files)).toEqual(["manifest.json", ...ADDITIONAL.map((l) => `${l}.json`), "color.png", "outline.png"]);
     expect(manifest).toMatchObject({
       manifestVersion: "1.17",
       version: TEAMS_APP_VERSION,
@@ -88,10 +91,7 @@ describe("the Teams app package", () => {
       },
       localizationInfo: {
         defaultLanguageTag: "en",
-        additionalLanguages: [
-          { languageTag: "fr", file: "fr.json" },
-          { languageTag: "de", file: "de.json" },
-        ],
+        additionalLanguages: ADDITIONAL.map((l) => ({ languageTag: l, file: `${l}.json` })),
       },
     });
     expect(manifest.bots).toBeUndefined();
@@ -161,9 +161,9 @@ describe("the Teams app package", () => {
     }
   });
 
-  it.each(["fr", "de"] as const)("localizes every string of the manifest in %s.json, under the same keys", (lang) => {
-    const { manifest, ...localized } = unpack();
-    const { $schema, ...strings } = localized[lang];
+  it.each(ADDITIONAL)("localizes every string of the manifest in %s.json, under the same keys", (lang) => {
+    const { manifest, localized } = unpack();
+    const { $schema, ...strings } = localized(lang);
     expect($schema).toContain("/v1.17/MicrosoftTeams.Localization.schema.json");
     expect(Object.keys(strings)).toEqual(Object.keys(teamsAppStrings("en")));
     for (const key of ["name.short", "name.full", "description.short", "description.full"]) {
@@ -174,7 +174,7 @@ describe("the Teams app package", () => {
     const at = (path: string) =>
       path.split(/\.|\[(\d+)\]/).filter(Boolean).reduce<any>((node, part) => node?.[part], manifest);
     for (const [key, value] of Object.entries(en)) expect(at(key), key).toBe(value);
-    expect(strings["staticTabs[0].name"]).toBe({ fr: "Accueil", de: "Startseite" }[lang]);
+    expect(strings["staticTabs[0].name"]).toBe(serverText(lang)["app.tab.name"]);
     for (const [key, value] of Object.entries(strings)) {
       if (key.startsWith("activities.")) expect((value as string).length, key).toBeLessThanOrEqual(128);
     }

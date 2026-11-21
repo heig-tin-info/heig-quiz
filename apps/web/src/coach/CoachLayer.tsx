@@ -475,8 +475,9 @@ function Bubble({
                 <span className="flex-1" />
                 {/* A walk offers "skip" until its last bubble; a lone bubble
                     (a nudge, a one-step tour) offers the way out of them all. */}
+                {/* `data-coach`: a hook for the screenshot scripts, whatever the language. */}
                 {!last ? (
-                  <Button variant="ghost" size="sm" onClick={onSkip}>
+                  <Button variant="ghost" size="sm" onClick={onSkip} data-coach="skip">
                     {t("coach.skip")}
                   </Button>
                 ) : count === 1 ? (
@@ -484,7 +485,7 @@ function Bubble({
                     {t("coach.turnOff")}
                   </Button>
                 ) : null}
-                <Button size="sm" onClick={onNext}>
+                <Button size="sm" onClick={onNext} data-coach={last ? "got-it" : "next"}>
                   {last ? t("coach.done") : t("coach.next")}
                   {last ? null : <ArrowRight />}
                 </Button>

@@ -34,11 +34,10 @@ import { fr } from "./fr";
  * dictionary is.
  */
 const DICTS: Record<Locale, Record<keyof typeof en, string>> = { en, fr, de };
-type Lang = Locale;
-const DICT: Record<Lang, Record<string, string>> = DICTS;
+const DICT: Record<Locale, Record<string, string>> = DICTS;
 type Rule = {
   name: string;
-  langs: Lang[];
+  langs: Locale[];
   /** Why, and what to write instead: the message of a failure. */
   fix: string;
   test: (text: string, key: string) => boolean;
@@ -76,10 +75,10 @@ const COMPONENT_KEY = /^(courses\.(settings\.)?components|gbook\.(settings|head|
 const REPARTITION = /\brépartitions?\b(?! (des (notes|réponses|points|scores)|par question)\b)/i;
 
 /** Every language of the dictionary. */
-const ALL = Object.keys(DICT) as Lang[];
-const FR: Lang[] = ["fr"];
-const EN: Lang[] = ["en"];
-const DE: Lang[] = ["de"];
+const ALL = Object.keys(DICT) as Locale[];
+const FR: Locale[] = ["fr"];
+const EN: Locale[] = ["en"];
+const DE: Locale[] = ["de"];
 
 /** German prose with its placeholders and inline code taken out: `dir` in backticks is a command, not an address. */
 const prose = (re: RegExp) => (text: string) => has(re)(text.replace(/`[^`]*`/g, "x"));
@@ -223,12 +222,12 @@ describe("copy lint of the French help pages (N-I18N-04)", () => {
  * exception, and every word is short — a label, or one sentence of a toast's
  * length at most.
  */
-const DOCUMENT_WORDS: Record<Lang, Record<string, string>> = { en: { ...LABELS.en }, fr: { ...LABELS.fr }, de: { ...LABELS.de } };
+const DOCUMENT_WORDS = Object.fromEntries(LOCALES.map((lang): [Locale, Record<string, string>] => [lang, { ...LABELS[lang] }]));
 const DOCUMENT_WORD_MAX = 80;
 
 describe("copy lint of a document's fixed words (N-I18N-04, ADR-125)", () => {
   it.each(LOCALES)("%s: every rule holds, every word is short", (lang) => {
-    const words = DOCUMENT_WORDS[lang];
+    const words = DOCUMENT_WORDS[lang]!;
     const offenders = RULES.filter((rule) => rule.langs.includes(lang)).flatMap((rule) =>
       Object.keys(words)
         .filter((key) => rule.test(words[key]!, key))

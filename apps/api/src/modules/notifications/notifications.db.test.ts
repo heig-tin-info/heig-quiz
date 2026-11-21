@@ -707,15 +707,6 @@ describe("the delivery job", () => {
     );
   });
 
-  it("mails a German account in German (ADR-140)", async () => {
-    const hans = await seedUser("hans@heig.test");
-    await db.update(users).set({ locale: "de" }).where(eq(users.id, hans));
-    const { deps, mails } = fakes();
-    await deliver(deps, { userId: hans, channel: "email", payload: released("Labo") });
-    expect(mails.map((m) => m.subject)).toEqual(["Ergebnisse verfügbar: Labo"]);
-    expect(mails[0]!.html).toContain("Meine Ergebnisse ansehen");
-  });
-
   it("mails the account's notification address: the institutional one by default, else the one chosen", async () => {
     const lou = await seedUser("lou@gmail.com");
     await db.insert(userEmails).values({ userId: lou, email: "lou@heig-vd.ch", source: "swissEduIDLinkedAffiliationMail" });

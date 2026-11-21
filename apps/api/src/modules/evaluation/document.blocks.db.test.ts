@@ -20,7 +20,7 @@ import { FeedbackPolicy } from "@quiz/contracts";
 import { findStudentLeaks } from "@quiz/core/testing";
 import type { Block, Document } from "@quiz/docexport";
 import { renderTypst } from "@quiz/docexport/typst";
-import { LOCALES } from "@quiz/domain";
+import { type Locale, LOCALES } from "@quiz/domain";
 
 import { answers, evaluations, questions } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
@@ -120,6 +120,17 @@ async function series(mode: "exam" | "exercise") {
   return seed;
 }
 
+/**
+ * Two lines of pseudo-code as each language prints them (`BLOCKS_PAPER_WORDS`
+ * of `@quiz/qt-blocks`, which the API reaches through the registry only):
+ * a language added to `LOCALES` is a compile error here until it is written.
+ */
+const PRINTED: Record<Locale, { ifFreeAhead: string; turnLeft: string }> = {
+  en: { ifFreeAhead: "if free ahead", turnLeft: "turn left" },
+  fr: { ifFreeAhead: "si libre devant", turnLeft: "tourner à gauche" },
+  de: { ifFreeAhead: "falls vorne frei", turnLeft: "nach links drehen" },
+};
+
 describe("the hand-out of a blocks question (ADR-126 §8)", () => {
   it("serves its Markdown in the reader's language, no hidden warehouse in it", async () => {
     const seed = await series("exam");
@@ -205,12 +216,12 @@ describe("the student's own documents of a blocks question", () => {
     const found = await studentCopyRecord(db, evaluation, attempt, { now: server.clock.now() });
     // The key's own words are shown: the reference is the student's to read.
     const shown = SECRETS.filter((s) => !REFERENCE_LINES.includes(s));
-    for (const lang of ["en", "fr"] as const) {
+    for (const lang of LOCALES) {
       const tree = studentCopyDocument(found, lang);
       const source = typstOf(tree);
-      expect(source).toContain(lang === "fr" ? "si libre devant" : "if free ahead");
+      expect(source).toContain(PRINTED[lang].ifFreeAhead);
       // Their own program, and the hidden warehouses' verdicts by number.
-      expect(source).toContain(lang === "fr" ? "tourner à gauche" : "turn left");
+      expect(source).toContain(PRINTED[lang].turnLeft);
       expect(source).toContain("#3");
       for (const form of [JSON.stringify(tree), source]) {
         expect(shown.filter((s) => form.includes(s))).toEqual([]);

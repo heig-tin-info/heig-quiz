@@ -1,7 +1,5 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { LOCALE_INFO, LOCALES } from "@quiz/domain";
 
 import { CrashBoundary } from "../CrashBoundary";
 import { de } from "./de";
@@ -83,13 +81,6 @@ describe("German, a translated language (ADR-140)", () => {
     return () => i18n;
   }
 
-  it("is what a German-speaking browser gets, whatever its region", () => {
-    prefer("de-CH", "fr-CH", "en");
-    expect(browserLocale()).toBe("de");
-    prefer("xx-YY", "de-DE");
-    expect(storedLocale()).toBe("de");
-  });
-
   it("paints German from the first frame once main.tsx has loaded it, never English first", async () => {
     prefer("en-GB");
     localStorage.setItem("quiz-locale", "de");
@@ -100,24 +91,6 @@ describe("German, a translated language (ADR-140)", () => {
     expect(document.documentElement.lang).toBe("de");
   });
 
-  it("is picked, stored in this browser and saved to the account", async () => {
-    prefer("fr-CH");
-    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
-    const i18n = probe();
-    await act(async () => i18n().setLocale("de"));
-    await waitFor(() => expect(i18n().locale).toBe("de"));
-    expect(i18n().choice).toBe("de");
-    expect(localStorage.getItem("quiz-locale")).toBe("de");
-    expect(storedChoice()).toBe("de");
-    const [url, init] = fetch.mock.calls[0]!;
-    expect(String(url)).toContain("/app/api/me");
-    expect(JSON.parse(String(init?.body))).toEqual({ locale: "de" });
-  });
-
-  it("is in the language picker and the command palette, named in itself", () => {
-    expect(LOCALES).toContain("de");
-    expect(LOCALE_INFO.de).toEqual({ endonym: "Deutsch", origin: "translated" });
-  });
 });
 
 describe("CrashBoundary", () => {

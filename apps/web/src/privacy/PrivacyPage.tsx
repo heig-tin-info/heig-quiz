@@ -30,13 +30,14 @@ import fr from "./privacy.fr.md?raw";
  */
 export const PRIVACY_SOURCES: Record<WrittenLocale, string> = { en, fr };
 
-/** The source a reader of `locale` reads: their own when it is written, English otherwise. */
-export function privacySource(locale: Locale): string {
-  return PRIVACY_SOURCES[isWrittenLocale(locale) ? locale : FALLBACK_LOCALE];
+/** The language a reader of `locale` reads the page in: their own when it is written, English otherwise. */
+export function privacyLocale(locale: Locale): WrittenLocale {
+  return isWrittenLocale(locale) ? locale : FALLBACK_LOCALE;
 }
 
 export function PrivacyPage() {
   const { t, locale } = useI18n();
+  const source = privacyLocale(locale);
   useDocumentTitle(`${t("privacy.title")} · Quiz`);
   return (
     <div className="min-h-dvh bg-canvas text-fg">
@@ -51,10 +52,10 @@ export function PrivacyPage() {
       <main className="mx-auto max-w-3xl px-4 pt-6 pb-12 sm:px-8">
         <PageHeader title={t("privacy.title")} description={t("privacy.lead")} />
         <article
-          lang={isWrittenLocale(locale) ? undefined : FALLBACK_LOCALE}
+          lang={source === locale ? undefined : source}
           className="mt-6 rounded-card border border-line bg-surface px-5 py-6 sm:px-10 sm:py-8"
         >
-          <MarkdownView source={privacySource(locale)} className="md-doc" />
+          <MarkdownView source={PRIVACY_SOURCES[source]} className="md-doc" />
         </article>
       </main>
       <footer className="pb-10 text-center text-xs text-fg-faint">{t("landing.footer")}</footer>

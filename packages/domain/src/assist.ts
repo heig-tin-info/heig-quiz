@@ -69,7 +69,7 @@ export function capToolResult(text: string, hint = "a narrower one: one entity, 
 export const ASSIST_REFUSAL: Record<AssistLocale, string> = {
   fr: "Je ne sais pas répondre à cette question ; je peux t'aider sur la plateforme de quiz.",
   en: "I can't answer that question; I can help you with the quiz platform.",
-  de: "Diese Frage kann ich nicht beantworten. Ich kann Ihnen bei der Quiz-Plattform helfen.",
+  de: "Diese Frage kann ich nicht beantworten. Ich kann Ihnen bei Fragen zur Quiz-Plattform helfen.",
 };
 
 /** The pages only an administrator's assistant reads (ADR-080 §5). */

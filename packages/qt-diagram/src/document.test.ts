@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EN_LABELS, FR_LABELS, LABELS, PX_MM, scopeZones, toSvg, type AnswerZone, type Block, type Lang } from "@quiz/docexport";
+import { EN_LABELS, FR_LABELS, LABELS, LANGS, PX_MM, scopeZones, toSvg, type AnswerZone, type Block, type Lang } from "@quiz/docexport";
 import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
 import { DIAGRAM_KINDS, GRID, type Scene } from "@quiz/diagram/server";
@@ -37,13 +37,14 @@ const KEY_TEXTS = ["SecretFigureRef", "SecretCircleRef", "secretOrigin", "secret
 const frameOf = (blocks: readonly Block[]): AnswerZone => blocks.find((b): b is AnswerZone => b.kind === "answerZone")!;
 
 describe("the diagram on paper (ADR-126)", () => {
-  it.each(["en", "fr"] as const)("hands out the prompt, the notation and a squared frame with the starter, and no key (%s)", (lang) => {
+  it.each(LANGS)("hands out the prompt, the notation and a squared frame with the starter, and no key (%s)", (lang) => {
     const blocks = handout(SECRET_CONFIG, lang);
     for (const [form, text] of Object.entries(forms(blocks, lang))) {
       expect(diagramLeakFixture.secrets.filter((secret) => text.includes(secret)), form).toEqual([]);
       expect(text, form).toContain(SECRET_CONFIG.prompt);
     }
-    expect(forms(blocks, lang).markdown).toContain(lang === "en" ? "Notation: UML class diagram" : "Notation : Diagramme de classes UML");
+    const labels = LABELS[lang];
+    expect(forms(blocks, lang).markdown).toContain(`${labels.diagramNotation}${labels.colon}${labels.diagramClass}`);
     const frame = frameOf(blocks);
     expect(frame).toMatchObject({ zone: "free", id: "item-1", ruling: { kind: "grid", pitchMm: GRID * PX_MM } });
     // The starter, drawn in grey under the frame: its class's name is in it.
@@ -52,7 +53,7 @@ describe("the diagram on paper (ADR-126)", () => {
     expect(under.ok && under.svg).not.toContain("#000000");
   });
 
-  it.each(["en", "fr", "de"] as const)("names every notation in the reader's words, each its own (%s)", (lang) => {
+  it.each(LANGS)("names every notation in the reader's words, each its own (%s)", (lang) => {
     const names = DIAGRAM_KINDS.map((kind) => {
       const student = diagramServer.toStudent({ ...SECRET_CONFIG, kind, starter: undefined }, view);
       const [, notation] = diagramServer.statementDoc!(student, LABELS[lang]);

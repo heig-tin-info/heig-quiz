@@ -154,8 +154,8 @@ third language would have been a hunt rather than a list of compile errors.
     money with a decimal point. The web app reads the tag through
     `intlTag(locale)` beside its i18n machinery, at every `Intl` formatter
     and `toLocale*String`. The mails and Teams parameters keep their own
-    date tags (`fr-CH`, `en-GB`, `de-CH`, in `notifications/templates.ts`): their
-    French numeric date with dots is production output, so for French the
+    date tags (`fr-CH`, `en-GB`, `de-CH`, in
+    `notifications/templates.ts`): their French numeric date with dots is production output, so for French the
     two are different facts. The bare code stays everything else: the
     page's `<html lang>`, the account's `locale`, the dictionaries' key, a
     collation (`localeCompare`). The absolute dates of the account's date

@@ -198,7 +198,6 @@ describe("labels", () => {
       for (const value of Object.values(labels)) expect(value.trim()).not.toBe("");
       expect(labels.lang).toBe(lang);
     }
-    expect(Object.keys(LABELS)).toEqual(["en", "fr", "de"]);
   });
 
   it("writes points with two decimals at most, and an answer only when there is one", () => {

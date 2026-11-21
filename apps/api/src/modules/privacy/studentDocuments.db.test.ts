@@ -21,9 +21,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { FeedbackPolicy, HandoutRecord, PERSONAL_DATA_EXPORT_PATH, StudentCopyRecord } from "@quiz/contracts";
 import { findStudentLeaks } from "@quiz/core/testing";
-import { EN_LABELS, FR_LABELS, type Document } from "@quiz/docexport";
+import { LABELS, type Document } from "@quiz/docexport";
 import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
+import { LOCALES } from "@quiz/domain";
 
 import { answers, auditLog, classrooms, enrollments, evaluations, questions } from "../../db/schema.js";
 import { type Payload, sessionOf, testServer, type TestServer } from "../../test/http.js";
@@ -99,11 +100,11 @@ const PROMPTS = ["MCQ_PROMPT", "SHORT_PROMPT", "CLOZE_PROMPT", "RICH_PROMPT", "M
 /**
  * What the key publishes, by value. The mcq's key choice is printed in every
  * statement (it is one of the choices): its key is the "Answer key"
- * part, searched by its heading in both languages ({@link KEY_HEADINGS}), and
+ * part, searched by its heading in every language ({@link KEY_HEADINGS}), and
  * its box, never ticked on a copy whose key is hidden ({@link tickedKey}).
  */
 const KEYS = ["SHORT_KEY_SECRET", "CLOZE_KEY_SECRET", "RICH_REFERENCE_SECRET", "x^3+11x"];
-const KEY_HEADINGS = [EN_LABELS.answerKey, FR_LABELS.answerKey];
+const KEY_HEADINGS = LOCALES.map((lang) => LABELS[lang].answerKey);
 const EXPLANATIONS = ["EXPLANATION_SECRET"];
 const COMMENT = "TEACHER_COMMENT_SECRET";
 /** What a student never reads, whatever the policy. */
@@ -333,11 +334,11 @@ describe("the student's own copy (F-EXP-06)", () => {
       expect(values.filter((secret) => res.body.includes(secret))).toEqual([]);
       for (const secret of present) expect(res.body).toContain(secret);
 
-      // The first and second forms (05 §5.7): the tree and its Typst source, in both languages.
+      // The first and second forms (05 §5.7): the tree and its Typst source, in every language.
       const evaluation = await reload(server.app.db, exam.evaluationId);
       const { attempt } = (await findOwnAttempt(server.app.db, student.id, exam.attemptId))!;
       const found = await studentCopyRecord(server.app.db, evaluation, attempt, { now: server.clock.now() });
-      for (const lang of ["en", "fr"] as const) {
+      for (const lang of LOCALES) {
         const tree = studentCopyDocument(found, lang);
         expect(findStudentLeaks(tree, { forbiddenKeys: live.FORBIDDEN_STUDENT_KEYS, secrets: absent })).toEqual([]);
         // The key choice's box is ticked only by the key, and only when the policy shows it.
@@ -441,7 +442,7 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
     const found = await handout(server.app.db, await reload(server.app.db, seed.evaluationId), { now: server.clock.now() });
     const paperSeed = (await reload(server.app.db, seed.evaluationId)).paperSeed!;
     const secrets = [...KEYS, ...KEY_HEADINGS, ...EXPLANATIONS, ...ALWAYS_SECRET];
-    for (const lang of ["en", "fr"] as const) {
+    for (const lang of LOCALES) {
       const tree = handoutTree(found, lang);
       expect(findStudentLeaks(tree, { forbiddenKeys: live.FORBIDDEN_STUDENT_KEYS, secrets })).toEqual([]);
       const source = typstOf(tree);
@@ -557,7 +558,7 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
     const res = await get(printUrl(seed.evaluationId), student.headers);
     expect(res.statusCode).toBe(typstProbe.available ? 200 : 503);
     const found = await handout(server.app.db, await reload(server.app.db, seed.evaluationId), { now: server.clock.now() });
-    for (const lang of ["en", "fr"] as const) {
+    for (const lang of LOCALES) {
       const tree = handoutTree(found, lang);
       expect(tree.blocks).toContainEqual(
         expect.objectContaining({ kind: "answerZone", zone: "free", ruling: { kind: "lines", pitchMm: 8 } }),

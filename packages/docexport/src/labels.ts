@@ -466,7 +466,7 @@ export const DE_LABELS: Labels = {
   noTests: "Keine Tests.",
   testsPassed: "Bestandene Tests",
   compileFailed: "Kompilierung fehlgeschlagen.",
-  answerMisfit: "Die Antwort passt nicht mehr zur Vorlage der Frage.",
+  answerMisfit: "Die Antwort passt nicht mehr zum Startcode der Frage.",
   rubric: "Korrekturanweisungen",
   criterion: "Kriterium",
   weight: "Gewichtung",
@@ -475,7 +475,7 @@ export const DE_LABELS: Labels = {
   matchedAnswer: "Passende akzeptierte Antwort",
   notRead: "Nicht lesbar",
   colon: ": ",
-  blocksMapLegend: "Grau: Regale. Schwarz: der Roboter, Pfeil nach vorn. Gestrichelt: die Laderampe.",
+  blocksMapLegend: "Grau: Regale. Schwarz: Roboter, Pfeil in Fahrtrichtung. Gestrichelt: Laderampe.",
   blocksHiddenWarehouses: "Verborgene Lager, bei der Korrektur getestet",
   blocksAllOrNothing: "Punkte nur, wenn der Roboter in jedem Lager die Laderampe erreicht.",
   blocksToolbox: "Verfügbare Blöcke",
@@ -489,7 +489,8 @@ export const DE_LABELS: Labels = {
  * API hands it a `Locale`, so a language added there is a compile error
  * there until it is added here, with its labels (ADR-140).
  */
-export type Lang = "en" | "fr" | "de";
+export const LANGS = ["en", "fr", "de"] as const;
+export type Lang = (typeof LANGS)[number];
 
 /** The words of each language, as a document's `lang` picks them. */
 export const LABELS: Readonly<Record<Lang, Labels>> = { en: EN_LABELS, fr: FR_LABELS, de: DE_LABELS };

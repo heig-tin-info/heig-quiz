@@ -8,7 +8,7 @@ import { de } from "../i18n/de";
 import { en } from "../i18n/en";
 import { fr } from "../i18n/fr";
 import { renderWithProviders } from "../test/render";
-import { PRIVACY_SOURCES, PrivacyPage, privacySource } from "./PrivacyPage";
+import { PRIVACY_SOURCES, PrivacyPage, privacyLocale } from "./PrivacyPage";
 
 // German is lazy like French, which the test setup loads: a German render reads it from its first frame.
 await loadLocale("de");
@@ -28,21 +28,21 @@ const tableRows = (source: string) => source.match(/^\|.+\|$/gm) ?? [];
 
 describe("the privacy sources", () => {
   it("are not empty in any interface language", () => {
-    for (const locale of LOCALES) expect(privacySource(locale).trim()).not.toBe("");
+    for (const locale of LOCALES) expect(PRIVACY_SOURCES[privacyLocale(locale)].trim()).not.toBe("");
   });
 
   it("have the same sections and the same table in every language", () => {
     for (const locale of LOCALES) {
-      expect(headings(privacySource(locale)).length).toBe(headings(PRIVACY_SOURCES.en).length);
-      expect(tableRows(privacySource(locale)).length).toBe(tableRows(PRIVACY_SOURCES.en).length);
+      expect(headings(PRIVACY_SOURCES[privacyLocale(locale)]).length).toBe(headings(PRIVACY_SOURCES.en).length);
+      expect(tableRows(PRIVACY_SOURCES[privacyLocale(locale)]).length).toBe(tableRows(PRIVACY_SOURCES.en).length);
     }
   });
 
   it("never leave a promise open", () => {
     for (const locale of LOCALES) {
-      expect(privacySource(locale)).not.toMatch(/to be confirmed|à confirmer|TODO/i);
+      expect(PRIVACY_SOURCES[privacyLocale(locale)]).not.toMatch(/to be confirmed|à confirmer|TODO/i);
       // The page renders the title itself, from t().
-      expect(privacySource(locale)).not.toMatch(/^# /m);
+      expect(PRIVACY_SOURCES[privacyLocale(locale)]).not.toMatch(/^# /m);
     }
   });
 });
@@ -56,7 +56,7 @@ describe("PrivacyPage", () => {
   });
 
   it("gives a translated language the English text, marked as English, under its own title", () => {
-    expect(privacySource("de")).toBe(PRIVACY_SOURCES.en);
+    expect(privacyLocale("de")).toBe("en");
     const { container } = renderWithProviders(<PrivacyPage />, { locale: "de", route: "/privacy" });
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(de["privacy.title"]);
     expect(screen.getByRole("heading", { level: 2, name: "How long it is kept" })).toBeVisible();
