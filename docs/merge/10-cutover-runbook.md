@@ -704,6 +704,12 @@ M9-01 row of [`PROGRESS.md`](PROGRESS.md).
    remains.
 8. **DNS and fragment**: keep `classroom.chevallier.io` and the redirect
    fragment for at least a year.
+   *Amended 2026-11-21: the resolver the fragment sends humans to is
+   retired by the product owner (heig-classroom migrated, old URLs no
+   longer served; [database remediation
+   plan](../audits/2026-11-21-database-remediation.md) §6.4): those paths
+   now land on Quiz's not-found page; the fragment's 410 rows are
+   unchanged.*
 9. **Classroom's GitHub App, last**: uninstall `hgc-prod` from every
    organization, then delete the App.
 10. **Archive** `heig-tin-info/heig-classroom`

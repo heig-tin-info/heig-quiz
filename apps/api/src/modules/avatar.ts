@@ -51,8 +51,7 @@ export function shownAvatar(
 /**
  * THE visibility of a user's picture (#318): the user, when the caller may
  * see them, and they have one to show — an upload, or an https IdP claim
- * (as {@link shownAvatar} says). One predicate for the route and for
- * {@link seesAvatar}, over `users LEFT JOIN avatars`.
+ * (as {@link shownAvatar} says), over `users LEFT JOIN avatars`.
  */
 const visiblePicture = (caller: Caller, userId: string) =>
   and(
@@ -65,21 +64,12 @@ const visiblePicture = (caller: Caller, userId: string) =>
  * The user's picture if the caller may see that user: the upload's bytes,
  * else the IdP's address; null alike for no picture and no right (#318).
  */
-export async function findVisibleAvatar(db: Db, caller: Caller, userId: string) {
+async function findVisibleAvatar(db: Db, caller: Caller, userId: string) {
   return first(db
     .select({ data: avatars.data, contentType: avatars.contentType, pictureUrl: users.pictureUrl })
     .from(users)
     .leftJoin(avatars, eq(avatars.userId, users.id))
     .where(visiblePicture(caller, userId)));
-}
-
-/**
- * Whether the caller sees a picture of that user: {@link findVisibleAvatar}
- * itself, ONE query — its one caller (a legacy link's redirect) is rare
- * enough that reading an upload's bytes for it costs nothing worth a second.
- */
-export async function seesAvatar(db: Db, caller: Caller, userId: string): Promise<boolean> {
-  return (await findVisibleAvatar(db, caller, userId)) !== null;
 }
 
 /** The IdP's pictures, by address, fetched and kept under the one policy of `remoteImage.ts`. */

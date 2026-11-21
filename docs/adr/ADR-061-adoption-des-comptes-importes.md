@@ -16,6 +16,12 @@ Note (2026-10-14, [ADR-111](ADR-111-admission-a-la-connexion.md) §1): login
 admission asks `placeholderFor`, read only, before any write; the person a
 placeholder account waits for is admitted as an existing account is.
 
+Amended 2026-11-21 (§6 only): the import's `id_map` is dropped with the
+legacy URL resolver, retired 2026-11-21 by the product owner: heig-classroom
+migrated, old URLs no longer served ([database remediation
+plan](../audits/2026-11-21-database-remediation.md) §6.4). Adoption never
+read it.
+
 ## Context
 
 The heig-classroom import brings the people of the mapped classrooms into
@@ -97,7 +103,9 @@ and GitHub link stay on the imported one, which nobody can ever sign in to.
 
 6. **Permanent.** An adopted account is an ordinary account; the
    placeholder is gone and nothing undoes it. The import's `id_map` keeps
-   the correspondence with the classroom id.
+   the correspondence with the classroom id. *(Amended 2026-11-21: the map
+   is dropped, migration `0152`; its dump is archived outside the
+   repository.)*
 
 7. **Cost, and no index.** Every login now opens a transaction and runs one
    more indexed SELECT (`oidc_sub`, unique) before the upsert; the rest of

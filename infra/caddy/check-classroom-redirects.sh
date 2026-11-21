@@ -65,7 +65,7 @@ for path in /webhooks/github /app/api/me /app/api/classrooms/$cid \
 done
 check POST /webhooks/github 410 "location=" "content-type=application/json"
 
-# Everything else: to the resolver, the path as sent, percent-encoding kept.
+# Everything else: to the resolver's former path, the path as sent, percent-encoding kept.
 for path in / /classrooms/$cid /classrooms/$cid/assignments/$aid \
   /classrooms/$cid/assignments/$aid/groups /classrooms/$cid/journal \
   /classrooms/$cid/journal/week-01/lab.md "/classrooms/$cid/journal/a%20b%2Fc%3Fd.md" \

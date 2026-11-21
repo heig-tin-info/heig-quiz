@@ -240,6 +240,14 @@ route, `/legacy/classroom/*`, resolves old SPA paths through the preserved
 UUIDs and the import id map — the mapping lives in tested code, not in
 Caddy.
 
+*Amended 2026-11-21: the resolver is retired by the product owner:
+heig-classroom migrated, old URLs no longer served
+([database remediation plan](../audits/2026-11-21-database-remediation.md)
+§6.4). The rows "via the resolver" below no longer hold: `/legacy/classroom/*`
+is no route any more and answers Quiz's not-found page, and the import's id
+map is dropped (migration `0152`). The fragment is unchanged: its 410 rows
+still answer.*
+
 | Old | Target | How |
 | --- | --- | --- |
 | `POST /webhooks/github` | — | 410: classroom's App is idle, Quiz's App has its own URL (D23) |

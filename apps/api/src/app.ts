@@ -52,7 +52,6 @@ import { journalPlugin } from "./modules/journal/routes.js";
 import { createKioskAttestor } from "./modules/kiosk/attestation.js";
 import { registerKioskJobs } from "./modules/kiosk/jobs.js";
 import { kioskPlugin } from "./modules/kiosk/routes.js";
-import { legacyPlugin } from "./modules/legacy/routes.js";
 import { livePlugin } from "./modules/live/routes.js";
 import { assistPlugin } from "./modules/assist/routes.js";
 import { bundledChangelog } from "./modules/changelog/bundle.js";
@@ -271,7 +270,6 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(activityPlugin, { config });
   // The journal: a Quiz-mode one needs no App (ADR-057); its GitHub routes do.
   await app.register(journalPlugin, { config });
-  await app.register(legacyPlugin);
   await app.register(livePlugin, { config });
   await app.register(previewPlugin);
   await app.register(gradingPlugin);
