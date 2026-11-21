@@ -61,11 +61,12 @@ describe("diskStatus", () => {
 });
 
 describe("backupStatus", () => {
-  it("warns after 26 h, fails after 50 h", () => {
+  it("warns after 3 h, fails after 26 h (hourly dumps and copies)", () => {
     expect(backupStatus({ ok: true, finishedAt: ago(2 * H) }, now)).toBe("ok");
-    expect(backupStatus({ ok: true, finishedAt: ago(26 * H) }, now)).toBe("ok");
-    expect(backupStatus({ ok: true, finishedAt: ago(26 * H + 1) }, now)).toBe("warn");
-    expect(backupStatus({ ok: true, finishedAt: ago(50 * H + 1) }, now)).toBe("fail");
+    expect(backupStatus({ ok: true, finishedAt: ago(3 * H) }, now)).toBe("ok");
+    expect(backupStatus({ ok: true, finishedAt: ago(3 * H + 1) }, now)).toBe("warn");
+    expect(backupStatus({ ok: true, finishedAt: ago(26 * H) }, now)).toBe("warn");
+    expect(backupStatus({ ok: true, finishedAt: ago(26 * H + 1) }, now)).toBe("fail");
   });
 
   it("fails on a failed dump, however recent", () => {

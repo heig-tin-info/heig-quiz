@@ -194,7 +194,7 @@ describe("the registry where there is nothing to measure", () => {
         },
       ],
     });
-    await report(30);
+    await report(5);
     expect(await check("backup", cfg)).toMatchObject({ status: "warn", cause: "backup.stale" });
     await report(1, false);
     expect(await check("backup", cfg)).toMatchObject({ status: "fail", cause: "backup.failed" });
@@ -225,9 +225,9 @@ describe("the registry where there is nothing to measure", () => {
       cause: null,
       details: [{ subject: { kind: "name", name: "portal-2026-09-20T05:34" }, values: [] }],
     });
-    await report(30);
+    await report(5);
     expect(await check("offsite", cfg)).toMatchObject({ status: "warn", cause: "offsite.stale" });
-    await report(60);
+    await report(30);
     expect(await check("offsite", cfg)).toMatchObject({ status: "fail", cause: "offsite.stale" });
     await report(1, false);
     expect(await check("offsite", cfg)).toMatchObject({ status: "fail", cause: "offsite.failed" });

@@ -56,7 +56,8 @@ else
 fi
 
 # One host writes this repository; a second one would need --glob-archives.
-borg prune --list --keep-daily 7 --keep-weekly 4 --keep-monthly 3
+# --keep-hourly 48: the push runs every hour (RPO 1 h, 2026-11-21).
+borg prune --list --keep-hourly 48 --keep-daily 7 --keep-weekly 4 --keep-monthly 3
 borg compact
 install -d -m 0700 "$(dirname "$STATE")"
 borg list --short | sort > "$STATE"

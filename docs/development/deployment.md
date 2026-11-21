@@ -86,7 +86,7 @@ application VM's address only.
 | Caddy | native package on the host, ports 80 and 443, shared with the neighbours | `Caddyfile`, copied to `/etc/caddy/conf.d/quiz.caddy` |
 | `app` | container, published on `127.0.0.1:3002` only; volume `static-history` | `Dockerfile`, image `ghcr.io/heig-tin-info/quiz` |
 | `postgres` | container, PostgreSQL 17, volume `pgdata` | `compose.prod.yml` |
-| `backup` | container running a daily `pg_dump -Fc` into `./backups/`, and its report into `./backup-status/last.json` | `compose.prod.yml` |
+| `backup` | container running an hourly `pg_dump -Fc` into `./backups/`, and its report into `./backup-status/last.json` | `compose.prod.yml` |
 
 The `static-history` volume (`STATIC_HISTORY_DIR=/app/static-history`)
 keeps the hashed files of `assets/` of the builds served in the last 30
@@ -987,16 +987,27 @@ first (§6); when in doubt, restore it anyway. A rollback holds until the next a
     purpose; the runner image itself still comes from CI, so that both VMs
     run the commit the checks passed on.
 
-## 6. Backups (RPO 24 h, RTO 4 h)
+## 6. Backups (RPO 1 h, RTO 4 h)
+
+NFR-16 asks for 24 h at most; the product owner chose one hour on
+2026-11-21 (database remediation plan, §6): a lost disk during an exam
+week would otherwise cost a day of answers. Point-in-time recovery (WAL
+archiving) is not set up; it comes only if an hour proves too much.
 
 - **A daily provider backup of the application VM**, off the machine:
   Hetzner Backups (the Backups tab of the server in the Hetzner console, 7
   daily slots), which replaces the previous host's daily snapshot. The whole
   VM comes back, secrets and volumes included, crash-consistent. It must be
   enabled in the console: check that it is.
-- **A daily `pg_dump -Fc`** from the compose `backup` service into
-  `/srv/quiz/backups/quiz-<date>.dump` (30-day retention): a logical dump,
-  restorable table by table. It lives on the VM it protects.
+- **An hourly `pg_dump -Fc`** from the compose `backup` service, at start
+  and at the top of every hour, into `/srv/quiz/backups/hourly-<UTC
+  date>T<hour>.dump` (the 48 newest kept), each read back whole before it
+  counts; the day's latest is also `quiz-<date>.dump` (a hard link, the 30
+  newest kept). Mode 600. A logical dump, restorable table by table. It
+  lives on the VM it protects; the off-site copy below takes it within the
+  hour. A single failed hour (a deploy recreating `postgres` on the hour, a
+  push waiting on a prune's lock) turns the coarse `backup` word, and so the
+  external probe's `attention`, on until the next good run.
 - **The backup report** ([ADR-055](../adr/ADR-055-etat-du-systeme.md)).
   After each dump the `backup` service writes one line of JSON into
   `/srv/quiz/backup-status/last.json`: `finished_at`, `ok`, `exit_code`,
@@ -1038,7 +1049,7 @@ first (§6); when in doubt, restore it anyway. A rollback holds until the next a
 
 ```bash
 cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image \
-  exec -T backup sh -c 'pg_dump -Fc -h postgres -U quiz quiz > "/backups/$1"' sh "manual-<migration>-$(date +%F-%H%M).dump"
+  exec -T backup sh -c 'umask 077; pg_dump -Fc -h postgres -U quiz quiz > "/backups/$1"' sh "manual-<migration>-$(date +%F-%H%M).dump"
 ```
 
 - **The fingerprint and the restore drill.** `scripts/db-fingerprint.sql`
@@ -1075,7 +1086,7 @@ deployed.
 
 ### The off-site copy (#235)
 
-Every night `srv`'s user timer `quiz-offsite-backup.timer` runs
+Every hour (at :15 UTC) `srv`'s user timer `quiz-offsite-backup.timer` runs
 `scripts/offsite-backup/push.sh`: one [borg](https://www.borgbackup.org/)
 archive, `zstd,6`, of the backups of **every service of this VM**, into one
 encrypted repository (`repokey-blake2`) on an off-site storage: another
@@ -1173,8 +1184,9 @@ Each client's cache is then newer than the repository and refuses with
 included, before its next run.
 
 **Pruning**, by hand from the workstation only (once a month is enough):
-`scripts/offsite-backup/prune.sh` keeps 7 daily, 4 weekly and 3 monthly
-archives (about three months of archives; each holds 30 days of dumps, so a
+`scripts/offsite-backup/prune.sh` keeps 48 hourly, 7 daily, 4 weekly and 3 monthly
+archives (an hourly push appends close to a whole compressed dump, about
+0.6 GB a day, which only a prune and compact reclaim; about three months of archives; each holds 30 days of dumps, so a
 deletion leaves the copy after about four months, N-DATA-03), then compacts, and saves the list of archives it leaves
 (`~/.config/borg-offsite/last-archives`). Before touching anything it
 refuses, pruning and compacting nothing:

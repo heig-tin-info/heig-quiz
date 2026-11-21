@@ -24,7 +24,7 @@ import {
 import { DATE_FORMATS, DEFAULT_MAX_ACTIVE_SESSIONS, SESSION_KINDS, USER_ROLES } from "@quiz/contracts";
 import { LOCALES, MCQ_SCORE_POLICIES, TOKEN_SCOPES } from "@quiz/domain";
 
-import { bytea } from "./columns.js";
+import { bytea, oneOf } from "./columns.js";
 import { evaluations } from "./evaluation.js";
 import { kioskDevices, kioskPairings } from "./kiosk.js";
 import { projects } from "./project.js";
@@ -112,7 +112,12 @@ export const users = pgTable(
     inactivityRemindedAt: timestamp("inactivity_reminded_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("users_email_idx").on(sql`lower(${t.email})`)],
+  (t) => [
+    index("users_email_idx").on(sql`lower(${t.email})`),
+    // The role is what `roles.ts` grants on: a value off the list would read
+    // as no known role at all, so the database refuses it.
+    check("users_role_ck", oneOf(t.role, USER_ROLES)),
+  ],
 );
 
 export const sessions = pgTable(
@@ -169,6 +174,8 @@ export const sessions = pgTable(
     index("sessions_expires_idx").on(t.expiresAt),
     uniqueIndex("sessions_device_idx").on(t.deviceId).where(sql`${t.deviceId} IS NOT NULL`),
     check("sessions_one_activity", sql`${t.evaluationId} IS NULL OR ${t.projectId} IS NULL`),
+    // The kind decides which routes the session reaches (ADR-027).
+    check("sessions_kind_ck", oneOf(t.kind, SESSION_KINDS)),
   ],
 );
 
@@ -200,6 +207,7 @@ export const launchTickets = pgTable(
   (t) => [
     index("launch_tickets_user_idx").on(t.userId, t.evaluationId),
     check("launch_tickets_one_activity", sql`${t.evaluationId} IS NULL OR ${t.projectId} IS NULL`),
+    check("launch_tickets_kind_ck", oneOf(t.kind, SESSION_KINDS)),
   ],
 );
 
@@ -257,7 +265,7 @@ export const apiTokens = pgTable(
   (t) => [
     index("api_tokens_user_idx").on(t.userId),
     index("api_tokens_grant_idx").on(t.grantId),
-    check("api_tokens_scope_ck", sql`${t.scope} in (${sql.raw(TOKEN_SCOPES.map((s) => `'${s}'`).join(", "))})`),
+    check("api_tokens_scope_ck", oneOf(t.scope, TOKEN_SCOPES)),
     check("api_tokens_scope_personal_ck", sql`(${t.audience} is null) = (${t.scope} is not null)`),
   ],
 );
@@ -374,6 +382,9 @@ export const userEmails = pgTable(
   (t) => [
     primaryKey({ columns: [t.userId, t.email] }),
     index("user_emails_email_idx").on(t.email),
+    // Matching compares addresses as stored: one left unnormalized would
+    // silently match nothing, so the database refuses it.
+    check("user_emails_email_normalized_ck", sql`${t.email} = lower(btrim(${t.email}))`),
   ],
 );
 
@@ -415,23 +426,30 @@ export const avatars = pgTable("avatars", {
  * even before the person has an account; identity and last login fill in at
  * their first edu-ID login.
  */
-export const teacherGrants = pgTable("teacher_grants", {
-  id: uuid("id").primaryKey(),
-  /** Normalized to lowercase. */
-  email: text("email").notNull().unique(),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  /**
-   * The online workspace (ADR-047 §4, amended 2026-10-07): may this teacher
-   * put a project of a course they own in the portal, and how many of the
-   * workspaces they carry may run at once (the portal enforces it, from the
-   * sync). Edited by an administrator only.
-   */
-  codespaceEnabled: boolean("codespace_enabled").notNull().default(false),
-  codespaceMaxActiveSessions: integer("codespace_max_active_sessions").notNull().default(DEFAULT_MAX_ACTIVE_SESSIONS),
-});
+export const teacherGrants = pgTable(
+  "teacher_grants",
+  {
+    id: uuid("id").primaryKey(),
+    /**
+     * Normalized (trim + lowercase), which the check below holds: the
+     * UNIQUE is then case-insensitive in effect.
+     */
+    email: text("email").notNull().unique(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * The online workspace (ADR-047 §4, amended 2026-10-07): may this teacher
+     * put a project of a course they own in the portal, and how many of the
+     * workspaces they carry may run at once (the portal enforces it, from the
+     * sync). Edited by an administrator only.
+     */
+    codespaceEnabled: boolean("codespace_enabled").notNull().default(false),
+    codespaceMaxActiveSessions: integer("codespace_max_active_sessions").notNull().default(DEFAULT_MAX_ACTIVE_SESSIONS),
+  },
+  (t) => [check("teacher_grants_email_normalized_ck", sql`${t.email} = lower(btrim(${t.email}))`)],
+);
 
 /**
  * Who an audit entry names as acting: a person through a session (`user`),
