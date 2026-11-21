@@ -27,11 +27,12 @@ describe("the locale registry (ADR-140)", () => {
     expect(LOCALE_INFO.en.intl).toBe("en-GB");
     expect(LOCALE_INFO.fr.intl).toBe("fr");
     expect(LOCALE_INFO.de.intl).toBe("de-CH");
+    expect(LOCALE_INFO.it.intl).toBe("it-CH");
   });
 
   it("tells the written languages from the translated ones (ADR-140 §2)", () => {
     expect(LOCALES.filter(isWrittenLocale)).toEqual(["en", "fr"]);
-    expect(LOCALES.filter((l) => LOCALE_INFO[l].origin === "translated")).toEqual(["de"]);
+    expect(LOCALES.filter((l) => LOCALE_INFO[l].origin === "translated")).toEqual(["de", "it"]);
     // The fallback is the source every translation is drafted from: written.
     expect(isWrittenLocale(FALLBACK_LOCALE)).toBe(true);
     expect(LOCALE_INFO.de.endonym).toBe("Deutsch");

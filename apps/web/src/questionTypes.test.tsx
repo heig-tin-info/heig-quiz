@@ -109,8 +109,8 @@ import {
  * a key renamed in a package fails here instead of on screen.
  */
 
-// French is loaded by the test setup; German too, for the words it shares with the printed documents.
-await loadLocale("de");
+// French is loaded by the test setup; every other language here, for the words it shares with the printed documents.
+await Promise.all(LOCALES.map(loadLocale));
 
 function makeT(locale: Locale): TFunction {
   return (key, vars) => {

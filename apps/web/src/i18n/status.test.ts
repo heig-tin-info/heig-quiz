@@ -39,12 +39,8 @@ import { it as itDict } from "./it";
 /**
  * Every translated language of the registry (`LOCALE_INFO`): one added there
  * is a compile error here until its dictionary is.
- *
- * TEMPORARY: Italian is drafted but not yet in `LOCALES`, so `Lang` widens
- * the registry by it. When `it` joins `LOCALES` as a translated language,
- * delete `| "it"`: `Lang` is then `TranslatedLocale` again.
  */
-type Lang = TranslatedLocale | "it";
+type Lang = TranslatedLocale;
 const TRANSLATED: Record<Lang, Record<keyof typeof en, string>> = { de, it: itDict };
 type Key = keyof typeof en;
 

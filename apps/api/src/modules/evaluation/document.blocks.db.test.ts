@@ -129,6 +129,7 @@ const PRINTED: Record<Locale, { ifFreeAhead: string; turnLeft: string }> = {
   en: { ifFreeAhead: "if free ahead", turnLeft: "turn left" },
   fr: { ifFreeAhead: "si libre devant", turnLeft: "tourner à gauche" },
   de: { ifFreeAhead: "falls vorne frei", turnLeft: "nach links drehen" },
+  it: { ifFreeAhead: "se davanti è libero", turnLeft: "gira a sinistra" },
 };
 
 describe("the hand-out of a blocks question (ADR-126 §8)", () => {

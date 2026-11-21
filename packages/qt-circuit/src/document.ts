@@ -90,7 +90,7 @@ export function circuitStatementDoc(student: CircuitStudent, labels: Labels): Bl
       : [
           markdown(`**${labels.circuitStimuli}**`),
           table(
-            [labels.name, labels.circuitSource, labels.circuitLoad, labels.circuitAnalysis, labels.points],
+            [labels.circuitName, labels.circuitSource, labels.circuitLoad, labels.circuitAnalysis, labels.points],
             stimuli.map((s) => [s.name, sourceText(s, labels), loadText(s, labels), analysisText(s), number(s.points)]),
           ),
         ]),

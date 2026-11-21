@@ -28,6 +28,7 @@ import { javascriptGenerator } from "blockly/javascript";
 import * as De from "blockly/msg/de";
 import * as En from "blockly/msg/en";
 import * as Fr from "blockly/msg/fr";
+import * as It from "blockly/msg/it";
 
 import { fmt } from "@quiz/core/client";
 import { BLOCK_KINDS, PROGRAM_LIMITS, type BlockKind, type NodePath, type Stmt } from "@quiz/domain/blocks";
@@ -39,7 +40,7 @@ import type { BlocksCanvasStrings } from "./strings.js";
 export const MEDIA_PATH = "/blockly-media/";
 
 /** Blockly's own interface (context menu, announcements) in each interface language. */
-const BLOCKLY_MESSAGES: Record<Locale, unknown> = { en: En, fr: Fr, de: De };
+const BLOCKLY_MESSAGES: Record<Locale, unknown> = { en: En, fr: Fr, de: De, it: It };
 
 // ---------------------------------------------------------------------------
 // Theme

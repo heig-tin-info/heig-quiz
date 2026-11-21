@@ -317,6 +317,7 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
     expect(wantsResults("Quelle est la moyenne de la classe ?")).toBe(true);
     expect(wantsResults("Show me the results")).toBe(true);
     expect(wantsResults("Wie ist der Durchschnitt der Klasse?")).toBe(true);
+    expect(wantsResults("Qual è la media della classe?")).toBe(true);
     expect(wantsResults("How do I share a pool?")).toBe(false);
   });
 

@@ -23,11 +23,8 @@ import { student } from "./it/student";
  * from the English, each value stamped in `it.status.json` with the English
  * it was drafted from (§7, `i18n/status.test.ts`). Typed
  * `Record<keyof Dict, string>` like `fr.ts`: a key missing here, or one
- * English no longer has, is a compile error.
- *
- * Drafted, not yet selectable: the app does not import this file (its tests
- * do). Italian becomes selectable when it joins `LOCALES` (`@quiz/domain`)
- * and its loader joins `index.tsx`.
+ * English no longer has, is a compile error. Loaded as a chunk of its own
+ * (`loadLocale` in `index.tsx`).
  */
 export const it: Record<keyof Dict, string> = {
   ...common,

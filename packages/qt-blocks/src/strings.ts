@@ -291,9 +291,43 @@ const blocksPaperWordsDe: Readonly<Record<keyof BlocksPaperWords, string>> = {
   hidden: "Verborgen",
 };
 
+/** Italian, a translated language (ADR-140): the drafted `qt.blocks.c.*` of the web app's Italian, word for word. */
+const blocksPaperWordsIt: Readonly<Record<keyof BlocksPaperWords, string>> = {
+  forward: "avanza",
+  turn: "gira a {dir}",
+  turnLeft: "sinistra",
+  turnRight: "destra",
+  repeat: "ripeti {n} volte",
+  repeatUntilDock: "ripeti fino alla banchina",
+  ifSensor: "se {where} è {sensor}",
+  else: "altrimenti",
+  sensorFree: "libero",
+  sensorBlocked: "bloccato",
+  whereFront: "davanti",
+  whereLeft: "a sinistra",
+  whereRight: "a destra",
+  kindForward: "Avanza",
+  kindTurn: "Gira",
+  kindRepeat: "Ripeti n volte",
+  kindRepeatUntilDock: "Ripeti fino alla banchina",
+  kindIfSensor: "Se un sensore indica",
+  battery: "Batteria",
+  map: "Pianta del magazzino",
+  dock: "BANCHINA",
+  reasonDock: "Banchina raggiunta",
+  reasonCollision: "Collisione",
+  reasonBattery: "Batteria scarica",
+  reasonLoop: "Ciclo infinito",
+  reasonShort: "Fermo prima della banchina",
+  colWarehouse: "Magazzino",
+  colResult: "Risultato",
+  hidden: "Nascosto",
+};
+
 /** The printed words of each language, as a document's `labels.lang` picks them. */
 export const BLOCKS_PAPER_WORDS: Readonly<Record<Lang, BlocksPaperWords>> = {
   en: blocksPaperWordsEn,
   fr: blocksPaperWordsFr,
   de: blocksPaperWordsDe,
+  it: blocksPaperWordsIt,
 };

@@ -10,7 +10,7 @@
 FROM docker.io/library/node:22-slim@sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96 AS vsix
 ARG VSCE_VERSION=4.0.0
 ARG EXT_STATUSBAR_ID=heig.codespace-statusbar
-ARG EXT_STATUSBAR_VERSION=0.4.1
+ARG EXT_STATUSBAR_VERSION=0.4.2
 WORKDIR /ext
 COPY extension/ /ext/
 # `--allow-missing-repository`: the extension is not published, it has no
@@ -56,7 +56,7 @@ ARG EXT_DEBUG=webfreak.debug
 # (deadline countdown, return button). It is not published, so it is installed
 # from the .vsix and not from Open VSX.
 ARG EXT_STATUSBAR=heig.codespace-statusbar
-ARG EXT_STATUSBAR_VERSION=0.4.1
+ARG EXT_STATUSBAR_VERSION=0.4.2
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \

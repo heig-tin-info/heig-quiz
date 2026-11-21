@@ -8,7 +8,7 @@
  */
 import { CONCEPT_LANGUAGES, type ConceptLanguage } from "./concepts.js";
 
-export const LOCALES = ["en", "fr", "de"] as const;
+export const LOCALES = ["en", "fr", "de", "it"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 /**
@@ -34,6 +34,7 @@ export const LOCALE_INFO = {
   en: { endonym: "English", intl: "en-GB", origin: "written" },
   fr: { endonym: "Français", intl: "fr", origin: "written" },
   de: { endonym: "Deutsch", intl: "de-CH", origin: "translated" },
+  it: { endonym: "Italiano", intl: "it-CH", origin: "translated" },
 } as const satisfies Readonly<Record<Locale, { endonym: string; intl: string; origin: LocaleOrigin }>>;
 
 /** The languages of one origin, as types: what a per-origin `Record` is keyed by. */

@@ -71,12 +71,12 @@
   const TICK_MS = 30_000;
 
   /**
-   * The workspace UI's language: its base ("fr", "de") when this table has
-   * it, English otherwise, and English for a key a language lacks, as the
+   * The workspace UI's language: its base ("fr", "de", "it") when this table
+   * has it, English otherwise, and English for a key a language lacks, as the
    * status bar extension does (ADR-140 §4, §5).
-   * French and German are not reached today: the image ships no language
-   * pack, so VS Code's language is always "en" (extension.js). `tag` is the
-   * `Intl` tag of the time.
+   * French, German and Italian are not reached today: the image ships no
+   * language pack, so VS Code's language is always "en" (extension.js).
+   * `tag` is the `Intl` tag of the time.
    */
   const STRINGS = {
     en: {
@@ -105,6 +105,15 @@
       left: (d) => `noch ${d}`,
       label: (n, charging) => `Akku ${n} %${charging ? ", wird geladen" : ""}`,
       tooltip: "Akku. Klicken Sie, um die Uhrzeit ein- oder auszublenden.",
+    },
+    it: {
+      tag: "it-CH",
+      percent: (n) => `${n}%`,
+      charging: "in carica",
+      full: (d) => `carica completa tra ${d}`,
+      left: (d) => `${d} rimanenti`,
+      label: (n, charging) => `Batteria ${n}%${charging ? ", in carica" : ""}`,
+      tooltip: "Batteria. Fare clic per mostrare o nascondere l'ora.",
     },
   };
 

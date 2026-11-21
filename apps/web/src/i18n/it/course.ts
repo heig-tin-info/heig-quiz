@@ -273,7 +273,7 @@ export const course: Record<keyof typeof en, string> = {
   "activities.layout.all": "Tutte",
   "activities.col.end": "Fine / Scadenza",
   "activities.summary.open": "In corso",
-  "activities.summary.toRelease": "Risultati da pubblicare",
+  "activities.summary.toRelease": "Da pubblicare",
   "activities.summary.toRelease.hint": "Chiuse, risultati non pubblicati",
   "activities.summary.week": "Prossimi 7 giorni",
   "activities.summary.week.none": "Nessuna apertura o chiusura",

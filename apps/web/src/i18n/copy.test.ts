@@ -33,12 +33,8 @@ import { it as itDict } from "./it";
  * English and French, the translated German and Italian (ADR-140). Keyed by
  * the registry: a language added there is a compile error here until its
  * dictionary is.
- *
- * TEMPORARY: Italian is drafted but not yet in `LOCALES`, so `Lang` widens
- * the registry by it. When `it` joins `LOCALES`, delete `| "it"`:
- * `Lang` is then `Locale` again.
  */
-type Lang = Locale | "it";
+type Lang = Locale;
 const DICTS: Record<Lang, Record<keyof typeof en, string>> = { en, fr, de, it: itDict };
 const DICT: Record<Lang, Record<string, string>> = DICTS;
 type Rule = {

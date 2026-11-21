@@ -254,8 +254,8 @@ describe("buildCommands: the theme and language actions", () => {
     const setLocale = vi.fn();
     const ids = (locale: Locale) =>
       buildCommands(makeContext({ locale })).flatMap((c) => (c.id.startsWith("action:locale:") ? [c.id] : []));
-    expect(ids("en")).toEqual(["action:locale:fr", "action:locale:de"]);
-    expect(ids("de")).toEqual(["action:locale:en", "action:locale:fr"]);
+    expect(ids("en")).toEqual(["action:locale:fr", "action:locale:de", "action:locale:it"]);
+    expect(ids("de")).toEqual(["action:locale:en", "action:locale:fr", "action:locale:it"]);
     const de = need(buildCommands(makeContext({ setLocale })), "action:locale:de");
     expect(de.label).toBe("Switch to Deutsch");
     de.run();

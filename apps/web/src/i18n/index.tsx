@@ -24,17 +24,18 @@ import { type Dict, en } from "./en";
  *
  * Scope: EVERY user-facing surface goes through `t()`, teacher screens
  * included (N-I18N-01) — a teacher in Yverdon reads French. The dictionary is
- * flat and typed: `fr` and `de` are `Record<keyof Dict, string>`, so a key
- * added in English without its twins is a compile error. Keep it that way.
+ * flat and typed: `fr`, `de` and `it` are `Record<keyof Dict, string>`, so
+ * a key added in English without its twins is a compile error. Keep it that
+ * way.
  *
- * The dictionaries live next door, one file per domain in `en/`, `fr/` and
- * `de/`, joined by `en.ts`, `fr.ts` and `de.ts`: this file is the machinery
- * that reads them. English and French are written, German is translated
- * (ADR-140). English is in the entry chunk, as the fallback it is; every
- * other language is a chunk of its own, loaded by `loadLocale` before
- * it is shown — before the first render when it is the stored choice
- * (`main.tsx`), before the switch when it is picked — so no screen paints in
- * English and then flips. Each keeps its `Record<keyof Dict, string>`
+ * The dictionaries live next door, one file per domain in `en/`, `fr/`,
+ * `de/` and `it/`, joined by `en.ts`, `fr.ts`, `de.ts` and `it.ts`: this file
+ * is the machinery that reads them. English and French are written, German
+ * and Italian are translated (ADR-140). English is in the entry chunk, as
+ * the fallback it is; every other language is a chunk of its own, loaded by
+ * `loadLocale` before it is shown — before the first render when it is the
+ * stored choice (`main.tsx`), before the switch when it is picked — so no
+ * screen paints in English and then flips. Each keeps its `Record<keyof Dict, string>`
  * type: the dynamic import changes when it loads, not what it must contain.
  *
  * What the user picks is a `LocaleChoice`: a language, or "browser" — the
@@ -59,6 +60,7 @@ export const DICTS: Record<typeof FALLBACK_LOCALE, Record<string, string>> & Par
 const loaders: Record<Exclude<Locale, typeof FALLBACK_LOCALE>, () => Promise<Record<string, string>>> = {
   fr: () => import("./fr").then((m) => m.fr),
   de: () => import("./de").then((m) => m.de),
+  it: () => import("./it").then((m) => m.it),
 };
 
 /** Resolves once `locale`'s dictionary is in `DICTS`; at once for English. */

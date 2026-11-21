@@ -73,6 +73,7 @@ describe("buildCommands and the mounted screen", () => {
       "action:theme",
       "action:locale:fr",
       "action:locale:de",
+      "action:locale:it",
       "action:signout",
     ]);
     unmount();

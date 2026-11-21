@@ -1,12 +1,13 @@
 /**
- * Every sentence the portal shows a person, in English, French and German
- * (root invariant 1, ADR-140). The portal is a separate deployable: it
- * cannot import the SPA's dictionaries, so it keeps its own, with the same
- * rule — `fr` and `de` are typed against the keys of `en`, so a missing
- * translation is a compile error. English and French are written; German is
- * translated (ADR-140 §2), drafted like the platform's, but neither this
- * German nor that of the student image's scripts is covered by the review
- * tracking of ADR-140 §7 or by the German copy lint (both in `apps/web`).
+ * Every sentence the portal shows a person, in English, French, German and
+ * Italian (root invariant 1, ADR-140). The portal is a separate deployable:
+ * it cannot import the SPA's dictionaries, so it keeps its own, with the
+ * same rule — `fr`, `de` and `it` are typed against the keys of `en`, so a
+ * missing translation is a compile error. English and French are written;
+ * German and Italian are translated (ADR-140 §2), drafted like the
+ * platform's, but neither these nor those of the student image's scripts
+ * are covered by the review tracking of ADR-140 §7 or by the copy lint
+ * (both in `apps/web`).
  *
  * The language comes from the browser's `Accept-Language`, English when it
  * names none of the portal's languages, as on the platform (ADR-140 §4,
@@ -218,10 +219,79 @@ const de: Record<MessageKey, string> = {
   portProxyDetail: "Der Online-Arbeitsbereich öffnet die Ports eines Programms nicht im Browser.",
 };
 
+const it: Record<MessageKey, string> = {
+  landingTitle: "Ambienti di sviluppo",
+  landingBody: "Un ambiente si apre dalla piattaforma, con il pulsante «Apri» dell'attività.",
+  back: "Indietro",
+  workspaceErrorTitle: "Non è stato possibile preparare lo spazio di lavoro",
+  workspaceErrorDetail:
+    "Non è stato possibile preparare lo spazio di lavoro: {cause}. Informare il team docente.",
+  sourceRepository: "il repository di origine",
+  causeNoAccess: "il portale non ha accesso a {where}",
+  causeNotFound: "repository {where} non trovato",
+  causeDenied: "accesso negato al repository {where}",
+  causeFetchFailed: "non è stato possibile recuperare {where}",
+  causeEmptyTemplate: "il repository modello del team docente non contiene alcun branch",
+  launchRefused: "Avvio rifiutato",
+  launchMissingToken: "Nessun token di avvio.",
+  launchExpired:
+    "Questo link di avvio è scaduto. Tornare alla piattaforma e aprire di nuovo l'attività.",
+  launchInvalid:
+    "Questo link di avvio non è valido. Tornare alla piattaforma e aprire di nuovo l'attività.",
+  launchIncomplete: "Questo link di avvio è incompleto.",
+  launchReplayed:
+    "Questo link di avvio è già stato usato. Tornare alla piattaforma e aprire di nuovo l'attività.",
+  launchUnknownAssignment:
+    "Questa attività non è stata sincronizzata dalla piattaforma. Informare il team docente: l'attività deve essere salvata sulla piattaforma prima di essere aperta.",
+  launchClosed: "Questa attività non è aperta in questo momento.",
+  launchSittingClosed: "La sua sessione su questa postazione è terminata. Chiamare la sorveglianza.",
+  launchRepoMissing:
+    "Il suo repository non è ancora pronto per questa attività. Riprovare tra un momento.",
+  launchBadAssignmentId: "Questa attività ha un identificativo che il portale non può usare.",
+  quotaTitle: "Quota raggiunta",
+  quotaDetail:
+    "Tutti i posti per gli ambienti messi a disposizione dal team docente sono occupati. Riprovare più tardi.",
+  reviewExpired:
+    "Questo link è scaduto. Tornare alla pagina del progetto e aprire di nuovo il repository nello spazio di lavoro.",
+  reviewInvalid:
+    "Questo link non è valido. Tornare alla pagina del progetto e aprire di nuovo il repository nello spazio di lavoro.",
+  reviewReplayed:
+    "Questo link è già stato usato. Tornare alla pagina del progetto e aprire di nuovo il repository nello spazio di lavoro.",
+  reviewRepoMissing: "Questo repository non è disponibile.",
+  reviewQuotaDetail:
+    "Tutti i posti nello spazio di lavoro di questo progetto sono occupati, o il team docente ha già due repository aperti nello spazio di lavoro. Chiuderne uno e riprovare.",
+  examOnlyInSeb: "Questo esame si apre solo da Safe Exam Browser.",
+  unknownAssignment: "Attività sconosciuta",
+  outsideSebTitle: "Sessione fuori da Safe Exam Browser",
+  outsideSebIntro:
+    "Questo esame si può aprire solo da Safe Exam Browser, avviato dal link fornito dal team docente.",
+  outsideSebHelp:
+    "Se si tratta di un errore, chiamare la sorveglianza. Non ricominciare da un altro browser.",
+  sebOtherMachine: "Questa sessione è stata aperta da un altro computer.",
+  sebNoExamSession: "Nessuna sessione d'esame valida in questo browser.",
+  sessionUnknownTitle: "Sessione sconosciuta",
+  sessionUnknownDetail: "Questa sessione non esiste, o non esiste più.",
+  sessionDeniedTitle: "Sessione non autorizzata",
+  sessionDeniedDetail:
+    "L'accesso di questo browser alla sessione è terminato, o non è mai stato concesso. Aprirla di nuovo dalla piattaforma.",
+  assignmentGoneDetail: "L'attività di questa sessione non esiste più.",
+  sessionClosedTitle: "Sessione chiusa",
+  sessionClosedDetail:
+    "Questa sessione è stata chiusa. Aprirla di nuovo dalla piattaforma. Il suo lavoro è conservato.",
+  reviewClosedDetail:
+    "Questo spazio di lavoro è stato chiuso, e non ne resta nulla. Aprire di nuovo il repository nello spazio di lavoro dalla pagina del progetto.",
+  sessionUnavailableTitle: "Sessione non disponibile",
+  sessionRestartFailed:
+    "Non è stato possibile riavviare il container. Il suo volume è intatto. Riprovare.",
+  sessionNoAddress: "Il container non ha un indirizzo.",
+  portProxyTitle: "Inoltro delle porte non disponibile",
+  portProxyDetail: "Lo spazio di lavoro online non apre nel browser le porte di un programma.",
+};
+
 /** The portal's own list (ADR-140 §4): not `@quiz/domain`'s `LOCALES`. */
-export const LANGS = ["fr", "en", "de"] as const;
+export const LANGS = ["fr", "en", "de", "it"] as const;
 export type Lang = (typeof LANGS)[number];
-const DICTS: Record<Lang, Record<MessageKey, string>> = { en, fr, de };
+const DICTS: Record<Lang, Record<MessageKey, string>> = { en, fr, de, it };
 /** What a reader whose browser names none of `LANGS` reads, as on the platform. */
 const FALLBACK: Lang = "en";
 
