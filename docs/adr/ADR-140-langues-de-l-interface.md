@@ -59,7 +59,8 @@ third language would have been a hunt rather than a list of compile errors.
 
 4. **One list, one registry.** `LOCALES` in `packages/domain/src/locales.ts`
    is the list of the platform's interface languages; the contracts read it
-   (`z.enum(LOCALES)`). Beside it: `LOCALE_INFO` (each language's endonym and `Intl` tag, §10),
+   (`z.enum(LOCALES)`). Beside it: `LOCALE_INFO` (each language's endonym
+   and `Intl` tag, §10),
    `FALLBACK_LOCALE` (English), `isLocale`, `matchLocale` (the first
    supported base language of a list of BCP-47 tags: `navigator.languages`,
    `Accept-Language`) and `dataLanguage` (§6). The written/translated
@@ -69,7 +70,8 @@ third language would have been a hunt rather than a list of compile errors.
    `"translated"`), with the types `WrittenLocale` and `TranslatedLocale`
    and `isWrittenLocale`. The privacy page (§5) is keyed by
    `WrittenLocale` and the review status test by `TranslatedLocale`; the
-   copy lint by `Locale`: a new language is a compile error there too. Outside that file, no code compares an
+   copy lint by `Locale`: a new language is a compile error there too.
+   Outside that file, no code compares an
    interface locale to a literal: a per-language value is a
    `Record<Locale, …>` or comes from the registry, so widening `LOCALES`
    names every place to fill as a compile error. Literals that remain
@@ -136,7 +138,8 @@ third language would have been a hunt rather than a list of compile errors.
    files may follow a language later: the help drawer and the assistant's
    corpus fall back to the English topic. No English or French output
    changes: dates and numbers keep their current `Intl` tags (open
-   question 75) *(superseded by §10, 2026-11-21)*. The voice (product owner, 2026-11-21, question 77): German
+   question 75) *(superseded by §10, 2026-11-21)*. The voice (product
+   owner, 2026-11-21, question 77): German
    addresses the reader as *Sie*, with Swiss spelling (*ss*, never *ß*) and
    guillemets «…»; Italian uses the formal *Lei* where an address is
    needed, and guillemets «…». The glossary of spec 01 §1.5 gains a column
@@ -155,7 +158,8 @@ third language would have been a hunt rather than a list of compile errors.
     `intlTag(locale)` beside its i18n machinery, at every `Intl` formatter
     and `toLocale*String`. The mails and Teams parameters keep their own
     date tags (`fr-CH`, `en-GB`, `de-CH`, in
-    `notifications/templates.ts`): their French numeric date with dots is production output, so for French the
+    `notifications/templates.ts`): their French numeric date with dots is
+    production output, so for French the
     two are different facts. The bare code stays everything else: the
     page's `<html lang>`, the account's `locale`, the dictionaries' key, a
     collation (`localeCompare`). The absolute dates of the account's date

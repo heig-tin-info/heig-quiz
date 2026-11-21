@@ -503,7 +503,7 @@ export function Stat({
 }) {
   const body = (
     <>
-      <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-fg-muted">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
         {Icon ? <Icon className="size-3.5 shrink-0 text-fg-faint" /> : null}
         {label}
         {aside ? <span className="ml-auto shrink-0 whitespace-nowrap pl-2 tabular-nums text-fg-faint">{aside}</span> : null}
