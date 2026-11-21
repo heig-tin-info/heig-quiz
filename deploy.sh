@@ -182,8 +182,10 @@ if [ "$environment" = production ] && [ -f .env.image ]; then
   # namespace, which this script, running as the host user, cannot write
   # (the first deploy carrying a migration was refused on exactly that,
   # 2026-11-21). The names travel as arguments, never inside the script text.
+  # `umask 077`: an exec session's umask is 000, and the first dump came out
+  # mode 666; a copy of production is its owner's alone.
   dump=
-  backup_sh() { "${COMPOSE[@]}" exec -T backup sh -c "$1" sh "${@:2}" < /dev/null; }
+  backup_sh() { "${COMPOSE[@]}" exec -T backup sh -c "umask 077; $1" sh "${@:2}" < /dev/null; }
   refuse_dump() {
     [ -z "$dump" ] || backup_sh 'rm -f "/backups/$1.tmp"' "$dump" || true
     echo "deploy: REFUSED, $1; the app was neither pulled nor restarted." >&2
