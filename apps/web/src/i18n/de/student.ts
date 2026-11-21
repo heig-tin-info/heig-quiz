@@ -257,9 +257,9 @@ export const student: Record<keyof typeof en, string> = {
   // the 404 above is deliberately the same one a stranger gets.
   "player.noSeatHint": "Treten Sie der Klasse in der Ansicht der Lehrperson bei («Der Klasse beitreten») und kehren Sie dann hierher zurück.",
   "player.noSeat.join": "Sie haben keinen Platz in der Klasse dieses Tests.",
-  "player.ipBlocked": "Dieser Test kann nicht aus diesem Netzwerk abgelegt werden.",
+  "player.ipBlocked": "Dieser Test kann nicht von diesem Netzwerk aus abgelegt werden.",
   "player.suspended.title": "Diese Station ist suspendiert",
-  "player.suspended.body": "Ihre Antworten sind gespeichert. Rufen Sie die Aufsicht: Die Prüfung geht weiter, sobald die Station erneut geprüft ist.",
+  "player.suspended.body": "Ihre Antworten sind gespeichert. Rufen Sie die Aufsicht: Die Prüfung geht weiter, sobald die Station erneut überprüft ist.",
   "feedback.download": "Kopie herunterladen",
   "feedback.title": "Ihre Ergebnisse",
   "feedback.classResults": "Klassenergebnisse zeigen",

@@ -229,8 +229,9 @@ are the written languages; a translated language (German, Italian) gains
 its own column in the pull request that adds it, translated from the
 English column.* *The German column (2026-11-21, ADR-140 §2, §9) is that
 translation, machine-drafted, not written: Swiss spelling (*ss*), the
-reader addressed as *Sie*; the copy lint refuses the German never-words it
-can detect.*
+reader addressed as *Sie*. Its never-words, which the copy lint refuses:
+Schüler, Dozent, Lehrer, Rückmeldung, einreichen, Benotung, Evaluation, and
+*das / ein Quiz* for an evaluation.*
 
 | Concept | English | French | German | Never (fr) |
 |---|---|---|---|---|
@@ -262,7 +263,7 @@ can detect.*
 | LLM, model, AI | AI | IA | KI | LLM, modèle, modèle de langage |
 | Runner | runner | exécuteur | Runner | runner, simulateur (the circuit simulator keeps *simulation*) |
 | Staff of a course | staff | équipe enseignante | Lehrteam | staff, équipe |
-| Teacher | teacher | enseignant·e in prose becomes a neutral turn; *enseignant* alone in a label | Lehrperson | professeur, prof |
+| Teacher | teacher | enseignant·e in prose becomes a neutral turn; *enseignant* alone in a label | Lehrperson; the course's owner role (*Teacher* in English) is *Kursleitung* | professeur, prof |
 | Student | student | étudiant (label); neutral turn in prose | Studierende (a plural or a neutral turn) | élève |
 | Classroom | classroom | classe | Klasse | salle, volée |
 | Roster | roster | liste des étudiants | Klassenliste | effectif, liste |

@@ -97,20 +97,21 @@ third language would have been a hunt rather than a list of compile errors.
    English it was drafted from, and a human review is recorded per key.
    *As built (2026-11-21, the `de` pull request):* one file per translated
    language beside the dictionaries, `apps/web/src/i18n/<lang>.status.json`,
-   one line per key, sorted: `drafted` holds, for every key, a short hash
-   of the English the value was drafted from; `reviewed` holds the keys a
-   person has read, each with a hash of the English and the translation as
-   read (empty for German: nobody has reviewed it). The test
-   `i18n/status.test.ts` fails on a key whose English changed since its
-   draft, naming it: its value is re-drafted, then re-stamped
-   (`I18N_STATUS=stamp`, the rewrite pattern of the copy lint); a review
-   whose English or translation changed since is stale, and the re-stamp
-   drops it. `I18N_STATUS=review=<lang>:<domain or key prefix>,…` records a
-   review, `I18N_STATUS=report` counts what is left per domain. The same
-   test holds a translated value to exactly the English placeholders, and
-   the copy lint (`copy.test.ts`) applies the Voice rules to it, with the
-   German rules of §9. The stamp records a claim, it does not check the
-   translation: a re-stamp without a re-draft shows only in the diff.
+   one line per key, sorted, mapping the key to a short hash of the English
+   its value was drafted from, or, once a person has reviewed it, to `r:`
+   and a hash of the English and the translation as read (no German key is
+   reviewed yet). The test `i18n/status.test.ts` fails on a key whose
+   English changed since its draft, naming its file: the value is
+   re-drafted, then re-stamped (`I18N_STATUS=stamp`, the rewrite pattern
+   of the copy lint). A review whose English or translation changed is
+   stale and fails too; the re-stamp turns it back into a draft stamp, and
+   a person records it again. `I18N_STATUS=review=<lang>:<marks>` records
+   reviews, a mark being one key, a key prefix ending in a dot, or a
+   domain; a mark that matches no key fails. The same test holds a
+   translated value to exactly the English placeholders, and the copy lint
+   (`copy.test.ts`) applies the Voice rules to it, with the German rules of
+   §9. The stamp records a claim, it does not check the translation: a
+   re-stamp without a re-draft shows only in the diff.
 
 8. **No i18n library.** Dictionaries stay hand-typed TypeScript next to
    their owner (the web app, the server's mail and Teams texts, the

@@ -39,7 +39,7 @@ export const journal: Record<keyof typeof en, string> = {
   "journal.warning.front_matter_yaml.line": "Der Front-Matter-Block ist kein gültiges YAML (Zeile {line}): Die Seite wird ohne ihn angezeigt.",
   "journal.warning.front_matter_not_mapping": "Der Front-Matter-Block ist keine Liste von Schlüsseln: Er wird ignoriert.",
   "journal.warning.visible_from_invalid": "visible_from ist kein Datum («{value}»): Die Seite bleibt sichtbar.",
-  "journal.warning.raw_html": "Reines HTML wird als Text angezeigt.",
+  "journal.warning.raw_html": "Roher HTML-Code wird als Text angezeigt.",
   "journal.warning.external_image": "Das Bild {href} liegt ausserhalb des Repositorys und wurde weggelassen.",
   "journal.warning.target_missing": "Der Link {href} führt im Journal ins Leere ({path}).",
   "journal.warning.asset_too_large": "Die Datei {path} ist grösser als 5 MB und wird nicht ausgeliefert.",

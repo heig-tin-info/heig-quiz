@@ -85,7 +85,7 @@ export const gradebook: Record<keyof typeof en, string> = {
   "gbook.refusal.archived": "Diese Klasse ist archiviert: Das Notenbuch ist schreibgeschützt.",
   "gbook.refusal.gradeExists": "Hier steht bereits eine Note.",
   "gbook.refusal.aboveMax": "Die Punkte liegen über dem Maximum.",
-  "gbook.refusal.ownerRequired": "Nur eine Lehrperson des Kurses kann eine freigegebene Note ersetzen.",
+  "gbook.refusal.ownerRequired": "Nur die Kursleitung kann eine freigegebene Note ersetzen.",
   "gbook.refusal.componentNameTaken": "Eine andere Komponente des Kurses trägt diesen Namen.",
   "gbook.refusal.componentInUse": "Diese Komponente enthält noch Spalten. Verschieben Sie diese zuerst.",
   "gbook.noComponent.help": "In keiner Komponente: zählt in keinem Durchschnitt.",

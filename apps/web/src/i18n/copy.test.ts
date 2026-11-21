@@ -26,7 +26,10 @@ import { fr } from "./fr";
  * show in the JSON diff.
  */
 
-type Lang = "fr" | "en" | "de";
+/** The dictionaries the lint reads: the written English and French, the translated German (ADR-140). */
+const DICTS = { fr, en, de };
+type Lang = keyof typeof DICTS;
+const DICT: Record<Lang, Record<string, string>> = DICTS;
 type Rule = {
   name: string;
   langs: Lang[];
@@ -67,7 +70,7 @@ const COMPONENT_KEY = /^(courses\.(settings\.)?components|gbook\.(settings|head|
 const REPARTITION = /\brépartitions?\b(?! (des (notes|réponses|points|scores)|par question)\b)/i;
 
 /** Every language of the dictionary. */
-const ALL: Lang[] = ["fr", "en", "de"];
+const ALL = Object.keys(DICT) as Lang[];
 const FR: Lang[] = ["fr"];
 const EN: Lang[] = ["en"];
 const DE: Lang[] = ["de"];
@@ -130,7 +133,8 @@ const RULES: Rule[] = [
   { name: "word-account-archived", langs: EN, fix: "dormant; archived is a classroom's", test: (t, k) => ACCOUNT_KEY.test(k) && has(/archiv/i)(t) },
   // A student's request on a graded question (ADR-139): a contestation, never a claim nor an appeal.
   { name: "word-contestation", langs: FR, fix: "contestation, contester", test: has(/\b(réclamations?|recours)\b/i) },
-  // The German glossary's never-words (§1.5): each is wrong wherever it stands.
+  // The German never-words of the glossary (§1.5), each wrong wherever it stands: Schüler,
+  // Dozent, Lehrer, Rückmeldung, einreichen, Benotung, Evaluation, and «das/ein Quiz» for an evaluation.
   { name: "word-schueler", langs: DE, fix: "Studierende", test: has(/\bSchüler/i) },
   { name: "word-dozent", langs: DE, fix: "Lehrperson", test: has(/\bDozent/i) },
   { name: "word-lehrer", langs: DE, fix: "Lehrperson, Lehrteam", test: has(/\bLehrer(in|innen|n|s)?\b/i) },
@@ -145,7 +149,6 @@ const RULES: Rule[] = [
   { name: "subtext-over-110", langs: ALL, fix: "one sentence of at most 110 characters, carrying a fact the label does not", test: (t, k) => SUBTEXT.includes(suffix(k)) && longerThan(110)(t) },
 ];
 
-const DICT: Record<Lang, Record<string, string>> = { fr, en, de };
 const EXCEPTIONS_PATH = join(dirname(fileURLToPath(import.meta.url)), "copy.exceptions.json");
 const exceptions = JSON.parse(readFileSync(EXCEPTIONS_PATH, "utf8")) as Record<string, string[]>;
 
@@ -214,15 +217,15 @@ describe("copy lint of the French help pages (N-I18N-04)", () => {
  * exception, and every word is short — a label, or one sentence of a toast's
  * length at most.
  */
-const DOCUMENT_WORDS: Record<"fr" | "en", Record<string, string>> = {
+const DOCUMENT_WORDS: Partial<Record<Lang, Record<string, string>>> = {
   fr: Object.fromEntries(Object.entries(FR_LABELS)),
   en: Object.fromEntries(Object.entries(EN_LABELS)),
 };
 const DOCUMENT_WORD_MAX = 80;
 
 describe("copy lint of a document's fixed words (N-I18N-04, ADR-125)", () => {
-  it.each(["fr", "en"] as const)("%s: every rule holds, every word is short", (lang) => {
-    const words = DOCUMENT_WORDS[lang];
+  it.each(Object.keys(DOCUMENT_WORDS) as Lang[])("%s: every rule holds, every word is short", (lang) => {
+    const words = DOCUMENT_WORDS[lang]!;
     const offenders = RULES.filter((rule) => rule.langs.includes(lang)).flatMap((rule) =>
       Object.keys(words)
         .filter((key) => rule.test(words[key]!, key))
