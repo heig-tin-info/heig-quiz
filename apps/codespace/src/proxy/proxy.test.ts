@@ -265,7 +265,7 @@ describe("proxy refusals", () => {
   it("403 without a session cookie", async () => {
     const res = await portal.app.inject({ method: "GET", url: "/s/s1/" });
     expect(res.statusCode).toBe(403);
-    expect(res.body).toContain("Session non autorisée");
+    expect(res.body).toContain("Session not allowed");
   });
 
   it("403 with a cookie from another session", async () => {
@@ -289,7 +289,7 @@ describe("proxy refusals", () => {
       cookies: { [SESSION_COOKIE]: cookieValue("s1", "wrong-token") },
     });
     expect(res.statusCode).toBe(403);
-    expect(res.body).toContain("Session non autorisée");
+    expect(res.body).toContain("Session not allowed");
     // No PLATFORM_URL set here: the link stays the portal's own, never the localhost default (#1101).
     expect(res.body).toContain('href="/"');
   });
@@ -337,7 +337,7 @@ describe("exam mode — invariant 5: the proxy reads no SEB header", () => {
       },
     });
     expect(res.statusCode).toBe(403);
-    expect(res.body).toContain("autre poste");
+    expect(res.body).toContain("another computer");
   });
 
   it("refuses an exam cookie issued for another session", async () => {

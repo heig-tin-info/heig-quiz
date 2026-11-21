@@ -351,4 +351,18 @@ describe("battery under SEB", () => {
     expect(button?.textContent).toMatch(/^\u{1F50B} 15\u00a0% · \d\d:\d\d · 25 min restantes$/u);
     expect(button?.getAttribute("aria-label")).toBe("Batterie 15\u00a0%");
   });
+
+  it("speaks German when the workspace does, English for a language it lacks", async () => {
+    const battery = fakeBattery({ level: 0.15, charging: false, chargingTime: Infinity, dischargingTime: 1500 });
+    const { doc } = page({ seb: true, battery, before: (win) => (win["_VSCODE_NLS_LANGUAGE"] = "de-ch") });
+    await nextTask();
+    const button = doc.getElementById("heig-seb-battery");
+    button?.click();
+    expect(button?.textContent).toMatch(/^\u{1F50B} 15\u00a0% \u00b7 \d\d:\d\d \u00b7 noch 25 min$/u);
+    expect(button?.getAttribute("aria-label")).toBe("Akku 15\u00a0%");
+
+    const other = page({ seb: true, battery, before: (win) => (win["_VSCODE_NLS_LANGUAGE"] = "it") });
+    await nextTask();
+    expect(other.doc.getElementById("heig-seb-battery")?.getAttribute("aria-label")).toBe("Battery 15%");
+  });
 });

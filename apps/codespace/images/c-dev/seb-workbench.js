@@ -71,12 +71,15 @@
   const TICK_MS = 30_000;
 
   /**
-   * The workspace UI's language, French when it starts with "fr", as the
-   * status bar extension does. French is not reached today: the image ships
-   * no language pack, so VS Code's language is always "en" (extension.js).
+   * The workspace UI's language: its base ("fr", "de") when this table has
+   * it, English otherwise, as the status bar extension does (ADR-140 §4).
+   * French and German are not reached today: the image ships no language
+   * pack, so VS Code's language is always "en" (extension.js). `tag` is the
+   * `Intl` tag of the time.
    */
   const STRINGS = {
     en: {
+      tag: "en-GB",
       percent: (n) => `${n}%`,
       charging: "charging",
       full: (d) => `full in ${d}`,
@@ -85,12 +88,22 @@
       tooltip: "Battery. Click to show or hide the time.",
     },
     fr: {
+      tag: "fr-CH",
       percent: (n) => `${n} %`,
       charging: "en charge",
       full: (d) => `pleine dans ${d}`,
       left: (d) => `${d} restantes`,
       label: (n, charging) => `Batterie ${n} %${charging ? ", en charge" : ""}`,
       tooltip: "Batterie. Cliquez pour afficher ou masquer l'heure.",
+    },
+    de: {
+      tag: "de-CH",
+      percent: (n) => `${n} %`,
+      charging: "wird geladen",
+      full: (d) => `voll in ${d}`,
+      left: (d) => `noch ${d}`,
+      label: (n, charging) => `Akku ${n} %${charging ? ", wird geladen" : ""}`,
+      tooltip: "Akku. Klicken Sie, um die Uhrzeit ein- oder auszublenden.",
     },
   };
 
@@ -239,13 +252,13 @@
         ].join(";");
 
         function render() {
-          const language = String(win._VSCODE_NLS_LANGUAGE || "en").toLowerCase();
-          const t = language.startsWith("fr") ? STRINGS.fr : STRINGS.en;
+          const base = String(win._VSCODE_NLS_LANGUAGE || "en").toLowerCase().split("-")[0];
+          const t = Object.prototype.hasOwnProperty.call(STRINGS, base) ? STRINGS[base] : STRINGS.en;
           const pct = Math.round(battery.level * 100);
           const level = battery.charging ? "ok" : pct <= 10 ? "error" : pct <= 20 ? "warning" : "ok";
           let text = `\u{1F50B} ${t.percent(pct)}${battery.charging ? " ⚡" : ""}`;
           if (expanded) {
-            const time = new Date().toLocaleTimeString(language.startsWith("fr") ? "fr-CH" : "en-GB", {
+            const time = new Date().toLocaleTimeString(t.tag, {
               hour: "2-digit",
               minute: "2-digit",
             });

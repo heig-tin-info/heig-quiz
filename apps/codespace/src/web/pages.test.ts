@@ -31,19 +31,38 @@ describe("pages", () => {
     expect(landingPage("en")).toContain(t("en", "landingTitle"));
     expect(landingPage("fr")).toContain('<html lang="fr">');
     expect(landingPage("fr")).toContain("Environnements de développement");
+    expect(landingPage("de")).toContain('<html lang="de">');
+    expect(landingPage("de")).toContain("Entwicklungsumgebungen");
+  });
+
+  it("German names a failed workspace's cause in German", () => {
+    const html = workspaceErrorPage("de", { key: "causeNotFound", repo: "org/depot" });
+    expect(html).toContain("Repository org/depot nicht gefunden");
+    expect(workspaceErrorPage("de", { key: "causeFetchFailed", repo: null })).toContain(
+      "das Quell-Repository konnte nicht abgerufen werden",
+    );
   });
 });
 
 describe("langOf", () => {
   it.each([
-    [undefined, "fr"],
-    ["", "fr"],
-    ["de-CH", "fr"],
+    // English when the browser names none of the portal's languages (ADR-140 §4).
+    [undefined, "en"],
+    ["", "en"],
+    ["it", "en"],
+    ["it-CH,it;q=0.9", "en"],
+    ["de", "de"],
+    ["de-CH", "de"],
     ["en-US,en;q=0.9", "en"],
     ["fr-CH,fr;q=0.9,en;q=0.8", "fr"],
-    ["de-CH,de;q=0.9,en;q=0.8,fr;q=0.7", "en"],
+    ["fr", "fr"],
+    ["de-CH,de;q=0.9,en;q=0.8,fr;q=0.7", "de"],
+    ["it-CH,en;q=0.8,fr;q=0.9", "fr"],
+    ["fr-CH;q=0.9, de;q=0.8", "fr"],
+    ["de;q=0.8, fr-CH;q=0.9", "fr"],
     ["fr;q=0.5,en;q=0.8", "en"],
     ["en;q=0,fr", "fr"],
+    ["de;q=0,it", "en"],
   ] as const)("%s → %s", (header, lang) => {
     expect(langOf(header)).toBe(lang);
   });

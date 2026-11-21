@@ -193,7 +193,7 @@ describe("the close of a kiosk sitting (ADR-089)", () => {
     const refused = await get("station", station);
     expect(refused.statusCode).toBe(403);
     // The station's words, not the SEB page.
-    expect(refused.body).toContain("Votre session sur ce poste est terminée");
+    expect(refused.body).toContain("Your session on this station has ended");
     expect(refused.body).not.toContain("Safe Exam Browser");
 
     await portal.close();

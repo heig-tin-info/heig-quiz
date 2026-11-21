@@ -32,6 +32,8 @@ import { JTI_RETENTION_AFTER_EXP_MS, classroomRoutes, consumeJti } from "./route
 const SECRET = "test-launch-secret-0123456789012345";
 const CLASSROOM = "http://classroom.test";
 const PORTAL = "http://portal.test";
+/** A French browser: the refusals below assert the French wording (no header reads English, ADR-140 §4). */
+const FR = { "accept-language": "fr-CH,fr;q=0.9" };
 
 function testConfig(over: Record<string, string> = {}): AppConfig {
   return loadConfig({
@@ -478,11 +480,29 @@ describe("GET /launch", () => {
     expect(reply.statusCode).toBe(200);
   }
 
-  it("403 without a token", async () => {
-    const reply = await h.app.inject({ url: "/launch" });
+  it("403 without a token, in English to a browser that names none of the portal's languages", async () => {
+    for (const headers of [{}, { "accept-language": "it-CH,it;q=0.9" }]) {
+      const reply = await h.app.inject({ url: "/launch", headers });
+      expect(reply.statusCode).toBe(403);
+      expect(reply.body).toContain('<html lang="en">');
+      expect(reply.body).toContain("Launch refused");
+    }
+  });
+
+  it("refuses in French to a French browser", async () => {
+    const reply = await h.app.inject({ url: "/launch", headers: FR });
     expect(reply.statusCode).toBe(403);
-    expect(reply.body).toContain("Lancement refusé");
     expect(reply.body).toContain('<html lang="fr">');
+    expect(reply.body).toContain("Lancement refusé");
+    expect(reply.body).toContain("Aucun jeton de lancement.");
+  });
+
+  it("refuses in German to a German browser", async () => {
+    const reply = await h.app.inject({ url: "/launch", headers: { "accept-language": "de-CH,de;q=0.9,en;q=0.8" } });
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toContain('<html lang="de">');
+    expect(reply.body).toContain("Start abgelehnt");
+    expect(reply.body).toContain("Kein Start-Token.");
   });
 
   it("refuses in English to a browser that asks for it", async () => {
@@ -507,7 +527,7 @@ describe("GET /launch", () => {
   it("403 on an expired token", async () => {
     await syncedAssignment();
     const token = await launchToken({ iat: now() - 7200, exp: now() - 3600 });
-    const reply = await h.app.inject({ url: `/launch?token=${token}` });
+    const reply = await h.app.inject({ url: `/launch?token=${token}`, headers: FR });
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toContain("expiré");
   });
@@ -523,7 +543,7 @@ describe("GET /launch", () => {
     const token = await launchToken();
     const first = await h.app.inject({ url: `/launch?token=${token}` });
     expect(first.statusCode).toBe(303);
-    const second = await h.app.inject({ url: `/launch?token=${token}` });
+    const second = await h.app.inject({ url: `/launch?token=${token}`, headers: FR });
     expect(second.statusCode).toBe(403);
     expect(second.body).toContain("déjà servi");
     expect(h.starts).toHaveLength(1);
@@ -535,7 +555,7 @@ describe("GET /launch", () => {
     const token = await launchToken({ iat: now() - 310, exp: now() - 10 });
     expect((await h.app.inject({ url: `/launch?token=${token}` })).statusCode).toBe(303);
     // The replay's own purge runs first: it must not sweep the row away.
-    const replay = await h.app.inject({ url: `/launch?token=${token}` });
+    const replay = await h.app.inject({ url: `/launch?token=${token}`, headers: FR });
     expect(replay.statusCode).toBe(403);
     expect(replay.body).toContain("déjà servi");
     expect(h.starts).toHaveLength(1);
@@ -550,14 +570,14 @@ describe("GET /launch", () => {
 
   it("403 on an assignment not synchronized from the platform", async () => {
     const token = await launchToken({ assignmentId: "a-never-seen" });
-    const reply = await h.app.inject({ url: `/launch?token=${token}` });
+    const reply = await h.app.inject({ url: `/launch?token=${token}`, headers: FR });
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toContain("non synchronisée depuis la plateforme");
   });
 
   it("403 outside the assignment window", async () => {
     await syncedAssignment({ deadlineAt: "2020-06-01T00:00:00.000Z" });
-    const reply = await h.app.inject({ url: `/launch?token=${await launchToken()}` });
+    const reply = await h.app.inject({ url: `/launch?token=${await launchToken()}`, headers: FR });
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toContain("fenêtre d'ouverture");
   });
@@ -573,7 +593,7 @@ describe("GET /launch", () => {
 
   it("403 when the token carries no repository", async () => {
     await syncedAssignment();
-    const reply = await h.app.inject({ url: `/launch?token=${await launchToken({ repo: null })}` });
+    const reply = await h.app.inject({ url: `/launch?token=${await launchToken({ repo: null })}`, headers: FR });
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toContain("dépôt");
     expect(h.starts).toHaveLength(0);
@@ -686,7 +706,7 @@ describe("GET /launch", () => {
     it("429 when the teacher's live sessions reach the quota", async () => {
       await syncedAssignment({ quota: { maxActiveSessions: 1 } });
       occupy("u-other", "a-lab");
-      const reply = await h.app.inject({ url: `/launch?token=${await launchToken()}` });
+      const reply = await h.app.inject({ url: `/launch?token=${await launchToken()}`, headers: FR });
       expect(reply.statusCode).toBe(429);
       expect(reply.body).toContain("Quota atteint");
       expect(h.starts).toHaveLength(0);
@@ -958,7 +978,7 @@ describe("GET /review", () => {
   });
 
   const review = async (over: Record<string, unknown> = {}) =>
-    h.app.inject({ url: `/review?token=${await reviewToken(over)}` });
+    h.app.inject({ url: `/review?token=${await reviewToken(over)}`, headers: FR });
 
   /** A live session of `student` on `assignmentId`, carried by the holder Tania. */
   function occupy(student: string, assignmentId: string): string {
@@ -1042,10 +1062,10 @@ describe("GET /review", () => {
 
   it("burns the jti before any other check: a refused token stays refused (invariant 7)", async () => {
     const token = await reviewToken({ repo: null });
-    const first = await h.app.inject({ url: `/review?token=${token}` });
+    const first = await h.app.inject({ url: `/review?token=${token}`, headers: FR });
     expect(first.statusCode).toBe(403);
     expect(first.body).toContain("pas disponible");
-    const replay = await h.app.inject({ url: `/review?token=${token}` });
+    const replay = await h.app.inject({ url: `/review?token=${token}`, headers: FR });
     expect(replay.statusCode).toBe(403);
     expect(replay.body).toContain("déjà servi");
     expect(h.starts).toHaveLength(0);

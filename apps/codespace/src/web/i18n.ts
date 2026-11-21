@@ -1,13 +1,15 @@
 /**
- * Every sentence the portal shows a person, in English and in French (root
- * invariant 1). The portal is a separate deployable: it cannot import the
- * SPA's dictionaries, so it keeps its own two, with the same rule — `fr` is
- * typed against the keys of `en`, so a missing translation is a compile
- * error.
+ * Every sentence the portal shows a person, in English, French and German
+ * (root invariant 1, ADR-140). The portal is a separate deployable: it
+ * cannot import the SPA's dictionaries, so it keeps its own, with the same
+ * rule — `fr` and `de` are typed against the keys of `en`, so a missing
+ * translation is a compile error. English and French are written; German is
+ * translated (ADR-140 §2).
  *
- * The language comes from the browser's `Accept-Language`, French by
- * default (the students of HEIG-VD). Placeholders are `{name}`, filled by
- * `t()`; the HTML around them escapes the result.
+ * The language comes from the browser's `Accept-Language`, English when it
+ * names none of the portal's languages, as on the platform (ADR-140 §4,
+ * settled question 76). Placeholders are `{name}`, filled by `t()`; the HTML
+ * around them escapes the result.
  */
 import type { FastifyRequest } from "fastify";
 
@@ -146,13 +148,84 @@ const fr: Record<MessageKey, string> = {
   portProxyDetail: "L'espace de travail en ligne n'ouvre pas les ports d'un programme dans le navigateur.",
 };
 
-export const LANGS = ["fr", "en"] as const;
+const de: Record<MessageKey, string> = {
+  landingTitle: "Entwicklungsumgebungen",
+  landingBody: "Eine Umgebung wird auf der Plattform geöffnet, mit der Schaltfläche «Öffnen» der Aktivität.",
+  back: "Zurück",
+  workspaceErrorTitle: "Der Arbeitsbereich konnte nicht vorbereitet werden",
+  workspaceErrorDetail:
+    "Der Arbeitsbereich konnte nicht vorbereitet werden: {cause}. Wenden Sie sich an das Lehrteam.",
+  sourceRepository: "das Quell-Repository",
+  causeNoAccess: "das Portal hat keinen Zugriff auf {where}",
+  causeNotFound: "Repository {where} nicht gefunden",
+  causeDenied: "Zugriff auf Repository {where} verweigert",
+  causeFetchFailed: "{where} konnte nicht abgerufen werden",
+  causeEmptyTemplate: "die Vorlage der Lehrperson enthält keinen Branch",
+  launchRefused: "Start abgelehnt",
+  launchMissingToken: "Kein Start-Token.",
+  launchExpired:
+    "Dieser Startlink ist abgelaufen. Kehren Sie zur Plattform zurück und öffnen Sie die Aktivität erneut.",
+  launchInvalid:
+    "Dieser Startlink ist ungültig. Kehren Sie zur Plattform zurück und öffnen Sie die Aktivität erneut.",
+  launchIncomplete: "Dieser Startlink ist unvollständig.",
+  launchReplayed:
+    "Dieser Startlink wurde bereits verwendet. Kehren Sie zur Plattform zurück und öffnen Sie die Aktivität erneut.",
+  launchUnknownAssignment:
+    "Diese Aktivität wurde nicht von der Plattform synchronisiert. Wenden Sie sich an das Lehrteam: Die Aktivität muss auf der Plattform gespeichert sein, bevor sie geöffnet wird.",
+  launchClosed: "Diese Aktivität ist zurzeit nicht offen.",
+  launchSittingClosed: "Ihre Sitzung an dieser Station ist beendet. Rufen Sie die Aufsicht.",
+  launchRepoMissing:
+    "Ihr Repository ist für diese Aktivität noch nicht bereit. Versuchen Sie es gleich noch einmal.",
+  launchBadAssignmentId: "Diese Aktivität hat eine Kennung, die das Portal nicht verwenden kann.",
+  quotaTitle: "Kontingent erreicht",
+  quotaDetail: "Alle Umgebungsplätze Ihrer Lehrperson sind belegt. Versuchen Sie es später erneut.",
+  reviewExpired:
+    "Dieser Link ist abgelaufen. Kehren Sie zur Projektseite zurück und öffnen Sie das Repository erneut im Arbeitsbereich.",
+  reviewInvalid:
+    "Dieser Link ist ungültig. Kehren Sie zur Projektseite zurück und öffnen Sie das Repository erneut im Arbeitsbereich.",
+  reviewReplayed:
+    "Dieser Link wurde bereits verwendet. Kehren Sie zur Projektseite zurück und öffnen Sie das Repository erneut im Arbeitsbereich.",
+  reviewRepoMissing: "Dieses Repository ist nicht verfügbar.",
+  reviewQuotaDetail:
+    "Alle Plätze im Arbeitsbereich für dieses Projekt sind belegt, oder das Lehrteam hat bereits zwei Repositories im Arbeitsbereich geöffnet. Schliessen Sie eines und versuchen Sie es erneut.",
+  examOnlyInSeb: "Diese Prüfung lässt sich nur in Safe Exam Browser öffnen.",
+  unknownAssignment: "Unbekannte Aktivität",
+  outsideSebTitle: "Sitzung ausserhalb von Safe Exam Browser",
+  outsideSebIntro:
+    "Diese Prüfung lässt sich nur in Safe Exam Browser öffnen, gestartet über den Link Ihrer Lehrperson.",
+  outsideSebHelp:
+    "Wenn Sie einen Fehler vermuten, rufen Sie die Aufsicht. Starten Sie nicht in einem anderen Browser neu.",
+  sebOtherMachine: "Diese Sitzung wurde von einem anderen Computer aus geöffnet.",
+  sebNoExamSession: "Keine gültige Prüfungssitzung in diesem Browser.",
+  sessionUnknownTitle: "Unbekannte Sitzung",
+  sessionUnknownDetail: "Diese Sitzung existiert nicht oder nicht mehr.",
+  sessionDeniedTitle: "Sitzung nicht erlaubt",
+  sessionDeniedDetail:
+    "Der Zugriff dieses Browsers auf die Sitzung ist beendet oder wurde nie erteilt. Öffnen Sie sie erneut über die Plattform.",
+  assignmentGoneDetail: "Die Aktivität dieser Sitzung existiert nicht mehr.",
+  sessionClosedTitle: "Sitzung geschlossen",
+  sessionClosedDetail:
+    "Diese Sitzung wurde geschlossen. Öffnen Sie sie erneut über die Plattform. Ihre Arbeit bleibt erhalten.",
+  reviewClosedDetail:
+    "Dieser Arbeitsbereich wurde geschlossen, und nichts davon bleibt erhalten. Öffnen Sie das Repository auf der Projektseite erneut im Arbeitsbereich.",
+  sessionUnavailableTitle: "Sitzung nicht verfügbar",
+  sessionRestartFailed:
+    "Der Container konnte nicht neu gestartet werden. Ihr Volume ist intakt. Versuchen Sie es erneut.",
+  sessionNoAddress: "Der Container hat keine Adresse.",
+  portProxyTitle: "Portweiterleitung nicht verfügbar",
+  portProxyDetail: "Der Online-Arbeitsbereich öffnet die Ports eines Programms nicht im Browser.",
+};
+
+/** The portal's own list (ADR-140 §4): not `@quiz/domain`'s `LOCALES`. */
+export const LANGS = ["fr", "en", "de"] as const;
 export type Lang = (typeof LANGS)[number];
-const DICTS: Record<Lang, Record<MessageKey, string>> = { en, fr };
+const DICTS: Record<Lang, Record<MessageKey, string>> = { en, fr, de };
+/** What a reader whose browser names none of `LANGS` reads, as on the platform. */
+const FALLBACK: Lang = "en";
 
 /**
- * The first of `en` / `fr` in the browser's preference order, French when it
- * names neither. Quality values are honoured; the order of equal ones is kept.
+ * The first of `LANGS` in the browser's preference order, English when it
+ * names none. Quality values are honoured; the order of equal ones is kept.
  */
 export function langOf(acceptLanguage: string | undefined): Lang {
   const ranked = (acceptLanguage ?? "")
@@ -164,7 +237,7 @@ export function langOf(acceptLanguage: string | undefined): Lang {
     })
     .filter((r) => r.q > 0)
     .sort((a, b) => b.q - a.q || a.index - b.index);
-  return ranked.map((r) => r.lang).find((l): l is Lang => (LANGS as readonly string[]).includes(l)) ?? "fr";
+  return ranked.map((r) => r.lang).find((l): l is Lang => (LANGS as readonly string[]).includes(l)) ?? FALLBACK;
 }
 
 export function requestLang(request: Pick<FastifyRequest, "headers">): Lang {

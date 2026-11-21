@@ -405,7 +405,8 @@ container yet: the decisions are `update.js`'s, tested on real repositories
 by hand after a rebuild (open a lab after a sync: the item, its tooltip,
 Apply, then a push).
 
-French as soon as `vscode.env.language` starts with `fr`, English otherwise.
+French or German as soon as `vscode.env.language` starts with `fr` or `de`, English
+otherwise (dates in `fr-CH`, `de-CH`, `en-GB`).
 
 ### Return link trusted (2026-10-08)
 
@@ -684,7 +685,7 @@ Ctrl+D in the terminal.
 
 Known limits:
 
-- **The terminal is always "Program".** The extension has French strings,
+- **The terminal is always "Program".** The extension has French and German strings,
   but code-server shows its interface, and gives extensions
   `vscode.env.language`, in English: the image ships no language pack (the
   comment above `pickStrings` in `extension/extension.js` says how one
@@ -824,7 +825,7 @@ Limits:
   script.
 - The battery button sits in the middle of the status bar; a very narrow
   window can make it cover an item.
-- Text in French only once the image ships a language pack (as for the
+- Text in French or German only once the image ships a language pack (as for the
   status bar extension).
 
 ## Resolver: `/etc/resolv.conf` shipped by the image
