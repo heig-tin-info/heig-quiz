@@ -174,31 +174,40 @@ if [ "$environment" = production ] && [ -f .env.image ]; then
   # no dump. The dump is read back whole (`pg_restore` to /dev/null), since
   # a custom-format dump written to a pipe does not notice a short write.
   # Any failure refuses the deploy before anything is pulled or the app
-  # restarted (exit 4). The ten newest `pre-*.dump` are kept here; the
-  # off-site copy takes them at its next nightly run; the daily
-  # `quiz-*.dump` are the backup service's.
+  # restarted (exit 4). The ten newest `pre-*.dump` are kept; the off-site
+  # copy takes them at its next nightly run; the daily `quiz-*.dump` are the
+  # backup service's.
+  # The dump is written BY the `backup` container, into its /backups: under
+  # rootless Docker that directory belongs to a uid of the container's user
+  # namespace, which this script, running as the host user, cannot write
+  # (the first deploy carrying a migration was refused on exactly that,
+  # 2026-11-21). The names travel as arguments, never inside the script text.
+  # `umask 077`: an exec session's umask is 000, and the first dump came out
+  # mode 666; a copy of production is its owner's alone.
+  dump=
+  backup_sh() { "${COMPOSE[@]}" exec -T backup sh -c "umask 077; $1" sh "${@:2}" < /dev/null; }
   refuse_dump() {
-    [ -z "${dump:-}" ] || rm -f "$dump.tmp"
+    [ -z "$dump" ] || backup_sh 'rm -f "/backups/$1.tmp"' "$dump" || true
     echo "deploy: REFUSED, $1; the app was neither pulled nor restarted." >&2
     back_to_running
     exit 4
   }
-  if [ -z "$postgres" ]; then
-    "${COMPOSE[@]}" up -d --wait --wait-timeout 60 postgres < /dev/null \
-      || refuse_dump "PostgreSQL did not start for the pre-migration check"
-  fi
+  # Start what is stopped, never recreate what runs (a recreated database
+  # before its dump is not what this step promises).
+  "${COMPOSE[@]}" up -d --no-recreate --wait --wait-timeout 60 postgres backup < /dev/null \
+    || refuse_dump "PostgreSQL or the backup service did not start for the pre-migration check"
   journal=$(sed -n 's/.*"when": *\([0-9]*\).*/\1/p' apps/api/drizzle/meta/_journal.json | sort -n | tail -n 1) || journal=
   applied=$("${COMPOSE[@]}" exec -T postgres psql -XAtq -v ON_ERROR_STOP=1 -U quiz -d quiz \
     -c 'SELECT coalesce(max(created_at), 0) FROM drizzle.__drizzle_migrations' < /dev/null) || applied=
   if ! [[ "$journal" =~ ^[0-9]+$ && "$applied" =~ ^[0-9]+$ ]] || [ "$journal" -gt "$applied" ]; then
-    dump="backups/pre-$(git rev-parse --short=8 HEAD)-$(date -u +%Y%m%dT%H%M%SZ).dump"
-    "${COMPOSE[@]}" exec -T postgres pg_dump -Fc -U quiz -d quiz < /dev/null > "$dump.tmp" \
+    dump="pre-$(git rev-parse --short=8 HEAD)-$(date -u +%Y%m%dT%H%M%SZ).dump"
+    backup_sh 'pg_dump -Fc -h postgres -U quiz quiz > "/backups/$1.tmp"' "$dump" \
       || refuse_dump "the pre-migration dump failed"
-    "${COMPOSE[@]}" exec -T postgres pg_restore -f /dev/null < "$dump.tmp" \
+    backup_sh 'pg_restore -f /dev/null "/backups/$1.tmp" && mv "/backups/$1.tmp" "/backups/$1"' "$dump" \
       || refuse_dump "the pre-migration dump does not read back whole"
-    mv "$dump.tmp" "$dump"
-    echo "deploy: a migration is pending; database dumped to $dump ($(stat -c %s "$dump") bytes, read back whole)."
-    ls -1t backups/pre-*.dump 2>/dev/null | tail -n +11 | xargs -r rm -- || true
+    size=$(backup_sh 'wc -c < "/backups/$1"' "$dump") || size='?'
+    echo "deploy: a migration is pending; database dumped to backups/$dump ($size bytes, read back whole)."
+    backup_sh 'ls -1t /backups/pre-*.dump 2>/dev/null | tail -n +11 | xargs -r rm --' || true
   fi
 fi
 
