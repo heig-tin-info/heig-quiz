@@ -1005,7 +1005,9 @@ archiving) is not set up; it comes only if an hour proves too much.
   counts; the day's latest is also `quiz-<date>.dump` (a hard link, the 30
   newest kept). Mode 600. A logical dump, restorable table by table. It
   lives on the VM it protects; the off-site copy below takes it within the
-  hour.
+  hour. A single failed hour (a deploy recreating `postgres` on the hour, a
+  push waiting on a prune's lock) turns the coarse `backup` word, and so the
+  external probe's `attention`, on until the next good run.
 - **The backup report** ([ADR-055](../adr/ADR-055-etat-du-systeme.md)).
   After each dump the `backup` service writes one line of JSON into
   `/srv/quiz/backup-status/last.json`: `finished_at`, `ok`, `exit_code`,
@@ -1047,7 +1049,7 @@ archiving) is not set up; it comes only if an hour proves too much.
 
 ```bash
 cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image \
-  exec -T backup sh -c 'pg_dump -Fc -h postgres -U quiz quiz > "/backups/$1"' sh "manual-<migration>-$(date +%F-%H%M).dump"
+  exec -T backup sh -c 'umask 077; pg_dump -Fc -h postgres -U quiz quiz > "/backups/$1"' sh "manual-<migration>-$(date +%F-%H%M).dump"
 ```
 
 - **The fingerprint and the restore drill.** `scripts/db-fingerprint.sql`
@@ -1183,7 +1185,8 @@ included, before its next run.
 
 **Pruning**, by hand from the workstation only (once a month is enough):
 `scripts/offsite-backup/prune.sh` keeps 48 hourly, 7 daily, 4 weekly and 3 monthly
-archives (about three months of archives; each holds 30 days of dumps, so a
+archives (an hourly push appends close to a whole compressed dump, about
+0.6 GB a day, which only a prune and compact reclaim; about three months of archives; each holds 30 days of dumps, so a
 deletion leaves the copy after about four months, N-DATA-03), then compacts, and saves the list of archives it leaves
 (`~/.config/borg-offsite/last-archives`). Before touching anything it
 refuses, pruning and compacting nothing:

@@ -168,6 +168,9 @@ services:
       - bash
       - -c
       - |
+        # A dump killed mid-way (a deploy recreating this container) left a
+        # temporary file nothing else removes.
+        rm -f /backups/hourly-*.dump.tmp
         while true; do
           # After a reboot this container may start before PostgreSQL accepts
           # connections (restart: always ignores depends_on): wait, never dump
