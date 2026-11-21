@@ -3,24 +3,25 @@
  * other one, with its qualifier when it has one.
  */
 import type { Concept, ConceptLang } from "@quiz/contracts";
-import { directNarrowerOf } from "@quiz/domain";
+import { dataLanguage, directNarrowerOf, otherConceptLanguage } from "@quiz/domain";
 
 import type { Locale, TFunction } from "../i18n";
 
 /**
- * A concept in the reader's language: its label and qualifier there, else in
- * the other language (a `proposed` concept may have one only), with `lang`
- * the language they are in; its description in the reader's language, else
- * the other one.
+ * A concept in the reader's data language (`dataLanguage`, ADR-140): its
+ * label and qualifier there, else in the other language (a `proposed`
+ * concept may have one only), with `lang` the language they are in; its
+ * description in the reader's language, else the other one.
  */
 export function conceptSide(c: Concept, locale: Locale) {
-  const other: Locale = locale === "fr" ? "en" : "fr";
-  const lang = c.labels[locale] !== null ? locale : other;
+  const own = dataLanguage(locale);
+  const other = otherConceptLanguage(own);
+  const lang = c.labels[own] !== null ? own : other;
   return {
     lang,
     label: c.labels[lang] ?? "",
     qualifier: c.qualifiers[lang],
-    description: c.descriptions[locale] || c.descriptions[other],
+    description: c.descriptions[own] || c.descriptions[other],
   };
 }
 

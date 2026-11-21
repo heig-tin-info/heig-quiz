@@ -2644,7 +2644,9 @@ the English rendered word for word. Both are written short, at the same time,
 by the same person, before the component is styled. The words are those of
 the interface glossary, `docs/spec/01-glossaire-et-domaine.md` §1.5, in
 both languages; the i18n lint (`src/i18n/copy.test.ts`, N-I18N-04) refuses
-what it can detect of the rules below.
+what it can detect of the rules below. This rule is for the written
+languages, English and French; a translated language (German, Italian) is
+drafted from the English and tracked for review, by ADR-140.
 
 - **A label is a label.** A heading, an option, a badge or a condition is a
   noun phrase ("Sorties de page enregistrées"), never a sentence with a

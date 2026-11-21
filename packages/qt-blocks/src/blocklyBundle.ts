@@ -30,11 +30,15 @@ import * as Fr from "blockly/msg/fr";
 
 import { fmt } from "@quiz/core/client";
 import { BLOCK_KINDS, PROGRAM_LIMITS, type BlockKind, type NodePath, type Stmt } from "@quiz/domain/blocks";
+import { FALLBACK_LOCALE, type Locale, matchLocale } from "@quiz/domain/locales";
 
 import type { BlocksCanvasStrings } from "./strings.js";
 
 /** Where `apps/web` serves Blockly's media (cursors, sprites). */
 export const MEDIA_PATH = "/blockly-media/";
+
+/** Blockly's own interface (context menu, announcements) in each interface language. */
+const BLOCKLY_MESSAGES: Record<Locale, unknown> = { en: En, fr: Fr };
 
 // ---------------------------------------------------------------------------
 // Theme
@@ -424,7 +428,7 @@ export interface MountedWorkspace {
 /** Injects a workspace into `container`. Throws whatever Blockly throws; the host falls back. */
 export function mountWorkspace(options: WorkspaceOptions): MountedWorkspace {
   const { container, words, readOnly } = options;
-  Blockly.setLocale((options.lang.startsWith("fr") ? Fr : En) as unknown as Record<string, string>);
+  Blockly.setLocale(BLOCKLY_MESSAGES[matchLocale([options.lang]) ?? FALLBACK_LOCALE] as unknown as Record<string, string>);
   defineBlocks(words);
   container.classList.add("quiz-blocks");
   const workspace = Blockly.inject(container, {

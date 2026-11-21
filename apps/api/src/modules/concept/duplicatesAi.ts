@@ -15,7 +15,7 @@ import { asc, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { CONCEPT_AI_PAIRS_MAX, CONCEPT_AI_REASON_MAX, type ConceptDuplicatesAi } from "@quiz/contracts";
-import { AI_DUPLICATE_KINDS, type AiDuplicateKind, type Locale } from "@quiz/domain";
+import { AI_DUPLICATE_KINDS, type AiDuplicateKind, type ConceptLanguage } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { concepts } from "../../db/schema.js";
@@ -75,7 +75,7 @@ function validPairs(value: z.infer<typeof Reply>, ids: readonly string[]): Conce
  * makes no call. The reason is written in `lang`. The gateway's failures pass
  * through (`llmArms`).
  */
-export async function aiDuplicates(db: Db, gateway: LlmGateway, userId: string, lang: Locale): Promise<ConceptDuplicatesAi> {
+export async function aiDuplicates(db: Db, gateway: LlmGateway, userId: string, lang: ConceptLanguage): Promise<ConceptDuplicatesAi> {
   const fetched = await db
     .select({
       id: concepts.id,

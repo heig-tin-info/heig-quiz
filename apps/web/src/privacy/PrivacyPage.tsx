@@ -22,6 +22,9 @@ import fr from "./privacy.fr.md?raw";
  * A reading page has no primary action. The language is chosen here for
  * this browser only, as on `/discover`: a signed-out reader has no account
  * to persist it to.
+ *
+ * A legal text: a translated language maps to the English file until a
+ * human-reviewed translation exists (ADR-140 §5).
  */
 export const PRIVACY_SOURCES: Record<Locale, string> = { en, fr };
 

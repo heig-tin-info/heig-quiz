@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 
 import type { ChangelogEntry, ChangelogKind, ChangelogList } from "@quiz/contracts";
+import { dataLanguage } from "@quiz/domain";
 
 import { api } from "../api";
 import { useI18n, type Dict } from "../i18n";
@@ -59,7 +60,7 @@ function ReleaseList({ entries, Heading }: { entries: ChangelogList; Heading: "h
                   <Badge tone={KIND[entry.kind].tone} className="justify-center sm:mt-px sm:w-24">
                     {t(KIND[entry.kind].label)}
                   </Badge>
-                  <MarkdownView inline source={entry.text[locale] || entry.text.en} className="min-w-0 flex-1" />
+                  <MarkdownView inline source={entry.text[dataLanguage(locale)] || entry.text.en} className="min-w-0 flex-1" />
                 </li>
               ))}
             </ul>

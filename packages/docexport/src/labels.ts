@@ -370,7 +370,12 @@ export const FR_LABELS: Labels = {
   colon: " : ",
 };
 
-/** The languages a document is worded in. */
+/**
+ * The languages a document is worded in: the interface languages, `LOCALES`
+ * of `@quiz/domain`, which this package sits below and cannot import. The
+ * API hands it a `Locale`, so a language added there is a compile error
+ * there until it is added here, with its labels (ADR-140).
+ */
 export type Lang = "en" | "fr";
 
 /** The words of each language, as a document's `lang` picks them. */

@@ -11,7 +11,7 @@ import type { FastifyInstance } from "fastify";
 import { actorOf } from "../../audit.js";
 import { publish } from "../../events.js";
 import { callerOf, ownSessionGuard, teacherGuard } from "../guards.js";
-import { readerLang, sendFailure } from "../http.js";
+import { readerLocale, sendFailure } from "../http.js";
 import { provision, status } from "./service.js";
 
 export async function trainingPlugin(app: FastifyInstance) {
@@ -27,7 +27,7 @@ export async function trainingPlugin(app: FastifyInstance) {
     const now = app.clock.now();
     const userId = callerOf(req).id;
     try {
-      const result = await provision(app.db, { userId, lang: readerLang(req), now, actor: actorOf(req), log: req.log });
+      const result = await provision(app.db, { userId, lang: readerLocale(req), now, actor: actorOf(req), log: req.log });
       if (result.created) publish("courses", [`teacher:${userId}`]);
       return reply.code(result.created ? 201 : 200).send(result);
     } catch (error) {

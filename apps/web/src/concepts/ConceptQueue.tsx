@@ -37,7 +37,7 @@ import { aiPairsOf, ConceptDuplicates, duplicatePairs } from "./ConceptDuplicate
 import { ConceptRelationReview } from "./ConceptRelationReview";
 import { ConceptSheet } from "./ConceptSheet";
 import { ConceptStatusBadge } from "./ConceptStatusBadge";
-import { conceptName, usesLabel } from "./names";
+import { conceptName, conceptSide, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 import { BroaderPath } from "./refs";
 import { conceptTree } from "./tree";
@@ -316,7 +316,7 @@ function ConceptRow({
   const name = conceptName(c, locale);
   const missing = missingLangs(c);
   const reasonId = `concept-${c.id}-why`;
-  const description = c.descriptions[locale] || c.descriptions[locale === "fr" ? "en" : "fr"];
+  const { description } = conceptSide(c, locale);
 
   return (
     <li {...indent} className={cx("flex flex-wrap items-start gap-x-4 gap-y-3 p-4", hairline(indent))}>

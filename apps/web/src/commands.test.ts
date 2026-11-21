@@ -240,12 +240,12 @@ describe("buildCommands: the theme and language actions", () => {
 
   it("names the other language in that language", () => {
     const setLocale = vi.fn();
-    const en = need(buildCommands(makeContext({ setLocale })), "action:locale");
+    const en = need(buildCommands(makeContext({ setLocale })), "action:locale:fr");
     expect(en.label).toBe("Switch to Français");
     en.run();
     expect(setLocale).toHaveBeenCalledWith("fr");
 
-    const fr = need(buildCommands(makeContext({ locale: "fr" })), "action:locale");
+    const fr = need(buildCommands(makeContext({ locale: "fr" })), "action:locale:en");
     expect(fr.label).toBe("Passer en English");
   });
 });
