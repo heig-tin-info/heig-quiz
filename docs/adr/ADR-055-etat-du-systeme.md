@@ -33,6 +33,11 @@ gains the `offsite` check, which §2's coarse `backup` word now covers (below).
 Extended by [ADR-058](ADR-058-passerelle-llm.md) §7: LLM health reads gateway state and the
 `llm.budget` check; it does not make a provider call.
 
+**Amended 2026-11-21 (database remediation plan §6), scope: the backup
+thresholds of §4.** The dump and the off-site copy run every hour (RPO 1 h,
+the product owner's decision), so `backupStatus` warns after 3 h (two
+missed runs) and fails after 26 h (a missed day), for both reports.
+
 **Amended 2026-10-11 (security audit L21), scope: §2.** The public answer
 is `status` and `attention` alone (`HealthProbe`): the deploy gate reads the
 status code, the external probe its `"attention":false`. The coarse words
@@ -79,7 +84,8 @@ The thresholds that turn a measure into a verdict are pure functions of
 `@quiz/domain/health` (invariant 8): the ticker is dead past 10 s (or three
 periods); an attempt or an evaluation still open **a minute** past the
 moment the ticker should have closed it fails; a disk warns under 15 % free
-and fails under 5 %; the last dump warns after 26 h and fails after 50 h; a
+and fails under 5 %; the last dump warns after 26 h and fails after 50 h
+(3 h and 26 h since the amendment of 2026-11-21 below); a
 scheduled task warns when its last run failed or it has had no success for
 two periods; `SELECT 1` warns past 250 ms; connections warn at 80 % and
 fail at 95 % of `max_connections`; a queue warns on a failure in the last

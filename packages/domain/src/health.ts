@@ -28,9 +28,12 @@ export const HEALTH_THRESHOLDS = {
   /** Free share of a disk under which it warns, then fails. */
   diskWarnFree: 0.15,
   diskFailFree: 0.05,
-  /** Age of the last dump: a daily job, so one missed day warns and two fail. */
-  backupWarnMs: 26 * 3_600_000,
-  backupFailMs: 50 * 3_600_000,
+  /**
+   * Age of the last dump, and of the last off-site copy: both hourly since
+   * 2026-11-21 (RPO 1 h), so two missed runs warn and a missed day fails.
+   */
+  backupWarnMs: 3 * 3_600_000,
+  backupFailMs: 26 * 3_600_000,
   /** A scheduled task with no successful run for this many periods is overdue. */
   taskOverduePeriods: 2,
   /** `SELECT 1` slower than this, on one idle VM, says the database is struggling. */

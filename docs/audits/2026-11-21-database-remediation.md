@@ -1,7 +1,8 @@
 # Database audit and remediation plan (2026-11-21)
 
-Status: **accepted by the product owner on 2026-11-21; Phase 0 in
-progress** (§7 tracks what is done). Audited state: `origin/main` at
+Status: **accepted by the product owner on 2026-11-21; Phases 0, 1 and the
+expand step of Phase 4 in production** (§7 tracks what is done; §6 holds
+the owner's decisions). Audited state: `origin/main` at
 migration `0150` (111 tables, 1036 columns, 215 foreign keys, 294 indexes),
 plus production's catalog statistics and, for Phase 0, counts only (no
 personal data was read).
@@ -217,13 +218,13 @@ plain `::numeric`), after the same exact check.
 
 | Item | Proposal |
 |---|---|
-| F6 deletion | ADR: a soft delete with a deferred purge (a deleted course stays restorable for 30 days), or `RESTRICT` once grades are released. Owner's choice |
-| F15 `import_classroom` | Archive its dump (internal notes + borg), then drop it |
+| F6 deletion | Decided (§6.3): the services refuse deleting what holds work or grades; archive instead; ADR |
+| F15 `import_classroom` | Decided (§6.4): the legacy URL resolver goes, the schema is dropped (archived first) |
 | F9 notifications | A stored generated column `kind` (= `payload->>'kind'`) and one `dedupe_key`; the ten partial indexes become one. Optional |
 | F10 | Document the meaning in the schema comment, or a nullable `owner_user_id` set for solo repositories only. Low priority |
 | F11 `nom/prenom` | Rename to `family_name/given_name`: pure churn, a non-additive migration; proposed **not done** |
 | F8 activity entity | A separate ADR; not in this plan |
-| PITR | WAL archiving to the Storage Box would bring the RPO from 24 h to minutes. Owner's choice; Phase 0 covers migrations without it |
+| PITR | Decided (§6.6): hourly dumps and copies (RPO 1 h); WAL archiving only if needed |
 
 ## 5. Order and size
 
@@ -240,15 +241,31 @@ Phases 0 and 1 can start right away. Phase 2 needs a week of Phase 1's
 statistics. Phase 4's contract steps wait for a quiet week (semester break
 at the latest).
 
-## 6. Decisions owed by the owner
+## 6. The owner's decisions (2026-11-21)
 
-1. Go for the plan as ordered, or another order.
-2. Target VM size (proposal: 2 vCPU / 4 GB) and a window for the reboot.
-3. F6: soft delete, `RESTRICT`, or the status quo.
-4. F15: archive then drop `import_classroom`.
-5. F9 and F10: do or skip.
-6. PITR: yes or no.
-7. How long `remediation_log` is kept.
+1. **The plan, as ordered.**
+2. **The VM** was rescaled to CPX22 (2 vCPU / 4 GB) by the owner the same
+   evening; the runner VM went down to 16 GB, its slices re-installed.
+3. **F6, deletion: refuse, no soft delete.** A soft delete would add a
+   `deleted_at` filter to every query and to `staffAccess`: one forgotten
+   filter shows a "deleted" course again. Instead the services refuse to
+   delete an evaluation with a submitted attempt or released grades, a
+   project with a graded repository, a classroom or a course holding one;
+   they offer the archive (which classrooms and projects have). A draft or
+   an empty classroom stays deletable. A short ADR amends F-ORG-09.
+4. **F15: the legacy heig-classroom URLs are no longer needed.** The
+   resolver (`modules/legacy`, which read `import_classroom.id_map`) goes,
+   and the schema is dropped; its dump was archived first (internal notes,
+   2026-11-21, 61 KB). `legacy_classroom_audit_log` is audit history and
+   stays.
+5. **F9: later**, with the next deduplicated notification kind. F10: the
+   schema comment.
+6. **PITR: an hourly dump first.** RPO 1 h (48 hourly dumps, 30 daily,
+   the off-site copy hourly too), the backup checks warning after 3 h. WAL
+   archiving only if an hour proves too much.
+7. **`remediation_log`** is created only by a migration that changes a
+   value, and kept one year (an academic year and its contestation
+   windows).
 
 ## 7. Progress
 
@@ -287,3 +304,25 @@ at the latest).
 
   So `remediation_log` has nothing to hold yet. It is created by the first
   migration that changes a value, if one ever does.
+
+### Phases 1 and 4 (expand), and the backups (2026-11-21)
+
+- **#1190, #1194, #1195:** the pre-migration dump. The first deploy carrying
+  a migration was refused by it: under rootless Docker `backups/` belongs to
+  a uid of the containers' namespace, so the dump is now written by the
+  `backup` container, read back whole, mode 600. It then ran: production
+  dumped (24 MB) before 0151.
+- **#1192 (Phase 4, expand of `project_repo_grades`)** in production: 213
+  rows, totals equal to the old columns, the verification query 0 rows. Its
+  first version cast `float8::numeric`, which keeps 15 significant digits:
+  caught by the review, cast through text since. The contract step comes a
+  week after, at the earliest.
+- **#1191 (Phase 1)** in production after the rescale: `shared_buffers`
+  256 MB and the rest, `pg_stat_statements` created by hand, and the API
+  survives a connection the server ends (`guardPoolErrors`).
+- **#1193 (Phases 2.2, 2.4, 3, migration 0152)** reviewed and rehearsed on
+  a copy of production (28 constraints validated); the next promotion.
+- **Hourly dumps** (§6.6): the dump every hour (48 kept, the day's latest
+  linked as the daily one), the off-site copy every hour at :15, prune
+  keeping 48 hourly archives, the backup checks warning after 3 h (ADR-055
+  amended). The timer unit is a copy on the VM: re-installed by hand.
