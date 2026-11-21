@@ -72,7 +72,8 @@
 
   /**
    * The workspace UI's language: its base ("fr", "de") when this table has
-   * it, English otherwise, as the status bar extension does (ADR-140 §4).
+   * it, English otherwise, and English for a key a language lacks, as the
+   * status bar extension does (ADR-140 §4, §5).
    * French and German are not reached today: the image ships no language
    * pack, so VS Code's language is always "en" (extension.js). `tag` is the
    * `Intl` tag of the time.
@@ -253,7 +254,7 @@
 
         function render() {
           const base = String(win._VSCODE_NLS_LANGUAGE || "en").toLowerCase().split("-")[0];
-          const t = Object.prototype.hasOwnProperty.call(STRINGS, base) ? STRINGS[base] : STRINGS.en;
+          const t = { ...STRINGS.en, ...(Object.hasOwn(STRINGS, base) ? STRINGS[base] : {}) };
           const pct = Math.round(battery.level * 100);
           const level = battery.charging ? "ok" : pct <= 10 ? "error" : pct <= 20 ? "warning" : "ok";
           let text = `\u{1F50B} ${t.percent(pct)}${battery.charging ? " ⚡" : ""}`;

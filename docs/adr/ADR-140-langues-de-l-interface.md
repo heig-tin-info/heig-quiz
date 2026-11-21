@@ -85,7 +85,10 @@ third language would have been a hunt rather than a list of compile errors.
      its own dictionary, its own `LANGS` and its own `Accept-Language`
      parser (its `CLAUDE.md`). It gains German at the same time as the
      platform and falls back to English like it (settled question 76,
-     product owner, 2026-11-21); its list is still widened by hand.
+     product owner, 2026-11-21); its list is still widened by hand. Its
+     German, and that of the student image's scripts, is drafted like the
+     platform's but is not covered by the review tracking of §7 nor by
+     the German copy lint, which both live in `apps/web`.
 
 5. **Fallback.** A key missing at run time reads its English (unchanged).
    The "Data and privacy" page (N-DATA-07) is a legal text: a reader of a

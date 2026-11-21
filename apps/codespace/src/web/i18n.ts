@@ -4,7 +4,9 @@
  * cannot import the SPA's dictionaries, so it keeps its own, with the same
  * rule — `fr` and `de` are typed against the keys of `en`, so a missing
  * translation is a compile error. English and French are written; German is
- * translated (ADR-140 §2).
+ * translated (ADR-140 §2), drafted like the platform's, but neither this
+ * German nor that of the student image's scripts is covered by the review
+ * tracking of ADR-140 §7 or by the German copy lint (both in `apps/web`).
  *
  * The language comes from the browser's `Accept-Language`, English when it
  * names none of the portal's languages, as on the platform (ADR-140 §4,

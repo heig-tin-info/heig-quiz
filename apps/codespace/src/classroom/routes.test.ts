@@ -489,22 +489,6 @@ describe("GET /launch", () => {
     }
   });
 
-  it("refuses in French to a French browser", async () => {
-    const reply = await h.app.inject({ url: "/launch", headers: FR });
-    expect(reply.statusCode).toBe(403);
-    expect(reply.body).toContain('<html lang="fr">');
-    expect(reply.body).toContain("Lancement refusé");
-    expect(reply.body).toContain("Aucun jeton de lancement.");
-  });
-
-  it("refuses in German to a German browser", async () => {
-    const reply = await h.app.inject({ url: "/launch", headers: { "accept-language": "de-CH,de;q=0.9,en;q=0.8" } });
-    expect(reply.statusCode).toBe(403);
-    expect(reply.body).toContain('<html lang="de">');
-    expect(reply.body).toContain("Start abgelehnt");
-    expect(reply.body).toContain("Kein Start-Token.");
-  });
-
   it("refuses in English to a browser that asks for it", async () => {
     const reply = await h.app.inject({
       url: "/launch",

@@ -66,15 +66,14 @@ const TTY_WAIT_MS = 5_000;
 
 const STRINGS = {
   fr: {
-    // The `Intl` tag of dates, and what joins a tooltip's label to its value.
+    // The `Intl` tag of dates.
     tag: "fr-CH",
-    colon: " : ",
     overdue: "Échéance dépassée",
     lessThanAMinute: "moins d'une minute restante",
     close: "Fermer",
     closeTooltip: "Quitter l'éditeur et revenir au portail",
-    deadline: "Échéance",
-    assignment: "Devoir",
+    deadlineLine: (date) => `Échéance : ${date}`,
+    assignmentLine: (name) => `Devoir : ${name}`,
     noReturnUrl: "Aucune URL de retour n'a été transmise à cette session.",
     // The wording of Quiz's own hint (apps/web, `seb.quit` and `seb.quit.keys`).
     sebQuit: "Quitter : Ctrl+Q",
@@ -112,13 +111,12 @@ const STRINGS = {
   },
   en: {
     tag: "en-GB",
-    colon: " : ",
     overdue: "Deadline passed",
     lessThanAMinute: "less than a minute left",
     close: "Close",
     closeTooltip: "Leave the editor and go back to the portal",
-    deadline: "Deadline",
-    assignment: "Assignment",
+    deadlineLine: (date) => `Deadline : ${date}`,
+    assignmentLine: (name) => `Assignment : ${name}`,
     noReturnUrl: "No return URL was given to this session.",
     sebQuit: "Quit: Ctrl+Q",
     sebQuitTooltip:
@@ -150,13 +148,12 @@ const STRINGS = {
   },
   de: {
     tag: "de-CH",
-    colon: ": ",
     overdue: "Frist abgelaufen",
     lessThanAMinute: "weniger als eine Minute übrig",
     close: "Schliessen",
     closeTooltip: "Editor verlassen und zum Portal zurückkehren",
-    deadline: "Frist",
-    assignment: "Aktivität",
+    deadlineLine: (date) => `Frist: ${date}`,
+    assignmentLine: (name) => `Aktivität: ${name}`,
     noReturnUrl: "Dieser Sitzung wurde keine Rückkehr-URL übergeben.",
     sebQuit: "Beenden: Ctrl+Q",
     sebQuitTooltip:
@@ -170,7 +167,7 @@ const STRINGS = {
     programTerminalFailed:
       "Das Terminal des Programms ist nicht gestartet: Was das Programm ausgibt und einliest, läuft über die Debug-Konsole.",
     update: "Aktualisierung des Lehrteams",
-    updateTooltip: (at) => `Das Lehrteam hat das Projekt aktualisiert${at ? `, ${at}` : ""}. Klicken Sie, um sie anzuwenden.`,
+    updateTooltip: (at) => `Das Lehrteam hat das Projekt aktualisiert${at ? `, ${at}` : ""}. Klicken Sie, um die Aktualisierung anzuwenden.`,
     updateMessage: "Nachricht des Lehrteams:",
     updateConfirm:
       "Die Aktualisierung des Lehrteams anwenden? Sie wird mit einem Merge-Commit in Ihren Branch übernommen. Pushen Sie danach wie gewohnt.",
@@ -191,16 +188,16 @@ const STRINGS = {
 
 /**
  * The strings of the interface language's base ("fr", "de"), English for any
- * other (ADR-140 §4). French and German are not reached today: the image
- * ships no language pack, so `vscode.env.language` is "en" whatever the
- * browser's language. Kept because a pack could be added without touching
+ * other, and English for a key a language's table lacks (ADR-140 §4, §5).
+ * French and German are not reached today: the image ships no language
+ * pack, so `vscode.env.language` is "en" whatever the browser's language. Kept because a pack could be added without touching
  * this extension: install Open VSX's `MS-CEINTL.vscode-language-pack-fr`
  * (or `-de`) beside the other extensions and start code-server with
  * `--locale fr` (entrypoint.sh) — not tried.
  */
 function pickStrings(language) {
   const base = String(language || "en").toLowerCase().split("-")[0];
-  return Object.prototype.hasOwnProperty.call(STRINGS, base) ? STRINGS[base] : STRINGS.en;
+  return { ...STRINGS.en, ...(Object.hasOwn(STRINGS, base) ? STRINGS[base] : {}) };
 }
 
 /** Countdown text for a remaining time in milliseconds. */
@@ -363,8 +360,8 @@ function activate(context) {
   // --- 1. countdown --------------------------------------------------------
   if (deadline) {
     const countdown = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    const tooltipLines = [`${t.deadline}${t.colon}${formatDeadline(deadline, t)}`];
-    if (assignmentName) tooltipLines.push(`${t.assignment}${t.colon}${assignmentName}`);
+    const tooltipLines = [t.deadlineLine(formatDeadline(deadline, t))];
+    if (assignmentName) tooltipLines.push(t.assignmentLine(assignmentName));
     countdown.tooltip = tooltipLines.join("\n");
 
     const render = () => {

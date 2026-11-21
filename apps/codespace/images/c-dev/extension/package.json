@@ -3,7 +3,7 @@
   "displayName": "Codespace",
   "description": "Time left until the assignment deadline, a way back to the portal (or, under Safe Exam Browser, its quit shortcut) and the teacher's update, in the status bar; a terminal for the program under gdb.",
   "publisher": "heig",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "license": "SEE LICENSE IN LICENSE.txt",
   "engines": {
     "vscode": "^1.75.0"
