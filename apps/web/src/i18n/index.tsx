@@ -27,8 +27,9 @@ import { type Dict, en } from "./en";
  * flat and typed: `fr` is `Record<keyof Dict, string>`, so a key added in
  * English without its French twin is a compile error. Keep it that way.
  *
- * The two dictionaries live next door, in `en.ts` and `fr.ts`: this file is
- * the machinery that reads them. English is in the entry chunk, as the
+ * The two dictionaries live next door, one file per domain in `en/` and
+ * `fr/`, joined by `en.ts` and `fr.ts`: this file is the machinery that reads
+ * them. English is in the entry chunk, as the
  * fallback it is; French is a chunk of its own, loaded by `loadLocale` before
  * it is shown — before the first render when it is the stored choice
  * (`main.tsx`), before the switch when it is picked — so no screen paints in

@@ -55,8 +55,9 @@ Never work around these, not even "temporarily".
 
 1. **English everywhere except UI strings.** Code, identifiers, comments,
    documentation, commit messages, ADRs: English. Only what a user reads is
-   translated, and it goes through `t()` in `apps/web/src/i18n/` (`en.ts`, `fr.ts`,
-   `index.tsx`) with an entry in every language of `LOCALES`
+   translated, and it goes through `t()` in `apps/web/src/i18n/` (one file per
+   domain in `en/` and `fr/`, assigned by `domains.ts`; `index.tsx`) with an
+   entry in every language of `LOCALES`
    (`packages/domain/src/locales.ts`) — teacher surfaces included (N-I18N-01).
    Every dictionary but English is typed `Record<keyof Dict, string>`, so a
    missing key is a compile error. Keep it that way. English and French are
