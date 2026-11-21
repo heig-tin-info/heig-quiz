@@ -17,6 +17,7 @@ import { KIOSK_DEVICE_STATUSES } from "@quiz/contracts";
 import { KIOSK_ATTESTATIONS, KIOSK_WATCHES, PAIRING_STATES } from "@quiz/domain";
 
 import { users } from "./auth.js";
+import { oneOf } from "./columns.js";
 import { evaluations } from "./evaluation.js";
 import { projects } from "./project.js";
 
@@ -104,5 +105,6 @@ export const kioskPairings = pgTable(
     index("kiosk_pairings_user_code_idx").on(t.userCodeHash),
     index("kiosk_pairings_device_state_idx").on(t.deviceId, t.state),
     check("kiosk_pairings_one_activity", sql`${t.evaluationId} IS NULL OR ${t.projectId} IS NULL`),
+    check("kiosk_pairings_state_ck", oneOf(t.state, PAIRING_STATES)),
   ],
 );

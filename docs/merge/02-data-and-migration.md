@@ -204,7 +204,7 @@ is the environment's `DATABASE_URL`.
   resolver is retired by the product owner (heig-classroom migrated, old
   URLs no longer served; [database remediation
   plan](../audits/2026-11-21-database-remediation.md) §6.4), and the schema
-  `import_classroom` is dropped with it (migration `0152`), its dump
+  `import_classroom` is dropped with it (migration `0153`), its dump
   archived outside the repository first.*
 - **Pre-flight** (refuses to `--apply` otherwise). M1-06: mapping
   complete and resolved (every source classroom, archived ones included,

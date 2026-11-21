@@ -91,9 +91,11 @@ describe("loginRefusal (ADR-111)", () => {
   });
 
   it("admits an external student a roster line waits for, case-blind", async () => {
-    const claims = stranger("ext.student@gmail.test");
+    // A roster line is stored normalized (`enrollments_email_normalized_ck`):
+    // the case the IdP sends is the side left to fold.
+    const claims = stranger("Ext.Student@gmail.test");
     expect(await loginRefusal(db, config, claims)).toBe("not_invited");
-    await rosterLine("Ext.Student@gmail.test");
+    await rosterLine("ext.student@gmail.test");
     expect(await loginRefusal(db, config, claims)).toBeNull();
   });
 

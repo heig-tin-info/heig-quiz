@@ -354,7 +354,9 @@ describe("reconcile.grades", () => {
     expect(await runsOf(pending!)).toHaveLength(1);
 
     // The review answered: the day is the bound again.
-    await server.app.db.update(projectRepos).set({ reviewGradeRunId: randomUUID() }).where(eq(projectRepos.id, pending!.id));
+    // The slot names a run of the repository (a foreign key since migration 0152).
+    const [answer] = await runsOf(pending!);
+    await server.app.db.update(projectRepos).set({ reviewGradeRunId: answer!.id }).where(eq(projectRepos.id, pending!.id));
     list(pending!, head(pending!));
     expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
     expect(await runsOf(pending!)).toHaveLength(1);

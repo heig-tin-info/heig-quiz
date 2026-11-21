@@ -118,13 +118,13 @@ async function classroom(tag: string, n = 4): Promise<Room> {
     emails.push(line!.email);
   }
   const unclaimed = randomUUID();
-  await db.insert(enrollments).values({ id: unclaimed, classroomId: seeded.classroomId, nom: `Libre${tag}`, prenom: "Zed", email: `libre-${tag}@heig.test` });
+  await db.insert(enrollments).values({ id: unclaimed, classroomId: seeded.classroomId, nom: `Libre${tag}`, prenom: "Zed", email: `libre-${tag.toLowerCase()}@heig.test` });
   await db.insert(enrollments).values({
     id: randomUUID(),
     classroomId: seeded.classroomId,
     nom: `Prof${tag}`,
     prenom: "Staff",
-    email: `prof-${tag}-${randomUUID().slice(0, 6)}@heig.test`,
+    email: `prof-${tag.toLowerCase()}-${randomUUID().slice(0, 6)}@heig.test`,
     userId: teacher.id,
     claimedAt: new Date(NOW),
     staff: true,

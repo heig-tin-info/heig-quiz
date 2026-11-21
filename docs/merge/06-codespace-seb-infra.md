@@ -245,7 +245,7 @@ heig-classroom migrated, old URLs no longer served
 ([database remediation plan](../audits/2026-11-21-database-remediation.md)
 §6.4). The rows "via the resolver" below no longer hold: `/legacy/classroom/*`
 is no route any more and answers Quiz's not-found page, and the import's id
-map is dropped (migration `0152`). The fragment is unchanged: its 410 rows
+map is dropped (migration `0153`). The fragment is unchanged: its 410 rows
 still answer.*
 
 | Old | Target | How |

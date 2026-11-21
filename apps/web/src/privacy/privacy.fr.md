@@ -72,7 +72,7 @@ Certaines données sont supprimées automatiquement :
 | Le journal d'audit, qui enregistre des actions comme les connexions, les modifications des listes de classe et les corrections, avec les noms | Trois ans après chaque entrée |
 | Un sondage auquel vous avez répondu sans compte : la trace du cookie et vos réponses | 30 jours après la fin du sondage. Les résultats du sondage restent pour l'enseignant, liés à personne, mais avec ce que vous y avez écrit |
 
-Les données supprimées restent environ quatre mois de plus dans les sauvegardes de la plateforme. Ce délai ne tient que si les plus anciennes sauvegardes sont retirées comme prévu, ce qui se fait à la main. Les copies quotidiennes de la base de données gardées sur le serveur lui-même ne sont pas chiffrées ; la copie conservée en Finlande l'est.
+Les données supprimées restent environ quatre mois de plus dans les sauvegardes de la plateforme. Ce délai ne tient que si les plus anciennes sauvegardes sont retirées comme prévu, ce qui se fait à la main. Les copies de la base de données gardées sur le serveur lui-même ne sont pas chiffrées ; la copie conservée en Finlande l'est.
 
 **Votre compte.** Après deux ans sans connexion, vous recevez un e-mail. Sans connexion dans l'année qui suit, votre compte est anonymisé : votre nom, vos adresses, votre photo et vos liens quittent Quiz. Le journal d'audit les garde jusqu'à trois ans, les sauvegardes environ quatre mois. Vos résultats restent, sans votre nom. Une connexion suffit pour garder votre compte. Vous pouvez aussi l'anonymiser plus tôt, dans les **Réglages**.
 

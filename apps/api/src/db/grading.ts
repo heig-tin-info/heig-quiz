@@ -11,8 +11,9 @@
  *     not exist. F-GRADE-01 grades an absent answer (zero points, validated,
  *     `auto`), and there is no `answers` row to hang it on, so `answer_id` is
  *     nullable and `(attempt_id, item_id)` carries the uniqueness instead.
- *     `answers` itself is unique on `(attempt_id, item_id)`, so the two
- *     indexes never disagree;
+ *     `answers` itself is unique on `(attempt_id, item_id)`, and
+ *     `gradings_answer_attempt_item_fk` makes a grading's pair its answer's,
+ *     so the two indexes never disagree;
  *   - `supersedes_id` is a self-reference, so the whole history of an answer
  *     is a chain and not a pile: `writeGrading` supersedes the previous
  *     grading and points at it in ONE transaction (§5.4).
@@ -23,6 +24,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  foreignKey,
   index,
   jsonb,
   numeric,
@@ -38,6 +40,7 @@ import { LLM_CONFIDENCES } from "@quiz/core/server";
 import { CONTESTATION_STATES, CONTESTATION_VERDICTS, GRADING_SOURCES, GRADING_STATES, type ProposedAcceptance } from "@quiz/domain";
 
 import { users } from "./auth.js";
+import { oneOf } from "./columns.js";
 import { evaluationItems } from "./evaluation.js";
 import { answers, attempts } from "./live.js";
 
@@ -83,6 +86,17 @@ export const gradings = pgTable(
     index("gradings_item_validated_idx")
       .on(t.itemId)
       .where(sql`${t.state} = 'validated'`),
+    // The attempt and the item are denormalized: this key makes them those
+    // of the answer, beside the single-column keys it keeps. MATCH SIMPLE: a
+    // grading of an absent answer (null `answer_id`) is not checked, which
+    // is what F-GRADE-01 needs.
+    foreignKey({
+      name: "gradings_answer_attempt_item_fk",
+      columns: [t.answerId, t.attemptId, t.itemId],
+      foreignColumns: [answers.id, answers.attemptId, answers.itemId],
+    }).onDelete("cascade"),
+    check("gradings_source_ck", oneOf(t.source, GRADING_SOURCES)),
+    check("gradings_state_ck", oneOf(t.state, GRADING_STATES)),
   ],
 );
 
@@ -118,6 +132,9 @@ export const answerAcceptances = pgTable(
     uniqueIndex("answer_acceptances_attempt_uq")
       .on(t.itemId, t.part, t.answer, t.attemptId)
       .where(sql`${t.attemptId} is not null`),
+    // Both unique indexes are partial: the item's own reads and its deletion
+    // need a plain one.
+    index("answer_acceptances_item_idx").on(t.itemId),
   ],
 );
 
@@ -174,6 +191,7 @@ export const contestations = pgTable(
   },
   (t) => [
     check("contestations_proposal_ck", sql`(${t.proposedAt} is null) = (${t.proposedVerdict} is null)`),
+    check("contestations_state_ck", oneOf(t.state, CONTESTATION_STATES)),
     uniqueIndex("contestations_cell_uq").on(t.attemptId, t.itemId),
     // "The open contestations of an evaluation", by its items.
     index("contestations_open_idx")

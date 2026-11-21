@@ -72,7 +72,7 @@ Some data is deleted automatically:
 | The audit log, which records actions such as sign-ins, class list changes and gradings, with names | Three years after each entry |
 | A poll you answered without an account: the cookie's trace and your answers | 30 days after the poll ended. The poll's results stay for the teacher, linked to no one, but with what you typed in them |
 
-Deleted data stays in the platform's backups for about four more months. That period holds only while the oldest backups are removed as planned, which is done by hand. The daily copies of the database kept on the server itself are not encrypted; the copy kept in Finland is.
+Deleted data stays in the platform's backups for about four more months. That period holds only while the oldest backups are removed as planned, which is done by hand. The copies of the database kept on the server itself are not encrypted; the copy kept in Finland is.
 
 **Your account.** After two years without signing in, you get an e-mail. A year later, if you have not signed in, your account is anonymized: your name, your addresses, your picture and your links leave Quiz. The audit log keeps them up to three years, the backups about four months. Your results stay, without your name. Signing in keeps your account. You can also anonymize it sooner, in **Settings**.
 

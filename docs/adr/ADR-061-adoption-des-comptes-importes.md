@@ -104,7 +104,7 @@ and GitHub link stay on the imported one, which nobody can ever sign in to.
 6. **Permanent.** An adopted account is an ordinary account; the
    placeholder is gone and nothing undoes it. The import's `id_map` keeps
    the correspondence with the classroom id. *(Amended 2026-11-21: the map
-   is dropped, migration `0152`; its dump is archived outside the
+   is dropped, migration `0153`; its dump is archived outside the
    repository.)*
 
 7. **Cost, and no index.** Every login now opens a transaction and runs one
