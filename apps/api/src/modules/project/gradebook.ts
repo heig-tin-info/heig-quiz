@@ -38,6 +38,7 @@ import { liveProject } from "../guards.js";
 import { releaseOf, repoScores } from "./detail.js";
 import { scoreFacts } from "./scores.js";
 import { seatRepos } from "./groupRepos.js";
+import { gradesIn, repoGrades, type RepoGrades } from "./repoGrades.js";
 import type { RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
 
@@ -116,9 +117,10 @@ export async function projectLiveScores(
 }
 
 /** A repository's release snapshot, null without a repository or a score at the release. */
-function releasedSnapshot(repo: RepoRow | null): { points: number; max: number; grade: number } | null {
-  const grade = repo?.releasedGrade ?? null;
-  return repo === null || grade === null ? null : { points: repo.releasedPoints!, max: repo.releasedMax!, grade };
+function releasedSnapshot(repo: RepoRow | null, grades: ReadonlyMap<string, RepoGrades>): { points: number; max: number; grade: number } | null {
+  if (repo === null) return null;
+  const { releasedGrade: grade, releasedPoints: points, releasedMax: max } = gradesIn(grades, repo.id);
+  return grade === null ? null : { points: points!, max: max!, grade };
 }
 
 /** One released project of a student's seat, with its classroom's header columns (F-ORG-14). */
@@ -183,9 +185,11 @@ export async function studentProjectGrades(db: Db, userId: string, classroomId?:
     );
   // One read of the seats' repositories for every project: a fixed number of statements (audit D-05).
   const seats = await seatRepos(db, rows.map((row) => row.project), rows.map((row) => row.enrollmentId));
+  const held = rows.flatMap((row) => seats.of(row.project.id, row.enrollmentId) ?? []);
+  const grades = await repoGrades(db, held.map((repo) => repo.id));
   return rows.map(({ enrollmentId, excusedMarkId, ...row }) => ({
     ...row,
     excused: excusedMarkId !== null,
-    score: releasedSnapshot(seats.of(row.project.id, enrollmentId)),
+    score: releasedSnapshot(seats.of(row.project.id, enrollmentId), grades),
   }));
 }

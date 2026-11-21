@@ -75,8 +75,9 @@ import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { accessStates } from "./memberAccess.js";
+import { NO_GRADES, type RepoGrades } from "./repoGrades.js";
 import { studentRepos, type RepoRow } from "./repos.js";
-import { adjusterNames, finalOf, scoreFacts, slots, type RunRow, type ScoreFacts } from "./scores.js";
+import { adjusterNames, finalOf, gradesOf, scoreFacts, slots, type RunRow, type ScoreFacts } from "./scores.js";
 import { gradedBeforeUpdate, projectSyncState, repoSyncViews } from "./sync.js";
 import { projectSummary, type ProjectRow } from "./views.js";
 
@@ -205,15 +206,16 @@ async function finalDispatches(db: Db, repoIds: string[]): Promise<Map<string, D
  * then through the grade adjustment (ADR-135), the adjustment, the
  * release's snapshot. The one computation behind the page's rows, the
  * score's and the adjustment's writes (M3-08b), the release and the
- * gradebook; `facts` holds the repository's slot runs and criteria
- * standing ({@link scoreFacts}). `names` names the adjustment's writer
+ * gradebook; `facts` holds the repository's slot runs, criteria
+ * standing and stored grading ({@link scoreFacts}). `names` names the adjustment's writer
  * (`adjusterNames`), read by the staff's views alone: without it, `by` is
  * null.
  */
 export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts, names: ReadonlyMap<string, string> = NO_NAMES): ProjectRepoScores {
   const [current, frozen, review] = slots(repo, facts.runs);
-  const final = finalOf(repo, facts);
-  const stored = storedAdjustment(repo);
+  const grades = gradesOf(facts, repo.id);
+  const final = finalOf(repo, facts, grades);
+  const stored = storedAdjustment(grades);
   // Points → their grade by the project's scale → the adjustment (ADR-135): the grade every view shows.
   const graded = adjustGrade(baseGrade(project, final), stored);
   const released = project.releasedAt !== null;
@@ -222,9 +224,9 @@ export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts
     frozen: slotScore(frozen, project, "ci"),
     review: slotScore(review, project, "review"),
     teacher:
-      repo.teacherPoints === null
+      grades.teacherPoints === null
         ? null
-        : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment, gradedAt: isoOrNull(repo.teacherGradedAt) },
+        : { points: grades.teacherPoints, max: grades.teacherMax, comment: grades.teacherComment, gradedAt: isoOrNull(grades.teacherGradedAt) },
     final: final && { ...final, grade: graded && { grade: graded.grade } },
     adjustment: stored && {
       kind: stored.kind,
@@ -239,12 +241,12 @@ export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts
   };
   return {
     scores,
-    released: released ? { points: repo.releasedPoints, max: repo.releasedMax } : null,
+    released: released ? { points: grades.releasedPoints, max: grades.releasedMax } : null,
     changedAfterRelease: changedAfterRelease(released, releaseOf(project, repo, scores), {
-      grade: repo.releasedGrade,
-      adjustmentComment: repo.releasedAdjustmentComment,
-      points: repo.releasedPoints,
-      max: repo.releasedMax,
+      grade: grades.releasedGrade,
+      adjustmentComment: grades.releasedAdjustmentComment,
+      points: grades.releasedPoints,
+      max: grades.releasedMax,
     }),
   };
 }
@@ -256,11 +258,11 @@ export function baseGrade(project: ProjectRow, final: FinalScore | null): number
 
 const NO_NAMES: ReadonlyMap<string, string> = new Map();
 
-/** A repository's grade adjustment as stored (ADR-135), null without one: its six columns are written whole (`project_repos_grade_adjust_whole`). */
-function storedAdjustment(repo: RepoRow): (GradeAdjustment & { comment: string; by: string; at: Date }) | null {
-  const { gradeAdjustKind: kind, gradeAdjustValue: value, gradeAdjustComment: comment, gradeAdjustedBy: by, gradeAdjustedAt: at } = repo;
+/** A repository's grade adjustment as stored (ADR-135), null without one: its six columns are written whole (`project_repo_grades_adjust_whole`). */
+function storedAdjustment(grades: RepoGrades): (GradeAdjustment & { comment: string; by: string; at: Date }) | null {
+  const { gradeAdjustKind: kind, gradeAdjustValue: value, gradeAdjustComment: comment, gradeAdjustedBy: by, gradeAdjustedAt: at } = grades;
   if (kind === null || value === null || comment === null || by === null || at === null) return null;
-  return { kind, value, baseAtWrite: repo.gradeAdjustBase, comment, by, at };
+  return { kind, value, baseAtWrite: grades.gradeAdjustBase, comment, by, at };
 }
 
 /**
@@ -297,7 +299,7 @@ export function releaseOf(
  * field, M3-12b).
  */
 export function teacherRunMax(repo: RepoRow, facts: ScoreFacts): number | null {
-  const scored = finalOf({ ...repo, teacherPoints: null, teacherMax: null }, facts);
+  const scored = finalOf(repo, facts, NO_GRADES);
   return scored && !scored.toVerify ? scored.max : null;
 }
 

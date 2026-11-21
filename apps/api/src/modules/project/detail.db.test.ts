@@ -44,6 +44,7 @@ import {
 import { resetLiveStateCache } from "../../github/metrics.js";
 import { json, orgsRoute, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
+import { patchRepo, setRepoGrades, splitRepoPatch, type RepoPatch } from "../../test/project.js";
 import { projectDetail } from "./detail.js";
 import {
   APP_ENV,
@@ -142,12 +143,12 @@ async function sibling(w: World, state: ProjectState): Promise<string> {
   return insertProject(w.classroomId, own!.orgId, w.org, state);
 }
 
-type RepoPatch = Partial<typeof projectRepos.$inferInsert>;
 let nextRepo = 40_000;
 /** The student's repository, provisioned and invited, as Accept leaves it. */
 async function repoOf(w: World, userId: string, patch: RepoPatch = {}): Promise<string> {
   const id = randomUUID();
   const n = nextRepo++;
+  const { repo, grades } = splitRepoPatch(patch);
   await server.app.db.insert(projectRepos).values({
     id,
     projectId: w.projectId,
@@ -159,8 +160,9 @@ async function repoOf(w: World, userId: string, patch: RepoPatch = {}): Promise<
     acceptedAt: at("2026-10-01T09:00:00Z"),
     invitationStatus: "accepted",
     rulesetId: n,
-    ...patch,
+    ...repo,
   });
+  await setRepoGrades(server.app.db, id, grades);
   return id;
 }
 
@@ -184,7 +186,7 @@ async function run(repoId: string, completedAt: string, patch: RunPatch = {}): P
   return id;
 }
 
-const setRepo = (id: string, patch: RepoPatch) => server.app.db.update(projectRepos).set(patch).where(eq(projectRepos.id, id));
+const setRepo = (id: string, patch: RepoPatch) => patchRepo(server.app.db, id, patch);
 
 async function detail(projectId: string, headers = teacher.headers): Promise<ProjectDetail> {
   const res = await call(`/app/api/projects/${projectId}`, headers);

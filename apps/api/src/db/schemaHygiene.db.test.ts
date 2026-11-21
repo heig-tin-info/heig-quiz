@@ -9,6 +9,14 @@
  *     served by the index on `answer_id`). Without one, deleting a parent
  *     row scans the child table, once per row deleted.
  *
+ * The rule is deliberately lenient for a composite key: the classic one
+ * wants an index leading with ALL its columns. Ours are composite only to
+ * cross-check a denormalized parent (`gradings` → `answers`, the members and
+ * repositories → `project_groups`, `gradebook_marks` → `gradebook_columns`),
+ * and their leading column is itself a key with its own index, as selective
+ * as the pair: a second, wider index would cost every write and serve no
+ * lookup the first does not.
+ *
  * A ratchet: a new foreign key without its index fails here, and so does an
  * entry of the allowlist below that no longer names an unindexed key (it was
  * indexed or dropped: take it out). The allowlist holds today's accepted
@@ -62,6 +70,8 @@ const UNINDEXED_FOREIGN_KEYS: readonly { reason: string; keys: readonly ForeignK
       "project_contestations(proposed_by) -> users",
       "project_contestations(resolved_by) -> users",
       "project_criterion_grades(created_by) -> users",
+      "project_repo_grades(grade_adjusted_by) -> users",
+      "project_repo_grades(teacher_graded_by) -> users",
       "project_repos(grade_adjusted_by) -> users",
       "project_repos(teacher_graded_by) -> users",
       "projects(created_by) -> users",

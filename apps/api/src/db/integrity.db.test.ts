@@ -1,5 +1,5 @@
 /**
- * The integrity constraints of migration 0151
+ * The integrity constraints of migration 0152
  * (docs/audits/2026-11-21-database-remediation.md, Phase 3), against the
  * real migrations: a role or a state off its list, an address not
  * normalized, a grading or a group member whose denormalized parent
