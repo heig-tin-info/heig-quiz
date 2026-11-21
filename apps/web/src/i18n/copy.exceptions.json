@@ -12,5 +12,8 @@
     "calc.close",
     "live.correction.publish",
     "share.publish"
+  ],
+  "it-informal-address": [
+    "settings.teams.step2"
   ]
 }

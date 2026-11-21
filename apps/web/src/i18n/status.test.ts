@@ -10,6 +10,7 @@ import type { TranslatedLocale } from "@quiz/domain";
 import { de } from "./de";
 import { DOMAINS } from "./domains";
 import { en } from "./en";
+import { it as itDict } from "./it";
 
 /**
  * The translated languages (ADR-140 §2, §7). English and French are
@@ -35,9 +36,16 @@ import { en } from "./en";
  *   a dot (`qt.mcq.`), or one key. A mark that matches no key fails.
  */
 
-/** Every translated language of the registry (`LOCALE_INFO`): one added there is a compile error here until its dictionary is. */
-const TRANSLATED: Record<TranslatedLocale, Record<keyof typeof en, string>> = { de };
-type Lang = TranslatedLocale;
+/**
+ * Every translated language of the registry (`LOCALE_INFO`): one added there
+ * is a compile error here until its dictionary is.
+ *
+ * TEMPORARY: Italian is drafted but not yet in `LOCALES`, so `Lang` widens
+ * the registry by it. When `it` joins `LOCALES` as a translated language,
+ * delete `| "it"`: `Lang` is then `TranslatedLocale` again.
+ */
+type Lang = TranslatedLocale | "it";
+const TRANSLATED: Record<Lang, Record<keyof typeof en, string>> = { de, it: itDict };
 type Key = keyof typeof en;
 
 const DIR = dirname(fileURLToPath(import.meta.url));

@@ -27,8 +27,8 @@ import { fr } from "./i18n/fr";
  *     head of a template that interpolates, and every `translated` prefix, is
  *     collected first; a key under one of them is live by construction.
  *
- * The dictionary files (each folder of `i18n/`, `en/`, `fr/`, `de/`, and
- * the `en.ts`, `fr.ts`, `de.ts` that spread them) are left out of the corpus — otherwise every key
+ * The dictionary files (each folder of `i18n/`, `en/`, `fr/`, `de/`, `it/`, and
+ * the `en.ts`, `fr.ts`, `de.ts`, `it.ts` that spread them) are left out of the corpus — otherwise every key
  * would trivially find itself — but the rest of `i18n/` stays in it, because
  * `formatDuration` in `i18n/index.tsx` reads the `dur.*` keys and nothing
  * else does.
@@ -36,7 +36,7 @@ import { fr } from "./i18n/fr";
 
 const WEB_SRC = import.meta.dirname;
 const REPO = join(WEB_SRC, "..", "..", "..");
-/** Each dictionary is a folder of `i18n/` (`en/`, `fr/`, `de/`…) and the file beside it that spreads it. */
+/** Each dictionary is a folder of `i18n/` (`en/`, `fr/`, `de/`, `it/`…) and the file beside it that spreads it. */
 const DICTIONARY_FILES = readdirSync(join(WEB_SRC, "i18n"), { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .flatMap(({ name }) => {

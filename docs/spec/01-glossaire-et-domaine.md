@@ -231,67 +231,74 @@ English column.* *The German column (2026-11-21, ADR-140 §2, §9) is that
 translation, machine-drafted, not written: Swiss spelling (*ss*), the
 reader addressed as *Sie*. Its never-words, which the copy lint refuses:
 Schüler, Dozent, Lehrer, Rückmeldung, einreichen, Benotung, Evaluation, and
-*das / ein Quiz* for an evaluation.*
+*das / ein Quiz* for an evaluation.* *The Italian column (ADR-140 §2, §9)
+is that translation too, machine-drafted, not written: Swiss usage (*nota*,
+never *voto*), the reader addressed, where needed, as a lowercase *lei*,
+accents never written as apostrophes, and *graded* said with *correzione*
+or *viene corretto*, never a bare *è corretto*, which reads "is correct".
+Its never-words, which the copy lint refuses: tu and voi, voto, alunno,
+allievo, professore, insegnante, feedback, sottomettere, and
+*il / un / questo quiz* for an evaluation.*
 
-| Concept | English | French | German | Never (fr) |
-|---|---|---|---|---|
-| Pool | pool | banque | Fragenpool | pool |
-| Poll | poll | sondage | Umfrage | poll |
-| Concept | concept | notion | Konzept | concept |
-| Evaluation, mode unknown | evaluation | évaluation | Test | quiz |
-| Exam / exercise, mode known | exam / exercise | examen / exercice | Prüfung / Übung | quiz, épreuve |
-| Feedback (what the student sees of the grading) | feedback | correction | Korrektur | retour, retour à l'étudiant, politique de retour |
-| Answer key (the published expected answer) | answer key | corrigé | Musterlösung | solution, réponse modèle, solution de référence |
-| Expected answer (inside a question) | expected answer | réponse attendue | erwartete Antwort | clé |
-| Explanation | explanation | explication | Erklärung | — |
-| Points of a question or an attempt | points | points | Punkte | score, marque |
-| Grade (1 to 6) | grade | note | Note | score, marque |
-| Score of a project (CI points) | score | score | Score | note, marque |
-| Grade scale | grade scale | barème | Notenskala | échelle, politique de notation |
-| Grading policy (MCQ, categorize) | grading policy | règle de notation | Bewertungsregel | politique |
-| Criterion of an essay (earns its points, or a share of the total by its weight once normalized) | criterion | critère | Kriterium | — |
-| Weighting of an essay's criteria (points, or weights sharing a total) | weighting | pondération | Gewichtung | barème |
-| Normalize (an essay's criteria become weights sharing a total; not a gradebook column's weight) | normalize | normaliser | normalisieren | — |
-| All-or-nothing policy | all or nothing | tout ou rien | alles oder nichts | exact |
-| Navigation checkpoint of an evaluation (closes what precedes it) | checkpoint | verrou | Sperre | jalon, étape, séparation de section |
-| Review checkpoint of a project | checkpoint | point de contrôle | Kontrollpunkt | jalon |
-| Lobby | lobby | salle d'attente | Warteraum | salle, anneau |
-| Notepad | notepad | bloc-notes | Notizblock | calepin |
-| Calculator | calculator | calculatrice | Taschenrechner | — |
-| Template (evaluation) | template | modèle | Vorlage | gabarit |
-| Code template, starter | starter | code de départ | Startcode | modèle, template |
-| LLM, model, AI | AI | IA | KI | LLM, modèle, modèle de langage |
-| Runner | runner | exécuteur | Runner | runner, simulateur (the circuit simulator keeps *simulation*) |
-| Staff of a course | staff | équipe enseignante | Lehrteam | staff, équipe |
-| Teacher | teacher | enseignant·e in prose becomes a neutral turn; *enseignant* alone in a label | Lehrperson; the course's owner role (*Teacher* in English) is *Kursleitung* | professeur, prof |
-| Student | student | étudiant (label); neutral turn in prose | Studierende (a plural or a neutral turn) | élève |
-| Classroom | classroom | classe | Klasse | salle, volée |
-| Roster | roster | liste des étudiants | Klassenliste | effectif, liste |
-| Settings | settings | réglages | Einstellungen | paramètres |
-| Edit | edit | modifier | bearbeiten | éditer |
-| Save | save | enregistrer | speichern | sauvegarder |
-| Submit (an attempt) | hand in | rendre | abgeben | soumettre, remettre |
-| Release (results, scores) | release | publier (les résultats, les notes) | freigeben | rendre, relâcher |
-| Published correction (exercise) | published correction | corrigé publié | veröffentlichte Korrektur | — |
-| Retake | retake | nouvelle tentative | neuer Versuch | reprise |
-| Contestation (a student contests the grading of one question or criterion, once, with a reason; ADR-139, 2026-11-20) | contestation; the act *Contest* | contestation; the act *Contester* | Beanstandung; the act *Beanstanden* | réclamation, recours |
-| Paper copy (an exam answered by hand, typed in by the staff, ADR-125) | paper copy; badge *Paper* | copie papier; badge *Papier* | Papierexemplar; badge *Papier* | — |
-| Hand-out (the printed evaluation, blank, for a paper sitting) | hand-out | énoncé à distribuer | Aufgabenblatt | — |
-| Frozen (score, list) | frozen | figé | eingefroren | gelé, verrouillé |
-| Locked (repository, question) | locked | verrouillé | gesperrt | figé, gelé |
-| Dashboard (live) | dashboard | tableau de bord | Dashboard | — |
-| Drill, practice | practice | entraînement | Training | drill, révisions |
-| Targeted revision | targeted revision | révision ciblée | gezielte Wiederholung | — |
-| Group set (a named list of groups, ADR-070; 2026-11-17) | group set | groupes, shown by the set's name (« Groupes Labo », « ces groupes »); one of its groups is *un groupe*; the Groups tab's button is *Nouveau groupe* | Gruppeneinteilung; the Groups tab's button is *Neue Gruppe* | répartition (*répartition des notes / des réponses / par question*, a distribution, stays), série, jeu, ensemble |
-| A teacher takes a staff seat in a classroom (ADR-018; 2026-11-17) | join as student | s'inscrire à la classe | der Klasse beitreten | rejoindre comme étudiant (*rejoindre* stays a group's) |
-| Journal | journal | journal | Journal | carnet |
-| Gradebook | gradebook | carnet de notes | Notenbuch | — |
-| Component of the mean (a course's weighted share of the gradebook's mean, ADR-131) | component | composante | Komponente | groupe, group, catégorie |
-| Label of a cloze shown as labels (an option of a dropdown blank, dragged from the tray into a gap of the text, ADR-138; not a diagram's label nor a kiosk station's) | label; the dropdown presentation is *dropdowns* | étiquette; the dropdown presentation is *listes* | Etikett; the dropdown presentation is *Dropdowns* | — |
-| Correct / wrong (a verdict) | correct / wrong | juste / faux | richtig / falsch | correct, bon |
-| Not answered | unanswered | sans réponse | unbeantwortet | pas répondu, non répondue |
-| Default | default | par défaut | Standard | défaut |
-| Pseudonymized account (UI word; its identity replaced, its results kept, ADR-117) | anonymized | anonymisé | anonymisiert | supprimé (and *deleted* in English) |
-| Dormant account (no activity for two years, the lifecycle e-mail sent; active again at the next sign-in; not an archived classroom, ADR-117, 2026-11-05) | dormant | en sommeil | ruhend | archivé |
-| Open a repository in the workspace (staff, read-only, ADR-129) | open in workspace | ouvrir dans l'espace de travail | im Arbeitsbereich öffnen | codespace |
-| The platform hands in the online workspace's state at the deadline (ADR-130) | collection at the deadline; collected, not collected | relevé à l'échéance ; relevé, non relevé | Einsammeln bei Fristende; eingesammelt, nicht eingesammelt | collecte, ramassage, push automatique |
+| Concept | English | French | German | Italian | Never (fr) |
+|---|---|---|---|---|---|
+| Pool | pool | banque | Fragenpool | banca di domande | pool |
+| Poll | poll | sondage | Umfrage | sondaggio | poll |
+| Concept | concept | notion | Konzept | concetto | concept |
+| Evaluation, mode unknown | evaluation | évaluation | Test | valutazione | quiz |
+| Exam / exercise, mode known | exam / exercise | examen / exercice | Prüfung / Übung | esame / esercizio | quiz, épreuve |
+| Feedback (what the student sees of the grading) | feedback | correction | Korrektur | correzione | retour, retour à l'étudiant, politique de retour |
+| Answer key (the published expected answer) | answer key | corrigé | Musterlösung | soluzione | solution, réponse modèle, solution de référence |
+| Expected answer (inside a question) | expected answer | réponse attendue | erwartete Antwort | risposta attesa | clé |
+| Explanation | explanation | explication | Erklärung | spiegazione | — |
+| Points of a question or an attempt | points | points | Punkte | punti | score, marque |
+| Grade (1 to 6) | grade | note | Note | nota | score, marque |
+| Score of a project (CI points) | score | score | Score | punteggio | note, marque |
+| Grade scale | grade scale | barème | Notenskala | scala delle note | échelle, politique de notation |
+| Grading policy (MCQ, categorize) | grading policy | règle de notation | Bewertungsregel | regola di valutazione | politique |
+| Criterion of an essay (earns its points, or a share of the total by its weight once normalized) | criterion | critère | Kriterium | criterio | — |
+| Weighting of an essay's criteria (points, or weights sharing a total) | weighting | pondération | Gewichtung | ponderazione | barème |
+| Normalize (an essay's criteria become weights sharing a total; not a gradebook column's weight) | normalize | normaliser | normalisieren | normalizzare | — |
+| All-or-nothing policy | all or nothing | tout ou rien | alles oder nichts | tutto o niente | exact |
+| Navigation checkpoint of an evaluation (closes what precedes it) | checkpoint | verrou | Sperre | blocco | jalon, étape, séparation de section |
+| Review checkpoint of a project | checkpoint | point de contrôle | Kontrollpunkt | punto di controllo | jalon |
+| Lobby | lobby | salle d'attente | Warteraum | sala d'attesa | salle, anneau |
+| Notepad | notepad | bloc-notes | Notizblock | blocco note | calepin |
+| Calculator | calculator | calculatrice | Taschenrechner | calcolatrice | — |
+| Template (evaluation) | template | modèle | Vorlage | modello | gabarit |
+| Code template, starter | starter | code de départ | Startcode | codice di partenza | modèle, template |
+| LLM, model, AI | AI | IA | KI | IA | LLM, modèle, modèle de langage |
+| Runner | runner | exécuteur | Runner | esecutore | runner, simulateur (the circuit simulator keeps *simulation*) |
+| Staff of a course | staff | équipe enseignante | Lehrteam | team docente | staff, équipe |
+| Teacher | teacher | enseignant·e in prose becomes a neutral turn; *enseignant* alone in a label | Lehrperson; the course's owner role (*Teacher* in English) is *Kursleitung* | docente; the course's owner role (*Teacher* in English) is *responsabile del corso* | professeur, prof |
+| Student | student | étudiant (label); neutral turn in prose | Studierende (a plural or a neutral turn) | studente / studenti (label); neutral turn in prose | élève |
+| Classroom | classroom | classe | Klasse | classe | salle, volée |
+| Roster | roster | liste des étudiants | Klassenliste | elenco della classe | effectif, liste |
+| Settings | settings | réglages | Einstellungen | impostazioni | paramètres |
+| Edit | edit | modifier | bearbeiten | modificare | éditer |
+| Save | save | enregistrer | speichern | salvare | sauvegarder |
+| Submit (an attempt) | hand in | rendre | abgeben | consegnare | soumettre, remettre |
+| Release (results, scores) | release | publier (les résultats, les notes) | freigeben | pubblicare | rendre, relâcher |
+| Published correction (exercise) | published correction | corrigé publié | veröffentlichte Korrektur | correzione pubblicata | — |
+| Retake | retake | nouvelle tentative | neuer Versuch | nuovo tentativo | reprise |
+| Contestation (a student contests the grading of one question or criterion, once, with a reason; ADR-139, 2026-11-20) | contestation; the act *Contest* | contestation; the act *Contester* | Beanstandung; the act *Beanstanden* | contestazione; the act *Contesta* | réclamation, recours |
+| Paper copy (an exam answered by hand, typed in by the staff, ADR-125) | paper copy; badge *Paper* | copie papier; badge *Papier* | Papierexemplar; badge *Papier* | copia cartacea; badge *Carta* | — |
+| Hand-out (the printed evaluation, blank, for a paper sitting) | hand-out | énoncé à distribuer | Aufgabenblatt | enunciato da distribuire | — |
+| Frozen (score, list) | frozen | figé | eingefroren | congelato | gelé, verrouillé |
+| Locked (repository, question) | locked | verrouillé | gesperrt | bloccato | figé, gelé |
+| Dashboard (live) | dashboard | tableau de bord | Dashboard | dashboard | — |
+| Drill, practice | practice | entraînement | Training | allenamento | drill, révisions |
+| Targeted revision | targeted revision | révision ciblée | gezielte Wiederholung | ripasso mirato | — |
+| Group set (a named list of groups, ADR-070; 2026-11-17) | group set | groupes, shown by the set's name (« Groupes Labo », « ces groupes »); one of its groups is *un groupe*; the Groups tab's button is *Nouveau groupe* | Gruppeneinteilung; the Groups tab's button is *Neue Gruppe* | insieme di gruppi; the Groups tab's button is *Nuovo gruppo* | répartition (*répartition des notes / des réponses / par question*, a distribution, stays), série, jeu, ensemble |
+| A teacher takes a staff seat in a classroom (ADR-018; 2026-11-17) | join as student | s'inscrire à la classe | der Klasse beitreten | iscriversi alla classe | rejoindre comme étudiant (*rejoindre* stays a group's) |
+| Journal | journal | journal | Journal | diario | carnet |
+| Gradebook | gradebook | carnet de notes | Notenbuch | registro delle note | — |
+| Component of the mean (a course's weighted share of the gradebook's mean, ADR-131) | component | composante | Komponente | componente | groupe, group, catégorie |
+| Label of a cloze shown as labels (an option of a dropdown blank, dragged from the tray into a gap of the text, ADR-138; not a diagram's label nor a kiosk station's) | label; the dropdown presentation is *dropdowns* | étiquette; the dropdown presentation is *listes* | Etikett; the dropdown presentation is *Dropdowns* | etichetta; the dropdown presentation is *menu a tendina* | — |
+| Correct / wrong (a verdict) | correct / wrong | juste / faux | richtig / falsch | corretto / errato | correct, bon |
+| Not answered | unanswered | sans réponse | unbeantwortet | senza risposta | pas répondu, non répondue |
+| Default | default | par défaut | Standard | predefinito | défaut |
+| Pseudonymized account (UI word; its identity replaced, its results kept, ADR-117) | anonymized | anonymisé | anonymisiert | anonimizzato | supprimé (and *deleted* in English) |
+| Dormant account (no activity for two years, the lifecycle e-mail sent; active again at the next sign-in; not an archived classroom, ADR-117, 2026-11-05) | dormant | en sommeil | ruhend | inattivo | archivé |
+| Open a repository in the workspace (staff, read-only, ADR-129) | open in workspace | ouvrir dans l'espace de travail | im Arbeitsbereich öffnen | aprire nello spazio di lavoro | codespace |
+| The platform hands in the online workspace's state at the deadline (ADR-130) | collection at the deadline; collected, not collected | relevé à l'échéance ; relevé, non relevé | Einsammeln bei Fristende; eingesammelt, nicht eingesammelt | raccolta alla scadenza; raccolto, non raccolto | collecte, ramassage, push automatique |

@@ -4,10 +4,11 @@ import { de } from "./de";
 import { DOMAINS } from "./domains";
 import { en } from "./en";
 import { fr } from "./fr";
+import { it as itDict } from "./it";
 
 /**
  * The guard of `domains.ts`: a key lives in the one domain file that lists
- * its first segment, in every dictionary folder (`en/`, `fr/`, `de/`). The
+ * its first segment, in every dictionary folder (`en/`, `fr/`, `de/`, `it/`). The
  * dictionaries spread the files, so a key in two files would silently keep
  * the last one; the prefix rule makes that impossible, and the count catches
  * a file left out of a spread.
@@ -16,7 +17,7 @@ import { fr } from "./fr";
 type Files = Record<string, Record<string, Record<string, string>>>;
 /** Every domain file, by folder: `./en/pool.ts`, `./de/qt.ts`… */
 const ALL_FILES: Files = import.meta.glob("./*/*.ts", { eager: true });
-const DICTS = { en, fr, de };
+const DICTS = { en, fr, de, it: itDict };
 type Lang = keyof typeof DICTS;
 
 const langOf = (path: string) => path.split("/")[1] as Lang;
