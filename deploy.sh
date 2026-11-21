@@ -166,30 +166,39 @@ if [ "$environment" = production ] && [ -f .env.image ]; then
   # app migrates at start in one transaction, so a migration that fails rolls
   # back whole; the dangerous one succeeds and changes data wrongly, and this
   # dump is the state just before it. Taken only when the commit carries a
-  # migration the running database has not applied: the journal's last
-  # `when` against the newest row of drizzle's own table, whose `created_at`
-  # IS that `when`. A check that cannot run counts as pending (fail closed).
-  # A dump that fails refuses the deploy before anything is pulled or
-  # restarted (exit 4). The ten newest are kept here, and the off-site copy
-  # takes the whole directory; the daily `quiz-*.dump` are the backup
-  # service's.
-  if [ -n "$postgres" ]; then
-    journal=$(sed -n 's/.*"when": *\([0-9]*\).*/\1/p' apps/api/drizzle/meta/_journal.json | tail -n 1)
-    applied=$("${COMPOSE[@]}" exec -T postgres psql -XAtq -v ON_ERROR_STOP=1 -U quiz -d quiz \
-      -c 'SELECT coalesce(max(created_at), 0) FROM drizzle.__drizzle_migrations') || applied=
-    if ! [[ "$journal" =~ ^[0-9]+$ && "$applied" =~ ^[0-9]+$ ]] || [ "$journal" -gt "$applied" ]; then
-      dump="backups/pre-$(git rev-parse --short=8 HEAD)-$(date -u +%Y%m%dT%H%M%SZ).dump"
-      if "${COMPOSE[@]}" exec -T postgres pg_dump -Fc -U quiz -d quiz > "$dump.tmp" && [ -s "$dump.tmp" ]; then
-        mv "$dump.tmp" "$dump"
-        echo "deploy: a migration is pending; database dumped to $dump ($(stat -c %s "$dump") bytes)."
-      else
-        rm -f "$dump.tmp"
-        echo "deploy: REFUSED, the pre-migration dump failed; nothing was pulled nor restarted." >&2
-        back_to_running
-        exit 4
-      fi
-      ls -1t backups/pre-*.dump 2>/dev/null | tail -n +11 | xargs -r rm --
-    fi
+  # migration the running database has not applied: drizzle applies every
+  # journal entry whose `when` is above the newest `created_at` of its own
+  # table, so a migration is pending iff the journal's largest `when` is.
+  # A check that cannot run counts as pending (fail closed). A database not
+  # running is started alone first: the app would otherwise migrate it with
+  # no dump. The dump is read back whole (`pg_restore` to /dev/null), since
+  # a custom-format dump written to a pipe does not notice a short write.
+  # Any failure refuses the deploy before anything is pulled or the app
+  # restarted (exit 4). The ten newest `pre-*.dump` are kept here; the
+  # off-site copy takes them at its next nightly run; the daily
+  # `quiz-*.dump` are the backup service's.
+  refuse_dump() {
+    [ -z "${dump:-}" ] || rm -f "$dump.tmp"
+    echo "deploy: REFUSED, $1; the app was neither pulled nor restarted." >&2
+    back_to_running
+    exit 4
+  }
+  if [ -z "$postgres" ]; then
+    "${COMPOSE[@]}" up -d --wait --wait-timeout 60 postgres < /dev/null \
+      || refuse_dump "PostgreSQL did not start for the pre-migration check"
+  fi
+  journal=$(sed -n 's/.*"when": *\([0-9]*\).*/\1/p' apps/api/drizzle/meta/_journal.json | sort -n | tail -n 1) || journal=
+  applied=$("${COMPOSE[@]}" exec -T postgres psql -XAtq -v ON_ERROR_STOP=1 -U quiz -d quiz \
+    -c 'SELECT coalesce(max(created_at), 0) FROM drizzle.__drizzle_migrations' < /dev/null) || applied=
+  if ! [[ "$journal" =~ ^[0-9]+$ && "$applied" =~ ^[0-9]+$ ]] || [ "$journal" -gt "$applied" ]; then
+    dump="backups/pre-$(git rev-parse --short=8 HEAD)-$(date -u +%Y%m%dT%H%M%SZ).dump"
+    "${COMPOSE[@]}" exec -T postgres pg_dump -Fc -U quiz -d quiz < /dev/null > "$dump.tmp" \
+      || refuse_dump "the pre-migration dump failed"
+    "${COMPOSE[@]}" exec -T postgres pg_restore -f /dev/null < "$dump.tmp" \
+      || refuse_dump "the pre-migration dump does not read back whole"
+    mv "$dump.tmp" "$dump"
+    echo "deploy: a migration is pending; database dumped to $dump ($(stat -c %s "$dump") bytes, read back whole)."
+    ls -1t backups/pre-*.dump 2>/dev/null | tail -n +11 | xargs -r rm -- || true
   fi
 fi
 

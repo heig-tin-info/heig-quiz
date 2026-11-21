@@ -13,7 +13,8 @@
 -- split changes the digests of the tables it touches, never these. A PR that
 -- moves one of these columns updates its line here, in the same PR.
 --
--- It reads every row once: about a minute on the application VM, off-peak.
+-- It reads every row once: a few seconds on the application VM (4 s on
+-- 2026-11-21, 172 MB).
 
 BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 \pset footer off

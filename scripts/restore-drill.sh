@@ -18,11 +18,12 @@ if [ "$(id -u)" != 0 ] && [ -z "${DOCKER_HOST:-}" ]; then
   export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
 fi
 C=(docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image)
-drill=quiz-restore-drill
+drill=quiz-restore-drill-$$
 work=$(mktemp -d /tmp/restore-drill.XXXXXX)
 chmod 700 "$work"
 cleanup() {
-  docker rm -f "$drill" >/dev/null 2>&1 || true
+  # -v: the image declares a volume, which holds the restored copy.
+  docker rm -fv "$drill" >/dev/null 2>&1 || true
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -55,7 +56,7 @@ sort "$work/restored.txt" > "$work/restored.sorted"
 comm -12 "$work/before.sorted" "$work/after.sorted" > "$work/stable.sorted"
 echo "drill: $(wc -l < "$work/stable.sorted") of $(wc -l < "$work/after.sorted") lines stable during the dump"
 moved=$(comm -13 "$work/before.sorted" "$work/after.sorted" | cut -d'|' -f1)
-[ -z "$moved" ] || printf 'drill: moved during the dump, not compared: %s\n' $moved
+[ -z "$moved" ] || printf '%s\n' "$moved" | sed 's/^/drill: moved during the dump, not compared: /'
 missing=$(comm -23 "$work/stable.sorted" "$work/restored.sorted")
 if [ -n "$missing" ]; then
   echo "drill: FAILED, these lines are not in the restore:" >&2

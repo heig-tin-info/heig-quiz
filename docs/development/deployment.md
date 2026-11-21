@@ -1001,19 +1001,21 @@ first (§6); when in doubt, restore it anyway. A rollback holds until the next a
   data).
 - **Before any migration, a fresh dump, taken by `deploy.sh`.** When the
   commit being deployed to production carries a migration the running
-  database has not applied (the journal's last `when` against the newest
+  database has not applied (the journal's largest `when` against the newest
   `created_at` of `drizzle.__drizzle_migrations`), the deploy dumps the
-  database to `backups/pre-<sha>-<UTC time>.dump` before anything is pulled
-  or restarted. A dump that fails refuses the deploy (exit 4, the checkout
+  database to `backups/pre-<sha>-<UTC time>.dump` and reads the dump back
+  whole before the app is pulled or restarted. A database found stopped is
+  started alone first. Any failure refuses the deploy (exit 4, the checkout
   back to the running commit); a check that cannot run counts as pending.
-  The ten newest are kept, and the off-site copy takes them with the daily
-  ones. It is the state just before the migration, the one a rollback past
-  a non-additive migration restores (§5, *Rollback*). By hand, for a
-  migration run outside a deploy:
+  The ten newest `pre-*.dump` are kept; the off-site copy takes them at its
+  next nightly run, so until then the dump lives on the VM only. It is the
+  state just before the migration, the one a rollback past a non-additive
+  migration restores (§5, *Rollback*). By hand, for a migration run outside
+  a deploy (named `manual-`, so the deploy's rotation never removes it):
 
 ```bash
 cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod \
-  exec -T postgres pg_dump -Fc -U quiz quiz > "backups/pre-<migration>-$(date +%F-%H%M).dump"
+  exec -T postgres pg_dump -Fc -U quiz quiz > "backups/manual-<migration>-$(date +%F-%H%M).dump"
 ```
 
 - **The fingerprint and the restore drill.** `scripts/db-fingerprint.sql`
