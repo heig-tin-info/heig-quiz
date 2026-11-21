@@ -24,8 +24,10 @@ async function seedUser(db: Db, login: string, ...institutional: string[]) {
   await db
     .insert(users)
     .values({ id, oidcSub: `s-${id}`, email: login, emailVerified: true });
+  // The address set is normalized, as `addAddresses` writes it (its check
+  // refuses anything else); `users.email` keeps what the IdP sent.
   await db.insert(userEmails).values([
-    { userId: id, email: login, source: "login", verified: true },
+    { userId: id, email: login.trim().toLowerCase(), source: "login", verified: true },
     ...institutional.map((email) => ({
       userId: id,
       email,
@@ -57,8 +59,10 @@ beforeAll(async () => {
 describe("claimEnrollments (AU-18/AU-21)", () => {
   it("claims a pending entry whose email matches, case-insensitively", async () => {
     const classroomId = await seedClassroom(db);
-    const userId = await seedUser(db, "ada.lovelace@heig.test");
-    const enrollmentId = await seedEntry(db, classroomId, "Ada.Lovelace@HEIG.test");
+    // The roster line is stored normalized (`enrollments_email_normalized_ck`);
+    // the login's case is what the IdP sends.
+    const userId = await seedUser(db, "Ada.Lovelace@HEIG.test");
+    const enrollmentId = await seedEntry(db, classroomId, "ada.lovelace@heig.test");
 
     expect(await claimEnrollments(db, { id: userId })).toBe(1);
     const row = await entry(db, enrollmentId);

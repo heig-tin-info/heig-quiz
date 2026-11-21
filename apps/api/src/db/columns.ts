@@ -1,10 +1,25 @@
 /**
- * Column types shared by the schemas of several modules. Not a table file:
+ * Column types and constraint helpers shared by the schemas of several modules. Not a table file:
  * `db/schema.ts` does not re-export it.
  */
-import { customType } from "drizzle-orm/pg-core";
+import { type SQL, sql } from "drizzle-orm";
+import { type AnyPgColumn, customType } from "drizzle-orm/pg-core";
 
 import type { Values } from "@quiz/domain/parameters";
+
+/**
+ * The body of a `CHECK` that holds a text column to a closed list: the SAME
+ * constant its `{ enum: ... }` reads, so a value added to the list in
+ * TypeScript only reaches the database with a migration that widens the
+ * check (`drizzle-kit generate` sees the expression change). The values are
+ * inlined as quoted literals: a DDL statement has no bind parameters, and a
+ * quote inside a value is doubled. A NULL passes, as `IN` yields unknown on
+ * it: a nullable column keeps its NULL.
+ */
+export function oneOf(column: AnyPgColumn, values: readonly string[]): SQL {
+  const literals = values.map((value) => `'${value.replaceAll("'", "''")}'`).join(", ");
+  return sql`${column} in (${sql.raw(literals)})`;
+}
 
 /**
  * The values one instance of a parameterized question was drawn with
