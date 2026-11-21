@@ -77,22 +77,41 @@ services:
       POSTGRES_USER: quiz
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       POSTGRES_DB: quiz
-    # The VM is 1 vCPU / 2 GB + 2 GB swap, shared by three services and two
-    # PostgreSQL instances (this one and the classroom's, ~50 MB each), kept
-    # separate on purpose so each service stays movable and restorable alone:
-    # the same tuning as the classroom's (correctness over throughput). Runtime
-    # GUCs, no re-init, data untouched. max_connections 40 fits app(10)+
-    # pg-boss(10)+backup with headroom; parallel query is pointless on one vCPU.
+    # Sized for the application VM at 2 vCPU / 4 GB (database remediation
+    # plan, Phase 1: docs/audits/2026-11-21-database-remediation.md), shared
+    # with the staging stack, the TB application and the RAD portal. The
+    # database is ~170 MB and grows: 256 MB of buffers hold all of it, the
+    # rest of the cache is the kernel's. Runtime GUCs, no re-init, data
+    # untouched; a change restarts PostgreSQL (seconds). max_connections 40
+    # fits app(10) + pg-boss(10) + backup with headroom; parallel query stays
+    # off (small tables, few cores).
+    # Observability: pg_stat_statements (its extension is created once by hand,
+    # deployment guide §6: PGlite has none, so no migration can), statements
+    # over 500 ms and lock waits in the log, and an idle transaction left open
+    # by a crashed client ended after 5 minutes. No server-wide
+    # statement_timeout: the backup and the migrations share this role.
     command:
       - postgres
       - -c
-      - shared_buffers=32MB
+      - shared_buffers=256MB
       - -c
-      - effective_cache_size=96MB
+      - effective_cache_size=1GB
       - -c
-      - maintenance_work_mem=16MB
+      - maintenance_work_mem=64MB
       - -c
-      - work_mem=2MB
+      - work_mem=4MB
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.max=2000
+      - -c
+      - track_io_timing=on
+      - -c
+      - log_min_duration_statement=500ms
+      - -c
+      - log_lock_waits=on
+      - -c
+      - idle_in_transaction_session_timeout=5min
       - -c
       - max_connections=40
       - -c
@@ -106,7 +125,7 @@ services:
       - -c
       - autovacuum_max_workers=1
       - -c
-      - wal_buffers=2MB
+      - wal_buffers=8MB
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
