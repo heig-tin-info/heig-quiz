@@ -120,7 +120,11 @@ other services, so the VM grows first.
 | 2.3 | The no-op writers found in 2.1 write only when the value changes (`WHERE col IS DISTINCT FROM $new`) |
 | 2.4 | Regression guard: a `schemaHygiene.db.test.ts` that reads the migrated catalog and fails on a foreign key without a covering index or a table without a primary key (explicit allowlist for the accepted cases) |
 
-### Phase 3 — integrity constraints (additive, one PR per bullet)
+### Phase 3 — integrity constraints (additive)
+
+0.4 found nothing to fix up, so Phase 3 and the indexes of 2.2 ship as ONE
+additive migration, with the hygiene test of 2.4: one promotion instead of
+five. 2.1 and 2.3 still wait for the statistics.
 
 - **3.1 State and role checks (F1).** A `CHECK (col IN (...))` built from the
   same TypeScript constant the code uses, so a new value forces a migration.
@@ -144,8 +148,10 @@ other services, so the VM grows first.
   `answers` against its attempt's evaluation would need an `evaluation_id`
   column: left out, low value.
 - **3.4 Missing foreign keys (F3).** `ON DELETE SET NULL` on the three grade
-  run slots and `attempts.{last,shown}_item_id` (no orphan in production,
-  0.4). `push_receipts` keeps no foreign key on purpose (direction project →
+  run slots and `attempts.last_item_id` (no orphan in production, 0.4).
+  `attempts.shown_item_id` keeps none: `attempts_shown_ck` ties it to
+  `shown_since`, so a `SET NULL` of the item alone would break the check;
+  the dwell closes the interval itself. `push_receipts` keeps no foreign key on purpose (direction project →
   github, N-DATA-03). `project_criterion_grades.pass_id` keeps none either:
   0.4 found it pointing at a grade dispatch (4,898 rows) or at an evidence
   row (524), and 5,349 at a pass since forgotten (a reopen forgets its
@@ -174,9 +180,12 @@ parent's id, in three releases:
   teacher_graded_at`, the six `grade_adjust_*`, `released_points,
   released_max, released_grade, released_comment,
   released_adjustment_comment`, with the `grade_adjust_whole` check.
-  - The points become `numeric` here, which fixes F5. The precision comes
-    from 0.4: `numeric(6,2)` if no stored value has more than two decimals,
-    otherwise unconstrained `numeric`, so nothing is rounded.
+  - The points become unconstrained `numeric` here, which fixes F5: exact,
+    and never rounded. Every stored value has at most two decimals (0.4),
+    but a `numeric(6,2)` would round a future computed value silently.
+  - A trigger in each direction (new → old and old → new, each writing only
+    what differs) keeps both copies equal through a rollback and the next
+    roll-forward, with no manual step.
   - The human writes (grading screen) no longer contend with the machine's
     writes on the same row.
 
@@ -220,8 +229,8 @@ cost more than it saves.
 |---|---|---|
 | 0 | 2 (deploy dump + guide; fingerprint + audit scripts) | none |
 | 1 | 1 PR + the rescale by the owner | one reboot, one PostgreSQL restart |
-| 2 | 1–2 | none (indexes in seconds) |
-| 3 | 4 | brief locks on small tables |
+| 2.2, 2.4 and 3 | 1 (0.4 found nothing to fix up) | brief locks on small tables |
+| 2.1, 2.3 | 1 | none |
 | 4 | expand + contract per split: 3 splits → 6, plus the `project_grade_runs` type | contract steps in a week without deadlines |
 | 5 | per decision | — |
 
@@ -262,7 +271,7 @@ at the latest).
     pointing to another parent (3.4 needs no fix-up). `pass_id` is not a
     reference (above).
   - `float8` points: no value with more than two decimals, the largest 100.
-    `numeric(6,2)` takes them all, no rounding.
+    The moved columns still become unconstrained `numeric` (Phase 4).
   - `project_repos`: 213 rows hold a released snapshot, 16 an adjustment,
     **none a teacher score** (`teacher_points`/`teacher_max` never written
     in production).
