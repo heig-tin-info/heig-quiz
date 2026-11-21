@@ -289,4 +289,9 @@ export const common = {
   "view.schedule": "Schedule",
   "view.tree": "Tree",
   "error.notReopenable": "A paper copy, or an attempt it replaced, is not reopened.",
+  "studentWork.title": "Deletion refused",
+  "studentWork.evaluation": "Students have started this evaluation or received its results.",
+  "studentWork.project": "This project has graded students' repositories or released scores. Archive it instead.",
+  "studentWork.classroom": "Activities with students' work: {count}. Archive the classroom instead.",
+  "studentWork.course": "Classrooms with students' work: {count}. Archive its classrooms instead.",
 };

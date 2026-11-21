@@ -209,6 +209,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
     staleItems: [],
     attemptCount: 2,
     deletionRole: "owner",
+    holdsStudentWork: false,
     editable: false,
     self: { seat: false, staffSeat: false, attemptId: null },
     editableQuestionIds: ["q1", "q2"],

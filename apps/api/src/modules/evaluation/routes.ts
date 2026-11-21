@@ -53,7 +53,7 @@ import {
   teacherGuard,
 } from "../guards.js";
 import * as gradebook from "../gradebook/service.js";
-import { notFound, readerLang, readerLocale, teacherRoute } from "../http.js";
+import { notFound, readerLang, readerLocale, sendFailure, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
 import { evaluationDocument, evaluationDocumentTree, handout, handoutTree } from "./document.js";
 import { evaluationChanged } from "./events.js";
@@ -115,10 +115,18 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
    * and is checked before the body, so an assistant naming the wrong title
    * is still `403 owner_required`, never `409 confirm_mismatch`. The caller's
    * role travels on, for the delete to decide again under the row's lock.
+   * Before the role, students' work (ADR-141): no role deletes an exam or an
+   * exercise a student started or that was released, so an assistant learns
+   * the `409 holds_student_work` an owner would get, not a 403.
    */
   const deletableEvaluation = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {
     const scope = await staffEvaluation(req, reply, p);
     if (!scope) return null;
+    const refusal = await service.studentWorkRefusal(app.db, scope.evaluation.id);
+    if (refusal) {
+      sendFailure(reply, refusal, app.clock.now());
+      return null;
+    }
     const needed = await service.deletionRole(app.db, scope.evaluation);
     const role = await requireCourseRole(app, req, reply, scope.classroom.courseId, needed);
     return role && { ...scope, role };

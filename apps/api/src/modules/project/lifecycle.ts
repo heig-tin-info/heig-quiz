@@ -60,6 +60,7 @@ import { ProjectError } from "./errors.js";
 import { replaceGroupCopy, stopProjects } from "./groupCopy.js";
 import { announcePublished, announceScheduled } from "./notify.js";
 import { classroomClient, fetchSource, readHandout, type Source } from "./sources.js";
+import { projectStudentWorkRefusal } from "./studentWork.js";
 import { lifeOf, type ProjectRow } from "./views.js";
 
 /**
@@ -778,13 +779,18 @@ export async function setProjectArchived(
 }
 
 /**
- * Deletes a project in any state (D19, F-PROJ-16): its rows — repositories,
- * runs, scores, groups, by cascade — and its push receipts (N-DATA-03), in
- * one transaction. NEVER a repository on GitHub: the students' repositories,
- * the distribution repository and the source stay where they are.
+ * Deletes a project (D19, F-PROJ-16): its rows — repositories, runs, scores,
+ * groups, by cascade — and its push receipts (N-DATA-03), in one
+ * transaction. NEVER a repository on GitHub: the students' repositories,
+ * the distribution repository and the source stay where they are. Refused,
+ * `409 holds_student_work`, once a student repository is graded or the
+ * project released (ADR-141), decided under the locks of this transaction
+ * (`projectWork`): the archive is the way out of the lists then.
  */
 export async function deleteProject(db: Db, project: ProjectRow, actor: AuditActor): Promise<void> {
   await db.transaction(async (tx) => {
+    const refusal = await projectStudentWorkRefusal(tx, project.id);
+    if (refusal) throw refusal;
     const receipts = await purgeProjectReceipts(tx, { projectId: project.id });
     await tx.delete(projects).where(eq(projects.id, project.id));
     await audit(tx, {

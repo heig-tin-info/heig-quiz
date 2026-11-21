@@ -503,6 +503,12 @@ export const EvaluationSummary = z.object({
    * reader whose role allows it; the server decides again when it deletes.
    */
   deletionRole: CourseRole,
+  /**
+   * An exam or an exercise a student has started, or released
+   * (`evaluationHoldsStudentWork`, ADR-141): no role deletes it, and the
+   * screens offer Delete greyed out with the reason. A poll: always false.
+   */
+  holdsStudentWork: z.boolean(),
   /** Who drives its clock (`clockChoiceOf`): a Scheduled draft is still not scheduled (#857). */
   clock: ClockMode,
   opensAt: z.iso.datetime().nullable(),
@@ -582,6 +588,8 @@ export const EvaluationDetail = z.object({
   attemptCount: z.number().int(),
   /** As {@link EvaluationSummary}. */
   deletionRole: CourseRole,
+  /** As {@link EvaluationSummary}. */
+  holdsStudentWork: z.boolean(),
   /** False once an attempt exists: the structure is frozen (F-EVAL-03). */
   editable: z.boolean(),
   /** The reader's own seat and test attempt (ADR-018). */

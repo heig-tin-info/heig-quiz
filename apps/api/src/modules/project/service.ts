@@ -126,6 +126,7 @@ export {
   setWorkMode,
   unscheduleProject,
 } from "./lifecycle.js";
+export { projectWork, type ProjectWorkScope } from "./studentWork.js";
 export { listSources, sourceDetail } from "./sources.js";
 export { studentProject, studentProjectCards, studentResendInvitation } from "./studentView.js";
 export { previewSync, requestSync } from "./sync.js";

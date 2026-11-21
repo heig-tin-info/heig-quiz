@@ -30,6 +30,11 @@ export interface ConfirmOptions {
    * as the API compares the `?confirm=` it is then sent.
    */
   typeToConfirm?: string;
+  /**
+   * A notice, not a question: one button, which closes (`confirmLabel`).
+   * For an action the server refused, said where it was asked (ADR-141).
+   */
+  acknowledge?: boolean;
 }
 
 type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
@@ -74,13 +79,15 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           onClose={() => settle(false)}
           footer={
             <>
-              <Button
-                variant="ghost"
-                autoFocus={pending.options.focusCancel === true}
-                onClick={() => settle(false)}
-              >
-                {pending.options.cancelLabel ?? t("common.cancel")}
-              </Button>
+              {pending.options.acknowledge ? null : (
+                <Button
+                  variant="ghost"
+                  autoFocus={pending.options.focusCancel === true}
+                  onClick={() => settle(false)}
+                >
+                  {pending.options.cancelLabel ?? t("common.cancel")}
+                </Button>
+              )}
               <Button
                 variant={pending.options.danger ? "danger" : "primary"}
                 autoFocus={pending.options.focusCancel !== true && mustType === undefined}

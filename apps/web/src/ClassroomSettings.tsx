@@ -27,6 +27,7 @@ import { JournalSettings } from "./journal/JournalSettings";
 import { useErrorToast, useToast } from "./notify";
 import { useIsCourseOwner } from "./course/parts";
 import { invalidateHint } from "./realtime/hints";
+import { useStudentWorkRefusal } from "./studentWork";
 import type { Navigate } from "./router";
 import { Button, Card, ClassroomIcon, Field, FormDialog, SectionHeading, SettingRow } from "./ui";
 
@@ -135,6 +136,7 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
     },
     onError: toastError("classroomSettings.archiveFailed"),
   });
+  const refused = useStudentWorkRefusal();
   const remove = useMutation({
     mutationFn: (confirm?: string) =>
       api(withConfirm(`/app/api/classrooms/${room.id}`, confirm), { method: "DELETE" }),
@@ -142,7 +144,11 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
       await invalidateHint(qc, ["classrooms"]);
       navigate({ view: "home" });
     },
-    onError: toastError("classroomSettings.deleteFailed"),
+    // A classroom holding students' work is never deleted (ADR-141): its archive is offered instead.
+    onError: refused("classroom", {
+      archive: archived ? undefined : () => archive.mutate("archive"),
+      otherwise: toastError("classroomSettings.deleteFailed"),
+    }),
   });
   return (
     <section className="space-y-3">

@@ -107,6 +107,8 @@ const STATUS: Record<Code, number> = {
   proposal_stale: 409,
   no_proposal: 404,
   criterion_contested: 409,
+  // ADR-141: a delete of a project holding a graded repository or released.
+  holds_student_work: 409,
   // Access to the distribution repository (#899): only a staff seat asks.
   staff_seat_required: 403,
   invite_refused: 422,

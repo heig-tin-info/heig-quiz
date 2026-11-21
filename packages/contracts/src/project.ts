@@ -666,6 +666,9 @@ export const PROJECT_REFUSALS = [
   // criterion with an open contestation, written through a token (an MCP
   // client's `grade_criterion`), are refused (409): the assistant proposes.
   "criterion_contested",
+  // ADR-141: a delete of a project holding a graded repository or released
+  // (409); the body is `StudentWorkRefusal`.
+  "holds_student_work",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;

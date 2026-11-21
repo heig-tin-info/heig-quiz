@@ -251,12 +251,19 @@ describe("the life of a card (ADR-041 §1–3)", () => {
     const app = await appAt();
     const a = await world(app, { mode: "exercise", students: 1 });
     await sit(app, a);
-    await evaluationService.deleteEvaluation(db, await reload(db, a.evaluationId), "owner");
+    // A sat exercise is never deleted through the services (ADR-141): its cards stay.
+    await expect(evaluationService.deleteEvaluation(db, await reload(db, a.evaluationId), "owner")).rejects.toMatchObject({
+      code: "holds_student_work",
+    });
+    await expect(org.deleteClassroom(db, a.classroomId)).rejects.toMatchObject({ code: "holds_student_work" });
+    expect(await cardsOf({ userId: a.studentIds[0]! })).not.toHaveLength(0);
+    // The schema still cascades, for what goes otherwise (a restore's cleanup, a retention purge).
+    await db.delete(evaluations).where(eq(evaluations.id, a.evaluationId));
     expect(await cardsOf({ userId: a.studentIds[0]! })).toHaveLength(0);
 
     const b = await world(app, { mode: "exercise", students: 1 });
     await sit(app, b);
-    await org.deleteClassroom(db, b.classroomId);
+    await db.delete(classrooms).where(eq(classrooms.id, b.classroomId));
     expect(await cardsOf({ userId: b.studentIds[0]! })).toHaveLength(0);
 
     // A question leaves once no evaluation holds it; its cards go with it.

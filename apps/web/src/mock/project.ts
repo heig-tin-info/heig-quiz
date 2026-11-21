@@ -155,7 +155,7 @@ import {
   unplacedClaimed,
 } from "./groups";
 import { mockWorkspace } from "./codespace";
-import { classroomRoster, courses, rooms } from "./org";
+import { classroomRoster, classroomWork, courses, rooms } from "./org";
 import { D, flags, H, iso, MockError, MockPayload, nextId, now, on, refuse, role } from "./runtime";
 
 /** PRG1-2026's organization, as `github.ts` names it (which this section, above it, cannot read). */
@@ -2004,8 +2004,26 @@ const setArchived = (id: string, on: boolean) => {
 on("POST", "/app/api/projects/:id/archive", (m) => setArchived(m.groups!.id!, true));
 on("POST", "/app/api/projects/:id/unarchive", (m) => setArchived(m.groups!.id!, false));
 
+/** Like the server (ADR-141): a graded repository (a score, an adjustment, a counted run) or the release. */
+const gradedReposOf = (p: MockProject) => p.repos.filter((r) => r.teacher !== null || r.adjustment !== null || r.runs.length > 0).length;
+const holdsStudentWork = (p: MockProject) => p.releasedAt !== null || gradedReposOf(p) > 0;
+classroomWork.push((classroomId) => {
+  const held = [...PROJECTS.values()].filter((p) => p.summary.classroomId === classroomId && holdsStudentWork(p));
+  return {
+    evaluations: 0,
+    projects: held.length,
+    attempts: 0,
+    gradedRepos: held.reduce((n, p) => n + gradedReposOf(p), 0),
+    released: held.filter((p) => p.releasedAt !== null).length,
+  };
+});
+
 on("DELETE", "/app/api/projects/:id", (m) => {
   const p = projectOr404(m.groups!.id!);
+  if (holdsStudentWork(p)) {
+    const work = { classrooms: 1, evaluations: 0, projects: 1, attempts: 0, gradedRepos: gradedReposOf(p), released: p.releasedAt ? 1 : 0 };
+    throw refuse(409, "holds_student_work", "The project holds students' grades", { work });
+  }
   PROJECTS.delete(p.summary.id);
   const created = CREATED.indexOf(p);
   const seed = SEEDS.findIndex((s) => s.id === p.summary.id);

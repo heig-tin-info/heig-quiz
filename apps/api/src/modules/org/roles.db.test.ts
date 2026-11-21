@@ -448,13 +448,18 @@ describe("deleting an evaluation (ADR-068 §3, amended 2026-10-10)", () => {
     expect((await remove(seed.evaluationId, owner)).statusCode).toBe(204);
   });
 
-  it("keeps a released one, or one whose correction is published, to an owner, attempts or none", async () => {
-    for (const published of [{ releasedAt: new Date() }, { correctionPublishedAt: new Date() }]) {
-      const seed = await seeded("exercise");
-      await server.app.db.update(evaluations).set(published).where(eq(evaluations.id, seed.evaluationId));
-      expect(await deletionRoles(seed)).toEqual(["owner", "owner"]);
-      expect((await remove(seed.evaluationId, assistant)).statusCode).toBe(403);
-      expect((await remove(seed.evaluationId, owner)).statusCode).toBe(204);
+  it("keeps one whose correction is published to an owner; a released one, nobody deletes (ADR-141)", async () => {
+    const published = await seeded("exercise");
+    await server.app.db.update(evaluations).set({ correctionPublishedAt: new Date() }).where(eq(evaluations.id, published.evaluationId));
+    expect(await deletionRoles(published)).toEqual(["owner", "owner"]);
+    expect((await remove(published.evaluationId, assistant)).statusCode).toBe(403);
+    expect((await remove(published.evaluationId, owner)).statusCode).toBe(204);
+
+    const released = await seeded("exercise");
+    await server.app.db.update(evaluations).set({ releasedAt: new Date() }).where(eq(evaluations.id, released.evaluationId));
+    for (const caller of [assistant, owner]) {
+      const refused = await remove(released.evaluationId, caller);
+      expect([refused.statusCode, refused.json().error]).toEqual([409, "holds_student_work"]);
     }
   });
 

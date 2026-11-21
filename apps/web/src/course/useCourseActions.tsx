@@ -11,6 +11,7 @@ import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { MenuItem } from "../ui";
 import { coursesKey, courseTemplatesKey } from "../queryKeys";
+import { useStudentWorkRefusal } from "../studentWork";
 import { AddStaffModal, NewClassroomModal } from "./modals";
 import { useIsCourseOwner } from "./parts";
 
@@ -67,6 +68,7 @@ export function useCourseActions(
   const [newRoom, setNewRoom] = useState(false);
   const [newStaff, setNewStaff] = useState(false);
   const invalidate = () => qc.invalidateQueries({ queryKey: coursesKey });
+  const workRefused = useStudentWorkRefusal();
   const removeCourse = useMutation({
     mutationFn: () => api(`/app/api/courses/${course.id}`, { method: "DELETE" }),
     // Away first, then the list: the page would otherwise redraw once as
@@ -75,6 +77,9 @@ export function useCourseActions(
       onGone?.();
       await invalidate();
     },
+    // A course holding students' work is never deleted (ADR-141). It has no
+    // archive of its own: the dialog sends to its classrooms'.
+    onError: workRefused("course", { otherwise: toastError("error.server") }),
   });
   const removeStaff = useMutation({
     mutationFn: (userId: string) =>

@@ -14,16 +14,17 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 
-import type {
-  CourseCreate,
-  CoursePatch,
-  CourseRole,
-  EnrollmentPatch,
-  StudentClassroom,
-  StudentClassroomPage,
-  TeacherCandidates,
+import {
+  type CourseCreate,
+  type CoursePatch,
+  type CourseRole,
+  type EnrollmentPatch,
+  HOLDS_STUDENT_WORK,
+  type StudentClassroom,
+  type StudentClassroomPage,
+  type TeacherCandidates,
 } from "@quiz/contracts";
-import { effectiveCourseRole, staffChangeRefusal, type StaffChange } from "@quiz/domain";
+import { effectiveCourseRole, staffChangeRefusal, studentWorkOf, type StaffChange } from "@quiz/domain";
 
 import type { AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -40,10 +41,11 @@ import {
   users,
 } from "../../db/schema.js";
 import { shownAvatar } from "../avatar.js";
-import { countTemplates } from "../evaluation/service.js";
+import { countTemplates, evaluationWork } from "../evaluation/service.js";
 import { purgeProjectReceipts } from "../github/service.js";
 import { journalSignals } from "../journal/service.js";
-import { releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "../project/service.js";
+import { DomainError } from "../http.js";
+import { projectWork, releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "../project/service.js";
 import { accessRevoked } from "../realtime/bus.js";
 import { rosterRefusal } from "./errors.js";
 
@@ -290,13 +292,40 @@ export async function updateCourse(
 }
 
 /**
- * Deletes the course and, by cascade, its classrooms and everything they
- * hold (F-ORG-09). Its projects' push receipts go first, in the same
- * transaction: no foreign key reaches them (N-DATA-03). Nothing is deleted
- * on GitHub (D19).
+ * ADR-141: a classroom or a course holding students' work is never deleted,
+ * by any role — `409 holds_student_work`, its body naming what blocks
+ * (`StudentWork`), the archive of the classrooms being the way out. In the
+ * delete's transaction, after the parent rows are locked `FOR UPDATE` (a new
+ * classroom, evaluation or project takes `FOR KEY SHARE` on its parent and
+ * waits); the evaluations' and projects' own rows are locked by their
+ * modules' reads, so an attempt, a grade or a release landing meanwhile
+ * either is counted or waits for the delete. Outside a transaction, a plain
+ * check (the route's, before the journal's confirmation).
+ */
+export async function refuseStudentWork(tx: Db | Tx, scope: { classroomId: string } | { courseId: string }): Promise<void> {
+  const work = studentWorkOf({
+    evaluations: await evaluationWork(tx, scope),
+    projects: await projectWork(tx, scope),
+  });
+  if (work) {
+    throw new DomainError(HOLDS_STUDENT_WORK, 409, "It holds students' work or grades: archive its classrooms instead (ADR-141)", {
+      work,
+    });
+  }
+}
+
+/**
+ * Deletes the course and, by cascade, its classrooms, its templates and
+ * everything they hold (F-ORG-09) — refused while one of its classrooms holds
+ * students' work (`refuseStudentWork`, ADR-141). Its projects' push receipts
+ * go first, in the same transaction: no foreign key reaches them
+ * (N-DATA-03). Nothing is deleted on GitHub (D19).
  */
 export async function deleteCourse(db: Db, courseId: string): Promise<void> {
   await db.transaction(async (tx) => {
+    await tx.select({ id: courses.id }).from(courses).where(eq(courses.id, courseId)).for("update");
+    await tx.select({ id: classrooms.id }).from(classrooms).where(eq(classrooms.courseId, courseId)).for("update");
+    await refuseStudentWork(tx, { courseId });
     await purgeProjectReceipts(tx, { courseId });
     await tx.delete(courses).where(eq(courses.id, courseId));
   });
@@ -490,11 +519,14 @@ export async function setArchived(db: Db, classroomId: string, archived: boolean
 
 /**
  * Deletes the classroom and, by cascade, its evaluations, journal and
- * projects (F-ORG-09); its projects' push receipts first, in the same
- * transaction (N-DATA-03). Nothing is deleted on GitHub (D19, F-PROJ-16).
+ * projects (F-ORG-09) — refused while it holds students' work
+ * (`refuseStudentWork`, ADR-141); its projects' push receipts first, in the
+ * same transaction (N-DATA-03). Nothing is deleted on GitHub (D19, F-PROJ-16).
  */
 export async function deleteClassroom(db: Db, classroomId: string): Promise<void> {
   await db.transaction(async (tx) => {
+    await tx.select({ id: classrooms.id }).from(classrooms).where(eq(classrooms.id, classroomId)).for("update");
+    await refuseStudentWork(tx, { classroomId });
     await purgeProjectReceipts(tx, { classroomId });
     await tx.delete(classrooms).where(eq(classrooms.id, classroomId));
   });

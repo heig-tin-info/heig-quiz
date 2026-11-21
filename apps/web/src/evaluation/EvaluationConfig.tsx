@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { courseRoleAllows, EVALUATION_STEPS, isEvaluationOver, itemListLock } from "@quiz/domain";
+import { EVALUATION_STEPS, isEvaluationOver, itemListLock } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -27,6 +27,7 @@ import type { Route } from "../router";
 import { routeToPath, useSearchParam } from "../router";
 import { Trail, useEvaluationCrumbs } from "../Trail";
 import { enterStudentView } from "../studentView";
+import { studentWorkIn, useStudentWorkRefusal } from "../studentWork";
 import {
   Alert,
   Badge,
@@ -44,7 +45,7 @@ import {
   Tabs,
   useNow,
 } from "../ui";
-import { evaluationBadgeLabel, scheduleFactsOf, schedulingPhase, stateStyle, type SchedulingPhase } from "./common";
+import { deleteGate, evaluationBadgeLabel, scheduleFactsOf, schedulingPhase, stateStyle, type SchedulingPhase } from "./common";
 import { evaluationTarget } from "./editTarget";
 import { ExportSheet } from "./ExportSheet";
 import { useItemPane } from "./ItemPreview";
@@ -143,6 +144,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
     onError: toastError("eval.resetAttempt.failed"),
   });
 
+  const refused = useStudentWorkRefusal();
   const remove = useMutation({
     mutationFn: (confirmTitle: string) =>
       api(`/app/api/evaluations/${id}`, {
@@ -156,6 +158,11 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
       } else {
         navigate({ view: "home" });
       }
+    },
+    // A student started it since the page was read (ADR-141): said, and the page read again.
+    onError: (error) => {
+      void qc.invalidateQueries({ queryKey: evaluationKey(id) });
+      refused("evaluation", { otherwise: () => {} })(error);
     },
   });
 
@@ -351,10 +358,8 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
                 icon: Trash2,
                 danger: true,
                 separator: self.attemptId === null || !self.staffSeat,
-                // Students' work or a release makes it an owner's act (ADR-068 §3).
-                ...(courseRoleAllows(myRole, data.deletionRole)
-                  ? {}
-                  : { disabled: true, description: t("eval.delete.ownerOnly") }),
+                // Students' work refuses it to everyone (ADR-141), then the role decides (ADR-068 §3).
+                ...deleteGate(data, myRole, t),
                 onSelect: async () => {
                   if (
                     await confirm({
@@ -397,7 +402,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         </Alert>
       ) : null}
 
-      <FormError error={remove.error} title={t("eval.saveFailed")} />
+      <FormError error={studentWorkIn(remove.error) ? null : remove.error} title={t("eval.saveFailed")} />
 
       <TabPanel idPrefix="eval-step" value={step}>
         {step === "questions" ? (

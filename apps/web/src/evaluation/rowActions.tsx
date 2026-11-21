@@ -3,16 +3,17 @@ import { Copy, Download, FileStack, Pencil, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { EvaluationPatch, type EvaluationSummary } from "@quiz/contracts";
-import { courseRoleAllows } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useClassroom, useCourseRole } from "../course/parts";
 import { useT } from "../i18n";
+import { useErrorToast } from "../notify";
 import { evaluationsKey } from "../queryKeys";
 import type { Route } from "../router";
+import { useStudentWorkRefusal } from "../studentWork";
 import { TextFieldDialog, type MenuItem } from "../ui";
-import { evaluationLinkItems } from "./common";
+import { deleteGate, evaluationLinkItems } from "./common";
 import { ExportSheet } from "./ExportSheet";
 import { SaveAsTemplateDialog, useDuplicateErrorToast } from "./templates";
 import { PullTemplateDialog } from "./templatePull";
@@ -57,7 +58,8 @@ function RenameEvaluationDialog({
  * row: where else it leads, Rename (#804), Duplicate, Save as template
  * (never a poll's, `422 template_poll`), Export (its documents, ADR-125;
  * never a poll's, which nobody prints) and Delete, greyed out with its
- * reason where the course role does not allow it (ADR-068 §3).
+ * reason where students' work (ADR-141) or the course role (ADR-068 §3)
+ * does not allow it.
  */
 export interface EvaluationRowActions {
   /** The row's overflow menu. */
@@ -94,6 +96,8 @@ export function useEvaluationRowActions(classroomId: string, navigate: (r: Route
     onSuccess: invalidate,
     onError: duplicateFailed,
   });
+  const refused = useStudentWorkRefusal();
+  const toastError = useErrorToast();
   const remove = useMutation({
     mutationFn: (row: EvaluationSummary) =>
       api(`/app/api/evaluations/${row.id}`, {
@@ -101,6 +105,11 @@ export function useEvaluationRowActions(classroomId: string, navigate: (r: Route
         body: JSON.stringify({ confirmTitle: row.title }),
       }),
     onSuccess: invalidate,
+    // A student started it since the list was read (ADR-141): said, and the list read again.
+    onError: (error) => {
+      void invalidate();
+      refused("evaluation", { otherwise: toastError("eval.saveFailed") })(error);
+    },
   });
 
   const menuItems = (row: EvaluationSummary): MenuItem[] => [
@@ -116,9 +125,7 @@ export function useEvaluationRowActions(classroomId: string, navigate: (r: Route
       icon: Trash2,
       danger: true,
       separator: true,
-      ...(courseRoleAllows(myRole, row.deletionRole)
-        ? {}
-        : { disabled: true, description: t("eval.delete.ownerOnly") }),
+      ...deleteGate(row, myRole, t),
       onSelect: async () => {
         if (
           await confirm({
