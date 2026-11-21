@@ -2,7 +2,7 @@ import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CrashBoundary } from "../CrashBoundary";
-import { browserLocale, I18nProvider, storedLocale, useI18n } from "./index";
+import { browserLocale, I18nProvider, storedChoice, storedLocale, useI18n } from "./index";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -21,6 +21,19 @@ describe("the browser's language (#228)", () => {
   it("falls back to English", () => {
     prefer("de-CH", "it");
     expect(browserLocale()).toBe("en");
+  });
+
+  it("reads navigator.language when the list is empty", () => {
+    prefer();
+    vi.spyOn(navigator, "language", "get").mockReturnValue("fr-CH");
+    expect(browserLocale()).toBe("fr");
+  });
+
+  it("takes a stored value it does not speak for the browser's choice", () => {
+    prefer("fr-CH");
+    localStorage.setItem("quiz-locale", "de");
+    expect(storedChoice()).toBe("browser");
+    expect(storedLocale()).toBe("fr");
   });
 
   it("is the default when nothing was chosen, and an explicit choice wins", () => {

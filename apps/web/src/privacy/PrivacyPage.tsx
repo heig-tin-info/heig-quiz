@@ -1,3 +1,5 @@
+import { FALLBACK_LOCALE, type WrittenLocale } from "@quiz/domain";
+
 import { Logo } from "../Header";
 import { type Locale, useI18n } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
@@ -22,8 +24,11 @@ import fr from "./privacy.fr.md?raw";
  * A reading page has no primary action. The language is chosen here for
  * this browser only, as on `/discover`: a signed-out reader has no account
  * to persist it to.
+ *
+ * A legal text: every written language has its file; a translated one
+ * reads the English until a human-reviewed translation is added (ADR-140).
  */
-export const PRIVACY_SOURCES: Record<Locale, string> = { en, fr };
+export const PRIVACY_SOURCES: Record<WrittenLocale, string> & Partial<Record<Locale, string>> = { en, fr };
 
 export function PrivacyPage() {
   const { t, locale } = useI18n();
@@ -41,7 +46,7 @@ export function PrivacyPage() {
       <main className="mx-auto max-w-3xl px-4 pt-6 pb-12 sm:px-8">
         <PageHeader title={t("privacy.title")} description={t("privacy.lead")} />
         <article className="mt-6 rounded-card border border-line bg-surface px-5 py-6 sm:px-10 sm:py-8">
-          <MarkdownView source={PRIVACY_SOURCES[locale]} className="md-doc" />
+          <MarkdownView source={PRIVACY_SOURCES[locale] ?? PRIVACY_SOURCES[FALLBACK_LOCALE]} className="md-doc" />
         </article>
       </main>
       <footer className="pb-10 text-center text-xs text-fg-faint">{t("landing.footer")}</footer>

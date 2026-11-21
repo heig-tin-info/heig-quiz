@@ -23,7 +23,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { z } from "zod";
 
 import { issuesOf } from "@quiz/contracts";
-import type { Locale } from "@quiz/domain";
+import { type ConceptLanguage, dataLanguage, FALLBACK_LOCALE, isLocale, type Locale, matchLocale } from "@quiz/domain";
 
 
 /** `400 validation` with the issues an editor can underline. */
@@ -39,20 +39,25 @@ export function invalid(reply: FastifyReply, error: z.ZodError) {
 export const emptyBody = (body: unknown) => (body === undefined || body === null ? {} : body);
 
 /**
- * The language a reader is answered in where a response carries words of
- * the instance (a concept's label, ADR-081 §2), by the web app's own rule:
- * the interface language of their account; when they left it to the
- * browser (`locale` null), the first of French and English their browser
- * asks for (`Accept-Language`, in order); English otherwise.
+ * A reader's interface language, by the web app's own rule: the one of
+ * their account; when they left it to the browser (`locale` null), the
+ * first interface language their browser asks for (`Accept-Language`, in
+ * order); English otherwise. The words of a document or a name the platform
+ * writes for them.
  */
-export function readerLang(req: FastifyRequest): Locale {
+export function readerLocale(req: FastifyRequest): Locale {
   const chosen = req.user?.locale;
-  if (chosen === "fr" || chosen === "en") return chosen;
-  for (const tag of String(req.headers["accept-language"] ?? "").split(",")) {
-    const base = tag.trim().toLowerCase().split(/[-;]/)[0];
-    if (base === "fr" || base === "en") return base;
-  }
-  return "en";
+  if (isLocale(chosen)) return chosen;
+  return matchLocale(String(req.headers["accept-language"] ?? "").split(",")) ?? FALLBACK_LOCALE;
+}
+
+/**
+ * The language a reader is answered in where a response carries words of
+ * the instance (a concept's label, ADR-081 §2): the two-language data
+ * language of their interface language (`dataLanguage`, ADR-140).
+ */
+export function readerLang(req: FastifyRequest): ConceptLanguage {
+  return dataLanguage(readerLocale(req));
 }
 
 /**

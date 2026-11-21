@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
-import type { Locale } from "@quiz/domain";
+import { FALLBACK_LOCALE, isLocale, type Locale, matchLocale } from "@quiz/domain";
 
 import { api } from "../api";
 import { readStored, writeStored } from "../ui/state";
@@ -45,39 +45,29 @@ import { type Dict, en } from "./en";
 export type { Locale };
 export type LocaleChoice = Locale | "browser";
 
-/**
- * Each interface language named in itself. The list is the domain's
- * `LOCALES`: a language added there does not compile until it is named here.
- */
-export const LOCALE_LABELS: Record<Locale, string> = { en: "English", fr: "Français" };
-
 const STORE_KEY = "quiz-locale";
 
 export type { Dict };
 
-/** The loaded dictionaries: English always, French once `loadLocale` resolved. */
-export const DICTS: { en: Record<string, string> } & Partial<Record<Locale, Record<string, string>>> =
-  { en };
+/** The loaded dictionaries: English always, another language once `loadLocale` resolved. */
+export const DICTS: Record<typeof FALLBACK_LOCALE, Record<string, string>> & Partial<Record<Locale, Record<string, string>>> =
+  { [FALLBACK_LOCALE]: en };
 
-const loaders: Record<Exclude<Locale, "en">, () => Promise<Record<string, string>>> = {
+/** A lazy chunk per language, but English: the entry chunk's fallback. */
+const loaders: Record<Exclude<Locale, typeof FALLBACK_LOCALE>, () => Promise<Record<string, string>>> = {
   fr: () => import("./fr").then((m) => m.fr),
 };
 
 /** Resolves once `locale`'s dictionary is in `DICTS`; at once for English. */
 export async function loadLocale(locale: Locale): Promise<void> {
-  if (DICTS[locale]) return;
-  if (locale === "en") return;
+  if (DICTS[locale] || locale === FALLBACK_LOCALE) return;
   DICTS[locale] = await loaders[locale]();
 }
 
 /** The first of the browser's preferred languages the app speaks, English when none. */
 export function browserLocale(): Locale {
-  const preferred = navigator.languages?.length ? navigator.languages : [navigator.language];
-  for (const tag of preferred) {
-    const base = tag?.toLowerCase().split("-")[0];
-    if (base === "fr" || base === "en") return base;
-  }
-  return "en";
+  const preferred = navigator.languages?.length ? navigator.languages : [navigator.language ?? ""];
+  return matchLocale(preferred) ?? FALLBACK_LOCALE;
 }
 
 export function resolveLocale(choice: LocaleChoice): Locale {
@@ -87,7 +77,7 @@ export function resolveLocale(choice: LocaleChoice): Locale {
 /** What this browser last chose, "browser" when nothing. */
 export function storedChoice(): LocaleChoice {
   const raw = readStored(STORE_KEY);
-  return raw === "fr" || raw === "en" ? raw : "browser";
+  return isLocale(raw) ? raw : "browser";
 }
 
 /** The language to paint in: the stored choice, resolved. */
@@ -98,7 +88,7 @@ export function storedLocale(): Locale {
 export type TFunction = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
 function translate(locale: Locale, key: string, vars?: Record<string, string | number>): string {
-  const raw = DICTS[locale]?.[key] ?? DICTS.en[key] ?? key;
+  const raw = DICTS[locale]?.[key] ?? DICTS[FALLBACK_LOCALE][key] ?? key;
   if (!vars) return raw;
   return raw.replace(/\{(\w+)\}/g, (_, k: string) =>
     Object.hasOwn(vars, k) ? String(vars[k]) : `{${k}}`,
@@ -115,10 +105,10 @@ interface I18nValue {
 }
 
 const I18nContext = createContext<I18nValue>({
-  locale: "en",
+  locale: FALLBACK_LOCALE,
   choice: "browser",
   setLocale: () => {},
-  t: (k) => translate("en", k),
+  t: (k) => translate(FALLBACK_LOCALE, k),
 });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
@@ -126,7 +116,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   // waits for it); otherwise English until the effect below has loaded it.
   const [locale, setLocaleState] = useState<Locale>(() => {
     const stored = storedLocale();
-    return DICTS[stored] ? stored : "en";
+    return DICTS[stored] ? stored : FALLBACK_LOCALE;
   });
   const [choice, setChoice] = useState<LocaleChoice>(storedChoice);
   useEffect(() => {

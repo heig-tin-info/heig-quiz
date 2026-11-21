@@ -19,6 +19,7 @@ import {
   cleanConceptLabel,
   cleanConceptQualifier,
   conceptKey,
+  otherConceptLanguage,
   qualifiedConceptKey,
   resolveConceptLabel,
   splitQualifiedLabel,
@@ -152,7 +153,7 @@ export function conceptLabelIn(
   sides: Record<ConceptLanguage, { label: string | null; qualifier: string }>,
   lang: ConceptLanguage,
 ): { label: string; qualifier: string } {
-  const other: ConceptLanguage = lang === "fr" ? "en" : "fr";
+  const other = otherConceptLanguage(lang);
   const side = sides[lang].label !== null ? sides[lang] : sides[other];
   return { label: side.label ?? "", qualifier: side.qualifier };
 }

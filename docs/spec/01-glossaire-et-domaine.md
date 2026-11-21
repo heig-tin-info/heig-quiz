@@ -223,7 +223,11 @@ replaces every variant listed under *never*; the i18n lint of
 `apps/web/src/i18n/` (`copy.test.ts`, which owns the list of enforced
 variants: a new row here prompts a rule there) refuses the variants it can
 detect (N-I18N-04). Settled
-by the product owner on 2026-10-20.
+by the product owner on 2026-10-20. *Amended 2026-11-21 (product owner,
+[ADR-140](../adr/ADR-140-langues-de-l-interface.md)): these two columns
+are the written languages; a translated language (German, Italian) gains
+its own column in the pull request that adds it, translated from the
+English column.*
 
 | Concept | English | French | Never (fr) |
 |---|---|---|---|

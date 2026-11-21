@@ -38,6 +38,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-005 — SSE rather than WebSocket, without `Last-Event-ID` replay](ADR-005-sse-sans-websocket.md)
 - [ADR-006 — Deadlines through a single ticker-sweeper, no scheduled one-shot job](ADR-006-deadline-ticker.md)
 - [ADR-008 — React + Vite SPA front end, own accessible primitives, no SSR](ADR-008-frontend-spa-react.md)
+- [ADR-140 — Interface languages: German and Italian as translated languages, one locale registry](ADR-140-langues-de-l-interface.md)
 - [ADR-094 — One scale for form controls: pill for one line, soft square for content](ADR-094-echelle-des-controles.md)
 - [ADR-104 — One state grammar for the staff's badges: green open, amber awaited, blue scheduled, outline finished](ADR-104-badges-d-etat-unifies.md)
 - [ADR-009 — Deployment on a single VM, Docker Compose, Caddy, provider and off-site backups](ADR-009-deploiement-vm-compose.md)

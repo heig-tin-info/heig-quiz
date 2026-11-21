@@ -28,7 +28,7 @@ import { readTracer, tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
 import { sendExport } from "../../documents/files.js";
 import { callerOf, loadEvaluation, loadEvaluationAttempt, ownAttempt, teacherGuard, withCourseRole } from "../guards.js";
-import { notFound, readerLang, sendCsv, studentRoute, teacherRoute } from "../http.js";
+import { notFound, readerLocale, sendCsv, studentRoute, teacherRoute } from "../http.js";
 import { byId, joinedItem, staffAttemptIds } from "../evaluation/service.js";
 import * as gradingEvents from "../grading/events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
@@ -110,7 +110,7 @@ export async function resultsPlugin(app: FastifyInstance) {
           view: "copy",
         });
         // A refused PDF (503) is still an opening: access was granted and the record built.
-        return sendExport(reply, format, found, StaffCopyRecord, () => staffCopyDocument(found, readerLang(req)));
+        return sendExport(reply, format, found, StaffCopyRecord, () => staffCopyDocument(found, readerLocale(req)));
       }),
     );
   }

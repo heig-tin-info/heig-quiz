@@ -382,9 +382,15 @@ export const freeName = (base: string, taken: ReadonlySet<string>): string => fi
 /** `base`, else `base-2`, `base-3`… — the first not in `taken`. */
 export const freeSlug = (base: string, taken: ReadonlySet<string>): string => firstFree(taken, (k) => (k === 1 ? base : `${base}-${k}`));
 
+/** The words of a default name, in the creator's interface language. */
+const NAME_WORDS: Record<Locale, { group: string; copy: string; set: (y: number, m: string, d: string, time: string) => string }> = {
+  en: { group: "Group", copy: "copy", set: (y, m, d, time) => `Groups of ${y}-${m}-${d} ${time}` },
+  fr: { group: "Groupe", copy: "copie", set: (y, m, d, time) => `Groupes du ${d}.${m}.${y} ${time}` },
+};
+
 /** "Group k" (fr "Groupe k") with the first k whose name is not `taken` (ADR-070 §1). */
 export function defaultGroupName(taken: ReadonlySet<string>, locale: Locale): string {
-  const word = locale === "fr" ? "Groupe" : "Group";
+  const word = NAME_WORDS[locale].group;
   return firstFree(taken, (k) => `${word} ${k}`);
 }
 
@@ -397,10 +403,10 @@ export function defaultSetName(at: Date, locale: Locale, timeZone: string = SCHO
   const two = (n: number) => String(n).padStart(2, "0");
   const [y, m, d] = [local.getUTCFullYear(), two(local.getUTCMonth() + 1), two(local.getUTCDate())];
   const time = `${two(local.getUTCHours())}:${two(local.getUTCMinutes())}`;
-  return locale === "fr" ? `Groupes du ${d}.${m}.${y} ${time}` : `Groups of ${y}-${m}-${d} ${time}`;
+  return NAME_WORDS[locale].set(y, m, d, time);
 }
 
 /** A copy's name for a duplicated set (fr "(copie)"), as a duplicated question's (`pool/questionWrite.ts`). */
 export function duplicateSetName(name: string, locale: Locale): string {
-  return `${name} (${locale === "fr" ? "copie" : "copy"})`;
+  return `${name} (${NAME_WORDS[locale].copy})`;
 }

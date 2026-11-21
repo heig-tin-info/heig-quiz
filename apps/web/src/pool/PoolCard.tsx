@@ -2,6 +2,7 @@ import { Globe, History, Lock, Users } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { Me, PoolSummary } from "@quiz/contracts";
+import { dataLanguage } from "@quiz/domain";
 
 import { useI18n, useT, type TFunction } from "../i18n";
 import type { Route } from "../router";
@@ -69,8 +70,8 @@ export function PoolCard({
   // In the catalogue a reader is the rule, not news: the footer keeps its room for Subscribe.
   const roleLabel = action ? null : poolRoleLabel(pool, t);
   const followers = pool.subscriberCount + pool.memberCount;
-  // The domain in the reader's language, the other one when only that exists.
-  const domain = locale === "fr" ? pool.domainFr || pool.domainEn : pool.domainEn || pool.domainFr;
+  // The domain in the reader's data language (ADR-140), the other one when only that exists.
+  const domain = dataLanguage(locale) === "fr" ? pool.domainFr || pool.domainEn : pool.domainEn || pool.domainFr;
 
   return (
     // A column, so the date strip is at the BOTTOM of every card and not

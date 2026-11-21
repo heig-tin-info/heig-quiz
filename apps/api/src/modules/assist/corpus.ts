@@ -14,7 +14,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { buildCorpus, type AssistCorpus, type AssistSource } from "@quiz/domain";
+import { buildCorpus, FALLBACK_LOCALE, isLocale, type AssistCorpus, type AssistSource } from "@quiz/domain";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** `src/modules/assist` or `dist/modules/assist`: the repository is five levels up either way. */
@@ -24,8 +24,8 @@ export const CORPUS_ARTIFACT = resolve(HERE, "../../assist-corpus.json");
 
 const GUIDE_DIR = "docs/guide";
 const HELP_DIR = "apps/web/src/help";
-/** `pool.md` is the English topic, `pool.fr.md` its French one. */
-const HELP_FILE = /^([a-z0-9-]+)(?:\.(fr))?\.md$/;
+/** `pool.md` is the English topic, `pool.fr.md` its French one: `<topic>.<locale>.md`, an interface language. */
+const HELP_FILE = /^([a-z0-9-]+)(?:\.([a-z]{2}))?\.md$/;
 
 const markdownIn = (dir: string) =>
   readdirSync(dir)
@@ -45,13 +45,14 @@ export function readCorpusSources(root: string = REPO_ROOT): AssistSource[] {
   }
   const sources: AssistSource[] = markdownIn(guide).map((file) => ({
     id: `guide/${file.replace(/\.md$/, "")}`,
-    locale: "en",
+    locale: FALLBACK_LOCALE,
     text: readFileSync(join(guide, file), "utf8"),
   }));
   for (const file of markdownIn(help)) {
     const m = HELP_FILE.exec(file);
-    if (!m) continue;
-    sources.push({ id: `help/${m[1]}`, locale: m[2] === "fr" ? "fr" : "en", text: readFileSync(join(help, file), "utf8") });
+    const locale = m?.[2] ?? FALLBACK_LOCALE;
+    if (!m || !isLocale(locale)) continue;
+    sources.push({ id: `help/${m[1]}`, locale, text: readFileSync(join(help, file), "utf8") });
   }
   return sources;
 }

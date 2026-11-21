@@ -519,4 +519,11 @@ export function cleanConceptQualifier(qualifier: string): string {
   return qualifier.trim().replace(/\s+/g, " ");
 }
 
+/**
+ * The languages of the instance's two-language data (ADR-081): French and
+ * English, whatever the interface languages are (ADR-140, `dataLanguage`).
+ */
 export type ConceptLanguage = "fr" | "en";
+
+/** The other language of a two-language value: where a label missing in one is read. */
+export const otherConceptLanguage = (lang: ConceptLanguage): ConceptLanguage => (lang === "fr" ? "en" : "fr");

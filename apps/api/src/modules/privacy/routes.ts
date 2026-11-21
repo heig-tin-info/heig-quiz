@@ -16,7 +16,7 @@ import { FixedWindowLimiter } from "../../limiter.js";
 import { codespaceOn } from "../codespace/service.js";
 import { handout, handoutTree } from "../evaluation/service.js";
 import { callerOf, ownAttempt, ownSessionGuard, userOf } from "../guards.js";
-import { DomainError, notFound, rateLimited, readerLang, studentRoute } from "../http.js";
+import { DomainError, notFound, rateLimited, readerLang, readerLocale, studentRoute } from "../http.js";
 import { studentCopyDocument, studentCopyRecord } from "../results/service.js";
 import { findPastSeries, STUDENT_DOCUMENTS_PER_HOUR } from "./documents.js";
 import { exportCounts, personalDataExport } from "./service.js";
@@ -96,7 +96,7 @@ export async function privacyPlugin(app: FastifyInstance, opts: { config: AppCon
         async ({ req, reply, now, scope }) => {
           assertBucket(req, now);
           const found = await studentCopyRecord(app.db, scope.evaluation, scope.attempt, { now });
-          const lang = readerLang(req);
+          const lang = readerLocale(req);
           return sendExport(
             reply,
             format,
@@ -123,7 +123,7 @@ export async function privacyPlugin(app: FastifyInstance, opts: { config: AppCon
     student({ params: IdParam, load: pastSeries }, async ({ req, reply, now, scope }) => {
       assertBucket(req, now);
       const found = await handout(app.db, scope, { now });
-      const lang = readerLang(req);
+      const lang = readerLocale(req);
       return sendExport(
         reply,
         "pdf",

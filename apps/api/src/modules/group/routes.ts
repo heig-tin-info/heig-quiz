@@ -41,6 +41,7 @@ import {
   StudentGroupCreate,
   StudentGroupJoin,
 } from "@quiz/contracts";
+import { FALLBACK_LOCALE } from "@quiz/domain";
 
 import { actorOf } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -62,7 +63,7 @@ export async function groupPlugin(app: FastifyInstance, opts: { config: AppConfi
   const ctx = (req: FastifyRequest, now: Date): service.WriteContext => ({
     actor: actorOf(req),
     userId: callerOf(req).id,
-    locale: userOf(req).locale ?? "en",
+    locale: userOf(req).locale ?? FALLBACK_LOCALE,
     now,
   });
 

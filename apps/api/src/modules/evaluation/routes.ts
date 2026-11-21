@@ -53,7 +53,7 @@ import {
   teacherGuard,
 } from "../guards.js";
 import * as gradebook from "../gradebook/service.js";
-import { notFound, readerLang, teacherRoute } from "../http.js";
+import { notFound, readerLang, readerLocale, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
 import { evaluationDocument, evaluationDocumentTree, handout, handoutTree } from "./document.js";
 import { evaluationChanged } from "./events.js";
@@ -246,7 +246,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
         `/app/api/evaluations/:id/${name}.${format}`,
         { preHandler: requireTeacher },
         teacher({ params: IdParam, load: staffEvaluation }, ({ req, reply, now, scope }) =>
-          serve({ reply, evaluation: scope.evaluation, now, format, lang: readerLang(req) }),
+          serve({ reply, evaluation: scope.evaluation, now, format, lang: readerLocale(req) }),
         ),
       );
     }

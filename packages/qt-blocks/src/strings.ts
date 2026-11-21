@@ -14,6 +14,7 @@
  * the world itself — the block labels, the run's verdicts, the warehouse —
  * and every word more than one surface says, written once.
  */
+import type { Lang } from "@quiz/docexport";
 
 /**
  * The world's words, shared by every surface. The block labels are interface
@@ -258,7 +259,7 @@ const blocksPaperWordsFr: Readonly<Record<keyof BlocksPaperWords, string>> = {
 };
 
 /** The printed words of each language, as a document's `labels.lang` picks them. */
-export const BLOCKS_PAPER_WORDS: Readonly<Record<"en" | "fr", BlocksPaperWords>> = {
+export const BLOCKS_PAPER_WORDS: Readonly<Record<Lang, BlocksPaperWords>> = {
   en: blocksPaperWordsEn,
   fr: blocksPaperWordsFr,
 };

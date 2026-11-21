@@ -54,7 +54,7 @@ import {
 } from "../guards.js";
 import type { Tx } from "../../db/client.js";
 import type { attempts } from "../../db/schema.js";
-import { notFound, notFoundError, readerLang, teacherRoute } from "../http.js";
+import { notFound, notFoundError, readerLocale, teacherRoute } from "../http.js";
 import { joinedItem, joinedItems, staffAttemptIds, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
 import { notifyUsers } from "../notifications/service.js";
 import { listVersions } from "../pool/service.js";
@@ -177,7 +177,7 @@ export async function gradingPlugin(app: FastifyInstance) {
         // The Markdown and the PDF print each answer as text; the record keeps it as stored.
         const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: format !== "json" });
         if (!found) return notFound(reply);
-        return sendExport(reply, format, found, ItemAnswersRecord, () => itemAnswersDocument(found, readerLang(req)));
+        return sendExport(reply, format, found, ItemAnswersRecord, () => itemAnswersDocument(found, readerLocale(req)));
       }),
     );
   }

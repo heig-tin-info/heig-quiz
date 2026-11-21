@@ -24,13 +24,13 @@ import {
 } from "lucide-react";
 
 import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
-import { LOCALES } from "@quiz/domain";
+import { LOCALE_INFO, LOCALES } from "@quiz/domain";
 
 import { inNavigation } from "./CourseNav";
 import { fuzzyFilter } from "./fuzzy";
 import { gradingLinks } from "./grading";
 import { DOCS_URL, SOURCES_URL } from "./Header";
-import { LOCALE_LABELS, type Locale, type TFunction } from "./i18n";
+import { type Locale, type TFunction } from "./i18n";
 import type { PaletteProject } from "./paletteProjects";
 import { evaluationInView, type Route } from "./router";
 import { screenCommands } from "./screenCommands";
@@ -343,7 +343,7 @@ export function buildCommands(ctx: CommandContext): Command[] {
       id: "action:locale",
       // The target language is named in its own language, so the command is
       // readable by someone who cannot read the interface it sits in.
-      label: t("palette.switchLocale", { language: LOCALE_LABELS[other] }),
+      label: t("palette.switchLocale", { language: LOCALE_INFO[other].endonym }),
       icon: Languages,
       group: "action",
       run: () => ctx.setLocale(other),

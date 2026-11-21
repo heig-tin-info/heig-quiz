@@ -52,7 +52,15 @@ import {
   type StudentGroupSetCard,
   type StudentGroupSets,
 } from "@quiz/contracts";
-import { defaultGroupName, defaultSetName, duplicateSetName, formRandomGroups, type Locale } from "@quiz/domain";
+import {
+  defaultGroupName,
+  defaultSetName,
+  duplicateSetName,
+  FALLBACK_LOCALE,
+  formRandomGroups,
+  type Locale,
+  matchLocale,
+} from "@quiz/domain";
 
 import { classroomRoster, rooms, studentRooms } from "./org";
 import { D, flags, H, iso, MockError, MockPayload, on, rand, refuse, role } from "./runtime";
@@ -91,7 +99,7 @@ let setSeq = 100;
 const setId = () => `5e7a0000-0000-4000-8000-${String((setSeq += 1)).padStart(12, "0")}`;
 
 /** The language a default name is written in: the reader's, as the server takes the creator's. */
-const nameLocale = (): Locale => (document.documentElement.lang.startsWith("fr") ? "fr" : "en");
+const nameLocale = (): Locale => matchLocale([document.documentElement.lang]) ?? FALLBACK_LOCALE;
 
 /** Groups cut from `students` in order, `sizes` long, named "Groupe k". */
 function cut(students: RosterEntry[], sizes: number[]): MockGroup[] {
