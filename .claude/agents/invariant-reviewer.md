@@ -36,7 +36,10 @@ which items you skipped.
    sub-text only when it adds a fact, no filler nor reassurance, the words
    of the glossary (`docs/spec/01-glossaire-et-domaine.md` §1.5), no
    generic masculine. A new key that breaks one of these is a finding even
-   when the lint (`src/i18n/copy.test.ts`) lets it through.
+   when the lint (`src/i18n/copy.test.ts`) lets it through. A new key, or a
+   key whose English changed, also needs its German draft in `de/` and the
+   re-stamp of `de.status.json` (ADR-140 §7); a French-only change needs
+   neither. A stamp changed with no German change is a finding to question.
 2. **One primary action.** A UI diff: can you name the single action of the
    screen? If `apps/web` changed, check that `quiz-ui`'s rules were applied
    (semantic tokens, primitives from `src/ui/`).

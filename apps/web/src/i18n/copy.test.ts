@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { EN_LABELS, FR_LABELS } from "@quiz/docexport";
 
+import { de } from "./de";
 import { en } from "./en";
 import { fr } from "./fr";
 
@@ -13,7 +14,9 @@ import { fr } from "./fr";
  * The copy lint (N-I18N-04): what a machine can check of the Voice rules of
  * `apps/web/DESIGN.md` and of the interface glossary
  * (`docs/spec/01-glossaire-et-domaine.md` §1.5, whose enforced variants
- * this table owns). Each rule names the keys it refuses, per language.
+ * this table owns). Each rule names the keys it refuses, per language:
+ * the written English and French, and the translated German (ADR-140),
+ * which is drafted by the same rules.
  * `copy.exceptions.json` holds the keys that broke a rule when the lint was
  * born and are not rewritten yet. The list only shrinks: a key that no
  * longer breaks its rule must leave it (the test says so), and a key that
@@ -23,7 +26,10 @@ import { fr } from "./fr";
  * show in the JSON diff.
  */
 
-type Lang = "fr" | "en";
+/** The dictionaries the lint reads: the written English and French, the translated German (ADR-140). */
+const DICTS = { fr, en, de };
+type Lang = keyof typeof DICTS;
+const DICT: Record<Lang, Record<string, string>> = DICTS;
 type Rule = {
   name: string;
   langs: Lang[];
@@ -63,22 +69,31 @@ const COMPONENT_KEY = /^(courses\.(settings\.)?components|gbook\.(settings|head|
 /** « Répartition » names a group set (refused) unless it is a distribution (glossary §1.5). */
 const REPARTITION = /\brépartitions?\b(?! (des (notes|réponses|points|scores)|par question)\b)/i;
 
-const BOTH: Lang[] = ["fr", "en"];
+/** Every language of the dictionary. */
+const ALL = Object.keys(DICT) as Lang[];
 const FR: Lang[] = ["fr"];
 const EN: Lang[] = ["en"];
+const DE: Lang[] = ["de"];
+
+/** German prose with its placeholders and inline code taken out: `dir` in backticks is a command, not an address. */
+const prose = (re: RegExp) => (text: string) => has(re)(text.replace(/`[^`]*`/g, "x"));
 
 const RULES: Rule[] = [
   // Typography (fr).
   { name: "breaking-space-before-double-punctuation", langs: FR, fix: "a narrow no-break space (U+202F) before : ; ? !", test: has(/[  ][:;?!]/) },
   { name: "guillemets-inner-space", langs: FR, fix: "a narrow no-break space inside « »", test: has(/«[  ]|[  ]»/) },
-  { name: "curly-apostrophe", langs: BOTH, fix: "the straight apostrophe, as everywhere else", test: has(/[’‘]/) },
+  { name: "curly-apostrophe", langs: ALL, fix: "the straight apostrophe, as everywhere else", test: has(/[’‘]/) },
   { name: "parenthesised-plural", langs: FR, fix: "a plural key (.one / .many), never (s) or (e)", test: has(/\((e|s|es)\)/) },
   { name: "recorriger-hyphen", langs: FR, fix: "recorriger, recorrection, without a hyphen", test: has(/re-corr/i) },
   { name: "defaut", langs: FR, fix: "« par défaut »", test: has(/\(défaut\)|\bdéfaut :/i) },
   { name: "cliquez-transitive", langs: FR, fix: "cliquez sur", test: has(/\bcliquez (la|le|les|l'|un|une)\b/i) },
-  // Prose (both).
-  { name: "em-dash-aside", langs: BOTH, fix: "two sentences, or a colon; no em-dash aside", test: has(/ — /) },
-  { name: "semicolon", langs: BOTH, fix: "two sentences; no semicolon chain", test: has(/; /) },
+  // Typography (de): Swiss spelling, Swiss quotation marks.
+  { name: "eszett", langs: DE, fix: "ss: Swiss German writes no ß", test: has(/ß/) },
+  { name: "quotation-marks", langs: DE, fix: "guillemets «…», never „…“ or “…”", test: has(/[„“”]/) },
+  // Prose (all).
+  { name: "em-dash-aside", langs: ALL, fix: "two sentences, or a colon; no em-dash aside", test: has(/ — /) },
+  { name: "semicolon", langs: ALL, fix: "two sentences; no semicolon chain", test: has(/; /) },
+  { name: "informal-address", langs: DE, fix: "Sie, Ihr: the reader is never addressed as du or ihr", test: prose(/\b([Dd]u|[Dd]ein(e|em|en|er|es)?|[Dd]ir|[Dd]ich|[Ee]uch|[Ee]uer|[Ee]ure[mnrs]?)\b/) },
   { name: "filler", langs: FR, fix: "delete the reassurance: a sub-text carries a fact the label does not", test: has(/Rien n'est (bloqué|supprimé)|conviennent à la plupart|revenir à tout moment/i) },
   { name: "filler", langs: EN, fix: "delete the reassurance: a sub-text carries a fact the label does not", test: has(/Nothing is (blocked|deleted)|defaults suit most|come back at any time/i) },
   { name: "generic-masculine", langs: FR, fix: "a neutral turn: les étudiants, a passive, an infinitive", test: has(/\bl'étudiant\b[^.]*\b(il|lui)\b/) },
@@ -107,7 +122,7 @@ const RULES: Rule[] = [
   { name: "word-join-classroom", langs: FR, fix: "s'inscrire comme étudiant; rejoindre is a group's word", test: has(/\brejoindre (comme|la classe|cette classe|une classe)\b/i) },
   // A group set (ADR-070, 2026-11-17): « groupes », shown by its name; « répartition des notes / des réponses / par question » is a distribution, and stays.
   { name: "word-repartition", langs: FR, fix: "groupes: a group set is « groupes », shown by its own name", test: has(REPARTITION) },
-  { name: "word-codespace", langs: BOTH, fix: "workspace, espace de travail; codespace is an internal word", test: has(/\bcodespaces?\b/i) },
+  { name: "word-codespace", langs: ALL, fix: "workspace, espace de travail, Arbeitsbereich; codespace is an internal word", test: has(/\bcodespaces?\b/i) },
   // A component of the mean (ADR-131): never a group, which is the students' (ADR-070), nor a category, which is a pool's.
   { name: "word-component", langs: FR, fix: "composante", test: (t, k) => COMPONENT_KEY.test(k) && has(/\b(groupes?|catégories?)\b/i)(t) },
   { name: "word-component", langs: EN, fix: "component", test: (t, k) => COMPONENT_KEY.test(k) && has(/\b(groups?|categor(y|ies))\b/i)(t) },
@@ -118,13 +133,22 @@ const RULES: Rule[] = [
   { name: "word-account-archived", langs: EN, fix: "dormant; archived is a classroom's", test: (t, k) => ACCOUNT_KEY.test(k) && has(/archiv/i)(t) },
   // A student's request on a graded question (ADR-139): a contestation, never a claim nor an appeal.
   { name: "word-contestation", langs: FR, fix: "contestation, contester", test: has(/\b(réclamations?|recours)\b/i) },
-  // Ceilings (both).
-  { name: "button-over-24", langs: BOTH, fix: "a verb, at most 24 characters", test: (t, k) => BUTTON.includes(suffix(k)) && !isSentence(t) && longerThan(24)(t) },
-  { name: "tab-over-18", langs: BOTH, fix: "at most 18 characters", test: (t, k) => /\.tab\.[^.]+$/.test(k) && longerThan(18)(t) },
-  { name: "subtext-over-110", langs: BOTH, fix: "one sentence of at most 110 characters, carrying a fact the label does not", test: (t, k) => SUBTEXT.includes(suffix(k)) && longerThan(110)(t) },
+  // The German never-words of the glossary (§1.5), each wrong wherever it stands: Schüler,
+  // Dozent, Lehrer, Rückmeldung, einreichen, Benotung, Evaluation, and «das/ein Quiz» for an evaluation.
+  { name: "word-schueler", langs: DE, fix: "Studierende", test: has(/\bSchüler/i) },
+  { name: "word-dozent", langs: DE, fix: "Lehrperson", test: has(/\bDozent/i) },
+  { name: "word-lehrer", langs: DE, fix: "Lehrperson, Lehrteam", test: has(/\bLehrer(in|innen|n|s)?\b/i) },
+  { name: "word-rueckmeldung", langs: DE, fix: "Korrektur", test: has(/Rückmeldung/i) },
+  { name: "word-einreichen", langs: DE, fix: "abgeben, Abgabe", test: has(/\b(einreich|eingereicht)/i) },
+  { name: "word-benotung", langs: DE, fix: "Korrektur, korrigieren", test: has(/\bbenot/i) },
+  { name: "word-evaluation", langs: DE, fix: "Test, Prüfung or Übung", test: has(/\bEvaluation/i) },
+  { name: "word-quiz", langs: DE, fix: "Test, Prüfung or Übung; Quiz is the platform's name only", test: has(/\b(das|ein|dieses|diesem|dem|des|jedes|jedem|kein|keinem|ihr|ihrem|ihres|neues)\s+Quiz(?![-\w])/i) },
+  // Ceilings (all).
+  { name: "button-over-24", langs: ALL, fix: "a verb, at most 24 characters", test: (t, k) => BUTTON.includes(suffix(k)) && !isSentence(t) && longerThan(24)(t) },
+  { name: "tab-over-18", langs: ALL, fix: "at most 18 characters", test: (t, k) => /\.tab\.[^.]+$/.test(k) && longerThan(18)(t) },
+  { name: "subtext-over-110", langs: ALL, fix: "one sentence of at most 110 characters, carrying a fact the label does not", test: (t, k) => SUBTEXT.includes(suffix(k)) && longerThan(110)(t) },
 ];
 
-const DICT: Record<Lang, Record<string, string>> = { fr, en };
 const EXCEPTIONS_PATH = join(dirname(fileURLToPath(import.meta.url)), "copy.exceptions.json");
 const exceptions = JSON.parse(readFileSync(EXCEPTIONS_PATH, "utf8")) as Record<string, string[]>;
 
@@ -193,15 +217,15 @@ describe("copy lint of the French help pages (N-I18N-04)", () => {
  * exception, and every word is short — a label, or one sentence of a toast's
  * length at most.
  */
-const DOCUMENT_WORDS: Record<Lang, Record<string, string>> = {
+const DOCUMENT_WORDS: Partial<Record<Lang, Record<string, string>>> = {
   fr: Object.fromEntries(Object.entries(FR_LABELS)),
   en: Object.fromEntries(Object.entries(EN_LABELS)),
 };
 const DOCUMENT_WORD_MAX = 80;
 
 describe("copy lint of a document's fixed words (N-I18N-04, ADR-125)", () => {
-  it.each(BOTH)("%s: every rule holds, every word is short", (lang) => {
-    const words = DOCUMENT_WORDS[lang];
+  it.each(Object.keys(DOCUMENT_WORDS) as Lang[])("%s: every rule holds, every word is short", (lang) => {
+    const words = DOCUMENT_WORDS[lang]!;
     const offenders = RULES.filter((rule) => rule.langs.includes(lang)).flatMap((rule) =>
       Object.keys(words)
         .filter((key) => rule.test(words[key]!, key))

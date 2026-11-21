@@ -1,23 +1,25 @@
 import { describe, expect, it } from "vitest";
 
+import { de } from "./de";
 import { DOMAINS } from "./domains";
 import { en } from "./en";
 import { fr } from "./fr";
 
 /**
  * The guard of `domains.ts`: a key lives in the one domain file that lists
- * its first segment, in both languages. The dictionaries spread the files,
- * so a key in two files would silently keep the last one; the prefix rule
- * makes that impossible, and the count catches a file left out of a spread.
+ * its first segment, in every dictionary folder (`en/`, `fr/`, `de/`). The
+ * dictionaries spread the files, so a key in two files would silently keep
+ * the last one; the prefix rule makes that impossible, and the count catches
+ * a file left out of a spread.
  */
 
 type Files = Record<string, Record<string, Record<string, string>>>;
-const FILES: Record<"en" | "fr", Files> = {
-  en: import.meta.glob("./en/*.ts", { eager: true }),
-  fr: import.meta.glob("./fr/*.ts", { eager: true }),
-};
-const DICTS = { en, fr };
+/** Every domain file, by folder: `./en/pool.ts`, `./de/qt.ts`… */
+const ALL_FILES: Files = import.meta.glob("./*/*.ts", { eager: true });
+const DICTS = { en, fr, de };
+type Lang = keyof typeof DICTS;
 
+const langOf = (path: string) => path.split("/")[1] as Lang;
 const domainOf = (path: string) => path.replace(/^.*\/(.+)\.ts$/, "$1") as keyof typeof DOMAINS;
 
 describe("the domain files of the dictionaries", () => {
@@ -26,9 +28,13 @@ describe("the domain files of the dictionaries", () => {
     expect(prefixes).toHaveLength(new Set(prefixes).size);
   });
 
-  for (const lang of ["en", "fr"] as const) {
+  it("has one dictionary per folder", () => {
+    expect([...new Set(Object.keys(ALL_FILES).map(langOf))].sort()).toEqual(Object.keys(DICTS).sort());
+  });
+
+  for (const lang of Object.keys(DICTS) as Lang[]) {
     it(`${lang}: one file per domain, each holding the keys of its prefixes only`, () => {
-      const files = Object.entries(FILES[lang]);
+      const files = Object.entries(ALL_FILES).filter(([path]) => langOf(path) === lang);
       expect(files.map(([path]) => domainOf(path)).sort()).toEqual(Object.keys(DOMAINS).sort());
       let count = 0;
       for (const [path, mod] of files) {
