@@ -86,7 +86,7 @@ services:
     # fits app(10) + pg-boss(10) + backup with headroom; parallel query stays
     # off (small tables, few cores).
     # Observability: pg_stat_statements (its extension is created once by hand,
-    # deployment guide §6: PGlite has none, so no migration can), statements
+    # see the deployment guide: PGlite has none, so no migration can), statements
     # over 500 ms (their text only: bind parameters, which carry names,
     # addresses and answers, never reach the log) and lock waits in the log,
     # and an idle transaction left open
