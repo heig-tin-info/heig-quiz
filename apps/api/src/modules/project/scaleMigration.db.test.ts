@@ -1,9 +1,11 @@
 /**
  * The removal of the `score_is_grade` scale (`0122_score_is_grade_linear`,
- * ADR-119 §11, L-06b), read from the shipped SQL: the rows are written while
- * the table still has its new column, the column is dropped to put
- * `project_repos` back in its old shape, and the migration's statements run
- * as they really run.
+ * ADR-119 §11, L-06b), read from the shipped SQL: the rows are written in
+ * `project_repos`' grading columns while the table still has its new column
+ * (the trigger of `0151_project_repo_grades` copies them where the readers
+ * read them), then `project_repos` is put back in its old shape — the column
+ * dropped, `0151` undone —, and the two migrations' statements run as they
+ * really ran: `0122`, then `0151`'s backfill.
  *
  * What it pins: every grade a student was given or would be given stays the
  * same — the release's (stored, then read rather than recomputed) and the
@@ -33,6 +35,7 @@ import {
   gradebookColumns,
   gradebookMarks,
   projectGradeRuns,
+  projectRepoGrades,
   projectRepos,
   projects,
 } from "../../db/schema.js";
@@ -42,6 +45,13 @@ import { projectLiveScores, studentProjectGrades } from "./gradebook.js";
 import type { ProjectRow } from "./views.js";
 
 const MIGRATION = new URL("../../../drizzle/0122_score_is_grade_linear.sql", import.meta.url);
+const GRADES_SPLIT = new URL("../../../drizzle/0151_project_repo_grades.sql", import.meta.url);
+/** `0151_project_repo_grades` undone: `project_repos` as `0122` found it. */
+const UNDO_GRADES_SPLIT = `
+  DROP TRIGGER "project_repo_grades_from_legacy" ON "project_repos";
+  DROP TABLE "project_repo_grades";
+  DROP FUNCTION "project_repo_grades_to_legacy"();
+  DROP FUNCTION "project_repo_grades_from_legacy"();`;
 const DEADLINE = new Date("2026-10-09T22:00:00Z");
 
 /** What the removed preset gave a score: a score out of 6 IS the grade, any other maximum linear. */
@@ -133,8 +143,8 @@ async function repo(
     invitationStatus: "accepted",
     deadlineAppliedAt: DEADLINE,
     frozenAt: new Date("2026-10-09T22:30:00Z"),
-    teacherPoints: s.teacher?.points ?? null,
-    teacherMax: s.teacher?.max ?? null,
+    legacyTeacherPoints: s.teacher?.points ?? null,
+    legacyTeacherMax: s.teacher?.max ?? null,
   });
   await db
     .update(projectRepos)
@@ -151,12 +161,22 @@ async function snapshot(projectId: string): Promise<void> {
     const userId = seats.find((s) => s.enrollmentId === enrollmentId)!.userId;
     await db
       .update(projectRepos)
-      .set({ releasedPoints: cell.points, releasedMax: cell.max })
+      .set({ legacyReleasedPoints: cell.points, legacyReleasedMax: cell.max })
       .where(and(eq(projectRepos.projectId, projectId), eq(projectRepos.userId, userId)));
   }
 }
 
 const projectRow = async (id: string): Promise<ProjectRow> => (await db.select().from(projects).where(eq(projects.id, id)))[0]!;
+
+/** The project's repositories with their grading as the readers read it (`project_repo_grades`). */
+const gradedRepos = async (projectId: string) =>
+  (
+    await db
+      .select({ repo: projectRepos, grades: projectRepoGrades })
+      .from(projectRepos)
+      .leftJoin(projectRepoGrades, eq(projectRepoGrades.repoId, projectRepos.id))
+      .where(eq(projectRepos.projectId, projectId))
+  ).map(({ repo, grades }) => ({ userId: repo.userId, ...grades }));
 
 /**
  * Every grade of the project by seat, the live final's and the release's:
@@ -167,7 +187,7 @@ const projectRow = async (id: string): Promise<ProjectRow> => (await db.select()
 async function grades(projectId: string, oracle?: (points: number, max: number) => number) {
   const row = await projectRow(projectId);
   const live = await projectLiveScores(db, row, seats.map((s) => s.enrollmentId));
-  const repos = await db.select().from(projectRepos).where(eq(projectRepos.projectId, projectId));
+  const repos = await gradedRepos(projectId);
   const out: Record<string, { live: number | null; released: number | null }> = {};
   for (const [i, seat] of seats.entries()) {
     const cell = live.get(seat.enrollmentId);
@@ -247,8 +267,11 @@ beforeAll(async () => {
     control: await grades(control, (p, m) => gradeFromPoints(p, m, { rounding: "up" })),
   };
 
+  await client.exec(UNDO_GRADES_SPLIT);
   await client.exec(`ALTER TABLE "project_repos" DROP COLUMN "released_grade";`);
-  for (const statement of readFileSync(MIGRATION, "utf8").split("--> statement-breakpoint")) await client.exec(statement);
+  for (const migration of [MIGRATION, GRADES_SPLIT]) {
+    for (const statement of readFileSync(migration, "utf8").split("--> statement-breakpoint")) await client.exec(statement);
+  }
 });
 
 const after = (projectId: string) => grades(projectId);
@@ -264,7 +287,7 @@ describe("0122_score_is_grade_linear (ADR-119 §11)", () => {
       5: { live: 1, released: 1 },
     });
     expect(await after(released)).toEqual(before.released);
-    const repos = await db.select().from(projectRepos).where(eq(projectRepos.projectId, released));
+    const repos = await gradedRepos(released);
     const bySeat = (i: number) => repos.find((r) => r.userId === seats[i]!.userId)!;
     expect([0, 1, 2, 3, 4, 5].map((i) => bySeat(i).releasedGrade)).toEqual([4.4, 5.5, 5.3, 6, 2.3, 1]);
     // The scores as points: (g − 1) out of 5, clamped; a score out of 20 unchanged.
@@ -287,8 +310,8 @@ describe("0122_score_is_grade_linear (ADR-119 §11)", () => {
       5: { live: null, released: null },
     });
     expect(await after(unreleased)).toEqual(before.unreleased);
-    const repos = await db.select().from(projectRepos).where(eq(projectRepos.projectId, unreleased));
-    expect(repos.every((r) => r.releasedGrade === null && r.releasedPoints === null)).toBe(true);
+    const repos = await gradedRepos(unreleased);
+    expect(repos.every((r) => (r.releasedGrade ?? null) === null && (r.releasedPoints ?? null) === null)).toBe(true);
   });
 
   it("converts every run out of 6 of the migrated projects, and no other", async () => {
@@ -312,7 +335,7 @@ describe("0122_score_is_grade_linear (ADR-119 §11)", () => {
     expect((await projectRow(control)).gradingScale).toEqual({ kind: "linear", rounding: "up" });
     expect(before.control![0]).toEqual({ live: 4.8, released: 4.8 });
     expect(await after(control)).toEqual(before.control);
-    const [c] = await db.select().from(projectRepos).where(eq(projectRepos.projectId, control));
+    const [c] = await gradedRepos(control);
     expect(c).toMatchObject({ releasedPoints: 4.5, releasedMax: 6, releasedGrade: 4.8 });
   });
 

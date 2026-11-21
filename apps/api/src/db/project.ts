@@ -580,63 +580,28 @@ export const projectRepos = pgTable(
     frozenGradeRunId: uuid("frozen_grade_run_id"),
     reviewGradeRunId: uuid("review_grade_run_id"),
     /**
-     * The teacher's score (F-PROJ-14), written after the definitive freeze:
-     * `teacher_points` out of `teacher_max` — the scored run's maximum when
-     * the repository has one, the teacher's own otherwise (product owner,
-     * 2026-10-02, M3-08b). Written together, so the score is self-contained:
-     * a later run with another maximum never re-reads it. Null when none;
-     * `teacher_max` null on heig-classroom's imported rows, which read the
-     * CI's maximum (`resolveFinalScore`).
+     * The grading columns before `project_repo_grades` (Phase 4 of the
+     * database remediation), which documents their meaning. Kept in sync
+     * by trigger until the contract step (migration 0151), so that an
+     * older image (a rollback) reads and writes current values and the next
+     * roll-forward finds them; never read or written by the code.
      */
-    teacherPoints: doublePrecision("teacher_points"),
-    teacherMax: doublePrecision("teacher_max"),
-    teacherComment: text("teacher_comment"),
-    teacherGradedBy: uuid("teacher_graded_by").references(() => users.id),
-    teacherGradedAt: timestamp("teacher_graded_at", { withTimezone: true }),
-    /**
-     * The grade adjustment (ADR-135), applied to the final score's grade,
-     * live: `relative` a delta, `absolute` the pinned grade
-     * (`adjustGrade`, `@quiz/domain`). `grade_adjust_base` the base grade
-     * it was written over, which tells an absolute pin that its base moved.
-     * The comment, required, is the student's to read once released
-     * (`released_adjustment_comment`). Written and cleared together;
-     * after the repository's definitive freeze only.
-     */
-    gradeAdjustKind: text("grade_adjust_kind", { enum: GRADE_ADJUSTMENT_KINDS }),
-    gradeAdjustValue: doublePrecision("grade_adjust_value"),
-    gradeAdjustBase: doublePrecision("grade_adjust_base"),
-    gradeAdjustComment: text("grade_adjust_comment"),
-    gradeAdjustedBy: uuid("grade_adjusted_by").references(() => users.id),
-    gradeAdjustedAt: timestamp("grade_adjusted_at", { withTimezone: true }),
-    /**
-     * The final score as the release wrote it (product owner, 2026-10-01):
-     * any later difference with the final score is "changed after release"
-     * (F-PROJ-14). Null before the release, or without a score then.
-     */
-    releasedPoints: doublePrecision("released_points"),
-    releasedMax: doublePrecision("released_max"),
-    /**
-     * The grade the release gave that score, stored so that nothing
-     * recomputes what a student was given (ADR-119 §11): written by each
-     * release and by the import, and by migration 0122 for every
-     * repository released before it. What the readers of the release
-     * read; null with no released score.
-     */
-    releasedGrade: doublePrecision("released_grade"),
-    /**
-     * The teacher's comment as the release wrote it (M3-09a): what the
-     * student reads with their released score (F-PROJ-15). A comment written
-     * since names a score not yet released again, so it stays the staff's
-     * until the next release.
-     */
-    releasedComment: text("released_comment"),
-    /**
-     * The grade adjustment's comment as the release wrote it (ADR-135),
-     * beside the teacher's (`released_comment`, which it never overwrites):
-     * what the student reads under their released grade. Null without an
-     * adjustment applied at the release.
-     */
-    releasedAdjustmentComment: text("released_adjustment_comment"),
+    legacyTeacherPoints: doublePrecision("teacher_points"),
+    legacyTeacherMax: doublePrecision("teacher_max"),
+    legacyTeacherComment: text("teacher_comment"),
+    legacyTeacherGradedBy: uuid("teacher_graded_by").references(() => users.id),
+    legacyTeacherGradedAt: timestamp("teacher_graded_at", { withTimezone: true }),
+    legacyGradeAdjustKind: text("grade_adjust_kind", { enum: GRADE_ADJUSTMENT_KINDS }),
+    legacyGradeAdjustValue: doublePrecision("grade_adjust_value"),
+    legacyGradeAdjustBase: doublePrecision("grade_adjust_base"),
+    legacyGradeAdjustComment: text("grade_adjust_comment"),
+    legacyGradeAdjustedBy: uuid("grade_adjusted_by").references(() => users.id),
+    legacyGradeAdjustedAt: timestamp("grade_adjusted_at", { withTimezone: true }),
+    legacyReleasedPoints: doublePrecision("released_points"),
+    legacyReleasedMax: doublePrecision("released_max"),
+    legacyReleasedGrade: doublePrecision("released_grade"),
+    legacyReleasedComment: text("released_comment"),
+    legacyReleasedAdjustmentComment: text("released_adjustment_comment"),
     /**
      * Restoring protected files stopped: five restores in an hour
      * (F-PROJ-08). The staff re-enable it by hand, which clears it.
@@ -668,9 +633,101 @@ export const projectRepos = pgTable(
     index("project_repos_freeze_due_idx")
       .on(t.projectId)
       .where(sql`${t.deadlineAppliedAt} IS NOT NULL AND ${t.frozenAt} IS NULL`),
-    // A grade adjustment is written and cleared whole (ADR-135): all six columns, or none.
+    // The legacy twin of `project_repo_grades_adjust_whole`, dropped with its columns.
     check(
       "project_repos_grade_adjust_whole",
+      sql`num_nonnulls(${t.legacyGradeAdjustKind}, ${t.legacyGradeAdjustValue}, ${t.legacyGradeAdjustBase}, ${t.legacyGradeAdjustComment}, ${t.legacyGradeAdjustedBy}, ${t.legacyGradeAdjustedAt}) IN (0, 6)`,
+    ),
+  ],
+);
+
+/**
+ * A repository's grading (F-PROJ-14, ADR-135), owned by the grading side of
+ * the project module: the teacher's score, the grade adjustment and the
+ * snapshot the release wrote. Out of `project_repos` (Phase 4 of the
+ * database remediation) so that the staff's writes no longer share a row
+ * with the jobs' many writes, and so that points are exact.
+ *
+ * 1:1 with its repository and sparse: a row exists only while one of its
+ * values is set (most repositories are never graded by hand); readers LEFT
+ * JOIN it, an absent row reading as every value null.
+ *
+ * Points are unconstrained `numeric`: exact, never rounded — a
+ * `numeric(6,2)` would round a computed value silently, a `float8` drifts.
+ *
+ * Until the contract step, two triggers (migration 0151) keep this row and
+ * the old columns of `project_repos` equal, both ways, so that a rollback to
+ * an older image and the roll-forward after it lose nothing.
+ */
+export const projectRepoGrades = pgTable(
+  "project_repo_grades",
+  {
+    repoId: uuid("repo_id")
+      .primaryKey()
+      .references(() => projectRepos.id, { onDelete: "cascade" }),
+    /**
+     * The teacher's score (F-PROJ-14), written after the definitive freeze:
+     * `teacher_points` out of `teacher_max` — the scored run's maximum when
+     * the repository has one, the teacher's own otherwise (product owner,
+     * 2026-10-02, M3-08b). Written together, so the score is self-contained:
+     * a later run with another maximum never re-reads it. Null when none;
+     * `teacher_max` null on heig-classroom's imported rows, which read the
+     * CI's maximum (`resolveFinalScore`).
+     */
+    teacherPoints: numeric("teacher_points", { mode: "number" }),
+    teacherMax: numeric("teacher_max", { mode: "number" }),
+    teacherComment: text("teacher_comment"),
+    teacherGradedBy: uuid("teacher_graded_by").references(() => users.id),
+    teacherGradedAt: timestamp("teacher_graded_at", { withTimezone: true }),
+    /**
+     * The grade adjustment (ADR-135), applied to the final score's grade,
+     * live: `relative` a delta, `absolute` the pinned grade
+     * (`adjustGrade`, `@quiz/domain`). `grade_adjust_base` the base grade
+     * it was written over, which tells an absolute pin that its base moved.
+     * The comment, required, is the student's to read once released
+     * (`released_adjustment_comment`). Written and cleared together;
+     * after the repository's definitive freeze only.
+     */
+    gradeAdjustKind: text("grade_adjust_kind", { enum: GRADE_ADJUSTMENT_KINDS }),
+    gradeAdjustValue: numeric("grade_adjust_value", { mode: "number" }),
+    gradeAdjustBase: numeric("grade_adjust_base", { mode: "number" }),
+    gradeAdjustComment: text("grade_adjust_comment"),
+    gradeAdjustedBy: uuid("grade_adjusted_by").references(() => users.id),
+    gradeAdjustedAt: timestamp("grade_adjusted_at", { withTimezone: true }),
+    /**
+     * The final score as the release wrote it (product owner, 2026-10-01):
+     * any later difference with the final score is "changed after release"
+     * (F-PROJ-14). Null before the release, or without a score then.
+     */
+    releasedPoints: numeric("released_points", { mode: "number" }),
+    releasedMax: numeric("released_max", { mode: "number" }),
+    /**
+     * The grade the release gave that score, stored so that nothing
+     * recomputes what a student was given (ADR-119 §11): written by each
+     * release and by the import, and by migration 0122 for every
+     * repository released before it. What the readers of the release
+     * read; null with no released score.
+     */
+    releasedGrade: numeric("released_grade", { mode: "number" }),
+    /**
+     * The teacher's comment as the release wrote it (M3-09a): what the
+     * student reads with their released score (F-PROJ-15). A comment written
+     * since names a score not yet released again, so it stays the staff's
+     * until the next release.
+     */
+    releasedComment: text("released_comment"),
+    /**
+     * The grade adjustment's comment as the release wrote it (ADR-135),
+     * beside the teacher's (`released_comment`, which it never overwrites):
+     * what the student reads under their released grade. Null without an
+     * adjustment applied at the release.
+     */
+    releasedAdjustmentComment: text("released_adjustment_comment"),
+  },
+  (t) => [
+    // A grade adjustment is written and cleared whole (ADR-135): all six columns, or none.
+    check(
+      "project_repo_grades_adjust_whole",
       sql`num_nonnulls(${t.gradeAdjustKind}, ${t.gradeAdjustValue}, ${t.gradeAdjustBase}, ${t.gradeAdjustComment}, ${t.gradeAdjustedBy}, ${t.gradeAdjustedAt}) IN (0, 6)`,
     ),
   ],

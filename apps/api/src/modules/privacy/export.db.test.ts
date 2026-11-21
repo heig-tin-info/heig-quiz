@@ -53,6 +53,7 @@ import {
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { kioskStation } from "../../test/kiosk.js";
+import { setRepoGrades } from "../../test/project.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import { applyState, joinedItems } from "../evaluation/service.js";
@@ -227,8 +228,9 @@ async function makeProject(name: string, state: "draft" | "locked", repos: { use
     ...(state === "locked" ? { releasedAt: new Date("2026-10-10T08:00:00Z"), releasedBy: teacher.id } : {}),
   });
   for (const [index, { userId, fullName }] of repos.entries()) {
+    const repoId = randomUUID();
     await db().insert(projectRepos).values({
-      id: randomUUID(),
+      id: repoId,
       projectId: id,
       userId,
       githubRepoId: n * 10 + index,
@@ -240,6 +242,8 @@ async function makeProject(name: string, state: "draft" | "locked", repos: { use
       rulesetId: n,
       deadlineAppliedAt: deadline,
       frozenAt: new Date("2026-10-09T22:30:00Z"),
+    });
+    await setRepoGrades(db(), repoId, {
       teacherPoints: 9,
       teacherMax: 10,
       teacherComment: NEVER.teacherComment,
