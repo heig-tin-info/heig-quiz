@@ -141,12 +141,18 @@ services:
       retries: 10
     logging: *small-log
 
-  # Daily pg_dump to ./backups; 30-day retention. The off-VM copy is a host
-  # timer (borg to a Storage Box): docs/development/deployment.md §6.
-  # After each dump, a one-line report in ./backup-status/last.json (when it
-  # finished, whether it worked, the file and its size), written through a
-  # temporary file so the app never reads half of it (ADR-055). `$$` is a
-  # literal `$` for the shell: compose would interpolate a single one.
+  # An hourly pg_dump to ./backups (RPO 1 h, owner's decision of 2026-11-21,
+  # database remediation plan §6): `hourly-<UTC date>T<hour>.dump`, the 48
+  # newest kept, each read back whole before it counts; the day's latest is
+  # also `quiz-<date>.dump` (a hard link, no second copy), the 30 newest kept.
+  # Dumps are mode 600 (a copy of production is srv's alone; the report
+  # stays readable by the app). At start, then at the top
+  # of every hour. The off-VM copy is a host timer, hourly too (borg to a
+  # Storage Box): docs/development/deployment.md §6. After each dump, a
+  # one-line report in ./backup-status/last.json (when it finished, whether
+  # it worked, the file and its size), written through a temporary file so
+  # the app never reads half of it (ADR-055). `$$` is a literal `$` for the
+  # shell: compose would interpolate a single one.
   backup:
     image: postgres:17
     restart: always
@@ -165,11 +171,15 @@ services:
         while true; do
           # After a reboot this container may start before PostgreSQL accepts
           # connections (restart: always ignores depends_on): wait, never dump
-          # into a failure that only the next day's run would correct.
+          # into a failure that only the next run would correct.
           until pg_isready -q -h postgres -U quiz; do sleep 5; done
-          file="quiz-$$(date +%F).dump"
-          if pg_dump -Fc -h postgres -U quiz quiz > "/backups/$$file.tmp" \
-            && mv "/backups/$$file.tmp" "/backups/$$file"; then
+          file="hourly-$$(date -u +%Y-%m-%dT%H).dump"
+          # umask 077 for the dump only: the report stays readable by the app,
+          # which runs as another uid.
+          if (umask 077 && pg_dump -Fc -h postgres -U quiz quiz > "/backups/$$file.tmp") \
+            && pg_restore -f /dev/null "/backups/$$file.tmp" \
+            && mv "/backups/$$file.tmp" "/backups/$$file" \
+            && ln -f "/backups/$$file" "/backups/quiz-$$(date -u +%F).dump"; then
             code=0; ok=true; size=$$(stat -c %s "/backups/$$file")
           else
             code=$$?; ok=false; size=0; rm -f "/backups/$$file.tmp"
@@ -177,8 +187,10 @@ services:
           printf '{"finished_at":"%s","ok":%s,"exit_code":%d,"file":"%s","size_bytes":%d}\n' \
             "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$ok" "$$code" "$$file" "$$size" \
             > /backup-status/last.json.tmp && mv /backup-status/last.json.tmp /backup-status/last.json
+          ls -1t /backups/hourly-*.dump 2>/dev/null | tail -n +49 | xargs -r rm --
           ls -1t /backups/quiz-*.dump 2>/dev/null | tail -n +31 | xargs -r rm --
-          sleep 86400
+          # Wake at the top of the next hour.
+          sleep $$((3600 - $$(date +%s) % 3600))
         done
     logging: *small-log
 

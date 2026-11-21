@@ -1,13 +1,15 @@
-# Once a day at 05:30 UTC, give or take a quarter of an hour: after every
-# night's dump (quiz 21:01, evaluation-tb 03:17 UTC)
-# and the engine pull (03:00–05:00); a run missed while the VM was down is
-# caught up at boot (Persistent).
+# Every hour at :15 UTC, give or take five minutes: after quiz's hourly dump
+# (at the top of the hour, a few seconds; RPO 1 h, owner's decision of
+# 2026-11-21), and, on the night's runs, after evaluation-tb's dump (03:17
+# UTC) and the engine pull (03:00–05:00). borg deduplicates, so an hour sends
+# little more than that hour's changes. A run missed while the VM was down
+# is caught up at boot (Persistent).
 [Unit]
-Description=quiz — daily push of the backups to the off-site borg repository
+Description=quiz — hourly push of the backups to the off-site borg repository
 
 [Timer]
-OnCalendar=*-*-* 05:30:00 UTC
-RandomizedDelaySec=15min
+OnCalendar=*-*-* *:15:00 UTC
+RandomizedDelaySec=5min
 Persistent=true
 
 [Install]
