@@ -99,7 +99,7 @@ third language would have been a hunt rather than a list of compile errors.
    their owner (the web app, the server's mail and Teams texts, the
    printed labels of `@quiz/docexport`, the workspace portal): the
    compile-time completeness check is the asset a library would trade
-   away. No pluralization engine; the `.one` / `.many` keys stay.
+   away. No pluralization engine; the `.one` keys stay.
 
 9. **Rollout and voice.** Order: this registry; the web dictionary split
    by domain (a parallel pull request); `de`; then `it`. The built-in help
