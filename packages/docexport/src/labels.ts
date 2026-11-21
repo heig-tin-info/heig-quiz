@@ -27,6 +27,7 @@ export interface Labels {
   /** The points of an answer nothing has graded yet. */
   notGraded: string;
   noAnswer: string;
+  /** A person's family name, beside `firstName` (Italian: «Cognome», «Nome»). */
   name: string;
   firstName: string;
   /** Column heads of a breakdown, blank by blank. */
@@ -65,6 +66,8 @@ export interface Labels {
   circuitOpen: string;
   circuitBias: string;
   circuitHidden: string;
+  /** The head of a stimulus's name column. */
+  circuitName: string;
   schematic: string;
   logicInputs: string;
   logicOutputs: string;
@@ -193,6 +196,7 @@ export const EN_LABELS: Labels = {
   circuitOpen: "Open output",
   circuitBias: "Bias",
   circuitHidden: "Hidden stimuli",
+  circuitName: "Name",
   schematic: "Schematic",
   logicInputs: "Inputs",
   logicOutputs: "Outputs",
@@ -302,6 +306,7 @@ export const FR_LABELS: Labels = {
   circuitOpen: "Sortie ouverte",
   circuitBias: "Polarisation",
   circuitHidden: "Stimuli cachés",
+  circuitName: "Nom",
   schematic: "Schéma",
   logicInputs: "Entrées",
   logicOutputs: "Sorties",
@@ -416,6 +421,7 @@ export const DE_LABELS: Labels = {
   circuitOpen: "Offener Ausgang",
   circuitBias: "Arbeitspunkt",
   circuitHidden: "Verborgene Stimuli",
+  circuitName: "Name",
   schematic: "Schaltplan",
   logicInputs: "Eingänge",
   logicOutputs: "Ausgänge",
@@ -484,16 +490,131 @@ export const DE_LABELS: Labels = {
 };
 
 /**
+ * Italian, a translated language (ADR-140 §2): drafted from the English, in
+ * the words of the web app's Italian dictionary (the formal «lei», «Lei» never
+ * capitalised; «correzione» for grading, never a bare «corretto»).
+ */
+export const IT_LABELS: Labels = {
+  lang: "it",
+  question: "Domanda",
+  statement: "Enunciato",
+  answerKey: "Soluzione",
+  explanation: "Spiegazione",
+  yourAnswer: "La sua risposta",
+  points: "Punti",
+  pointsShort: "pt",
+  notGraded: "in attesa di correzione",
+  noAnswer: "Nessuna risposta.",
+  name: "Cognome",
+  firstName: "Nome",
+  blank: "Lacuna",
+  expected: "Risposta attesa",
+  result: "Risultato",
+  right: "corretta",
+  wrong: "errata",
+  severalAnswers: "Più risposte possono essere corrette.",
+  negativeMarking: "Una risposta errata toglie punti. Non rispondere non toglie nulla.",
+  expectNumber: "Rispondere con un numero.",
+  expectDate: "Rispondere con una data.",
+  expectTime: "Rispondere con un orario.",
+  symbols: "Simboli",
+  lengthLimit: "Lunghezza massima",
+  characters: "caratteri",
+  circuitParts: "Componenti",
+  circuitMaxParts: "Numero massimo di componenti",
+  circuitSupplies: "Alimentazioni",
+  circuitCommonGround: "in− e out− sono la massa.",
+  circuitSeparateGround: "in− e out− sono due nodi liberi. Un simbolo di massa indica il nodo 0.",
+  circuitStimuli: "Come viene testato il circuito",
+  circuitSource: "Sorgente",
+  circuitLoad: "Carico",
+  circuitAnalysis: "Analisi",
+  circuitDc: "Tensione continua",
+  circuitSine: "Sinusoide",
+  circuitPulse: "Impulsi",
+  circuitStep: "Gradino",
+  circuitOpen: "Uscita a vuoto",
+  circuitBias: "Polarizzazione",
+  circuitHidden: "Stimoli nascosti",
+  circuitName: "Nome",
+  schematic: "Schema",
+  logicInputs: "Ingressi",
+  logicOutputs: "Uscite",
+  logicGates: "Porte logiche",
+  logicMaxGates: "Numero massimo di porte",
+  logicVectors: "Vettori di test",
+  diagramNotation: "Notazione",
+  diagramStarter: "Diagramma di partenza",
+  diagramClass: "Diagramma delle classi UML",
+  diagramUsecase: "Diagramma dei casi d'uso UML",
+  diagramState: "Macchina a stati",
+  diagramEr: "Diagramma entità-relazione",
+  diagramFlow: "Diagramma di flusso",
+  diagramAutomaton: "Automa finito",
+  diagramGraph: "Grafo",
+  diagramFree: "Disegno libero",
+  grade: "Nota",
+  awaitingGrading: "Domande in attesa di correzione",
+  comment: "Commento del team docente",
+  bonus: "bonus",
+  notCounted: "non conteggiata",
+  notPrintable: "Non stampabile: da leggere in Quiz.",
+  answer: "Risposta",
+  staffComment: "Commento",
+  attempt: "Tentativo",
+  state: "Stato",
+  stateNotStarted: "Non iniziato",
+  stateInProgress: "In corso",
+  stateSubmitted: "Consegnato",
+  stateExpired: "Scaduto",
+  noAttempt: "Nessun tentativo.",
+  unreadableAnswer: "La risposta registrata è illeggibile.",
+  policy: "Regola di valutazione",
+  fraction: "Frazione",
+  rightTicks: "Crocette corrette",
+  wrongTicks: "Crocette errate",
+  rightChoices: "Opzioni corrette",
+  wrongChoices: "Opzioni errate",
+  negativeMarkingShort: "punti negativi",
+  given: "Risposta data",
+  test: "Test",
+  visibility: "Visibilità",
+  arguments: "Argomenti",
+  visible: "visibile",
+  hidden: "nascosto",
+  passed: "superato",
+  failed: "non superato",
+  noTests: "Nessun test.",
+  testsPassed: "Test superati",
+  compileFailed: "Compilazione non riuscita.",
+  answerMisfit: "La risposta non corrisponde più al codice di partenza della domanda.",
+  rubric: "Istruzioni di correzione",
+  criterion: "Criterio",
+  weight: "Peso",
+  graderNote: "Prompt di correzione",
+  noMatch: "Nessuna risposta accettata corrisponde.",
+  matchedAnswer: "Corrisponde alla risposta accettata",
+  notRead: "Illeggibile",
+  colon: ": ",
+  blocksMapLegend: "Grigio: scaffali. Nero: il robot, freccia in avanti. Tratteggiato: la banchina.",
+  blocksHiddenWarehouses: "Magazzini nascosti, testati alla correzione",
+  blocksAllOrNothing: "Punti solo se il robot raggiunge la banchina in ogni magazzino.",
+  blocksToolbox: "Blocchi disponibili",
+  blocksStarter: "Programma di partenza",
+  blocksAnswerHint: "Scrivere il programma in pseudocodice: un blocco per riga, il corpo rientrato.",
+};
+
+/**
  * The languages a document is worded in: the interface languages, `LOCALES`
  * of `@quiz/domain`, which this package sits below and cannot import. The
  * API hands it a `Locale`, so a language added there is a compile error
  * there until it is added here, with its labels (ADR-140).
  */
-export const LANGS = ["en", "fr", "de"] as const;
+export const LANGS = ["en", "fr", "de", "it"] as const;
 export type Lang = (typeof LANGS)[number];
 
 /** The words of each language, as a document's `lang` picks them. */
-export const LABELS: Readonly<Record<Lang, Labels>> = { en: EN_LABELS, fr: FR_LABELS, de: DE_LABELS };
+export const LABELS: Readonly<Record<Lang, Labels>> = { en: EN_LABELS, fr: FR_LABELS, de: DE_LABELS, it: IT_LABELS };
 
 /** `Label: value`, with the language's own colon. */
 export const labelled = (labels: Labels, label: string, value: string): string => `${label}${labels.colon}${value}`;

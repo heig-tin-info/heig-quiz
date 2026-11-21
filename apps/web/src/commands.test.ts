@@ -4,6 +4,8 @@ import { CalendarRange, Eye, Library } from "lucide-react";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { LOCALES } from "@quiz/domain";
+
 import {
   buildCommands,
   capClassrooms,
@@ -26,8 +28,7 @@ import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures
  * context is that the context can be written down.
  */
 
-await loadLocale("fr");
-await loadLocale("de");
+await Promise.all(LOCALES.map(loadLocale));
 
 /** The real dictionaries, so a missing `fr` string fails a test instead of
  *  falling back silently. */
@@ -250,12 +251,13 @@ describe("buildCommands: the theme and language actions", () => {
     expect(fr.label).toBe("Passer en English");
   });
 
-  it("offers every other language of the registry, German included (ADR-140)", () => {
+  it("offers every other language of the registry (ADR-140)", () => {
     const setLocale = vi.fn();
     const ids = (locale: Locale) =>
       buildCommands(makeContext({ locale })).flatMap((c) => (c.id.startsWith("action:locale:") ? [c.id] : []));
-    expect(ids("en")).toEqual(["action:locale:fr", "action:locale:de"]);
-    expect(ids("de")).toEqual(["action:locale:en", "action:locale:fr"]);
+    for (const locale of LOCALES) {
+      expect(ids(locale)).toEqual(LOCALES.filter((other) => other !== locale).map((other) => `action:locale:${other}`));
+    }
     const de = need(buildCommands(makeContext({ setLocale })), "action:locale:de");
     expect(de.label).toBe("Switch to Deutsch");
     de.run();

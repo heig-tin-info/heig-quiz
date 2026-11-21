@@ -117,12 +117,9 @@ export default defineConfig({
       exclude: [
         ...coverage.exclude,
         "src/mock/**",
-        "src/i18n/en.ts",
-        "src/i18n/fr.ts",
-        "src/i18n/de.ts",
-        "src/i18n/en/**",
-        "src/i18n/fr/**",
-        "src/i18n/de/**",
+        // Each language's dictionary: `<lang>.ts` and its folder of domain files.
+        "src/i18n/??.ts",
+        "src/i18n/*/**",
         "src/DevGallery.tsx",
         "src/devgallery/**",
         "src/paper/paper.fixtures.ts",

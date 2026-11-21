@@ -11,7 +11,7 @@ classroom `a676c8c` (merge task M6-03).
 
 The root `CLAUDE.md` and `AGENTS.md` apply here. Of the root invariants,
 only 11 and 12 are relaxed, on exactly the two points below; everything else
-(1 included: every page in English and French, and German beside them) binds this app as it is. Read [ADR-047](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md)
+(1 included: every page in English and French, and German and Italian beside them) binds this app as it is. Read [ADR-047](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md)
 and its M6-03 amendment, then [docs/merge/06-codespace-seb-infra.md](../../docs/merge/06-codespace-seb-infra.md)
 §6.2–§6.4.
 
@@ -71,10 +71,10 @@ Start button, its teacher dashboard and its YAML seed (all removed, below).
   `images/` is built on the VM, never in CI: by the prod deploy when
   `images/c-dev` changed, tested before it is tagged
   (`deploy/student-image.sh`, RUNBOOK §7), or by hand.
-- **Pages in English, French and German** (`src/web/i18n.ts`, the language
-  from `Accept-Language`, English when the browser names none of the
-  portal's `LANGS`, as on the platform; ADR-140 §4): `en` is the
-  dictionary, `fr` and `de` are typed `Record<keyof typeof en, string>`, so
+- **Pages in English, French, German and Italian** (`src/web/i18n.ts`, the
+  language from `Accept-Language`, English when the browser names none of
+  the portal's `LANGS`, as on the platform; ADR-140 §4): `en` is the
+  dictionary, `fr`, `de` and `it` are typed `Record<keyof typeof en, string>`, so
   a missing translation is a compile error. The portal keeps its own list
   and parser, not `@quiz/domain`'s registry. Every sentence a person reads
   goes through `t()`.

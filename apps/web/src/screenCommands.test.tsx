@@ -68,11 +68,10 @@ describe("buildCommands and the mounted screen", () => {
     ];
     const { unmount } = render(<Screen commands={commands} />);
     const actions = groupCommands(buildCommands(context())).find((g) => g.group === "action");
-    expect(actions?.commands.map((c) => c.id)).toEqual([
+    // The language commands follow the registry (commands.test.ts): left out here.
+    expect(actions?.commands.map((c) => c.id).filter((id) => !id.startsWith("action:locale:"))).toEqual([
       "question:publish",
       "action:theme",
-      "action:locale:fr",
-      "action:locale:de",
       "action:signout",
     ]);
     unmount();

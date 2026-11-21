@@ -149,8 +149,8 @@ describe("the Teams app package", () => {
     expect(TEAMS_ACTIVITY_KINDS).toEqual(expect.arrayContaining(["contestation_filed", "contestation_resolved"]));
     // A project's criterion contested (ADR-139 §13), at 2.7.0.
     expect(TEAMS_ACTIVITY_KINDS).toEqual(expect.arrayContaining(["project_contestation_filed", "project_contestation_resolved"]));
-    // German, its `de.json` (ADR-140), at 2.8.0.
-    expect(TEAMS_APP_VERSION).toBe("2.8.0");
+    // German, its `de.json` (ADR-140), at 2.8.0; Italian, its `it.json`, at 2.9.0.
+    expect(TEAMS_APP_VERSION).toBe("2.9.0");
     // Semver, as Teams wants it; the value itself is bumped by hand.
     expect(TEAMS_APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
     expect(new Set(types.map((a) => a.type)).size).toBe(types.length);

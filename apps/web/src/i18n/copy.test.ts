@@ -10,14 +10,15 @@ import { type Locale, LOCALES } from "@quiz/domain";
 import { de } from "./de";
 import { en } from "./en";
 import { fr } from "./fr";
+import { it as itDict } from "./it";
 
 /**
  * The copy lint (N-I18N-04): what a machine can check of the Voice rules of
  * `apps/web/DESIGN.md` and of the interface glossary
  * (`docs/spec/01-glossaire-et-domaine.md` §1.5, whose enforced variants
  * this table owns). Each rule names the keys it refuses, per language:
- * the written English and French, and the translated German (ADR-140),
- * which is drafted by the same rules.
+ * the written English and French, and the translated German and Italian
+ * (ADR-140), which are drafted by the same rules.
  * `copy.exceptions.json` holds the keys that broke a rule when the lint was
  * born and are not rewritten yet. The list only shrinks: a key that no
  * longer breaks its rule must leave it (the test says so), and a key that
@@ -29,11 +30,11 @@ import { fr } from "./fr";
 
 /**
  * The dictionaries the lint reads, one per interface language: the written
- * English and French, the translated German (ADR-140). Keyed by the
- * registry: a language added there is a compile error here until its
+ * English and French, the translated German and Italian (ADR-140). Keyed by
+ * the registry: a language added there is a compile error here until its
  * dictionary is.
  */
-const DICTS: Record<Locale, Record<keyof typeof en, string>> = { en, fr, de };
+const DICTS: Record<Locale, Record<keyof typeof en, string>> = { en, fr, de, it: itDict };
 const DICT: Record<Locale, Record<string, string>> = DICTS;
 type Rule = {
   name: string;
@@ -79,8 +80,9 @@ const ALL = Object.keys(DICT) as Locale[];
 const FR: Locale[] = ["fr"];
 const EN: Locale[] = ["en"];
 const DE: Locale[] = ["de"];
+const IT: Locale[] = ["it"];
 
-/** German prose with its placeholders and inline code taken out: `dir` in backticks is a command, not an address. */
+/** Prose with its placeholders and inline code taken out: `dir` in backticks is a command, not an address. */
 const prose = (re: RegExp) => (text: string) => has(re)(text.replace(/`[^`]*`/g, "x"));
 
 const RULES: Rule[] = [
@@ -95,10 +97,16 @@ const RULES: Rule[] = [
   // Typography (de): Swiss spelling, Swiss quotation marks.
   { name: "eszett", langs: DE, fix: "ss: Swiss German writes no ß", test: has(/ß/) },
   { name: "quotation-marks", langs: DE, fix: "guillemets «…», never „…“ or “…”", test: has(/[„“”]/) },
+  // Typography (it): accents, never an apostrophe for one; Swiss quotation marks.
+  { name: "apostrophe-accent", langs: IT, fix: "the accent: è, È, perché, più, già, può, cioè", test: has(/(^|[^\p{L}])(E|e|perche|piu|gia|puo|cioe|pero|sara|verra|attivita|qualita|unita|modalita|possibilita|citta)'(?![\p{L}])/iu) },
+  { name: "quotation-marks", langs: IT, fix: "guillemets «…», never “…” or „…“", test: has(/[„“”]/) },
   // Prose (all).
   { name: "em-dash-aside", langs: ALL, fix: "two sentences, or a colon; no em-dash aside", test: has(/ — /) },
   { name: "semicolon", langs: ALL, fix: "two sentences; no semicolon chain", test: has(/; /) },
   { name: "informal-address", langs: DE, fix: "Sie, Ihr: the reader is never addressed as du or ihr", test: prose(/\b([Dd]u|[Dd]ein(e|em|en|er|es)?|[Dd]ir|[Dd]ich|[Ee]uch|[Ee]uer|[Ee]ure[mnrs]?)\b/) },
+  // «Gestisci le tue app» is Teams' own menu, quoted as Teams names it (copy.exceptions.json).
+  { name: "informal-address", langs: IT, fix: "lei (lowercase), or an infinitive: the reader is never addressed as tu or voi", test: prose(/(^|[^\p{L}'])(tu|tuo|tua|tuoi|tue|ti|te|voi|vostr[oaie])(?![\p{L}'])/iu) },
+  { name: "capitalised-lei", langs: IT, fix: "lei, sua, suo, le in lowercase: the formal address is never capitalised", test: (t) => /[\p{Ll},;] (Lei|Sua|Suo|Sue|Suoi|Le)(?![\p{L}'])/u.test(t.replace(/`[^`]*`/g, "x")) },
   { name: "filler", langs: FR, fix: "delete the reassurance: a sub-text carries a fact the label does not", test: has(/Rien n'est (bloqué|supprimé)|conviennent à la plupart|revenir à tout moment/i) },
   { name: "filler", langs: EN, fix: "delete the reassurance: a sub-text carries a fact the label does not", test: has(/Nothing is (blocked|deleted)|defaults suit most|come back at any time/i) },
   { name: "generic-masculine", langs: FR, fix: "a neutral turn: les étudiants, a passive, an infinitive", test: has(/\bl'étudiant\b[^.]*\b(il|lui)\b/) },
@@ -148,9 +156,19 @@ const RULES: Rule[] = [
   { name: "word-benotung", langs: DE, fix: "Korrektur, korrigieren", test: has(/\bbenot/i) },
   { name: "word-evaluation", langs: DE, fix: "Test, Prüfung or Übung", test: has(/\bEvaluation/i) },
   { name: "word-quiz", langs: DE, fix: "Test, Prüfung or Übung; Quiz is the platform's name only", test: has(/\b(das|ein|dieses|diesem|dem|des|jedes|jedem|kein|keinem|ihr|ihrem|ihres|neues)\s+Quiz(?![-\w])/i) },
+  // The Italian never-words of the glossary (§1.5), each wrong wherever it stands: voto, alunno,
+  // allievo, professore, insegnante, feedback, sottomettere, and «il/un/questo quiz» for an evaluation.
+  { name: "word-voto", langs: IT, fix: "nota: Swiss Italian", test: has(/\bvot[oi]\b/i) },
+  { name: "word-alunno", langs: IT, fix: "studente in a label, a neutral turn in prose", test: has(/\b(alunn|alliev)[oaie]\b/i) },
+  { name: "word-professore", langs: IT, fix: "docente, team docente", test: has(/\b(professor[ei]|professoress[ae]|insegnant[ei])\b/i) },
+  { name: "word-feedback", langs: IT, fix: "correzione", test: has(/\bfeedback\b/i) },
+  { name: "word-sottomettere", langs: IT, fix: "consegnare, consegna", test: has(/\bsottome(tt|ss)/i) },
+  { name: "word-quiz", langs: IT, fix: "valutazione, esame or esercizio; Quiz is the platform's name only", test: has(/\b(il|un|questo|quel|ogni|nessun|del|al|nel|dal|sul|i|dei|ai|nei|dai|sui|nuovo|primo|ultimo|stesso|suo|proprio)\s+quiz\b/i) },
   // Ceilings (all).
   { name: "button-over-24", langs: ALL, fix: "a verb, at most 24 characters", test: (t, k) => BUTTON.includes(suffix(k)) && !isSentence(t) && longerThan(24)(t) },
   { name: "tab-over-18", langs: ALL, fix: "at most 18 characters", test: (t, k) => /\.tab\.[^.]+$/.test(k) && longerThan(18)(t) },
+  // A summary tile of the activities page shares its label row with a chip: at 390 px, 20 characters take two lines (ADR-140).
+  { name: "tile-label-over-20", langs: ALL, fix: "at most 20 characters", test: (t, k) => /^activities\.summary\.[^.]+$/.test(k) && longerThan(20)(t) },
   { name: "subtext-over-110", langs: ALL, fix: "one sentence of at most 110 characters, carrying a fact the label does not", test: (t, k) => SUBTEXT.includes(suffix(k)) && longerThan(110)(t) },
 ];
 

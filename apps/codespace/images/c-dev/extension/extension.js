@@ -184,15 +184,58 @@ const STRINGS = {
     updateFailed: (detail) => `Nichts wurde geändert: git hat den Merge abgelehnt (${detail}).`,
     remaining: (h, m) => (h > 0 ? `noch ${h} h ${m} min` : `noch ${m} min`),
   },
+  it: {
+    tag: "it-CH",
+    overdue: "Scadenza superata",
+    lessThanAMinute: "meno di un minuto rimanente",
+    close: "Chiudi",
+    closeTooltip: "Lasciare l'editor e tornare al portale",
+    deadlineLine: (date) => `Scadenza: ${date}`,
+    assignmentLine: (name) => `Attività: ${name}`,
+    noReturnUrl: "A questa sessione non è stato passato alcun URL di ritorno.",
+    sebQuit: "Chiudi: Ctrl+Q",
+    sebQuitTooltip:
+      "Uscire da Safe Exam Browser. Scorciatoia: Ctrl+Q (Windows) o ⌘Q (Mac), che può chiedere una password. " +
+      "I suoi file vengono salvati automaticamente.",
+    pushRejected: "Push rifiutato da GitHub",
+    pushRejectedTooltip: (branch, reason) =>
+      `Il suo ultimo push sul branch ${branch} non è stato inoltrato a GitHub (${reason}). ` +
+      "Il suo commit è ancora nel suo spazio di lavoro: fare pull, sistemare se necessario, poi fare di nuovo push.",
+    programTerminal: "Programma",
+    programTerminalFailed:
+      "Il terminale del programma non si è avviato: ciò che il programma stampa e legge passa dalla console di debug.",
+    update: "Aggiornamento del team docente",
+    updateTooltip: (at) => `Il team docente ha aggiornato il progetto${at ? `, ${at}` : ""}. Fare clic per applicare l'aggiornamento.`,
+    updateMessage: "Messaggio del team docente:",
+    updateConfirm:
+      "Applicare l'aggiornamento del team docente? Viene integrato nel suo branch con un merge commit. Poi fare push come al solito.",
+    apply: "Applica",
+    updateApplied: "Aggiornamento applicato. Fare push per inviarlo con il suo lavoro.",
+    updateUnavailable: "Non è stato possibile recuperare l'aggiornamento. Riprovare tra un momento.",
+    updateOtherBranch: (branch) => `Passare al branch ${branch} per applicare l'aggiornamento.`,
+    updateBusy: "Un merge, un rebase o un cherry-pick è in corso: completarlo o annullarlo, poi riprovare.",
+    updateDirty: (files) =>
+      `Non è stato modificato nulla: le sue modifiche non committate in ${files} verrebbero sovrascritte. Fare commit del proprio lavoro, poi riprovare.`,
+    updateConflict: (files) =>
+      `Non è stato modificato nulla: l'aggiornamento è in conflitto con il suo lavoro in ${files}. Rivolgersi al team docente, o fare il merge a mano con git.`,
+    updateFailed: (detail) => `Non è stato modificato nulla: git ha rifiutato il merge (${detail}).`,
+    remaining: (h, m) =>
+      h > 0
+        ? `${h} h ${m} min rimanenti`
+        : m > 1
+          ? `${m} min rimanenti`
+          : `${m} min rimanente`,
+  },
 };
 
 /**
- * The strings of the interface language's base ("fr", "de"), English for any
- * other, and English for a key a language's table lacks (ADR-140 §4, §5).
- * French and German are not reached today: the image ships no language
- * pack, so `vscode.env.language` is "en" whatever the browser's language. Kept because a pack could be added without touching
+ * The strings of the interface language's base ("fr", "de", "it"), English
+ * for any other, and English for a key a language's table lacks (ADR-140
+ * §4, §5). French, German and Italian are not reached today: the image
+ * ships no language pack, so `vscode.env.language` is "en" whatever the
+ * browser's language. Kept because a pack could be added without touching
  * this extension: install Open VSX's `MS-CEINTL.vscode-language-pack-fr`
- * (or `-de`) beside the other extensions and start code-server with
+ * (or `-de`, `-it`) beside the other extensions and start code-server with
  * `--locale fr` (entrypoint.sh) — not tried.
  */
 function pickStrings(language) {

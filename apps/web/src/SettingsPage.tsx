@@ -10,7 +10,7 @@ import { DataExportCard } from "./DataExportCard";
 import { api, useMePatch } from "./api";
 import { GithubAccountCard } from "./github/AccountCard";
 import { ViewModeToggle } from "./Header";
-import { useI18n, useT } from "./i18n";
+import { type LocaleChoice, useI18n, useT } from "./i18n";
 import {
   DATE_FORMATS,
   McqPolicy,
@@ -161,15 +161,20 @@ function PreferencesCard({ me }: { me: Me }) {
       <SectionHeading icon={SlidersHorizontal} title={t("settings.preferences")} />
       <Card className="divide-y divide-line px-5">
         <SettingRow title={t("settings.language")} desc={t("settings.languageHint")}>
-          <Segmented
-            name="locale"
+          {/* A select: the list of languages grows. */}
+          <Select
             value={choice}
-            onChange={setLocale}
-            options={[
-              { value: "browser", label: t("settings.language.browser") },
-              ...LOCALES.map((code) => ({ value: code, label: LOCALE_INFO[code].endonym })),
-            ]}
-          />
+            onChange={(e) => setLocale(e.target.value as LocaleChoice)}
+            width="w-52"
+            aria-label={t("settings.language")}
+          >
+            <option value="browser">{t("settings.language.browser")}</option>
+            {LOCALES.map((code) => (
+              <option key={code} value={code} lang={code}>
+                {LOCALE_INFO[code].endonym}
+              </option>
+            ))}
+          </Select>
         </SettingRow>
         <SettingRow title={t("settings.appearance")}>
           <Segmented

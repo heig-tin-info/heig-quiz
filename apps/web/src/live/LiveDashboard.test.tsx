@@ -775,9 +775,10 @@ describe("LiveDashboard — command palette", () => {
   });
 
   /** Exactly what the palette walks: grouped, in the order the rows appear. */
+  // The language commands follow the registry (commands.test.ts): left out here.
   const paletteIds = () =>
-    groupCommands(capClassrooms(filterCommands("", buildCommands(paletteContext())), "")).flatMap(
-      (g) => g.commands.map((c) => c.id),
+    groupCommands(capClassrooms(filterCommands("", buildCommands(paletteContext())), "")).flatMap((g) =>
+      g.commands.flatMap((c) => (c.id.startsWith("action:locale:") ? [] : [c.id])),
     );
 
   it("offers pause, +5 min, close and configure while the quiz runs", async () => {
@@ -795,8 +796,6 @@ describe("LiveDashboard — command palette", () => {
       "live:extend",
       "live:close",
       "action:theme",
-      "action:locale:fr",
-      "action:locale:de",
       "action:signout",
       "help:docs",
       "help:sources",
@@ -819,8 +818,6 @@ describe("LiveDashboard — command palette", () => {
       "nav:results",
       "live:start",
       "action:theme",
-      "action:locale:fr",
-      "action:locale:de",
       "action:signout",
       "help:docs",
       "help:sources",

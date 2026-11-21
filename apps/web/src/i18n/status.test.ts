@@ -10,6 +10,7 @@ import type { TranslatedLocale } from "@quiz/domain";
 import { de } from "./de";
 import { DOMAINS } from "./domains";
 import { en } from "./en";
+import { it as itDict } from "./it";
 
 /**
  * The translated languages (ADR-140 §2, §7). English and French are
@@ -36,7 +37,7 @@ import { en } from "./en";
  */
 
 /** Every translated language of the registry (`LOCALE_INFO`): one added there is a compile error here until its dictionary is. */
-const TRANSLATED: Record<TranslatedLocale, Record<keyof typeof en, string>> = { de };
+const TRANSLATED: Record<TranslatedLocale, Record<keyof typeof en, string>> = { de, it: itDict };
 type Lang = TranslatedLocale;
 type Key = keyof typeof en;
 

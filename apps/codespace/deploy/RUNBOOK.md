@@ -192,7 +192,7 @@ then the script warns that the tag and the Containerfile disagree, and
 builds under the old tag.
 
 The status-bar extension is part of the image: its version is in the log
-(`test.sh` § 3, `heig.codespace-statusbar@0.4.1 installed and listed by
+(`test.sh` § 3, `heig.codespace-statusbar@0.4.2 installed and listed by
 code-server`); the portal works with an older one, which ignores what it
 does not know. The build downloads from Debian, GitHub (code-server), Open
 VSX and PyPI (Baygon's wheels, hash-checked): the host policy

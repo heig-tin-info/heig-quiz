@@ -11,7 +11,8 @@ the orchestrator's design. §7 amended in place on 2026-11-21 by the `de`
 pull request, with the mechanism as built. §10 (regional formats) added
 2026-11-21 by the product owner, settling question 75; it supersedes the
 sentence of §9 that no English or French output changes. §4 and §5
-amended on 2026-11-21 by the pull request that makes German selectable.
+amended on 2026-11-21 by the pull request that makes German selectable;
+§4 amended again on 2026-11-21 by the one that makes Italian selectable.
 
 Scope: the list of interface languages, how a language's copy is made and
 released, the run-time fallback, and the code rule that makes a language
@@ -89,6 +90,15 @@ third language would have been a hunt rather than a list of compile errors.
      German, and that of the student image's scripts, is drafted like the
      platform's but is not covered by the review tracking of §7 nor by
      the German copy lint, which both live in `apps/web`.
+     *Amended 2026-11-21, Italian selectable:* Italian is live beside
+     German (`it`, `Italiano`, `it-CH`), with the same compile errors
+     filled; the portal and the image's scripts speak it too, under the
+     same reservation as their German. The second language showed what
+     the registry did not catch, now keyed by it: tests that took `it` as
+     the example of an unsupported language (they use `xx`), tests that
+     named one language's word or command, and the development stub's word
+     matchers (`domain/assist.ts`, a `Record<AssistLocale, …>` of
+     alternations).
 
 5. **Fallback.** A key missing at run time reads its English (unchanged).
    The "Data and privacy" page (N-DATA-07) is a legal text: a reader of a

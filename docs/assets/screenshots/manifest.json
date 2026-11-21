@@ -1283,9 +1283,9 @@
         "light": "settings-light.png",
         "dark": "settings-dark.png"
       },
-      "takenAt": "2026-10-14T20:20:16.864Z",
-      "commit": "75d362c1",
-      "base": "http://localhost:3105"
+      "takenAt": "2026-11-21T16:57:27.350Z",
+      "commit": "86edd875",
+      "base": "http://localhost:3100"
     },
     {
       "name": "settings-token-created",
@@ -1766,9 +1766,9 @@
         "light": "student-settings-light.png",
         "dark": "student-settings-dark.png"
       },
-      "takenAt": "2026-10-14T20:20:16.864Z",
-      "commit": "75d362c1",
-      "base": "http://localhost:3105"
+      "takenAt": "2026-11-21T16:57:27.350Z",
+      "commit": "86edd875",
+      "base": "http://localhost:3100"
     }
   ]
 }

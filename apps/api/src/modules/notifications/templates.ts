@@ -3,14 +3,14 @@
  * and the preview line of a Teams activity, rendered on the server in the
  * RECIPIENT's language (`users.locale`, English when unset), never the
  * sender's — and every user-facing string of the Teams app package (its
- * name, descriptions, tab and activity types), whose French and German
- * become the package's `fr.json` and `de.json`.
+ * name, descriptions, tab and activity types), each other language's
+ * becoming the package's `<locale>.json`.
  *
- * One typed dictionary per language, the web app's rule mirrored: `fr` and
- * `de` are `Record<keyof typeof en, string>`, so a missing sentence is a
- * compile error. English and French are written, German is translated
- * (ADR-140). The bell is NOT rendered here — the web app turns the same
- * payload into its own sentence (`NotificationPanel.tsx`).
+ * One typed dictionary per language, the web app's rule mirrored: every one
+ * but English is `Record<keyof typeof en, string>`, so a missing sentence is
+ * a compile error. English and French are written, the others translated
+ * (ADR-140). The bell is NOT rendered here — the web app turns
+ * the same payload into its own sentence (`NotificationPanel.tsx`).
  *
  * Every value that comes from a user (a pool name, a title, a display name)
  * is escaped before it lands in HTML, and the subject line is flattened to
@@ -719,7 +719,238 @@ const de: Record<Key, string> = {
   "activity.project_contestation_filed.template": "Beanstandungen zu {projectTitle}: {count}",
 };
 
-const DICTS: Record<Locale, Record<Key, string>> = { en, fr, de };
+/**
+ * Italian, a translated language (ADR-140 §2): drafted from the English, by
+ * the rules of the web app's Italian (the formal «lei» in lowercase or an
+ * infinitive, guillemets, the glossary of spec 01 §1.5), naming each screen
+ * and button as the web's Italian does. As in German, a Teams template keeps
+ * the English's parameters, and a count whose plural it cannot choose
+ * stands after a colon.
+ */
+const it: Record<Key, string> = {
+  "results_released.subject": "Risultati disponibili: {evaluationTitle}",
+  "results_released.body": "I risultati di «{evaluationTitle}» sono disponibili.",
+  "results_released.action": "Vedi i miei risultati",
+  "activity_scheduled.subject": "{count} esercizi pianificati in {classroomName}",
+  "activity_scheduled.subject.one": "Un esercizio pianificato in {classroomName}",
+  "activity_scheduled.body": "In {classroomName} sono stati pianificati {count} esercizi.",
+  "activity_scheduled.body.one": "In {classroomName} è stato pianificato un esercizio.",
+  "activity_scheduled.action": "Vedi le mie attività",
+  "activity_available.subject": "Esercizio aperto: {evaluationTitle}",
+  "activity_available.body": "L'esercizio «{evaluationTitle}» è aperto. Può svolgerlo da subito.",
+  "activity_available.action": "Apri l'esercizio",
+  "deadline_approaching.subject": "Chiude entro 24 ore: {evaluationTitle}",
+  "deadline_approaching.body": "«{evaluationTitle}» chiude tra meno di 24 ore. Manca ancora la sua consegna.",
+  "deadline_approaching.action": "Apri la valutazione",
+  "results_updated.subject": "Risultati aggiornati: {evaluationTitle}",
+  "results_updated.body": "La sua nota per «{evaluationTitle}» è cambiata dopo una correzione.",
+  "results_updated.action": "Vedi i miei risultati",
+  "contestation_resolved.subject": "Risposta alla sua contestazione: {evaluationTitle}",
+  "contestation_resolved.body": "La sua contestazione su «{evaluationTitle}» ha ricevuto una risposta.",
+  "contestation_resolved.action": "Vedi i miei risultati",
+  "contestation_filed.subject": "{count} contestazioni: {evaluationTitle}",
+  "contestation_filed.subject.one": "Una contestazione: {evaluationTitle}",
+  "contestation_filed.body": "Su «{evaluationTitle}» sono state presentate {count} contestazioni.",
+  "contestation_filed.body.one": "La correzione di una domanda di «{evaluationTitle}» è stata contestata.",
+  "contestation_filed.action": "Apri la correzione",
+  "pool_shared.subject": "Una banca di domande condivisa con lei: {poolName}",
+  "pool_shared.body": "{byName} ha condiviso con lei la banca di domande «{poolName}» (ruolo: {role}).",
+  "pool_shared.action": "Apri la banca di domande",
+  "pool_ownership.subject": "Ora è responsabile della banca di domande {poolName}",
+  "pool_ownership.body": "Ora è responsabile della banca di domande «{poolName}», trasferita da {fromName}.",
+  "pool_ownership.action": "Apri la banca di domande",
+  "student_joined.subject": "{count} nuove iscrizioni in {classroomName}",
+  "student_joined.subject.one": "Una nuova iscrizione in {classroomName}",
+  "student_joined.body": "{count} persone si sono iscritte alla classe {classroomName}.",
+  "student_joined.body.one": "Una persona si è iscritta alla classe {classroomName}.",
+  "student_joined.action": "Apri l'elenco della classe",
+  "roster_conflict.subject": "{count} voci dell'elenco di {classroomName} attendono una sua decisione",
+  "roster_conflict.subject.one": "Una voce dell'elenco di {classroomName} attende una sua decisione",
+  "roster_conflict.body": "{count} voci dell'elenco di {classroomName} non sono state abbinate automaticamente a un account e attendono una sua decisione.",
+  "roster_conflict.body.one": "Una voce dell'elenco di {classroomName} non è stata abbinata automaticamente a un account e attende una sua decisione.",
+  "roster_conflict.action": "Apri l'elenco della classe",
+  "grading_ready.subject": "{count} proposte da convalidare: {evaluationTitle}",
+  "grading_ready.subject.one": "Una proposta da convalidare: {evaluationTitle}",
+  "grading_ready.body": "La correzione automatica di «{evaluationTitle}» è terminata. {count} proposte attendono la sua convalida.",
+  "grading_ready.body.one": "La correzione automatica di «{evaluationTitle}» è terminata. Una proposta attende la sua convalida.",
+  "grading_ready.action": "Apri la correzione",
+  "pool_question_added.subject": "{count} domande pubblicate in {poolName}",
+  "pool_question_added.subject.one": "Una domanda pubblicata in {poolName}",
+  "pool_question_added.body": "Nella banca di domande «{poolName}» sono state pubblicate {count} domande.",
+  "pool_question_added.body.one": "Nella banca di domande «{poolName}» è stata pubblicata una domanda.",
+  "pool_question_added.action": "Apri la banca di domande",
+  "question_reported.subject": "{count} segnalazioni su {questionName}",
+  "question_reported.subject.one": "Una segnalazione su {questionName}",
+  "question_reported.body": "Sono state inviate {count} segnalazioni di un problema sulla domanda «{questionName}» della banca di domande «{poolName}».",
+  "question_reported.body.one": "È stata inviata una segnalazione di un problema sulla domanda «{questionName}» della banca di domande «{poolName}».",
+  "question_reported.action": "Apri la domanda",
+  "question_report_resolved.subject": "La sua segnalazione è stata risolta: {questionName}",
+  "question_report_resolved.body": "La sua segnalazione sulla domanda «{questionName}» della banca di domande «{poolName}» è stata risolta.",
+  "question_report_resolved.action": "Apri la domanda",
+  // A public pool left the catalogue (ADR-095): one sentence per state.
+  "pool_unpublished.unpublished.subject": "La banca di domande {poolName} ha lasciato il catalogo",
+  "pool_unpublished.unpublished.body": "La banca di domande «{poolName}» è stata ritirata dal catalogo: il suo abbonamento è terminato.",
+  "pool_unpublished.course.subject": "La banca di domande {poolName} ha lasciato il catalogo",
+  "pool_unpublished.course.body": "La banca di domande «{poolName}» è stata ritirata dal catalogo: il suo corso «{courseName}» non vi attinge più. Le valutazioni del corso conservano le loro domande. Collegare un'altra banca di domande, o chiedere a chi è responsabile della banca di domande di pubblicarla di nuovo.",
+  "pool_unpublished.deleted.subject": "La banca di domande {poolName} è stata eliminata",
+  "pool_unpublished.deleted.body": "La banca di domande «{poolName}» è stata eliminata: il suo abbonamento è terminato.",
+  "pool_unpublished.action": "Apri le banche di domande",
+  // The project kinds (F-NOTIF-13, M3-09b): the project's name and counts,
+  // never a score nor a student's name.
+  "project_scheduled.subject": "Progetto annunciato: {projectTitle}",
+  "project_scheduled.body": "Il progetto «{projectTitle}» si apre il {startAt}. Da quel momento potrà accettarlo.",
+  "project_scheduled.unlinked.body": "Il progetto «{projectTitle}» si apre il {startAt}. Collegare il proprio account GitHub prima di allora, per poterlo accettare all'apertura.",
+  "project_scheduled.action": "Apri il progetto",
+  "project_published.subject": "Nuovo progetto: {projectTitle}",
+  "project_published.body": "Il progetto «{projectTitle}» è pubblicato nella sua classe. Accettarlo per ottenere il proprio repository.",
+  "project_published.unlinked.body": "Il progetto «{projectTitle}» è pubblicato nella sua classe. Collegare il proprio account GitHub, poi accettarlo per ottenere il proprio repository.",
+  "project_published.action": "Apri il progetto",
+  "project_deadline_reminder.subject": "Scadenza entro 24 ore: {projectTitle}",
+  "project_deadline_reminder.body": "La scadenza del progetto «{projectTitle}» è tra meno di 24 ore. Prima della scadenza, fare push di tutto ciò che deve contare per la correzione.",
+  "project_deadline_reminder.action": "Apri il progetto",
+  "project_repo_invited.subject": "Il suo repository è pronto: {projectTitle}",
+  "project_repo_invited.body": "Il suo repository per il progetto «{projectTitle}» è stato creato. Accettare l'invito su GitHub per iniziare a lavorarci.",
+  "project_repo_invited.action": "Apri il progetto",
+  "project_grade_final.subject": "Punteggi pubblicati: {projectTitle}",
+  "project_grade_final.body": "I punteggi del progetto «{projectTitle}» sono pubblicati.",
+  "project_grade_final.action": "Vedi il mio punteggio",
+  "project_contestation_resolved.subject": "Risposta alla sua contestazione: {projectTitle}",
+  "project_contestation_resolved.body": "La contestazione di un criterio del progetto «{projectTitle}» ha ricevuto una risposta.",
+  "project_contestation_resolved.action": "Apri il progetto",
+  "project_contestation_filed.subject": "{count} contestazioni: {projectTitle}",
+  "project_contestation_filed.subject.one": "Una contestazione: {projectTitle}",
+  "project_contestation_filed.body": "Su criteri di «{projectTitle}» sono state presentate {count} contestazioni.",
+  "project_contestation_filed.body.one": "La correzione di un criterio di «{projectTitle}» è stata contestata.",
+  "project_contestation_filed.action": "Apri il progetto",
+  "project_deadline_applied.subject": "Scadenza applicata a {count} repository: {projectTitle}",
+  "project_deadline_applied.subject.one": "Scadenza applicata a un repository: {projectTitle}",
+  "project_deadline_applied.body": "La scadenza di «{projectTitle}» è stata applicata a {count} repository.",
+  "project_deadline_applied.body.one": "La scadenza di «{projectTitle}» è stata applicata a un repository.",
+  "project_deadline_applied.action": "Apri il progetto",
+  "project_provision_failed.subject": "Non è stato possibile creare {count} repository: {projectTitle}",
+  "project_provision_failed.subject.one": "Non è stato possibile creare un repository: {projectTitle}",
+  "project_provision_failed.body": "Non è stato possibile creare {count} repository di studenti per «{projectTitle}». Ultima causa: {reason}.",
+  "project_provision_failed.body.one": "Non è stato possibile creare il repository di una persona iscritta per «{projectTitle}»: {reason}.",
+  "project_provision_failed.action": "Apri il progetto",
+  "github_org_lost.subject": "Organizzazione GitHub persa: {classroomName}",
+  "github_org_lost.body": "L'organizzazione {orgLogin} di {classroomName} è stata eliminata su GitHub, o l'app di HEIG Quiz ne è stata disinstallata. Nei repository dell'organizzazione non si può scrivere nulla finché non viene collegata di nuovo.",
+  "github_org_lost.action": "Apri le impostazioni della classe",
+  // Why a repository could not be made (`project_provision_failed.reason`).
+  "reason.repo_name_taken": "esiste già un repository con questo nome nell'organizzazione, e solo il team docente può risolvere il problema",
+  "reason.github_error": "GitHub ha avuto un errore o ha rifiutato, e chi ha accettato il progetto può riprovare",
+  "system_alert.failing.subject": "{host}: controlli di sistema in errore",
+  "system_alert.failing.body": "Alcuni controlli di sistema di {host} sono falliti due volte di seguito: {checks}.",
+  "system_alert.still_failing.subject": "{host}: controlli di sistema ancora in errore",
+  "system_alert.still_failing.body": "Alcuni controlli di sistema di {host} sono in errore da più di un giorno: {checks}.",
+  "system_alert.recovered.subject": "{host}: controlli di sistema di nuovo OK",
+  "system_alert.recovered.body": "Alcuni controlli di sistema di {host} che erano falliti sono di nuovo OK: {checks}.",
+  "system_alert.action": "Apri lo stato del sistema",
+  // The account lifecycle (ADR-117 §4): never "deleted", the results stay.
+  "account_dormant.notice.subject": "Il suo account HEIG Quiz non viene usato da due anni",
+  "account_dormant.notice.body":
+    "Non usa HEIG Quiz da due anni. Per conservare il suo account, accedere entro un anno. Altrimenti l'account sarà anonimizzato: nome, indirizzi, foto e collegamenti ne saranno rimossi, e i suoi risultati resteranno senza il suo nome. Se desidera una copia, scaricare prima i propri dati.",
+  "account_dormant.reminder.subject": "Il suo account HEIG Quiz sarà anonimizzato tra tre mesi",
+  "account_dormant.reminder.body":
+    "Non usa HEIG Quiz da più di due anni. Per conservare il suo account, accedere entro tre mesi. Altrimenti l'account sarà anonimizzato: nome, indirizzi, foto e collegamenti ne saranno rimossi, e i suoi risultati resteranno senza il suo nome. Se desidera una copia, scaricare prima i propri dati.",
+  "account_dormant.action": "Scarica i miei dati",
+  signin: "Accedi",
+  // The administrator's "Send me a test e-mail" (ADR-055 §6): no kind, no preference.
+  "test_mail.subject": "{host}: e-mail di prova",
+  "test_mail.body": "Questa è un'e-mail di prova di {host}, inviata su sua richiesta dalla pagina Stato del sistema. Se la sta leggendo, l'invio delle e-mail della piattaforma funziona.",
+  "test_mail.action": "Torna allo stato del sistema",
+  // The checks by name, as the System status page names them
+  // (`admin.system.check.*` in the web's dictionaries).
+  "check.ticker": "Orologio delle valutazioni (ticker)",
+  "check.attempts.overdue": "Tentativi oltre la scadenza",
+  "check.evaluations.overdue": "Valutazioni oltre la fine",
+  "check.tasks": "Operazioni pianificate",
+  "check.jobs": "Operazioni in background fallite (24 h)",
+  "check.runner": "Esecutore di codice",
+  "check.evaluations.live": "Valutazioni in diretta",
+  "check.connections.live": "Connessioni in tempo reale",
+  "check.database": "Risposta del database",
+  "check.database.size": "Dimensione del database",
+  "check.database.connections": "Connessioni al database",
+  "check.disk": "Spazio su disco",
+  "check.backup": "Ultimo backup",
+  "check.offsite": "Copia esterna",
+  "check.http.errors": "Errori del server (24 h)",
+  "check.service.mail": "E-mail",
+  "check.service.signin": "Accesso (fornitore di identità)",
+  "check.service.teams": "Microsoft Teams",
+  "check.service.llm": "Fornitore di IA",
+  "check.llm.budget": "Spesa IA di oggi",
+  "check.pdf": "Esportazione PDF",
+  "check.service.github": "App GitHub",
+  "check.accounts": "Ciclo di vita degli account",
+  // A pool's roles, as the web's `share.role.*` name them.
+  "role.reader": "Lettura",
+  "role.contributor": "Collaborazione",
+  "role.owner": "Responsabile",
+  footer: "Riceve questo messaggio da HEIG Quiz. Nelle sue impostazioni può scegliere quali notifiche ricevere, e dove:",
+  "footer.link": "Impostazioni delle notifiche",
+  // The Teams app package (`teamsApp.ts`), under the same caps as the English.
+  "app.name.short": "HEIG Quiz",
+  "app.name.full": "Notifiche di HEIG Quiz",
+  "app.description.short": "Le sue notifiche di HEIG Quiz, nel feed attività di Teams.",
+  "app.description.full":
+    "HEIG Quiz invia le proprie notifiche al feed attività di Teams: risultati pubblicati, banche di domande condivise con lei, novità delle sue classi e delle sue valutazioni. Aprire l'app una volta e collegarla al proprio account Quiz, poi scegliere nelle impostazioni della piattaforma quali notifiche ricevere in Teams.",
+  "app.tab.name": "Home",
+  "activity.results_released.description": "I risultati di una valutazione svolta sono pubblicati",
+  "activity.results_released.template": "Risultati disponibili: {evaluationTitle}",
+  "activity.pool_shared.description": "Una banca di domande viene condivisa con lei",
+  "activity.pool_shared.template": "{byName} ha condiviso con lei la banca di domande {poolName}",
+  "activity.pool_ownership.description": "Una banca di domande le viene affidata",
+  "activity.pool_ownership.template": "Ora è responsabile della banca di domande {poolName}",
+  "activity.student_joined.description": "Nuove iscrizioni in una delle sue classi",
+  "activity.student_joined.template": "Nuove iscrizioni in {classroomName}: {count}",
+  "activity.roster_conflict.description": "Voci dell'elenco di una delle sue classi attendono una sua decisione",
+  "activity.roster_conflict.template": "Voci da abbinare nell'elenco di {classroomName}: {count}",
+  "activity.grading_ready.description": "La correzione automatica è terminata e alcune proposte attendono la sua convalida",
+  "activity.grading_ready.template": "Correzione da convalidare: {evaluationTitle}",
+  "activity.pool_question_added.description": "Vengono pubblicate domande in una banca di domande condivisa con lei",
+  "activity.pool_question_added.template": "Nuove domande in {poolName}: {count}",
+  "activity.question_reported.description": "Viene segnalato un problema su una domanda di una banca di domande in cui scrive",
+  "activity.question_reported.template": "Segnalazioni su {questionName}: {count}",
+  "activity.question_report_resolved.description": "La sua segnalazione su una domanda viene risolta",
+  "activity.question_report_resolved.template": "Segnalazione risolta: {questionName}",
+  "activity.pool_unpublished.description": "Una banca di domande pubblica da lei usata lascia il catalogo",
+  "activity.pool_unpublished.template": "La banca di domande {poolName} ha lasciato il catalogo",
+  "activity.activity_scheduled.description": "Vengono pianificati esercizi nella sua classe",
+  "activity.activity_scheduled.template": "Esercizi pianificati in {classroomName}: {count}",
+  "activity.activity_available.description": "Un esercizio si apre",
+  "activity.activity_available.template": "Esercizio aperto: {evaluationTitle}",
+  "activity.deadline_approaching.description": "Una valutazione non ancora consegnata chiude entro 24 ore",
+  "activity.deadline_approaching.template": "Chiude entro 24 ore: {evaluationTitle}",
+  "activity.results_updated.description": "La sua nota in una valutazione con risultati pubblicati cambia",
+  "activity.results_updated.template": "Risultati aggiornati: {evaluationTitle}",
+  "activity.project_scheduled.description": "Un progetto della sua classe viene annunciato, con la data di apertura",
+  "activity.project_scheduled.template": "{projectTitle} si apre il {startAt}",
+  "activity.project_published.description": "Un progetto viene pubblicato nella sua classe",
+  "activity.project_published.template": "Nuovo progetto: {projectTitle}",
+  "activity.project_deadline_reminder.description": "La scadenza di un progetto è tra meno di 24 ore",
+  "activity.project_deadline_reminder.template": "Scadenza entro 24 ore: {projectTitle}",
+  "activity.project_repo_invited.description": "Il suo repository per un progetto è pronto su GitHub",
+  "activity.project_repo_invited.template": "Il suo repository è pronto: {projectTitle}",
+  "activity.project_grade_final.description": "I punteggi di un progetto sono pubblicati",
+  "activity.project_grade_final.template": "Punteggi pubblicati: {projectTitle}",
+  "activity.project_deadline_applied.description": "La scadenza di uno dei suoi progetti è stata applicata ai repository del progetto",
+  "activity.project_deadline_applied.template": "Scadenza di {projectTitle} applicata ai repository: {count}",
+  "activity.project_provision_failed.description": "Non è stato possibile creare un repository di uno dei suoi progetti",
+  "activity.project_provision_failed.template": "Repository di {projectTitle} non creati: {count}",
+  "activity.github_org_lost.description": "L'organizzazione GitHub di una delle sue classi è stata eliminata o l'app disinstallata",
+  "activity.github_org_lost.template": "Organizzazione GitHub persa: {classroomName}",
+  "activity.contestation_resolved.description": "La sua contestazione di una domanda riceve una risposta",
+  "activity.contestation_resolved.template": "Contestazione evasa: {evaluationTitle}",
+  "activity.contestation_filed.description": "La correzione di una domanda di un esame con risultati pubblicati viene contestata",
+  "activity.contestation_filed.template": "Contestazioni su {evaluationTitle}: {count}",
+  "activity.project_contestation_resolved.description": "La sua contestazione di un criterio di progetto riceve una risposta",
+  "activity.project_contestation_resolved.template": "Contestazione evasa: {projectTitle}",
+  "activity.project_contestation_filed.description": "La correzione di un criterio di un progetto con punteggi pubblicati viene contestata",
+  "activity.project_contestation_filed.template": "Contestazioni su {projectTitle}: {count}",
+};
+
+const DICTS: Record<Locale, Record<Key, string>> = { en, fr, de, it };
 
 /** The whole dictionary of one language (the Teams app package reads it). */
 export function serverText(locale: Locale): Record<Key, string> {
@@ -747,11 +978,11 @@ function oneLine(s: string): string {
 }
 
 /** The `Intl` tag of each language's dates in a message. */
-const DATE_TAGS: Record<Locale, string> = { en: "en-GB", fr: "fr-CH", de: "de-CH" };
+const DATE_TAGS: Record<Locale, string> = { en: "en-GB", fr: "fr-CH", de: "de-CH", it: "it-CH" };
 
 /**
  * An instant as the school reads it (`SCHOOL_TIME_ZONE`), in digits only —
- * `06.11.2026 16:30` in French, `06.11.2026, 16:30` in German,
+ * `06.11.2026 16:30` in French, `06.11.2026, 16:30` in German and Italian,
  * `06/11/2026, 16:30` in English: a Teams template parameter is never a
  * translated word.
  */

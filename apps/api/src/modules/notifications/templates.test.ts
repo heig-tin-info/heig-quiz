@@ -131,6 +131,7 @@ describe("renderNotification", () => {
     expect(renderNotification(scheduled, "fr", url).text).toContain("ouvre le 06.11.2026 16:30.");
     expect(renderNotification(scheduled, "en", url).text).toContain("opens on 06/11/2026, 16:30.");
     expect(renderNotification(scheduled, "de", url).text).toContain("beginnt am 06.11.2026, 16:30.");
+    expect(renderNotification(scheduled, "it", url).text).toContain("si apre il 06.11.2026, 16:30.");
     expect(renderNotification({ ...scheduled, githubLinked: false }, "fr", url).text).toContain("Liez votre compte GitHub");
     expect(notificationPath(scheduled)).toBe(`/projects/${PROJECT}`);
   });
@@ -207,7 +208,7 @@ describe("helpers", () => {
     expect(mailLocale("en")).toBe("en");
     expect(mailLocale("de")).toBe("de");
     expect(mailLocale(null)).toBe("en");
-    expect(mailLocale("it")).toBe("en");
+    expect(mailLocale("xx")).toBe("en");
   });
 
   it("opens the same page as the bell", () => {
@@ -381,10 +382,10 @@ describe("account_dormant (ADR-117 §4)", () => {
         const out = renderNotification({ kind: "account_dormant", state }, locale, "https://quiz.test");
         for (const part of [out.subject, out.text, out.html]) {
           expect(part).not.toMatch(/\{\w+\}/);
-          expect(part).not.toMatch(/delet|supprim|lösch/i);
+          expect(part).not.toMatch(/delet|supprim|lösch|elimin/i);
         }
         expect(out.text).not.toContain("--");
-        expect(out.html).not.toMatch(/notification settings|Réglages des notifications|Benachrichtigungseinstellungen/i);
+        expect(out.html).not.toMatch(/notification settings|Réglages des notifications|Benachrichtigungseinstellungen|Impostazioni delle notifiche/i);
       }
     }
   });
@@ -406,10 +407,10 @@ describe("the test e-mail (ADR-055 §6)", () => {
 });
 
 /*
- * The German of the mails and the Teams app is drafted, not written
- * (ADR-140 §2): the machine-checkable rules of the web app's copy lint
- * hold here too (Swiss spelling, guillemets, «Sie», no semicolon chain nor
- * em-dash aside), and every value keeps the English placeholders.
+ * The mails and the Teams app of each translated language are drafted, not
+ * written (ADR-140 §2): the machine-checkable rules of the web app's copy
+ * lint for that language hold here too, and every value keeps the English
+ * placeholders.
  */
 describe("the dictionaries of the other languages", () => {
   const en: Record<string, string> = serverText("en");
@@ -426,8 +427,25 @@ describe("the dictionaries of the other languages", () => {
   it("writes Swiss German, addresses the reader as Sie, and uses guillemets", () => {
     const de: Record<string, string> = serverText("de");
     const offenders = Object.entries(de).filter(([, text]) =>
-      /ß|[„“”]|; | — |\b([Dd]u|[Dd]ein(e|em|en|er|es)?|[Dd]ir|[Dd]ich|[Ee]uch)\b/.test(text.replace(/\{\w+\}/g, "x")),
+      /ß|[„“”]|; | — |\b([Dd]u|[Dd]ein(e|em|en|er|es)?|[Dd]ir|[Dd]ich|[Ee]uch|[Ee]uer|[Ee]ure[mnrs]?)\b/.test(text.replace(/\{\w+\}/g, "x")),
     );
+    expect(offenders).toEqual([]);
+  });
+
+  // The Italian rules of the web app's copy lint (`apps/web/src/i18n/copy.test.ts`:
+  // apostrophe-accent, quotation-marks, informal-address, capitalised-lei, semicolon,
+  // em-dash-aside), restated here because that lint reads the web dictionaries only.
+  it("writes Italian accents, addresses the reader as lei or with an infinitive, and uses guillemets", () => {
+    const dict: Record<string, string> = serverText("it");
+    const offenders = Object.entries(dict).filter(([, raw]) => {
+      const text = raw.replace(/\{\w+\}/g, "x");
+      return (
+        /[„“”]|; | — /.test(text) ||
+        /(^|[^\p{L}])(E|e|perche|piu|gia|puo|cioe|pero|sara|verra|attivita|qualita|unita|modalita|possibilita|citta)'(?![\p{L}])/iu.test(text) ||
+        /(^|[^\p{L}'])(tu|tuo|tua|tuoi|tue|ti|te|voi|vostr[oaie])(?![\p{L}'])/iu.test(text) ||
+        /[\p{Ll},;] (Lei|Sua|Suo|Sue|Suoi|Le)(?![\p{L}'])/u.test(text)
+      );
+    });
     expect(offenders).toEqual([]);
   });
 });

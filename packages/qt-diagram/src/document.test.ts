@@ -59,7 +59,7 @@ describe("the diagram on paper (ADR-126)", () => {
       const [, notation] = diagramServer.statementDoc!(student, LABELS[lang]);
       return notation?.kind === "markdown" ? notation.text : "";
     });
-    expect(names.every((name) => name.startsWith("Notation"))).toBe(true);
+    expect(names.every((name) => name.startsWith(LABELS[lang].diagramNotation))).toBe(true);
     expect(new Set(names).size).toBe(DIAGRAM_KINDS.length);
   });
 

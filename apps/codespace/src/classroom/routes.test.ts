@@ -481,7 +481,7 @@ describe("GET /launch", () => {
   }
 
   it("403 without a token, in English to a browser that names none of the portal's languages", async () => {
-    for (const headers of [{}, { "accept-language": "it-CH,it;q=0.9" }]) {
+    for (const headers of [{}, { "accept-language": "xx-YY,xx;q=0.9" }]) {
       const reply = await h.app.inject({ url: "/launch", headers });
       expect(reply.statusCode).toBe(403);
       expect(reply.body).toContain('<html lang="en">');

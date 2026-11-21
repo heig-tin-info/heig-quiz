@@ -70,6 +70,7 @@ export const ASSIST_REFUSAL: Record<AssistLocale, string> = {
   fr: "Je ne sais pas répondre à cette question ; je peux t'aider sur la plateforme de quiz.",
   en: "I can't answer that question; I can help you with the quiz platform.",
   de: "Diese Frage kann ich nicht beantworten. Ich kann Ihnen bei Fragen zur Quiz-Plattform helfen.",
+  it: "Non posso rispondere a questa domanda. Posso aiutarla con la piattaforma Quiz.",
 };
 
 /** The pages only an administrator's assistant reads (ADR-080 §5). */
@@ -295,7 +296,7 @@ export interface AssistScreen {
 }
 
 /** The UI languages as the prompt names them, in English. */
-const LANGUAGE_NAMES: Record<AssistLocale, string> = { en: "English (en)", fr: "French (fr)", de: "German (de)" };
+const LANGUAGE_NAMES: Record<AssistLocale, string> = { en: "English (en)", fr: "French (fr)", de: "German (de)", it: "Italian (it)" };
 
 /**
  * The part of the system prompt that follows the screen, after the cached
@@ -418,6 +419,17 @@ export const STUB_TEXT: Record<
     proposed: "Ich schlage eine sauberere Aufgabenstellung vor. Vergleichen Sie sie unten und wenden Sie sie an. Bis dahin ändert sich nichts.",
     prepared: "Ich habe die Kategorie unten vorbereitet. Erstellt wird sie erst, wenn Sie bestätigen.",
     refused: "Die Plattform hat abgelehnt:",
+  },
+  it: {
+    intro: "Risposta di sviluppo, non dell'IA: su questa piattaforma non è configurata alcuna IA.",
+    related: "Queste sezioni della documentazione sembrano pertinenti:",
+    none: "Nessuna sezione della documentazione corrisponde alla domanda.",
+    topic: "L'aiuto di questa pagina è",
+    opened: "Ho aperto la banca di domande",
+    searched: "con la ricerca",
+    proposed: "Propongo un enunciato più curato: confrontarlo e applicarlo qui sotto. Nulla cambia finché non viene applicato.",
+    prepared: "Ho preparato la categoria qui sotto. Nulla viene creato prima della conferma.",
+    refused: "La piattaforma ha rifiutato:",
   },
 };
 
@@ -550,9 +562,40 @@ export function assistResults(table: ResultsSource): AssistResults {
 
 // --- The development stub with the data tools ---------------------------------
 
+/**
+ * The words the development stub recognises in a question, per language, as
+ * regular-expression alternations: results or grades, a request to see a
+ * screen, a request to rewrite, a category. A question may mix languages, so
+ * each matcher reads every language's words.
+ */
+const STUB_WORDS: Record<AssistLocale, { results: string; screen: string; rewrite: string; category: string }> = {
+  en: { results: "results?|grades?|marks?|means?|averages?", screen: "show|open|display", rewrite: "rewrite|rephrase|fix", category: "category" },
+  fr: {
+    results: "r[ée]sultats?|notes?|moyennes?",
+    screen: "montre|montrez|affiche|affichez|ouvre|ouvrez|voir",
+    rewrite: "reformule|reformulez|r[ée][ée]cris|r[ée][ée]crivez|corrige|corrigez",
+    category: "cat[ée]gorie",
+  },
+  de: { results: "ergebnisse?|noten|durchschnitt", screen: "zeigen|zeige|anzeigen", rewrite: "umformulieren|formulieren|korrigieren", category: "kategorie" },
+  it: {
+    results: "risultat[oi]|medi[ae]",
+    screen: "mostra|mostrare|apri|aprire|visualizza",
+    rewrite: "riformula|riformulare|riscrivi|riscrivere|correggi|correggere",
+    category: "categoria",
+  },
+};
+
+/** One matcher of `STUB_WORDS`: any language's words, as whole words. */
+const stubMatcher = (kind: keyof (typeof STUB_WORDS)[AssistLocale]): RegExp =>
+  new RegExp(`\\b(${Object.values(STUB_WORDS).map((words) => words[kind]).join("|")})\\b`, "i");
+const RESULTS_WORDS = stubMatcher("results");
+const SCREEN_WORDS = stubMatcher("screen");
+const REWRITE_WORDS = stubMatcher("rewrite");
+const CATEGORY_WORDS = stubMatcher("category");
+
 /** A question the stub answers with the results reader: it names results, grades or marks. */
 export function wantsResults(question: string): boolean {
-  return /\b(r[ée]sultats?|results?|ergebnisse?|notes?|noten|grades?|marks?|moyennes?|means?|averages?|durchschnitt)\b/i.test(question);
+  return RESULTS_WORDS.test(question);
 }
 
 export const STUB_RESULTS_TEXT: Record<
@@ -582,6 +625,14 @@ export const STUB_RESULTS_TEXT: Record<
     mean: "Durchschnitt",
     unreleased: "nicht freigegebene Spalte(n) weggelassen. Deren Noten sind nicht endgültig.",
     refused: "Das Lesen der Ergebnisse wurde abgelehnt:",
+  },
+  it: {
+    read: "Ho letto i risultati definitivi di questa classe (`get_classroom_results`):",
+    none: "Ancora nessun risultato pubblicato in questa classe.",
+    noClassroom: "Aprire prima una classe: la lettura dei risultati ne richiede una sulla pagina.",
+    mean: "media",
+    unreleased: "colonna/e non pubblicata/e, esclusa/e: le loro note non sono definitive.",
+    refused: "La lettura dei risultati è stata rifiutata:",
   },
 };
 
@@ -644,7 +695,7 @@ export async function stubReply(
 
 /** A question the stub answers by opening a screen: it asks to see, show or open something. */
 function wantsScreen(question: string): boolean {
-  return /\b(montre|montrez|affiche|affichez|ouvre|ouvrez|voir|show|open|display|zeigen|zeige|anzeigen)\b/i.test(question);
+  return SCREEN_WORDS.test(question);
 }
 
 /**
@@ -673,12 +724,12 @@ function searchOf(question: string): string | null {
 
 /** A question the stub answers with an editor proposal: it asks to rewrite, rephrase or correct. */
 function wantsRewrite(question: string): boolean {
-  return /\b(reformule|reformulez|r[ée][ée]cris|r[ée][ée]crivez|corrige|corrigez|rewrite|rephrase|fix|umformulieren|formulieren|korrigieren)\b/i.test(question);
+  return REWRITE_WORDS.test(question);
 }
 
 /** The category a question asks to create: "create a category «Pointers»" (quoted). */
 function categoryAsked(question: string): string | null {
-  if (!/\b([ck]at[ée]gorie|category)\b/i.test(question)) return null;
+  if (!CATEGORY_WORDS.test(question)) return null;
   return /["«“']\s*([^"»”']{1,100}?)\s*["»”']/u.exec(question)?.[1] ?? null;
 }
 
