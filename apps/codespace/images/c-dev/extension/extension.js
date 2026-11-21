@@ -66,12 +66,14 @@ const TTY_WAIT_MS = 5_000;
 
 const STRINGS = {
   fr: {
+    // The `Intl` tag of dates.
+    tag: "fr-CH",
     overdue: "Échéance dépassée",
     lessThanAMinute: "moins d'une minute restante",
     close: "Fermer",
     closeTooltip: "Quitter l'éditeur et revenir au portail",
-    deadline: "Échéance",
-    assignment: "Devoir",
+    deadlineLine: (date) => `Échéance : ${date}`,
+    assignmentLine: (name) => `Devoir : ${name}`,
     noReturnUrl: "Aucune URL de retour n'a été transmise à cette session.",
     // The wording of Quiz's own hint (apps/web, `seb.quit` and `seb.quit.keys`).
     sebQuit: "Quitter : Ctrl+Q",
@@ -108,12 +110,13 @@ const STRINGS = {
           : `${m} min restante`,
   },
   en: {
+    tag: "en-GB",
     overdue: "Deadline passed",
     lessThanAMinute: "less than a minute left",
     close: "Close",
     closeTooltip: "Leave the editor and go back to the portal",
-    deadline: "Deadline",
-    assignment: "Assignment",
+    deadlineLine: (date) => `Deadline : ${date}`,
+    assignmentLine: (name) => `Assignment : ${name}`,
     noReturnUrl: "No return URL was given to this session.",
     sebQuit: "Quit: Ctrl+Q",
     sebQuitTooltip:
@@ -143,18 +146,58 @@ const STRINGS = {
     updateFailed: (detail) => `Nothing was changed: git refused the merge (${detail}).`,
     remaining: (h, m) => (h > 0 ? `${h} h ${m} min left` : `${m} min left`),
   },
+  de: {
+    tag: "de-CH",
+    overdue: "Frist abgelaufen",
+    lessThanAMinute: "weniger als eine Minute übrig",
+    close: "Schliessen",
+    closeTooltip: "Editor verlassen und zum Portal zurückkehren",
+    deadlineLine: (date) => `Frist: ${date}`,
+    assignmentLine: (name) => `Aktivität: ${name}`,
+    noReturnUrl: "Dieser Sitzung wurde keine Rückkehr-URL übergeben.",
+    sebQuit: "Beenden: Ctrl+Q",
+    sebQuitTooltip:
+      "Safe Exam Browser beenden. Tastenkürzel: Ctrl+Q (Windows) oder ⌘Q (Mac), eventuell mit Passwortabfrage. " +
+      "Ihre Dateien werden automatisch gespeichert.",
+    pushRejected: "Push von GitHub abgelehnt",
+    pushRejectedTooltip: (branch, reason) =>
+      `Ihr letzter Push von ${branch} wurde nicht an GitHub weitergeleitet (${reason}). ` +
+      "Ihr Commit ist weiterhin in Ihrem Arbeitsbereich: Machen Sie einen Pull, korrigieren Sie bei Bedarf und pushen Sie erneut.",
+    programTerminal: "Programm",
+    programTerminalFailed:
+      "Das Terminal des Programms ist nicht gestartet: Was das Programm ausgibt und einliest, läuft über die Debug-Konsole.",
+    update: "Aktualisierung des Lehrteams",
+    updateTooltip: (at) => `Das Lehrteam hat das Projekt aktualisiert${at ? `, ${at}` : ""}. Klicken Sie, um die Aktualisierung anzuwenden.`,
+    updateMessage: "Nachricht des Lehrteams:",
+    updateConfirm:
+      "Die Aktualisierung des Lehrteams anwenden? Sie wird mit einem Merge-Commit in Ihren Branch übernommen. Pushen Sie danach wie gewohnt.",
+    apply: "Anwenden",
+    updateApplied: "Aktualisierung angewendet. Pushen Sie, um sie mit Ihrer Arbeit zu senden.",
+    updateUnavailable: "Die Aktualisierung konnte nicht abgerufen werden. Versuchen Sie es gleich noch einmal.",
+    updateOtherBranch: (branch) => `Wechseln Sie auf den Branch ${branch}, um die Aktualisierung anzuwenden.`,
+    updateBusy:
+      "Ein Merge, Rebase oder Cherry-Pick läuft: Schliessen Sie ihn ab oder brechen Sie ihn ab. Versuchen Sie es dann erneut.",
+    updateDirty: (files) =>
+      `Nichts wurde geändert: Ihre nicht committeten Änderungen an ${files} würden überschrieben. Committen Sie Ihre Arbeit und versuchen Sie es dann erneut.`,
+    updateConflict: (files) =>
+      `Nichts wurde geändert: Die Aktualisierung steht in Konflikt mit Ihrer Arbeit in ${files}. Wenden Sie sich an das Lehrteam oder führen Sie den Merge von Hand mit git durch.`,
+    updateFailed: (detail) => `Nichts wurde geändert: git hat den Merge abgelehnt (${detail}).`,
+    remaining: (h, m) => (h > 0 ? `noch ${h} h ${m} min` : `noch ${m} min`),
+  },
 };
 
 /**
- * French as soon as the interface language starts with "fr". Not reached
- * today: the image ships no language pack, so `vscode.env.language` is "en"
- * whatever the browser's language. Kept because a pack could be added
- * without touching this extension: install Open VSX's
- * `MS-CEINTL.vscode-language-pack-fr` beside the other extensions and start
- * code-server with `--locale fr` (entrypoint.sh) — not tried.
+ * The strings of the interface language's base ("fr", "de"), English for any
+ * other, and English for a key a language's table lacks (ADR-140 §4, §5).
+ * French and German are not reached today: the image ships no language
+ * pack, so `vscode.env.language` is "en" whatever the browser's language. Kept because a pack could be added without touching
+ * this extension: install Open VSX's `MS-CEINTL.vscode-language-pack-fr`
+ * (or `-de`) beside the other extensions and start code-server with
+ * `--locale fr` (entrypoint.sh) — not tried.
  */
 function pickStrings(language) {
-  return String(language || "en").toLowerCase().startsWith("fr") ? STRINGS.fr : STRINGS.en;
+  const base = String(language || "en").toLowerCase().split("-")[0];
+  return { ...STRINGS.en, ...(Object.hasOwn(STRINGS, base) ? STRINGS[base] : {}) };
 }
 
 /** Countdown text for a remaining time in milliseconds. */
@@ -166,9 +209,9 @@ function formatRemaining(remainingMs, t) {
 }
 
 /** Local date and time of the container (TZ=Europe/Zurich in the image). */
-function formatDeadline(deadline, fr) {
+function formatDeadline(deadline, t) {
   try {
-    return deadline.toLocaleString(fr ? "fr-CH" : "en-GB", {
+    return deadline.toLocaleString(t.tag, {
       dateStyle: "full",
       timeStyle: "short",
     });
@@ -294,7 +337,6 @@ function registerProgramTerminal(context, t) {
 }
 
 function activate(context) {
-  const fr = String(vscode.env.language || "en").toLowerCase().startsWith("fr");
   const t = pickStrings(vscode.env.language);
 
   const rawDeadline = readEnv("CODESPACE_DEADLINE");
@@ -318,8 +360,8 @@ function activate(context) {
   // --- 1. countdown --------------------------------------------------------
   if (deadline) {
     const countdown = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    const tooltipLines = [`${t.deadline} : ${formatDeadline(deadline, fr)}`];
-    if (assignmentName) tooltipLines.push(`${t.assignment} : ${assignmentName}`);
+    const tooltipLines = [t.deadlineLine(formatDeadline(deadline, t))];
+    if (assignmentName) tooltipLines.push(t.assignmentLine(assignmentName));
     countdown.tooltip = tooltipLines.join("\n");
 
     const render = () => {
@@ -394,7 +436,7 @@ function activate(context) {
     /** The teacher's message and its date, as plain text only (never a MarkdownString). */
     const describe = (update) => {
       const date = update.message ? new Date(update.message.at) : null;
-      const at = date && !Number.isNaN(date.getTime()) ? formatDeadline(date, fr) : "";
+      const at = date && !Number.isNaN(date.getTime()) ? formatDeadline(date, t) : "";
       const lines = [t.updateTooltip(at)];
       if (update.message) lines.push("", t.updateMessage, plainText(update.message.text));
       return lines.join("\n");

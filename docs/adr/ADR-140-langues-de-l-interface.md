@@ -23,9 +23,8 @@ of [ADR-081](ADR-081-vocabulaire-de-notions.md) (concept labels),
 [ADR-095](ADR-095-catalogue-des-banques-publiques.md) §7 (pool domains)
 and [ADR-087](ADR-087-nouveautes-de-la-plateforme.md) (What's new); the
 printed words of [ADR-125](ADR-125-copies-papier-pdf-typst.md) §7 follow
-§4 below. Open question 76 (the workspace portal's fallback); questions
-75 (regional `Intl` tags, §10) and 77 (the voice of German and Italian)
-are settled.
+§4 below. Questions 75 (regional `Intl` tags, §10), 76 (the workspace
+portal's fallback) and 77 (the voice of German and Italian) are settled.
 
 ## Context
 
@@ -84,9 +83,12 @@ third language would have been a hunt rather than a list of compile errors.
      `Locale`, so the compile error appears at that boundary.
    - The workspace portal (`apps/codespace`), a separate deployable with
      its own dictionary, its own `LANGS` and its own `Accept-Language`
-     parser (its `CLAUDE.md`), whose fallback is French. It follows a new
-     language in a later pull request of its own; whether its fallback
-     stays French is open question 76.
+     parser (its `CLAUDE.md`). It gains German at the same time as the
+     platform and falls back to English like it (settled question 76,
+     product owner, 2026-11-21); its list is still widened by hand. Its
+     German, and that of the student image's scripts, is drafted like the
+     platform's but is not covered by the review tracking of §7 nor by
+     the German copy lint, which both live in `apps/web`.
 
 5. **Fallback.** A key missing at run time reads its English (unchanged).
    The "Data and privacy" page (N-DATA-07) is a legal text: a reader of a

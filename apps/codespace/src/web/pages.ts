@@ -1,7 +1,7 @@
 /**
  * The portal pages, as HTML served by Fastify. No front-end framework
  * (analyse.md D8): the portal shows only a landing page and its refusals,
- * in English or French (`i18n.ts`).
+ * in English, French or German (`i18n.ts`).
  *
  * The "session outside SEB" refusal page is not here: it is provided by
  * `seb/check.ts` (`outsideSebPage`), so that the message does not vary with

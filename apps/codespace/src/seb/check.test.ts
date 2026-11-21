@@ -45,7 +45,7 @@ describe("the proxy reads only the cookie (invariant 6)", () => {
       remoteAddress: "10.0.0.8",
     });
     expect(res.statusCode).toBe(403);
-    expect(res.body).toContain("depuis un autre poste");
+    expect(res.body).toContain("from another computer");
   });
 
   it("refuses another assignment's cookie", async () => {
@@ -69,6 +69,6 @@ describe("the proxy reads only the cookie (invariant 6)", () => {
     });
     expect(res.statusCode).toBe(403);
     expect(res.headers["content-type"]).toContain("text/html");
-    expect(res.body).toContain("Session hors Safe Exam Browser");
+    expect(res.body).toContain("Session outside Safe Exam Browser");
   });
 });

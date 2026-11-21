@@ -23,7 +23,7 @@ PODMAN_URL="${PODMAN_URL:-unix:///run/podman/podman.sock}"
 SECCOMP_DEFAULT="${SECCOMP_DEFAULT:-/usr/share/containers/seccomp.json}"
 
 # The status-bar extension's version, as the Containerfile's EXT_STATUSBAR_VERSION.
-STATUSBAR_VERSION=0.4.0
+STATUSBAR_VERSION=0.4.1
 STATUSBAR_DIR="/opt/code-server/extensions/heig.codespace-statusbar-${STATUSBAR_VERSION}"
 
 CTR_A=cdev-p1-a

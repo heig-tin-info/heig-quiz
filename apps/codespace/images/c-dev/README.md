@@ -39,7 +39,7 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | git | 2.47.3 | Debian stable repository |
 | `llvm-vs-code-extensions.vscode-clangd` | 0.6.0 | Open VSX, resolved at build time |
 | `webfreak.debug` | 0.27.0 | Open VSX, resolved at build time |
-| `heig.codespace-statusbar` | 0.4.0 | local source `extension/`, packaged at build time |
+| `heig.codespace-statusbar` | 0.4.1 | local source `extension/`, packaged at build time |
 | Python | 3.13.5 (package `python3`) | Debian stable repository; the interpreter of Baygon and pytest |
 | Baygon | **0.7.0** (MIT, HEIG-VD) | `baygon/requirements.txt`: it and its 18 dependencies pinned by version and sha256, wheels only |
 | pytest | 8.3.5 (Debian 8.3.5-2), with pluggy 1.5.0, iniconfig 1.1.1, packaging 25.0 | Debian stable repository (package `python3-pytest`, § pytest) |
@@ -354,9 +354,9 @@ picks dies with the container: the `user-data-dir` is a tmpfs.
 ## Status bar extension `heig.codespace-statusbar`
 
 Feedback 3 of [docs/history/leads.md](../../docs/history/leads.md). Publisher `heig`, name
-`codespace-statusbar`, version `0.4.0` (0.2.0 adds the debugged program's
+`codespace-statusbar`, version `0.4.1` (0.2.0 adds the debugged program's
 terminal, § Debugging; 0.3.0 the teacher's update, below; 0.4.0 SEB's quit
-hint in place of "Close"). Source in
+hint in place of "Close"; 0.4.1 German strings, English for a missing key). Source in
 `extension/`: plain JavaScript (`package.json`, `extension.js`, and the
 two modules that need no `vscode`, `debugIo.js` and `update.js`, unit-tested
 from `apps/codespace/src`), **no dependency, no bundler, no network access
@@ -405,7 +405,8 @@ container yet: the decisions are `update.js`'s, tested on real repositories
 by hand after a rebuild (open a lab after a sync: the item, its tooltip,
 Apply, then a push).
 
-French as soon as `vscode.env.language` starts with `fr`, English otherwise.
+French or German as soon as `vscode.env.language` starts with `fr` or `de`, English
+otherwise (dates in `fr-CH`, `de-CH`, `en-GB`).
 
 ### Return link trusted (2026-10-08)
 
@@ -684,7 +685,7 @@ Ctrl+D in the terminal.
 
 Known limits:
 
-- **The terminal is always "Program".** The extension has French strings,
+- **The terminal is always "Program".** The extension has French and German strings,
   but code-server shows its interface, and gives extensions
   `vscode.env.language`, in English: the image ships no language pack (the
   comment above `pickStrings` in `extension/extension.js` says how one
@@ -824,7 +825,7 @@ Limits:
   script.
 - The battery button sits in the middle of the status bar; a very narrow
   window can make it cover an item.
-- Text in French only once the image ships a language pack (as for the
+- Text in French or German only once the image ships a language pack (as for the
   status bar extension).
 
 ## Resolver: `/etc/resolv.conf` shipped by the image
