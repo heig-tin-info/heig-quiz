@@ -134,7 +134,9 @@ export const attempts = pgTable(
      * Where the student was, restored on reload (F-LIVE-06). `set null` with
      * its item: an item is deleted only while its evaluation has no attempt
      * (`assertItemListEditable`), or with the evaluation itself, and a null
-     * bookmark reads like an unknown one, the first question.
+     * bookmark reads like an unknown one, the first question. Not indexed
+     * on purpose: it changes on every navigation, and an index would cost
+     * those updates their HOT path; the rare cascade scans a small table.
      */
     lastItemId: uuid("last_item_id").references(() => evaluationItems.id, { onDelete: "set null" }),
     /** Last sign of life; the presence map is in memory, this survives a restart. */
@@ -208,8 +210,9 @@ export const attempts = pgTable(
     // The unique index above leads with the evaluation: a student's own
     // attempts across evaluations are read by account alone.
     index("attempts_user_idx").on(t.userId),
-    // The `set null` of a deleted item finds its bookmarks without a scan.
-    index("attempts_last_item_idx").on(t.lastItemId),
+    // A poll's guests are purged one by one (`deleteGuests`): each finds
+    // its attempts without a scan. Never updated, so it costs no HOT update.
+    index("attempts_guest_idx").on(t.guestId),
     check("attempts_state_ck", oneOf(t.state, ATTEMPT_STATES)),
   ],
 );

@@ -18,13 +18,10 @@ ALTER TABLE "project_repos" ADD CONSTRAINT "project_repos_frozen_grade_run_id_pr
 ALTER TABLE "project_repos" ADD CONSTRAINT "project_repos_review_grade_run_id_project_grade_runs_id_fk" FOREIGN KEY ("review_grade_run_id") REFERENCES "public"."project_grade_runs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_repos" ADD CONSTRAINT "project_repos_group_project_fk" FOREIGN KEY ("group_id","project_id") REFERENCES "public"."project_groups"("id","project_id") ON DELETE SET NULL ("group_id") ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "attempts_user_idx" ON "attempts" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "attempts_last_item_idx" ON "attempts" USING btree ("last_item_id");--> statement-breakpoint
+CREATE INDEX "attempts_guest_idx" ON "attempts" USING btree ("guest_id");--> statement-breakpoint
 CREATE INDEX "answer_acceptances_item_idx" ON "answer_acceptances" USING btree ("item_id");--> statement-breakpoint
 CREATE INDEX "grade_dispatches_repo_idx" ON "grade_dispatches" USING btree ("repo_id");--> statement-breakpoint
 CREATE INDEX "project_repos_project_idx" ON "project_repos" USING btree ("project_id");--> statement-breakpoint
-CREATE INDEX "project_repos_current_run_idx" ON "project_repos" USING btree ("current_grade_run_id");--> statement-breakpoint
-CREATE INDEX "project_repos_frozen_run_idx" ON "project_repos" USING btree ("frozen_grade_run_id");--> statement-breakpoint
-CREATE INDEX "project_repos_review_run_idx" ON "project_repos" USING btree ("review_grade_run_id");--> statement-breakpoint
 ALTER TABLE "launch_tickets" ADD CONSTRAINT "launch_tickets_kind_ck" CHECK ("launch_tickets"."kind" in ('portal', 'impersonation', 'seb', 'kiosk'));--> statement-breakpoint
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_kind_ck" CHECK ("sessions"."kind" in ('portal', 'impersonation', 'seb', 'kiosk'));--> statement-breakpoint
 ALTER TABLE "teacher_grants" ADD CONSTRAINT "teacher_grants_email_normalized_ck" CHECK ("teacher_grants"."email" = lower(btrim("teacher_grants"."email")));--> statement-breakpoint

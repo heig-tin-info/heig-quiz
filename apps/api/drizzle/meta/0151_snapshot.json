@@ -1,5 +1,5 @@
 {
-  "id": "0a1172e4-948b-4520-9b53-4bf00b33668f",
+  "id": "0b17fce8-b64d-4776-a19e-a49144ec8235",
   "prevId": "3bb4e102-7b53-4ac6-bfca-3e933f488cc7",
   "version": "7",
   "dialect": "postgresql",
@@ -4563,11 +4563,11 @@
           "method": "btree",
           "with": {}
         },
-        "attempts_last_item_idx": {
-          "name": "attempts_last_item_idx",
+        "attempts_guest_idx": {
+          "name": "attempts_guest_idx",
           "columns": [
             {
-              "expression": "last_item_id",
+              "expression": "guest_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -11444,51 +11444,6 @@
           "columns": [
             {
               "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_repos_current_run_idx": {
-          "name": "project_repos_current_run_idx",
-          "columns": [
-            {
-              "expression": "current_grade_run_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_repos_frozen_run_idx": {
-          "name": "project_repos_frozen_run_idx",
-          "columns": [
-            {
-              "expression": "frozen_grade_run_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_repos_review_run_idx": {
-          "name": "project_repos_review_run_idx",
-          "columns": [
-            {
-              "expression": "review_grade_run_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

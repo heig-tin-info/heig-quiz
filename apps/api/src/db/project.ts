@@ -590,7 +590,9 @@ export const projectRepos = pgTable(
      * frozen one, the final review's. heig-classroom kept them without a
      * foreign key; `set null` since migration 0151. A run is never deleted
      * but with its repository (`repo_id` cascades), so the slot that empties
-     * is on a row that goes in the same statement.
+     * is on a row that goes in the same statement. Not indexed on purpose:
+     * the slots change on every CI run, and an index would cost those
+     * updates their HOT path; the rare cascade scans a small table.
      */
     currentGradeRunId: uuid("current_grade_run_id").references((): AnyPgColumn => projectGradeRuns.id, {
       onDelete: "set null",
@@ -689,11 +691,6 @@ export const projectRepos = pgTable(
     // A project's repositories: the unique index above is partial on
     // solo rows and the ticker's on the grace, so neither serves every read.
     index("project_repos_project_idx").on(t.projectId),
-    // The `set null` of a run deleted with its repository finds the slots
-    // without a scan of the table.
-    index("project_repos_current_run_idx").on(t.currentGradeRunId),
-    index("project_repos_frozen_run_idx").on(t.frozenGradeRunId),
-    index("project_repos_review_run_idx").on(t.reviewGradeRunId),
     // A group's repository is in the group's project. Deleting the group
     // empties `group_id` alone: the foreign key is `ON DELETE SET NULL
     // ("group_id")`, written by hand in migration 0151 (drizzle cannot

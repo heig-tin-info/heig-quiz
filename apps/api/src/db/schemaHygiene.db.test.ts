@@ -123,10 +123,18 @@ const UNINDEXED_FOREIGN_KEYS: readonly { reason: string; keys: readonly ForeignK
     ],
   },
   {
+    reason: "Column updated on a hot path; an index would cost HOT updates; the parent is deleted rarely and the table is small.",
+    keys: [
+      "attempts(last_item_id) -> evaluation_items",
+      "project_repos(current_grade_run_id) -> project_grade_runs",
+      "project_repos(frozen_grade_run_id) -> project_grade_runs",
+      "project_repos(review_grade_run_id) -> project_grade_runs",
+    ],
+  },
+  {
     reason: "Not measured yet: small tables or rare deletions, left to the statistics of Phase 2.1 (pg_stat_statements).",
     keys: [
       "answer_acceptances(attempt_id) -> attempts",
-      "attempts(guest_id) -> guest_participants",
       "codespace_reviews(project_repo_id) -> project_repos",
       "evaluations(course_id) -> courses",
       "grade_dispatches(checkpoint_id) -> project_checkpoints",
