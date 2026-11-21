@@ -18,10 +18,17 @@ export type Locale = (typeof LOCALES)[number];
  */
 export const FALLBACK_LOCALE = "en" satisfies Locale;
 
-/** Each language named in itself, as a picker offers it. */
-export const LOCALE_INFO: Readonly<Record<Locale, { endonym: string }>> = {
-  en: { endonym: "English" },
-  fr: { endonym: "Français" },
+/**
+ * Each language as the interface presents it: `endonym`, its name in itself,
+ * as a picker offers it; `intl`, the BCP-47 tag its dates, times and numbers
+ * are formatted with — the Swiss regional variant (ADR-140 §10, N-I18N-02),
+ * British for English, whose spelling the interface already follows. The
+ * bare code stays the language of the page (`<html lang>`) and of every
+ * other choice.
+ */
+export const LOCALE_INFO: Readonly<Record<Locale, { endonym: string; intl: string }>> = {
+  en: { endonym: "English", intl: "en-GB" },
+  fr: { endonym: "Français", intl: "fr-CH" },
 };
 
 export function isLocale(value: unknown): value is Locale {

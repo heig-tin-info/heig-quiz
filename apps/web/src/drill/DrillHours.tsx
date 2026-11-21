@@ -11,7 +11,7 @@ import { isWeekdayClassHour, SCHOOL_TIME_ZONE } from "@quiz/domain";
 import { Clock } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { useI18n, useT, type Locale } from "../i18n";
+import { intlTag, useI18n, useT, type Locale } from "../i18n";
 import { Card, HeatLegend, HourHeatmap, isoDateParts, padHour, percent, QueryError, SectionHeading, Skeleton } from "../ui";
 import { useDrillHours } from "./api";
 
@@ -21,7 +21,7 @@ import { useDrillHours } from "./api";
  * reference, read in UTC.
  */
 const weekdayLabel = (weekday: number, locale: Locale) =>
-  new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(
+  new Intl.DateTimeFormat(intlTag(locale), { weekday: "short", timeZone: "UTC" }).format(
     new Date(Date.UTC(2024, 0, 1 + weekday)), // 2024-01-01 is a Monday
   );
 

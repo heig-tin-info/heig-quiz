@@ -223,8 +223,8 @@ describe("the classroom's Drill tab", () => {
         .getAllByRole("row")
         .slice(1)
         .map((r) => r.textContent);
-    expect(rowsOf(reviews!)).toEqual(["Oct 512", "Oct 120", "Oct 1920"]);
-    expect(rowsOf(recall!)).toEqual(["Oct 5—", "Oct 12—", "Oct 1980%"]);
+    expect(rowsOf(reviews!)).toEqual(["5 Oct12", "12 Oct0", "19 Oct20"]);
+    expect(rowsOf(recall!)).toEqual(["5 Oct—", "12 Oct—", "19 Oct80%"]);
     expect(calls.some((c) => c.url.endsWith(`/progress?student=${SEAT.Alder}`))).toBe(true);
   });
 

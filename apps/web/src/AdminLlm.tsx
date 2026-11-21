@@ -7,7 +7,7 @@ import { LLM_MODELS, type LlmModelId } from "@quiz/domain";
 
 import { api, apiErrorMessage } from "./api";
 import { useConfirm } from "./confirm";
-import { formatDecimal, useI18n, useT, type Dict, type Locale } from "./i18n";
+import { formatDecimal, intlTag, useI18n, useT, type Dict, type Locale } from "./i18n";
 import { adminLlmKey, adminLlmUsageKey } from "./queryKeys";
 import {
   Alert,
@@ -27,7 +27,7 @@ import {
 } from "./ui";
 
 const usd = (value: number, locale: Locale, digits = 2) =>
-  new Intl.NumberFormat(locale, { style: "currency", currency: "USD", maximumFractionDigits: digits }).format(value);
+  new Intl.NumberFormat(intlTag(locale), { style: "currency", currency: "USD", maximumFractionDigits: digits }).format(value);
 
 /** Every error of the gateway's vocabulary, worded in both languages. */
 const errorLabel = (code: LlmErrorCode) => `admin.llm.error.${code}` as const satisfies keyof Dict;

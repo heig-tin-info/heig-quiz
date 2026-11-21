@@ -131,6 +131,20 @@ third language would have been a hunt rather than a list of compile errors.
    per translated language in that language's pull request. Project
    documentation stays English.
 
+10. **Regional formats** (product owner, 2026-11-21; settles open question 75).
+    Quiz is a Swiss platform: each language formats dates, times and
+    numbers with its regional `Intl` tag, French `fr-CH`, English `en-GB`
+    (the British English of `apps/web/DESIGN.md`, and what the mails
+    already wrote), German `de-CH` and Italian `it-CH` when they come. The
+    tag is the `intl` field of `LOCALE_INFO` (§4), the one source: the web
+    app reads it through `intlTag(locale)` beside its i18n machinery, and
+    the mails' and Teams parameters' dates through the same field. The bare
+    code stays everything else: the page's `<html lang>`, the account's
+    `locale`, the dictionaries' key, a collation (`localeCompare`). The
+    absolute dates of the account's date format (`iso`, `eu`, `uk`, `us`)
+    are written by hand and do not change. This supersedes the sentence of
+    §9 that dates and numbers keep their current `Intl` tags.
+
 ## Consequences
 
 - Adding a language is one entry in `LOCALES` and `LOCALE_INFO`, then the
@@ -152,6 +166,9 @@ third language would have been a hunt rather than a list of compile errors.
   readers get machine-drafted copy without a label saying so (§3).
 - A German or Italian reader reads concepts, pool domains, What's new and
   the privacy page in English (or French where the data has only French).
+- Today's readers see Swiss and British formats (§10): in English the day
+  before the month ("Fri 6 Nov"), in French a percentage without a space
+  ("85%"); a new language adds its `intl` tag beside its endonym.
 
 ## Alternatives considered
 

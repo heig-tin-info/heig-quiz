@@ -213,9 +213,9 @@ describe("the members (ADR-137, ADR-136, F-PROJ-07)", () => {
     renderPage(repo.id);
     const table = await screen.findByRole("table", { name: "Commits per member and per week" });
     const cells = [...table.querySelectorAll("td")];
-    expect(cells.find((c) => c.title === "Martin Benoît, week of Nov 9: 9 commits")).toBeDefined();
-    expect(cells.find((c) => c.title === "Unattributed, week of Nov 2: 2 commits")).toBeDefined();
-    expect(cells.find((c) => c.title === "Martin Benoît, week of Oct 26: 0 commits")).toBeDefined();
+    expect(cells.find((c) => c.title === "Martin Benoît, week of 9 Nov: 9 commits")).toBeDefined();
+    expect(cells.find((c) => c.title === "Unattributed, week of 2 Nov: 2 commits")).toBeDefined();
+    expect(cells.find((c) => c.title === "Martin Benoît, week of 26 Oct: 0 commits")).toBeDefined();
     // The deadline is a fortnight ahead: its weeks are there, empty.
     const heads = [...table.querySelectorAll("thead th")].map((th) => th.textContent);
     expect(heads.length).toBeGreaterThan(4);

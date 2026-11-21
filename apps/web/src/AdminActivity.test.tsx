@@ -68,7 +68,7 @@ describe("the Activity tab (F-ADMIN-09, ADR-107)", () => {
     // Staff only: the student-only hour empties.
     await userEvent.click(screen.getByRole("radio", { name: "Staff" }));
     expect(within(grid).getByTitle(/09:00–10:00: 3 active$/)).toHaveTextContent("3");
-    expect(within(grid).getByTitle(/Oct 25, 21:00–22:00: 0 active/)).not.toHaveTextContent(/[1-9]/);
+    expect(within(grid).getByTitle(/Sun 25 Oct, 21:00–22:00: 0 active/)).not.toHaveTextContent(/[1-9]/);
   });
 
   it("says nothing was recorded yet, rather than draw an empty grid", async () => {

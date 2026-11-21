@@ -1,7 +1,7 @@
 import { ArrowRight, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 
-import { useI18n, useT } from "../i18n";
+import { intlTag, useI18n, useT } from "../i18n";
 import { Button, TextInput } from "./controls";
 import { fromLocalInput, isoDateTime, pad2, toLocalInput, weekStartsOn } from "./dates";
 import { cx } from "./layers";
@@ -298,10 +298,10 @@ function RangePanel({
   const weeks = monthWeeks(focus, weekStart);
 
   const { dayName, weekdays } = useMemo(() => {
-    const short = new Intl.DateTimeFormat(locale, { weekday: "short" });
-    const long = new Intl.DateTimeFormat(locale, { weekday: "long" });
+    const short = new Intl.DateTimeFormat(intlTag(locale), { weekday: "short" });
+    const long = new Intl.DateTimeFormat(intlTag(locale), { weekday: "long" });
     return {
-      dayName: new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+      dayName: new Intl.DateTimeFormat(intlTag(locale), { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
       weekdays: Array.from({ length: 7 }, (_, i) => {
         // 2023-01-01 is a Sunday.
         const d = new Date(2023, 0, 1 + ((i + weekStart) % 7), 12);
@@ -309,7 +309,7 @@ function RangePanel({
       }),
     };
   }, [locale, weekStart]);
-  const monthName = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(dateOf(focus));
+  const monthName = new Intl.DateTimeFormat(intlTag(locale), { month: "long", year: "numeric" }).format(dateOf(focus));
 
   // Keyboard moves, and a keyboard opening, land the focus on the day once it is drawn.
   useEffect(() => {

@@ -222,8 +222,8 @@ describe("EvaluationConfig", () => {
         route: "/evaluations/x?step=timing",
       });
       await user.click(await screen.findByRole("button", { name: /^opens at/i }));
-      await user.click(screen.getByRole("button", { name: /March 6, 2030/ }));
-      await user.click(screen.getByRole("button", { name: /March 13, 2030/ }));
+      await user.click(screen.getByRole("button", { name: /\b6 March 2030/ }));
+      await user.click(screen.getByRole("button", { name: /\b13 March 2030/ }));
       expect(calls.find((c) => c.method === "PATCH")).toBeUndefined();
       await user.keyboard("{Escape}");
       await waitFor(() =>

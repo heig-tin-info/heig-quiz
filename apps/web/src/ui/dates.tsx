@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { DateFormat } from "@quiz/contracts";
 import { IconButton as IconButtonBase } from "@quiz/ui";
 
-import { useI18n, useT, type Locale, type TFunction } from "../i18n";
+import { intlTag, useI18n, useT, type Locale, type TFunction } from "../i18n";
 import { cx, Tip, useNow } from "./layers";
 
 // Dates: the account's date format, absolute and relative times.
@@ -114,7 +114,7 @@ export function isoDateParts(iso: string): { date: string; time: string } {
 
 /** "Oct 5", in the interface language: a week by its Monday, a calendar date read in UTC (the drill's weeks, a repository's). */
 export function weekLabel(weekStart: string, locale: Locale): string {
-  return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(
+  return new Intl.DateTimeFormat(intlTag(locale), { day: "numeric", month: "short", timeZone: "UTC" }).format(
     new Date(`${weekStart}T00:00:00Z`),
   );
 }
@@ -125,7 +125,7 @@ export function weekLabel(weekStart: string, locale: Locale): string {
  * number written the way the reader's language writes it.
  */
 export function percent(rate: number, locale: Locale): string {
-  return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }).format(rate);
+  return new Intl.NumberFormat(intlTag(locale), { style: "percent", maximumFractionDigits: 0 }).format(rate);
 }
 
 /**
@@ -145,7 +145,7 @@ export function relativeTime(
   const diff = new Date(iso).getTime() - now;
   const abs = Math.abs(diff);
   if (abs < 45_000) return t("time.now");
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style });
+  const rtf = new Intl.RelativeTimeFormat(intlTag(locale), { numeric: "auto", style });
   const units: [Intl.RelativeTimeFormatUnit, number][] = [
     ["year", 365 * 86_400_000],
     ["month", 30 * 86_400_000],

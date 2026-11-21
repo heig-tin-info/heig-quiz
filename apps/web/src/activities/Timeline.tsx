@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ActivitySummary } from "@quiz/contracts";
 import { clamp } from "@quiz/domain";
 
-import { useI18n, useT } from "../i18n";
+import { intlTag, useI18n, useT, type Locale } from "../i18n";
 import type { Route } from "../router";
 import { useShortcuts } from "../shortcuts";
 import { Card, cx, EmptyState, IconButton, isoDateTime, modKey, type Tone } from "../ui";
@@ -78,8 +78,8 @@ function computeDefault(spans: Span[], now: number): View {
 }
 
 /** Grid ticks whose granularity follows the zoom: days, then months, then years. */
-function buildTicks(from: number, to: number, locale: string): Tick[] {
-  const month = (d: Date) => d.toLocaleDateString(locale, { month: "short" });
+function buildTicks(from: number, to: number, locale: Locale): Tick[] {
+  const month = (d: Date) => d.toLocaleDateString(intlTag(locale), { month: "short" });
   const spanDays = (to - from) / DAY;
   const ticks: Tick[] = [];
   if (spanDays <= 75) {

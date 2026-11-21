@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 
 import type { ActivitySummary } from "@quiz/contracts";
 
-import { useI18n, useT, type TFunction } from "../i18n";
+import { intlTag, useI18n, useT, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import {
   Badge,
@@ -278,9 +278,9 @@ export function ActivitySchedule({ rows, navigate, onEnd, now }: ViewProps & { n
   const shown = showPast ? weeks : weeks.filter((w) => !past.includes(w));
   // "Mon 28" / "lun. 28": the weekday first in both languages (Intl alone
   // writes "28 Mon" in English).
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: "short" });
+  const weekday = new Intl.DateTimeFormat(intlTag(locale), { weekday: "short" });
   const day = (d: Date) => `${weekday.format(d)} ${d.getDate()}`;
-  const range = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" });
+  const range = new Intl.DateTimeFormat(intlTag(locale), { day: "numeric", month: "short" });
 
   const heading = (start: number | null): ReactNode => {
     if (start === null) return t("activities.week.undated");

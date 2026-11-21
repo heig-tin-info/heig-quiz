@@ -29,7 +29,7 @@ import {
   type OutboundNotificationKind,
   type TeamsNotificationKind,
 } from "@quiz/contracts";
-import { FALLBACK_LOCALE, isLocale, SCHOOL_TIME_ZONE, type Locale } from "@quiz/domain";
+import { FALLBACK_LOCALE, isLocale, LOCALE_INFO, SCHOOL_TIME_ZONE, type Locale } from "@quiz/domain";
 import { escapeHtml } from "@quiz/docrender/highlight";
 
 /**
@@ -515,16 +515,14 @@ function oneLine(s: string): string {
   return s.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
 }
 
-/** The `Intl` tag of each language's dates in a message. */
-const DATE_TAGS: Record<Locale, string> = { en: "en-GB", fr: "fr-CH" };
-
 /**
- * An instant as the school reads it (`SCHOOL_TIME_ZONE`), in digits only —
+ * An instant as the school reads it (`SCHOOL_TIME_ZONE`), in digits only and
+ * the language's regional tag (`LOCALE_INFO`, ADR-140 §10) —
  * `06.11.2026 16:30` in French, `06/11/2026, 16:30` in English: a Teams
  * template parameter is never a translated word.
  */
 function schoolDateTime(at: string, locale: Locale): string {
-  return new Intl.DateTimeFormat(DATE_TAGS[locale], {
+  return new Intl.DateTimeFormat(LOCALE_INFO[locale].intl, {
     timeZone: SCHOOL_TIME_ZONE,
     day: "2-digit",
     month: "2-digit",
