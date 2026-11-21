@@ -652,8 +652,10 @@ export const projectRepos = pgTable(
  * values is set (most repositories are never graded by hand); readers LEFT
  * JOIN it, an absent row reading as every value null.
  *
- * Points are unconstrained `numeric`: exact, never rounded — a
- * `numeric(6,2)` would round a computed value silently, a `float8` drifts.
+ * Points are unconstrained `numeric`: what is written is kept, never
+ * rounded — a `numeric(6,2)` would round a computed value silently. A float8
+ * becomes one through its shortest round-trip text (`x::text::numeric`),
+ * never a plain `::numeric`, which keeps 15 significant digits only.
  *
  * Until the contract step, two triggers (migration 0151) keep this row and
  * the old columns of `project_repos` equal, both ways, so that a rollback to

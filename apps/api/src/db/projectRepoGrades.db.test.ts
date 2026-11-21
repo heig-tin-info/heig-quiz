@@ -77,9 +77,13 @@ async function exact(repoId: string, column: string): Promise<string | null> {
 
 const differences = async () => (await client.query<{ id: string }>(VERIFY)).rows.map((r) => r.id);
 
+/** A float8 sum with noise, as a CI's output gives one: `0.30000000000000004`, which a plain `::numeric` makes `0.3`. */
+const NOISY = "0.1::float8 + 0.2::float8";
+
 let released: string;
 let adjusted: string;
 let commentOnly: string;
+let noisy: string;
 let untouched: string;
 
 beforeAll(async () => {
@@ -91,7 +95,10 @@ beforeAll(async () => {
 
   // Production before the migration: the grading in `project_repos`' own columns.
   await client.exec(UNDO);
-  [released, adjusted, commentOnly, untouched] = [await repo(), await repo(), await repo(), await repo()];
+  [released, adjusted, commentOnly, noisy, untouched] = [await repo(), await repo(), await repo(), await repo(), await repo()];
+  await client.query(`UPDATE project_repos SET released_points = ${NOISY}, released_max = 1 WHERE id = $1`, [noisy]);
+  // A session printing floats with 15 digits: the migration sets its own.
+  await client.exec(`SET extra_float_digits = 0`);
   await client.query(
     `UPDATE project_repos SET released_points = 13.75, released_max = 20, released_grade = 4.4,
             released_comment = 'Well done', released_adjustment_comment = 'Bonus for the report',
@@ -109,8 +116,34 @@ beforeAll(async () => {
   );
   await client.query(`UPDATE project_repos SET released_comment = 'Only a comment' WHERE id = $1`, [commentOnly]);
 
-  for (const statement of MIGRATION.split("--> statement-breakpoint")) await client.exec(statement);
+  // In one transaction, as the migrator runs it: `SET LOCAL` lasts until its end.
+  await client.transaction(async (tx) => {
+    for (const statement of MIGRATION.split("--> statement-breakpoint")) await tx.exec(statement);
+  });
+  await client.exec(`RESET extra_float_digits`);
 });
+
+/** `write` from a session printing floats with 15 digits: a trigger function sets its own. */
+async function inShortFloatSession(write: () => Promise<unknown>): Promise<void> {
+  await client.exec(`SET extra_float_digits = 0`);
+  try {
+    await write();
+  } finally {
+    await client.exec(`RESET extra_float_digits`);
+  }
+}
+
+/** Runs `write` with the triggers of both copies off: one copy corrupted on purpose. */
+async function withoutTriggers(write: () => Promise<unknown>): Promise<void> {
+  await client.exec(`ALTER TABLE project_repo_grades DISABLE TRIGGER project_repo_grades_to_legacy;
+    ALTER TABLE project_repos DISABLE TRIGGER project_repo_grades_from_legacy;`);
+  try {
+    await write();
+  } finally {
+    await client.exec(`ALTER TABLE project_repo_grades ENABLE TRIGGER project_repo_grades_to_legacy;
+      ALTER TABLE project_repos ENABLE TRIGGER project_repo_grades_from_legacy;`);
+  }
+}
 
 describe("0151_project_repo_grades: the backfill", () => {
   it("copies every repository holding a value, exactly, and none other", async () => {
@@ -140,8 +173,28 @@ describe("0151_project_repo_grades: the backfill", () => {
     expect([await exact(released, "released_points"), await exact(released, "grade_adjust_value")]).toEqual(["13.75", "0.3"]);
   });
 
+  it("copies a float8 with noise exactly, through its shortest round-trip text", async () => {
+    expect(await exact(noisy, "released_points")).toBe("0.30000000000000004");
+    expect((await repoGradesRow(db, noisy))!.releasedPoints).toBe(0.1 + 0.2);
+  });
+
   it("leaves the old columns as they were, and the verification query finds no difference", async () => {
     expect(await legacy(released)).toMatchObject({ released_points: 13.75, released_grade: 4.4, grade_adjust_value: 0.3 });
+    expect(await differences()).toEqual([]);
+  });
+});
+
+describe("0151_project_repo_grades: the verification query", () => {
+  it("sees a copy rounded to 15 digits, and a comment changed on one side", async () => {
+    // What a plain `::numeric` would have backfilled: `0.3` for the old column's `0.30000000000000004`.
+    await withoutTriggers(() => client.query(`UPDATE project_repo_grades SET released_points = 0.3 WHERE repo_id = $1`, [noisy]));
+    expect(await differences()).toEqual([noisy]);
+    await withoutTriggers(() => client.query(`UPDATE project_repo_grades SET released_points = ($2::float8)::text::numeric WHERE repo_id = $1`, [noisy, String(0.1 + 0.2)]));
+    expect(await differences()).toEqual([]);
+
+    await withoutTriggers(() => client.query(`UPDATE project_repos SET released_comment = 'Edited behind' WHERE id = $1`, [released]));
+    expect(await differences()).toEqual([released]);
+    await withoutTriggers(() => client.query(`UPDATE project_repos SET released_comment = 'Well done' WHERE id = $1`, [released]));
     expect(await differences()).toEqual([]);
   });
 });
@@ -175,6 +228,20 @@ describe("0151_project_repo_grades: the code's writes reach the old columns", ()
     expect(await repoGradesRow(db, id)).toBeUndefined();
     expect(await legacy(id)).toMatchObject({ grade_adjust_kind: null, grade_adjust_value: null, grade_adjusted_by: null });
     expect(await differences()).toEqual([]);
+  });
+
+  it("clears a group without creating a row, and without touching another group", async () => {
+    const cleared = { teacherPoints: null, teacherMax: null, teacherComment: null, teacherGradedBy: null, teacherGradedAt: null };
+    const bare = await repo();
+    await db.transaction((tx) => writeGrades(tx, bare, cleared));
+    expect(await repoGradesRow(db, bare)).toBeUndefined();
+
+    const releasedToo = await repo();
+    await db.transaction((tx) => writeGrades(tx, releasedToo, { teacherPoints: 6, teacherMax: 10, teacherComment: "Ok", teacherGradedBy: teacherId, teacherGradedAt: NOW }));
+    await db.transaction((tx) => writeGrades(tx, releasedToo, { releasedPoints: 6, releasedMax: 10, releasedGrade: 4 }));
+    await db.transaction((tx) => writeGrades(tx, releasedToo, cleared));
+    expect(await repoGradesRow(db, releasedToo)).toMatchObject({ teacherPoints: null, releasedPoints: 6, releasedGrade: 4 });
+    expect(await legacy(releasedToo)).toMatchObject({ teacher_points: null, released_points: 6 });
   });
 
   it("clears the old columns when the row is deleted, and goes with its repository", async () => {
@@ -213,6 +280,16 @@ describe("0151_project_repo_grades: an older image's writes reach the new table 
       [id],
     );
     expect(await repoGradesRow(db, id)).toBeUndefined();
+    expect(await differences()).toEqual([]);
+  });
+
+  it("copies a float8 with noise exactly, on a new row and on an existing one, whatever the session prints", async () => {
+    const id = await repo();
+    await inShortFloatSession(() => client.query(`UPDATE project_repos SET released_points = ${NOISY}, released_max = 1 WHERE id = $1`, [id]));
+    expect(await exact(id, "released_points")).toBe("0.30000000000000004");
+    // The row exists now: the changed column's own copy.
+    await inShortFloatSession(() => client.query(`UPDATE project_repos SET released_max = ${NOISY} WHERE id = $1`, [id]));
+    expect(await exact(id, "released_max")).toBe("0.30000000000000004");
     expect(await differences()).toEqual([]);
   });
 

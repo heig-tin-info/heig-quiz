@@ -46,19 +46,25 @@ export const gradesIn = (grades: ReadonlyMap<string, RepoGrades>, repoId: string
 
 /**
  * Writes `values` into `repoId`'s grading, in the caller's transaction: one
- * upsert, then the row deleted when it holds no value any more. The columns
+ * upsert — a plain update when every value is null, which creates no row —,
+ * then the row deleted when it holds no value any more. The columns
  * written together (a score, an adjustment's six, a release's snapshot) are
  * one statement, so `project_repo_grades_adjust_whole` sees them whole —
  * and `values` is always such a whole group: the upsert's proposed row is
  * checked before its conflict is. Answers the grading as it now stands.
  */
 export async function writeGrades(tx: Tx, repoId: string, values: Partial<RepoGrades>): Promise<RepoGrades> {
-  const [row] = await tx
-    .insert(projectRepoGrades)
-    .values({ ...values, repoId })
-    .onConflictDoUpdate({ target: projectRepoGrades.repoId, set: values })
-    .returning();
-  const grades = withoutKey(row!);
+  const clearing = Object.values(values).every((value) => value === null);
+  const [row] = clearing
+    ? await tx.update(projectRepoGrades).set(values).where(eq(projectRepoGrades.repoId, repoId)).returning()
+    : await tx
+        .insert(projectRepoGrades)
+        .values({ ...values, repoId })
+        .onConflictDoUpdate({ target: projectRepoGrades.repoId, set: values })
+        .returning();
+  // Clearing a repository without a row: nothing to write, nothing written.
+  if (row === undefined) return NO_GRADES;
+  const grades = withoutKey(row);
   if (Object.values(grades).every((value) => value === null)) {
     await tx.delete(projectRepoGrades).where(eq(projectRepoGrades.repoId, repoId));
   }

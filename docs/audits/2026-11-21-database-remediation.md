@@ -209,7 +209,9 @@ cost more than it saves.
   `projects`: it is what a project is.
 
 `project_grade_runs.points/max` (`float8`, written from CI output) become
-`numeric` by a plain `ALTER COLUMN … TYPE`, after the same precision check.
+unconstrained `numeric` by an `ALTER COLUMN … TYPE numeric USING x::text::numeric`
+(exact: the shortest round-trip text of the float, never the 15 digits of a
+plain `::numeric`), after the same exact check.
 
 ### Phase 5 — product decisions, then work
 
@@ -270,8 +272,14 @@ at the latest).
   - The grade run slots and `attempts.{last,shown}_item_id`: no orphan, none
     pointing to another parent (3.4 needs no fix-up). `pass_id` is not a
     reference (above).
-  - `float8` points: no value with more than two decimals, the largest 100.
-    The moved columns still become unconstrained `numeric` (Phase 4).
+  - `float8` points of `project_repos`: none with more than two decimals,
+    the largest 100. Correction (2026-11-21, after the review of #1192):
+    this was first measured through `::numeric`, which keeps only 15
+    significant digits. Measured through `::text::numeric` (exact),
+    `project_repos` is confirmed, but `project_grade_runs.points` holds 252
+    values with float noise (e.g. a sum like `0.30000000000000004`). Every
+    float8 → numeric conversion of the plan casts through text, into
+    unconstrained `numeric`, never `numeric(6,2)`.
   - `project_repos`: 213 rows hold a released snapshot, 16 an adjustment,
     **none a teacher score** (`teacher_points`/`teacher_max` never written
     in production).
