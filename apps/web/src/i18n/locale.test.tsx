@@ -14,12 +14,12 @@ const prefer = (...languages: string[]) =>
 
 describe("the browser's language (#228)", () => {
   it("takes the first preferred language the app speaks", () => {
-    prefer("de-CH", "fr-CH", "en");
+    prefer("xx-YY", "fr-CH", "en");
     expect(browserLocale()).toBe("fr");
   });
 
   it("falls back to English", () => {
-    prefer("de-CH", "it");
+    prefer("xx-YY", "zz");
     expect(browserLocale()).toBe("en");
   });
 
@@ -31,7 +31,7 @@ describe("the browser's language (#228)", () => {
 
   it("takes a stored value it does not speak for the browser's choice", () => {
     prefer("fr-CH");
-    localStorage.setItem("quiz-locale", "de");
+    localStorage.setItem("quiz-locale", "zz");
     expect(storedChoice()).toBe("browser");
     expect(storedLocale()).toBe("fr");
   });

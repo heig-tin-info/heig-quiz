@@ -337,10 +337,9 @@ export function buildCommands(ctx: CommandContext): Command[] {
     });
   }
 
-  const other = LOCALES.find((code) => code !== ctx.locale);
-  if (other) {
+  for (const other of LOCALES.filter((code) => code !== ctx.locale)) {
     commands.push({
-      id: "action:locale",
+      id: `action:locale:${other}`,
       // The target language is named in its own language, so the command is
       // readable by someone who cannot read the interface it sits in.
       label: t("palette.switchLocale", { language: LOCALE_INFO[other].endonym }),

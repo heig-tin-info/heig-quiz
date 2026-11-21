@@ -15,12 +15,14 @@ import {
   CONCEPT_DESCRIPTION_MAX,
   CONCEPT_LABEL_MAX,
   CONCEPT_LABEL_PATTERN,
+  CONCEPT_LANGUAGES,
   CONCEPT_QUALIFIER_MAX,
 } from "@quiz/domain";
 
 import { LlmDraftConfig } from "./llm.js";
 
-export const CONCEPT_LANGS = ["fr", "en"] as const;
+/** The languages of a concept's data: the domain's list (ADR-081, ADR-140). */
+export const CONCEPT_LANGS = CONCEPT_LANGUAGES;
 export const ConceptLang = z.enum(CONCEPT_LANGS);
 export type ConceptLang = z.infer<typeof ConceptLang>;
 

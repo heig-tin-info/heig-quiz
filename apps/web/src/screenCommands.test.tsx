@@ -71,7 +71,7 @@ describe("buildCommands and the mounted screen", () => {
     expect(actions?.commands.map((c) => c.id)).toEqual([
       "question:publish",
       "action:theme",
-      "action:locale",
+      "action:locale:fr",
       "action:signout",
     ]);
     unmount();
