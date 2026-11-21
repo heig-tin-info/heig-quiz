@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { EN_LABELS, FR_LABELS } from "@quiz/docexport";
+import { LABELS } from "@quiz/docexport";
+import { type Locale, LOCALES } from "@quiz/domain";
 
 import { de } from "./de";
 import { en } from "./en";
@@ -26,9 +27,14 @@ import { fr } from "./fr";
  * show in the JSON diff.
  */
 
-/** The dictionaries the lint reads: the written English and French, the translated German (ADR-140). */
-const DICTS = { fr, en, de };
-type Lang = keyof typeof DICTS;
+/**
+ * The dictionaries the lint reads, one per interface language: the written
+ * English and French, the translated German (ADR-140). Keyed by the
+ * registry: a language added there is a compile error here until its
+ * dictionary is.
+ */
+const DICTS: Record<Locale, Record<keyof typeof en, string>> = { en, fr, de };
+type Lang = Locale;
 const DICT: Record<Lang, Record<string, string>> = DICTS;
 type Rule = {
   name: string;
@@ -217,15 +223,12 @@ describe("copy lint of the French help pages (N-I18N-04)", () => {
  * exception, and every word is short — a label, or one sentence of a toast's
  * length at most.
  */
-const DOCUMENT_WORDS: Partial<Record<Lang, Record<string, string>>> = {
-  fr: Object.fromEntries(Object.entries(FR_LABELS)),
-  en: Object.fromEntries(Object.entries(EN_LABELS)),
-};
+const DOCUMENT_WORDS: Record<Lang, Record<string, string>> = { en: { ...LABELS.en }, fr: { ...LABELS.fr }, de: { ...LABELS.de } };
 const DOCUMENT_WORD_MAX = 80;
 
 describe("copy lint of a document's fixed words (N-I18N-04, ADR-125)", () => {
-  it.each(Object.keys(DOCUMENT_WORDS) as Lang[])("%s: every rule holds, every word is short", (lang) => {
-    const words = DOCUMENT_WORDS[lang]!;
+  it.each(LOCALES)("%s: every rule holds, every word is short", (lang) => {
+    const words = DOCUMENT_WORDS[lang];
     const offenders = RULES.filter((rule) => rule.langs.includes(lang)).flatMap((rule) =>
       Object.keys(words)
         .filter((key) => rule.test(words[key]!, key))

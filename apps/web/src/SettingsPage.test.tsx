@@ -243,3 +243,21 @@ describe("SettingsPage — anonymize my account", () => {
     expect(screen.queryByText("Account anonymization")).not.toBeInTheDocument();
   });
 });
+
+/*
+ * The language picker lists the registry (ADR-140): German is offered,
+ * named in itself, and the choice goes to the account.
+ */
+describe("SettingsPage — language", () => {
+  it("offers German, named in itself, and saves it on the account", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({ "PATCH /app/api/me": ok({}) });
+    renderWithProviders(<SettingsPage me={makeMe()} />);
+    for (const name of ["English", "Français", "Deutsch"]) expect(screen.getByRole("radio", { name })).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "Deutsch" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ locale: "de" }));
+    // Shown once its chunk has loaded, never a mixed frame.
+    await waitFor(() => expect(document.documentElement.lang).toBe("de"));
+    expect(screen.getByRole("radio", { name: "Deutsch" })).toBeChecked();
+  });
+});

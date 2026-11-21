@@ -386,6 +386,7 @@ export const freeSlug = (base: string, taken: ReadonlySet<string>): string => fi
 const NAME_WORDS: Record<Locale, { group: string; copy: string; set: (y: number, m: string, d: string, time: string) => string }> = {
   en: { group: "Group", copy: "copy", set: (y, m, d, time) => `Groups of ${y}-${m}-${d} ${time}` },
   fr: { group: "Groupe", copy: "copie", set: (y, m, d, time) => `Groupes du ${d}.${m}.${y} ${time}` },
+  de: { group: "Gruppe", copy: "Kopie", set: (y, m, d, time) => `Gruppen vom ${d}.${m}.${y} ${time}` },
 };
 
 /** "Group k" (fr "Groupe k") with the first k whose name is not `taken` (ADR-070 §1). */

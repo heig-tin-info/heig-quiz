@@ -30,7 +30,7 @@ import {
 
 const view = { seed: 0, itemId: "item-1", shuffle: false };
 const PROVENANCE = { kind: "test", version: 1, source: {}, attempts: [], generatedAt: "2026-11-04T10:00:00.000Z", app: null };
-const LANGS: readonly Lang[] = ["en", "fr"];
+const LANGS: readonly Lang[] = ["en", "fr", "de"];
 
 /**
  * The three forms of a list of blocks: its tree, its Typst body (escapes

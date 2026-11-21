@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChangelogList, Me } from "@quiz/contracts";
 
 import App from "../App";
+import { loadLocale, type Locale } from "../i18n";
+import { de } from "../i18n/de";
 import { resetEventStream } from "../realtime/useEventStream";
 import { makeMe } from "../test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
@@ -35,7 +37,11 @@ class FakeStream {
   close() {}
 }
 
-function render(route: string, me: Me = makeMe({ role: "teacher" }), { unseen = UNSEEN, all = UNSEEN } = {}) {
+function render(
+  route: string,
+  me: Me = makeMe({ role: "teacher" }),
+  { unseen = UNSEEN, all = UNSEEN, locale = "en" as Locale } = {},
+) {
   vi.stubGlobal("EventSource", FakeStream);
   const mock = mockFetch({
     "GET /app/api/me": ok(me),
@@ -45,7 +51,7 @@ function render(route: string, me: Me = makeMe({ role: "teacher" }), { unseen = 
     "GET /app/api/changelog": ok(all),
     "POST /app/api/me/changelog": { status: 204, body: undefined },
   });
-  return { ...mock, ...renderWithProviders(<App />, { route }) };
+  return { ...mock, ...renderWithProviders(<App />, { route, locale }) };
 }
 
 afterEach(() => {
@@ -70,6 +76,14 @@ describe("What's new", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Got it" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(calls.filter((c) => c.method === "POST" && c.url === "/app/api/me/changelog")).toHaveLength(1);
+  });
+
+  it("reads an entry in English for a German reader: the entries are written in English and French only (ADR-140 §6)", async () => {
+    await loadLocale("de");
+    render("/", makeMe({ role: "teacher", locale: "de" }), { locale: "de" });
+    const dialog = await screen.findByRole("dialog", { name: de["whatsNew.title"] });
+    expect(within(dialog).getByText("Settings").tagName).toBe("STRONG");
+    expect(within(dialog).queryByText("Réglages")).toBeNull();
   });
 
   it.each([`/evaluations/${EVAL}/live`, "/settings"])("never opens on %s", async (route) => {

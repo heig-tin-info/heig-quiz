@@ -7,7 +7,8 @@
 //
 // Flags: --dark, --width=390|768|1440 (repeatable), --height=<px>, --only=<substring> (=name: that scene only),
 //        --fold (viewport only, instead of the full page), --touch (a touch
-//        screen: coarse pointer, no hover), --list.
+//        screen: coarse pointer, no hover), --lang=<tag> (the browser's language
+//        for every scene, over a scene's own: `--lang=de-CH` for German), --list.
 // Environment: BASE (default http://localhost:5173), OUT (default
 // apps/web/screenshots).
 
@@ -31,6 +32,8 @@ const touch = flag("touch");
 const fullPage = !flag("fold");
 const only = opt("only").concat(argv.filter((a) => !a.startsWith("--")));
 const widths = opt("width").map(Number).filter(Boolean);
+/** --lang=de-CH: every scene in that browser language (ADR-140), a scene's own `lang` otherwise. */
+const langOpt = opt("lang")[0];
 /** --height=768: a laptop screen instead of the default 900 (844 on a phone). */
 const heightOpt = opt("height").map(Number).find(Boolean);
 
@@ -2638,7 +2641,7 @@ async function gotIt(page) {
 }
 
 async function skipCoach(page) {
-  const skip = page.getByRole("button", { name: /^(Skip|Passer)$/ }).locator("visible=true").first();
+  const skip = page.getByRole("button", { name: /^(Skip|Passer|Überspringen)$/ }).locator("visible=true").first();
   // It shows a moment after the page settles, or not at all.
   if (await skip.waitFor({ timeout: 3000 }).then(() => true, () => false)) {
     await skip.click({ timeout: 3000, force: true }).catch(() => {});
@@ -2991,7 +2994,7 @@ for (const width of widths.length ? widths : [1440]) {
         for (const [k, v] of Object.entries(ls ?? {})) localStorage.setItem(k, v);
         for (const [k, v] of Object.entries(ss ?? {})) sessionStorage.setItem(k, v);
       },
-      { role: scene.role, ls: scene.ls, ss: scene.ss, dark, lang: scene.lang, battery: scene.battery },
+      { role: scene.role, ls: scene.ls, ss: scene.ss, dark, lang: langOpt ?? scene.lang, battery: scene.battery },
     );
     try {
       await page.goto(BASE + scene.path, { waitUntil: "domcontentloaded" });

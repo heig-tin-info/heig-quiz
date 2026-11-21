@@ -10,7 +10,8 @@ its code rule (§4), the review tracking (§7), §8 and the rollout order are
 the orchestrator's design. §7 amended in place on 2026-11-21 by the `de`
 pull request, with the mechanism as built. §10 (regional formats) added
 2026-11-21 by the product owner, settling question 75; it supersedes the
-sentence of §9 that no English or French output changes.
+sentence of §9 that no English or French output changes. §4 and §5
+amended on 2026-11-21 by the pull request that makes German selectable.
 
 Scope: the list of interface languages, how a language's copy is made and
 released, the run-time fallback, and the code rule that makes a language
@@ -63,7 +64,12 @@ third language would have been a hunt rather than a list of compile errors.
    supported base language of a list of BCP-47 tags: `navigator.languages`,
    `Accept-Language`) and `dataLanguage` (§6). The written/translated
    distinction of §2 is a decision, not yet code: it becomes code when a
-   translated language needs it. Outside that file, no code compares an
+   translated language needs it. *Amended 2026-11-21, German selectable:*
+   it is code, `LOCALE_INFO[locale].origin` (`"written"` or
+   `"translated"`), with the types `WrittenLocale` and `TranslatedLocale`
+   and `isWrittenLocale`. The privacy page (§5) is keyed by
+   `WrittenLocale` and the review status test by `TranslatedLocale`; the
+   copy lint by `Locale`: a new language is a compile error there too. Outside that file, no code compares an
    interface locale to a literal: a per-language value is a
    `Record<Locale, …>` or comes from the registry, so widening `LOCALES`
    names every place to fill as a compile error. Literals that remain
@@ -85,6 +91,10 @@ third language would have been a hunt rather than a list of compile errors.
    translated language reads the English page until a human-reviewed
    translation of it exists. Its sources stay a `Record<Locale, string>`:
    the pull request that adds a language maps it to the English file.
+   *Amended 2026-11-21, German selectable:* the sources are a
+   `Record<WrittenLocale, string>`, and a translated language reads the
+   English file by its origin (§4), marked `lang="en"`: no mapping to add
+   per language.
 
 6. **Two-language data stays two-language.** Concept labels (ADR-081), pool
    domains (ADR-095 §7) and What's new entries (ADR-087) keep French and
@@ -144,7 +154,7 @@ third language would have been a hunt rather than a list of compile errors.
     money with a decimal point. The web app reads the tag through
     `intlTag(locale)` beside its i18n machinery, at every `Intl` formatter
     and `toLocale*String`. The mails and Teams parameters keep their own
-    date tags (`fr-CH`, `en-GB`, in `notifications/templates.ts`): their
+    date tags (`fr-CH`, `en-GB`, `de-CH`, in `notifications/templates.ts`): their
     French numeric date with dots is production output, so for French the
     two are different facts. The bare code stays everything else: the
     page's `<html lang>`, the account's `locale`, the dictionaries' key, a

@@ -352,6 +352,7 @@ describe("names (ADR-070 §1, §2)", () => {
   it("names a group with the first free k, in the creator's language", () => {
     expect(defaultGroupName(new Set(["Group 1", "Group 3"]), "en")).toBe("Group 2");
     expect(defaultGroupName(new Set(["Group 1"]), "fr")).toBe("Groupe 1");
+    expect(defaultGroupName(new Set(["Gruppe 1"]), "de")).toBe("Gruppe 2");
   });
 
   it("names a set after its creation on the school's clock", () => {
@@ -359,11 +360,13 @@ describe("names (ADR-070 §1, §2)", () => {
     const at = new Date("2026-10-04T12:05:00Z");
     expect(defaultSetName(at, "en")).toBe("Groups of 2026-10-04 14:05");
     expect(defaultSetName(at, "fr")).toBe("Groupes du 04.10.2026 14:05");
+    expect(defaultSetName(at, "de")).toBe("Gruppen vom 04.10.2026 14:05");
     expect(defaultSetName(new Date("2026-12-31T23:30:00Z"), "en")).toBe("Groups of 2027-01-01 00:30");
   });
 
   it("names a duplicated set", () => {
     expect(duplicateSetName("Labo 1", "en")).toBe("Labo 1 (copy)");
     expect(duplicateSetName("Labo 1", "fr")).toBe("Labo 1 (copie)");
+    expect(duplicateSetName("Labo 1", "de")).toBe("Labo 1 (Kopie)");
   });
 });

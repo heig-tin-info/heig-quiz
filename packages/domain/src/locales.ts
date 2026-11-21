@@ -8,7 +8,7 @@
  */
 import { CONCEPT_LANGUAGES, type ConceptLanguage } from "./concepts.js";
 
-export const LOCALES = ["en", "fr"] as const;
+export const LOCALES = ["en", "fr", "de"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 /**
@@ -19,13 +19,33 @@ export type Locale = (typeof LOCALES)[number];
 export const FALLBACK_LOCALE = "en" satisfies Locale;
 
 /**
- * Each language's name in itself, as a picker offers it, and the `Intl` tag
- * the interface formats its dates, times and numbers with (ADR-140 §10).
+ * How a language's copy is made (ADR-140 §2): `written` by the author of
+ * each key, or `translated`, machine-drafted from the English and tracked
+ * against it. A legal text exists in a written language only (§5).
  */
-export const LOCALE_INFO: Readonly<Record<Locale, { endonym: string; intl: string }>> = {
-  en: { endonym: "English", intl: "en-GB" },
-  fr: { endonym: "Français", intl: "fr" },
-};
+export type LocaleOrigin = "written" | "translated";
+
+/**
+ * Each language's name in itself, as a picker offers it, the `Intl` tag the
+ * interface formats its dates, times and numbers with (ADR-140 §10), and
+ * how its copy is made.
+ */
+export const LOCALE_INFO = {
+  en: { endonym: "English", intl: "en-GB", origin: "written" },
+  fr: { endonym: "Français", intl: "fr", origin: "written" },
+  de: { endonym: "Deutsch", intl: "de-CH", origin: "translated" },
+} as const satisfies Readonly<Record<Locale, { endonym: string; intl: string; origin: LocaleOrigin }>>;
+
+/** The languages of one origin, as types: what a per-origin `Record` is keyed by. */
+type LocaleOf<O extends LocaleOrigin> = {
+  [L in Locale]: (typeof LOCALE_INFO)[L]["origin"] extends O ? L : never;
+}[Locale];
+export type WrittenLocale = LocaleOf<"written">;
+export type TranslatedLocale = LocaleOf<"translated">;
+
+export function isWrittenLocale(locale: Locale): locale is WrittenLocale {
+  return LOCALE_INFO[locale].origin === "written";
+}
 
 export function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && (LOCALES as readonly string[]).includes(value);

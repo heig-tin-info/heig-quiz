@@ -10,6 +10,7 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import type { TrainingInstallResult } from "@quiz/contracts";
+import type { Locale } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import {
@@ -60,7 +61,7 @@ async function installed(content: TrainingContent = trainingFixture(), email = A
   return outcome;
 }
 
-const provisionFor = (userId: string, lang: "fr" | "en" = "fr", content = trainingFixture()) =>
+const provisionFor = (userId: string, lang: Locale = "fr", content = trainingFixture()) =>
   provision(db, { userId, lang, now: NOW, actor: actorOf(userId), log, content });
 
 async function publishedVersions(internalName: string): Promise<number> {
@@ -252,6 +253,15 @@ describe("provision (§1)", () => {
     expect(theirs[0]).toMatchObject({ name: "Getting started with Quiz", code: "INIT" });
     const [room] = await db.select().from(classrooms).where(eq(classrooms.courseId, theirs[0]!.id));
     expect(room!.period).toBe("Autumn 2026");
+  });
+
+  it("names a German caller's course and period in German (ADR-140)", async () => {
+    const hans = await makeUser("teacher");
+    const { courseId } = await provisionFor(hans, "de");
+    const [course] = await db.select().from(courses).where(eq(courses.id, courseId));
+    expect(course).toMatchObject({ name: "Erste Schritte mit Quiz", code: "INIT" });
+    const [room] = await db.select().from(classrooms).where(eq(classrooms.courseId, courseId));
+    expect(room).toMatchObject({ name: "Initiation", period: "Herbst 2026" });
   });
 
   it("a failure on the way leaves no course behind", async () => {

@@ -20,6 +20,7 @@ import { FeedbackPolicy } from "@quiz/contracts";
 import { findStudentLeaks } from "@quiz/core/testing";
 import type { Block, Document } from "@quiz/docexport";
 import { renderTypst } from "@quiz/docexport/typst";
+import { LOCALES } from "@quiz/domain";
 
 import { answers, evaluations, questions } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
@@ -161,7 +162,7 @@ describe("the student's own documents of a blocks question", () => {
     const running = await applyState(db, await reload(db, seed.evaluationId), "running", server.clock.now());
     await live.closeEvaluation(db, running, server.clock.now());
     const found = await handout(db, await reload(db, seed.evaluationId), { now: server.clock.now() });
-    for (const lang of ["en", "fr"] as const) {
+    for (const lang of LOCALES) {
       const tree = handoutTree(found, lang);
       expect(treeLeaks(tree)).toEqual([]);
       expect(leaksIn(typstOf(tree))).toEqual([]);

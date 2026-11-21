@@ -61,7 +61,7 @@ function graded(): BlocksDetails {
 }
 
 describe("the hand-out of a blocks question (ADR-126 §8, §9)", () => {
-  for (const lang of ["en", "fr"] as const) {
+  for (const lang of ["en", "fr", "de"] as const) {
     const labels = LABELS[lang];
     const handout = [...blocksServer.statementDoc!(student, labels), ...blocksServer.answerZone!(student)];
 
@@ -81,7 +81,7 @@ describe("the hand-out of a blocks question (ADR-126 §8, §9)", () => {
       const [, typst, markdown] = forms(handout, lang);
       const words = BLOCKS_PAPER_WORDS[lang];
       for (const form of [typst!, markdown!]) {
-        expect(form).toContain(`${labels.blocksHiddenWarehouses}${labels.colon}2 · 5 pt`);
+        expect(form).toContain(`${labels.blocksHiddenWarehouses}${labels.colon}2 · 5 ${labels.pointsShort}`);
         expect(form).toContain(words.kindRepeatUntilDock);
         expect(form).toContain(pseudoCode(SECRET_CONFIG.starter, words));
         for (const c of visible) expect(form).toContain(c.name);

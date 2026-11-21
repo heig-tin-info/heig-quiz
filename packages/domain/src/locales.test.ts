@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import { CONCEPT_LANGUAGES } from "./concepts.js";
-import { dataLanguage, FALLBACK_LOCALE, isLocale, type Locale, LOCALE_INFO, LOCALES, matchLocale } from "./locales.js";
+import {
+  dataLanguage,
+  FALLBACK_LOCALE,
+  isLocale,
+  isWrittenLocale,
+  type Locale,
+  LOCALE_INFO,
+  LOCALES,
+  matchLocale,
+} from "./locales.js";
 
 describe("the locale registry (ADR-140)", () => {
   it("names every language in itself, and falls back to one of them", () => {
@@ -17,6 +26,15 @@ describe("the locale registry (ADR-140)", () => {
     }
     expect(LOCALE_INFO.en.intl).toBe("en-GB");
     expect(LOCALE_INFO.fr.intl).toBe("fr");
+    expect(LOCALE_INFO.de.intl).toBe("de-CH");
+  });
+
+  it("tells the written languages from the translated ones (ADR-140 §2)", () => {
+    expect(LOCALES.filter(isWrittenLocale)).toEqual(["en", "fr"]);
+    expect(LOCALES.filter((l) => LOCALE_INFO[l].origin === "translated")).toEqual(["de"]);
+    // The fallback is the source every translation is drafted from: written.
+    expect(isWrittenLocale(FALLBACK_LOCALE)).toBe(true);
+    expect(LOCALE_INFO.de.endonym).toBe("Deutsch");
   });
 
   it("knows a locale from any other value", () => {
@@ -29,6 +47,7 @@ describe("the locale registry (ADR-140)", () => {
     expect(matchLocale(["EN-gb"])).toBe("en");
     expect(matchLocale([" fr-CH;q=0.9", "en;q=0.8"])).toBe("fr");
     expect(matchLocale(["fr_CH"])).toBe("fr");
+    expect(matchLocale(["de-CH", "fr-CH"])).toBe("de");
   });
 
   it("matches nothing among languages it does not speak", () => {
@@ -43,6 +62,8 @@ describe("the locale registry (ADR-140)", () => {
       expect(dataLanguage(locale)).toBe(expected);
     }
     expect(dataLanguage("fr")).toBe("fr");
+    // German, a translated language, reads the English side of the data.
+    expect(dataLanguage("de")).toBe("en");
     // A language the data lacks, as a translated one will be.
     expect(dataLanguage("zz" as Locale)).toBe("en");
   });

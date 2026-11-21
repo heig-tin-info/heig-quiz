@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { fmt, plural } from "@quiz/core/client";
+import { LOCALES } from "@quiz/domain";
 
 import {
   mcqEditorStrings,
@@ -81,7 +82,7 @@ import {
   REVIEW_STRINGS as CIRCUIT_REVIEW_STRINGS,
 } from "@quiz/qt-circuit/client";
 
-import { DICTS, type Locale, type TFunction } from "./i18n";
+import { DICTS, loadLocale, type Locale, type TFunction } from "./i18n";
 import {
   blocksCanvasStringsOf,
   circuitCanvasStrings,
@@ -107,6 +108,9 @@ import {
  * in both dictionaries, so a French teacher never meets an English label and
  * a key renamed in a package fails here instead of on screen.
  */
+
+// French is loaded by the test setup; German too, for the words it shares with the printed documents.
+await loadLocale("de");
 
 function makeT(locale: Locale): TFunction {
   return (key, vars) => {
@@ -242,16 +246,16 @@ describe("question type strings", () => {
   /*
    * A printed blocks question (ADR-126 §7) speaks the canvas's words from
    * its own copy, which the API can read: it must say what the screen says.
-   * The English is `blocksCanvasStrings` itself; the French is the copy.
+   * The English is `blocksCanvasStrings` itself; each other language is the copy.
    */
-  it("prints the blocks canvas's French words as the screen shows them", () => {
-    for (const [key, value] of Object.entries(BLOCKS_PAPER_WORDS.fr)) {
-      expect(DICTS.fr![`qt.blocks.c.${key}`], `qt.blocks.c.${key}`).toBe(value);
+  it.each(LOCALES)("prints the blocks canvas's words as the screen shows them (%s)", (locale) => {
+    for (const [key, value] of Object.entries(BLOCKS_PAPER_WORDS[locale])) {
+      expect(DICTS[locale]![`qt.blocks.c.${key}`], `qt.blocks.c.${key}`).toBe(value);
     }
   });
 
-  it("gives every type a label and a hint in both languages", () => {
-    for (const locale of ["en", "fr"] as const) {
+  it("gives every type a label and a hint in every language", () => {
+    for (const locale of LOCALES) {
       const t = makeT(locale);
       for (const id of QUESTION_TYPE_IDS) {
         const client = questionType(id)!;

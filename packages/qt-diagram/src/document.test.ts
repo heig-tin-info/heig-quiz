@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EN_LABELS, FR_LABELS, PX_MM, scopeZones, toSvg, type AnswerZone, type Block, type Lang } from "@quiz/docexport";
+import { EN_LABELS, FR_LABELS, LABELS, PX_MM, scopeZones, toSvg, type AnswerZone, type Block, type Lang } from "@quiz/docexport";
 import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
 import { DIAGRAM_KINDS, GRID, type Scene } from "@quiz/diagram/server";
@@ -11,7 +11,6 @@ import { diagramLeakFixture, REFERENCE, SECRET_CONFIG, STARTER } from "./testing
 
 const view = { seed: 0, itemId: "item-1", shuffle: false };
 const PROVENANCE = { kind: "test", version: 1, source: {}, attempts: [], generatedAt: "2026-11-04T10:00:00.000Z", app: null };
-const LABELS = { en: EN_LABELS, fr: FR_LABELS } as const;
 
 /** The hand-out's blocks of `config`: its statement and its frame, from the student view alone. */
 const handout = (config: DiagramConfig, lang: Lang = "en"): Block[] => {
@@ -53,7 +52,7 @@ describe("the diagram on paper (ADR-126)", () => {
     expect(under.ok && under.svg).not.toContain("#000000");
   });
 
-  it.each(["en", "fr"] as const)("names every notation in the reader's words, each its own (%s)", (lang) => {
+  it.each(["en", "fr", "de"] as const)("names every notation in the reader's words, each its own (%s)", (lang) => {
     const names = DIAGRAM_KINDS.map((kind) => {
       const student = diagramServer.toStudent({ ...SECRET_CONFIG, kind, starter: undefined }, view);
       const [, notation] = diagramServer.statementDoc!(student, LABELS[lang]);

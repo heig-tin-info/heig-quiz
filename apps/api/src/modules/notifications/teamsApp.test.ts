@@ -1,7 +1,7 @@
 /**
  * The Teams app package (ADR-030): a zip holding a manifest that declares
  * the tab, the activity types and the resource-specific permission, its
- * French localization and its two icons — the same bytes on every build,
+ * French and German localizations and its two icons — the same bytes on every build,
  * and nothing read from disk to make it.
  */
 import * as fs from "node:fs";
@@ -10,6 +10,7 @@ import { unzipSync } from "fflate";
 import { describe, expect, it, vi } from "vitest";
 
 import { kindChannels, NOTIFICATION_KINDS } from "@quiz/contracts";
+import { LOCALES } from "@quiz/domain";
 
 import {
   TEAMS_ACTIVITY_KINDS,
@@ -58,13 +59,13 @@ const PAYLOADS: TeamsPayload[] = [
 function unpack() {
   const files = unzipSync(teamsAppPackage(OPTS));
   const read = (name: string) => JSON.parse(Buffer.from(files[name]!).toString("utf8")) as Record<string, any>;
-  return { files, manifest: read("manifest.json"), fr: read("fr.json") };
+  return { files, manifest: read("manifest.json"), fr: read("fr.json"), de: read("de.json") };
 }
 
 describe("the Teams app package", () => {
   it("holds a manifest for a personal tab and activity feed notifications, and no bot", () => {
     const { files, manifest } = unpack();
-    expect(Object.keys(files)).toEqual(["manifest.json", "fr.json", "color.png", "outline.png"]);
+    expect(Object.keys(files)).toEqual(["manifest.json", "fr.json", "de.json", "color.png", "outline.png"]);
     expect(manifest).toMatchObject({
       manifestVersion: "1.17",
       version: TEAMS_APP_VERSION,
@@ -85,7 +86,13 @@ describe("the Teams app package", () => {
       authorization: {
         permissions: { resourceSpecific: [{ type: "Application", name: "TeamsActivity.Send.User" }] },
       },
-      localizationInfo: { defaultLanguageTag: "en", additionalLanguages: [{ languageTag: "fr", file: "fr.json" }] },
+      localizationInfo: {
+        defaultLanguageTag: "en",
+        additionalLanguages: [
+          { languageTag: "fr", file: "fr.json" },
+          { languageTag: "de", file: "de.json" },
+        ],
+      },
     });
     expect(manifest.bots).toBeUndefined();
     expect(manifest.$schema).toContain("/v1.17/MicrosoftTeams.schema.json");
@@ -142,7 +149,8 @@ describe("the Teams app package", () => {
     expect(TEAMS_ACTIVITY_KINDS).toEqual(expect.arrayContaining(["contestation_filed", "contestation_resolved"]));
     // A project's criterion contested (ADR-139 §13), at 2.7.0.
     expect(TEAMS_ACTIVITY_KINDS).toEqual(expect.arrayContaining(["project_contestation_filed", "project_contestation_resolved"]));
-    expect(TEAMS_APP_VERSION).toBe("2.7.0");
+    // German, its `de.json` (ADR-140), at 2.8.0.
+    expect(TEAMS_APP_VERSION).toBe("2.8.0");
     // Semver, as Teams wants it; the value itself is bumped by hand.
     expect(TEAMS_APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
     expect(new Set(types.map((a) => a.type)).size).toBe(types.length);
@@ -153,9 +161,9 @@ describe("the Teams app package", () => {
     }
   });
 
-  it("localizes every string of the manifest in fr.json, under the same keys", () => {
-    const { manifest, fr } = unpack();
-    const { $schema, ...strings } = fr;
+  it.each(["fr", "de"] as const)("localizes every string of the manifest in %s.json, under the same keys", (lang) => {
+    const { manifest, ...localized } = unpack();
+    const { $schema, ...strings } = localized[lang];
     expect($schema).toContain("/v1.17/MicrosoftTeams.Localization.schema.json");
     expect(Object.keys(strings)).toEqual(Object.keys(teamsAppStrings("en")));
     for (const key of ["name.short", "name.full", "description.short", "description.full"]) {
@@ -166,17 +174,19 @@ describe("the Teams app package", () => {
     const at = (path: string) =>
       path.split(/\.|\[(\d+)\]/).filter(Boolean).reduce<any>((node, part) => node?.[part], manifest);
     for (const [key, value] of Object.entries(en)) expect(at(key), key).toBe(value);
-    expect(strings["staticTabs[0].name"]).toBe("Accueil");
+    expect(strings["staticTabs[0].name"]).toBe({ fr: "Accueil", de: "Startseite" }[lang]);
     for (const [key, value] of Object.entries(strings)) {
       if (key.startsWith("activities.")) expect((value as string).length, key).toBeLessThanOrEqual(128);
     }
     expect((strings["description.short"] as string).length).toBeLessThanOrEqual(80);
   });
 
-  it("uses the same template parameters in both languages", () => {
+  it("uses the same template parameters in every language", () => {
     for (const kind of TEAMS_ACTIVITY_KINDS) {
       const key = `activity.${kind}.template` as const;
-      expect(placeholders(serverText("fr")[key]).sort(), kind).toEqual(placeholders(serverText("en")[key]).sort());
+      for (const locale of LOCALES) {
+        expect(placeholders(serverText(locale)[key]).sort(), `${locale} ${kind}`).toEqual(placeholders(serverText("en")[key]).sort());
+      }
     }
   });
 
@@ -194,11 +204,11 @@ describe("the Teams app package", () => {
 });
 
 describe("an activity of the app", () => {
-  it("fills every placeholder of its type's template, in both languages", () => {
+  it("fills every placeholder of its type's template, in every language", () => {
     for (const payload of PAYLOADS) {
       const activity = teamsActivity(APP_ID, payload, renderNotification(payload, "fr", "https://quiz.test"));
       expect(activity.activityType).toBe(TEAMS_ACTIVITY_TYPES[payload.kind]);
-      for (const locale of ["en", "fr"] as const) {
+      for (const locale of LOCALES) {
         const template = serverText(locale)[`activity.${payload.kind}.template`];
         expect(Object.keys(activity.templateParameters).sort()).toEqual(placeholders(template).sort());
       }
@@ -213,6 +223,8 @@ describe("an activity of the app", () => {
     const fr = teamsActivity(APP_ID, released!, renderNotification(released!, "fr", "https://quiz.test"));
     expect(fr.previewText).toBe("Les résultats de « Test 0 — bases du C » sont disponibles.");
     expect(fr.topic).toBe("Test 0 — bases du C");
+    const de = teamsActivity(APP_ID, released!, renderNotification(released!, "de", "https://quiz.test"));
+    expect(de.previewText).toBe("Die Ergebnisse von «Test 0 — bases du C» sind verfügbar.");
     const long = { ...released!, evaluationTitle: "x".repeat(400) } as TeamsPayload;
     const cut = teamsActivity(APP_ID, long, renderNotification(long, "en", "https://quiz.test"));
     expect(cut.previewText).toHaveLength(150);

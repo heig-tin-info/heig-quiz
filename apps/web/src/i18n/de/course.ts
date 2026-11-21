@@ -293,7 +293,7 @@ export const course: Record<keyof typeof en, string> = {
   "activities.summary.students.none": "Keine Studierenden betroffen",
   "activities.summary.toRelease.unit": "wartend",
   "activities.summary.toRelease.none": "alles freigegeben",
-  "activities.summary.toRelease.todo": "zu erledigen",
+  "activities.summary.toRelease.todo": "To-do",
   "activities.summary.toRelease.nothing": "Nichts wartet",
   "activities.summary.week.unit": "Ereignisse",
   "activities.summary.week.unit.one": "Ereignis",
