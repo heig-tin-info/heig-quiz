@@ -25,7 +25,7 @@ environment's GitHub App is [Quiz's GitHub App](github-app.md).
 
 | | `portal.heig.chevallier.io` (application VM) | `code.chevallier.io` (runner VM) |
 | --- | --- | --- |
-| Size | Hetzner CPX12, 1 vCPU, 2 GB + 2 GB swap, `128.140.71.35` | Hetzner, 2 CPU, 4 GB |
+| Size | Hetzner CPX22, 2 vCPU, 4 GB + 2 GB swap (CPX12 until 2026-11, rescaled CPU and RAM only, disk kept), `128.140.71.35` | Hetzner, 2 CPU, 4 GB |
 | Already runs | evaluation-tb on `:3001`, a native Caddy | heig-codespace, rootful Podman 5.7, a native Caddy |
 | Gets | `/srv/quiz`: the compose stack `app`, `postgres`, `backup`, on the `srv` account's rootless Docker; and staging, `/home/srvstg/quiz-staging` on the `srvstg` account's own rootless Docker (§8) | `/opt/quiz-runner`: the runner as a Podman quadlet |
 | Listens on | `app` on `127.0.0.1:3002` (staging `127.0.0.1:3003`) | the runner on `127.0.0.1:3200` |
@@ -111,9 +111,29 @@ heig-classroom). Quiz holds its copy,
 `/srv/quiz/secrets/eduid-private-key.pem` (and the vault's, ADR-010). **Never
 revoke that JWK**: Quiz's login depends on it.
 
-The `postgres` service carries a low-memory tuning
-(`shared_buffers=32MB`, `max_connections=40`, no parallel query): the VM has
-one vCPU and 2 GB, shared with staging and evaluation-tb.
+The `postgres` service is tuned for the VM's 4 GB, shared with staging,
+evaluation-tb and the RAD portal (`shared_buffers=256MB`, `max_connections=40`,
+no parallel query), and it records its statements: `pg_stat_statements`,
+statements over 500 ms and lock waits in its log (`docker compose logs
+postgres`; bind parameters stay out, but a constraint violation still
+prints its key or row: the log holds personal data). A transaction left
+open and idle for 5 minutes is ended (`idle_in_transaction_session_timeout`),
+an interactive `psql` after `BEGIN` included: run a hand fix-up as one
+script, never typed step by step. The extension is created once per
+database, by hand, after the first start with the library loaded (PGlite
+has none, so no migration can):
+
+```bash
+cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image \
+  exec -T postgres psql -U quiz -d quiz -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements'
+```
+
+The heaviest statements, read-only:
+
+```bash
+cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image \
+  exec -T postgres psql -U quiz -d quiz -c "SELECT calls, round(total_exec_time) AS ms, rows, left(query, 120) FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20"
+```
 
 The Caddy fragment does two things beyond proxying to `localhost:3002`: it
 sets the transport headers (HSTS, `nosniff`, referrer policy) and it proxies
@@ -961,7 +981,7 @@ first (§6); when in doubt, restore it anyway. A rollback holds until the next a
 
 !!! warning "Never build on the application VM"
 
-    The application VM is small (1 vCPU, 2 GB). A local build makes the host
+    The application VM is small (2 vCPU, 4 GB). A local build makes the host
     swap and strangles PostgreSQL and fills the disk with builder cache. `deploy.sh` only
     pulls. The runner VM does build the Alpine language images (rust, ~820 MB, included), on
     purpose; the runner image itself still comes from CI, so that both VMs
