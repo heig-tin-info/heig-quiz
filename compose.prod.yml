@@ -87,7 +87,9 @@ services:
     # off (small tables, few cores).
     # Observability: pg_stat_statements (its extension is created once by hand,
     # deployment guide §6: PGlite has none, so no migration can), statements
-    # over 500 ms and lock waits in the log, and an idle transaction left open
+    # over 500 ms (their text only: bind parameters, which carry names,
+    # addresses and answers, never reach the log) and lock waits in the log,
+    # and an idle transaction left open
     # by a crashed client ended after 5 minutes. No server-wide
     # statement_timeout: the backup and the migrations share this role.
     command:
@@ -108,6 +110,8 @@ services:
       - track_io_timing=on
       - -c
       - log_min_duration_statement=500ms
+      - -c
+      - log_parameter_max_length=0
       - -c
       - log_lock_waits=on
       - -c
