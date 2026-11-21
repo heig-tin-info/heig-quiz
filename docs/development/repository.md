@@ -282,8 +282,9 @@ prefix ending in a dot, or one key). What is left to review:
 `jq '[.[] | select(startswith("r:") | not)] | length' apps/web/src/i18n/de.status.json`.
 
 Adding a language (German was the first, Italian the second, ADR-140 §4)
-starts with its entry in `LOCALES` and `LOCALE_INFO` (`packages/domain/src/locales.ts`: its
-endonym, and `origin: "translated"` unless the team writes it), then
+starts with its entry in `LOCALES` and `LOCALE_INFO`
+(`packages/domain/src/locales.ts`: its endonym, its `Intl` tag, and
+`origin: "translated"` unless the team writes it), then
 follows the compile errors, each a `Record<Locale, …>` to fill: the web
 dictionary (`src/i18n/<lang>.ts`, its lazy loader in `index.tsx`, which
 `pnpm typecheck` names and `pnpm build` does not, its
@@ -292,20 +293,15 @@ strings and their date tag (`notifications/templates.ts`; bump
 `TEAMS_APP_VERSION`), the printed labels (`Lang` and `LABELS` of
 `@quiz/docexport`), the blocks' printed words and Blockly's message pack
 (`qt-blocks`), the group names (`domain/groupSets.ts`), the training
-course's words, the assistant's fixed replies (`domain/assist.ts`) and the
-copy lint's and status test's tables. A written language also needs its
+course's words, the assistant's fixed replies and the development stub's
+words (`domain/assist.ts`), and the tables of the copy lint, the status
+test and `domains.test.ts`. A written language also needs its
 privacy page (`src/privacy/`); a translated one reads the English. The
 picker, the command palette, the Teams package's language files, the help
 drawer and the assistant's corpus follow the list on their own; the
 workspace portal (`apps/codespace`) does not, and is widened by hand (its
-`LANGS`, and the tables of the image's two scripts). The compile errors do
-not name: the development stub's word matchers (`domain/assist.ts`), tests
-that use the new language's code as the example of an unsupported one
-(pick a code no one will add), tests that expect one language's word
-where they should read `LABELS[lang]` or load every dictionary, the
-palette tests that list every command id (`action:locale:<lang>`); a printed
-label used for two things (`name` was both a family name and a stimulus's
-name until Italian needed *Cognome* and *Nome*).
+`LANGS`, and the tables of the image's two scripts). A test that needs an
+unsupported language uses `xx`, never a real code.
 
 Everything else, code, identifiers, comments, commit messages, ADRs and
 this documentation, is in English.

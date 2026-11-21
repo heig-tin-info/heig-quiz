@@ -208,7 +208,7 @@ describe("helpers", () => {
     expect(mailLocale("en")).toBe("en");
     expect(mailLocale("de")).toBe("de");
     expect(mailLocale(null)).toBe("en");
-    expect(mailLocale("es")).toBe("en");
+    expect(mailLocale("xx")).toBe("en");
   });
 
   it("opens the same page as the bell", () => {
@@ -407,10 +407,10 @@ describe("the test e-mail (ADR-055 §6)", () => {
 });
 
 /*
- * The German of the mails and the Teams app is drafted, not written
- * (ADR-140 §2): the machine-checkable rules of the web app's copy lint
- * hold here too (Swiss spelling, guillemets, «Sie», no semicolon chain nor
- * em-dash aside), and every value keeps the English placeholders.
+ * The mails and the Teams app of each translated language are drafted, not
+ * written (ADR-140 §2): the machine-checkable rules of the web app's copy
+ * lint for that language hold here too, and every value keeps the English
+ * placeholders.
  */
 describe("the dictionaries of the other languages", () => {
   const en: Record<string, string> = serverText("en");
@@ -427,7 +427,7 @@ describe("the dictionaries of the other languages", () => {
   it("writes Swiss German, addresses the reader as Sie, and uses guillemets", () => {
     const de: Record<string, string> = serverText("de");
     const offenders = Object.entries(de).filter(([, text]) =>
-      /ß|[„“”]|; | — |\b([Dd]u|[Dd]ein(e|em|en|er|es)?|[Dd]ir|[Dd]ich|[Ee]uch)\b/.test(text.replace(/\{\w+\}/g, "x")),
+      /ß|[„“”]|; | — |\b([Dd]u|[Dd]ein(e|em|en|er|es)?|[Dd]ir|[Dd]ich|[Ee]uch|[Ee]uer|[Ee]ure[mnrs]?)\b/.test(text.replace(/\{\w+\}/g, "x")),
     );
     expect(offenders).toEqual([]);
   });
@@ -441,7 +441,7 @@ describe("the dictionaries of the other languages", () => {
       const text = raw.replace(/\{\w+\}/g, "x");
       return (
         /[„“”]|; | — /.test(text) ||
-        /(^|[^\p{L}])(E|e|perche|piu|gia|puo|cioe)'(?![\p{L}])/iu.test(text) ||
+        /(^|[^\p{L}])(E|e|perche|piu|gia|puo|cioe|pero|sara|verra|attivita|qualita|unita|modalita|possibilita|citta)'(?![\p{L}])/iu.test(text) ||
         /(^|[^\p{L}'])(tu|tuo|tua|tuoi|tue|ti|te|voi|vostr[oaie])(?![\p{L}'])/iu.test(text) ||
         /[\p{Ll},;] (Lei|Sua|Suo|Sue|Suoi|Le)(?![\p{L}'])/u.test(text)
       );

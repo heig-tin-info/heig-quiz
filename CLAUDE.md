@@ -64,13 +64,13 @@ Never work around these, not even "temporarily".
    written, never translated, short, by the Voice rules of
    `apps/web/DESIGN.md` and the glossary of
    `docs/spec/01-glossaire-et-domaine.md` §1.5 (N-I18N-04); the copy lint of
-   `apps/web/src/i18n/` refuses what it can detect. German and Italian are
-   live and *translated* (`LOCALE_INFO[…].origin`), machine-drafted from the
-   English; the rule that no code compares a locale to a literal: ADR-140. A
-   new key, or a key whose English changed, also gets its German and Italian
-   drafts in `de/<domain>.ts` and `it/<domain>.ts` and the re-stamp of
-   `de.status.json` and `it.status.json` (`I18N_STATUS=stamp`,
-   `src/i18n/status.test.ts`); a French-only change needs neither.
+   `apps/web/src/i18n/` refuses what it can detect. The other languages are
+   *translated* (`LOCALE_INFO[…].origin`), machine-drafted from the English;
+   the rule that no code compares a locale to a literal: ADR-140. A new key,
+   or a key whose English changed, also gets a draft in each translated
+   language's `<lang>/<domain>.ts` and the re-stamp of its
+   `<lang>.status.json` (`I18N_STATUS=stamp`, `src/i18n/status.test.ts`); a
+   French-only change needs neither.
 2. **One primary action per screen.** If you cannot name the single thing a
    screen is for, the flow is wrong, not the styling. See
    `.claude/skills/quiz-ui/SKILL.md` and `apps/web/DESIGN.md`.

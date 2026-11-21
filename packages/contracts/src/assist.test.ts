@@ -25,7 +25,7 @@ describe("AssistContext — a route pattern, never an entity (ADR-080 §2)", () 
     expect(AssistContext.safeParse({ route: "/", helpTopic: "question-editor", locale: "fr" }).success).toBe(true);
     expect(AssistContext.safeParse({ route: "/", helpTopic: "../x", locale: "fr" }).success).toBe(false);
     expect(AssistContext.safeParse({ route: "/", helpTopic: null, locale: "de" }).success).toBe(true);
-    expect(AssistContext.safeParse({ route: "/", helpTopic: null, locale: "es" }).success).toBe(false);
+    expect(AssistContext.safeParse({ route: "/", helpTopic: null, locale: "xx" }).success).toBe(false);
     expect(AssistContext.safeParse({ route: "/", helpTopic: null, locale: "en", title: "x" }).success).toBe(false);
   });
 });

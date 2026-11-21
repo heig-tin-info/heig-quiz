@@ -562,9 +562,40 @@ export function assistResults(table: ResultsSource): AssistResults {
 
 // --- The development stub with the data tools ---------------------------------
 
+/**
+ * The words the development stub recognises in a question, per language, as
+ * regular-expression alternations: results or grades, a request to see a
+ * screen, a request to rewrite, a category. A question may mix languages, so
+ * each matcher reads every language's words.
+ */
+const STUB_WORDS: Record<AssistLocale, { results: string; screen: string; rewrite: string; category: string }> = {
+  en: { results: "results?|grades?|marks?|means?|averages?", screen: "show|open|display", rewrite: "rewrite|rephrase|fix", category: "category" },
+  fr: {
+    results: "r[ée]sultats?|notes?|moyennes?",
+    screen: "montre|montrez|affiche|affichez|ouvre|ouvrez|voir",
+    rewrite: "reformule|reformulez|r[ée][ée]cris|r[ée][ée]crivez|corrige|corrigez",
+    category: "cat[ée]gorie",
+  },
+  de: { results: "ergebnisse?|noten|durchschnitt", screen: "zeigen|zeige|anzeigen", rewrite: "umformulieren|formulieren|korrigieren", category: "kategorie" },
+  it: {
+    results: "risultat[oi]|medi[ae]",
+    screen: "mostra|mostrare|apri|aprire|visualizza",
+    rewrite: "riformula|riformulare|riscrivi|riscrivere|correggi|correggere",
+    category: "categoria",
+  },
+};
+
+/** One matcher of `STUB_WORDS`: any language's words, as whole words. */
+const stubMatcher = (kind: keyof (typeof STUB_WORDS)[AssistLocale]): RegExp =>
+  new RegExp(`\\b(${Object.values(STUB_WORDS).map((words) => words[kind]).join("|")})\\b`, "i");
+const RESULTS_WORDS = stubMatcher("results");
+const SCREEN_WORDS = stubMatcher("screen");
+const REWRITE_WORDS = stubMatcher("rewrite");
+const CATEGORY_WORDS = stubMatcher("category");
+
 /** A question the stub answers with the results reader: it names results, grades or marks. */
 export function wantsResults(question: string): boolean {
-  return /\b(r[ée]sultats?|results?|ergebnisse?|notes?|noten|grades?|marks?|moyennes?|means?|averages?|durchschnitt|risultat[oi]|medi[ae])\b/i.test(question);
+  return RESULTS_WORDS.test(question);
 }
 
 export const STUB_RESULTS_TEXT: Record<
@@ -664,7 +695,7 @@ export async function stubReply(
 
 /** A question the stub answers by opening a screen: it asks to see, show or open something. */
 function wantsScreen(question: string): boolean {
-  return /\b(montre|montrez|affiche|affichez|ouvre|ouvrez|voir|show|open|display|zeigen|zeige|anzeigen|mostra|mostrare|apri|aprire|visualizza)\b/i.test(question);
+  return SCREEN_WORDS.test(question);
 }
 
 /**
@@ -693,12 +724,12 @@ function searchOf(question: string): string | null {
 
 /** A question the stub answers with an editor proposal: it asks to rewrite, rephrase or correct. */
 function wantsRewrite(question: string): boolean {
-  return /\b(reformule|reformulez|r[ée][ée]cris|r[ée][ée]crivez|corrige|corrigez|rewrite|rephrase|fix|umformulieren|formulieren|korrigieren|riformula|riformulare|riscrivi|riscrivere|correggi|correggere)\b/i.test(question);
+  return REWRITE_WORDS.test(question);
 }
 
 /** The category a question asks to create: "create a category «Pointers»" (quoted). */
 function categoryAsked(question: string): string | null {
-  if (!/\b([ck]at[ée]gori[ea]|category)\b/i.test(question)) return null;
+  if (!CATEGORY_WORDS.test(question)) return null;
   return /["«“']\s*([^"»”']{1,100}?)\s*["»”']/u.exec(question)?.[1] ?? null;
 }
 

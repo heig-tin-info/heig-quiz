@@ -161,7 +161,7 @@ function PreferencesCard({ me }: { me: Me }) {
       <SectionHeading icon={SlidersHorizontal} title={t("settings.preferences")} />
       <Card className="divide-y divide-line px-5">
         <SettingRow title={t("settings.language")} desc={t("settings.languageHint")}>
-          {/* A select, not a segmented control: the list grows with the languages and no longer fits a phone's width. */}
+          {/* A select: the list of languages grows. */}
           <Select
             value={choice}
             onChange={(e) => setLocale(e.target.value as LocaleChoice)}

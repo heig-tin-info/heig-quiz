@@ -221,15 +221,15 @@ const de: Record<MessageKey, string> = {
 
 const it: Record<MessageKey, string> = {
   landingTitle: "Ambienti di sviluppo",
-  landingBody: "Un ambiente si apre dalla piattaforma, con il pulsante «Apri» dell'attività.",
+  landingBody: "Un ambiente si apre dalla piattaforma, con il pulsante «Apri lo spazio di lavoro» dell'attività.",
   back: "Indietro",
   workspaceErrorTitle: "Non è stato possibile preparare lo spazio di lavoro",
   workspaceErrorDetail:
     "Non è stato possibile preparare lo spazio di lavoro: {cause}. Informare il team docente.",
   sourceRepository: "il repository di origine",
-  causeNoAccess: "il portale non ha accesso a {where}",
-  causeNotFound: "repository {where} non trovato",
-  causeDenied: "accesso negato al repository {where}",
+  causeNoAccess: "il portale non ha accesso a questo repository: {where}",
+  causeNotFound: "repository non trovato: {where}",
+  causeDenied: "accesso negato: {where}",
   causeFetchFailed: "non è stato possibile recuperare {where}",
   causeEmptyTemplate: "il repository modello del team docente non contiene alcun branch",
   launchRefused: "Avvio rifiutato",

@@ -36,12 +36,9 @@ import { it as itDict } from "./it";
  *   a dot (`qt.mcq.`), or one key. A mark that matches no key fails.
  */
 
-/**
- * Every translated language of the registry (`LOCALE_INFO`): one added there
- * is a compile error here until its dictionary is.
- */
+/** Every translated language of the registry (`LOCALE_INFO`): one added there is a compile error here until its dictionary is. */
+const TRANSLATED: Record<TranslatedLocale, Record<keyof typeof en, string>> = { de, it: itDict };
 type Lang = TranslatedLocale;
-const TRANSLATED: Record<Lang, Record<keyof typeof en, string>> = { de, it: itDict };
 type Key = keyof typeof en;
 
 const DIR = dirname(fileURLToPath(import.meta.url));

@@ -27,6 +27,7 @@ export interface Labels {
   /** The points of an answer nothing has graded yet. */
   notGraded: string;
   noAnswer: string;
+  /** A person's family name, beside `firstName` (Italian: «Cognome», «Nome»). */
   name: string;
   firstName: string;
   /** Column heads of a breakdown, blank by blank. */
@@ -65,7 +66,7 @@ export interface Labels {
   circuitOpen: string;
   circuitBias: string;
   circuitHidden: string;
-  /** The head of a stimulus's name column: not `name`, which is a person's family name beside `firstName`. */
+  /** The head of a stimulus's name column. */
   circuitName: string;
   schematic: string;
   logicInputs: string;
@@ -515,7 +516,7 @@ export const IT_LABELS: Labels = {
   negativeMarking: "Una risposta errata toglie punti. Non rispondere non toglie nulla.",
   expectNumber: "Rispondere con un numero.",
   expectDate: "Rispondere con una data.",
-  expectTime: "Rispondere con un'ora.",
+  expectTime: "Rispondere con un orario.",
   symbols: "Simboli",
   lengthLimit: "Lunghezza massima",
   characters: "caratteri",
@@ -592,7 +593,7 @@ export const IT_LABELS: Labels = {
   weight: "Peso",
   graderNote: "Prompt di correzione",
   noMatch: "Nessuna risposta accettata corrisponde.",
-  matchedAnswer: "Risposta accettata corrispondente",
+  matchedAnswer: "Corrisponde alla risposta accettata",
   notRead: "Illeggibile",
   colon: ": ",
   blocksMapLegend: "Grigio: scaffali. Nero: il robot, freccia in avanti. Tratteggiato: la banchina.",

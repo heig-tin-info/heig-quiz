@@ -3,13 +3,13 @@
  * and the preview line of a Teams activity, rendered on the server in the
  * RECIPIENT's language (`users.locale`, English when unset), never the
  * sender's — and every user-facing string of the Teams app package (its
- * name, descriptions, tab and activity types), whose French, German and
- * Italian become the package's `fr.json`, `de.json` and `it.json`.
+ * name, descriptions, tab and activity types), each other language's
+ * becoming the package's `<locale>.json`.
  *
- * One typed dictionary per language, the web app's rule mirrored: `fr`, `de`
- * and `it` are `Record<keyof typeof en, string>`, so a missing sentence is a
- * compile error. English and French are written, German and Italian are
- * translated (ADR-140). The bell is NOT rendered here — the web app turns
+ * One typed dictionary per language, the web app's rule mirrored: every one
+ * but English is `Record<keyof typeof en, string>`, so a missing sentence is
+ * a compile error. English and French are written, the others translated
+ * (ADR-140). The bell is NOT rendered here — the web app turns
  * the same payload into its own sentence (`NotificationPanel.tsx`).
  *
  * Every value that comes from a user (a pool name, a title, a display name)
@@ -766,8 +766,8 @@ const it: Record<Key, string> = {
   "student_joined.action": "Apri l'elenco della classe",
   "roster_conflict.subject": "{count} voci dell'elenco di {classroomName} attendono una sua decisione",
   "roster_conflict.subject.one": "Una voce dell'elenco di {classroomName} attende una sua decisione",
-  "roster_conflict.body": "{count} voci dell'elenco di {classroomName} non sono state associate automaticamente a un account e attendono una sua decisione.",
-  "roster_conflict.body.one": "Una voce dell'elenco di {classroomName} non è stata associata automaticamente a un account e attende una sua decisione.",
+  "roster_conflict.body": "{count} voci dell'elenco di {classroomName} non sono state abbinate automaticamente a un account e attendono una sua decisione.",
+  "roster_conflict.body.one": "Una voce dell'elenco di {classroomName} non è stata abbinata automaticamente a un account e attende una sua decisione.",
   "roster_conflict.action": "Apri l'elenco della classe",
   "grading_ready.subject": "{count} proposte da convalidare: {evaluationTitle}",
   "grading_ready.subject.one": "Una proposta da convalidare: {evaluationTitle}",
@@ -791,7 +791,7 @@ const it: Record<Key, string> = {
   "pool_unpublished.unpublished.subject": "La banca di domande {poolName} ha lasciato il catalogo",
   "pool_unpublished.unpublished.body": "La banca di domande «{poolName}» è stata ritirata dal catalogo: il suo abbonamento è terminato.",
   "pool_unpublished.course.subject": "La banca di domande {poolName} ha lasciato il catalogo",
-  "pool_unpublished.course.body": "La banca di domande «{poolName}» è stata ritirata dal catalogo: il suo corso «{courseName}» non vi attinge più. Le valutazioni del corso conservano le loro domande. Collegare un'altra banca di domande, o chiedere a chi ne è responsabile di pubblicarla di nuovo.",
+  "pool_unpublished.course.body": "La banca di domande «{poolName}» è stata ritirata dal catalogo: il suo corso «{courseName}» non vi attinge più. Le valutazioni del corso conservano le loro domande. Collegare un'altra banca di domande, o chiedere a chi è responsabile della banca di domande di pubblicarla di nuovo.",
   "pool_unpublished.deleted.subject": "La banca di domande {poolName} è stata eliminata",
   "pool_unpublished.deleted.body": "La banca di domande «{poolName}» è stata eliminata: il suo abbonamento è terminato.",
   "pool_unpublished.action": "Apri le banche di domande",
@@ -829,8 +829,8 @@ const it: Record<Key, string> = {
   "project_deadline_applied.action": "Apri il progetto",
   "project_provision_failed.subject": "Non è stato possibile creare {count} repository: {projectTitle}",
   "project_provision_failed.subject.one": "Non è stato possibile creare un repository: {projectTitle}",
-  "project_provision_failed.body": "Non è stato possibile creare {count} repository studente di «{projectTitle}». Ultima causa: {reason}.",
-  "project_provision_failed.body.one": "Non è stato possibile creare un repository studente di «{projectTitle}»: {reason}.",
+  "project_provision_failed.body": "Non è stato possibile creare {count} repository di studenti per «{projectTitle}». Ultima causa: {reason}.",
+  "project_provision_failed.body.one": "Non è stato possibile creare il repository di una persona iscritta per «{projectTitle}»: {reason}.",
   "project_provision_failed.action": "Apri il progetto",
   "github_org_lost.subject": "Organizzazione GitHub persa: {classroomName}",
   "github_org_lost.body": "L'organizzazione {orgLogin} di {classroomName} è stata eliminata su GitHub, o l'app di HEIG Quiz ne è stata disinstallata. Nei repository dell'organizzazione non si può scrivere nulla finché non viene collegata di nuovo.",
@@ -848,10 +848,10 @@ const it: Record<Key, string> = {
   // The account lifecycle (ADR-117 §4): never "deleted", the results stay.
   "account_dormant.notice.subject": "Il suo account HEIG Quiz non viene usato da due anni",
   "account_dormant.notice.body":
-    "Non usa HEIG Quiz da due anni. Per conservare il suo account, acceda entro un anno. Altrimenti l'account sarà anonimizzato: nome, indirizzi, foto e collegamenti ne saranno rimossi, e i suoi risultati resteranno senza il suo nome. Se desidera una copia, scarichi prima i suoi dati.",
+    "Non usa HEIG Quiz da due anni. Per conservare il suo account, accedere entro un anno. Altrimenti l'account sarà anonimizzato: nome, indirizzi, foto e collegamenti ne saranno rimossi, e i suoi risultati resteranno senza il suo nome. Se desidera una copia, scaricare prima i propri dati.",
   "account_dormant.reminder.subject": "Il suo account HEIG Quiz sarà anonimizzato tra tre mesi",
   "account_dormant.reminder.body":
-    "Non usa HEIG Quiz da più di due anni. Per conservare il suo account, acceda entro tre mesi. Altrimenti l'account sarà anonimizzato: nome, indirizzi, foto e collegamenti ne saranno rimossi, e i suoi risultati resteranno senza il suo nome. Se desidera una copia, scarichi prima i suoi dati.",
+    "Non usa HEIG Quiz da più di due anni. Per conservare il suo account, accedere entro tre mesi. Altrimenti l'account sarà anonimizzato: nome, indirizzi, foto e collegamenti ne saranno rimossi, e i suoi risultati resteranno senza il suo nome. Se desidera una copia, scaricare prima i propri dati.",
   "account_dormant.action": "Scarica i miei dati",
   signin: "Accedi",
   // The administrator's "Send me a test e-mail" (ADR-055 §6): no kind, no preference.
@@ -900,21 +900,21 @@ const it: Record<Key, string> = {
   "activity.results_released.template": "Risultati disponibili: {evaluationTitle}",
   "activity.pool_shared.description": "Una banca di domande viene condivisa con lei",
   "activity.pool_shared.template": "{byName} ha condiviso con lei la banca di domande {poolName}",
-  "activity.pool_ownership.description": "Diventa responsabile di una banca di domande",
+  "activity.pool_ownership.description": "Una banca di domande le viene affidata",
   "activity.pool_ownership.template": "Ora è responsabile della banca di domande {poolName}",
   "activity.student_joined.description": "Nuove iscrizioni in una delle sue classi",
   "activity.student_joined.template": "Nuove iscrizioni in {classroomName}: {count}",
   "activity.roster_conflict.description": "Voci dell'elenco di una delle sue classi attendono una sua decisione",
-  "activity.roster_conflict.template": "Voci da decidere nell'elenco di {classroomName}: {count}",
+  "activity.roster_conflict.template": "Voci da abbinare nell'elenco di {classroomName}: {count}",
   "activity.grading_ready.description": "La correzione automatica è terminata e alcune proposte attendono la sua convalida",
   "activity.grading_ready.template": "Correzione da convalidare: {evaluationTitle}",
-  "activity.pool_question_added.description": "Vengono pubblicate domande in una banca di domande che condivide",
+  "activity.pool_question_added.description": "Vengono pubblicate domande in una banca di domande condivisa con lei",
   "activity.pool_question_added.template": "Nuove domande in {poolName}: {count}",
   "activity.question_reported.description": "Viene segnalato un problema su una domanda di una banca di domande in cui scrive",
   "activity.question_reported.template": "Segnalazioni su {questionName}: {count}",
   "activity.question_report_resolved.description": "La sua segnalazione su una domanda viene risolta",
   "activity.question_report_resolved.template": "Segnalazione risolta: {questionName}",
-  "activity.pool_unpublished.description": "Una banca di domande pubblica che usa lascia il catalogo",
+  "activity.pool_unpublished.description": "Una banca di domande pubblica da lei usata lascia il catalogo",
   "activity.pool_unpublished.template": "La banca di domande {poolName} ha lasciato il catalogo",
   "activity.activity_scheduled.description": "Vengono pianificati esercizi nella sua classe",
   "activity.activity_scheduled.template": "Esercizi pianificati in {classroomName}: {count}",
@@ -922,7 +922,7 @@ const it: Record<Key, string> = {
   "activity.activity_available.template": "Esercizio aperto: {evaluationTitle}",
   "activity.deadline_approaching.description": "Una valutazione non ancora consegnata chiude entro 24 ore",
   "activity.deadline_approaching.template": "Chiude entro 24 ore: {evaluationTitle}",
-  "activity.results_updated.description": "Cambia la sua nota in una valutazione con risultati pubblicati",
+  "activity.results_updated.description": "La sua nota in una valutazione con risultati pubblicati cambia",
   "activity.results_updated.template": "Risultati aggiornati: {evaluationTitle}",
   "activity.project_scheduled.description": "Un progetto della sua classe viene annunciato, con la data di apertura",
   "activity.project_scheduled.template": "{projectTitle} si apre il {startAt}",

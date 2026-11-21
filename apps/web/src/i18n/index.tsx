@@ -24,19 +24,20 @@ import { type Dict, en } from "./en";
  *
  * Scope: EVERY user-facing surface goes through `t()`, teacher screens
  * included (N-I18N-01) — a teacher in Yverdon reads French. The dictionary is
- * flat and typed: `fr`, `de` and `it` are `Record<keyof Dict, string>`, so
- * a key added in English without its twins is a compile error. Keep it that
- * way.
+ * flat and typed: every dictionary but English is `Record<keyof Dict,
+ * string>`, so a key added in English without its twins is a compile error.
+ * Keep it that way.
  *
- * The dictionaries live next door, one file per domain in `en/`, `fr/`,
- * `de/` and `it/`, joined by `en.ts`, `fr.ts`, `de.ts` and `it.ts`: this file
- * is the machinery that reads them. English and French are written, German
- * and Italian are translated (ADR-140). English is in the entry chunk, as
- * the fallback it is; every other language is a chunk of its own, loaded by
+ * The dictionaries live next door, one file per domain in a folder per
+ * language (`en/`, `fr/`…), joined by the `<lang>.ts` beside it: this file is
+ * the machinery that reads them. Each language is written or translated
+ * (`LOCALE_INFO[…].origin`, ADR-140). English is in the entry chunk, as the
+ * fallback it is; every other language is a chunk of its own, loaded by
  * `loadLocale` before it is shown — before the first render when it is the
  * stored choice (`main.tsx`), before the switch when it is picked — so no
- * screen paints in English and then flips. Each keeps its `Record<keyof Dict, string>`
- * type: the dynamic import changes when it loads, not what it must contain.
+ * screen paints in English and then flips. Each keeps its `Record<keyof
+ * Dict, string>` type: the dynamic import changes when it loads, not what it
+ * must contain.
  *
  * What the user picks is a `LocaleChoice`: a language, or "browser" — the
  * default, `locale = null` on the account — which follows `navigator.languages`.

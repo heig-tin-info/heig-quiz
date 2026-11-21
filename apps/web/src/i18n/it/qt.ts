@@ -337,7 +337,7 @@ export const qt: Record<keyof typeof en, string> = {
   "qt.short.p.label": "La sua risposta",
   "qt.short.p.hintNumber": "Un numero, con virgola o punto.",
   "qt.short.p.hintDate": "Digitare una data, per esempio 2026-09-20.",
-  "qt.short.p.hintTime": "Digitare un'ora, per esempio 14:05.",
+  "qt.short.p.hintTime": "Digitare un orario, per esempio 14:05.",
   "qt.short.p.expected": "Risposte accettate",
   "qt.short.r.yourAnswer": "La sua risposta",
   "qt.short.r.noAnswer": "Senza risposta",

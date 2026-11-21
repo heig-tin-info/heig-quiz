@@ -51,8 +51,8 @@ describe("langOf", () => {
     // English when the browser names none of the portal's languages (ADR-140 §4).
     [undefined, "en"],
     ["", "en"],
-    ["es", "en"],
-    ["es-ES,es;q=0.9", "en"],
+    ["xx", "en"],
+    ["xx-YY,xx;q=0.9", "en"],
     ["it", "it"],
     ["it-CH,it;q=0.9", "it"],
     ["de", "de"],
@@ -62,13 +62,13 @@ describe("langOf", () => {
     ["fr", "fr"],
     ["de-CH,de;q=0.9,en;q=0.8,fr;q=0.7", "de"],
     ["it-CH,en;q=0.8,fr;q=0.9", "it"],
-    ["es-ES,en;q=0.8,fr;q=0.9", "fr"],
+    ["xx-YY,en;q=0.8,fr;q=0.9", "fr"],
     ["fr-CH;q=0.9, de;q=0.8", "fr"],
     ["de;q=0.8, fr-CH;q=0.9", "fr"],
     ["fr;q=0.5,en;q=0.8", "en"],
     ["en;q=0,fr", "fr"],
     ["de;q=0,it", "it"],
-    ["de;q=0,es", "en"],
+    ["de;q=0,xx", "en"],
   ] as const)("%s → %s", (header, lang) => {
     expect(langOf(header)).toBe(lang);
   });

@@ -368,7 +368,7 @@ describe("battery under SEB", () => {
     expect(itButton?.textContent).toMatch(/^\u{1F50B} 15% \u00b7 \d\d:\d\d \u00b7 25 min rimanenti$/u);
     expect(itButton?.getAttribute("aria-label")).toBe("Batteria 15%");
 
-    const other = page({ seb: true, battery, before: (win) => (win["_VSCODE_NLS_LANGUAGE"] = "es") });
+    const other = page({ seb: true, battery, before: (win) => (win["_VSCODE_NLS_LANGUAGE"] = "xx") });
     await nextTask();
     expect(other.doc.getElementById("heig-seb-battery")?.getAttribute("aria-label")).toBe("Battery 15%");
   });

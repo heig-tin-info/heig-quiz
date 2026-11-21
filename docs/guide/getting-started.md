@@ -110,7 +110,7 @@ A notification that arrives while the platform is open also shows as a brief toa
 
 **Settings** opens from the account menu or from the palette. The **Profile** card shows your picture, which you can change, your role and your last sign-in. Under **Preferences**:
 
-- **Language**: **English**, **Français**, **Deutsch** or **Italiano**. The choice is saved on your account, so it follows you to another browser, and your e-mails and printed documents follow it. The **Data and privacy** page, a legal text, stays in English for a German or Italian reader. The palette's **Switch to Français**, **Switch to Deutsch** and **Switch to Italiano** entries are the same setting.
+- **Language**: **English**, **Français**, **Deutsch** or **Italiano**. The choice is saved on your account, so it follows you to another browser, and your e-mails and printed documents follow it. The **Data and privacy** page, a legal text, stays in English for a reader of a language other than English or French. The palette's **Switch to …** entries are the same setting.
 - **Appearance**: **Light**, **Dark** or **System**, which follows the operating system.
 - **Date format**: how dates and times are written across the portal.
 - **Multiple-answer scoring**: the policy that seeds the evaluations you create, for multiple-choice questions with several correct answers. Changing it never moves an evaluation that already exists, and each evaluation keeps its own. The five policies are explained in [Question pools](pools.md).

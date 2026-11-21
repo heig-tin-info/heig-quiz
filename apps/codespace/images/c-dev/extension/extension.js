@@ -195,11 +195,11 @@ const STRINGS = {
     noReturnUrl: "A questa sessione non è stato passato alcun URL di ritorno.",
     sebQuit: "Chiudi: Ctrl+Q",
     sebQuitTooltip:
-      "Chiudi Safe Exam Browser. Scorciatoia: Ctrl+Q (Windows) o ⌘Q (Mac), che può chiedere una password. " +
+      "Uscire da Safe Exam Browser. Scorciatoia: Ctrl+Q (Windows) o ⌘Q (Mac), che può chiedere una password. " +
       "I suoi file vengono salvati automaticamente.",
     pushRejected: "Push rifiutato da GitHub",
     pushRejectedTooltip: (branch, reason) =>
-      `Il suo ultimo push di ${branch} non è stato inoltrato a GitHub (${reason}). ` +
+      `Il suo ultimo push sul branch ${branch} non è stato inoltrato a GitHub (${reason}). ` +
       "Il suo commit è ancora nel suo spazio di lavoro: fare pull, sistemare se necessario, poi fare di nuovo push.",
     programTerminal: "Programma",
     programTerminalFailed:

@@ -34,12 +34,11 @@ import { it as itDict } from "./it";
  * the registry: a language added there is a compile error here until its
  * dictionary is.
  */
-type Lang = Locale;
-const DICTS: Record<Lang, Record<keyof typeof en, string>> = { en, fr, de, it: itDict };
-const DICT: Record<Lang, Record<string, string>> = DICTS;
+const DICTS: Record<Locale, Record<keyof typeof en, string>> = { en, fr, de, it: itDict };
+const DICT: Record<Locale, Record<string, string>> = DICTS;
 type Rule = {
   name: string;
-  langs: Lang[];
+  langs: Locale[];
   /** Why, and what to write instead: the message of a failure. */
   fix: string;
   test: (text: string, key: string) => boolean;
@@ -77,11 +76,11 @@ const COMPONENT_KEY = /^(courses\.(settings\.)?components|gbook\.(settings|head|
 const REPARTITION = /\brépartitions?\b(?! (des (notes|réponses|points|scores)|par question)\b)/i;
 
 /** Every language of the dictionary. */
-const ALL = Object.keys(DICT) as Lang[];
-const FR: Lang[] = ["fr"];
-const EN: Lang[] = ["en"];
-const DE: Lang[] = ["de"];
-const IT: Lang[] = ["it"];
+const ALL = Object.keys(DICT) as Locale[];
+const FR: Locale[] = ["fr"];
+const EN: Locale[] = ["en"];
+const DE: Locale[] = ["de"];
+const IT: Locale[] = ["it"];
 
 /** Prose with its placeholders and inline code taken out: `dir` in backticks is a command, not an address. */
 const prose = (re: RegExp) => (text: string) => has(re)(text.replace(/`[^`]*`/g, "x"));
@@ -168,6 +167,8 @@ const RULES: Rule[] = [
   // Ceilings (all).
   { name: "button-over-24", langs: ALL, fix: "a verb, at most 24 characters", test: (t, k) => BUTTON.includes(suffix(k)) && !isSentence(t) && longerThan(24)(t) },
   { name: "tab-over-18", langs: ALL, fix: "at most 18 characters", test: (t, k) => /\.tab\.[^.]+$/.test(k) && longerThan(18)(t) },
+  // A summary tile of the activities page shares its label row with a chip: at 390 px, 20 characters take two lines (ADR-140).
+  { name: "tile-label-over-20", langs: ALL, fix: "at most 20 characters", test: (t, k) => /^activities\.summary\.[^.]+$/.test(k) && longerThan(20)(t) },
   { name: "subtext-over-110", langs: ALL, fix: "one sentence of at most 110 characters, carrying a fact the label does not", test: (t, k) => SUBTEXT.includes(suffix(k)) && longerThan(110)(t) },
 ];
 

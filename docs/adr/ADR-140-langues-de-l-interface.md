@@ -94,10 +94,11 @@ third language would have been a hunt rather than a list of compile errors.
      German (`it`, `Italiano`, `it-CH`), with the same compile errors
      filled; the portal and the image's scripts speak it too, under the
      same reservation as their German. The second language showed what
-     the registry does not catch: tests that took `it` as the example of
-     an unsupported language, tests that named one language's word instead
-     of reading the labels, and the development stub's word matchers
-     (`domain/assist.ts`), which are regular expressions per language.
+     the registry did not catch, now keyed by it: tests that took `it` as
+     the example of an unsupported language (they use `xx`), tests that
+     named one language's word or command, and the development stub's word
+     matchers (`domain/assist.ts`, a `Record<AssistLocale, …>` of
+     alternations).
 
 5. **Fallback.** A key missing at run time reads its English (unchanged).
    The "Data and privacy" page (N-DATA-07) is a legal text: a reader of a
