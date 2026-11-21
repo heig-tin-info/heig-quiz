@@ -119,6 +119,8 @@ export default defineConfig({
         "src/mock/**",
         "src/i18n/en.ts",
         "src/i18n/fr.ts",
+        "src/i18n/en/**",
+        "src/i18n/fr/**",
         "src/DevGallery.tsx",
         "src/devgallery/**",
         "src/paper/paper.fixtures.ts",
