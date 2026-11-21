@@ -27,7 +27,8 @@ Go through the list; skip an item only when the diff cannot touch it, and say
 which items you skipped.
 
 1. **English / i18n.** Every new user-visible string goes through `t()` with
-   a key in BOTH `apps/web/src/i18n/en.ts` and `fr.ts`. A literal string in
+   a key in the `apps/web/src/i18n/en/<domain>.ts` file that `i18n/domains.ts`
+   assigns its first segment to, and in its `fr/` twin. A literal string in
    JSX, a toast, an error message shown to a user, or an API error meant to
    be displayed verbatim is a finding. Identifiers, comments, commits: English.
    The copy itself follows N-I18N-04: both languages written short, labels

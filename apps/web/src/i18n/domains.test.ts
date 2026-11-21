@@ -35,7 +35,10 @@ describe("the domain files of the dictionaries", () => {
         const domain = domainOf(path);
         const prefixes: readonly string[] = DOMAINS[domain];
         const keys = Object.keys(mod[domain] ?? {});
-        expect(keys.filter((key) => !prefixes.includes(key.split(".")[0] ?? "")), `${lang}/${domain}.ts`).toEqual([]);
+        expect(
+          keys.filter((key) => !prefixes.includes(key.split(".")[0] ?? "")),
+          `${lang}/${domain}.ts holds keys whose first segment domains.ts does not list for it`,
+        ).toEqual([]);
         count += keys.length;
       }
       expect(Object.keys(DICTS[lang])).toHaveLength(count);
