@@ -10,7 +10,8 @@
 #
 # Caddy answers the machines with a 410, and sends every path a human
 # clicks to Quiz's home. Until 2026-11-21 those paths went to Quiz's legacy
-# URL resolver (`/legacy/classroom/*`), which led an old link to the
+# URL resolver (`/legacy/classroom/*`, now a 302 home for browsers that
+# cached this fragment's earlier 308), which led an old link to the
 # matching Quiz page; the product owner retired it (heig-classroom migrated,
 # old URLs no longer served; docs/audits/2026-11-21-database-remediation.md
 # §6.4). The redirect is a 308 since the point of no return (M9-01,

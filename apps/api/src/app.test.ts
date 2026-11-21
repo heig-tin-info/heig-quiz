@@ -210,6 +210,13 @@ describe("app (serving the built SPA)", () => {
     expect(res.body).toContain("<title>SPA</title>");
   });
 
+  // Plan §6.4: a browser's cached 308 of the retired resolver lands on the home, not on the SPA's not-found page.
+  it("redirects an old /legacy/classroom link home, before the SPA fallback", async () => {
+    const res = await app.inject({ method: "GET", url: "/legacy/classroom/classrooms/c1/journal?tab=x" });
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe("/");
+  });
+
   // ADR-089 §10: the deep link of a project's station page admits the portal in a frame; the project's own page does not.
   it("sends frame-src with the portal on a project's station page only", async () => {
     const station = await app.inject({ method: "GET", url: "/projects/p1/station" });

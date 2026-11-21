@@ -246,7 +246,8 @@ heig-classroom migrated, old URLs no longer served
 §6.4). The import's id map is dropped (migration `0153`). The 410 rows
 below still hold; every other row, "via the resolver" or not, is now a 308
 to Quiz's home, without the path or the query: the fragment no longer sends
-anything to `/legacy/classroom/*`, which is no route any more.*
+anything to `/legacy/classroom/*`. That path now only redirects home (a
+302, `app.ts`), for the browsers that cached the fragment's earlier 308s.*
 
 | Old | Target | How |
 | --- | --- | --- |

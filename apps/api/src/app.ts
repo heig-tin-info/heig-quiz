@@ -352,6 +352,11 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await step("changelog sync", () => syncChangelog(app.db, bundledChangelog(), config.COMMIT_SHA || null));
   if (runWorkers) startTicker(app, config);
 
+  // The legacy URL resolver is retired (database remediation plan §6.4), but
+  // browsers cached the permanent 308s that sent classroom.chevallier.io's old
+  // links here: they land on the home, not on the SPA's not-found page.
+  app.get("/legacy/classroom/*", (_req, reply) => reply.redirect("/", 302));
+
   // Built SPA served by the monolith (ADR-009: single image, frontend included).
   if (config.STATIC_DIR && existsSync(config.STATIC_DIR)) {
     const build = resolve(config.STATIC_DIR);
