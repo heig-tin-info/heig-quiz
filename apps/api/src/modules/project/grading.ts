@@ -278,14 +278,23 @@ export async function refreshScoreSelection(
   const lagging = runs.filter((r) => !r.toVerify && restored.has(r.headSha)).map((r) => r.id);
   if (lagging.length > 0) await db.update(projectGradeRuns).set({ toVerify: true }).where(inArray(projectGradeRuns.id, lagging));
   const selected = selectScoreRun(runs, restored);
+  // Written only when a slot changes: `reconcile.grades` calls this for every
+  // quiet repository every quarter of an hour, and an unconditional write was
+  // ~19,000 updates a day of the same values (database remediation, Phase 2.1).
+  const grace = sql`${projectRepos.deadlineAppliedAt} IS NOT NULL AND ${projectRepos.frozenAt} IS NULL`;
   await db
     .update(projectRepos)
     .set({
       currentGradeRunId: selected,
-      frozenGradeRunId: sql`CASE WHEN ${projectRepos.deadlineAppliedAt} IS NOT NULL AND ${projectRepos.frozenAt} IS NULL
-        THEN ${selected}::uuid ELSE ${projectRepos.frozenGradeRunId} END`,
+      frozenGradeRunId: sql`CASE WHEN ${grace} THEN ${selected}::uuid ELSE ${projectRepos.frozenGradeRunId} END`,
     })
-    .where(eq(projectRepos.id, ctx.repo.id));
+    .where(
+      and(
+        eq(projectRepos.id, ctx.repo.id),
+        sql`(${projectRepos.currentGradeRunId} IS DISTINCT FROM ${selected}::uuid
+          OR (${grace} AND ${projectRepos.frozenGradeRunId} IS DISTINCT FROM ${selected}::uuid))`,
+      ),
+    );
 }
 
 /**
