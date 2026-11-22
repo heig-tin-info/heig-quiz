@@ -9,7 +9,7 @@
  * `app.ts`): without it none of these routes exists, so each is a 404 and
  * nothing calls GitHub.
  */
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest, onRequestHookHandler } from "fastify";
 
 import {
   GithubConnectBody,
@@ -210,6 +210,64 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
   });
 }
 
+/** GitHub caps a webhook payload at 25 MB: the intake takes any payload GitHub may send. */
+export const WEBHOOK_BODY_LIMIT = 25 * 1024 * 1024;
+/** Above this (Fastify's default limit), a body counts as large... */
+export const WEBHOOK_LARGE_BODY = 1024 * 1024;
+/** ...and at most this many large bodies are read at once in a process; another is answered 503, which GitHub's redelivery takes. */
+export const WEBHOOK_LARGE_IN_FLIGHT = 2;
+
+/** A large body not read whole this long after its admission is cut off, its slot given back. */
+let largeBodyDeadlineMs = 60_000;
+
+/** Test seam: a shorter deadline for a stalled large body; never in production. */
+export function webhookBodyDeadlineForTests(ms: number): void {
+  if (process.env.NODE_ENV === "production") throw new Error("webhookBodyDeadlineForTests: never in production");
+  largeBodyDeadlineMs = ms;
+}
+
+/**
+ * The admission of a delivery BEFORE its body is read (`onRequest`): the
+ * body is buffered whole for the HMAC, on a public route, so whatever is not
+ * a delivery of GitHub's is refused first — no signature header (401), no
+ * event header (400), a `content-length` that is no length (400) or one over
+ * GitHub's cap (413). A large body — over 1 MB, or of no declared length
+ * (chunked: Fastify's `bodyLimit` still cuts it at 25 MB as it streams) —
+ * takes one of {@link WEBHOOK_LARGE_IN_FLIGHT} slots, or is answered 503
+ * when none is free. A slot is given back once the response is sent or the
+ * client gone; a body not read whole {@link largeBodyDeadlineMs} after its
+ * admission is cut off (the request destroyed), so a stalled sender cannot
+ * hold a slot. All of it scoped to this route: the server's own timeouts
+ * are left as they are.
+ */
+function admitDelivery(): onRequestHookHandler {
+  let large = 0;
+  return (req, reply, done) => {
+    if (typeof req.headers["x-hub-signature-256"] !== "string") return void reply.code(401).send({ error: "bad_signature" });
+    if (typeof req.headers["x-github-event"] !== "string") return void reply.code(400).send({ error: "bad_headers" });
+    const declared = req.headers["content-length"];
+    const length = declared === undefined ? null : Number(declared);
+    if (length !== null && (!Number.isSafeInteger(length) || length < 0)) return void reply.code(400).send({ error: "bad_headers" });
+    if (length !== null && length > WEBHOOK_BODY_LIMIT) return void reply.code(413).send({ error: "too_large" });
+    if (length === null || length > WEBHOOK_LARGE_BODY) {
+      if (large >= WEBHOOK_LARGE_IN_FLIGHT) return void reply.code(503).send({ error: "busy" });
+      large += 1;
+      let held = true;
+      const deadline = setTimeout(() => req.raw.destroy(), largeBodyDeadlineMs);
+      deadline.unref();
+      const release = () => {
+        clearTimeout(deadline);
+        if (held) large -= 1;
+        held = false;
+      };
+      req.raw.once("end", () => clearTimeout(deadline));
+      reply.raw.once("close", release);
+      req.raw.once("close", release);
+    }
+    done();
+  };
+}
+
 /**
  * `POST /webhooks/github` (N-SEC-17, spec 05 §5.11; the sequence is in
  * `deliveries.ts`). Public, and served to no session at all (`sessions:
@@ -219,14 +277,17 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
  * replaces every body parser in this context only, so the route reads the
  * exact bytes GitHub signed and the JSON parsing of every other route is
  * untouched. Nothing is parsed, nor stored, before the HMAC holds. The body
- * limit is Fastify's default, 1 MB, as in classroom.
+ * limit is GitHub's own cap on a payload, 25 MB ({@link WEBHOOK_BODY_LIMIT}),
+ * on this route only: at Fastify's default of 1 MB (classroom's) a large
+ * push was refused 413, its receipt lost for good (ADR-011's addendum of
+ * 2026-11-22). The memory it may take is bounded by {@link admitDelivery}.
  */
 async function webhookIntake(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   app.removeAllContentTypeParsers();
   app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
 
-  app.post(WEBHOOK_PATH, { config: { sessions: [] } }, async (req, reply) => {
+  app.post(WEBHOOK_PATH, { config: { sessions: [] }, bodyLimit: WEBHOOK_BODY_LIMIT, onRequest: admitDelivery() }, async (req, reply) => {
     const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     const signature = req.headers["x-hub-signature-256"];
     if (

@@ -95,6 +95,7 @@ export const SCHEDULED_TASK_KEYS = [
   "deliveries.purge",
   "reconcile.grades",
   "reconcile.repos",
+  "reconcile.ci",
   "llm.review",
   "llm.domain",
   "assist.purge",

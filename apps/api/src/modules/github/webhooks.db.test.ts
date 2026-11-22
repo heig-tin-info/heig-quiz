@@ -8,6 +8,7 @@
  * is walked in `walks.db.test.ts`.
  */
 import { randomUUID } from "node:crypto";
+import { PassThrough } from "node:stream";
 
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,6 +26,8 @@ import {
   notifications,
   pushReceipts,
   webhookDeliveries,
+  webhookDeliveryScan,
+  webhookRedeliveryAsks,
 } from "../../db/schema.js";
 import {
   appKey,
@@ -36,16 +39,20 @@ import {
   signedDelivery,
   type DeliveryOptions,
   type FakeOrg,
+  type Route,
 } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import {
+  ASKS_RETENTION_MS,
   PAYLOAD_RETENTION_MS,
   processDelivery,
   purgeDeliveryPayloads,
+  purgeRedeliveryAsks,
   reconcileDeliveries,
   REPLAY_AFTER_MS,
 } from "./deliveries.js";
+import { WEBHOOK_BODY_LIMIT, webhookBodyDeadlineForTests } from "./routes.js";
 import { onEvent, onReceipt, orgView, resetGithubCaches } from "./service.js";
 
 const SECRET = "w".repeat(40);
@@ -557,7 +564,7 @@ describe("a failed delivery", () => {
 
     // Too recent: its job may still be retrying.
     expect(await reconcileDeliveries(server.app, config)).toBe(
-      "0 local deliveries replayed, 0 GitHub redeliveries requested",
+      "0 local deliveries replayed, 0 GitHub redeliveries requested, 1 log pages read",
     );
     expect(pings).toBe(0);
 
@@ -599,22 +606,345 @@ describe("the redelivery of GitHub's failures", () => {
       redelivery,
       delivered_at: at(hoursAgo),
     });
+    const [again, through] = [randomUUID(), randomUUID()];
     gh.routes = [
       on("GET", "/app/hook/deliveries", () =>
         json([
+          attempt(7, through, 200, 0.2, true), // a redelivery that got through: the newest attempt decides
+          attempt(5, again, 500, 0.5, true), // a redelivery that failed in turn: asked again, by its own id
           attempt(1, randomUUID(), 502, 1),
-          attempt(2, held, 500, 2), // stored since: a later attempt got through
           attempt(3, randomUUID(), 200, 1), // delivered
+          attempt(8, through, 500, 1),
+          attempt(6, again, 500, 1.5), // its original: not asked twice
+          attempt(2, held, 500, 2), // stored since: a later attempt got through
           attempt(4, randomUUID(), 500, 30), // too old
-          attempt(5, randomUUID(), 500, 1, true), // itself a redelivery
         ]),
       ),
-      on("POST", "/app/hook/deliveries/1/attempts", () => json({}, 202)),
+      (url, init) => (init.method === "POST" && /^\/app\/hook\/deliveries\/[15]\/attempts$/.test(url.pathname) ? json({}, 202) : undefined),
     ];
-    expect(await reconcileDeliveries(server.app, config)).toMatch(/1 GitHub redeliveries requested$/);
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/2 GitHub redeliveries requested, 1 log pages read$/);
+    // Oldest first: the deliveries closest to leaving the window.
     expect(gh.calls.filter((c) => c.startsWith("POST"))).toEqual([
       "POST api.github.com/app/hook/deliveries/1/attempts",
+      "POST api.github.com/app/hook/deliveries/5/attempts",
     ]);
+  });
+});
+
+describe("the incremental read of GitHub's delivery log (ADR-011, 2026-11-22)", () => {
+  const START = new Date("2026-10-20T12:00:00.000Z");
+  /** GitHub's log of the App's attempts, newest first. */
+  let log: { id: number; guid: string; status_code: number; redelivery: boolean; delivered_at: string }[] = [];
+  /** The `cursor` of every read of the log, null for the top. */
+  let cursors: (string | null)[] = [];
+  let nextId = 1;
+
+  /**
+   * `n` attempts, oldest first (`status(i)` the i-th's), `everySeconds`
+   * apart, the newest `minutesAgo` before the server's now, put on top of
+   * the log; their guids, oldest first.
+   */
+  function happened(n: number, minutesAgo: number, status = (_i: number) => 200, everySeconds = 60): string[] {
+    const newest = server.clock.now().getTime() - minutesAgo * 60_000;
+    const made = Array.from({ length: n }, (_, i) => ({
+      id: nextId++,
+      guid: randomUUID(),
+      status_code: status(i),
+      redelivery: false,
+      delivered_at: new Date(newest - (n - 1 - i) * everySeconds * 1000).toISOString(),
+    }));
+    log = [...[...made].reverse(), ...log];
+    return made.map((a) => a.guid);
+  }
+
+  /** GitHub's pagination: 100 a page, the next page named by the id of its first attempt, as a cursor names a delivery. */
+  const logRoute: Route = (url, init) => {
+    if (url.host !== "api.github.com" || init.method !== "GET" || url.pathname !== "/app/hook/deliveries") return undefined;
+    const cursor = url.searchParams.get("cursor");
+    cursors.push(cursor);
+    const from = cursor === null ? 0 : log.findIndex((a) => `d${a.id}` === cursor);
+    if (from < 0) return json({ message: "Invalid cursor" }, 422);
+    const page = log.slice(from, from + 100);
+    const next = log[from + 100];
+    return new Response(JSON.stringify(page), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        ...(next ? { link: `<https://api.github.com/app/hook/deliveries?per_page=100&cursor=d${next.id}>; rel="next", <https://api.github.com/app/hook/deliveries?per_page=100>; rel="first"` } : {}),
+      },
+    });
+  };
+  /** GitHub's answer to a redelivery request, by the attempt's id. */
+  let postAnswer: (id: number) => number = () => 202;
+  /** The status of the attempt GitHub then makes, put on top of the log; null: none shown. */
+  let redeliveryStatus: (guid: string) => number | null = () => null;
+  const redeliveryRoute: Route = (url, init) => {
+    const m = /^\/app\/hook\/deliveries\/(\d+)\/attempts$/.exec(url.pathname);
+    if (url.host !== "api.github.com" || init.method !== "POST" || !m) return undefined;
+    const answer = postAnswer(Number(m[1]));
+    const guid = log.find((a) => a.id === Number(m[1]))!.guid;
+    const status = redeliveryStatus(guid);
+    if (answer === 202 && status !== null) {
+      log = [{ id: nextId++, guid, status_code: status, redelivery: true, delivered_at: server.clock.now().toISOString() }, ...log];
+    }
+    return json(answer === 202 ? {} : { message: "Server Error" }, answer);
+  };
+  const redelivered = () =>
+    gh.calls.filter((c) => c.startsWith("POST")).map((c) => Number(/deliveries\/(\d+)\/attempts/.exec(c)![1]));
+  const guidOf = (id: number) => log.find((a) => a.id === id)!.guid;
+  const idsOf = (guids: string[]) => guids.map((g) => log.find((a) => a.guid === g)!.id);
+  /** The redeliveries GitHub made reached the intake: Quiz holds them now. */
+  const received = async (ids: number[]) => {
+    if (ids.length === 0) return;
+    await server.app.db.insert(webhookDeliveries).values(
+      ids.map((id) => ({ deliveryId: guidOf(id), event: "test_ping", payload: {}, receivedAt: server.clock.now(), processedAt: server.clock.now() })),
+    );
+  };
+  const scan = async () => (await server.app.db.select().from(webhookDeliveryScan))[0];
+  const asksOf = async (guid: string) => (await server.app.db.select().from(webhookRedeliveryAsks).where(eq(webhookRedeliveryAsks.guid, guid)))[0];
+  const storedOf = async (guid: string) => (await server.app.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.deliveryId, guid)))[0];
+
+  beforeEach(async () => {
+    server.clock.set(START.toISOString());
+    await server.app.db.delete(webhookDeliveryScan);
+    await server.app.db.delete(webhookRedeliveryAsks);
+    log = [];
+    cursors = [];
+    postAnswer = () => 202;
+    redeliveryStatus = () => null;
+    gh.routes = [logRoute, redeliveryRoute];
+  });
+
+  it("reads the log down to what the previous pass covered, not 24 hours of it", async () => {
+    happened(300, 0); // five hours of traffic, all delivered
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/0 GitHub redeliveries requested, 3 log pages read$/);
+    expect(await scan()).toMatchObject({ coveredUntil: START, resumeCursor: null, resumeCeiling: null });
+
+    // Fifteen minutes on, 15 more deliveries, one failed: one page, stopped at the covered point less the overlap.
+    server.clock.advance(15 * 60_000);
+    cursors = [];
+    gh.calls.length = 0;
+    const [failed] = happened(15, 0, (i) => (i === 3 ? 502 : 200)).filter((_, i) => i === 3);
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/1 GitHub redeliveries requested, 1 log pages read$/);
+    expect(cursors).toEqual([null]);
+    expect(redelivered()).toEqual(idsOf([failed!]));
+    expect((await scan())?.coveredUntil).toEqual(server.clock.now());
+  });
+
+  it("finds the failures of a gap larger than one page, and none below the covered point", async () => {
+    happened(50, 200, (i) => (i === 10 ? 500 : 200)); // before the covered point: already handled
+    await server.app.db.insert(webhookDeliveryScan).values({ id: "app", coveredUntil: new Date(START.getTime() - 3 * 3_600_000) });
+    // Three hours of traffic since, failures on the fourth, third and first pages; asked oldest first.
+    const guids = happened(350, 0, (i) => ([5, 120, 340].includes(i) ? 503 : 200), 30);
+    const failures = [guids[5]!, guids[120]!, guids[340]!];
+
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/3 GitHub redeliveries requested, 4 log pages read$/);
+    expect(redelivered()).toEqual(idsOf(failures));
+    expect(cursors[0]).toBeNull();
+    expect(cursors.slice(1).every((c) => c !== null)).toBe(true);
+  });
+
+  it("asks again, pass after pass, for a delivery whose redelivery failed in turn", async () => {
+    const [lost] = happened(1, 120, () => 502);
+    happened(10, 0);
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/1 GitHub redeliveries requested, 1 log pages read$/);
+    const [first] = redelivered();
+    expect(first).toBe(idsOf([lost!])[0]);
+
+    // The intake still down: GitHub's redelivery failed too, on top of the log; the original lies below the covered point now.
+    server.clock.advance(15 * 60_000);
+    log = [{ id: nextId++, guid: lost!, status_code: 502, redelivery: true, delivered_at: new Date(START.getTime() + 60_000).toISOString() }, ...log];
+    gh.calls.length = 0;
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/1 GitHub redeliveries requested, 1 log pages read$/);
+    // Asked from the record, by the attempt first recorded: GitHub redelivers any attempt of the delivery.
+    expect(redelivered()).toEqual([first]);
+    expect((await asksOf(lost!))?.lastStatus).toBe(502);
+  });
+
+  it("stops at the 24-hour window when nothing was covered yet", async () => {
+    happened(20, 25 * 60, () => 500); // older than the window
+    const [recent] = happened(1, 60, () => 500);
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/1 GitHub redeliveries requested, 1 log pages read$/);
+    expect(redelivered()).toEqual(idsOf([recent!]));
+  });
+
+  it("goes on from the page it reached when the gap exceeds a pass's pages, before the newer top", async () => {
+    const covered = new Date(START.getTime() - 20 * 3_600_000);
+    await server.app.db.insert(webhookDeliveryScan).values({ id: "app", coveredUntil: covered });
+    // 2 300 attempts since the covered point, the one failure on the 23rd page.
+    const guids = happened(2_300, 0, (i) => (i === 50 ? 500 : 200), 30);
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/0 GitHub redeliveries requested, 20 log pages read$/);
+    const stopped = await scan();
+    expect(stopped).toMatchObject({ coveredUntil: covered, resumeCursor: `d${log[2_000]!.id}`, resumeCeiling: START });
+
+    // The next pass: on from there, down to the floor, the failure found; the newer top is not read yet.
+    server.clock.advance(15 * 60_000);
+    happened(30, 0);
+    cursors = [];
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/1 GitHub redeliveries requested, 3 log pages read$/);
+    expect(cursors[0]).toBe(stopped!.resumeCursor);
+    expect(redelivered()).toEqual(idsOf([guids[50]!]));
+    expect(await scan()).toMatchObject({ coveredUntil: START, resumeCursor: null, resumeCeiling: null });
+
+    // And then the top, down to the first pass's start.
+    cursors = [];
+    gh.calls.length = 0;
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/0 GitHub redeliveries requested, 1 log pages read$/);
+    expect(cursors).toEqual([null]);
+  });
+
+  it("asks the rest of a capped pass next time, from the record, while the scan moves on", async () => {
+    happened(80, 0, (i) => (i < 60 ? 500 : 200));
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/50 GitHub redeliveries requested, 1 log pages read$/);
+    expect(await scan()).toMatchObject({ coveredUntil: START, resumeCursor: null });
+    await received(redelivered());
+
+    gh.calls.length = 0;
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/10 GitHub redeliveries requested, 1 log pages read$/);
+    expect(await scan()).toMatchObject({ coveredUntil: START });
+  });
+
+  it("stops on GitHub's rate limit at once and keeps its place", async () => {
+    await server.app.db.insert(webhookDeliveryScan).values({ id: "app", coveredUntil: new Date(START.getTime() - 5 * 3_600_000) });
+    happened(250, 0);
+    let reads = 0;
+    gh.routes = [
+      (url, init) =>
+        init.method === "GET" && url.pathname === "/app/hook/deliveries" && ++reads === 2
+          ? new Response(JSON.stringify({ message: "API rate limit exceeded" }), {
+              status: 403,
+              headers: { "content-type": "application/json", "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 3600) },
+            })
+          : undefined,
+      logRoute,
+    ];
+    const started = Date.now();
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/0 GitHub redeliveries requested, 1 log pages read, stopped on GitHub's rate limit$/);
+    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(await scan()).toMatchObject({ resumeCursor: `d${log[100]!.id}`, resumeCeiling: START });
+  });
+
+  it("never asks for a delivery the intake refused (a 413), and logs it once; a 401 is asked", async () => {
+    const [failed] = happened(1, 60, () => 401); // a secret rotated: it passes once both sides agree
+    const [refused] = happened(1, 30, () => 413);
+    const warned = vi.spyOn(server.app.log, "warn");
+    const refusals = () => warned.mock.calls.filter((c) => String(c[1]).includes("refused a delivery")).length;
+    try {
+      expect(await reconcileDeliveries(server.app, config)).toMatch(/1 GitHub redeliveries requested/);
+      expect(redelivered()).toEqual(idsOf([failed!]));
+      expect(refusals()).toBe(1);
+
+      // Read again from scratch: the refusal stays unasked, and unlogged.
+      await server.app.db.delete(webhookDeliveryScan);
+      server.clock.advance(15 * 60_000);
+      gh.calls.length = 0;
+      await reconcileDeliveries(server.app, config);
+      expect(redelivered()).not.toContain(idsOf([refused!])[0]);
+      expect(refusals()).toBe(1);
+    } finally {
+      warned.mockRestore();
+    }
+  });
+
+  it("keeps asking through an outage of the intake with a doubling wait, and recovers the delivery", async () => {
+    const [lost] = happened(1, 5, () => 502);
+    let down = true;
+    redeliveryStatus = () => (down ? 502 : 200);
+    const askedAt: number[] = [];
+    for (let minutes = 0; minutes <= 4 * 60; minutes += 15) {
+      if (minutes >= 3 * 60) down = false; // three hours down, twelve passes
+      gh.calls.length = 0;
+      await reconcileDeliveries(server.app, config);
+      if (redelivered().length > 0) askedAt.push(minutes);
+      if (log[0]!.guid === lost && log[0]!.status_code === 200 && (await storedOf(lost!)) === undefined) await received([log[0]!.id]);
+      server.clock.advance(15 * 60_000);
+    }
+    // Asked at once, then 15 min, 30 min, 1 h and 2 h apart: the last after the intake came back.
+    expect(askedAt).toEqual([0, 15, 45, 105, 225]);
+    expect(await storedOf(lost!)).toBeDefined();
+  });
+
+  it("bounds a delivery the intake keeps failing to about seven asks a day, and a real failure behind a flood is asked", async () => {
+    const poison = happened(60, 61, () => 500);
+    const [real] = happened(1, 30, () => 503);
+    redeliveryStatus = (guid) => (guid === real ? 200 : 500);
+    const asked = new Map<string, number>();
+    let realPass = 0;
+    for (let n = 1; n <= 96; n += 1) {
+      gh.calls.length = 0;
+      await reconcileDeliveries(server.app, config);
+      for (const g of redelivered().map(guidOf)) asked.set(g, (asked.get(g) ?? 0) + 1);
+      if (realPass === 0 && asked.has(real!)) {
+        realPass = n;
+        await received(idsOf([real!]));
+      }
+      server.clock.advance(15 * 60_000);
+    }
+    expect(realPass).toBeLessThanOrEqual(3);
+    expect(Math.max(...poison.map((g) => asked.get(g) ?? 0))).toBe(7);
+    expect(Math.min(...poison.map((g) => asked.get(g) ?? 0))).toBeGreaterThanOrEqual(6);
+  });
+
+  it("counts no ask for a redelivery request GitHub refuses, and backs it off on the same doubling", async () => {
+    const [failed] = happened(1, 60, () => 502);
+    happened(5, 0);
+    const failedId = idsOf([failed!])[0]!;
+    postAnswer = (id) => (id === failedId ? 422 : 202); // GitHub refuses the request itself
+    const requestedAt: number[] = [];
+    for (let minutes = 0; minutes <= 120; minutes += 15) {
+      if (minutes === 120) postAnswer = () => 202;
+      gh.calls.length = 0;
+      await reconcileDeliveries(server.app, config);
+      if (redelivered().includes(failedId)) requestedAt.push(minutes);
+      server.clock.advance(15 * 60_000);
+    }
+    // No ask counted while GitHub refused, but the same doubling wait: 0, 15, 45, then 105 and 225 min.
+    expect(requestedAt).toEqual([0, 15, 45, 105]);
+    expect(await asksOf(failed!)).toMatchObject({ asks: 0, lastAskedAt: null, failedRequests: 4 });
+  });
+
+  it("keeps a record whose guid is no UUID, and asks for it without failing the pass", async () => {
+    log = [{ id: nextId++, guid: "not-a-uuid", status_code: 502, redelivery: false, delivered_at: new Date(START.getTime() - 60_000).toISOString() }];
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/1 GitHub redeliveries requested, 1 log pages read$/);
+    expect(await asksOf("not-a-uuid")).toMatchObject({ asks: 1 });
+  });
+
+  it("drops a resume cursor GitHub no longer knows, or one left past the window, and reads the top", async () => {
+    happened(5, 0, (i) => (i === 0 ? 502 : 200));
+    await server.app.db.insert(webhookDeliveryScan).values({
+      id: "app",
+      coveredUntil: new Date(START.getTime() - 3_600_000),
+      resumeCursor: "dgone",
+      resumeCeiling: new Date(START.getTime() - 30 * 60_000),
+    });
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/0 log pages read$/);
+    expect(await scan()).toMatchObject({ resumeCursor: null, resumeCeiling: null });
+    cursors = [];
+    expect(await reconcileDeliveries(server.app, config)).toMatch(/1 GitHub redeliveries requested, 1 log pages read$/);
+    expect(cursors).toEqual([null]);
+
+    // A ceiling past the 24-hour window: its cursor is never read again.
+    await server.app.db
+      .update(webhookDeliveryScan)
+      .set({ coveredUntil: new Date(START.getTime() - 30 * 3_600_000), resumeCursor: `d${log[2]!.id}`, resumeCeiling: new Date(START.getTime() - 25 * 3_600_000) });
+    cursors = [];
+    await reconcileDeliveries(server.app, config);
+    expect(cursors[0]).toBeNull();
+  });
+});
+
+describe("the purge of the redelivery asks", () => {
+  it("forgets a failure's record three days after it, and keeps the recent ones", async () => {
+    const now = new Date("2026-11-25T00:00:00.000Z");
+    const [old, recent] = [randomUUID(), randomUUID()];
+    await server.app.db.insert(webhookRedeliveryAsks).values([
+      { guid: old, attemptId: 1, failedAt: new Date(now.getTime() - ASKS_RETENTION_MS - 60_000), asks: 3, nextAskAt: now, lastStatus: 500 },
+      { guid: recent, attemptId: 2, failedAt: new Date(now.getTime() - ASKS_RETENTION_MS + 60_000), asks: 1, nextAskAt: now, lastStatus: 0 },
+    ]);
+    expect(await purgeRedeliveryAsks(server.app.db, now)).toBeGreaterThanOrEqual(1);
+    const left = (await server.app.db.select().from(webhookRedeliveryAsks)).map((r) => r.guid);
+    expect(left).toContain(recent);
+    expect(left).not.toContain(old);
   });
 });
 
@@ -654,5 +984,89 @@ describe("the raw-body parser", () => {
     });
     expect(created.statusCode, created.body).toBe(201);
     expect(created.json()).toMatchObject({ name: "Parsed" });
+  });
+
+  it("refuses before reading its body a request that is no delivery of GitHub's", async () => {
+    /** A body that never ends: a request whose body were read would never be answered. */
+    const endless = (length: number, headers: Record<string, string>) =>
+      server.app.inject({ method: "POST", url: "/webhooks/github", headers: { "content-type": "application/json", "content-length": String(length), ...headers }, payload: new PassThrough() });
+    const signed = { "x-hub-signature-256": "sha256=00", "x-github-event": "push", "x-github-delivery": randomUUID() };
+    expect((await endless(20 * 1024 * 1024, { "x-github-event": "push" })).statusCode).toBe(401);
+    expect((await endless(20 * 1024 * 1024, { "x-hub-signature-256": "sha256=00" })).statusCode).toBe(400);
+    expect((await endless(WEBHOOK_BODY_LIMIT + 1, signed)).statusCode).toBe(413);
+    // A length that is no number.
+    const bad = await server.app.inject({ method: "POST", url: "/webhooks/github", headers: { "content-type": "application/json", ...signed, "content-length": "abc" }, payload: "{}" });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it("takes a body of no declared length as a large one, in a slot", async () => {
+    const id = randomUUID();
+    const body = JSON.stringify({ zen: "chunked" });
+    const chunked = new PassThrough();
+    const res = server.app.inject({
+      method: "POST",
+      url: "/webhooks/github",
+      headers: { "content-type": "application/json", "transfer-encoding": "chunked", "x-hub-signature-256": signBody(SECRET, body), "x-github-event": "test_ping", "x-github-delivery": id },
+      payload: chunked,
+    });
+    chunked.end(body);
+    expect((await res).statusCode).toBe(200);
+    await processed(id);
+  });
+
+  it("cuts off a stalled large body at its deadline, and its slot takes the next one", async () => {
+    webhookBodyDeadlineForTests(200);
+    try {
+      const LENGTH = 2 * 1024 * 1024;
+      const headers = () => ({ "content-type": "application/json", "content-length": String(LENGTH), "x-hub-signature-256": "sha256=00", "x-github-event": "push", "x-github-delivery": randomUUID() });
+      // Two senders that stall: both slots taken, never released by a response.
+      const stalled = [new PassThrough(), new PassThrough()];
+      for (const payload of stalled) void server.app.inject({ method: "POST", url: "/webhooks/github", headers: headers(), payload }).catch(() => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect((await server.app.inject({ method: "POST", url: "/webhooks/github", headers: headers(), payload: Buffer.alloc(LENGTH) })).statusCode).toBe(503);
+      // Past the deadline the stalled requests are cut off and their slots given back.
+      const id = randomUUID();
+      const started = Date.now();
+      await vi.waitFor(async () => expect((await deliver("test_ping", { blob: "z".repeat(LENGTH) }, { id })).statusCode).toBe(200), { timeout: 3_000, interval: 100 });
+      expect(Date.now() - started).toBeGreaterThanOrEqual(100);
+      await processed(id);
+    } finally {
+      webhookBodyDeadlineForTests(60_000);
+    }
+  });
+
+  it("reads two large bodies at once at most, and answers 503 to a third", async () => {
+    const LENGTH = 2 * 1024 * 1024;
+    const streams = [new PassThrough(), new PassThrough()];
+    const headers = () => ({ "content-type": "application/json", "content-length": String(LENGTH), "x-hub-signature-256": "sha256=00", "x-github-event": "push", "x-github-delivery": randomUUID() });
+    const reading = streams.map((payload) => server.app.inject({ method: "POST", url: "/webhooks/github", headers: headers(), payload }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const third = await server.app.inject({ method: "POST", url: "/webhooks/github", headers: headers(), payload: Buffer.alloc(LENGTH) });
+    expect(third.statusCode).toBe(503);
+    // The two complete their bodies (a wrong signature): their slots are given back.
+    for (const stream of streams) stream.end(Buffer.alloc(LENGTH));
+    expect((await Promise.all(reading)).map((r) => r.statusCode)).toEqual([401, 401]);
+    const id = randomUUID();
+    expect((await deliver("test_ping", { blob: "z".repeat(LENGTH) }, { id })).statusCode).toBe(200);
+    await processed(id);
+  });
+
+  it("takes a payload over Fastify's 1 MB default, up to GitHub's 25 MB cap, on the intake only", async () => {
+    const id = randomUUID();
+    const big = { commits: [{ message: "x".repeat(3 * 1024 * 1024) }] };
+    expect((await deliver("test_ping", big, { id })).statusCode).toBe(200);
+    await processed(id);
+    // Past GitHub's cap, refused as before.
+    const huge = await deliver("test_ping", { blob: "y".repeat(WEBHOOK_BODY_LIMIT) });
+    expect(huge.statusCode).toBe(413);
+    // Every other route keeps the default.
+    const teacher = await server.signIn("teacher");
+    const other = await server.app.inject({
+      method: "POST",
+      url: "/app/api/courses",
+      headers: { ...teacher.headers, "content-type": "application/json" },
+      payload: JSON.stringify({ name: "z".repeat(2 * 1024 * 1024), code: "BIG1" }),
+    });
+    expect(other.statusCode).toBe(413);
   });
 });

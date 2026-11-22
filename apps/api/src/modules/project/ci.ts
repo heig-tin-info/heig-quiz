@@ -39,7 +39,7 @@
  * from `passTarget` itself.
  *
  * **The intake** ({@link ingestRun}: the ONE entry of a completed run, from
- * the `workflow_run` webhook and the reconciliation's listing of a quiet
+ * the `workflow_run` webhook and the reconciliation's daily listing of a
  * repository's runs, ADR-011 — no poll of its own): a dispatched run of a
  * schema-3 project goes to {@link intakeGradedRun}, never to
  * `ingestCompletedRun` — it is no review and no score, and fills neither
@@ -72,7 +72,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, eq, exists, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { readResults, snapshotSettings } from "@quiz/contracts";
@@ -660,11 +660,41 @@ export async function purgeCiResults(db: Db, now: Date): Promise<number> {
   return purged.length;
 }
 
-/** A CI pass of the repository still open, over a `project_repos` row: the reconciliation keeps reading its runs. */
-export const ciPassOpen = (db: Db | Tx) =>
+/**
+ * A CI pass of the repository still open, over a `project_repos` row: the
+ * reconciliation keeps reading its runs. With `checkpoints` (ages after the
+ * dispatch GitHub accepted), only a pass that has crossed one of them since
+ * `reconcile.ci` last read it (`ci_checked_at`), up to `now`: its run is
+ * overdue, its webhook may be lost (ADR-011's addendum of 2026-11-22). A
+ * late or skipped pass of the task delays that read, never loses it, and
+ * several checkpoints crossed at once cost one read.
+ */
+export const ciPassOpen = (db: Db | Tx, due?: { now: Date; checkpointsMs: readonly number[] }) =>
   exists(
     db
       .select({ id: gradeDispatches.id })
       .from(gradeDispatches)
-      .where(and(eq(gradeDispatches.repoId, projectRepos.id), OPEN)),
+      .where(
+        and(
+          eq(gradeDispatches.repoId, projectRepos.id),
+          OPEN,
+          due === undefined
+            ? undefined
+            : or(
+                ...due.checkpointsMs.map((ms) => {
+                  const at = sql`${gradeDispatches.dispatchedAt} + make_interval(secs => ${ms / 1000})`;
+                  return sql`(${at} <= ${due.now.toISOString()}::timestamptz AND (${gradeDispatches.ciCheckedAt} IS NULL OR ${at} > ${gradeDispatches.ciCheckedAt}))`;
+                }),
+              ),
+        ),
+      ),
   );
+
+/** `reconcile.ci` read the runs of the repository: its open CI passes remember when (`ci_checked_at`). */
+export async function markCiChecked(db: Db, repoId: string, now: Date): Promise<void> {
+  await db.update(gradeDispatches).set({ ciCheckedAt: now }).where(and(eq(gradeDispatches.repoId, repoId), OPEN));
+}
+
+/** The oldest dispatch of the repository's open CI passes, over a `project_repos` row: `reconcile.ci` reads the oldest first. */
+export const oldestOpenCiDispatch = sql`(SELECT min(${gradeDispatches.dispatchedAt}) FROM ${gradeDispatches}
+  WHERE ${gradeDispatches.repoId} = ${projectRepos.id} AND ${gradeDispatches.nonce} IS NOT NULL AND ${gradeDispatches.closedAt} IS NULL)`;

@@ -509,7 +509,7 @@ export type AuditAction =
   | "project.closed_now"
   /**
    * One pass of a reconciliation (N-RES-08, ADR-011; merge task M3-06),
-   * subject the scheduled task (`reconcile.grades`, `reconcile.repos`), one
+   * subject the scheduled task (`reconcile.grades`, `reconcile.repos`, `reconcile.ci`), one
    * entry per pass that changed something or stopped: `payload.repos`
    * (read), `runsIngested`, `reinvited`, `accepted` (invitations found
    * accepted), `heads` (last commits moved), `renamed`, `deleted` (counts),

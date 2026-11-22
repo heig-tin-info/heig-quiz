@@ -4,11 +4,12 @@
  * fake GitHub (`github/testing.ts`) and the local bare repositories
  * (`./testing.ts`), the clock moved by hand:
  *
- * - `reconcile.grades`: the completed runs of a quiet repository through
- *   the webhook's own ingestion — once, whichever path saw the run first;
- *   a repository active within 30 minutes left alone; the scope — 24 hours
- *   after the freeze unless a final review is pending —; a 404 from the
- *   run listing is no deletion; a rate limit stops the pass at once;
+ * - `reconcile.grades`: the completed runs of a repository through the
+ *   webhook's own ingestion — once, whichever path saw the run first; a
+ *   repository active a moment ago read too; the scope — 24 hours after
+ *   the freeze unless a final review is pending, and never beyond 7 days
+ *   (ADR-011's addendum of 2026-11-22) —; a 404 from the run listing is no
+ *   deletion; a rate limit stops the pass at once;
  * - `reconcile.repos`: an invitation gone from GitHub re-invited once a
  *   day, by the claim on the grant, never once frozen, one still pending
  *   left alone, found accepted meanwhile; the
@@ -40,7 +41,7 @@ import {
 import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { SCHEDULED_TASKS } from "../system/catalog.js";
-import { reconcileGrades, reconcileRepos } from "./reconcile.js";
+import { CI_CHECKPOINTS_MS, CI_RUN_OVERDUE_MS, reconcileCi, reconcileGrades, reconcileRepos } from "./reconcile.js";
 import {
   APP_ENV,
   call,
@@ -228,24 +229,26 @@ beforeEach(async () => {
 });
 
 describe("the catalog", () => {
-  it("runs the grades every 15 minutes and the repositories daily, as scheduled tasks (D10)", () => {
+  it("runs the grades and the repositories daily, the deliveries and the overdue CI runs every 15 minutes, as scheduled tasks (D10, ADR-011 as amended 2026-11-22)", () => {
     const periods = Object.fromEntries(SCHEDULED_TASKS.map((t) => [t.key, t.defaultIntervalMinutes]));
-    expect(periods["reconcile.grades"]).toBe(15);
+    expect(periods["reconcile.grades"]).toBe(24 * 60);
     expect(periods["reconcile.repos"]).toBe(24 * 60);
+    expect(periods["reconcile.deliveries"]).toBe(15);
+    expect(periods["reconcile.ci"]).toBe(15);
   });
 });
 
 // ---------------------------------------------------------------- reconcile.grades
 
 describe("reconcile.grades", () => {
-  it("ingests the completed runs of a quiet repository through the one path, once, and audits the pass", async () => {
+  it("ingests the completed runs of a repository through the one path, once, and audits the pass", async () => {
     const { repos } = await project();
     const [repo] = repos;
     const sha = head(repo!);
     const first = list(repo!, sha);
     const second = list(repo!, sha, { conclusion: "failure" });
 
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 2 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 2 runs ingested");
     const runs = await runsOf(repo!);
     expect(runs.map((r) => r.workflowRunId).sort()).toEqual([first.id, second.id].sort());
     expect(runs.every((r) => r.parseStatus === "fallback" && r.kind === "ci" && !r.afterDeadline)).toBe(true);
@@ -257,7 +260,7 @@ describe("reconcile.grades", () => {
     const passes = (await auditOf("reconcile.grades", "project.reconciled")).length;
 
     // Again: nothing new to read, nothing written, no audit for a pass that changed nothing.
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect(await runsOf(repo!)).toHaveLength(2);
     expect(await auditOf("reconcile.grades", "project.reconciled")).toHaveLength(passes);
   });
@@ -267,7 +270,7 @@ describe("reconcile.grades", () => {
     const [repo] = repos;
     const sha = head(repo!);
     const run = list(repo!, sha);
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 1 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 1 runs ingested");
     const [row] = await runsOf(repo!);
     expect(row).toMatchObject({ workflowRunId: run.id, toVerify: false });
     expect((await repoRow(repo!.id)).currentGradeRunId).toBe(row!.id);
@@ -275,7 +278,7 @@ describe("reconcile.grades", () => {
     // The head turns out restored after the run was ingested: a row answering its push, the head alone.
     await server.app.db.insert(reverts).values({ id: randomUUID(), repoId: repo!.id, headSha: sha, files: [CI], branch: "main", createdAt: server.clock.now() });
     gh.calls.length = 0;
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect((await runsOf(repo!))[0]).toMatchObject({ toVerify: true });
     expect((await repoRow(repo!.id)).currentGradeRunId).toBeNull();
     expect(callsTo(/\/actions\/runs$/)).toHaveLength(1); // the listing, nothing more
@@ -315,11 +318,11 @@ describe("reconcile.grades", () => {
     });
     expect(await runsOf(repo!)).toHaveLength(1);
 
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect(await runsOf(repo!)).toHaveLength(1);
   });
 
-  it("leaves a repository alone while something happened to it within 30 minutes", async () => {
+  it("reads a repository active a moment ago too: a daily pass has no quiet rule", async () => {
     const { repos } = await project();
     const [repo] = repos;
     list(repo!, head(repo!));
@@ -328,15 +331,48 @@ describe("reconcile.grades", () => {
       githubRepoId: repo!.githubRepoId!,
       branch: "main",
       headSha: head(repo!),
-      receivedAt: at(NOW, -10 * MINUTE),
+      receivedAt: at(NOW, -MINUTE),
       isBot: false,
       forced: false,
     });
-    expect(await reconcileGrades(server.app, config)).toBe("0 quiet repositories checked, 0 runs ingested");
-    expect(await runsOf(repo!)).toHaveLength(0);
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 1 runs ingested");
+  });
 
-    server.clock.set(at(NOW, 21 * MINUTE).toISOString());
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 1 runs ingested");
+  it("gives up a final review asked and never answered 7 days after the freeze (ADR-011, 2026-11-22)", async () => {
+    const { repos } = await project({ students: 2 });
+    const [sixDays, eightDays] = repos;
+    for (const repo of repos) {
+      list(repo!, head(repo!));
+      await server.app.db.insert(gradeDispatches).values({ id: randomUUID(), repoId: repo!.id, trigger: "deadline", sha: head(repo!) });
+    }
+    await freeze(sixDays!, at(NOW, -6 * DAY));
+    await freeze(eightDays!, at(NOW, -8 * DAY));
+
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 1 runs ingested");
+    expect(await runsOf(sixDays!)).toHaveLength(1);
+    expect(await runsOf(eightDays!)).toHaveLength(0);
+    expect(callsTo(new RegExp(`${eightDays!.fullName}/actions/runs$`))).toHaveLength(0);
+    // reconcile.repos reads the same scope.
+    gh.calls.length = 0;
+    await reconcileRepos(server.app, config);
+    expect(gh.calls.some((c) => c.includes(`/repositories/${eightDays!.githubRepoId}`))).toBe(false);
+    expect(gh.calls.some((c) => c.includes(`/repositories/${sixDays!.githubRepoId}`))).toBe(true);
+  });
+
+  it("keeps a CI pass open past the 7 days: a Regrade weeks after the freeze is polled (ADR-132)", async () => {
+    const { repos } = await project({ students: 2 });
+    const [regraded, auto] = repos;
+    for (const repo of repos) list(repo!, head(repo!));
+    await freeze(regraded!, at(NOW, -30 * DAY));
+    await freeze(auto!, at(NOW, -8 * DAY));
+    // A Regrade's CI pass, open; and an auto project's final review asked long ago, never answered.
+    await server.app.db.insert(gradeDispatches).values([
+      { id: randomUUID(), repoId: regraded!.id, trigger: "regrade", sha: head(regraded!), nonce: randomUUID(), dispatchedAt: at(NOW, -HOUR) },
+      { id: randomUUID(), repoId: auto!.id, trigger: "deadline", sha: head(auto!) },
+    ]);
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 1 runs ingested");
+    expect(await runsOf(regraded!)).toHaveLength(1);
+    expect(await runsOf(auto!)).toHaveLength(0);
   });
 
   it("drops a repository a day after its definitive freeze, unless its final review was asked and not answered", async () => {
@@ -348,7 +384,7 @@ describe("reconcile.grades", () => {
     await freeze(pending!, at(NOW, -25 * HOUR));
     await server.app.db.insert(gradeDispatches).values({ id: randomUUID(), repoId: pending!.id, trigger: "deadline", sha: head(pending!) });
 
-    expect(await reconcileGrades(server.app, config)).toBe("2 quiet repositories checked, 2 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("2 repositories checked, 2 runs ingested");
     expect(await runsOf(recent!)).toHaveLength(1);
     expect(await runsOf(old!)).toHaveLength(0);
     expect(await runsOf(pending!)).toHaveLength(1);
@@ -358,7 +394,7 @@ describe("reconcile.grades", () => {
     const [answer] = await runsOf(pending!);
     await server.app.db.update(projectRepos).set({ reviewGradeRunId: answer!.id }).where(eq(projectRepos.id, pending!.id));
     list(pending!, head(pending!));
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect(await runsOf(pending!)).toHaveLength(1);
   });
 
@@ -369,7 +405,7 @@ describe("reconcile.grades", () => {
     list(repo!, head(repo!));
     await freeze(repo!, at(NOW, -25 * HOUR));
     await server.app.db.insert(gradeDispatches).values({ id: randomUUID(), repoId: repo!.id, trigger: "deadline", sha: head(repo!) });
-    expect(await reconcileGrades(server.app, config)).toBe("0 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("0 repositories checked, 0 runs ingested");
     expect(await runsOf(repo!)).toHaveLength(0);
   });
 
@@ -380,12 +416,12 @@ describe("reconcile.grades", () => {
     await server.app.db.update(projectRepos).set({ deletedAt: at(NOW) }).where(eq(projectRepos.id, gone!.id));
     runsFailing.set(kept!.fullName!, "404");
 
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect((await repoRow(kept!.id)).deletedAt).toBeNull();
     expect(await auditOf(kept!.id, "project_repo.deleted")).toHaveLength(0);
 
     await server.app.db.update(projects).set({ archivedAt: at(NOW) }).where(eq(projects.id, id));
-    expect(await reconcileGrades(server.app, config)).toBe("0 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("0 repositories checked, 0 runs ingested");
   });
 
   it("stops at once on GitHub's rate limit, keeps what it did, and says so", async () => {
@@ -398,7 +434,7 @@ describe("reconcile.grades", () => {
     runsFailing.delete(first!.fullName!);
 
     const started = Date.now();
-    expect(await reconcileGrades(server.app, config)).toBe("2 quiet repositories checked, 1 runs ingested, stopped on GitHub's rate limit");
+    expect(await reconcileGrades(server.app, config)).toBe("2 repositories checked, 1 runs ingested, stopped on GitHub's rate limit");
     // Octokit would otherwise wait for the reset, an hour away.
     expect(Date.now() - started).toBeLessThan(10_000);
     expect(await runsOf(first!)).toHaveLength(1);
@@ -408,7 +444,7 @@ describe("reconcile.grades", () => {
 
     // The next period resumes: the second repository's runs, and nothing twice.
     runsFailing.clear();
-    expect(await reconcileGrades(server.app, config)).toBe("2 quiet repositories checked, 1 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("2 repositories checked, 1 runs ingested");
     expect(await runsOf(second!)).toHaveLength(1);
   });
 
@@ -416,6 +452,78 @@ describe("reconcile.grades", () => {
     const off = loadConfig({ NODE_ENV: "test" });
     expect(await reconcileGrades(server.app, off)).toBe("GitHub App not configured");
     expect(await reconcileRepos(server.app, off)).toBe("GitHub App not configured; 0 evidence files purged; 0 CI results purged");
+  });
+});
+
+// ---------------------------------------------------------------- reconcile.ci
+
+describe("reconcile.ci (every 15 minutes, ADR-011 as amended 2026-11-22)", () => {
+  it("reads only the repositories whose CI pass waits for an overdue graded run, whatever the freeze's age", async () => {
+    const { repos } = await project({ students: 4 });
+    const [overdue, recent, settled, none] = repos;
+    for (const repo of repos) list(repo!, head(repo!));
+    await freeze(overdue!, at(NOW, -20 * DAY));
+    const pass = (repo: typeof overdue, over: Partial<typeof gradeDispatches.$inferInsert>) => ({
+      id: randomUUID(),
+      repoId: repo!.id,
+      trigger: "regrade" as const,
+      sha: head(repo!),
+      nonce: randomUUID(),
+      ...over,
+    });
+    await server.app.db.insert(gradeDispatches).values([
+      pass(overdue, { dispatchedAt: at(NOW, -CI_RUN_OVERDUE_MS - MINUTE) }),
+      pass(recent, { dispatchedAt: at(NOW, -10 * MINUTE) }),
+      pass(settled, { dispatchedAt: at(NOW, -2 * HOUR), closedAt: at(NOW, -HOUR) }),
+    ]);
+    expect(none).toBeDefined();
+    gh.calls.length = 0;
+    expect(await reconcileCi(server.app, config)).toBe("1 repositories awaiting a graded run checked, 1 runs ingested");
+    expect(await runsOf(overdue!)).toHaveLength(1);
+    for (const repo of [recent, settled, none]) expect(await runsOf(repo!)).toHaveLength(0);
+    expect(callsTo(/\/actions\/runs$/).every((c) => c.includes(overdue!.fullName!))).toBe(true);
+
+    // Nothing open and overdue: no GitHub call at all.
+    await server.app.db.update(gradeDispatches).set({ closedAt: at(NOW) }).where(eq(gradeDispatches.repoId, overdue!.id));
+    gh.calls.length = 0;
+    expect(await reconcileCi(server.app, config)).toBe("0 repositories awaiting a graded run checked, 0 runs ingested");
+    expect(gh.calls.filter((c) => !c.includes("/installation"))).toEqual([]);
+  });
+
+  it("reads a pass at its checkpoints only: 30 min, then 1, 2, 4, 8 and 16 h after its dispatch", async () => {
+    const { repos } = await project({ students: 1 });
+    const [repo] = repos;
+    await server.app.db
+      .insert(gradeDispatches)
+      .values({ id: randomUUID(), repoId: repo!.id, trigger: "regrade", sha: head(repo!), nonce: randomUUID(), dispatchedAt: at(NOW) });
+    const readAt: number[] = [];
+    for (let minutes = 0; minutes < 24 * 60; minutes += 15) {
+      server.clock.set(at(NOW, minutes * MINUTE).toISOString());
+      gh.calls.length = 0;
+      await reconcileCi(server.app, config);
+      if (callsTo(/\/actions\/runs$/).length > 0) readAt.push(minutes);
+    }
+    expect(readAt).toEqual(CI_CHECKPOINTS_MS.map((ms) => ms / MINUTE));
+    expect(readAt).toEqual([30, 60, 120, 240, 480, 960]);
+  });
+
+  it("never misses a checkpoint when the task is late or skips a run: it reads at its next run, once", async () => {
+    const { repos } = await project({ students: 1 });
+    const [repo] = repos;
+    await server.app.db
+      .insert(gradeDispatches)
+      .values({ id: randomUUID(), repoId: repo!.id, trigger: "regrade", sha: head(repo!), nonce: randomUUID(), dispatchedAt: at(NOW) });
+    // Runs at 0, 15, then none until 47 (30 skipped, 45 late), then 52, 61 and every 15 min from 76 (a lagging clock).
+    const runs = [0, 15, 47, 52, 61, ...Array.from({ length: 90 }, (_, i) => 76 + 15 * i)];
+    const readAt: number[] = [];
+    for (const minutes of runs) {
+      server.clock.set(at(NOW, minutes * MINUTE).toISOString());
+      gh.calls.length = 0;
+      await reconcileCi(server.app, config);
+      if (callsTo(/\/actions\/runs$/).length > 0) readAt.push(minutes);
+    }
+    // 30 min read at 47, 1 h at 61, then 2, 4, 8 and 16 h at the first run past them.
+    expect(readAt).toEqual([47, 61, 121, 241, 481, 961]);
   });
 });
 
@@ -738,7 +846,7 @@ describe("reconcile.repos: the repository itself", () => {
     const [repo] = repos;
     list(repo!, head(repo!));
     byId.set(repo!.githubRepoId!, "gone");
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect((await repoRow(repo!.id)).deletedAt).not.toBeNull();
     expect(await runsOf(repo!)).toHaveLength(0);
     expect(await lastPass("reconcile.grades")).toMatchObject({ deleted: 1 });

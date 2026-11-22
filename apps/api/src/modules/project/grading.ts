@@ -279,7 +279,7 @@ export async function refreshScoreSelection(
   if (lagging.length > 0) await db.update(projectGradeRuns).set({ toVerify: true }).where(inArray(projectGradeRuns.id, lagging));
   const selected = selectScoreRun(runs, restored);
   // Written only when a slot changes: `reconcile.grades` calls this for every
-  // quiet repository every quarter of an hour, and an unconditional write was
+  // repository in scope (every quarter of an hour until 2026-11-22, daily since), and an unconditional write was
   // ~19,000 updates a day of the same values (database remediation, Phase 2.1).
   const grace = sql`${projectRepos.deadlineAppliedAt} IS NOT NULL AND ${projectRepos.frozenAt} IS NULL`;
   await db

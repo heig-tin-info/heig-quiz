@@ -988,6 +988,13 @@ export const gradeDispatches = pgTable(
     /** The CI pass accepts no run any more: settled (its automatic rows written), or retired by a newer dispatch. */
     closedAt: timestamp("closed_at", { withTimezone: true }),
     /**
+     * When `reconcile.ci` last read the runs of an open CI pass's repository
+     * (ADR-011's addendum of 2026-11-22): it reads again once the pass's age
+     * has crossed another checkpoint since, so a late or skipped pass of the
+     * task delays a read, never loses it.
+     */
+    ciCheckedAt: timestamp("ci_checked_at", { withTimezone: true }),
+    /**
      * A v3 pass's graded commit (ADR-132 §2), on `refs/quiz-grade-<id>/graded`:
      * `sha` (the target) with the graded paths of `distribution_sha`; what
      * the dispatch sends and the LLM reads. Null: nothing was grafted (the

@@ -354,9 +354,11 @@ export const admin: Record<keyof typeof en, string> = {
   "admin.task.deliveries.purge.desc":
     "Cancella il contenuto degli eventi GitHub elaborati da più di 30 giorni e ne conserva la traccia.",
   "admin.task.reconcile.grades": "Esecuzioni dei progetti GitHub",
-  "admin.task.reconcile.grades.desc": "Legge le esecuzioni dei repository inattivi da 30 minuti e registra i punteggi che GitHub non ha annunciato.",
+  "admin.task.reconcile.grades.desc": "Legge ogni giorno le esecuzioni dei repository di progetto e registra i punteggi non annunciati da GitHub.",
   "admin.task.reconcile.repos": "Repository dei progetti GitHub",
   "admin.task.reconcile.repos.desc": "Segue i repository rinominati o eliminati e l'ultimo commit, e reinvita ogni giorno chi non ha accesso.",
+  "admin.task.reconcile.ci": "Esecuzioni valutate GitHub",
+  "admin.task.reconcile.ci.desc": "Legge ogni 15 minuti le esecuzioni dei repository che attendono ancora la loro esecuzione valutata.",
   "admin.task.llm.review": "Revisione IA delle domande",
   "admin.task.llm.review.desc": "Tra l'1 e le 6, rivede le domande delle banche che l'hanno chiesto, entro un quarto del limite IA del giorno.",
   "admin.task.llm.domain": "Dominio delle banche pubbliche",

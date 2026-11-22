@@ -252,7 +252,17 @@ On the server, in the checkout the application runs from:
 Then, as an administrator: *Administration → System status*, the GitHub
 App row (it turns OK after the first call to GitHub). The App's *Advanced*
 tab on GitHub lists the webhook deliveries and their answers (200
-expected; 401 means the webhook secrets differ).
+expected; 401 means the webhook secrets differ; 503 means two large
+deliveries were already being read, and the reconciliation asks for it
+again).
+
+The intake takes a payload up to GitHub's cap of 25 MB. It refuses a
+request without GitHub's signature and event headers before reading its
+body, reads at most two bodies over 1 MB at once, and cuts off one not
+received whole within 60 seconds (ADR-011's addendum of 2026-11-22). As a second line of defence, the operator may cap the body
+in Caddy on that path too, for instance
+`request_body /webhooks/github { max_size 25MB }`; no Caddy file of this
+repository sets it.
 
 This project's own environments follow
 [deployment §2 and §8](deployment.md#8-staging-quizdevchevallierio-adr-028)
@@ -299,7 +309,7 @@ copied project only if it belongs to that organization.
 - **Webhook secret**: set the new value on GitHub (*Webhook secret*) and in
   the environment's file at the same time, then restart `app`. Deliveries
   in between answer 401; `reconcile.deliveries` asks GitHub for them again
-  within a day.
+  within 15 minutes, then on a doubling wait for a day.
 - **Client secret**: *Generate a new client secret*, update
   `GITHUB_APP_CLIENT_SECRET`, restart, then delete the old one on GitHub.
   Only the account link uses it.
