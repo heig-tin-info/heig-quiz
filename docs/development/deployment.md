@@ -831,7 +831,11 @@ VM's SSH host keys, copied over, so `DEPLOY_HOST_KEY` did not change with the
 
 `DEPLOY_HOST` is `classroom.chevallier.io`: the name and its redirect
 fragment are kept for at least a year (the cutover runbook's §5 step 8), and it is still a CNAME to
-the application VM. Moving it to `portal.heig.chevallier.io` before the name
+the application VM. The fragment (`infra/caddy/classroom-redirect.caddy`,
+since 2026-11-21 a 308 to Quiz's home for every path a human clicks) is
+not deployed by CI: after a change to it is merged, the owner copies it to
+`/etc/caddy/conf.d/classroom.caddy` and reloads Caddy by hand, with the
+command in its header. Moving it to `portal.heig.chevallier.io` before the name
 goes means setting `DEPLOY_HOST` and re-scanning `DEPLOY_HOST_KEY` (the same
 host key).
 
@@ -973,7 +977,10 @@ image reads):
   `concept_tag_sortings` rows and drops five of their columns;
 - `0112_item_counting.sql`: drops `evaluation_items.bonus`;
 - `0145_project_member_access.sql`: drops
-  `project_repos.invitation_reinvited_at` (ADR-070, 2026-11-19).
+  `project_repos.invitation_reinvited_at` (ADR-070, 2026-11-19);
+- `0153_drop_import_classroom.sql`: drops the schema `import_classroom`
+  (`id_map` and `runs`), which an older image's legacy URL resolver reads
+  (2026-11-21).
 
 A rollback to an image older than any of them, or than any other migration
 that is not additive, needs that migration's pre-migration dump restored

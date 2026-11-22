@@ -76,7 +76,6 @@ Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP ha
 | `group` | A classroom's group sets, their groups and who is in which, formed by hand, at random or by the students (ADR-070) | |
 | `codespace` | What Quiz says to the online workspace portal (ADR-047, ADR-078): the signed project sync, the launch token, the git token relay | |
 | `kiosk` | The kiosk station registry (ADR-051): attestation, pairing, the station cookie | |
-| `legacy` | The resolver of heig-classroom's legacy URLs (merge task M8-02) | |
 | `assist` | The teacher assistant (ADR-080, F-LLM-07): a question answered by the gateway with read-only tools | |
 | `mcp` | The MCP server's tool catalogue and the in-process client of `/app/api` its tools call through | |
 | `changelog` | What's new on the platform (ADR-087): the entries shipped in the build and what each reader has acknowledged | |

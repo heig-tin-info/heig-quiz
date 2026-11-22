@@ -23,8 +23,11 @@ cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
   dropped. The breadcrumb app-wide is merged (#576). The import ran from
   the production image (#655, the runbook's O6); the projects and the
   import went live together (D26) at the cutover (D20). The importer was
-  removed on 2026-11-08 (product owner); the legacy URL resolver and the
-  login adoption stay.
+  removed on 2026-11-08 (product owner); the login adoption stays. The
+  legacy URL resolver was retired on 2026-11-21 (product owner:
+  heig-classroom migrated, old URLs no longer served; [database remediation
+  plan](../audits/2026-11-21-database-remediation.md) §6.4), and the schema
+  `import_classroom` dropped with it.
 - **Next actions**: **the cutover is done** (M8-07, Sunday 2026-10-11
   07:07–07:50 UTC, rehearsed on staging the day before: M8-06): classroom
   redirects to Quiz, its data is imported, its App no longer acts. The
@@ -212,7 +215,7 @@ In the critical path only if D09 finds online assignments in production.
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | M8-01 | Import script complete | done | schema tasks, D11 | `merge/M8-01a-import-frame` (a of a, b, c, d); `merge/M8-01d-import-journals`; `merge/M8-01b-import-projects` | #535 (a), #538 (d), #539 (b), #550 (c) | The classroom import (frame, journals, projects, groups), whose dry run on a production dump is M8-06's rehearsal: card M8-01, "As delivered (a)" to "(d)". |
-| M8-02 | Legacy URL resolver | done | M8-01, M3-12, M4-04 | `merge/M8-02-legacy-urls` | #547 | `GET /legacy/classroom/*` resolves the classroom's old URLs: card M8-02, "As delivered". |
+| M8-02 | Legacy URL resolver | done | M8-01, M3-12, M4-04 | `merge/M8-02-legacy-urls` | #547 | `GET /legacy/classroom/*` resolves the classroom's old URLs: card M8-02, "As delivered". Retired 2026-11-21 by the product owner (old URLs no longer served; database remediation plan §6.4): the route, `legacyRule` and the schema `import_classroom` are removed. |
 | M8-03 | Caddy fragments | done | — | `merge/M8-03-caddy-fragments` | #598 | `infra/caddy/` maintenance and redirect fragments with their curl matrix: card M8-03, "As delivered". |
 | M8-04 | Codespace identity remap | dropped | M6 in scope | | | Product owner, 2026-10-09: classroom's portal never served a real class, and it has been stopped and disabled since M6-04 (SQLite and volumes archived in `/root/classroom-codespace` on the engine VM); Quiz's portal started empty. Nothing to remap; runbook step C4 |
 | M8-05 | Cutover runbook | done | M8-01…03 | `merge/M8-05-cutover-runbook` | #653 | [`10-cutover-runbook.md`](10-cutover-runbook.md) replaces 06 §6.5 B–E and §6.7, and its finding O6 (the production image could not run the import) was fixed by #655: card M8-05, "As delivered". |

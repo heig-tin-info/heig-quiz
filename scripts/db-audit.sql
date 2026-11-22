@@ -120,11 +120,4 @@ UNION ALL SELECT 'adjustment', count(*) FILTER (WHERE grade_adjust_kind IS NOT N
 UNION ALL SELECT 'released snapshot', count(*) FILTER (WHERE released_points IS NOT NULL OR released_grade IS NOT NULL OR released_comment IS NOT NULL) FROM project_repos
 UNION ALL SELECT 'all rows', count(*) FROM project_repos;
 
-\echo == F15 the import_classroom schema (table | rows)
-SELECT c.relname AS "table",
-  (xpath('/row/n/text()', query_to_xml(format('SELECT count(*) AS n FROM import_classroom.%I', c.relname), false, true, '')))[1]::text AS n
-FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = 'import_classroom' AND c.relkind = 'r'
-ORDER BY 1;
-
 COMMIT;

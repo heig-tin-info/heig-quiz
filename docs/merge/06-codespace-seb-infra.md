@@ -240,6 +240,15 @@ route, `/legacy/classroom/*`, resolves old SPA paths through the preserved
 UUIDs and the import id map — the mapping lives in tested code, not in
 Caddy.
 
+*Amended 2026-11-21: the resolver is retired by the product owner:
+heig-classroom migrated, old URLs no longer served
+([database remediation plan](../audits/2026-11-21-database-remediation.md)
+§6.4). The import's id map is dropped (migration `0153`). The 410 rows
+below still hold; every other row, "via the resolver" or not, is now a 308
+to Quiz's home, without the path or the query: the fragment no longer sends
+anything to `/legacy/classroom/*`. That path now only redirects home (a
+302, `app.ts`), for the browsers that cached the fragment's earlier 308s.*
+
 | Old | Target | How |
 | --- | --- | --- |
 | `POST /webhooks/github` | — | 410: classroom's App is idle, Quiz's App has its own URL (D23) |
@@ -259,7 +268,11 @@ The fragment is `infra/caddy/classroom-redirect.caddy` (M8-03): Caddy
 answers the 410 rows (the avatar excepted) and sends every other path to
 `/legacy/classroom<path>`, which owns the rows; the query is dropped, the
 path's percent-encoding kept. `infra/caddy/check-classroom-redirects.sh`
-asserts each row's status and `Location`.
+asserts each row's status and `Location`. *Amended 2026-11-21: every other
+path goes to Quiz's home (`https://quiz.chevallier.io/`), with neither path
+nor query. The repository holds only a copy: after the merge the owner
+copies it to `/etc/caddy/conf.d` and reloads Caddy by hand, as the runbook's
+C6 does, then runs the check script against production.*
 
 ## 6.7 Rollback
 

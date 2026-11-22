@@ -204,7 +204,7 @@ API-side client of the runner (`http.ts`) and the stub that stands in for it
 The Drizzle schema is split by module under `apps/api/src/db/` (`assist.ts`,
 `auth.ts`, `changelog.ts`, `codespace.ts`, `concept.ts`, `drill.ts`,
 `evaluation.ts`, `github.ts`, `gradebook.ts`, `grading.ts`, `group.ts`,
-`importClassroom.ts`, `journal.ts`, `kiosk.ts`, `live.ts`, `llm.ts`,
+`journal.ts`, `kiosk.ts`, `live.ts`, `llm.ts`,
 `notifications.ts`, `org.ts`, `poll.ts`, `pool.ts`, `project.ts`,
 `review.ts`, `system.ts`) and re-exported by `db/schema.ts`; `columns.ts`
 holds shared column types and `client.ts` the connection. A table belongs to

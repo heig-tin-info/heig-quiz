@@ -6,7 +6,7 @@
 --   docker compose -f compose.prod.yml --env-file .env.prod exec -T postgres \
 --     psql -XAq -v ON_ERROR_STOP=1 -U quiz -d quiz < scripts/db-fingerprint.sql > fp-before.txt
 --
--- Per table of `public`, `drizzle` and `import_classroom`: its row count and
+-- Per table of `public` and `drizzle`: its row count and
 -- a digest of its content (the md5 of the sorted md5s of its rows, so the
 -- physical order does not matter). pg-boss's queue is left out: it changes
 -- every second. Then the totals a migration that MOVES data must keep: a
@@ -29,7 +29,7 @@ SELECT
       n.nspname, c.relname), false, true, '')))[1]::text AS digest
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE c.relkind IN ('r', 'p') AND n.nspname IN ('public', 'drizzle', 'import_classroom')
+WHERE c.relkind IN ('r', 'p') AND n.nspname IN ('public', 'drizzle')
 ORDER BY 1;
 
 \echo == totals that must survive a migration

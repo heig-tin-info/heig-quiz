@@ -38,7 +38,6 @@ export * from "./gradebook.js";
 export * from "./llm.js";
 export * from "./assist.js";
 export * from "./codespace.js";
-export * from "./legacy.js";
 export * from "./concept.js";
 export * from "./conceptProposals.js";
 export * from "./changelog.js";

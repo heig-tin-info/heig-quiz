@@ -290,9 +290,12 @@ delivered card.
 - [M8-01](history/09-tasks-delivered.md#m8-01-import-script-complete): the follow-ups of the code
   review of #550, not blocking (group stops, member placement, `addedAt`,
   `repoMembers` batching, among others); relevant to the M8-06 rehearsal.
-- [M8-02](history/09-tasks-delivered.md#m8-02-legacy-url-resolver): not done, the HMAC-honouring of
-  an old unsubscribe link and an absolute `Location`; the non-blocking
-  follow-ups of the code review of #547.
+- [M8-02](history/09-tasks-delivered.md#m8-02-legacy-url-resolver): none any more: the resolver was
+  retired on 2026-11-21 (product owner: heig-classroom migrated, old URLs no
+  longer served; [database remediation plan](../audits/2026-11-21-database-remediation.md)
+  §6.4), so its follow-ups (the HMAC-honouring of an old unsubscribe link,
+  an absolute `Location`, the non-blocking ones of the code review of #547)
+  are dropped.
 
 ## L — After the merge
 

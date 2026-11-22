@@ -25,7 +25,7 @@ done
 [[ $# -eq 1 ]] || usage
 base="${1%/}"
 
-legacy=https://quiz.chevallier.io/legacy/classroom
+home=https://quiz.chevallier.io/
 cid=0b6f6c1e-3c1a-4c2e-9d6a-1f2e3d4c5b6a
 aid=7a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 uid=3f2e1d0c-9b8a-4c7d-8e6f-5a4b3c2d1e0f
@@ -65,20 +65,20 @@ for path in /webhooks/github /app/api/me /app/api/classrooms/$cid \
 done
 check POST /webhooks/github 410 "location=" "content-type=application/json"
 
-# Everything else: to the resolver, the path as sent, percent-encoding kept.
+# Everything else: to Quiz's home, the path dropped.
 for path in / /classrooms/$cid /classrooms/$cid/assignments/$aid \
   /classrooms/$cid/assignments/$aid/groups /classrooms/$cid/journal \
   /classrooms/$cid/journal/week-01/lab.md "/classrooms/$cid/journal/a%20b%2Fc%3Fd.md" \
   /app/codespace/start/$aid /app/api/users/$uid/avatar \
   /app/auth/github/callback /app/auth/login /app/email/unsub /setup/github/installed \
   /settings /admin /admin/users /classrooms /unknown; do
-  check GET "$path" 308 "location=$legacy$path"
+  check GET "$path" 308 "location=$home"
 done
 
 # The query never reaches Quiz.
-check GET "/app/auth/github/callback?code=c0de&state=s7" 308 "location=$legacy/app/auth/github/callback"
-check GET "/app/email/unsub?t=t0ken" 308 "location=$legacy/app/email/unsub"
-check GET "/classrooms/$cid?tab=journal" 308 "location=$legacy/classrooms/$cid"
+check GET "/app/auth/github/callback?code=c0de&state=s7" 308 "location=$home"
+check GET "/app/email/unsub?t=t0ken" 308 "location=$home"
+check GET "/classrooms/$cid?tab=journal" 308 "location=$home"
 
 if [[ $failures -gt 0 ]]; then
   echo "$failures mismatch(es)" >&2
