@@ -1,5 +1,5 @@
 {
-  "id": "47761cce-bd68-4db3-8b6e-5a6575bc9a55",
+  "id": "c97a8023-9461-45a3-931c-654bbaff1c64",
   "prevId": "9b6e1feb-4467-45ce-89b0-8bf5fdc76a15",
   "version": "7",
   "dialect": "postgresql",
@@ -8614,8 +8614,14 @@
           "primaryKey": true,
           "notNull": true
         },
-        "first_asked_at": {
-          "name": "first_asked_at",
+        "attempt_id": {
+          "name": "attempt_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "failed_at": {
+          "name": "failed_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
@@ -8623,6 +8629,18 @@
         "asks": {
           "name": "asks",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_asked_at": {
+          "name": "last_asked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "next_ask_at": {
+          "name": "next_ask_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
@@ -8639,7 +8657,24 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "webhook_redelivery_asks_due_idx": {
+          "name": "webhook_redelivery_asks_due_idx",
+          "columns": [
+            {
+              "expression": "failed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"webhook_redelivery_asks\".\"refused_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

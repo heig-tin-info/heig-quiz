@@ -31,11 +31,11 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, asc, eq, inArray, isNotNull, isNull, lt, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, lte, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { GithubWebhookBody } from "@quiz/contracts";
-import { attemptVerdict, mayAskAgain, type CommitAuthor, type RedeliveryAsks } from "@quiz/domain";
+import { attemptVerdict, nextAskAt, REDELIVERY_WINDOW_MS, type CommitAuthor } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
@@ -374,8 +374,7 @@ export async function dispatchDelivery(
 export const REPLAY_AFTER_MS = 30 * 60_000;
 /** At most this many replayed per run: the next run takes the rest. */
 const MAX_REPLAYS = 200;
-/** GitHub's failed attempts younger than this are asked again, at most {@link MAX_REDELIVERIES} per pass. */
-export const REDELIVERY_WINDOW_MS = 24 * 3_600_000;
+/** At most this many redeliveries asked per pass, the oldest failures first; the next pass asks the rest. */
 export const MAX_REDELIVERIES = 50;
 /**
  * Pages of GitHub's delivery log (100 attempts each) one pass reads at most:
@@ -422,36 +421,6 @@ const refusedRequest = (err: unknown): boolean => {
   return status !== undefined && status >= 400 && status < 500;
 };
 
-/**
- * A delivery's newest attempt found refused (a 4xx: `attemptVerdict`): it is
- * never asked for, and logged once, when its row first records the refusal.
- */
-async function recordRefusal(app: FastifyInstance, attempt: HookDelivery, now: Date): Promise<void> {
-  const [recorded] = await app.db
-    .insert(webhookRedeliveryAsks)
-    .values({ guid: attempt.guid, firstAskedAt: now, asks: 0, lastStatus: attempt.statusCode, refusedAt: now })
-    .onConflictDoUpdate({
-      target: webhookRedeliveryAsks.guid,
-      set: { lastStatus: attempt.statusCode, refusedAt: now },
-      setWhere: isNull(webhookRedeliveryAsks.refusedAt),
-    })
-    .returning({ guid: webhookRedeliveryAsks.guid });
-  if (recorded) {
-    app.log.warn({ guid: attempt.guid, status: attempt.statusCode }, "reconcile.deliveries: the intake refused a delivery; it is not asked for again");
-  }
-}
-
-/** One ask of a delivery counted (`mayAskAgain` reads the count): the first sets the start of its day. */
-async function recordAsk(db: Db, attempt: HookDelivery, now: Date): Promise<void> {
-  await db
-    .insert(webhookRedeliveryAsks)
-    .values({ guid: attempt.guid, firstAskedAt: now, asks: 1, lastStatus: attempt.statusCode })
-    .onConflictDoUpdate({
-      target: webhookRedeliveryAsks.guid,
-      set: { asks: sql`${webhookRedeliveryAsks.asks} + 1`, lastStatus: attempt.statusCode },
-    });
-}
-
 /** The newest attempt of each delivery in the stretch read, and how the read ended. */
 interface Stretch {
   newest: Map<string, HookDelivery>;
@@ -485,30 +454,101 @@ async function readStretch(config: AppConfig, cursor: string | null, floor: numb
   return stretch;
 }
 
+/** The deliveries Quiz holds among `guids`: one of their attempts got through. */
+async function storedOf(db: Db, guids: string[]): Promise<Set<string>> {
+  if (guids.length === 0) return new Set();
+  const rows = await db.select({ id: webhookDeliveries.deliveryId }).from(webhookDeliveries).where(inArray(webhookDeliveries.deliveryId, guids));
+  return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * The failures of a stretch recorded in `webhook_redelivery_asks`, from each
+ * delivery's NEWEST attempt in it (`attemptVerdict`): a delivery Quiz holds
+ * or GitHub delivered is left alone; a refusal is marked, never asked, and
+ * logged once; any other failure is recorded once, due at once, and a later
+ * attempt's status is kept on it.
+ */
+async function recordFailures(app: FastifyInstance, newest: Iterable<HookDelivery>, now: Date): Promise<void> {
+  const failed = [...newest].filter((d) => attemptVerdict(d.statusCode) !== "delivered");
+  const stored = await storedOf(app.db, failed.map((d) => d.guid));
+  for (const d of failed) {
+    if (stored.has(d.guid)) continue;
+    const refused = attemptVerdict(d.statusCode) === "refused";
+    const [row] = await app.db
+      .insert(webhookRedeliveryAsks)
+      .values({ guid: d.guid, attemptId: d.id, failedAt: d.deliveredAt, asks: 0, nextAskAt: now, lastStatus: d.statusCode, refusedAt: refused ? now : null })
+      .onConflictDoUpdate({
+        target: webhookRedeliveryAsks.guid,
+        set: { lastStatus: d.statusCode, ...(refused ? { refusedAt: now } : {}) },
+        // A refusal already recorded is final; its row is left as it is.
+        setWhere: isNull(webhookRedeliveryAsks.refusedAt),
+      })
+      .returning({ refusedAt: webhookRedeliveryAsks.refusedAt });
+    if (refused && row?.refusedAt?.getTime() === now.getTime()) {
+      app.log.warn({ guid: d.guid, status: d.statusCode }, "reconcile.deliveries: the intake refused a delivery; it is not asked for again");
+    }
+  }
+}
+
+/**
+ * Asks GitHub to deliver again the recorded failures that are due —
+ * `next_ask_at` come, within 24 hours of the failure, never refused, and not
+ * stored by Quiz meanwhile — OLDEST FAILURE FIRST, at most
+ * {@link MAX_REDELIVERIES}. An ask GitHub accepts counts and sets the next
+ * (`nextAskAt`: a doubling wait); one GitHub fails counts nothing, and the
+ * delivery stays due; a rate limit stops the asks.
+ */
+async function askDue(app: FastifyInstance, config: AppConfig, now: Date, result: LogPass): Promise<void> {
+  const due = await app.db
+    .select({ guid: webhookRedeliveryAsks.guid, attemptId: webhookRedeliveryAsks.attemptId, asks: webhookRedeliveryAsks.asks })
+    .from(webhookRedeliveryAsks)
+    .where(
+      and(
+        isNull(webhookRedeliveryAsks.refusedAt),
+        gt(webhookRedeliveryAsks.failedAt, new Date(now.getTime() - REDELIVERY_WINDOW_MS)),
+        lte(webhookRedeliveryAsks.nextAskAt, now),
+        notExists(app.db.select({ id: webhookDeliveries.deliveryId }).from(webhookDeliveries).where(eq(webhookDeliveries.deliveryId, webhookRedeliveryAsks.guid))),
+      ),
+    )
+    .orderBy(asc(webhookRedeliveryAsks.failedAt))
+    .limit(MAX_REDELIVERIES);
+  for (const { guid, attemptId, asks } of due) {
+    try {
+      await redeliverHookDelivery(config, attemptId);
+    } catch (err) {
+      if (rateLimited(err)) {
+        result.stoppedOnRateLimit = true;
+        return;
+      }
+      app.log.warn({ guid, error: redactedError(err) }, "reconcile.deliveries: a redelivery request failed; asked again next pass");
+      continue;
+    }
+    result.redelivered += 1;
+    await app.db
+      .update(webhookRedeliveryAsks)
+      .set({ asks: asks + 1, lastAskedAt: now, nextAskAt: nextAskAt(asks + 1, now) })
+      .where(eq(webhookRedeliveryAsks.guid, guid));
+  }
+}
+
 /**
  * The deliveries GitHub failed to hand over (GH-62), read INCREMENTALLY from
  * its log of the App's attempts (ADR-011's addendum of 2026-11-22): newest
  * first, one page of 100 at a time, down to the point the previous passes
  * covered less {@link LOG_OVERLAP_MS}, and never below the 24-hour
  * redelivery window — so a pass costs the pages of the deliveries made since
- * the last one, not 24 hours of them.
+ * the last one, not 24 hours of them. The failures read are recorded
+ * ({@link recordFailures}); then the recorded failures due are asked again
+ * ({@link askDue}): the asks are driven by the record, not by the log, so
+ * the scan's covered point may move past a delivery still waiting for its
+ * next ask.
  *
- * Each delivery's NEWEST attempt in that stretch decides (`attemptVerdict`):
- * delivered, or stored by Quiz meanwhile, nothing to do; refused (a 4xx),
- * never asked for, logged once; else (no answer, a 429, a 5xx) asked again
- * while `mayAskAgain` holds — three asks within a day of the first, so a
- * delivery the intake keeps failing cannot spend every pass's cap. The asks
- * go OLDEST FIRST, the deliveries closest to leaving the window, at most
- * {@link MAX_REDELIVERIES} a pass.
- *
- * Where the pass stops is kept (`webhook_delivery_scan`). Having read down
- * to the floor and asked all it found, everything up to its start is covered
- * — or up to the oldest ask that failed, so the next pass asks it again. Its
- * {@link MAX_LOG_PAGES} pages read first, the next pass goes on from the page
- * it reached (GitHub's own cursor), down to the same floor, before it reads
- * the newer top. Its asks cut short (the cap, a rate limit), the next pass
- * reads the same stretch again. A resume cursor GitHub no longer knows, or
- * one left past the window, is dropped: the top is read instead.
+ * Where the scan stops is kept (`webhook_delivery_scan`). Having read down
+ * to the floor, everything up to its start is covered. Its
+ * {@link MAX_LOG_PAGES} pages read first (or a rate limit met), the next pass
+ * goes on from the page it reached (GitHub's own cursor), down to the same
+ * floor, before it reads the newer top. A resume cursor GitHub no longer
+ * knows, or one left past the window, is dropped: the top is read instead.
  */
 async function redeliverFailures(app: FastifyInstance, config: AppConfig, now: number): Promise<LogPass> {
   const stored = await readScan(app.db);
@@ -516,74 +556,19 @@ async function redeliverFailures(app: FastifyInstance, config: AppConfig, now: n
   const scan = stale ? { ...stored, resumeCursor: null, resumeCeiling: null } : stored;
   const floor = Math.max(now - REDELIVERY_WINDOW_MS, (scan.coveredUntil?.getTime() ?? 0) - LOG_OVERLAP_MS);
   const ceiling = scan.resumeCeiling ?? new Date(now);
-  /** The next pass reads from `cursor` again (null: the top, nothing to keep), down to the same floor. */
+  /** The next pass reads from `cursor` (null: the top), down to the same floor. */
   const resumeAt = (cursor: string | null) =>
     saveScan(app.db, { coveredUntil: scan.coveredUntil, resumeCursor: cursor, resumeCeiling: cursor === null ? null : ceiling });
 
   const stretch = await readStretch(config, scan.resumeCursor, floor);
   const result: LogPass = { pages: stretch.pages, redelivered: 0, stoppedOnRateLimit: stretch.failure === "rate_limit" };
+  await recordFailures(app, stretch.newest.values(), new Date(now));
   if (stretch.failure === "stale_cursor") {
     app.log.warn("reconcile.deliveries: GitHub no longer knows the resume cursor; the top is read next");
     await resumeAt(null);
-    return result;
-  }
-
-  const failed = [...stretch.newest.values()].filter((d) => attemptVerdict(d.statusCode) !== "delivered");
-  const guids = failed.map((d) => d.guid);
-  const [held, asked] =
-    guids.length === 0
-      ? [new Set<string>(), new Map<string, RedeliveryAsks>()]
-      : await Promise.all([
-          app.db
-            .select({ deliveryId: webhookDeliveries.deliveryId })
-            .from(webhookDeliveries)
-            .where(inArray(webhookDeliveries.deliveryId, guids))
-            .then((rows) => new Set(rows.map((r) => r.deliveryId))),
-          app.db
-            .select()
-            .from(webhookRedeliveryAsks)
-            .where(inArray(webhookRedeliveryAsks.guid, guids))
-            .then((rows) => new Map(rows.map((r) => [r.guid, r]))),
-        ]);
-  const due: HookDelivery[] = [];
-  for (const d of failed) {
-    if (held.has(d.guid)) continue;
-    if (attemptVerdict(d.statusCode) === "refused") await recordRefusal(app, d, new Date(now));
-    else if (mayAskAgain(asked.get(d.guid), new Date(now))) due.push(d);
-  }
-  due.sort((a, b) => a.deliveredAt.getTime() - b.deliveredAt.getTime());
-
-  let tries = 0;
-  let cutShort = false;
-  /** The oldest delivery whose ask GitHub failed: the covered point stays below it. */
-  let failedAsk: number | null = null;
-  for (const d of due) {
-    if (tries === MAX_REDELIVERIES) {
-      cutShort = true;
-      break;
-    }
-    tries += 1;
-    try {
-      await redeliverHookDelivery(config, d.id);
-      result.redelivered += 1;
-    } catch (err) {
-      if (rateLimited(err)) {
-        result.stoppedOnRateLimit = true;
-        cutShort = true;
-        break;
-      }
-      app.log.warn({ guid: d.guid, error: redactedError(err) }, "reconcile.deliveries: a redelivery failed");
-      failedAsk = Math.min(failedAsk ?? Infinity, d.deliveredAt.getTime());
-    }
-    await recordAsk(app.db, d, new Date(now));
-  }
-
-  if (cutShort || (!stretch.reached && failedAsk !== null)) await resumeAt(scan.resumeCursor);
-  else if (!stretch.reached) await resumeAt(stretch.next);
-  else {
-    const covered = failedAsk === null ? ceiling : new Date(Math.min(ceiling.getTime(), failedAsk));
-    await saveScan(app.db, { coveredUntil: covered, resumeCursor: null, resumeCeiling: null });
-  }
+  } else if (!stretch.reached) await resumeAt(stretch.next);
+  else await saveScan(app.db, { coveredUntil: ceiling, resumeCursor: null, resumeCeiling: null });
+  if (!result.stoppedOnRateLimit) await askDue(app, config, new Date(now), result);
   return result;
 }
 
@@ -652,14 +637,14 @@ export async function purgeDeliveryPayloads(db: Db, now: Date): Promise<number> 
   return purged.length;
 }
 
-/** A delivery's asks are kept this long after the first: its last redelivery has left the 24-hour window by then. */
+/** A failure's record is kept this long: its asks end 24 hours after it, and its last redelivery has left GitHub's log window by then. */
 export const ASKS_RETENTION_MS = 3 * 24 * 3_600_000;
 
 /** `deliveries.purge`, second step: the asks of deliveries past any window (`webhook_redelivery_asks`). */
 export async function purgeRedeliveryAsks(db: Db, now: Date): Promise<number> {
   const purged = await db
     .delete(webhookRedeliveryAsks)
-    .where(lt(webhookRedeliveryAsks.firstAskedAt, new Date(now.getTime() - ASKS_RETENTION_MS)))
+    .where(lt(webhookRedeliveryAsks.failedAt, new Date(now.getTime() - ASKS_RETENTION_MS)))
     .returning({ guid: webhookRedeliveryAsks.guid });
   return purged.length;
 }

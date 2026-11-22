@@ -41,7 +41,7 @@ import {
 import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { SCHEDULED_TASKS } from "../system/catalog.js";
-import { CI_RUN_OVERDUE_MS, reconcileCi, reconcileGrades, reconcileRepos } from "./reconcile.js";
+import { CI_CHECKPOINTS_MS, CI_RUN_OVERDUE_MS, reconcileCi, reconcileGrades, reconcileRepos } from "./reconcile.js";
 import {
   APP_ENV,
   call,
@@ -488,6 +488,23 @@ describe("reconcile.ci (every 15 minutes, ADR-011 as amended 2026-11-22)", () =>
     gh.calls.length = 0;
     expect(await reconcileCi(server.app, config)).toBe("0 repositories awaiting a graded run checked, 0 runs ingested");
     expect(gh.calls.filter((c) => !c.includes("/installation"))).toEqual([]);
+  });
+
+  it("reads a pass at its checkpoints only: 30 min, then 1, 2, 4, 8 and 16 h after its dispatch", async () => {
+    const { repos } = await project({ students: 1 });
+    const [repo] = repos;
+    await server.app.db
+      .insert(gradeDispatches)
+      .values({ id: randomUUID(), repoId: repo!.id, trigger: "regrade", sha: head(repo!), nonce: randomUUID(), dispatchedAt: at(NOW) });
+    const readAt: number[] = [];
+    for (let minutes = 0; minutes < 24 * 60; minutes += 15) {
+      server.clock.set(at(NOW, minutes * MINUTE).toISOString());
+      gh.calls.length = 0;
+      await reconcileCi(server.app, config);
+      if (callsTo(/\/actions\/runs$/).length > 0) readAt.push(minutes);
+    }
+    expect(readAt).toEqual(CI_CHECKPOINTS_MS.map((ms) => ms / MINUTE));
+    expect(readAt).toEqual([30, 60, 120, 240, 480, 960]);
   });
 });
 

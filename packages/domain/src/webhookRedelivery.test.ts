@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { attemptVerdict, mayAskAgain, REDELIVERY_ASK_WINDOW_MS, REDELIVERY_MAX_ASKS } from "./webhookRedelivery.js";
+import { attemptVerdict, nextAskAt, REDELIVERY_BACKOFF_MS, REDELIVERY_SLACK_MS, REDELIVERY_WINDOW_MS } from "./webhookRedelivery.js";
 
 const NOW = new Date("2026-11-22T12:00:00.000Z");
-const ago = (ms: number) => new Date(NOW.getTime() - ms);
+const MINUTE = 60_000;
 
 describe("attemptVerdict", () => {
   it("reads a 2xx as delivered", () => {
@@ -11,35 +11,33 @@ describe("attemptVerdict", () => {
     expect(attemptVerdict(204)).toBe("delivered");
   });
 
-  it("retries no answer, an overload and a server failure", () => {
-    expect(attemptVerdict(0)).toBe("retry");
-    expect(attemptVerdict(429)).toBe("retry");
-    expect(attemptVerdict(500)).toBe("retry");
-    expect(attemptVerdict(502)).toBe("retry");
-    expect(attemptVerdict(504)).toBe("retry");
+  it("refuses only a payload too large or unprocessable", () => {
+    expect(attemptVerdict(413)).toBe("refused");
+    expect(attemptVerdict(422)).toBe("refused");
   });
 
-  it("takes any other answer as a refusal, never asked again", () => {
-    expect(attemptVerdict(400)).toBe("refused");
-    expect(attemptVerdict(401)).toBe("refused");
-    expect(attemptVerdict(413)).toBe("refused");
-    expect(attemptVerdict(302)).toBe("refused");
+  it("retries everything else: no answer, a server failure, and the 4xx a deploy or a secret rotation answers", () => {
+    for (const status of [0, 400, 401, 403, 404, 408, 429, 500, 502, 503, 504, 302]) expect(attemptVerdict(status)).toBe("retry");
   });
 });
 
-describe("mayAskAgain", () => {
-  it("asks a delivery never asked", () => {
-    expect(mayAskAgain(undefined, NOW)).toBe(true);
+describe("nextAskAt", () => {
+  it("waits 15 minutes after the first ask, then doubles, less a minute of slack", () => {
+    const wait = (asks: number) => (nextAskAt(asks, NOW).getTime() - NOW.getTime() + REDELIVERY_SLACK_MS) / MINUTE;
+    expect([1, 2, 3, 4, 5, 6, 7].map(wait)).toEqual([15, 30, 60, 120, 240, 480, 960]);
+    expect(nextAskAt(0, NOW).getTime()).toBe(NOW.getTime() + REDELIVERY_BACKOFF_MS - REDELIVERY_SLACK_MS);
   });
 
-  it("asks again under three asks within a day of the first", () => {
-    expect(mayAskAgain({ asks: 1, firstAskedAt: ago(15 * 60_000), refusedAt: null }, NOW)).toBe(true);
-    expect(mayAskAgain({ asks: REDELIVERY_MAX_ASKS - 1, firstAskedAt: ago(REDELIVERY_ASK_WINDOW_MS - 1), refusedAt: null }, NOW)).toBe(true);
-  });
-
-  it("stops at three asks, a day after the first, or once refused", () => {
-    expect(mayAskAgain({ asks: REDELIVERY_MAX_ASKS, firstAskedAt: ago(60_000), refusedAt: null }, NOW)).toBe(false);
-    expect(mayAskAgain({ asks: 1, firstAskedAt: ago(REDELIVERY_ASK_WINDOW_MS), refusedAt: null }, NOW)).toBe(false);
-    expect(mayAskAgain({ asks: 0, firstAskedAt: ago(60_000), refusedAt: ago(60_000) }, NOW)).toBe(false);
+  it("asks about seven times within the window, the last some 16 hours after the first", () => {
+    let at = NOW;
+    let asks = 1;
+    while (true) {
+      const next = nextAskAt(asks, at);
+      if (next.getTime() - NOW.getTime() >= REDELIVERY_WINDOW_MS) break;
+      at = next;
+      asks += 1;
+    }
+    expect(asks).toBe(7);
+    expect((at.getTime() - NOW.getTime()) / 3_600_000).toBeGreaterThan(15);
   });
 });

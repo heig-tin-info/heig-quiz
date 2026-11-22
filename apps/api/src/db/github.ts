@@ -189,15 +189,15 @@ export const webhookDeliveries = pgTable(
 /**
  * How far `reconcile.deliveries` has read GitHub's log of the App's
  * deliveries (ADR-011's addendum of 2026-11-22): one row, `id = 'app'`,
- * written by the pass alone. Every attempt older than `covered_until` was
- * handled — redelivered, found stored, or a success — so the next pass reads
- * the log, newest first, only down to it (less a safety overlap), never 24
- * hours of it. A pass that stopped before reaching it (its page budget, its
- * redelivery cap, a rate limit) keeps GitHub's opaque pagination cursor of
- * the page to read next (`resume_cursor`) and the top of the stretch it was
- * reading (`resume_ceiling`, the pass's start); the next pass goes on from
- * there, and `covered_until` becomes that ceiling once it reaches the floor.
- * No row: nothing read yet, the floor is the 24-hour redelivery window.
+ * written by the pass alone. Every failed attempt older than `covered_until`
+ * was recorded in `webhook_redelivery_asks`, so the next pass reads the log,
+ * newest first, only down to it (less a safety overlap), never 24 hours of
+ * it. A pass whose pages ran out (or met a rate limit) before it keeps
+ * GitHub's opaque pagination cursor of the page to read next
+ * (`resume_cursor`) and the top of the stretch it was reading
+ * (`resume_ceiling`, the pass's start); the next pass goes on from there, and
+ * `covered_until` becomes that ceiling once it reaches the floor. No row:
+ * nothing read yet, the floor is the 24-hour redelivery window.
  */
 export const webhookDeliveryScan = pgTable(
   "webhook_delivery_scan",
@@ -214,23 +214,41 @@ export const webhookDeliveryScan = pgTable(
 );
 
 /**
- * What `reconcile.deliveries` asked GitHub to deliver again, per delivery
- * (`X-GitHub-Delivery`, the same for all its attempts): how many times, since
- * when, and whether an attempt was found refused (ADR-011's addendum of
- * 2026-11-22; the rules are `mayAskAgain` and `attemptVerdict` of
- * `@quiz/domain`). It bounds a delivery the intake keeps failing to three
- * asks within a day, and a refusal (a 4xx) to none, logged once. Purged by
- * `deliveries.purge` once past any window.
+ * The deliveries GitHub failed to hand over, as `reconcile.deliveries` found
+ * them in GitHub's log, one row per delivery (`X-GitHub-Delivery`, the same
+ * for all its attempts), and its asks to deliver them again (ADR-011's
+ * addendum of 2026-11-22; the rules are `attemptVerdict` and `nextAskAt` of
+ * `@quiz/domain`). The scan records a failure here once; the asks are driven
+ * from here, oldest failure first, each when `next_ask_at` has come (a
+ * doubling wait), while Quiz has not stored the delivery and within 24 hours
+ * of `failed_at`. A refusal (a 413, a 422) is never asked, logged once.
+ * Purged by `deliveries.purge` three days after the failure.
  */
-export const webhookRedeliveryAsks = pgTable("webhook_redelivery_asks", {
-  guid: uuid("guid").primaryKey(),
-  firstAskedAt: timestamp("first_asked_at", { withTimezone: true }).notNull(),
-  asks: integer("asks").notNull(),
-  /** The status of the attempt last looked at (0: no answer). */
-  lastStatus: integer("last_status").notNull(),
-  /** When an attempt was found refused: never asked again. */
-  refusedAt: timestamp("refused_at", { withTimezone: true }),
-});
+export const webhookRedeliveryAsks = pgTable(
+  "webhook_redelivery_asks",
+  {
+    guid: uuid("guid").primaryKey(),
+    /** The failed attempt a redelivery names (GitHub accepts any attempt of the delivery). */
+    attemptId: bigint("attempt_id", { mode: "number" }).notNull(),
+    /** When the first failed attempt seen was made, on GitHub's clock: the 24-hour window and the order. */
+    failedAt: timestamp("failed_at", { withTimezone: true }).notNull(),
+    /** Asks GitHub accepted (a redelivery request it failed counts none). */
+    asks: integer("asks").notNull(),
+    lastAskedAt: timestamp("last_asked_at", { withTimezone: true }),
+    /** When the delivery may be asked next: at once on its record, then after each ask a doubling wait. */
+    nextAskAt: timestamp("next_ask_at", { withTimezone: true }).notNull(),
+    /** The status of the newest attempt the scan saw (0: no answer). */
+    lastStatus: integer("last_status").notNull(),
+    /** When an attempt was found refused: never asked again. */
+    refusedAt: timestamp("refused_at", { withTimezone: true }),
+  },
+  (t) => [
+    // The asks due, oldest failure first.
+    index("webhook_redelivery_asks_due_idx")
+      .on(t.failedAt)
+      .where(sql`${t.refusedAt} IS NULL`),
+  ],
+);
 
 /**
  * The server's receipt of a push (heig-classroom ADR-012, Quiz's ADR-012

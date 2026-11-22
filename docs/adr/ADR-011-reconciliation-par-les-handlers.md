@@ -37,7 +37,7 @@ the collaborators and the invitations once per repository.
 cadences) and the addendum of 2026-10-05's point 1 (the scope and the quiet
 rule). See [the addendum of that day](#addendum-2026-11-22-the-cost-follows-activity):
 `reconcile.deliveries` every 15 minutes, reading GitHub's log
-incrementally, each delivery asked three times at most; `reconcile.grades`
+incrementally, each failure asked again on a doubling wait within a day; `reconcile.grades`
 daily, with no quiet rule, and `reconcile.ci` every 15 minutes for the CI
 passes awaiting their run; an unanswered final review polled 7 days after
 the freeze at most.
@@ -180,42 +180,56 @@ with that product. The cost now follows events.
    GitHub's own `cursor`). A pass reads down to the point the previous
    passes covered, less 5 minutes of overlap (GitHub's clock against the
    server's, an attempt listed after it was made), and never below the
-   24-hour redelivery window; at most 20 pages and 50 redeliveries a pass,
-   as before for the redeliveries. Where it stops is kept
-   (`webhook_delivery_scan`, one row): having read down to that floor and
-   asked all it found, the pass covered everything up to its start — or up
-   to the oldest delivery whose redelivery request GitHub failed (a 5xx, a
-   timeout), so the next pass asks it again. Its pages spent first, the
-   next pass goes on from the page it reached, down to the same floor,
-   before it reads the newer top. Its asks cut short (the cap, a rate
-   limit), the next pass reads the same stretch again. A resume cursor
-   GitHub no longer knows (a 4xx), or one whose stretch has left the
-   window, is dropped and the top read instead, so the scan cannot stick.
-   The `status=failure` filter of the endpoint is not used: it selects
-   the codes 400 to 599 and so would miss an attempt with no HTTP answer
-   (the intake unreachable), the very loss this task exists for. The log
-   is read with the App's JWT, which spends no installation's quota;
-   GitHub documents no figure for it, so every call of the pass answers a
-   rate limit at once and the pass stops, keeping its place (point 5 of
-   the addendum of 2026-10-05, now applied to this task too). A pass costs
-   one page per 100 deliveries made since the previous one.
+   24-hour redelivery window, at most 20 pages; every failure it reads is
+   RECORDED (`webhook_redelivery_asks`, point 1b), so the covered point may
+   move past a delivery still waiting for its next ask. Where the scan
+   stops is kept (`webhook_delivery_scan`, one row): having read down to
+   that floor, the pass covered everything up to its start; its pages
+   spent first (or a rate limit met), the next pass goes on from the page
+   it reached, down to the same floor, before it reads the newer top. A
+   resume cursor GitHub no longer knows (a 4xx), or one whose stretch has
+   left the window, is dropped and the top read instead, so the scan
+   cannot stick. The `status=failure` filter of the endpoint is not used:
+   it selects the codes 400 to 599 and so would miss an attempt with no
+   HTTP answer (the intake unreachable), the very loss this task exists
+   for. The log is read with the App's JWT, which spends no installation's
+   quota; GitHub documents no figure for it, so every call of the pass
+   answers a rate limit at once and the pass stops, keeping its place
+   (point 5 of the addendum of 2026-10-05, now applied to this task too). A
+   pass costs one page per 100 deliveries made since the previous one.
 
-   1b. **What is asked, and how often** (`attemptVerdict`, `mayAskAgain`
-   of `@quiz/domain`; `webhook_redelivery_asks`). Each delivery's NEWEST
+   1b. **What is asked, and when** (`attemptVerdict`, `nextAskAt` of
+   `@quiz/domain`; `webhook_redelivery_asks`). Each delivery's NEWEST
    attempt in the stretch read decides. Delivered, or stored by Quiz
-   meanwhile: nothing to do. No answer, a 429 or a 5xx: asked again — a
-   redelivery that failed in turn included (until now a redelivery was
-   never asked again; with an advancing cursor its original lies below the
-   covered point by then) — at most three times, within a day of the first
-   ask. Any other answer, a 4xx, is a refusal: the same bytes would be
-   refused again, so the delivery is never asked for, logged once. The
-   asks of one pass go OLDEST FIRST, the deliveries closest to leaving the
-   window, so a delivery the intake keeps failing costs three asks and
-   cannot starve a real failure behind it. The asks are purged three days
-   after the first, with the payloads (`deliveries.purge`). The intake's
-   body limit is GitHub's own cap on a payload, 25 MB, on that route only:
-   at Fastify's 1 MB default a push over 1 MB was refused 413, its receipt
-   lost for good.
+   meanwhile: nothing to do. A 413 (too large) or a 422 (unprocessable) is
+   a refusal: the same bytes would be refused again, so the delivery is
+   never asked for, logged once. Anything else — no answer, a 5xx, a 429,
+   and also a 401 after the webhook secret was rotated, a 404, 403 or 408
+   from the proxy during a deploy, a 400 — is recorded once and asked
+   again, a redelivery that failed in turn included (until now a
+   redelivery was never asked again). The asks are driven by the record,
+   not by the log: up to 50 a pass, OLDEST FAILURE FIRST (the deliveries
+   closest to leaving the window), each when its wait has passed — at once,
+   then 15 minutes after the first ask, and twice as long after each
+   (30 minutes, 1 h, 2 h, 4 h, 8 h), a minute of slack off each wait —
+   within 24 hours of the failure. That is about seven asks a day: a
+   delivery the intake keeps failing stays bounded, and an outage of the
+   intake of up to about 15 hours is still recovered. Only an ask GitHub
+   accepts counts and starts the next wait; a redelivery request GitHub
+   fails (a 5xx, a timeout) counts nothing and stays due for the next pass.
+   A record is purged three days after its failure (`deliveries.purge`).
+
+   1c. **The intake takes what GitHub may send, safely.** The body limit
+   is GitHub's own cap on a payload, 25 MB, on that route only: at
+   Fastify's 1 MB default a push over 1 MB was refused 413, its receipt
+   lost for good. Since the body is buffered whole for the HMAC on a public
+   route, an `onRequest` hook refuses before any byte of the body is read
+   a request without a signature header (401) or an event header (400),
+   without a `content-length` (411) or with one over the cap (413); and at
+   most two bodies over 1 MB are read at once in a process, another being
+   answered 503 — a failure GitHub logs and point 1b asks again. A
+   `request_body max_size` on the route in Caddy is a second line the
+   operator may add (`docs/development/github-app.md`).
 2. **`reconcile.grades` daily**, a last resort: the webhooks carry the runs,
    and the 15-minute `reconcile.deliveries` asks again for those GitHub
    failed to hand over. The QUIET rule (no push nor run for 30 minutes) is
@@ -228,11 +242,16 @@ with that product. The cost now follows events.
    project's CI pass (ADR-119 §6) settles `no_result` 24 hours after its
    dispatch; a lost `workflow_run` left to the daily pass would race that
    end and cost the student every automatic criterion. This task reads,
-   through the same `ingestRuns`, the repositories whose pass is open and
-   whose dispatch GitHub accepted more than 30 minutes ago: nothing outside
-   a grading, a lost run caught within about 45 minutes. The 24-hour sweep
-   itself makes no GitHub call (it runs in the ticker's tick, invariant 5),
-   so it does not read the runs once more before it settles.
+   through the same `ingestRuns`, the repositories whose pass is open, at
+   CHECKPOINTS of the pass's age: 30 minutes after the dispatch GitHub
+   accepted, then 1, 2, 4, 8 and 16 hours, each for one period of the task —
+   read by the age, so no state is kept, and a slow Actions queue costs six
+   reads a pass rather than one every 15 minutes. At most 100 repositories a
+   pass, the oldest dispatch first: they share the installation's quota
+   with the dispatches. Nothing is read outside a grading; a lost run is
+   caught within about 45 minutes. The 24-hour sweep itself makes no GitHub
+   call (it runs in the ticker's tick, invariant 5), so it does not read
+   the runs once more before it settles.
 4. **The exception of an `auto` project's final review asked and
    unanswered ends 7 days after the freeze** (`RECONCILE_REVIEW_WAIT_MS`,
    `reconciles` of `@quiz/domain`). A schema-3 CI pass open keeps its

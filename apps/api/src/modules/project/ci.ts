@@ -72,7 +72,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, eq, exists, inArray, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm";
+import { and, eq, exists, gt, inArray, isNotNull, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { readResults, snapshotSettings } from "@quiz/contracts";
@@ -662,11 +662,12 @@ export async function purgeCiResults(db: Db, now: Date): Promise<number> {
 
 /**
  * A CI pass of the repository still open, over a `project_repos` row: the
- * reconciliation keeps reading its runs. With `dispatchedBefore`, only a pass
- * GitHub accepted the dispatch of by then: its run is overdue, its webhook
- * may be lost (`reconcile.ci`, ADR-011's addendum of 2026-11-22).
+ * reconciliation keeps reading its runs. With `dispatchedIn`, only a pass
+ * whose dispatch GitHub accepted within one of these spans `(from, to]`: its
+ * run is overdue, its webhook may be lost (`reconcile.ci`, ADR-011's
+ * addendum of 2026-11-22).
  */
-export const ciPassOpen = (db: Db | Tx, dispatchedBefore?: Date) =>
+export const ciPassOpen = (db: Db | Tx, dispatchedIn?: readonly (readonly [Date, Date])[]) =>
   exists(
     db
       .select({ id: gradeDispatches.id })
@@ -675,7 +676,13 @@ export const ciPassOpen = (db: Db | Tx, dispatchedBefore?: Date) =>
         and(
           eq(gradeDispatches.repoId, projectRepos.id),
           OPEN,
-          dispatchedBefore === undefined ? undefined : lte(gradeDispatches.dispatchedAt, dispatchedBefore),
+          dispatchedIn === undefined
+            ? undefined
+            : or(...dispatchedIn.map(([from, to]) => and(gt(gradeDispatches.dispatchedAt, from), lte(gradeDispatches.dispatchedAt, to)))),
         ),
       ),
   );
+
+/** The oldest dispatch of the repository's open CI passes, over a `project_repos` row: `reconcile.ci` reads the oldest first. */
+export const oldestOpenCiDispatch = sql`(SELECT min(${gradeDispatches.dispatchedAt}) FROM ${gradeDispatches}
+  WHERE ${gradeDispatches.repoId} = ${projectRepos.id} AND ${gradeDispatches.nonce} IS NOT NULL AND ${gradeDispatches.closedAt} IS NULL)`;
