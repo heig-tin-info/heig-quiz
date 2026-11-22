@@ -227,7 +227,8 @@ export const webhookDeliveryScan = pgTable(
 export const webhookRedeliveryAsks = pgTable(
   "webhook_redelivery_asks",
   {
-    guid: uuid("guid").primaryKey(),
+    /** GitHub's delivery guid, as text: one that is not a UUID is kept, never the cause of a failing pass. */
+    guid: text("guid").primaryKey(),
     /** The failed attempt a redelivery names (GitHub accepts any attempt of the delivery). */
     attemptId: bigint("attempt_id", { mode: "number" }).notNull(),
     /** When the first failed attempt seen was made, on GitHub's clock: the 24-hour window and the order. */
@@ -237,6 +238,8 @@ export const webhookRedeliveryAsks = pgTable(
     lastAskedAt: timestamp("last_asked_at", { withTimezone: true }),
     /** When the delivery may be asked next: at once on its record, then after each ask a doubling wait. */
     nextAskAt: timestamp("next_ask_at", { withTimezone: true }).notNull(),
+    /** Redelivery requests GitHub refused or failed in a row: each pushes `next_ask_at` back on the same doubling, none counts as an ask. */
+    failedRequests: integer("failed_requests").notNull().default(0),
     /** The status of the newest attempt the scan saw (0: no answer). */
     lastStatus: integer("last_status").notNull(),
     /** When an attempt was found refused: never asked again. */

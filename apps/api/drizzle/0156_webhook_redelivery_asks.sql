@@ -1,10 +1,11 @@
 CREATE TABLE "webhook_redelivery_asks" (
-	"guid" uuid PRIMARY KEY NOT NULL,
+	"guid" text PRIMARY KEY NOT NULL,
 	"attempt_id" bigint NOT NULL,
 	"failed_at" timestamp with time zone NOT NULL,
 	"asks" integer NOT NULL,
 	"last_asked_at" timestamp with time zone,
 	"next_ask_at" timestamp with time zone NOT NULL,
+	"failed_requests" integer DEFAULT 0 NOT NULL,
 	"last_status" integer NOT NULL,
 	"refused_at" timestamp with time zone
 );

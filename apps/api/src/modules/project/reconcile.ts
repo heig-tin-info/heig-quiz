@@ -70,7 +70,7 @@ import { protectStudentRepo } from "../../github/provision.js";
 import type { ScheduledTask } from "../../ticker.js";
 import { pushedBy } from "../github/service.js";
 import { followInvitation, installationClients, inviteAccount, notRecorded } from "./access.js";
-import { ciPassOpen, ingestRun, oldestOpenCiDispatch, purgeCiResults } from "./ci.js";
+import { ciPassOpen, ingestRun, markCiChecked, oldestOpenCiDispatch, purgeCiResults } from "./ci.js";
 import { LIVE } from "./deadline.js";
 import { purgeEvidenceFiles } from "./evidence.js";
 import { ProjectError } from "./errors.js";
@@ -95,8 +95,6 @@ export const REINVITE_INTERVAL_MS = 24 * 3_600_000;
 export const CI_RUN_OVERDUE_MS = 30 * 60_000;
 /** The ages of an open CI pass at which `reconcile.ci` reads its runs: overdue, then doubling, all before its 24-hour end. */
 export const CI_CHECKPOINTS_MS = [CI_RUN_OVERDUE_MS, ...[1, 2, 4, 8, 16].map((h) => h * 3_600_000)];
-/** How long each checkpoint lasts: the task's period, so a pass every 15 minutes reads a repository once per checkpoint. */
-export const CI_CHECK_SPAN_MS = 15 * 60_000;
 /** Repositories `reconcile.ci` reads per pass at most. */
 export const MAX_CI_REPOS = 100;
 
@@ -154,21 +152,21 @@ async function candidates(db: Db, now: Date): Promise<Candidate[]> {
 }
 
 /**
- * The live repositories with a CI pass open whose dispatch is at one of its
- * CHECKPOINTS (`reconcile.ci`): {@link CI_RUN_OVERDUE_MS} after it, then 1,
- * 2, 4, 8 and 16 hours, each for one period of the task
- * ({@link CI_CHECK_SPAN_MS}) — its graded run overdue, its `workflow_run`
+ * The live repositories with a CI pass open that crossed one of its
+ * CHECKPOINTS since `reconcile.ci` last read it (`ciPassOpen` with
+ * checkpoints): {@link CI_RUN_OVERDUE_MS} after the dispatch GitHub accepted,
+ * then 1, 2, 4, 8 and 16 hours — its graded run overdue, its `workflow_run`
  * webhook perhaps lost, before the pass settles `no_result` 24 hours after
- * its dispatch (`RESULT_WAIT_MS`). Read by the pass's age, so no state: a
- * slow Actions queue costs six reads a pass, not one every 15 minutes. At
- * most {@link MAX_CI_REPOS} a pass, the oldest dispatch first: they share
- * the installation's quota with the dispatches. Whatever the freeze's age.
+ * its dispatch (`RESULT_WAIT_MS`). A slow Actions queue costs six reads a
+ * pass, not one every 15 minutes; a late or skipped run of the task delays a
+ * read, never loses it. At most {@link MAX_CI_REPOS} a pass, the oldest
+ * dispatch first: they share the installation's quota with the dispatches.
+ * Whatever the freeze's age.
  */
 async function overdueCiCandidates(db: Db, now: Date): Promise<Candidate[]> {
-  const spans = CI_CHECKPOINTS_MS.map((age) => [new Date(now.getTime() - age - CI_CHECK_SPAN_MS), new Date(now.getTime() - age)] as const);
   return repoWithProject(db, { courseId: classrooms.courseId })
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
-    .where(and(LIVE, ciPassOpen(db, spans)))
+    .where(and(LIVE, ciPassOpen(db, { now, checkpointsMs: CI_CHECKPOINTS_MS })))
     .orderBy(asc(oldestOpenCiDispatch), asc(projectRepos.id))
     .limit(MAX_CI_REPOS);
 }
@@ -295,7 +293,11 @@ export function reconcileGrades(app: FastifyInstance, config: AppConfig): Promis
  * grading.
  */
 export function reconcileCi(app: FastifyInstance, config: AppConfig): Promise<string> {
-  return pass(app, config, "reconcile.ci", overdueCiCandidates, ingestRuns, (repos, c) => `${repos} repositories awaiting a graded run checked, ${c.runsIngested} runs ingested`);
+  const readAndMark = async (step: Step) => {
+    await ingestRuns(step);
+    await markCiChecked(step.app.db, step.ctx.repo.id, step.now);
+  };
+  return pass(app, config, "reconcile.ci", overdueCiCandidates, readAndMark, (repos, c) => `${repos} repositories awaiting a graded run checked, ${c.runsIngested} runs ingested`);
 }
 
 // ---------------------------------------------------------------- reconcile.repos

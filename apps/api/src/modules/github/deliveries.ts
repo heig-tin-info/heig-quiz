@@ -456,10 +456,17 @@ async function readStretch(config: AppConfig, cursor: string | null, floor: numb
 
 /** The deliveries Quiz holds among `guids`: one of their attempts got through. */
 async function storedOf(db: Db, guids: string[]): Promise<Set<string>> {
-  if (guids.length === 0) return new Set();
-  const rows = await db.select({ id: webhookDeliveries.deliveryId }).from(webhookDeliveries).where(inArray(webhookDeliveries.deliveryId, guids));
+  // A guid that is no UUID was never stored: the intake keys deliveries by UUID (and refuses any other).
+  const uuids = guids.filter((g) => UUID.test(g));
+  if (uuids.length === 0) return new Set();
+  const rows = await db.select({ id: webhookDeliveries.deliveryId }).from(webhookDeliveries).where(inArray(webhookDeliveries.deliveryId, uuids));
   return new Set(rows.map((r) => r.id));
 }
+
+/** A delivery guid as the intake keys it. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A record's guid as a UUID, or null when it is none: compared with the intake's keys, never cast blindly. */
+const recordUuid = sql`(CASE WHEN ${webhookRedeliveryAsks.guid} ~* ${UUID.source} THEN ${webhookRedeliveryAsks.guid}::uuid END)`;
 
 /**
  * The failures of a stretch recorded in `webhook_redelivery_asks`, from each
@@ -495,24 +502,30 @@ async function recordFailures(app: FastifyInstance, newest: Iterable<HookDeliver
  * `next_ask_at` come, within 24 hours of the failure, never refused, and not
  * stored by Quiz meanwhile — OLDEST FAILURE FIRST, at most
  * {@link MAX_REDELIVERIES}. An ask GitHub accepts counts and sets the next
- * (`nextAskAt`: a doubling wait); one GitHub fails counts nothing, and the
- * delivery stays due; a rate limit stops the asks.
+ * (`nextAskAt`: a doubling wait); one GitHub refuses or fails counts no ask
+ * but waits on the same doubling (`failed_requests`); a rate limit stops the
+ * asks.
  */
 async function askDue(app: FastifyInstance, config: AppConfig, now: Date, result: LogPass): Promise<void> {
   const due = await app.db
-    .select({ guid: webhookRedeliveryAsks.guid, attemptId: webhookRedeliveryAsks.attemptId, asks: webhookRedeliveryAsks.asks })
+    .select({
+      guid: webhookRedeliveryAsks.guid,
+      attemptId: webhookRedeliveryAsks.attemptId,
+      asks: webhookRedeliveryAsks.asks,
+      failedRequests: webhookRedeliveryAsks.failedRequests,
+    })
     .from(webhookRedeliveryAsks)
     .where(
       and(
         isNull(webhookRedeliveryAsks.refusedAt),
         gt(webhookRedeliveryAsks.failedAt, new Date(now.getTime() - REDELIVERY_WINDOW_MS)),
         lte(webhookRedeliveryAsks.nextAskAt, now),
-        notExists(app.db.select({ id: webhookDeliveries.deliveryId }).from(webhookDeliveries).where(eq(webhookDeliveries.deliveryId, webhookRedeliveryAsks.guid))),
+        notExists(app.db.select({ id: webhookDeliveries.deliveryId }).from(webhookDeliveries).where(eq(webhookDeliveries.deliveryId, recordUuid))),
       ),
     )
     .orderBy(asc(webhookRedeliveryAsks.failedAt))
     .limit(MAX_REDELIVERIES);
-  for (const { guid, attemptId, asks } of due) {
+  for (const { guid, attemptId, asks, failedRequests } of due) {
     try {
       await redeliverHookDelivery(config, attemptId);
     } catch (err) {
@@ -520,13 +533,19 @@ async function askDue(app: FastifyInstance, config: AppConfig, now: Date, result
         result.stoppedOnRateLimit = true;
         return;
       }
-      app.log.warn({ guid, error: redactedError(err) }, "reconcile.deliveries: a redelivery request failed; asked again next pass");
+      // GitHub refused or failed the request: no ask counted, but the same doubling wait, so requests
+      // it refuses for good cannot fill every pass's cap for a day.
+      app.log.warn({ guid, error: redactedError(err) }, "reconcile.deliveries: a redelivery request failed; asked again later");
+      await app.db
+        .update(webhookRedeliveryAsks)
+        .set({ failedRequests: failedRequests + 1, nextAskAt: nextAskAt(failedRequests + 1, now) })
+        .where(eq(webhookRedeliveryAsks.guid, guid));
       continue;
     }
     result.redelivered += 1;
     await app.db
       .update(webhookRedeliveryAsks)
-      .set({ asks: asks + 1, lastAskedAt: now, nextAskAt: nextAskAt(asks + 1, now) })
+      .set({ asks: asks + 1, lastAskedAt: now, nextAskAt: nextAskAt(asks + 1, now), failedRequests: 0 })
       .where(eq(webhookRedeliveryAsks.guid, guid));
   }
 }

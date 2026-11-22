@@ -217,30 +217,50 @@ export const WEBHOOK_LARGE_BODY = 1024 * 1024;
 /** ...and at most this many large bodies are read at once in a process; another is answered 503, which GitHub's redelivery takes. */
 export const WEBHOOK_LARGE_IN_FLIGHT = 2;
 
+/** A large body not read whole this long after its admission is cut off, its slot given back. */
+let largeBodyDeadlineMs = 60_000;
+
+/** Test seam: a shorter deadline for a stalled large body; never in production. */
+export function webhookBodyDeadlineForTests(ms: number): void {
+  if (process.env.NODE_ENV === "production") throw new Error("webhookBodyDeadlineForTests: never in production");
+  largeBodyDeadlineMs = ms;
+}
+
 /**
  * The admission of a delivery BEFORE its body is read (`onRequest`): the
  * body is buffered whole for the HMAC, on a public route, so whatever is not
  * a delivery of GitHub's is refused first — no signature header (401), no
- * event header (400), no `content-length` (411) or one over GitHub's cap
- * (413) — and a large body waits for a free slot or is answered 503. The
- * slot is given back once the response is sent or the client gone.
+ * event header (400), a `content-length` that is no length (400) or one over
+ * GitHub's cap (413). A large body — over 1 MB, or of no declared length
+ * (chunked: Fastify's `bodyLimit` still cuts it at 25 MB as it streams) —
+ * takes one of {@link WEBHOOK_LARGE_IN_FLIGHT} slots, or is answered 503
+ * when none is free. A slot is given back once the response is sent or the
+ * client gone; a body not read whole {@link largeBodyDeadlineMs} after its
+ * admission is cut off (the request destroyed), so a stalled sender cannot
+ * hold a slot. All of it scoped to this route: the server's own timeouts
+ * are left as they are.
  */
 function admitDelivery(): onRequestHookHandler {
   let large = 0;
   return (req, reply, done) => {
-    const length = Number(req.headers["content-length"]);
     if (typeof req.headers["x-hub-signature-256"] !== "string") return void reply.code(401).send({ error: "bad_signature" });
     if (typeof req.headers["x-github-event"] !== "string") return void reply.code(400).send({ error: "bad_headers" });
-    if (req.headers["content-length"] === undefined || !Number.isSafeInteger(length) || length < 0) return void reply.code(411).send({ error: "length_required" });
-    if (length > WEBHOOK_BODY_LIMIT) return void reply.code(413).send({ error: "too_large" });
-    if (length > WEBHOOK_LARGE_BODY) {
+    const declared = req.headers["content-length"];
+    const length = declared === undefined ? null : Number(declared);
+    if (length !== null && (!Number.isSafeInteger(length) || length < 0)) return void reply.code(400).send({ error: "bad_headers" });
+    if (length !== null && length > WEBHOOK_BODY_LIMIT) return void reply.code(413).send({ error: "too_large" });
+    if (length === null || length > WEBHOOK_LARGE_BODY) {
       if (large >= WEBHOOK_LARGE_IN_FLIGHT) return void reply.code(503).send({ error: "busy" });
       large += 1;
       let held = true;
+      const deadline = setTimeout(() => req.raw.destroy(), largeBodyDeadlineMs);
+      deadline.unref();
       const release = () => {
+        clearTimeout(deadline);
         if (held) large -= 1;
         held = false;
       };
+      req.raw.once("end", () => clearTimeout(deadline));
       reply.raw.once("close", release);
       req.raw.once("close", release);
     }

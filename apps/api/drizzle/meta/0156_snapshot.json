@@ -1,5 +1,5 @@
 {
-  "id": "c97a8023-9461-45a3-931c-654bbaff1c64",
+  "id": "7baec2e3-4752-47c7-a3f2-0654af7d7bc0",
   "prevId": "9b6e1feb-4467-45ce-89b0-8bf5fdc76a15",
   "version": "7",
   "dialect": "postgresql",
@@ -8610,7 +8610,7 @@
       "columns": {
         "guid": {
           "name": "guid",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true
         },
@@ -8643,6 +8643,13 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
+        },
+        "failed_requests": {
+          "name": "failed_requests",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "last_status": {
           "name": "last_status",

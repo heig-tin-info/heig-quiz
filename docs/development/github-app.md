@@ -256,10 +256,10 @@ expected; 401 means the webhook secrets differ; 503 means two large
 deliveries were already being read, and the reconciliation asks for it
 again).
 
-The intake takes a payload up to GitHub's cap of 25 MB, and refuses a
-request without GitHub's signature and event headers, or without a
-`content-length`, before reading its body (ADR-011's addendum of
-2026-11-22). As a second line of defence, the operator may cap the body
+The intake takes a payload up to GitHub's cap of 25 MB. It refuses a
+request without GitHub's signature and event headers before reading its
+body, reads at most two bodies over 1 MB at once, and cuts off one not
+received whole within 60 seconds (ADR-011's addendum of 2026-11-22). As a second line of defence, the operator may cap the body
 in Caddy on that path too, for instance
 `request_body /webhooks/github { max_size 25MB }`; no Caddy file of this
 repository sets it.

@@ -52,7 +52,7 @@ import {
   reconcileDeliveries,
   REPLAY_AFTER_MS,
 } from "./deliveries.js";
-import { WEBHOOK_BODY_LIMIT } from "./routes.js";
+import { WEBHOOK_BODY_LIMIT, webhookBodyDeadlineForTests } from "./routes.js";
 import { onEvent, onReceipt, orgView, resetGithubCaches } from "./service.js";
 
 const SECRET = "w".repeat(40);
@@ -885,20 +885,28 @@ describe("the incremental read of GitHub's delivery log (ADR-011, 2026-11-22)", 
     expect(Math.min(...poison.map((g) => asked.get(g) ?? 0))).toBeGreaterThanOrEqual(6);
   });
 
-  it("counts no ask for a redelivery request GitHub fails, and asks again next pass", async () => {
+  it("counts no ask for a redelivery request GitHub refuses, and backs it off on the same doubling", async () => {
     const [failed] = happened(1, 60, () => 502);
     happened(5, 0);
     const failedId = idsOf([failed!])[0]!;
-    postAnswer = (id) => (id === failedId ? 500 : 202);
-    expect(await reconcileDeliveries(server.app, config)).toMatch(/0 GitHub redeliveries requested, 1 log pages read$/);
-    expect(await asksOf(failed!)).toMatchObject({ asks: 0, lastAskedAt: null });
+    postAnswer = (id) => (id === failedId ? 422 : 202); // GitHub refuses the request itself
+    const requestedAt: number[] = [];
+    for (let minutes = 0; minutes <= 120; minutes += 15) {
+      if (minutes === 120) postAnswer = () => 202;
+      gh.calls.length = 0;
+      await reconcileDeliveries(server.app, config);
+      if (redelivered().includes(failedId)) requestedAt.push(minutes);
+      server.clock.advance(15 * 60_000);
+    }
+    // No ask counted while GitHub refused, but the same doubling wait: 0, 15, 45, then 105 and 225 min.
+    expect(requestedAt).toEqual([0, 15, 45, 105]);
+    expect(await asksOf(failed!)).toMatchObject({ asks: 0, lastAskedAt: null, failedRequests: 4 });
+  });
 
-    server.clock.advance(15 * 60_000);
-    postAnswer = () => 202;
-    gh.calls.length = 0;
+  it("keeps a record whose guid is no UUID, and asks for it without failing the pass", async () => {
+    log = [{ id: nextId++, guid: "not-a-uuid", status_code: 502, redelivery: false, delivered_at: new Date(START.getTime() - 60_000).toISOString() }];
     expect(await reconcileDeliveries(server.app, config)).toMatch(/1 GitHub redeliveries requested, 1 log pages read$/);
-    expect(redelivered()).toEqual([failedId]);
-    expect(await asksOf(failed!)).toMatchObject({ asks: 1, lastAskedAt: server.clock.now() });
+    expect(await asksOf("not-a-uuid")).toMatchObject({ asks: 1 });
   });
 
   it("drops a resume cursor GitHub no longer knows, or one left past the window, and reads the top", async () => {
@@ -986,8 +994,45 @@ describe("the raw-body parser", () => {
     expect((await endless(20 * 1024 * 1024, { "x-github-event": "push" })).statusCode).toBe(401);
     expect((await endless(20 * 1024 * 1024, { "x-hub-signature-256": "sha256=00" })).statusCode).toBe(400);
     expect((await endless(WEBHOOK_BODY_LIMIT + 1, signed)).statusCode).toBe(413);
-    const unsized = await server.app.inject({ method: "POST", url: "/webhooks/github", headers: { "content-type": "application/json", ...signed, "transfer-encoding": "chunked" }, payload: new PassThrough() });
-    expect(unsized.statusCode).toBe(411);
+    // A length that is no number.
+    const bad = await server.app.inject({ method: "POST", url: "/webhooks/github", headers: { "content-type": "application/json", ...signed, "content-length": "abc" }, payload: "{}" });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it("takes a body of no declared length as a large one, in a slot", async () => {
+    const id = randomUUID();
+    const body = JSON.stringify({ zen: "chunked" });
+    const chunked = new PassThrough();
+    const res = server.app.inject({
+      method: "POST",
+      url: "/webhooks/github",
+      headers: { "content-type": "application/json", "transfer-encoding": "chunked", "x-hub-signature-256": signBody(SECRET, body), "x-github-event": "test_ping", "x-github-delivery": id },
+      payload: chunked,
+    });
+    chunked.end(body);
+    expect((await res).statusCode).toBe(200);
+    await processed(id);
+  });
+
+  it("cuts off a stalled large body at its deadline, and its slot takes the next one", async () => {
+    webhookBodyDeadlineForTests(200);
+    try {
+      const LENGTH = 2 * 1024 * 1024;
+      const headers = () => ({ "content-type": "application/json", "content-length": String(LENGTH), "x-hub-signature-256": "sha256=00", "x-github-event": "push", "x-github-delivery": randomUUID() });
+      // Two senders that stall: both slots taken, never released by a response.
+      const stalled = [new PassThrough(), new PassThrough()];
+      for (const payload of stalled) void server.app.inject({ method: "POST", url: "/webhooks/github", headers: headers(), payload }).catch(() => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect((await server.app.inject({ method: "POST", url: "/webhooks/github", headers: headers(), payload: Buffer.alloc(LENGTH) })).statusCode).toBe(503);
+      // Past the deadline the stalled requests are cut off and their slots given back.
+      const id = randomUUID();
+      const started = Date.now();
+      await vi.waitFor(async () => expect((await deliver("test_ping", { blob: "z".repeat(LENGTH) }, { id })).statusCode).toBe(200), { timeout: 3_000, interval: 100 });
+      expect(Date.now() - started).toBeGreaterThanOrEqual(100);
+      await processed(id);
+    } finally {
+      webhookBodyDeadlineForTests(60_000);
+    }
   });
 
   it("reads two large bodies at once at most, and answers 503 to a third", async () => {

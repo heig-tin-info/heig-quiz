@@ -506,6 +506,25 @@ describe("reconcile.ci (every 15 minutes, ADR-011 as amended 2026-11-22)", () =>
     expect(readAt).toEqual(CI_CHECKPOINTS_MS.map((ms) => ms / MINUTE));
     expect(readAt).toEqual([30, 60, 120, 240, 480, 960]);
   });
+
+  it("never misses a checkpoint when the task is late or skips a run: it reads at its next run, once", async () => {
+    const { repos } = await project({ students: 1 });
+    const [repo] = repos;
+    await server.app.db
+      .insert(gradeDispatches)
+      .values({ id: randomUUID(), repoId: repo!.id, trigger: "regrade", sha: head(repo!), nonce: randomUUID(), dispatchedAt: at(NOW) });
+    // Runs at 0, 15, then none until 47 (30 skipped, 45 late), then 52, 61 and every 15 min from 76 (a lagging clock).
+    const runs = [0, 15, 47, 52, 61, ...Array.from({ length: 90 }, (_, i) => 76 + 15 * i)];
+    const readAt: number[] = [];
+    for (const minutes of runs) {
+      server.clock.set(at(NOW, minutes * MINUTE).toISOString());
+      gh.calls.length = 0;
+      await reconcileCi(server.app, config);
+      if (callsTo(/\/actions\/runs$/).length > 0) readAt.push(minutes);
+    }
+    // 30 min read at 47, 1 h at 61, then 2, 4, 8 and 16 h at the first run past them.
+    expect(readAt).toEqual([47, 61, 121, 241, 481, 961]);
+  });
 });
 
 // ---------------------------------------------------------------- reconcile.repos

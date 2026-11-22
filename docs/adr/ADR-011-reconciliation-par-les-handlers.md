@@ -215,21 +215,29 @@ with that product. The cost now follows events.
    within 24 hours of the failure. That is about seven asks a day: a
    delivery the intake keeps failing stays bounded, and an outage of the
    intake of up to about 15 hours is still recovered. Only an ask GitHub
-   accepts counts and starts the next wait; a redelivery request GitHub
-   fails (a 5xx, a timeout) counts nothing and stays due for the next pass.
-   A record is purged three days after its failure (`deliveries.purge`).
+   accepts counts; a redelivery request GitHub refuses or fails (a 4xx, a
+   5xx, a timeout) counts no ask but waits on the same doubling
+   (`failed_requests`), so requests GitHub refuses for good cannot fill
+   every pass's cap for a day. A record is keyed by GitHub's guid as text,
+   so a guid that is no UUID cannot fail a pass; it is purged three days
+   after its failure (`deliveries.purge`).
 
    1c. **The intake takes what GitHub may send, safely.** The body limit
    is GitHub's own cap on a payload, 25 MB, on that route only: at
    Fastify's 1 MB default a push over 1 MB was refused 413, its receipt
    lost for good. Since the body is buffered whole for the HMAC on a public
-   route, an `onRequest` hook refuses before any byte of the body is read
-   a request without a signature header (401) or an event header (400),
-   without a `content-length` (411) or with one over the cap (413); and at
-   most two bodies over 1 MB are read at once in a process, another being
-   answered 503 — a failure GitHub logs and point 1b asks again. A
-   `request_body max_size` on the route in Caddy is a second line the
-   operator may add (`docs/development/github-app.md`).
+   route, an `onRequest` hook of that route refuses before any byte of the
+   body is read a request without a signature header (401) or an event
+   header (400), with a `content-length` that is no length (400) or one
+   over the cap (413). A body over 1 MB, or of no declared length (Fastify's
+   body limit still cuts it at 25 MB as it streams, so the intake does not
+   depend on the sender declaring it), takes one of two slots per process;
+   another is answered 503 — a failure GitHub logs and point 1b asks again.
+   A slot is held 60 seconds at most: a body not read whole by then is cut
+   off (its request destroyed), so a stalled sender cannot hold it; the
+   server's own timeouts are left as they are. A `request_body max_size`
+   on the route in Caddy is a second line the operator may add
+   (`docs/development/github-app.md`).
 2. **`reconcile.grades` daily**, a last resort: the webhooks carry the runs,
    and the 15-minute `reconcile.deliveries` asks again for those GitHub
    failed to hand over. The QUIET rule (no push nor run for 30 minutes) is
@@ -242,12 +250,14 @@ with that product. The cost now follows events.
    project's CI pass (ADR-119 §6) settles `no_result` 24 hours after its
    dispatch; a lost `workflow_run` left to the daily pass would race that
    end and cost the student every automatic criterion. This task reads,
-   through the same `ingestRuns`, the repositories whose pass is open, at
-   CHECKPOINTS of the pass's age: 30 minutes after the dispatch GitHub
-   accepted, then 1, 2, 4, 8 and 16 hours, each for one period of the task —
-   read by the age, so no state is kept, and a slow Actions queue costs six
-   reads a pass rather than one every 15 minutes. At most 100 repositories a
-   pass, the oldest dispatch first: they share the installation's quota
+   through the same `ingestRuns`, the repositories whose pass is open and
+   has crossed one of its CHECKPOINTS since the task last read it
+   (`grade_dispatches.ci_checked_at`, migration 0157): 30 minutes after the
+   dispatch GitHub accepted, then 1, 2, 4, 8 and 16 hours. A slow Actions
+   queue costs six reads a pass rather than one every 15 minutes; a late or
+   skipped run of the task delays a read, never loses it, and checkpoints
+   crossed together cost one read. At most 100 repositories a pass, the
+   oldest dispatch first: they share the installation's quota
    with the dispatches. Nothing is read outside a grading; a lost run is
    caught within about 45 minutes. The 24-hour sweep itself makes no GitHub
    call (it runs in the ticker's tick, invariant 5), so it does not read

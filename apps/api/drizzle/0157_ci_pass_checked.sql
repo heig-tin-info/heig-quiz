@@ -1,0 +1,1 @@
+ALTER TABLE "grade_dispatches" ADD COLUMN "ci_checked_at" timestamp with time zone;
