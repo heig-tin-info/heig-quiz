@@ -200,6 +200,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
     staleItems: [],
     attemptCount: 0,
     deletionRole: "assistant",
+    holdsStudentWork: false,
     editable: true,
     self: { seat: false, staffSeat: false, attemptId: null },
     editableQuestionIds: items.map((i) => i.questionId),

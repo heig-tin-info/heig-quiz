@@ -12,7 +12,15 @@
 import { BarChart3, ClipboardCheck, ClipboardList, MonitorPlay, Presentation } from "lucide-react";
 
 import type { Evaluation, EvaluationMode, EvaluationState, EvaluationSummary } from "@quiz/contracts";
-import { clockChoiceOf, isDebriefOpen, isEvaluationOpen, isEvaluationOver, isUnscheduledDraft } from "@quiz/domain";
+import {
+  clockChoiceOf,
+  courseRoleAllows,
+  type CourseRoleName,
+  isDebriefOpen,
+  isEvaluationOpen,
+  isEvaluationOver,
+  isUnscheduledDraft,
+} from "@quiz/domain";
 
 import { gradingLinks } from "../grading";
 import type { Dict, TFunction } from "../i18n";
@@ -150,4 +158,20 @@ export function evaluationLinkItems(
     ...(hasDashboard(row) ? [item("eval.dashboard", MonitorPlay, { view: "live", id: row.id })] : []),
     item("eval.configure", ClipboardList, { view: "evaluation", id: row.id }),
   ];
+}
+
+/**
+ * Whether the Delete of an evaluation's menu is offered, and why not: an
+ * exam or an exercise holding students' work is deleted by nobody (ADR-141),
+ * then the caller's role decides (ADR-068 §3). Greyed out with its reason,
+ * the same in the list's row and on the evaluation's page.
+ */
+export function deleteGate(
+  facts: Pick<EvaluationSummary, "holdsStudentWork" | "deletionRole">,
+  role: CourseRoleName | null,
+  t: TFunction,
+): Pick<MenuItem, "disabled" | "description"> {
+  if (facts.holdsStudentWork) return { disabled: true, description: t("studentWork.evaluation") };
+  if (!courseRoleAllows(role, facts.deletionRole)) return { disabled: true, description: t("eval.delete.ownerOnly") };
+  return {};
 }

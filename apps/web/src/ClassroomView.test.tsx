@@ -67,6 +67,7 @@ const summary = (over: Partial<EvaluationSummary>): EvaluationSummary => ({
   attemptCount: 0,
   participantCount: 0,
   deletionRole: "assistant",
+  holdsStudentWork: false,
   clock: "live",
   opensAt: null,
   closesAt: null,

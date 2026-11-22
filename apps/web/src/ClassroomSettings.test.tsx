@@ -134,6 +134,24 @@ describe("the classroom's Settings tab", () => {
     expect(calls.some((c) => c.method === "DELETE" && c.url === ROOM)).toBe(true);
   });
 
+  it("says why a classroom holding students' work is not deleted, and offers its archive (ADR-141)", async () => {
+    const work = { classrooms: 1, evaluations: 2, projects: 1, attempts: 30, gradedRepos: 12, marks: 0, released: 1 };
+    const { calls } = mockFetch({
+      ...OWNER,
+      [`GET ${ROOM}`]: ok(makeClassroomDetail()),
+      [`DELETE ${ROOM}`]: fail(409, { error: "holds_student_work", message: "m", work }),
+      [`POST ${ROOM}/archive`]: noContent(),
+    });
+    const navigate = renderSettings();
+    await userEvent.click(await screen.findByRole("button", { name: /Delete classroom/ }));
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
+    const refused = await screen.findByRole("dialog", { name: "Deletion refused" });
+    expect(refused).toHaveTextContent("Activities with students' work: 3. Archive the classroom instead.");
+    await userEvent.click(within(refused).getByRole("button", { name: "Archive" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === `${ROOM}/archive`)).toBe(true));
+    expect(navigate).not.toHaveBeenCalledWith({ view: "home" });
+  });
+
   it("asks for the classroom's name when a Quiz-mode journal with pages goes with it, and sends it", async () => {
     const { calls } = mockFetch({
       ...OWNER,

@@ -7,6 +7,8 @@
  */
 import { z } from "zod";
 
+import type { StudentWork as StudentWorkFacts } from "@quiz/domain";
+
 import { CourseRole, PersonRef, teacherChoiceWith } from "./common.js";
 import { ConceptRef } from "./concept.js";
 import { ConditionKind, EvaluationCondition } from "./evaluation.js";
@@ -303,4 +305,34 @@ export const CourseCondition = z.object({
   archivedAt: z.string().nullable(),
 });
 export type CourseCondition = z.infer<typeof CourseCondition>;
+
+// ---------------------------------------------------------- deleting what holds students' work (ADR-141)
+
+/** What blocks a deletion, by kind and how many (`studentWorkOf`, `@quiz/domain`): never a name. */
+export const StudentWork = z.object({
+  classrooms: z.number().int().nonnegative(),
+  evaluations: z.number().int().nonnegative(),
+  projects: z.number().int().nonnegative(),
+  attempts: z.number().int().nonnegative(),
+  gradedRepos: z.number().int().nonnegative(),
+  marks: z.number().int().nonnegative(),
+  released: z.number().int().nonnegative(),
+}) satisfies z.ZodType<StudentWorkFacts>;
+export type StudentWork = z.infer<typeof StudentWork>;
+
+/** The code of the refusal, the same for a course, a classroom, an evaluation and a project. */
+export const HOLDS_STUDENT_WORK = "holds_student_work";
+
+/**
+ * The `409 holds_student_work` of `DELETE /courses/:id`, `/classrooms/:id`,
+ * `/evaluations/:id` and `/projects/:id` (ADR-141): the entity holds a real
+ * student's work or grades, so no role deletes it. The web app words it from
+ * `work` and offers the archive where the entity has one.
+ */
+export const StudentWorkRefusal = z.object({
+  error: z.literal(HOLDS_STUDENT_WORK),
+  message: z.string(),
+  work: StudentWork,
+});
+export type StudentWorkRefusal = z.infer<typeof StudentWorkRefusal>;
 

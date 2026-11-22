@@ -515,11 +515,15 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
    * The classroom goes, and its journal with it by cascade (F-ORG-09): a
    * Quiz-mode journal holding pages is the only copy, so the journal's own
    * guard asks for the classroom's name typed (`?confirm=`, F-JRN-04).
+   * Students' work refuses it before that guard (ADR-141): nobody types a
+   * name to learn the classroom cannot go; the delete decides again under
+   * its locks.
    */
   app.delete(
     "/app/api/classrooms/:id",
     { preHandler: requireTeacher },
     teacher({ ...onClassroom("owner"), query: ClassroomDeleteQuery }, async ({ req, reply, query, scope }) => {
+      await service.refuseStudentWork(app.db, { classroomId: scope.room.id });
       await journalRemovalRefused(app.db, scope.room, query.confirm);
       await service.deleteClassroom(app.db, scope.room.id);
       await trace(req, "classroom.delete", "classroom", scope.room.id, { name: scope.room.name });

@@ -72,6 +72,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-053 — Removing the entry codes: the classroom join code and the evaluation access code](ADR-053-retrait-des-codes-d-entree.md)
 - [ADR-054 — Super Powers: an admin reaches everyone's content for one hour, on request](ADR-054-super-powers-admin.md)
 - [ADR-068 — Course staff roles: owner and assistant](ADR-068-roles-de-l-equipe-du-cours.md)
+- [ADR-141 — Deleting what holds students' work is refused; the archive instead](ADR-141-refus-de-supprimer-le-travail-des-etudiants.md)
 - [ADR-061 — Login adoption of the accounts imported from heig-classroom](ADR-061-adoption-des-comptes-importes.md)
 - [ADR-111 — Login admission: an account is created only for a member of a listed institution or an invited person](ADR-111-admission-a-la-connexion.md)
 - [ADR-112 — A person's data export: their own student views gathered in one file, plus three account rows](ADR-112-export-des-donnees-personnelles.md)

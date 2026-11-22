@@ -10,7 +10,7 @@
 export const DOMAINS = {
   common: [
     "common", "ui", "error", "sync", "view", "verdict", "segments", "countdown", "heatmap",
-    "dur", "time", "key", "people", "bar", "export", "md", "markdown", "dev",
+    "dur", "time", "key", "people", "bar", "export", "md", "markdown", "dev", "studentWork",
   ],
   shell: [
     "app", "connection", "crash", "confirm", "toast", "menu", "header", "nav", "bnav", "aside",

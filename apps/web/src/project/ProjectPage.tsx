@@ -35,6 +35,7 @@ import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
 import { activitiesKey, classroomProjectsKey, projectKey } from "../queryKeys";
 import { useSearchParam, type Navigate } from "../router";
+import { useStudentWorkRefusal } from "../studentWork";
 import { Trail, useClassroomCrumbs } from "../Trail";
 import {
   Alert,
@@ -270,8 +271,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       toast(t("project.deleted"), "success");
       navigate(classroomId ? { view: "classroom", id: classroomId } : { view: "activities" });
     },
-    onError: failed,
   });
+  const refused = useStudentWorkRefusal();
 
   if (detail.isLoading) return <PageSkeleton header="title-and-bar" body="summary-and-block" />;
   if (detail.isError) {
@@ -315,7 +316,10 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         danger: true,
       })
     ) {
-      remove.mutate();
+      // A project holding students' grades is never deleted (ADR-141): its archive, confirmed, is offered instead.
+      remove.mutate(undefined, {
+        onError: refused("project", { archive: archived ? undefined : () => void onArchive(), otherwise: failed }),
+      });
     }
   };
   /** The release, and the release again once a score moved: the same route, the confirmation says which. */

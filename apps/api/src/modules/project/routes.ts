@@ -503,7 +503,11 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     ),
   );
 
-  /** D19, F-PROJ-16: the rows only, in any state; nothing is deleted on GitHub. */
+  /**
+   * D19, F-PROJ-16: the rows only; nothing is deleted on GitHub. Refused,
+   * `409 holds_student_work`, once the project holds students' grades
+   * (ADR-141, decided under the delete's locks by `deleteProject`).
+   */
   app.delete(
     "/app/api/projects/:id",
     session,

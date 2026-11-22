@@ -278,4 +278,9 @@ export const common: Record<keyof typeof en, string> = {
   "view.schedule": "Planning",
   "view.tree": "Arborescence",
   "error.notReopenable": "Une copie papier, ou une tentative qu'elle remplace, ne se rouvre pas.",
+  "studentWork.title": "Suppression refusée",
+  "studentWork.evaluation": "Cette évaluation contient du travail ou des notes d'étudiants.",
+  "studentWork.project": "Ce projet contient des notes d'étudiants. Archivez-le plutôt.",
+  "studentWork.classroom": "Activités avec du travail d'étudiants : {count}. Archivez plutôt la classe.",
+  "studentWork.course": "Classes avec du travail d'étudiants : {count}. Archivez plutôt ses classes.",
 };

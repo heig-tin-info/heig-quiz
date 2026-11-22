@@ -884,6 +884,53 @@ const scenes = [
   { name: "classroom-settings-github-checks-warn", role: "teacher", path: "/classrooms/r1/settings?ghwarn=1" },
   { name: "classroom-settings-github-org-missing", role: "teacher", path: "/classrooms/r1/settings?ghmissing=1" },
   { name: "classroom-settings-rename", role: "teacher", path: "/classrooms/r1/settings", fold: true, act: (p) => p.getByRole("button", { name: /^(rename|renommer)$/i }).first().click() },
+  // ADR-141: deleting what holds students' work is refused, the archive
+  // offered — a classroom (Archive), a course (Close only), a project
+  // (Archive), and an evaluation's Delete greyed out with its reason.
+  {
+    name: "delete-refused-classroom",
+    role: "teacher",
+    path: "/classrooms/r1/settings",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(delete classroom|supprimer la classe)$/i }).click();
+      await p.getByRole("dialog").getByRole("button", { name: /^(delete|supprimer)$/i }).click();
+      await p.getByRole("dialog", { name: /deletion refused|suppression refusée/i }).waitFor();
+    },
+  },
+  {
+    name: "delete-refused-course",
+    role: "teacher",
+    path: "/courses/c1/settings",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(delete course|supprimer le cours)$/i }).click();
+      await p.getByRole("dialog").getByRole("button", { name: /^(delete|supprimer)$/i }).click();
+      await p.getByRole("dialog", { name: /deletion refused|suppression refusée/i }).waitFor();
+    },
+  },
+  {
+    name: "delete-refused-project",
+    role: "teacher",
+    path: "/projects/pj-graded?projects=1",
+    settle: 2500,
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(more actions|plus d'actions)$/i }).first().click();
+      await p.getByRole("menuitem", { name: /^(delete project|supprimer le projet)$/i }).click();
+      const dialog = p.getByRole("dialog");
+      await dialog.getByRole("textbox").fill("Labo 0 — prise en main");
+      await dialog.getByRole("button", { name: /^(delete|supprimer)$/i }).click();
+      await p.getByRole("dialog", { name: /deletion refused|suppression refusée/i }).waitFor();
+    },
+  },
+  {
+    name: "delete-refused-evaluation",
+    role: "teacher",
+    path: "/classrooms/r1",
+    fold: true,
+    act: (p) => p.getByRole("button", { name: /^(actions|more actions|plus d'actions)/i }).first().click(),
+  },
   // F-JRN-01 to F-JRN-05 (M4-05, M4-09): the Journal section. PRG1-2026
   // (r1) is connected and has no journal by default: the mode's segmented
   // control, In Quiz chosen (`journal-settings-mode`), In a GitHub

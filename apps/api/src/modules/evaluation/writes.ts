@@ -39,6 +39,7 @@ import {
   OVER_STATES,
   retakesAllowedFor,
   retakeScopeFits,
+  studentWorkOf,
 } from "@quiz/domain";
 
 import type { Db, Tx } from "../../db/client.js";
@@ -60,7 +61,15 @@ import {
   questionRefused,
 } from "./shared.js";
 import { assertStaysScheduled } from "./stateMachine.js";
-import { attemptCount as countAttempts, byId, deletionRole, settingsOf, storedFeedbackOf, preferredMcqPolicy } from "./reads.js";
+import {
+  attemptCount as countAttempts,
+  byId,
+  deletionRole,
+  evaluationWork,
+  settingsOf,
+  storedFeedbackOf,
+  preferredMcqPolicy,
+} from "./reads.js";
 import { latestPublished } from "./items.js";
 
 /**
@@ -371,18 +380,32 @@ export async function patchEvaluation(
 }
 
 /**
- * The delete, with its role decided again under the row's lock (ADR-068 §3,
- * amended 2026-10-10): the route's loader counted the attempts already, but
- * a student may start between that count and the delete, within the same
- * request. The row is locked `FOR UPDATE` before the count, and creating an attempt takes
- * `FOR KEY SHARE` on that row (its foreign key), which conflicts: an attempt
- * inserted first is counted here, one inserted after waits and then finds no
- * evaluation. `role` is the caller's.
+ * ADR-141: the refusal of deleting an exam or an exercise that holds
+ * students' work — `409 holds_student_work`, whatever the caller's role —
+ * or null. Read through `evaluationWork`, which locks the row: called inside
+ * the delete's transaction, its answer holds until the delete.
+ */
+export async function studentWorkRefusal(db: DbOrTx, evaluationId: string): Promise<EvaluationError | null> {
+  const work = studentWorkOf({ evaluations: await evaluationWork(db, { evaluationId }), projects: [] });
+  return work && new EvaluationError("holds_student_work", undefined, { work });
+}
+
+/**
+ * The delete, with what refuses it decided again under the row's lock
+ * (ADR-141; ADR-068 §3, amended 2026-10-10): the route's loader counted the
+ * attempts already, but a student may start between that count and the
+ * delete, within the same request. The row is locked `FOR UPDATE` before the
+ * count, and creating an attempt takes `FOR KEY SHARE` on that row (its
+ * foreign key), which conflicts: an attempt inserted first is counted here,
+ * one inserted after waits and then finds no evaluation. Students' work
+ * refuses it first, for every role; then the role. `role` is the caller's.
  */
 export async function deleteEvaluation(db: Db, row: EvaluationRecord, role: CourseRoleName): Promise<void> {
   await db.transaction(async (tx) => {
     const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, row.id)).for("update");
     if (!locked) return;
+    const refusal = await studentWorkRefusal(tx, row.id);
+    if (refusal) throw refusal;
     if (!courseRoleAllows(role, await deletionRole(tx, locked))) throw new EvaluationError("owner_required");
     await tx.delete(evaluations).where(eq(evaluations.id, row.id));
   });

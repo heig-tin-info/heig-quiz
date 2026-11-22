@@ -38,6 +38,9 @@ const REFUSALS = {
   // ADR-068 §3 (amended 2026-10-10): a delete re-decided under the row's
   // lock, once a student attempt landed after the route's own role step.
   owner_required: [403, "Only an owner of this course may do that"],
+  // ADR-141: an exam or an exercise a student has started, or released, is
+  // never deleted, by any role; the body names what blocks (`work`).
+  holds_student_work: [409, "it holds students' work or grades: it cannot be deleted (ADR-141)"],
   locked: [409, "an attempt exists: the structure is frozen"],
   // #86: `running` or `paused` locks the configuration until it closes, all
   // but the title, the access control and the feedback policy; time is

@@ -31,6 +31,7 @@ function summary(over: Partial<EvaluationSummary> = {}): EvaluationSummary {
     attemptCount: 0,
     participantCount: 0,
     deletionRole: "assistant",
+    holdsStudentWork: false,
     clock: "live",
     opensAt: null,
     closesAt: null,
@@ -227,6 +228,29 @@ describe("the evaluations of the Activities tab", () => {
     await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: /Draft quiz/ }));
     expect(await screen.findByRole("menuitem", { name: "Delete evaluation" })).toBeEnabled();
+  });
+
+  it("greys out Delete for every role once students have started it, saying why (ADR-141)", async () => {
+    const user = userEvent.setup();
+    const course = id("course", 1);
+    mockFetch({
+      [`GET /app/api/classrooms/${CLASSROOM}`]: ok({
+        id: CLASSROOM,
+        name: "A",
+        period: "",
+        archivedAt: null,
+        course: { id: course, name: "Programmation C", code: "PRG1" },
+        roster: [],
+      }),
+      "GET /app/api/courses": ok([makeCourseSummary({ id: course, myRole: "owner" })]),
+      ...list([summary({ state: "closed", title: "Sat quiz", deletionRole: "owner", holdsStudentWork: true })]),
+    });
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
+
+    await user.click(await screen.findByRole("button", { name: /Sat quiz/ }));
+    const refused = await screen.findByRole("menuitem", { name: /Delete evaluation/ });
+    await waitFor(() => expect(refused).toBeDisabled());
+    expect(refused).toHaveTextContent("This evaluation holds students' work or grades.");
   });
 
   it("asks the page for the dialog from the empty state, and has no button of its own", async () => {

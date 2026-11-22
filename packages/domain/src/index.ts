@@ -57,6 +57,7 @@ export * from "./outputDiff.js";
 export * from "./cooldown.js";
 export * from "./correction.js";
 export * from "./courseRole.js";
+export * from "./studentWork.js";
 export * from "./dayBucket.js";
 export * from "./siteActivity.js";
 export * from "./debrief.js";

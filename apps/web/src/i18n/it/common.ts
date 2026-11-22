@@ -291,4 +291,9 @@ export const common: Record<keyof typeof en, string> = {
   "view.schedule": "Calendario",
   "view.tree": "Albero",
   "error.notReopenable": "Non si riapre una copia cartacea, né il tentativo che essa ha sostituito.",
+  "studentWork.title": "Eliminazione rifiutata",
+  "studentWork.evaluation": "Questa valutazione contiene lavori o note di studenti.",
+  "studentWork.project": "Questo progetto contiene note di studenti. Archiviatelo invece.",
+  "studentWork.classroom": "Attività con lavori di studenti: {count}. Archiviate invece la classe.",
+  "studentWork.course": "Classi con lavori di studenti: {count}. Archiviate invece le sue classi.",
 };

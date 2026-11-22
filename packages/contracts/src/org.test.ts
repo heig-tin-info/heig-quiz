@@ -6,6 +6,7 @@ import {
   CourseConditionCreate,
   CourseConditionOrder,
   CourseConditionPatch,
+  StudentWorkRefusal,
 } from "./org.js";
 
 describe("ClassroomCreate — the dated period", () => {
@@ -94,5 +95,22 @@ describe("the course's catalog of conditions (F-ORG-16)", () => {
   it("orders a non-empty list of ids", () => {
     expect(CourseConditionOrder.safeParse({ ids: [] }).success).toBe(false);
     expect(CourseConditionOrder.safeParse({ ids: ["nope"] }).success).toBe(false);
+  });
+});
+
+describe("StudentWorkRefusal (ADR-141)", () => {
+  const work = { classrooms: 1, evaluations: 1, projects: 0, attempts: 3, gradedRepos: 0, marks: 0, released: 0 };
+
+  it("reads the 409 of a deletion: its code, its message and what blocks", () => {
+    expect(StudentWorkRefusal.parse({ error: "holds_student_work", message: "m", work })).toEqual({
+      error: "holds_student_work",
+      message: "m",
+      work,
+    });
+  });
+
+  it("refuses another code, or a count that is not a natural number", () => {
+    expect(StudentWorkRefusal.safeParse({ error: "owner_required", message: "m", work }).success).toBe(false);
+    expect(StudentWorkRefusal.safeParse({ error: "holds_student_work", message: "m", work: { ...work, attempts: -1 } }).success).toBe(false);
   });
 });

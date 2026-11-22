@@ -23,6 +23,7 @@ import { countsAsCompleted,
   clockChoiceOf,
   type ClockSettings,
   type ItemCounting,
+  evaluationHoldsStudentWork,
 } from "@quiz/domain";
 import type { BlocksAnswer, BlocksConfig } from "@quiz/qt-blocks/client";
 import { blocksServer } from "@quiz/qt-blocks/server";
@@ -48,6 +49,7 @@ import {
   now,
   on,
   rand,
+  refuse,
 } from "./runtime";
 import {
   BLOCKS_ANSWER,
@@ -75,6 +77,7 @@ import {
   ME_TEACHER,
   MOCK_CATALOG,
   classroomRoster,
+  classroomWork,
   courses,
   roomOr404,
   rooms,
@@ -941,6 +944,22 @@ const deletionRoleOf = (e: MockEvaluation) =>
     studentAttempts: e.rows.filter((r) => !r.staff && r.attemptId !== null).length,
   });
 
+/** Like the server (ADR-141): a student's attempt, or the release, of an exam or an exercise; never a poll. */
+const startedOf = (e: MockEvaluation) => e.rows.filter((r) => !r.staff && r.attemptId !== null).length;
+const holdsStudentWorkOf = (e: MockEvaluation) =>
+  evaluationHoldsStudentWork({ mode: e.mode, released: e.releasedAt !== null, attemptsWithWork: startedOf(e), scoreMarks: 0 });
+classroomWork.push((classroomId) => {
+  const held = evaluations.filter((e) => e.classroomId === classroomId && holdsStudentWorkOf(e));
+  return {
+    evaluations: held.length,
+    projects: 0,
+    attempts: held.reduce((n, e) => n + startedOf(e), 0),
+    gradedRepos: 0,
+    marks: 0,
+    released: held.filter((e) => e.releasedAt !== null).length,
+  };
+});
+
 export const toEvaluation = (e: MockEvaluation) => ({
   id: e.id,
   classroomId: e.classroomId,
@@ -1015,6 +1034,7 @@ const evaluationSummary = (e: MockEvaluation) => ({
   // Like the server: the students who took it, never a staff seat (ADR-018).
   participantCount: e.rows.filter((r) => !r.staff && r.attemptId !== null).length,
   deletionRole: deletionRoleOf(e),
+  holdsStudentWork: holdsStudentWorkOf(e),
   clock: clockOf(e),
   opensAt: e.opensAt,
   closesAt: e.closesAt,
@@ -1082,6 +1102,7 @@ const evaluationDetail = (e: MockEvaluation) => ({
   // Like the server: the students who took it, never a staff seat (ADR-018).
   participantCount: e.rows.filter((r) => !r.staff && r.attemptId !== null).length,
   deletionRole: deletionRoleOf(e),
+  holdsStudentWork: holdsStudentWorkOf(e),
   editable: isConfigEditable(e.state, attemptCountOf(e)),
   self: selfOf(e),
   roster: rosterOf(e),
@@ -1441,7 +1462,12 @@ function applyConfigPatch(e: MockEvaluation, body: Record<string, unknown>): voi
   if ("durationS" in body) e.durationS = body.durationS as number | null;
 }
 on("DELETE", "/app/api/evaluations/:id", (m) => {
-  const i = evaluations.findIndex((e) => e.id === m.groups!.id);
+  const e = evaluationOr404(m.groups!.id!);
+  if (holdsStudentWorkOf(e)) {
+    const work = { classrooms: 1, evaluations: 1, projects: 0, attempts: startedOf(e), gradedRepos: 0, marks: 0, released: e.releasedAt ? 1 : 0 };
+    throw refuse(409, "holds_student_work", "It holds students' work or grades", { work });
+  }
+  const i = evaluations.findIndex((x) => x.id === e.id);
   if (i >= 0) evaluations.splice(i, 1);
   return undefined;
 });
