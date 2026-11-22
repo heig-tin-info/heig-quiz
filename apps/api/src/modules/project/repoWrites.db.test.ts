@@ -16,7 +16,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -241,6 +241,41 @@ describe("the protection re-enabled (F-PROJ-08)", () => {
     await server.app.db.update(projectRepos).set({ deletedAt: server.clock.now(), protectionSuspendedAt: server.clock.now() }).where(eq(projectRepos.id, deleted!.id));
     const gone = await reenable(p.id, deleted!.id);
     expect([gone.statusCode, gone.json().error]).toEqual([409, "repo_unavailable"]);
+  });
+
+  it("rewrites the score slots only when the selection changes", async () => {
+    const p = await project();
+    const [repo] = p.repos;
+    const xmin = async () =>
+      (await server.app.db.execute<{ xmin: string }>(sql`SELECT xmin::text AS xmin FROM ${projectRepos} WHERE ${projectRepos.id} = ${repo!.id}`)).rows[0]!.xmin;
+    const run = (workflowRunId: number, points: number, completedAt: Date) =>
+      server.app.db.insert(projectGradeRuns).values({
+        id: randomUUID(),
+        repoId: repo!.id,
+        workflowRunId,
+        headBranch: "main",
+        headSha: head(repo!.fullName!),
+        conclusion: "success",
+        points,
+        max: 6,
+        parseStatus: "ok",
+        completedAt,
+      });
+    await run(3, 4, at(DEADLINE, -2 * MINUTE));
+    await refreshScoreSelection(server.app.db, { repo: repo! });
+    const first = await repoRow(repo!.id);
+    expect(first.currentGradeRunId).not.toBeNull();
+
+    // The same set again (the reconciliation's quarter-hour pass): no write, the row's version unmoved.
+    const version = await xmin();
+    await refreshScoreSelection(server.app.db, { repo: repo! });
+    expect(await xmin()).toBe(version);
+
+    // A newer run, which the selection takes: written.
+    await run(4, 6, at(DEADLINE, -MINUTE));
+    await refreshScoreSelection(server.app.db, { repo: repo! });
+    expect(await xmin()).not.toBe(version);
+    expect((await repoRow(repo!.id)).currentGradeRunId).not.toBe(first.currentGradeRunId);
   });
 
   it("makes the final review due again, and the page say so", async () => {
