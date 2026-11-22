@@ -39,8 +39,8 @@ import type { CommitAuthor } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { botCommits, codespaceRelays, githubAccounts, projectRepos, pushReceipts, webhookDeliveries } from "../../db/schema.js";
-import { githubApp, isZeroSha, rateLimitReset, recentHookDeliveries, redeliverHookDelivery } from "../../github/app.js";
+import { botCommits, codespaceRelays, githubAccounts, projectRepos, pushReceipts, webhookDeliveries, webhookDeliveryScan } from "../../db/schema.js";
+import { githubApp, hookDeliveriesPage, isZeroSha, rateLimitReset, redeliverHookDelivery, type HookDeliveryPage } from "../../github/app.js";
 import { GITHUB_WEBHOOK_QUEUE } from "../../jobs.js";
 import { redactTokens } from "../../redact.js";
 
@@ -374,17 +374,145 @@ export async function dispatchDelivery(
 export const REPLAY_AFTER_MS = 30 * 60_000;
 /** At most this many replayed per run: the next run takes the rest. */
 const MAX_REPLAYS = 200;
-/** GitHub's failed attempts younger than this are asked again, at most {@link MAX_REDELIVERIES}. */
-const REDELIVERY_WINDOW_MS = 24 * 3_600_000;
-const MAX_REDELIVERIES = 50;
+/** GitHub's failed attempts younger than this are asked again, at most {@link MAX_REDELIVERIES} per pass. */
+export const REDELIVERY_WINDOW_MS = 24 * 3_600_000;
+export const MAX_REDELIVERIES = 50;
+/**
+ * Pages of GitHub's delivery log (100 attempts each) one pass reads at most:
+ * a pass every 15 minutes reads one to a few in nominal operation; a gap
+ * deeper than this (the task stopped for hours) is read over several passes.
+ */
+export const MAX_LOG_PAGES = 20;
+/**
+ * How far below the point already covered a pass reads again: GitHub's clock
+ * against the server's, and an attempt listed a few seconds after it was made.
+ */
+export const LOG_OVERLAP_MS = 5 * 60_000;
+/** The one row of `webhook_delivery_scan`. */
+const SCAN_ROW = "app";
+
+type Scan = Omit<typeof webhookDeliveryScan.$inferSelect, "id">;
+
+/** Where the previous passes left GitHub's log; no row is nothing read yet. */
+async function readScan(db: Db): Promise<Scan> {
+  const [row] = await db.select().from(webhookDeliveryScan).where(eq(webhookDeliveryScan.id, SCAN_ROW));
+  return row ?? { coveredUntil: null, resumeCursor: null, resumeCeiling: null };
+}
+
+async function saveScan(db: Db, scan: Scan): Promise<void> {
+  await db
+    .insert(webhookDeliveryScan)
+    .values({ id: SCAN_ROW, ...scan })
+    .onConflictDoUpdate({ target: webhookDeliveryScan.id, set: scan });
+}
+
+/** A failure GitHub answered for its rate limit: the pass stops on it, its place kept. */
+const rateLimited = (err: unknown): boolean => rateLimitReset(err, Date.now()) !== null;
+
+/** What one pass over GitHub's log did. */
+interface LogPass {
+  pages: number;
+  redelivered: number;
+  stoppedOnRateLimit: boolean;
+}
 
 /**
- * `reconcile.deliveries` (GH-62, ADR-011), a scheduled task: the deliveries
- * stored but left unprocessed (a lost job, a crash, retries exhausted) go
- * through the worker again; the deliveries GitHub failed to hand over in
- * the last 24 hours (the intake down, a 5xx) are asked again, unless one of
- * their attempts was stored since. Without Quiz's App it does nothing:
- * there is no intake, and no handler registered to replay through.
+ * The deliveries GitHub failed to hand over (GH-62), read INCREMENTALLY from
+ * its log of the App's attempts (ADR-011's addendum of 2026-11-22): newest
+ * first, one page of 100 at a time, down to the point the previous passes
+ * covered less {@link LOG_OVERLAP_MS}, and never below the 24-hour
+ * redelivery window — so a pass costs the pages of the deliveries made since
+ * the last one, not 24 hours of them. A delivery whose newest attempt in
+ * that stretch failed (no 2xx, or no answer at all) and which Quiz never
+ * stored is asked again, at most {@link MAX_REDELIVERIES} a pass. That
+ * attempt may be a redelivery this task asked for: its original lies below
+ * the covered point by then, so the redelivery that failed in turn is what
+ * keeps the delivery asked for, every pass, until the intake takes it.
+ *
+ * Where the pass stops is kept (`webhook_delivery_scan`): having reached the
+ * floor, everything up to its start is covered; stopped before it — its
+ * {@link MAX_LOG_PAGES} pages read, its redeliveries spent, GitHub's rate
+ * limit — the next pass goes on from the page it had reached (GitHub's own
+ * cursor), down to the same floor, before it reads the newer top. The
+ * failures closest to leaving the window are thus never starved by new
+ * traffic.
+ */
+async function redeliverFailures(app: FastifyInstance, config: AppConfig, now: number): Promise<LogPass> {
+  const scan = await readScan(app.db);
+  const floor = Math.max(now - REDELIVERY_WINDOW_MS, (scan.coveredUntil?.getTime() ?? 0) - LOG_OVERLAP_MS);
+  const ceiling = scan.resumeCeiling ?? new Date(now);
+  const result: LogPass = { pages: 0, redelivered: 0, stoppedOnRateLimit: false };
+  /** Stopped before the floor: the next pass reads `cursor`'s page again (null: the top, nothing to keep). */
+  const resumeAt = (cursor: string | null) =>
+    saveScan(app.db, { coveredUntil: scan.coveredUntil, resumeCursor: cursor, resumeCeiling: cursor === null ? null : ceiling });
+  const decided = new Set<string>();
+  let cursor = scan.resumeCursor;
+  for (;;) {
+    if (result.pages === MAX_LOG_PAGES) {
+      await resumeAt(cursor);
+      return result;
+    }
+    let page: HookDeliveryPage;
+    try {
+      page = await hookDeliveriesPage(config, cursor);
+    } catch (err) {
+      if (!rateLimited(err)) throw err;
+      await resumeAt(cursor);
+      return { ...result, stoppedOnRateLimit: true };
+    }
+    result.pages += 1;
+    const inWindow = page.deliveries.filter((d) => d.deliveredAt.getTime() >= floor);
+    const failed = new Map<string, number>();
+    // A delivery's newest attempt decides: its redelivery that failed too is asked again.
+    for (const d of inWindow) {
+      if (decided.has(d.guid)) continue;
+      decided.add(d.guid);
+      if (d.statusCode < 200 || d.statusCode >= 300) failed.set(d.guid, d.id);
+    }
+    const held = new Set(
+      failed.size === 0
+        ? []
+        : (
+            await app.db
+              .select({ deliveryId: webhookDeliveries.deliveryId })
+              .from(webhookDeliveries)
+              .where(inArray(webhookDeliveries.deliveryId, [...failed.keys()]))
+          ).map((r) => r.deliveryId),
+    );
+    for (const [guid, id] of failed) {
+      if (held.has(guid)) continue;
+      if (result.redelivered === MAX_REDELIVERIES) {
+        await resumeAt(cursor);
+        return result;
+      }
+      try {
+        await redeliverHookDelivery(config, id);
+        result.redelivered += 1;
+      } catch (err) {
+        if (rateLimited(err)) {
+          await resumeAt(cursor);
+          return { ...result, stoppedOnRateLimit: true };
+        }
+        app.log.warn({ guid, error: redactedError(err) }, "reconcile.deliveries: a redelivery failed");
+      }
+    }
+    if (inWindow.length < page.deliveries.length || page.next === null) {
+      await saveScan(app.db, { coveredUntil: ceiling, resumeCursor: null, resumeCeiling: null });
+      return result;
+    }
+    cursor = page.next;
+  }
+}
+
+/**
+ * `reconcile.deliveries` (GH-62, ADR-011 as amended 2026-11-22), a
+ * scheduled task, every 15 minutes: the deliveries stored but left
+ * unprocessed (a lost job, a crash, retries exhausted) go through the worker
+ * again; the deliveries GitHub failed to hand over in the last 24 hours (the
+ * intake down, a 5xx) are asked again, unless one of their attempts was
+ * stored since ({@link redeliverFailures}). Its cost follows the traffic,
+ * not the number of repositories. Without Quiz's App it does nothing: there
+ * is no intake, and no handler registered to replay through.
  */
 export async function reconcileDeliveries(
   app: FastifyInstance,
@@ -406,39 +534,15 @@ export async function reconcileDeliveries(
     .limit(MAX_REPLAYS);
   // A delivery waiting out a rate limit (`processDelivery`) may be replayed
   // here before its reset: accepted — it meets the limit again and is sent
-  // again for the reset, at the cost of a few calls once a day.
+  // again for the reset, at the cost of a few calls.
   for (const { deliveryId } of stuck) {
     await dispatchDelivery(app, config, deliveryId, { wait: true });
   }
-
-  const failed = new Map<string, number>();
-  for (const d of await recentHookDeliveries(config)) {
-    const ok = d.statusCode >= 200 && d.statusCode < 300;
-    if (ok || d.redelivery || d.deliveredAt.getTime() < now - REDELIVERY_WINDOW_MS) continue;
-    if (!failed.has(d.guid)) failed.set(d.guid, d.id);
-  }
-  const held = new Set(
-    failed.size === 0
-      ? []
-      : (
-          await app.db
-            .select({ deliveryId: webhookDeliveries.deliveryId })
-            .from(webhookDeliveries)
-            .where(inArray(webhookDeliveries.deliveryId, [...failed.keys()]))
-        ).map((r) => r.deliveryId),
+  const log = await redeliverFailures(app, config, now);
+  return (
+    `${stuck.length} local deliveries replayed, ${log.redelivered} GitHub redeliveries requested, ${log.pages} log pages read` +
+    (log.stoppedOnRateLimit ? ", stopped on GitHub's rate limit" : "")
   );
-  let redelivered = 0;
-  for (const [guid, id] of failed) {
-    if (held.has(guid)) continue;
-    if (redelivered >= MAX_REDELIVERIES) break;
-    try {
-      await redeliverHookDelivery(config, id);
-      redelivered += 1;
-    } catch (err) {
-      app.log.warn({ guid, error: redactedError(err) }, "reconcile.deliveries: a redelivery failed");
-    }
-  }
-  return `${stuck.length} local deliveries replayed, ${redelivered} GitHub redeliveries requested`;
 }
 
 /** A processed delivery's payload is kept this long, then cleared (spec 05 §5.11). */

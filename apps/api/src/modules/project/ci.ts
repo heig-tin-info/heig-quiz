@@ -39,7 +39,7 @@
  * from `passTarget` itself.
  *
  * **The intake** ({@link ingestRun}: the ONE entry of a completed run, from
- * the `workflow_run` webhook and the reconciliation's listing of a quiet
+ * the `workflow_run` webhook and the reconciliation's daily listing of a
  * repository's runs, ADR-011 — no poll of its own): a dispatched run of a
  * schema-3 project goes to {@link intakeGradedRun}, never to
  * `ingestCompletedRun` — it is no review and no score, and fills neither

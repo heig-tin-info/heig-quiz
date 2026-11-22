@@ -4,11 +4,12 @@
  * fake GitHub (`github/testing.ts`) and the local bare repositories
  * (`./testing.ts`), the clock moved by hand:
  *
- * - `reconcile.grades`: the completed runs of a quiet repository through
- *   the webhook's own ingestion — once, whichever path saw the run first;
- *   a repository active within 30 minutes left alone; the scope — 24 hours
- *   after the freeze unless a final review is pending —; a 404 from the
- *   run listing is no deletion; a rate limit stops the pass at once;
+ * - `reconcile.grades`: the completed runs of a repository through the
+ *   webhook's own ingestion — once, whichever path saw the run first; a
+ *   repository active a moment ago read too; the scope — 24 hours after
+ *   the freeze unless a final review is pending, and never beyond 7 days
+ *   (ADR-011's addendum of 2026-11-22) —; a 404 from the run listing is no
+ *   deletion; a rate limit stops the pass at once;
  * - `reconcile.repos`: an invitation gone from GitHub re-invited once a
  *   day, by the claim on the grant, never once frozen, one still pending
  *   left alone, found accepted meanwhile; the
@@ -228,24 +229,25 @@ beforeEach(async () => {
 });
 
 describe("the catalog", () => {
-  it("runs the grades every 15 minutes and the repositories daily, as scheduled tasks (D10)", () => {
+  it("runs the grades and the repositories daily, the deliveries every 15 minutes, as scheduled tasks (D10, ADR-011 as amended 2026-11-22)", () => {
     const periods = Object.fromEntries(SCHEDULED_TASKS.map((t) => [t.key, t.defaultIntervalMinutes]));
-    expect(periods["reconcile.grades"]).toBe(15);
+    expect(periods["reconcile.grades"]).toBe(24 * 60);
     expect(periods["reconcile.repos"]).toBe(24 * 60);
+    expect(periods["reconcile.deliveries"]).toBe(15);
   });
 });
 
 // ---------------------------------------------------------------- reconcile.grades
 
 describe("reconcile.grades", () => {
-  it("ingests the completed runs of a quiet repository through the one path, once, and audits the pass", async () => {
+  it("ingests the completed runs of a repository through the one path, once, and audits the pass", async () => {
     const { repos } = await project();
     const [repo] = repos;
     const sha = head(repo!);
     const first = list(repo!, sha);
     const second = list(repo!, sha, { conclusion: "failure" });
 
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 2 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 2 runs ingested");
     const runs = await runsOf(repo!);
     expect(runs.map((r) => r.workflowRunId).sort()).toEqual([first.id, second.id].sort());
     expect(runs.every((r) => r.parseStatus === "fallback" && r.kind === "ci" && !r.afterDeadline)).toBe(true);
@@ -257,7 +259,7 @@ describe("reconcile.grades", () => {
     const passes = (await auditOf("reconcile.grades", "project.reconciled")).length;
 
     // Again: nothing new to read, nothing written, no audit for a pass that changed nothing.
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect(await runsOf(repo!)).toHaveLength(2);
     expect(await auditOf("reconcile.grades", "project.reconciled")).toHaveLength(passes);
   });
@@ -267,7 +269,7 @@ describe("reconcile.grades", () => {
     const [repo] = repos;
     const sha = head(repo!);
     const run = list(repo!, sha);
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 1 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 1 runs ingested");
     const [row] = await runsOf(repo!);
     expect(row).toMatchObject({ workflowRunId: run.id, toVerify: false });
     expect((await repoRow(repo!.id)).currentGradeRunId).toBe(row!.id);
@@ -275,7 +277,7 @@ describe("reconcile.grades", () => {
     // The head turns out restored after the run was ingested: a row answering its push, the head alone.
     await server.app.db.insert(reverts).values({ id: randomUUID(), repoId: repo!.id, headSha: sha, files: [CI], branch: "main", createdAt: server.clock.now() });
     gh.calls.length = 0;
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect((await runsOf(repo!))[0]).toMatchObject({ toVerify: true });
     expect((await repoRow(repo!.id)).currentGradeRunId).toBeNull();
     expect(callsTo(/\/actions\/runs$/)).toHaveLength(1); // the listing, nothing more
@@ -315,11 +317,11 @@ describe("reconcile.grades", () => {
     });
     expect(await runsOf(repo!)).toHaveLength(1);
 
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect(await runsOf(repo!)).toHaveLength(1);
   });
 
-  it("leaves a repository alone while something happened to it within 30 minutes", async () => {
+  it("reads a repository active a moment ago too: a daily pass has no quiet rule", async () => {
     const { repos } = await project();
     const [repo] = repos;
     list(repo!, head(repo!));
@@ -328,15 +330,32 @@ describe("reconcile.grades", () => {
       githubRepoId: repo!.githubRepoId!,
       branch: "main",
       headSha: head(repo!),
-      receivedAt: at(NOW, -10 * MINUTE),
+      receivedAt: at(NOW, -MINUTE),
       isBot: false,
       forced: false,
     });
-    expect(await reconcileGrades(server.app, config)).toBe("0 quiet repositories checked, 0 runs ingested");
-    expect(await runsOf(repo!)).toHaveLength(0);
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 1 runs ingested");
+  });
 
-    server.clock.set(at(NOW, 21 * MINUTE).toISOString());
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 1 runs ingested");
+  it("gives up a final review asked and never answered 7 days after the freeze (ADR-011, 2026-11-22)", async () => {
+    const { repos } = await project({ students: 2 });
+    const [sixDays, eightDays] = repos;
+    for (const repo of repos) {
+      list(repo!, head(repo!));
+      await server.app.db.insert(gradeDispatches).values({ id: randomUUID(), repoId: repo!.id, trigger: "deadline", sha: head(repo!) });
+    }
+    await freeze(sixDays!, at(NOW, -6 * DAY));
+    await freeze(eightDays!, at(NOW, -8 * DAY));
+
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 1 runs ingested");
+    expect(await runsOf(sixDays!)).toHaveLength(1);
+    expect(await runsOf(eightDays!)).toHaveLength(0);
+    expect(callsTo(new RegExp(`${eightDays!.fullName}/actions/runs$`))).toHaveLength(0);
+    // reconcile.repos reads the same scope.
+    gh.calls.length = 0;
+    await reconcileRepos(server.app, config);
+    expect(gh.calls.some((c) => c.includes(`/repositories/${eightDays!.githubRepoId}`))).toBe(false);
+    expect(gh.calls.some((c) => c.includes(`/repositories/${sixDays!.githubRepoId}`))).toBe(true);
   });
 
   it("drops a repository a day after its definitive freeze, unless its final review was asked and not answered", async () => {
@@ -348,7 +367,7 @@ describe("reconcile.grades", () => {
     await freeze(pending!, at(NOW, -25 * HOUR));
     await server.app.db.insert(gradeDispatches).values({ id: randomUUID(), repoId: pending!.id, trigger: "deadline", sha: head(pending!) });
 
-    expect(await reconcileGrades(server.app, config)).toBe("2 quiet repositories checked, 2 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("2 repositories checked, 2 runs ingested");
     expect(await runsOf(recent!)).toHaveLength(1);
     expect(await runsOf(old!)).toHaveLength(0);
     expect(await runsOf(pending!)).toHaveLength(1);
@@ -358,7 +377,7 @@ describe("reconcile.grades", () => {
     const [answer] = await runsOf(pending!);
     await server.app.db.update(projectRepos).set({ reviewGradeRunId: answer!.id }).where(eq(projectRepos.id, pending!.id));
     list(pending!, head(pending!));
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect(await runsOf(pending!)).toHaveLength(1);
   });
 
@@ -369,7 +388,7 @@ describe("reconcile.grades", () => {
     list(repo!, head(repo!));
     await freeze(repo!, at(NOW, -25 * HOUR));
     await server.app.db.insert(gradeDispatches).values({ id: randomUUID(), repoId: repo!.id, trigger: "deadline", sha: head(repo!) });
-    expect(await reconcileGrades(server.app, config)).toBe("0 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("0 repositories checked, 0 runs ingested");
     expect(await runsOf(repo!)).toHaveLength(0);
   });
 
@@ -380,12 +399,12 @@ describe("reconcile.grades", () => {
     await server.app.db.update(projectRepos).set({ deletedAt: at(NOW) }).where(eq(projectRepos.id, gone!.id));
     runsFailing.set(kept!.fullName!, "404");
 
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect((await repoRow(kept!.id)).deletedAt).toBeNull();
     expect(await auditOf(kept!.id, "project_repo.deleted")).toHaveLength(0);
 
     await server.app.db.update(projects).set({ archivedAt: at(NOW) }).where(eq(projects.id, id));
-    expect(await reconcileGrades(server.app, config)).toBe("0 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("0 repositories checked, 0 runs ingested");
   });
 
   it("stops at once on GitHub's rate limit, keeps what it did, and says so", async () => {
@@ -398,7 +417,7 @@ describe("reconcile.grades", () => {
     runsFailing.delete(first!.fullName!);
 
     const started = Date.now();
-    expect(await reconcileGrades(server.app, config)).toBe("2 quiet repositories checked, 1 runs ingested, stopped on GitHub's rate limit");
+    expect(await reconcileGrades(server.app, config)).toBe("2 repositories checked, 1 runs ingested, stopped on GitHub's rate limit");
     // Octokit would otherwise wait for the reset, an hour away.
     expect(Date.now() - started).toBeLessThan(10_000);
     expect(await runsOf(first!)).toHaveLength(1);
@@ -408,7 +427,7 @@ describe("reconcile.grades", () => {
 
     // The next period resumes: the second repository's runs, and nothing twice.
     runsFailing.clear();
-    expect(await reconcileGrades(server.app, config)).toBe("2 quiet repositories checked, 1 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("2 repositories checked, 1 runs ingested");
     expect(await runsOf(second!)).toHaveLength(1);
   });
 
@@ -738,7 +757,7 @@ describe("reconcile.repos: the repository itself", () => {
     const [repo] = repos;
     list(repo!, head(repo!));
     byId.set(repo!.githubRepoId!, "gone");
-    expect(await reconcileGrades(server.app, config)).toBe("1 quiet repositories checked, 0 runs ingested");
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 0 runs ingested");
     expect((await repoRow(repo!.id)).deletedAt).not.toBeNull();
     expect(await runsOf(repo!)).toHaveLength(0);
     expect(await lastPass("reconcile.grades")).toMatchObject({ deleted: 1 });

@@ -452,33 +452,54 @@ interface RawHookDelivery {
   delivered_at: string;
 }
 
-/**
- * The App's latest webhook delivery attempts, newest first, one page of 100
- * (GH-62): where the reconciliation looks for failures. Empty when the App
- * has no webhook configured (GitHub's 404); any other failure throws. A
- * background call: a rate limit is waited out once.
- */
-export async function recentHookDeliveries(config: AppConfig): Promise<HookDelivery[]> {
-  const app = githubApp(config);
-  if (!app) return [];
-  const deliveries = await unless404(async () => {
-    const { data } = await app.octokit.request("GET /app/hook/deliveries", { per_page: 100 });
-    return data as RawHookDelivery[];
-  });
-  return (deliveries ?? []).map((d) => ({
-    id: d.id,
-    guid: d.guid,
-    statusCode: d.status_code,
-    redelivery: d.redelivery,
-    deliveredAt: new Date(d.delivered_at),
-  }));
+/** One page of GitHub's log of the App's deliveries, and the cursor of the next (older) page, null at the end. */
+export interface HookDeliveryPage {
+  deliveries: HookDelivery[];
+  next: string | null;
 }
 
-/** Asks GitHub to deliver an attempt again (`POST /app/hook/deliveries/{id}/attempts`). */
+/** The `cursor` of the `rel="next"` link GitHub sends with a page of its delivery log, null without one. */
+export function nextCursor(link: string | undefined): string | null {
+  const next = link?.split(",").find((part) => /rel="next"/.test(part));
+  const url = next?.match(/<([^>]+)>/)?.[1];
+  return url ? new URL(url).searchParams.get("cursor") : null;
+}
+
+/**
+ * One page of the App's webhook delivery attempts (GH-62), newest first,
+ * 100 at a time: from the top with a null `cursor`, else from the page
+ * GitHub's `cursor` names (its own pagination, read from the `rel="next"`
+ * link). Authenticated as the App (its JWT): it spends no installation's
+ * quota. A rate limit is answered at once (`noRateLimitWait`): the caller
+ * stops and resumes later, never waits inside a scheduled task. An empty
+ * last page when the App has no webhook configured (GitHub's 404); any other
+ * failure throws.
+ */
+export async function hookDeliveriesPage(config: AppConfig, cursor: string | null): Promise<HookDeliveryPage> {
+  const app = githubApp(config);
+  if (!app) return { deliveries: [], next: null };
+  const page = await unless404(() =>
+    app.octokit.request("GET /app/hook/deliveries", { per_page: 100, ...(cursor === null ? {} : { cursor }), request: HTTP_READ }),
+  );
+  if (!page) return { deliveries: [], next: null };
+  return {
+    deliveries: (page.data as RawHookDelivery[]).map((d) => ({
+      id: d.id,
+      guid: d.guid,
+      statusCode: d.status_code,
+      redelivery: d.redelivery,
+      deliveredAt: new Date(d.delivered_at),
+    })),
+    next: nextCursor(page.headers.link),
+  };
+}
+
+/** Asks GitHub to deliver an attempt again (`POST /app/hook/deliveries/{id}/attempts`); a rate limit is answered at once, as for the log. */
 export async function redeliverHookDelivery(config: AppConfig, id: number): Promise<void> {
   const app = githubApp(config);
   if (!app) return;
   await app.octokit.request("POST /app/hook/deliveries/{delivery_id}/attempts", {
     delivery_id: id,
+    request: HTTP_READ,
   });
 }

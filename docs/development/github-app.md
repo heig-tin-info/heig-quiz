@@ -299,7 +299,7 @@ copied project only if it belongs to that organization.
 - **Webhook secret**: set the new value on GitHub (*Webhook secret*) and in
   the environment's file at the same time, then restart `app`. Deliveries
   in between answer 401; `reconcile.deliveries` asks GitHub for them again
-  within a day.
+  within 15 minutes.
 - **Client secret**: *Generate a new client secret*, update
   `GITHUB_APP_CLIENT_SECRET`, restart, then delete the old one on GitHub.
   Only the account link uses it.

@@ -354,7 +354,7 @@ export const admin: Record<keyof typeof en, string> = {
   "admin.task.deliveries.purge.desc":
     "Leert den Inhalt der vor über 30 Tagen verarbeiteten GitHub-Ereignisse und behält ihren Eintrag.",
   "admin.task.reconcile.grades": "Läufe der GitHub-Projekte",
-  "admin.task.reconcile.grades.desc": "Liest die Läufe von seit 30 Minuten ruhenden Repositories und erfasst Scores, die GitHub nicht gemeldet hat.",
+  "admin.task.reconcile.grades.desc": "Liest einmal täglich die Läufe der Projekt-Repositories und erfasst Scores, die GitHub nicht gemeldet hat.",
   "admin.task.reconcile.repos": "Repositories der GitHub-Projekte",
   "admin.task.reconcile.repos.desc": "Verfolgt umbenannte, gelöschte Repositories und letzte Commits. Lädt Studierende ohne Zugang täglich neu ein.",
   "admin.task.llm.review": "KI-Durchsicht der Fragen",

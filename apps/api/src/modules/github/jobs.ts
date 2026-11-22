@@ -33,14 +33,16 @@ export async function registerGithubJobs(
 }
 
 /**
- * Daily, both, like classroom's, and in the catalog whether or not the App
- * is configured (the catalog is static). Without it the reconciliation
- * returns at once, and the purge clears what an earlier configuration left.
+ * In the catalog whether or not the App is configured (the catalog is
+ * static). Without it the reconciliation returns at once, and the purge
+ * clears what an earlier configuration left. The reconciliation runs every
+ * 15 minutes (ADR-011 as amended 2026-11-22: the detector of lost webhooks,
+ * reading GitHub's log incrementally), the purge daily.
  */
 export const GITHUB_TASKS: readonly ScheduledTask[] = [
   {
     key: "reconcile.deliveries",
-    defaultIntervalMinutes: 24 * 60,
+    defaultIntervalMinutes: 15,
     run: reconcileDeliveries,
   },
   {

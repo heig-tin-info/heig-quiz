@@ -24,6 +24,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -182,6 +183,33 @@ export const webhookDeliveries = pgTable(
     index("webhook_deliveries_pending_idx")
       .on(t.receivedAt)
       .where(sql`${t.processedAt} IS NULL`),
+  ],
+);
+
+/**
+ * How far `reconcile.deliveries` has read GitHub's log of the App's
+ * deliveries (ADR-011's addendum of 2026-11-22): one row, `id = 'app'`,
+ * written by the pass alone. Every attempt older than `covered_until` was
+ * handled — redelivered, found stored, or a success — so the next pass reads
+ * the log, newest first, only down to it (less a safety overlap), never 24
+ * hours of it. A pass that stopped before reaching it (its page budget, its
+ * redelivery cap, a rate limit) keeps GitHub's opaque pagination cursor of
+ * the page to read next (`resume_cursor`) and the top of the stretch it was
+ * reading (`resume_ceiling`, the pass's start); the next pass goes on from
+ * there, and `covered_until` becomes that ceiling once it reaches the floor.
+ * No row: nothing read yet, the floor is the 24-hour redelivery window.
+ */
+export const webhookDeliveryScan = pgTable(
+  "webhook_delivery_scan",
+  {
+    id: text("id").primaryKey(),
+    coveredUntil: timestamp("covered_until", { withTimezone: true }),
+    resumeCursor: text("resume_cursor"),
+    resumeCeiling: timestamp("resume_ceiling", { withTimezone: true }),
+  },
+  (t) => [
+    check("webhook_delivery_scan_one_row", sql`${t.id} = 'app'`),
+    check("webhook_delivery_scan_resume", sql`(${t.resumeCursor} IS NULL) = (${t.resumeCeiling} IS NULL)`),
   ],
 );
 

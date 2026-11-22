@@ -352,7 +352,7 @@ export const admin = {
   "admin.task.deliveries.purge.desc":
     "Clears the content of the GitHub events processed more than 30 days ago, and keeps their record.",
   "admin.task.reconcile.grades": "GitHub project runs",
-  "admin.task.reconcile.grades.desc": "Reads the runs of repositories idle for 30 minutes and captures the scores GitHub failed to announce.",
+  "admin.task.reconcile.grades.desc": "Reads the runs of project repositories once a day and captures the scores GitHub failed to announce.",
   "admin.task.reconcile.repos": "GitHub project repositories",
   "admin.task.reconcile.repos.desc": "Tracks renamed and deleted repositories and their last commit, and re-invites students without access daily.",
   "admin.task.llm.review": "AI review of the questions",

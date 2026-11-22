@@ -214,7 +214,8 @@ numbered points are cited as "ADR-062 addendum N".
    of a run follows the set at every reselection (`refreshScoreSelection`):
    a run ingested before a late receipt widened its window is flagged at
    the repository's next reselection — a restore, a run ingested by the
-   webhook, or `reconcile.grades` (15 min), which reselects every quiet
+   webhook, or `reconcile.grades` (daily since ADR-011's addendum of
+   2026-11-22; every 15 minutes before), which reselects every
    repository in scope and so re-flags without a new run or a GitHub call —
    and the score never waited for the flag, it reads the set
    (`selectScoreRun`). The student never sees

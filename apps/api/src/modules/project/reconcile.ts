@@ -6,11 +6,11 @@
  * worker runs them, never a tick (invariant 5), and without Quiz's App they
  * skip. Every step is the webhook's own, idempotent path (ADR-011 §1).
  *
- * - `reconcile.grades` (every 15 minutes): the last 20 completed runs of
- *   every repository in scope that is QUIET — no push received and no run
- *   completed for 30 minutes (while the webhooks flow there is nothing to
- *   catch up) — through `ingestRun` (`ingestCompletedRun`, or a schema-3
- *   project's graded run, `ci.ts`): a run already known reads and
+ * - `reconcile.grades` (daily, a last resort since the webhooks carry the
+ *   runs and `reconcile.deliveries` asks again every 15 minutes for the
+ *   ones GitHub failed to hand over): the last 100 completed runs of every
+ *   repository in scope through `ingestRun` (`ingestCompletedRun`, or a
+ *   schema-3 project's graded run, `ci.ts`): a run already known reads and
  *   writes nothing (the UNIQUE of `project_grade_runs`). A reconciled run
  *   has no receipt: late once the deadline passed (GR-14.3).
  * - `reconcile.repos` (daily): each member's invitation (a student's own
@@ -35,10 +35,12 @@
  * name GitHub changed is followed as the `repository.renamed` webhook
  * follows it (`followRepoRename`).
  *
- * SCOPE (product owner, 2026-10-05; `reconciles` of `@quiz/domain`): the
- * live repositories (`LIVE`), until 24 hours after their definitive freeze
- * — longer only while a final review was asked and not answered. GitHub's
- * quota (N-PERF-07): a finished project costs nothing after a day.
+ * SCOPE (product owner, 2026-10-05 and 2026-11-22; `reconciles` of
+ * `@quiz/domain`): the live repositories (`LIVE`), until 24 hours after
+ * their definitive freeze — longer only while a final review was asked and
+ * not answered, and never beyond 7 days after the freeze. GitHub's quota
+ * (N-PERF-07): a finished project costs nothing after a day, and the cost
+ * of both tasks is two to five calls per repository in scope and per day.
  *
  * A RATE LIMIT STOPS THE PASS at once (`failFast`: `noRateLimitWait` on
  * every request) instead of waiting it out inside the task — a run of 30
@@ -47,15 +49,15 @@
  * logged and the pass goes on to the next.
  */
 import type { FastifyInstance } from "fastify";
-import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
-import { effectiveDeadline, isQuiet, reconciles } from "@quiz/domain";
+import { effectiveDeadline, reconciles } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { botCommits, classrooms, gradeDispatches, projectGradeRuns, projectRepoAccess, projectRepos, projects, pushReceipts } from "../../db/schema.js";
+import { botCommits, classrooms, gradeDispatches, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
 import { failFast, githubApp, githubStatus, ownerRepo, rateLimitReset } from "../../github/app.js";
 import { forgetRepoLiveState } from "../../github/metrics.js";
 import { protectStudentRepo } from "../../github/provision.js";
@@ -71,8 +73,12 @@ import { repoMembers } from "./groupRepos.js";
 import { checkGrants, liveGrants } from "./memberAccess.js";
 import { followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, repoWithProject, type RepoContext } from "./repos.js";
 
-/** The completed runs read per repository (heig-classroom's figure): the lost webhooks of a quiet half hour fit in far fewer. */
-const RUNS_PER_REPO = 20;
+/**
+ * The completed runs read per repository, one page at GitHub's largest: a
+ * daily pass reads a day of an active repository's runs in the one call
+ * (heig-classroom read 20, every 15 minutes).
+ */
+const RUNS_PER_REPO = 100;
 /** The least time between two re-invites of one member's invitation (F-PROJ-07: at most once a day). */
 export const REINVITE_INTERVAL_MS = 24 * 3_600_000;
 
@@ -126,39 +132,6 @@ async function candidates(db: Db, now: Date): Promise<Candidate[]> {
     .where(LIVE)
     .orderBy(asc(projects.id), asc(projectRepos.id));
   return rows.filter((r) => reconciles(r.repo, r.reviewAsked, now)).map(({ reviewAsked: _asked, ...ctx }) => ctx);
-}
-
-/**
- * The candidates QUIET for 30 minutes (`isQuiet`): nothing happened to them
- * — the latest of their push receipts and of their runs' completion (GitHub's
- * clock, never the row's `created_at`: the two clocks do not mix) is older
- * than that, or there was none.
- */
-async function quietCandidates(db: Db, now: Date): Promise<Candidate[]> {
-  const rows = await candidates(db, now);
-  if (rows.length === 0) return rows;
-  const ids = rows.map((r) => r.repo.id);
-  const latest = (column: typeof pushReceipts.receivedAt | typeof projectGradeRuns.completedAt) =>
-    sql<string | Date>`max(${column})`.mapWith((v: string | Date) => new Date(v));
-  const [receipts, runs] = await Promise.all([
-    db
-      .select({ id: projectRepos.id, at: latest(pushReceipts.receivedAt) })
-      .from(pushReceipts)
-      .innerJoin(projectRepos, eq(projectRepos.githubRepoId, pushReceipts.githubRepoId))
-      .where(inArray(projectRepos.id, ids))
-      .groupBy(projectRepos.id),
-    db
-      .select({ id: projectGradeRuns.repoId, at: latest(projectGradeRuns.completedAt) })
-      .from(projectGradeRuns)
-      .where(inArray(projectGradeRuns.repoId, ids))
-      .groupBy(projectGradeRuns.repoId),
-  ]);
-  const activity = new Map<string, Date>();
-  for (const { id, at } of [...receipts, ...runs]) {
-    const known = activity.get(id);
-    if (!known || known < at) activity.set(id, at);
-  }
-  return rows.filter((r) => isQuiet(activity.get(r.repo.id) ?? null, now));
 }
 
 /**
@@ -264,9 +237,14 @@ async function ingestRuns({ app, config, octokit, ctx, located, counts, now }: S
   await hintRepo(app.db, ctx);
 }
 
-/** `reconcile.grades`: the runs of the quiet repositories in scope. */
+/**
+ * `reconcile.grades`: the runs of every repository in scope. No longer only
+ * the quiet ones (no push nor run for 30 minutes): that filter saved calls
+ * when the pass ran every 15 minutes; once a day it would only skip, until
+ * the next day, the few repositories active at the pass's minute.
+ */
 export function reconcileGrades(app: FastifyInstance, config: AppConfig): Promise<string> {
-  return pass(app, config, "reconcile.grades", quietCandidates, ingestRuns, (repos, c) => `${repos} quiet repositories checked, ${c.runsIngested} runs ingested`);
+  return pass(app, config, "reconcile.grades", candidates, ingestRuns, (repos, c) => `${repos} repositories checked, ${c.runsIngested} runs ingested`);
 }
 
 // ---------------------------------------------------------------- reconcile.repos
@@ -460,7 +438,7 @@ async function refreshRepo(step: Step): Promise<void> {
   await refreshHead(step);
 }
 
-/** `reconcile.repos`: every repository in scope, quiet or not; then the evidence files past their retention (ADR-106 §3). */
+/** `reconcile.repos`: every repository in scope; then the evidence files past their retention (ADR-106 §3). */
 export async function reconcileRepos(app: FastifyInstance, config: AppConfig): Promise<string> {
   const summary = await pass(
     app,
@@ -477,6 +455,6 @@ export async function reconcileRepos(app: FastifyInstance, config: AppConfig): P
 
 /** The two tasks, in the catalog whether or not the App is configured (the catalog is static): without it they return at once. */
 export const RECONCILE_TASKS: readonly ScheduledTask[] = [
-  { key: "reconcile.grades", defaultIntervalMinutes: 15, run: reconcileGrades },
+  { key: "reconcile.grades", defaultIntervalMinutes: 24 * 60, run: reconcileGrades },
   { key: "reconcile.repos", defaultIntervalMinutes: 24 * 60, run: reconcileRepos },
 ];
