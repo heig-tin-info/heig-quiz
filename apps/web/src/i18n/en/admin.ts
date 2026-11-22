@@ -355,6 +355,8 @@ export const admin = {
   "admin.task.reconcile.grades.desc": "Reads the runs of project repositories once a day and captures the scores GitHub failed to announce.",
   "admin.task.reconcile.repos": "GitHub project repositories",
   "admin.task.reconcile.repos.desc": "Tracks renamed and deleted repositories and their last commit, and re-invites students without access daily.",
+  "admin.task.reconcile.ci": "GitHub graded runs",
+  "admin.task.reconcile.ci.desc": "Reads every 15 minutes the runs of repositories still awaiting their graded run, before the pass expires.",
   "admin.task.llm.review": "AI review of the questions",
   "admin.task.llm.review.desc": "Between 1 and 6 a.m., reviews the questions of the pools that asked, within a quarter of the day's AI cap.",
   "admin.task.llm.domain": "Domain of the public pools",

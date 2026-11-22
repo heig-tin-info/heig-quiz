@@ -72,7 +72,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, eq, exists, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { readResults, snapshotSettings } from "@quiz/contracts";
@@ -660,11 +660,22 @@ export async function purgeCiResults(db: Db, now: Date): Promise<number> {
   return purged.length;
 }
 
-/** A CI pass of the repository still open, over a `project_repos` row: the reconciliation keeps reading its runs. */
-export const ciPassOpen = (db: Db | Tx) =>
+/**
+ * A CI pass of the repository still open, over a `project_repos` row: the
+ * reconciliation keeps reading its runs. With `dispatchedBefore`, only a pass
+ * GitHub accepted the dispatch of by then: its run is overdue, its webhook
+ * may be lost (`reconcile.ci`, ADR-011's addendum of 2026-11-22).
+ */
+export const ciPassOpen = (db: Db | Tx, dispatchedBefore?: Date) =>
   exists(
     db
       .select({ id: gradeDispatches.id })
       .from(gradeDispatches)
-      .where(and(eq(gradeDispatches.repoId, projectRepos.id), OPEN)),
+      .where(
+        and(
+          eq(gradeDispatches.repoId, projectRepos.id),
+          OPEN,
+          dispatchedBefore === undefined ? undefined : lte(gradeDispatches.dispatchedAt, dispatchedBefore),
+        ),
+      ),
   );

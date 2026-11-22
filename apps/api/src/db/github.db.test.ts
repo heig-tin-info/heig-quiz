@@ -13,7 +13,7 @@ import type { Db } from "./client.js";
 import { githubAccounts, pushReceipts, users, webhookDeliveries } from "./schema.js";
 import { testDb } from "../test/db.js";
 
-const GITHUB_TABLES = ["github_organizations", "github_classroom_links", "github_accounts", "webhook_deliveries", "webhook_delivery_scan", "push_receipts"];
+const GITHUB_TABLES = ["github_organizations", "github_classroom_links", "github_accounts", "webhook_deliveries", "webhook_delivery_scan", "webhook_redelivery_asks", "push_receipts"];
 
 let db: Db;
 beforeAll(async () => {

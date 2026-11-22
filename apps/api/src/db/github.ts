@@ -214,6 +214,25 @@ export const webhookDeliveryScan = pgTable(
 );
 
 /**
+ * What `reconcile.deliveries` asked GitHub to deliver again, per delivery
+ * (`X-GitHub-Delivery`, the same for all its attempts): how many times, since
+ * when, and whether an attempt was found refused (ADR-011's addendum of
+ * 2026-11-22; the rules are `mayAskAgain` and `attemptVerdict` of
+ * `@quiz/domain`). It bounds a delivery the intake keeps failing to three
+ * asks within a day, and a refusal (a 4xx) to none, logged once. Purged by
+ * `deliveries.purge` once past any window.
+ */
+export const webhookRedeliveryAsks = pgTable("webhook_redelivery_asks", {
+  guid: uuid("guid").primaryKey(),
+  firstAskedAt: timestamp("first_asked_at", { withTimezone: true }).notNull(),
+  asks: integer("asks").notNull(),
+  /** The status of the attempt last looked at (0: no answer). */
+  lastStatus: integer("last_status").notNull(),
+  /** When an attempt was found refused: never asked again. */
+  refusedAt: timestamp("refused_at", { withTimezone: true }),
+});
+
+/**
  * The server's receipt of a push (heig-classroom ADR-012, Quiz's ADR-012
  * addendum): written SYNCHRONOUSLY by the intake, before the job is queued,
  * for the repositories a handler registered as tracked (projects' student

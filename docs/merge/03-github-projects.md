@@ -205,7 +205,8 @@ layers:
   Since 2026-11-22 (ADR-011's addendum of that day): `reconcile.grades`
   daily, with no quiet rule, a pending final review polled 7 days after
   the freeze at most; `reconcile.deliveries` every 15 minutes, reading
-  GitHub's log incrementally.
+  GitHub's log incrementally; `reconcile.ci` every 15 minutes for the CI
+  passes awaiting their graded run.
   `purge.housekeeping`: payloads > 30 days (in Quiz, the scheduled task
   `deliveries.purge`, M2-04).
 - Admin-configurable period, enable flag, run-now, last status, atomic claim

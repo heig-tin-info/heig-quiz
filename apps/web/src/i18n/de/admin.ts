@@ -357,6 +357,8 @@ export const admin: Record<keyof typeof en, string> = {
   "admin.task.reconcile.grades.desc": "Liest einmal täglich die Läufe der Projekt-Repositories und erfasst Scores, die GitHub nicht gemeldet hat.",
   "admin.task.reconcile.repos": "Repositories der GitHub-Projekte",
   "admin.task.reconcile.repos.desc": "Verfolgt umbenannte, gelöschte Repositories und letzte Commits. Lädt Studierende ohne Zugang täglich neu ein.",
+  "admin.task.reconcile.ci": "Bewertete GitHub-Läufe",
+  "admin.task.reconcile.ci.desc": "Liest alle 15 Minuten die Läufe der Repositories, die noch auf ihren bewerteten Lauf warten.",
   "admin.task.llm.review": "KI-Durchsicht der Fragen",
   "admin.task.llm.review.desc": "Sieht 1–6 Uhr die Fragen der Fragenpools durch, die es wünschen, mit max. einem Viertel des KI-Tageslimits.",
   "admin.task.llm.domain": "Fachgebiet der öffentlichen Fragenpools",

@@ -357,6 +357,8 @@ export const admin: Record<keyof typeof en, string> = {
   "admin.task.reconcile.grades.desc": "Legge ogni giorno le esecuzioni dei repository di progetto e registra i punteggi non annunciati da GitHub.",
   "admin.task.reconcile.repos": "Repository dei progetti GitHub",
   "admin.task.reconcile.repos.desc": "Segue i repository rinominati o eliminati e l'ultimo commit, e reinvita ogni giorno chi non ha accesso.",
+  "admin.task.reconcile.ci": "Esecuzioni valutate GitHub",
+  "admin.task.reconcile.ci.desc": "Legge ogni 15 minuti le esecuzioni dei repository che attendono ancora la loro esecuzione valutata.",
   "admin.task.llm.review": "Revisione IA delle domande",
   "admin.task.llm.review.desc": "Tra l'1 e le 6, rivede le domande delle banche che l'hanno chiesto, entro un quarto del limite IA del giorno.",
   "admin.task.llm.domain": "Dominio delle banche pubbliche",

@@ -35,12 +35,12 @@ import { and, asc, eq, inArray, isNotNull, isNull, lt, notExists, sql } from "dr
 import { z } from "zod";
 
 import type { GithubWebhookBody } from "@quiz/contracts";
-import type { CommitAuthor } from "@quiz/domain";
+import { attemptVerdict, mayAskAgain, type CommitAuthor, type RedeliveryAsks } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { botCommits, codespaceRelays, githubAccounts, projectRepos, pushReceipts, webhookDeliveries, webhookDeliveryScan } from "../../db/schema.js";
-import { githubApp, hookDeliveriesPage, isZeroSha, rateLimitReset, redeliverHookDelivery, type HookDeliveryPage } from "../../github/app.js";
+import { botCommits, codespaceRelays, githubAccounts, projectRepos, pushReceipts, webhookDeliveries, webhookDeliveryScan, webhookRedeliveryAsks } from "../../db/schema.js";
+import { githubApp, githubStatus, hookDeliveriesPage, isZeroSha, rateLimitReset, redeliverHookDelivery, type HookDelivery, type HookDeliveryPage } from "../../github/app.js";
 import { GITHUB_WEBHOOK_QUEUE } from "../../jobs.js";
 import { redactTokens } from "../../redact.js";
 
@@ -416,92 +416,175 @@ interface LogPass {
   stoppedOnRateLimit: boolean;
 }
 
+/** A 4xx GitHub answered for a request: the cursor it named is no longer its own. */
+const refusedRequest = (err: unknown): boolean => {
+  const status = githubStatus(err);
+  return status !== undefined && status >= 400 && status < 500;
+};
+
+/**
+ * A delivery's newest attempt found refused (a 4xx: `attemptVerdict`): it is
+ * never asked for, and logged once, when its row first records the refusal.
+ */
+async function recordRefusal(app: FastifyInstance, attempt: HookDelivery, now: Date): Promise<void> {
+  const [recorded] = await app.db
+    .insert(webhookRedeliveryAsks)
+    .values({ guid: attempt.guid, firstAskedAt: now, asks: 0, lastStatus: attempt.statusCode, refusedAt: now })
+    .onConflictDoUpdate({
+      target: webhookRedeliveryAsks.guid,
+      set: { lastStatus: attempt.statusCode, refusedAt: now },
+      setWhere: isNull(webhookRedeliveryAsks.refusedAt),
+    })
+    .returning({ guid: webhookRedeliveryAsks.guid });
+  if (recorded) {
+    app.log.warn({ guid: attempt.guid, status: attempt.statusCode }, "reconcile.deliveries: the intake refused a delivery; it is not asked for again");
+  }
+}
+
+/** One ask of a delivery counted (`mayAskAgain` reads the count): the first sets the start of its day. */
+async function recordAsk(db: Db, attempt: HookDelivery, now: Date): Promise<void> {
+  await db
+    .insert(webhookRedeliveryAsks)
+    .values({ guid: attempt.guid, firstAskedAt: now, asks: 1, lastStatus: attempt.statusCode })
+    .onConflictDoUpdate({
+      target: webhookRedeliveryAsks.guid,
+      set: { asks: sql`${webhookRedeliveryAsks.asks} + 1`, lastStatus: attempt.statusCode },
+    });
+}
+
+/** The newest attempt of each delivery in the stretch read, and how the read ended. */
+interface Stretch {
+  newest: Map<string, HookDelivery>;
+  pages: number;
+  /** The floor was reached (or the log's end): the stretch is whole. */
+  reached: boolean;
+  /** The page to read next when it was not. */
+  next: string | null;
+  /** How the read failed, if it did. */
+  failure: "rate_limit" | "stale_cursor" | null;
+}
+
+/** GitHub's log from `cursor` down to `floor`, at most {@link MAX_LOG_PAGES} pages. */
+async function readStretch(config: AppConfig, cursor: string | null, floor: number): Promise<Stretch> {
+  const stretch: Stretch = { newest: new Map(), pages: 0, reached: false, next: cursor, failure: null };
+  while (stretch.pages < MAX_LOG_PAGES) {
+    let page: HookDeliveryPage;
+    try {
+      page = await hookDeliveriesPage(config, stretch.next);
+    } catch (err) {
+      if (rateLimited(err)) return { ...stretch, failure: "rate_limit" };
+      if (stretch.next !== null && refusedRequest(err)) return { ...stretch, failure: "stale_cursor" };
+      throw err;
+    }
+    stretch.pages += 1;
+    const inWindow = page.deliveries.filter((d) => d.deliveredAt.getTime() >= floor);
+    for (const d of inWindow) if (!stretch.newest.has(d.guid)) stretch.newest.set(d.guid, d);
+    if (inWindow.length < page.deliveries.length || page.next === null) return { ...stretch, reached: true };
+    stretch.next = page.next;
+  }
+  return stretch;
+}
+
 /**
  * The deliveries GitHub failed to hand over (GH-62), read INCREMENTALLY from
  * its log of the App's attempts (ADR-011's addendum of 2026-11-22): newest
  * first, one page of 100 at a time, down to the point the previous passes
  * covered less {@link LOG_OVERLAP_MS}, and never below the 24-hour
  * redelivery window — so a pass costs the pages of the deliveries made since
- * the last one, not 24 hours of them. A delivery whose newest attempt in
- * that stretch failed (no 2xx, or no answer at all) and which Quiz never
- * stored is asked again, at most {@link MAX_REDELIVERIES} a pass. That
- * attempt may be a redelivery this task asked for: its original lies below
- * the covered point by then, so the redelivery that failed in turn is what
- * keeps the delivery asked for, every pass, until the intake takes it.
+ * the last one, not 24 hours of them.
  *
- * Where the pass stops is kept (`webhook_delivery_scan`): having reached the
- * floor, everything up to its start is covered; stopped before it — its
- * {@link MAX_LOG_PAGES} pages read, its redeliveries spent, GitHub's rate
- * limit — the next pass goes on from the page it had reached (GitHub's own
- * cursor), down to the same floor, before it reads the newer top. The
- * failures closest to leaving the window are thus never starved by new
- * traffic.
+ * Each delivery's NEWEST attempt in that stretch decides (`attemptVerdict`):
+ * delivered, or stored by Quiz meanwhile, nothing to do; refused (a 4xx),
+ * never asked for, logged once; else (no answer, a 429, a 5xx) asked again
+ * while `mayAskAgain` holds — three asks within a day of the first, so a
+ * delivery the intake keeps failing cannot spend every pass's cap. The asks
+ * go OLDEST FIRST, the deliveries closest to leaving the window, at most
+ * {@link MAX_REDELIVERIES} a pass.
+ *
+ * Where the pass stops is kept (`webhook_delivery_scan`). Having read down
+ * to the floor and asked all it found, everything up to its start is covered
+ * — or up to the oldest ask that failed, so the next pass asks it again. Its
+ * {@link MAX_LOG_PAGES} pages read first, the next pass goes on from the page
+ * it reached (GitHub's own cursor), down to the same floor, before it reads
+ * the newer top. Its asks cut short (the cap, a rate limit), the next pass
+ * reads the same stretch again. A resume cursor GitHub no longer knows, or
+ * one left past the window, is dropped: the top is read instead.
  */
 async function redeliverFailures(app: FastifyInstance, config: AppConfig, now: number): Promise<LogPass> {
-  const scan = await readScan(app.db);
+  const stored = await readScan(app.db);
+  const stale = stored.resumeCeiling !== null && stored.resumeCeiling.getTime() < now - REDELIVERY_WINDOW_MS;
+  const scan = stale ? { ...stored, resumeCursor: null, resumeCeiling: null } : stored;
   const floor = Math.max(now - REDELIVERY_WINDOW_MS, (scan.coveredUntil?.getTime() ?? 0) - LOG_OVERLAP_MS);
   const ceiling = scan.resumeCeiling ?? new Date(now);
-  const result: LogPass = { pages: 0, redelivered: 0, stoppedOnRateLimit: false };
-  /** Stopped before the floor: the next pass reads `cursor`'s page again (null: the top, nothing to keep). */
+  /** The next pass reads from `cursor` again (null: the top, nothing to keep), down to the same floor. */
   const resumeAt = (cursor: string | null) =>
     saveScan(app.db, { coveredUntil: scan.coveredUntil, resumeCursor: cursor, resumeCeiling: cursor === null ? null : ceiling });
-  const decided = new Set<string>();
-  let cursor = scan.resumeCursor;
-  for (;;) {
-    if (result.pages === MAX_LOG_PAGES) {
-      await resumeAt(cursor);
-      return result;
-    }
-    let page: HookDeliveryPage;
-    try {
-      page = await hookDeliveriesPage(config, cursor);
-    } catch (err) {
-      if (!rateLimited(err)) throw err;
-      await resumeAt(cursor);
-      return { ...result, stoppedOnRateLimit: true };
-    }
-    result.pages += 1;
-    const inWindow = page.deliveries.filter((d) => d.deliveredAt.getTime() >= floor);
-    const failed = new Map<string, number>();
-    // A delivery's newest attempt decides: its redelivery that failed too is asked again.
-    for (const d of inWindow) {
-      if (decided.has(d.guid)) continue;
-      decided.add(d.guid);
-      if (d.statusCode < 200 || d.statusCode >= 300) failed.set(d.guid, d.id);
-    }
-    const held = new Set(
-      failed.size === 0
-        ? []
-        : (
-            await app.db
-              .select({ deliveryId: webhookDeliveries.deliveryId })
-              .from(webhookDeliveries)
-              .where(inArray(webhookDeliveries.deliveryId, [...failed.keys()]))
-          ).map((r) => r.deliveryId),
-    );
-    for (const [guid, id] of failed) {
-      if (held.has(guid)) continue;
-      if (result.redelivered === MAX_REDELIVERIES) {
-        await resumeAt(cursor);
-        return result;
-      }
-      try {
-        await redeliverHookDelivery(config, id);
-        result.redelivered += 1;
-      } catch (err) {
-        if (rateLimited(err)) {
-          await resumeAt(cursor);
-          return { ...result, stoppedOnRateLimit: true };
-        }
-        app.log.warn({ guid, error: redactedError(err) }, "reconcile.deliveries: a redelivery failed");
-      }
-    }
-    if (inWindow.length < page.deliveries.length || page.next === null) {
-      await saveScan(app.db, { coveredUntil: ceiling, resumeCursor: null, resumeCeiling: null });
-      return result;
-    }
-    cursor = page.next;
+
+  const stretch = await readStretch(config, scan.resumeCursor, floor);
+  const result: LogPass = { pages: stretch.pages, redelivered: 0, stoppedOnRateLimit: stretch.failure === "rate_limit" };
+  if (stretch.failure === "stale_cursor") {
+    app.log.warn("reconcile.deliveries: GitHub no longer knows the resume cursor; the top is read next");
+    await resumeAt(null);
+    return result;
   }
+
+  const failed = [...stretch.newest.values()].filter((d) => attemptVerdict(d.statusCode) !== "delivered");
+  const guids = failed.map((d) => d.guid);
+  const [held, asked] =
+    guids.length === 0
+      ? [new Set<string>(), new Map<string, RedeliveryAsks>()]
+      : await Promise.all([
+          app.db
+            .select({ deliveryId: webhookDeliveries.deliveryId })
+            .from(webhookDeliveries)
+            .where(inArray(webhookDeliveries.deliveryId, guids))
+            .then((rows) => new Set(rows.map((r) => r.deliveryId))),
+          app.db
+            .select()
+            .from(webhookRedeliveryAsks)
+            .where(inArray(webhookRedeliveryAsks.guid, guids))
+            .then((rows) => new Map(rows.map((r) => [r.guid, r]))),
+        ]);
+  const due: HookDelivery[] = [];
+  for (const d of failed) {
+    if (held.has(d.guid)) continue;
+    if (attemptVerdict(d.statusCode) === "refused") await recordRefusal(app, d, new Date(now));
+    else if (mayAskAgain(asked.get(d.guid), new Date(now))) due.push(d);
+  }
+  due.sort((a, b) => a.deliveredAt.getTime() - b.deliveredAt.getTime());
+
+  let tries = 0;
+  let cutShort = false;
+  /** The oldest delivery whose ask GitHub failed: the covered point stays below it. */
+  let failedAsk: number | null = null;
+  for (const d of due) {
+    if (tries === MAX_REDELIVERIES) {
+      cutShort = true;
+      break;
+    }
+    tries += 1;
+    try {
+      await redeliverHookDelivery(config, d.id);
+      result.redelivered += 1;
+    } catch (err) {
+      if (rateLimited(err)) {
+        result.stoppedOnRateLimit = true;
+        cutShort = true;
+        break;
+      }
+      app.log.warn({ guid: d.guid, error: redactedError(err) }, "reconcile.deliveries: a redelivery failed");
+      failedAsk = Math.min(failedAsk ?? Infinity, d.deliveredAt.getTime());
+    }
+    await recordAsk(app.db, d, new Date(now));
+  }
+
+  if (cutShort || (!stretch.reached && failedAsk !== null)) await resumeAt(scan.resumeCursor);
+  else if (!stretch.reached) await resumeAt(stretch.next);
+  else {
+    const covered = failedAsk === null ? ceiling : new Date(Math.min(ceiling.getTime(), failedAsk));
+    await saveScan(app.db, { coveredUntil: covered, resumeCursor: null, resumeCeiling: null });
+  }
+  return result;
 }
 
 /**
@@ -566,5 +649,17 @@ export async function purgeDeliveryPayloads(db: Db, now: Date): Promise<number> 
       ),
     )
     .returning({ deliveryId: webhookDeliveries.deliveryId });
+  return purged.length;
+}
+
+/** A delivery's asks are kept this long after the first: its last redelivery has left the 24-hour window by then. */
+export const ASKS_RETENTION_MS = 3 * 24 * 3_600_000;
+
+/** `deliveries.purge`, second step: the asks of deliveries past any window (`webhook_redelivery_asks`). */
+export async function purgeRedeliveryAsks(db: Db, now: Date): Promise<number> {
+  const purged = await db
+    .delete(webhookRedeliveryAsks)
+    .where(lt(webhookRedeliveryAsks.firstAskedAt, new Date(now.getTime() - ASKS_RETENTION_MS)))
+    .returning({ guid: webhookRedeliveryAsks.guid });
   return purged.length;
 }

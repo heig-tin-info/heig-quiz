@@ -472,15 +472,15 @@ export function nextCursor(link: string | undefined): string | null {
  * link). Authenticated as the App (its JWT): it spends no installation's
  * quota. A rate limit is answered at once (`noRateLimitWait`): the caller
  * stops and resumes later, never waits inside a scheduled task. An empty
- * last page when the App has no webhook configured (GitHub's 404); any other
- * failure throws.
+ * last page when the App has no webhook configured (GitHub's 404 on the top
+ * page); any other failure throws — a 404 on a cursor included: the cursor
+ * is no longer GitHub's, never the log's end.
  */
 export async function hookDeliveriesPage(config: AppConfig, cursor: string | null): Promise<HookDeliveryPage> {
   const app = githubApp(config);
   if (!app) return { deliveries: [], next: null };
-  const page = await unless404(() =>
-    app.octokit.request("GET /app/hook/deliveries", { per_page: 100, ...(cursor === null ? {} : { cursor }), request: HTTP_READ }),
-  );
+  const read = () => app.octokit.request("GET /app/hook/deliveries", { per_page: 100, ...(cursor === null ? {} : { cursor }), request: HTTP_READ });
+  const page = cursor === null ? await unless404(read) : await read();
   if (!page) return { deliveries: [], next: null };
   return {
     deliveries: (page.data as RawHookDelivery[]).map((d) => ({

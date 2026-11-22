@@ -41,7 +41,7 @@ import {
 import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import { seedLive } from "../../test/live.js";
 import { SCHEDULED_TASKS } from "../system/catalog.js";
-import { reconcileGrades, reconcileRepos } from "./reconcile.js";
+import { CI_RUN_OVERDUE_MS, reconcileCi, reconcileGrades, reconcileRepos } from "./reconcile.js";
 import {
   APP_ENV,
   call,
@@ -229,11 +229,12 @@ beforeEach(async () => {
 });
 
 describe("the catalog", () => {
-  it("runs the grades and the repositories daily, the deliveries every 15 minutes, as scheduled tasks (D10, ADR-011 as amended 2026-11-22)", () => {
+  it("runs the grades and the repositories daily, the deliveries and the overdue CI runs every 15 minutes, as scheduled tasks (D10, ADR-011 as amended 2026-11-22)", () => {
     const periods = Object.fromEntries(SCHEDULED_TASKS.map((t) => [t.key, t.defaultIntervalMinutes]));
     expect(periods["reconcile.grades"]).toBe(24 * 60);
     expect(periods["reconcile.repos"]).toBe(24 * 60);
     expect(periods["reconcile.deliveries"]).toBe(15);
+    expect(periods["reconcile.ci"]).toBe(15);
   });
 });
 
@@ -358,6 +359,22 @@ describe("reconcile.grades", () => {
     expect(gh.calls.some((c) => c.includes(`/repositories/${sixDays!.githubRepoId}`))).toBe(true);
   });
 
+  it("keeps a CI pass open past the 7 days: a Regrade weeks after the freeze is polled (ADR-132)", async () => {
+    const { repos } = await project({ students: 2 });
+    const [regraded, auto] = repos;
+    for (const repo of repos) list(repo!, head(repo!));
+    await freeze(regraded!, at(NOW, -30 * DAY));
+    await freeze(auto!, at(NOW, -8 * DAY));
+    // A Regrade's CI pass, open; and an auto project's final review asked long ago, never answered.
+    await server.app.db.insert(gradeDispatches).values([
+      { id: randomUUID(), repoId: regraded!.id, trigger: "regrade", sha: head(regraded!), nonce: randomUUID(), dispatchedAt: at(NOW, -HOUR) },
+      { id: randomUUID(), repoId: auto!.id, trigger: "deadline", sha: head(auto!) },
+    ]);
+    expect(await reconcileGrades(server.app, config)).toBe("1 repositories checked, 1 runs ingested");
+    expect(await runsOf(regraded!)).toHaveLength(1);
+    expect(await runsOf(auto!)).toHaveLength(0);
+  });
+
   it("drops a repository a day after its definitive freeze, unless its final review was asked and not answered", async () => {
     const { repos } = await project({ students: 3 });
     const [recent, old, pending] = repos;
@@ -435,6 +452,42 @@ describe("reconcile.grades", () => {
     const off = loadConfig({ NODE_ENV: "test" });
     expect(await reconcileGrades(server.app, off)).toBe("GitHub App not configured");
     expect(await reconcileRepos(server.app, off)).toBe("GitHub App not configured; 0 evidence files purged; 0 CI results purged");
+  });
+});
+
+// ---------------------------------------------------------------- reconcile.ci
+
+describe("reconcile.ci (every 15 minutes, ADR-011 as amended 2026-11-22)", () => {
+  it("reads only the repositories whose CI pass waits for an overdue graded run, whatever the freeze's age", async () => {
+    const { repos } = await project({ students: 4 });
+    const [overdue, recent, settled, none] = repos;
+    for (const repo of repos) list(repo!, head(repo!));
+    await freeze(overdue!, at(NOW, -20 * DAY));
+    const pass = (repo: typeof overdue, over: Partial<typeof gradeDispatches.$inferInsert>) => ({
+      id: randomUUID(),
+      repoId: repo!.id,
+      trigger: "regrade" as const,
+      sha: head(repo!),
+      nonce: randomUUID(),
+      ...over,
+    });
+    await server.app.db.insert(gradeDispatches).values([
+      pass(overdue, { dispatchedAt: at(NOW, -CI_RUN_OVERDUE_MS - MINUTE) }),
+      pass(recent, { dispatchedAt: at(NOW, -10 * MINUTE) }),
+      pass(settled, { dispatchedAt: at(NOW, -2 * HOUR), closedAt: at(NOW, -HOUR) }),
+    ]);
+    expect(none).toBeDefined();
+    gh.calls.length = 0;
+    expect(await reconcileCi(server.app, config)).toBe("1 repositories awaiting a graded run checked, 1 runs ingested");
+    expect(await runsOf(overdue!)).toHaveLength(1);
+    for (const repo of [recent, settled, none]) expect(await runsOf(repo!)).toHaveLength(0);
+    expect(callsTo(/\/actions\/runs$/).every((c) => c.includes(overdue!.fullName!))).toBe(true);
+
+    // Nothing open and overdue: no GitHub call at all.
+    await server.app.db.update(gradeDispatches).set({ closedAt: at(NOW) }).where(eq(gradeDispatches.repoId, overdue!.id));
+    gh.calls.length = 0;
+    expect(await reconcileCi(server.app, config)).toBe("0 repositories awaiting a graded run checked, 0 runs ingested");
+    expect(gh.calls.filter((c) => !c.includes("/installation"))).toEqual([]);
   });
 });
 

@@ -219,14 +219,20 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
  * replaces every body parser in this context only, so the route reads the
  * exact bytes GitHub signed and the JSON parsing of every other route is
  * untouched. Nothing is parsed, nor stored, before the HMAC holds. The body
- * limit is Fastify's default, 1 MB, as in classroom.
+ * limit is GitHub's own cap on a payload, 25 MB ({@link WEBHOOK_BODY_LIMIT}),
+ * on this route only: at Fastify's default of 1 MB (classroom's) a large
+ * push was refused 413 — its receipt lost, and never asked again, since the
+ * same bytes would be refused again (ADR-011's addendum of 2026-11-22).
  */
+/** GitHub caps a webhook payload at 25 MB: the intake takes any payload GitHub may send. */
+export const WEBHOOK_BODY_LIMIT = 25 * 1024 * 1024;
+
 async function webhookIntake(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   app.removeAllContentTypeParsers();
   app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
 
-  app.post(WEBHOOK_PATH, { config: { sessions: [] } }, async (req, reply) => {
+  app.post(WEBHOOK_PATH, { config: { sessions: [] }, bodyLimit: WEBHOOK_BODY_LIMIT }, async (req, reply) => {
     const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     const signature = req.headers["x-hub-signature-256"];
     if (

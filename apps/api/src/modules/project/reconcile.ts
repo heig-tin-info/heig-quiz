@@ -1,7 +1,7 @@
 /**
  * The reconciliations of projects (N-RES-08, ADR-011 and its addendum of
  * 2026-10-05; merge task M3-06a), ported from heig-classroom's `tasks.ts`
- * (`reconcileGrades`, `reconcileRepos`, sync point `ab98cc0`) as two
+ * (`reconcileGrades`, `reconcileRepos`, sync point `ab98cc0`) as
  * scheduled tasks of the catalog (D10, `RECONCILE_TASKS`): the `system.task`
  * worker runs them, never a tick (invariant 5), and without Quiz's App they
  * skip. Every step is the webhook's own, idempotent path (ADR-011 §1).
@@ -13,6 +13,10 @@
  *   schema-3 project's graded run, `ci.ts`): a run already known reads and
  *   writes nothing (the UNIQUE of `project_grade_runs`). A reconciled run
  *   has no receipt: late once the deadline passed (GR-14.3).
+ * - `reconcile.ci` (every 15 minutes): the same, for the repositories whose
+ *   schema-3 CI pass has waited more than 30 minutes for its graded run
+ *   (ADR-119 §6), so a lost `workflow_run` is caught long before the pass's
+ *   24-hour `no_result`.
  * - `reconcile.repos` (daily): each member's invitation (a student's own
  *   repository's or a group's, ADR-070's amendment of 2026-11-19) found
  *   accepted meanwhile, or, gone from GitHub, re-invited at most once a day
@@ -29,7 +33,7 @@
  *   `project_repo.protected` (M3-14k, ADR-011's addendum of 2026-10-06); a
  *   plan that still refuses leaves it null, tried again the next day.
  *
- * Both locate each repository by its immutable id first: a 404 there, once
+ * All locate each repository by its immutable id first: a 404 there, once
  * the installation's token was obtained, is the repository gone
  * (`markRepoDeleted`, `via: reconcile`); a 404 anywhere else never is. A
  * name GitHub changed is followed as the `repository.renamed` webhook
@@ -37,8 +41,10 @@
  *
  * SCOPE (product owner, 2026-10-05 and 2026-11-22; `reconciles` of
  * `@quiz/domain`): the live repositories (`LIVE`), until 24 hours after
- * their definitive freeze — longer only while a final review was asked and
- * not answered, and never beyond 7 days after the freeze. GitHub's quota
+ * their definitive freeze — longer while a schema-3 CI pass is open (it ends
+ * itself within a day, a Regrade's included), and while an `auto` project's
+ * final review was asked and not answered, never beyond 7 days after the
+ * freeze. GitHub's quota
  * (N-PERF-07): a finished project costs nothing after a day, and the cost
  * of both tasks is two to five calls per repository in scope and per day.
  *
@@ -82,7 +88,13 @@ const RUNS_PER_REPO = 100;
 /** The least time between two re-invites of one member's invitation (F-PROJ-07: at most once a day). */
 export const REINVITE_INTERVAL_MS = 24 * 3_600_000;
 
-type TaskKey = "reconcile.grades" | "reconcile.repos";
+/**
+ * A CI pass's graded run not in this long after its dispatch is overdue: a
+ * graded run takes minutes, and its webhook usually comes well within this.
+ */
+export const CI_RUN_OVERDUE_MS = 30 * 60_000;
+
+type TaskKey = "reconcile.grades" | "reconcile.repos" | "reconcile.ci";
 
 /** What one pass changed: the audit's payload beside the repositories read, and the summary's figures. */
 interface Counts {
@@ -122,16 +134,31 @@ const rateLimited = (err: unknown): boolean => rateLimitReset(err, Date.now()) !
 /** The live repositories in scope (`reconciles`), with their project and course; one read. */
 async function candidates(db: Db, now: Date): Promise<Candidate[]> {
   // A CI final review asked: an `auto` project's only — a `criteria` project's `deadline` row is
-  // its platform pass (ADR-106 §6), whose review slot never fills —, or a schema-3 project's CI pass
-  // still waiting for its graded run (ADR-119 §6): its runs are read until the pass settles.
-  const reviewAsked = sql<boolean>`(EXISTS (SELECT 1 FROM ${gradeDispatches}
+  // its platform pass (ADR-106 §6), whose review slot never fills.
+  const finalReview = sql<boolean>`EXISTS (SELECT 1 FROM ${gradeDispatches}
     WHERE ${gradeDispatches.repoId} = ${projectRepos.id} AND ${gradeDispatches.trigger} = 'deadline'
-    AND ${projects.gradingMode} = 'auto') OR ${ciPassOpen(db)})`.mapWith(Boolean);
-  const rows = await repoWithProject(db, { courseId: classrooms.courseId, reviewAsked })
+    AND ${projects.gradingMode} = 'auto')`.mapWith(Boolean);
+  // A schema-3 project's CI pass still waiting for its graded run (ADR-119 §6), a Regrade's included.
+  const ciPass = sql<boolean>`${ciPassOpen(db)}`.mapWith(Boolean);
+  const rows = await repoWithProject(db, { courseId: classrooms.courseId, finalReview, ciPass })
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
     .where(LIVE)
     .orderBy(asc(projects.id), asc(projectRepos.id));
-  return rows.filter((r) => reconciles(r.repo, r.reviewAsked, now)).map(({ reviewAsked: _asked, ...ctx }) => ctx);
+  return rows.filter((r) => reconciles(r.repo, r, now)).map(({ finalReview: _review, ciPass: _pass, ...ctx }) => ctx);
+}
+
+/**
+ * The live repositories with a CI pass open whose dispatch GitHub accepted
+ * more than {@link CI_RUN_OVERDUE_MS} ago (`reconcile.ci`): their graded run
+ * is overdue, its `workflow_run` webhook perhaps lost, and the pass settles
+ * `no_result` 24 hours after its dispatch (`RESULT_WAIT_MS`). Bounded by the
+ * passes open, whatever the freeze's age.
+ */
+async function overdueCiCandidates(db: Db, now: Date): Promise<Candidate[]> {
+  return repoWithProject(db, { courseId: classrooms.courseId })
+    .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
+    .where(and(LIVE, ciPassOpen(db, new Date(now.getTime() - CI_RUN_OVERDUE_MS))))
+    .orderBy(asc(projects.id), asc(projectRepos.id));
 }
 
 /**
@@ -245,6 +272,18 @@ async function ingestRuns({ app, config, octokit, ctx, located, counts, now }: S
  */
 export function reconcileGrades(app: FastifyInstance, config: AppConfig): Promise<string> {
   return pass(app, config, "reconcile.grades", candidates, ingestRuns, (repos, c) => `${repos} repositories checked, ${c.runsIngested} runs ingested`);
+}
+
+/**
+ * `reconcile.ci` (every 15 minutes, ADR-011's addendum of 2026-11-22): the
+ * runs of the repositories whose CI pass waits for an overdue graded run
+ * ({@link overdueCiCandidates}), through the same `ingestRuns`. A lost
+ * `workflow_run` would otherwise wait for the daily pass and race the pass's
+ * 24-hour `no_result`. Its cost follows the passes open: nothing outside a
+ * grading.
+ */
+export function reconcileCi(app: FastifyInstance, config: AppConfig): Promise<string> {
+  return pass(app, config, "reconcile.ci", overdueCiCandidates, ingestRuns, (repos, c) => `${repos} repositories awaiting a graded run checked, ${c.runsIngested} runs ingested`);
 }
 
 // ---------------------------------------------------------------- reconcile.repos
@@ -453,8 +492,9 @@ export async function reconcileRepos(app: FastifyInstance, config: AppConfig): P
   return `${summary}; ${await purgeEvidenceFiles(app.db, now)} evidence files purged; ${await purgeCiResults(app.db, now)} CI results purged`;
 }
 
-/** The two tasks, in the catalog whether or not the App is configured (the catalog is static): without it they return at once. */
+/** The three tasks, in the catalog whether or not the App is configured (the catalog is static): without it they return at once. */
 export const RECONCILE_TASKS: readonly ScheduledTask[] = [
   { key: "reconcile.grades", defaultIntervalMinutes: 24 * 60, run: reconcileGrades },
   { key: "reconcile.repos", defaultIntervalMinutes: 24 * 60, run: reconcileRepos },
+  { key: "reconcile.ci", defaultIntervalMinutes: 15, run: reconcileCi },
 ];

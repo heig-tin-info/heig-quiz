@@ -37,8 +37,10 @@ the collaborators and the invitations once per repository.
 cadences) and the addendum of 2026-10-05's point 1 (the scope and the quiet
 rule). See [the addendum of that day](#addendum-2026-11-22-the-cost-follows-activity):
 `reconcile.deliveries` every 15 minutes, reading GitHub's log
-incrementally; `reconcile.grades` daily, with no quiet rule; an unanswered
-final review polled 7 days after the freeze at most.
+incrementally, each delivery asked three times at most; `reconcile.grades`
+daily, with no quiet rule, and `reconcile.ci` every 15 minutes for the CI
+passes awaiting their run; an unanswered final review polled 7 days after
+the freeze at most.
 
 ## Context
 
@@ -157,19 +159,21 @@ instead of the archive (H8). The Decision and points 1 to 5 stand.
 ## Addendum (2026-11-22): the cost follows activity
 
 Decided by the product owner on a measurement of production (2026-11-22,
-read-only). `reconcile.grades`, every 15 minutes, read about 198
-repositories quiet for 30 minutes — nearly every repository nearly all the
-time — at two calls each (`GET /repositories/{id}`, the run listing): about
-38 000 calls a day, 156 s a pass, almost always "0 runs ingested". 52 of
-them belonged to six projects frozen in September and October whose final
-review was asked and never came (21 never had a review run, 25 only failed
-ones, 6 a successful one never taken as final): point 1's exception had no
-end. Meanwhile `reconcile.deliveries`, the one detector of a lost webhook,
-ran daily and read one page of GitHub's log (the latest 100 attempts), so a
-failure older than that page was never seen. The cost was the number of
-repositories times time; at the target scale (300 teachers, 10 labs, 30
-students: some 14 000 live repositories, one organization per course) it
-would have grown with that product. The cost now follows events.
+read-only); points 1b, 2 (the asks), 3 (the CI passes) and 6 settled with
+the orchestrator's review of the change. `reconcile.grades`, every 15
+minutes, read about 198 repositories quiet for 30 minutes — nearly every
+repository nearly all the time — at two calls each (`GET
+/repositories/{id}`, the run listing): about 38 000 calls a day, 156 s a
+pass, almost always "0 runs ingested". 52 of them belonged to six projects
+frozen in September and October whose final review was asked and never
+came (21 never had a review run, 25 only failed ones, 6 a successful one
+never taken as final): point 1's exception had no end. Meanwhile
+`reconcile.deliveries`, the one detector of a lost webhook, ran daily and
+read one page of GitHub's log (the latest 100 attempts), so a failure older
+than that page was never seen. The cost was the number of repositories
+times time; at the target scale (300 teachers, 10 labs, 30 students: some
+14 000 live repositories, one organization per course) it would have grown
+with that product. The cost now follows events.
 
 1. **`reconcile.deliveries` every 15 minutes, reading GitHub's log
    incrementally** (`GET /app/hook/deliveries`, newest first, 100 a page,
@@ -178,26 +182,40 @@ would have grown with that product. The cost now follows events.
    server's, an attempt listed after it was made), and never below the
    24-hour redelivery window; at most 20 pages and 50 redeliveries a pass,
    as before for the redeliveries. Where it stops is kept
-   (`webhook_delivery_scan`, one row): having reached that floor, the pass
-   covered everything up to its start; stopped before it (its pages, its
-   redeliveries, a rate limit), the next pass goes on from the page it had
-   reached, down to the same floor, before it reads the newer top — the
-   failures closest to leaving the window come first. A delivery is asked
-   again when its NEWEST attempt in the stretch read failed and Quiz never
-   stored it — that attempt may be a redelivery an earlier pass asked for
-   (until now a redelivery was never asked again): its original lies below
-   the covered point by then, so the failed redelivery is what keeps the
-   delivery asked for, once a pass, until the intake takes it. Known limit:
-   a delivery the intake would always refuse is asked for every pass,
-   within the cap. The `status=failure`
-   filter of the endpoint is not used: it selects the codes 400 to 599 and
-   so would miss an attempt with no HTTP answer (the intake unreachable),
-   the very loss this task exists for. The log is read with the App's JWT,
-   which spends no installation's quota; GitHub documents no figure for it,
-   so every call of the pass answers a rate limit at once and the pass
-   stops, keeping its place (point 5 of the addendum of 2026-10-05, now
-   applied to this task too). A pass costs one page per 100 deliveries made
-   since the previous one.
+   (`webhook_delivery_scan`, one row): having read down to that floor and
+   asked all it found, the pass covered everything up to its start — or up
+   to the oldest delivery whose redelivery request GitHub failed (a 5xx, a
+   timeout), so the next pass asks it again. Its pages spent first, the
+   next pass goes on from the page it reached, down to the same floor,
+   before it reads the newer top. Its asks cut short (the cap, a rate
+   limit), the next pass reads the same stretch again. A resume cursor
+   GitHub no longer knows (a 4xx), or one whose stretch has left the
+   window, is dropped and the top read instead, so the scan cannot stick.
+   The `status=failure` filter of the endpoint is not used: it selects
+   the codes 400 to 599 and so would miss an attempt with no HTTP answer
+   (the intake unreachable), the very loss this task exists for. The log
+   is read with the App's JWT, which spends no installation's quota;
+   GitHub documents no figure for it, so every call of the pass answers a
+   rate limit at once and the pass stops, keeping its place (point 5 of
+   the addendum of 2026-10-05, now applied to this task too). A pass costs
+   one page per 100 deliveries made since the previous one.
+
+   1b. **What is asked, and how often** (`attemptVerdict`, `mayAskAgain`
+   of `@quiz/domain`; `webhook_redelivery_asks`). Each delivery's NEWEST
+   attempt in the stretch read decides. Delivered, or stored by Quiz
+   meanwhile: nothing to do. No answer, a 429 or a 5xx: asked again — a
+   redelivery that failed in turn included (until now a redelivery was
+   never asked again; with an advancing cursor its original lies below the
+   covered point by then) — at most three times, within a day of the first
+   ask. Any other answer, a 4xx, is a refusal: the same bytes would be
+   refused again, so the delivery is never asked for, logged once. The
+   asks of one pass go OLDEST FIRST, the deliveries closest to leaving the
+   window, so a delivery the intake keeps failing costs three asks and
+   cannot starve a real failure behind it. The asks are purged three days
+   after the first, with the payloads (`deliveries.purge`). The intake's
+   body limit is GitHub's own cap on a payload, 25 MB, on that route only:
+   at Fastify's 1 MB default a push over 1 MB was refused 413, its receipt
+   lost for good.
 2. **`reconcile.grades` daily**, a last resort: the webhooks carry the runs,
    and the 15-minute `reconcile.deliveries` asks again for those GitHub
    failed to hand over. The QUIET rule (no push nor run for 30 minutes) is
@@ -206,16 +224,36 @@ would have grown with that product. The cost now follows events.
    minute. The pass reads the last 100 completed runs of a repository
    (GitHub's largest page, one call as before) instead of 20, a day of an
    active repository's runs.
-3. **The exception of a final review asked and unanswered ends 7 days after
-   the freeze** (`RECONCILE_REVIEW_WAIT_MS`, `reconciles` of `@quiz/domain`);
-   the rest of point 1 stands: live repositories not yet frozen, and 24
-   hours after the definitive freeze. `reconcile.repos` stays daily and
+3. **`reconcile.ci` every 15 minutes, for the CI passes only.** A schema-3
+   project's CI pass (ADR-119 §6) settles `no_result` 24 hours after its
+   dispatch; a lost `workflow_run` left to the daily pass would race that
+   end and cost the student every automatic criterion. This task reads,
+   through the same `ingestRuns`, the repositories whose pass is open and
+   whose dispatch GitHub accepted more than 30 minutes ago: nothing outside
+   a grading, a lost run caught within about 45 minutes. The 24-hour sweep
+   itself makes no GitHub call (it runs in the ticker's tick, invariant 5),
+   so it does not read the runs once more before it settles.
+4. **The exception of an `auto` project's final review asked and
+   unanswered ends 7 days after the freeze** (`RECONCILE_REVIEW_WAIT_MS`,
+   `reconciles` of `@quiz/domain`). A schema-3 CI pass open keeps its
+   repository in scope whatever the freeze's age — a Regrade opens one on a
+   repository frozen long before (ADR-132), and the pass ends itself within
+   a day. The rest of point 1 stands: live repositories not yet frozen, and
+   24 hours after the definitive freeze. `reconcile.repos` stays daily and
    reads the same scope, so the bound applies to it as well.
-4. **Existing periods.** A new default moves no `scheduled_tasks` row: the
+5. **Existing periods.** A new default moves no `scheduled_tasks` row: the
    migration `0155_reconcile_follows_activity` moves each row only where it
    still holds its old default (`reconcile.deliveries` 1440 → 15,
    `reconcile.grades` 15 → 1440); a period an administrator set by hand
-   stays.
+   stays. `reconcile.ci` is new: its row is inserted at boot with 15.
+6. **A redelivered push's receipt carries the redelivery's arrival time**,
+   not the original attempt's: the receipt is the server's receipt time
+   (ADR-012), and a push the intake missed is received when GitHub delivers
+   it again. Receipts are the legal reference of a deadline, so a push lost
+   just before a deadline and redelivered after it reads as late. This
+   change shortens that gap from up to a day to about 15 minutes; it does
+   not change the rule, which is the product owner's to settle (the
+   teacher's arbitration of GR-14.3 stays the remedy).
 
 A consequence for [ADR-062](ADR-062-depot-de-distribution.md): a run's
 stored `to_verify` that a late receipt left lagging is re-flagged by the
@@ -225,15 +263,19 @@ for the flag. Known limits: a pass of either daily task walks its
 repositories one after the other, about 0.8 s each in production; past
 some 2 000 repositories in scope a pass outlives the 30 minutes after which
 a running task is taken for dead (`RUNNING_STALE_MINUTES`) and claimed
-again. And 50 redeliveries a pass (200 an hour) recover an outage of the
+again. 50 redeliveries a pass (200 an hour) recover an outage of the
 intake only as fast; what they cannot reach in the 24-hour window, the
-daily passes catch up through the repositories' state.
+daily passes catch up through the repositories' state. A delivery waiting
+out a rate limit may get a second job from the replay of stuck deliveries
+(no `singletonKey`: it dedupes nothing on our `standard` queues, #273,
+`jobs.ts`); the second finds the delivery processed and does nothing.
 
 Expected calls, per day: today (about 200 repositories in scope, a few
 hundred deliveries a day), `reconcile.grades` some 400 instead of 38 000,
-`reconcile.deliveries` about 96 log pages plus its redeliveries. At the
-target scale, `reconcile.grades` and `reconcile.repos` two to five calls per
-repository in scope a day, some 28 000 and up to 70 000 spread over about
-300 organizations (each its own quota of 5 000 an hour); `reconcile.deliveries`
+`reconcile.deliveries` about 96 log pages plus its redeliveries,
+`reconcile.ci` a few calls per graded run. At the target scale,
+`reconcile.grades` and `reconcile.repos` two to five calls per repository in
+scope a day, some 28 000 and up to 70 000 spread over about 300
+organizations (each its own quota of 5 000 an hour); `reconcile.deliveries`
 about 60 000 deliveries a day, so some 7 to 9 pages a pass, under 900 calls
 a day on the App's JWT, at most 1 920 when catching up.
