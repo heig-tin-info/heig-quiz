@@ -23,6 +23,8 @@ import {
   courses,
   enrollments,
   evaluations,
+  gradebookColumns,
+  gradebookMarks,
   guestParticipants,
   projectCriterionGrades,
   projectGradeRuns,
@@ -82,6 +84,30 @@ async function staffSeat(classroomId: string) {
   });
 }
 
+/**
+ * A gradebook mark of `kind` on the first student of the seed, in the column
+ * of the evaluation or the project `activity`, as `setMark` stores it.
+ */
+async function markOn(seed: Seeded, activity: { evaluationId: string } | { projectId: string }, kind: "score" | "excused") {
+  const [seat] = await db()
+    .select({ id: enrollments.id })
+    .from(enrollments)
+    .where(eq(enrollments.userId, seed.studentIds[0]!));
+  const columnId = randomUUID();
+  await db().insert(gradebookColumns).values({ id: columnId, classroomId: seed.classroomId, ...activity, counts: true, updatedAt: new Date() });
+  await db()
+    .insert(gradebookMarks)
+    .values({
+      id: randomUUID(),
+      classroomId: seed.classroomId,
+      columnId,
+      enrollmentId: seat!.id,
+      kind,
+      ...(kind === "score" ? { points: 4, max: 6 } : {}),
+      setAt: new Date(),
+    });
+}
+
 const deleteEvaluation = (seed: Seeded) =>
   send("DELETE", `/app/api/evaluations/${seed.evaluationId}`, { confirmTitle: "Test évaluation" });
 const deleteClassroom = (seed: Seeded) => send("DELETE", `/app/api/classrooms/${seed.classroomId}`);
@@ -102,7 +128,7 @@ describe("an exam or an exercise", () => {
     await attemptBy(seed.evaluationId, seed.studentIds[0]!);
     await attemptBy(seed.evaluationId, seed.studentIds[1]!);
     for (const res of [await deleteEvaluation(seed), await send("DELETE", `/app/api/evaluations/${seed.evaluationId}`, { confirmTitle: "wrong" })]) {
-      expect(refusal(res)).toEqual({ classrooms: 1, evaluations: 1, projects: 0, attempts: 2, gradedRepos: 0, released: 0 });
+      expect(refusal(res)).toEqual({ classrooms: 1, evaluations: 1, projects: 0, attempts: 2, gradedRepos: 0, marks: 0, released: 0 });
     }
     expect(await exists(evaluations, seed.evaluationId)).toBe(true);
     // The payloads say so, for the screens to grey Delete out.
@@ -146,6 +172,57 @@ describe("an exam or an exercise", () => {
       status: 409,
     });
     expect(await exists(evaluations, seed.evaluationId)).toBe(true);
+  });
+});
+
+describe("an exam sat on paper, and the gradebook's scores", () => {
+  it("refuses an exam whose only work is a paper copy, entered submitted and never started", async () => {
+    const seed = await seeded();
+    // As `insertPaperAttempt` writes it.
+    await db().insert(attempts).values({
+      id: randomUUID(),
+      evaluationId: seed.evaluationId,
+      userId: seed.studentIds[0]!,
+      seed: 1,
+      origin: "paper",
+      state: "submitted",
+      submittedAt: new Date(),
+    });
+    expect(refusal(await deleteEvaluation(seed))).toMatchObject({ evaluations: 1, attempts: 1, marks: 0, released: 0 });
+    const detail = (await send("GET", `/app/api/evaluations/${seed.evaluationId}`)).json() as EvaluationDetail;
+    expect(detail.holdsStudentWork).toBe(true);
+  });
+
+  it("refuses an exam with no attempt but a teacher's score in the gradebook; an excuse alone does not block", async () => {
+    const scored = await seeded();
+    await markOn(scored, { evaluationId: scored.evaluationId }, "score");
+    expect(refusal(await deleteEvaluation(scored))).toMatchObject({ evaluations: 1, attempts: 0, marks: 1 });
+    const list = (await send("GET", `/app/api/classrooms/${scored.classroomId}/evaluations`)).json() as EvaluationSummary[];
+    expect(list.find((e) => e.id === scored.evaluationId)?.holdsStudentWork).toBe(true);
+    expect(refusal(await deleteClassroom(scored))).toMatchObject({ marks: 1 });
+
+    const excused = await seeded();
+    await markOn(excused, { evaluationId: excused.evaluationId }, "excused");
+    expect((await deleteEvaluation(excused)).statusCode).toBe(204);
+  });
+
+  it("refuses a project with a gradebook score and nothing else", async () => {
+    const seed = await seeded();
+    const project = await gradedProject(db(), { classroomId: seed.classroomId, name: "Lab", createdBy: owner.id, released: false });
+    await markOn(seed, { projectId: project.id }, "score");
+    const row = (await db().select().from(projects).where(eq(projects.id, project.id)))[0]!;
+    await expect(projectService.deleteProject(db(), row, SYSTEM_ACTOR)).rejects.toMatchObject({
+      code: "holds_student_work",
+      details: { work: { projects: 1, gradedRepos: 0, marks: 1 } },
+    });
+  });
+
+  it("decides again under the lock: a score set after the loader still refuses the evaluation", async () => {
+    const seed = await seeded();
+    const loaded = await reload(db(), seed.evaluationId);
+    expect(await evaluationService.studentWorkRefusal(db(), seed.evaluationId)).toBeNull();
+    await markOn(seed, { evaluationId: seed.evaluationId }, "score");
+    await expect(evaluationService.deleteEvaluation(db(), loaded, "owner")).rejects.toMatchObject({ code: "holds_student_work" });
   });
 });
 
@@ -236,7 +313,7 @@ describe("a classroom and a course", () => {
     await attemptBy(seed.evaluationId, seed.studentIds[0]!);
     const project = await gradedProject(db(), { classroomId: seed.classroomId, name: "Lab", createdBy: owner.id, released: true });
     await projectRepo(db(), project, { userId: seed.studentIds[0]!, points: 8, max: 10 });
-    const expected = { classrooms: 1, evaluations: 1, projects: 1, attempts: 1, gradedRepos: 1, released: 1 };
+    const expected = { classrooms: 1, evaluations: 1, projects: 1, attempts: 1, gradedRepos: 1, marks: 0, released: 1 };
     expect(refusal(await deleteClassroom(seed))).toEqual(expected);
     expect(refusal(await deleteCourse(seed))).toEqual(expected);
     expect(await exists(classrooms, seed.classroomId)).toBe(true);

@@ -42,10 +42,11 @@ released project are not covered yet (a follow-up of ADR-135).
 
 Amended 2026-11-21 by [ADR-141](ADR-141-refus-de-supprimer-le-travail-des-etudiants.md)
 (product owner): §3, the row of `DELETE /evaluations/:id` only — an exam or an
-exercise a student has started, or released, is deleted by no role (`409
+exercise a student has started or submitted (a paper copy included), with a
+student's score in the gradebook, or released, is deleted by no role (`409
 holds_student_work`, decided before the role); the owner's row keeps what no
 student work blocks: a published correction, a released poll, an attempt row
-never started.
+never started nor handed in.
 
 Scope: what a member of a course's staff may do on the course, its classrooms and
 its evaluations; who reaches them is unchanged (`staffAccess`, invariant 6).

@@ -34,7 +34,7 @@
  *
  * `created_at`, `updated_at`, `set_at` are the server's clock, written by the service.
  */
-import { and, eq, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, count, eq, inArray, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -53,6 +53,7 @@ import {
 import { GRADEBOOK_MARK_KINDS, WEIGHT_DEFAULT } from "@quiz/domain";
 
 import { users } from "./auth.js";
+import type { Db, Tx } from "./client.js";
 import { evaluations } from "./evaluation.js";
 import { classrooms, courses, enrollments } from "./org.js";
 import { projects } from "./project.js";
@@ -183,3 +184,34 @@ export const excusedMarkOfSeat = (): SQL =>
  */
 export const courseHasComponents = (courseId: AnyColumn): SQL<boolean> =>
   sql<boolean>`exists (select 1 from ${gradebookComponents} where ${qualified(gradebookComponents.courseId)} = ${qualified(courseId)})`;
+
+/**
+ * The real students' `score` marks of the gradebook columns of the
+ * activities `ids` (by `evaluation_id` or `project_id`), counted by activity
+ * for the refusal of a deletion (ADR-141) and the screens' flag of it.
+ * With `lock`, in the delete's transaction, the columns are locked
+ * `FOR UPDATE` first: a mark written meanwhile (its foreign key takes
+ * `FOR KEY SHARE` on its column) waits for the delete and then finds the
+ * column gone; a new column waits on its activity's row, which the caller
+ * locked first. An absence or an excuse is no grade, and a staff seat holds
+ * none. Here, beside the tables it reads, for the `evaluation` and `project`
+ * modules alike (as `isStaffAttempt`).
+ */
+export async function scoreMarksOf(
+  db: Db | Tx,
+  key: "evaluationId" | "projectId",
+  ids: string[],
+  { lock }: { lock: boolean },
+): Promise<Map<string, number>> {
+  if (ids.length === 0) return new Map();
+  const activity = gradebookColumns[key];
+  if (lock) await db.select({ id: gradebookColumns.id }).from(gradebookColumns).where(inArray(activity, ids)).for("update");
+  const rows = await db
+    .select({ id: activity, n: count() })
+    .from(gradebookMarks)
+    .innerJoin(gradebookColumns, eq(gradebookColumns.id, gradebookMarks.columnId))
+    .innerJoin(enrollments, eq(enrollments.id, gradebookMarks.enrollmentId))
+    .where(and(inArray(activity, ids), eq(gradebookMarks.kind, "score"), eq(enrollments.staff, false)))
+    .groupBy(activity);
+  return new Map(rows.flatMap((r) => (r.id === null ? [] : [[r.id, r.n] as const])));
+}

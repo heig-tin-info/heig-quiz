@@ -58,6 +58,7 @@ import {
   isStaffAttempt,
   officialAttempt,
   pools,
+  scoreMarksOf,
   questionVersions,
   questions,
   users,
@@ -307,24 +308,28 @@ export async function deletionRole(db: DbOrTx, row: EvaluationRecord): Promise<C
   return deletionRoleOf(row, (await attemptCounts(db, row.id)).students);
 }
 
-/** A student's attempt that was started (ADR-141): the work a deletion would erase. */
-const isStartedStudentAttempt = sql`${attempts.startedAt} is not null and ${isStudentAttempt}`;
+/**
+ * A student's attempt that holds work (ADR-141): started, submitted, or a
+ * paper copy — which the teacher enters submitted, never started
+ * (`insertPaperAttempt`). The work a deletion would erase.
+ */
+const isWorkAttempt = sql`(${attempts.startedAt} is not null or ${attempts.submittedAt} is not null or ${attempts.origin} = 'paper') and ${isStudentAttempt}`;
 
-/** Every attempt row of the evaluation, those of a student seat (or a poll guest), and those started. */
+/** Every attempt row of the evaluation, those of a student seat (or a poll guest), and those holding work. */
 async function attemptCounts(
   db: DbOrTx,
   evaluationId: string,
-): Promise<{ all: number; students: number; started: number }> {
+): Promise<{ all: number; students: number; withWork: number }> {
   const [row] = await db
     .select({
       all: count(),
       students: sql<number>`count(*) filter (where ${isStudentAttempt})`.mapWith(Number),
-      started: sql<number>`count(*) filter (where ${isStartedStudentAttempt})`.mapWith(Number),
+      withWork: sql<number>`count(*) filter (where ${isWorkAttempt})`.mapWith(Number),
     })
     .from(attempts)
     .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
     .where(eq(attempts.evaluationId, evaluationId));
-  return { all: row?.all ?? 0, students: row?.students ?? 0, started: row?.started ?? 0 };
+  return { all: row?.all ?? 0, students: row?.students ?? 0, withWork: row?.withWork ?? 0 };
 }
 
 const deletionRoleOf = (row: EvaluationRecord, studentAttempts: number): CourseRoleName =>
@@ -335,19 +340,23 @@ const deletionRoleOf = (row: EvaluationRecord, studentAttempts: number): CourseR
     studentAttempts,
   });
 
-const holdsWorkOf = (row: EvaluationRecord, startedStudentAttempts: number): boolean =>
-  evaluationHoldsStudentWork({ mode: row.mode, released: row.releasedAt !== null, startedStudentAttempts });
+const holdsWorkOf = (row: EvaluationRecord, attemptsWithWork: number, scoreMarks: number): boolean =>
+  evaluationHoldsStudentWork({ mode: row.mode, released: row.releasedAt !== null, attemptsWithWork, scoreMarks });
 
 /** Where a deletion reaches evaluations (ADR-141): one, a classroom's, or a course's classrooms'. */
 export type WorkScope = { evaluationId: string } | { classroomId: string } | { courseId: string };
 
 /**
  * The facts `studentWorkOf` judges (ADR-141), for the evaluations of
- * `scope` — a course's templates left out, which hold no attempt. Their rows
- * are locked `FOR UPDATE` first: inside a delete's transaction, an attempt
- * starting (its foreign key takes `FOR KEY SHARE` on the row) or a release
- * waits for the delete, and then finds the evaluation gone; outside one, it
- * is a plain read.
+ * `scope` — a course's templates left out, which hold no attempt. Inside a
+ * delete's transaction, what could add work meanwhile waits for the delete
+ * and then finds the evaluation gone:
+ *   - the evaluations are locked `FOR UPDATE`: a new attempt, a paper copy
+ *     or a new gradebook column (their foreign keys take `FOR KEY SHARE`),
+ *     and a release;
+ *   - their attempts `FOR SHARE`: an attempt's start or hand-in (an UPDATE);
+ *   - their gradebook columns `FOR UPDATE` (`scoreMarksOf`): a mark.
+ * Outside one, a plain read.
  */
 export async function evaluationWork(db: DbOrTx, scope: WorkScope): Promise<EvaluationWorkFacts[]> {
   const where =
@@ -365,18 +374,22 @@ export async function evaluationWork(db: DbOrTx, scope: WorkScope): Promise<Eval
     .where(where)
     .for("update");
   if (rows.length === 0) return [];
-  const started = await db
+  const ids = rows.map((r) => r.id);
+  await db.select({ id: attempts.id }).from(attempts).where(inArray(attempts.evaluationId, ids)).for("share");
+  const held = await db
     .select({ id: attempts.evaluationId, n: count() })
     .from(attempts)
     .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
-    .where(and(inArray(attempts.evaluationId, rows.map((r) => r.id)), isStartedStudentAttempt))
+    .where(and(inArray(attempts.evaluationId, ids), isWorkAttempt))
     .groupBy(attempts.evaluationId);
-  const startedOf = new Map(started.map((s) => [s.id, s.n]));
+  const heldOf = new Map(held.map((s) => [s.id, s.n]));
+  const marks = await scoreMarksOf(db, "evaluationId", ids, { lock: true });
   return rows.map((r) => ({
     classroomId: r.classroomId,
     mode: r.mode,
     released: r.releasedAt !== null,
-    startedStudentAttempts: startedOf.get(r.id) ?? 0,
+    attemptsWithWork: heldOf.get(r.id) ?? 0,
+    scoreMarks: marks.get(r.id) ?? 0,
   }));
 }
 
@@ -851,7 +864,7 @@ export async function evaluationDetail(
     staleItems: staleOf(items),
     attemptCount: attemptsSoFar,
     deletionRole: deletionRoleOf(row, counted.students),
-    holdsStudentWork: holdsWorkOf(row, counted.started),
+    holdsStudentWork: holdsWorkOf(row, counted.withWork, (await scoreMarksOf(db, "evaluationId", [row.id], { lock: false })).get(row.id) ?? 0),
     editable: isConfigEditable(row.state, attemptsSoFar),
     self: await selfOf(db, row, viewer.id),
     editableQuestionIds: await editableQuestionIdsOf(db, items, viewer),
@@ -889,7 +902,7 @@ export async function listEvaluations(
       n: sql<number>`count(distinct coalesce(${attempts.userId}, ${attempts.guestId})) filter (where ${officialAttempt})`.mapWith(Number),
       participants: sql<number>`count(distinct coalesce(${attempts.userId}, ${attempts.guestId})) filter (where ${isStudentAttempt} and ${officialAttempt})`.mapWith(Number),
       students: sql<number>`count(*) filter (where ${isStudentAttempt})`.mapWith(Number),
-      started: sql<number>`count(*) filter (where ${isStartedStudentAttempt})`.mapWith(Number),
+      withWork: sql<number>`count(*) filter (where ${isWorkAttempt})`.mapWith(Number),
     })
     .from(attempts)
     .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
@@ -897,6 +910,7 @@ export async function listEvaluations(
     .groupBy(attempts.evaluationId);
   const tries = new Map(attemptStats.map((s) => [s.evaluationId, s]));
   const templateRevisions = await templateRevisionsOf(db, rows);
+  const marks = await scoreMarksOf(db, "evaluationId", ids, { lock: false });
   return rows.map((r) => ({
     id: r.id,
     classroomId,
@@ -908,7 +922,7 @@ export async function listEvaluations(
     attemptCount: tries.get(r.id)?.n ?? 0,
     participantCount: tries.get(r.id)?.participants ?? 0,
     deletionRole: deletionRoleOf(r, tries.get(r.id)?.students ?? 0),
-    holdsStudentWork: holdsWorkOf(r, tries.get(r.id)?.started ?? 0),
+    holdsStudentWork: holdsWorkOf(r, tries.get(r.id)?.withWork ?? 0, marks.get(r.id) ?? 0),
     clock: clockChoiceOf(settingsOf(r)).mode,
     opensAt: isoOrNull(r.opensAt),
     closesAt: isoOrNull(r.closesAt),

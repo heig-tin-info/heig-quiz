@@ -250,7 +250,7 @@ describe("the evaluations of the Activities tab", () => {
     await user.click(await screen.findByRole("button", { name: /Sat quiz/ }));
     const refused = await screen.findByRole("menuitem", { name: /Delete evaluation/ });
     await waitFor(() => expect(refused).toBeDisabled());
-    expect(refused).toHaveTextContent("Students have started this evaluation or received its results.");
+    expect(refused).toHaveTextContent("This evaluation holds students' work or grades.");
   });
 
   it("asks the page for the dialog from the empty state, and has no button of its own", async () => {

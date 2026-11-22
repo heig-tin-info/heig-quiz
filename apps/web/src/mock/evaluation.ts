@@ -947,7 +947,7 @@ const deletionRoleOf = (e: MockEvaluation) =>
 /** Like the server (ADR-141): a student's attempt, or the release, of an exam or an exercise; never a poll. */
 const startedOf = (e: MockEvaluation) => e.rows.filter((r) => !r.staff && r.attemptId !== null).length;
 const holdsStudentWorkOf = (e: MockEvaluation) =>
-  evaluationHoldsStudentWork({ mode: e.mode, released: e.releasedAt !== null, startedStudentAttempts: startedOf(e) });
+  evaluationHoldsStudentWork({ mode: e.mode, released: e.releasedAt !== null, attemptsWithWork: startedOf(e), scoreMarks: 0 });
 classroomWork.push((classroomId) => {
   const held = evaluations.filter((e) => e.classroomId === classroomId && holdsStudentWorkOf(e));
   return {
@@ -955,6 +955,7 @@ classroomWork.push((classroomId) => {
     projects: 0,
     attempts: held.reduce((n, e) => n + startedOf(e), 0),
     gradedRepos: 0,
+    marks: 0,
     released: held.filter((e) => e.releasedAt !== null).length,
   };
 });
@@ -1463,7 +1464,7 @@ function applyConfigPatch(e: MockEvaluation, body: Record<string, unknown>): voi
 on("DELETE", "/app/api/evaluations/:id", (m) => {
   const e = evaluationOr404(m.groups!.id!);
   if (holdsStudentWorkOf(e)) {
-    const work = { classrooms: 1, evaluations: 1, projects: 0, attempts: startedOf(e), gradedRepos: 0, released: e.releasedAt ? 1 : 0 };
+    const work = { classrooms: 1, evaluations: 1, projects: 0, attempts: startedOf(e), gradedRepos: 0, marks: 0, released: e.releasedAt ? 1 : 0 };
     throw refuse(409, "holds_student_work", "It holds students' work or grades", { work });
   }
   const i = evaluations.findIndex((x) => x.id === e.id);

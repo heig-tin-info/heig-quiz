@@ -135,7 +135,7 @@ describe("the classroom's Settings tab", () => {
   });
 
   it("says why a classroom holding students' work is not deleted, and offers its archive (ADR-141)", async () => {
-    const work = { classrooms: 1, evaluations: 2, projects: 1, attempts: 30, gradedRepos: 12, released: 1 };
+    const work = { classrooms: 1, evaluations: 2, projects: 1, attempts: 30, gradedRepos: 12, marks: 0, released: 1 };
     const { calls } = mockFetch({
       ...OWNER,
       [`GET ${ROOM}`]: ok(makeClassroomDetail()),

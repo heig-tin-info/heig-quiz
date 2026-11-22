@@ -2014,6 +2014,7 @@ classroomWork.push((classroomId) => {
     projects: held.length,
     attempts: 0,
     gradedRepos: held.reduce((n, p) => n + gradedReposOf(p), 0),
+    marks: 0,
     released: held.filter((p) => p.releasedAt !== null).length,
   };
 });
@@ -2021,7 +2022,7 @@ classroomWork.push((classroomId) => {
 on("DELETE", "/app/api/projects/:id", (m) => {
   const p = projectOr404(m.groups!.id!);
   if (holdsStudentWork(p)) {
-    const work = { classrooms: 1, evaluations: 0, projects: 1, attempts: 0, gradedRepos: gradedReposOf(p), released: p.releasedAt ? 1 : 0 };
+    const work = { classrooms: 1, evaluations: 0, projects: 1, attempts: 0, gradedRepos: gradedReposOf(p), marks: 0, released: p.releasedAt ? 1 : 0 };
     throw refuse(409, "holds_student_work", "The project holds students' grades", { work });
   }
   PROJECTS.delete(p.summary.id);

@@ -66,7 +66,7 @@ import {
  * mock its released or graded projects — for the deletion of a classroom or a
  * course, which the server refuses while one holds any.
  */
-export type ClassroomWork = { evaluations: number; projects: number; attempts: number; gradedRepos: number; released: number };
+export type ClassroomWork = { evaluations: number; projects: number; attempts: number; gradedRepos: number; marks: number; released: number };
 export const classroomWork: ((classroomId: string) => ClassroomWork)[] = [];
 
 function refuseStudentWork(classroomIds: string[]): void {
@@ -79,9 +79,10 @@ function refuseStudentWork(classroomIds: string[]): void {
           projects: a.projects + b.projects,
           attempts: a.attempts + b.attempts,
           gradedRepos: a.gradedRepos + b.gradedRepos,
+          marks: a.marks + b.marks,
           released: a.released + b.released,
         }),
-        { evaluations: 0, projects: 0, attempts: 0, gradedRepos: 0, released: 0 },
+        { evaluations: 0, projects: 0, attempts: 0, gradedRepos: 0, marks: 0, released: 0 },
       ),
   );
   const blocking = per.filter((w) => w.evaluations + w.projects > 0);
@@ -94,6 +95,7 @@ function refuseStudentWork(classroomIds: string[]): void {
       projects: sum("projects"),
       attempts: sum("attempts"),
       gradedRepos: sum("gradedRepos"),
+      marks: sum("marks"),
       released: sum("released"),
     },
   });

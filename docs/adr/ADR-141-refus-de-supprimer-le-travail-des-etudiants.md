@@ -47,8 +47,11 @@ hidden per person (F-ORG-11), which is display state, not an archive.
    ADR-014's own rule). An impersonation session writes nothing in
    production (ADR-034).
 
-2. **An exam or an exercise** holds students' work once a student has
-   started an attempt (`attempts.started_at` set) or once it was released
+2. **An exam or an exercise** holds students' work once a student has an
+   attempt that is started or submitted, a paper copy included
+   (`started_at` or `submitted_at` set, or `origin = 'paper'`: the teacher
+   enters a paper copy submitted, never started, ADR-125), once a student
+   has a score in its gradebook column (point 4), or once it was released
    (`released_at`). A poll never does, and stays deletable under ADR-068's
    role rule. An exercise's attempts also feed its students' drill cards
    (ADR-041), which would go with it.
@@ -56,51 +59,72 @@ hidden per person (F-ORG-11), which is display state, not an archive.
 3. **A project** holds students' work once one of its student repositories
    is graded — a row of `project_repo_grades` (a teacher's score, an
    adjustment, a released snapshot), a **validated** row of
-   `project_criterion_grades` (a proposal is not a grade), or a counted run
-   of `project_grade_runs` — or once it was released (`released_at`). A
-   draft has neither and stays deletable; so does the row a failed build
-   discards (`createProject`).
+   `project_criterion_grades` (a proposal is not a grade), or any CI run of
+   `project_grade_runs`, a failed one included (the safe side) — once a
+   student has a score in its gradebook column (point 4), or once it was
+   released (`released_at`). A draft has none of them and stays deletable;
+   so does the row a failed build discards (`createProject`).
 
-4. **A classroom** holds students' work when one of its evaluations or
+4. **The gradebook's scores.** A `score` mark (`gradebook_marks`, the
+   teacher's own points, accepted before any release) on a real student's
+   seat, in the column of an evaluation or a project, is a grade: it
+   cascades with its activity, so it blocks the deletion. An `absent` or an
+   `excused` mark is not a grade and blocks nothing (the coordinating
+   implementer's call, 2026-11-22, within the owner's rule).
+
+5. **A classroom** holds students' work when one of its evaluations or
    projects does; **a course** when one of its classrooms does. A course's
    templates hold no attempt and are never released: they never block, and
    they still go with their course.
 
-5. **The refusal.** Deleting an entity that holds students' work answers
+6. **The refusal.** Deleting an entity that holds students' work answers
    **`409 holds_student_work`**, whatever the caller's role: neither an
    owner (ADR-068) nor an administrator with Super Powers (ADR-054)
    overrides it. The body is `StudentWorkRefusal` (`@quiz/contracts`):
    `work` counts what blocks by kind — classrooms, evaluations, projects,
-   started attempts, graded repositories, released activities — and never
+   attempts holding work, graded repositories, gradebook scores, released
+   activities — and never
    names a person. The pure rule is `studentWorkOf` (`@quiz/domain`). It
    comes before every other step of the delete: an evaluation's role check
    (an assistant learns the 409 an owner would get), and a classroom's
    journal confirmation (nobody types a name to learn the classroom stays).
 
-6. **Under the lock.** The check runs again inside the delete's
-   transaction, after the rows are locked `FOR UPDATE`: the course and its
-   classrooms (a new classroom, evaluation or project waits on its
-   parent's `FOR KEY SHARE`), then the evaluations (an attempt's insert, a
-   release), then the projects and their repositories (a new repository, a
-   grade, a run, a validation, a release). Work that lands between a
-   route's loader and its delete is either counted or waits for the delete
-   and then finds its parent gone. `deleteEvaluation`'s existing lock
-   (ADR-068 §3, amended 2026-10-10) is the model.
+7. **Under the lock.** The check runs again inside the delete's
+   transaction, after the rows are locked, in this order:
+   - the course and its classrooms `FOR UPDATE` (a new classroom,
+     evaluation or project waits on its parent's `FOR KEY SHARE`; a mark
+     waits too, `setMark` taking its classroom `FOR SHARE`);
+   - the evaluations `FOR UPDATE` (a new attempt or paper copy, a new
+     gradebook column, a release), then their attempts `FOR SHARE` (an
+     attempt's start or hand-in, an UPDATE), then their gradebook columns
+     `FOR UPDATE` (a new mark, whose foreign key takes `FOR KEY SHARE` on
+     its column);
+   - the projects and their repositories `FOR UPDATE` (a new repository, a
+     grade, a run, a validation, a release), then their gradebook columns.
 
-7. **The way out.** The web app says why in a dialog and offers the
+   An evaluation's or a project's own delete takes its row first, then the
+   rest; a classroom `FOR SHARE` would not stop `setMark`, which takes the
+   same share lock, so the columns are what close that window. Work that
+   lands between a route's loader and its delete is either counted or waits
+   for the delete and then finds its parent gone. `deleteEvaluation`'s
+   existing lock (ADR-068 §3, amended 2026-10-10) is the model.
+
+8. **The way out.** The web app says why in a dialog and offers the
    archive where the entity has one: a classroom's, a project's (its own
    confirmation follows, as it says what leaves the gradebook). An
    evaluation's Delete is greyed out with the reason (`holdsStudentWork` of
    `EvaluationSummary` and `EvaluationDetail`); a course's dialog sends to
    its classrooms' archive.
 
-8. **No audit of the refusal.** None of the four modules audits a refused
+9. **No audit of the refusal.** None of the four modules audits a refused
    write today; the refusal changes nothing, and the audit union stays as
    it is (invariant 9).
 
 The remediation audit's wording (§6.3) says "a submitted attempt". The
-rule takes a **started** one: an attempt is autosaved from its start, so an
-exam interrupted before hand-in is a student's work too.
+rule takes a **started or submitted** one, paper copies included: an
+attempt is autosaved from its start, so an exam interrupted before hand-in
+is a student's work too, and a paper copy is entered submitted without ever
+being started.
 
 ## Consequences
 
@@ -115,7 +139,7 @@ exam interrupted before hand-in is a student's work too.
   here, not resolved: the product owner's retention decision stays owed.
 - The owner-only row of ADR-068 §3 for `DELETE /evaluations/:id` now
   covers only what no student work blocks: a correction published, a
-  poll released, or an attempt row a student never started.
+  poll released, or an attempt row a student never started nor handed in.
 - The cascades stay in the schema: a restore's cleanup and the retention
   purges still rely on them.
 

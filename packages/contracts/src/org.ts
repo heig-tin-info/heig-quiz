@@ -315,6 +315,7 @@ export const StudentWork = z.object({
   projects: z.number().int().nonnegative(),
   attempts: z.number().int().nonnegative(),
   gradedRepos: z.number().int().nonnegative(),
+  marks: z.number().int().nonnegative(),
   released: z.number().int().nonnegative(),
 }) satisfies z.ZodType<StudentWorkFacts>;
 export type StudentWork = z.infer<typeof StudentWork>;

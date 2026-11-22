@@ -4,8 +4,8 @@
  * delete's transaction; this decides, and sums what blocks for the 409
  * `holds_student_work`.
  *
- * Students' work is a REAL student's: a staff seat's attempt or repository
- * (ADR-018) is none, and a poll holds votes, never grades.
+ * Students' work is a REAL student's: a staff seat's attempt, repository or
+ * mark (ADR-018) is none, and a poll holds votes, never grades.
  */
 import type { EvaluationModeName } from "./evaluationConfig.js";
 
@@ -15,12 +15,14 @@ export interface StudentWork {
   classrooms: number;
   /** The exams and exercises holding students' work. */
   evaluations: number;
-  /** The projects holding a graded repository or released. */
+  /** The projects holding a graded repository, a score in the gradebook, or released. */
   projects: number;
-  /** The students' started attempts on those evaluations. */
+  /** The students' attempts on those evaluations: started, submitted, or a paper copy. */
   attempts: number;
   /** The students' graded repositories of those projects. */
   gradedRepos: number;
+  /** The students' scores in the gradebook columns of those activities. */
+  marks: number;
   /** Those evaluations and projects that are released. */
   released: number;
 }
@@ -31,32 +33,42 @@ export interface EvaluationWorkFacts {
   classroomId: string | null;
   mode: EvaluationModeName;
   released: boolean;
-  /** Attempts with a `started_at`, a staff seat's left out. */
-  startedStudentAttempts: number;
+  /**
+   * A student's attempts that hold work: started (`started_at`), submitted
+   * (`submitted_at`) or a paper copy (`origin = 'paper'`, entered by the
+   * teacher with neither start nor deadline). A staff seat's left out.
+   */
+  attemptsWithWork: number;
+  /** The `score` marks of the evaluation's gradebook column, on a student's seat; an absence or an excuse is no grade. */
+  scoreMarks: number;
 }
 
 /** A project's facts, read under the delete's locks. */
 export interface ProjectWorkFacts {
   classroomId: string;
   released: boolean;
-  /** Student repositories with a score, an adjustment, a validated criterion or a counted run. */
+  /** Student repositories with a score, an adjustment, a validated criterion or any CI run. */
   gradedRepos: number;
+  /** As {@link EvaluationWorkFacts.scoreMarks}, for the project's column. */
+  scoreMarks: number;
 }
 
 /**
- * An exam or an exercise holds students' work once a student has started an
- * attempt or once it was released. A poll never does.
+ * An exam or an exercise holds students' work once a student has started or
+ * submitted an attempt (a paper copy included), once a student has a score
+ * in its gradebook column, or once it was released. A poll never does.
  */
 export function evaluationHoldsStudentWork(facts: Omit<EvaluationWorkFacts, "classroomId">): boolean {
-  return facts.mode !== "poll" && (facts.released || facts.startedStudentAttempts > 0);
+  return facts.mode !== "poll" && (facts.released || facts.attemptsWithWork > 0 || facts.scoreMarks > 0);
 }
 
 /**
  * A project holds students' work once one of its student repositories is
- * graded or once it was released. A draft has neither.
+ * graded, once a student has a score in its gradebook column, or once it
+ * was released. A draft has none of them.
  */
 export function projectHoldsStudentWork(facts: Omit<ProjectWorkFacts, "classroomId">): boolean {
-  return facts.released || facts.gradedRepos > 0;
+  return facts.released || facts.gradedRepos > 0 || facts.scoreMarks > 0;
 }
 
 /**
@@ -77,8 +89,9 @@ export function studentWorkOf(input: {
     classrooms: new Set(blocking.map((a) => a.classroomId)).size,
     evaluations: evaluations.length,
     projects: projects.length,
-    attempts: evaluations.reduce((n, e) => n + e.startedStudentAttempts, 0),
+    attempts: evaluations.reduce((n, e) => n + e.attemptsWithWork, 0),
     gradedRepos: projects.reduce((n, p) => n + p.gradedRepos, 0),
+    marks: blocking.reduce((n, a) => n + a.scoreMarks, 0),
     released: blocking.filter((a) => a.released).length,
   };
 }

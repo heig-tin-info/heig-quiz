@@ -16,6 +16,7 @@ import {
   projectRepoGrades,
   projectRepos,
   projects,
+  scoreMarksOf,
 } from "../../db/schema.js";
 import { ProjectError } from "./errors.js";
 import { STUDENT_REPO } from "./repos.js";
@@ -25,8 +26,9 @@ export type ProjectWorkScope = { projectId: string } | { classroomId: string } |
 
 /**
  * A graded repository: a row of its grading (a teacher's score, an
- * adjustment, a released snapshot), a validated criterion, or a counted run
- * of the CI. A proposal the teacher never validated is not a grade.
+ * adjustment, a released snapshot), a validated criterion, or any run of the
+ * CI, a failed one included (the safe side). A proposal the teacher never
+ * validated is not a grade.
  */
 const GRADED_REPO = or(
   exists(sql`(SELECT 1 FROM ${projectRepoGrades} WHERE ${projectRepoGrades.repoId} = ${projectRepos.id})`),
@@ -38,11 +40,11 @@ const GRADED_REPO = or(
 
 /**
  * The facts of the projects of `scope`. Their rows, then their repositories'
- * rows, are locked `FOR UPDATE` first: inside a delete's transaction a
- * release, a new repository and a new grade, run or validation (each takes
- * `FOR KEY SHARE` on its repository through its foreign key, or updates the
- * project) wait for the delete, and then find it gone. Outside one, a plain
- * read.
+ * rows and their gradebook columns (`scoreMarksOf`), are locked `FOR UPDATE`
+ * first: inside a delete's transaction a release, a new repository, column
+ * or mark, and a new grade, run or validation (each takes `FOR KEY SHARE` on
+ * its parent through its foreign key, or updates the project) wait for the
+ * delete, and then find it gone. Outside one, a plain read.
  */
 export async function projectWork(db: Db | Tx, scope: ProjectWorkScope): Promise<ProjectWorkFacts[]> {
   const where =
@@ -69,7 +71,13 @@ export async function projectWork(db: Db | Tx, scope: ProjectWorkScope): Promise
     .where(and(inArray(projectRepos.projectId, ids), STUDENT_REPO, GRADED_REPO))
     .groupBy(projectRepos.projectId);
   const gradedOf = new Map(graded.map((g) => [g.id, g.n]));
-  return rows.map((r) => ({ classroomId: r.classroomId, released: r.releasedAt !== null, gradedRepos: gradedOf.get(r.id) ?? 0 }));
+  const marks = await scoreMarksOf(db, "projectId", ids, { lock: true });
+  return rows.map((r) => ({
+    classroomId: r.classroomId,
+    released: r.releasedAt !== null,
+    gradedRepos: gradedOf.get(r.id) ?? 0,
+    scoreMarks: marks.get(r.id) ?? 0,
+  }));
 }
 
 /** ADR-141: the refusal of deleting a project that holds students' work, or null. */

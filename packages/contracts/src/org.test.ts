@@ -99,7 +99,7 @@ describe("the course's catalog of conditions (F-ORG-16)", () => {
 });
 
 describe("StudentWorkRefusal (ADR-141)", () => {
-  const work = { classrooms: 1, evaluations: 1, projects: 0, attempts: 3, gradedRepos: 0, released: 0 };
+  const work = { classrooms: 1, evaluations: 1, projects: 0, attempts: 3, gradedRepos: 0, marks: 0, released: 0 };
 
   it("reads the 409 of a deletion: its code, its message and what blocks", () => {
     expect(StudentWorkRefusal.parse({ error: "holds_student_work", message: "m", work })).toEqual({

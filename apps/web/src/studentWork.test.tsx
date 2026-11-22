@@ -13,7 +13,7 @@ import { renderWithProviders } from "./test/render";
  * offers Archive where the entity has one and only closes otherwise.
  */
 
-const work = { classrooms: 2, evaluations: 3, projects: 1, attempts: 40, gradedRepos: 5, released: 1 };
+const work = { classrooms: 2, evaluations: 3, projects: 1, attempts: 40, gradedRepos: 5, marks: 2, released: 1 };
 const refusal = new ApiError(409, { error: "holds_student_work", message: "m", work });
 const t = (key: keyof typeof en, vars?: Record<string, string | number>) =>
   en[key].replace(/\{(\w+)\}/g, (_, k: string) => String(vars?.[k]));
@@ -29,8 +29,8 @@ describe("studentWorkIn", () => {
 
 describe("studentWorkText", () => {
   it("says what blocks, by kind, and where to go instead", () => {
-    expect(studentWorkText(t, "evaluation", work)).toBe("Students have started this evaluation or received its results.");
-    expect(studentWorkText(t, "project", work)).toBe("This project has graded students' repositories or released scores. Archive it instead.");
+    expect(studentWorkText(t, "evaluation", work)).toBe("This evaluation holds students' work or grades.");
+    expect(studentWorkText(t, "project", work)).toBe("This project holds students' grades. Archive it instead.");
     expect(studentWorkText(t, "classroom", work)).toBe("Activities with students' work: 4. Archive the classroom instead.");
     expect(studentWorkText(t, "course", work)).toBe("Classrooms with students' work: 2. Archive its classrooms instead.");
   });
