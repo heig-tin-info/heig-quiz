@@ -205,7 +205,16 @@ export async function scoreMarksOf(
 ): Promise<Map<string, number>> {
   if (ids.length === 0) return new Map();
   const activity = gradebookColumns[key];
-  if (lock) await db.select({ id: gradebookColumns.id }).from(gradebookColumns).where(inArray(activity, ids)).for("update");
+  if (lock) {
+    await db.select({ id: gradebookColumns.id }).from(gradebookColumns).where(inArray(activity, ids)).for("update");
+    // An existing mark turned into a score (the upsert's DO UPDATE takes no lock on its column) waits too.
+    await db
+      .select({ id: gradebookMarks.id })
+      .from(gradebookMarks)
+      .innerJoin(gradebookColumns, eq(gradebookColumns.id, gradebookMarks.columnId))
+      .where(inArray(activity, ids))
+      .for("share", { of: gradebookMarks });
+  }
   const rows = await db
     .select({ id: activity, n: count() })
     .from(gradebookMarks)

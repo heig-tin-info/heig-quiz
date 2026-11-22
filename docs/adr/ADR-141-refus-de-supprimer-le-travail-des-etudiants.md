@@ -104,7 +104,10 @@ hidden per person (F-ORG-11), which is display state, not an archive.
 
    An evaluation's or a project's own delete takes its row first, then the
    rest; a classroom `FOR SHARE` would not stop `setMark`, which takes the
-   same share lock, so the columns are what close that window. Work that
+   same share lock, so the columns are what close that window. Their
+   existing marks are then locked `FOR SHARE`, all kinds: an absence or an
+   excuse turned into a score (an upsert's `DO UPDATE`, which takes no lock
+   on its column) waits for the delete too. Work that
    lands between a route's loader and its delete is either counted or waits
    for the delete and then finds its parent gone. `deleteEvaluation`'s
    existing lock (ADR-068 §3, amended 2026-10-10) is the model.

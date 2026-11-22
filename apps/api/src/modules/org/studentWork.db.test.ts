@@ -224,6 +224,16 @@ describe("an exam sat on paper, and the gradebook's scores", () => {
     await markOn(seed, { evaluationId: seed.evaluationId }, "score");
     await expect(evaluationService.deleteEvaluation(db(), loaded, "owner")).rejects.toMatchObject({ code: "holds_student_work" });
   });
+
+  it("decides again under the lock: an excuse turned into a score after the loader still refuses the evaluation", async () => {
+    const seed = await seeded();
+    await markOn(seed, { evaluationId: seed.evaluationId }, "excused");
+    const loaded = await reload(db(), seed.evaluationId);
+    expect(await evaluationService.studentWorkRefusal(db(), seed.evaluationId)).toBeNull();
+    // As `setMark`'s upsert rewrites it: the same row, now a score.
+    await db().update(gradebookMarks).set({ kind: "score", points: 5, max: 6 }).where(eq(gradebookMarks.classroomId, seed.classroomId));
+    await expect(evaluationService.deleteEvaluation(db(), loaded, "owner")).rejects.toMatchObject({ code: "holds_student_work" });
+  });
 });
 
 describe("a project", () => {
