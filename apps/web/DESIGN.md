@@ -1235,8 +1235,8 @@ live in `ui/state.ts`, each written once.
   compressed) centred in a question's box, no glyph, no number — the
   questions keep theirs — since reading a text is not recorded. Current,
   it is a solid accent dot with the 3 px halo; closed, 45 %. The connectors
-  run edge to edge into it, and the stretch through it is drawn solid when
-  the questions on both sides are dealt with. Its accessible name is its
+  run edge to edge into it, and for the path covered it reads as the
+  question after it: it has no mark of its own. Its accessible name is its
   title (the text's first heading, else "Text") and the question it comes
   before.
 - ProgressList: the same question list, standing — the zen player's side
@@ -1262,7 +1262,8 @@ live in `ui/state.ts`, each written once.
   corner, "Leave unanswered" and "Clear" under the question: they act on
   the question and its answer, not on the list. One question, or under
   1024 px, the column is absent and the strip is back in the bar; one
-  question with a text before it is two entries, and keeps its list.
+  question with a text before it keeps its list while the text can still
+  be opened.
 - Wide question (`QuestionTypeClient.wide`, ADR-066): the one exception to
   the 760 px, for a statement that must stay in sight beside a program —
   `code` and `codeimage`. From 1024 px of viewport its column takes the room

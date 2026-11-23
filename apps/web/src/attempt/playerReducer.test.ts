@@ -322,6 +322,17 @@ describe("playerReducer: the text before an item (ADR-084)", () => {
     }
   });
 
+  it("keeps a text reopened from the list open across a refetch", () => {
+    const items = [item(1), item(2, { intro, answer: { selected: [0] } })];
+    let state = load(view("free", items, "i1"));
+    expect(state.passed["i2"]).toBe(true);
+    state = playerReducer(state, selectEntry("intro:i2"));
+    expect(passageOf(state)).toBe(intro);
+    // The 60 s refetch, or the window's focus: the same view again.
+    state = playerReducer(state, { type: "load", view: view("free", items, "i1") });
+    expect(passageOf(state)).toBe(intro);
+  });
+
   it("outside free navigation, leads to a text not reached yet like its question's entry would", () => {
     const state = load(view("forward_only", [item(1), item(2, { intro }), item(3)]));
     expect(introReachable(state, "i2")).toBe(true);

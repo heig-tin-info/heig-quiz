@@ -439,12 +439,12 @@ export function PlayerView({
   // absent rather than disabled. Nothing to show at all — one question,
   // nothing to validate — means no bar, not an empty one.
   const manyItems = total > 1;
-  // The question list (F-LIVE-09) maps the screens of the paper: one entry
-  // is not a progression, and draws no list. A single question with a text
-  // before it is two screens, and the list is how the text is read again
-  // (ADR-084). Without a list to stand beside, the heading keeps the
-  // points, as on a narrow screen.
-  const listed = segments.length > 1;
+  // The question list (F-LIVE-09) maps the screens of the paper: one
+  // question is not a progression, and draws no list — unless a text before
+  // it can still be opened (ADR-084): two screens then, and the list is the
+  // way back to the text. Without a list to stand beside, the heading keeps
+  // the points, as on a narrow screen.
+  const listed = total > 1 || segments.some((s) => s.passage !== undefined && s.locked !== true);
   const rail = railScreen && listed && item !== undefined;
   const selectSegment = (id: string) => dispatch(selectEntry(id));
   const progressLabel = t("player.progress", { n: state.index + 1, total });
@@ -529,6 +529,7 @@ export function PlayerView({
                   segments={segments}
                   onSelect={selectSegment}
                   label={progressLabel}
+                  number={state.index + 1}
                   // The passage is not the question: its points and the
                   // preview's tools for it wait for Continue (ADR-084).
                   {...(passage === null ? { points: item.points } : {})}

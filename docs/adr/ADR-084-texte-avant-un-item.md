@@ -14,9 +14,13 @@ no number, no mark, named by the text's first heading ("Text" without one),
 current while the passage is up. Under `free` navigation it opens the
 passage, from anywhere; under `forward_only` and `milestones` it leads where
 its question's entry would until the text is passed, then it is closed. It
-replaces "Read the text again", which is gone. A single question with a
-text has a list, since it is two screens. Alt+←/→ still step from question
-to question; a passage is not a stop of its own. The builder's band folds
+replaces "Read the text again", which is gone. The heading is in the list
+for the whole attempt — before the text is reached and after it is closed —
+so a teacher must not put what is to be memorised in it. A single question
+with a text has a list while the text can still be opened (two screens);
+once it is closed, under `forward_only` or `milestones`, the list goes.
+Alt+←/→ still step from question to question; a passage is not a stop of
+its own. The builder's band folds
 to the text's title and first paragraph and unfolds, on a click, to the
 text as the student reads it.
 

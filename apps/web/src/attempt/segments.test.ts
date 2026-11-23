@@ -132,10 +132,10 @@ describe("segmentsOf", () => {
       passed,
     });
 
-    it("gets an entry before its question, titled by the first heading, marked like its question", () => {
+    it("gets an entry before its question, titled by the first heading, with no mark of its own", () => {
       expect(segmentsOf(paper("free", 0, {}), answered)).toEqual([
         { id: "i0", mark: "answered", current: true, flagged: false, locked: false },
-        { id: "intro:i1", mark: "answered", current: false, locked: false, passage: { title: "Partie 2" } },
+        { id: "intro:i1", mark: "unanswered", current: false, locked: false, passage: { title: "Partie 2" } },
         { id: "i1", mark: "answered", current: false, flagged: false, locked: false },
         { id: "intro:i2", mark: "unanswered", current: false, locked: false, passage: { title: null } },
         { id: "i2", mark: "unanswered", current: false, flagged: false, locked: false },

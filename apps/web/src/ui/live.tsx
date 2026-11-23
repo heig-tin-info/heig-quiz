@@ -323,9 +323,9 @@ export interface Segment {
   /**
    * Not a question: the text before the question that follows it (ADR-084).
    * A smaller dot with no number and no mark of its own, named by `title`
-   * (the text's first heading; "Text" when it has none). Its `mark` is the
-   * next question's and only draws the connector, so the path reads through
-   * it.
+   * (the text's first heading; "Text" when it has none). Its `mark` is
+   * ignored; the connector reads it as the question after it, so the path
+   * runs through it.
    */
   passage?: { title: string | null };
 }
@@ -380,17 +380,20 @@ const passageTitle = (t: TFunction, passage: { title: string | null }): string =
  * `n` is the entry's {@link questionNumbers} value.
  */
 function segmentName(t: TFunction, segment: Segment, n: number): string {
-  const position = [
-    ...(segment.locked ? [t("segments.locked")] : []),
-    ...(segment.current ? [t("segments.current")] : []),
-  ];
+  const current = segment.current ? [t("segments.current")] : [];
   if (segment.passage) {
-    return [t("segments.passage", { title: passageTitle(t, segment.passage), n }), ...position].join(", ");
+    // "Closed" agrees with the text (masculine in French), not the question.
+    return [
+      t("segments.passage", { title: passageTitle(t, segment.passage), n }),
+      ...(segment.locked ? [t("segments.passageLocked")] : []),
+      ...current,
+    ].join(", ");
   }
   const facts = [
     t(SEGMENT_LABEL[segment.mark]),
     ...(segment.flagged ? [segment.flagLabel ?? t("segments.flagged")] : []),
-    ...position,
+    ...(segment.locked ? [t("segments.locked")] : []),
+    ...current,
   ];
   return t("segments.item", { n, state: facts.join(", ") });
 }
@@ -466,9 +469,21 @@ function rove(e: React.KeyboardEvent, list: HTMLElement | null, current: number,
   buttons[next]?.focus();
 }
 
-/** Two questions already dealt with: the stretch between them is drawn solid. */
-function covered(segment: Segment, next: Segment | undefined): boolean {
-  return segment.mark !== "unanswered" && next !== undefined && next.mark !== "unanswered";
+/**
+ * Whether the entry at `i` is a question already dealt with (answered or
+ * declined). A passage has no mark of its own: it reads as the question it
+ * comes before, so the path runs through it.
+ */
+function dealtWith(segments: readonly Segment[], i: number): boolean {
+  let at = i;
+  while (segments[at]?.passage) at += 1;
+  const segment = segments[at];
+  return segment !== undefined && segment.mark !== "unanswered";
+}
+
+/** The stretch from entry `i` to the next one is drawn solid when both are dealt with. */
+function covered(segments: readonly Segment[], i: number): boolean {
+  return i + 1 < segments.length && dealtWith(segments, i) && dealtWith(segments, i + 1);
 }
 
 /**
@@ -623,7 +638,7 @@ export function ProgressSegments({
                 className={cx(
                   "absolute -translate-y-1/2",
                   roomy ? "top-4" : "top-2.75",
-                  covered(segment, next) ? "h-0.5 bg-fg" : "h-px bg-line-strong",
+                  covered(segments, i) ? "h-0.5 bg-fg" : "h-px bg-line-strong",
                 )}
                 style={linkSpan(segment, next, roomy, "x")}
                 data-part="link"
@@ -728,7 +743,7 @@ export function ProgressList({
                   "absolute",
                   // Centred under the circle: the row's 8 px padding, then
                   // half the 20 px circle, less half the stroke.
-                  covered(segment, next)
+                  covered(segments, i)
                     ? "left-[17px] w-0.5 bg-fg"
                     : "left-[17.5px] w-px bg-line-strong",
                 )}

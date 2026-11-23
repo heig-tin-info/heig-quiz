@@ -27,6 +27,10 @@ describe("markdownTitle", () => {
     );
   });
 
+  it("drops raw HTML in a heading: plain words, never a tag", () => {
+    expect(markdownTitle("## A <img src=x onerror=alert(1)> B")).toBe("A B");
+  });
+
   it("never takes a line inside a code fence for a heading", () => {
     expect(markdownTitle("```c\n# include <stdio.h>\n```\n\nSans titre.")).toBeNull();
     expect(markdownTitle("```sh\n# comment\n```\n\n## Le vrai titre")).toBe("Le vrai titre");

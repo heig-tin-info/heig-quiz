@@ -1179,9 +1179,6 @@ describe("the conditions during the attempt", () => {
 });
 
 describe("the text before a question (ADR-084)", () => {
-  // The setup's narrow stub, back for the tests after a wide one.
-  const narrow = window.matchMedia;
-  afterEach(() => vi.stubGlobal("matchMedia", narrow));
   const INTRO = "Lisez le **chapitre 8** avant de répondre.";
   /** The three questions, the third preceded by a text. */
   const withIntro = (navigation: "free" | "forward_only" | "milestones", lastItemId: string) => {
@@ -1228,29 +1225,23 @@ describe("the text before a question (ADR-084)", () => {
     expect(screen.getByText(/ce texte ne sera plus affiché/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
     expect(await screen.findByText("Question 3")).toBeInTheDocument();
-    const entry = screen.getByRole("button", { name: "Texte, avant la question 3, fermée" });
+    const entry = screen.getByRole("button", { name: "Texte, avant la question 3, fermé" });
     await userEvent.click(entry);
     expect(screen.queryByText("Avant la question 3")).toBeNull();
     expect(screen.getByText("Question 3")).toBeInTheDocument();
   });
 
-  it("names its entry by the text's first heading, and the questions keep their numbers", async () => {
-    viewport(1280);
-    const view = withIntro("free", "i3");
+  it("names its entry by the text's first heading, and jumps there from question 2", async () => {
+    const view = withIntro("free", "i2");
     const titled = {
       ...view,
       items: view.items.map((item) => (item.id === "i3" ? { ...item, intro: `## Partie 2\n\n${INTRO}` } : item)),
     };
     stubs(titled);
     render(titled);
-    const list = await screen.findByRole("navigation", { name: /^Progression/ });
-    expect(within(list).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
-      expect.stringMatching(/^Question 1,/),
-      expect.stringMatching(/^Question 2,/),
-      "Partie 2, avant la question 3, en cours",
-      expect.stringMatching(/^Question 3,/),
-    ]);
-    expect(within(list).getByText("Partie 2")).toBeInTheDocument();
+    await screen.findByText("Question 2");
+    await userEvent.click(screen.getByRole("button", { name: "Partie 2, avant la question 3" }));
+    expect(await screen.findByText("Avant la question 3")).toBeInTheDocument();
   });
 
   it("lists a single question preceded by a text: two screens, and the way back to the text", async () => {
@@ -1262,6 +1253,17 @@ describe("the text before a question (ADR-084)", () => {
     expect(await screen.findByText("Question 1")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Texte, avant la question 1" }));
     expect(await screen.findByText("Avant la question 1")).toBeInTheDocument();
+  });
+
+  it("drops the list of a single question once its text is closed (forward_only)", async () => {
+    const one = withNavigation(oneItemView(), "forward_only");
+    const view = { ...one, items: [{ ...one.items[0]!, intro: INTRO, answer: null }] };
+    stubs(view);
+    render(view);
+    expect(await screen.findByRole("button", { name: "Texte, avant la question 1, en cours" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
+    expect(await screen.findByText("Question 1")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: /^Progression/ })).toBeNull();
   });
 
   it("is not shown again on reloading a question already started", async () => {

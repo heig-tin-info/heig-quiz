@@ -249,7 +249,7 @@ export function neighbour(state: PlayerState, delta: 1 | -1): number | null {
  * An item with an intro (ADR-084) gets an entry before its question, named by
  * the text's first heading: current while the passage is on screen, closed
  * once it cannot be opened again ({@link introReachable}). Its mark is the
- * question's, for the connector only: reading a text is not recorded.
+ * neutral "unanswered", never drawn: reading a text is not recorded.
  */
 export function segmentsOf(
   state: PlayerState,
@@ -273,7 +273,7 @@ export function segmentsOf(
     if (item.intro === null) return [question];
     const passage: Segment = {
       id: `${PASSAGE}${item.id}`,
-      mark,
+      mark: "unanswered",
       current: here && reading,
       locked: !introReachable(state, item.id),
       passage: { title: markdownTitle(item.intro) },
@@ -328,8 +328,12 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       );
       // ADR-084: a passage once passed stays passed across a refetch; one
       // whose item is already started is not shown again after a reload.
+      // Only for an item this player does not track yet: a refetch must not
+      // close again a text the student reopened from the list.
       const passed: Record<string, true> = { ...state.passed };
-      for (const item of action.view.items) if (started(item)) passed[item.id] = true;
+      for (const item of action.view.items) {
+        if (!before.has(item.id) && started(item)) passed[item.id] = true;
+      }
       return {
         items,
         index,

@@ -92,7 +92,7 @@ describe("ProgressSegments", () => {
   it("gives a text before a question (ADR-084) a slot with no number; the questions keep theirs", () => {
     const withText: Segment[] = [
       { id: "q1", mark: "answered" },
-      { id: "intro:q2", mark: "answered", current: true, passage: { title: "Partie 2" } },
+      { id: "intro:q2", mark: "unanswered", current: true, passage: { title: "Partie 2" } },
       { id: "q2", mark: "answered" },
     ];
     const { container } = renderWithProviders(
@@ -106,7 +106,7 @@ describe("ProgressSegments", () => {
       (s) => s.textContent,
     );
     expect(numbers).toEqual(["1", "", "2"]);
-    // The path runs through it: answered on both sides, both stretches solid.
+    // No mark of its own: the path runs through it, both stretches solid.
     const links = Array.from(container.querySelectorAll("[data-part=link]"));
     expect(links.map((l) => l.classList.contains("bg-fg"))).toEqual([true, true]);
   });
