@@ -23,6 +23,7 @@ const item = (id: string, over: Partial<PlayerItem> = {}): PlayerItem => ({
   milestone: false,
   counting: "normal",
   intro: null,
+  section: null,
   markedDone: false,
   skipped: false,
   flagged: false,

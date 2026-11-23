@@ -14,6 +14,9 @@ import { Card } from "../ui";
  * text for a question to answer. The text is the teacher's markdown, rendered by the
  * one renderer a student sees (`MarkdownView`).
  *
+ * A section's text (ADR-143) names the questions it applies to instead,
+ * "Questions 4 to 7": the student may meet it on any of them.
+ *
  * Where Continue is one way (`forward_only`, `milestones`), one muted line
  * under the text says so before the student presses it: they cannot come
  * back to it.
@@ -21,11 +24,14 @@ import { Card } from "../ui";
 export function IntroPassage({
   source,
   index,
+  span = null,
   oneWay,
 }: {
   source: string;
   /** Zero-based position of the question the text precedes. */
   index: number;
+  /** A section's text: the questions it applies to, numbered from 1. */
+  span?: { from: number; to: number } | null;
   oneWay: boolean;
 }) {
   const t = useT();
@@ -35,7 +41,7 @@ export function IntroPassage({
         aria-live="polite"
         className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-fg-muted"
       >
-        {t("player.intro.before", { n: index + 1 })}
+        {span === null ? t("player.intro.before", { n: index + 1 }) : t("player.intro.section", span)}
       </p>
       <Card className="p-5 sm:p-6">
         <MarkdownView source={source} />

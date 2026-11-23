@@ -328,6 +328,11 @@ export interface Segment {
    * runs through it.
    */
   passage?: { title: string | null };
+  /**
+   * Inside a section (ADR-143): the standing list sets the entry slightly
+   * in, under the section's text; the strip draws nothing more.
+   */
+  indent?: boolean;
 }
 
 /**
@@ -338,6 +343,65 @@ export interface Segment {
 function questionNumbers(segments: readonly Segment[]): number[] {
   let n = 0;
   return segments.map((segment) => (segment.passage ? n + 1 : ++n));
+}
+
+/**
+ * The connector of the standing list from entry `segment` down to `next`,
+ * drawn from the row of `segment`: straight down when both stand at the same
+ * indent; into a section (ADR-143), down from the text's dot and in to the
+ * first question's; out of one, from the last question's dot out and down
+ * to the next text's. A row's dot is centred 18 px from its left edge (8 px
+ * of padding, then half the 20 px circle), and an indented row stands
+ * {@link LIST_INDENT} px further in.
+ */
+function listLink(segment: Segment, next: Segment, thick: boolean): { className: string; style: CSSProperties } {
+  const tone = thick ? "border-fg" : "border-line-strong";
+  const stroke = thick ? 2 : 1;
+  const axis = 18 - stroke / 2;
+  const from = dotRadius(segment, true);
+  const to = dotRadius(next, true);
+  if ((segment.indent ?? false) === (next.indent ?? false)) {
+    // Centred under the circle, less half the stroke.
+    return {
+      className: thick ? "left-[17px] w-0.5 bg-fg" : "left-[17.5px] w-px bg-line-strong",
+      style: linkSpan(segment, next, true, "y"),
+    };
+  }
+  if (next.indent) {
+    // Down from this dot's bottom to the next row's middle, then in to its circle's edge.
+    return {
+      className: cx("rounded-bl-[6px] border-b border-l", tone),
+      style: {
+        left: axis,
+        top: `calc(50% + ${from}px)`,
+        height: `calc(100% - ${from}px + ${stroke / 2}px)`,
+        width: LIST_INDENT + 18 - to - axis,
+        borderLeftWidth: stroke,
+        borderBottomWidth: stroke,
+      },
+    };
+  }
+  // Out from this circle's edge to the next row's axis, then down to its dot's top.
+  const outer = axis - LIST_INDENT;
+  return {
+    className: cx("rounded-tl-[6px] border-l border-t", tone),
+    style: {
+      left: outer,
+      top: `calc(50% - ${stroke / 2}px)`,
+      height: `calc(100% - ${to}px + ${stroke / 2}px)`,
+      width: 18 - from - outer,
+      borderLeftWidth: stroke,
+      borderTopWidth: stroke,
+    },
+  };
+}
+
+/** How far the standing list sets an entry of a section in (ADR-143), in px. */
+const LIST_INDENT = 16;
+
+function ListLink({ segment, next, thick }: { segment: Segment; next: Segment; thick: boolean }) {
+  const { className, style } = listLink(segment, next, thick);
+  return <span className={cx("absolute", className)} style={style} data-part="link" aria-hidden />;
 }
 
 /** Half the width of an entry's dot, for the connectors that start and end at its edge. */
@@ -729,6 +793,7 @@ export function ProgressList({
             title={name}
             aria-current={segment.current ? "true" : undefined}
             onClick={() => onSelect(segment.id)}
+            style={segment.indent ? { marginLeft: LIST_INDENT } : undefined}
             className={cx(
               "relative flex items-center gap-2.5 rounded-field px-2 py-1.5 text-left text-[13px] leading-5",
               !segment.current && "hover:bg-surface-2",
@@ -736,22 +801,9 @@ export function ProgressList({
           >
             <SegmentDot segment={segment} roomy />
             {/* From this circle's bottom edge to the next one's top: the
-                path down the paper, drawn like the strip's. */}
-            {next ? (
-              <span
-                className={cx(
-                  "absolute",
-                  // Centred under the circle: the row's 8 px padding, then
-                  // half the 20 px circle, less half the stroke.
-                  covered(segments, i)
-                    ? "left-[17px] w-0.5 bg-fg"
-                    : "left-[17.5px] w-px bg-line-strong",
-                )}
-                style={linkSpan(segment, next, true, "y")}
-                data-part="link"
-                aria-hidden
-              />
-            ) : null}
+                path down the paper, drawn like the strip's — with an elbow
+                into and out of a section's indent. */}
+            {next ? <ListLink segment={segment} next={next} thick={covered(segments, i)} /> : null}
             {/* A passage reads one step quieter than a question: its title,
                 at the caption size, never a number. */}
             <span

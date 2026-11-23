@@ -269,7 +269,7 @@ function effectiveSettings(row: EvaluationRecord): EvaluationSettings {
  * as everywhere and the settings through their accessors (so a stored row
  * missing a defaulted or optional key equals the same row spelling its
  * default), and the items with their versions, points, order, milestones,
- * bonus flags (ADR-052) and intros (ADR-084).
+ * bonus flags (ADR-052), intros (ADR-084) and their scopes (ADR-143).
  */
 async function contentOf(db: DbOrTx, row: EvaluationRecord) {
   return {
@@ -288,6 +288,7 @@ async function contentOf(db: DbOrTx, row: EvaluationRecord) {
         milestone: evaluationItems.milestone,
         counting: evaluationItems.counting,
         intro: evaluationItems.intro,
+        introScope: evaluationItems.introScope,
       })
       .from(evaluationItems)
       .where(eq(evaluationItems.evaluationId, row.id))
@@ -415,6 +416,7 @@ const pullItem = (j: JoinedItem): TemplatePullItem => ({
   milestone: j.item.milestone,
   counting: j.item.counting,
   intro: j.item.intro,
+  introScope: j.item.introScope,
 });
 
 /**

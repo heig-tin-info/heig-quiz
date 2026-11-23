@@ -136,6 +136,7 @@ export function makeItemRow(index: number, overrides: Partial<ItemRow> = {}): It
     milestone: false,
     counting: "normal",
     intro: null,
+    introScope: "item",
     questionId: id("question", index),
     questionVersionId: id("version", index),
     type: "mcq",

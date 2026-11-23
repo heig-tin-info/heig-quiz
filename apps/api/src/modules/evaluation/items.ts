@@ -4,7 +4,14 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { ItemPatch, ItemRow, PoolSummary, TemplateItemRef } from "@quiz/contracts";
-import { copiedCounting, evaluationTotal, itemListLock, lacksGradedPoints, type ItemCounting } from "@quiz/domain";
+import {
+  copiedCounting,
+  evaluationTotal,
+  itemListLock,
+  lacksGradedPoints,
+  textOnRemoval,
+  type ItemCounting,
+} from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import {
@@ -168,6 +175,20 @@ export async function patchItem(
   if (patch.milestone !== undefined) next.milestone = patch.milestone;
   if (patch.counting !== undefined) next.counting = patch.counting;
   if (patch.intro !== undefined) next.intro = patch.intro;
+  if (patch.introScope !== undefined) next.introScope = patch.introScope;
+  // ADR-143: a scope belongs to a text. Removing the text resets it; a
+  // section is never opened by an item left without one.
+  if (patch.intro === null) {
+    if (patch.introScope === "following") throw new EvaluationError("intro_scope_without_text");
+    next.introScope = "item";
+  }
+  if (next.introScope === "following" && patch.intro === undefined) {
+    const [item] = await db
+      .select({ intro: evaluationItems.intro })
+      .from(evaluationItems)
+      .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, row.id)));
+    if (item !== undefined && item.intro === null) throw new EvaluationError("intro_scope_without_text");
+  }
   await db
     .update(evaluationItems)
     .set(next)
@@ -222,6 +243,14 @@ export async function setItemCounting(
   return item.counting;
 }
 
+/**
+ * Removes one item. Its text goes with it — unless it opens a section and
+ * the next item, in the same section, has none: the text then moves there
+ * (ADR-143, `textOnRemoval`), so the section survives its first question.
+ * One transaction under the evaluation's row lock (a template's is already
+ * held by `editTemplate`): the move, the removal and the renumbering land
+ * together or not at all.
+ */
 export async function deleteItem(
   db: DbOrTx,
   row: EvaluationRecord,
@@ -229,17 +258,29 @@ export async function deleteItem(
   ctx: { attemptCount: number },
 ): Promise<ItemRow[]> {
   assertItemListEditable(row, ctx);
-  await db
-    .delete(evaluationItems)
-    .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, row.id)));
-  // Positions stay dense: the grid, the CSV export and `forward_only` all
-  // read `position` as an index, not as an opaque sort key.
-  const remaining = await db
-    .select()
-    .from(evaluationItems)
-    .where(eq(evaluationItems.evaluationId, row.id))
-    .orderBy(asc(evaluationItems.position));
-  await renumber(db, row.id, remaining.map((r) => r.id));
+  await db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, row.id)).for("update");
+    if (!locked) return;
+    assertItemListEditable(locked, ctx);
+    const items = await tx
+      .select()
+      .from(evaluationItems)
+      .where(eq(evaluationItems.evaluationId, row.id))
+      .orderBy(asc(evaluationItems.position));
+    const removed = items.find((item) => item.id === itemId);
+    if (!removed) return;
+    const { moveTo } = textOnRemoval(items, itemId, (item) => item);
+    await tx.delete(evaluationItems).where(eq(evaluationItems.id, itemId));
+    if (moveTo !== null) {
+      await tx
+        .update(evaluationItems)
+        .set({ intro: removed.intro, introScope: removed.introScope })
+        .where(eq(evaluationItems.id, moveTo));
+    }
+    // Positions stay dense: the grid, the CSV export and `forward_only` all
+    // read `position` as an index, not as an opaque sort key.
+    await renumber(tx, row.id, items.filter((item) => item.id !== itemId).map((item) => item.id));
+  });
   return itemRows(db, row.id);
 }
 
@@ -360,7 +401,7 @@ export async function replaceItems(
 /**
  * THE copy of an item list into `evaluationId`: the SAME frozen versions,
  * points, order, milestones, countings (a neutralized item comes back normal,
- * `copiedCounting`, ADR-108) and intros (ADR-084), under new ids — copying must never silently
+ * `copiedCounting`, ADR-108) and intros with their scopes (ADR-084, ADR-143), under new ids — copying must never silently
  * upgrade a question. Written by `copyEvaluation` and by a template pull
  * (F-EVAL-26), inside the caller's transaction.
  */
@@ -380,6 +421,7 @@ export async function copyItems(
       milestone: item.milestone,
       counting: copiedCounting(item.counting),
       intro: item.intro,
+      introScope: item.introScope,
     })),
   );
 }

@@ -21,6 +21,7 @@ import {
   EVALUATION_MODES,
   EVALUATION_STATES,
   FEEDBACK_WHEN,
+  INTRO_SCOPES,
   ITEM_COUNTINGS,
   isIpRange,
   LOBBIES,
@@ -53,6 +54,13 @@ export type EvaluationMode = z.infer<typeof EvaluationMode>;
  */
 export const ItemCounting = z.enum(ITEM_COUNTINGS);
 export type ItemCounting = z.infer<typeof ItemCounting>;
+
+/**
+ * ADR-143: what an item's text applies to — its own item, or the following
+ * questions too, up to the next text that does (a section).
+ */
+export const IntroScope = z.enum(INTRO_SCOPES);
+export type IntroScope = z.infer<typeof IntroScope>;
 
 /** What the builder offers (ADR-052 §2): `neutralized` is a grading-time act only (ADR-108). */
 export const BuilderCounting = ItemCounting.exclude(["neutralized"]);
@@ -542,6 +550,8 @@ export const ItemRow = z.object({
   counting: ItemCounting,
   /** ADR-084: the text shown to the student before this item; null for none. */
   intro: z.string().nullable(),
+  /** ADR-143: `following` when that text opens a section; `item` without a text. */
+  introScope: IntroScope,
   questionId: z.uuid(),
   questionVersionId: z.uuid(),
   type: z.string(),
@@ -782,6 +792,12 @@ export const ItemPatch = z
       .nullable()
       .transform((v) => (v === null || v.trim() === "" ? null : v))
       .optional(),
+    /**
+     * ADR-143: `following` makes the text open a section, `item` keeps it
+     * before its own item. Refused on an item left without a text
+     * (`422 intro_scope_without_text`); removing the text resets it to `item`.
+     */
+    introScope: IntroScope.optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
 export type ItemPatch = z.infer<typeof ItemPatch>;
@@ -933,6 +949,8 @@ export const TemplatePullItem = TemplateItemRef.extend({
   counting: ItemCounting,
   /** ADR-084: a different intro makes the item `changed`. */
   intro: z.string().nullable(),
+  /** ADR-143: so does a different scope of it. */
+  introScope: IntroScope,
 });
 export type TemplatePullItem = z.infer<typeof TemplatePullItem>;
 
@@ -940,7 +958,7 @@ export type TemplatePullItem = z.infer<typeof TemplatePullItem>;
  * `GET /evaluations/:id/pull-template` — what pulling the template's current
  * revision would do to the evaluation's QUESTIONS, the only thing a pull
  * replaces: items `added` (in the template only), `removed` (in the
- * evaluation only), `changed` (another version, points, milestone, counting or intro),
+ * evaluation only), `changed` (another version, points, milestone, counting, intro or its scope),
  * whether the order moves, and "rev. `from` → `to`". `unlinkedItems` would
  * refuse the pull (`422 template_pool_unlinked`); `deprecatedItems` only warn.
  */

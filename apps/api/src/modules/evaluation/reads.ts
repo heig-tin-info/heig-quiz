@@ -683,6 +683,7 @@ export async function itemRowsOf(db: DbOrTx, joined: readonly JoinedItem[]): Pro
     milestone: j.item.milestone,
     counting: j.item.counting,
     intro: j.item.intro,
+    introScope: j.item.introScope,
     questionId: j.question.id,
     questionVersionId: j.version.id,
     type: j.question.type,

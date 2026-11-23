@@ -1279,6 +1279,31 @@ describe("the text before a question (ADR-084)", () => {
     // Still there to read again from its entry, under free navigation.
     expect(screen.getByRole("button", { name: "Texte, avant la question 2" })).toBeInTheDocument();
   });
+
+  it("shows a section's text on arriving at any of its questions, naming them, then that question (ADR-143)", async () => {
+    const view = withNavigation(attemptView({ lastItemId: "i3" }), "free");
+    const sectioned = {
+      ...view,
+      items: view.items.map((item) =>
+        item.id === "i2"
+          ? { ...item, intro: `## Partie 2\n\n${INTRO}`, section: "i2", answer: null }
+          : item.id === "i3"
+            ? { ...item, section: "i2", answer: null }
+            : item,
+      ),
+    };
+    stubs(sectioned);
+    render(sectioned);
+    expect(await screen.findByText("Questions 2 à 3")).toBeInTheDocument();
+    expect(screen.getByText("chapitre 8")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
+    expect(await screen.findByText("Question 3")).toBeInTheDocument();
+    // Reread from the question it applies to: back to that question after.
+    await userEvent.click(screen.getByRole("button", { name: "Partie 2, avant la question 2" }));
+    expect(await screen.findByText("Questions 2 à 3")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
+    expect(await screen.findByText("Question 3")).toBeInTheDocument();
+  });
 });
 
 describe("the zen player's integrity journal (F-EVAL-13)", () => {

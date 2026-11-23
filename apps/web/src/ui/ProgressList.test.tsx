@@ -72,6 +72,28 @@ describe("ProgressList", () => {
     expect(onSelect).toHaveBeenCalledWith("intro:q2");
   });
 
+  it("sets a section's entries in under its text, with an elbow in and out (ADR-143)", () => {
+    const sectioned: Segment[] = [
+      { id: "q1", mark: "answered" },
+      { id: "intro:q2", mark: "unanswered", passage: { title: "Partie 2" } },
+      { id: "q2", mark: "unanswered", indent: true },
+      { id: "q3", mark: "unanswered", indent: true },
+      { id: "intro:q4", mark: "unanswered", passage: { title: "Partie 3" } },
+      { id: "q4", mark: "unanswered", indent: true },
+    ];
+    const { container } = renderWithProviders(
+      <ProgressList segments={sectioned} label="Progress" onSelect={() => {}} />,
+    );
+    const rows = screen.getAllByRole("button");
+    expect(rows.map((row) => row.style.marginLeft)).toEqual(["", "", "16px", "16px", "", "16px"]);
+    const links = Array.from(container.querySelectorAll<HTMLElement>("[data-part=link]"));
+    // Straight, in, straight, out, in: the numbering is the questions' own.
+    expect(links.map((l) => (l.className.includes("rounded-bl") ? "in" : l.className.includes("rounded-tl") ? "out" : "straight"))).toEqual(
+      ["straight", "in", "straight", "out", "in"],
+    );
+    expect(screen.getByText("Question 3")).toBeInTheDocument();
+  });
+
   it("hands the caller the id it clicked", async () => {
     const onSelect = vi.fn();
     renderWithProviders(<ProgressList segments={segments} label="Progress" onSelect={onSelect} />);

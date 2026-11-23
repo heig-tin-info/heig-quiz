@@ -144,9 +144,17 @@ export const AttemptItem = z.object({
   counting: ItemCounting,
   /**
    * ADR-084: the teacher's markdown shown as a passage screen before the
-   * item; null for none. An item's property, not question content.
+   * item; null for none. An item's property, not question content. In the
+   * student's order (ADR-143): a section's text is on the first item of the
+   * section drawn, whichever it is.
    */
   intro: z.string().nullable(),
+  /**
+   * ADR-143: the section the item belongs to — the id of the item whose
+   * text opens it — or null outside one. The items of a section are
+   * contiguous in the student's order; the first carries its text.
+   */
+  section: z.uuid().nullable(),
   student: z.unknown(),
   answer: z.unknown().nullable(),
   revision: z.number().int(),

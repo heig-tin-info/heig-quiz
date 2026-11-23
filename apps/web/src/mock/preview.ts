@@ -6,8 +6,8 @@
  * the same `tryAnswer` as the question editor's Try panel.
  *
  * Like the API, nothing is kept: the seed is the whole state. The order of
- * the items is a rotation by the seed when the evaluation shuffles them —
- * enough to see the order move on "Restart" — and the code runner answers the
+ * the items is the API's, from the same domain rule and the same seed — the
+ * order moves on "Restart" — and the code runner answers the
  * `runner_unavailable` of a machine without a container engine, so the
  * correction shows the warning a default deployment shows.
  */
@@ -21,7 +21,7 @@ import type {
   PreviewSolution,
 } from "@quiz/contracts";
 import { AI_KEY, JUSTIFICATION_KEY, evaluationConditionsOf } from "@quiz/contracts";
-import { evaluationTotal, gradeFromPoints, round2 } from "@quiz/domain";
+import { evaluationTotal, gradeFromPoints, placeIntros, round2, sectionedOrder } from "@quiz/domain";
 
 import { evaluationOr404, itemQuestion, templateOr404, type MockEvaluation } from "./evaluation";
 import { frozenConfig, solutionOf, studentSolutionOf, studentView, tryAnswer } from "./pool";
@@ -39,12 +39,13 @@ function withoutAi(details: unknown): unknown {
 
 let seeds = 1_000;
 
-/** The items in the order a student of `seed` gets them. */
+/** The items in the order a student of `seed` gets them: the server's own rule (`sectionedOrder`, ADR-143). */
 function orderOf(e: MockEvaluation, seed: number) {
-  const items = [...e.items];
-  if (e.settings.shuffleItems !== true || items.length === 0) return items;
-  const shift = seed % items.length;
-  return [...items.slice(shift), ...items.slice(0, shift)];
+  return sectionedOrder(e.items, (item) => item, {
+    shuffle: e.settings.shuffleItems === true,
+    seed,
+    evaluationId: e.id,
+  });
 }
 
 function durationOf(e: MockEvaluation): number | null {
@@ -88,9 +89,10 @@ export function viewOf(e: MockEvaluation, seed: number): AttemptView {
       pausedAt: e.pausedAt,
       totalPoints: evaluationTotal(e.items),
     },
-    items: orderOf(e, seed).flatMap((item) => {
+    items: orderOf(e, seed).flatMap((item, rank, ordered) => {
       const q = itemQuestion(item);
       if (!q) return [];
+      const placed = placeIntros(e.items, ordered, (i) => i)[rank]!;
       return [
         {
           id: item.id,
@@ -99,7 +101,8 @@ export function viewOf(e: MockEvaluation, seed: number): AttemptView {
           type: item.type,
           milestone: item.milestone,
           counting: item.counting,
-          intro: item.intro,
+          intro: placed.intro,
+          section: placed.section,
           student: studentView(q, frozenConfig(q)),
           answer: null,
           revision: 0,

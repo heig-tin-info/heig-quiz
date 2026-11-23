@@ -41,9 +41,17 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { EVALUATION_CLOSERS, EVALUATION_MODES, EVALUATION_STATES, ITEM_COUNTINGS, MCQ_SCORE_POLICIES } from "@quiz/domain";
+import {
+  EVALUATION_CLOSERS,
+  EVALUATION_MODES,
+  EVALUATION_STATES,
+  INTRO_SCOPES,
+  ITEM_COUNTINGS,
+  MCQ_SCORE_POLICIES,
+} from "@quiz/domain";
 
 import { users } from "./auth.js";
+import { oneOf } from "./columns.js";
 import { classrooms, courses } from "./org.js";
 import { questionVersions } from "./pool.js";
 
@@ -281,10 +289,19 @@ export const evaluationItems = pgTable(
      * item; null for none. Item content, like `milestone`.
      */
     intro: text("intro"),
+    /**
+     * ADR-143: what `intro` applies to — its own item, or the following
+     * questions too, up to the next `following` text (a section). Only a
+     * text has a scope: `following` without one is refused by a check.
+     */
+    introScope: text("intro_scope", { enum: INTRO_SCOPES }).notNull().default("item"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("evaluation_items_position_uq").on(t.evaluationId, t.position),
     index("evaluation_items_version_idx").on(t.questionVersionId),
+    check("evaluation_items_intro_scope_ck", oneOf(t.introScope, INTRO_SCOPES)),
+    // A section is opened by a text: no `following` scope on an item without one.
+    check("evaluation_items_intro_scope_text_ck", sql`${t.introScope} = 'item' or ${t.intro} is not null`),
   ],
 );

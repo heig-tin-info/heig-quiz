@@ -233,6 +233,8 @@ export type Scene =
   | "intro"
   /** ADR-084: the texts of `intro`, under `forward_only` navigation. */
   | "intro-forward"
+  /** ADR-143: two sections, the second question's text shared by the next ones. */
+  | "section"
   | "partial"
   /** ADR-018: the staff persona holds no seat in the evaluation's classroom until Join as student. */
   | "noseat";

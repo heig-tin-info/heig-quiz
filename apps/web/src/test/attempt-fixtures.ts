@@ -32,6 +32,7 @@ export function makeAttemptItem(
     milestone: false,
     counting: "normal",
     intro: null,
+    section: null,
     student: ADDRESS_MCQ,
     answer: null,
     revision: 0,

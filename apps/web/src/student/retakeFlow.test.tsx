@@ -103,6 +103,7 @@ function view(
         milestone: false,
         counting: "normal",
         intro: null,
+        section: null,
         student: {
           prompt: "Quelle expression donne l'adresse de `x` ?",
           mode: "single",

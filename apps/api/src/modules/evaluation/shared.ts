@@ -69,6 +69,8 @@ const REFUSALS = {
   // Opened to students (`lobby` or later): the questions are frozen even
   // while nobody has entered yet (#79).
   items_frozen: [409, "the evaluation has been opened: its questions are frozen"],
+  // ADR-143: a section is opened by a text; an item without one has no scope to set.
+  intro_scope_without_text: [422, "only an item with a text can open a section (ADR-143)"],
   // ADR-108: the grading-time counting act is the opposite of the builder's
   // toggle — only once the item list is frozen, and never on a poll.
   counting_not_frozen: [409, "the item list is still editable: set the counting in the builder (ADR-108)"],

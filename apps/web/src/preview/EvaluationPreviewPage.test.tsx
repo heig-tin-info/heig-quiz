@@ -80,6 +80,7 @@ const view = (): AttemptView => ({
       milestone: false,
       counting: "normal",
       intro: null,
+      section: null,
       student: {
         prompt: "Quelle expression donne l'adresse de `x` ?",
         mode: "single",
@@ -106,6 +107,7 @@ const view = (): AttemptView => ({
       milestone: false,
       counting: "normal",
       intro: null,
+      section: null,
       student: {
         prompt: "Quelle est la taille d'un `char` ?",
         mode: "single",
@@ -504,6 +506,7 @@ describe("EvaluationPreviewPage — fixing a question", () => {
     milestone: false,
     counting: "normal",
     intro: null,
+    introScope: "item",
     questionId,
     questionVersionId: "00000000-0000-4000-8000-00000000000" + questionId.slice(-1),
     type: "mcq",
@@ -626,6 +629,7 @@ describe("EvaluationPreviewPage — a template", () => {
     milestone: false,
     counting: "normal" as const,
     intro: null,
+    introScope: "item" as const,
     questionId,
     questionVersionId: "00000000-0000-4000-8000-00000000000" + questionId.slice(-1),
     type: "mcq",

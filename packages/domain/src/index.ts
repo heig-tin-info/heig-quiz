@@ -161,6 +161,7 @@ export * from "./studentSearch.js";
 export * from "./syncPreview.js";
 export * from "./workspaceCollection.js";
 export * from "./stats.js";
+export * from "./sections.js";
 export * from "./templatePull.js";
 export * from "./tokenScope.js";
 export * from "./typedName.js";

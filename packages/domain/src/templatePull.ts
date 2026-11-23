@@ -5,13 +5,14 @@
  * never offer a pull the server refuses, nor hide one it allows.
  *
  * A pull replaces the instance's QUESTIONS ONLY — the frozen versions, points,
- * order, milestones, counting and intros of the template — and keeps everything else of the
+ * order, milestones, counting, intros and their scopes (ADR-143) of the template — and keeps everything else of the
  * instance. It is therefore a write to the item list, and allowed exactly
  * where that list is editable (`itemListLock`: `draft` or `scheduled`, no
  * attempt of anybody, a teacher's own included).
  */
 import type { ItemCounting } from "./grade.js";
 import { itemListLock, type EvaluationStateName } from "./itemList.js";
+import type { IntroScope } from "./sections.js";
 
 /** Where an instance stands against its template. */
 export interface TemplateStanding {
@@ -50,6 +51,8 @@ export interface PullItem {
   counting: ItemCounting;
   /** ADR-084: the passage before the item, compared as written. */
   intro: string | null;
+  /** ADR-143: whether that text applies to the following questions too. */
+  introScope: IntroScope;
 }
 
 /** What a pull would change in the question list, instance → template. */
@@ -58,7 +61,7 @@ export interface ItemListDiff<T extends PullItem> {
   added: T[];
   /** In the instance, not in the template: a local addition, or a question the template dropped. */
   removed: T[];
-  /** The same question on both sides with another version, points, milestone, counting or intro. */
+  /** The same question on both sides with another version, points, milestone, counting, intro or its scope. */
   changed: { from: T; to: T }[];
   /** The questions both sides hold do not come in the same order. */
   reordered: boolean;
@@ -95,7 +98,8 @@ export function itemListDiff<T extends PullItem>(
       from.points !== to.points ||
       from.milestone !== to.milestone ||
       from.counting !== to.counting ||
-      from.intro !== to.intro,
+      from.intro !== to.intro ||
+      from.introScope !== to.introScope,
   );
   // `pairs` is in the template's order; the instance's order of the same
   // questions must then be increasing too.

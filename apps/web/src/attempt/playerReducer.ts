@@ -29,8 +29,13 @@ export interface PlayerItem {
   milestone: boolean;
   /** ADR-052, ADR-108: a bonus is labelled "Bonus question"; its points are not in the total. */
   counting: ItemCounting;
-  /** ADR-084: the teacher's passage shown before the item; null for none. */
+  /**
+   * ADR-084: the teacher's passage shown before the item; null for none. A
+   * section's text (ADR-143) is on the first item of its section.
+   */
   intro: string | null;
+  /** ADR-143: the section the item belongs to (the id of the item opening it); null outside one. */
+  section: string | null;
   /**
    * VALIDATED: "Validate and continue" in `forward_only`, a crossed
    * checkpoint in `milestones` (F-LIVE-08, issue #89).
@@ -75,8 +80,9 @@ export interface PlayerState {
   answers: Record<string, unknown>;
   /**
    * ADR-084: the items whose intro this player has passed ("Continue"), or
-   * that were already started when the attempt loaded. Held here, never
-   * stored: see {@link passageOf}.
+   * that were already started when the attempt loaded — for a section's
+   * text (ADR-143), the first item of the section, passed once any of its
+   * items is started. Held here, never stored: see {@link passageOf}.
    */
   passed: Readonly<Record<string, true>>;
 }
@@ -131,6 +137,7 @@ const toItem = (item: AttemptItem): PlayerItem => ({
   milestone: item.milestone,
   counting: item.counting,
   intro: item.intro,
+  section: item.section,
   markedDone: item.markedDone,
   skipped: item.skipped,
   flagged: item.flagged,
@@ -187,16 +194,54 @@ export function isWritable(state: PlayerState, itemId: string): boolean {
 export const currentItem = (state: PlayerState): PlayerItem | undefined => state.items[state.index];
 
 /**
- * The passage screen (ADR-084): the intro of the item on screen while it has
- * not been passed, `null` once it has — or when there is none. One rule for
- * every navigation: an intro shows on arriving at its item until Continue;
- * what differs is only whether its entry in the question list can bring it
- * back ({@link introReachable}).
+ * The item that opens the section of `item` in this order — the first of
+ * its items, which carries the section's text (ADR-143) — or `undefined`
+ * outside a section.
  */
-export function passageOf(state: PlayerState): string | null {
+function sectionHead(state: PlayerState, item: PlayerItem): PlayerItem | undefined {
+  if (item.section === null) return undefined;
+  const head = state.items.find((i) => i.section === item.section);
+  return head?.intro === null ? undefined : head;
+}
+
+/** Whether `item` carries its section's text (ADR-143). */
+const headsSection = (state: PlayerState, item: PlayerItem): boolean => sectionHead(state, item) === item;
+
+/**
+ * The item whose text the passage screen shows (ADR-084), or `null`. One
+ * rule for every navigation: a text shows on arriving at its item until
+ * Continue; a section's text (ADR-143) shows on arriving at ANY item of its
+ * section until it is passed — Continue, or an item of the section started —
+ * so a student jumping to its third question reads it first. An item's own
+ * text inside a section comes after its section's. What differs between
+ * navigations is only whether the list can bring a text back
+ * ({@link introReachable}).
+ */
+export function passageItem(state: PlayerState): PlayerItem | null {
   const item = currentItem(state);
-  if (!item || item.intro === null || state.passed[item.id] === true) return null;
-  return item.intro;
+  if (!item) return null;
+  const head = sectionHead(state, item);
+  if (head !== undefined && head !== item && state.passed[head.id] !== true) return head;
+  return item.intro !== null && state.passed[item.id] !== true ? item : null;
+}
+
+/** The text of the passage screen ({@link passageItem}), `null` when the question shows. */
+export function passageOf(state: PlayerState): string | null {
+  return passageItem(state)?.intro ?? null;
+}
+
+/**
+ * The questions a section's text on screen applies to, numbered in the
+ * student's order (`from` to `to`, both counted from 1), or `null` when the
+ * passage is not a section's or its section holds one question.
+ */
+export function passageSpan(state: PlayerState): { from: number; to: number } | null {
+  const item = passageItem(state);
+  if (item === null || !headsSection(state, item)) return null;
+  const from = state.items.indexOf(item);
+  const count = state.items.filter((i) => i.section === item.section).length;
+  // The items of a section are contiguous in the student's order, its head first.
+  return count > 1 ? { from: from + 1, to: from + count } : null;
 }
 
 /**
@@ -215,6 +260,18 @@ export function introReachable(state: PlayerState, itemId: string): boolean {
 }
 
 /**
+ * Where the student stands while the text of `itemId` is read again: on the
+ * question they are on when it is of the same section (ADR-143: a section's
+ * text is reread from any of its questions, and Continue leads back there),
+ * on the text's own item otherwise.
+ */
+function readingIndex(state: PlayerState, itemId: string): number {
+  const current = currentItem(state);
+  const head = current === undefined ? undefined : sectionHead(state, current);
+  return head?.id === itemId ? state.index : state.items.findIndex((i) => i.id === itemId);
+}
+
+/**
  * The prefix of a passage's entry in the question list. An item id is a
  * UUID, so it cannot meet a question's own entry.
  */
@@ -230,6 +287,19 @@ export function selectEntry(entryId: string): PlayerAction {
 /** Already started: an answer, "Leave unanswered", or validated. Its intro is behind the student. */
 const started = (item: AttemptItem): boolean =>
   item.answer !== null || item.skipped || item.markedDone;
+
+/**
+ * Whether the text before `item` is behind the student when the attempt
+ * loads (ADR-084): its item is started. A section's text (ADR-143), on its
+ * first item, once any item of the section is started — but not by one
+ * carried over by a partial retake (ADR-091), which must not swallow the
+ * text of a section it retakes; with nothing of it retaken, it is passed.
+ */
+function passedOnLoad(items: readonly AttemptItem[], item: AttemptItem): boolean {
+  const members = item.section === null ? [] : items.filter((i) => i.section === item.section);
+  if (members[0] !== item) return started(item);
+  return members.some((i) => started(i) && !i.acquired) || members.every((i) => i.acquired);
+}
 
 /** The next index the arrows would land on, or `null` when there is none. */
 export function neighbour(state: PlayerState, delta: 1 | -1): number | null {
@@ -256,27 +326,31 @@ export function segmentsOf(
   answered: (type: string, answer: unknown) => boolean,
 ): Segment[] {
   const locked = lockedIds(state);
-  const reading = passageOf(state) !== null;
+  const reading = passageItem(state);
   return state.items.flatMap((item, index) => {
-    const here = index === state.index;
     const mark = answerMark({
       answered: answered(item.type, state.answers[item.id] ?? null),
       skipped: item.skipped,
     });
+    // ADR-143: a section's questions, and the texts of their own, stand
+    // indented under the section's text; that text's entry does not.
+    const indent = item.section !== null ? { indent: true } : {};
     const question: Segment = {
       id: item.id,
       mark,
-      current: here && !reading,
+      current: index === state.index && reading === null,
       flagged: item.flagged,
       locked: item.serverLocked || locked.has(item.id),
+      ...indent,
     };
     if (item.intro === null) return [question];
     const passage: Segment = {
       id: `${PASSAGE}${item.id}`,
       mark: "unanswered",
-      current: here && reading,
+      current: reading === item,
       locked: !introReachable(state, item.id),
       passage: { title: markdownTitle(item.intro) },
+      ...(headsSection(state, item) ? {} : indent),
     };
     return [passage, question];
   });
@@ -332,7 +406,7 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       // close again a text the student reopened from the list.
       const passed: Record<string, true> = { ...state.passed };
       for (const item of action.view.items) {
-        if (!before.has(item.id) && started(item)) passed[item.id] = true;
+        if (!before.has(item.id) && passedOnLoad(action.view.items, item)) passed[item.id] = true;
       }
       return {
         items,
@@ -347,11 +421,10 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       return { ...state, passed: { ...state.passed, [action.itemId]: true } };
     case "intro": {
       if (!introReachable(state, action.itemId)) return state;
-      const index = state.items.findIndex((i) => i.id === action.itemId);
       // Already on screen: nothing moves.
-      if (index === state.index && state.passed[action.itemId] !== true) return state;
+      if (passageItem(state)?.id === action.itemId) return state;
       const { [action.itemId]: _reopened, ...passed } = state.passed;
-      return { ...state, index, passed };
+      return { ...state, index: readingIndex(state, action.itemId), passed };
     }
     case "goto": {
       const index = state.items.findIndex((i) => i.id === action.itemId);

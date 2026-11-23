@@ -1,13 +1,13 @@
 import { BookOpen, ChevronDown, Pencil, X } from "lucide-react";
 import { useState, type MouseEvent } from "react";
 
-import { ITEM_INTRO_MAX } from "@quiz/contracts";
+import { ITEM_INTRO_MAX, type IntroScope } from "@quiz/contracts";
 
 import { useT, type TFunction } from "../i18n";
 import { MarkdownField } from "../markdown/MarkdownField";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { markdownLead, markdownTitle } from "../markdown/outline";
-import { Button, Card, cx, FormError, IconButton, Modal } from "../ui";
+import { Button, Card, cx, FormError, IconButton, Modal, SettingRow, Switch } from "../ui";
 
 /**
  * The text a student reads before an item (ADR-084), as the builder shows it:
@@ -22,9 +22,13 @@ import { Button, Card, cx, FormError, IconButton, Modal } from "../ui";
  * button with `aria-expanded`, the chevron at its end, the pencil and the ×
  * beside it and outside it. Folded by default and never remembered, like a
  * `Disclosure`.
+ *
+ * A shared text (ADR-143) names the questions it applies to in place of
+ * "Text before the question": "Shared text, questions 5 to 7".
  */
 export function IntroBand({
   intro,
+  span = null,
   name,
   locked,
   onEdit,
@@ -32,6 +36,8 @@ export function IntroBand({
   t,
 }: {
   intro: string;
+  /** A shared text: the questions it applies to, numbered from 1; null for a text before its item only. */
+  span?: { from: number; to: number } | null;
   /** The item's internal name, for the controls' accessible names. */
   name: string;
   locked: boolean;
@@ -54,7 +60,11 @@ export function IntroBand({
           <BookOpen className="mt-0.5 size-3.5 shrink-0 text-fg-muted" aria-hidden />
           <span className="min-w-0 flex-1">
             <span className="block text-[11px] font-medium tracking-wide text-fg-muted uppercase">
-              {t("eval.questions.intro.label")}
+              {span === null
+                ? t("eval.questions.intro.label")
+                : span.from === span.to
+                  ? t("eval.questions.intro.sharedOne", { n: span.from })
+                  : t("eval.questions.intro.shared", span)}
             </span>
             {/* Folded: which text, not the text. Unfolded, the text follows. */}
             {open || (title === null && lead === "") ? null : (
@@ -114,11 +124,14 @@ export function IntroBand({
  * Writing the text before an item: one markdown field, so a modal (quiz-ui
  * rule 4). The field is the question editor's own (`MarkdownField`), without
  * image upload: an intro is text. Save writes the whole text through the
- * item's patch; a blank text removes it, as the server reads it.
+ * item's patch; a blank text removes it, as the server reads it. Under the
+ * field, the switch of ADR-143: the text also applies to the following
+ * questions, up to the next shared text. Off for a new text.
  */
 export function IntroEditor({
   name,
   initial,
+  initialScope = "item",
   saving,
   error,
   onSave,
@@ -126,13 +139,16 @@ export function IntroEditor({
 }: {
   name: string;
   initial: string;
+  initialScope?: IntroScope;
   saving: boolean;
   error: unknown;
-  onSave: (intro: string | null) => void;
+  /** A blank text is `null`, and has no scope: the server resets it. */
+  onSave: (intro: string | null, scope: IntroScope) => void;
   onClose: () => void;
 }) {
   const t = useT();
   const [value, setValue] = useState(initial);
+  const [shared, setShared] = useState(initialScope === "following");
   const tooLong = value.length > ITEM_INTRO_MAX;
   return (
     <Modal
@@ -148,7 +164,7 @@ export function IntroEditor({
           <Button
             loading={saving}
             disabled={tooLong}
-            onClick={() => onSave(value.trim() === "" ? null : value)}
+            onClick={() => onSave(value.trim() === "" ? null : value, shared ? "following" : "item")}
           >
             {t("common.save")}
           </Button>
@@ -158,6 +174,13 @@ export function IntroEditor({
       <div className="space-y-3">
         <p className="text-[13px] leading-relaxed text-fg-muted">{t("eval.questions.intro.hint")}</p>
         <MarkdownField label={t("eval.questions.intro.field")} value={value} onChange={setValue} />
+        <SettingRow
+          title={t("eval.questions.intro.following")}
+          desc={t("eval.questions.intro.following.desc")}
+          className="py-1"
+        >
+          <Switch checked={shared} label={t("eval.questions.intro.following")} onChange={setShared} />
+        </SettingRow>
         {tooLong ? (
           <p className="text-[13px] text-danger">
             {t("eval.questions.intro.tooLong", { max: ITEM_INTRO_MAX, n: value.length })}
