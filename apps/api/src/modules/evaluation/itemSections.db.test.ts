@@ -241,7 +241,9 @@ describe("the student's order and where the texts are shown", () => {
     const head = s.itemIds[1]!;
     let movedHead = false;
     let ownFirst = false;
-    for (let seedValue = 0; seedValue < 12; seedValue++) {
+    // The evaluation id feeds the stream, so which seeds draw what varies from
+    // run to run: draw until both cases are seen (each has odds 1/4 per seed).
+    for (let seedValue = 0; seedValue < 200 && !(movedHead && ownFirst); seedValue++) {
       const items = await view(s.evaluationId, seedValue);
       // The leading item stays first; the section's four follow, in some order.
       expect(items[0]!.id).toBe(s.itemIds[0]);
