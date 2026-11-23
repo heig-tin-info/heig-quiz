@@ -257,6 +257,8 @@ async function resolveWatch(
   evaluation: typeof evaluations.$inferSelect;
   staff: boolean;
   participant: boolean;
+  /** A practice attempt's stream (ADR-122, ADR-142 §4). */
+  practice?: boolean;
 } | null> {
   const separator = subject.indexOf(":");
   const [kind, id] = [subject.slice(0, separator), subject.slice(separator + 1)];
@@ -301,6 +303,7 @@ async function resolveWatch(
       // Watching one's OWN attempt is sitting the quiz, teacher or not; a
       // staff inspector watching somebody else's row is not in the room.
       participant: attempt.userId === callerOf(req).id,
+      practice: attempt.afterDue,
     };
   }
   return null;
@@ -422,7 +425,7 @@ export async function realtimePlugin(app: FastifyInstance) {
       // An unreachable subject is a 404, exactly like a missing one — and so
       // is one this session may not sit (ADR-027); staff watching somebody
       // else's room is not sitting it.
-      if (!resolved || sitRefusal(req, resolved.evaluation, resolved.staff && !resolved.participant) !== null) {
+      if (!resolved || sitRefusal(req, resolved.evaluation, resolved.staff && !resolved.participant, resolved.practice) !== null) {
         return reply.code(404).send({ error: "not_found" });
       }
       watch = resolved.watch;

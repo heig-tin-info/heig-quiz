@@ -559,6 +559,9 @@ export const evaluation: Record<keyof typeof en, string> = {
   "eval.drill.loadFailed": "Die Trainingskarten konnten nicht geladen werden",
   "eval.afterDue": "Training nach dem Abgabetermin",
   "eval.afterDue.desc": "Nach dem Ende bleibt die Übung zum Training offen, zählt aber nie.",
+  "eval.afterDue.exam.desc": "Nach der Freigabe können die Studierenden, die sie abgelegt haben, sie leer wiederholen. Sie zählt nie.",
+  "eval.afterDue.keyHidden": "Erfordert «Bei Freigabe» und «Erwartete Antwort zeigen».",
+  "eval.afterDue.suspended": "Ausgesetzt, solange «Erwartete Antwort zeigen» aus ist.",
   "eval.afterDue.failed": "Die Einstellung konnte nicht gespeichert werden",
   // ADR-125: the paper copy entered by the teaching team.
   "paper.enter": "Papierexemplar erfassen",

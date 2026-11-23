@@ -6,7 +6,7 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import type { AttemptScore, EvaluationCard, PracticeCard, StudentPollCard } from "@quiz/contracts";
-import { isFinishedAttempt, retakeRefusal, retakeScopeOf } from "@quiz/domain";
+import { isFinishedAttempt, retakeRefusal, retakeScopeOf, takenBy } from "@quiz/domain";
 
 import { isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -16,6 +16,7 @@ import {
   countedItemsByEvaluation,
   handoutPrints,
   inPastSeries,
+  pastSeriesPrintable,
   retakePolicyOf,
   retakesEnabled,
   studentEvaluationRows,
@@ -43,8 +44,8 @@ import { conditionsFor } from "./views.js";
 
 /**
  * ADR-122, the student home's "Past series", from the rows `studentBoard`
- * already read: the exercises over and open to practice in a classroom that
- * is not archived, newest closed first, each with the student's unfinished
+ * already read: the exercises over and the exams released (ADR-142) open to
+ * practice in a classroom that is not archived, newest closed first, each with the student's unfinished
  * practice attempt and the score of their latest finished one — points,
  * never a grade — and whether its blank print is made (`printable`, the ids
  * `handoutPrints` let through).
@@ -77,7 +78,8 @@ function practiceCardsOf(
             : {
                 attemptId: last.id,
                 finishedAt: isoOrNull(last.submittedAt ?? last.closedAt),
-                // An exercise shows its correction, the score included (ADR-124).
+                // An exercise shows its correction, the score included (ADR-124);
+                // so does a released exam open to practice (ADR-142 §2).
                 score: scoreFrom(scores, last.id, evaluation.id),
               },
       };
@@ -168,8 +170,12 @@ export async function studentBoard(
   // other card is its one attempt, as before.
   const withRetakes = rows.filter((r) => retakesEnabled(r.evaluation));
   // ADR-122: the exercises over and open to practice, outside an archived
-  // classroom, and the student's practice attempts on them.
-  const practiced = options.practice ? rows.filter((r) => inPastSeries(r.evaluation, r.archivedAt)) : [];
+  // classroom — and the released exams open to it that the student handed in
+  // (ADR-142, `row.attempt` the official latest) — with the student's
+  // practice attempts on them.
+  const practiced = options.practice
+    ? rows.filter((r) => inPastSeries(r.evaluation, r.archivedAt, takenBy(r.attempt === null ? [] : [r.attempt])))
+    : [];
   const [perEvaluation, practiceRows] = await Promise.all([
     studentAttempts(
       db,
@@ -194,9 +200,10 @@ export async function studentBoard(
       ...scored.map((row) => countedAttemptId(perEvaluation, row)).filter((id): id is string => id !== null),
       ...lastFinishedPracticeIds(practiceRows),
     ]),
+    // The hand-out route's own rule (`pastSeriesPrintable`): never an exam's.
     handoutPrints(
       db,
-      practiced.map((r) => r.evaluation),
+      practiced.filter((r) => pastSeriesPrintable(r.evaluation, r.archivedAt)).map((r) => r.evaluation),
     ),
   ]);
   const scores: Scores = { totals, itemCounts, tallies };

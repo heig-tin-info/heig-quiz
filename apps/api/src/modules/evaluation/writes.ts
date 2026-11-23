@@ -21,6 +21,7 @@ import {
   retakesOf,
 } from "@quiz/contracts";
 import {
+  afterDueRefusal,
   allowDrillWritable,
   calculatorAllowedFor,
   notepadAllowedFor,
@@ -302,6 +303,9 @@ export async function patchEvaluation(
     // ADR-041 §2: the drill is frozen at what the old mode gave it, so the
     // change does not silently flip it.
     if (modeChanged) settings.allowDrill = drillAllowedOn(row.mode, settings.allowDrill);
+    // ADR-142 §1: the practice switch does not cross a change of mode — an
+    // exercise's open default must not become an exam's opened practice.
+    if (modeChanged) delete settings.afterDue;
     // The settings the write leaves behind are judged against the mode it
     // leaves behind: a change of mode runs every gate against the new one.
     for (const { code, on, allowedFor, why } of MODE_SETTINGS) {
@@ -528,19 +532,22 @@ export async function setAllowDrill(
   return updated;
 }
 
-/** `409 after_due_locked`: the after-due switch exists on an exercise only (ADR-122). */
+/** `409 after_due_locked`: a poll has no practice (ADR-122, ADR-142). */
 export class AfterDueLocked extends EvaluationError {
   constructor() {
-    super("after_due_locked", "practice after the due date is an exercise's setting");
+    super("after_due_locked", "a poll takes no practice attempts");
   }
 }
 
 /**
- * The teacher's "practice after the due date" switch (ADR-122 §1):
- * `settings.afterDue`, writable at ANY state — it is a visibility switch, not
- * a frozen setting, and the configuration lock does not apply to it. The
- * second write of the settings outside {@link patchEvaluation}, beside
- * {@link setAllowDrill}. An exercise only.
+ * The teacher's practice switch (ADR-122 §1, ADR-142 §1): `settings.afterDue`,
+ * writable at ANY state — it is a visibility switch, not a frozen setting,
+ * and the configuration lock does not apply to it. The second write of the
+ * settings outside {@link patchEvaluation}, beside {@link setAllowDrill}. An
+ * exercise or an exam; an exam's opens only under a stored feedback policy
+ * that shows the key at the release (`afterDueRefusal`,
+ * `422 practice_key_hidden`); the open rule re-checks the policy on every
+ * read, so a policy changed since the load opens nothing.
  */
 export async function setAfterDue(
   db: DbOrTx,
@@ -548,16 +555,20 @@ export async function setAfterDue(
   afterDue: "open" | "hidden",
   now: Date,
 ): Promise<EvaluationRecord> {
-  if (row.mode !== "exercise") throw new AfterDueLocked();
+  const refusal = afterDueRefusal({ mode: row.mode, afterDue, feedback: storedFeedbackOf(row) });
+  if (refusal === "mode") throw new AfterDueLocked();
+  if (refusal === "key_hidden") throw new EvaluationError("practice_key_hidden");
+  // On the mode judged: a poll never gets the key. A policy changed since
+  // the load needs no lock — the open rule re-reads it on every read.
   const [updated] = await db
     .update(evaluations)
     .set({
       settings: sql`${evaluations.settings} || jsonb_build_object('afterDue', ${afterDue}::text)`,
       updatedAt: now,
     })
-    .where(and(eq(evaluations.id, row.id), eq(evaluations.mode, "exercise")))
+    .where(and(eq(evaluations.id, row.id), eq(evaluations.mode, row.mode)))
     .returning();
-  if (!updated) throw new AfterDueLocked();
+  if (!updated) throw new EvaluationError("not_found");
   return updated;
 }
 

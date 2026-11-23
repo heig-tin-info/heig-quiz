@@ -21,6 +21,7 @@ import {
   isFinishedAttempt,
   isLiveState,
   practiceDurationS,
+  practiceIgnoresSittingConditions,
   practiceOwnLimit,
 } from "@quiz/domain";
 
@@ -312,9 +313,10 @@ export function conditionsFor(evaluation: EvaluationRecord, timeBonusPercent: nu
 }
 
 /**
- * The conditions of a practice attempt (ADR-122): the exercise's own, with
+ * The conditions of a practice attempt (ADR-122): the evaluation's own, with
  * the practice's clock — its time limit, or eight hours, never its passed
- * closing — unlimited attempts, and no integrity journal.
+ * closing — unlimited attempts, and no integrity journal. An exam's trusted
+ * clients are not a practice's (ADR-142 §4): they protect the sitting.
  */
 export function practiceConditions(evaluation: EvaluationRecord, timeBonusPercent: number): EvaluationConditions {
   const settings = settingsOf(evaluation);
@@ -325,12 +327,15 @@ export function practiceConditions(evaluation: EvaluationRecord, timeBonusPercen
       ...settings,
       timing: "duration",
       logVisibility: false,
-      retakes: { enabled: true, keep: "best", maxAttempts: null },
+      // Never a partial retake (ADR-091): a practice is always blank.
+      retakes: undefined,
+      ...(practiceIgnoresSittingConditions(evaluation.mode) ? { safeExamBrowser: false, kiosk: false } : {}),
     },
     durationS: practiceDurationS(limit),
     closesAt: null,
-    // The accommodation stretches the exercise's own limit, not the eight hours.
+    // The accommodation stretches the evaluation's own limit, not the eight hours.
     timeBonusPercent: practiceOwnLimit(limit) ? timeBonusPercent : 0,
+    maxAttempts: null,
   });
 }
 

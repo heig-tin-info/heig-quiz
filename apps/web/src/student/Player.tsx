@@ -501,8 +501,9 @@ export function PlayerView({
         wide={item !== undefined && isWide(item.type)}
         // Issue #125: an exercise may be left and continued later; an exam
         // may not look like it can. The teacher's preview, exam or not, has
-        // no clock to stop: its way out is the same quiet button.
-        {...(initial.evaluation.mode === "exercise" || initial.attempt.preview
+        // no clock to stop: its way out is the same quiet button. So has a
+        // practice attempt, an exam's included (ADR-142): it counts nowhere.
+        {...(initial.evaluation.mode === "exercise" || initial.attempt.preview || initial.attempt.practice === true
           ? { home }
           : {})}
         headerAction={

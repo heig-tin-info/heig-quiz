@@ -1,11 +1,12 @@
 /**
  * Practice after the due date (ADR-122): entering it and starting a new
- * practice attempt on an exercise that is over.
+ * practice attempt on an exercise that is over, or on a released exam the
+ * student handed in (ADR-142).
  */
 import { and, asc, eq } from "drizzle-orm";
 
 import type { AttemptView, ReadyView } from "@quiz/contracts";
-import { isFinishedAttempt, practiceCooldownS, practiceDeadline, practiceRefusal } from "@quiz/domain";
+import { isFinishedAttempt, practiceCooldownS, practiceDeadline, practiceRefusal, takenBy } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { attempts, evaluations } from "../../db/schema.js";
@@ -18,8 +19,9 @@ import { attemptView, practiceConditions } from "./views.js";
 /**
  * Where a student stands for practice on one evaluation, from ONE read of
  * their attempts: the unfinished practice attempt to resume, whether an
- * official attempt is left unfinished, the latest practice one (for the
- * minute between two), and the next attempt number.
+ * official attempt is left unfinished or handed in (`taken`, which an exam's
+ * practice asks for, ADR-142 §3), the latest practice one (for the minute
+ * between two), and the next attempt number.
  */
 async function practiceState(tx: DbOrTx, evaluationId: string, userId: string) {
   const mine = await tx
@@ -31,6 +33,7 @@ async function practiceState(tx: DbOrTx, evaluationId: string, userId: string) {
   return {
     open: unfinished.find((a) => a.afterDue) ?? null,
     unfinishedOfficial: unfinished.some((a) => !a.afterDue),
+    taken: takenBy(mine),
     lastPractice: mine.filter((a) => a.afterDue).at(-1) ?? null,
     nextNumber: (mine.at(-1)?.attemptNumber ?? 0) + 1,
   };
@@ -41,14 +44,16 @@ async function assertPractice(
   db: DbOrTx,
   evaluation: EvaluationRecord,
   archived: boolean | null,
-  unfinishedOfficial: boolean,
+  state: { unfinishedOfficial: boolean; taken: boolean },
 ): Promise<void> {
   const refusal = practiceRefusal({
+    mode: evaluation.mode,
     open: practiceOpen(evaluation),
     evaluationState: evaluation.state,
     // The student's loader read it with their seat; the staff's did not (`null`).
     archived: archived ?? (await classroomArchived(db, evaluation)),
-    unfinishedOfficial,
+    unfinishedOfficial: state.unfinishedOfficial,
+    taken: state.taken,
   });
   if (refusal !== null) throw new PracticeRefused(refusal);
 }
@@ -78,7 +83,7 @@ export async function practiceEntry(
   if (state.open !== null) {
     return { kind: "attempt", view: await attemptView(db, evaluation, state.open, now, participant) };
   }
-  await assertPractice(db, evaluation, input.archived, state.unfinishedOfficial);
+  await assertPractice(db, evaluation, input.archived, state);
   return {
     kind: "ready",
     view: {
@@ -90,7 +95,7 @@ export async function practiceEntry(
 
 /**
  * `POST /evaluations/:id/practice/start` (ADR-122): a NEW practice attempt
- * on an exercise that is over — blank, a new seed (a new order, new values),
+ * on an exercise that is over, or a released exam (ADR-142) — blank, a new seed (a new order, new values),
  * never a partial retake (ADR-091), started at once with its own deadline
  * (`practiceDeadline`). Unlimited, one unfinished at a time: an unfinished
  * practice attempt is answered instead of a new one. At most one new
@@ -118,7 +123,7 @@ export async function startPractice(
     if (!evaluation) throw new PracticeRefused("not_over");
     const state = await practiceState(tx, evaluation.id, userId);
     if (state.open !== null) return { evaluation, row: state.open, created: false };
-    await assertPractice(tx, evaluation, input.archived, state.unfinishedOfficial);
+    await assertPractice(tx, evaluation, input.archived, state);
     const wait = practiceCooldownS(state.lastPractice?.createdAt ?? null, now);
     if (wait > 0) throw new RateLimited(wait);
 

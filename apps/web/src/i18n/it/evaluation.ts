@@ -560,6 +560,9 @@ export const evaluation: Record<keyof typeof en, string> = {
   "eval.drill.loadFailed": "Impossibile caricare le carte di allenamento",
   "eval.afterDue": "Allenamento dopo il termine di consegna",
   "eval.afterDue.desc": "Una volta terminato, l'esercizio resta aperto per l'allenamento. Non conta mai.",
+  "eval.afterDue.exam.desc": "Dopo la pubblicazione dei risultati, chi l'ha sostenuto può rifarlo in bianco. Non conta mai.",
+  "eval.afterDue.keyHidden": "Richiede «Alla pubblicazione» e «Mostrare la risposta attesa».",
+  "eval.afterDue.suspended": "Sospeso finché «Mostrare la risposta attesa» è disattivato.",
   "eval.afterDue.failed": "Impossibile salvare l'impostazione",
   // ADR-125: the paper copy entered by the teaching team.
   "paper.enter": "Inserisci copia cartacea",

@@ -142,6 +142,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-092 — Changing the mode of an evaluation: only the mode moves, until students are let in](ADR-092-changer-le-mode-d-une-evaluation.md)
 - [ADR-122 — Practice after the due date: an exercise stays open, its practice attempts count nowhere](ADR-122-entrainement-apres-l-echeance.md)
 - [ADR-124 — An exercise always shows its correction; a per-question check](ADR-124-un-exercice-montre-toujours-sa-correction.md)
+- [ADR-142 — Practice of a released exam: redone blank, counted nowhere, when the teacher allows it](ADR-142-entrainement-sur-un-examen-publie.md)
 - [ADR-125 — Paper copies: the hand-out and its answer zones, PDF through Typst, the paper attempt entered by the teacher](ADR-125-copies-papier-pdf-typst.md)
 - [ADR-126 — Canvas question types on paper: a closed drawing model, inline SVG, a ruled free frame](ADR-126-types-a-canevas-sur-papier.md)
 

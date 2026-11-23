@@ -1140,11 +1140,13 @@ on("GET", "/app/api/student/home", studentHome);
 //
 // Two exercises of the student's classroom that are over and open to
 // practice ("Past series"): one practised twice, its last score shown; one
-// with a practice attempt still open, which the card resumes. The practice
+// with a practice attempt still open, which the card resumes; and a released
+// exam the student took, open to practice by its teacher (ADR-142). The practice
 // route answers the ready screen until Start, then the player's attempt,
 // marked practice.
 export const STUDENT_PRACTICE_A = "11111111-1111-4111-8111-111111111131";
 const STUDENT_PRACTICE_B = "11111111-1111-4111-8111-111111111132";
+const STUDENT_PRACTICE_EXAM = "11111111-1111-4111-8111-111111111133";
 export const STUDENT_PRACTICE_ATTEMPT = "22222222-2222-4222-8222-222222222231";
 
 const practiceCards = (): PracticeCard[] => [
@@ -1174,6 +1176,19 @@ const practiceCards = (): PracticeCard[] => [
     openAttemptId: STUDENT_ATTEMPT,
     count: 0,
     // A series holding a type with no paper form: no printer on its row.
+    printable: false,
+    last: null,
+  },
+  // ADR-142: a released exam the student took, open to practice — never printed.
+  {
+    id: STUDENT_PRACTICE_EXAM,
+    title: "Quiz 1 — Pointeurs",
+    classroomId: "r1",
+    classroomName: "PRG1-2026",
+    courseCode: "PRG1",
+    closedAt: iso(-26 * D),
+    openAttemptId: null,
+    count: 0,
     printable: false,
     last: null,
   },

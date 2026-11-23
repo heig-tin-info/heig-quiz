@@ -238,7 +238,7 @@ describe("the student classroom page", () => {
     expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
       "Open now",
       "Coming up",
-      "Past series",
+      "Practice on past evaluations",
       "Past evaluations",
     ]);
     const rows = screen.getAllByText("Série 2 — Boucles").map((el) => within(el.closest("div.rounded-card") as HTMLElement));

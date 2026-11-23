@@ -60,7 +60,7 @@ describe("the student's Past series", () => {
   it("lists an exercise open to practice, and opens its practice route", async () => {
     const user = userEvent.setup();
     const navigate = render([practice({})]);
-    const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
+    const section = (await screen.findByRole("heading", { name: "Practice on past evaluations" })).closest("section")!;
     expect(within(section).getByText("Série 2 — Boucles")).toBeVisible();
     await user.click(within(section).getByRole("button", { name: "Practise" }));
     expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e9", practice: true });
@@ -73,7 +73,7 @@ describe("the student's Past series", () => {
         last: { attemptId: "a7", finishedAt: null, score: { points: 7.5, totalPoints: 10, pendingCount: 0 } },
       }),
     ]);
-    const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
+    const section = (await screen.findByRole("heading", { name: "Practice on past evaluations" })).closest("section")!;
     expect(within(section).getByText("Last practice: 7.5 / 10 points")).toBeVisible();
     expect(within(section).getByRole("button", { name: "Practise again" })).toBeVisible();
     // The title opens that practice's results.
@@ -85,7 +85,7 @@ describe("the student's Past series", () => {
 
   it("resumes a practice attempt still open", async () => {
     render([practice({ openAttemptId: "a8" })]);
-    const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
+    const section = (await screen.findByRole("heading", { name: "Practice on past evaluations" })).closest("section")!;
     expect(within(section).getByText("in progress")).toBeVisible();
     expect(within(section).getByRole("button", { name: "Resume" })).toBeVisible();
   });
@@ -95,7 +95,7 @@ describe("the student's Past series", () => {
     const createObjectURL = vi.fn((_blob: Blob) => "blob:pdf");
     Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
     const { calls } = render([practice({})], vi.fn(), { ...publicConfig(true), [`GET ${PRINT}`]: ok("%PDF-1.7") });
-    const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
+    const section = (await screen.findByRole("heading", { name: "Practice on past evaluations" })).closest("section")!;
     const print = await within(section).findByRole("button", { name: "Print the series" });
     // Practise stays the row's one button with a label.
     expect(within(section).getByRole("button", { name: "Practise" })).toBeVisible();
@@ -106,7 +106,7 @@ describe("the student's Past series", () => {
 
   it("offers no print when the server makes no PDF", async () => {
     render([practice({})], vi.fn(), publicConfig(false));
-    const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
+    const section = (await screen.findByRole("heading", { name: "Practice on past evaluations" })).closest("section")!;
     expect(within(section).getByRole("button", { name: "Practise" })).toBeVisible();
     // The config has answered: still no print.
     await waitFor(() => expect(within(section).queryByRole("button", { name: "Print the series" })).toBeNull());
@@ -114,7 +114,7 @@ describe("the student's Past series", () => {
 
   it("offers no print on a series that does not print (ADR-125 §5)", async () => {
     render([practice({ printable: false })], vi.fn(), publicConfig(true));
-    const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
+    const section = (await screen.findByRole("heading", { name: "Practice on past evaluations" })).closest("section")!;
     expect(within(section).getByRole("button", { name: "Practise" })).toBeVisible();
     await waitFor(() => expect(within(section).queryByRole("button", { name: "Print the series" })).toBeNull());
   });
@@ -125,7 +125,7 @@ describe("the student's Past series", () => {
       ...publicConfig(true),
       [`GET ${PRINT}`]: fail(409, { error: "not_printable", message: "this evaluation does not print", reason: "type", types: ["code"] }),
     });
-    const section = (await screen.findByRole("heading", { name: "Past series" })).closest("section")!;
+    const section = (await screen.findByRole("heading", { name: "Practice on past evaluations" })).closest("section")!;
     await user.click(await within(section).findByRole("button", { name: "Print the series" }));
     expect(await screen.findByText("This series has a question that does not print.")).toBeVisible();
     expect(screen.queryByText("this evaluation does not print")).toBeNull();
@@ -134,6 +134,6 @@ describe("the student's Past series", () => {
   it("draws nothing when no exercise is open to practice", async () => {
     render([]);
     expect(await screen.findByRole("heading", { name: "Coming up" })).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "Past series" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Practice on past evaluations" })).toBeNull();
   });
 });

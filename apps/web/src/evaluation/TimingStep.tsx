@@ -544,12 +544,12 @@ export function TimingStep({
         dates={dates}
         /* ADR-041 §2 (#317): its own writer, editable until the release —
            not one of the settings `patch` saves, nor frozen with them. And
-           ADR-122: practice after the due date, an exercise's, editable at
-           any state. */
+           ADR-122: practice after the due date, an exercise's or an exam's
+           (ADR-142), editable at any state. */
         feedbackExtra={
           drillModeOf(mode) ? (
             <>
-              {mode === "exercise" ? <AfterDueSetting detail={detail} /> : null}
+              <AfterDueSetting detail={detail} />
               <EvaluationDrillSetting evaluation={detail.evaluation} />
             </>
           ) : undefined

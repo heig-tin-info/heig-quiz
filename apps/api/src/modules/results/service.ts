@@ -409,10 +409,10 @@ export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise
 
 /**
  * ADR-122: how many students — not staff seats — started a practice attempt
- * after the due date. Shown beside the grade table, never in it.
+ * after the due date (an exam's too, ADR-142). Shown beside the grade
+ * table, never in it.
  */
 async function practisedCountOf(db: Db, evaluation: EvaluationRecord): Promise<number> {
-  if (evaluation.mode !== "exercise") return 0;
   const [row] = await db
     .select({ n: countDistinct(attempts.userId) })
     .from(attempts)

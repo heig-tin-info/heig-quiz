@@ -358,7 +358,7 @@ export const AttemptEntry = z.union([
 export type AttemptEntry = z.infer<typeof AttemptEntry>;
 
 /**
- * ADR-122: why a practice attempt may not start (`practiceRefusal`,
+ * ADR-122, ADR-142: why a practice attempt may not start (`practiceRefusal`,
  * `@quiz/domain`), the reason of a `409 practice_refused`. Starting a new
  * one less than a minute after the previous one is a `429 rate_limited`.
  */
@@ -641,7 +641,8 @@ export type CardResults = z.infer<typeof CardResults>;
 
 /**
  * ADR-122, "Past series": an exercise of the student's classrooms that is
- * over and takes practice attempts, with the student's latest practice.
+ * over and takes practice attempts — or a released exam that does and that
+ * the student handed in (ADR-142) — with the student's latest practice.
  */
 export const PracticeCard = z.object({
   id: z.uuid(),
@@ -649,7 +650,7 @@ export const PracticeCard = z.object({
   classroomId: z.uuid(),
   classroomName: z.string(),
   courseCode: z.string(),
-  /** When the exercise closed; null for a row closed before the instant was kept. */
+  /** When the evaluation closed; null for a row closed before the instant was kept. */
   closedAt: z.iso.datetime().nullable(),
   /** The student's unfinished practice attempt, which the card resumes; null when none. */
   openAttemptId: z.uuid().nullable(),
@@ -659,7 +660,7 @@ export const PracticeCard = z.object({
    * Whether the blank print of the series is made (ADR-125 §5, the rule
    * `printRefusal`): false when one of its types has no paper form or an
    * item is parameterized, so the card never offers a print the route
-   * refuses with `409 not_printable`.
+   * refuses with `409 not_printable`. Always false on an exam (ADR-142).
    */
   printable: z.boolean(),
   /**

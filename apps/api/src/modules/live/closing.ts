@@ -62,8 +62,9 @@ export function reopenRole(evaluation: EvaluationRecord, attemptState: string): 
  * an evaluation runs (F-LLM-03). An exam is graded at its close, as before,
  * and so is everything a poll holds (nothing: a poll has no key).
  *
- * A practice attempt after the due date (ADR-122) is graded at its hand-in
- * whatever the evaluation's state — it is never in a close's pass — and its
+ * A practice attempt after the due date (ADR-122), an exam's included
+ * (ADR-142), is graded at its hand-in whatever the evaluation's state — it
+ * is never in a close's pass — and its
  * pass may ask the model, the evaluation being over (`grading/jobs.ts`).
  */
 export async function gradeAtHandIn(
@@ -71,8 +72,7 @@ export async function gradeAtHandIn(
   evaluation: EvaluationRecord,
   ended: readonly { id: string; afterDue: boolean }[],
 ): Promise<void> {
-  if (evaluation.mode !== "exercise") return;
-  const live = evaluation.state === "running" || evaluation.state === "paused";
+  const live = evaluation.mode === "exercise" && (evaluation.state === "running" || evaluation.state === "paused");
   const attemptIds = ended.filter((a) => live || a.afterDue).map((a) => a.id);
   if (attemptIds.length === 0) return;
   await enqueueEvaluationGrading(app, { evaluationId: evaluation.id, attemptIds });

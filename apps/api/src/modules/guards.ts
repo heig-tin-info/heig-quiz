@@ -29,6 +29,7 @@ import {
   poolRoleAllows,
   PROJECT_LIVE_STATES,
   PROJECT_VISIBLE_STATES,
+  practiceIgnoresSittingConditions,
   trustedClientsOf,
   type ProjectStateName,
   type TrustedClient,
@@ -1329,18 +1330,25 @@ export async function findReachableEvaluation(
  * - nobody sits from outside the room (F-EVAL-12): the IP allow-list holds on
  *   every sitting request, whatever the kind, not only at the entry.
  * `staffWatch` is a staff member watching somebody else (dashboard,
- * inspector), which is not sitting. Checked after the loaders of invariant 6;
- * `client` is answered with their 404.
+ * inspector), which is not sitting. `practice` is a practice attempt, its
+ * entry or its own routes (ADR-122): a confined session never practises, and
+ * an EXAM's practice is not its sitting — its trusted clients and its IP
+ * allow-list protect the sitting, and are not asked again (ADR-142 §4); an
+ * exercise's practice keeps its allow-list (ADR-122 §5). Checked after the
+ * loaders of invariant 6; `client` is answered with their 404.
  */
 export function sitRefusal(
   req: FastifyRequest,
   evaluation: typeof evaluations.$inferSelect,
   staffWatch: boolean,
+  practice = false,
 ): "client" | "ip" | null {
+  const auth = req.auth;
+  if (practice && confined(auth)) return "client";
+  if (practice && practiceIgnoresSittingConditions(evaluation.mode)) return null;
   // The twin of `trustedClients()` in `evaluation/reads.ts`, computed here
   // from the domain rule so that guards never imports the evaluation facade.
   const clients = trustedClientsOf(evaluation.mode, EvaluationSettings.parse(evaluation.settings));
-  const auth = req.auth;
   const refused = confined(auth)
     ? auth.evaluationId !== evaluation.id || !clients.includes(auth.kind)
     : !staffWatch && clients.length > 0;

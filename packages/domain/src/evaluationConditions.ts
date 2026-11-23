@@ -112,6 +112,11 @@ export interface ConditionsInput {
   closesAt: string | null;
   /** The student's extra time (an accommodation); 0 for the teacher's previews. */
   timeBonusPercent: number;
+  /**
+   * The attempts the line announces, when not the retake rule's: a practice
+   * attempt's are unlimited (`null`, ADR-122 §5), whatever the mode.
+   */
+  maxAttempts?: number | null | undefined;
 }
 
 type Line<K extends ImposedConditionKey> = Extract<ImposedCondition, { key: K }>;
@@ -157,10 +162,11 @@ const DERIVE: { [K in ImposedConditionKey]: (input: ConditionsInput) => Line<K> 
           bonusPercent: settings.timing === "manual" ? 0 : timeBonusPercent,
         }
       : null,
-  attempts: ({ mode, settings: { retakes } }) => ({
+  attempts: ({ mode, settings: { retakes }, maxAttempts }) => ({
     key: "attempts",
     kind: "info",
-    maxAttempts: retakes !== undefined && retakesOn(mode, retakes) ? retakes.maxAttempts : 1,
+    maxAttempts:
+      maxAttempts !== undefined ? maxAttempts : retakes !== undefined && retakesOn(mode, retakes) ? retakes.maxAttempts : 1,
   }),
   // ADR-091: a retake may ask only the questions to review.
   partial_retake: ({ mode, settings: { retakes } }) =>

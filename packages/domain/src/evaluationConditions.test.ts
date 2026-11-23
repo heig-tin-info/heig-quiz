@@ -124,6 +124,11 @@ describe("imposedConditions (ADR-079)", () => {
       key: "attempts",
       kind: "info",
       maxAttempts: 1,
+    });    // A practice's attempts are unlimited, an exam's too (ADR-122 §5, ADR-142).
+    expect(imposedConditions(base({ mode: "exam", maxAttempts: null }, {}))).toContainEqual({
+      key: "attempts",
+      kind: "info",
+      maxAttempts: null,
     });
   });
 
