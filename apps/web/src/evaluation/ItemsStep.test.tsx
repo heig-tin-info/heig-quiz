@@ -406,7 +406,7 @@ describe("ItemsStep — a shared text (ADR-143)", () => {
     for (const name of ["head-q", "second-q", "third-q"]) expect(ruled(name), name).toBe(true);
   });
 
-  it("says which questions lose the text when it is no longer shared", async () => {
+  it("stops sharing on Save, with no dialog: the switch is reversible", async () => {
     const user = userEvent.setup();
     const { calls } = mockFetch({ [patchUrl(head.id)]: ok([]) });
     list();
@@ -414,8 +414,6 @@ describe("ItemsStep — a shared text (ADR-143)", () => {
     const dialog = await screen.findByRole("dialog", { name: "Text before head-q" });
     await user.click(within(dialog).getByRole("switch"));
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
-    expect(await screen.findByText("Questions 3 to 4 then have no shared text.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Stop sharing" }));
     await waitFor(() =>
       expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ intro: shared, introScope: "item" }),
     );
@@ -446,8 +444,20 @@ describe("ItemsStep — a shared text (ADR-143)", () => {
     const user = userEvent.setup();
     mockFetch({});
     const first = makeItemRow(0, { internalName: "first-q", intro: "## Part 1", introScope: "following" });
-    list([first, head, second]);
-    await user.click(within(rowOf("head-q")).getByRole("button", { name: "Remove the text before head-q" }));
-    expect(await screen.findByText("Questions 2 to 3 then come under the shared text above.")).toBeInTheDocument();
+    const ownText = makeItemRow(2, { internalName: "second-q", intro: "Read it." });
+    list([first, head, ownText, third]);
+    await user.click(screen.getByRole("button", { name: "Remove head-q from the evaluation" }));
+    expect(await screen.findByText("Questions 3 to 4 then come under the shared text above.")).toBeInTheDocument();
+  });
+
+  it("removes a one-question section like a question with its own text: no dialog", async () => {
+    const user = userEvent.setup();
+    const alone = makeItemRow(1, { internalName: "head-q", intro: shared, introScope: "following" });
+    const next = makeItemRow(2, { internalName: "second-q", intro: "## Part 3", introScope: "following" });
+    const { calls } = mockFetch({ [deleteUrl(alone.id)]: ok(null) });
+    list([frozen, alone, next]);
+    await user.click(screen.getByRole("button", { name: "Remove head-q from the evaluation" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

@@ -222,17 +222,17 @@ describe("the student's order and where the texts are shown", () => {
   }
   const view = async (evaluationId: string, seedValue: number) =>
     (await previewView(db(), await reload(db(), evaluationId), server.clock.now(), seedValue)).items;
-  const shown = (items: readonly AttemptItem[]) => items.map((i) => [i.id, i.intro, i.section]);
+  const shown = (items: readonly AttemptItem[]) => items.map((i) => [i.id, i.sectionIntro, i.intro, i.section]);
 
   it("without shuffle, keeps each text on its item and names the section", async () => {
     const s = await sectioned(false);
     const [lead, head, second, third, fourth] = s.itemIds;
     expect(shown(await view(s.evaluationId, 3))).toEqual([
-      [lead, null, null],
-      [head, SECTION, head],
-      [second, null, head],
-      [third, OWN, head],
-      [fourth, null, head],
+      [lead, null, null, null],
+      [head, SECTION, null, head],
+      [second, null, null, head],
+      [third, null, OWN, head],
+      [fourth, null, null, head],
     ]);
   });
 
@@ -240,6 +240,7 @@ describe("the student's order and where the texts are shown", () => {
     const s = await sectioned(true);
     const head = s.itemIds[1]!;
     let movedHead = false;
+    let ownFirst = false;
     for (let seedValue = 0; seedValue < 12; seedValue++) {
       const items = await view(s.evaluationId, seedValue);
       // The leading item stays first; the section's four follow, in some order.
@@ -247,29 +248,48 @@ describe("the student's order and where the texts are shown", () => {
       expect(items[0]!.section).toBeNull();
       expect(items.slice(1).map((i) => i.section)).toEqual([head, head, head, head]);
       const first = items[1]!;
-      expect(first.intro?.startsWith(SECTION)).toBe(true);
+      expect(first.sectionIntro).toBe(SECTION);
       if (first.id !== head) movedHead = true;
-      // The section's text is shown once; the own text stays with its item.
-      expect(items.filter((i) => i.intro?.includes("SECTION-MARKER-143"))).toHaveLength(1);
-      expect(items.filter((i) => i.intro?.includes("OWN-MARKER-143")).map((i) => i.id)).toEqual([s.itemIds[3]]);
+      if (first.id === s.itemIds[3]) ownFirst = true;
+      // The section's text is placed once; the own text stays with its item, apart.
+      expect(items.filter((i) => i.sectionIntro !== null)).toHaveLength(1);
+      expect(items.filter((i) => i.intro !== null).map((i) => [i.id, i.intro])).toEqual([[s.itemIds[3], OWN]]);
     }
     expect(movedHead).toBe(true);
+    expect(ownFirst).toBe(true);
   });
 
-  it("serves the same placement to the teacher's preview and to the student's attempt", async () => {
+  it("serves the same placement to the preview and the attempt, and never to results nor feedback", async () => {
     const s = await sectioned(true);
     const preview = EvaluationPreview.parse(
       (await call(teacher, "POST", `/app/api/evaluations/${s.evaluationId}/preview`, {})).json(),
     );
-    expect(preview.view.items.filter((i) => i.intro?.includes("SECTION-MARKER-143"))).toHaveLength(1);
+    expect(preview.view.items.filter((i) => i.sectionIntro === SECTION)).toHaveLength(1);
     await applyState(db(), await reload(db(), s.evaluationId), "running", server.clock.now());
     const entered = (await call(student, "POST", `/app/api/evaluations/${s.evaluationId}/attempt/start`, {})).json() as {
       kind: string;
-      view: { items: AttemptItem[] };
+      view: { attempt: { id: string }; items: AttemptItem[] };
     };
     expect(entered.kind).toBe("attempt");
     const items = entered.view.items;
     expect(items.slice(1).every((i) => i.section === s.itemIds[1])).toBe(true);
-    expect(items[1]!.intro?.startsWith(SECTION)).toBe(true);
+    expect(items[1]!.sectionIntro).toBe(SECTION);
+
+    const attemptId = entered.view.attempt.id;
+    await call(teacher, "POST", `/app/api/evaluations/${s.evaluationId}/close`);
+    await call(teacher, "POST", `/app/api/evaluations/${s.evaluationId}/release`, { confirm: true });
+    for (const url of [
+      `/app/api/evaluations/${s.evaluationId}/results`,
+      `/app/api/evaluations/${s.evaluationId}/results/attempts/${attemptId}`,
+    ]) {
+      const res = await call(teacher, "GET", url);
+      expect(res.statusCode, url).toBe(200);
+      expect(res.body, url).not.toContain("SECTION-MARKER-143");
+    }
+    for (const url of [`/app/api/attempts/${attemptId}/feedback`, "/app/api/student/results"]) {
+      const res = await call(student, "GET", url);
+      expect(res.statusCode, url).toBe(200);
+      expect(res.body, url).not.toContain("SECTION-MARKER-143");
+    }
   });
 });

@@ -1286,7 +1286,7 @@ describe("the text before a question (ADR-084)", () => {
       ...view,
       items: view.items.map((item) =>
         item.id === "i2"
-          ? { ...item, intro: `## Partie 2\n\n${INTRO}`, section: "i2", answer: null }
+          ? { ...item, sectionIntro: `## Partie 2\n\n${INTRO}`, section: "i2", answer: null }
           : item.id === "i3"
             ? { ...item, section: "i2", answer: null }
             : item,

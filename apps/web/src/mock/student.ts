@@ -465,7 +465,7 @@ const studentPlaced = (numbers: readonly number[]) => {
       ? { id: studentItem(n), intro: section, introScope: "following" as const }
       : { id: studentItem(n), intro: own ?? null, introScope: "item" as const };
   });
-  return placeIntros(items, items, (item) => item);
+  return placeIntros(items, items, (item) => item).map((placed, rank) => ({ ...placed, n: numbers[rank]! }));
 };
 
 if (scene === "marks" || scene === "forward") {
@@ -601,9 +601,8 @@ export const studentAttemptView = (): AttemptView => ({
     pausedAt: scene === "paused" ? iso(-30_000) : null,
     totalPoints: 10,
   },
-  items: studentNumbers().map((n, rank) => {
+  items: studentPlaced(studentNumbers()).map(({ n, intro, sectionIntro, section }) => {
     const stored = studentAnswers.get(studentItem(n));
-    const placed = studentPlaced(studentNumbers())[rank]!;
     return {
       id: studentItem(n),
       position: n - 1,
@@ -612,8 +611,9 @@ export const studentAttemptView = (): AttemptView => ({
       milestone: n === 3,
       // The circuit, a bonus question (ADR-052): the player's label.
       counting: n === 5 ? ("bonus" as const) : ("normal" as const),
-      intro: placed.intro,
-      section: placed.section,
+      intro,
+      section,
+      sectionIntro,
       // ADR-026: what `toStudent` adds to a choice question under negative marking.
       student:
         n === 1 && flags.negative

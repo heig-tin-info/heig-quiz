@@ -11,9 +11,8 @@ import {
   isWritable,
   lockedIds,
   neighbour,
-  passageItem,
+  passage,
   passageOf,
-  passageSpan,
   playerReducer,
   segmentsOf,
   selectEntry,
@@ -36,6 +35,7 @@ const item = (n: number, over: Partial<AttemptView["items"][number]> = {}) => ({
   counting: "normal" as const,
   intro: null as string | null,
   section: null as string | null,
+  sectionIntro: null as string | null,
   student: {},
   answer: null,
   revision: 0,
@@ -378,11 +378,19 @@ describe("playerReducer: the text before an item (ADR-084)", () => {
 describe("playerReducer: a section's text (ADR-143)", () => {
   const shared = "## Part 2";
   const own = "Read the listing.";
-  /** i1 alone, then a section opened by i2 over i2..i4, i3 with a text of its own. */
-  const paper = (over: Partial<Record<number, Partial<AttemptView["items"][number]>>> = {}) => [
+  type Over = Partial<AttemptView["items"][number]>;
+  /** i1 alone, then the section opened by i2 over i2..i4, i3 with a text of its own; in canonical order. */
+  const paper = (over: Partial<Record<number, Over>> = {}) => [
     item(1, over[1]),
-    item(2, { intro: shared, section: "i2", ...over[2] }),
+    item(2, { sectionIntro: shared, section: "i2", ...over[2] }),
     item(3, { intro: own, section: "i2", ...over[3] }),
+    item(4, { section: "i2", ...over[4] }),
+  ];
+  /** The same section shuffled, i3 drawn first: the section's text is on it, beside its own. */
+  const drawn = (over: Partial<Record<number, Over>> = {}) => [
+    item(1, over[1]),
+    item(3, { intro: own, sectionIntro: shared, section: "i2", ...over[3] }),
+    item(2, { section: "i2", ...over[2] }),
     item(4, { section: "i2", ...over[4] }),
   ];
 
@@ -391,9 +399,7 @@ describe("playerReducer: a section's text (ADR-143)", () => {
     expect(passageOf(state)).toBeNull();
     // Straight to the section's last question: its text first.
     state = playerReducer(state, { type: "goto", itemId: "i4" });
-    expect(passageItem(state)?.id).toBe("i2");
-    expect(passageOf(state)).toBe(shared);
-    expect(passageSpan(state)).toEqual({ from: 2, to: 4 });
+    expect(passage(state)).toEqual({ key: "i2", text: shared, span: { from: 2, to: 4 } });
     state = playerReducer(state, { type: "pass", itemId: "i2" });
     expect(currentItem(state)?.id).toBe("i4");
     expect(passageOf(state)).toBeNull();
@@ -402,13 +408,27 @@ describe("playerReducer: a section's text (ADR-143)", () => {
     expect(passageOf(state)).toBeNull();
     // A question's own text inside the section still shows on its arrival.
     state = playerReducer(state, { type: "goto", itemId: "i3" });
-    expect(passageOf(state)).toBe(own);
-    expect(passageSpan(state)).toBeNull();
+    expect(passage(state)).toEqual({ key: "i3", text: own, span: null });
+  });
+
+  it("keeps a question's own text apart when that question carries its section's text", () => {
+    let state = load(view("free", drawn(), "i1"));
+    // To the section's last question: its section's text only, never i3's own.
+    state = playerReducer(state, { type: "goto", itemId: "i4" });
+    expect(passage(state)).toEqual({ key: "i2", text: shared, span: { from: 2, to: 4 } });
+    state = playerReducer(state, { type: "pass", itemId: "i2" });
+    expect(passageOf(state)).toBeNull();
+    // i3's own text is still to read, before i3.
+    state = playerReducer(state, { type: "goto", itemId: "i3" });
+    expect(passage(state)).toEqual({ key: "i3", text: own, span: null });
+    // A reload with i4 started: the section is passed, i3's own text is not.
+    const reloaded = load(view("free", drawn({ 4: { answer: { selected: [0] } } }), "i3"));
+    expect(passage(reloaded)).toEqual({ key: "i3", text: own, span: null });
   });
 
   it("shows the section's text before a question's own one", () => {
-    let state = load(view("free", paper(), "i3"));
-    expect(passageItem(state)?.id).toBe("i2");
+    let state = load(view("free", drawn(), "i3"));
+    expect(passage(state)?.key).toBe("i2");
     state = playerReducer(state, { type: "pass", itemId: "i2" });
     expect(passageOf(state)).toBe(own);
   });
@@ -460,16 +480,14 @@ describe("playerReducer: a section's text (ADR-143)", () => {
     expect(started.passed["i2"]).toBe(true);
   });
 
-  it("indents the section's questions in the list, under its text's entry", () => {
-    const state = load(view("free", paper({ 2: { answer: { selected: [0] } } }), "i1"));
-    expect(
-      segmentsOf(state, () => false).map((s) => [s.id, s.indent === true]),
-    ).toEqual([
+  it("lists the section's text before its first question drawn, the section's entries set in under it", () => {
+    const state = load(view("free", drawn({ 2: { answer: { selected: [0] } } }), "i1"));
+    expect(segmentsOf(state, () => false).map((s) => [s.id, s.indent === true])).toEqual([
       ["i1", false],
       ["intro:i2", false],
-      ["i2", true],
       ["intro:i3", true],
       ["i3", true],
+      ["i2", true],
       ["i4", true],
     ]);
   });

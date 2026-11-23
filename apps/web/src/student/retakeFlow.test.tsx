@@ -104,6 +104,7 @@ function view(
         counting: "normal",
         intro: null,
         section: null,
+        sectionIntro: null,
         student: {
           prompt: "Quelle expression donne l'adresse de `x` ?",
           mode: "single",

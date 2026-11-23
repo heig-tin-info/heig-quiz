@@ -53,7 +53,7 @@ Turn on **Also applies to the following questions, until the next shared text** 
 
 With **Shuffle the questions**, each part keeps its place and only its questions are shuffled among themselves; the questions before the first shared text are shuffled among themselves too. The student reads the shared text before the first question of the part they meet, whichever it is: a student who jumps straight to the third question of the part reads the text first. Under **Free** navigation they read it again from its entry in the question list, which sets the part's questions slightly in under it; Continue brings them back to the question they were on.
 
-Dragging a question moves its text with it, shared or not: nothing else moves. Removing the first question of a part hands its shared text to the next question when that one has no text of its own; otherwise the text goes with the question, and the dialog says which questions lose it. Removing a shared text, or turning its switch off, leaves its questions to the shared text above, or to none.
+Dragging a question moves its text with it, shared or not: nothing else moves. Removing the first question of a part hands its shared text to the next question when that one has no text of its own; otherwise the text goes with the question, and the dialog says which questions lose it. Removing a shared text, or turning its switch off, leaves its questions to the shared text above, or to none. When the first question of a part drawn by the shuffle has a text of its own, the student reads the shared text first, then that question's text.
 
 ### Bonus questions
 

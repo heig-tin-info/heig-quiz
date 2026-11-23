@@ -341,8 +341,6 @@ export const evaluation = {
   "eval.questions.intro.joinAboveOne": "Question {n} then comes under the shared text above.",
   "eval.questions.intro.joinNone": "Questions {from} to {to} then have no shared text.",
   "eval.questions.intro.joinNoneOne": "Question {n} then has no shared text.",
-  "eval.questions.intro.unshareConfirm": "Stop sharing this text?",
-  "eval.questions.intro.unshareAction": "Stop sharing",
   "eval.questions.removeShared.title": "Remove the question and its shared text?",
   "eval.questions.removeShared.action": "Remove both",
   "eval.questions.deprecated": "deprecated",

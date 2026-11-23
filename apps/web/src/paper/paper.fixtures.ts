@@ -17,6 +17,7 @@ const mcq = (id: string, prompt: string, choices: string[]) => ({
   counting: "normal" as const,
   intro: null,
   section: null,
+  sectionIntro: null,
   student: { prompt, mode: "single", choices: choices.map((text, i) => ({ id: i, text })) },
   answer: null,
   revision: 0,

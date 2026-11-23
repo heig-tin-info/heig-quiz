@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 
-import type { ConceptRef, EvaluationDetail, IntroScope, ItemPatch, ItemRow } from "@quiz/contracts";
+import type { ConceptRef, EvaluationDetail, ItemPatch, ItemRow } from "@quiz/contracts";
 import type { z } from "zod";
 import { bonusTotal, sectionSpans, textOnRemoval, type ItemListLock } from "@quiz/domain";
 
@@ -556,12 +556,11 @@ function SectionRule() {
 const sectionRow = (item: Row) => item;
 
 /**
- * Where the questions of a shared text go when it stops applying to them
- * (ADR-143): under the shared text above, or under none. `from` and `to`
- * are numbered from 1; nothing to say when the range is empty.
+ * Where the questions of a shared text go when it is removed with its first
+ * question (ADR-143): under the shared text above, or under none. `from` and
+ * `to` are numbered from 1.
  */
-function joinSentence(t: TFunction, items: readonly Row[], headIndex: number, from: number, to: number): string | undefined {
-  if (to < from) return undefined;
+function joinSentence(t: TFunction, items: readonly Row[], headIndex: number, from: number, to: number): string {
   const above = sectionSpans(items.slice(0, headIndex), sectionRow).size > 0;
   if (from === to) return t(above ? "eval.questions.intro.joinAboveOne" : "eval.questions.intro.joinNoneOne", { n: from });
   return t(above ? "eval.questions.intro.joinAbove" : "eval.questions.intro.joinNone", { from, to });
@@ -660,35 +659,12 @@ export function ItemsStep({
     return ids === undefined ? null : index + ids.length;
   };
   const removeIntro = async (item: ItemRow) => {
-    const index = items.indexOf(item);
-    const end = sectionEnd(index);
     const ok = await confirm({
       title: t("eval.questions.intro.removeConfirm"),
-      // A shared text: its questions, its own included, join the text above.
-      ...(end === null ? {} : { message: joinSentence(t, items, index, index + 1, end) }),
       confirmLabel: t("eval.questions.intro.removeAction"),
       danger: true,
     });
     if (ok) patch.mutate({ itemId: item.id, body: { intro: null } });
-  };
-  /** The editor's Save: a shared text no longer shared leaves its other questions to the text above. */
-  const writeIntro = async (item: ItemRow, intro: string | null, introScope: IntroScope) => {
-    if (intro === null && item.intro !== null) {
-      setWritingIntro(null);
-      await removeIntro(item);
-      return;
-    }
-    const index = items.indexOf(item);
-    const end = sectionEnd(index);
-    if (intro !== null && introScope === "item" && end !== null && end > index + 1) {
-      const ok = await confirm({
-        title: t("eval.questions.intro.unshareConfirm"),
-        message: joinSentence(t, items, index, index + 2, end),
-        confirmLabel: t("eval.questions.intro.unshareAction"),
-      });
-      if (!ok) return;
-    }
-    saveIntro.mutate({ itemId: item.id, body: intro === null ? { intro } : { intro, introScope } });
   };
   const reorder = useMutation({
     mutationFn: (itemIds: string[]) =>
@@ -739,16 +715,16 @@ export function ItemsStep({
 
   // Removing an item takes nothing away from the pool — the question stays
   // where it was written — and it is only possible while nobody can have
-  // seen the list, so it is an edit and not worth a dialog. Unless it takes a
-  // shared text with it (ADR-143): kept when the next question can carry it,
-  // otherwise the dialog says which questions lose it.
+  // seen the list, so it is an edit and not worth a dialog. Unless it takes
+  // away the shared text of other questions (ADR-143): kept when the next
+  // question can carry it, otherwise the dialog says which questions lose it.
   const removeItem = async (item: ItemRow) => {
     const index = items.indexOf(item);
     const end = sectionEnd(index);
-    if (end !== null && textOnRemoval(items, item.id, sectionRow).dropped) {
+    if (end !== null && end > index + 1 && textOnRemoval(items, item.id, sectionRow).dropped) {
       const ok = await confirm({
         title: t("eval.questions.removeShared.title"),
-        ...(end > index + 1 ? { message: joinSentence(t, items, index, index + 2, end) } : {}),
+        message: joinSentence(t, items, index, index + 2, end),
         confirmLabel: t("eval.questions.removeShared.action"),
         danger: true,
       });
@@ -929,7 +905,9 @@ export function ItemsStep({
           initialScope={introItem.introScope}
           saving={saveIntro.isPending}
           error={saveIntro.error}
-          onSave={(intro, introScope) => void writeIntro(introItem, intro, introScope)}
+          onSave={(intro, introScope) =>
+            saveIntro.mutate({ itemId: introItem.id, body: intro === null ? { intro } : { intro, introScope } })
+          }
           onClose={() => {
             saveIntro.reset();
             setWritingIntro(null);

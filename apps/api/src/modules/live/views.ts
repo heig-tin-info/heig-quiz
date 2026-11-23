@@ -86,9 +86,11 @@ function attemptItems(
       counting: entry.item.counting,
       // ADR-084: the teacher's passage before the item — an item property,
       // like the two flags above, carried by the one builder of the attempt.
-      // ADR-143: as placed in this order, a section's text on its first item.
+      // ADR-143: the section of the item, and its text on the first of its
+      // items in this order; the item's own text stays its own.
       intro: entry.placed.intro,
       section: entry.placed.section,
+      sectionIntro: entry.placed.sectionIntro,
       student: studentViewOf(type, config, view),
       answer: answerToStudent(type, config, view, answer?.payload),
       revision: answer?.revision ?? 0,

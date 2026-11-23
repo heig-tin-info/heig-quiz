@@ -60,6 +60,8 @@ function durationOf(e: MockEvaluation): number | null {
 
 export function viewOf(e: MockEvaluation, seed: number): AttemptView {
   const nowIso = new Date().toISOString();
+  const ordered = orderOf(e, seed);
+  const placed = placeIntros(e.items, ordered, (i) => i);
   return {
     attempt: {
       id: PREVIEW_ATTEMPT_ID,
@@ -89,10 +91,10 @@ export function viewOf(e: MockEvaluation, seed: number): AttemptView {
       pausedAt: e.pausedAt,
       totalPoints: evaluationTotal(e.items),
     },
-    items: orderOf(e, seed).flatMap((item, rank, ordered) => {
+    items: ordered.flatMap((item, rank) => {
       const q = itemQuestion(item);
       if (!q) return [];
-      const placed = placeIntros(e.items, ordered, (i) => i)[rank]!;
+      const { intro, sectionIntro, section } = placed[rank]!;
       return [
         {
           id: item.id,
@@ -101,8 +103,9 @@ export function viewOf(e: MockEvaluation, seed: number): AttemptView {
           type: item.type,
           milestone: item.milestone,
           counting: item.counting,
-          intro: placed.intro,
-          section: placed.section,
+          intro,
+          section,
+          sectionIntro,
           student: studentView(q, frozenConfig(q)),
           answer: null,
           revision: 0,

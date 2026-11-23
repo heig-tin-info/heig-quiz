@@ -72,24 +72,23 @@ export function sectionedOrder<T>(
   return itemSegments(items, read).flatMap((segment) => shuffleWith(segment.items, next));
 }
 
-/** Where a text is shown: before this item, and the section it belongs to (its head's id). */
+/** The texts shown before an item, and the section it belongs to (its head's id). */
 export interface PlacedIntro {
-  /** The text shown before the item in this order; null for none. */
+  /** The item's own text (an `item` scope), exactly as ADR-084 has it; null for none. */
   intro: string | null;
+  /** Its section's text, on the first item of the section in this order only; null elsewhere. */
+  sectionIntro: string | null;
   /** The id of the item that opens the item's section; null outside a section. */
   section: string | null;
 }
 
-/** Between a section's text and the item's own text, when one item shows both. */
-export const INTRO_SEPARATOR = "\n\n";
-
 /**
- * Which text is shown before each item of `ordered` (a {@link sectionedOrder}
- * of `canonical`), aligned with it. An `item` text stays on its item; a
+ * The texts shown before each item of `ordered` (a {@link sectionedOrder} of
+ * `canonical`), aligned with it. An `item` text stays on its item; a
  * section's text goes to the FIRST item of its section in this order — its
  * head without shuffle, whichever question was drawn first with it — so it is
- * never read mid-section. Should that item carry a text of its own, both are
- * shown as one passage, the section's first.
+ * never read mid-section. The two never merge: an item drawn first may carry
+ * both, each read on its own.
  */
 export function placeIntros<T>(
   canonical: readonly T[],
@@ -106,11 +105,11 @@ export function placeIntros<T>(
   return ordered.map((entry) => {
     const item = read(entry);
     const head = headOf.get(item.id) ?? null;
-    const own = item.introScope === "item" ? item.intro : null;
-    if (head === null) return { intro: own, section: null };
-    if (opened.has(head.id)) return { intro: own, section: head.id };
+    const intro = item.introScope === "item" ? item.intro : null;
+    if (head === null) return { intro, sectionIntro: null, section: null };
+    const first = !opened.has(head.id);
     opened.add(head.id);
-    return { intro: own === null ? head.intro : `${head.intro}${INTRO_SEPARATOR}${own}`, section: head.id };
+    return { intro, sectionIntro: first ? head.intro : null, section: head.id };
   });
 }
 

@@ -9,7 +9,7 @@ F-EVAL-26 and the settled question no. 55.
 
 Scope: the column `evaluation_items.intro_scope` (migration
 `0158_item_intro_scope`), `ItemPatch.introScope`, the student's item order
-(`orderItems`), `AttemptItem.intro` and `AttemptItem.section`, the removal of
+(`orderItems`), `AttemptItem.section` and `AttemptItem.sectionIntro`, the removal of
 an item, the template's revision and pull summary, the builder's band and
 editor, the player's passage and question list.
 
@@ -52,19 +52,22 @@ of the part never reads it.
    autosave, a regrade's ranks and a reprinted paper recompute: a golden
    test pins it.
 4. **Where a section's text shows.** The server computes it, with the same
-   module, in the student's order: an `item` text stays on its item; a
-   section's text goes to the FIRST item of its section in that order, so
-   it is never read mid-section. Should that item have a text of its own,
-   the two are shown as one passage, the section's first.
+   module, in the student's order. `AttemptItem.intro` stays the item's own
+   text, exactly as ADR-084 has it; the section's text travels apart, as
+   `AttemptItem.sectionIntro`, on the FIRST item of its section in that
+   order, so it is never read mid-section. The two never merge: an item
+   drawn first with a text of its own carries both, each read on its own.
    `AttemptItem.section` names the section of each item (the id of the item
    opening it), or null. The attempt, its restore, the teacher's preview and
-   the paper hand-out (which prints the section's text once, at its head)
-   all come through `attemptItems`. Results, feedback and the drill carry
-   neither field.
+   the paper hand-out (which prints the section's text once, at its head,
+   then the item's own) all come through `attemptItems`. Results, feedback
+   and the drill carry none of the three.
 5. **The player.** A section's text shows on the first arrival at ANY
    question of the section — a student jumping straight to its third
    question reads it first — and counts as passed after Continue, or once
-   any question of the section is started (on load too). Under `free`
+   any question of the section is started (on load too). The player holds
+   it by its section's id, apart from every item's own text, which still
+   shows on arriving at its item until passed. Under `free`
    navigation its entry rereads it from any question of the section, and
    Continue leads back to that question; under `forward_only` and
    `milestones` it is one way, as ADR-084 §6 has it. In a partial retake
@@ -78,12 +81,14 @@ of the part never reads it.
    a discreet rule runs beside the rows it covers. A drag moves a text with
    its item, as a milestone: nothing is re-anchored. Removing the item that
    opens a section moves its text to the next item when that item is in the
-   section and has no text, otherwise the text goes with the item and the
-   removal's confirmation says which questions lose it; the move, the
-   removal and the renumbering are one transaction under the evaluation's
-   (or the template's) row lock. Removing a shared text, or no longer
-   sharing it, names the questions that then come under the shared text
-   above, or under none.
+   section and has no text; otherwise the text goes with the item, and when
+   other questions lose it a confirmation names them and where they go
+   (under the shared text above, or under none). A one-question section is
+   removed like an item with its own text. The move, the removal and the
+   renumbering are one transaction under the evaluation's (or the
+   template's) row lock, which also re-reads the gate. Removing a shared
+   text, or turning the switch off, asks nothing more than removing any
+   text does: the switch is reversible and the band shows its effect.
 
 ## Consequences
 
@@ -107,3 +112,7 @@ of the part never reads it.
   removals, copies and pulls, which the item already is.
 - **Pinning the section's text to the item that opens it under shuffle**:
   the text would show mid-section for most students.
+- **Merging the section's text with the own text of the item drawn first**
+  (one `intro`): a student jumping to another question of the section
+  would read that item's own text out of place, and never again before
+  its question.

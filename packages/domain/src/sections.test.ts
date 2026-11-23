@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { rng, shuffle, shuffleWith, streamSeed } from "@quiz/core/rng";
 
 import {
-  INTRO_SEPARATOR,
   itemSegments,
   opensSection,
   placeIntros,
@@ -91,13 +90,12 @@ describe("sectionedOrder", () => {
 
 describe("placeIntros", () => {
   it("leaves item texts on their items and a section's text on its head without shuffle", () => {
-    const list = [own("a"), head("b"), own("c"), plain("d"), plain("e")];
+    const list = [own("a"), head("b"), own("c"), plain("d")];
     expect(placeIntros(list, list, self)).toEqual([
-      { intro: "before a", section: null },
-      { intro: "section b", section: "b" },
-      { intro: "before c", section: "b" },
-      { intro: null, section: "b" },
-      { intro: null, section: "b" },
+      { intro: "before a", sectionIntro: null, section: null },
+      { intro: null, sectionIntro: "section b", section: "b" },
+      { intro: "before c", sectionIntro: null, section: "b" },
+      { intro: null, sectionIntro: null, section: "b" },
     ]);
   });
 
@@ -105,18 +103,19 @@ describe("placeIntros", () => {
     const list = [plain("a"), head("b"), plain("c"), plain("d")];
     const ordered = [list[0]!, list[3]!, list[1]!, list[2]!];
     expect(placeIntros(list, ordered, self)).toEqual([
-      { intro: null, section: null },
-      { intro: "section b", section: "b" },
-      { intro: null, section: "b" },
-      { intro: null, section: "b" },
+      { intro: null, sectionIntro: null, section: null },
+      { intro: null, sectionIntro: "section b", section: "b" },
+      { intro: null, sectionIntro: null, section: "b" },
+      { intro: null, sectionIntro: null, section: "b" },
     ]);
   });
 
-  it("shows both texts, the section's first, when the first item drawn has its own", () => {
-    const list = [head("a"), own("b")];
-    expect(placeIntros(list, [list[1]!, list[0]!], self)).toEqual([
-      { intro: `section a${INTRO_SEPARATOR}before b`, section: "a" },
-      { intro: null, section: "a" },
+  it("keeps the two texts apart when the first item drawn has its own", () => {
+    const list = [head("a"), own("b"), plain("c")];
+    expect(placeIntros(list, [list[1]!, list[2]!, list[0]!], self)).toEqual([
+      { intro: "before b", sectionIntro: "section a", section: "a" },
+      { intro: null, sectionIntro: null, section: "a" },
+      { intro: null, sectionIntro: null, section: "a" },
     ]);
   });
 });

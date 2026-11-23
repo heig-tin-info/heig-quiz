@@ -342,8 +342,6 @@ export const evaluation: Record<keyof typeof en, string> = {
   "eval.questions.intro.joinAboveOne": "Frage {n} gehört dann zum gemeinsamen Text darüber.",
   "eval.questions.intro.joinNone": "Die Fragen {from} bis {to} haben dann keinen gemeinsamen Text mehr.",
   "eval.questions.intro.joinNoneOne": "Frage {n} hat dann keinen gemeinsamen Text mehr.",
-  "eval.questions.intro.unshareConfirm": "Diesen Text nicht mehr teilen?",
-  "eval.questions.intro.unshareAction": "Nicht mehr teilen",
   "eval.questions.removeShared.title": "Frage und ihren gemeinsamen Text entfernen?",
   "eval.questions.removeShared.action": "Beides entfernen",
   "eval.questions.deprecated": "veraltet",

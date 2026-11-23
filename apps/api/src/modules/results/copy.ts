@@ -4,7 +4,8 @@
  * hooks (`statementDoc`, `studentAnswerDoc`, the `copy` need of `declares`),
  * because a copy holds what the student was served, never the config (the
  * staff record's key aside, below). An
- * item's `intro` (ADR-084) is absent: `StudentResultItem` does not carry it.
+ * item's `intro` (ADR-084) and its section's `sectionIntro` (ADR-143) are absent:
+ * `StudentResultItem` carries neither.
  *
  *   - {@link staffCopyRecord} (ADR-125 §4, §5), for the results per-student
  *     view and the live dashboard's inspect view: {@link staffCopy}, the copy

@@ -154,6 +154,7 @@ export async function handout(
         type: item.type,
         points: item.points,
         counting: item.counting,
+        sectionIntro: item.sectionIntro,
         intro: item.intro,
         statement: item.student,
       })),
@@ -175,7 +176,8 @@ export function handoutTree(found: Found<HandoutRecord>, lang: Lang): Document {
   record.items.forEach((item, rank) => {
     const type = typeOf(item.type);
     blocks.push(
-      ...(item.intro ? [markdown(item.intro)] : []),
+      // ADR-143: a section's text, once, at its head; then the item's own.
+      ...[item.sectionIntro, item.intro].flatMap((text) => (text ? [markdown(text)] : [])),
       heading(2, `${l.question} ${rank + 1}`, pointsAside(l, item.points)),
       // Both hooks are there: `printRefusal` refused the hand-out otherwise.
       ...scopeZones(item.id, [...type.statementDoc!(item.statement, l), ...type.answerZone!(item.statement)]),

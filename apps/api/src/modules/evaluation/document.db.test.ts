@@ -297,7 +297,8 @@ describe("the hand-out (ADR-125)", () => {
 
     const record = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
     expect(record.items[0]!.id).toBe(items[0]!.item.id);
-    expect(record.items.map((i) => i.intro)).toEqual([null, section, null, null, null]);
+    expect(record.items.map((i) => i.sectionIntro)).toEqual([null, section, null, null, null]);
+    expect(record.items.map((i) => i.intro)).toEqual([null, null, null, null, null]);
     const text = (await get(url(evaluation.id, "handout.md"), teacher.headers)).body;
     expect(text.split(section)).toHaveLength(2);
     expect(text.indexOf(section)).toBeGreaterThan(text.search(/^## Question 1 /m));

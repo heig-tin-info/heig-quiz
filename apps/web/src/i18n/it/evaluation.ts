@@ -343,8 +343,6 @@ export const evaluation: Record<keyof typeof en, string> = {
   "eval.questions.intro.joinAboveOne": "La domanda {n} passa allora sotto il testo condiviso precedente.",
   "eval.questions.intro.joinNone": "Le domande da {from} a {to} non hanno allora più un testo condiviso.",
   "eval.questions.intro.joinNoneOne": "La domanda {n} non ha allora più un testo condiviso.",
-  "eval.questions.intro.unshareConfirm": "Non condividere più questo testo?",
-  "eval.questions.intro.unshareAction": "Non condividere più",
   "eval.questions.removeShared.title": "Rimuovere la domanda e il suo testo condiviso?",
   "eval.questions.removeShared.action": "Rimuovere entrambi",
   "eval.questions.deprecated": "obsoleta",

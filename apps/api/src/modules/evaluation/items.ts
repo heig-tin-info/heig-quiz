@@ -182,17 +182,21 @@ export async function patchItem(
     if (patch.introScope === "following") throw new EvaluationError("intro_scope_without_text");
     next.introScope = "item";
   }
-  if (next.introScope === "following" && patch.intro === undefined) {
-    const [item] = await db
-      .select({ intro: evaluationItems.intro })
-      .from(evaluationItems)
-      .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, row.id)));
-    if (item !== undefined && item.intro === null) throw new EvaluationError("intro_scope_without_text");
-  }
-  await db
+  // Opening a section on the text the item already holds: the UPDATE itself
+  // requires that text, so no read can race the write into the check.
+  const needsText = next.introScope === "following" && patch.intro === undefined;
+  const written = await db
     .update(evaluationItems)
     .set(next)
-    .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, row.id)));
+    .where(
+      and(
+        eq(evaluationItems.id, itemId),
+        eq(evaluationItems.evaluationId, row.id),
+        needsText ? isNotNull(evaluationItems.intro) : undefined,
+      ),
+    )
+    .returning({ id: evaluationItems.id });
+  if (needsText && written.length === 0) throw new EvaluationError("intro_scope_without_text");
   return itemRows(db, row.id);
 }
 
@@ -255,13 +259,14 @@ export async function deleteItem(
   db: DbOrTx,
   row: EvaluationRecord,
   itemId: string,
-  ctx: { attemptCount: number },
+  // The gate is read under the lock, attempts recounted there: the count the
+  // route read before it may be stale (as in `setItemCounting`).
+  _ctx: { attemptCount: number },
 ): Promise<ItemRow[]> {
-  assertItemListEditable(row, ctx);
   await db.transaction(async (tx) => {
     const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, row.id)).for("update");
     if (!locked) return;
-    assertItemListEditable(locked, ctx);
+    assertItemListEditable(locked, { attemptCount: await attemptCount(tx, row.id) });
     const items = await tx
       .select()
       .from(evaluationItems)
