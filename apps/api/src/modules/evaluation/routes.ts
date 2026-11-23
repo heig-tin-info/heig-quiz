@@ -296,10 +296,12 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
   );
 
   /**
-   * ADR-122: "Practice after the due date", the one writer of
-   * `settings.afterDue`. An exercise's, editable at any state — the close
-   * and the release included: it opens or hides the practice, nothing a
-   * student already did moves. Any member of the course, like "Allow drill".
+   * ADR-122, ADR-142: "Practice after the due date", the one writer of
+   * `settings.afterDue`. An exercise's or an exam's, editable at any state —
+   * the close and the release included: it opens or hides the practice,
+   * nothing a student already did moves. Any member of the course, like
+   * "Allow drill". An exam's opens only under a policy that shows the key
+   * (`422 practice_key_hidden`).
    */
   app.put(
     "/app/api/evaluations/:id/after-due",

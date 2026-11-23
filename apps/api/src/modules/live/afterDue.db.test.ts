@@ -203,8 +203,6 @@ describe("starting a practice attempt (ADR-122 §2, §3, §5)", () => {
     const seed = await seedLive(db, { mode: "exercise", durationS: null, settings: { timing: "manual", lobby: "skip" } });
     const running = await applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
     expect(await refusal(practise(app, running, seed.studentIds[0]!))).toBe("not_over");
-    // An exam never.
-    expect(() => setAfterDue(db, { ...running, mode: "exam" }, "open", app.clock.now())).rejects.toThrow();
   });
 
   it("starts at most one new practice attempt a minute", async () => {
@@ -468,7 +466,7 @@ describe("the practice routes (ADR-122 §5)", () => {
     expect((home.json() as StudentHome).practice?.map((c) => c.id)).toContain(evaluation.id);
   });
 
-  it("lets a member of the course switch the practice, on an exercise only", async () => {
+  it("lets a member of the course switch the practice", async () => {
     const teacher = await server.signIn("teacher");
     const { evaluation } = await closedExercise({});
     const { courseStaff } = await import("../../db/schema.js");

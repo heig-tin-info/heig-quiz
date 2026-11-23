@@ -558,6 +558,8 @@ export const evaluation = {
   "eval.drill.loadFailed": "Could not load the practice cards",
   "eval.afterDue": "Practice after the due date",
   "eval.afterDue.desc": "Once over, the exercise stays open for practice. It never counts.",
+  "eval.afterDue.exam.desc": "Once the results are released, the students who took it may redo it blank. It never counts.",
+  "eval.afterDue.keyHidden": "Needs the correction at the release, with the answer and the answer key.",
   "eval.afterDue.failed": "The setting could not be saved",
   // ADR-125: the paper copy entered by the teaching team.
   "paper.enter": "Enter a paper copy",

@@ -123,9 +123,11 @@ export async function insertPaperAttempt(
 ): Promise<InsertedPaperAttempt> {
   const { evaluation, userId, now } = input;
   const own = and(eq(attempts.evaluationId, evaluation.id), eq(attempts.userId, userId))!;
+  // The official attempts only: a practice attempt of a released exam whose
+  // release was withdrawn (ADR-142) is not the paper's to end.
   const ended = await endAttemptsIn(
     tx,
-    own,
+    and(own, officialAttempt)!,
     ["not_started", "in_progress"],
     { state: "expired", closedBy: "teacher" },
     now,

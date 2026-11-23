@@ -86,14 +86,17 @@ export async function livePlugin(
   // comes from outside the room (F-EVAL-12). Every sitting route passes
   // here, so a session cookie carried out of the room neither enters, nor
   // reads, nor writes.
-  function sitting<S extends { evaluation: Parameters<typeof sitRefusal>[1] }>(
+  function sitting<S extends { evaluation: Parameters<typeof sitRefusal>[1]; attempt?: { afterDue: boolean } }>(
     req: FastifyRequest,
     reply: FastifyReply,
     scope: S | null,
+    practice = scope?.attempt?.afterDue === true,
   ): S | null {
     if (!scope) return null;
-    // `false`: a sitting route is never a staff watch, whoever calls it.
-    const refusal = sitRefusal(req, scope.evaluation, false);
+    // `false`: a sitting route is never a staff watch, whoever calls it. A
+    // practice attempt's own routes, and the practice entry, sit a practice
+    // (ADR-122, ADR-142 §4).
+    const refusal = sitRefusal(req, scope.evaluation, false, practice);
     if (refusal === null) return scope;
     if (refusal === "ip") reply.code(403).send({ error: "ip_not_allowed" });
     else notFound(reply);
@@ -210,10 +213,11 @@ export async function livePlugin(
    * screen of a new one (its conditions, no content); `…/practice/start`
    * starts a new one — `409 practice_refused` with its reason where the rule
    * refuses, `429 rate_limited` within a minute of the previous one. The same
-   * loader as the entry: a claimed seat, the network allowlist.
+   * loader as the entry: a claimed seat, the network allowlist — not an
+   * exam's, whose practice is not its sitting (ADR-142 §4).
    */
   const practiceScope = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {
-    const scope = sitting(req, reply, await reachableEvaluation(app, req, reply, p.id));
+    const scope = sitting(req, reply, await reachableEvaluation(app, req, reply, p.id), true);
     if (!scope) return null;
     // A CLAIMED roster seat, as for the entry; anyone else gets its 404.
     const participant = await service.participantOf(app.db, scope.evaluation, callerOf(req).id);
@@ -225,7 +229,8 @@ export async function livePlugin(
   };
   const practiceRoute = { params: IdParam, body: AttemptStartBody, optionalBody: true as const, load: practiceScope };
   // Not `SITTING`: a confined session (`seb`, `kiosk`) never practises —
-  // an exercise asking for a trusted client is hidden after its due date.
+  // an exercise asking for a trusted client is hidden after its due date,
+  // and an exam's practice is sat from the portal (ADR-142 §4).
   app.post(
     "/app/api/evaluations/:id/practice",
     { preHandler: requireSession },

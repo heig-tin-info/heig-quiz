@@ -15,6 +15,8 @@ import { countsAsCompleted,
   feedbackWhenFor,
   drillAllowedOn,
   afterDueOpen,
+  afterDueRefusal,
+  type AfterDueSetting,
   pastTiming,
   parseCloze,
   poolRoleAllows,
@@ -35,7 +37,7 @@ import type {
   LobbyName,
   McqScorePolicy,
 } from "@quiz/domain";
-import { TemplatePatch, type DashboardAccess, type EvaluationExports, type IntegrityIncident } from "@quiz/contracts";
+import { FeedbackPolicy, TemplatePatch, type DashboardAccess, type EvaluationExports, type IntegrityIncident } from "@quiz/contracts";
 import {
   D,
   H,
@@ -962,6 +964,10 @@ classroomWork.push((classroomId) => {
   };
 });
 
+/** The stored practice switch (ADR-122), absent when unset. */
+const afterDueOf = (e: MockEvaluation): AfterDueSetting | undefined =>
+  e.settings["afterDue"] === "open" || e.settings["afterDue"] === "hidden" ? e.settings["afterDue"] : undefined;
+
 export const toEvaluation = (e: MockEvaluation) => ({
   id: e.id,
   classroomId: e.classroomId,
@@ -973,12 +979,14 @@ export const toEvaluation = (e: MockEvaluation) => ({
   allowDrill:
     e.mode !== "poll" &&
     (typeof e.settings["allowDrill"] === "boolean" ? e.settings["allowDrill"] : e.mode === "exercise"),
-  // The server's `practiceOpen` (ADR-122, ADR-124): the switch, else open.
+  // The server's `practiceOpen` (ADR-122, ADR-124, ADR-142): the switch, else
+  // the mode's default, and an exam's under its stored policy.
   afterDueOpen: afterDueOpen({
     mode: e.mode,
-    afterDue: e.settings["afterDue"] === "open" || e.settings["afterDue"] === "hidden" ? e.settings["afterDue"] : undefined,
+    afterDue: afterDueOf(e),
     safeExamBrowser: e.settings["safeExamBrowser"] === true,
     kiosk: e.settings["kiosk"] === true,
+    feedback: FeedbackPolicy.parse(e.feedbackPolicy),
   }),
   gradingScale: e.gradingScale,
   feedbackPolicy: e.feedbackPolicy,
@@ -1340,13 +1348,18 @@ on("POST", "/app/api/classrooms/:id/evaluations", (m, body) => {
 });
 on("GET", "/app/api/evaluations/:id", (m) => evaluationDetail(evaluationOr404(m.groups!.id!)));
 
-// ADR-122: practice after the due date, an exercise's own writer, editable at any state.
+// ADR-122, ADR-142: practice after the due date, its own writer, editable at any state.
 on("PUT", "/app/api/evaluations/:id/after-due", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
-  if (e.mode !== "exercise") {
-    throw new MockPayload(409, { error: "after_due_locked", message: "practice after the due date is an exercise's setting" });
+  const afterDue = body.afterDue === "open" ? "open" : "hidden";
+  const refusal = afterDueRefusal({ mode: e.mode, afterDue, feedback: FeedbackPolicy.parse(e.feedbackPolicy) });
+  if (refusal === "mode") {
+    throw new MockPayload(409, { error: "after_due_locked", message: "a poll takes no practice attempts" });
   }
-  e.settings["afterDue"] = body.afterDue === "open" ? "open" : "hidden";
+  if (refusal === "key_hidden") {
+    throw new MockPayload(422, { error: "practice_key_hidden", message: "an exam's practice needs its correction at the release" });
+  }
+  e.settings["afterDue"] = afterDue;
   return evaluationDetail(e);
 });
 /** The picker's pools: the course's own, like the server (F-EVAL-01), by name. */

@@ -92,8 +92,11 @@ const REFUSALS = {
   no_template: [409, "the evaluation has no template to pull from"],
   template_moved: [409, "the template has a newer revision than the one confirmed"],
   allow_drill_locked: [409],
-  // ADR-122: practice after the due date is an exercise's switch.
+  // ADR-122, ADR-142: a poll has no practice switch.
   after_due_locked: [409],
+  // ADR-142 §2: an exam's practice opens only under a stored policy that
+  // shows the answer and the key at the release — no oracle of points.
+  practice_key_hidden: [422, "an exam's practice needs its correction at the release, with the answer and the key (ADR-142)"],
   // ADR-092: the mode changes only while the evaluation is a draft or
   // scheduled with no attempt (`modeChangeable`), and never on a poll.
   mode_frozen: [409, "the mode can no longer change: students have been let in, or an attempt exists (ADR-092)"],

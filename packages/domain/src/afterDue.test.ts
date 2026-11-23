@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   afterDueOpen,
+  afterDueRefusal,
+  examPracticeFeedbackOk,
+  practiceStateOpen,
   PRACTICE_DEFAULT_S,
   practiceCooldownS,
   practiceDeadline,
@@ -23,14 +26,60 @@ describe("afterDueOpen (ADR-122 §1, ADR-124)", () => {
     expect(afterDueOpen({ ...exercise, afterDue: "open" })).toBe(true);
   });
 
-  it("is never open on an exam or a poll", () => {
-    expect(afterDueOpen({ ...exercise, mode: "exam", afterDue: "open" })).toBe(false);
+  it("is never open on a poll", () => {
     expect(afterDueOpen({ ...exercise, mode: "poll", afterDue: "open" })).toBe(false);
   });
 
   it("is hidden on an exercise that asks for a trusted client", () => {
     expect(afterDueOpen({ ...exercise, afterDue: "open", safeExamBrowser: true })).toBe(false);
     expect(afterDueOpen({ ...exercise, kiosk: true })).toBe(false);
+  });
+});
+
+describe("an exam's practice (ADR-142)", () => {
+  const shown = { when: "on_release" as const, showKey: true, showAnswer: true };
+  const exam = { mode: "exam" as const, afterDue: "open" as const, feedback: shown };
+
+  it("is closed by default, open only when the teacher set it", () => {
+    expect(afterDueOpen({ ...exam, afterDue: undefined })).toBe(false);
+    expect(afterDueOpen({ ...exam, afterDue: "hidden" })).toBe(false);
+    expect(afterDueOpen(exam)).toBe(true);
+  });
+
+  it("closes again when the stored policy stops showing the key and the answer at the release", () => {
+    expect(afterDueOpen({ ...exam, feedback: { ...shown, showKey: false } })).toBe(false);
+    expect(afterDueOpen({ ...exam, feedback: { ...shown, showAnswer: false } })).toBe(false);
+    expect(afterDueOpen({ ...exam, feedback: { ...shown, when: "none" } })).toBe(false);
+    expect(afterDueOpen({ ...exam, feedback: undefined })).toBe(false);
+    expect(examPracticeFeedbackOk({ ...shown, when: "immediate" })).toBe(false);
+  });
+
+  it("ignores the exam's trusted clients: they protect the sitting", () => {
+    expect(afterDueOpen({ ...exam, safeExamBrowser: true, kiosk: true })).toBe(true);
+  });
+
+  it("refuses the switch on under a hidden key, never its closing, and always on a poll", () => {
+    expect(afterDueRefusal({ ...exam, feedback: { ...shown, showKey: false } })).toBe("key_hidden");
+    expect(afterDueRefusal({ ...exam, afterDue: "hidden", feedback: { ...shown, showKey: false } })).toBeNull();
+    expect(afterDueRefusal(exam)).toBeNull();
+    expect(afterDueRefusal({ ...exam, mode: "exercise", feedback: { ...shown, when: "none" } })).toBeNull();
+    expect(afterDueRefusal({ ...exam, mode: "poll" })).toBe("mode");
+  });
+
+  it("takes practice once released only", () => {
+    expect(practiceStateOpen("exam", "released")).toBe(true);
+    for (const state of ["closed", "grading", "running"] as const) expect(practiceStateOpen("exam", state)).toBe(false);
+    expect(practiceStateOpen("exercise", "closed")).toBe(true);
+  });
+
+  it("refuses a student who did not hand it in, and an exam not (or no longer) released", () => {
+    const ok = { mode: "exam" as const, open: true, evaluationState: "released" as const, archived: false, taken: true, unfinishedOfficial: false };
+    expect(practiceRefusal(ok)).toBeNull();
+    expect(practiceRefusal({ ...ok, taken: false })).toBe("not_taken");
+    expect(practiceRefusal({ ...ok, evaluationState: "grading" })).toBe("not_released");
+    expect(practiceRefusal({ ...ok, archived: true, taken: false })).toBe("archived");
+    // An exercise asks nobody to have handed it in.
+    expect(practiceRefusal({ ...ok, mode: "exercise", taken: false })).toBeNull();
   });
 });
 
@@ -60,7 +109,7 @@ describe("practiceDeadline (ADR-122 §3)", () => {
 });
 
 describe("practiceRefusal (ADR-122 §5)", () => {
-  const ok = { open: true, evaluationState: "closed" as const, archived: false, unfinishedOfficial: false };
+  const ok = { mode: "exercise" as const, open: true, evaluationState: "closed" as const, archived: false, taken: false, unfinishedOfficial: false };
 
   it("lets a practice attempt start on an exercise that is over", () => {
     for (const evaluationState of ["closed", "grading", "released"] as const) {

@@ -338,7 +338,9 @@ export const EvaluationSettings = z.object({
   /**
    * ADR-122 (#985): whether an exercise takes PRACTICE attempts once it is
    * over — `open` or `hidden`. Absent means the default, open (ADR-124: every
-   * exercise shows its key at the hand-in); read it through `afterDueOpen`
+   * exercise shows its key at the hand-in); on an exam (ADR-142, #1037),
+   * once released, absent means hidden, and `open` holds only while the
+   * stored feedback policy shows the key at the release; read it through `afterDueOpen`
    * (`@quiz/domain`), never raw — `Evaluation.afterDueOpen` carries the
    * effective value. Like `allowDrill` it is NOT in
    * {@link EvaluationSettingsPatch}: a visibility switch, not a frozen exam
@@ -431,7 +433,7 @@ export const Evaluation = z.object({
   settings: EvaluationSettings,
   /** ADR-041 §2: the effective "Allow drill" (`settings.allowDrill` or the mode's default). */
   allowDrill: z.boolean(),
-  /** ADR-122: whether the exercise takes practice attempts once over (`afterDueOpen`), always false elsewhere. */
+  /** ADR-122, ADR-142: whether the exercise or the exam takes practice attempts once over (`afterDueOpen`), always false on a poll. */
   afterDueOpen: z.boolean(),
   gradingScale: GradingScale,
   feedbackPolicy: FeedbackPolicy,
@@ -698,7 +700,13 @@ const _settingsPatchKeys: SameKeys<
 const _feedbackPatchKeys: SameKeys<FeedbackPolicy, Required<FeedbackPolicyPatch>> = true;
 void [_settingsPatchKeys, _feedbackPatchKeys];
 
-/** `PUT /evaluations/:id/after-due` (ADR-122): the teacher's switch, on an exercise only. */
+/**
+ * `PUT /evaluations/:id/after-due` (ADR-122, ADR-142): the teacher's switch,
+ * on an exercise or an exam — `409 after_due_locked` on a poll. Opening an
+ * exam's practice is refused `422 practice_key_hidden` unless its stored
+ * feedback policy shows the answer and the key at the release
+ * (`afterDueRefusal`, `@quiz/domain`).
+ */
 export const EvaluationAfterDueBody = z.object({ afterDue: z.enum(AFTER_DUE_SETTINGS) });
 export type EvaluationAfterDueBody = z.infer<typeof EvaluationAfterDueBody>;
 

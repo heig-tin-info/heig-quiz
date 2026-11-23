@@ -49,11 +49,13 @@ import { attemptEntryKey, practiceEntryKey } from "../queryKeys";
 import { toKiosk } from "../kiosk/navigation";
 import { useStationAttestation } from "../kiosk/useStationAttestation";
 
-/** Why a practice attempt may not start, in the student's words (ADR-122). */
+/** Why a practice attempt may not start, in the student's words (ADR-122, ADR-142). */
 const PRACTICE_REFUSED: Record<PracticeRefusalReason, keyof Dict> = {
   hidden: "practice.refused.hidden",
   not_over: "practice.refused.not_over",
+  not_released: "practice.refused.not_released",
   archived: "practice.refused.archived",
+  not_taken: "practice.refused.not_taken",
   unfinished: "practice.refused.unfinished",
 };
 

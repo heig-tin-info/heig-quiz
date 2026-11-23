@@ -234,8 +234,9 @@ export function drillAllowed(row: EvaluationRecord): boolean {
 }
 
 /**
- * ADR-122: whether this exercise takes practice attempts once it is over —
- * the teacher's switch or its default (`afterDueOpen`, the one rule).
+ * ADR-122, ADR-142: whether this evaluation takes practice attempts once it
+ * is over — the teacher's switch or its default, and for an exam its stored
+ * feedback policy (`afterDueOpen`, the one rule).
  */
 export function practiceOpen(row: EvaluationRecord): boolean {
   const settings = settingsOf(row);
@@ -244,23 +245,28 @@ export function practiceOpen(row: EvaluationRecord): boolean {
     afterDue: settings.afterDue,
     safeExamBrowser: settings.safeExamBrowser,
     kiosk: settings.kiosk,
+    feedback: storedFeedbackOf(row),
   });
 }
 
 /**
  * ADR-122 §9, "Past series": whether this evaluation is one of them for a
  * student of its classroom (`archivedAt`, the classroom's) — an exercise
- * that is over and takes practice attempts, in a classroom not archived.
- * The one rule the home's list and the series' blank print (ADR-112
- * amendment of 2026-11-03) read: the practice rule (`practiceRefusal`)
- * before any student's own attempts count.
+ * that is over, or an exam released (ADR-142), that takes practice
+ * attempts, in a classroom not archived; an exam only for a student who
+ * handed it in (`taken`, a finished official attempt of theirs). The one
+ * rule the home's list and the series' blank print (ADR-112 amendment of
+ * 2026-11-03) read: the practice rule (`practiceRefusal`) before the
+ * student's unfinished attempts count.
  */
-export function inPastSeries(row: EvaluationRecord, archivedAt: Date | null): boolean {
+export function inPastSeries(row: EvaluationRecord, archivedAt: Date | null, taken: boolean): boolean {
   return (
     practiceRefusal({
+      mode: row.mode,
       open: practiceOpen(row),
       evaluationState: row.state,
       archived: archivedAt !== null,
+      taken,
       unfinishedOfficial: false,
     }) === null
   );

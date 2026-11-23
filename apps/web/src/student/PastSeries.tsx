@@ -1,7 +1,9 @@
 /**
  * "Past series" (ADR-122): the exercises of the student's classrooms that
- * are over and still open to practice — on the home, every classroom; on a
- * classroom's Activities tab, that classroom's, without the where-line.
+ * are over and still open to practice, and the released exams the student
+ * took that their teacher opened to practice (ADR-142) — on the home, every
+ * classroom; on a classroom's Activities tab, that classroom's, without the
+ * where-line. An exam's row never prints (`printable` is false).
  *
  * A practice attempt counts for nothing: the official result stays on the
  * Grades page. Each row says when the exercise closed and what the latest

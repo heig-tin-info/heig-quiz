@@ -33,6 +33,8 @@ Amended 2026-11-02 by [ADR-122](ADR-122-entrainement-apres-l-echeance.md): once 
 
 Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correction.md): §4 only — the score-only view between two attempts is lifted. A student reads the whole correction of each attempt at its hand-in (verdict, points, answer, key, explanation), retakes open or not, whatever the stored feedback policy; the refusal `retakes_open` is removed. Grading at hand-in is unchanged.
 
+Amended 2026-11-23 by [ADR-142](ADR-142-entrainement-sur-un-examen-publie.md) (issue #1037): an exam keeps one OFFICIAL attempt per student; once its results are released, and if its teacher allows it, a student who handed it in may start practice attempts on it, which count nowhere (ADR-122 §4) and are never a retake (§2's `422 retakes_not_allowed` on an exam is unchanged).
+
 ## Context
 
 F-EVAL-15 asks that an `exercise` may allow several attempts, keeping the

@@ -38,6 +38,9 @@ export async function findPastSeries(
   if (!evaluation?.classroomId) return null;
   // The student payload asked for: a staff member reads as in the student view.
   const room = await findReadableClassroom(db, caller, auth, evaluation.classroomId, { studentView: true });
-  if (room === null || !inPastSeries(evaluation, room.room.archivedAt)) return null;
+  // `taken: false`: the blank print is an exercise's — a released exam open
+  // to practice (ADR-142) is never handed out blank, its paper seed being
+  // the exam's own (ADR-125 §8).
+  if (room === null || !inPastSeries(evaluation, room.room.archivedAt, false)) return null;
   return evaluation;
 }

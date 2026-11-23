@@ -24,6 +24,7 @@ import {
 import type { Db } from "../../db/client.js";
 import {
   attempts,
+  officialAttempt,
   classrooms,
   drillCards,
   drillReviews,
@@ -235,15 +236,27 @@ async function createCards(
  */
 export async function cardsAtRelease(db: Db, evaluation: EvaluationRecord, now: Date): Promise<number> {
   if (evaluation.mode !== "exam") return 0;
-  return createCards(db, evaluation, await finishedTakers(db, evaluation.id), now);
+  return createCards(db, evaluation, await finishedTakers(db, evaluation), now);
 }
 
-/** The students with a finished attempt of an evaluation: who handed it in. */
-async function finishedTakers(db: Db, evaluationId: string): Promise<string[]> {
+/**
+ * The students with a finished attempt of an evaluation: who handed it in.
+ * An exam counts its OFFICIAL attempts only (`officialAttempt`): a practice
+ * attempt of a released exam (ADR-142) is no hand-in, and must give no card
+ * — nor, through it, a key — to anyone. An exercise's practice attempt feeds
+ * the drill like any hand-in (ADR-122 §8).
+ */
+async function finishedTakers(db: Db, evaluation: EvaluationRecord): Promise<string[]> {
   const ended = await db
     .selectDistinct({ userId: attempts.userId })
     .from(attempts)
-    .where(and(eq(attempts.evaluationId, evaluationId), inArray(attempts.state, [...FINISHED_ATTEMPT_STATES])));
+    .where(
+      and(
+        eq(attempts.evaluationId, evaluation.id),
+        inArray(attempts.state, [...FINISHED_ATTEMPT_STATES]),
+        evaluation.mode === "exam" ? officialAttempt : undefined,
+      ),
+    );
   return ended.flatMap((a) => (a.userId === null ? [] : [a.userId]));
 }
 
@@ -263,7 +276,7 @@ export async function backfillClassroom(db: Db, classroomId: string, now: Date):
   let created = 0;
   for (const evaluation of rows) {
     if (evaluation.mode === "exam" && evaluation.releasedAt === null) continue;
-    created += await createCards(db, evaluation, await finishedTakers(db, evaluation.id), now);
+    created += await createCards(db, evaluation, await finishedTakers(db, evaluation), now);
   }
   return created;
 }

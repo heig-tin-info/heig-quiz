@@ -1034,6 +1034,8 @@ const scenes = [
   { name: "eval-config-retakes-locked", role: "teacher", path: "/evaluations/paused?step=timing" },
   // ADR-122: practice after the due date, an exercise's switch under the advanced options.
   { name: "eval-config-after-due", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
+  // ADR-142: the same switch on a released exam, disabled or not by its feedback policy.
+  { name: "eval-config-after-due-exam", role: "teacher", path: "/evaluations/released?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
   { name: "eval-config-advanced-running", role: "teacher", path: "/evaluations/running?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
   // #152: the pre-flight checklist — ready with warnings (the draft exam),
   // scheduled, no waiting room (the retake exercise opens straight into
