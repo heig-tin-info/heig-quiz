@@ -48,6 +48,30 @@ describe("ProgressList", () => {
     expect(at(1)).toHaveFocus();
   });
 
+  it("lists a text before a question (ADR-084) by its title, without a number, the questions keeping theirs", async () => {
+    const onSelect = vi.fn();
+    const withTexts: Segment[] = [
+      { id: "q1", mark: "answered" },
+      { id: "intro:q2", mark: "unanswered", current: true, passage: { title: "Partie 2" } },
+      { id: "q2", mark: "unanswered" },
+      { id: "intro:q3", mark: "unanswered", locked: true, passage: { title: null } },
+      { id: "q3", mark: "unanswered" },
+    ];
+    renderWithProviders(<ProgressList segments={withTexts} label="Progress" onSelect={onSelect} />);
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Question 1, answered",
+      "Partie 2, before question 2, current",
+      "Question 2, not answered",
+      "Text, before question 3, closed",
+      "Question 3, not answered",
+    ]);
+    expect(screen.getByText("Partie 2")).toBeInTheDocument();
+    expect(screen.getByText("Text")).toBeInTheDocument();
+    expect(screen.getByText("Question 3")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /^Partie 2,/ }));
+    expect(onSelect).toHaveBeenCalledWith("intro:q2");
+  });
+
   it("hands the caller the id it clicked", async () => {
     const onSelect = vi.fn();
     renderWithProviders(<ProgressList segments={segments} label="Progress" onSelect={onSelect} />);

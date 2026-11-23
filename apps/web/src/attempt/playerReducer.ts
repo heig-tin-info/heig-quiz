@@ -18,6 +18,7 @@
 import type { AttemptItem, AttemptView, ItemCorrection, ItemCounting, Navigation } from "@quiz/contracts";
 import { answerMark, lockedItems } from "@quiz/domain";
 
+import { markdownTitle } from "../markdown/outline";
 import type { Segment } from "../ui";
 
 export interface PlayerItem {
@@ -102,8 +103,11 @@ export type PlayerAction =
   | { type: "check"; itemId: string; correction: ItemCorrection }
   /** ADR-084: "Continue" on the passage screen: the question shows. */
   | { type: "pass"; itemId: string }
-  /** ADR-084: "Read the text again", under `free` navigation only. */
-  | { type: "reread"; itemId: string }
+  /**
+   * ADR-084: the passage's entry of the question list, chosen: its item, with
+   * the text shown again (see {@link introReachable}).
+   */
+  | { type: "intro"; itemId: string }
   /**
    * The teacher's preview only (ADR-018, sixth addendum): one item moved to
    * a newer version of its question. Its content is replaced and its answer
@@ -186,7 +190,8 @@ export const currentItem = (state: PlayerState): PlayerItem | undefined => state
  * The passage screen (ADR-084): the intro of the item on screen while it has
  * not been passed, `null` once it has — or when there is none. One rule for
  * every navigation: an intro shows on arriving at its item until Continue;
- * what differs is only whether `reread` can bring it back ({@link canReread}).
+ * what differs is only whether its entry in the question list can bring it
+ * back ({@link introReachable}).
  */
 export function passageOf(state: PlayerState): string | null {
   const item = currentItem(state);
@@ -195,20 +200,31 @@ export function passageOf(state: PlayerState): string | null {
 }
 
 /**
- * Whether the intro of `itemId` can be read again: one it has, already
- * passed, under `free` navigation only. In `forward_only` and `milestones`
- * Continue is one way — what makes "memorise this, then answer" possible
- * (ADR-084 §6). The one rule behind the button and the `reread` action.
+ * Whether the passage before `itemId` can be opened from the question list:
+ * the item has an intro and can be reached, and — outside `free` navigation —
+ * the text has not been passed yet. In `forward_only` and `milestones`
+ * Continue is one way, which is what makes "memorise this, then answer"
+ * possible (ADR-084 §6); before that, the entry leads where the question's
+ * would. The one rule behind the entry's lock and the `intro` action.
  */
-function rereadable(state: PlayerState, itemId: string): boolean {
-  const item = state.items.find((i) => i.id === itemId);
-  return state.navigation === "free" && item?.intro != null && state.passed[itemId] === true;
+export function introReachable(state: PlayerState, itemId: string): boolean {
+  const index = state.items.findIndex((i) => i.id === itemId);
+  const item = state.items[index];
+  if (item === undefined || item.intro === null || !canReach(state, index)) return false;
+  return state.navigation === "free" || state.passed[itemId] !== true;
 }
 
-/** {@link rereadable}, for the item on screen. */
-export function canReread(state: PlayerState): boolean {
-  const item = currentItem(state);
-  return item !== undefined && rereadable(state, item.id);
+/**
+ * The prefix of a passage's entry in the question list. An item id is a
+ * UUID, so it cannot meet a question's own entry.
+ */
+const PASSAGE = "intro:";
+
+/** What choosing an entry of the question list does: open a passage, or go to a question. */
+export function selectEntry(entryId: string): PlayerAction {
+  return entryId.startsWith(PASSAGE)
+    ? { type: "intro", itemId: entryId.slice(PASSAGE.length) }
+    : { type: "goto", itemId: entryId };
 }
 
 /** Already started: an answer, "Leave unanswered", or validated. Its intro is behind the student. */
@@ -229,22 +245,41 @@ export function neighbour(state: PlayerState, delta: 1 | -1): number | null {
  * whether it is closed, and where the student is. Whether an answer holds
  * SOMETHING is the question type's call, so it comes in as `answered` and
  * this module stays free of the registry.
+ *
+ * An item with an intro (ADR-084) gets an entry before its question, named by
+ * the text's first heading: current while the passage is on screen, closed
+ * once it cannot be opened again ({@link introReachable}). Its mark is the
+ * neutral "unanswered", never drawn: reading a text is not recorded.
  */
 export function segmentsOf(
   state: PlayerState,
   answered: (type: string, answer: unknown) => boolean,
 ): Segment[] {
   const locked = lockedIds(state);
-  return state.items.map((item, index) => ({
-    id: item.id,
-    mark: answerMark({
+  const reading = passageOf(state) !== null;
+  return state.items.flatMap((item, index) => {
+    const here = index === state.index;
+    const mark = answerMark({
       answered: answered(item.type, state.answers[item.id] ?? null),
       skipped: item.skipped,
-    }),
-    current: index === state.index,
-    flagged: item.flagged,
-    locked: item.serverLocked || locked.has(item.id),
-  }));
+    });
+    const question: Segment = {
+      id: item.id,
+      mark,
+      current: here && !reading,
+      flagged: item.flagged,
+      locked: item.serverLocked || locked.has(item.id),
+    };
+    if (item.intro === null) return [question];
+    const passage: Segment = {
+      id: `${PASSAGE}${item.id}`,
+      mark: "unanswered",
+      current: here && reading,
+      locked: !introReachable(state, item.id),
+      passage: { title: markdownTitle(item.intro) },
+    };
+    return [passage, question];
+  });
 }
 
 /** One item's own fields, replaced; the SAME state when nothing moved. */
@@ -293,8 +328,12 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       );
       // ADR-084: a passage once passed stays passed across a refetch; one
       // whose item is already started is not shown again after a reload.
+      // Only for an item this player does not track yet: a refetch must not
+      // close again a text the student reopened from the list.
       const passed: Record<string, true> = { ...state.passed };
-      for (const item of action.view.items) if (started(item)) passed[item.id] = true;
+      for (const item of action.view.items) {
+        if (!before.has(item.id) && started(item)) passed[item.id] = true;
+      }
       return {
         items,
         index,
@@ -306,10 +345,13 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
     case "pass":
       if (state.passed[action.itemId] === true) return state;
       return { ...state, passed: { ...state.passed, [action.itemId]: true } };
-    case "reread": {
-      if (!rereadable(state, action.itemId)) return state;
+    case "intro": {
+      if (!introReachable(state, action.itemId)) return state;
+      const index = state.items.findIndex((i) => i.id === action.itemId);
+      // Already on screen: nothing moves.
+      if (index === state.index && state.passed[action.itemId] !== true) return state;
       const { [action.itemId]: _reopened, ...passed } = state.passed;
-      return { ...state, passed };
+      return { ...state, index, passed };
     }
     case "goto": {
       const index = state.items.findIndex((i) => i.id === action.itemId);

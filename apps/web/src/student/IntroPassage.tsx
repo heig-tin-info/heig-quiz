@@ -1,8 +1,6 @@
-import { BookOpen } from "lucide-react";
-
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
-import { Button, Card } from "../ui";
+import { Card } from "../ui";
 
 /**
  * The passage screen of ADR-084: the teacher's text before a question —
@@ -11,9 +9,9 @@ import { Button, Card } from "../ui";
  * where the question's own actions go, as the screen's one primary action).
  *
  * The eyebrow names what follows, "Before question 3", in the place and the
- * style of the question's own "Question 3": the strip above still marks
- * question 3 as the current one, and the reader must not take the text for
- * a question to answer. The text is the teacher's markdown, rendered by the
+ * style of the question's own "Question 3": the question list marks the
+ * text's own entry, just before question 3, and the reader must not take the
+ * text for a question to answer. The text is the teacher's markdown, rendered by the
  * one renderer a student sees (`MarkdownView`).
  *
  * Where Continue is one way (`forward_only`, `milestones`), one muted line
@@ -46,20 +44,5 @@ export function IntroPassage({
         <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{t("player.intro.oneWay")}</p>
       ) : null}
     </>
-  );
-}
-
-/**
- * "Read the text again", beside a question whose text can still be reopened
- * (`free` navigation, ADR-084 §6). A ghost button: a way back to something
- * already read, never the page's action.
- */
-export function RereadButton({ onClick }: { onClick: () => void }) {
-  const t = useT();
-  return (
-    <Button variant="ghost" size="sm" className="-ml-2" onClick={onClick}>
-      <BookOpen className="size-4" aria-hidden />
-      {t("player.intro.reread")}
-    </Button>
   );
 }

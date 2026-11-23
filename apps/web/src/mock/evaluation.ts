@@ -366,7 +366,9 @@ export function mockRate(seed: number): number {
 const MOCK_INTRO_FIRST =
   "Lisez les chapitres 8 et 9 du polycopié avant de répondre. **Une seule réponse** par question à choix.";
 const MOCK_INTRO_PART2 =
-  "## Partie 2\n\nFin de la première partie. Les questions suivantes portent sur le code.";
+  "## Partie 2 : le code\n\nFin de la première partie. Les questions suivantes portent sur la fonction " +
+  "ci-dessous ; gardez-la sous les yeux.\n\n```c\ndouble r_parallele(double r1, double r2)\n{\n" +
+  "    return r1 * r2 / (r1 + r2);\n}\n```\n\nUne résistance nulle court-circuite le montage.";
 
 interface MockItem {
   id: string;

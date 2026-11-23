@@ -89,6 +89,28 @@ describe("ProgressSegments", () => {
     for (const button of screen.getAllByRole("button")) expect(button).toBeDisabled();
   });
 
+  it("gives a text before a question (ADR-084) a slot with no number; the questions keep theirs", () => {
+    const withText: Segment[] = [
+      { id: "q1", mark: "answered" },
+      { id: "intro:q2", mark: "unanswered", current: true, passage: { title: "Partie 2" } },
+      { id: "q2", mark: "answered" },
+    ];
+    const { container } = renderWithProviders(
+      <ProgressSegments segments={withText} label="Progress" onSelect={() => {}} />,
+    );
+    expect(screen.getByRole("button", { name: "Partie 2, before question 2, current" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    const numbers = Array.from(container.querySelectorAll("button > span:last-child")).map(
+      (s) => s.textContent,
+    );
+    expect(numbers).toEqual(["1", "", "2"]);
+    // No mark of its own: the path runs through it, both stretches solid.
+    const links = Array.from(container.querySelectorAll("[data-part=link]"));
+    expect(links.map((l) => l.classList.contains("bg-fg"))).toEqual([true, true]);
+  });
+
   it("prints every number while the bars have the room for one", () => {
     const { container } = renderWithProviders(
       <ProgressSegments segments={segments} label="Progress" onSelect={() => {}} />,

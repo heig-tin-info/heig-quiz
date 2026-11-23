@@ -40,8 +40,9 @@
  *
  * An item may carry the teacher's text before it (ADR-084): arriving on it
  * shows that passage in place of the question, and the one primary action
- * is then "Continue". Under `free` navigation "Read the text again" brings
- * it back; elsewhere Continue is one way (`passageOf`, `canReread`).
+ * is then "Continue". The text has its own entry in the question list,
+ * before its question: under `free` navigation it brings the text back;
+ * elsewhere Continue is one way (`passageOf`, `introReachable`).
  *
  * A one-question evaluation has no navigation to draw: no progress strip
  * (the strip is a map of a paper that has one page) and no previous / next
@@ -69,13 +70,13 @@ import { useIntegrityJournal } from "../attempt/integrity";
 import { postSimulate } from "../attempt/run";
 import { useAttempt, type UseAttempt } from "../attempt/useAttempt";
 import {
-  canReread,
   currentItem,
   isLocked,
   isWritable,
   neighbour,
   passageOf,
   segmentsOf,
+  selectEntry,
 } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
@@ -84,7 +85,7 @@ import { Button, Card, LG_PX, Modal, useMinWidth } from "../ui";
 import { CheckedCorrection } from "./CheckedCorrection";
 import { ConditionsList } from "./ConditionsList";
 import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
-import { IntroPassage, RereadButton } from "./IntroPassage";
+import { IntroPassage } from "./IntroPassage";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay, ScreenOverlay } from "./PausedOverlay";
 import type { StationAttestation } from "../kiosk/useStationAttestation";
@@ -435,15 +436,17 @@ export function PlayerView({
   const settled = mark !== "unanswered" || validated;
   const handInIsPrimary = passage === null && !canValidate && !checkPrimary && settled && next === null;
   // A single question has no neighbours to walk to: the two buttons are
-  // absent rather than disabled, and so is the strip above (F-LIVE-09 draws
-  // the questions, and one question is not a progression). Nothing to show
-  // at all — one question, nothing to validate — means no bar, not an empty
-  // one.
+  // absent rather than disabled. Nothing to show at all — one question,
+  // nothing to validate — means no bar, not an empty one.
   const manyItems = total > 1;
-  // One question has no list to stand beside it: the heading keeps the
-  // points, as on a narrow screen.
-  const rail = railScreen && manyItems && item !== undefined;
-  const selectSegment = (itemId: string) => dispatch({ type: "goto", itemId });
+  // The question list (F-LIVE-09) maps the screens of the paper: one
+  // question is not a progression, and draws no list — unless a text before
+  // it can still be opened (ADR-084): two screens then, and the list is the
+  // way back to the text. Without a list to stand beside, the heading keeps
+  // the points, as on a narrow screen.
+  const listed = total > 1 || segments.some((s) => s.passage !== undefined && s.locked !== true);
+  const rail = railScreen && listed && item !== undefined;
+  const selectSegment = (id: string) => dispatch(selectEntry(id));
   const progressLabel = t("player.progress", { n: state.index + 1, total });
   // The passage's one action stands where the question's go — the phone's
   // footer, under the text on a desktop — on the right, where Next would be.
@@ -488,7 +491,7 @@ export function PlayerView({
         clock={session.clock}
         paused={paused}
         {...(sync === undefined ? {} : { sync })}
-        segments={manyItems ? segments : []}
+        segments={listed ? segments : []}
         onSelectSegment={selectSegment}
         progressLabel={progressLabel}
         commands={commands}
@@ -526,6 +529,7 @@ export function PlayerView({
                   segments={segments}
                   onSelect={selectSegment}
                   label={progressLabel}
+                  number={state.index + 1}
                   // The passage is not the question: its points and the
                   // preview's tools for it wait for Continue (ADR-084).
                   {...(passage === null ? { points: item.points } : {})}
@@ -558,11 +562,6 @@ export function PlayerView({
               checked={checked}
               mark={mark}
             />
-            {canReread(state) ? (
-              <div className="-mt-1 mb-2">
-                <RereadButton onClick={() => dispatch({ type: "reread", itemId: item.id })} />
-              </div>
-            ) : null}
             {/* `flow-root` holds the floated flag: the statement's first
                 lines wrap around it instead of running under it. */}
             <Card className="flow-root p-5 sm:p-6">

@@ -80,14 +80,16 @@ import { me } from "./session";
 // serves:
 //
 //   ?scene=lobby | ready | running | paused | closed | extend | single | marks
-//          | forward | exercise | intro | partial     (running by default)
+//          | forward | exercise | intro | intro-forward | partial
+//          (running by default)
 //
 // `partial` is a partial retake of an exercise (ADR-091): Q1 and Q4 were
 // acquired in the previous attempt and come back read-only, marked
 // "Acquired"; the student stands on Q1.
 //
 // `intro` gives Q1 and Q4 the teacher's text before them (ADR-084): the
-// paper opens on the passage screen.
+// paper opens on the passage screen. `intro-forward` is the same paper under
+// `forward_only` navigation, where a text once passed cannot be reopened.
 //
 // `ready` is a running evaluation the student has not started (ADR-076): the
 // entry route answers the ready screen until `POST …/attempt/start`.
@@ -506,7 +508,7 @@ export const setStudentDeadline = (at: number) => {
 
 /** The settings of the student's evaluation, which every one of its views states. */
 const studentSettings = (): AttemptView["evaluation"]["settings"] => ({
-  navigation: scene === "forward" ? "forward_only" : "free",
+  navigation: scene === "forward" || scene === "intro-forward" ? "forward_only" : "free",
   lobby: "manual",
   shuffleItems: false,
   shuffleChoices: true,
@@ -582,7 +584,7 @@ export const studentAttemptView = (): AttemptView => ({
       milestone: n === 3,
       // The circuit, a bonus question (ADR-052): the player's label.
       counting: n === 5 ? ("bonus" as const) : ("normal" as const),
-      intro: scene === "intro" ? (STUDENT_INTROS[n] ?? null) : null,
+      intro: scene === "intro" || scene === "intro-forward" ? (STUDENT_INTROS[n] ?? null) : null,
       // ADR-026: what `toStudent` adds to a choice question under negative marking.
       student:
         n === 1 && flags.negative

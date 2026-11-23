@@ -1204,10 +1204,16 @@ describe("the text before a question (ADR-084)", () => {
     expect(isPrimary(go)).toBe(true);
     expect(screen.queryByText(/ne sera plus affiché/)).toBeNull();
 
+    // The text has its own entry in the question list, current while it is up.
+    expect(screen.getByRole("button", { name: "Texte, avant la question 3, en cours" })).toBeInTheDocument();
+
     await userEvent.click(go);
     expect(await screen.findByText("Question 3")).toBeInTheDocument();
     expect(screen.queryByText("chapitre 8")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Relire le texte" }));
+    // Free navigation: the entry brings the text back, from any question.
+    await userEvent.keyboard("{Alt>}{ArrowLeft}{/Alt}");
+    expect(await screen.findByText("Question 2")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Texte, avant la question 3" }));
     expect(await screen.findByText("Avant la question 3")).toBeInTheDocument();
   });
 
@@ -1219,7 +1225,45 @@ describe("the text before a question (ADR-084)", () => {
     expect(screen.getByText(/ce texte ne sera plus affiché/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
     expect(await screen.findByText("Question 3")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Relire le texte" })).toBeNull();
+    const entry = screen.getByRole("button", { name: "Texte, avant la question 3, fermé" });
+    await userEvent.click(entry);
+    expect(screen.queryByText("Avant la question 3")).toBeNull();
+    expect(screen.getByText("Question 3")).toBeInTheDocument();
+  });
+
+  it("names its entry by the text's first heading, and jumps there from question 2", async () => {
+    const view = withIntro("free", "i2");
+    const titled = {
+      ...view,
+      items: view.items.map((item) => (item.id === "i3" ? { ...item, intro: `## Partie 2\n\n${INTRO}` } : item)),
+    };
+    stubs(titled);
+    render(titled);
+    await screen.findByText("Question 2");
+    await userEvent.click(screen.getByRole("button", { name: "Partie 2, avant la question 3" }));
+    expect(await screen.findByText("Avant la question 3")).toBeInTheDocument();
+  });
+
+  it("lists a single question preceded by a text: two screens, and the way back to the text", async () => {
+    const one = oneItemView();
+    const view = { ...one, items: [{ ...one.items[0]!, intro: INTRO }] };
+    stubs(view);
+    render(view);
+    // Already answered: the text is behind the student, the question up.
+    expect(await screen.findByText("Question 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Texte, avant la question 1" }));
+    expect(await screen.findByText("Avant la question 1")).toBeInTheDocument();
+  });
+
+  it("drops the list of a single question once its text is closed (forward_only)", async () => {
+    const one = withNavigation(oneItemView(), "forward_only");
+    const view = { ...one, items: [{ ...one.items[0]!, intro: INTRO, answer: null }] };
+    stubs(view);
+    render(view);
+    expect(await screen.findByRole("button", { name: "Texte, avant la question 1, en cours" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
+    expect(await screen.findByText("Question 1")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: /^Progression/ })).toBeNull();
   });
 
   it("is not shown again on reloading a question already started", async () => {
@@ -1232,8 +1276,8 @@ describe("the text before a question (ADR-084)", () => {
     render(started);
     expect(await screen.findByText("Question 2")).toBeInTheDocument();
     expect(screen.queryByText("Avant la question 2")).toBeNull();
-    // Still there to read again, under free navigation.
-    expect(screen.getByRole("button", { name: "Relire le texte" })).toBeInTheDocument();
+    // Still there to read again from its entry, under free navigation.
+    expect(screen.getByRole("button", { name: "Texte, avant la question 2" })).toBeInTheDocument();
   });
 });
 

@@ -320,7 +320,29 @@ export interface Segment {
   flagLabel?: string | undefined;
   /** Closed by the navigation (validated in `forward_only`, behind a checkpoint). */
   locked?: boolean;
+  /**
+   * Not a question: the text before the question that follows it (ADR-084).
+   * A smaller dot with no number and no mark of its own, named by `title`
+   * (the text's first heading; "Text" when it has none). Its `mark` is
+   * ignored; the connector reads it as the question after it, so the path
+   * runs through it.
+   */
+  passage?: { title: string | null };
 }
+
+/**
+ * Each entry's question number: a question's own, counted over the questions
+ * only, and for a passage the number of the question it precedes. A passage
+ * never takes a number.
+ */
+function questionNumbers(segments: readonly Segment[]): number[] {
+  let n = 0;
+  return segments.map((segment) => (segment.passage ? n + 1 : ++n));
+}
+
+/** Half the width of an entry's dot, for the connectors that start and end at its edge. */
+const dotRadius = (segment: Segment, roomy: boolean): number =>
+  segment.passage ? (roomy ? 5 : 3) : roomy ? 10 : 5;
 
 /**
  * Under this width a question gets a plain 10 px dot instead of the 20 px
@@ -348,23 +370,71 @@ function segmentLabelStep(width: number, count: number): 1 | 5 {
   return width / count >= 22 ? 1 : 5;
 }
 
-/** The accessible name of a question of the paper: its number and every fact of it, in words. */
-function segmentName(t: TFunction, segment: Segment, i: number): string {
+/** What a passage is called in the list: its title, or "Text". */
+const passageTitle = (t: TFunction, passage: { title: string | null }): string =>
+  passage.title ?? t("segments.text");
+
+/**
+ * The accessible name of an entry of the paper: a question's number and every
+ * fact of it, in words; a passage's title and the question it comes before.
+ * `n` is the entry's {@link questionNumbers} value.
+ */
+function segmentName(t: TFunction, segment: Segment, n: number): string {
+  const current = segment.current ? [t("segments.current")] : [];
+  if (segment.passage) {
+    // "Closed" agrees with the text (masculine in French), not the question.
+    return [
+      t("segments.passage", { title: passageTitle(t, segment.passage), n }),
+      ...(segment.locked ? [t("segments.passageLocked")] : []),
+      ...current,
+    ].join(", ");
+  }
   const facts = [
     t(SEGMENT_LABEL[segment.mark]),
     ...(segment.flagged ? [segment.flagLabel ?? t("segments.flagged")] : []),
     ...(segment.locked ? [t("segments.locked")] : []),
-    ...(segment.current ? [t("segments.current")] : []),
+    ...current,
   ];
-  return t("segments.item", { n: i + 1, state: facts.join(", ") });
+  return t("segments.item", { n, state: facts.join(", ") });
+}
+
+/**
+ * A connector from an entry's dot to the next one's, edge to edge: its start
+ * and length along the axis (`left`/`width` in the strip, `top`/`height` in
+ * the list), from the two dots' sizes.
+ */
+function linkSpan(segment: Segment, next: Segment, roomy: boolean, axis: "x" | "y"): CSSProperties {
+  const from = dotRadius(segment, roomy);
+  const to = dotRadius(next, roomy);
+  const start = `calc(50% + ${from}px)`;
+  const length = `calc(100% - ${from + to}px)`;
+  return axis === "x" ? { left: start, width: length } : { top: start, height: length };
 }
 
 /**
  * One question's circle, the same in the strip and in the list: its mark as
  * a shape, the accent ring where the student is, faded when closed. Not
  * `roomy`, it drops to a plain dot with no glyph.
+ *
+ * A passage (ADR-084) is a dot half the size, hollow, in the box of a
+ * question's circle so the row stays on one line: no mark, since reading a
+ * text is not recorded; the accent and its halo where the student is.
  */
 function SegmentDot({ segment, roomy }: { segment: Segment; roomy: boolean }) {
+  if (segment.passage) {
+    return (
+      <span className={cx("flex shrink-0 items-center justify-center", roomy ? "size-5" : "size-2.5")}>
+        <span
+          className={cx(
+            "rounded-full border-fg-faint bg-surface transition-colors duration-150",
+            roomy ? "size-2.5 border-2" : "size-1.5 border",
+            segment.locked && !segment.current && "opacity-45",
+            segment.current && "border-accent! bg-accent! ring-3 ring-accent-soft",
+          )}
+        />
+      </span>
+    );
+  }
   const Glyph = roomy ? SEGMENT_GLYPH[segment.mark] : null;
   return (
     <span
@@ -399,9 +469,21 @@ function rove(e: React.KeyboardEvent, list: HTMLElement | null, current: number,
   buttons[next]?.focus();
 }
 
-/** Two questions already dealt with: the stretch between them is drawn solid. */
-function covered(segment: Segment, next: Segment | undefined): boolean {
-  return segment.mark !== "unanswered" && next !== undefined && next.mark !== "unanswered";
+/**
+ * Whether the entry at `i` is a question already dealt with (answered or
+ * declined). A passage has no mark of its own: it reads as the question it
+ * comes before, so the path runs through it.
+ */
+function dealtWith(segments: readonly Segment[], i: number): boolean {
+  let at = i;
+  while (segments[at]?.passage) at += 1;
+  const segment = segments[at];
+  return segment !== undefined && segment.mark !== "unanswered";
+}
+
+/** The stretch from entry `i` to the next one is drawn solid when both are dealt with. */
+function covered(segments: readonly Segment[], i: number): boolean {
+  return i + 1 < segments.length && dealtWith(segments, i) && dealtWith(segments, i + 1);
 }
 
 /**
@@ -442,6 +524,9 @@ function covered(segment: Segment, next: Segment | undefined): boolean {
  * A multiple that lands within two slots of the last one is dropped, so "30"
  * and "32" never collide. Nothing is lost for a screen reader: the number and
  * the state live in each bar's accessible name, which never thins out.
+ *
+ * A passage (ADR-084, {@link Segment.passage}) takes a slot before its
+ * question, with a smaller dot and no number: the questions keep theirs.
  */
 export function ProgressSegments({
   segments,
@@ -473,6 +558,8 @@ export function ProgressSegments({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+  const numbers = questionNumbers(segments);
+  const count = segments.filter((s) => s.passage === undefined).length;
   const per = width / segments.length;
   const scrolls = width > 0 && per < MIN_SEGMENT;
   const step = scrolls ? 1 : segmentLabelStep(width, segments.length);
@@ -515,14 +602,16 @@ export function ProgressSegments({
       )}
     >
       {segments.map((segment, i) => {
-        const name = segmentName(t, segment, i);
-        const last = segments.length - 1;
+        const n = numbers[i]!;
+        const name = segmentName(t, segment, n);
+        // A passage takes a slot of the strip but never a number.
         const numbered =
-          step === 1 ||
-          i === 0 ||
-          i === last ||
-          i === current ||
-          ((i + 1) % step === 0 && last - i >= 2);
+          segment.passage === undefined &&
+          (step === 1 ||
+            n === 1 ||
+            n === count ||
+            segment.current === true ||
+            (n % step === 0 && count - n >= 2));
         const next = segments[i + 1];
         return (
           <button
@@ -548,11 +637,10 @@ export function ProgressSegments({
               <span
                 className={cx(
                   "absolute -translate-y-1/2",
-                  roomy
-                    ? "top-4 left-[calc(50%+10px)] w-[calc(100%-20px)]"
-                    : "top-2.75 left-[calc(50%+5px)] w-[calc(100%-10px)]",
-                  covered(segment, next) ? "h-0.5 bg-fg" : "h-px bg-line-strong",
+                  roomy ? "top-4" : "top-2.75",
+                  covered(segments, i) ? "h-0.5 bg-fg" : "h-px bg-line-strong",
                 )}
+                style={linkSpan(segment, next, roomy, "x")}
                 data-part="link"
                 aria-hidden
               />
@@ -569,7 +657,7 @@ export function ProgressSegments({
               )}
               aria-hidden
             >
-              {numbered ? i + 1 : null}
+              {numbered ? n : null}
               {segment.flagged ? (
                 <Flag className="size-2.5 shrink-0 fill-current text-warning" aria-hidden />
               ) : null}
@@ -590,7 +678,8 @@ export function ProgressSegments({
  * nothing compresses. A long paper scrolls inside the list — it is given a
  * bounded height by its column — and keeps the current question in view.
  *
- * Roving tabindex like the strip, ↑/↓ added.
+ * Roving tabindex like the strip, ↑/↓ added. A passage (ADR-084) is a row of
+ * its own above its question: the small dot and the text's title.
  */
 export function ProgressList({
   segments,
@@ -616,6 +705,7 @@ export function ProgressList({
       el.scrollTop = button.offsetTop + button.offsetHeight - el.clientHeight;
   }, [current]);
   const fade = useScrollFade(list, `${segments.length}`);
+  const numbers = questionNumbers(segments);
   return (
     <nav
       ref={list}
@@ -627,7 +717,8 @@ export function ProgressList({
       className={cx("relative flex flex-col overflow-y-auto overscroll-contain p-1", className)}
     >
       {segments.map((segment, i) => {
-        const name = segmentName(t, segment, i);
+        const n = numbers[i]!;
+        const name = segmentName(t, segment, n);
         const next = segments[i + 1];
         return (
           <button
@@ -649,26 +740,32 @@ export function ProgressList({
             {next ? (
               <span
                 className={cx(
-                  "absolute top-[calc(50%+10px)] h-[calc(100%-20px)]",
+                  "absolute",
                   // Centred under the circle: the row's 8 px padding, then
                   // half the 20 px circle, less half the stroke.
-                  covered(segment, next)
+                  covered(segments, i)
                     ? "left-[17px] w-0.5 bg-fg"
                     : "left-[17.5px] w-px bg-line-strong",
                 )}
+                style={linkSpan(segment, next, true, "y")}
                 data-part="link"
                 aria-hidden
               />
             ) : null}
+            {/* A passage reads one step quieter than a question: its title,
+                at the caption size, never a number. */}
             <span
               className={cx(
-                "min-w-0 flex-1 truncate tabular-nums",
+                "min-w-0 flex-1 truncate",
+                segment.passage ? "text-[12px]" : "tabular-nums",
                 segment.current ? "font-semibold text-accent" : "text-fg-muted",
                 segment.locked && !segment.current && "opacity-45",
               )}
               aria-hidden
             >
-              {t("player.question", { n: i + 1 })}
+              {segment.passage
+                ? passageTitle(t, segment.passage)
+                : t("player.question", { n })}
             </span>
             {segment.flagged ? (
               <Flag className="size-3.5 shrink-0 fill-current text-warning" aria-hidden />

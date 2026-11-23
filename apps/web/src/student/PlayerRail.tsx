@@ -20,18 +20,20 @@ export function PlayerRail({
   segments,
   onSelect,
   label,
+  number,
   points,
   children,
 }: {
   segments: Segment[];
   onSelect: (id: string) => void;
   label: string;
+  /** The question on screen's number, 1-based: what its line under the list says. */
+  number: number;
   /** Absent while the passage before the question is up (ADR-084): nothing to score yet. */
   points?: number;
   children?: ReactNode;
 }) {
   const t = useT();
-  const index = segments.findIndex((s) => s.current === true);
   return (
     <>
       <ProgressList
@@ -44,7 +46,7 @@ export function PlayerRail({
       {points === undefined ? null : (
         <div className="border-t border-line pt-4">
           <p className="text-[13px] text-fg-muted">
-            <span className="font-semibold text-fg">{t("player.question", { n: index + 1 })}</span>
+            <span className="font-semibold text-fg">{t("player.question", { n: number })}</span>
             {" · "}
             {pointsLabel(t, points)}
           </p>

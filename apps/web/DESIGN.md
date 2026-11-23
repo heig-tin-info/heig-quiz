@@ -896,6 +896,16 @@ live in `ui/state.ts`, each written once.
   GAP it would fill (row hover, its own focus, or always under a coarse
   pointer), because a section break is a thing you put BETWEEN two rows, not
   a property you tick on one.
+- Text band (ADR-084): the text before an item, the same recessed band but
+  ABOVE the row it precedes — `BookOpen` and the eyebrow "Text before the
+  question" in 11 px uppercase `fg-muted`, then, folded, the text's title
+  (its first heading, semibold) and its first paragraph in 13 px `fg`, two
+  lines at most and never its code. The whole band but its pencil and its ×
+  is ONE button with `aria-expanded` and a faint chevron at its end that
+  turns over, like a `Disclosure`: open, the text follows under it as the
+  student reads it (`MarkdownView` in a card), and a click on that text
+  folds it back unless it selected words or hit a link. Folded by default,
+  never remembered.
 - Settings row: label and the description of the current choice on the left,
   the control on the right. The row wraps rather than squeezing — the text
   keeps a 14 rem floor, so a segmented control or a select drops to its own
@@ -1220,6 +1230,15 @@ live in `ui/state.ts`, each written once.
   under `prefers-reduced-motion` (nor on the first load). Its hidden sides
   fade like the Tabs strip's (`useScrollFade`). Nothing is lost: the number and the state
   live in each circle's accessible name, which never thins out.
+  A text before a question (ADR-084) takes a slot of its own just before
+  that question: a hollow `fg-faint` dot HALF the size (10 px, 6 px
+  compressed) centred in a question's box, no glyph, no number — the
+  questions keep theirs — since reading a text is not recorded. Current,
+  it is a solid accent dot with the 3 px halo; closed, 45 %. The connectors
+  run edge to edge into it, and for the path covered it reads as the
+  question after it: it has no mark of its own. Its accessible name is its
+  title (the text's first heading, else "Text") and the question it comes
+  before.
 - ProgressList: the same question list, standing — the zen player's side
   column from 1024 px of viewport up. A laptop has width to spare and height
   to none, so the list and what the current question is worth move out of
@@ -1234,13 +1253,17 @@ live in `ui/state.ts`, each written once.
   (drawn down), same accessible names as the strip; each row adds
   "Question n" in words, so nothing thins out and nothing compresses — a
   long paper scrolls inside the list, which keeps the current row in view.
+  A text's row carries its small dot and its title in 12 px instead,
+  the caption step: it reads one step quieter than the questions around it.
   Roving on ↑/↓ (the rows stand, and stop at the ends), ←/→ stepping with
   wrap as on the strip, Home and End. Under the list, a hairline,
   then the current question's own line — "Question n · p points" — and
   the move keys (`Alt` + ←/→) in `Kbd`. The flag stays in the card's
   corner, "Leave unanswered" and "Clear" under the question: they act on
   the question and its answer, not on the list. One question, or under
-  1024 px, the column is absent and the strip is back in the bar.
+  1024 px, the column is absent and the strip is back in the bar; one
+  question with a text before it keeps its list while the text can still
+  be opened.
 - Wide question (`QuestionTypeClient.wide`, ADR-066): the one exception to
   the 760 px, for a statement that must stay in sight beside a program —
   `code` and `codeimage`. From 1024 px of viewport its column takes the room

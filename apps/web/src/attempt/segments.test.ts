@@ -122,6 +122,41 @@ describe("segmentsOf", () => {
     ]);
   });
 
+  describe("a text before a question (ADR-084)", () => {
+    const intro = "Consignes générales.\n\n## Partie *2*\n\n```c\n# include\n```";
+    const paper = (navigation: Navigation, index: number, passed: Record<string, true>): PlayerState => ({
+      navigation,
+      index,
+      items: [item("i0"), item("i1", { intro }), item("i2", { intro: "Sans titre." })],
+      answers: { i0: "x", i1: "y" },
+      passed,
+    });
+
+    it("gets an entry before its question, titled by the first heading, with no mark of its own", () => {
+      expect(segmentsOf(paper("free", 0, {}), answered)).toEqual([
+        { id: "i0", mark: "answered", current: true, flagged: false, locked: false },
+        { id: "intro:i1", mark: "unanswered", current: false, locked: false, passage: { title: "Partie 2" } },
+        { id: "i1", mark: "answered", current: false, flagged: false, locked: false },
+        { id: "intro:i2", mark: "unanswered", current: false, locked: false, passage: { title: null } },
+        { id: "i2", mark: "unanswered", current: false, flagged: false, locked: false },
+      ]);
+    });
+
+    it("is the current entry while the passage is on screen, its question once passed", () => {
+      const current = (s: PlayerState) => segmentsOf(s, answered).filter((x) => x.current).map((x) => x.id);
+      expect(current(paper("free", 1, {}))).toEqual(["intro:i1"]);
+      expect(current(paper("free", 1, { i1: true }))).toEqual(["i1"]);
+    });
+
+    it("is closed once passed outside free navigation, never in free", () => {
+      const lockOf = (navigation: Navigation) =>
+        segmentsOf(paper(navigation, 2, { i1: true }), answered).find((x) => x.id === "intro:i1")?.locked;
+      expect(lockOf("free")).toBe(false);
+      expect(lockOf("forward_only")).toBe(true);
+      expect(lockOf("milestones")).toBe(true);
+    });
+  });
+
   it("an empty attempt has an empty strip", () => {
     expect(segmentsOf({ navigation: "free", index: 0, items: [], answers: {}, passed: {} }, answered)).toEqual([]);
   });
