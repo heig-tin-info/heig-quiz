@@ -756,8 +756,8 @@ export function ImpersonationBanner({ me, children }: { me: Me; children: ReactN
   );
 }
 
-/** The height of one mode banner; `--banner-h` is the sum of the banners above the frame. */
-const BANNER_HEIGHT = "2rem";
+/** The height of one mode banner (style.css); `--banner-h` is the sum of the banners above the frame. */
+const BANNER_HEIGHT = "var(--banner-height)";
 
 /** The fill of each tone, with its ink, the pill's hairline and its focus ring. */
 const BANNER_TONE = {
@@ -824,7 +824,7 @@ export function ModeBanner({
         // style.css paints the top of the page's scrollbar in this tone.
         data-mode-banner={tone}
         className={cx(
-          "sticky top-(--banner-top) flex h-8 items-center gap-2 px-4 text-xs font-medium [&>svg]:size-3.5 [&>svg]:shrink-0",
+          "sticky top-(--banner-top) flex h-(--banner-height) items-center gap-2 px-4 text-xs font-medium [&>svg]:size-3.5 [&>svg]:shrink-0",
           BANNER_TONE[tone],
           Z.banner,
         )}

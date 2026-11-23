@@ -13,6 +13,7 @@ import { makeMe } from "../test/fixtures";
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { viewport } from "../test/viewport";
 import { AttemptPage } from "./Attempt";
+import { isWide } from "./QuestionHost";
 
 /*
  * Every render of the question host is counted, so a test can prove that the
@@ -161,6 +162,24 @@ describe("the zen player on a wide screen", () => {
     // A row of the list moves, like a circle of the strip.
     await userEvent.click(within(list).getByRole("button", { name: /^Question 3,/ }));
     expect(await screen.findByText("Question 3", { selector: "p" })).toBeInTheDocument();
+  });
+
+  it("reads a text in the text's column, even before a wide question (ADR-084)", async () => {
+    viewport(1280);
+    expect(isWide("code")).toBe(true);
+    const view = attemptView({ lastItemId: "i3" });
+    const coded = {
+      ...view,
+      items: view.items.map((item) =>
+        item.id === "i3" ? { ...item, type: "code", intro: "Lisez le listing.", answer: null } : item,
+      ),
+    };
+    stubs(coded);
+    const { container } = render(coded);
+    expect(await screen.findByText("Avant la question 3")).toBeInTheDocument();
+    const main = container.querySelector("main")!;
+    expect(main).toHaveClass("max-w-190");
+    expect(main).not.toHaveClass("max-w-400");
   });
 
   it("draws no side column for a single question: nothing to list", async () => {

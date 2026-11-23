@@ -501,6 +501,15 @@ describe("playerReducer: a section's text (ADR-143)", () => {
     }
   });
 
+  it("forward_only: a question chosen from the text passes it, one way", () => {
+    let state = load(view("forward_only", paper(), "i2"));
+    expect(passage(state)?.key).toBe("i2");
+    state = playerReducer(state, { type: "goto", itemId: "i4" });
+    expect(currentItem(state)?.id).toBe("i4");
+    expect(passageOf(state)).toBeNull();
+    expect(introReachable(state, "i2")).toBe(false);
+  });
+
   it("still shows the text first to a student arriving from outside the section", () => {
     let state = load(view("free", paper(), "i2"));
     state = playerReducer(state, { type: "goto", itemId: "i1" });
