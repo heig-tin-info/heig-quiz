@@ -253,15 +253,14 @@ export async function setItemCounting(
  * (ADR-143, `textOnRemoval`), so the section survives its first question.
  * One transaction under the evaluation's row lock (a template's is already
  * held by `editTemplate`): the move, the removal and the renumbering land
- * together or not at all.
+ * together or not at all. The gate is read under the lock, attempts
+ * recounted there: a count read before it may be stale (as in
+ * `setItemCounting`).
  */
 export async function deleteItem(
   db: DbOrTx,
   row: EvaluationRecord,
   itemId: string,
-  // The gate is read under the lock, attempts recounted there: the count the
-  // route read before it may be stale (as in `setItemCounting`).
-  _ctx: { attemptCount: number },
 ): Promise<ItemRow[]> {
   await db.transaction(async (tx) => {
     const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, row.id)).for("update");

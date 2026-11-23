@@ -421,7 +421,7 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
         scope.evaluation,
         "evaluation.items_update",
         { removed: params.itemId },
-        (ctx) => service.deleteItem(app.db, scope.evaluation, params.itemId, ctx),
+        () => service.deleteItem(app.db, scope.evaluation, params.itemId),
       );
       return reply.code(204).send();
     }),
@@ -629,8 +629,8 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
     "/app/api/templates/:id/items/:itemId",
     { preHandler: requireTeacher },
     teacher({ params: ItemParam, load: staffTemplate }, ({ req, params, scope }) =>
-      templateWrite(req, scope.template, { removed: params.itemId }, (tx, row, ctx) =>
-        service.deleteItem(tx, row, params.itemId, ctx),
+      templateWrite(req, scope.template, { removed: params.itemId }, (tx, row) =>
+        service.deleteItem(tx, row, params.itemId),
       ),
     ),
   );
