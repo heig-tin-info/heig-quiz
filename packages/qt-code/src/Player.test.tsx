@@ -315,7 +315,8 @@ describe("the student's tools", () => {
     const stderr = Array.from({ length: 200 }, (_, i) => `main.c:${i}: error: oops`).join("\n");
     setup({ onRun: async () => outcome([], { ok: false, stderr }) });
     fireEvent.click(screen.getByRole("button", { name: "Compile" }));
-    const box = await screen.findByText(/main\.c:199: error: oops/);
+    await screen.findByText(/main\.c:199: error: oops/);
+    const box = screen.getByRole("region", { name: "Compilation failed" });
     expect(box.className).toMatch(/max-h-/);
     expect(box.className).toMatch(/overflow-y-auto/);
     expect(box).toHaveAttribute("tabindex", "0");

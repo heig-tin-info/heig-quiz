@@ -439,6 +439,8 @@ export function RunStatus({
           {outcome.compile.ok || outcome.compile.stderr === "" ? null : (
             <code
               tabIndex={0}
+              role="region"
+              aria-label={s.compileFailed}
               className="mt-1 block max-h-[min(12rem,25dvh)] overflow-y-auto whitespace-pre-wrap font-mono text-[13px] text-danger [scrollbar-width:thin]"
             >
               {outcome.compile.stderr}
