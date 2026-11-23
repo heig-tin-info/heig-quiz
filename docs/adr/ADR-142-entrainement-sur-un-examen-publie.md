@@ -66,6 +66,8 @@ a kiosk station, an IP allow-list — which a revision at home cannot meet.
    hidden test case of a `code`, `circuit` or `blocks` question keeps its
    verdict and points in every correction (ADR-096), so repeated attempts
    tell which hidden cases a program passes, never their input or output.
+   The product owner accepted this limit on 2026-11-23, rather than hiding
+   the per-case detail in practice or keeping such exams out of it.
 3. **Who.** Only a student with a FINISHED OFFICIAL attempt on that exam
    (`officialAttempt`: not a practice one, not one a paper copy replaced) —
    `409 practice_refused`, `not_taken` otherwise. An absent or excused
