@@ -1205,7 +1205,7 @@ describe("the text before a question (ADR-084)", () => {
     expect(screen.queryByText(/ne sera plus affiché/)).toBeNull();
 
     // The text has its own entry in the question list, current while it is up.
-    expect(screen.getByRole("button", { name: "Texte, avant la question 3, en cours" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Texte, en cours" })).toBeInTheDocument();
 
     await userEvent.click(go);
     expect(await screen.findByText("Question 3")).toBeInTheDocument();
@@ -1213,7 +1213,7 @@ describe("the text before a question (ADR-084)", () => {
     // Free navigation: the entry brings the text back, from any question.
     await userEvent.keyboard("{Alt>}{ArrowLeft}{/Alt}");
     expect(await screen.findByText("Question 2")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Texte, avant la question 3" }));
+    await userEvent.click(screen.getByRole("button", { name: "Texte" }));
     expect(await screen.findByText("Avant la question 3")).toBeInTheDocument();
   });
 
@@ -1225,7 +1225,7 @@ describe("the text before a question (ADR-084)", () => {
     expect(screen.getByText(/ce texte ne sera plus affiché/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
     expect(await screen.findByText("Question 3")).toBeInTheDocument();
-    const entry = screen.getByRole("button", { name: "Texte, avant la question 3, fermé" });
+    const entry = screen.getByRole("button", { name: "Texte, fermé" });
     await userEvent.click(entry);
     expect(screen.queryByText("Avant la question 3")).toBeNull();
     expect(screen.getByText("Question 3")).toBeInTheDocument();
@@ -1240,7 +1240,7 @@ describe("the text before a question (ADR-084)", () => {
     stubs(titled);
     render(titled);
     await screen.findByText("Question 2");
-    await userEvent.click(screen.getByRole("button", { name: "Partie 2, avant la question 3" }));
+    await userEvent.click(screen.getByRole("button", { name: "Partie 2" }));
     expect(await screen.findByText("Avant la question 3")).toBeInTheDocument();
   });
 
@@ -1251,7 +1251,7 @@ describe("the text before a question (ADR-084)", () => {
     render(view);
     // Already answered: the text is behind the student, the question up.
     expect(await screen.findByText("Question 1")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Texte, avant la question 1" }));
+    await userEvent.click(screen.getByRole("button", { name: "Texte" }));
     expect(await screen.findByText("Avant la question 1")).toBeInTheDocument();
   });
 
@@ -1260,7 +1260,7 @@ describe("the text before a question (ADR-084)", () => {
     const view = { ...one, items: [{ ...one.items[0]!, intro: INTRO, answer: null }] };
     stubs(view);
     render(view);
-    expect(await screen.findByRole("button", { name: "Texte, avant la question 1, en cours" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Texte, en cours" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
     expect(await screen.findByText("Question 1")).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: /^Progression/ })).toBeNull();
@@ -1276,8 +1276,11 @@ describe("the text before a question (ADR-084)", () => {
     render(started);
     expect(await screen.findByText("Question 2")).toBeInTheDocument();
     expect(screen.queryByText("Avant la question 2")).toBeNull();
-    // Still there to read again from its entry, under free navigation.
-    expect(screen.getByRole("button", { name: "Texte, avant la question 2" })).toBeInTheDocument();
+    // Still there to read again from its entry, under free navigation: the
+    // first of the two texts' entries, before question 2's own.
+    const entries = screen.getAllByRole("button", { name: "Texte" });
+    expect(entries).toHaveLength(2);
+    expect(entries[0]!.nextElementSibling).toHaveAccessibleName(/^Question 2,/);
   });
 
   it("shows a section's text on arriving at any of its questions, naming them, then that question (ADR-143)", async () => {
@@ -1299,7 +1302,7 @@ describe("the text before a question (ADR-084)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
     expect(await screen.findByText("Question 3")).toBeInTheDocument();
     // Reread from the question it applies to: back to that question after.
-    await userEvent.click(screen.getByRole("button", { name: "Partie 2, avant la question 2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Partie 2" }));
     expect(await screen.findByText("Questions 2 à 3")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
     expect(await screen.findByText("Question 3")).toBeInTheDocument();

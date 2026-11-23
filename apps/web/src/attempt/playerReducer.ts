@@ -94,7 +94,15 @@ export type PlayerAction =
    * hand the editor back an older text.
    */
   | { type: "load"; view: AttemptView; unsaved?: ReadonlySet<string> }
+  /**
+   * A question chosen from the list. Chosen while a passage is on screen, it
+   * passes that passage when it would show it again ({@link arrive}).
+   */
   | { type: "goto"; itemId: string }
+  /**
+   * The arrows. +1 while a passage is on screen is its Continue: the student
+   * lands on the question under the text, the index unchanged.
+   */
   | { type: "move"; delta: 1 | -1 }
   /**
    * `answered`: the payload holds something (the type's `isAnswered`), which
@@ -221,9 +229,11 @@ function spanOf(state: PlayerState, section: string): { from: number; to: number
  * until Continue; a section's text (ADR-143) shows on arriving at ANY item of
  * its section until it is passed — Continue, or an item of the section
  * started — so a student jumping to its third question reads it first, and
- * then that question's own text if it has one. What differs between
- * navigations is only whether the list can bring a text back
- * ({@link introReachable}).
+ * then that question's own text if it has one. A question chosen, or the
+ * arrow forward, while a text is on screen passes that text when the
+ * question would show it again ({@link arrive}): the student read it and
+ * asked for the question. What differs between navigations is only whether
+ * the list can bring a text back ({@link introReachable}).
  */
 export function passage(state: PlayerState): Passage | null {
   const item = currentItem(state);
@@ -352,6 +362,24 @@ export function segmentsOf(
   });
 }
 
+/** The text of `key` passed; the SAME state when it already was. */
+function pass(state: PlayerState, key: string): PlayerState {
+  return state.passed[key] === true ? state : { ...state, passed: { ...state.passed, [key]: true } };
+}
+
+/**
+ * The student moves to `index`. With a passage on screen that the question
+ * at `index` would show again — the same section's text, or the item's own
+ * text for the item on screen — the student has the text in front of them
+ * and asked for the question: the text is passed, as Continue would. Coming
+ * from anywhere else, the first-arrival rule of {@link passage} holds.
+ */
+function arrive(state: PlayerState, index: number): PlayerState {
+  const reading = passage(state);
+  const next = { ...state, index };
+  return reading !== null && passage(next)?.key === reading.key ? pass(next, reading.key) : next;
+}
+
 /** One item's own fields, replaced; the SAME state when nothing moved. */
 function patchItem(state: PlayerState, itemId: string, patch: Partial<PlayerItem>): PlayerState {
   let changed = false;
@@ -418,8 +446,7 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       };
     }
     case "pass":
-      if (state.passed[action.itemId] === true) return state;
-      return { ...state, passed: { ...state.passed, [action.itemId]: true } };
+      return pass(state, action.itemId);
     case "intro": {
       if (!introReachable(state, action.itemId)) return state;
       // Already on screen: nothing moves.
@@ -430,9 +457,11 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
     case "goto": {
       const index = state.items.findIndex((i) => i.id === action.itemId);
       if (index < 0 || !canReach(state, index)) return state;
-      return { ...state, index };
+      return arrive(state, index);
     }
     case "move": {
+      const reading = action.delta === 1 ? passage(state) : null;
+      if (reading !== null) return pass(state, reading.key);
       const index = neighbour(state, action.delta);
       return index === null ? state : { ...state, index };
     }

@@ -306,6 +306,9 @@ html.dark {
 @layer base {
   html {
     @apply antialiased;
+    /* The page's scrollbar keeps its room whether the page overflows or not:
+       two pages, one long and one short, put their content at the same x. */
+    scrollbar-gutter: stable;
     /* Native widgets (datetime pickers, scrollbars) follow the theme instead
        of popping up as a white square over a dark UI. */
     color-scheme: light;
@@ -357,6 +360,25 @@ html.dark {
   }
   ::-webkit-scrollbar-track {
     background: transparent;
+  }
+  /* A mode banner (`ModeBanner`, Shell.tsx) runs edge to edge: the page's
+     scrollbar beside it takes its fill over the banner's height, or a strip
+     of canvas cuts the banner off on hosts that draw classic scrollbars.
+     While a banner is up the page keeps a track, so a short page's gutter
+     gets the same fill (a layer's scroll lock, on the root's inline style,
+     still wins). Chromium styles the viewport's scrollbar from `body`, and
+     paints no image of the root's background under it. One banner's
+     height; Firefox styles no part of a track and keeps the gap. */
+  @supports selector(::-webkit-scrollbar) {
+    html:has([data-mode-banner]) {
+      overflow-y: scroll;
+    }
+    body:has([data-mode-banner="mode"])::-webkit-scrollbar-track {
+      background: linear-gradient(var(--fg) 2rem, transparent 2rem);
+    }
+    body:has([data-mode-banner="danger"])::-webkit-scrollbar-track {
+      background: linear-gradient(var(--danger) 2rem, transparent 2rem);
+    }
   }
 }
 

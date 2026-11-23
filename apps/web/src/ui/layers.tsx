@@ -304,13 +304,19 @@ export function useLayer(
   }, [enabled, trap, escape, panel]);
 }
 
-/** Locks the page scroll while a floating layer is open. */
+/**
+ * Locks the page scroll while a floating layer is open — on the root, which
+ * owns the viewport's overflow: under a mode banner the root asks for a
+ * scrollbar (style.css), and a body's own overflow no longer reaches the
+ * viewport then.
+ */
 export function useScrollLock() {
   useLayoutEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const root = document.documentElement;
+    const prev = root.style.overflow;
+    root.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      root.style.overflow = prev;
     };
   }, []);
 }

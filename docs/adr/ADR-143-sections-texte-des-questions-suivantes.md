@@ -90,6 +90,20 @@ of the part never reads it.
    text, or turning the switch off, asks nothing more than removing any
    text does: the switch is reversible and the band shows its effect.
 
+### Amendment 2026-11-23: a question chosen from the text
+
+Decided by the product owner, 2026-11-23, after a template preview where
+the questions of a section could not be reached from its text. §5: a
+question chosen from the list while a text is on screen, when that
+question would show the same text (another question of the section, or
+the item on screen for its own text), passes the text as Continue does:
+the student has it in front of them and asked for the question. The arrow
+forward (Alt+→) on a text is its Continue, on the question under it; the
+arrow back is unchanged. Arriving at a question of a section from outside
+it still shows the section's text first. One rule in the player's reducer
+(`arrive`, `apps/web/src/attempt/playerReducer.ts`); under `forward_only`
+and `milestones` the text so passed is not reopened, as after Continue.
+
 ## Consequences
 
 - One column, one optional field of the patch, one field of the attempt's

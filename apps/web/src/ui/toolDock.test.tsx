@@ -52,7 +52,7 @@ describe("ToolDock", () => {
     dock(false);
     await userEvent.click(screen.getByRole("button", { name: "Open tool" }));
     expect(screen.getByRole("dialog", { name: "Tool" })).toHaveAttribute("aria-modal", "false");
-    expect(document.body.style.overflow).toBe("");
+    expect(document.documentElement.style.overflow).toBe("");
   });
 
   it("with sheetOnPhone, stays a floating panel on a screen that is not a phone's", async () => {
@@ -72,10 +72,10 @@ describe("ToolDock", () => {
     expect(panel).toHaveAttribute("aria-modal", "true");
     expect(panel.className).toContain("inset-x-0");
     expect(panel.contains(document.activeElement)).toBe(true);
-    expect(document.body.style.overflow).toBe("hidden");
+    expect(document.documentElement.style.overflow).toBe("hidden");
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(document.body.style.overflow).toBe("");
+    expect(document.documentElement.style.overflow).toBe("");
     expect(trigger).toHaveFocus();
   });
 
@@ -87,7 +87,7 @@ describe("ToolDock", () => {
     expect(panel).toHaveAttribute("aria-modal", "true");
     expect(panel.className).toContain("inset-x-0");
     expect(panel.className).not.toContain("w-80");
-    expect(document.body.style.overflow).toBe("hidden");
+    expect(document.documentElement.style.overflow).toBe("hidden");
   });
 
   it("fits the sheet into what a soft keyboard leaves of the window (#849)", async () => {
@@ -118,7 +118,7 @@ describe("ToolDock", () => {
     rerender(tool(true));
     expect(screen.getByRole("dialog", { name: "Tool" })).toHaveAttribute("aria-modal", "true");
     expect(screen.getByRole("textbox", { name: "Field" })).toHaveFocus();
-    expect(document.body.style.overflow).toBe("hidden");
+    expect(document.documentElement.style.overflow).toBe("hidden");
   });
 
   it("keeps the floating panel it opened as while the phone rotates to landscape: no trap mid-typing", async () => {
@@ -129,7 +129,7 @@ describe("ToolDock", () => {
     rerender(tool(true));
     expect(screen.getByRole("dialog", { name: "Tool" })).toHaveAttribute("aria-modal", "false");
     expect(screen.getByRole("textbox", { name: "Field" })).toHaveFocus();
-    expect(document.body.style.overflow).toBe("");
+    expect(document.documentElement.style.overflow).toBe("");
   });
 
   it("decides again at the next opening", async () => {

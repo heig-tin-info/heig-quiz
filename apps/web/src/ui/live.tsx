@@ -440,7 +440,7 @@ const passageTitle = (t: TFunction, passage: { title: string | null }): string =
 
 /**
  * The accessible name of an entry of the paper: a question's number and every
- * fact of it, in words; a passage's title and the question it comes before.
+ * fact of it, in words; a passage's title and its facts, as a question's.
  * `n` is the entry's {@link questionNumbers} value.
  */
 function segmentName(t: TFunction, segment: Segment, n: number): string {
@@ -448,7 +448,7 @@ function segmentName(t: TFunction, segment: Segment, n: number): string {
   if (segment.passage) {
     // "Closed" agrees with the text (masculine in French), not the question.
     return [
-      t("segments.passage", { title: passageTitle(t, segment.passage), n }),
+      passageTitle(t, segment.passage),
       ...(segment.locked ? [t("segments.passageLocked")] : []),
       ...current,
     ].join(", ");

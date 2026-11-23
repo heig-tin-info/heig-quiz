@@ -821,6 +821,8 @@ export function ModeBanner({
       <div
         role="region"
         aria-label={message}
+        // style.css paints the top of the page's scrollbar in this tone.
+        data-mode-banner={tone}
         className={cx(
           "sticky top-(--banner-top) flex h-8 items-center gap-2 px-4 text-xs font-medium [&>svg]:size-3.5 [&>svg]:shrink-0",
           BANNER_TONE[tone],

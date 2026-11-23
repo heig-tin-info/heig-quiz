@@ -138,7 +138,7 @@ Your teacher chooses one of three rules, and the waiting room names the one in f
 - **One way through**: a question you validate cannot be opened again.
 - **Checkpoints**: the list has milestones. Passing one closes every question before it, and you do not come back. The player asks for confirmation before you cross a milestone.
 
-Your teacher may put a text before a question: instructions, a transition, something to read. It shows as a page of its own, **Before question 3**, with a **Continue** button, and has a small dot of its own in the question list, just before its question, named by the text's title. Under free navigation, that dot brings the text back; otherwise the page tells you that once you continue, you will not be able to read it again.
+Your teacher may put a text before a question: instructions, a transition, something to read. It shows as a page of its own, **Before question 3**, with a **Continue** button, and has a small dot of its own in the question list, just before its question, named by the text's title. Under free navigation, that dot brings the text back; otherwise the page tells you that once you continue, you will not be able to read it again. Choosing a question of that text in the list, or **Alt+→**, works like **Continue**.
 
 A question counts as **answered** as soon as it holds an answer: there is nothing to click, and the header of the question reads **Answered**. The rest is quiet:
 
