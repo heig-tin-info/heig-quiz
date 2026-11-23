@@ -31,7 +31,8 @@ export function PlayerRail({
   children?: ReactNode;
 }) {
   const t = useT();
-  const index = segments.findIndex((s) => s.current === true);
+  // Counted over the questions: a passage's entry (ADR-084) takes no number.
+  const index = segments.filter((s) => s.passage === undefined).findIndex((s) => s.current === true);
   return (
     <>
       <ProgressList

@@ -119,6 +119,8 @@ export const common = {
   "segments.flagged": "flagged for review",
   "segments.locked": "closed",
   "segments.current": "current",
+  "segments.passage": "{title}, before question {n}",
+  "segments.text": "Text",
   "verdict.blank": "Not started",
   "verdict.inProgress": "In progress",
   "verdict.answered": "Answered",

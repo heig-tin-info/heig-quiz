@@ -4,15 +4,16 @@ import type { AttemptView } from "@quiz/contracts";
 
 import {
   canReach,
-  canReread,
   currentItem,
   emptyPlayerState,
+  introReachable,
   isLocked,
   isWritable,
   lockedIds,
   neighbour,
   passageOf,
   playerReducer,
+  selectEntry,
   type PlayerState,
 } from "./playerReducer";
 
@@ -290,31 +291,57 @@ describe("playerReducer: replacing one item (ADR-018, sixth addendum)", () => {
 describe("playerReducer: the text before an item (ADR-084)", () => {
   const intro = "Read chapter 8.";
 
-  it("shows the intro of the item on screen until it is passed; free navigation rereads it", () => {
+  it("shows the intro of the item on screen until it is passed; free navigation reopens it from anywhere", () => {
     let state = load(view("free", [item(1, { intro }), item(2)]));
     expect(passageOf(state)).toBe(intro);
-    expect(canReread(state)).toBe(false);
     state = playerReducer(state, { type: "pass", itemId: "i1" });
     expect(passageOf(state)).toBeNull();
-    expect(canReread(state)).toBe(true);
-    // Moving away and back keeps it passed.
+    expect(introReachable(state, "i1")).toBe(true);
+    // Moving away and back keeps it passed: the arrows step over passages.
     state = playerReducer(state, { type: "move", delta: 1 });
     state = playerReducer(state, { type: "move", delta: -1 });
     expect(passageOf(state)).toBeNull();
-    state = playerReducer(state, { type: "reread", itemId: "i1" });
+    // Its entry in the list, chosen from question 2: back to item 1, the text up.
+    state = playerReducer(state, { type: "move", delta: 1 });
+    state = playerReducer(state, selectEntry("intro:i1"));
+    expect(currentItem(state)?.id).toBe("i1");
     expect(passageOf(state)).toBe(intro);
   });
 
-  it("cannot be reread once passed outside free navigation", () => {
+  it("cannot be reopened once passed outside free navigation", () => {
     for (const navigation of ["forward_only", "milestones"] as const) {
-      const state = playerReducer(load(view(navigation, [item(1, { intro }), item(2)])), {
+      let state = playerReducer(load(view(navigation, [item(1, { intro }), item(2)])), {
         type: "pass",
         itemId: "i1",
       });
-      expect(canReread(state)).toBe(false);
-      expect(playerReducer(state, { type: "reread", itemId: "i1" })).toBe(state);
+      expect(introReachable(state, "i1")).toBe(false);
+      expect(playerReducer(state, { type: "intro", itemId: "i1" })).toBe(state);
+      state = playerReducer(state, { type: "move", delta: 1 });
+      expect(playerReducer(state, selectEntry("intro:i1"))).toBe(state);
       expect(passageOf(state)).toBeNull();
     }
+  });
+
+  it("outside free navigation, leads to a text not reached yet like its question's entry would", () => {
+    const state = load(view("forward_only", [item(1), item(2, { intro }), item(3)]));
+    expect(introReachable(state, "i2")).toBe(true);
+    const next = playerReducer(state, selectEntry("intro:i2"));
+    expect(currentItem(next)?.id).toBe("i2");
+    expect(passageOf(next)).toBe(intro);
+    // Behind a validated question, it is closed with it.
+    const closed = load(view("forward_only", [item(1), item(2, { intro, markedDone: true }), item(3)], "i3"));
+    expect(introReachable(closed, "i2")).toBe(false);
+  });
+
+  it("is a no-op on the passage already on screen, and for an item without a text", () => {
+    const state = load(view("free", [item(1, { intro }), item(2)]));
+    expect(playerReducer(state, selectEntry("intro:i1"))).toBe(state);
+    expect(playerReducer(state, { type: "intro", itemId: "i2" })).toBe(state);
+  });
+
+  it("selects a question's entry as a plain goto", () => {
+    expect(selectEntry("i2")).toEqual({ type: "goto", itemId: "i2" });
+    expect(selectEntry("intro:i2")).toEqual({ type: "intro", itemId: "i2" });
   });
 
   it("is passed on load for an item already started, and stays passed across a refetch", () => {

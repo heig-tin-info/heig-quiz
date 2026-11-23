@@ -115,6 +115,8 @@ export const common: Record<keyof typeof en, string> = {
   "segments.flagged": "marquée à revoir",
   "segments.locked": "fermée",
   "segments.current": "en cours",
+  "segments.passage": "{title}, avant la question {n}",
+  "segments.text": "Texte",
   "verdict.blank": "Non commencée",
   "verdict.inProgress": "En cours",
   "verdict.answered": "Répondue",

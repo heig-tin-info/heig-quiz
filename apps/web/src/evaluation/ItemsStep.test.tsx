@@ -299,6 +299,54 @@ describe("ItemsStep — the text before an item (ADR-084)", () => {
     );
   });
 
+  it("folds the text to its title and first paragraph, and unfolds it as the student reads it", async () => {
+    const user = userEvent.setup();
+    const source = "## Partie 2\n\nLisez le **programme** ci-dessous.\n\n```c\nint main(void);\n```";
+    mockFetch({});
+    renderWithProviders(
+      <ItemsStep
+        target={target}
+        lock={itemListLock("running", 2)}
+        detail={makeEvaluationDetail({ items: [frozen, makeItemRow(1, { internalName: "array-decay", intro: source })] })}
+        navigate={vi.fn()}
+      />,
+    );
+    const row = rowOf("array-decay");
+    const toggle = within(row).getByRole("button", { expanded: false });
+    // Folded: the title and the words of the first paragraph, never the code.
+    expect(toggle).toHaveTextContent("Partie 2 · Lisez le programme ci-dessous.");
+    expect(row.querySelector("pre")).toBeNull();
+
+    // Locked or not, the text can be read: a click unfolds it, rendered.
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(within(row).getByRole("heading", { name: "Partie 2" })).toBeInTheDocument();
+    expect(within(row).getByText("programme").tagName).toBe("STRONG");
+    expect(row.querySelector("pre code")).toHaveTextContent("int main(void);");
+    // A second click folds it back; the keyboard has the same button.
+    toggle.focus();
+    await user.keyboard("{Enter}");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(row.querySelector("pre")).toBeNull();
+  });
+
+  it("keeps the pencil out of the toggle", async () => {
+    const user = userEvent.setup();
+    mockFetch({});
+    renderWithProviders(
+      <ItemsStep
+        target={target}
+        lock={null}
+        detail={makeEvaluationDetail({ items: [frozen, makeItemRow(1, { internalName: "array-decay", intro })] })}
+        navigate={vi.fn()}
+      />,
+    );
+    const row = rowOf("array-decay");
+    await user.click(within(row).getByRole("button", { name: "Edit the text before array-decay" }));
+    await screen.findByRole("dialog", { name: "Text before array-decay" });
+    expect(within(row).getByRole("button", { expanded: false })).toBeInTheDocument();
+  });
+
   it("is locked with the item list", () => {
     mockFetch({});
     const withIntro = makeItemRow(1, { internalName: "array-decay", intro });

@@ -1179,6 +1179,9 @@ describe("the conditions during the attempt", () => {
 });
 
 describe("the text before a question (ADR-084)", () => {
+  // The setup's narrow stub, back for the tests after a wide one.
+  const narrow = window.matchMedia;
+  afterEach(() => vi.stubGlobal("matchMedia", narrow));
   const INTRO = "Lisez le **chapitre 8** avant de répondre.";
   /** The three questions, the third preceded by a text. */
   const withIntro = (navigation: "free" | "forward_only" | "milestones", lastItemId: string) => {
@@ -1204,10 +1207,16 @@ describe("the text before a question (ADR-084)", () => {
     expect(isPrimary(go)).toBe(true);
     expect(screen.queryByText(/ne sera plus affiché/)).toBeNull();
 
+    // The text has its own entry in the question list, current while it is up.
+    expect(screen.getByRole("button", { name: "Texte, avant la question 3, en cours" })).toBeInTheDocument();
+
     await userEvent.click(go);
     expect(await screen.findByText("Question 3")).toBeInTheDocument();
     expect(screen.queryByText("chapitre 8")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Relire le texte" }));
+    // Free navigation: the entry brings the text back, from any question.
+    await userEvent.keyboard("{Alt>}{ArrowLeft}{/Alt}");
+    expect(await screen.findByText("Question 2")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Texte, avant la question 3" }));
     expect(await screen.findByText("Avant la question 3")).toBeInTheDocument();
   });
 
@@ -1219,7 +1228,40 @@ describe("the text before a question (ADR-084)", () => {
     expect(screen.getByText(/ce texte ne sera plus affiché/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
     expect(await screen.findByText("Question 3")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Relire le texte" })).toBeNull();
+    const entry = screen.getByRole("button", { name: "Texte, avant la question 3, fermée" });
+    await userEvent.click(entry);
+    expect(screen.queryByText("Avant la question 3")).toBeNull();
+    expect(screen.getByText("Question 3")).toBeInTheDocument();
+  });
+
+  it("names its entry by the text's first heading, and the questions keep their numbers", async () => {
+    viewport(1280);
+    const view = withIntro("free", "i3");
+    const titled = {
+      ...view,
+      items: view.items.map((item) => (item.id === "i3" ? { ...item, intro: `## Partie 2\n\n${INTRO}` } : item)),
+    };
+    stubs(titled);
+    render(titled);
+    const list = await screen.findByRole("navigation", { name: /^Progression/ });
+    expect(within(list).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      expect.stringMatching(/^Question 1,/),
+      expect.stringMatching(/^Question 2,/),
+      "Partie 2, avant la question 3, en cours",
+      expect.stringMatching(/^Question 3,/),
+    ]);
+    expect(within(list).getByText("Partie 2")).toBeInTheDocument();
+  });
+
+  it("lists a single question preceded by a text: two screens, and the way back to the text", async () => {
+    const one = oneItemView();
+    const view = { ...one, items: [{ ...one.items[0]!, intro: INTRO }] };
+    stubs(view);
+    render(view);
+    // Already answered: the text is behind the student, the question up.
+    expect(await screen.findByText("Question 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Texte, avant la question 1" }));
+    expect(await screen.findByText("Avant la question 1")).toBeInTheDocument();
   });
 
   it("is not shown again on reloading a question already started", async () => {
@@ -1232,8 +1274,8 @@ describe("the text before a question (ADR-084)", () => {
     render(started);
     expect(await screen.findByText("Question 2")).toBeInTheDocument();
     expect(screen.queryByText("Avant la question 2")).toBeNull();
-    // Still there to read again, under free navigation.
-    expect(screen.getByRole("button", { name: "Relire le texte" })).toBeInTheDocument();
+    // Still there to read again from its entry, under free navigation.
+    expect(screen.getByRole("button", { name: "Texte, avant la question 2" })).toBeInTheDocument();
   });
 });
 

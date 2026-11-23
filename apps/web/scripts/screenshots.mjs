@@ -999,6 +999,10 @@ const scenes = [
   // the text before an item is written in a dialog from its band.
   { name: "eval-config-intro-gap", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByText("filtre-capteur-rc", { exact: true }).first().hover() },
   { name: "eval-config-intro-editor", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^edit the text before/i }).first().click() },
+  // The band folded to its title and first paragraph, then unfolded to the
+  // text as the student reads it (its code included).
+  { name: "eval-config-intro-band", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByText("Partie 2 : le code").first().scrollIntoViewIfNeeded() },
+  { name: "eval-config-intro-band-open", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { expanded: false }).filter({ hasText: "Partie 2 : le code" }).click() },
   { name: "eval-config-picker", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /add questions/i }).first().click() },
   // The picker with a question looked at (issue #207): docked beside the list
   // from 1280 px, in place of the list below.
@@ -1418,10 +1422,12 @@ const scenes = [
   // Issue #89: the question list with its four states at once — answered,
   // left unanswered, flagged, nothing yet — on the flagged empty question.
   { name: "player-marks", role: "student", path: `${TAKE}?scene=marks` },
-  // ADR-084: the teacher's text before question 1, then the question with
-  // its "Read the text again" (free navigation).
+  // ADR-084: the teacher's text before question 1, its entry current in the
+  // list, then the question (free navigation: the entry reopens the text).
+  // Under forward_only, the entry of a text passed is closed.
   { name: "player-intro", role: "student", path: `${TAKE}?scene=intro` },
   { name: "player-intro-continued", role: "student", path: `${TAKE}?scene=intro`, act: (p) => p.getByRole("button", { name: /^continue$/i }).click() },
+  { name: "player-intro-forward", role: "student", path: `${TAKE}?scene=intro-forward`, act: (p) => p.getByRole("button", { name: /^continue$/i }).click() },
   // The same list, the student having left the question unanswered: the flag
   // in the card's corner and "Leave unanswered" under it, both pressed.
   { name: "player-marks-skipped", role: "student", path: `${TAKE}?scene=marks`, act: async (p) => { await p.getByRole("button", { name: /^leave unanswered$/i }).click(); await p.getByRole("button", { name: /^leave unanswered$/i, pressed: true }).waitFor(); } },

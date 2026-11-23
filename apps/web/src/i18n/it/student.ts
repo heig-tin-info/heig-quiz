@@ -110,7 +110,6 @@ export const student: Record<keyof typeof en, string> = {
   "player.intro.before": "Prima della domanda {n}",
   "player.intro.continue": "Continua",
   "player.intro.oneWay": "Dopo «Continua», questo testo non viene più mostrato.",
-  "player.intro.reread": "Rileggi il testo",
   "player.answered": "Risposta data",
   "player.skipped": "Lasciata senza risposta",
   "player.skip": "Lascia senza risposta",
