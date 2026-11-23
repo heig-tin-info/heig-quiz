@@ -100,6 +100,9 @@
      the window. Zero without one; the banner sets it on the frame it wraps,
      and every sticky bar and full-height column under it offsets by it. */
   --banner-h: 0px;
+  /* The height of ONE mode banner: the banner itself, the sum above, and
+     the strip of the page's scrollbar painted beside it. */
+  --banner-height: 2rem;
   /* The exam player's top bar (`PlayerShell.tsx`), which publishes it on the
      document while it is mounted: its docked column and the top toasts
      (`notify.tsx`) sit under it. Zero without a player. */
@@ -306,6 +309,9 @@ html.dark {
 @layer base {
   html {
     @apply antialiased;
+    /* The page's scrollbar keeps its room whether the page overflows or not:
+       two pages, one long and one short, put their content at the same x. */
+    scrollbar-gutter: stable;
     /* Native widgets (datetime pickers, scrollbars) follow the theme instead
        of popping up as a white square over a dark UI. */
     color-scheme: light;
@@ -357,6 +363,26 @@ html.dark {
   }
   ::-webkit-scrollbar-track {
     background: transparent;
+  }
+  /* A mode banner (`ModeBanner`, Shell.tsx) runs edge to edge: the page's
+     scrollbar beside it takes its fill over the banner's height, or a strip
+     of canvas cuts the banner off on hosts that draw classic scrollbars.
+     While a banner is up the page keeps a track, so a short page's gutter
+     gets the same fill (a layer's scroll lock, on the root's inline style,
+     still wins). Chromium styles the viewport's scrollbar from `body`, and
+     paints no image of the root's background under it. Firefox styles no
+     part of a track and keeps the gap. Stacked banners (Super Powers over
+     another): one banner's height is painted, the danger rule winning. */
+  @supports selector(::-webkit-scrollbar) {
+    html:has([data-mode-banner]) {
+      overflow-y: scroll;
+    }
+    body:has([data-mode-banner="mode"])::-webkit-scrollbar-track {
+      background: linear-gradient(var(--fg) var(--banner-height), transparent var(--banner-height));
+    }
+    body:has([data-mode-banner="danger"])::-webkit-scrollbar-track {
+      background: linear-gradient(var(--danger) var(--banner-height), transparent var(--banner-height));
+    }
   }
 }
 

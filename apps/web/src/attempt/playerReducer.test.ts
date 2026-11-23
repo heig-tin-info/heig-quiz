@@ -354,6 +354,15 @@ describe("playerReducer: the text before an item (ADR-084)", () => {
     expect(playerReducer(state, { type: "intro", itemId: "i2" })).toBe(state);
   });
 
+  it("is passed by choosing its own question from the list while it shows", () => {
+    const state = playerReducer(load(view("free", [item(1, { intro }), item(2)])), selectEntry("i1"));
+    expect(currentItem(state)?.id).toBe("i1");
+    expect(passageOf(state)).toBeNull();
+    // From another question, the same entry is a first arrival: the text shows.
+    const away = load(view("free", [item(1, { intro }), item(2)], "i2"));
+    expect(passageOf(playerReducer(away, selectEntry("i1")))).toBe(intro);
+  });
+
   it("selects a question's entry as a plain goto", () => {
     expect(selectEntry("i2")).toEqual({ type: "goto", itemId: "i2" });
     expect(selectEntry("intro:i2")).toEqual({ type: "intro", itemId: "i2" });
@@ -478,6 +487,45 @@ describe("playerReducer: a section's text (ADR-143)", () => {
     // A retaken question started: passed, as in any attempt.
     const started = load(view("free", paper({ 2: acquired, 4: { answer: { selected: [1] } } }), "i4"));
     expect(started.passed["i2"]).toBe(true);
+  });
+
+  it("passes the text on screen when a question of its section is chosen from the list", () => {
+    for (const target of ["i3", "i4"]) {
+      let state = load(view("free", paper(), "i2"));
+      expect(passage(state)?.key).toBe("i2");
+      state = playerReducer(state, { type: "goto", itemId: target });
+      expect(currentItem(state)?.id).toBe(target);
+      expect(state.passed["i2"]).toBe(true);
+      // i3 has a text of its own: it shows next, as after Continue.
+      expect(passage(state)?.key).toBe(target === "i3" ? "i3" : undefined);
+    }
+  });
+
+  it("forward_only: a question chosen from the text passes it, one way", () => {
+    let state = load(view("forward_only", paper(), "i2"));
+    expect(passage(state)?.key).toBe("i2");
+    state = playerReducer(state, { type: "goto", itemId: "i4" });
+    expect(currentItem(state)?.id).toBe("i4");
+    expect(passageOf(state)).toBeNull();
+    expect(introReachable(state, "i2")).toBe(false);
+  });
+
+  it("still shows the text first to a student arriving from outside the section", () => {
+    let state = load(view("free", paper(), "i2"));
+    state = playerReducer(state, { type: "goto", itemId: "i1" });
+    state = playerReducer(state, { type: "goto", itemId: "i4" });
+    expect(passage(state)?.key).toBe("i2");
+    expect(state.passed["i2"]).toBeUndefined();
+  });
+
+  it("takes the arrow forward on the text as its Continue, and leaves the arrow back alone", () => {
+    let state = load(view("free", paper(), "i4"));
+    expect(passage(state)?.key).toBe("i2");
+    expect(playerReducer(state, { type: "move", delta: -1 }).index).toBe(2);
+    expect(playerReducer(state, { type: "move", delta: -1 }).passed["i2"]).toBeUndefined();
+    state = playerReducer(state, { type: "move", delta: 1 });
+    expect(currentItem(state)?.id).toBe("i4");
+    expect(passageOf(state)).toBeNull();
   });
 
   it("lists the section's text before its first question drawn, the section's entries set in under it", () => {

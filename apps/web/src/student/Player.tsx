@@ -501,7 +501,9 @@ export function PlayerView({
         onConditions={openConditions}
         // Issue #1151: SEB and a station hide the system's battery and clock.
         device={confinement ? <BatteryClock /> : undefined}
-        wide={item !== undefined && isWide(item.type)}
+        // A passage reads in the text's column whatever the question under
+        // it: a wide type (code) widens its own screen only (ADR-084).
+        wide={passage === null && item !== undefined && isWide(item.type)}
         // Issue #125: an exercise may be left and continued later; an exam
         // may not look like it can. The teacher's preview, exam or not, has
         // no clock to stop: its way out is the same quiet button. So has a

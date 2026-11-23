@@ -98,7 +98,7 @@ describe("ProgressSegments", () => {
     const { container } = renderWithProviders(
       <ProgressSegments segments={withText} label="Progress" onSelect={() => {}} />,
     );
-    expect(screen.getByRole("button", { name: "Partie 2, before question 2, current" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Partie 2, current" })).toHaveAttribute(
       "aria-current",
       "true",
     );

@@ -60,9 +60,9 @@ describe("ProgressList", () => {
     renderWithProviders(<ProgressList segments={withTexts} label="Progress" onSelect={onSelect} />);
     expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
       "Question 1, answered",
-      "Partie 2, before question 2, current",
+      "Partie 2, current",
       "Question 2, not answered",
-      "Text, before question 3, closed",
+      "Text, closed",
       "Question 3, not answered",
     ]);
     expect(screen.getByText("Partie 2")).toBeInTheDocument();

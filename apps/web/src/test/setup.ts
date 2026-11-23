@@ -89,5 +89,5 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   // Modal and Sheet lock the page scroll; a crashed test must not leak it.
-  document.body.style.overflow = "";
+  document.documentElement.style.overflow = "";
 });
