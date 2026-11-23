@@ -44,7 +44,7 @@ afterAll(async () => {
   restore();
 });
 
-/** The policy that lets an exam's practice open: the answer and the key at the release (ADR-142 §2). */
+/** The policy that lets an exam's practice open: the key at the release (ADR-142 §2). */
 const SHOWN: FeedbackPolicy = {
   when: "on_release",
   showAnswer: true,
@@ -52,6 +52,7 @@ const SHOWN: FeedbackPolicy = {
   showExplanation: false,
   showHiddenCaseNames: false,
   showTeacherComment: true,
+  contestationDays: 7,
 };
 
 async function appFor() {
@@ -153,7 +154,7 @@ const putAfterDue = (teacher: Actor, evaluationId: string, afterDue: "open" | "h
   });
 
 describe("the teacher's switch on an exam (ADR-142 §1, §2)", () => {
-  it("is closed by default, and opens only under a policy that shows the answer and the key", async () => {
+  it("is closed by default, and opens only under a policy that shows the key at the release", async () => {
     const { app, evaluation, teacher, taker } = await sitExam();
     expect(toEvaluation(evaluation).afterDueOpen).toBe(false);
     expect(await refusal(practise(app, evaluation, taker.id))).toBe("hidden");
@@ -162,12 +163,13 @@ describe("the teacher's switch on an exam (ADR-142 §1, §2)", () => {
     const hidden = await putAfterDue(teacher, evaluation.id, "open");
     expect(hidden.statusCode).toBe(422);
     expect(hidden.json()).toMatchObject({ error: "practice_key_hidden" });
-    await db.update(evaluations).set({ feedbackPolicy: { ...SHOWN, showAnswer: false } }).where(eq(evaluations.id, evaluation.id));
+    await db.update(evaluations).set({ feedbackPolicy: { ...SHOWN, when: "none" } }).where(eq(evaluations.id, evaluation.id));
     expect((await putAfterDue(teacher, evaluation.id, "open")).statusCode).toBe(422);
     // Closing it is never refused.
     expect((await putAfterDue(teacher, evaluation.id, "hidden")).statusCode).toBe(200);
 
-    await db.update(evaluations).set({ feedbackPolicy: SHOWN }).where(eq(evaluations.id, evaluation.id));
+    // The key alone is asked: the student's own answer hidden opens it all the same.
+    await db.update(evaluations).set({ feedbackPolicy: { ...SHOWN, showAnswer: false } }).where(eq(evaluations.id, evaluation.id));
     const opened = await putAfterDue(teacher, evaluation.id, "open");
     expect(opened.statusCode).toBe(200);
     expect(opened.json()).toMatchObject({ evaluation: { afterDueOpen: true } });
@@ -255,13 +257,18 @@ describe("the sitting's conditions are not a practice's (ADR-142 §4)", () => {
     // A SEB session never practises, not even its own exam.
     const seb = await sessionOf(db, taker.id, { kind: "seb", evaluationId: evaluation.id });
     expect((await server.app.inject({ method: "POST", url: `${url}/start`, headers: seb })).statusCode).toBe(401);
-    expect((await server.app.inject({ method: "GET", url: `/app/api/attempts/${attemptId}`, headers: seb })).statusCode).not.toBe(200);
+    expect((await server.app.inject({ method: "GET", url: `/app/api/attempts/${attemptId}`, headers: seb })).statusCode).toBe(404);
+
+    // The student's home lists it over HTTP.
+    const home = await server.app.inject({ method: "GET", url: "/app/api/student/home", headers: taker.headers });
+    expect(home.statusCode).toBe(200);
+    expect((home.json() as StudentHome).practice?.map((c) => c.id)).toContain(evaluation.id);
   });
 });
 
 describe("what a student reads of an exam's practice (invariant 4)", () => {
   it("carries no key while written, the key at the hand-in, and nothing the policy hides once it hides the key", async () => {
-    const { app, evaluation, taker } = await sitExam({ afterDue: "open" });
+    const { app, evaluation, taker, official } = await sitExam({ afterDue: "open" });
     const { row } = await practise(app, evaluation, taker.id);
     const view = await live.attemptView(db, evaluation, row, app.clock.now());
     const written = JSON.stringify(view);
@@ -274,6 +281,10 @@ describe("what a student reads of an exam's practice (invariant 4)", () => {
     const shown = await results.studentFeedback(db, await reload(db, evaluation.id), done, app.clock.now());
     expect(shown).toMatchObject({ available: true, practice: true, grade: null, points: 0, totalPoints: 2 });
     expect(JSON.stringify(shown)).toContain("answer-q0");
+    // The contestation window is open on the official attempt, never on a practice one (ADR-139).
+    const own = await results.studentFeedback(db, await reload(db, evaluation.id), official, app.clock.now());
+    expect(own.available && own.items.some((item) => item.contestable)).toBe(true);
+    expect(shown.available && shown.items.every((item) => !item.contestable)).toBe(true);
 
     // A practice attempt left open, then the key hidden: resumed, handed in, keyless.
     app.clock.advance(60_000);
@@ -350,12 +361,5 @@ describe("practice rows on an exam count nowhere (ADR-142, ADR-122 §4)", () => 
     await results.releaseResults(db, await reload(db, s.evaluation.id), s.app.clock.now());
     await backfillClassroom(db, s.seed.classroomId, s.app.clock.now());
     expect(await db.select().from(drillCards).where(eq(drillCards.evaluationId, s.evaluation.id))).toHaveLength(0);
-  });
-
-  it("lists the practice on the student's home over HTTP, beside the exam's own past card", async () => {
-    const { evaluation, taker } = await sitExam({ afterDue: "open" });
-    const home = await server.app.inject({ method: "GET", url: "/app/api/student/home", headers: taker.headers });
-    expect(home.statusCode).toBe(200);
-    expect((home.json() as StudentHome).practice?.map((c) => c.id)).toContain(evaluation.id);
   });
 });

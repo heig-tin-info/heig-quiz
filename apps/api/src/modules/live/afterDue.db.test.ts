@@ -173,7 +173,10 @@ describe("starting a practice attempt (ADR-122 §2, §3, §5)", () => {
   });
 
   it("answers the ready screen with the practice's conditions before a new one", async () => {
-    const { app, evaluation, student } = await closedExercise();
+    // An exercise whose retakes ask the questions to review: its practice is blank all the same.
+    const { app, evaluation, student } = await closedExercise({
+      settings: { navigation: "free", retakes: { enabled: true, keep: "best", maxAttempts: 2, scope: "to_review" } },
+    });
     const entry = await live.practiceEntry(db, { evaluation, participant: await participant(evaluation, student), archived: null, now: app.clock.now() });
     expect(entry.kind).toBe("ready");
     if (entry.kind !== "ready") return;
@@ -181,6 +184,8 @@ describe("starting a practice attempt (ADR-122 §2, §3, §5)", () => {
     expect(keys).toContain("duration");
     expect(keys).not.toContain("deadline");
     expect(keys).not.toContain("visibility_logged");
+    expect(keys).not.toContain("partial_retake");
+    expect(entry.view.conditions.imposed.find((line) => line.key === "attempts")).toMatchObject({ maxAttempts: null });
   });
 
   it("refuses where the practice is hidden, not over, archived, or behind a trusted client", async () => {
@@ -203,6 +208,11 @@ describe("starting a practice attempt (ADR-122 §2, §3, §5)", () => {
     const seed = await seedLive(db, { mode: "exercise", durationS: null, settings: { timing: "manual", lobby: "skip" } });
     const running = await applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
     expect(await refusal(practise(app, running, seed.studentIds[0]!))).toBe("not_over");
+    // A poll has no practice switch: 409 after_due_locked.
+    await expect(setAfterDue(db, { ...running, mode: "poll" }, "open", app.clock.now())).rejects.toMatchObject({
+      code: "after_due_locked",
+      status: 409,
+    });
   });
 
   it("starts at most one new practice attempt a minute", async () => {

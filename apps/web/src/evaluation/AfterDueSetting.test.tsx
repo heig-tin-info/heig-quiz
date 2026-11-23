@@ -59,7 +59,24 @@ describe("the after-due practice switch", () => {
     };
     renderWithProviders(<AfterDueSetting detail={exam} />);
     expect(screen.getByRole("switch", { name: "Practice after the due date" })).toBeDisabled();
-    expect(screen.getByText("Needs the correction at the release, with the answer and the answer key.")).toBeVisible();
+    expect(screen.getByText("Needs “On release” and “Show the expected answer”.")).toBeVisible();
+  });
+
+  it("on an exam opened before the key was hidden, shows it suspended and still lets the teacher close it", async () => {
+    const user = userEvent.setup();
+    const detail = exercise({ afterDueOpen: false, afterDue: "open" });
+    const exam = {
+      ...detail,
+      evaluation: { ...detail.evaluation, mode: "exam" as const, feedbackPolicy: { ...detail.evaluation.feedbackPolicy, when: "on_release" as const, showKey: false } },
+    };
+    const { calls } = mockFetch({ [`PUT /app/api/evaluations/${exam.evaluation.id}/after-due`]: ok(exam) });
+    renderWithProviders(<AfterDueSetting detail={exam} />);
+    const toggle = screen.getByRole("switch", { name: "Practice after the due date" });
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    expect(toggle).toBeEnabled();
+    expect(screen.getByText("Suspended while “Show the expected answer” is off.")).toBeVisible();
+    await user.click(toggle);
+    await vi.waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ afterDue: "hidden" }));
   });
 
   it("on an exam whose policy shows the key, opens the practice", async () => {
@@ -70,7 +87,7 @@ describe("the after-due practice switch", () => {
       evaluation: {
         ...detail.evaluation,
         mode: "exam" as const,
-        feedbackPolicy: { ...detail.evaluation.feedbackPolicy, when: "on_release" as const, showKey: true, showAnswer: true },
+        feedbackPolicy: { ...detail.evaluation.feedbackPolicy, when: "on_release" as const, showKey: true },
       },
     };
     const { calls } = mockFetch({ [`PUT /app/api/evaluations/${exam.evaluation.id}/after-due`]: ok({ ...exam, evaluation: { ...exam.evaluation, afterDueOpen: true } }) });

@@ -86,11 +86,11 @@ export async function livePlugin(
   // comes from outside the room (F-EVAL-12). Every sitting route passes
   // here, so a session cookie carried out of the room neither enters, nor
   // reads, nor writes.
-  function sitting<S extends { evaluation: Parameters<typeof sitRefusal>[1]; attempt?: { afterDue: boolean } }>(
+  function sitting<S extends { evaluation: Parameters<typeof sitRefusal>[1] }>(
     req: FastifyRequest,
     reply: FastifyReply,
     scope: S | null,
-    practice = scope?.attempt?.afterDue === true,
+    practice: boolean,
   ): S | null {
     if (!scope) return null;
     // `false`: a sitting route is never a staff watch, whoever calls it. A
@@ -102,8 +102,10 @@ export async function livePlugin(
     else notFound(reply);
     return null;
   }
-  const own = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
-    sitting(req, reply, await ownAttempt(app, req, reply, p.id));
+  const own = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {
+    const scope = await ownAttempt(app, req, reply, p.id);
+    return sitting(req, reply, scope, scope?.attempt.afterDue === true);
+  };
   /** The routes a `seb` session may call: sitting its evaluation, nothing else. */
   const sit = { preHandler: requireSession, config: SITTING };
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
@@ -133,7 +135,7 @@ export async function livePlugin(
         body: AttemptStartBody,
         optionalBody: true,
         load: async (req, reply, p) =>
-          sitting(req, reply, await reachableEvaluation(app, req, reply, p.id)),
+          sitting(req, reply, await reachableEvaluation(app, req, reply, p.id), false),
       },
       async ({ req, reply, now, scope }) => {
         const participant = await service.participantOf(app.db, scope.evaluation, callerOf(req).id);
@@ -185,7 +187,7 @@ export async function livePlugin(
         body: RetakeBody,
         optionalBody: true,
         load: async (req, reply, p) =>
-          sitting(req, reply, await reachableEvaluation(app, req, reply, p.id)),
+          sitting(req, reply, await reachableEvaluation(app, req, reply, p.id), false),
       },
       async ({ req, reply, now, scope, body }) => {
         const participant = await service.participantOf(app.db, scope.evaluation, callerOf(req).id);

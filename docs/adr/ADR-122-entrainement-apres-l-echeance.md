@@ -21,7 +21,7 @@ Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correctio
 
 Amended 2026-11-03 (#1004), scope: §9 only — see the amendment note there.
 
-Amended 2026-11-23 by [ADR-142](ADR-142-entrainement-sur-un-examen-publie.md) (product owner, issue #1037), scope: §1, §2 and §5 — the switch also takes an exam, closed by default and open only under a stored policy that shows the answer and the key at the release (`422 practice_key_hidden`); an exam's practice starts once its results are released (`not_released`), for a student who handed it in (`not_taken`), and ignores its trusted clients and IP allow-list. §4 holds for an exam's practice rows.
+Amended 2026-11-23 by [ADR-142](ADR-142-entrainement-sur-un-examen-publie.md) (product owner, issue #1037), scope: §1, §2 and §5 — the switch also takes an exam, closed by default and open only under a stored policy that shows the key at the release (`422 practice_key_hidden`); an exam's practice starts once its results are released (`not_released`), for a student who handed it in (`not_taken`), and ignores its trusted clients and IP allow-list. §4 holds for an exam's practice rows.
 
 Corrected 2026-11-23 (ADR-142), scope: §1 only — "like 'Allow drill' (ADR-041 §10)" is wrong about "Allow drill": it is editable until the release, not at any state (`allowDrillWritable`); only the practice switch is editable at any state.
 

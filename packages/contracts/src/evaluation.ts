@@ -704,7 +704,7 @@ void [_settingsPatchKeys, _feedbackPatchKeys];
  * `PUT /evaluations/:id/after-due` (ADR-122, ADR-142): the teacher's switch,
  * on an exercise or an exam — `409 after_due_locked` on a poll. Opening an
  * exam's practice is refused `422 practice_key_hidden` unless its stored
- * feedback policy shows the answer and the key at the release
+ * feedback policy shows the key at the release
  * (`afterDueRefusal`, `@quiz/domain`).
  */
 export const EvaluationAfterDueBody = z.object({ afterDue: z.enum(AFTER_DUE_SETTINGS) });

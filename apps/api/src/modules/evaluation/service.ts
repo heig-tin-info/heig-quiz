@@ -69,6 +69,7 @@ export {
   drillAllowed,
   practiceOpen,
   inPastSeries,
+  pastSeriesPrintable,
   attemptCount,
   deletionRole,
   evaluationWork,

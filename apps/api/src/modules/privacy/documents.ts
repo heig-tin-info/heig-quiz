@@ -10,7 +10,7 @@
  */
 import type { SessionAuth } from "../../auth/session.js";
 import type { Db } from "../../db/client.js";
-import { byId, inPastSeries, type EvaluationRecord } from "../evaluation/service.js";
+import { byId, pastSeriesPrintable, type EvaluationRecord } from "../evaluation/service.js";
 import { findReadableClassroom, type Caller } from "../guards.js";
 
 /**
@@ -25,7 +25,7 @@ export const STUDENT_DOCUMENTS_PER_HOUR = 20;
  * of a missing one: an evaluation of a classroom the caller reads with the
  * student payload — a claimed seat, or a staff member in the student view
  * (`findReadableClassroom`, ADR-018) — that is one of its past series
- * (`inPastSeries`, ADR-122 §9). A draft, an evaluation not over, an exam, an
+ * that prints (`pastSeriesPrintable`, ADR-122 §9, ADR-142 §5). A draft, an evaluation not over, an exam, an
  * exercise closed to practice or a classroom archived: null.
  */
 export async function findPastSeries(
@@ -38,9 +38,6 @@ export async function findPastSeries(
   if (!evaluation?.classroomId) return null;
   // The student payload asked for: a staff member reads as in the student view.
   const room = await findReadableClassroom(db, caller, auth, evaluation.classroomId, { studentView: true });
-  // `taken: false`: the blank print is an exercise's — a released exam open
-  // to practice (ADR-142) is never handed out blank, its paper seed being
-  // the exam's own (ADR-125 §8).
-  if (room === null || !inPastSeries(evaluation, room.room.archivedAt, false)) return null;
+  if (room === null || !pastSeriesPrintable(evaluation, room.room.archivedAt)) return null;
   return evaluation;
 }

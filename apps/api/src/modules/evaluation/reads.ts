@@ -34,6 +34,7 @@ import {
   type TrustedClient,
   drillAllowedOn,
   afterDueOpen,
+  practicePrintable,
   effectiveFeedbackPolicy,
   evaluationTotal,
   practiceRefusal,
@@ -270,6 +271,17 @@ export function inPastSeries(row: EvaluationRecord, archivedAt: Date | null, tak
       unfinishedOfficial: false,
     }) === null
   );
+}
+
+/**
+ * ADR-142 §5: whether this evaluation's blank print is offered as a past
+ * series (`practicePrintable`: an exercise's, never an exam's), the series
+ * being in its classroom's past series. A printing mode never asks who took
+ * it (`needsTaken`, asserted by the domain's tests), so no student's attempt
+ * is read. The one rule of the home's printer and the hand-out route.
+ */
+export function pastSeriesPrintable(row: EvaluationRecord, archivedAt: Date | null): boolean {
+  return practicePrintable(row.mode) && inPastSeries(row, archivedAt, false);
 }
 
 /**

@@ -170,7 +170,7 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   // ADR-092: a change of mode refused (a stale screen can still send one).
   mode_frozen: "error.modeFrozen",
   retakes_not_allowed: "error.retakesNotAllowed",
-  // ADR-142 §2: an exam's practice needs the answer and the key at the release.
+  // ADR-142 §2: an exam's practice needs the key at the release.
   practice_key_hidden: "eval.afterDue.keyHidden",
   // ADR-056 §5 and §10: a regrade across other variables, a poll on a parameterized question.
   variables_changed: "error.variablesChanged",

@@ -6,7 +6,7 @@
 import { and, asc, eq } from "drizzle-orm";
 
 import type { AttemptView, ReadyView } from "@quiz/contracts";
-import { isFinishedAttempt, practiceCooldownS, practiceDeadline, practiceRefusal } from "@quiz/domain";
+import { isFinishedAttempt, practiceCooldownS, practiceDeadline, practiceRefusal, takenBy } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { attempts, evaluations } from "../../db/schema.js";
@@ -30,12 +30,10 @@ async function practiceState(tx: DbOrTx, evaluationId: string, userId: string) {
     .where(and(eq(attempts.evaluationId, evaluationId), eq(attempts.userId, userId)))
     .orderBy(asc(attempts.attemptNumber));
   const unfinished = mine.filter((a) => !isFinishedAttempt(a.state));
-  // `officialAttempt` in memory: not a practice one, not one a paper copy replaced.
-  const official = mine.filter((a) => !a.afterDue && a.supersededBy === null);
   return {
     open: unfinished.find((a) => a.afterDue) ?? null,
     unfinishedOfficial: unfinished.some((a) => !a.afterDue),
-    taken: official.some((a) => isFinishedAttempt(a.state)),
+    taken: takenBy(mine),
     lastPractice: mine.filter((a) => a.afterDue).at(-1) ?? null,
     nextNumber: (mine.at(-1)?.attemptNumber ?? 0) + 1,
   };

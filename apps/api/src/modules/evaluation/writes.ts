@@ -545,31 +545,31 @@ export class AfterDueLocked extends EvaluationError {
  * and the configuration lock does not apply to it. The second write of the
  * settings outside {@link patchEvaluation}, beside {@link setAllowDrill}. An
  * exercise or an exam; an exam's opens only under a stored feedback policy
- * that shows the answer and the key at the release (`afterDueRefusal`,
- * `422 practice_key_hidden`) — re-checked by the update itself, so a policy
- * changed between the load and the write cannot slip through.
+ * that shows the key at the release (`afterDueRefusal`,
+ * `422 practice_key_hidden`); the open rule re-checks the policy on every
+ * read, so a policy changed since the load opens nothing.
  */
 export async function setAfterDue(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   afterDue: "open" | "hidden",
   now: Date,
 ): Promise<EvaluationRecord> {
-  return db.transaction(async (tx) => {
-    const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, row.id)).for("update");
-    const refusal = locked ? afterDueRefusal({ mode: locked.mode, afterDue, feedback: storedFeedbackOf(locked) }) : "mode";
-    if (refusal === "mode") throw new AfterDueLocked();
-    if (refusal === "key_hidden") throw new EvaluationError("practice_key_hidden");
-    const [updated] = await tx
-      .update(evaluations)
-      .set({
-        settings: sql`${evaluations.settings} || jsonb_build_object('afterDue', ${afterDue}::text)`,
-        updatedAt: now,
-      })
-      .where(eq(evaluations.id, row.id))
-      .returning();
-    return updated!;
-  });
+  const refusal = afterDueRefusal({ mode: row.mode, afterDue, feedback: storedFeedbackOf(row) });
+  if (refusal === "mode") throw new AfterDueLocked();
+  if (refusal === "key_hidden") throw new EvaluationError("practice_key_hidden");
+  // On the mode judged: a poll never gets the key. A policy changed since
+  // the load needs no lock — the open rule re-reads it on every read.
+  const [updated] = await db
+    .update(evaluations)
+    .set({
+      settings: sql`${evaluations.settings} || jsonb_build_object('afterDue', ${afterDue}::text)`,
+      updatedAt: now,
+    })
+    .where(and(eq(evaluations.id, row.id), eq(evaluations.mode, row.mode)))
+    .returning();
+  if (!updated) throw new EvaluationError("not_found");
+  return updated;
 }
 
 /**

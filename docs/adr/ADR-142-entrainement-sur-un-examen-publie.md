@@ -38,13 +38,15 @@ a kiosk station, an IP allow-list — which a revision at home cannot meet.
    writer `PUT /evaluations/:id/after-due` (any member of the course,
    audited `evaluation.after_due`, editable at any state, outside the
    configuration lock) and its rule `afterDueOpen` (`@quiz/domain`,
-   `afterDue.ts`) now take an exam. On an exam the default is CLOSED: absent
+   `afterDue.ts`) now take an exam; how each mode takes practice is one table
+   of that file (`PRACTICE_BY_MODE`), which the rules, the guards and the
+   practice's conditions read instead of testing the mode. On an exam the default is CLOSED: absent
    means `hidden`. A poll still has no switch (`409 after_due_locked`). Not
    "Allow drill", which is locked at the release (`allowDrillWritable`). The
    switch travels with the settings into a template and out of it, as the
    rest of the settings do; it does not survive a change of mode (each mode
    finds its own default). An exam's practice is open only while the exam is
-   RELEASED and the switch is on (`practiceStateOpen`): a withdrawn release
+   RELEASED and the switch is on (the table's `stateOpen`): a withdrawn release
    stops new practice attempts (`409 practice_refused`, `not_released`); an
    unfinished one may still be resumed, and its correction then waits for the
    results, through the feedback gate unchanged (`results_pending`).
@@ -52,10 +54,18 @@ a kiosk station, an IP allow-list — which a revision at home cannot meet.
    exactly what the exam's stored policy shows (`feedbackOf`,
    `effectiveFeedbackPolicy`, invariant 4 unchanged): points only, never a
    grade. The switch may be turned on only when that policy is `on_release`
-   with `showAnswer` and `showKey` (`examPracticeFeedbackOk`); otherwise
-   `422 practice_key_hidden`. The open rule re-checks the policy: a teacher
-   who later hides the key closes the practice, so repeated attempts never
-   reveal points under a policy that hides the key.
+   with `showKey` (`practiceKeyShown`); otherwise `422 practice_key_hidden`.
+   `showAnswer` is not asked: hiding the student's own answer reveals nothing
+   to a practice, and the editor has no control for it. The open rule
+   re-checks the policy on every read: a teacher who later hides the key
+   SUSPENDS the practice, so repeated attempts never reveal points under a
+   policy that hides the key. The stored `open` stays; the editor shows the
+   switch on with "suspended", lets the teacher close it, and showing the key
+   again reopens it. What a practice still shows under that policy is the
+   points of each question, as an exercise's practice does (ADR-122): a
+   hidden test case of a `code`, `circuit` or `blocks` question keeps its
+   verdict and points in every correction (ADR-096), so repeated attempts
+   tell which hidden cases a program passes, never their input or output.
 3. **Who.** Only a student with a FINISHED OFFICIAL attempt on that exam
    (`officialAttempt`: not a practice one, not one a paper copy replaced) —
    `409 practice_refused`, `not_taken` otherwise. An absent or excused
@@ -81,8 +91,10 @@ a kiosk station, an IP allow-list — which a revision at home cannot meet.
 6. **It counts nowhere.** ADR-122 §4 holds for an exam's practice rows:
    `officialAttempt` everywhere an exam was read as one attempt per student.
    The drill's cards of an exam (`finishedTakers`, at the release and the
-   backfill) read official attempts only, so a practice row never gives a
-   card, nor through it a key. A paper copy entered on an exam ends only the
+   backfill) read official attempts only (the table's `practiceFeedsDrill`
+   is false), so a practice row never gives a card, nor through it a key —
+   kept although §3 already admits only those who handed the exam in, as a
+   defence should that rule widen (to excused students, say). A paper copy entered on an exam ends only the
    student's official attempts. The results page counts the students who
    practised, apart from the table, as for an exercise.
 

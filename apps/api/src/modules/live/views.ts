@@ -21,6 +21,7 @@ import {
   isFinishedAttempt,
   isLiveState,
   practiceDurationS,
+  practiceIgnoresSittingConditions,
   practiceOwnLimit,
 } from "@quiz/domain";
 
@@ -320,24 +321,22 @@ export function conditionsFor(evaluation: EvaluationRecord, timeBonusPercent: nu
 export function practiceConditions(evaluation: EvaluationRecord, timeBonusPercent: number): EvaluationConditions {
   const settings = settingsOf(evaluation);
   const limit = { timing: settings.timing, durationS: evaluation.durationS };
-  const conditions = evaluationConditionsOf({
+  return evaluationConditionsOf({
     mode: evaluation.mode,
     settings: {
       ...settings,
       timing: "duration",
       logVisibility: false,
-      safeExamBrowser: false,
-      kiosk: false,
-      retakes: { enabled: true, keep: "best", maxAttempts: null },
+      // Never a partial retake (ADR-091): a practice is always blank.
+      retakes: undefined,
+      ...(practiceIgnoresSittingConditions(evaluation.mode) ? { safeExamBrowser: false, kiosk: false } : {}),
     },
     durationS: practiceDurationS(limit),
     closesAt: null,
     // The accommodation stretches the evaluation's own limit, not the eight hours.
     timeBonusPercent: practiceOwnLimit(limit) ? timeBonusPercent : 0,
+    maxAttempts: null,
   });
-  // Unlimited, whatever the mode: an exam takes no retakes, its practice does.
-  const imposed = conditions.imposed.map((line) => (line.key === "attempts" ? { ...line, maxAttempts: null } : line));
-  return { ...conditions, imposed };
 }
 
 /** What both the waiting room and the ready screen state (`EvaluationRules`). */

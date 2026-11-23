@@ -6,7 +6,7 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import type { AttemptScore, EvaluationCard, PracticeCard, StudentPollCard } from "@quiz/contracts";
-import { isFinishedAttempt, retakeRefusal, retakeScopeOf } from "@quiz/domain";
+import { isFinishedAttempt, retakeRefusal, retakeScopeOf, takenBy } from "@quiz/domain";
 
 import { isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -16,6 +16,7 @@ import {
   countedItemsByEvaluation,
   handoutPrints,
   inPastSeries,
+  pastSeriesPrintable,
   retakePolicyOf,
   retakesEnabled,
   studentEvaluationRows,
@@ -173,7 +174,7 @@ export async function studentBoard(
   // (ADR-142, `row.attempt` the official latest) — with the student's
   // practice attempts on them.
   const practiced = options.practice
-    ? rows.filter((r) => inPastSeries(r.evaluation, r.archivedAt, r.attempt !== null && isFinishedAttempt(r.attempt.state)))
+    ? rows.filter((r) => inPastSeries(r.evaluation, r.archivedAt, takenBy(r.attempt === null ? [] : [r.attempt])))
     : [];
   const [perEvaluation, practiceRows] = await Promise.all([
     studentAttempts(
@@ -199,10 +200,10 @@ export async function studentBoard(
       ...scored.map((row) => countedAttemptId(perEvaluation, row)).filter((id): id is string => id !== null),
       ...lastFinishedPracticeIds(practiceRows),
     ]),
-    // The blank print is an exercise's (`findPastSeries`): never an exam's.
+    // The hand-out route's own rule (`pastSeriesPrintable`): never an exam's.
     handoutPrints(
       db,
-      practiced.filter((r) => r.evaluation.mode === "exercise").map((r) => r.evaluation),
+      practiced.filter((r) => pastSeriesPrintable(r.evaluation, r.archivedAt)).map((r) => r.evaluation),
     ),
   ]);
   const scores: Scores = { totals, itemCounts, tallies };

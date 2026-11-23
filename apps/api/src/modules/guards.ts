@@ -29,6 +29,7 @@ import {
   poolRoleAllows,
   PROJECT_LIVE_STATES,
   PROJECT_VISIBLE_STATES,
+  practiceIgnoresSittingConditions,
   trustedClientsOf,
   type ProjectStateName,
   type TrustedClient,
@@ -1344,7 +1345,7 @@ export function sitRefusal(
 ): "client" | "ip" | null {
   const auth = req.auth;
   if (practice && confined(auth)) return "client";
-  if (practice && evaluation.mode === "exam") return null;
+  if (practice && practiceIgnoresSittingConditions(evaluation.mode)) return null;
   // The twin of `trustedClients()` in `evaluation/reads.ts`, computed here
   // from the domain rule so that guards never imports the evaluation facade.
   const clients = trustedClientsOf(evaluation.mode, EvaluationSettings.parse(evaluation.settings));

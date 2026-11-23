@@ -19,6 +19,7 @@ import {
   DRILL_TYPES,
   FINISHED_ATTEMPT_STATES,
   isDrillEligible,
+  practiceFeedsDrill,
 } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
@@ -241,10 +242,11 @@ export async function cardsAtRelease(db: Db, evaluation: EvaluationRecord, now: 
 
 /**
  * The students with a finished attempt of an evaluation: who handed it in.
- * An exam counts its OFFICIAL attempts only (`officialAttempt`): a practice
- * attempt of a released exam (ADR-142) is no hand-in, and must give no card
- * — nor, through it, a key — to anyone. An exercise's practice attempt feeds
- * the drill like any hand-in (ADR-122 §8).
+ * Where a practice attempt does not feed the drill (`practiceFeedsDrill`:
+ * an exam's, ADR-142 §6), the OFFICIAL attempts only: a practice row is no
+ * hand-in and must give no card — nor, through it, a key — to anyone, even
+ * should the "taken" rule widen. An exercise's practice attempt feeds the
+ * drill like any hand-in (ADR-122 §8).
  */
 async function finishedTakers(db: Db, evaluation: EvaluationRecord): Promise<string[]> {
   const ended = await db
@@ -254,7 +256,7 @@ async function finishedTakers(db: Db, evaluation: EvaluationRecord): Promise<str
       and(
         eq(attempts.evaluationId, evaluation.id),
         inArray(attempts.state, [...FINISHED_ATTEMPT_STATES]),
-        evaluation.mode === "exam" ? officialAttempt : undefined,
+        practiceFeedsDrill(evaluation.mode) ? undefined : officialAttempt,
       ),
     );
   return ended.flatMap((a) => (a.userId === null ? [] : [a.userId]));
