@@ -65,7 +65,7 @@ export function TemplateBehindBadge({
   );
 }
 
-/** What moved on one item: its version, its points, its section break, its bonus flag, its intro. */
+/** What moved on one item: its version, its points, its section break, its bonus flag, its intro and its scope. */
 function changeOf(from: TemplatePullItem, to: TemplatePullItem, t: TFunction): string {
   const parts = [
     ...(from.versionNumber !== to.versionNumber
@@ -79,6 +79,10 @@ function changeOf(from: TemplatePullItem, to: TemplatePullItem, t: TFunction): s
       ? [t(to.counting === "bonus" ? "templatePull.change.bonusOn" : "templatePull.change.bonusOff")]
       : []),
     ...(from.intro !== to.intro ? [t("templatePull.change.intro")] : []),
+    // ADR-143: whether the text is shared with the following questions.
+    ...(from.introScope !== to.introScope
+      ? [t(to.introScope === "following" ? "templatePull.change.introShared" : "templatePull.change.introUnshared")]
+      : []),
   ];
   return `${to.internalName} (${parts.join(", ")})`;
 }

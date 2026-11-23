@@ -16,6 +16,7 @@ const item = (position: number, questionId: string, extra: Partial<PullItem> = {
   milestone: false,
   counting: "normal",
   intro: null,
+  introScope: "item",
   ...extra,
 });
 
@@ -75,6 +76,13 @@ describe("itemListDiff", () => {
     expect(itemListDiff([read], [item(0, "a", { intro: "Read chapter 9." })]).changed).toHaveLength(1);
     expect(itemListDiff([read], [item(0, "a")]).changed).toHaveLength(1);
     expect(isEmptyDiff(itemListDiff([read], [{ ...read }]))).toBe(true);
+  });
+
+  it("sees a text's scope that changed as a change of the item (ADR-143)", () => {
+    const read = item(0, "a", { intro: "Part 2." });
+    const section = item(0, "a", { intro: "Part 2.", introScope: "following" });
+    expect(itemListDiff([read], [section]).changed.map((c) => c.to.introScope)).toEqual(["following"]);
+    expect(isEmptyDiff(itemListDiff([section], [{ ...section }]))).toBe(true);
   });
 
   it("sees a change of order among the questions both sides hold", () => {

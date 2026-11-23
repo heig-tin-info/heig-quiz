@@ -1003,6 +1003,10 @@ const scenes = [
   // text as the student reads it (its code included).
   { name: "eval-config-intro-band", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByText("Partie 2 : le code").first().scrollIntoViewIfNeeded() },
   { name: "eval-config-intro-band-open", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { expanded: false }).filter({ hasText: "Partie 2 : le code" }).click() },
+  // ADR-143: a shared text, its band naming its questions, a rule beside the
+  // rows it covers; then its editor, the switch on.
+  { name: "eval-config-sections", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByText(/^Shared text, questions/).first().scrollIntoViewIfNeeded() },
+  { name: "eval-config-intro-shared", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^edit the text before/i }).nth(1).click() },
   { name: "eval-config-picker", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /add questions/i }).first().click() },
   // The picker with a question looked at (issue #207): docked beside the list
   // from 1280 px, in place of the list below.
@@ -1430,6 +1434,11 @@ const scenes = [
   { name: "player-intro", role: "student", path: `${TAKE}?scene=intro` },
   { name: "player-intro-continued", role: "student", path: `${TAKE}?scene=intro`, act: (p) => p.getByRole("button", { name: /^continue$/i }).click() },
   { name: "player-intro-forward", role: "student", path: `${TAKE}?scene=intro-forward`, act: (p) => p.getByRole("button", { name: /^continue$/i }).click() },
+  // ADR-143: straight to question 6, inside the section of question 4: its
+  // text first, naming the questions it applies to; then the question, the
+  // section's entries set in under its text in the list.
+  { name: "player-section", role: "student", path: `${TAKE}?scene=section`, act: async (p) => { await p.getByRole("button", { name: /^continue$/i }).click(); await p.getByRole("button", { name: /^Question 6,/ }).first().click(); await p.getByText(/^Questions 4 to 7$/).waitFor(); } },
+  { name: "player-section-continued", role: "student", path: `${TAKE}?scene=section`, act: async (p) => { await p.getByRole("button", { name: /^continue$/i }).click(); await p.getByRole("button", { name: /^Question 6,/ }).first().click(); await p.getByRole("button", { name: /^continue$/i }).click(); } },
   // The same list, the student having left the question unanswered: the flag
   // in the card's corner and "Leave unanswered" under it, both pressed.
   { name: "player-marks-skipped", role: "student", path: `${TAKE}?scene=marks`, act: async (p) => { await p.getByRole("button", { name: /^leave unanswered$/i }).click(); await p.getByRole("button", { name: /^leave unanswered$/i, pressed: true }).waitFor(); } },

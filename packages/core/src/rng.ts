@@ -34,8 +34,16 @@ export function rng(seed: number): () => number {
 
 /** Fisher-Yates, pure: returns a new array. Same seed => same permutation, forever. */
 export function shuffle<T>(items: readonly T[], seed: number): T[] {
+  return shuffleWith(items, rng(seed));
+}
+
+/**
+ * {@link shuffle} drawing from a generator the caller holds, so several
+ * lists can be shuffled from ONE stream, one after the other (the sections
+ * of ADR-143). `shuffleWith(items, rng(seed))` is `shuffle(items, seed)`.
+ */
+export function shuffleWith<T>(items: readonly T[], next: () => number): T[] {
   const out = items.slice();
-  const next = rng(seed);
   for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(next() * (i + 1));
     [out[i], out[j]] = [out[j]!, out[i]!];

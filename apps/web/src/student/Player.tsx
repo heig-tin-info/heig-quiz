@@ -42,7 +42,9 @@
  * shows that passage in place of the question, and the one primary action
  * is then "Continue". The text has its own entry in the question list,
  * before its question: under `free` navigation it brings the text back;
- * elsewhere Continue is one way (`passageOf`, `introReachable`).
+ * elsewhere Continue is one way (`passage`, `introReachable`). A section's
+ * text (ADR-143) shows on arriving at any of its questions until passed, and
+ * names the questions it applies to.
  *
  * A one-question evaluation has no navigation to draw: no progress strip
  * (the strip is a map of a paper that has one page) and no previous / next
@@ -74,7 +76,7 @@ import {
   isLocked,
   isWritable,
   neighbour,
-  passageOf,
+  passage as passageOn,
   segmentsOf,
   selectEntry,
 } from "../attempt/playerReducer";
@@ -337,7 +339,8 @@ export function PlayerView({
   const item = currentItem(state);
   // ADR-084: the teacher's text before the question, until Continue. While
   // it shows, the question — and everything that acts on it — waits.
-  const passage = passageOf(state);
+  const reading = passageOn(state);
+  const passage = reading?.text ?? null;
   const total = state.items.length;
   const locked = item ? isLocked(state, item.id) : true;
   // ADR-091 and ADR-124 §3: carried over, or checked — for the badge and the hint.
@@ -454,7 +457,7 @@ export function PlayerView({
     passage !== null && item ? (
       <>
         <div className="flex-1" />
-        <Button variant="primary" onClick={() => dispatch({ type: "pass", itemId: item.id })}>
+        <Button variant="primary" onClick={() => dispatch({ type: "pass", itemId: reading!.key })}>
           {t("player.intro.continue")}
           <ChevronRight className="size-4" aria-hidden />
         </Button>
@@ -546,6 +549,7 @@ export function PlayerView({
             <IntroPassage
               source={passage}
               index={state.index}
+              span={reading?.span ?? null}
               oneWay={state.navigation !== "free"}
             />
             {desktop && actions ? (

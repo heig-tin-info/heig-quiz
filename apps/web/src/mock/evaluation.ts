@@ -24,6 +24,8 @@ import { countsAsCompleted,
   splitTemplate,
   clockChoiceOf,
   type ClockSettings,
+  textOnRemoval,
+  type IntroScope,
   type ItemCounting,
   evaluationHoldsStudentWork,
 } from "@quiz/domain";
@@ -372,6 +374,10 @@ const MOCK_INTRO_PART2 =
   "ci-dessous ; gardez-la sous les yeux.\n\n```c\ndouble r_parallele(double r1, double r2)\n{\n" +
   "    return r1 * r2 / (r1 + r2);\n}\n```\n\nUne résistance nulle court-circuite le montage.";
 
+const MOCK_INTRO_PART3 =
+  "## Partie 3 — Schémas\n\nLes questions suivantes portent sur les schémas du chapitre 9. " +
+  "Gardez le polycopié ouvert à la page 112.";
+
 interface MockItem {
   id: string;
   position: number;
@@ -379,6 +385,7 @@ interface MockItem {
   milestone: boolean;
   counting: ItemCounting;
   intro: string | null;
+  introScope: IntroScope;
   questionId: string;
   questionVersionId: string;
   type: string;
@@ -517,8 +524,11 @@ function makeItems(count: number): MockItem[] {
       // that count: the builder's candy toggle and the student's label.
       counting: count >= 4 && i === 2 ? "bonus" : "normal",
       // ADR-084: the instructions before the first question, and a transition
-      // after the first section break — the builder's text bands.
-      intro: i === 0 ? MOCK_INTRO_FIRST : i === 2 ? MOCK_INTRO_PART2 : null,
+      // after the first section break — the builder's text bands. ADR-143:
+      // the transition, and a third part's text, are shared by the questions
+      // after them: two sections, their span on the band.
+      intro: i === 0 ? MOCK_INTRO_FIRST : i === 2 ? MOCK_INTRO_PART2 : i === 5 ? MOCK_INTRO_PART3 : null,
+      introScope: i === 2 || i === 5 ? "following" : "item",
       questionId: q.id,
       questionVersionId: uuid(),
       type: q.type,
@@ -1706,6 +1716,7 @@ on("GET", "/app/api/evaluations/:id/pull-template", (m) => {
     milestone: i.milestone,
     counting: i.counting,
     intro: i.intro,
+    introScope: i.introScope,
   });
   return {
     templateId: template.id,
@@ -1812,6 +1823,7 @@ function addItemsTo(e: MockEvaluation, questionIds: string[]): void {
       milestone: false,
       counting: "normal",
       intro: null,
+      introScope: "item",
       questionId: q.id,
       questionVersionId: uuid(),
       type: q.type,
@@ -1832,6 +1844,14 @@ function patchItemOf(e: MockEvaluation, itemId: string, body: Record<string, unk
   if (typeof body.intro === "string" || body.intro === null) {
     item.intro = typeof body.intro === "string" && body.intro.trim() !== "" ? body.intro : null;
   }
+  // ADR-143: a scope belongs to a text; the API's 422 without one.
+  if (body.introScope === "item" || body.introScope === "following") item.introScope = body.introScope;
+  if (item.intro === null) {
+    if (body.introScope === "following") {
+      throw new MockPayload(422, { error: "intro_scope_without_text", message: "only an item with a text can open a section" });
+    }
+    item.introScope = "item";
+  }
   return item;
 }
 
@@ -1841,6 +1861,11 @@ function reorderItemsOf(e: MockEvaluation, order: string[]): void {
 }
 
 function removeItemOf(e: MockEvaluation, itemId: string): void {
+  // ADR-143: a section's text moves to the next item when it may.
+  const { moveTo } = textOnRemoval(e.items, itemId, (i) => i);
+  const removed = e.items.find((i) => i.id === itemId);
+  const heir = e.items.find((i) => i.id === moveTo);
+  if (removed && heir) Object.assign(heir, { intro: removed.intro, introScope: removed.introScope });
   e.items = e.items.filter((i) => i.id !== itemId);
   e.items.forEach((i, index) => (i.position = index));
 }
@@ -1888,7 +1913,7 @@ on("DELETE", "/app/api/evaluations/:id/items/:itemId", (m) => {
 const contentOf = (e: MockEvaluation) =>
   JSON.stringify([
     e.mode,
-    e.items.map((i) => [i.id, i.points, i.milestone, i.counting, i.intro, i.versionNumber]),
+    e.items.map((i) => [i.id, i.points, i.milestone, i.counting, i.intro, i.introScope, i.versionNumber]),
     e.settings,
     e.gradingScale,
     e.feedbackPolicy,

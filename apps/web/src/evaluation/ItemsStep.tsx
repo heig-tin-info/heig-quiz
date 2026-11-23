@@ -34,7 +34,7 @@ import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "r
 
 import type { ConceptRef, EvaluationDetail, ItemPatch, ItemRow } from "@quiz/contracts";
 import type { z } from "zod";
-import { bonusTotal, type ItemListLock } from "@quiz/domain";
+import { bonusTotal, sectionSpans, textOnRemoval, type ItemListLock } from "@quiz/domain";
 
 import { api } from "../api";
 import type { Route } from "../router";
@@ -341,6 +341,7 @@ function ItemCard({
   onEditIntro,
   onRemoveIntro,
   addTextBelow,
+  section,
 }: {
   item: Row;
   index: number;
@@ -366,6 +367,12 @@ function ItemCard({
   onRemoveIntro: () => void;
   /** "+ Text" for the NEXT item, drawn in the gap under this row; null when it has one. */
   addTextBelow: GapAction | null;
+  /**
+   * ADR-143: the row's place in a section — its `head`, whose band names the
+   * questions it covers (`span`), or a `member` — or null outside one. A
+   * discreet rule runs down the left edge of the rows it covers.
+   */
+  section: { role: "head"; span: { from: number; to: number } } | { role: "member" } | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -383,9 +390,11 @@ function ItemCard({
         isDragging && "z-20 shadow-overlay ring-1 ring-line-strong",
       )}
     >
+      {section?.role === "member" ? <SectionRule /> : null}
       {item.intro !== null ? (
         <IntroBand
           intro={item.intro}
+          span={section?.role === "head" ? section.span : null}
           name={item.internalName}
           locked={locked}
           onEdit={onEditIntro}
@@ -394,6 +403,8 @@ function ItemCard({
         />
       ) : null}
       {/* The item's own line is the look; its bands (text, milestone) are not. */}
+      <div className="relative">
+      {section?.role === "head" ? <SectionRule /> : null}
       <div
         onClick={(e: MouseEvent) => {
           // A control of the row keeps its own click; the row's is a look.
@@ -528,8 +539,31 @@ function ItemCard({
           ]}
         />
       ) : null}
+      </div>
     </li>
   );
+}
+
+/**
+ * The discreet rule beside the rows a shared text covers (ADR-143): from
+ * under the text's band to the last question it applies to.
+ */
+function SectionRule() {
+  return <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-0.5 bg-line-strong" />;
+}
+
+/** What the section rules of `@quiz/domain` read of a row. */
+const sectionRow = (item: Row) => item;
+
+/**
+ * Where the questions of a shared text go when it is removed with its first
+ * question (ADR-143): under the shared text above, or under none. `from` and
+ * `to` are numbered from 1.
+ */
+function joinSentence(t: TFunction, items: readonly Row[], headIndex: number, from: number, to: number): string {
+  const above = sectionSpans(items.slice(0, headIndex), sectionRow).size > 0;
+  if (from === to) return t(above ? "eval.questions.intro.joinAboveOne" : "eval.questions.intro.joinNoneOne", { n: from });
+  return t(above ? "eval.questions.intro.joinAbove" : "eval.questions.intro.joinNone", { from, to });
 }
 
 /** What the list reads off an evaluation's detail or a template's: both have these. */
@@ -595,6 +629,12 @@ export function ItemsStep({
       setPendingOrder(null);
     }
   }, [detail.items, pendingOrder]);
+  // ADR-143: each shared text and the rows it covers, in the order shown.
+  const spans = useMemo(() => sectionSpans(items, sectionRow), [items]);
+  const memberOf = useMemo(
+    () => new Set([...spans.values()].flatMap((ids) => ids.slice(1))),
+    [spans],
+  );
 
   const invalidate = useTargetRefresh(target);
   /** THE item write, its body typed by the route's own schema (invariant 7). */
@@ -613,6 +653,11 @@ export function ItemsStep({
       await invalidate();
     },
   });
+  /** ADR-143: the 1-based index of the last question a shared text on row `index` covers, or null. */
+  const sectionEnd = (index: number): number | null => {
+    const ids = spans.get(items[index]?.id ?? "");
+    return ids === undefined ? null : index + ids.length;
+  };
   const removeIntro = async (item: ItemRow) => {
     const ok = await confirm({
       title: t("eval.questions.intro.removeConfirm"),
@@ -670,8 +715,23 @@ export function ItemsStep({
 
   // Removing an item takes nothing away from the pool — the question stays
   // where it was written — and it is only possible while nobody can have
-  // seen the list, so it is an edit and not worth a dialog.
-  const removeItem = (item: ItemRow) => remove.mutate(item.id);
+  // seen the list, so it is an edit and not worth a dialog. Unless it takes
+  // away the shared text of other questions (ADR-143): kept when the next
+  // question can carry it, otherwise the dialog says which questions lose it.
+  const removeItem = async (item: ItemRow) => {
+    const index = items.indexOf(item);
+    const end = sectionEnd(index);
+    if (end !== null && end > index + 1 && textOnRemoval(items, item.id, sectionRow).dropped) {
+      const ok = await confirm({
+        title: t("eval.questions.removeShared.title"),
+        message: joinSentence(t, items, index, index + 2, end),
+        confirmLabel: t("eval.questions.removeShared.action"),
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    remove.mutate(item.id);
+  };
 
   const addButton = (
     <Button variant={addVariant} onClick={() => setAdding(true)} disabled={locked}>
@@ -801,7 +861,7 @@ export function ItemsStep({
                           patch.mutate({ itemId: item.id, body: { milestone } })
                         }
                         onUpdate={() => updateVersions.mutate([item.id])}
-                        onRemove={() => removeItem(item)}
+                        onRemove={() => void removeItem(item)}
                         canEdit={editable.has(item.questionId)}
                         onPreview={() => pane.setShown(item.id)}
                         onEdit={() =>
@@ -813,6 +873,13 @@ export function ItemsStep({
                           items[index + 1] && items[index + 1]!.intro === null
                             ? addTextBefore(items[index + 1]!)
                             : null
+                        }
+                        section={
+                          spans.has(item.id)
+                            ? { role: "head", span: { from: index + 1, to: sectionEnd(index)! } }
+                            : memberOf.has(item.id)
+                              ? { role: "member" }
+                              : null
                         }
                       />
                     ))}
@@ -835,9 +902,12 @@ export function ItemsStep({
         <IntroEditor
           name={introItem.internalName}
           initial={introItem.intro ?? ""}
+          initialScope={introItem.introScope}
           saving={saveIntro.isPending}
           error={saveIntro.error}
-          onSave={(intro) => saveIntro.mutate({ itemId: introItem.id, body: { intro } })}
+          onSave={(intro, introScope) =>
+            saveIntro.mutate({ itemId: introItem.id, body: intro === null ? { intro } : { intro, introScope } })
+          }
           onClose={() => {
             saveIntro.reset();
             setWritingIntro(null);

@@ -108,6 +108,7 @@ export const student = {
   "player.intro.before": "Before question {n}",
   "player.intro.continue": "Continue",
   "player.intro.oneWay": "Once you continue, this text is not shown again.",
+  "player.intro.section": "Questions {from} to {to}",
   "player.answered": "Answered",
   "player.skipped": "Left unanswered",
   "player.skip": "Leave unanswered",

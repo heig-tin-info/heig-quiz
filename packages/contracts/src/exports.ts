@@ -97,6 +97,8 @@ export const HandoutRecord = z.object({
       type: z.string(),
       points: z.number(),
       counting: z.enum(ITEM_COUNTINGS),
+      /** ADR-143: the text of the section this item opens on the paper; printed before `intro`. */
+      sectionIntro: z.string().nullable(),
       intro: z.string().nullable(),
       /** The type's student view, through the one exit (invariant 4). */
       statement: z.unknown(),

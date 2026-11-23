@@ -1,5 +1,5 @@
 /** Section 4 of the mock — see `index.ts` for the layout. */
-import { studentProjectGroup, type StudentActivityGroup } from "@quiz/domain";
+import { placeIntros, studentProjectGroup, type StudentActivityGroup } from "@quiz/domain";
 import { ContestationFileBody, evaluationConditionsOf } from "@quiz/contracts";
 import type {
   AttemptView,
@@ -80,7 +80,7 @@ import { me } from "./session";
 // serves:
 //
 //   ?scene=lobby | ready | running | paused | closed | extend | single | marks
-//          | forward | exercise | intro | intro-forward | partial
+//          | forward | exercise | intro | intro-forward | section | partial
 //          (running by default)
 //
 // `partial` is a partial retake of an exercise (ADR-091): Q1 and Q4 were
@@ -90,6 +90,8 @@ import { me } from "./session";
 // `intro` gives Q1 and Q4 the teacher's text before them (ADR-084): the
 // paper opens on the passage screen. `intro-forward` is the same paper under
 // `forward_only` navigation, where a text once passed cannot be reopened.
+// `section` (ADR-143) keeps Q1's text and makes Q4's and Q8's shared by the
+// questions after them: two sections, indented in the question list.
 //
 // `ready` is a running evaluation the student has not started (ADR-076): the
 // entry route answers the ready screen until `POST …/attempt/start`.
@@ -435,6 +437,8 @@ studentAnswers.set(studentItem(7), {
   done: false,
 });
 let studentPosition: string | null = studentItem(1);
+// ADR-143: the section of question 4 untouched, so its text is still to read.
+if (scene === "section") for (const n of [4, 5, 6, 7]) studentAnswers.delete(studentItem(n));
 /** ADR-084: the passages of `?scene=intro`, by question number. */
 const STUDENT_INTROS: Record<number, string> = {
   1:
@@ -444,6 +448,26 @@ const STUDENT_INTROS: Record<number, string> = {
     "## Partie 2 — Code\n\nLes questions suivantes demandent d'écrire du code. Relisez votre fonction avant de continuer : " +
     "`r_parallele` doit gérer une résistance nulle.",
 };
+/** ADR-143: the texts of `?scene=section` that open a section, by question number. */
+const STUDENT_SECTIONS: Record<number, string> = {
+  4: STUDENT_INTROS[4]!,
+  8:
+    "## Partie 3 — Schémas\n\nLes questions 8 à 13 portent sur les schémas du chapitre 9 : " +
+    "circuits, diagrammes et blocs. Gardez le polycopié ouvert à la page 112.",
+};
+
+/** What the server places before each question of the paper (`placeIntros`), and the section of each. */
+const studentPlaced = (numbers: readonly number[]) => {
+  const items = numbers.map((n) => {
+    const section = scene === "section" ? STUDENT_SECTIONS[n] : undefined;
+    const own = scene === "intro" || scene === "intro-forward" || scene === "section" ? STUDENT_INTROS[n] : undefined;
+    return section !== undefined
+      ? { id: studentItem(n), intro: section, introScope: "following" as const }
+      : { id: studentItem(n), intro: own ?? null, introScope: "item" as const };
+  });
+  return placeIntros(items, items, (item) => item).map((placed, rank) => ({ ...placed, n: numbers[rank]! }));
+};
+
 if (scene === "marks" || scene === "forward") {
   // Q1 answered, Q2 left on purpose, Q3 flagged and still empty (where the
   // student is), Q4 flagged with an answer; Q5 answered, Q6 untouched.
@@ -543,6 +567,9 @@ export const studentConditions = (kiosk = false) =>
 /** What question n is worth. */
 const studentItemPoints = (n: number): number => (n === 4 ? 5 : n === 5 || n === 7 ? 3 : n === 3 ? 1 : 2);
 
+/** The question numbers of the paper, in its order. */
+const studentNumbers = (): number[] => (scene === "single" ? [1] : STUDENT_TYPES.map((_, i) => i + 1));
+
 export const studentAttemptView = (): AttemptView => ({
   conditions: studentConditions(),
   attempt: {
@@ -574,7 +601,7 @@ export const studentAttemptView = (): AttemptView => ({
     pausedAt: scene === "paused" ? iso(-30_000) : null,
     totalPoints: 10,
   },
-  items: (scene === "single" ? [1] : STUDENT_TYPES.map((_, i) => i + 1)).map((n) => {
+  items: studentPlaced(studentNumbers()).map(({ n, intro, sectionIntro, section }) => {
     const stored = studentAnswers.get(studentItem(n));
     return {
       id: studentItem(n),
@@ -584,7 +611,9 @@ export const studentAttemptView = (): AttemptView => ({
       milestone: n === 3,
       // The circuit, a bonus question (ADR-052): the player's label.
       counting: n === 5 ? ("bonus" as const) : ("normal" as const),
-      intro: scene === "intro" || scene === "intro-forward" ? (STUDENT_INTROS[n] ?? null) : null,
+      intro,
+      section,
+      sectionIntro,
       // ADR-026: what `toStudent` adds to a choice question under negative marking.
       student:
         n === 1 && flags.negative

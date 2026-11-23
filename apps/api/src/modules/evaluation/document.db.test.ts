@@ -28,7 +28,7 @@ import * as live from "../live/service.js";
 import { typeOf } from "../pool/config.js";
 import * as poolService from "../pool/service.js";
 import { handout, handoutTree } from "./document.js";
-import { addItems, joinedItems, settingsOf } from "./service.js";
+import { addItems, joinedItems, patchItem, settingsOf } from "./service.js";
 
 /** One question of each printable type, every secret a marker the search finds. */
 const QUESTIONS = {
@@ -279,6 +279,30 @@ describe("the hand-out (ADR-125)", () => {
     // Exactly what a digital attempt of the same seed is served, choices included (ADR-097).
     const attempt = await live.previewView(db, await reload(db, evaluation.id), server.clock.now(), seed);
     expect(first.items.map((i) => [i.id, i.statement])).toEqual(attempt.items.map((i) => [i.id, i.student]));
+  });
+
+  it("prints a section's text once, at the head of its section in the paper's order (ADR-143)", async () => {
+    const db = server.app.db;
+    const evaluation = await exam();
+    const items = await joinedItems(db, evaluation.id);
+    const section = "SECTION_TEXT_143";
+    // The section opens on the second item: the first stays a leading item.
+    await patchItem(db, evaluation, items[1]!.item.id, { intro: section, introScope: "following" }, { attemptCount: 0 });
+    const head = items[1]!.item.id;
+    // A seed under which the section's first item is not the one carrying its text.
+    let seed = 1;
+    const sectioned = await joinedItems(db, evaluation.id);
+    while (live.orderItems(sectioned, settingsOf(evaluation), seed, evaluation.id)[1]!.item.id === head) seed += 1;
+    await db.update(evaluations).set({ paperSeed: seed }).where(eq(evaluations.id, evaluation.id));
+
+    const record = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
+    expect(record.items[0]!.id).toBe(items[0]!.item.id);
+    expect(record.items.map((i) => i.sectionIntro)).toEqual([null, section, null, null, null]);
+    expect(record.items.map((i) => i.intro)).toEqual([null, null, null, null, null]);
+    const text = (await get(url(evaluation.id, "handout.md"), teacher.headers)).body;
+    expect(text.split(section)).toHaveLength(2);
+    expect(text.indexOf(section)).toBeGreaterThan(text.search(/^## Question 1 /m));
+    expect(text.indexOf(section)).toBeLessThan(text.search(/^## Question 2 /m));
   });
 
   it("keeps one seed when two first prints race", async () => {

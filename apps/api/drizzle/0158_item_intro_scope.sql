@@ -1,0 +1,3 @@
+ALTER TABLE "evaluation_items" ADD COLUMN "intro_scope" text DEFAULT 'item' NOT NULL;--> statement-breakpoint
+ALTER TABLE "evaluation_items" ADD CONSTRAINT "evaluation_items_intro_scope_ck" CHECK ("evaluation_items"."intro_scope" in ('item', 'following'));--> statement-breakpoint
+ALTER TABLE "evaluation_items" ADD CONSTRAINT "evaluation_items_intro_scope_text_ck" CHECK ("evaluation_items"."intro_scope" = 'item' or "evaluation_items"."intro" is not null);

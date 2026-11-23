@@ -288,7 +288,7 @@ describe("ItemsStep — the text before an item (ADR-084)", () => {
     await user.click(within(row).getByRole("button", { name: "Edit the text before array-decay" }));
     const dialog = await screen.findByRole("dialog", { name: "Text before array-decay" });
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ intro }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ intro, introScope: "item" }));
 
     await user.click(
       within(rowOf("array-decay")).getByRole("button", { name: "Remove the text before array-decay" }),
@@ -361,5 +361,103 @@ describe("ItemsStep — the text before an item (ADR-084)", () => {
     expect(screen.queryByRole("button", { name: /^add a text before/i })).toBeNull();
     expect(screen.getByRole("button", { name: "Edit the text before array-decay" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Remove the text before array-decay" })).toBeDisabled();
+  });
+});
+
+describe("ItemsStep — a shared text (ADR-143)", () => {
+  const shared = "## Part 2\n\nThe next questions are about the listing.";
+  const patchUrl = (id: string) => `PATCH /app/api/evaluations/${EVALUATION_ID}/items/${id}`;
+  const deleteUrl = (id: string) => `DELETE /app/api/evaluations/${EVALUATION_ID}/items/${id}`;
+  const head = makeItemRow(1, { internalName: "head-q", intro: shared, introScope: "following" });
+  const second = makeItemRow(2, { internalName: "second-q" });
+  const third = makeItemRow(3, { internalName: "third-q" });
+  const list = (items = [frozen, head, second, third]) =>
+    renderWithProviders(
+      <ItemsStep target={target} lock={null} detail={makeEvaluationDetail({ items })} navigate={vi.fn()} />,
+    );
+  /** The rule beside the rows a shared text covers. */
+  const ruled = (name: string) => rowOf(name).querySelector(".bg-line-strong.w-0\\.5") !== null;
+
+  it("writes the switch with the text, off for a new one", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({ [patchUrl(other.id)]: ok([]) });
+    list([frozen, other]);
+    await user.click(screen.getByRole("button", { name: "Add a text before array-decay" }));
+    const dialog = await screen.findByRole("dialog", { name: "Text before array-decay" });
+    const toggle = within(dialog).getByRole("switch", {
+      name: "Also applies to the following questions, until the next shared text",
+    });
+    expect(toggle).not.toBeChecked();
+    // The markdown source, where the field is a plain textarea.
+    await user.click(within(dialog).getByRole("button", { name: "Markdown source" }));
+    await user.type(within(dialog).getByRole("textbox", { name: "Text" }), "Part 2");
+    await user.click(toggle);
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ intro: "Part 2", introScope: "following" }),
+    );
+  });
+
+  it("names the questions it applies to on its band, and rules the rows it covers", () => {
+    mockFetch({});
+    list();
+    expect(within(rowOf("head-q")).getByText("Shared text, questions 2 to 4")).toBeInTheDocument();
+    expect(ruled("pointer-decl")).toBe(false);
+    for (const name of ["head-q", "second-q", "third-q"]) expect(ruled(name), name).toBe(true);
+  });
+
+  it("stops sharing on Save, with no dialog: the switch is reversible", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({ [patchUrl(head.id)]: ok([]) });
+    list();
+    await user.click(within(rowOf("head-q")).getByRole("button", { name: "Edit the text before head-q" }));
+    const dialog = await screen.findByRole("dialog", { name: "Text before head-q" });
+    await user.click(within(dialog).getByRole("switch"));
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ intro: shared, introScope: "item" }),
+    );
+  });
+
+  it("removes the first question without a dialog when the next one takes the text", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({ [deleteUrl(head.id)]: ok(null) });
+    list();
+    await user.click(screen.getByRole("button", { name: "Remove head-q from the evaluation" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("asks before the text goes with its question, naming the questions that lose it", async () => {
+    const user = userEvent.setup();
+    const ownText = makeItemRow(2, { internalName: "second-q", intro: "Read it." });
+    const { calls } = mockFetch({ [deleteUrl(head.id)]: ok(null) });
+    list([frozen, head, ownText, third]);
+    await user.click(screen.getByRole("button", { name: "Remove head-q from the evaluation" }));
+    expect(await screen.findByText("Questions 3 to 4 then have no shared text.")).toBeInTheDocument();
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+    await user.click(screen.getByRole("button", { name: "Remove both" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
+  });
+
+  it("names the shared text above when there is one", async () => {
+    const user = userEvent.setup();
+    mockFetch({});
+    const first = makeItemRow(0, { internalName: "first-q", intro: "## Part 1", introScope: "following" });
+    const ownText = makeItemRow(2, { internalName: "second-q", intro: "Read it." });
+    list([first, head, ownText, third]);
+    await user.click(screen.getByRole("button", { name: "Remove head-q from the evaluation" }));
+    expect(await screen.findByText("Questions 3 to 4 then come under the shared text above.")).toBeInTheDocument();
+  });
+
+  it("removes a one-question section like a question with its own text: no dialog", async () => {
+    const user = userEvent.setup();
+    const alone = makeItemRow(1, { internalName: "head-q", intro: shared, introScope: "following" });
+    const next = makeItemRow(2, { internalName: "second-q", intro: "## Part 3", introScope: "following" });
+    const { calls } = mockFetch({ [deleteUrl(alone.id)]: ok(null) });
+    list([frozen, alone, next]);
+    await user.click(screen.getByRole("button", { name: "Remove head-q from the evaluation" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

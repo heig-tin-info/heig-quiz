@@ -29,8 +29,12 @@ export interface PlayerItem {
   milestone: boolean;
   /** ADR-052, ADR-108: a bonus is labelled "Bonus question"; its points are not in the total. */
   counting: ItemCounting;
-  /** ADR-084: the teacher's passage shown before the item; null for none. */
+  /** ADR-084: the teacher's passage shown before the item, its own; null for none. */
   intro: string | null;
+  /** ADR-143: the section the item belongs to (the id of the item opening it); null outside one. */
+  section: string | null;
+  /** ADR-143: the section's text, on the first item of the section in this order only. */
+  sectionIntro: string | null;
   /**
    * VALIDATED: "Validate and continue" in `forward_only`, a crossed
    * checkpoint in `milestones` (F-LIVE-08, issue #89).
@@ -74,9 +78,11 @@ export interface PlayerState {
   /** itemId → the answer payload, `null` for "opened, nothing written". */
   answers: Record<string, unknown>;
   /**
-   * ADR-084: the items whose intro this player has passed ("Continue"), or
-   * that were already started when the attempt loaded. Held here, never
-   * stored: see {@link passageOf}.
+   * ADR-084: the texts this player has passed ("Continue"), or whose item was
+   * already started when the attempt loaded, by key: an item's own text by
+   * its item's id, a section's text (ADR-143) by its section's id — the id of
+   * the item that opens it, which never has a text of its own, so the two
+   * keys never meet. Held here, never stored: see {@link passage}.
    */
   passed: Readonly<Record<string, true>>;
 }
@@ -101,11 +107,11 @@ export type PlayerAction =
   | { type: "flag"; itemId: string; flagged: boolean }
   /** ADR-124 §3: the server checked the question; its correction, as it answered. */
   | { type: "check"; itemId: string; correction: ItemCorrection }
-  /** ADR-084: "Continue" on the passage screen: the question shows. */
+  /** ADR-084: "Continue" on the passage screen; `itemId` is the text's key ({@link PlayerState.passed}). */
   | { type: "pass"; itemId: string }
   /**
-   * ADR-084: the passage's entry of the question list, chosen: its item, with
-   * the text shown again (see {@link introReachable}).
+   * ADR-084: the passage's entry of the question list, chosen: the text of
+   * key `itemId` shown again (see {@link introReachable}).
    */
   | { type: "intro"; itemId: string }
   /**
@@ -131,6 +137,8 @@ const toItem = (item: AttemptItem): PlayerItem => ({
   milestone: item.milestone,
   counting: item.counting,
   intro: item.intro,
+  section: item.section,
+  sectionIntro: item.sectionIntro,
   markedDone: item.markedDone,
   skipped: item.skipped,
   flagged: item.flagged,
@@ -186,32 +194,77 @@ export function isWritable(state: PlayerState, itemId: string): boolean {
 
 export const currentItem = (state: PlayerState): PlayerItem | undefined => state.items[state.index];
 
-/**
- * The passage screen (ADR-084): the intro of the item on screen while it has
- * not been passed, `null` once it has — or when there is none. One rule for
- * every navigation: an intro shows on arriving at its item until Continue;
- * what differs is only whether its entry in the question list can bring it
- * back ({@link introReachable}).
- */
-export function passageOf(state: PlayerState): string | null {
-  const item = currentItem(state);
-  if (!item || item.intro === null || state.passed[item.id] === true) return null;
-  return item.intro;
+/** The text of section `section` (ADR-143), on the first of its items in this order; null without one. */
+function sectionText(state: PlayerState, section: string): string | null {
+  return state.items.find((i) => i.section === section && i.sectionIntro !== null)?.sectionIntro ?? null;
+}
+
+/** The text on the passage screen and its key ({@link PlayerState.passed}). */
+export interface Passage {
+  key: string;
+  text: string;
+  /** A section's text: the questions it applies to, numbered from 1; null otherwise or for one question. */
+  span: { from: number; to: number } | null;
+}
+
+/** The questions of section `section`, numbered in this order; null for a section of one. */
+function spanOf(state: PlayerState, section: string): { from: number; to: number } | null {
+  const from = state.items.findIndex((i) => i.section === section);
+  const count = state.items.filter((i) => i.section === section).length;
+  // The items of a section are contiguous in the student's order.
+  return count > 1 ? { from: from + 1, to: from + count } : null;
 }
 
 /**
- * Whether the passage before `itemId` can be opened from the question list:
- * the item has an intro and can be reached, and — outside `free` navigation —
- * the text has not been passed yet. In `forward_only` and `milestones`
- * Continue is one way, which is what makes "memorise this, then answer"
- * possible (ADR-084 §6); before that, the entry leads where the question's
- * would. The one rule behind the entry's lock and the `intro` action.
+ * The passage screen (ADR-084), or `null` while the question shows. One rule
+ * for every navigation: an item's own text shows on arriving at its item
+ * until Continue; a section's text (ADR-143) shows on arriving at ANY item of
+ * its section until it is passed — Continue, or an item of the section
+ * started — so a student jumping to its third question reads it first, and
+ * then that question's own text if it has one. What differs between
+ * navigations is only whether the list can bring a text back
+ * ({@link introReachable}).
  */
-export function introReachable(state: PlayerState, itemId: string): boolean {
-  const index = state.items.findIndex((i) => i.id === itemId);
-  const item = state.items[index];
-  if (item === undefined || item.intro === null || !canReach(state, index)) return false;
-  return state.navigation === "free" || state.passed[itemId] !== true;
+export function passage(state: PlayerState): Passage | null {
+  const item = currentItem(state);
+  if (!item) return null;
+  if (item.section !== null && state.passed[item.section] !== true) {
+    const text = sectionText(state, item.section);
+    if (text !== null) return { key: item.section, text, span: spanOf(state, item.section) };
+  }
+  return item.intro !== null && state.passed[item.id] !== true ? { key: item.id, text: item.intro, span: null } : null;
+}
+
+/** The text of the passage screen ({@link passage}), `null` when the question shows. */
+export function passageOf(state: PlayerState): string | null {
+  return passage(state)?.text ?? null;
+}
+
+/**
+ * Where the text of `key` is read: a section's (ADR-143) on the question the
+ * student is on when it is one of the section's — a section's text is reread
+ * from any of its questions, and Continue leads back there — on its first
+ * question otherwise; an item's own on its item. -1 for no such text.
+ */
+function readingIndex(state: PlayerState, key: string): number {
+  if (sectionText(state, key) !== null) {
+    return currentItem(state)?.section === key ? state.index : state.items.findIndex((i) => i.section === key);
+  }
+  return state.items.findIndex((i) => i.id === key && i.intro !== null);
+}
+
+/**
+ * Whether the text of `key` can be opened from the question list: it exists
+ * and its question can be reached, and — outside `free` navigation — it has
+ * not been passed yet. In `forward_only` and `milestones` Continue is one way,
+ * which is what makes "memorise this, then answer" possible (ADR-084 §6);
+ * before that, the entry leads where the question's would. The one rule
+ * behind the entry's lock and the `intro` action.
+ */
+export function introReachable(state: PlayerState, key: string): boolean {
+  const index = readingIndex(state, key);
+  if (index < 0 || !canReach(state, index)) return false;
+  return state.navigation === "free" || state.passed[key] !== true;
 }
 
 /**
@@ -230,6 +283,16 @@ export function selectEntry(entryId: string): PlayerAction {
 /** Already started: an answer, "Leave unanswered", or validated. Its intro is behind the student. */
 const started = (item: AttemptItem): boolean =>
   item.answer !== null || item.skipped || item.markedDone;
+
+/**
+ * Whether a section's text (ADR-143) is behind the student when the attempt
+ * loads: an item of the section is started — but not one carried over by a
+ * partial retake (ADR-091), which must not swallow the text of a section it
+ * retakes; with nothing of it retaken, it is passed.
+ */
+function sectionPassedOnLoad(members: readonly AttemptItem[]): boolean {
+  return members.some((i) => started(i) && !i.acquired) || members.every((i) => i.acquired);
+}
 
 /** The next index the arrows would land on, or `null` when there is none. */
 export function neighbour(state: PlayerState, delta: 1 | -1): number | null {
@@ -256,29 +319,36 @@ export function segmentsOf(
   answered: (type: string, answer: unknown) => boolean,
 ): Segment[] {
   const locked = lockedIds(state);
-  const reading = passageOf(state) !== null;
+  const reading = passage(state);
   return state.items.flatMap((item, index) => {
-    const here = index === state.index;
     const mark = answerMark({
       answered: answered(item.type, state.answers[item.id] ?? null),
       skipped: item.skipped,
     });
+    // ADR-143: a section's questions, and the texts of their own, stand
+    // indented under the section's text; that text's entry does not.
+    const indent = item.section !== null ? { indent: true } : {};
     const question: Segment = {
       id: item.id,
       mark,
-      current: here && !reading,
+      current: index === state.index && reading === null,
       flagged: item.flagged,
       locked: item.serverLocked || locked.has(item.id),
+      ...indent,
     };
-    if (item.intro === null) return [question];
-    const passage: Segment = {
-      id: `${PASSAGE}${item.id}`,
+    const entry = (key: string, text: string, rest: Partial<Segment>): Segment => ({
+      id: `${PASSAGE}${key}`,
       mark: "unanswered",
-      current: here && reading,
-      locked: !introReachable(state, item.id),
-      passage: { title: markdownTitle(item.intro) },
-    };
-    return [passage, question];
+      current: reading?.key === key,
+      locked: !introReachable(state, key),
+      passage: { title: markdownTitle(text) },
+      ...rest,
+    });
+    return [
+      ...(item.section !== null && item.sectionIntro !== null ? [entry(item.section, item.sectionIntro, {})] : []),
+      ...(item.intro !== null ? [entry(item.id, item.intro, indent)] : []),
+      question,
+    ];
   });
 }
 
@@ -332,7 +402,12 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       // close again a text the student reopened from the list.
       const passed: Record<string, true> = { ...state.passed };
       for (const item of action.view.items) {
-        if (!before.has(item.id) && started(item)) passed[item.id] = true;
+        if (before.has(item.id)) continue;
+        if (item.intro !== null && started(item)) passed[item.id] = true;
+        if (item.section !== null && item.sectionIntro !== null) {
+          const members = action.view.items.filter((i) => i.section === item.section);
+          if (sectionPassedOnLoad(members)) passed[item.section] = true;
+        }
       }
       return {
         items,
@@ -347,11 +422,10 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       return { ...state, passed: { ...state.passed, [action.itemId]: true } };
     case "intro": {
       if (!introReachable(state, action.itemId)) return state;
-      const index = state.items.findIndex((i) => i.id === action.itemId);
       // Already on screen: nothing moves.
-      if (index === state.index && state.passed[action.itemId] !== true) return state;
+      if (passage(state)?.key === action.itemId) return state;
       const { [action.itemId]: _reopened, ...passed } = state.passed;
-      return { ...state, index, passed };
+      return { ...state, index: readingIndex(state, action.itemId), passed };
     }
     case "goto": {
       const index = state.items.findIndex((i) => i.id === action.itemId);

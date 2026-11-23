@@ -338,7 +338,6 @@ describe("items (F-EVAL-02, F-EVAL-03)", () => {
       db,
       await reload(db, seed.evaluationId),
       before[1]!.id,
-      { attemptCount: 0 },
     );
     expect(after.map((i) => i.position)).toEqual([0, 1]);
   });
@@ -355,7 +354,7 @@ describe("items (F-EVAL-02, F-EVAL-03)", () => {
     await expect(
       service.patchItem(db, row, items[0]!.id, { points: 9, counting: "normal" }, ctx),
     ).rejects.toMatchObject({ code: "locked" });
-    await expect(service.deleteItem(db, row, items[0]!.id, ctx)).rejects.toMatchObject({
+    await expect(service.deleteItem(db, row, items[0]!.id)).rejects.toMatchObject({
       code: "locked",
     });
   });
@@ -379,7 +378,7 @@ describe("the item list freezes once the evaluation is opened (issue #79)", () =
         service.addItems(db, row, seed.questionIds.slice(0, 1), points, ctx),
         state,
       ).rejects.toMatchObject(frozen);
-      await expect(service.deleteItem(db, row, items[0]!.id, ctx), state).rejects.toMatchObject(
+      await expect(service.deleteItem(db, row, items[0]!.id), state).rejects.toMatchObject(
         frozen,
       );
       await expect(
@@ -405,7 +404,7 @@ describe("the item list freezes once the evaluation is opened (issue #79)", () =
   it("keeps the list editable while scheduled", async () => {
     const { seed, row } = await opened("scheduled", 3);
     const items = await service.itemRows(db, seed.evaluationId);
-    const after = await service.deleteItem(db, row, items[0]!.id, { attemptCount: 0 });
+    const after = await service.deleteItem(db, row, items[0]!.id);
     expect(after).toHaveLength(2);
   });
 
@@ -413,7 +412,7 @@ describe("the item list freezes once the evaluation is opened (issue #79)", () =
     const { seed, row } = await opened("lobby", 2);
     const draft = await service.transition(db, row, "draft", server.clock.now());
     const items = await service.itemRows(db, seed.evaluationId);
-    const after = await service.deleteItem(db, draft, items[0]!.id, { attemptCount: 0 });
+    const after = await service.deleteItem(db, draft, items[0]!.id);
     expect(after).toHaveLength(1);
   });
 

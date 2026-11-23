@@ -11,8 +11,10 @@ import {
   isWritable,
   lockedIds,
   neighbour,
+  passage,
   passageOf,
   playerReducer,
+  segmentsOf,
   selectEntry,
   type PlayerState,
 } from "./playerReducer";
@@ -32,6 +34,8 @@ const item = (n: number, over: Partial<AttemptView["items"][number]> = {}) => ({
   milestone: false,
   counting: "normal" as const,
   intro: null as string | null,
+  section: null as string | null,
+  sectionIntro: null as string | null,
   student: {},
   answer: null,
   revision: 0,
@@ -368,6 +372,124 @@ describe("playerReducer: the text before an item (ADR-084)", () => {
     state = playerReducer(state, { type: "pass", itemId: "i4" });
     state = playerReducer(state, { type: "load", view: view("free", items, "i4") });
     expect(passageOf(state)).toBeNull();
+  });
+});
+
+describe("playerReducer: a section's text (ADR-143)", () => {
+  const shared = "## Part 2";
+  const own = "Read the listing.";
+  type Over = Partial<AttemptView["items"][number]>;
+  /** i1 alone, then the section opened by i2 over i2..i4, i3 with a text of its own; in canonical order. */
+  const paper = (over: Partial<Record<number, Over>> = {}) => [
+    item(1, over[1]),
+    item(2, { sectionIntro: shared, section: "i2", ...over[2] }),
+    item(3, { intro: own, section: "i2", ...over[3] }),
+    item(4, { section: "i2", ...over[4] }),
+  ];
+  /** The same section shuffled, i3 drawn first: the section's text is on it, beside its own. */
+  const drawn = (over: Partial<Record<number, Over>> = {}) => [
+    item(1, over[1]),
+    item(3, { intro: own, sectionIntro: shared, section: "i2", ...over[3] }),
+    item(2, { section: "i2", ...over[2] }),
+    item(4, { section: "i2", ...over[4] }),
+  ];
+
+  it("shows on the first arrival at any question of the section, and once passed, not again", () => {
+    let state = load(view("free", paper(), "i1"));
+    expect(passageOf(state)).toBeNull();
+    // Straight to the section's last question: its text first.
+    state = playerReducer(state, { type: "goto", itemId: "i4" });
+    expect(passage(state)).toEqual({ key: "i2", text: shared, span: { from: 2, to: 4 } });
+    state = playerReducer(state, { type: "pass", itemId: "i2" });
+    expect(currentItem(state)?.id).toBe("i4");
+    expect(passageOf(state)).toBeNull();
+    // The section's first question: its text is behind the student now.
+    state = playerReducer(state, { type: "goto", itemId: "i2" });
+    expect(passageOf(state)).toBeNull();
+    // A question's own text inside the section still shows on its arrival.
+    state = playerReducer(state, { type: "goto", itemId: "i3" });
+    expect(passage(state)).toEqual({ key: "i3", text: own, span: null });
+  });
+
+  it("keeps a question's own text apart when that question carries its section's text", () => {
+    let state = load(view("free", drawn(), "i1"));
+    // To the section's last question: its section's text only, never i3's own.
+    state = playerReducer(state, { type: "goto", itemId: "i4" });
+    expect(passage(state)).toEqual({ key: "i2", text: shared, span: { from: 2, to: 4 } });
+    state = playerReducer(state, { type: "pass", itemId: "i2" });
+    expect(passageOf(state)).toBeNull();
+    // i3's own text is still to read, before i3.
+    state = playerReducer(state, { type: "goto", itemId: "i3" });
+    expect(passage(state)).toEqual({ key: "i3", text: own, span: null });
+    // A reload with i4 started: the section is passed, i3's own text is not.
+    const reloaded = load(view("free", drawn({ 4: { answer: { selected: [0] } } }), "i3"));
+    expect(passage(reloaded)).toEqual({ key: "i3", text: own, span: null });
+  });
+
+  it("shows the section's text before a question's own one", () => {
+    let state = load(view("free", drawn(), "i3"));
+    expect(passage(state)?.key).toBe("i2");
+    state = playerReducer(state, { type: "pass", itemId: "i2" });
+    expect(passageOf(state)).toBe(own);
+  });
+
+  it("is passed on load once any question of the section is started", () => {
+    const state = load(view("free", paper({ 4: { answer: { selected: [0] } } }), "i3"));
+    expect(state.passed["i2"]).toBe(true);
+    expect(passageOf(state)).toBe(own);
+    expect(load(view("free", paper(), "i3")).passed["i2"]).toBeUndefined();
+  });
+
+  it("free navigation: reread from any question of the section, then back to that question", () => {
+    let state = load(view("free", paper({ 2: { answer: { selected: [0] } } }), "i4"));
+    expect(passageOf(state)).toBeNull();
+    state = playerReducer(state, selectEntry("intro:i2"));
+    expect(currentItem(state)?.id).toBe("i4");
+    expect(passageOf(state)).toBe(shared);
+    expect(playerReducer(state, selectEntry("intro:i2"))).toBe(state);
+    state = playerReducer(state, { type: "pass", itemId: "i2" });
+    expect(currentItem(state)?.id).toBe("i4");
+    expect(passageOf(state)).toBeNull();
+    // From outside the section, its entry leads to its first question.
+    state = playerReducer(state, { type: "goto", itemId: "i1" });
+    state = playerReducer(state, selectEntry("intro:i2"));
+    expect(currentItem(state)?.id).toBe("i2");
+    expect(passageOf(state)).toBe(shared);
+  });
+
+  it("is one way outside free navigation, as an item's text is", () => {
+    let state = load(view("forward_only", paper(), "i2"));
+    state = playerReducer(state, { type: "pass", itemId: "i2" });
+    state = playerReducer(state, { type: "goto", itemId: "i4" });
+    expect(introReachable(state, "i2")).toBe(false);
+    expect(playerReducer(state, selectEntry("intro:i2"))).toBe(state);
+    expect(passageOf(state)).toBeNull();
+  });
+
+  it("partial retake: an acquired question does not swallow the text of a section it retakes", () => {
+    const acquired = { acquired: true, answer: { selected: [0] } };
+    // The section's first question acquired, the others to redo: the text shows.
+    const retaken = load(view("free", paper({ 2: acquired }), "i4"));
+    expect(retaken.passed["i2"]).toBeUndefined();
+    expect(passageOf(retaken)).toBe(shared);
+    // Every question of the section acquired: nothing of it is retaken, the text is passed.
+    const none = load(view("free", paper({ 2: acquired, 3: acquired, 4: acquired }), "i4"));
+    expect(none.passed["i2"]).toBe(true);
+    // A retaken question started: passed, as in any attempt.
+    const started = load(view("free", paper({ 2: acquired, 4: { answer: { selected: [1] } } }), "i4"));
+    expect(started.passed["i2"]).toBe(true);
+  });
+
+  it("lists the section's text before its first question drawn, the section's entries set in under it", () => {
+    const state = load(view("free", drawn({ 2: { answer: { selected: [0] } } }), "i1"));
+    expect(segmentsOf(state, () => false).map((s) => [s.id, s.indent === true])).toEqual([
+      ["i1", false],
+      ["intro:i2", false],
+      ["intro:i3", true],
+      ["i3", true],
+      ["i2", true],
+      ["i4", true],
+    ]);
   });
 });
 

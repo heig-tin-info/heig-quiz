@@ -342,6 +342,8 @@ function itemTexts(home: Home) {
     remove:
       `Removes one item from ${noun}: the question as placed there, with its points, intro and frozen version, ` +
       `addressed by its \`itemId\` (the \`items\` of get_${home}; the same question may be there twice). ` +
+      "An intro that opens a section (`introScope: following`) moves to the next item instead, when that item " +
+      "is in the section and has no intro of its own; otherwise it goes with the item. " +
       "The question stays in its pool. Cannot be undone: adding the question back makes a new item, last, on " +
       `its latest version, with default points. ${NOT_ACROSS[home]} Returns the ${home} with its remaining items.`,
     versions:
@@ -351,7 +353,11 @@ function itemTexts(home: Home) {
     patch:
       `Changes one item of ${noun}, addressed by its \`itemId\`: \`points\`; \`counting\`, \`normal\` or ` +
       "`bonus` (left out of the total, its points can only lift a student, ADR-052); `milestone`; `intro`, a " +
-      "Markdown passage shown before the question (null removes it). Neutralizing an item is a grading act, " +
+      "Markdown passage shown before the question (null removes it, and resets its scope); `introScope`, " +
+      "`item` (the intro precedes this question only, the default) or `following` (it opens a section: it also " +
+      "applies to the following questions, up to the next item whose intro is `following`; shuffled items stay " +
+      "inside their section, and the student reads the text before the section's first question). `following` " +
+      "needs an intro on the item. Moving items never moves an intro. Neutralizing an item is a grading act, " +
       `done from the web app, never here. ${NOT_ACROSS[home]}`,
   };
 }
