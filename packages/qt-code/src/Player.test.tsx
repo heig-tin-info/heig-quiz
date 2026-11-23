@@ -311,6 +311,16 @@ describe("the student's tools", () => {
     expect(seen).toEqual([true]);
   });
 
+  it("caps the compiler's words in a scrolled box, so the dock never covers the editor (#1201)", async () => {
+    const stderr = Array.from({ length: 200 }, (_, i) => `main.c:${i}: error: oops`).join("\n");
+    setup({ onRun: async () => outcome([], { ok: false, stderr }) });
+    fireEvent.click(screen.getByRole("button", { name: "Compile" }));
+    const box = await screen.findByText(/main\.c:199: error: oops/);
+    expect(box.className).toMatch(/max-h-/);
+    expect(box.className).toMatch(/overflow-y-auto/);
+    expect(box).toHaveAttribute("tabindex", "0");
+  });
+
   it("refills after a run, and says when the buttons are back", async () => {
     setup({ onRun: async () => outcome([{ stdout: "6\n" }, { stdout: "0\n" }]) });
     fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));

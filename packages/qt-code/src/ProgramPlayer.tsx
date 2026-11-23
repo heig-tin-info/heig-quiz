@@ -429,8 +429,18 @@ export function RunStatus({
       {outcome !== null ? (
         <p role="status" className={hint}>
           {outcome.compile.ok ? s.compileOk : s.compileFailed}
+          {/*
+           * Capped, and scrolled on its own (#1201): this line sits in the
+           * player's sticky dock, and complaints taller than the screen made
+           * the dock cover the whole editor. The editor draws the same
+           * complaints on their lines anyway. Focusable, so a keyboard
+           * scrolls it too.
+           */}
           {outcome.compile.ok || outcome.compile.stderr === "" ? null : (
-            <code className="mt-1 block whitespace-pre-wrap font-mono text-[13px] text-danger">
+            <code
+              tabIndex={0}
+              className="mt-1 block max-h-[min(12rem,25dvh)] overflow-y-auto whitespace-pre-wrap font-mono text-[13px] text-danger [scrollbar-width:thin]"
+            >
               {outcome.compile.stderr}
             </code>
           )}
