@@ -21,6 +21,7 @@
  */
 import { createReadStream } from "node:fs";
 
+import type { MultipartFile } from "@fastify/multipart";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { z } from "zod";
 
@@ -106,7 +107,7 @@ export function sendCsv(reply: FastifyReply, filename: string, csv: string) {
 export function sendAttachment(reply: FastifyReply, type: string, filename: string, body: string | Buffer) {
   return reply
     .type(type)
-    .header("content-disposition", `attachment; filename="${filename}"`)
+    .header("content-disposition", dispositionOf(filename))
     .header("cache-control", "no-store")
     .send(body);
 }
@@ -133,7 +134,7 @@ export function parseRange(header: string | undefined, size: number): ByteRange 
   if (from === "" && to === "") return null;
   if (from === "") {
     const suffix = Number(to);
-    if (suffix === 0 || size === 0) return "unsatisfiable";
+    if (suffix === 0) return "unsatisfiable";
     return { start: Math.max(0, size - suffix), end: size - 1 };
   }
   const start = Number(from);
@@ -143,12 +144,33 @@ export function parseRange(header: string | undefined, size: number): ByteRange 
   return { start, end: Math.min(end, size - 1) };
 }
 
-/** A file name for `content-disposition`: a quoted ASCII fallback, and the exact name as `filename*`. */
-export function dispositionOf(kind: "attachment" | "inline", filename: string): string {
+/**
+ * `content-disposition: attachment` for `filename`, the one place the header
+ * is written: quoted as it is when it is plain ASCII (a slug), else an ASCII
+ * fallback and the exact name as RFC 8187's `filename*`.
+ */
+export function dispositionOf(filename: string): string {
   const ascii = filename.replace(/[^\x20-\x7e]|["\\]/g, "_");
+  if (ascii === filename) return `attachment; filename="${filename}"`;
   // RFC 8187's attr-char: `encodeURIComponent` leaves `'()*` as they are.
   const exact = encodeURIComponent(filename).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-  return `${kind}; filename="${ascii}"; filename*=UTF-8''${exact}`;
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${exact}`;
+}
+
+/**
+ * The one file of a multipart upload, or the refusal already sent: `415`
+ * when the request is not multipart, `400` when it carries no file. Past
+ * the plugin's `fileSize` the stream is cut (`truncated`): the caller says so.
+ */
+export async function multipartFile(req: FastifyRequest, reply: FastifyReply): Promise<MultipartFile | null> {
+  if (!req.isMultipart()) {
+    await reply.code(415).send({ error: "unsupported_media_type", message: "Expected multipart/form-data" });
+    return null;
+  }
+  const part = await req.file();
+  if (part) return part;
+  await reply.code(400).send({ error: "validation", message: "No file in the request" });
+  return null;
 }
 
 /**
@@ -167,7 +189,7 @@ export function sendRanged(
   reply
     .type(file.type)
     .header("accept-ranges", "bytes")
-    .header("content-disposition", dispositionOf("attachment", file.filename))
+    .header("content-disposition", dispositionOf(file.filename))
     .header("x-content-type-options", "nosniff")
     .header("cache-control", "no-store")
     .header("content-security-policy", "default-src 'none'; sandbox");
@@ -175,7 +197,6 @@ export function sendRanged(
   if (range === "unsatisfiable") {
     return reply.code(416).header("content-range", `bytes */${file.size}`).header("content-length", 0).send();
   }
-  if (file.size === 0) return reply.header("content-length", 0).send("");
   const { start, end } = range ?? { start: 0, end: file.size - 1 };
   if (range) reply.code(206).header("content-range", `bytes ${start}-${end}/${file.size}`);
   return reply.header("content-length", end - start + 1).send(createReadStream(file.path, { start, end }));

@@ -11,6 +11,7 @@ import { checkSvg, looksLikeMarkup } from "./svgCheck.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
 import { callerOf, userOf } from "../guards.js";
+import { multipartFile } from "../http.js";
 
 export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { config, requireTeacher, trace, teacher, inPool } = ctx;
@@ -53,15 +54,8 @@ export function assetRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     req: FastifyRequest,
     reply: FastifyReply,
   ): Promise<{ bytes: Buffer; facts: ImageFacts } | null> {
-    if (!req.isMultipart()) {
-      await reply.code(415).send({ error: "unsupported_media_type", message: "Expected multipart/form-data" });
-      return null;
-    }
-    const part = await req.file();
-    if (!part) {
-      await reply.code(400).send({ error: "validation", message: "No file in the request" });
-      return null;
-    }
+    const part = await multipartFile(req, reply);
+    if (!part) return null;
     const bytes = await part.toBuffer();
     const facts = sniffImage(bytes);
     if (facts) return { bytes, facts };

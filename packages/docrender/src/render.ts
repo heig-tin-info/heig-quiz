@@ -405,8 +405,6 @@ function math(
 
 /** What {@link renderStandalone} keeps of a rendering: a document stands alone. */
 export interface StandaloneRendering {
-  /** PLAIN TEXT, as {@link RenderedPage.title}. */
-  title: string | null;
   html: string;
   toc: JournalTocEntry[];
   warnings: JournalWarning[];
@@ -421,16 +419,15 @@ export interface StandaloneRendering {
  * v1. Raw HTML is shown as text, as everywhere. The front matter's `draft`
  * and `visible_from` mean nothing here and are dropped.
  */
-export function renderStandalone(source: string, fallbackTitle: string | null): StandaloneRendering {
+export function renderStandalone(source: string): StandaloneRendering {
   const page = renderPage(source, {
     classroomId: "",
     pagePath: "document.md",
-    fallbackTitle,
+    fallbackTitle: null,
     pages: new Set(),
     assets: new Set(),
   });
   return {
-    title: page.title,
     html: page.html,
     toc: page.toc,
     warnings: page.warnings.filter((w) => w.code !== "visible_from_invalid"),

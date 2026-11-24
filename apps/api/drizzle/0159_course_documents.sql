@@ -18,7 +18,7 @@ CREATE TABLE "course_documents" (
 	CONSTRAINT "course_documents_html_ck" CHECK (("course_documents"."kind" = 'markdown') = ("course_documents"."html" IS NOT NULL))
 );
 --> statement-breakpoint
-ALTER TABLE "courses" ADD COLUMN "documents_quota_bytes" bigint DEFAULT 104857600 NOT NULL;--> statement-breakpoint
+ALTER TABLE "courses" ADD COLUMN "documents_quota_bytes" bigint DEFAULT 100000000 NOT NULL;--> statement-breakpoint
 ALTER TABLE "course_documents" ADD CONSTRAINT "course_documents_course_id_courses_id_fk" FOREIGN KEY ("course_id") REFERENCES "public"."courses"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "course_documents" ADD CONSTRAINT "course_documents_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "course_documents_course_sha_uq" ON "course_documents" USING btree ("course_id","sha256");--> statement-breakpoint

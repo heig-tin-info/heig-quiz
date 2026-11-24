@@ -18,14 +18,14 @@ import { CourseDocuments, useDocumentUploads } from "./CourseDocuments";
 
 const COURSE = "0190d3c4-0000-7000-8000-0000000000c1";
 const URL_LIST = `/app/api/courses/${COURSE}/documents`;
-const MIB = 1024 * 1024;
+const MB = 1_000_000;
 
 const pdf: CourseDocument = {
   id: "0190d3c4-0000-7000-8000-0000000000e1",
   title: "Datasheet",
   filename: "datasheet.pdf",
   kind: "pdf",
-  bytes: 2 * MIB,
+  bytes: 2 * MB,
   uploadedAt: "2026-11-20T10:00:00.000Z",
   uploadedBy: { id: "0190d3c4-0000-7000-8000-0000000000a1", name: "Ada Teacher" },
   warnings: [],
@@ -43,7 +43,7 @@ const sheet: CourseDocument = {
   canDelete: false,
 };
 
-const libraryOf = (documents: CourseDocument[], usedBytes = documents.reduce((s, d) => s + d.bytes, 0), quotaBytes = 100 * MIB): CourseLibrary => ({
+const libraryOf = (documents: CourseDocument[], usedBytes = documents.reduce((s, d) => s + d.bytes, 0), quotaBytes = 100 * MB): CourseLibrary => ({
   documents,
   usedBytes,
   quotaBytes,
@@ -91,7 +91,7 @@ describe("the Documents tab", () => {
     expect(screen.getAllByText(/Ada Teacher/).length).toBeGreaterThan(0);
     expect(screen.getByText("Raw HTML is shown as text.")).toBeInTheDocument();
     expect(screen.getByText(/The image https:\/\/example.org\/a.png is left out/)).toBeInTheDocument();
-    // The file's own name shows once the title is another.
+    // The file's own name, always, in the meta line.
     expect(screen.getByText("formulas.md")).toBeInTheDocument();
     expect(screen.getByText("File missing")).toBeInTheDocument();
     expect(screen.getByText(/The server has lost this file/)).toBeInTheDocument();
@@ -113,9 +113,9 @@ describe("the Documents tab", () => {
   });
 
   it("says the space is full", async () => {
-    renderTab(ok(libraryOf([pdf], 100 * MIB, 100 * MIB)));
+    renderTab(ok(libraryOf([pdf], 100 * MB, 100 * MB)));
     expect(await screen.findByText(/The course's space is full/)).toBeInTheDocument();
-    expect(screen.getByRole("meter", { name: "Space used" })).toHaveAttribute("aria-valuenow", String(100 * MIB));
+    expect(screen.getByRole("meter", { name: "Space used" })).toHaveAttribute("aria-valuenow", String(100 * MB));
   });
 
   it("sends the picked files one after the other and words each refusal", async () => {
@@ -123,8 +123,8 @@ describe("the Documents tab", () => {
     const replies: Reply[] = [
       { status: 201, body: pdf },
       fail(415, { error: "document_unsupported", message: "no" }),
-      fail(413, { error: "file_too_large", message: "no", maxBytes: 50 * MIB }),
-      fail(409, { error: "quota_exceeded", message: "no", usedBytes: 99 * MIB, quotaBytes: 100 * MIB }),
+      fail(413, { error: "file_too_large", message: "no", maxBytes: 50 * MB }),
+      fail(409, { error: "quota_exceeded", message: "no", usedBytes: 99 * MB, quotaBytes: 100 * MB }),
     ];
     const { calls } = renderTab(ok(libraryOf([])), {
       [`POST ${URL_LIST}`]: () => {
@@ -177,13 +177,13 @@ describe("the Documents tab", () => {
     const quotaUrl = `/app/api/admin/courses/${COURSE}/documents-quota`;
     const { calls } = renderTab(ok(libraryOf([pdf])), {
       "GET /app/api/me": ok({ id: "a", email: "a@b", givenName: "A", familyName: "B", role: "admin" }),
-      [`PATCH ${quotaUrl}`]: ok({ quotaBytes: 500 * MIB }),
+      [`PATCH ${quotaUrl}`]: ok({ quotaBytes: 500 * MB }),
     });
     const field = await screen.findByRole("spinbutton", { name: "Quota of the course, in MB" });
     expect(field).toHaveValue(100);
     await userEvent.clear(field);
     await userEvent.type(field, "500{Enter}");
-    await waitFor(() => expect(calls.find((c) => c.url === quotaUrl)?.body).toEqual({ quotaBytes: 500 * MIB }));
+    await waitFor(() => expect(calls.find((c) => c.url === quotaUrl)?.body).toEqual({ quotaBytes: 500 * MB }));
   });
 
   it("shows no quota field to a teacher", async () => {

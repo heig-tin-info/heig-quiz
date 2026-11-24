@@ -4,4 +4,3 @@
  * browser declared (N-SEC-24).
  */
 export const DOCUMENT_KINDS = ["pdf", "markdown"] as const;
-export type DocumentKind = (typeof DOCUMENT_KINDS)[number];

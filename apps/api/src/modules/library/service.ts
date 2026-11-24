@@ -134,7 +134,7 @@ export async function receiveUpload(
     }
     const text = markdownText(await readFile(temp.path));
     if (text === null) throw new LibraryError("document_unsupported");
-    const { html, toc, warnings } = renderStandalone(text, null);
+    const { html, toc, warnings } = renderStandalone(text);
     return { temp, kind: "markdown", filename, rendering: { html, toc, warnings } };
   } catch (error) {
     await dropTemp(temp.path);
@@ -177,6 +177,9 @@ export async function storeDocument(
       if (usedBytes + temp.bytes > course.quotaBytes) {
         throw new LibraryError("quota_exceeded", undefined, { usedBytes, quotaBytes: course.quotaBytes });
       }
+      // The sweep holds the same lock while it re-checks and removes a file:
+      // the file this row will name is never removed under it.
+      await lockFile(tx, temp.sha256);
       // The file's time is the server's (invariant 5): the sweep's grace counts from it.
       const full = await placeTemp(assetsDir, temp, documentPath(temp.sha256));
       await utimes(full, now, now);
@@ -201,6 +204,15 @@ export async function storeDocument(
   } finally {
     await dropTemp(temp.path);
   }
+}
+
+/**
+ * The lock of one file of the store, until the transaction ends: the upload
+ * that is about to name it and the sweep that is about to remove it take it
+ * in turn.
+ */
+async function lockFile(tx: Tx, sha256: string): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`library:${sha256}`}))`);
 }
 
 /** The bytes the course's documents use, each counted in full. */
@@ -235,6 +247,11 @@ export interface Viewer {
   owner: boolean;
 }
 
+/** Whether `viewer` may delete the document: its uploader, or an owner of the course. */
+export function mayDelete(row: Pick<Row, "uploadedBy">, viewer: Viewer): boolean {
+  return viewer.owner || row.uploadedBy === viewer.id;
+}
+
 /** A row as its staff read it. */
 function documentView(
   row: Row,
@@ -253,30 +270,8 @@ function documentView(
     uploadedBy: { id: row.uploadedBy, name: name || uploader.email },
     warnings: row.warnings ?? [],
     missing,
-    canDelete: viewer.owner || row.uploadedBy === viewer.id,
+    canDelete: mayDelete(row, viewer),
   };
-}
-
-/**
- * A Markdown row rendered by an older `RENDERER_VERSION`, rendered again
- * from its file and stored; the row as it was when the file is missing.
- */
-async function freshRendering(db: Db, assetsDir: string, row: Row): Promise<Row> {
-  if (row.kind !== "markdown" || row.renderedWith === RENDERER_VERSION) return row;
-  let text: string | null;
-  try {
-    text = markdownText(await readFile(safeJoin(assetsDir, documentPath(row.sha256))));
-  } catch {
-    return row;
-  }
-  if (text === null) return row;
-  const { html, toc, warnings } = renderStandalone(text, null);
-  const [updated] = await db
-    .update(courseDocuments)
-    .set({ html, toc, warnings, renderedWith: RENDERER_VERSION })
-    .where(eq(courseDocuments.id, row.id))
-    .returning();
-  return updated ?? row;
 }
 
 /** The library of a course: its documents, newest first, the bytes they use and its quota. */
@@ -294,7 +289,7 @@ export async function libraryOf(
     .orderBy(desc(courseDocuments.createdAt), desc(courseDocuments.id));
   const documents = await Promise.all(
     rows.map(async ({ row, uploader }) =>
-      documentView(await freshRendering(db, assetsDir, row), uploader, viewer, !(await present(assetsDir, row.sha256))),
+      documentView(row, uploader, viewer, !(await present(assetsDir, row.sha256))),
     ),
   );
   return {
@@ -329,8 +324,10 @@ export async function renameDocument(db: Db, row: Row, title: string, now: Date)
  * the sweep's grace starts now.
  */
 export async function deleteDocument(db: Db, assetsDir: string, row: Row, now: Date): Promise<void> {
-  await db.delete(courseDocuments).where(eq(courseDocuments.id, row.id));
+  // The time first: between the two, the row still names the file, and once
+  // it does not the file is too recent for the sweep.
   await utimes(safeJoin(assetsDir, documentPath(row.sha256)), now, now).catch(() => undefined);
+  await db.delete(courseDocuments).where(eq(courseDocuments.id, row.id));
 }
 
 /** The document's file, to stream: its absolute path, size and type, or `404 file_missing`. */
@@ -344,35 +341,80 @@ export async function documentFile(
   return { path, size: info.size, type: MIME[row.kind], filename: row.filename };
 }
 
+/** A file of the store the sweep may remove: absolute, and the hash its name is (or a temporary name). */
+export interface SweepCandidate {
+  path: string;
+  sha256: string | null;
+}
+
 /**
- * The daily sweep (ADR-144): under `ASSETS_DIR/documents/`, every file no
- * row names — and every temporary file an upload left behind — whose time
- * is older than {@link SWEEP_GRACE_MS}, removed. A file just placed or just
- * released by a delete carries the time of that request and is kept.
- * Answers how many.
+ * The files under `ASSETS_DIR/documents/` that no row named when listed —
+ * the documents' files and the temporary files an upload left behind —
+ * whose time is older than {@link SWEEP_GRACE_MS}.
  */
-export async function sweepDocumentFiles(db: Db, assetsDir: string, now: Date): Promise<number> {
+export async function sweepCandidates(db: Db, assetsDir: string, now: Date): Promise<SweepCandidate[]> {
   const root = safeJoin(assetsDir, DOCUMENTS_DIR);
   let shards;
   try {
     shards = await readdir(root, { withFileTypes: true });
   } catch {
-    return 0; // No document was ever stored.
+    return []; // No document was ever stored.
   }
   const named = new Set((await db.selectDistinct({ sha: courseDocuments.sha256 }).from(courseDocuments)).map((r) => r.sha));
   const cutoff = now.getTime() - SWEEP_GRACE_MS;
-  let removed = 0;
+  const candidates: SweepCandidate[] = [];
   for (const shard of shards) {
     if (!shard.isDirectory()) continue;
+    const temporary = shard.name === "tmp";
     const dir = join(root, shard.name);
     for (const name of await readdir(dir)) {
-      if (shard.name !== "tmp" && named.has(name)) continue;
-      const full = join(dir, name);
-      const info = await stat(full).catch(() => null);
-      if (!info?.isFile() || info.mtimeMs > cutoff) continue;
-      await rm(full, { force: true });
-      removed += 1;
+      if (!temporary && named.has(name)) continue;
+      const info = await stat(join(dir, name)).catch(() => null);
+      if (info?.isFile() && info.mtimeMs <= cutoff) {
+        candidates.push({ path: join(dir, name), sha256: temporary ? null : name });
+      }
     }
+  }
+  return candidates;
+}
+
+/**
+ * Removes one candidate, unless something claimed it since it was listed:
+ * under the file's lock, the one {@link storeDocument} takes before it
+ * places the file and inserts its row, no row names it and its time is
+ * still past the grace. Answers whether it was removed.
+ */
+export async function removeIfUnnamed(db: Db, candidate: SweepCandidate, now: Date): Promise<boolean> {
+  const { path, sha256 } = candidate;
+  if (sha256 === null) {
+    await rm(path, { force: true });
+    return true;
+  }
+  return db.transaction(async (tx) => {
+    await lockFile(tx, sha256);
+    const [named] = await tx
+      .select({ id: courseDocuments.id })
+      .from(courseDocuments)
+      .where(eq(courseDocuments.sha256, sha256))
+      .limit(1);
+    if (named) return false;
+    const info = await stat(path).catch(() => null);
+    if (!info?.isFile() || info.mtimeMs > now.getTime() - SWEEP_GRACE_MS) return false;
+    await rm(path, { force: true });
+    return true;
+  });
+}
+
+/**
+ * The daily sweep (ADR-144 §4): every candidate that is still unnamed when
+ * its turn comes, removed. A file just placed or just released by a delete
+ * carries the time of that request and is kept; a course deleted takes its
+ * rows at once, and its files follow at the next pass. Answers how many.
+ */
+export async function sweepDocumentFiles(db: Db, assetsDir: string, now: Date): Promise<number> {
+  let removed = 0;
+  for (const candidate of await sweepCandidates(db, assetsDir, now)) {
+    if (await removeIfUnnamed(db, candidate, now)) removed += 1;
   }
   return removed;
 }

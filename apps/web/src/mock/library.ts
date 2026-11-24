@@ -9,6 +9,7 @@
  */
 import {
   DEFAULT_DOCUMENTS_QUOTA_BYTES,
+  DEFAULT_DOCUMENT_MAX_BYTES,
   DOCUMENT_MARKDOWN_MAX_BYTES,
   DocumentsQuotaPatch,
   type CourseDocument,
@@ -18,8 +19,6 @@ import {
 import { courseOr404, ME_TEACHER, myRoleOn } from "./org";
 import { D, flags, H, iso, MockError, on, refuse } from "./runtime";
 
-/** The mock's own cap on one file, as `DOCUMENT_MAX_BYTES` is the server's. */
-const MAX_BYTES = 50_000_000;
 
 const me = { id: ME_TEACHER.userId, name: `${ME_TEACHER.givenName} ${ME_TEACHER.familyName}` };
 const colleague = { id: "u2", name: "Pierre Roulet" };
@@ -36,8 +35,8 @@ const doc = (over: Partial<CourseDocument> & Pick<CourseDocument, "id" | "title"
 const PRG1: CourseDocument[] = [
   doc({
     id: "5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1f01",
-    title: "Norme C99 — extraits",
-    filename: "iso-c99-extraits.pdf",
+    title: "Formulaire d'électronique",
+    filename: "formulaire-electronique.pdf",
     kind: "pdf",
     bytes: 3_412_000,
     uploadedAt: iso(-3 * H),
@@ -56,8 +55,8 @@ const PRG1: CourseDocument[] = [
   }),
   doc({
     id: "5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1f03",
-    title: "Fiche technique ATmega328P",
-    filename: "ATmega328P-datasheet.pdf",
+    title: "Fiche technique BRV2207",
+    filename: "brv2207-datasheet.pdf",
     kind: "pdf",
     bytes: 31_250_000,
     uploadedAt: iso(-12 * D),
@@ -122,7 +121,7 @@ on("POST", "/app/api/courses/:id/documents", (m, body): CourseDocument => {
   const pdf = /\.pdf$/i.test(file.name);
   const markdown = /\.(md|markdown)$/i.test(file.name);
   if (!pdf && !markdown) throw refuse(415, "document_unsupported", "a document is a PDF or a Markdown file");
-  const cap = markdown ? DOCUMENT_MARKDOWN_MAX_BYTES : MAX_BYTES;
+  const cap = markdown ? DOCUMENT_MARKDOWN_MAX_BYTES : DEFAULT_DOCUMENT_MAX_BYTES;
   if (file.size > cap) throw refuse(413, "file_too_large", "the file is too large", { maxBytes: cap });
   const used = usedBytes(library);
   if (used + file.size > library.quotaBytes) {
@@ -130,6 +129,7 @@ on("POST", "/app/api/courses/:id/documents", (m, body): CourseDocument => {
   }
   const created = doc({
     id: crypto.randomUUID(),
+    // The server's title (`titleOf`): the name without its extension.
     title: file.name.replace(/\.[^.]+$/, "") || file.name,
     filename: file.name,
     kind: pdf ? "pdf" : "markdown",

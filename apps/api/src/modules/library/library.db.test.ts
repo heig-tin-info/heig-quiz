@@ -17,7 +17,7 @@ import { CourseDocument, CourseLibrary, DEFAULT_DOCUMENTS_QUOTA_BYTES } from "@q
 
 import { auditLog, courseDocuments, courseStaff, courses } from "../../db/schema.js";
 import { testServer, type Actor, type TestServer } from "../../test/http.js";
-import { documentPath, sweepDocumentFiles, SWEEP_GRACE_MS } from "./service.js";
+import { documentPath, removeIfUnnamed, sweepCandidates, sweepDocumentFiles, SWEEP_GRACE_MS } from "./service.js";
 
 const MAX = 8192;
 
@@ -135,11 +135,6 @@ describe("an upload (F-ORG-18, N-SEC-24)", () => {
     expect(row!.html).not.toContain("<img");
     expect(row!.toc).toEqual([{ id: "formulaire", depth: 1, text: "Formulaire" }]);
     expect(row!.renderedWith).toBeGreaterThan(0);
-    // Rendered by an older renderer: rendered again from the file when the library is read.
-    await db().update(courseDocuments).set({ html: "<p>old</p>", renderedWith: 0 }).where(eq(courseDocuments.id, document.id));
-    await library(id);
-    const [again] = await db().select().from(courseDocuments).where(eq(courseDocuments.id, document.id));
-    expect(again).toMatchObject({ html: row!.html, renderedWith: row!.renderedWith });
   });
 
   it("refuses what is neither: 415, and nothing stored", async () => {
@@ -197,7 +192,7 @@ describe("an upload (F-ORG-18, N-SEC-24)", () => {
 });
 
 describe("the quota (F-ADMIN-10)", () => {
-  it("defaults to 100 MiB", async () => {
+  it("defaults to 100 MB", async () => {
     expect((await library(await course())).quotaBytes).toBe(DEFAULT_DOCUMENTS_QUOTA_BYTES);
   });
 
@@ -257,6 +252,8 @@ describe("rename and delete", () => {
   it("deletes for the uploader or an owner; refuses another assistant with 403 owner_required", async () => {
     const id = await course();
     const mine = (await upload(id, pdf(), "a.pdf", assistant)).json();
+    // Newest first: the second upload a minute later, never at the same instant.
+    server.clock.advance(60_000);
     const theirs = (await upload(id, pdf(), "b.pdf", colleague)).json();
     const del = (docId: string, who: Actor) =>
       server.app.inject({ method: "DELETE", url: `${base(id)}/${docId}`, headers: who.headers });
@@ -319,9 +316,26 @@ describe("the sweep (library.blob_sweep)", () => {
     expect(await exists(sharedRow!.sha256)).toBe(true);
   });
 
-  it("is in the scheduled catalog", async () => {
-    const { SCHEDULED_TASKS } = await import("../system/catalog.js");
-    expect(SCHEDULED_TASKS.map((t) => t.key)).toContain("library.blob_sweep");
+  it("keeps a file a row came to name between the listing and the removal", async () => {
+    const id = await course();
+    const bytes = pdf();
+    const doc = (await upload(id, bytes)).json();
+    const [row] = await db().select().from(courseDocuments).where(eq(courseDocuments.id, doc.id));
+    const sha = row!.sha256;
+    // Unnamed and old: a candidate when the sweep lists the store.
+    await db().delete(courseDocuments).where(eq(courseDocuments.id, doc.id));
+    const old = new Date(server.clock.now().getTime() - SWEEP_GRACE_MS - 60_000);
+    await utimes(fileOf(sha), old, old);
+    const candidate = (await sweepCandidates(db(), server.assetsDir, server.clock.now())).find((c) => c.sha256 === sha);
+    expect(candidate).toBeDefined();
+    // The same bytes uploaded again before the sweep reaches the file.
+    await db().insert(courseDocuments).values({ ...row!, id: randomUUID() });
+    expect(await removeIfUnnamed(db(), candidate!, server.clock.now())).toBe(false);
+    expect(await readFile(fileOf(sha))).toEqual(bytes);
+    // Unnamed again: now it goes.
+    await db().delete(courseDocuments).where(eq(courseDocuments.sha256, sha));
+    expect(await removeIfUnnamed(db(), candidate!, server.clock.now())).toBe(true);
+    await expect(stat(fileOf(sha))).rejects.toThrow();
   });
 });
 

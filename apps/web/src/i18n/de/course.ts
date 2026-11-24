@@ -87,7 +87,6 @@ export const course: Record<keyof typeof en, string> = {
   "courses.docs.quota.field": "Kontingent des Kurses, in MB",
   "courses.docs.quota.unit": "MB",
   "courses.docs.quota.full": "Der Speicher des Kurses ist voll. Löschen Sie ein Dokument oder bitten Sie die Administration um mehr.",
-  "courses.docs.warning.raw_html": "Rohes HTML wird als Text angezeigt.",
   "courses.docs.warning.image": "Das Bild {href} wird weggelassen: Ein Dokument enthält keine Bilder.",
   "courses.docs.warning.target": "{href} wird weggelassen: Ein Dokument enthält weder Bilder noch verlinkte Dateien.",
   "courses.members.hint": "Das Lehrteam hat Zugang zum Kurs. Nur die Kursleitung verwaltet Mitglieder, Fragenpools, Klassen, Ergebnisse.",

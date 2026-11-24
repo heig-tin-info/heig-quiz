@@ -22,14 +22,14 @@ import {
   DOCUMENTS_QUOTA_LIMIT_BYTES,
   type CourseDocument,
   type CourseLibrary,
-  type JournalWarning,
-  type JournalWarningCode,
 } from "@quiz/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useMe } from "../api";
 import { useConfirm } from "../confirm";
-import { formatBytes, useI18n, useT, type Dict, type TFunction } from "../i18n";
+import { formatBytes, useI18n, useT } from "../i18n";
+import type { WarningWords } from "../journal/words";
+import { warningText } from "../journal/words";
 import { useErrorToast, useToast } from "../notify";
 import { courseLibraryKey } from "../queryKeys";
 import {
@@ -58,7 +58,8 @@ import {
   type UploadRefusal,
 } from "./api";
 
-const MIB = 1024 * 1024;
+/** The quota is typed in MB, the unit `formatBytes` shows it in. */
+const MB = 1_000_000;
 
 /** One file the server refused, with why. */
 interface Refused {
@@ -183,17 +184,14 @@ export function CourseDocuments({ courseId, uploads }: { courseId: string; uploa
 function RefusedFiles({ refused, onDismiss }: { refused: Refused[]; onDismiss: () => void }) {
   const t = useT();
   const { locale } = useI18n();
-  const size = (bytes: number) => formatBytes(bytes, locale, { binary: true });
   const reason = ({ name, refusal }: Refused): string => {
     switch (refusal.code) {
       case "document_unsupported":
         return t("courses.docs.refused.unsupported", { name });
       case "file_too_large":
-        return refusal.maxBytes === null
-          ? t("courses.docs.refused.failed", { name })
-          : t("courses.docs.refused.tooLarge", { name, max: size(refusal.maxBytes) });
+        return t("courses.docs.refused.tooLarge", { name, max: formatBytes(refusal.maxBytes, locale) });
       case "quota_exceeded":
-        return t("courses.docs.refused.quota", { name, free: size(refusal.freeBytes) });
+        return t("courses.docs.refused.quota", { name, free: formatBytes(refusal.freeBytes, locale) });
       case "failed":
         return t("courses.docs.refused.failed", { name });
     }
@@ -232,7 +230,6 @@ function QuotaMeter({ courseId, library }: { courseId: string; library: CourseLi
   const { usedBytes, quotaBytes } = library;
   const share = quotaBytes === 0 ? 1 : Math.min(1, usedBytes / quotaBytes);
   const full = usedBytes >= quotaBytes;
-  const size = (bytes: number) => formatBytes(bytes, locale, { binary: true });
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[13px]">
@@ -240,11 +237,11 @@ function QuotaMeter({ courseId, library }: { courseId: string; library: CourseLi
         <span className="flex items-center gap-2 tabular-nums">
           {admin ? (
             <>
-              <span>{t("courses.docs.quota.used", { used: size(usedBytes) })}</span>
+              <span>{t("courses.docs.quota.used", { used: formatBytes(usedBytes, locale) })}</span>
               <QuotaField courseId={courseId} quotaBytes={quotaBytes} />
             </>
           ) : (
-            t("courses.docs.quota", { used: size(usedBytes), quota: size(quotaBytes) })
+            t("courses.docs.quota", { used: formatBytes(usedBytes, locale), quota: formatBytes(quotaBytes, locale) })
           )}
         </span>
       </div>
@@ -254,7 +251,7 @@ function QuotaMeter({ courseId, library }: { courseId: string; library: CourseLi
         aria-valuemin={0}
         aria-valuemax={quotaBytes}
         aria-valuenow={Math.min(usedBytes, quotaBytes)}
-        aria-valuetext={t("courses.docs.quota", { used: size(usedBytes), quota: size(quotaBytes) })}
+        aria-valuetext={t("courses.docs.quota", { used: formatBytes(usedBytes, locale), quota: formatBytes(quotaBytes, locale) })}
         className="h-1.5 overflow-hidden rounded-full bg-surface-3"
       >
         <div
@@ -271,23 +268,23 @@ function QuotaMeter({ courseId, library }: { courseId: string; library: CourseLi
 function QuotaField({ courseId, quotaBytes }: { courseId: string; quotaBytes: number }) {
   const t = useT();
   const toastError = useErrorToast();
-  const saved = String(Math.round(quotaBytes / MIB));
+  const saved = String(Math.round(quotaBytes / MB));
   const [value, setValue] = useState(saved);
   const save = useSetDocumentsQuota(courseId);
   const commit = () => {
     const mb = value.trim() === "" ? NaN : Number(value);
-    if (!Number.isInteger(mb) || mb < 0 || mb * MIB > DOCUMENTS_QUOTA_LIMIT_BYTES) {
+    if (!Number.isInteger(mb) || mb < 0 || mb * MB > DOCUMENTS_QUOTA_LIMIT_BYTES) {
       setValue(saved);
       return;
     }
-    if (mb * MIB !== quotaBytes) save.mutate(mb * MIB, { onError: (e) => { setValue(saved); toastError("error.save")(e); } });
+    if (mb * MB !== quotaBytes) save.mutate(mb * MB, { onError: (e) => { setValue(saved); toastError("error.save")(e); } });
   };
   return (
     <label className="flex items-center gap-1.5">
       <TextInput
         type="number"
         min={0}
-        max={DOCUMENTS_QUOTA_LIMIT_BYTES / MIB}
+        max={DOCUMENTS_QUOTA_LIMIT_BYTES / MB}
         inputMode="numeric"
         aria-label={t("courses.docs.quota.field")}
         size="sm"
@@ -305,21 +302,15 @@ function QuotaField({ courseId, quotaBytes }: { courseId: string; quotaBytes: nu
   );
 }
 
-/** The words of a rendering's warning, for a document: it stands alone, carries no image and no linked file. */
-const WARNINGS: Record<JournalWarningCode, keyof Dict> = {
-  raw_html: "courses.docs.warning.raw_html",
-  external_image: "courses.docs.warning.image",
-  target_missing: "courses.docs.warning.target",
-  asset_too_large: "courses.docs.warning.target",
-  math_error: "journal.warning.math_error",
-  front_matter_yaml: "journal.warning.front_matter_yaml",
-  front_matter_not_mapping: "journal.warning.front_matter_not_mapping",
-  visible_from_invalid: "journal.warning.visible_from_invalid",
+/**
+ * A rendering's warnings in the journal's words, but the images': a
+ * document carries no image and no linked file (ADR-144 §3).
+ */
+const DOCUMENT_WARNINGS: WarningWords = {
+  external_image: (w, t) => t("courses.docs.warning.image", { href: w.href }),
+  target_missing: (w, t) => t("courses.docs.warning.target", { href: w.href }),
+  asset_too_large: (w, t) => t("courses.docs.warning.target", { href: w.href }),
 };
-
-function warningText(warning: JournalWarning, t: TFunction): string {
-  return t(WARNINGS[warning.code], { ...warning } as Record<string, string | number>);
-}
 
 function DocumentRow({ courseId, document }: { courseId: string; document: CourseDocument }) {
   const t = useT();
@@ -361,20 +352,17 @@ function DocumentRow({ courseId, document }: { courseId: string; document: Cours
         </div>
         <p className="text-[13px] text-fg-muted">
           {t(document.kind === "pdf" ? "courses.docs.kind.pdf" : "courses.docs.kind.markdown")} ·{" "}
-          <span className="tabular-nums">{formatBytes(document.bytes, locale, { binary: true })}</span> ·{" "}
+          <span className="tabular-nums">{formatBytes(document.bytes, locale)}</span> ·{" "}
           {document.uploadedBy.name} · <RelativeTime iso={document.uploadedAt} />
         </p>
-        {/* The file's own name, once a rename made the title another: the staff's alone. */}
-        {document.filename.replace(/\.[^.]+$/, "") !== document.title ? (
-          <p className="truncate text-xs text-fg-faint">{document.filename}</p>
-        ) : null}
+        <p className="truncate text-xs text-fg-faint">{document.filename}</p>
         {document.missing ? <p className="text-[13px] text-fg-muted">{t("courses.docs.missing.hint")}</p> : null}
         {document.warnings.length > 0 ? (
           <ul className="space-y-0.5 text-[13px] text-fg-muted">
             {document.warnings.map((warning, i) => (
               <li key={i} className="flex items-start gap-1.5 break-words">
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />
-                {warningText(warning, t)}
+                {warningText(warning, t, DOCUMENT_WARNINGS)}
               </li>
             ))}
           </ul>

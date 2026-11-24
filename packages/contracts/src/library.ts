@@ -18,7 +18,7 @@
  *     quota, an administrator's alone.
  *
  * Staff only, every one of them. The student's exit arrives with the
- * documents an evaluation provides (ADR-144 §PR3).
+ * documents an evaluation provides (ADR-144 §7).
  */
 import { z } from "zod";
 
@@ -30,10 +30,12 @@ import { JournalWarning } from "./journal.js";
 export const DOCUMENT_TITLE_MAX = 120;
 /** The largest Markdown document, in bytes: beyond, it is no course sheet. */
 export const DOCUMENT_MARKDOWN_MAX_BYTES = 500_000;
-/** A course's quota when nobody raised it: 100 MiB. */
-export const DEFAULT_DOCUMENTS_QUOTA_BYTES = 104_857_600;
-/** The highest quota an administrator may give a course: 10 GiB. */
-export const DOCUMENTS_QUOTA_LIMIT_BYTES = 10 * 1024 * 1024 * 1024;
+/** The largest document when `DOCUMENT_MAX_BYTES` is not set: 50 MB. */
+export const DEFAULT_DOCUMENT_MAX_BYTES = 50_000_000;
+/** A course's quota when nobody raised it: 100 MB (decimal units, as `formatBytes` shows them). */
+export const DEFAULT_DOCUMENTS_QUOTA_BYTES = 100_000_000;
+/** The highest quota an administrator may give a course: 10 GB. */
+export const DOCUMENTS_QUOTA_LIMIT_BYTES = 10_000_000_000;
 /** What the file picker offers; the server reads the bytes, never this list. */
 export const DOCUMENT_ACCEPT = ".pdf,.md,.markdown";
 
@@ -93,11 +95,15 @@ export const QuotaExceeded = z.object({
 });
 export type QuotaExceeded = z.infer<typeof QuotaExceeded>;
 
+/** The body of `413 file_too_large`, beside `error` and `message`: the limit the file went past. */
+export const FileTooLarge = z.object({ maxBytes: z.number().int().positive() });
+export type FileTooLarge = z.infer<typeof FileTooLarge>;
+
 /**
  * The refusals of an upload the screen words, by code: `415
  * document_unsupported` (neither a PDF nor a Markdown file, by its bytes),
  * `409 quota_exceeded` ({@link QuotaExceeded}) and `413 file_too_large`
- * (`{ maxBytes }`: past `DOCUMENT_MAX_BYTES`, or a Markdown file past
+ * ({@link FileTooLarge}: past `DOCUMENT_MAX_BYTES`, or a Markdown file past
  * {@link DOCUMENT_MARKDOWN_MAX_BYTES}).
  */
 export const DOCUMENT_UPLOAD_REFUSALS = ["document_unsupported", "quota_exceeded", "file_too_large"] as const;

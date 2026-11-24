@@ -21,7 +21,7 @@ import {
 import { readTracer, tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { callerOf, loadEvaluation, loadEvaluationAttempt, teacherGuard } from "../guards.js";
-import { teacherRoute } from "../http.js";
+import { multipartFile, teacherRoute } from "../http.js";
 import { liveFailureArms } from "../live/service.js";
 import * as service from "./service.js";
 
@@ -88,11 +88,8 @@ export async function paperPlugin(
     "/app/api/evaluations/:id/attempts/:attemptId/paper/scan",
     { preHandler: requireTeacher },
     teacher({ params: AttemptParam, load: staffEvaluationAttempt }, async ({ req, reply, now, scope }) => {
-      if (!req.isMultipart()) {
-        return reply.code(415).send({ error: "unsupported_media_type", message: "Expected multipart/form-data" });
-      }
-      const part = await req.file();
-      if (!part) return reply.code(400).send({ error: "validation", message: "No file in the request" });
+      const part = await multipartFile(req, reply);
+      if (!part) return reply;
       const bytes = await part.toBuffer();
       const sheet = await service.attachScan(app.db, config.ASSETS_DIR, scope.attempt.id, bytes, callerOf(req).id, now);
       await trace(req, "paper.scan_upload", "attempt", scope.attempt.id, {

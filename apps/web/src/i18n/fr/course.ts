@@ -82,7 +82,6 @@ export const course: Record<keyof typeof en, string> = {
   "courses.docs.quota.field": "Quota du cours, en Mo",
   "courses.docs.quota.unit": "Mo",
   "courses.docs.quota.full": "L'espace du cours est plein. Supprimez un document ou demandez plus d'espace à l'administration.",
-  "courses.docs.warning.raw_html": "Le HTML brut est affiché comme du texte.",
   "courses.docs.warning.image": "L'image {href} est omise : un document ne contient pas d'image.",
   "courses.docs.warning.target": "{href} est omis : un document ne contient ni image ni fichier lié.",
   "courses.members.hint": "L'équipe enseignante accède au cours. Seuls les enseignants gèrent membres, banques, classes et résultats.",

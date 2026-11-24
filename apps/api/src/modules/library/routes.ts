@@ -18,7 +18,7 @@ import { CourseDocumentParam, CourseDocumentPatch, DocumentsQuotaPatch, IdParam 
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { accessibleCourse, adminGuard, callerOf, isCourseOwner, requireCourseRole, teacherGuard, withRoleStep } from "../guards.js";
-import { notFound, sendRanged, teacherRoute } from "../http.js";
+import { multipartFile, notFound, sendRanged, teacherRoute } from "../http.js";
 import { setDocumentsQuota } from "../org/service.js";
 import * as service from "./service.js";
 
@@ -50,21 +50,23 @@ export async function libraryPlugin(
     return null;
   };
   const onDocument = { params: CourseDocumentParam, load: loadDocument };
-  /** A delete: the uploader's own document, or any as an owner of the course (`403 owner_required`). */
+  const viewerOf = async (req: FastifyRequest, courseId: string): Promise<service.Viewer> => ({
+    id: callerOf(req).id,
+    owner: await isCourseOwner(app.db, courseId, callerOf(req)),
+  });
+  /**
+   * A delete: `mayDelete`, the rule the list's `canDelete` reads too; anyone
+   * else meets the owner role's `403 owner_required`.
+   */
   const onDeletable = {
     params: CourseDocumentParam,
     load: withRoleStep(
       loadDocument,
       async (req, reply, scope) =>
-        scope.row.uploadedBy === callerOf(req).id ||
+        service.mayDelete(scope.row, await viewerOf(req, scope.course.id)) ||
         (await requireCourseRole(app, req, reply, scope.course.id, "owner")) !== null,
     ),
   };
-
-  const viewerOf = async (req: FastifyRequest, courseId: string): Promise<service.Viewer> => ({
-    id: callerOf(req).id,
-    owner: await isCourseOwner(app.db, courseId, callerOf(req)),
-  });
   const auditPayload = (row: { id: string; title: string; kind: string; bytes: number }) => ({
     documentId: row.id,
     title: row.title,
@@ -85,11 +87,8 @@ export async function libraryPlugin(
     "/app/api/courses/:id/documents",
     { preHandler: requireTeacher },
     teacher(onCourse, async ({ req, reply, now, scope: course }) => {
-      if (!req.isMultipart()) {
-        return reply.code(415).send({ error: "unsupported_media_type", message: "Expected multipart/form-data" });
-      }
-      const part = await req.file();
-      if (!part) return reply.code(400).send({ error: "validation", message: "No file in the request" });
+      const part = await multipartFile(req, reply);
+      if (!part) return reply;
       const received = await service.receiveUpload(config.ASSETS_DIR, part, config.DOCUMENT_MAX_BYTES);
       const caller = callerOf(req).id;
       const { row, created } = await service.storeDocument(app.db, config.ASSETS_DIR, course.id, received, caller, now);

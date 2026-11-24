@@ -49,15 +49,16 @@ material (old labs, notes) is out of scope.
 
 ### 2. Quota per course (product owner)
 
-A course's documents share a quota, 100 MiB by default
+A course's documents share a quota, 100 MB by default
 (`courses.documents_quota_bytes`), raised by an administrator only, up to
-10 GiB, from the course's Documents tab: an administrator who reaches the
+10 GB, from the course's Documents tab: an administrator who reaches the
 course (a seat or Super Powers) types it in; there is no administration list
 of courses. The same file in two courses is stored once on disk and counts
 in full in each course's quota. The check runs inside a transaction that
 locks the course row `FOR UPDATE` and sums `bytes`: over the quota is
 `409 quota_exceeded { usedBytes, quotaBytes }`. `413` stays the per-file
-cap.
+cap. Every size is in decimal units, as the interface shows them: 1 MB is
+10^6 bytes.
 
 ### 3. Kinds and sizes, by the bytes (N-SEC-24)
 
@@ -73,8 +74,8 @@ A Markdown document is rendered at upload by `@quiz/docrender`'s
 HTML shown as text, a relative image becomes its alt text and a warning, an
 external one is dropped with a warning; a document carries no image in v1.
 The HTML, the table of contents, the warnings and the `RENDERER_VERSION`
-are stored; a row rendered by an older version is rendered again from its
-file when it is next read. The staff list shows the warnings.
+are stored; a row rendered by an older version is rendered again by the
+library's daily task, from PR2 on. The staff list shows the warnings.
 
 ### 4. Its own store, streamed in, never unlinked by a request
 
@@ -93,7 +94,17 @@ A request never unlinks a file. A delete removes the row and sets the
 file's time to the server's; the daily task `library.blob_sweep` removes the
 files under `documents/` that no row names and whose time is older than
 48 hours. The grace covers a delete racing an upload of the same bytes and
-a database restored from an older dump.
+a database restored from an older dump. The delete sets the time before it
+removes the row, and the sweep re-checks each file under a transaction-level
+advisory lock on its hash, the lock an upload takes before it places the
+file and inserts its row: a file an upload is about to name is never
+removed under it.
+
+A course's deletion takes its rows by the foreign key's cascade and does
+not touch the files: they leave at the next sweep, without the 48-hour
+grace (their time is their upload's). Accepted: a course's deletion is
+rare, confirmed, and refused while its students have work
+([ADR-141](ADR-141-refus-de-supprimer-le-travail-des-etudiants.md)).
 
 ### 5. Inert files, staff routes (N-SEC-24)
 
@@ -114,22 +125,28 @@ PR2 adds a viewer for both kinds and a staff preview, with the route that
 serves a Markdown document's HTML. The PDF viewer is pdf.js, hardened: no
 `eval`, no scripting, no XFA, forms and annotation editing off, external
 links inert, the worker and its assets served from Quiz's own origin, the
-file read in range chunks of 1 MiB. The panel that shows a document is
-never an `iframe`.
+file read in range chunks of 1 MiB. The links of a Markdown document are
+inert in the viewer, as a PDF's are, in-page anchors excepted: an external
+link must never take the exam's tab away. The panel that shows a document
+is never an `iframe`.
 
 ### 7. Documents provided by an evaluation (PR3, product owner)
 
 - An exam or an exercise may provide documents of its course's library,
-  ticked in its advanced options; a poll is refused.
+  at most 10, ticked in its advanced options; a poll is refused. The
+  evaluation's conditions ([ADR-079](ADR-079-conditions-de-l-evaluation.md))
+  gain an imposed line of kind *provided* naming them.
 - The selection is frozen like every setting once an attempt exists.
 - A document is not deleted while a non-finished evaluation or a template
   of the course references it.
 - A copy of an evaluation into another course drops the selection, and
   the copy dialog says so.
 - On an exam, the documents are served only for the official attempt
-  while the exam runs: not in the lobby, not during a pause, not to a
-  blank practice after the release. On an exercise, while an attempt is
-  open.
+  while the exam runs; on an exercise, while an attempt is open. "Not in
+  the lobby, not during a pause, not to a blank practice after the
+  release" is the orchestrator's reading of the owner's "nothing
+  afterwards", stated to the product owner on 2026-11-24 and not objected
+  to.
 - The student reads them in a panel of the player. Invariant 4 of
   `CLAUDE.md` gains a named exit for provided documents: the student
   reaches a document only through it, under the rules above.
@@ -151,17 +168,20 @@ scans. The store is covered by the off-site borg copy and the VM backup, not
 by the on-VM database dumps: that is why a document is a file, not a
 `bytea` row that would swell every dump.
 
-`scripts/staging-export.sh` leaves `documents/` out of the staging copy:
-staging holds the rows without their files, and the Documents tab says
-"File missing" on each.
+`scripts/staging-export.sh` leaves `documents/` out of the staging copy to
+save disk, the staging copy living on the same VM; it hides nothing:
+staging keeps the rows, so a Markdown document's rendered HTML is there
+like any other course content, and each document reads "File missing".
 
 A deleted document leaves the backups on their own schedule (N-DATA-03),
 as a deleted paper scan does (open question 64).
 
 ### 10. Out of v1
 
-Images in Markdown, replace, text extraction (and so search inside a PDF),
-an MCP tool, a line on the System status page.
+Images in Markdown, replace, text extraction at upload (a warning for a
+scanned PDF, a search across documents), an MCP tool, a line on the System
+status page. Searching inside one PDF is in v1: the viewer searches its
+text layer.
 
 ### 11. Owed before production
 
@@ -178,8 +198,9 @@ in a document.
   share. The borg copy and the VM backup must keep covering `ASSETS_DIR`.
 - The upload path holds no file in memory; the sweep is the only code that
   unlinks a document's file.
-- Staging cannot open a document of production.
-- PR3 adds a third student exit to invariant 4, with its own leak test.
+- Staging holds production's document rows, rendered Markdown included,
+  but not their files: a PDF cannot be opened there.
+- PR3 adds one more student exit to invariant 4, with its own leak test.
 
 ## Alternatives considered
 

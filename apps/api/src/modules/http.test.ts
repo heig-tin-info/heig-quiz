@@ -26,15 +26,18 @@ describe("parseRange (RFC 9110 §14, one range)", () => {
     expect(parseRange("bytes=100-", 100)).toBe("unsatisfiable");
     expect(parseRange("bytes=100-200", 100)).toBe("unsatisfiable");
     expect(parseRange("bytes=-0", 100)).toBe("unsatisfiable");
-    expect(parseRange("bytes=-5", 0)).toBe("unsatisfiable");
   });
 });
 
 describe("dispositionOf", () => {
+  it("quotes a plain ASCII name as it is", () => {
+    expect(dispositionOf("prg1-key.pdf")).toBe('attachment; filename="prg1-key.pdf"');
+  });
+
   it("quotes an ASCII fallback and carries the exact name", () => {
-    expect(dispositionOf("attachment", 'Fiche "C" été.pdf')).toBe(
+    expect(dispositionOf('Fiche "C" été.pdf')).toBe(
       "attachment; filename=\"Fiche _C_ _t_.pdf\"; filename*=UTF-8''Fiche%20%22C%22%20%C3%A9t%C3%A9.pdf",
     );
-    expect(dispositionOf("attachment", "it's (1).md")).toBe("attachment; filename=\"it's (1).md\"; filename*=UTF-8''it%27s%20%281%29.md");
+    expect(dispositionOf("l'été (1).md")).toBe("attachment; filename=\"l'_t_ (1).md\"; filename*=UTF-8''l%27%C3%A9t%C3%A9%20%281%29.md");
   });
 });

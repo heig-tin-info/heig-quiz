@@ -85,7 +85,6 @@ export const course = {
   "courses.docs.quota.field": "Quota of the course, in MB",
   "courses.docs.quota.unit": "MB",
   "courses.docs.quota.full": "The course's space is full. Delete a document, or ask an administrator for more.",
-  "courses.docs.warning.raw_html": "Raw HTML is shown as text.",
   "courses.docs.warning.image": "The image {href} is left out: a document carries no image.",
   "courses.docs.warning.target": "{href} is left out: a document carries no image nor linked file.",
   "courses.members.hint": "The staff reaches the course. Only teachers manage members, linked pools, classrooms and results.",

@@ -7,7 +7,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   CourseDocumentPatch,
+  DOCUMENT_UPLOAD_REFUSALS,
   DocumentsQuotaPatch,
+  FileTooLarge,
   QuotaExceeded,
   type CourseDocument,
   type CourseLibrary,
@@ -36,23 +38,24 @@ export function uploadDocument(courseId: string, file: File): Promise<CourseDocu
   return api<CourseDocument>(base(courseId), { method: "POST", body: form });
 }
 
-/** Why an upload was refused, in the terms the screen words it. */
+/** Why an upload was refused, in the terms the screen words it: the contract's refusals, or a failure. */
 export type UploadRefusal =
   | { code: "document_unsupported" }
-  | { code: "file_too_large"; maxBytes: number | null }
+  | ({ code: "file_too_large" } & FileTooLarge)
   | { code: "quota_exceeded"; freeBytes: number }
   | { code: "failed" };
 
-/** The refusal of an upload, from what the API answered. */
+/** The refusal of an upload, read with the contract's schemas; anything else is a failure. */
 export function uploadRefusalOf(error: unknown): UploadRefusal {
-  const code = refusalCodeOf(error);
+  const code = DOCUMENT_UPLOAD_REFUSALS.find((refusal) => refusal === refusalCodeOf(error));
+  const body = error instanceof ApiError ? error.body : null;
   if (code === "document_unsupported") return { code };
-  if (error instanceof ApiError && error.status === 413) {
-    const maxBytes = (error.body as { maxBytes?: unknown } | null)?.maxBytes;
-    return { code: "file_too_large", maxBytes: typeof maxBytes === "number" ? maxBytes : null };
+  if (code === "file_too_large") {
+    const tooLarge = FileTooLarge.safeParse(body);
+    if (tooLarge.success) return { code, ...tooLarge.data };
   }
-  if (code === "quota_exceeded" && error instanceof ApiError) {
-    const quota = QuotaExceeded.safeParse(error.body);
+  if (code === "quota_exceeded") {
+    const quota = QuotaExceeded.safeParse(body);
     if (quota.success) return { code, freeBytes: Math.max(0, quota.data.quotaBytes - quota.data.usedBytes) };
   }
   return { code: "failed" };
