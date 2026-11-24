@@ -1,9 +1,13 @@
+import { useMutation } from "@tanstack/react-query";
 import { FolderGit2, GraduationCap, Loader2, Lock, LockOpen, Snowflake, Users } from "lucide-react";
 
-import type { ProjectDetail, ProjectRepoView } from "@quiz/contracts";
+import type { ProjectDetail, ProjectReposAccess, ProjectRepoView } from "@quiz/contracts";
 import { projectGraded } from "@quiz/domain";
 
+import { api } from "../api";
+import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
+import { useToast } from "../notify";
 import type { Navigate } from "../router";
 import {
   Badge,
@@ -12,6 +16,7 @@ import {
   cx,
   EmptyState,
   isoDateParts,
+  isoDateTime,
   pressable,
   RelativeTime,
   RepoLink,
@@ -29,12 +34,14 @@ import {
   entryRowId,
   filterEntries,
   joinedCount,
+  refusalMessage,
   repoEntries,
   shortSha,
   type CommitTone,
   type RepoEntry,
   type RepoFilter,
 } from "./projectPage";
+import { useProjectRefresh } from "./useProjectPatch";
 
 type SortKey = "student" | "score";
 
@@ -225,13 +232,65 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
  * had them, and `liveStale` is said on the heading while the next refetch
  * fills it.
  */
+/**
+ * An `online_seb` project's repositories open to their students (ADR-145
+ * §6): the fact and its date, and the course owner's secondary *Close
+ * access*, confirmed first — it revokes the access on GitHub and cannot
+ * take back a clone. Nothing while they are closed: the opening is the
+ * header's primary action.
+ */
+function ReposAccessLine({ project, owner }: { project: ProjectDetail; owner: boolean | null }) {
+  const t = useT();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const refresh = useProjectRefresh(project.id, project.classroomId);
+  const close = useMutation({
+    mutationFn: () => api<ProjectReposAccess>(`/app/api/projects/${project.id}/repos/close`, { method: "POST" }),
+    onSuccess: async () => {
+      await refresh();
+      toast(t("project.repos.access.closedToast"), "success");
+    },
+    onError: (error) => toast(refusalMessage(error, t), "error"),
+  });
+  const openedAt = project.reposAccess?.openedAt;
+  if (!openedAt) return null;
+  const onClose = async () => {
+    if (
+      await confirm({
+        title: t("project.repos.access.close.confirm.title"),
+        message: t("project.repos.access.close.confirm.body"),
+        confirmLabel: t("project.repos.access.close"),
+        danger: true,
+      })
+    ) {
+      close.mutate();
+    }
+  };
+  return (
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-muted" data-testid="repos-access">
+      <span className="inline-flex items-center gap-1.5">
+        <LockOpen className="size-3.5 text-fg-faint" aria-hidden />
+        {t("project.repos.access.state", { date: isoDateTime(openedAt) })}
+      </span>
+      {owner === true ? (
+        <Button variant="secondary" size="sm" onClick={() => void onClose()} loading={close.isPending}>
+          {close.isPending ? null : <Lock />} {t("project.repos.access.close")}
+        </Button>
+      ) : null}
+    </p>
+  );
+}
+
 export function ProjectRepos({
   project,
   onOpen,
   navigate,
   filter,
   onFilter,
+  owner,
 }: {
+  /** The caller owns the course (ADR-068): *Close access* is theirs (ADR-145); null while unknown. */
+  owner: boolean | null;
   project: ProjectDetail;
   /** Opens a row's page (ADR-137), by its id (`entryRowId`). */
   onOpen: (rowId: string) => void;
@@ -307,6 +366,7 @@ export function ProjectRepos({
   return (
     <section aria-labelledby="project-repos" className="space-y-3">
       {heading}
+      <ReposAccessLine project={project} owner={owner} />
       {noneAccepted ? <p className="text-sm text-fg-muted">{t("project.repos.none")}</p> : null}
       {filter !== null ? (
         <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-fg-muted" data-testid="project-filter">

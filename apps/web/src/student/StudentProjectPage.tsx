@@ -143,9 +143,10 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
   const inSeb = useMe().data?.session?.projectId === project.id;
 
   // ADR-047 §2: under Safe Exam Browser the student is invited to nothing
-  // (`invitation` null) and reaches no repository before grading. Once
-  // accepted, the page's action is the workspace's, never GitHub's.
-  const noGithub = inSeb || project.workspace?.mode === "online_seb";
+  // (`invitation` null) and reaches no repository until the course owner
+  // opens the repositories (ADR-145). Until then, once accepted, the page's
+  // action is the workspace's, never GitHub's; afterwards, as online.
+  const noGithub = inSeb || (project.workspace?.mode === "online_seb" && (project.repo?.invitation ?? null) === null);
 
   const facts = factsOfProject(project);
   const kind = projectActionKind(facts, now);

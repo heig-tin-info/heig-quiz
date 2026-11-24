@@ -41,6 +41,13 @@ Dès que votre enseignant publie les scores, la page affiche votre score
 final, votre note et le commentaire de l'enseignant. Vous recevez une
 notification.
 
+## Après un test de labo sous Safe Exam Browser
+
+Pendant le test, vous n'avez aucun accès à votre dépôt sur GitHub. Une fois
+le test terminé, l'enseignant peut ouvrir les dépôts : vous recevez alors
+une invitation en lecture seule, que vous acceptez depuis cette page, pour
+relire votre code, les tests et les exécutions de la CI.
+
 ## Contester un critère
 
 Une fois ses scores publiés, un projet noté par critères peut être contesté pendant quelques jours : **Contester**, sous un critère, envoie votre motif une seule fois.

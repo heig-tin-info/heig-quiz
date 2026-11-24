@@ -7,7 +7,21 @@ from a source repository of yours. The repository's own CI computes the
 score; Quiz keeps the deadline, the protected files, the scores and the
 release. The one primary action follows the state: **Publish** for a draft,
 **Sync** when the source is ahead, **Release scores** once everything is
-final.
+final, **Open repositories** once a lab test sat under Safe Exam Browser is
+over.
+
+## Lab tests under Safe Exam Browser
+
+During a lab test under Safe Exam Browser or at a kiosk, nobody is invited
+on GitHub. Once the scores are released (or every repository is frozen,
+for a project without grading), the course owner may **Open repositories**:
+the students who worked are invited read-only. They then read their code,
+the statement and tests, and every CI run with its logs: a test that
+prints hidden cases in its logs shows them. A copy they clone cannot be
+taken back. A repository with no work of its student stays closed, marked
+*nothing to open*. **Close access**, on the **Repositories** tab, takes the
+access back. While the repositories are open, a later deadline that would
+reopen one is refused: close the access first.
 
 ## The table
 

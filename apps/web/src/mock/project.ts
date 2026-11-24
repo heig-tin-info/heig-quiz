@@ -85,6 +85,8 @@ import {
   type ProjectReleaseResult,
   type ProjectRepoDeadlineState,
   type ProjectRepoProtection,
+  type ProjectReposAccess,
+  type ReposOpeningRefusal,
   type ProjectRepoReview,
   type ProjectRepoScores,
   type ProjectRepoSync,
@@ -127,6 +129,9 @@ import {
   proratedByTests,
   resolveFinalScore,
   repoValidation,
+  nothingToOpen,
+  repoOpenable,
+  reposOpeningRefusal,
   reviewState,
   roundPoints,
   teacherScoreMax,
@@ -137,6 +142,7 @@ import {
   type CriterionGradeLike,
   type FinalScoreSource,
   type GradeAdjustment,
+  type OpenableRepo,
   type ProjectDatesChange,
   type ReleasedGrade,
   type ProjectLifeLike,
@@ -241,6 +247,8 @@ interface MockProject {
   copy: CopyGroup[] | null;
   /** A confirmed resync the job is applying (R2): pending for this many reads more. */
   resyncReads: number;
+  /** An `online_seb` project (ADR-145): since when its repositories are open to the students, null while closed; absent otherwise. */
+  reposOpenedAt?: string | null;
 }
 
 /**
@@ -270,6 +278,8 @@ const SEEDS: {
   summary?: Partial<ProjectSummary>;
   /** `?pjstates=1`: nobody accepted yet. */
   noRepos?: true;
+  /** An `online_seb` lab test (ADR-145): its repositories closed to the students until the owner opens them. */
+  seb?: true;
 }[] = [
   { id: "pj-draft", title: "Labo 3 — listes chaînées", state: "draft", start: 7 * D, deadline: 21 * D },
   // Scheduled (ADR-127): announced to the class, published by the ticker at its start.
@@ -282,6 +292,8 @@ const SEEDS: {
   { id: "pj-graded", title: "Labo 0 — prise en main", state: "locked", start: -21 * D, deadline: -2 * D, unreleased: true },
   // Past its deadline under the `commit` strategy, its scores not final (graded `none`): `deadline passed`, never `locked` (#958).
   { id: "pj-commit", title: "Labo 0c — Makefile", state: "locked", start: -20 * D, deadline: -1 * D, unreleased: true, summary: { deadlineStrategy: "commit", gradingMode: "none" } },
+  // ADR-145: a lab test sat under Safe Exam Browser, released, its repositories still closed to the students.
+  { id: "pj-seb", title: "Test de labo 1 — sous SEB", state: "locked", start: -9 * D, deadline: -8 * D, seb: true },
   // `?groups=1`: group projects following PRG1-2026's pairs — a draft, a published one, one stopped.
   ...(flags.groups
     ? [
@@ -781,6 +793,12 @@ function seeded(): MockProject[] {
             ]
           : [];
     PROJECTS.set(seed.id, project);
+    // ADR-145: nobody invited under SEB; the third student accepted and never worked (absent): nothing to open there.
+    if (seed.seb) {
+      project.reposOpenedAt = null;
+      for (const r of project.repos) r.invitationStatus = "none";
+      Object.assign(project.repos[2] ?? {}, { lastCommit: null, live: { commitCount: 1, checksPassed: null, checksTotal: null, stale: false }, ciStatus: "none" });
+    }
     // Graded by criteria (ADR-106): the snapshot, and the passes' rows of every frozen repository.
     if (summary.gradingMode === "criteria") seedCriteria(project);
     if (seed.id === PJ_CRITERIA_RELEASED) seedContestations(project);
@@ -1009,6 +1027,38 @@ export function projectColumnOf(id: string): { classroomId: string; released: bo
 /** A live repository: provisioned, not deleted, its project not archived (`LIVE` of `deadline.ts`). */
 const isLive = (p: MockProject, r: MockRepo) => r.provisionStatus === "ok" && !r.deleted && p.summary.archivedAt === null;
 
+/** A repository as the opening reads it (ADR-145): its student's work, a commit of theirs (the mock keeps no receipts). */
+const openableOf = (r: MockRepo): OpenableRepo => ({
+  groupId: r.groupId,
+  provisionStatus: r.provisionStatus,
+  fullName: r.fullName,
+  deletedAt: r.deleted ? iso(0) : null,
+  frozenAt: r.frozenAt,
+  work: commitsOf(r) > 0,
+});
+
+/** An `online_seb` project's opening (ADR-145), as the server reads it (`reposOpening`); null in another mode. */
+function reposAccessOf(p: MockProject): { view: ProjectReposAccess; refusal: ReposOpeningRefusal | null } | null {
+  if (p.reposOpenedAt === undefined) return null;
+  const facts = p.repos.filter((r) => isLive(p, r)).map(openableOf);
+  const { live, frozen } = readinessOf(p);
+  const openable = facts.filter(repoOpenable).length;
+  return {
+    refusal: reposOpeningRefusal({
+      workMode: "online_seb",
+      gradingMode: p.summary.gradingMode,
+      projectArchived: p.summary.archivedAt !== null,
+      classroomArchived: false,
+      opened: p.reposOpenedAt !== null,
+      released: p.releasedAt !== null,
+      live,
+      frozen,
+      openable,
+    }),
+    view: { openedAt: p.reposOpenedAt, openable, nothingToOpen: facts.filter(nothingToOpen).length, sameSource: ["Test de labo 1 — rattrapage"] },
+  };
+}
+
 function deadlineState(p: MockProject, r: MockRepo): ProjectRepoDeadlineState {
   return {
     id: r.id,
@@ -1120,6 +1170,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
     },
     accessToRevoke: r.accessToRevoke,
     collection: mockCollection(p, r),
+    nothingToOpen: p.reposOpenedAt !== undefined && isLive(p, r) && nothingToOpen(openableOf(r)),
   };
 }
 
@@ -1286,8 +1337,10 @@ function detailOf(p: MockProject): ProjectDetail {
       startsLater: draftStartsLater({ publishMode: p.summary.publishMode, startAt: new Date(p.summary.startAt) }, new Date(now)),
       sourceAhead: p.sync.aheadAt !== null,
       changedAfterRelease: views.filter((r) => r.flags.changedAfterRelease).length,
+      reposOpenable: reposAccessOf(p)?.refusal === null,
     }),
     counts,
+    reposAccess: reposAccessOf(p)?.view ?? null,
     sync: {
       ahead: p.sync.aheadAt === null ? null : { pushedAt: p.sync.aheadAt, commits: p.sync.aheadCommits },
       inProgress: p.sync.inProgressReads > 0,
@@ -2422,6 +2475,28 @@ on("POST", "/app/api/projects/:id/release", (m) => {
   }
   const result: ProjectReleaseResult = { releasedAt: p.releasedAt, first, repos: p.repos.length, scored };
   return result;
+});
+
+/**
+ * ADR-145: an `online_seb` project's repositories opened to their students
+ * (the openable ones invited, `pending`), and closed again (every one back
+ * to `none`). The refusals are the domain's.
+ */
+on("POST", "/app/api/projects/:id/repos/open", (m): ProjectReposAccess => {
+  const p = projectOr404(m.groups!.id!);
+  const opening = reposAccessOf(p);
+  const refusal = opening === null ? "not_supervised" : opening.refusal;
+  if (refusal) throw refuse(409, refusal, refusal);
+  p.reposOpenedAt = iso(0);
+  for (const r of p.repos) if (isLive(p, r) && repoOpenable(openableOf(r))) r.invitationStatus = "pending";
+  return reposAccessOf(p)!.view;
+});
+on("POST", "/app/api/projects/:id/repos/close", (m): ProjectReposAccess => {
+  const p = projectOr404(m.groups!.id!);
+  if (p.reposOpenedAt === undefined) throw refuse(409, "not_supervised", "not_supervised");
+  p.reposOpenedAt = null;
+  for (const r of p.repos) r.invitationStatus = "none";
+  return reposAccessOf(p)!.view;
 });
 
 /** The protected files restored again (F-PROJ-08): a no-op on a repository not suspended. */

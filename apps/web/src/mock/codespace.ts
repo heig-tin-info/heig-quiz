@@ -46,6 +46,8 @@ const WORKSPACES = new Map<string, MockWorkspace>([
     "pj-draft-manual",
     { mode: "online_seb", devices: flags.pjkiosk ? "kiosk" : "seb", launched: false, syncedAt: iso(-30 * 60_000), syncError: null },
   ],
+  // ADR-145: the lab test sat under SEB, over and released (`mock/project.ts`, its repositories' opening).
+  ["pj-seb", { mode: "online_seb", devices: "seb", launched: true, syncedAt: iso(-200 * H), syncError: null }],
 ]);
 
 /** `?kioskprojects=1`: the platform offers kiosk stations to projects (`KIOSK_PROJECTS`, ADR-089). */

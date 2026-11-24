@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   FolderGit2,
   LayoutDashboard,
+  LockOpen,
   RefreshCw,
   Rocket,
   Send,
@@ -20,6 +21,7 @@ import { useState } from "react";
 import type {
   ProjectDetail,
   ProjectReleaseResult,
+  ProjectReposAccess,
   ProjectSummary,
   ProjectSyncAccepted,
   ProjectSyncRequest,
@@ -126,7 +128,10 @@ import { useProjectPatch, useProjectRefresh, useRenameProject } from "./useProje
  * the source is ahead (F-PROJ-12, M3-07: the distribution repository is
  * updated and the students get a pull request each), offered as a
  * secondary button beside Publish or Release while the source is ahead
- * (`offersSync`); `none` leaves the header to its sentence. *Close
+ * (`offersSync`); Open repositories (ADR-145), an `online_seb` project's
+ * once its work is over and released, confirmed first with what becomes
+ * readable and that a clone cannot be taken back — closing them again is
+ * the Repositories tab's secondary; `none` leaves the header to its sentence. *Close
  * project* (#1147), the course owner's while the project is published and
  * its deadline ahead (`offersClose`), is a `danger-quiet` button of the header, as
  * the live evaluation's Close, confirmed first with what follows. Archive,
@@ -243,6 +248,15 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     },
     onError: failed,
   });
+  /** ADR-145: an `online_seb` project's repositories opened to their students, read-only; the job invites them. */
+  const openRepos = useMutation({
+    mutationFn: () => api<ProjectReposAccess>(`/app/api/projects/${id}/repos/open`, { method: "POST" }),
+    onSuccess: async () => {
+      await refresh();
+      toast(t("project.repos.openedToast"), "success");
+    },
+    onError: failed,
+  });
   /** #1147: the deadline brought to the server's now; the ticker applies it as any deadline. */
   const closeNow = useMutation({
     mutationFn: () => api<ProjectSummary>(`/app/api/projects/${id}/close`, { method: "POST" }),
@@ -335,6 +349,33 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       })
     ) {
       release.mutate();
+    }
+  };
+  /** ADR-145 §5: one-way in practice — what becomes readable, a clone kept, the sittings still to come on this source. */
+  const onOpenRepos = async () => {
+    const access = project.reposAccess!;
+    const opened =
+      access.openable === 1 ? t("project.repos.open.confirm.body.one") : t("project.repos.open.confirm.body", { n: access.openable });
+    const closed =
+      access.nothingToOpen === 1
+        ? t("project.repos.open.confirm.none.one")
+        : t("project.repos.open.confirm.none", { n: access.nothingToOpen });
+    if (
+      await confirm({
+        title: t("project.repos.open.confirm.title"),
+        message: (
+          <span className="flex flex-col gap-2">
+            <span>{opened}</span>
+            {access.nothingToOpen > 0 ? <span>{closed}</span> : null}
+            {access.sameSource.length > 0 ? (
+              <span className="font-medium text-fg">{t("project.repos.open.confirm.sameSource", { names: access.sameSource.join(", ") })}</span>
+            ) : null}
+          </span>
+        ),
+        confirmLabel: t("project.repos.open"),
+      })
+    ) {
+      openRepos.mutate();
     }
   };
   const onCloseNow = async () => {
@@ -488,6 +529,11 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
               >
                 <Send /> {t(again ? "project.release.again" : "project.release")}
               </Button>
+            ) : project.primaryAction === "open_repos" ? (
+              // ADR-145 §3: once the lab is over, the course owner opens the repositories to their students.
+              <Button data-coach="project.primary" onClick={() => void onOpenRepos()} loading={openRepos.isPending}>
+                {openRepos.isPending ? null : <LockOpen />} {t("project.repos.open")}
+              </Button>
             ) : project.primaryAction === "sync" ? (
               syncButton("primary", "project.primary")
             ) : null}
@@ -593,6 +639,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
                 navigate={navigate}
                 filter={filter}
                 onFilter={setFilter}
+                owner={owner}
               />
             ) : tab === "grading" ? (
               <GradingTab project={project} navigate={navigate} owner={owner} />

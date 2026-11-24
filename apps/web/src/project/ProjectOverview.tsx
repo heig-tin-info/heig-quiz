@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 
 import type { ProjectDetail, ProjectPatch, ProjectSummary } from "@quiz/contracts";
 
-import { refusedWith } from "../api";
 import { useConfirm } from "../confirm";
 import { DateField } from "../evaluation/TimingStep";
 import { useT, type TFunction } from "../i18n";
@@ -23,6 +22,7 @@ import { SyncButton } from "./parts";
 import { DistributionRepo } from "./DistributionRepo";
 import {
   deadlineDesc,
+  deadlineRefusal,
   deadlinePassed,
   isReopen,
   offersSync,
@@ -171,10 +171,7 @@ function DeadlineTile({
   const t = useT();
   const confirm = useConfirm();
   const busy = patch.isPending || project.archivedAt !== null;
-  const deadlineRefused =
-    patch.variables?.deadlineAt !== undefined && refusedWith(patch.error, "deadline_past")
-      ? t("project.refusal.deadlinePast")
-      : undefined;
+  const deadlineRefused = patch.variables?.deadlineAt !== undefined ? deadlineRefusal(patch.error, t) : undefined;
 
   const commitDeadline = async (deadlineAt: string | null, reset: () => void) => {
     if (deadlineAt === null) {

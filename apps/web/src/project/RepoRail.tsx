@@ -3,12 +3,11 @@ import type { ReactNode } from "react";
 
 import type { ProjectDetail, ProjectRepoView } from "@quiz/contracts";
 
-import { refusedWith } from "../api";
 import { DateField } from "../evaluation/TimingStep";
 import { useI18n, useT } from "../i18n";
 import { Button, Card, Dash, Fact, FieldError, fieldErrorProps, isoDateTime, percent, RelativeTime } from "../ui";
 import { CollectionFacts, SyncBadge } from "./parts";
-import { classPosition, teacherScoreBlock, type RepoEntry, type RepoPrimary } from "./projectPage";
+import { classPosition, deadlineRefusal, teacherScoreBlock, type RepoEntry, type RepoPrimary } from "./projectPage";
 import { ScoreFacts, TeacherScoreButton } from "./TeacherScoreForm";
 import type { RepoWrites } from "./useRepoWrites";
 
@@ -34,7 +33,7 @@ function DeadlineSection({ repo, writes, can }: { repo: ProjectRepoView; writes:
   const t = useT();
   const { deadline, lock } = writes;
   const busy = deadline.isPending || lock.isPending;
-  const refused = refusedWith(deadline.error, "deadline_past") ? t("project.refusal.deadlinePast") : undefined;
+  const refused = deadlineRefusal(deadline.error, t);
   return (
     <RailSection title={t("project.sheet.deadline")} testId="repo-deadline">
       {!can ? <p className="text-[13px] text-fg-muted">{t("project.sheet.unavailable")}</p> : null}

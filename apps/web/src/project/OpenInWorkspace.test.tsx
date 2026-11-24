@@ -50,7 +50,7 @@ function routes(ws: RouteHandler, extra: Record<string, RouteHandler> = {}, arch
 
 const renderTable = (p: ProjectDetail) => {
   const onOpen = vi.fn();
-  renderWithProviders(<ProjectRepos project={p} onOpen={onOpen} navigate={vi.fn()} filter={null} onFilter={vi.fn()} />);
+  renderWithProviders(<ProjectRepos project={p} onOpen={onOpen} navigate={vi.fn()} filter={null} onFilter={vi.fn()} owner={true} />);
   return { onOpen };
 };
 /** The repository's page (ADR-137), which reads its project as the project page does. */
