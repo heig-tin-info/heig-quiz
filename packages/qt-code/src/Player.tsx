@@ -419,7 +419,7 @@ export function CodePlayer({
         {student.visibleCases.length === 0 ? (
           <p className={hint}>{s.noVisibleCases}</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className={table.table}>
               <HeadRow>
                 <Th>{s.caseName}</Th>

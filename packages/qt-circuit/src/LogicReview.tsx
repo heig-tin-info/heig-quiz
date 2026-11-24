@@ -95,7 +95,7 @@ export function LogicReview({
           <p className="text-[13px] font-medium text-fg tabular-nums">
             {fmt(s.rightRows, { right: breakdown.right, total: breakdown.total })}
           </p>
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className={table.table}>
               <HeadRow>
                 <Th>{s.output}</Th>
@@ -151,7 +151,7 @@ export function LogicReview({
           {breakdown.total - breakdown.right > rows.length ? (
             <p className={hint}>{fmt(s.failingFirst, { n: rows.length })}</p>
           ) : null}
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className={table.table}>
               <HeadRow>
                 {breakdown.inputs.map((name) => (

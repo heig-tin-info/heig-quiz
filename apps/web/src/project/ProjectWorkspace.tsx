@@ -242,7 +242,7 @@ function WorkspaceSessions({ projectId }: { projectId: string }) {
   return (
     <div className="space-y-2">
       {title}
-      <Card className="overflow-x-auto">
+      <Card className={cx(T.container, "overflow-x-auto")}>
         <table className={cx(T.table, "min-w-140")}>
           <TableHead
             columns={[

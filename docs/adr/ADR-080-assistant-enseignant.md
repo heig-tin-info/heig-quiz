@@ -6,7 +6,8 @@ Accepted (2026-10-07, decisions of the product owner on issue #559, after a spec
 feature in three phases, P1 (§1–§7, requirement F-LLM-07), P2 (§8) and P3 (§9). Amended 2026-10-08 by
 the P2, P2b and P3 amendments, folded on 2026-10-09 into §8, §10 and §9 (their items keep their numbers;
 the notes they made in §1, §2, §3 and §5 stay there). Amended 2026-10-13 (§7, issue #450): on a low
-screen the panel is a modal sheet; amended 2026-10-14 (§7, issue #849): on a phone held upright too.
+screen the panel is a modal sheet; amended 2026-10-14 (§7, issue #849): on a phone held upright too;
+amended 2026-11-24 (§7): on a phone held in the hand (narrow and touch), no assistant and no page "?".
 Amended 2026-10-15 (§6, and the P2 amendment's items 4 and 9, what students are told, issue #868):
 the "Data and privacy" page of N-DATA-07 (`/privacy`) says that the assistant may send a classroom's
 names and final results to Anthropic, and that such a name may remain 30 days in the teacher's stored
@@ -252,6 +253,20 @@ there was the window less 32 px over a page nobody could read beside it,
 and on iOS the soft keyboard hid its composer. The sheet fits the visible
 part of the window, so the composer sits above the keyboard
 (`apps/web/DESIGN.md`, "The help assistant").*
+
+*Amended 2026-11-24 (asked by the product owner): a phone held in the hand
+gets no assistant at all — no button, no sheet — and the teacher pages lose
+their header "?" with it; the fields' "?" and the help drawer they open stay.
+A teacher on a phone checks something in class or on the train; a chat that
+covers the whole screen, and a "?" that crowds the title for a document meant
+for a desk, cost more there than they give. "A phone held in the hand" is
+narrow AND touch: `usePhoneScreen()` (under `sm`, or a low screen) and
+`(pointer: coarse)`, one hook, `useTouchPhone` (`apps/web/src/ui/layers.tsx`).
+The width alone would also match a desktop zoomed to 200 % (N-A11Y-04),
+whose reader keeps every control, and the pointer alone a tablet, which keeps
+them too. A change of layout still follows the width alone; this rule is for
+removing a feature. The stored conversations are untouched: they wait in the
+history on a computer. Students see nothing change: they never had either.*
 
 ### 8. P2 — read tools
 

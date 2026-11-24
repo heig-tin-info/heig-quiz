@@ -7,7 +7,7 @@ import { card, NotePanel } from "@quiz/ui";
 import { Button } from "./controls";
 import { Fab, type PagePrimary } from "./fab";
 import { Skeleton } from "./feedback";
-import { cx, HelpIcon, LG_PX, PageHelpButton, Tip, useMinWidth, type IconType } from "./layers";
+import { cx, HelpIcon, LG_PX, PageHelpButton, Tip, useMinWidth, useTouchPhone, type IconType } from "./layers";
 import { rovingIndex } from "./menu";
 
 // Surfaces and page structure.
@@ -187,12 +187,18 @@ export function PageHeader({
 }) {
   const desktop = useMinWidth(LG_PX);
   const button = primary && desktop ? <PrimaryButton {...primary} /> : null;
+  // A page's "?" is a teacher's (no student screen passes `help`), and a
+  // phone held in the hand goes without it, as without the help assistant
+  // (ADR-080 §7, amendment of 2026-11-24): the fields' "?" stay. Hidden,
+  // not removed, so the coach's step on it waits unread.
+  const touchPhone = useTouchPhone();
+  const pageHelp = touchPhone ? undefined : help;
   const right = actions || button || help || menu;
   // A page whose whole action row is ONE control: on a phone that row takes
   // the full width under the title, so a `w-full` control reads as the
   // button of a student's card does (the student's project page). A row of
   // several controls, or one with help or a menu, keeps its intrinsic width.
-  const soleAction = isValidElement(actions) && actions.type !== Fragment && !button && !help && !menu;
+  const soleAction = isValidElement(actions) && actions.type !== Fragment && !button && !pageHelp && !menu;
   // Under `lg` the header is a grid: the title and, beside it at the top
   // right, "?" and "…"; the actions on a row of their own under both. The
   // help no longer drops onto a line of its own once the primary left for
@@ -228,8 +234,11 @@ export function PageHeader({
           {/* "?" and "…" stay together: beside the title on a phone, at the
               end of the action row from `lg`. */}
           {help || menu ? (
-            <span className="flex items-center gap-2 max-lg:col-start-2 max-lg:row-start-1">
-              {help ? <PageHelpButton topic={help} /> : null}
+            <span
+              hidden={!pageHelp && !menu}
+              className="flex items-center gap-2 max-lg:col-start-2 max-lg:row-start-1"
+            >
+              {help ? <PageHelpButton topic={help} hidden={touchPhone} /> : null}
               {menu}
             </span>
           ) : null}

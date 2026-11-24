@@ -232,7 +232,7 @@ export function TeachersSection() {
             </EmptyState>
           </Card>
         ) : (
-          <Card className="overflow-x-auto">
+          <Card className={cx(T.container, "overflow-x-auto")}>
             <table className={cx(T.table, "min-w-180")}>
               <TableHead columns={columns} sort={sort} onToggle={toggle} />
               <tbody>

@@ -141,6 +141,20 @@ export function useCoarsePointer(): boolean {
   return useMediaQuery("(pointer: coarse)");
 }
 
+/**
+ * A phone held in the hand: {@link usePhoneScreen} AND
+ * {@link useCoarsePointer}. The rule for REMOVING a feature on a phone
+ * (ADR-080 §7, amendment of 2026-11-24): the width alone also matches a
+ * desktop zoomed to 200 % (N-A11Y-04), whose reader must keep every control,
+ * and the pointer alone matches a tablet. A change of layout follows the
+ * width alone. False where `matchMedia` does not exist.
+ */
+export function useTouchPhone(): boolean {
+  const phone = usePhoneScreen();
+  const coarse = useCoarsePointer();
+  return phone && coarse;
+}
+
 /** One shared timer per interval, and who listens to it. */
 const tickers = new Map<number, { timer: ReturnType<typeof setInterval>; listeners: Set<() => void> }>();
 
@@ -593,27 +607,31 @@ export const currentHelpTopic = (): string | null => currentTopic;
  * renamed in place, carries a badge, wraps on a phone — and a "?" riding it
  * never sat right; the action row does not move. `HelpIcon` stays the mark of
  * a section, a field or a dialog, where the help is about the words beside it.
+ *
+ * `hidden` keeps it in the page but out of sight, of the focus and of a
+ * screen reader: a coach mark pointing at it then waits, unread, for the
+ * day it shows.
  */
-export function PageHelpButton({ topic }: { topic: string }) {
+export function PageHelpButton({ topic, hidden = false }: { topic: string; hidden?: boolean }) {
   const { t } = useI18n();
   const { open } = useContext(HelpContext);
   useCurrentHelpTopic(topic);
-  return (
-    <Tip label={t("help.title")}>
-      <button
-        type="button"
-        aria-label={t("help.title")}
-        data-coach="page.help"
-        onClick={() => open(topic)}
-        // The outline and height of a secondary button, written out: `buttonClass`
-        // carries a horizontal padding that a square button cannot override
-        // (two paddings are settled by stylesheet order, not by writing order).
-        className="touch-hit inline-flex size-8.5 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface text-fg-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg active:scale-97 [&_svg]:size-4"
-      >
-        <CircleHelp />
-      </button>
-    </Tip>
+  const button = (
+    <button
+      type="button"
+      hidden={hidden}
+      aria-label={t("help.title")}
+      data-coach="page.help"
+      onClick={() => open(topic)}
+      // The outline and height of a secondary button, written out: `buttonClass`
+      // carries a horizontal padding that a square button cannot override
+      // (two paddings are settled by stylesheet order, not by writing order).
+      className="touch-hit inline-flex size-8.5 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface text-fg-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg active:scale-97 [&_svg]:size-4"
+    >
+      <CircleHelp />
+    </button>
   );
+  return hidden ? button : <Tip label={t("help.title")}>{button}</Tip>;
 }
 
 /**

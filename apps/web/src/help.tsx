@@ -109,11 +109,13 @@ export function HelpProvider({ children }: { children: ReactNode }) {
       {topic ? <div className={`fixed inset-0 ${Z.helpBackdrop}`} onClick={() => setTopic(null)} /> : null}
       {/* The window, clipping: parked off the right edge, a `fixed` panel is
           a page wider than the window to iOS Safari, which lets a finger pan
-          sideways onto it (#849). Clicks go through to the page. */}
+          sideways onto it (#849). Clicks go through to the page. Under `sm`
+          the drawer takes the whole width: beside it, a strip of page
+          nobody could read. */}
       <div className={`pointer-events-none fixed inset-0 overflow-hidden ${Z.help}`}>
         <div
           ref={panel}
-          className={`pointer-events-auto absolute inset-y-0 right-0 w-85 max-w-full transform border-l border-line bg-surface transition-transform duration-200 ease-out-emphasized focus:outline-none ${
+          className={`pointer-events-auto absolute inset-y-0 right-0 w-full sm:w-85 transform border-l border-line bg-surface transition-transform duration-200 ease-out-emphasized focus:outline-none ${
             // The shadow only while open: parked off the right edge, its blur
             // still reached into the window, a grey seam down every page.
             source ? "translate-x-0 shadow-sheet" : "translate-x-full"

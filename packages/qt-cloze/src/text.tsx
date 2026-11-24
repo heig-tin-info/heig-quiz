@@ -216,7 +216,7 @@ export function ClozeFallbackText({ template, renderBlank }: ClozeTextProps) {
         }
         if (block.kind === "table") {
           return (
-            <div key={`b${i}`} className="overflow-x-auto">
+            <div key={`b${i}`} className="relative overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr>

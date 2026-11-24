@@ -253,7 +253,7 @@ export function CircuitReview({
       )}
 
       {rows.length === 0 ? null : (
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className={table.table}>
             <caption className="sr-only">{s.stimuli}</caption>
             <HeadRow>

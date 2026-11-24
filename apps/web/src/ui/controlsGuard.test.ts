@@ -184,6 +184,24 @@ describe("control scale guard rail (ADR-094)", () => {
     expect(bad).toEqual([]);
   });
 
+  it("positions every sideways scroller of a table (DESIGN.md, Tables: `T.container`)", () => {
+    // An `sr-only` label (a caption, the actions' head) is `absolute`: with no
+    // positioned scroller it is placed against the page, past the clip, and
+    // the whole page scrolls sideways on a phone.
+    const bad: string[] = [];
+    for (const { path, src } of files) {
+      let from = 0;
+      for (const { tag, line } of tagsOf(src, "div|Card")) {
+        const at = src.indexOf(tag, from);
+        from = at + tag.length;
+        const classes = classNameOf(tag);
+        if (!/\boverflow-x-auto\b/.test(classes) || !/^\s*<table\b/.test(src.slice(from))) continue;
+        if (!/\brelative\b|\bT\.container\b/.test(classes)) bad.push(`${path}:${line}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
   it("writes no rounded-full and no literal height beside the scale", () => {
     const bad: string[] = [];
     for (const { path, src } of files) {

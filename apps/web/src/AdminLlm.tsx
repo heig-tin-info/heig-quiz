@@ -253,7 +253,7 @@ function UsageSection({ settings }: { settings: LlmSettings | null }) {
               <EmptyState icon={BarChart3} title={t("admin.llm.usage.empty.title")} />
             </Card>
           ) : (
-            <Card className="overflow-x-auto">
+            <Card className={cx(T.container, "overflow-x-auto")}>
               <table className={cx(T.table, "min-w-160")}>
                 <TableHead
                   columns={[
