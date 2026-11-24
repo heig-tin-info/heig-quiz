@@ -56,6 +56,7 @@ function view(
   const mode = over.mode ?? "exercise";
   return {
     conditions: { announced: [], imposed: [] },
+    documents: [],
     attempt: {
       id: attemptId,
       state,

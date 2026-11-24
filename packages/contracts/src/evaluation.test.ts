@@ -206,7 +206,7 @@ describe("evaluationConditionsOf (ADR-079)", () => {
     logVisibility: false,
     conditions: [{ kind: "provided", text: "A formula sheet", catalogId: "5b0c3f2e-8a7d-4c1b-9e6f-2d3a4b5c6d7e" }],
   });
-  const input = { settings, durationS: null, closesAt: null, timeBonusPercent: 0 };
+  const input = { settings, durationS: null, closesAt: null, timeBonusPercent: 0, documentCount: 0 };
 
   it("strips the catalog reference of the announced ones", () => {
     expect(evaluationConditionsOf({ ...input, mode: "exam" }).announced).toEqual([

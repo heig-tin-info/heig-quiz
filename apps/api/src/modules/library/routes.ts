@@ -7,7 +7,9 @@
  * anyone else gets the 404 of a missing course, and a document of another
  * course is the 404 of a missing document. Any member uploads and renames;
  * a delete is the uploader's or a course owner's (`403 owner_required`),
- * refused inside the loader, before anything else is read. The quota is an
+ * refused inside the loader, before anything else is read; and refused `409
+ * document_in_use` while an evaluation not yet over or a template provides
+ * the document (ADR-144 §7). The quota is an
  * administrator's alone (`adminGuard`), on a course they reach.
  */
 import fastifyMultipart from "@fastify/multipart";
@@ -114,8 +116,12 @@ export async function libraryPlugin(
     "/app/api/courses/:id/documents/:documentId",
     { preHandler: requireTeacher },
     teacher(onDeletable, async ({ req, reply, now, scope }) => {
-      await service.deleteDocument(app.db, config.ASSETS_DIR, scope.row, now);
-      await trace(req, "course.document_delete", "course", scope.course.id, auditPayload(scope.row));
+      const { released } = await service.deleteDocument(app.db, config.ASSETS_DIR, scope.row, now);
+      // ADR-144 §7: the finished evaluations whose selection went with it.
+      await trace(req, "course.document_delete", "course", scope.course.id, {
+        ...auditPayload(scope.row),
+        ...(released.length > 0 ? { evaluations: released } : {}),
+      });
       return reply.code(204).send();
     }),
   );

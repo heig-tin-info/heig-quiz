@@ -10,6 +10,7 @@
 export * from "./acceptance.js";
 export * from "./activity.js";
 export * from "./afterDue.js";
+export * from "./attemptGate.js";
 export * from "./admission.js";
 export * from "./batchable.js";
 export * from "./blocks.js";

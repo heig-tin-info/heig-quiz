@@ -21,10 +21,13 @@ import {
   type CourseDocument,
   type CourseLibrary,
   type DocumentHtml,
+  type ProvidedDocument,
 } from "@quiz/contracts";
+import { isEvaluationOver } from "@quiz/domain";
 
 import { renderStandalone } from "@quiz/docrender";
 
+import { dropMockDocument, mockDocumentUses } from "./evaluation";
 import { courseOr404, ME_TEACHER, myRoleOn } from "./org";
 import { D, flags, H, iso, MockError, on, refuse } from "./runtime";
 import markdownSample from "./samples/aide-memoire.md?raw";
@@ -40,6 +43,7 @@ const doc = (over: Partial<CourseDocument> & Pick<CourseDocument, "id" | "title"
   warnings: [],
   missing: false,
   canDelete: true,
+  usedBy: [],
   ...over,
 });
 
@@ -107,7 +111,17 @@ const libraryOf = (courseId: string): MockLibrary =>
 const asRead = (courseId: string, d: CourseDocument): CourseDocument => ({
   ...d,
   canDelete: myRoleOn(courseId) === "owner" || d.uploadedBy.id === me.id,
+  usedBy: mockDocumentUses(d.id),
 });
+
+/** ADR-144 §7: the course's documents of a selection, in its order; an id of no document of the course is left out. */
+export function mockProvided(courseId: string, ids: readonly string[]): ProvidedDocument[] {
+  const documents = libraries[courseId]?.documents ?? [];
+  return ids.flatMap((id) => {
+    const d = documents.find((x) => x.id === id);
+    return d ? [{ id: d.id, title: d.title, kind: d.kind }] : [];
+  });
+}
 
 const documentOr404 = (m: RegExpMatchArray) => {
   const library = libraryOf(m.groups!.id!);
@@ -162,7 +176,13 @@ on("DELETE", "/app/api/courses/:id/documents/:documentId", (m) => {
   if (!asRead(m.groups!.id!, document).canDelete) {
     throw refuse(403, "owner_required", "Only an owner of this course may do that");
   }
+  // ADR-144 §7: a template or an evaluation not yet over holds it.
+  const holding = mockDocumentUses(document.id).filter((use) => use.template || !isEvaluationOver(use.state));
+  if (holding.length > 0) {
+    throw refuse(409, "document_in_use", "an evaluation or a template still provides this document", { evaluations: holding });
+  }
   library.documents.splice(library.documents.indexOf(document), 1);
+  dropMockDocument(document.id);
   return undefined;
 });
 

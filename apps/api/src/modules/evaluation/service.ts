@@ -93,6 +93,7 @@ export {
   peopleOf,
   classroomArchived,
 } from "./reads.js";
+export { providedDocumentCount, providedDocumentCounts, providedDocumentsOf } from "./providedDocuments.js";
 export {
   createEvaluation,
   createPollEvaluation,

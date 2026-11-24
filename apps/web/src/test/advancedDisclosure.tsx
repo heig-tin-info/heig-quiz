@@ -28,10 +28,13 @@ export function Harness({
   detail,
   disabled = false,
   holdsCategorize = false,
+  documents = false,
 }: {
   detail: EvaluationDetail;
   disabled?: boolean;
   holdsCategorize?: boolean;
+  /** The "Documents provided" row (ADR-144 §7), which reads the course's library. */
+  documents?: boolean;
 }) {
   const patch = useConfigPatch(evaluationTarget(EVALUATION_ID));
   return (
@@ -41,6 +44,7 @@ export function Harness({
       disabled={disabled}
       feedbackDisabled={false}
       holdsCategorize={holdsCategorize}
+      {...(documents ? { documents: { courseId: detail.courseId, selected: detail.documents } } : {})}
     />
   );
 }

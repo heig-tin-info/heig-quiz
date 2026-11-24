@@ -246,10 +246,11 @@ function rulesCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
   const { evaluation } = detail;
   const { settings, mode } = evaluation;
   // ADR-079: the attempts and the negative marking as the students read them.
-  const imposed = imposedConditions({ ...evaluation, timeBonusPercent: 0 });
+  const imposed = imposedConditions({ ...evaluation, timeBonusPercent: 0, documentCount: detail.documents.length });
   const line = <K extends ImposedCondition["key"]>(key: K) =>
     imposed.find((c): c is Extract<ImposedCondition, { key: K }> => c.key === key);
   const attemptsLine = line("attempts");
+  const documentsLine = line("documents");
   const retakes = retakesOf(settings);
   const attempts = attemptsLine
     ? [
@@ -270,6 +271,8 @@ function rulesCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
     detail: [
       ...(attempts === null ? [] : [attempts]),
       ...(line("negative_marking") ? [t("launch.rules.negative")] : []),
+      // ADR-144 §7: the documents it provides, counted as the students read them.
+      ...(documentsLine ? [imposedText(documentsLine, t).title] : []),
       // ADR-079: said, never warned about — an evaluation without any is fine.
       ...(announced.length === 0
         ? []

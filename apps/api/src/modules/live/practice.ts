@@ -10,7 +10,14 @@ import { isFinishedAttempt, practiceCooldownS, practiceDeadline, practiceRefusal
 
 import type { Db } from "../../db/client.js";
 import { attempts, evaluations } from "../../db/schema.js";
-import { classroomArchived, practiceOpen, settingsOf, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
+import {
+  classroomArchived,
+  practiceOpen,
+  providedDocumentCount,
+  settingsOf,
+  type DbOrTx,
+  type EvaluationRecord,
+} from "../evaluation/service.js";
 import type { AttemptRecord, Participant } from "./access.js";
 import { PracticeRefused, RateLimited } from "./failures.js";
 import { drawInstances, drawSeed, insertAttempt } from "./lifecycle.js";
@@ -87,7 +94,11 @@ export async function practiceEntry(
   return {
     kind: "ready",
     view: {
-      conditions: practiceConditions(evaluation, participant.timeBonusPercent),
+      conditions: practiceConditions(
+        evaluation,
+        participant.timeBonusPercent,
+        await providedDocumentCount(db, evaluation.id),
+      ),
       evaluation: { id: evaluation.id, title: evaluation.title },
     },
   };

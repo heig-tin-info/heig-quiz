@@ -12,6 +12,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
+  AttemptDocumentParam,
   AttemptEventBody,
   AttemptParam,
   AnswerParam,
@@ -34,6 +35,7 @@ import {
   SubmitBody,
   isIntegrityEventKind,
   type CheckResponse,
+  type DocumentHtml,
   type ExtendResponse,
   type FlagResponse,
   type ResetAttemptResponse,
@@ -58,8 +60,9 @@ import {
   teacherGuard,
   withCourseRole,
 } from "../guards.js";
-import { notFound, rateLimited, studentRoute, teacherRoute } from "../http.js";
+import { notFound, rateLimited, sendRanged, studentRoute, teacherRoute } from "../http.js";
 import * as evaluationService from "../evaluation/service.js";
+import * as library from "../library/service.js";
 import { presence } from "../realtime/presence.js";
 import * as events from "./events.js";
 import * as service from "./service.js";
@@ -69,7 +72,7 @@ const EVENTS_PER_MINUTE = 60;
 
 export async function livePlugin(
   app: FastifyInstance,
-  opts: { config: Pick<AppConfig, "RUNNER_RUNS_PER_EVALUATION"> },
+  opts: { config: Pick<AppConfig, "RUNNER_RUNS_PER_EVALUATION" | "ASSETS_DIR"> },
 ) {
   const requireSession = (req: FastifyRequest, reply: FastifyReply) =>
     app.requireSession(req, reply);
@@ -543,6 +546,51 @@ export async function livePlugin(
         now,
       });
       return reply.code(200).send(outcome satisfies InteractiveOutcome);
+    }),
+  );
+
+  /**
+   * ADR-144 §7, F-LIVE-15: a document the evaluation of the caller's own
+   * attempt provides, through the library's student view — the one exit
+   * (invariant 4), which applies the read rule. Every refusal is the 404 of
+   * a missing document: not the caller's attempt (`own`, a superseded one
+   * included), a confined session of another evaluation (`sitting`), the
+   * rule false (the lobby, a pause, a closed or expired attempt, an exam's
+   * blank practice), a document not selected or of another course, or the
+   * other kind's route. Nothing is audited, no attempt event written.
+   */
+  const provided = async (
+    reply: FastifyReply,
+    scope: NonNullable<Awaited<ReturnType<typeof own>>>,
+    documentId: string,
+    kind: "pdf" | "markdown",
+    now: Date,
+  ) => {
+    const document = await library.providedDocument(app.db, scope, documentId, now);
+    if (document?.kind === kind) return document;
+    notFound(reply);
+    return null;
+  };
+
+  /** A PDF's bytes, with `Range`, inert (`sendRanged`). */
+  app.get(
+    "/app/api/attempts/:id/documents/:documentId/file",
+    sit,
+    student({ params: AttemptDocumentParam, load: own }, async ({ req, reply, now, params, scope }) => {
+      const document = await provided(reply, scope, params.documentId, "pdf", now);
+      if (!document) return reply;
+      return sendRanged(req, reply, await library.providedFile(opts.config.ASSETS_DIR, document));
+    }),
+  );
+
+  /** A Markdown document as rendered at upload. */
+  app.get(
+    "/app/api/attempts/:id/documents/:documentId/html",
+    sit,
+    student({ params: AttemptDocumentParam, load: own }, async ({ reply, now, params, scope }) => {
+      const document = await provided(reply, scope, params.documentId, "markdown", now);
+      if (!document) return reply;
+      return library.providedHtml(document) satisfies DocumentHtml;
     }),
   );
 

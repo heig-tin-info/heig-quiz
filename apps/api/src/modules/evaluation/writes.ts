@@ -38,6 +38,7 @@ import {
   modeChangeable,
   negativeMarkingAllowedFor,
   OVER_STATES,
+  providedDocumentsAllowedFor,
   retakesAllowedFor,
   retakeScopeFits,
   studentWorkOf,
@@ -72,6 +73,7 @@ import {
   preferredMcqPolicy,
 } from "./reads.js";
 import { latestPublished } from "./items.js";
+import { setProvidedDocuments } from "./providedDocuments.js";
 
 /**
  * The two presets of §4.3. An exam is timed, forward-only-ish and silent
@@ -295,6 +297,12 @@ export async function patchEvaluation(
     throw new EvaluationError(lock === "running" ? "running_locked" : "locked");
   }
   if (row.mode === "poll" && patch.feedbackPolicy !== undefined) throw new EvaluationError("poll_feedback_locked");
+  // ADR-144 §7: the selection lives in its own table, not in the settings
+  // `MODE_SETTINGS` reads, so its mode gate is here. A change of mode never
+  // reaches a poll (`modeChangeable`), so no stored selection meets one.
+  if (patch.documents !== undefined && patch.documents.length > 0 && !providedDocumentsAllowedFor(mode)) {
+    throw new EvaluationError("documents_not_allowed");
+  }
   const next: Partial<typeof evaluations.$inferInsert> = { updatedAt: new Date() };
   if (patch.title !== undefined) next.title = patch.title;
   if (modeChanged) next.mode = mode;
@@ -379,6 +387,7 @@ export async function patchEvaluation(
     assertStaysScheduled({ ...row, ...next } as EvaluationRecord, ctx.now);
   }
 
+  if (patch.documents !== undefined) await setProvidedDocuments(db, row, patch.documents);
   await db.update(evaluations).set(next).where(eq(evaluations.id, row.id));
   return (await byId(db, row.id))!;
 }

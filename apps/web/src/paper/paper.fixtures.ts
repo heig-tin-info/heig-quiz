@@ -34,6 +34,7 @@ export const makePaper = (over: Partial<PaperItems> = {}): PaperItems => ({
   student: { userId: USER, displayName: "Nadia Roux" },
   view: {
     conditions: { announced: [], imposed: [] },
+    documents: [],
     attempt: {
       id: "00000000-0000-4000-8000-000000000000",
       state: "in_progress",

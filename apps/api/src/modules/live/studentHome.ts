@@ -6,7 +6,7 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import type { AttemptScore, EvaluationCard, PracticeCard, StudentPollCard } from "@quiz/contracts";
-import { isFinishedAttempt, retakeRefusal, retakeScopeOf, takenBy } from "@quiz/domain";
+import { isEvaluationOpen, isFinishedAttempt, retakeRefusal, retakeScopeOf, takenBy } from "@quiz/domain";
 
 import { isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -17,6 +17,7 @@ import {
   handoutPrints,
   inPastSeries,
   pastSeriesPrintable,
+  providedDocumentCounts,
   retakePolicyOf,
   retakesEnabled,
   studentEvaluationRows,
@@ -192,7 +193,7 @@ export async function studentBoard(
   const readableEarly = readableEarlyOf(rows, perEvaluation);
   const scored = [...new Set([...withRetakes, ...readableEarly])];
   const scoredIds = [...new Set([...scored, ...practiced].map((r) => r.evaluation.id))];
-  const [grades, totals, itemCounts, tallies, printable] = await Promise.all([
+  const [grades, totals, itemCounts, tallies, printable, documentCounts] = await Promise.all([
     releasedGradesOf(db, userId, rows, perEvaluation),
     totalPointsByEvaluation(db, scoredIds),
     countedItemsByEvaluation(db, scoredIds),
@@ -205,10 +206,12 @@ export async function studentBoard(
       db,
       practiced.filter((r) => pastSeriesPrintable(r.evaluation, r.archivedAt)).map((r) => r.evaluation),
     ),
+    // The conditions of an open card behind a trusted client (`withConditions`).
+    providedDocumentCounts(db, rows.filter((r) => isEvaluationOpen(r.evaluation.state)).map((r) => r.evaluation.id)),
   ]);
   const scores: Scores = { totals, itemCounts, tallies };
 
-  const { open, upcoming, past } = groupCards(rows, { perEvaluation, readableEarly, grades, scores, now });
+  const { open, upcoming, past } = groupCards(rows, { perEvaluation, readableEarly, grades, scores, documentCounts, now });
   const practice = practiceCardsOf(practiced, practiceRows, printable, scores);
   return { polls, open, upcoming, past, practice };
 }
@@ -282,6 +285,8 @@ interface BoardContext {
   readableEarly: readonly StudentRow[];
   grades: ReadonlyMap<string, ReleasedGrade>;
   scores: Scores;
+  /** How many documents each evaluation provides, for an open card's conditions (ADR-144 §7). */
+  documentCounts: ReadonlyMap<string, number>;
   now: Date;
 }
 
@@ -354,8 +359,10 @@ function cardOf(row: StudentRow, counted: string | null, ctx: BoardContext): Eva
  * waiting room, so an OPEN card carries what that room would have said.
  * Upcoming and past cards carry none, as a plain exam's.
  */
-function withConditions(row: StudentRow, c: EvaluationCard): EvaluationCard {
-  return c.trustedClients.length > 0 ? { ...c, conditions: conditionsFor(row.evaluation, row.timeBonusPercent) } : c;
+function withConditions(row: StudentRow, c: EvaluationCard, ctx: BoardContext): EvaluationCard {
+  if (c.trustedClients.length === 0) return c;
+  const documents = ctx.documentCounts.get(row.evaluation.id) ?? 0;
+  return { ...c, conditions: conditionsFor(row.evaluation, row.timeBonusPercent, documents) };
 }
 
 /**
@@ -388,7 +395,7 @@ function groupCards(
     const c = cardOf(row, counted?.state ?? null, ctx);
     const group = groupOf(c);
     if (group === "upcoming") upcoming.push(c);
-    else if (group === "open") open.push(withConditions(row, c));
+    else if (group === "open") open.push(withConditions(row, c, ctx));
     else {
       const early =
         counted !== null && ctx.readableEarly.includes(row) ? scoreFrom(ctx.scores, counted.id, row.evaluation.id) : null;

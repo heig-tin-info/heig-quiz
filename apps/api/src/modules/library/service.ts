@@ -11,22 +11,27 @@
  *     The same bytes twice in one course are one document; in two courses,
  *     two rows and one file, each counted in full in its course's quota —
  *     and the reply never says whether another course holds them;
- *   - {@link deleteDocument}: the row only. A request never unlinks a file:
- *     it touches its time, and {@link sweepDocumentFiles}, a daily task,
- *     removes the files no row names once they are 48 hours old;
+ *   - {@link deleteDocument}: the row only, refused while a template of the
+ *     course or an evaluation that is not over provides it (ADR-144 §7). A
+ *     request never unlinks a file: it touches its time, and
+ *     {@link sweepDocumentFiles}, a daily task, removes the files no row
+ *     names once they are 48 hours old;
  *   - {@link documentHtml}: a Markdown document's stored rendering, for the
  *     viewer; {@link rerenderDocuments}, in the same daily task, renders
- *     again from its file a document an older renderer rendered.
+ *     again from its file a document an older renderer rendered;
+ *   - the student's one exit, `./studentView.ts`, re-exported here.
  *
  * This module owns `course_documents` and is its only writer. It reads
- * `courses` (the quota) and locks its row; `org` writes it.
+ * `courses` (the quota) and locks its row; `org` writes it. It reads
+ * `evaluation_provided_documents` and `evaluations` by join; `evaluation`
+ * writes them.
  */
 import { randomUUID } from "node:crypto";
 import { readdir, readFile, rm, stat, utimes } from "node:fs/promises";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 
-import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 
 import {
   DOCUMENT_MARKDOWN_MAX_BYTES,
@@ -35,14 +40,18 @@ import {
   type DocumentHtml,
   type DocumentKind,
   type DocumentUploadRefusal,
+  type DocumentUse,
 } from "@quiz/contracts";
+import { isEvaluationOver } from "@quiz/domain";
 import { RENDERER_VERSION, renderStandalone } from "@quiz/docrender";
 
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
-import { courseDocuments, courses, users } from "../../db/schema.js";
+import { courseDocuments, courses, evaluationProvidedDocuments, evaluations, users } from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
 import { dropTemp, pathForHash, placeTemp, safeJoin, streamToTemp, type TempFile } from "../pool/assets.js";
+
+export { providedDocument, providedDocuments, providedFile, providedHtml, type ReadingAttempt } from "./studentView.js";
 
 const REFUSALS = {
   document_unsupported: [415, "a document is a PDF or a Markdown file"],
@@ -50,7 +59,10 @@ const REFUSALS = {
   quota_exceeded: [409, "the course's documents would go past its quota"],
   // The row outlived its file: a staging copy holds the rows only, or a disk was lost.
   file_missing: [404, "the document's file is missing"],
-} satisfies Record<DocumentUploadRefusal | "file_missing", Refusal>;
+  // ADR-144 §7: a template of the course or an evaluation not yet over
+  // provides it; the body names them (`DocumentInUse`).
+  document_in_use: [409, "an evaluation or a template still provides this document"],
+} satisfies Record<DocumentUploadRefusal | "file_missing" | "document_in_use", Refusal>;
 
 export class LibraryError extends refusalClass("LibraryError", REFUSALS) {}
 
@@ -262,6 +274,7 @@ function documentView(
   uploader: { givenName: string; familyName: string; email: string },
   viewer: Viewer,
   missing: boolean,
+  usedBy: DocumentUse[],
 ): CourseDocument {
   const name = `${uploader.givenName} ${uploader.familyName}`.trim();
   return {
@@ -275,8 +288,42 @@ function documentView(
     warnings: row.warnings ?? [],
     missing,
     canDelete: mayDelete(row, viewer),
+    usedBy,
   };
 }
+
+/**
+ * The evaluations and templates that provide each of these documents, oldest
+ * first; a document nobody provides is absent. Read by join: the `evaluation`
+ * module writes the selection.
+ */
+async function usesOf(db: Db | Tx, documentIds: readonly string[]): Promise<Map<string, DocumentUse[]>> {
+  const uses = new Map<string, DocumentUse[]>();
+  if (documentIds.length === 0) return uses;
+  const rows = await db
+    .select({
+      documentId: evaluationProvidedDocuments.documentId,
+      evaluationId: evaluations.id,
+      title: evaluations.title,
+      state: evaluations.state,
+      courseId: evaluations.courseId,
+    })
+    .from(evaluationProvidedDocuments)
+    .innerJoin(evaluations, eq(evaluations.id, evaluationProvidedDocuments.evaluationId))
+    .where(inArray(evaluationProvidedDocuments.documentId, [...documentIds]))
+    .orderBy(asc(evaluations.createdAt), asc(evaluations.id));
+  for (const { documentId, courseId, ...use } of rows) {
+    uses.set(documentId, [...(uses.get(documentId) ?? []), { ...use, template: courseId !== null }]);
+  }
+  return uses;
+}
+
+/**
+ * Whether a use holds the document (ADR-144 §7): a template, whatever comes
+ * of it, or an evaluation that is not over — a draft, a scheduled one, one
+ * in its lobby, running or paused. A finished one lets it go.
+ */
+const holds = (use: DocumentUse) => use.template || !isEvaluationOver(use.state);
 
 /** The library of a course: its documents, newest first, the bytes they use and its quota. */
 export async function libraryOf(
@@ -291,9 +338,10 @@ export async function libraryOf(
     .innerJoin(users, eq(users.id, courseDocuments.uploadedBy))
     .where(eq(courseDocuments.courseId, course.id))
     .orderBy(desc(courseDocuments.createdAt), desc(courseDocuments.id));
+  const uses = await usesOf(db, rows.map(({ row }) => row.id));
   const documents = await Promise.all(
     rows.map(async ({ row, uploader }) =>
-      documentView(row, uploader, viewer, !(await present(assetsDir, row.sha256))),
+      documentView(row, uploader, viewer, !(await present(assetsDir, row.sha256)), uses.get(row.id) ?? []),
     ),
   );
   return {
@@ -309,7 +357,8 @@ export async function documentOf(db: Db, assetsDir: string, row: Row, viewer: Vi
     .select({ givenName: users.givenName, familyName: users.familyName, email: users.email })
     .from(users)
     .where(eq(users.id, row.uploadedBy));
-  return documentView(row, uploader!, viewer, !(await present(assetsDir, row.sha256)));
+  const uses = await usesOf(db, [row.id]);
+  return documentView(row, uploader!, viewer, !(await present(assetsDir, row.sha256)), uses.get(row.id) ?? []);
 }
 
 /** A new title: what students will read. */
@@ -326,12 +375,31 @@ export async function renameDocument(db: Db, row: Row, title: string, now: Date)
  * Deletes the row, never the file: another course may name the same bytes,
  * and an upload of them may be on its way. The file's time is touched, so
  * the sweep's grace starts now.
+ *
+ * Refused `409 document_in_use` while a template of the course or an
+ * evaluation that is not over provides the document (ADR-144 §7), decided
+ * under the document's row lock: a selection being written reads the
+ * document `FOR SHARE` (`evaluation/providedDocuments.ts`), so it lands
+ * before this check or finds the document gone. The finished evaluations'
+ * selections go with it, by cascade; their ids are answered for the audit.
  */
-export async function deleteDocument(db: Db, assetsDir: string, row: Row, now: Date): Promise<void> {
-  // The time first: between the two, the row still names the file, and once
-  // it does not the file is too recent for the sweep.
-  await utimes(safeJoin(assetsDir, documentPath(row.sha256)), now, now).catch(() => undefined);
-  await db.delete(courseDocuments).where(eq(courseDocuments.id, row.id));
+export async function deleteDocument(db: Db, assetsDir: string, row: Row, now: Date): Promise<{ released: string[] }> {
+  return db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select({ id: courseDocuments.id })
+      .from(courseDocuments)
+      .where(eq(courseDocuments.id, row.id))
+      .for("update");
+    if (!locked) return { released: [] }; // A concurrent delete went first.
+    const uses = (await usesOf(tx, [row.id])).get(row.id) ?? [];
+    const holding = uses.filter(holds);
+    if (holding.length > 0) throw new LibraryError("document_in_use", undefined, { evaluations: holding });
+    // The time first: between the two, the row still names the file, and once
+    // it does not the file is too recent for the sweep.
+    await utimes(safeJoin(assetsDir, documentPath(row.sha256)), now, now).catch(() => undefined);
+    await tx.delete(courseDocuments).where(eq(courseDocuments.id, row.id));
+    return { released: uses.map((u) => u.evaluationId) };
+  });
 }
 
 /** The document's file, to stream: its absolute path, size and type, or `404 file_missing`. */

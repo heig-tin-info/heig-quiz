@@ -15,6 +15,7 @@ import {
   announcedConditionsOn,
   ATTEMPT_CLOSERS,
   ATTEMPT_ORIGINS,
+  ATTEMPT_CLOSED_REASONS,
   ATTEMPT_STATES,
   imposedConditions,
   LOCKED_NAVIGATIONS,
@@ -42,6 +43,7 @@ import { SESSION_KINDS } from "./api.js";
 import { AnswerCoordinates, StaffItemRef } from "./common.js";
 import { Verdict } from "./grading.js";
 import { IntegrityIncident } from "./integrity.js";
+import { ProvidedDocument } from "./library.js";
 
 export const AttemptState = z.enum(ATTEMPT_STATES);
 export type AttemptState = z.infer<typeof AttemptState>;
@@ -209,6 +211,7 @@ export const ImposedCondition = z.discriminatedUnion("key", [
   }),
   z.object({ key: z.literal("notepad"), kind: z.literal("provided") }),
   z.object({ key: z.literal("notepad_no_clipboard"), kind: z.literal("provided") }),
+  z.object({ key: z.literal("documents"), kind: z.literal("provided"), count: z.number().int().positive() }),
   z.object({
     key: z.literal("duration"),
     kind: z.literal("info"),
@@ -304,6 +307,13 @@ export const AttemptView = z.object({
    * ADR-079: the conditions, reopenable from the player's bar.
    */
   conditions: EvaluationConditions,
+  /**
+   * ADR-144 §7: the documents the evaluation provides, in their order, while
+   * the attempt may read them (`providedDocumentsReadable`); `[]` otherwise.
+   * The teacher's stateless preview lists the selection, read through the
+   * staff routes of the course's library.
+   */
+  documents: z.array(ProvidedDocument),
 });
 export type AttemptView = z.infer<typeof AttemptView>;
 
@@ -458,7 +468,7 @@ export type CheckResponse = z.infer<typeof CheckResponse>;
 /** The 410 body. `reason` is what the player shows the student. */
 export const AttemptClosed = z.object({
   error: z.literal("attempt_closed"),
-  reason: z.enum(["deadline", "submitted", "evaluation_closed", "paused"]),
+  reason: z.enum(ATTEMPT_CLOSED_REASONS),
   deadlineAt: z.iso.datetime().nullable(),
   serverNow: z.iso.datetime(),
 });

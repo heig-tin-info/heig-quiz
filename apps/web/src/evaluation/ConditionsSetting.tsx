@@ -38,6 +38,7 @@ export function ConditionsSetting({
   config,
   courseId,
   closesAt = null,
+  documentCount,
   patch,
   disabled,
 }: {
@@ -46,6 +47,8 @@ export function ConditionsSetting({
   courseId: string;
   /** The run's common end, for the deadline line; a template has none. */
   closesAt?: string | null;
+  /** ADR-144 §7: how many documents it provides, for their line. */
+  documentCount: number;
   patch: ConfigPatch;
   disabled: boolean;
 }) {
@@ -67,7 +70,7 @@ export function ConditionsSetting({
         ? [...list, { kind: entry.kind, text: entry.text, catalogId: entry.id }]
         : list.filter((c) => c.catalogId !== entry.id),
     );
-  const imposed = imposedConditions({ ...config, closesAt, timeBonusPercent: 0 });
+  const imposed = imposedConditions({ ...config, closesAt, timeBonusPercent: 0, documentCount });
 
   return (
     <Disclosure

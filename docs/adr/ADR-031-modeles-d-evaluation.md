@@ -24,7 +24,11 @@ holds a presentation; a stored row's old keys are dropped when its settings are 
 [ADR-131](ADR-131-composantes-de-la-moyenne.md) §15 (2026-11-16):** a template also holds its gradebook
 settings — weight, counted flag, component of the mean —, stored by the `gradebook` module and outside its
 content: they do not move the revision (§4), an instance inherits them when it is made, a pull never
-carries them, and *Save as template* keeps the source's.
+carries them, and *Save as template* keeps the source's. **Amended by
+[ADR-144](ADR-144-documents-fournis.md) §7 (2026-11-24):** the documents an evaluation provides are
+content: a template carries them in their order, a change of them moves the revision, *Save as template*,
+an instance and a duplicate within the course copy them, a copy into another course drops them, and a pull
+leaves the instance's alone, like its settings.
 
 ## Context
 

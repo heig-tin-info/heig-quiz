@@ -42,6 +42,7 @@ import { CourseRole } from "./common.js";
 import { ContestationDays } from "./contestation.js";
 import { ConceptRef } from "./concept.js";
 import { EvaluationExports } from "./exports.js";
+import { ProvidedDocument, ProvidedDocumentIds } from "./library.js";
 
 /** F-EVAL-01. `poll` is accepted by the column and refused by every route (decision D7). */
 export const EvaluationMode = z.enum(EVALUATION_MODES);
@@ -637,6 +638,8 @@ export const EvaluationDetail = z.object({
   courseId: z.uuid(),
   /** What the export sheet offers (ADR-121 step 3, ADR-125 §5): each document, or why it is refused. */
   exports: EvaluationExports,
+  /** The course documents it provides, in their order (ADR-144 §7). */
+  documents: z.array(ProvidedDocument),
 });
 export type EvaluationDetail = z.infer<typeof EvaluationDetail>;
 
@@ -757,6 +760,13 @@ const EvaluationPatchFields = z.object({
     .array(z.string().trim().max(64).refine(isIpRange, { message: "an IP address or a CIDR range" }))
     .max(32)
     .optional(),
+  /**
+   * ADR-144 §7: the course's documents it provides, in their order, replaced
+   * whole. A document of another course is `422 document_unknown`; a poll is
+   * refused `422 documents_not_allowed` (an empty list passes). Frozen with
+   * the configuration (`configLock`).
+   */
+  documents: ProvidedDocumentIds.optional(),
 });
 
 const somethingToUpdate = (b: object) => Object.keys(b).length > 0;
@@ -893,6 +903,8 @@ export const TemplateDetail = z.object({
   staleItems: z.array(z.uuid()),
   /** As {@link EvaluationDetail.shape.editableQuestionIds}: whom the question editor lets in. */
   editableQuestionIds: z.array(z.uuid()),
+  /** As {@link EvaluationDetail.shape.documents}. */
+  documents: z.array(ProvidedDocument),
 });
 export type TemplateDetail = z.infer<typeof TemplateDetail>;
 

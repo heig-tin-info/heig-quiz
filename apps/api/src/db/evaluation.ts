@@ -34,6 +34,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   type AnyPgColumn,
   text,
   timestamp,
@@ -52,6 +53,7 @@ import {
 
 import { users } from "./auth.js";
 import { oneOf } from "./columns.js";
+import { courseDocuments } from "./library.js";
 import { classrooms, courses } from "./org.js";
 import { questionVersions } from "./pool.js";
 
@@ -303,5 +305,35 @@ export const evaluationItems = pgTable(
     check("evaluation_items_intro_scope_ck", oneOf(t.introScope, INTRO_SCOPES)),
     // A section is opened by a text: no `following` scope on an item without one.
     check("evaluation_items_intro_scope_text_ck", sql`${t.introScope} = 'item' or ${t.intro} is not null`),
+  ],
+);
+
+/**
+ * The documents of its course's library an evaluation provides (ADR-144 §7,
+ * F-EVAL-37), in their order: at most `MAX_PROVIDED_DOCUMENTS`, written by
+ * `evaluation/providedDocuments.ts` alone, read by the `library` module's
+ * student view by join.
+ *
+ * A join table, not a setting: a document's delete reaches it. While a
+ * template or an evaluation that is not over selects the document, the
+ * `library` module refuses the delete (`409 document_in_use`); otherwise the
+ * rows go with the document, by cascade. Nothing here checks that the
+ * document is of the evaluation's course: the writer does, under the
+ * patch's transaction (`422 document_unknown`).
+ */
+export const evaluationProvidedDocuments = pgTable(
+  "evaluation_provided_documents",
+  {
+    evaluationId: uuid("evaluation_id")
+      .notNull()
+      .references(() => evaluations.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => courseDocuments.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.evaluationId, t.documentId] }),
+    index("evaluation_provided_documents_document_idx").on(t.documentId),
   ],
 );

@@ -219,6 +219,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
     templateRevision: null,
     courseId: "c1",
     exports: { document: null, handout: null, paper: "paper_not_started" },
+    documents: [],
     ...over,
   };
 }

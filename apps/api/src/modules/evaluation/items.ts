@@ -32,6 +32,7 @@ import {
   EvaluationError,
   questionRefused,
 } from "./shared.js";
+import { copyProvidedDocuments } from "./providedDocuments.js";
 import { attemptCount, byId, classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
 import type { ItemRecord } from "./shared.js";
 import { countingCoursePool, type Caller } from "../guards.js";
@@ -434,7 +435,8 @@ export async function copyItems(
  * THE copy of an evaluation into a new draft: its settings, grade scale,
  * feedback and MCQ policies, duration, and its items — the SAME frozen
  * versions, points, order, milestones and bonus items (never a neutralization,
- * ADR-108). Duplicate, "Save as template" and
+ * ADR-108) — and the documents it provides, when the copy stays in the
+ * course (ADR-144 §7). Duplicate, "Save as template" and
  * "Instantiate" differ only in the home and the origin. A copy into a
  * course is a template, at revision 1, and carries nothing of a run (dates,
  * IP list); a copy into a classroom keeps them — a template has none to
@@ -484,6 +486,9 @@ export async function copyEvaluation(
       createdBy: target.createdBy,
     });
     await copyItems(tx, id, joined.map((j) => j.item));
+    // ADR-144 §7: the documents of the copy's course — all of them within
+    // the course, none into another.
+    await copyProvidedDocuments(tx, row.id, id, target.home);
   });
   return (await byId(db, id))!;
 }

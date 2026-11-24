@@ -52,6 +52,11 @@ const REFUSALS = {
   calculator_not_allowed: [422],
   notepad_not_allowed: [422],
   conditions_not_allowed: [422],
+  // ADR-144 §7: a poll provides no documents (an empty list passes), and a
+  // selected document is one of the evaluation's own course — an unknown id
+  // and another course's document read the same.
+  documents_not_allowed: [422, "a poll provides no documents (ADR-144)"],
+  document_unknown: [422, "a selected document is not in this course's library"],
   // ADR-091: a retake of the questions to review shows the acquired ones
   // read-only between the others, which only `free` navigation does.
   retake_scope_navigation: [422, "a retake of the questions to review needs free navigation (ADR-091)"],

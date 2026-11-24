@@ -1037,6 +1037,11 @@ const scenes = [
   { name: "eval-config-milestone-gap", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /^reorder /i }).first().hover() },
   { name: "eval-config-timing", role: "teacher", path: "/evaluations/draft?step=timing" },
   { name: "eval-config-advanced", role: "teacher", path: "/evaluations/draft?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
+  // ADR-144 §7: the documents the draft provides, under the advanced options, and their picker;
+  // the conditions' line that counts them, in the editor's preview.
+  { name: "eval-config-documents", role: "teacher", path: "/evaluations/draft?step=timing", fold: true, act: async (p) => { await p.getByRole("button", { name: /^advanced options$/i }).first().click(); await p.getByText(/^Documents provided$/).first().scrollIntoViewIfNeeded(); } },
+  { name: "eval-config-documents-choose", role: "teacher", path: "/evaluations/draft?step=timing", fold: true, act: async (p) => { await p.getByRole("button", { name: /^advanced options$/i }).first().click(); await p.getByRole("button", { name: /^choose$/i }).click(); } },
+  { name: "eval-config-conditions-documents", role: "teacher", path: "/evaluations/draft?step=timing", fold: true, act: async (p) => { await p.getByRole("button", { name: /^conditions/i }).first().click(); await p.getByText(/^2 documents provided$/).first().scrollIntoViewIfNeeded(); } },
   // Issue #86: running, the configuration is locked in the editor but for the title and the feedback.
   { name: "eval-config-timing-running", role: "teacher", path: "/evaluations/running?step=timing" },
   // ADR-131 §13: the Gradebook row under the timing, from the draft on — on a

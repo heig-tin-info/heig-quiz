@@ -62,6 +62,7 @@ import {
   type JoinedItem,
 } from "./reads.js";
 import { createEvaluation } from "./writes.js";
+import { providedDocumentIds, providedDocumentsOf } from "./providedDocuments.js";
 import {
   assertPoolsLinked,
   copyEvaluation,
@@ -235,6 +236,7 @@ export async function templateDetail(
     totalPoints,
     staleItems: staleOf(rows),
     editableQuestionIds: await editableQuestionIdsOf(db, rows, viewer),
+    documents: await providedDocumentsOf(db, row.id),
   };
 }
 
@@ -269,7 +271,8 @@ function effectiveSettings(row: EvaluationRecord): EvaluationSettings {
  * as everywhere and the settings through their accessors (so a stored row
  * missing a defaulted or optional key equals the same row spelling its
  * default), and the items with their versions, points, order, milestones,
- * bonus flags (ADR-052), intros (ADR-084) and their scopes (ADR-143).
+ * bonus flags (ADR-052), intros (ADR-084) and their scopes (ADR-143), and
+ * the documents it provides, in their order (ADR-144 §7).
  */
 async function contentOf(db: DbOrTx, row: EvaluationRecord) {
   return {
@@ -279,6 +282,7 @@ async function contentOf(db: DbOrTx, row: EvaluationRecord) {
     feedbackPolicy: storedFeedbackOf(row),
     mcqPolicy: row.mcqPolicy,
     durationS: row.durationS,
+    documents: await providedDocumentIds(db, row.id),
     items: await db
       .select({
         id: evaluationItems.id,
@@ -451,8 +455,8 @@ export async function templatePullPreview(
  * "Pull": the instance's QUESTIONS replaced by the template's current ones —
  * frozen versions, points, order, milestones — and `origin_revision` moved to
  * the revision copied. Nothing else of the instance changes: title, dates,
- * IP list, settings, scale, policies, duration and state stay
- * (F-EVAL-26), so a template that moved only in its settings is pulled as a
+ * IP list, settings, scale, policies, duration, provided documents
+ * (ADR-144 §7) and state stay (F-EVAL-26), so a template that moved only in its settings is pulled as a
  * bare record of the revision.
  *
  * One transaction, and the locks in the order every other writer takes

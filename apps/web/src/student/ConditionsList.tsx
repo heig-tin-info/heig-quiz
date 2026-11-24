@@ -53,6 +53,8 @@ export function imposedText(line: ImposedCondition, t: TFunction): { title: stri
       return { title: t("conditions.notepad"), body: t("conditions.notepad.body") };
     case "notepad_no_clipboard":
       return { title: t("conditions.notepad.noClipboard") };
+    case "documents":
+      return { title: line.count === 1 ? t("conditions.documents.one") : t("conditions.documents.many", { n: line.count }) };
     case "duration":
       return {
         title: t("conditions.duration", { n: minutesWithBonus(line.durationS, line.bonusPercent) }),

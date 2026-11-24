@@ -20,7 +20,15 @@ const withSettings = (settings: Partial<EvaluationSettings>): EvaluationDetail =
 
 function Harness({ detail, disabled = false }: { detail: EvaluationDetail; disabled?: boolean }) {
   const patch = useConfigPatch(evaluationTarget(EVALUATION_ID));
-  return <ConditionsSetting config={detail.evaluation} courseId={detail.courseId} patch={patch} disabled={disabled} />;
+  return (
+    <ConditionsSetting
+      config={detail.evaluation}
+      courseId={detail.courseId}
+      documentCount={detail.documents.length}
+      patch={patch}
+      disabled={disabled}
+    />
+  );
 }
 
 /** The card is folded by default: renders it, then opens it. */
