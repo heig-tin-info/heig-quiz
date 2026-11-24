@@ -23,7 +23,7 @@
  * `evaluation` module does); it reads it by join.
  */
 import { and, asc, eq } from "drizzle-orm";
-import type { SelectedFields } from "drizzle-orm/pg-core";
+import type { PgSelect } from "drizzle-orm/pg-core";
 
 import type { DocumentHtml, ProvidedDocument } from "@quiz/contracts";
 import { providedDocumentsReadable, type EvaluationModeName, type GatedAttempt } from "@quiz/domain";
@@ -45,12 +45,12 @@ const readable = ({ evaluation, attempt }: ReadingAttempt, now: Date) =>
  * The provided documents of the evaluation, in their order, joined to its
  * classroom's course: a row whose document is of another course is never
  * one (the writer refuses it; this read does not trust it). `documentId`
- * narrows it to one. The one join both reads below build on.
+ * narrows it to one. The one join both reads below build on, each from its
+ * own `select … from evaluation_provided_documents`: the fields stay typed,
+ * so the compiler checks what leaves.
  */
-function selection(db: Db, fields: SelectedFields, evaluationId: string, documentId?: string) {
-  return db
-    .select(fields)
-    .from(evaluationProvidedDocuments)
+function selection<T extends PgSelect>(query: T, evaluationId: string, documentId?: string) {
+  return query
     .innerJoin(courseDocuments, eq(courseDocuments.id, evaluationProvidedDocuments.documentId))
     .innerJoin(evaluations, eq(evaluations.id, evaluationProvidedDocuments.evaluationId))
     .innerJoin(classrooms, eq(classrooms.id, evaluations.classroomId))
@@ -68,7 +68,7 @@ function selection(db: Db, fields: SelectedFields, evaluationId: string, documen
 export async function providedDocuments(db: Db, scope: ReadingAttempt, now: Date): Promise<ProvidedDocument[]> {
   if (!readable(scope, now)) return [];
   const fields = { id: courseDocuments.id, title: courseDocuments.title, kind: courseDocuments.kind };
-  return (await selection(db, fields, scope.evaluation.id)) as ProvidedDocument[];
+  return selection(db.select(fields).from(evaluationProvidedDocuments).$dynamic(), scope.evaluation.id);
 }
 
 /** One document the attempt may read now, to serve; null — the route's 404 — otherwise. */
@@ -79,7 +79,8 @@ export async function providedDocument(
   now: Date,
 ): Promise<Row | null> {
   if (!readable(scope, now)) return null;
-  const [row] = (await selection(db, { document: courseDocuments }, scope.evaluation.id, documentId)) as { document: Row }[];
+  const query = db.select({ document: courseDocuments }).from(evaluationProvidedDocuments).$dynamic();
+  const [row] = await selection(query, scope.evaluation.id, documentId);
   return row?.document ?? null;
 }
 
